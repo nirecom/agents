@@ -44,13 +44,17 @@ WRONG (chained): `git add file1 && git commit -m "msg" && git push`
 
 This ensures each command matches its individual permission rule in `settings.json`.
 
+### Testing
+
+Before modifying any source code, first create or update test scripts:
+- Use the project's existing test directory if one exists; otherwise create `tests/`.
+- Tests must cover both normal and abnormal cases.
+- Run all relevant tests and confirm they pass before committing.
+
 ### Verification Before Proceeding
 
 When the user asks you to verify or test something, complete it and report results
 BEFORE moving to the next task. Never skip or assume success.
-
-For any implementation task, complete both normal-case and abnormal-case testing
-before proceeding to commit or the next step.
 
 ### File Edits
 
