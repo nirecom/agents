@@ -8,7 +8,6 @@ Update `instruction.md` to reflect infrastructure changes across all stacks and 
 
 - Source repos (for detecting changes):
   - langchain-stack: `../langchain-stack/` → `git@github.com:nirecom/langchain-stack.git`
-  - litellm-stack: `../litellm-stack/` → `git@github.com:nirecom/litellm-stack.git`
   - open-webui-stack: `../open-webui-stack/` → `git@github.com:nirecom/open-webui-stack.git`
   - portable-llm-server: `../portable-llm-server/` → `git@github.com:nirecom/portable-llm-server.git`
 
