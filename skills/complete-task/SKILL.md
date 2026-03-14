@@ -1,3 +1,10 @@
+---
+name: complete-task
+description: Complete a task and run post-processing
+disable-model-invocation: true
+argument-hint: "[task-id]"
+---
+
 Complete a task and run post-processing
 
 ## Arguments
