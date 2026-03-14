@@ -22,6 +22,7 @@ tests/<branch-type>-<branch-name>.<ext>
 
 | Language | Extension |
 |---|---|
+| Python (pytest) | `test_<branch-type>-<branch-name>.py` |
 | bash | `.sh` |
 | PowerShell (Pester) | `.Tests.ps1` |
 
