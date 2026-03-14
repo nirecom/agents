@@ -1,3 +1,8 @@
+---
+name: update-instruction
+description: Update instruction.md to reflect infrastructure changes across all stacks and hosts
+---
+
 Update `instruction.md` to reflect infrastructure changes across all stacks and hosts
 
 ## Target files
