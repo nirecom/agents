@@ -1,3 +1,8 @@
+---
+name: update-docs
+description: Update all project documentation to reflect recent changes
+---
+
 Update all project documentation to reflect recent changes
 
 ## Project Detection

@@ -1,3 +1,10 @@
+---
+name: start-task
+description: Start a task (phase implementation, incident response, or improvement)
+disable-model-invocation: true
+argument-hint: "[task-id]"
+---
+
 Start a task (phase implementation, incident response, or improvement)
 
 ## Arguments
