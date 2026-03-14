@@ -20,6 +20,8 @@ tests/<branch-type>-<branch-name>.<ext>
 - main direct work: `tests/main-<name>.sh`
 - Multiple files per feature: add a suffix (e.g., `feature-claude-rules-global.sh`)
 
+Python (pytest) requires a `test_` prefix for auto-discovery:
+
 | Language | Extension |
 |---|---|
 | Python (pytest) | `test_<branch-type>-<branch-name>.py` |
