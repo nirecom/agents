@@ -5,16 +5,6 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ~/dotfiles/claude-global/hooks/check-private-info.js",
-            "timeout": 5
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -93,8 +83,6 @@
       "Bash(git add -A)",
       "Bash(git add *)",
       "Bash(git -C * add *)",
-      "Bash(git commit -m *)",
-      "Bash(git -C * commit -m *)",
       "Bash(git push)",
       "Bash(git push origin *)",
       "Bash(git -C * push)",
@@ -162,6 +150,10 @@
       "Edit(~/.profile)",
       "Edit(~/.bash_profile)",
       "Edit(~/.profile_common)"
+    ],
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git -C * commit *)"
     ],
     "disableBypassPermissionsMode": "disable"
   },
