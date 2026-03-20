@@ -6,7 +6,7 @@
 |------|------|-------------|---------|
 | `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`) | Unlimited (split into `architecture/` OK) | Always |
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
-| `history.md` | Completed phases, incidents, change log (append-only, table format) | Unlimited | On first completion |
+| `history.md` | Completed work with why (background, incidents, decisions) — append-only | Unlimited | On first completion |
 | `ops.md` | Operational procedures with actual commands | Unlimited | On demand |
 
 Do not use `progress.md` or standalone `roadmap.md` — status tracking belongs in `todo.md`,
@@ -26,7 +26,7 @@ scoped to that level. Upper levels contain **summary + pointers**, not duplicate
 ## Content Rules
 
 - `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`)
-- `history.md`: Group related commits by phase, use table format, commit hashes only (7 chars, no GitHub links)
+- `history.md`: Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Group by phase, use table format, commit hashes only (7 chars, no GitHub links). This prevents re-litigating past decisions in future conversations
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
