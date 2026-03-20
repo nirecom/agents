@@ -3,6 +3,9 @@
 Before modifying any source code, first create or update test scripts:
 - Use the project's existing test directory if one exists; otherwise create `tests/`.
 - Tests must cover normal cases, error cases, and edge cases.
+- **Before writing test code**, list all planned test cases by category (normal / error / edge)
+  and present them to the user. Walk through the edge case checklist below and explicitly
+  address each applicable sub-category. Write code only after the user approves the list.
 - Run all relevant tests and confirm they pass before committing.
 
 ## Test Case Categories
@@ -14,6 +17,13 @@ Before modifying any source code, first create or update test scripts:
   - String: empty `""`, `null`, single character, extremely long
   - Collection: empty array/list, single element, duplicates
   - File/path: non-existent, empty file, special characters in name
+
+## Test Coverage Review
+
+After writing test code, run `/review-tests` to verify test case completeness before committing.
+This launches an Explore subagent that reads both the source code and the test file,
+checks coverage against the Test Case Categories checklist above, and lists any gaps.
+Fix gaps before presenting tests to the user.
 
 ## Test File Naming
 
