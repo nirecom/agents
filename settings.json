@@ -177,6 +177,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/dotfiles/claude-global/hooks/check-test-updated.js",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
