@@ -30,6 +30,10 @@ Extend the timeout only when the test genuinely requires it (e.g., integration t
   - Collection: empty array/list, single element, duplicates
   - File/path: non-existent, empty file, special characters in name
 
+- **Idempotency cases**: Re-running the same operation produces the same result without side effects
+  - File/config: re-running doesn't duplicate entries (e.g., same line appended twice to `.bashrc`), template generation produces identical output
+  - Cleanup: deletion/uninstall of already-removed targets doesn't error
+
 ## Test Coverage Review
 
 After writing test code, run `/review-tests` to verify test case completeness before committing.
@@ -65,3 +69,5 @@ Silent installers (NSIS, Electron-builder, etc.) have non-obvious behaviors that
 - **Async completion**: Installers often spawn child processes and return immediately. `Start-Process -Wait` only waits for the parent. Poll for expected artifacts with a timeout instead of trusting process exit.
 - **Variable install paths**: Per-user vs per-machine installs use different directories (e.g., `%LOCALAPPDATA%\Programs\` vs `%ProgramFiles%\`). Always check all candidate paths rather than hardcoding one.
 - **Silent failure**: Exit code 0 does not guarantee success. Flag combinations that work interactively may silently fail in silent mode (e.g., `/S /currentuser`). Always verify the actual installed artifact exists.
+
+- **Idempotency**: Re-installing doesn't fail or leave inconsistent artifacts. PATH/env additions don't duplicate on re-run. Version-pinned installs produce the same result.
