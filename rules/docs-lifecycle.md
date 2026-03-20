@@ -6,11 +6,9 @@ At the start of a task that involves code changes, read the project's docs direc
 
 | File | Responsibility | Format |
 |------|---------------|--------|
-| `architecture.md` | Architecture, design decisions | What/Why |
-| `history.md` | Change history, incidents | Change History / Incident History tables, 7-char commit hashes |
-| `todo.md` | Upcoming tasks | Checklist |
-| `progress.md` | Phase progress | Phase table |
-| `roadmap.md` | Roadmap | Milestone-based |
+| `architecture.md` | Architecture, design decisions, future phase specs | What/Why |
+| `todo.md` | Current work pointer, active tasks, phase status | Status Summary + Checklist |
+| `history.md` | Completed phases, incidents, change archive | Phase Detail sections, append-only |
 | `ops.md` | Setup procedures, operations | How |
 
 Skip reading docs for investigation-only or Q&A conversations.
@@ -30,4 +28,5 @@ At task completion, propose updates to the relevant docs files based on changes 
 
 - **General projects:** `docs/` directory
 - **LangChain projects** (langchain-stack, open-webui-stack, etc.): all `.md` files under `../ai-specs/projects/engineering/langchain/`
+- **ai-specs managed projects** (ai-video, nemoclaw, llama-swap): `projects/engineering/{project}/`
 - Detection: determine from repository name or CLAUDE.md content

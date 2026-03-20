@@ -22,13 +22,13 @@ Determine the docs location based on the current project:
 ## Procedure
 
 1. Read project docs (follow path resolution from project detection above):
-   - `architecture.md`, `progress.md` (and other existing docs)
+   - `architecture.md`, `todo.md` (and other existing docs)
 2. Read the target repo's `CLAUDE.md`
 3. Read `.context-private/handoff-phase{$TASK_ID}.md` (if exists)
-4. Read `.context-private/completion-phase{prev}.md` (if exists — determine prev from progress.md)
+4. Read `.context-private/completion-phase{prev}.md` (if exists — determine prev from todo.md Status Summary or history.md)
 5. Read `ops.md` (for incident/infrastructure tasks)
 6. Cross-check handoff against higher-priority documents:
-   - **Priority 1**: Project docs (`architecture.md`, `progress.md`, `CLAUDE.md`)
+   - **Priority 1**: Project docs (`architecture.md`, `todo.md`, `CLAUDE.md`)
    - **Priority 2**: Previous completion report
    - **Priority 3**: Current handoff
 7. If conflicts found, present them to the user before proceeding

@@ -22,8 +22,9 @@ $TASK_ID - Task identifier (e.g., 3E, 4, incident-xxx)
    - Current system state (API format, config, etc.)
    - Notes and warnings for the next phase
 4. Run `/update-docs` to update project documentation
-5. Commit target repo changes
-6. If docs are in a separate repo (e.g., ai-specs), commit that repo separately
+5. Move completed phase details from `todo.md` to `history.md`
+6. Commit target repo changes
+7. If docs are in a separate repo (e.g., ai-specs), commit that repo separately
 
 ## Rules
 
