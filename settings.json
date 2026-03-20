@@ -157,6 +157,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/dotfiles/claude-global/hooks/block-dotenv.js",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
