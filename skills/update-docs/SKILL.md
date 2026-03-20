@@ -15,7 +15,6 @@ Determine the docs location based on the current project:
   - Target: all `.md` files in the directory
   - Source repos for change detection:
     - `../langchain-stack/` → `git@github.com:nirecom/langchain-stack.git`
-    - `../litellm-stack/` → `git@github.com:nirecom/litellm-stack.git`
     - `../open-webui-stack/` → `git@github.com:nirecom/open-webui-stack.git`
     - `../portable-llm-server/` → `git@github.com:nirecom/portable-llm-server.git`
 
@@ -42,7 +41,8 @@ Determine the docs location based on the current project:
 
 ## Rules
 
-- Follow the format conventions defined in `rules/docs-lifecycle.md`
+- Follow the gather → propose → confirm → apply cycle (never write without user confirmation)
+- Compare git log against current docs to identify gaps
 - Match the existing language style of each file (some files are Japanese, some English)
 - Do not use GitHub links (use commit hashes only, 7 characters)
 - For history.md: group related commits by phase, use table format
