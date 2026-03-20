@@ -25,7 +25,8 @@ scoped to that level. Upper levels contain **summary + pointers**, not duplicate
 
 ## Content Rules
 
-- `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`)
+- `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`).
+  When updating todo.md after completing implementation work, add a **user verification step** as the next action item. The phase/task stays in Current Work with "Verifying" status until the user confirms completion. Do not move it to `history.md` until verification passes.
 - `history.md`: Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Group by phase, use table format, commit hashes only (7 chars, no GitHub links). This prevents re-litigating past decisions in future conversations
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
