@@ -21,7 +21,7 @@ Determine the docs location based on the current project:
 
 - **General projects** (dotfiles, etc.):
   - Docs directory: `docs/` within the project root
-  - Target files: `architecture.md`, `history.md`, `todo.md`, `progress.md`, `roadmap.md` (existing files only)
+  - Target files: `architecture.md`, `todo.md`, `history.md`, `ops.md` (existing files only)
   - Also update `README.md` if file tree or installation procedure changed
 
 ## Procedure
@@ -47,6 +47,7 @@ Determine the docs location based on the current project:
 - Do not use GitHub links (use commit hashes only, 7 characters)
 - For history.md: group related commits by phase, use table format
 - For architecture.md: document What/Why, not How (How belongs in ops.md)
-- For progress.md: use checkbox format (`- [x]` / `- [ ]`), keep summary table in sync
+- For todo.md: keep Status Summary in sync, move completed phases to history.md
+- For history.md: append completed phase details with date
 - For ops.md: keep procedures actionable with actual commands
 - Do not duplicate content across documents — cross-reference instead
