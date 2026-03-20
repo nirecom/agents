@@ -8,6 +8,18 @@ Before modifying any source code, first create or update test scripts:
   address each applicable sub-category. Write code only after the user approves the list.
 - Run all relevant tests and confirm they pass before committing.
 
+## Test Execution Timeout
+
+Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
+
+| Runner | Command |
+|--------|---------|
+| Bash | `timeout 120 <test-command>` |
+| PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `timeout 120` wrapper |
+| pytest | `timeout 120 pytest ...` |
+
+Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
+
 ## Test Case Categories
 
 - **Normal cases**: Expected inputs and typical usage
