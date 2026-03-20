@@ -41,13 +41,6 @@ Determine the docs location based on the current project:
 
 ## Rules
 
+- Follow the structure and content rules defined in `rules/docs-convention.md`
 - Follow the gather → propose → confirm → apply cycle (never write without user confirmation)
 - Compare git log against current docs to identify gaps
-- Match the existing language style of each file (some files are Japanese, some English)
-- Do not use GitHub links (use commit hashes only, 7 characters)
-- For history.md: group related commits by phase, use table format
-- For architecture.md: document What/Why, not How (How belongs in ops.md)
-- For todo.md: keep Status Summary in sync, move completed phases to history.md
-- For history.md: append completed phase details with date
-- For ops.md: keep procedures actionable with actual commands
-- Do not duplicate content across documents — cross-reference instead
