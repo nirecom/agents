@@ -1,20 +1,7 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ~/dotfiles/claude-global/hooks/check-private-info.js",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "95"
   },
   "attribution": {
     "commit": "",
@@ -159,5 +146,19 @@
     "disableBypassPermissionsMode": "disable"
   },
   "enableAllProjectMcpServers": false,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/dotfiles/claude-global/hooks/check-private-info.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
   "autoUpdatesChannel": "latest"
 }
