@@ -7,6 +7,7 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
 
 function readStdin() {
   const chunks = [];
@@ -54,8 +55,10 @@ const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
 if (!commitMatch) approve();
 
 // Determine the repo directory
-const cPathMatch = command.match(/git\s+-C\s+(\S+)\s+commit/);
-const repoDir = process.env.HOOK_CWD || (cPathMatch ? cPathMatch[1] : ".");
+const repoDir = resolveRepoDir(command);
+
+// Skip private repos
+if (isPrivateRepo(repoDir)) approve();
 
 // Get staged files
 let stagedFiles;

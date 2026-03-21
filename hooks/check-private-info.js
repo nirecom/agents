@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: check Edit/Write content for private information
-// Skips scanning for repos listed in .context-private/private-repos.txt
+// Skips scanning for private repos (detected dynamically via GitHub API)
 
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
 function readStdin() {
@@ -41,11 +42,6 @@ function shellPath(p) {
 // Determine dotfiles directory (this script lives in dotfiles/claude-global/hooks/)
 const DOTFILES_DIR = path.resolve(__dirname, "..", "..");
 const SCANNER = path.join(DOTFILES_DIR, "bin", "check-private-info.sh");
-const PRIVATE_REPOS = path.join(
-  DOTFILES_DIR,
-  ".context-private",
-  "private-repos.txt"
-);
 
 // Parse stdin
 const input = JSON.parse(readStdin());
@@ -89,39 +85,26 @@ if (!content) {
   approve();
 }
 
-// Check if the target file is in a private repo
-if (filePath && fs.existsSync(PRIVATE_REPOS)) {
-  try {
-    const repoRoot = execSync(`git -C "${shellPath(path.dirname(filePath))}" rev-parse --show-toplevel`, {
-      encoding: "utf8",
-      timeout: 5000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-
-    if (repoRoot) {
-      const remoteUrl = execSync(`git -C "${repoRoot}" remote get-url origin`, {
+// Check if the target repo is private (skip scanning for private repos)
+{
+  let repoDir = null;
+  if (filePath) {
+    // Edit/Write: resolve repo from file path
+    try {
+      repoDir = execSync(`git -C "${shellPath(path.dirname(filePath))}" rev-parse --show-toplevel`, {
         encoding: "utf8",
         timeout: 5000,
         stdio: ["pipe", "pipe", "pipe"],
       }).trim();
-
-      if (remoteUrl) {
-        // Extract owner/repo from SSH or HTTPS URL
-        const match = remoteUrl.match(/[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
-        if (match) {
-          const repoId = match[1];
-          const privateRepos = fs
-            .readFileSync(PRIVATE_REPOS, "utf8")
-            .split(/\r?\n/)
-            .filter((l) => l.trim());
-          if (privateRepos.includes(repoId)) {
-            approve();
-          }
-        }
-      }
+    } catch (e) {
+      // Not in a git repo — continue with scan
     }
-  } catch (e) {
-    // If git commands fail, continue with scan (safe default)
+  } else if (toolName === "Bash") {
+    // Bash: resolve repo from git -C <path> or HOOK_CWD
+    repoDir = resolveRepoDir(toolInput.command || "");
+  }
+  if (isPrivateRepo(repoDir)) {
+    approve();
   }
 }
 

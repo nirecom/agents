@@ -1,20 +1,19 @@
 #!/bin/bash
 # Pre-commit hook: scan staged files for private information
-# Skips scanning for repos listed in .context-private/private-repos.txt
+# Skips scanning for private repos (detected dynamically via GitHub API)
 
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
-PRIVATE_REPOS="$DOTFILES_DIR/.context-private/private-repos.txt"
 
-# Check if this repo is in the private repo whitelist
-if [ -f "$PRIVATE_REPOS" ]; then
-    REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
-    if [ -n "$REMOTE_URL" ]; then
-        # Extract owner/repo from SSH or HTTPS URL
-        REPO_ID="$(echo "$REMOTE_URL" | sed 's/\.git$//' | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#')"
-        if grep -qFx "$REPO_ID" "$PRIVATE_REPOS"; then
+# Check if this repo is private via GitHub API (skip scanning if private)
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+if [ -n "$REMOTE_URL" ]; then
+    REPO_ID="$(echo "$REMOTE_URL" | sed 's/\.git$//' | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#')"
+    if [ -n "$REPO_ID" ] && command -v gh >/dev/null 2>&1; then
+        IS_PRIVATE="$(gh api "repos/$REPO_ID" --jq .private 2>/dev/null || true)"
+        if [ "$IS_PRIVATE" = "true" ]; then
             exit 0
         fi
     fi
