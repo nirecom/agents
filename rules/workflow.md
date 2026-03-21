@@ -7,7 +7,7 @@ BEFORE moving to the next task. Never skip or assume success.
 
 ## File Edits
 
-- Always show a diff before applying file edits. Do not apply edits without showing the diff first.
+- **CLI（ターミナル）使用時のみ**: Edit 実行前にチャットで diff を提示し、ユーザーの承認後に Edit を実行する。VSCode 使用時は内蔵の diff ダイアログに任せるため不要。
 
 ## Cross-Platform Orthogonality
 
