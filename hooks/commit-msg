@@ -1,0 +1,29 @@
+#!/bin/bash
+# commit-msg hook: scan commit message for private information
+# Skips scanning for repos listed in .context-private/private-repos.txt
+
+set -euo pipefail
+
+DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
+PRIVATE_REPOS="$DOTFILES_DIR/.context-private/private-repos.txt"
+
+# Check if this repo is in the private repo whitelist
+if [ -f "$PRIVATE_REPOS" ]; then
+    REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+    if [ -n "$REMOTE_URL" ]; then
+        REPO_ID="$(echo "$REMOTE_URL" | sed 's/\.git$//' | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#')"
+        if grep -qFx "$REPO_ID" "$PRIVATE_REPOS"; then
+            exit 0
+        fi
+    fi
+fi
+
+# $1 is the commit message file
+if ! "$SCANNER" --stdin "commit-msg" < "$1"; then
+    echo ""
+    echo "Commit blocked: private information detected in commit message."
+    echo "Fix the message, or add exceptions to .private-info-allowlist"
+    exit 1
+fi
+exit 0
