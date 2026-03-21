@@ -7,10 +7,10 @@ When providing shell commands (curl, docker, etc.):
 
 | Host | Default shell | Notes |
 |------|---------------|-------|
-| penpen (Windows) | **pwsh (PowerShell)** | `curl.exe` required; WSL sessions use bash/Linux as normal |
-| goma (QNAP) | **bash** | No curl/wget — use Python method below |
+| Windows host | **pwsh (PowerShell)** | `curl.exe` required; WSL sessions use bash/Linux as normal |
+| QNAP host | **bash** | No curl/wget — use Python method below |
 
-When suggesting verification commands for penpen, default to **pwsh-compatible commands**.
+When suggesting verification commands for the Windows host, default to **pwsh-compatible commands**.
 Only use Linux commands when explicitly working inside WSL.
 
 **curl commands MUST follow all three rules (PowerShell compatibility):**
@@ -22,7 +22,7 @@ Only use Linux commands when explicitly working inside WSL.
 
 ## QNAP / Docker HTTP Checks
 
-QNAP (goma) and most Docker containers do **not** have `curl` or `wget`.
+QNAP and most Docker containers do **not** have `curl` or `wget`.
 When suggesting HTTP connectivity checks on these environments, use Python directly:
 
 ```bash

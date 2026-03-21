@@ -25,7 +25,7 @@ Update `instruction.md` to reflect infrastructure changes across all stacks and 
 1. **Gather recent changes**: For each source repo, run `git log --oneline -20`. Also check `langchain/architecture.md` and `langchain/ops.md` for recently documented changes not yet in instruction.md
 2. **Read current instruction.md**: Understand what is already documented
 3. **Identify gaps**: Compare against instruction.md. Look for:
-   - Host service changes (penpen services, Mac services, QNAP docker-stacks)
+   - Host service changes (Windows host services, Mac services, QNAP docker-stacks)
    - Stack additions or removals
    - Port allocation changes
    - Connection topology changes
