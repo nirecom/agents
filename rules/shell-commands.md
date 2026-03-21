@@ -9,3 +9,14 @@ When providing shell commands (curl, docker, etc.):
    CORRECT: `curl.exe -d '{"key":"value"}'`
    WRONG:   `curl -d "{\"key\":\"value\"}"`
 3. No line continuation — single line only
+
+## QNAP / Docker HTTP Checks
+
+QNAP (goma) and most Docker containers do **not** have `curl` or `wget`.
+When suggesting HTTP connectivity checks on these environments, use Python directly:
+
+```bash
+python3 -c "import urllib.request,ssl;ctx=ssl._create_unverified_context();print(urllib.request.urlopen('URL',context=ctx).read().decode())"
+```
+
+Do NOT suggest `curl` → `wget` → Python as a fallback chain. Go straight to Python.
