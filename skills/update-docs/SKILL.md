@@ -37,7 +37,9 @@ Determine the docs location based on the current project:
    - Which sections need changes and why
    - Specific additions or modifications
 5. **Apply after confirmation**: Edit files only after user approval
-6. **Commit separately**: If docs are in a separate repo (e.g., my-specs-repo), commit each repo independently
+6. **Propagate to parent docs**: For my-specs-repo projects, update parent-level counterparts
+   (e.g. `langchain/todo.md` → `engineering/todo.md`). Skip for repo-local `docs/`.
+7. **Commit separately**: If docs are in a separate repo (e.g., my-specs-repo), commit each repo independently
 
 ## Rules
 
