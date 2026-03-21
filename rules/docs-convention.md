@@ -34,6 +34,7 @@ scoped to that level. Upper levels contain **summary + pointers**, not duplicate
   Changes: ...
   ```
   Incident entries use `Cause:` / `Fix:` instead of `Background:` / `Changes:`.
+  If `history.md` is in legacy table format, convert it using `~/dotfiles/bin/convert-history-table.py`. **Always** present the converted output to the user for review before overwriting.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
