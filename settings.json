@@ -160,7 +160,10 @@
       "Bash(git -C * commit *)",
       "Bash(cd * && git commit *)"
     ],
-    "disableBypassPermissionsMode": "disable"
+    "disableBypassPermissionsMode": "disable",
+    "additionalDirectories": [
+      "C:\\Users\\nire\\dotfiles\\tests"
+    ]
   },
   "enableAllProjectMcpServers": false,
   "hooks": {
