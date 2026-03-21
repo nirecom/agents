@@ -17,12 +17,18 @@ completed details in `history.md`, future design specs in `architecture/roadmap.
 
 Same-named files at different hierarchy levels provide the same kind of information
 scoped to that level. Upper levels contain **summary + pointers**, not duplicated content.
+All standard doc types (`todo.md`, `history.md`, `ops.md`) follow the same cascade —
+`architecture.md` is shown as an example below.
 
 | Level | Example | Content |
 |-------|---------|---------|
 | Hub of hubs | `engineering/architecture.md` | One-line per project → links to project `architecture.md` |
 | Project hub | `{project}/architecture.md` | Index or flat design doc |
 | Detail | `{project}/architecture/overview.md` | Full design detail |
+
+When updating a project-level doc in ai-specs, also update its parent-level counterpart
+(e.g. `langchain/todo.md` → `engineering/todo.md`).
+Repo-local `docs/` has no parent level — propagation is not needed.
 
 ## Doc Location and Commit Hook
 
