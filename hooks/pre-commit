@@ -27,7 +27,7 @@ if [ -z "$STAGED_FILES" ]; then
 fi
 
 # Files to skip
-SKIP_PATTERNS="bin/check-private-info.sh|\.private-info-allowlist|\.private-info-blocklist"
+SKIP_PATTERNS="bin/check-private-info.sh|\.private-info-allowlist"
 
 FOUND_VIOLATIONS=0
 
