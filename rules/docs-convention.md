@@ -23,6 +23,22 @@ scoped to that level. Upper levels contain **summary + pointers**, not duplicate
 | Project hub | `{project}/architecture.md` | Index or flat design doc |
 | Detail | `{project}/architecture/overview.md` | Full design detail |
 
+## Doc Location and Commit Hook
+
+The `check-docs-updated` hook enforces that documentation is updated alongside code.
+It checks two locations in priority order:
+
+1. **Local**: `docs/` or any `.md` file staged in the same repo
+2. **Sibling ai-specs**: `../ai-specs` — searches for a directory matching the repo name
+
+If a project's docs live in `ai-specs` (not in the repo itself), the hook will
+automatically find them — no configuration file needed. The repo name must match
+the directory name under `ai-specs/` (e.g., repo `llm-infra-check` →
+`ai-specs/**/llm-infra-check/`).
+
+When committing code changes, ensure the corresponding docs in `ai-specs` have
+staged or unstaged changes, otherwise the commit will be blocked.
+
 ## Content Rules
 
 - `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`).
