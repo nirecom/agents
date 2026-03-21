@@ -27,3 +27,7 @@ Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
   - Registry-based flag injection must be verified to actually work before writing. If the app ignores externally written entries (e.g., encrypted config, internal state mismatch), abandon the approach rather than leave dead entries.
   - Never patch binary or encrypted config files to inject settings. (Precedent: Google Japanese Input config.)
 - **Clean up mistakes immediately.** If a registry entry turns out to be ineffective, delete it before proceeding with any other fix.
+
+## File Naming Conventions
+
+- **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
