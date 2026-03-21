@@ -16,7 +16,7 @@ Always run tests with a timeout (default **120 seconds**). Tests that hang block
 |--------|---------|
 | Bash | `timeout 120 <test-command>` |
 | PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `timeout 120` wrapper |
-| pytest | `timeout 120 pytest ...` |
+| pytest | `timeout 120 uv run pytest ...` |
 
 Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
 

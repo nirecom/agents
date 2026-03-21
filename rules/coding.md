@@ -29,6 +29,12 @@ Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
   - Never patch binary or encrypted config files to inject settings. (Precedent: Google Japanese Input config.)
 - **Clean up mistakes immediately.** If a registry entry turns out to be ineffective, delete it before proceeding with any other fix.
 
+## Python
+
+- Do not use bare `python`, `pip`, or `python3` commands. Always use `uv` (`uv run`, `uv pip`, etc.).
+- For one-off scripts: `uv run script.py`
+- For adding dependencies: `uv pip install` or `uv add`
+
 ## File Naming Conventions
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
