@@ -161,6 +161,7 @@ const EXEMPT_FILES = [
   /^\.editorconfig$/,
   /^LICENSE/,
   /\.md$/i, // Markdown files are documentation, not code
+  /\.code-workspace$/i, // VSCode workspace config, not code
 ];
 
 const hasCodeChanges = stagedFiles.some((f) => {
