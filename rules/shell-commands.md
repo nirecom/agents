@@ -3,6 +3,16 @@
 When providing shell commands (curl, docker, etc.):
 - Always write commands on a single line — do NOT use backslash `\` line continuation
 
+## Host Shell Defaults
+
+| Host | Default shell | Notes |
+|------|---------------|-------|
+| penpen (Windows) | **pwsh (PowerShell)** | `curl.exe` required; WSL sessions use bash/Linux as normal |
+| goma (QNAP) | **bash** | No curl/wget — use Python method below |
+
+When suggesting verification commands for penpen, default to **pwsh-compatible commands**.
+Only use Linux commands when explicitly working inside WSL.
+
 **curl commands MUST follow all three rules (PowerShell compatibility):**
 1. Use `curl.exe` — NEVER bare `curl` (PowerShell aliases it to `Invoke-WebRequest`)
 2. Use single quotes for JSON body — NEVER escaped double quotes:
