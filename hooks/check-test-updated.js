@@ -79,9 +79,8 @@ const EXEMPT_DIRS = ["docs/", ".claude/", "claude-global/"];
 const EXEMPT_FILES = [
   /^\.gitignore$/,
   /^\.editorconfig$/,
-  /^README\.md$/,
   /^LICENSE/,
-  /^CLAUDE\.md$/,
+  /\.md$/i, // Markdown files are documentation, not code
 ];
 
 const hasTestChanges = stagedFiles.some((f) =>
