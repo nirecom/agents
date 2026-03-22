@@ -98,6 +98,41 @@ function dirHasGitChanges(dir) {
   return false;
 }
 
+// Check if a directory in a git repo has recent commits (within cutoffMinutes)
+function dirHasRecentCommits(dir, cutoffMinutes = 3) {
+  let gitRoot;
+  try {
+    gitRoot = execSync("git rev-parse --show-toplevel", {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 5000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch (e) {
+    return false;
+  }
+
+  const relPath = path.relative(gitRoot, dir).replace(/\\/g, "/");
+  const prefix = relPath ? relPath + "/" : "";
+
+  const since = `${cutoffMinutes}.minutes.ago`;
+  try {
+    const output = execSync(
+      `git log --since="${since}" --oneline -- "${prefix}"`,
+      {
+        cwd: gitRoot,
+        encoding: "utf8",
+        timeout: 5000,
+        stdio: ["pipe", "pipe", "pipe"],
+      }
+    ).trim();
+    if (output) return true;
+  } catch (e) {
+    // ignore
+  }
+  return false;
+}
+
 // Check sibling ../ai-specs for same-name directory with changes
 function checkAiSpecsDocs(repoDir) {
   const resolvedRepo = path.resolve(repoDir);
@@ -109,7 +144,7 @@ function checkAiSpecsDocs(repoDir) {
   const matchingDirs = findDirs(aiSpecsDir, repoName);
 
   for (const dir of matchingDirs) {
-    if (dirHasGitChanges(dir)) return true;
+    if (dirHasGitChanges(dir) || dirHasRecentCommits(dir)) return true;
   }
   return false;
 }
