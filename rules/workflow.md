@@ -7,7 +7,7 @@ BEFORE moving to the next task. Never skip or assume success.
 
 ## File Edits
 
-- **CLI（ターミナル）使用時のみ**: Edit 実行前にチャットで diff を提示し、ユーザーの承認後に Edit を実行する。VSCode 使用時は内蔵の diff ダイアログに任せるため不要。
+- Always present a diff in chat before calling Edit, and wait for the user's approval before proceeding.
 
 ## Cross-Platform Orthogonality
 
