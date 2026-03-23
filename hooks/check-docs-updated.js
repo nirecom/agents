@@ -141,7 +141,11 @@ function checkAiSpecsDocs(repoDir) {
   if (!fs.existsSync(aiSpecsDir)) return false;
 
   const repoName = path.basename(resolvedRepo);
-  const matchingDirs = findDirs(aiSpecsDir, repoName);
+  let matchingDirs = findDirs(aiSpecsDir, repoName);
+  // Retry without common suffixes (e.g. langchain-stack -> langchain)
+  if (matchingDirs.length === 0 && repoName.endsWith("-stack")) {
+    matchingDirs = findDirs(aiSpecsDir, repoName.replace(/-stack$/, ""));
+  }
 
   for (const dir of matchingDirs) {
     if (dirHasGitChanges(dir) || dirHasRecentCommits(dir)) return true;
