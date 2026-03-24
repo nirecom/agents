@@ -140,11 +140,20 @@ function checkAiSpecsDocs(repoDir) {
 
   if (!fs.existsSync(aiSpecsDir)) return false;
 
-  const repoName = path.basename(resolvedRepo);
-  let matchingDirs = findDirs(aiSpecsDir, repoName);
-  // Retry without common suffixes (e.g. langchain-stack -> langchain)
-  if (matchingDirs.length === 0 && repoName.endsWith("-stack")) {
-    matchingDirs = findDirs(aiSpecsDir, repoName.replace(/-stack$/, ""));
+  // Check for docs/.ai-specs marker file (overrides repo name matching)
+  const markerFile = path.join(resolvedRepo, "docs", ".ai-specs");
+  let projectName;
+  try {
+    projectName = fs.readFileSync(markerFile, "utf8").trim();
+  } catch (e) {
+    // No marker file — fall through to repo name matching
+  }
+
+  const searchName = projectName || path.basename(resolvedRepo);
+  let matchingDirs = findDirs(aiSpecsDir, searchName);
+  // Retry without common suffixes (e.g. langchain-stack -> langchain) — only when no marker
+  if (matchingDirs.length === 0 && !projectName && searchName.endsWith("-stack")) {
+    matchingDirs = findDirs(aiSpecsDir, searchName.replace(/-stack$/, ""));
   }
 
   for (const dir of matchingDirs) {
