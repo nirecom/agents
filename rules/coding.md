@@ -35,6 +35,11 @@ Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
 - For one-off scripts: `uv run script.py`
 - For adding dependencies: `uv pip install` or `uv add`
 
+## Node.js
+
+- Do not install Node.js directly. Use `fnm` for version management.
+- Activate the correct version with `fnm use` (or automatic `.node-version` detection) before running `node`, `npm`, or `npx`.
+
 ## File Naming Conventions
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
