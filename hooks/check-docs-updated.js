@@ -150,11 +150,7 @@ function checkAiSpecsDocs(repoDir) {
   }
 
   const searchName = projectName || path.basename(resolvedRepo);
-  let matchingDirs = findDirs(aiSpecsDir, searchName);
-  // Retry without common suffixes (e.g. langchain-stack -> langchain) — only when no marker
-  if (matchingDirs.length === 0 && !projectName && searchName.endsWith("-stack")) {
-    matchingDirs = findDirs(aiSpecsDir, searchName.replace(/-stack$/, ""));
-  }
+  const matchingDirs = findDirs(aiSpecsDir, searchName);
 
   for (const dir of matchingDirs) {
     if (dirHasGitChanges(dir) || dirHasRecentCommits(dir)) return true;
