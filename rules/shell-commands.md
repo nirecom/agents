@@ -30,3 +30,8 @@ python3 -c "import urllib.request,ssl;ctx=ssl._create_unverified_context();print
 ```
 
 Do NOT suggest `curl` → `wget` → Python as a fallback chain. Go straight to Python.
+
+## Docker Restart Caveat
+
+`docker restart` does not reload `.env`, config files, or compose changes.
+Use `docker compose up -d <service>` instead when any of these have changed.
