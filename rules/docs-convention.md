@@ -41,8 +41,7 @@ It checks two locations in priority order:
 If a project's docs live in `my-specs-repo` (not in the repo itself), the hook will
 automatically find them — no configuration file needed. The repo name must match
 the directory name under `my-specs-repo/` (e.g., repo `llm-infra-check` →
-`my-specs-repo/**/llm-infra-check/`). A `-stack` suffix is stripped automatically
-(e.g., `langchain-stack` → `my-specs-repo/**/langchain/`).
+`my-specs-repo/**/llm-infra-check/`).
 
 **Custom mapping via `docs/.my-specs-repo`:** If a repo's my-specs-repo directory name
 differs from the repo name (and isn't just a `-stack` suffix), place a marker
