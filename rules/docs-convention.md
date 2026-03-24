@@ -41,8 +41,7 @@ It checks two locations in priority order:
 If a project's docs live in `ai-specs` (not in the repo itself), the hook will
 automatically find them — no configuration file needed. The repo name must match
 the directory name under `ai-specs/` (e.g., repo `llm-infra-check` →
-`ai-specs/**/llm-infra-check/`). A `-stack` suffix is stripped automatically
-(e.g., `langchain-stack` → `ai-specs/**/langchain/`).
+`ai-specs/**/llm-infra-check/`).
 
 **Custom mapping via `docs/.ai-specs`:** If a repo's ai-specs directory name
 differs from the repo name (and isn't just a `-stack` suffix), place a marker
