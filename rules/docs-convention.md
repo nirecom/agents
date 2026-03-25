@@ -8,7 +8,7 @@
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
 | `history.md` | Completed work with why (background, incidents, decisions) — append-only | Unlimited | On first completion |
 | `ops.md` | Operational procedures with actual commands | Unlimited | On demand |
-| `instruction.md` | **SSOT** for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. | Unlimited | Always (in `ai-specs`) |
+| `infrastructure.md` | **SSOT** for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. | Unlimited | Always (in `ai-specs`) |
 
 Do not use `progress.md` or standalone `roadmap.md` — status tracking belongs in `todo.md`,
 completed details in `history.md`, future design specs in `architecture/roadmap.md`.
@@ -70,7 +70,7 @@ staged or unstaged changes, otherwise the commit will be blocked.
   ```
   Incident entries use `Cause:` / `Fix:` instead of `Background:` / `Changes:`.
   If `history.md` is in legacy table format, convert it using `~/dotfiles/bin/convert-history-table.py`. **Always** present the converted output to the user for review before overwriting.
-- `instruction.md`: Authoritative source for host specs, network topology, Docker stack composition, port allocation, and cloud resources. When adding or moving a service, update `instruction.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-instruction` skill to keep it aligned with infrastructure changes.
+- `infrastructure.md`: Authoritative source for host specs, network topology, Docker stack composition, port allocation, and cloud resources. When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-instruction` skill to keep it aligned with infrastructure changes.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
