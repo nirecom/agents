@@ -1,7 +1,4 @@
 {
-  "deniedMcpServers": [
-    { "serverName": "claude_ai_Notion" }
-  ],
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "95"
@@ -169,10 +166,15 @@
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
-      "C:\\Users\\nire\\dotfiles\\tests"
+      "../ai-specs"
     ]
   },
   "enableAllProjectMcpServers": false,
+  "deniedMcpServers": [
+    {
+      "serverName": "claude_ai_Notion"
+    }
+  ],
   "hooks": {
     "PreToolUse": [
       {
