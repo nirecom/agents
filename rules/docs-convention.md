@@ -1,3 +1,7 @@
+---
+description: "Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastructure.md management"
+---
+
 # Documentation Convention
 
 ## Standard Files
@@ -32,31 +36,10 @@ Repo-local `docs/` has no parent level — propagation is not needed.
 
 ## Doc Location and Commit Hook
 
-The `check-docs-updated` hook enforces that documentation is updated alongside code.
-It checks two locations in priority order:
-
-1. **Local**: `docs/` or any `.md` file staged in the same repo
-2. **Sibling ai-specs**: `../ai-specs` — searches for a directory matching the repo name
-
-If a project's docs live in `ai-specs` (not in the repo itself), the hook will
-automatically find them — no configuration file needed. The repo name must match
-the directory name under `ai-specs/` (e.g., repo `llm-infra-check` →
-`ai-specs/**/llm-infra-check/`).
-
-**Custom mapping via `docs/.ai-specs`:** If a repo's ai-specs directory name
-differs from the repo name (and isn't just a `-stack` suffix), place a marker
-file at `docs/.ai-specs` containing the logical project name:
-
-```
-langchain
-```
-
-The hook reads this file and searches `ai-specs` for a directory matching that
-name instead of the repo name. An empty marker file falls back to repo name
-matching.
-
-When committing code changes, ensure the corresponding docs in `ai-specs` have
-staged or unstaged changes, otherwise the commit will be blocked.
+The `check-docs-updated` hook blocks commits unless related documentation is also
+staged. It automatically searches `docs/` in the repo and sibling `../ai-specs/`.
+When committing code changes, ensure the corresponding docs have staged or
+unstaged changes.
 
 ## Content Rules
 
