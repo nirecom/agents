@@ -216,6 +216,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/dotfiles/claude-global/hooks/check-cross-platform.js",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
