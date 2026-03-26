@@ -37,8 +37,9 @@ Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
 
 ## Node.js
 
-- Do not install Node.js directly. Use `fnm` for version management.
-- Activate the correct version with `fnm use` (or automatic `.node-version` detection) before running `node`, `npm`, or `npx`.
+- Do not install Node.js directly. Use a version manager:
+  - **Windows (PowerShell):** `fnm` (`fnm use` / `.node-version` auto-detection)
+  - **WSL2 / macOS / Linux:** `nvm` (`nvm use` / `.nvmrc` auto-detection)
 
 ## File Naming Conventions
 
