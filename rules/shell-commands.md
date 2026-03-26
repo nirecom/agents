@@ -1,3 +1,7 @@
+---
+description: "Shell commands, curl, PowerShell, QNAP, Docker HTTP checks, host shell defaults"
+---
+
 # Shell Commands
 
 When providing shell commands (curl, docker, etc.):
