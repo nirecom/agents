@@ -1,8 +1,6 @@
----
-description: "Writing or running tests, test planning, test coverage review"
----
-
 # Testing
+
+Writing or running tests, test planning, test coverage review.
 
 Before modifying any source code, first create or update test scripts:
 - Use the project's existing test directory if one exists; otherwise create `tests/`.
