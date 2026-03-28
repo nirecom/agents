@@ -1,8 +1,6 @@
----
-description: "Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastructure.md management"
----
-
 # Documentation Convention
+
+Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastructure.md management.
 
 ## Standard Files
 
