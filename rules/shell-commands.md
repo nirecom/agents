@@ -1,8 +1,6 @@
----
-description: "Shell commands, curl, PowerShell, QNAP, Docker HTTP checks, host shell defaults"
----
-
 # Shell Commands
+
+Shell commands, curl, PowerShell, QNAP, Docker HTTP checks, host shell defaults.
 
 When providing shell commands (curl, docker, etc.):
 - Always write commands on a single line — do NOT use backslash `\` line continuation
