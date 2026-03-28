@@ -162,7 +162,9 @@
     "ask": [
       "Bash(git commit *)",
       "Bash(git -C * commit *)",
-      "Bash(cd * && git commit *)"
+      "Bash(cd * && git commit *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
