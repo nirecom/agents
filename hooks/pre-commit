@@ -10,6 +10,11 @@ SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then
+    # Extract hostname — non-GitHub hosts are treated as private (skip scanning)
+    REMOTE_HOST="$(echo "$REMOTE_URL" | sed -E 's#^(ssh|https?)://([^@]+@)?([^/:]+).*#\3#; t; s#^[^@]+@([^:]+):.*#\1#')"
+    if [ -n "$REMOTE_HOST" ] && [ "$REMOTE_HOST" != "github.com" ]; then
+        exit 0
+    fi
     REPO_ID="$(echo "$REMOTE_URL" | sed 's/\.git$//' | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#')"
     if [ -n "$REPO_ID" ] && command -v gh >/dev/null 2>&1; then
         IS_PRIVATE="$(gh api "repos/$REPO_ID" --jq .private 2>/dev/null || true)"
