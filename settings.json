@@ -244,5 +244,5 @@
     ]
   },
   "autoUpdatesChannel": "latest",
-  "effortLevel": "max"
+  "effortLevel": "medium"
 }
