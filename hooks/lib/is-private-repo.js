@@ -15,6 +15,19 @@ function extractRepoDirFromCommand(command) {
   return match ? match[1] : null;
 }
 
+// Extract hostname from a git remote URL
+// Supports: git@host:path, https://host/path, ssh://user@host:port/path
+function extractHost(remoteUrl) {
+  if (!remoteUrl) return null;
+  // ssh://user@host:port/path or https://host/path
+  const urlMatch = remoteUrl.match(/^(?:ssh|https?):\/\/(?:[^@]+@)?([^/:]+)/);
+  if (urlMatch) return urlMatch[1];
+  // git@host:path (SCP-style)
+  const scpMatch = remoteUrl.match(/^[^@]+@([^:]+):/);
+  if (scpMatch) return scpMatch[1];
+  return null;
+}
+
 // Get owner/repo identifier from a git remote URL
 // Supports SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo.git)
 function extractRepoId(remoteUrl) {
@@ -36,6 +49,10 @@ function isPrivateRepo(repoDir) {
     }).trim();
 
     if (!remoteUrl) return false;
+
+    const host = extractHost(remoteUrl);
+    // Non-GitHub hosts (GitLab, Bitbucket, etc.) → treat as private
+    if (host && host !== "github.com") return true;
 
     const repoId = extractRepoId(remoteUrl);
     if (!repoId) return false;
@@ -60,4 +77,4 @@ function resolveRepoDir(command) {
   return extractRepoDirFromCommand(command) || ".";
 }
 
-module.exports = { isPrivateRepo, resolveRepoDir, extractRepoDirFromCommand, extractRepoId };
+module.exports = { isPrivateRepo, resolveRepoDir, extractRepoDirFromCommand, extractRepoId, extractHost };
