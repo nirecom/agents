@@ -55,4 +55,5 @@ unstaged changes.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
-- Match the existing language style of each file
+- **Public repositories**: all documentation must be in English
+- **Private repositories**: Japanese is acceptable
