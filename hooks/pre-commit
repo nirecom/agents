@@ -11,7 +11,7 @@ SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then
     # Extract hostname — non-GitHub hosts are treated as private (skip scanning)
-    REMOTE_HOST="$(echo "$REMOTE_URL" | sed -E 's#^(ssh|https?)://([^@]+@)?([^/:]+).*#\3#; t; s#^[^@]+@([^:]+):.*#\1#')"
+    REMOTE_HOST="$(echo "$REMOTE_URL" | sed -E 's#^(ssh|https?)://([^@]+@)?([^/:]+).*#\3#' | sed -E 's#^[^@]+@([^:]+):.*#\1#')"
     if [ -n "$REMOTE_HOST" ] && [ "$REMOTE_HOST" != "github.com" ]; then
         exit 0
     fi
