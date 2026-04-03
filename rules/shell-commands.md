@@ -15,6 +15,12 @@ When providing shell commands (curl, docker, etc.):
 When suggesting verification commands for the Windows host, default to **pwsh-compatible commands**.
 Only use Linux commands when explicitly working inside WSL.
 
+**Claude Code's Bash tool vs user's terminal:**
+Claude Code's built-in Bash tool runs in a bash shell — Linux commands work there.
+But when telling the user to run commands manually (e.g., "run this in your terminal"),
+use **PowerShell-native commands**. Do not suggest `openssl`, `cp`, `sed`, `grep`, etc.
+directly — use their PowerShell equivalents.
+
 **curl commands MUST follow all three rules (PowerShell compatibility):**
 1. Use `curl.exe` — NEVER bare `curl` (PowerShell aliases it to `Invoke-WebRequest`)
 2. Use single quotes for JSON body — NEVER escaped double quotes:
