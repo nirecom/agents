@@ -15,4 +15,4 @@ Analyze the task and create an implementation plan.
 ## Rules
 
 - Read before planning — do not plan from assumptions
-- Cross-platform and naming orthogonality rules are in `rules/workflow.md` — follow them, do not duplicate here
+- Follow `rules/orthogonality.md` for cross-platform and naming consistency

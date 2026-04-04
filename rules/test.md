@@ -1,21 +1,5 @@
 # Testing
 
-Writing or running tests, test planning, test coverage review.
-
-Before modifying any source code, run `/write-tests` to plan and create tests.
-
-## Test Execution Timeout
-
-Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
-
-| Runner | Command |
-|--------|---------|
-| Bash | `timeout 120 <test-command>` |
-| PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `timeout 120` wrapper |
-| pytest | `timeout 120 uv run pytest ...` |
-
-Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
-
 ## Test Case Categories
 
 - **Normal cases**: Expected inputs and typical usage
@@ -57,6 +41,18 @@ Python (pytest) requires a `test_` prefix for auto-discovery:
 | Python (pytest) | `test_<branch-type>-<branch-name>.py` |
 | bash | `.sh` |
 | PowerShell (Pester) | `.Tests.ps1` |
+
+## Test Execution Timeout
+
+Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
+
+| Runner | Command |
+|--------|---------|
+| Bash | `timeout 120 <test-command>` |
+| PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `timeout 120` wrapper |
+| pytest | `timeout 120 uv run pytest ...` |
+
+Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
 
 ## Installer Testing
 
