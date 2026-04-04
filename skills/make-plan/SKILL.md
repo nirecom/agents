@@ -1,5 +1,5 @@
 ---
-name: plan
+name: make-plan
 description: Enter plan mode with high reasoning effort for implementation planning.
 effort: high
 ---
