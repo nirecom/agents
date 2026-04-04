@@ -25,7 +25,9 @@ Determine the docs location based on the current project:
 
 ## Procedure
 
-1. **Gather recent changes**: Run `git log --oneline -20` for the current repo (and source repos for LangChain projects)
+1. **Gather recent changes**:
+   - Run `git diff` and `git diff --cached` to capture uncommitted and staged changes (current session's work, not yet in git log)
+   - Run `git log --oneline -20` for committed history
 2. **Read current docs**: Read all target docs files
 3. **Identify gaps**: Compare git log against each document's content. Look for:
    - Unrecorded commits or phases
