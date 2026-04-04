@@ -44,3 +44,5 @@ Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
 ## File Naming Conventions
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
+
+See also `rules/orthogonality.md` for cross-platform and naming consistency rules.
