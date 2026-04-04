@@ -20,6 +20,21 @@ if git diff --cached --name-only | grep -qx "$SETTINGS"; then
     fi
 fi
 
+# Check execute permission on staged .sh files
+SH_NO_EXEC=""
+while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    mode=$(git ls-files -s "$f" | awk '{print $1}')
+    if [ "$mode" = "100644" ]; then
+        SH_NO_EXEC="$SH_NO_EXEC\n  $f"
+    fi
+done <<< "$(git diff --cached --name-only -- '*.sh')"
+if [ -n "$SH_NO_EXEC" ]; then
+    echo "pre-commit: .sh files lacking execute permission:$SH_NO_EXEC"
+    echo "Run: git update-index --chmod=+x <file>"
+    exit 1
+fi
+
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then
