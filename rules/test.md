@@ -2,13 +2,7 @@
 
 Writing or running tests, test planning, test coverage review.
 
-Before modifying any source code, first create or update test scripts:
-- Use the project's existing test directory if one exists; otherwise create `tests/`.
-- Tests must cover normal cases, error cases, and edge cases.
-- **Before writing test code**, list all planned test cases by category (normal / error / edge)
-  and present them to the user. Walk through the edge case checklist below and explicitly
-  address each applicable sub-category. Write code only after the user approves the list.
-- Run all relevant tests and confirm they pass before committing.
+Before modifying any source code, run `/write-tests` to plan and create tests.
 
 ## Test Execution Timeout
 
