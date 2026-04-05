@@ -82,7 +82,16 @@
       "Bash(git -C * push origin *)",
       "Bash(git -C * push -u origin *)",
       "Bash(chmod +x *.sh)",
-      "Bash(chmod +x */hooks/*)"
+      "Bash(chmod +x */hooks/*)",
+      "WebSearch",
+      "WebFetch(domain:developer.mozilla.org)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:learn.microsoft.com)",
+      "WebFetch(domain:man7.org)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:docs.github.com)"
     ],
     "deny": [
       "Read(**/.env)",
@@ -162,9 +171,7 @@
     "ask": [
       "Bash(git commit *)",
       "Bash(git -C * commit *)",
-      "Bash(cd * && git commit *)",
-      "WebSearch",
-      "WebFetch(domain:github.com)"
+      "Bash(cd * && git commit *)"
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
@@ -243,5 +250,6 @@
       }
     ]
   },
-  "autoUpdatesChannel": "latest"
+  "autoUpdatesChannel": "latest",
+  "effortLevel": "medium"
 }
