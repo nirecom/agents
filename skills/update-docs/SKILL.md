@@ -9,19 +9,22 @@ Update all project documentation to reflect recent changes
 
 Determine the docs location based on the current project:
 
-- **LangChain projects** (langchain-stack, litellm-stack, open-webui-stack, portable-llm-server):
-  - Docs directory: `../ai-specs/projects/engineering/langchain/`
+- **General projects** (dotfiles, etc.):
+  - Docs directory: `docs/` within the project root
+  - Target files: `architecture.md`, `todo.md`, `history.md`, `ops.md` (existing files only)
+  - Also update `README.md` if file tree or installation procedure changed
+
+- **ai-specs projects** (langchain-stack, litellm-stack, open-webui-stack, portable-llm-server, llama-swap, judgeclaw):
+  - Docs directory: `../ai-specs/projects/engineering/` (subdirectory per project: `langchain/`, `llama-swap/`, `judgeclaw/`, etc.)
   - If not found locally, clone from `git@github.com:nirecom/ai-specs.git`
   - Target: all `.md` files in the directory
   - Source repos for change detection:
     - `../langchain-stack/` → `git@github.com:nirecom/langchain-stack.git`
     - `../open-webui-stack/` → `git@github.com:nirecom/open-webui-stack.git`
     - `../portable-llm-server/` → `git@github.com:nirecom/portable-llm-server.git`
-
-- **General projects** (dotfiles, etc.):
-  - Docs directory: `docs/` within the project root
-  - Target files: `architecture.md`, `todo.md`, `history.md`, `ops.md` (existing files only)
-  - Also update `README.md` if file tree or installation procedure changed
+    - `../llama-swap/` → `git@github.com:nirecom/llama-swap.git`
+    - `../judgeclaw/` → `git@github.com:nirecom/judgeclaw.git`
+  - **llama-swap additional**: when `config.yaml` changes, also update in-repo `model-annotations.yaml` and `optimization-history.md`
 
 ## Procedure
 
