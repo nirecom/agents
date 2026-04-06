@@ -43,14 +43,15 @@ unstaged changes.
 
 - `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`).
   When updating todo.md after completing implementation work, add a **user verification step** as the next action item. The phase/task stays in Current Work with "Verifying" status until the user confirms completion. Do not move it to `history.md` until verification passes.
-- `history.md`: Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Use `###` section per entry (not table — long text is unreadable in tables). Commit hashes only (7 chars, no GitHub links). This prevents re-litigating past decisions in future conversations. New entries go at the **end** of their section — never insert in the middle. When appending, use Edit with `old_string` matching the trailing blank lines at the end of the file, and `new_string` being those blank lines plus the new entry. Format:
+- `history.md`: Single chronological stream in ascending order (oldest first, newest at end). Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Use `###` per entry (not tables). Changes and incidents are interleaved chronologically — do NOT use separate `##` sections. Incident entries use `### #N:` prefix for identification. New entries go at the **end** — never insert in the middle. When appending, use Edit with `old_string` matching the trailing blank lines at the end of the file, and `new_string` being those blank lines plus the new entry. Format:
   ```
-  ### Subject (commits)
+  ### Subject (YYYY-MM-DD, commits)
   Background: ...
   Changes: ...
   ```
-  Incident entries use `Cause:` / `Fix:` instead of `Background:` / `Changes:`.
-  If `history.md` is in legacy table format, convert it using `~/dotfiles/bin/convert-history-table.py`. **Always** present the converted output to the user for review before overwriting.
+  Date is mandatory (rebase-proof — commit hashes can become unresolvable). Commit hashes are 7 chars, no GitHub links. Incident entries use `### #N: Subject (YYYY-MM-DD, commits)` with `Cause:` / `Fix:` instead of `Background:` / `Changes:`.
+  To sort a history.md into ascending order: `uv run bin/sort-history.py <file> --dry-run`
+  If `history.md` is in legacy table format, convert using `~/dotfiles/bin/convert-history-table.py`. **Always** present converted output to the user for review before overwriting.
 - `infrastructure.md`: Authoritative source for host specs, network topology, Docker stack composition, port allocation, and cloud resources. When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-instruction` skill to keep it aligned with infrastructure changes.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
