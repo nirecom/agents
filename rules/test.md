@@ -1,5 +1,11 @@
 # Testing
 
+## Test Iteration Subagent
+
+Test file creation and iteration (write → run → fix) MUST run inside a subagent.
+Never write or edit test files directly in the main conversation.
+The `/write-tests` skill handles subagent launch — follow its procedure.
+
 ## Test Case Categories
 
 - **Normal cases**: Expected inputs and typical usage
