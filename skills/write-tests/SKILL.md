@@ -1,6 +1,6 @@
 ---
 name: write-tests
-description: Plan and write test cases with high reasoning effort. Invoked automatically before source code changes.
+description: Plan and write test cases with high reasoning effort. Test iteration runs in a subagent to minimize confirmations.
 effort: high
 ---
 
@@ -11,9 +11,14 @@ Write or update tests for the current task.
 1. Read `rules/test.md` for test case categories, naming conventions, and timeout rules.
 2. Identify which source file(s) need tests.
 3. List all planned test cases by category. Present to the user — do not write code until approved.
-4. Write the test file(s).
-5. Run tests with timeout.
-6. Run `/review-tests` to verify coverage. Fix gaps.
+4. **Launch a subagent** (`mode: "auto"`) to autonomously:
+   a. Write the test file(s).
+   b. Run tests with timeout.
+   c. Fix failures and re-run until green.
+   d. Review test coverage against `rules/test.md` categories — fix gaps.
+   e. Re-run tests until green.
+   The subagent prompt MUST instruct: edit only test files, never modify source code.
+5. Present the final test file content to the user for review.
 
 ## Rules
 
