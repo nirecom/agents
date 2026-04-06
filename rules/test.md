@@ -14,6 +14,10 @@
   - File/config: re-running doesn't duplicate entries (e.g., same line appended twice to `.bashrc`), template generation produces identical output
   - Cleanup: deletion/uninstall of already-removed targets doesn't error
 
+## Security vs Test Compatibility
+
+- Never weaken new security to preserve old tests — update the tests instead.
+
 ## Test Coverage Review
 
 After writing test code, run `/review-tests` to verify test case completeness before committing.
