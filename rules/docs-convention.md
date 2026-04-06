@@ -43,7 +43,7 @@ unstaged changes.
 
 - `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`).
   When updating todo.md after completing implementation work, add a **user verification step** as the next action item. The phase/task stays in Current Work with "Verifying" status until the user confirms completion. Do not move it to `history.md` until verification passes.
-- `history.md`: Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Use `###` section per entry (not table — long text is unreadable in tables). Commit hashes only (7 chars, no GitHub links). This prevents re-litigating past decisions in future conversations. Format:
+- `history.md`: Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Use `###` section per entry (not table — long text is unreadable in tables). Commit hashes only (7 chars, no GitHub links). This prevents re-litigating past decisions in future conversations. New entries go at the **end** of their section — never insert in the middle. When appending, use Edit with `old_string` matching the trailing blank lines at the end of the file, and `new_string` being those blank lines plus the new entry. Format:
   ```
   ### Subject (commits)
   Background: ...
