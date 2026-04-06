@@ -18,6 +18,7 @@ Write or update tests for the current task.
    d. Review test coverage against `rules/test.md` categories — fix gaps.
    e. Re-run tests until green.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
+   The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 5. Present the final test file content to the user for review.
 
 ## Rules
