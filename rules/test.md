@@ -1,10 +1,8 @@
 # Testing
 
-## Test Iteration Subagent
+## Test Writing
 
-Test file creation and iteration (write → run → fix) MUST run inside a subagent.
-Never write or edit test files directly in the main conversation.
-The `/write-tests` skill handles subagent launch — follow its procedure.
+Run `/write-tests` to create or update tests. Do not write test files directly in the main conversation.
 
 ## Test Case Categories
 
@@ -27,9 +25,6 @@ The `/write-tests` skill handles subagent launch — follow its procedure.
 ## Test Coverage Review
 
 After writing test code, run `/review-tests` to verify test case completeness before committing.
-This launches an Explore subagent that reads both the source code and the test file,
-checks coverage against the Test Case Categories checklist above, and lists any gaps.
-Fix gaps before presenting tests to the user.
 
 ## Test File Naming
 
