@@ -17,6 +17,7 @@
       "Grep(**/.env.sample)",
       "Grep(**/.env.template)",
       "Grep(**/.env.dist)",
+      "Bash(git commit *)",
       "Bash(git status*)",
       "Bash(git log *)",
       "Bash(git log)",
@@ -169,7 +170,6 @@
       "Edit(~/.profile_common)"
     ],
     "ask": [
-      "Bash(git commit *)",
       "Bash(git -C * commit *)",
       "Bash(cd * && git commit *)"
     ],
