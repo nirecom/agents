@@ -7,7 +7,7 @@ Create the following as a TodoWrite checklist and work through each step in orde
 1. **Research** — Run `/survey-code` and/or `/deep-research`.
    - `/survey-code`: Skip when the change target is already known (single file/function).
    - `/deep-research`: Skip when no external knowledge is needed.
-2. **Plan** — Run `/make-plan` and get approval.
+2. **Plan** — Run `/make-plan` (planner/reviewer discussion → approval).
    - Skip when: the task is a single-file change AND no design decision is needed.
    - Skipping Research does NOT justify skipping Plan.
    Run `/review-security` when the plan involves secrets, third-party services, or external input.
