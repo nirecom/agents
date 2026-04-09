@@ -9,7 +9,7 @@ Commit staged/unstaged changes and push to the remote.
 
 1. Stage changes with `git add`
 2. Run `git diff --cached --stat` to show what will be committed
-3. Draft a commit message and present it in chat. **Wait for user approval before proceeding.**
+3. Draft a commit message and present it in chat.
 4. Create the commit with the approved message
 5. Push to the current branch (`git push`; if no upstream is set, use `git push -u origin <branch>`)
 
