@@ -43,6 +43,7 @@ unstaged changes.
 
 - `todo.md`: Current Work section first. Status Summary has incomplete phases only (completed → `history.md`).
   When updating todo.md after completing implementation work, add a **user verification step** as the next action item. The phase/task stays in Current Work with "Verifying" status until the user confirms completion. Do not move it to `history.md` until verification passes.
+  Once verification passes, **move** the completed phase/step to `history.md` and **fully remove** it from `todo.md` — do not leave `[x]` checkboxes, completed sub-steps, or stub pointers back to `history.md`. The entry must exist in exactly one place. Status Summary likewise drops completed phases.
 - `history.md`: Single chronological stream in ascending order (oldest first, newest at end). Record completed work with **why** (background, incidents, migration rationale) — not just what was done. Use `###` per entry (not tables). Changes and incidents are interleaved chronologically — do NOT use separate `##` sections. Incident entries use `### #N:` prefix for identification. New entries go at the **end** — never insert in the middle. When appending, use Edit with `old_string` matching the trailing blank lines at the end of the file, and `new_string` being those blank lines plus the new entry. Format:
   ```
   ### Subject (YYYY-MM-DD, commits)
