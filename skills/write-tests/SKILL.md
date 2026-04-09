@@ -11,7 +11,7 @@ Write or update tests for the current task.
 1. Read `rules/test.md` for test case categories, naming conventions, and timeout rules.
 2. Identify which source file(s) need tests.
 3. List all planned test cases by category. Present to the user — do not write code until approved.
-4. **Launch a subagent** (`mode: "auto"`) to autonomously:
+4. **Launch a subagent** (`mode: "acceptEdits"`) to autonomously:
    a. Write the test file(s).
    b. Run tests with timeout.
    c. Fix failures and re-run until green.
