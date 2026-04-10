@@ -11,7 +11,7 @@ Create the following as a TodoWrite checklist and work through each step in orde
    - Skip when: the task is a single-file change AND no design decision is needed.
    - Skipping Research does NOT justify skipping Plan.
    Run `/review-security` when the plan involves secrets, third-party services, or external input.
-3. **Write tests** — **Always write or update tests before modifying source code.** See `rules/test.md`.
+3. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
 4. **Code** — Present a diff in chat before calling Edit. Wait for approval.
 5. **Test & Verify** — Run tests. Complete any additional verification and report results.
 6. **Docs** — Run `/update-docs`.
