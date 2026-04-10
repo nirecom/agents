@@ -83,6 +83,8 @@
       "Bash(git -C * push -u origin *)",
       "Bash(chmod +x *.sh)",
       "Bash(chmod +x */hooks/*)",
+      "Write(**/tests/**)",
+      "Edit(**/tests/**)",
       "WebSearch",
       "WebFetch(domain:developer.mozilla.org)",
       "WebFetch(domain:docs.python.org)",

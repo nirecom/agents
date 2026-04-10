@@ -2,7 +2,7 @@
 
 ## Test Writing
 
-Run `/write-tests` to create or update tests. Do not write test files directly in the main conversation.
+Do not write or edit test files directly in the main conversation.
 
 ## Test Case Categories
 
