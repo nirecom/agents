@@ -14,20 +14,9 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
 
 ## Review Checklist
 
-Inspect the plan against:
-
-- **Correctness** — will the steps actually achieve the stated goal? Any logical gaps?
-- **Completeness** — missing files, missing test updates, missing doc updates (per `rules/docs-convention.md`)
-- **Rules compliance**:
-  - `rules/coding.md` — secrets, temporary migration markers, naming, Python/Node commands
-  - `rules/orthogonality.md` — cross-platform parity, naming consistency
-  - `rules/test.md` — tests before source, categories covered (normal/error/edge/idempotency), timeout
-  - `rules/docs-convention.md` — todo.md / history.md / architecture.md updates
-  - `rules/git.md`, `rules/shell-commands.md`, `rules/installer.md` as applicable
-- **Edge cases** — empty inputs, boundary values, idempotency, re-run safety, failure modes
-- **Cross-platform** — Windows / Linux / macOS / QNAP impact
-- **Consistency with existing patterns** — does the plan align with how similar things are already done in the repo? Read the existing code to verify.
-- **Risks** — any risk the planner hasn't acknowledged
+- **Correctness & completeness** — will the steps achieve the goal? Missing files, tests, or doc updates?
+- **Rules compliance** — does the plan comply with project rules? Rules are already in your context — do not re-read them via the Read tool. Only Read a rule file if you need to verify a detail you cannot recall.
+- **Risks & edge cases** — unacknowledged risks, cross-platform impact, idempotency, failure modes
 - **Scope** — anything unnecessary that should be cut
 
 ## Procedure
