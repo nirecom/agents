@@ -1,6 +1,7 @@
 ---
 name: review-security
 description: Review architecture security across three axes before implementation planning.
+model: opus
 effort: medium
 ---
 

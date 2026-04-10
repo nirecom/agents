@@ -1,6 +1,7 @@
 ---
 name: deep-research
 description: Research external information (APIs, libraries, best practices, existing solutions) via web search before planning or implementation.
+model: opus
 effort: medium
 ---
 

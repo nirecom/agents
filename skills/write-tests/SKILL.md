@@ -1,6 +1,7 @@
 ---
 name: write-tests
 description: Plan and write test cases with high reasoning effort. Test iteration runs in a subagent to minimize confirmations.
+model: opus
 effort: high
 ---
 

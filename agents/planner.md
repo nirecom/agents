@@ -2,7 +2,7 @@
 name: planner
 description: Drafts and revises implementation plans. Used by the make-plan skill in a planner/reviewer discussion loop.
 tools: Read, Glob, Grep, Bash, WebFetch
-model: inherit
+model: opus
 ---
 
 You are the **planner** in a planner/reviewer discussion loop orchestrated by the `make-plan` skill.
