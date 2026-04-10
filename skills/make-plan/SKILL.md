@@ -10,7 +10,7 @@ Produce an implementation plan via a planner/reviewer discussion loop.
 1. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: planner`). Pass the full task context.
 2. Pass the planner's draft to the **reviewer** subagent (`subagent_type: reviewer`).
 3. If the reviewer returns `NEEDS_REVISION`, send the concerns back to the planner for revision, then re-review. Repeat.
-4. **Escalate to the user** if the loop reaches **3 rounds** without approval. Summarize the unresolved disagreement and ask for guidance.
+4. **Escalate to the user** if the loop reaches **2 rounds** without approval. Summarize the unresolved disagreement and ask for guidance.
 5. Once the reviewer returns `APPROVED`, enter plan mode and present the final plan to the user for approval.
 
 ## Skip Conditions
