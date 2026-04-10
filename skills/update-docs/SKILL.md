@@ -1,6 +1,8 @@
 ---
 name: update-docs
 description: Update all project documentation to reflect recent changes
+model: sonnet
+effort: low
 ---
 
 Update all project documentation to reflect recent changes

@@ -1,6 +1,8 @@
 ---
 name: update-instruction
 description: Update infrastructure.md to reflect infrastructure changes across all stacks and hosts
+model: sonnet
+effort: low
 ---
 
 Update `infrastructure.md` to reflect infrastructure changes across all stacks and hosts
