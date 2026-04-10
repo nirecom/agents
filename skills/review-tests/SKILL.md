@@ -1,6 +1,8 @@
 ---
 name: review-tests
 description: Review test coverage completeness using an Explore subagent
+model: sonnet
+effort: low
 ---
 
 Review test case completeness against source code.
