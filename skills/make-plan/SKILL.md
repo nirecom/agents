@@ -1,6 +1,7 @@
 ---
 name: make-plan
 description: Produce an implementation plan via a planner/reviewer discussion loop, then get user approval.
+model: opus
 ---
 
 Produce an implementation plan via a planner/reviewer discussion loop.

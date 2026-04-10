@@ -2,7 +2,7 @@
 name: reviewer
 description: Critically reviews implementation plans produced by the planner agent. Thorough — surfaces minor issues as well as major ones. Used by the make-plan skill.
 tools: Read, Glob, Grep
-model: inherit
+model: opus
 effort: high
 ---
 
