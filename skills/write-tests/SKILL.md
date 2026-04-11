@@ -25,3 +25,8 @@ Write or update tests for the current task.
 ## Rules
 
 - All test rules live in `rules/test.md` — do not duplicate here
+
+## Completion
+
+After completing this skill, run:
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID write_tests complete`

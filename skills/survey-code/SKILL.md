@@ -19,3 +19,8 @@ Investigate the codebase related to the given task.
 - Read-only — do not modify any files
 - Use Explore subagents for broad searches when needed
 - Follow `rules/orthogonality.md` — check cross-platform counterparts
+
+## Completion
+
+After completing this skill, run:
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID research complete`
