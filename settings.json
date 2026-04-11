@@ -235,7 +235,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-test-updated.js\"",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-tests-updated.js\"",
             "timeout": 5
           }
         ]
@@ -252,6 +252,7 @@
       }
     ]
   },
+  "effortLevel": "medium",
   "autoUpdatesChannel": "latest",
-  "effortLevel": "medium"
+  "model": "sonnet"
 }
