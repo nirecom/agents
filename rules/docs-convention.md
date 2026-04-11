@@ -59,5 +59,3 @@ unstaged changes.
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
 - `README.md`: External-facing overview (What / Install / Usage / Configuration). Delegate internals to `architecture.md` and procedures to `ops.md` — do not duplicate. For ai-specs projects, `README.md` lives in the source repo root (not in ai-specs). Keep concise — link to `docs/` for details.
-- **Public repositories**: all documentation must be in English
-- **Private repositories**: Japanese is acceptable
