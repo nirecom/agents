@@ -78,7 +78,7 @@ if (stagedFiles.length === 0) approve();
 
 // Categorize staged files
 const TEST_DIRS = ["tests/", "test/"];
-const EXEMPT_DIRS = ["docs/", ".claude/", "claude-global/"];
+const EXEMPT_DIRS = ["docs/", ".claude/", "claude-global/", ".config/"];
 const EXEMPT_FILES = [
   /^\.gitignore$/,
   /^\.editorconfig$/,
