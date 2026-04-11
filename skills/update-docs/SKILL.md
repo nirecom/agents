@@ -53,3 +53,8 @@ Determine the docs location based on the current project:
 - Follow the structure and content rules defined in `rules/docs-convention.md`
 - Follow the gather → propose → confirm → apply cycle (never write without user confirmation)
 - Compare git log against current docs to identify gaps
+
+## Completion
+
+After completing this skill, run:
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID docs complete`

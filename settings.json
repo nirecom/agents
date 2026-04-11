@@ -83,6 +83,7 @@
       "Bash(git -C * push -u origin *)",
       "Bash(chmod +x *.sh)",
       "Bash(chmod +x */hooks/*)",
+      "Bash(node *claude-global/hooks/mark-step.js*)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",
@@ -173,13 +174,15 @@
     "ask": [
       "Bash(git commit *)",
       "Bash(git -C * commit *)",
-      "Bash(cd * && git commit *)"
+      "Bash(cd * && git commit *)",
+      "Bash(node *mark-step.js*user_verification*)"
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
       "../ai-specs"
     ]
   },
+  "model": "sonnet",
   "enableAllProjectMcpServers": false,
   "deniedMcpServers": [
     {
@@ -195,6 +198,18 @@
             "type": "command",
             "command": "powershell.exe -NoProfile -Command \"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null; $xml = [Windows.Data.Xml.Dom.XmlDocument]::new(); $xml.LoadXml('<toast><visual><binding template=\\\"ToastText02\\\"><text id=\\\"1\\\">Claude Code</text><text id=\\\"2\\\">Permission approval needed</text></binding></visual></toast>'); [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Claude Code').Show([Windows.UI.Notifications.ToastNotification]::new($xml))\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/session-start.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -225,17 +240,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-docs-updated.js\"",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-tests-updated.js\"",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-gate.js\"",
             "timeout": 5
           }
         ]
@@ -253,6 +258,5 @@
     ]
   },
   "effortLevel": "medium",
-  "autoUpdatesChannel": "latest",
-  "model": "sonnet"
+  "autoUpdatesChannel": "latest"
 }
