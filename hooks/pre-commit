@@ -11,7 +11,7 @@ SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
 SETTINGS="claude-global/settings.json"
 if git diff --cached --name-only | grep -qx "$SETTINGS"; then
     # Compare HEAD vs staged after stripping effortLevel from both
-    STRIP_EFFORT='let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);delete j.effortLevel;console.log(JSON.stringify(j))})'
+    STRIP_EFFORT='let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);delete j.effortLevel;delete j.model;console.log(JSON.stringify(j))})'
     HEAD_CLEAN="$(git show "HEAD:$SETTINGS" 2>/dev/null | node -e "$STRIP_EFFORT" 2>/dev/null || true)"
     STAGED_CLEAN="$(git show ":$SETTINGS" 2>/dev/null | node -e "$STRIP_EFFORT" 2>/dev/null || true)"
     if [ -n "$HEAD_CLEAN" ] && [ "$HEAD_CLEAN" = "$STAGED_CLEAN" ]; then
