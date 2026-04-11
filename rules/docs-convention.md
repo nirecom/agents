@@ -11,6 +11,7 @@ Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastruct
 | `history.md` | Completed work with why (background, incidents, decisions) — append-only | Unlimited | On first completion |
 | `ops.md` | Operational procedures with actual commands | Unlimited | On demand |
 | `infrastructure.md` | **SSOT** for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. | Unlimited | Always (in `ai-specs`) |
+| `README.md` | Public-facing entry point — what it does, install, usage, configuration. For external users. | Compact | Public repos |
 
 Do not use `progress.md` or standalone `roadmap.md` — status tracking belongs in `todo.md`,
 completed details in `history.md`, future design specs in `architecture/roadmap.md`.
@@ -57,5 +58,6 @@ unstaged changes.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
+- `README.md`: External-facing overview (What / Install / Usage / Configuration). Delegate internals to `architecture.md` and procedures to `ops.md` — do not duplicate. For ai-specs projects, `README.md` lives in the source repo root (not in ai-specs). Keep concise — link to `docs/` for details.
 - **Public repositories**: all documentation must be in English
 - **Private repositories**: Japanese is acceptable
