@@ -13,6 +13,9 @@ If tests are missing or the commit hook blocks due to missing tests:
 - Never write tests directly in this conversation.
 - Invoke the `/write-tests` skill first, then resume commit-push.
 
+If documentation is missing or the commit hook blocks due to missing documentation updates:
+- Invoke the `/update-docs` skill first, then resume commit-push.
+
 ## Procedure
 
 1. Stage changes with `git add`
