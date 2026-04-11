@@ -13,13 +13,13 @@ Determine the docs location based on the current project:
 
 - **General projects** (dotfiles, etc.):
   - Docs directory: `docs/` within the project root
-  - Target files: `architecture.md`, `todo.md`, `history.md`, `ops.md` (existing files only)
-  - Also update `README.md` if file tree or installation procedure changed
+  - Target files: `README.md`, `architecture.md`, `todo.md`, `history.md`, `ops.md` (existing files only)
 
 - **ai-specs projects** (langchain-stack, litellm-stack, open-webui-stack, portable-llm-server, llama-swap, judgeclaw):
   - Docs directory: `../ai-specs/projects/engineering/` (subdirectory per project: `langchain/`, `llama-swap/`, `judgeclaw/`, etc.)
   - If not found locally, clone from `git@github.com:nirecom/ai-specs.git`
   - Target: all `.md` files in the directory
+  - Also update `README.md` in the source repo root
   - Source repos for change detection:
     - `../langchain-stack/` → `git@github.com:nirecom/langchain-stack.git`
     - `../open-webui-stack/` → `git@github.com:nirecom/open-webui-stack.git`
