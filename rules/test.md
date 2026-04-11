@@ -4,15 +4,6 @@
 
 Do not write or edit test files directly in the main conversation.
 
-### Temporary test file location
-
-Check `Platform` in the session's `<env>` block:
-
-| Platform | Location | Notes |
-|----------|----------|-------|
-| macOS / Linux | `/tmp/tests/` | Do not place files directly under `/tmp/` |
-| Windows | `tests/` (project-internal) | `/tmp/` does not exist on Windows |
-
 ## Test Case Categories
 
 - **Normal cases**: Expected inputs and typical usage
