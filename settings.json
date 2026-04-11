@@ -85,6 +85,8 @@
       "Bash(chmod +x */hooks/*)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
+      "Write(/tmp/tests/**)",
+      "Edit(/tmp/tests/**)",
       "WebSearch",
       "WebFetch(domain:developer.mozilla.org)",
       "WebFetch(domain:docs.python.org)",
