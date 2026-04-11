@@ -7,6 +7,12 @@ effort: low
 
 Commit staged/unstaged changes and push to the remote.
 
+## Pre-commit check
+
+If tests are missing or the commit hook blocks due to missing tests:
+- Never write tests directly in this conversation.
+- Invoke the `/write-tests` skill first, then resume commit-push.
+
 ## Procedure
 
 1. Stage changes with `git add`
