@@ -57,4 +57,4 @@ Determine the docs location based on the current project:
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID docs complete`
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" docs complete`
