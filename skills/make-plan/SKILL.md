@@ -31,4 +31,4 @@ In that case, draft the plan directly in the main conversation and present it fo
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID plan complete`
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" plan complete`

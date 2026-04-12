@@ -25,4 +25,4 @@ Investigate external information related to the given task.
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID research complete`
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" research complete`
