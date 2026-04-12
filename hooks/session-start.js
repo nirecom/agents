@@ -25,7 +25,7 @@ try {
   // Fail-open: malformed input — continue without setting session ID
 }
 
-// Write CLAUDE_SESSION_ID to env file if available
+// Write CLAUDE_SESSION_ID to env file if available (KEY=VALUE format, no export prefix)
 if (sessionId && process.env.CLAUDE_ENV_FILE) {
   try {
     fs.appendFileSync(
