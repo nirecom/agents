@@ -6,6 +6,7 @@
 const {
   VALID_STEPS,
   VALID_STATUSES,
+  resolveSessionId,
   markStep,
   createInitialState,
   writeState,
@@ -14,19 +15,26 @@ const {
 const args = process.argv.slice(2);
 const repoDir = process.env.HOOK_CWD || process.cwd();
 
-if (args.length < 3) {
+if (args.length < 2) {
   process.stderr.write(
-    "Usage: node mark-step.js <session-id> <step> <status>\n" +
-      "       node mark-step.js <session-id> --reset-from <step>\n"
+    "Usage: node mark-step.js <step> <status>\n" +
+      "       node mark-step.js --reset-from <step>\n"
   );
   process.exit(1);
 }
 
-const sessionId = args[0];
+const sessionId = resolveSessionId();
+if (!sessionId) {
+  process.stderr.write(
+    "Error: cannot resolve session ID from CLAUDE_ENV_FILE.\n" +
+      "CLAUDE_ENV_FILE must be set and contain CLAUDE_SESSION_ID=<id>.\n"
+  );
+  process.exit(1);
+}
 
 // --reset-from mode
-if (args[1] === "--reset-from") {
-  const fromStep = args[2];
+if (args[0] === "--reset-from") {
+  const fromStep = args[1];
   if (!VALID_STEPS.includes(fromStep)) {
     process.stderr.write(
       `Error: unknown step "${fromStep}". Valid steps: ${VALID_STEPS.join(", ")}\n`
@@ -55,8 +63,8 @@ if (args[1] === "--reset-from") {
 }
 
 // Normal mode: mark a step with a status
-const stepName = args[1];
-const status = args[2];
+const stepName = args[0];
+const status = args[1];
 
 if (!VALID_STEPS.includes(stepName)) {
   process.stderr.write(
