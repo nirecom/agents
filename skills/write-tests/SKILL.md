@@ -29,4 +29,4 @@ Write or update tests for the current task.
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" $CLAUDE_SESSION_ID write_tests complete`
+`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" write_tests complete`
