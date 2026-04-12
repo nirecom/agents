@@ -54,6 +54,7 @@ if (!commitMatch) approve();
 
 const repoDir = resolveRepoDir(command);
 
+
 if (isPrivateRepo(repoDir)) approve();
 
 // session_id is required — fail-safe if missing
