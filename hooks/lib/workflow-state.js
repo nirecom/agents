@@ -5,6 +5,24 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
+/**
+ * Resolve the current session ID from CLAUDE_ENV_FILE.
+ * CLAUDE_ENV_FILE is set by Claude Code in hook contexts (SessionStart, PreToolUse, etc.)
+ * and contains KEY=VALUE lines written by session-start.js.
+ * Returns null if CLAUDE_ENV_FILE is not set or CLAUDE_SESSION_ID is not found.
+ */
+function resolveSessionId() {
+  const envFile = process.env.CLAUDE_ENV_FILE;
+  if (!envFile) return null;
+  try {
+    const content = fs.readFileSync(envFile, "utf8");
+    const match = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
+    return match ? match[1].trim() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 const VALID_STEPS = [
   "research",
   "plan",
@@ -123,6 +141,7 @@ module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   VALID_STATUSES,
+  resolveSessionId,
   readState,
   writeState,
   markStep,
