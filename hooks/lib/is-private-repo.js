@@ -70,11 +70,20 @@ function isPrivateRepo(repoDir) {
   }
 }
 
+// Convert WSL/MSYS-style drive paths (e.g. bash /X/path) to Windows paths (X:/path) on win32.
+// Necessary because the Bash tool uses Unix-style paths even on Windows.
+function toNativePath(p) {
+  if (process.platform !== "win32") return p;
+  const m = p.match(/^\/([a-z])\/(.*)$/i);
+  return m ? `${m[1].toUpperCase()}:/${m[2]}` : p;
+}
+
 // Resolve the effective repo directory for a Bash git commit command
 // Uses HOOK_CWD env var if available, falls back to -C path or cwd
 function resolveRepoDir(command) {
   if (process.env.HOOK_CWD) return process.env.HOOK_CWD;
-  return extractRepoDirFromCommand(command) || ".";
+  const raw = extractRepoDirFromCommand(command) || ".";
+  return toNativePath(raw);
 }
 
-module.exports = { isPrivateRepo, resolveRepoDir, extractRepoDirFromCommand, extractRepoId, extractHost };
+module.exports = { isPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost };
