@@ -25,3 +25,9 @@ Write or update tests for the current task.
 ## Rules
 
 - All test rules live in `rules/test.md` — do not duplicate here
+
+## Completion
+
+After completing this skill, run:
+`echo "<<WORKFLOW_MARK_STEP:write_tests:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
