@@ -84,6 +84,8 @@
       "Bash(chmod +x *.sh)",
       "Bash(chmod +x */hooks/*)",
       "Bash(node *claude-global/hooks/mark-step.js*)",
+      "Bash(echo \"<<WORKFLOW_MARK_STEP:*\")",
+      "Bash(echo \"<<WORKFLOW_RESET_FROM:*\")",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",
@@ -180,6 +182,18 @@
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
       "../ai-specs"
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-mark.js\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "model": "sonnet",
