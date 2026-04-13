@@ -53,3 +53,9 @@ Determine the docs location based on the current project:
 - Follow the structure and content rules defined in `rules/docs-convention.md`
 - Follow the gather → propose → confirm → apply cycle (never write without user confirmation)
 - Compare git log against current docs to identify gaps
+
+## Completion
+
+After completing this skill, run:
+`echo "<<WORKFLOW_MARK_STEP:docs:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)

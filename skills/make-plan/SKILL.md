@@ -27,3 +27,9 @@ In that case, draft the plan directly in the main conversation and present it fo
 - Read before planning — do not plan from assumptions
 - Orchestrator (main Claude) only summarizes each discussion round to the user — do not dump full transcripts into the conversation
 - Follow `rules/orthogonality.md` for cross-platform and naming consistency
+
+## Completion
+
+After completing this skill, run:
+`echo "<<WORKFLOW_MARK_STEP:plan:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
