@@ -15,7 +15,6 @@ const {
   createInitialState,
   writeState,
 } = require("./lib/workflow-state");
-const { isPrivateRepo } = require("./lib/is-private-repo");
 
 function readStdin() {
   const chunks = [];
@@ -38,6 +37,8 @@ const MARKER_RE_SQ =
   /^echo\s+'<<WORKFLOW_MARK_STEP:([a-z_]+):(complete|skipped|pending|in_progress)>>'$/;
 const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM:([a-z_]+)>>"$/;
 const RESET_FROM_RE_SQ = /^echo\s+'<<WORKFLOW_RESET_FROM:([a-z_]+)>>'$/;
+// USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly
+const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED>>"$/;
 
 function done(additionalContext) {
   const out = additionalContext ? { additionalContext } : {};
@@ -58,7 +59,8 @@ if (input.tool_name !== "Bash") done();
 const command = ((input.tool_input && input.tool_input.command) || "").trim();
 const markMatch = command.match(MARKER_RE_DQ) || command.match(MARKER_RE_SQ);
 const resetMatch = command.match(RESET_FROM_RE_DQ) || command.match(RESET_FROM_RE_SQ);
-if (!markMatch && !resetMatch) done(); // not a marker command
+const userVerifiedMatch = command.match(USER_VERIFIED_RE_DQ);
+if (!markMatch && !resetMatch && !userVerifiedMatch) done(); // not a marker command
 
 // If the echo itself failed, don't apply (handle multiple possible response shapes)
 const toolResponse = input.tool_response || {};
@@ -74,11 +76,25 @@ if (exitCode !== 0) {
 // Resolve repo dir — CLAUDE_PROJECT_DIR is documented and available in all hook types
 const repoDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
-// Skip private repos (consistent with workflow-gate.js)
-if (isPrivateRepo(repoDir)) done();
-
 // Resolve session ID from hook stdin (preferred), fall back to CLAUDE_ENV_FILE
 const sessionId = input.session_id || resolveSessionId();
+
+// --- USER_VERIFIED handler ---
+if (userVerifiedMatch) {
+  if (!sessionId) {
+    done(
+      `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
+        `Confirm manually: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" user_verification complete`
+    );
+  }
+  try {
+    markStep(repoDir, sessionId, "user_verification", "complete");
+  } catch (e) {
+    done(
+      `workflow-mark: failed to write state — ${e.message}. user_verification NOT recorded.`
+    );
+  }
+}
 
 // --- MARK_STEP handler ---
 if (markMatch) {
