@@ -85,7 +85,8 @@
       "Bash(chmod +x */hooks/*)",
       "Bash(node *claude-global/hooks/mark-step.js*)",
       "Bash(echo \"<<WORKFLOW_MARK_STEP:*\")",
-      "Bash(echo \"<<WORKFLOW_RESET_FROM:*\")",
+      "Bash(echo '<<WORKFLOW_MARK_STEP:*')",
+      "Bash(echo '<<WORKFLOW_RESET_FROM:*')",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",
@@ -171,13 +172,17 @@
       "Edit(~/.zshrc)",
       "Edit(~/.profile)",
       "Edit(~/.bash_profile)",
-      "Edit(~/.profile_common)"
+      "Edit(~/.profile_common)",
+      "Edit(**/.git/workflow/**)",
+      "Write(**/.git/workflow/**)"
     ],
     "ask": [
       "Bash(git commit *)",
       "Bash(git -C * commit *)",
       "Bash(cd * && git commit *)",
-      "Bash(node *mark-step.js*user_verification*)"
+      "Bash(node *mark-step.js*user_verification*)",
+      "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
+      "Bash(echo \"<<WORKFLOW_RESET_FROM:*\")"
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
