@@ -2,7 +2,7 @@
 // Claude Code SessionStart hook: set CLAUDE_SESSION_ID env and clean up zombie state files
 
 const fs = require("fs");
-const { cleanupZombies } = require("./lib/workflow-state");
+const { cleanupZombies, createInitialState, writeState, readState } = require("./lib/workflow-state");
 
 function readStdin() {
   const chunks = [];
@@ -35,6 +35,21 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
     );
   } catch (e) {
     // Fail-open
+  }
+}
+
+// Create initial state file if session_id and CLAUDE_PROJECT_DIR are available
+if (sessionId && process.env.CLAUDE_PROJECT_DIR) {
+  try {
+    const repoDir = process.env.CLAUDE_PROJECT_DIR;
+    // Only create if state file does not already exist (idempotent)
+    const existing = readState(repoDir, sessionId);
+    if (!existing) {
+      const state = createInitialState(sessionId);
+      writeState(repoDir, sessionId, state);
+    }
+  } catch (e) {
+    // Fail-open: non-git dir, permission error, etc. — do not crash SessionStart
   }
 }
 
