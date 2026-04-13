@@ -29,4 +29,5 @@ Write or update tests for the current task.
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" write_tests complete`
+`echo "<<WORKFLOW_MARK_STEP:write_tests:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)

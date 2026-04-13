@@ -31,4 +31,5 @@ In that case, draft the plan directly in the main conversation and present it fo
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" plan complete`
+`echo "<<WORKFLOW_MARK_STEP:plan:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)

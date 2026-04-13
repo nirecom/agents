@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+// Claude Code PostToolUse hook: intercept workflow markers from skill completions
+//
+// Supported markers (must be the ENTIRE Bash command — no pipes, &&, redirects):
+//   echo "<<WORKFLOW_MARK_STEP:<step>:<status>>>"  — mark a step
+//   echo "<<WORKFLOW_RESET_FROM:<step>>>"           — reset state from a step
+//
+// Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
+
+const fs = require("fs");
+const {
+  VALID_STEPS,
+  resolveSessionId,
+  markStep,
+  createInitialState,
+  writeState,
+} = require("./lib/workflow-state");
+const { isPrivateRepo } = require("./lib/is-private-repo");
+
+function readStdin() {
+  const chunks = [];
+  const buf = Buffer.alloc(4096);
+  try {
+    while (true) {
+      const bytesRead = fs.readSync(0, buf, 0, buf.length);
+      if (bytesRead === 0) break;
+      chunks.push(buf.slice(0, bytesRead));
+    }
+  } catch (e) {}
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+// Strict anchored regex: the entire command must be exactly this echo.
+// Rejects pipes, &&, ;, redirects, prefixed cd, printf, etc. by construction.
+const MARKER_RE_DQ =
+  /^echo\s+"<<WORKFLOW_MARK_STEP:([a-z_]+):(complete|skipped|pending|in_progress)>>"$/;
+const MARKER_RE_SQ =
+  /^echo\s+'<<WORKFLOW_MARK_STEP:([a-z_]+):(complete|skipped|pending|in_progress)>>'$/;
+const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM:([a-z_]+)>>"$/;
+const RESET_FROM_RE_SQ = /^echo\s+'<<WORKFLOW_RESET_FROM:([a-z_]+)>>'$/;
+
+function done(additionalContext) {
+  const out = additionalContext ? { additionalContext } : {};
+  console.log(JSON.stringify(out));
+  process.exit(0);
+}
+
+let input;
+try {
+  input = JSON.parse(readStdin());
+} catch (e) {
+  done(); // fail-open on malformed stdin
+}
+
+// Only handle Bash tool
+if (input.tool_name !== "Bash") done();
+
+const command = ((input.tool_input && input.tool_input.command) || "").trim();
+const markMatch = command.match(MARKER_RE_DQ) || command.match(MARKER_RE_SQ);
+const resetMatch = command.match(RESET_FROM_RE_DQ) || command.match(RESET_FROM_RE_SQ);
+if (!markMatch && !resetMatch) done(); // not a marker command
+
+// If the echo itself failed, don't apply (handle multiple possible response shapes)
+const toolResponse = input.tool_response || {};
+const exitCode =
+  toolResponse.exit_code ??
+  toolResponse.exitCode ??
+  (toolResponse.success === false ? 1 : 0);
+if (exitCode !== 0) {
+  const label = markMatch ? markMatch[1] : resetMatch[1];
+  done(`workflow-mark: echo exited ${exitCode} — operation for "${label}" NOT applied.`);
+}
+
+// Resolve repo dir — CLAUDE_PROJECT_DIR is documented and available in all hook types
+const repoDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+
+// Skip private repos (consistent with workflow-gate.js)
+if (isPrivateRepo(repoDir)) done();
+
+// Resolve session ID from hook stdin (preferred), fall back to CLAUDE_ENV_FILE
+const sessionId = input.session_id || resolveSessionId();
+
+// --- MARK_STEP handler ---
+if (markMatch) {
+  const [, stepName, status] = markMatch;
+
+  // user_verification must go through CLI (preserves the ask-rule in settings.json)
+  if (stepName === "user_verification") {
+    done(
+      `workflow-mark: user_verification cannot be marked via echo sentinel. ` +
+        `Run: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" user_verification complete`
+    );
+  }
+
+  // Validate step name (regex already constrains status values)
+  if (!VALID_STEPS.includes(stepName)) {
+    done(`workflow-mark: unknown step "${stepName}" in marker — ignored.`);
+  }
+
+  if (!sessionId) {
+    done(
+      `workflow-mark: could not resolve session_id — step "${stepName}" NOT recorded. ` +
+        `Commit gate will block. Run manually: ` +
+        `node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" ${stepName} ${status}`
+    );
+  }
+
+  try {
+    markStep(repoDir, sessionId, stepName, status);
+  } catch (e) {
+    done(
+      `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
+    );
+  }
+}
+
+// --- RESET_FROM handler ---
+if (resetMatch) {
+  const [, fromStep] = resetMatch;
+
+  if (!VALID_STEPS.includes(fromStep)) {
+    done(`workflow-mark: unknown step "${fromStep}" for reset-from — ignored.`);
+  }
+
+  if (!sessionId) {
+    done(
+      `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
+        `Run manually: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" --reset-from ${fromStep}`
+    );
+  }
+
+  try {
+    const newState = createInitialState(sessionId);
+    const fromIndex = VALID_STEPS.indexOf(fromStep);
+    const now = new Date().toISOString();
+    for (let i = 0; i < fromIndex; i++) {
+      newState.steps[VALID_STEPS[i]] = { status: "complete", updated_at: now };
+    }
+    writeState(repoDir, sessionId, newState);
+  } catch (e) {
+    done(`workflow-mark: reset-from failed — ${e.message}.`);
+  }
+}
+
+done();
