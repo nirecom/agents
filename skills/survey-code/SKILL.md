@@ -23,4 +23,5 @@ Investigate the codebase related to the given task.
 ## Completion
 
 After completing this skill, run:
-`node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" research complete`
+`echo "<<WORKFLOW_MARK_STEP:research:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
