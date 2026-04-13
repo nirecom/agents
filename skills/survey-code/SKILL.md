@@ -19,3 +19,9 @@ Investigate the codebase related to the given task.
 - Read-only — do not modify any files
 - Use Explore subagents for broad searches when needed
 - Follow `rules/orthogonality.md` — check cross-platform counterparts
+
+## Completion
+
+After completing this skill, run:
+`echo "<<WORKFLOW_MARK_STEP:research:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)

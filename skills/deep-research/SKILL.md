@@ -21,3 +21,9 @@ Investigate external information related to the given task.
 - Always include source URLs for traceability
 - Prefer primary sources (official docs, RFCs) over blog posts
 - When sources contradict each other, report both sides instead of choosing one
+
+## Completion
+
+After completing this skill, run:
+`echo "<<WORKFLOW_MARK_STEP:research:complete>>"`
+(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
