@@ -182,18 +182,6 @@
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
       "../ai-specs"
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-mark.js\"",
-            "timeout": 5
-          }
-        ]
-      }
     ]
   },
   "model": "sonnet",
@@ -269,8 +257,20 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-mark.js\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
-  "effortLevel": "medium",
+  "effortLevel": "high",
   "autoUpdatesChannel": "latest"
 }
