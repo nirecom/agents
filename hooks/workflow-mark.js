@@ -2,8 +2,8 @@
 // Claude Code PostToolUse hook: intercept workflow markers from skill completions
 //
 // Supported markers (must be the ENTIRE Bash command — no pipes, &&, redirects):
-//   echo "<<WORKFLOW_MARK_STEP:<step>:<status>>>"  — mark a step
-//   echo "<<WORKFLOW_RESET_FROM:<step>>>"           — reset state from a step
+//   echo "<<WORKFLOW_MARK_STEP_<step>_<status>>>"   — mark a step
+//   echo "<<WORKFLOW_RESET_FROM_<step>>>"            — reset state from a step
 //
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
 
@@ -32,11 +32,10 @@ function readStdin() {
 // Strict anchored regex: the entire command must be exactly this echo.
 // Rejects pipes, &&, ;, redirects, prefixed cd, printf, etc. by construction.
 const MARKER_RE_DQ =
-  /^echo\s+"<<WORKFLOW_MARK_STEP:([a-z_]+):(complete|skipped|pending|in_progress)>>"$/;
+  /^echo\s+"<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>"$/;
 const MARKER_RE_SQ =
-  /^echo\s+'<<WORKFLOW_MARK_STEP:([a-z_]+):(complete|skipped|pending|in_progress)>>'$/;
-const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM:([a-z_]+)>>"$/;
-const RESET_FROM_RE_SQ = /^echo\s+'<<WORKFLOW_RESET_FROM:([a-z_]+)>>'$/;
+  /^echo\s+'<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>'$/;
+const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
 // USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly
 const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED>>"$/;
 
@@ -58,7 +57,7 @@ if (input.tool_name !== "Bash") done();
 
 const command = ((input.tool_input && input.tool_input.command) || "").trim();
 const markMatch = command.match(MARKER_RE_DQ) || command.match(MARKER_RE_SQ);
-const resetMatch = command.match(RESET_FROM_RE_DQ) || command.match(RESET_FROM_RE_SQ);
+const resetMatch = command.match(RESET_FROM_RE_DQ);
 const userVerifiedMatch = command.match(USER_VERIFIED_RE_DQ);
 if (!markMatch && !resetMatch && !userVerifiedMatch) done(); // not a marker command
 
