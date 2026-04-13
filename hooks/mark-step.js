@@ -13,7 +13,7 @@ const {
 } = require("./lib/workflow-state");
 
 const args = process.argv.slice(2);
-const repoDir = process.env.HOOK_CWD || process.cwd();
+const repoDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 if (args.length < 2) {
   process.stderr.write(

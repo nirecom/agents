@@ -81,7 +81,7 @@ function toNativePath(p) {
 // Resolve the effective repo directory for a Bash git commit command
 // Uses HOOK_CWD env var if available, falls back to -C path or cwd
 function resolveRepoDir(command) {
-  if (process.env.HOOK_CWD) return process.env.HOOK_CWD;
+  if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
   const raw = extractRepoDirFromCommand(command) || ".";
   return toNativePath(raw);
 }
