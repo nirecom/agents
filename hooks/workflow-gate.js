@@ -3,7 +3,7 @@
 // Replaces check-tests-updated.js and check-docs-updated.js
 
 const fs = require("fs");
-const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
+const { resolveRepoDir } = require("./lib/is-private-repo");
 const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -53,9 +53,6 @@ const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
 if (!commitMatch) approve();
 
 const repoDir = resolveRepoDir(command);
-
-
-if (isPrivateRepo(repoDir)) approve();
 
 // session_id is required — fail-safe if missing
 if (!sessionId) {
