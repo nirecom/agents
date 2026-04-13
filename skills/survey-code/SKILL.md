@@ -23,5 +23,5 @@ Investigate the codebase related to the given task.
 ## Completion
 
 After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP:research:complete>>"`
+`echo "<<WORKFLOW_MARK_STEP_research_complete>>"`
 (This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)

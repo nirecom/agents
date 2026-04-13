@@ -57,5 +57,5 @@ Determine the docs location based on the current project:
 ## Completion
 
 After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP:docs:complete>>"`
+`echo "<<WORKFLOW_MARK_STEP_docs_complete>>"`
 (This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)

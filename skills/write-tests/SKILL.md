@@ -29,5 +29,5 @@ Write or update tests for the current task.
 ## Completion
 
 After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP:write_tests:complete>>"`
+`echo "<<WORKFLOW_MARK_STEP_write_tests_complete>>"`
 (This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
