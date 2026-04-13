@@ -40,7 +40,7 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
 
 // Clean up zombie state files (older than 7 days)
 try {
-  cleanupZombies(process.env.HOOK_CWD || process.cwd(), 7);
+  cleanupZombies(process.env.CLAUDE_PROJECT_DIR || process.cwd(), 7);
 } catch (e) {
   // Fail-open
 }
