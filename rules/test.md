@@ -47,28 +47,6 @@ Python (pytest) requires a `test_` prefix for auto-discovery:
 | bash | `.sh` |
 | PowerShell (Pester) | `.Tests.ps1` |
 
-## Test Execution Timeout
-
-Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
-
-| Runner | Command |
-|--------|---------|
-| Bash | `timeout 120 <test-command>` |
-| PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `timeout 120` wrapper |
-| pytest | `timeout 120 uv run pytest ...` |
-
-Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
-
-## Installer Testing
-
-Silent installers (NSIS, Electron-builder, etc.) have non-obvious behaviors that tests must account for:
-
-- **Async completion**: Installers often spawn child processes and return immediately. `Start-Process -Wait` only waits for the parent. Poll for expected artifacts with a timeout instead of trusting process exit.
-- **Variable install paths**: Per-user vs per-machine installs use different directories (e.g., `%LOCALAPPDATA%\Programs\` vs `%ProgramFiles%\`). Always check all candidate paths rather than hardcoding one.
-- **Silent failure**: Exit code 0 does not guarantee success. Flag combinations that work interactively may silently fail in silent mode (e.g., `/S /currentuser`). Always verify the actual installed artifact exists.
-
-- **Idempotency**: Re-installing doesn't fail or leave inconsistent artifacts. PATH/env additions don't duplicate on re-run. Version-pinned installs produce the same result.
-
 ## Test Layer Selection
 
 Follow Martin Fowler's narrow/broad integration distinction and Kent C. Dodds'
@@ -111,3 +89,53 @@ the event, would my unit tests still pass?"* If yes, a unit test is not enough.
 - Fowler, *IntegrationTest* — https://martinfowler.com/bliki/IntegrationTest.html
 - Kent C. Dodds, *Write tests. Not too many. Mostly integration.* — https://kentcdodds.com/blog/write-tests
 - Kent C. Dodds, *Static vs Unit vs Integration vs E2E Tests* — https://kentcdodds.com/blog/static-vs-unit-vs-integration-vs-e2e-tests
+
+## Test Execution Timeout
+
+Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
+
+Note: `timeout` is not available on macOS. Use a portable wrapper in bash test scripts:
+
+```bash
+run_with_timeout() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 180 "$@"
+    else
+        perl -e 'alarm 180; exec @ARGV' -- "$@"
+    fi
+}
+```
+
+| Runner | Command |
+|--------|---------|
+| Bash | `run_with_timeout <test-command>` (use wrapper above) |
+| PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `run_with_timeout` wrapper |
+| pytest | `run_with_timeout uv run pytest ...` |
+
+Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
+
+## Claude Code CLI (`claude -p`) E2E Testing
+
+When spawning `claude -p` in E2E tests, three precautions are required:
+
+1. **Unset `CLAUDECODE`** — Claude Code sets this env var in its session.
+   Child processes inherit it, causing `claude -p` to refuse with
+   "nested sessions" error. Always `unset CLAUDECODE` before the call.
+
+2. **Use minimal settings.json** — Copying `claude-global/settings.json` into
+   the test repo also copies `disableBypassPermissionsMode: disable`, which
+   neutralizes `--dangerously-skip-permissions` and causes a hang.
+   Write only the hooks needed by the test:
+   ```json
+   { "hooks": { "PostToolUse": [...] } }
+   ```
+
+3. **WSL-via-Windows bridge masks both issues** — When Claude Code on WSL
+   runs through the native Windows binary, `CLAUDECODE` is not propagated
+   into the WSL shell and user settings are read from the Windows profile.
+   Tests that pass on WSL may still fail on macOS native. Always verify
+   E2E tests on a true native environment.
+
+## Installer Testing
+
+See [test-installer.md](test-installer.md) for silent installer test patterns (async completion, variable install paths, silent failure, idempotency).
