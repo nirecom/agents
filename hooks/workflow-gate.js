@@ -116,7 +116,7 @@ for (const step of incomplete) {
 lines.push(
   "",
   "To reset workflow state from a specific step:",
-  '  node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" --reset-from <step>'
+  '  echo "<<WORKFLOW_RESET_FROM:<step>>"'
 );
 
 block(lines.join("\n"));
