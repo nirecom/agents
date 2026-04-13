@@ -68,3 +68,46 @@ Silent installers (NSIS, Electron-builder, etc.) have non-obvious behaviors that
 - **Silent failure**: Exit code 0 does not guarantee success. Flag combinations that work interactively may silently fail in silent mode (e.g., `/S /currentuser`). Always verify the actual installed artifact exists.
 
 - **Idempotency**: Re-installing doesn't fail or leave inconsistent artifacts. PATH/env additions don't duplicate on re-run. Version-pinned installs produce the same result.
+
+## Test Layer Selection
+
+Follow Martin Fowler's narrow/broad integration distinction and Kent C. Dodds'
+Testing Trophy: pick the lowest test layer that can actually fail when the code
+under test is broken.
+
+| Layer | What it must catch |
+|---|---|
+| Static (schema / lint / types) | Config file structure errors, typos in known schemas |
+| Unit | Pure logic of a single function with all I/O mocked |
+| Narrow integration | Module reads real config files / env vars / fixtures |
+| Broad integration | Real subprocess, real filesystem, real plugin/hook registration |
+| Smoke (post-install) | "Is it actually wired up in the real environment?" |
+
+### Mandatory integration or E2E coverage
+
+Add an integration or E2E test (not just unit) when the change touches any of
+the following — unit tests are structurally blind to these failure modes:
+
+1. **Configuration files** (`settings.json`, YAML, TOML, etc.) — load the real
+   file and assert the feature activates. Consider schema validation as a static
+   test.
+2. **Hook / plugin / event-handler registration** — the test must verify the
+   hook actually fires in the real host process, not just that the handler
+   function works when called directly.
+3. **Subprocess boundaries** — spawn the real CLI and assert on
+   stdout/stderr/exit code/side-effect files.
+4. **Cross-module wiring** added or modified (DI, routing, event bus).
+5. **Regression for a bug that slipped past unit tests** — the regression test
+   must live at the layer that would have caught it.
+
+### Deciding whether to write an integration test
+
+Ask: *"If someone deleted the registration / misplaced the config key / renamed
+the event, would my unit tests still pass?"* If yes, a unit test is not enough.
+
+### References
+
+- Fowler, *The Practical Test Pyramid* — https://martinfowler.com/articles/practical-test-pyramid.html
+- Fowler, *IntegrationTest* — https://martinfowler.com/bliki/IntegrationTest.html
+- Kent C. Dodds, *Write tests. Not too many. Mostly integration.* — https://kentcdodds.com/blog/write-tests
+- Kent C. Dodds, *Static vs Unit vs Integration vs E2E Tests* — https://kentcdodds.com/blog/static-vs-unit-vs-integration-vs-e2e-tests
