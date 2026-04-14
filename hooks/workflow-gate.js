@@ -110,10 +110,4 @@ for (const step of incomplete) {
   }
 }
 
-lines.push(
-  "",
-  "To reset workflow state from a specific step:",
-  '  echo "<<WORKFLOW_RESET_FROM_<step>>"'
-);
-
 block(lines.join("\n"));
