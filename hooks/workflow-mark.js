@@ -72,8 +72,6 @@ if (exitCode !== 0) {
   done(`workflow-mark: echo exited ${exitCode} — operation for "${label}" NOT applied.`);
 }
 
-// Resolve repo dir — CLAUDE_PROJECT_DIR is documented and available in all hook types
-const repoDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 // Resolve session ID from hook stdin (preferred), fall back to CLAUDE_ENV_FILE
 const sessionId = input.session_id || resolveSessionId();
@@ -87,7 +85,7 @@ if (userVerifiedMatch) {
     );
   }
   try {
-    markStep(repoDir, sessionId, "user_verification", "complete");
+    markStep(sessionId, "user_verification", "complete");
   } catch (e) {
     done(
       `workflow-mark: failed to write state — ${e.message}. user_verification NOT recorded.`
@@ -121,7 +119,7 @@ if (markMatch) {
   }
 
   try {
-    markStep(repoDir, sessionId, stepName, status);
+    markStep(sessionId, stepName, status);
   } catch (e) {
     done(
       `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
@@ -151,7 +149,7 @@ if (resetMatch) {
     for (let i = 0; i < fromIndex; i++) {
       newState.steps[VALID_STEPS[i]] = { status: "complete", updated_at: now };
     }
-    writeState(repoDir, sessionId, newState);
+    writeState(sessionId, newState);
   } catch (e) {
     done(`workflow-mark: reset-from failed — ${e.message}.`);
   }

@@ -172,8 +172,8 @@
       "Edit(~/.profile)",
       "Edit(~/.bash_profile)",
       "Edit(~/.profile_common)",
-      "Edit(**/.git/workflow/**)",
-      "Write(**/.git/workflow/**)"
+      "Edit(~/.claude/projects/workflow/**)",
+      "Write(~/.claude/projects/workflow/**)"
     ],
     "ask": [
       "Bash(git commit *)",
