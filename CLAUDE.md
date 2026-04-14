@@ -17,3 +17,12 @@ Create the following as a TodoWrite checklist and work through each step in orde
 6. **Docs** — Run `/update-docs`.
 7. **User verification** — Wait for the user to confirm the task is complete.
 8. **Commit** — Run `/commit-push`.
+
+## Workflow State Recovery
+
+The main conversation can reset workflow state only when it has enough holistic context
+to judge that a reset is genuinely warranted. Skills and subagents must not reset.
+
+```
+echo "<<WORKFLOW_RESET_FROM_<step>>>"
+```
