@@ -79,8 +79,15 @@ if (!VALID_STATUSES.includes(status)) {
   process.exit(1);
 }
 
-if (stepName === "user_verification" && status === "skipped") {
-  process.stderr.write('Error: "user_verification" cannot be skipped.\n');
+if (stepName === "user_verification" && (status === "complete" || status === "skipped")) {
+  if (status === "skipped") {
+    process.stderr.write('Error: "user_verification" cannot be skipped.\n');
+  } else {
+    process.stderr.write(
+      'Error: "user_verification" cannot be marked complete directly.\n' +
+        'Use: echo "<<WORKFLOW_USER_VERIFIED>>" (triggers ask dialog for user approval)\n'
+    );
+  }
   process.exit(1);
 }
 
