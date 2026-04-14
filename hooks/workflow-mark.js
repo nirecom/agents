@@ -81,7 +81,7 @@ if (userVerifiedMatch) {
   if (!sessionId) {
     done(
       `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
-        `Confirm manually: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" user_verification complete`
+        `Re-run: echo "<<WORKFLOW_USER_VERIFIED>>" (ask dialog will re-trigger for user approval)`
     );
   }
   try {
@@ -97,11 +97,12 @@ if (userVerifiedMatch) {
 if (markMatch) {
   const [, stepName, status] = markMatch;
 
-  // user_verification must go through CLI (preserves the ask-rule in settings.json)
+  // user_verification must go through the WORKFLOW_USER_VERIFIED echo path
+  // (preserves the ask-rule in settings.json — the CLI bypass is blocked in mark-step.js)
   if (stepName === "user_verification") {
     done(
-      `workflow-mark: user_verification cannot be marked via echo sentinel. ` +
-        `Run: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" user_verification complete`
+      `workflow-mark: user_verification cannot be marked via MARK_STEP sentinel. ` +
+        `Use: echo "<<WORKFLOW_USER_VERIFIED>>" (triggers ask dialog for user approval)`
     );
   }
 
