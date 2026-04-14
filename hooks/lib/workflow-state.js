@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Shared state module for workflow hooks
 
-const { execSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 /**
@@ -35,26 +35,20 @@ const VALID_STEPS = [
 const SKIPPABLE_STEPS = ["research", "plan"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
-function getWorkflowDir(repoDir) {
-  const gitDir = execSync("git rev-parse --git-dir", {
-    cwd: repoDir,
-    encoding: "utf8",
-    timeout: 5000,
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
-  const absGitDir = path.isAbsolute(gitDir)
-    ? gitDir
-    : path.join(repoDir, gitDir);
-  return path.join(absGitDir, "workflow");
+// State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
+// CLAUDE_WORKFLOW_DIR env var overrides the directory (used in tests).
+function getWorkflowDir() {
+  if (process.env.CLAUDE_WORKFLOW_DIR) return process.env.CLAUDE_WORKFLOW_DIR;
+  return path.join(os.homedir(), ".claude", "projects", "workflow");
 }
 
-function getStatePath(repoDir, sessionId) {
-  return path.join(getWorkflowDir(repoDir), sessionId + ".json");
+function getStatePath(sessionId) {
+  return path.join(getWorkflowDir(), sessionId + ".json");
 }
 
-function readState(repoDir, sessionId) {
+function readState(sessionId) {
   try {
-    const filePath = getStatePath(repoDir, sessionId);
+    const filePath = getStatePath(sessionId);
     const raw = fs.readFileSync(filePath, "utf8");
     return JSON.parse(raw);
   } catch (e) {
@@ -62,10 +56,10 @@ function readState(repoDir, sessionId) {
   }
 }
 
-function writeState(repoDir, sessionId, state) {
-  const workflowDir = getWorkflowDir(repoDir);
+function writeState(sessionId, state) {
+  const workflowDir = getWorkflowDir();
   fs.mkdirSync(workflowDir, { recursive: true });
-  const filePath = getStatePath(repoDir, sessionId);
+  const filePath = getStatePath(sessionId);
   const tmpPath = filePath + ".tmp";
   fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf8");
   fs.renameSync(tmpPath, filePath);
@@ -84,34 +78,41 @@ function createInitialState(sessionId) {
   };
 }
 
-function markStep(repoDir, sessionId, stepName, status) {
-  let state = readState(repoDir, sessionId);
+function markStep(sessionId, stepName, status) {
+  let state = readState(sessionId);
   if (!state) {
     state = createInitialState(sessionId);
   }
   state.steps[stepName] = { status, updated_at: new Date().toISOString() };
-  writeState(repoDir, sessionId, state);
+  writeState(sessionId, state);
 }
 
-function cleanupZombies(repoDir, maxAgeDays = 7) {
-  let workflowDir;
-  try {
-    workflowDir = getWorkflowDir(repoDir);
-  } catch (e) {
-    return; // No git repo or other error — skip cleanup
-  }
-
+function cleanupZombies(maxAgeDays = 7) {
+  const workflowDir = getWorkflowDir();
   let files;
   try {
-    files = fs.readdirSync(workflowDir).filter((f) => f.endsWith(".json"));
+    files = fs.readdirSync(workflowDir);
   } catch (e) {
     return; // Directory doesn't exist — skip cleanup
   }
 
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  const tmpCutoff = Date.now() - 24 * 60 * 60 * 1000;
 
   for (const file of files) {
     const filePath = path.join(workflowDir, file);
+
+    // Clean up stale .tmp files (crash leftovers) older than 24h
+    if (file.endsWith(".tmp")) {
+      try {
+        const st = fs.statSync(filePath);
+        if (st.mtimeMs < tmpCutoff) fs.unlinkSync(filePath);
+      } catch (e) {}
+      continue;
+    }
+
+    if (!file.endsWith(".json")) continue;
+
     try {
       const raw = fs.readFileSync(filePath, "utf8");
       const state = JSON.parse(raw);
@@ -147,4 +148,5 @@ module.exports = {
   markStep,
   createInitialState,
   cleanupZombies,
+  getWorkflowDir,
 };

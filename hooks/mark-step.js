@@ -13,7 +13,6 @@ const {
 } = require("./lib/workflow-state");
 
 const args = process.argv.slice(2);
-const repoDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 if (args.length < 2) {
   process.stderr.write(
@@ -51,7 +50,7 @@ if (args[0] === "--reset-from") {
   }
 
   try {
-    writeState(repoDir, sessionId, newState);
+    writeState(sessionId, newState);
     process.stderr.write(
       `Workflow reset: steps before "${fromStep}" marked complete, "${fromStep}" and after reset to pending.\n`
     );
@@ -86,7 +85,7 @@ if (stepName === "user_verification" && status === "skipped") {
 }
 
 try {
-  markStep(repoDir, sessionId, stepName, status);
+  markStep(sessionId, stepName, status);
   process.stderr.write(`Step "${stepName}" marked as "${status}".\n`);
   process.exit(0);
 } catch (e) {
