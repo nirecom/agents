@@ -38,24 +38,38 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
   }
 }
 
-// Create initial state file if session_id and CLAUDE_PROJECT_DIR are available
-if (sessionId && process.env.CLAUDE_PROJECT_DIR) {
+// Create initial state file if session_id is available
+if (sessionId) {
   try {
-    const repoDir = process.env.CLAUDE_PROJECT_DIR;
     // Only create if state file does not already exist (idempotent)
-    const existing = readState(repoDir, sessionId);
+    const existing = readState(sessionId);
     if (!existing) {
       const state = createInitialState(sessionId);
-      writeState(repoDir, sessionId, state);
+      writeState(sessionId, state);
     }
   } catch (e) {
-    // Fail-open: non-git dir, permission error, etc. — do not crash SessionStart
+    // Fail-open: permission error, etc. — do not crash SessionStart
   }
 }
 
+// --- BEGIN temporary: .git/workflow/ → ~/.claude/projects/workflow/ migration ---
+// Delete old per-repo state files left by the previous implementation.
+// Safe to run on every session start — idempotent, only touches CLAUDE_PROJECT_DIR.
+if (sessionId && process.env.CLAUDE_PROJECT_DIR) {
+  try {
+    const oldDir = require("path").join(process.env.CLAUDE_PROJECT_DIR, ".git", "workflow");
+    const oldFile = require("path").join(oldDir, sessionId + ".json");
+    const fs2 = require("fs");
+    if (fs2.existsSync(oldFile)) fs2.unlinkSync(oldFile);
+  } catch (e) {
+    // Fail-open
+  }
+}
+// --- END temporary: .git/workflow/ → ~/.claude/projects/workflow/ migration ---
+
 // Clean up zombie state files (older than 7 days)
 try {
-  cleanupZombies(process.env.CLAUDE_PROJECT_DIR || process.cwd(), 7);
+  cleanupZombies(7);
 } catch (e) {
   // Fail-open
 }
