@@ -57,7 +57,7 @@ if (!sessionId) {
     "workflow-gate: session_id not found in hook input.\n" +
       "Cannot verify workflow state. Commit blocked (fail-safe).\n" +
       "To reset workflow state, run:\n" +
-      '  node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" --reset-from research'
+      '  echo "<<WORKFLOW_RESET_FROM_research>>"'
   );
 }
 
@@ -67,7 +67,7 @@ if (!state) {
   block(
     `workflow-gate: no workflow state found for session ${sessionId}.\n` +
       "Commit blocked (fail-safe). To initialize workflow state, run:\n" +
-      '  node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" --reset-from research'
+      '  echo "<<WORKFLOW_RESET_FROM_research>>"'
   );
 }
 
@@ -102,7 +102,7 @@ for (const step of incomplete) {
     lines.push(`  ${step}: run ${SKILL_MAP[step]}`);
   } else {
     lines.push(
-      `  ${step}: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" ${step} complete`
+      `  ${step}: echo "<<WORKFLOW_MARK_STEP_${step}_complete>>"`
     );
   }
 }
