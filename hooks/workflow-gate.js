@@ -36,10 +36,19 @@ function hasStagedDocChanges(repoDir) {
   }
 }
 
-// Resolve repo dir from git -C flag in command, or process cwd
+// Resolve repo dir from git -C flag in command, or process cwd.
+// Normalizes Git Bash Unix-style drive paths: /<drive>/path/to → <DRIVE>:\path\to
 function resolveRepoDir(command) {
   const m = command.match(/git\s+-C\s+(\S+)/);
-  return m ? m[1] : process.cwd();
+  if (!m) return process.cwd();
+  const p = m[1];
+  const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
+  if (driveMatch) {
+    const drive = driveMatch[1].toUpperCase();
+    const rest = driveMatch[2] || "";
+    return drive + ":\\" + rest.replace(/\//g, "\\").replace(/^\\/, "");
+  }
+  return p;
 }
 
 function readStdin() {
@@ -65,84 +74,88 @@ function block(reason) {
   process.exit(0);
 }
 
-let input;
-try {
-  input = JSON.parse(readStdin());
-} catch (e) {
-  block("workflow-gate: failed to parse hook input — commit blocked (fail-safe).");
-}
+if (require.main === module) {
+  let input;
+  try {
+    input = JSON.parse(readStdin());
+  } catch (e) {
+    block("workflow-gate: failed to parse hook input — commit blocked (fail-safe).");
+  }
 
-const toolName = input.tool_name;
-const toolInput = input.tool_input || {};
-const sessionId = input.session_id;
+  const toolName = input.tool_name;
+  const toolInput = input.tool_input || {};
+  const sessionId = input.session_id;
 
-if (toolName !== "Bash") approve();
+  if (toolName !== "Bash") approve();
 
-const command = toolInput.command || "";
-if (!command) approve();
+  const command = toolInput.command || "";
+  if (!command) approve();
 
-const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
-if (!commitMatch) approve();
+  const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
+  if (!commitMatch) approve();
 
-const repoDir = resolveRepoDir(command);
+  const repoDir = resolveRepoDir(command);
 
-// session_id is required — fail-safe if missing
-if (!sessionId) {
-  block(
-    "workflow-gate: session_id not found in hook input.\n" +
-      "Cannot verify workflow state. Commit blocked (fail-safe).\n" +
-      "To reset workflow state, run:\n" +
-      '  echo "<<WORKFLOW_RESET_FROM_research>>"'
-  );
-}
-
-const state = readState(sessionId);
-
-if (!state) {
-  block(
-    `workflow-gate: no workflow state found for session ${sessionId}.\n` +
-      "Commit blocked (fail-safe). To initialize workflow state, run:\n" +
-      '  echo "<<WORKFLOW_RESET_FROM_research>>"'
-  );
-}
-
-// Check all steps
-const incomplete = [];
-for (const step of VALID_STEPS) {
-  const stepState = state.steps && state.steps[step];
-  const status = stepState ? stepState.status : "pending";
-
-  if (status === "complete") continue;
-  if (status === "skipped" && SKIPPABLE_STEPS.includes(step)) continue;
-  // Evidence-based overrides: staged files are proof of completion
-  if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
-  if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
-  incomplete.push(step);
-}
-
-if (incomplete.length === 0) approve();
-
-const SKILL_MAP = {
-  research: "/survey-code or /deep-research",
-  plan: "/make-plan",
-  write_tests: '/write-tests (then git add tests/)  OR if tests not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"',
-  docs: '/update-docs (then git add docs/)  OR if no doc changes needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"',
-};
-
-const lines = [
-  `workflow-gate: the following workflow steps are not complete: ${incomplete.join(", ")}`,
-  "",
-  "To mark a step complete:",
-];
-
-for (const step of incomplete) {
-  if (SKILL_MAP[step]) {
-    lines.push(`  ${step}: run ${SKILL_MAP[step]}`);
-  } else {
-    lines.push(
-      `  ${step}: echo "<<WORKFLOW_MARK_STEP_${step}_complete>>"`
+  // session_id is required — fail-safe if missing
+  if (!sessionId) {
+    block(
+      "workflow-gate: session_id not found in hook input.\n" +
+        "Cannot verify workflow state. Commit blocked (fail-safe).\n" +
+        "To reset workflow state, run:\n" +
+        '  echo "<<WORKFLOW_RESET_FROM_research>>"'
     );
   }
+
+  const state = readState(sessionId);
+
+  if (!state) {
+    block(
+      `workflow-gate: no workflow state found for session ${sessionId}.\n` +
+        "Commit blocked (fail-safe). To initialize workflow state, run:\n" +
+        '  echo "<<WORKFLOW_RESET_FROM_research>>"'
+    );
+  }
+
+  // Check all steps
+  const incomplete = [];
+  for (const step of VALID_STEPS) {
+    const stepState = state.steps && state.steps[step];
+    const status = stepState ? stepState.status : "pending";
+
+    if (status === "complete") continue;
+    if (status === "skipped" && SKIPPABLE_STEPS.includes(step)) continue;
+    // Evidence-based overrides: staged files are proof of completion
+    if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
+    if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
+    incomplete.push(step);
+  }
+
+  if (incomplete.length === 0) approve();
+
+  const SKILL_MAP = {
+    research: "/survey-code or /deep-research",
+    plan: "/make-plan",
+    write_tests: '/write-tests (then git add tests/)  OR if tests not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"',
+    docs: '/update-docs (then git add docs/)  OR if no doc changes needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"',
+  };
+
+  const lines = [
+    `workflow-gate: the following workflow steps are not complete: ${incomplete.join(", ")}`,
+    "",
+    "To mark a step complete:",
+  ];
+
+  for (const step of incomplete) {
+    if (SKILL_MAP[step]) {
+      lines.push(`  ${step}: run ${SKILL_MAP[step]}`);
+    } else {
+      lines.push(
+        `  ${step}: echo "<<WORKFLOW_MARK_STEP_${step}_complete>>"`
+      );
+    }
+  }
+
+  block(lines.join("\n"));
 }
 
-block(lines.join("\n"));
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges };
