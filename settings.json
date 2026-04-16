@@ -85,6 +85,7 @@
       "Bash(chmod +x */hooks/*)",
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
       "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
+      "Bash(uv run bin/doc-append.py *)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",
@@ -181,7 +182,8 @@
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
       "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>\")",
       "Bash(echo \"<<WORKFLOW_DOCS_NOT_NEEDED>>\")",
-      "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")"
+      "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
+      "Bash(uv run bin/doc-rotate.py *)"
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
