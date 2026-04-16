@@ -63,6 +63,8 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
   ```
   Date is mandatory (rebase-proof — commit hashes can become unresolvable). Commit hashes are 7 chars, no GitHub links. Incident entries use `### #N: Subject (YYYY-MM-DD, commits)` with `Cause:` / `Fix:` instead of `Background:` / `Changes:`.
 
+  **Archived history** — entries rotated out of `history.md` live under `history/` as separate `.md` files. `history/index.md` is the lookup index (year-grouped list of all archived entries). When searching for information not present in `history.md`, consult `history/index.md` first, then read the specific archive file listed there. Never reconstruct history solely from `history.md`.
+
 - `infrastructure.md`: Authoritative source for host specs, network topology, Docker stack composition, port allocation, and cloud resources. When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-instruction` skill to keep it aligned with infrastructure changes.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Keep procedures actionable with real commands
