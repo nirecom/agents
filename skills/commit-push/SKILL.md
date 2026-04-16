@@ -1,8 +1,6 @@
 ---
 name: commit-push
 description: Commit and push changes to the remote repository
-model: haiku
-effort: low
 ---
 
 Commit staged/unstaged changes and push to the remote.
