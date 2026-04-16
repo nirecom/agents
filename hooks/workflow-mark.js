@@ -100,8 +100,8 @@ if (markMatch) {
   // user_verification must go through the WORKFLOW_USER_VERIFIED echo path
   if (stepName === "user_verification") {
     done(
-      `workflow-mark: user_verification cannot be marked via MARK_STEP sentinel. ` +
-        `Use: echo "<<WORKFLOW_USER_VERIFIED>>" (triggers ask dialog for user approval)`
+      `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
+        `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED>>"`
     );
   }
 
