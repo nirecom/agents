@@ -17,7 +17,10 @@ function hasStagedTestChanges(repoDir) {
       cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
     });
     return out.trim().split("\n").some((f) => f.startsWith("tests/") || f.startsWith("test/"));
-  } catch (e) { return false; }
+  } catch (e) {
+    process.stderr.write(`workflow-gate: hasStagedTestChanges failed (cwd=${repoDir}): ${e.message}\n`);
+    return false;
+  }
 }
 
 // Evidence-based check: staged files contain docs/*.md or *.md changes
@@ -27,7 +30,10 @@ function hasStagedDocChanges(repoDir) {
       cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
     });
     return out.trim().split("\n").some((f) => f.startsWith("docs/") || /\.md$/i.test(f));
-  } catch (e) { return false; }
+  } catch (e) {
+    process.stderr.write(`workflow-gate: hasStagedDocChanges failed (cwd=${repoDir}): ${e.message}\n`);
+    return false;
+  }
 }
 
 // Resolve repo dir from git -C flag in command, or process cwd
