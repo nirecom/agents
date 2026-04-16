@@ -83,7 +83,6 @@
       "Bash(git -C * push -u origin *)",
       "Bash(chmod +x *.sh)",
       "Bash(chmod +x */hooks/*)",
-      "Bash(node *claude-global/hooks/mark-step.js*)",
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
       "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
       "Write(**/tests/**)",
@@ -179,7 +178,6 @@
       "Bash(git commit *)",
       "Bash(git -C * commit *)",
       "Bash(cd * && git commit *)",
-      "Bash(node *mark-step.js*user_verification*)",
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")"
     ],

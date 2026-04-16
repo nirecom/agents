@@ -98,7 +98,6 @@ if (markMatch) {
   const [, stepName, status] = markMatch;
 
   // user_verification must go through the WORKFLOW_USER_VERIFIED echo path
-  // (preserves the ask-rule in settings.json — the CLI bypass is blocked in mark-step.js)
   if (stepName === "user_verification") {
     done(
       `workflow-mark: user_verification cannot be marked via MARK_STEP sentinel. ` +
@@ -114,8 +113,8 @@ if (markMatch) {
   if (!sessionId) {
     done(
       `workflow-mark: could not resolve session_id — step "${stepName}" NOT recorded. ` +
-        `Commit gate will block. Run manually: ` +
-        `node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" ${stepName} ${status}`
+        `Commit gate will block. Re-run: ` +
+        `echo "<<WORKFLOW_MARK_STEP_${stepName}_${status}>>"`
     );
   }
 
@@ -139,7 +138,7 @@ if (resetMatch) {
   if (!sessionId) {
     done(
       `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
-        `Run manually: node "$DOTFILES_DIR/claude-global/hooks/mark-step.js" --reset-from ${fromStep}`
+        `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}>>"`
     );
   }
 
