@@ -99,6 +99,7 @@
       "WebFetch(domain:docs.github.com)"
     ],
     "deny": [
+      "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
       "Read(**/.env)",
       "Read(**/.env.local)",
       "Read(**/.env.development)",
