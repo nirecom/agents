@@ -56,6 +56,8 @@ Determine the docs location based on the current project:
 
 ## Completion
 
-After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP_docs_complete>>"`
-(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
+After completing this skill, stage the updated doc files:
+`git add docs/`
+The commit gate detects staged docs/ or .md changes as evidence of completion.
+If no doc changes were needed for this change, run instead:
+`echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"`
