@@ -28,6 +28,8 @@ Write or update tests for the current task.
 
 ## Completion
 
-After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP_write_tests_complete>>"`
-(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
+After completing this skill, stage the test files:
+`git add tests/`
+The commit gate detects staged tests/ changes as evidence of completion.
+If tests are genuinely not needed for this change, run instead:
+`echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"`
