@@ -103,7 +103,7 @@ const SESSION_ID_RE = /Current workflow session_id:\s*([^\s\\]+)/;
 function findLatestStateForContext(ctx) {
   if (!ctx || typeof ctx.cwd !== "string") return null;
 
-  const encoded = ctx.cwd.replace(/[^a-zA-Z0-9]/g, "-");
+  const encoded = ctx.cwd.toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
   const transcriptDir = path.join(os.homedir(), ".claude", "projects", encoded);
 
   let files;
