@@ -89,7 +89,8 @@ const resetMatch = command.match(RESET_FROM_RE_DQ);
 const userVerifiedMatch = command.match(USER_VERIFIED_RE_DQ);
 const writeTestsNotNeededMatch = command.match(WRITE_TESTS_NOT_NEEDED_RE_DQ);
 const docsNotNeededMatch = command.match(DOCS_NOT_NEEDED_RE_DQ);
-if (!markMatch && !resetMatch && !userVerifiedMatch && !writeTestsNotNeededMatch && !docsNotNeededMatch) done(); // not a marker command
+const docsNotNeededLooksLike = !docsNotNeededMatch && DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(command);
+if (!markMatch && !resetMatch && !userVerifiedMatch && !writeTestsNotNeededMatch && !docsNotNeededMatch && !docsNotNeededLooksLike) done(); // not a marker command
 
 // If the echo itself failed, don't apply (handle multiple possible response shapes)
 const toolResponse = input.tool_response || {};
@@ -122,15 +123,29 @@ if (writeTestsNotNeededMatch) {
 }
 
 // --- DOCS_NOT_NEEDED handler ---
+if (docsNotNeededLooksLike) {
+  done(
+    `workflow-mark: DOCS_NOT_NEEDED rejected — malformed sentinel. ` +
+      `Expected exactly: echo "<<WORKFLOW_DOCS_NOT_NEEDED: REASON>>" ` +
+      `where REASON contains no '>' and is at least 3 non-space characters.`
+  );
+}
 if (docsNotNeededMatch) {
+  const v = validateDocsSkipReason(docsNotNeededMatch[1]);
+  if (!v.ok) {
+    done(
+      `workflow-mark: DOCS_NOT_NEEDED rejected — ${v.msg} ` +
+        `Re-run: echo "<<WORKFLOW_DOCS_NOT_NEEDED: <better reason>>"`
+    );
+  }
   if (!sessionId) {
     done(
       `workflow-mark: could not resolve session_id — docs NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"`
+        `Re-run: echo "<<WORKFLOW_DOCS_NOT_NEEDED: ${v.reason}>>"`
     );
   }
   try {
-    markStep(sessionId, "docs", "complete");
+    markStep(sessionId, "docs", "complete", { skip_reason: v.reason });
   } catch (e) {
     done(`workflow-mark: failed to write state — ${e.message}. docs NOT recorded.`);
   }
@@ -177,7 +192,8 @@ if (markMatch) {
     done(
       `workflow-mark: docs NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
         `Stage doc changes (run /update-docs then git add docs/) ` +
-        `OR declare not needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"`
+        `OR declare not needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED: <reason>>"` +
+        ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
     );
   }
 
