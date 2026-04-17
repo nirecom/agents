@@ -39,7 +39,33 @@ const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
 // USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly
 const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED>>"$/;
 const WRITE_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"$/;
-const DOCS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"$/;
+const DOCS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED: ([^>]+)>>"$/;
+// Looks-like fallback: catches legacy bare form AND reason-with-'>' cases,
+// so we can emit a helpful hint instead of silently falling through.
+const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
+// TODO: mirror the reason-requirement pattern to WRITE_TESTS_NOT_NEEDED once
+// the DOCS flow is validated in practice. Deferred to avoid changing two
+// sentinels at once.
+
+const DOCS_SKIP_DUDS = new Set([
+  "none", "n/a", "na", "nope", "no", "nothing",
+  "skip", "skipped", "not needed", "not required", "nil",
+  "スキップ", "スキップする", "省略する", "特になし", "無し",
+]);
+function validateDocsSkipReason(raw) {
+  const trimmed = (raw || "").trim();
+  const nonSpace = trimmed.replace(/\s+/g, "");
+  if (nonSpace.length < 3) {
+    return { ok: false, msg: "reason too short — provide at least 3 non-space characters explaining why docs are unaffected." };
+  }
+  if (DOCS_SKIP_DUDS.has(trimmed.toLowerCase())) {
+    return { ok: false, msg: `reason "${trimmed}" is a placeholder — explain which docs you considered and why each is unaffected.` };
+  }
+  if (/^(.)\1+$/u.test(nonSpace)) {
+    return { ok: false, msg: "reason is a single repeated character — provide a real explanation." };
+  }
+  return { ok: true, reason: trimmed };
+}
 
 function done(additionalContext) {
   const out = additionalContext ? { additionalContext } : {};
