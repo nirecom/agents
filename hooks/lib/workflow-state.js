@@ -4,6 +4,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { execSync } = require("child_process");
 
 /**
  * Resolve the current session ID from CLAUDE_ENV_FILE.
@@ -65,17 +66,93 @@ function writeState(sessionId, state) {
   fs.renameSync(tmpPath, filePath);
 }
 
-function createInitialState(sessionId) {
+function createInitialState(sessionId, ctx) {
   const steps = {};
   for (const step of VALID_STEPS) {
     steps[step] = { status: "pending", updated_at: null };
   }
-  return {
+  const state = {
     version: 1,
     session_id: sessionId,
     created_at: new Date().toISOString(),
     steps,
   };
+  if (ctx && typeof ctx === "object") {
+    if (typeof ctx.cwd === "string") state.cwd = ctx.cwd;
+    state.git_branch = ctx.git_branch ?? null;
+  }
+  return state;
+}
+
+function getCurrentContext() {
+  const cwd = path.resolve(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  let git_branch = null;
+  try {
+    const out = execSync(
+      `git -C ${JSON.stringify(cwd)} rev-parse --abbrev-ref HEAD`,
+      { encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"] }
+    );
+    git_branch = out.trim() || null;
+    if (git_branch === "HEAD") git_branch = null;
+  } catch (e) {}
+  return { cwd, git_branch };
+}
+
+const SESSION_ID_RE = /Current workflow session_id:\s*([^\s\\]+)/;
+
+function findLatestStateForContext(ctx) {
+  if (!ctx || typeof ctx.cwd !== "string") return null;
+
+  const encoded = ctx.cwd.replace(/[^a-zA-Z0-9]/g, "-");
+  const transcriptDir = path.join(os.homedir(), ".claude", "projects", encoded);
+
+  let files;
+  try {
+    files = fs
+      .readdirSync(transcriptDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => ({
+        name: f,
+        mtime: fs.statSync(path.join(transcriptDir, f)).mtimeMs,
+      }))
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, 10);
+  } catch (e) {
+    return null;
+  }
+
+  for (const { name } of files) {
+    const filePath = path.join(transcriptDir, name);
+    let foundSessionId = null;
+    try {
+      const content = fs.readFileSync(filePath, "utf8");
+      for (const line of content.split("\n")) {
+        if (!line) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type !== "attachment") continue;
+          const att = entry.attachment;
+          if (!att || att.exitCode !== 0) continue;
+          if (!["SessionStart", "PostCompact"].includes(att.hookEvent)) continue;
+          const m = (att.stdout || "").match(SESSION_ID_RE);
+          if (m) { foundSessionId = m[1]; break; }
+        } catch (e) {}
+      }
+    } catch (e) { continue; }
+
+    if (!foundSessionId) continue;
+
+    try {
+      const state = readState(foundSessionId);
+      if (!state) continue;
+      if ((state.git_branch ?? null) !== (ctx.git_branch ?? null)) continue;
+      const allPending = Object.values(state.steps || {})
+        .every((v) => !v || v.status === "pending");
+      if (allPending) continue;
+      return state;
+    } catch (e) { continue; }
+  }
+  return null;
 }
 
 function markStep(sessionId, stepName, status) {
@@ -149,4 +226,6 @@ module.exports = {
   createInitialState,
   cleanupZombies,
   getWorkflowDir,
+  getCurrentContext,
+  findLatestStateForContext,
 };

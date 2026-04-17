@@ -191,7 +191,6 @@
       "../ai-specs"
     ]
   },
-  "model": "sonnet",
   "enableAllProjectMcpServers": false,
   "deniedMcpServers": [
     {
@@ -218,6 +217,18 @@
           {
             "type": "command",
             "command": "node \"$DOTFILES_DIR/claude-global/hooks/session-start.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/post-compact.js\"",
             "timeout": 5
           }
         ]
@@ -278,6 +289,5 @@
       }
     ]
   },
-  "effortLevel": "medium",
   "autoUpdatesChannel": "latest"
 }
