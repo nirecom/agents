@@ -136,7 +136,7 @@ if (require.main === module) {
     research: "/survey-code or /deep-research",
     plan: "/make-plan",
     write_tests: '/write-tests (then git add tests/)  OR if tests not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"',
-    docs: '/update-docs (then git add docs/)  OR if no doc changes needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED>>"',
+    docs: '/update-docs (then git add docs/)  OR if no doc changes needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     user_verification: 'wait for the user to confirm, then run: echo "<<WORKFLOW_USER_VERIFIED>>"  (requires user approval — DO NOT use MARK_STEP for this step)',
   };
 
