@@ -155,12 +155,14 @@ function findLatestStateForContext(ctx) {
   return null;
 }
 
-function markStep(sessionId, stepName, status) {
+function markStep(sessionId, stepName, status, extraFields = {}) {
   let state = readState(sessionId);
   if (!state) {
     state = createInitialState(sessionId);
   }
-  state.steps[stepName] = { status, updated_at: new Date().toISOString() };
+  // NOTE: extraFields are spread in — calling without extraFields clears previous
+  // extras (e.g. skip_reason). Intentional: overwrite semantics match idempotency.
+  state.steps[stepName] = { status, updated_at: new Date().toISOString(), ...extraFields };
   writeState(sessionId, state);
 }
 
