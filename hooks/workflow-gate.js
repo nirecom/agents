@@ -91,7 +91,7 @@ if (require.main === module) {
   const command = toolInput.command || "";
   if (!command) approve();
 
-  const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
+  const commitMatch = command.match(/^git\s+(?:-C\s+\S+\s+)?commit\s/);
   if (!commitMatch) approve();
 
   const repoDir = resolveRepoDir(command);
