@@ -177,7 +177,9 @@
       "Edit(~/.bash_profile)",
       "Edit(~/.profile_common)",
       "Edit(~/.claude/projects/workflow/**)",
-      "Write(~/.claude/projects/workflow/**)"
+      "Write(~/.claude/projects/workflow/**)",
+      "Edit(**/history.md)",
+      "Write(**/history.md)"
     ],
     "ask": [
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
@@ -271,6 +273,16 @@
           {
             "type": "command",
             "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-cross-platform.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-japanese-in-docs.js\"",
             "timeout": 5
           }
         ]
