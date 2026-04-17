@@ -2,7 +2,10 @@
 // Claude Code SessionStart hook: set CLAUDE_SESSION_ID env and clean up zombie state files
 
 const fs = require("fs");
-const { cleanupZombies, createInitialState, writeState, readState } = require("./lib/workflow-state");
+const path = require("path");
+const os = require("os");
+const { cleanupZombies, createInitialState, writeState, readState,
+        getCurrentContext, findLatestStateForContext } = require("./lib/workflow-state");
 
 function readStdin() {
   const chunks = [];
@@ -38,17 +41,38 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
   }
 }
 
-// Create initial state file if session_id is available
+// Create initial state file if session_id is available (with inheritance logic)
+let inheritedFromSessionId = null;
 if (sessionId) {
   try {
-    // Only create if state file does not already exist (idempotent)
     const existing = readState(sessionId);
     if (!existing) {
-      const state = createInitialState(sessionId);
-      writeState(sessionId, state);
+      let ctx;
+      try { ctx = getCurrentContext(); }
+      catch (e) { ctx = { cwd: process.cwd(), git_branch: null }; }
+
+      let inherited = null;
+      try { inherited = findLatestStateForContext(ctx); }
+      catch (e) {}
+
+      let newState;
+      if (inherited) {
+        newState = {
+          version: 1,
+          session_id: sessionId,
+          created_at: new Date().toISOString(),
+          cwd: ctx.cwd,
+          git_branch: ctx.git_branch,
+          steps: JSON.parse(JSON.stringify(inherited.steps)),
+        };
+        inheritedFromSessionId = inherited.session_id;
+      } else {
+        newState = createInitialState(sessionId, ctx);
+      }
+      try { writeState(sessionId, newState); } catch (e) {}
     }
   } catch (e) {
-    // Fail-open: permission error, etc. — do not crash SessionStart
+    // Fail-open
   }
 }
 
@@ -75,4 +99,14 @@ try {
 }
 
 // SessionStart hooks must output valid JSON
-console.log("{}");
+const lines = [];
+if (sessionId) {
+  const stateDir = process.env.CLAUDE_WORKFLOW_DIR ||
+    path.join(os.homedir(), ".claude", "projects", "workflow");
+  lines.push(`Current workflow session_id: ${sessionId}`);
+  lines.push(`State file: ${path.join(stateDir, sessionId + ".json")}`);
+  if (inheritedFromSessionId) {
+    lines.push(`Inherited workflow steps from session ${inheritedFromSessionId} (cwd+branch match)`);
+  }
+}
+console.log(JSON.stringify(lines.length ? { additionalContext: lines.join("\n") } : {}));
