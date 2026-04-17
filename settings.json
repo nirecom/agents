@@ -81,6 +81,9 @@
       "Bash(git -C * push)",
       "Bash(git -C * push origin *)",
       "Bash(git -C * push -u origin *)",
+      "Bash(git commit *)",
+      "Bash(git -C * commit *)",
+      "Bash(cd * && git commit *)",
       "Bash(chmod +x *.sh)",
       "Bash(chmod +x */hooks/*)",
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
@@ -177,12 +180,9 @@
       "Write(~/.claude/projects/workflow/**)"
     ],
     "ask": [
-      "Bash(git commit *)",
-      "Bash(git -C * commit *)",
-      "Bash(cd * && git commit *)",
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
       "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>\")",
-      "Bash(echo \"<<WORKFLOW_DOCS_NOT_NEEDED>>\")",
+      "Bash(echo \"<<WORKFLOW_DOCS_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
       "Bash(uv run bin/doc-rotate.py *)"
     ],
@@ -289,5 +289,7 @@
       }
     ]
   },
-  "autoUpdatesChannel": "latest"
+  "effortLevel": "medium",
+  "autoUpdatesChannel": "latest",
+  "model": "sonnet"
 }
