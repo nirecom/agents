@@ -1,6 +1,6 @@
 ---
-name: review-security
-description: Review architecture security across three axes before implementation planning.
+name: review-plan-security
+description: Review architecture security across three axes before implementation planning. Companion to /review-code-security (called at Step 5 for code-level patterns).
 model: opus
 effort: medium
 ---
@@ -12,7 +12,7 @@ Review security implications of the current task across three axes.
 - **TodoWrite is mandatory.** Do not evaluate inline without it.
 - Evaluate all three axes — do not skip axes that seem irrelevant (report N/A instead).
 - Reference specific OWASP/CWE identifiers when reporting risks.
-- This checklist is for architecture/planning review — runtime scanning is covered by `/scan-security` (Phase 3).
+- This checklist is for architecture/planning review — code-level pattern scanning is covered by `/review-code-security` (companion skill, called at Step 5).
 
 ## Procedure
 
@@ -33,6 +33,8 @@ Source: OWASP ASVS V8 (Data Protection), V6 (Stored Cryptography)
 - PII is not stored in plain text where encryption is feasible
 - Build artifacts and temp files do not contain embedded secrets
 
+For concrete detection patterns, see `/review-code-security` Axis 1.
+
 ### Axis 2: Third-Party Access
 Source: OWASP MCP Top 10 (MCP03 Excessive Permissions, MCP04 Tool Poisoning), LLM Top 10 (LLM03 Supply Chain)
 
@@ -42,6 +44,8 @@ Source: OWASP MCP Top 10 (MCP03 Excessive Permissions, MCP04 Tool Poisoning), LL
 - Tool descriptions and return values from untrusted MCP servers are treated as untrusted input
 - Supply chain: new dependencies are from reputable sources with active maintenance
 
+For concrete detection patterns, see `/review-code-security` Axis 2.
+
 ### Axis 3: External Access
 Source: OWASP WSTG (Input Validation), CWE Top 25 #2 (CWE-79 XSS), #3 (CWE-89 SQL Injection)
 
@@ -50,3 +54,5 @@ Source: OWASP WSTG (Input Validation), CWE Top 25 #2 (CWE-79 XSS), #3 (CWE-89 SQ
 - File paths from external input are validated against traversal (CWE-22 Path Traversal)
 - SQL queries use parameterized statements, not string concatenation (CWE-89)
 - URLs and redirects are validated against allowlists (CWE-601 Open Redirect)
+
+For concrete detection patterns, see `/review-code-security` Axis 3.
