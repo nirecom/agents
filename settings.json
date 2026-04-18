@@ -183,8 +183,9 @@
     ],
     "ask": [
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
-      "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>\")",
-      "Bash(echo \"<<WORKFLOW_DOCS_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_PLAN_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
       "Bash(uv run bin/doc-rotate.py *)"
     ],
@@ -301,7 +302,7 @@
       }
     ]
   },
-  "effortLevel": "medium",
+  "effortLevel": "max",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }
