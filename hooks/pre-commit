@@ -35,6 +35,15 @@ if [ -n "$SH_NO_EXEC" ]; then
     exit 1
 fi
 
+# Block direct commits of .env files (use .env.example / .env.sample / .env.template instead)
+ENV_FILES="$(git diff --cached --name-only --diff-filter=A | grep -E '(^|/)\.env$' || true)"
+if [ -n "$ENV_FILES" ]; then
+    echo "pre-commit: .env file(s) staged for commit:"
+    echo "$ENV_FILES" | sed 's/^/  /'
+    echo "Use .env.example / .env.sample / .env.template instead."
+    exit 1
+fi
+
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then
