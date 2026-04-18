@@ -243,7 +243,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-private-info.js\"",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/scan-outbound.js\"",
             "timeout": 5
           }
         ]
@@ -302,7 +302,7 @@
       }
     ]
   },
-  "effortLevel": "max",
+  "effortLevel": "medium",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }
