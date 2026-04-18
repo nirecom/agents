@@ -15,7 +15,7 @@ Called at Step 5 (Test & Verify) when the implementation touches external input,
 
 - Report each finding with: file/location, pattern category, and recommended fix.
 - Note context for potential false positives (test fixtures, comments, examples).
-- For commit-time auto-scanning of hard secrets (AWS/LLM API keys, PEM keys, GitHub/Slack tokens, `.env` commits), see `docs/private-info-scanning.md` — those are covered automatically.
+- For commit-time auto-scanning of hard secrets (AWS/LLM API keys, PEM keys, GitHub/Slack tokens, `.env` commits), see `docs/scan-outbound.md` — those are covered automatically.
 
 ## Procedure
 
@@ -28,7 +28,7 @@ Called at Step 5 (Test & Verify) when the implementation touches external input,
 ### Axis 1: Information Leakage
 *Axis scope: OWASP ASVS V8 (Data Protection), V6 (Stored Cryptography)*
 
-**Automated coverage**: AWS/LLM API keys, PEM private keys, GitHub/Slack tokens, and `.env` file commits are auto-detected by `check-private-info.sh` at pre-commit. This axis focuses on context-dependent leaks automation cannot catch.
+**Automated coverage**: AWS/LLM API keys, PEM private keys, GitHub/Slack tokens, and `.env` file commits are auto-detected by `scan-outbound.sh` at pre-commit. Source integrity is also covered: zero-width chars (U+200B/C/D, U+FEFF) and Bidi override chars (U+202D/E, U+2066–2069) are detected as `[zero-width]` / `[bidi-override]` (Trojan Source, CVE-2021-42574). This axis focuses on context-dependent leaks automation cannot catch.
 
 | Pattern | What to look for | Risk |
 |---|---|---|
@@ -45,6 +45,9 @@ Called at Step 5 (Test & Verify) when the implementation touches external input,
 | Unpinned dependency | `"latest"` in package.json, bare package name in requirements.txt | Supply chain (LLM03) |
 | Unvalidated LLM/MCP output | Agent output used directly in `eval`, shell call, or DB query | Prompt injection → RCE |
 | Excessive MCP permissions | Tool requesting file system / network beyond task scope | MCP03 |
+| Tool Poisoning | MCP tool descriptions containing instruction overrides (`ignore previous`, system commands) | MCP04 |
+| Rug Pull | MCP server behavior changes after approval — use trusted, auditable publishers only | MCP09 |
+| Return Value Injection | Tool return value fed directly into a prompt or `eval` without validation | MCP05 / LLM01 |
 
 ### Axis 3: External Access
 *Axis scope: OWASP WSTG (Input Validation), CWE Top 25 #2 (CWE-79 XSS), #3 (CWE-89 SQL Injection)*
@@ -56,8 +59,10 @@ Called at Step 5 (Test & Verify) when the implementation touches external input,
 | SQL injection | String concatenation in SQL (`"SELECT " + var`) | CWE-89 |
 | Open redirect | Redirect to URL from user input without allowlist | CWE-601 |
 | XSS | Unsanitized user input rendered as HTML | CWE-79 |
+| Instruction override in input | Untrusted input containing `ignore previous`, `you are now`, `system:` forwarded to LLM as context | LLM01 |
+| Base64 obfuscation | Base64 string from untrusted input decoded and passed to LLM/shell | LLM01 |
 
 ## Relationship to Other Tools
 
 - `/review-plan-security` — architecture-level checklist (Step 2, before code exists)
-- `check-private-info.sh` — auto-detects hard secrets and private info at pre-commit (see `docs/private-info-scanning.md`)
+- `scan-outbound.sh` — auto-detects hard secrets and private info at pre-commit (see `docs/scan-outbound.md`)

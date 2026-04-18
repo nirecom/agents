@@ -41,7 +41,7 @@ function shellPath(p) {
 
 // Determine dotfiles directory (this script lives in dotfiles/claude-global/hooks/)
 const DOTFILES_DIR = path.resolve(__dirname, "..", "..");
-const SCANNER = path.join(DOTFILES_DIR, "bin", "check-private-info.sh");
+const SCANNER = path.join(DOTFILES_DIR, "bin", "scan-outbound.sh");
 
 // Parse stdin
 const input = JSON.parse(readStdin());

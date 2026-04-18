@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
+SCANNER="$DOTFILES_DIR/bin/scan-outbound.sh"
 
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
