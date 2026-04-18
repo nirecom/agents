@@ -1,3 +1,9 @@
+---
+paths:
+  - "install/**"
+  - "**/*.Tests.ps1"
+---
+
 # Installer Testing
 
 Silent installers (NSIS, Electron-builder, etc.) have non-obvious behaviors that tests must account for:
