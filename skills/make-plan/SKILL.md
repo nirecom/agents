@@ -57,6 +57,19 @@ Skip the entire discussion loop when **both** of the following are true:
 
 In that case, draft the plan directly in the main conversation and present it for approval.
 
+## Skipping the Plan Step Entirely
+
+The Skip Conditions above skip the planner/reviewer discussion loop but still
+produce a plan. To skip the plan step itself (no plan at all), run:
+
+`echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
+
+Use this only when the task is trivial enough that no written plan — not even
+an informal one — is needed (e.g., a typo fix, a one-line config tweak).
+Reason must be ≥3 non-space chars, not a placeholder, and contain no '>'.
+
+Skipping research does NOT justify skipping the plan step.
+
 ## Rules
 
 - Read before planning — do not plan from assumptions

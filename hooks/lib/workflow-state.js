@@ -33,7 +33,7 @@ const VALID_STEPS = [
   "docs",
   "user_verification",
 ];
-const SKIPPABLE_STEPS = ["research", "plan"];
+const SKIPPABLE_STEPS = ["research", "plan", "write_tests"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
