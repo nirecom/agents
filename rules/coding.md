@@ -2,7 +2,7 @@
 
 ## Public GitHub Rules
 
-- Never commit private information (automatically enforced by pre-commit hook and Claude Code PreToolUse hook — see `docs/private-info-scanning.md` for the full list of detected patterns). Use generic placeholders or descriptions instead.
+- Never commit private information (automatically enforced by pre-commit hook and Claude Code PreToolUse hook — see `docs/scan-outbound.md` for the full list of detected patterns). Use generic placeholders or descriptions instead.
   - Fictional email addresses for tests must use the `example.com` domain (RFC 2606 reserved).
 - Always add `.env` to `.gitignore` to exclude secrets from version control.
 - Do NOT add `Co-Authored-By` trailers to commit messages.
