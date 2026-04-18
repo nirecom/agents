@@ -133,10 +133,10 @@ if (require.main === module) {
   if (incomplete.length === 0) approve();
 
   const SKILL_MAP = {
-    research: "/survey-code or /deep-research",
-    plan: "/make-plan",
-    write_tests: '/write-tests (then git add tests/)  OR if tests not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"',
-    docs: '/update-docs (then git add docs/)  OR if no doc changes needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
+    research: '/survey-code or /deep-research  OR if unnecessary: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
+    plan: '/make-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
+    write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
+    docs: '/update-docs (then git add docs/)',
     user_verification: 'wait for the user to confirm, then run: echo "<<WORKFLOW_USER_VERIFIED>>"  (requires user approval — DO NOT use MARK_STEP for this step)',
   };
 
