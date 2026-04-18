@@ -18,6 +18,14 @@ Do not write or edit test files directly in the main conversation.
   - File/config: re-running doesn't duplicate entries (e.g., same line appended twice to `.bashrc`), template generation produces identical output
   - Cleanup: deletion/uninstall of already-removed targets doesn't error
 
+- **Security cases**: Verify that security boundaries hold under adversarial input
+  Source: OWASP ASVS V8 (Data Protection), OWASP WSTG (Input Validation), CWE Top 25
+  - Secret leakage: secrets never appear in output, logs, temp files, or error messages (OWASP ASVS V8)
+  - Input injection: malicious CLI args, file paths, and shell metacharacters are rejected or sanitized (OWASP WSTG, CWE-78 OS Command Injection, CWE-22 Path Traversal)
+  - Permission: operations respect access control boundaries — unprivileged callers are denied (OWASP ASVS V4 Access Control)
+  - Prompt injection: LLM/agent inputs from untrusted sources do not override system instructions or trigger unintended tool calls (OWASP LLM Top 10 LLM01, MCP Top 10 MCP06)
+  - Security idempotency: re-running security-relevant operations (e.g., permission grants, secret rotation) does not escalate privileges or leave duplicate entries (extension of Idempotency cases)
+
 ## Security vs Test Compatibility
 
 - Never weaken new security to preserve old tests — update the tests instead.
@@ -83,59 +91,16 @@ the following — unit tests are structurally blind to these failure modes:
 Ask: *"If someone deleted the registration / misplaced the config key / renamed
 the event, would my unit tests still pass?"* If yes, a unit test is not enough.
 
-### References
-
-- Fowler, *The Practical Test Pyramid* — https://martinfowler.com/articles/practical-test-pyramid.html
-- Fowler, *IntegrationTest* — https://martinfowler.com/bliki/IntegrationTest.html
-- Kent C. Dodds, *Write tests. Not too many. Mostly integration.* — https://kentcdodds.com/blog/write-tests
-- Kent C. Dodds, *Static vs Unit vs Integration vs E2E Tests* — https://kentcdodds.com/blog/static-vs-unit-vs-integration-vs-e2e-tests
-
 ## Test Execution Timeout
 
 Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow.
 
-Note: `timeout` is not available on macOS. Use a portable wrapper in bash test scripts:
+See [test-rules/macos-timeout.md](test-rules/macos-timeout.md) for the portable `run_with_timeout` wrapper (macOS-compatible).
 
-```bash
-run_with_timeout() {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 180 "$@"
-    else
-        perl -e 'alarm 180; exec @ARGV' -- "$@"
-    fi
-}
-```
+## Claude Code E2E Testing
 
-| Runner | Command |
-|--------|---------|
-| Bash | `run_with_timeout <test-command>` (use wrapper above) |
-| PowerShell (Pester) | `powershell.exe -NoProfile -Command "Invoke-Pester ... "` with Bash `run_with_timeout` wrapper |
-| pytest | `run_with_timeout uv run pytest ...` |
-
-Extend the timeout only when the test genuinely requires it (e.g., integration tests with real installs).
-
-## Claude Code CLI (`claude -p`) E2E Testing
-
-When spawning `claude -p` in E2E tests, three precautions are required:
-
-1. **Unset `CLAUDECODE`** — Claude Code sets this env var in its session.
-   Child processes inherit it, causing `claude -p` to refuse with
-   "nested sessions" error. Always `unset CLAUDECODE` before the call.
-
-2. **Use minimal settings.json** — Copying `claude-global/settings.json` into
-   the test repo also copies `disableBypassPermissionsMode: disable`, which
-   neutralizes `--dangerously-skip-permissions` and causes a hang.
-   Write only the hooks needed by the test:
-   ```json
-   { "hooks": { "PostToolUse": [...] } }
-   ```
-
-3. **WSL-via-Windows bridge masks both issues** — When Claude Code on WSL
-   runs through the native Windows binary, `CLAUDECODE` is not propagated
-   into the WSL shell and user settings are read from the Windows profile.
-   Tests that pass on WSL may still fail on macOS native. Always verify
-   E2E tests on a true native environment.
+See [test-rules/claude-e2e.md](test-rules/claude-e2e.md) for precautions when spawning `claude -p` in tests.
 
 ## Installer Testing
 
-See [test-installer.md](test-installer.md) for silent installer test patterns (async completion, variable install paths, silent failure, idempotency).
+See [test-rules/installer.md](test-rules/installer.md) for silent installer test patterns (async completion, variable install paths, silent failure, idempotency).
