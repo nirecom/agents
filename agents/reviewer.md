@@ -18,10 +18,11 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
 - **Rules compliance** — does the plan comply with project rules? Rules are already in your context — do not re-read them via the Read tool. Only Read a rule file if you need to verify a detail you cannot recall.
 - **Risks & edge cases** — unacknowledged risks, cross-platform impact, idempotency, failure modes
 - **Scope** — anything unnecessary that should be cut
+- **Citation integrity** — if the plan contains `[research: <tag>]` tags (tag format: `[a-z0-9-]+`), verify each tag resolves to a bullet in the plan's `## Research Findings (from this session)` section. If a claim appears to rely on external knowledge but has no citation, include in `NEEDS_REVISION`: `show research finding for: <claim>`
 
 ## Procedure
 
-1. Read the plan carefully.
+1. Read the plan carefully. Note: `NEEDS_RESEARCH` replies from the planner are handled by the orchestrator before reaching you — you will only ever see plan drafts.
 2. Read the referenced source files and related existing code to verify the planner's claims.
 3. Be thorough — report minor issues as well as big ones. Do not withhold concerns.
 4. Return a verdict in exactly one of these two formats:
