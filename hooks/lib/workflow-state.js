@@ -104,7 +104,9 @@ function findLatestStateForContext(ctx) {
   if (!ctx || typeof ctx.cwd !== "string") return null;
 
   const encoded = ctx.cwd.toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
-  const transcriptDir = path.join(os.homedir(), ".claude", "projects", encoded);
+  const transcriptBase = process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
+    path.join(os.homedir(), ".claude", "projects");
+  const transcriptDir = path.join(transcriptBase, encoded);
 
   let files;
   try {
@@ -123,7 +125,7 @@ function findLatestStateForContext(ctx) {
 
   for (const { name } of files) {
     const filePath = path.join(transcriptDir, name);
-    let foundSessionId = null;
+    const foundIds = [];
     try {
       const content = fs.readFileSync(filePath, "utf8");
       for (const line of content.split("\n")) {
@@ -135,22 +137,25 @@ function findLatestStateForContext(ctx) {
           if (!att || att.exitCode !== 0) continue;
           if (!["SessionStart", "PostCompact"].includes(att.hookEvent)) continue;
           const m = (att.stdout || "").match(SESSION_ID_RE);
-          if (m) { foundSessionId = m[1]; break; }
+          if (m) foundIds.push(m[1]);
         } catch (e) {}
       }
     } catch (e) { continue; }
 
-    if (!foundSessionId) continue;
+    if (foundIds.length === 0) continue;
 
-    try {
-      const state = readState(foundSessionId);
-      if (!state) continue;
-      if ((state.git_branch ?? null) !== (ctx.git_branch ?? null)) continue;
-      const allPending = Object.values(state.steps || {})
-        .every((v) => !v || v.status === "pending");
-      if (allPending) continue;
-      return state;
-    } catch (e) { continue; }
+    for (const id of [...foundIds].reverse()) {
+      try {
+        const state = readState(id);
+        if (!state) continue;
+        if ((state.git_branch ?? null) !== (ctx.git_branch ?? null)) continue;
+        const allPending = Object.values(state.steps || {})
+          .every((v) => !v || v.status === "pending");
+        if (allPending) continue;
+        if (state.steps?.user_verification?.status === "complete") break;
+        return state;
+      } catch (e) { continue; }
+    }
   }
   return null;
 }
