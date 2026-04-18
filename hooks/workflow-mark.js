@@ -38,28 +38,28 @@ const MARKER_RE_SQ =
 const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
 // USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly
 const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED>>"$/;
-const WRITE_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"$/;
-const DOCS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED: ([^>]+)>>"$/;
-// Looks-like fallback: catches legacy bare form AND reason-with-'>' cases,
-// so we can emit a helpful hint instead of silently falling through.
+const RESEARCH_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ([^>]+)>>"$/;
+const RESEARCH_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED([: ].*)?>>"$/;
+const PLAN_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_PLAN_NOT_NEEDED: ([^>]+)>>"$/;
+const PLAN_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PLAN_NOT_NEEDED([: ].*)?>>"$/;
+const WRITE_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ([^>]+)>>"$/;
+const WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED([: ].*)?>>"$/;
+// Looks-like fallback for removed DOCS_NOT_NEEDED — catches attempts and emits deprecation message.
 const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
-// TODO: mirror the reason-requirement pattern to WRITE_TESTS_NOT_NEEDED once
-// the DOCS flow is validated in practice. Deferred to avoid changing two
-// sentinels at once.
 
-const DOCS_SKIP_DUDS = new Set([
+const SKIP_REASON_DUDS = new Set([
   "none", "n/a", "na", "nope", "no", "nothing",
   "skip", "skipped", "not needed", "not required", "nil",
   "スキップ", "スキップする", "省略する", "特になし", "無し",
 ]);
-function validateDocsSkipReason(raw) {
+function validateSkipReason(raw) {
   const trimmed = (raw || "").trim();
   const nonSpace = trimmed.replace(/\s+/g, "");
   if (nonSpace.length < 3) {
-    return { ok: false, msg: "reason too short — provide at least 3 non-space characters explaining why docs are unaffected." };
+    return { ok: false, msg: "reason too short — provide at least 3 non-space characters explaining why this step is unnecessary in this task's context." };
   }
-  if (DOCS_SKIP_DUDS.has(trimmed.toLowerCase())) {
-    return { ok: false, msg: `reason "${trimmed}" is a placeholder — explain which docs you considered and why each is unaffected.` };
+  if (SKIP_REASON_DUDS.has(trimmed.toLowerCase())) {
+    return { ok: false, msg: `reason "${trimmed}" is a placeholder — explain why this step is unnecessary in this task's context.` };
   }
   if (/^(.)\1+$/u.test(nonSpace)) {
     return { ok: false, msg: "reason is a single repeated character — provide a real explanation." };
@@ -87,10 +87,18 @@ const command = ((input.tool_input && input.tool_input.command) || "").trim();
 const markMatch = command.match(MARKER_RE_DQ) || command.match(MARKER_RE_SQ);
 const resetMatch = command.match(RESET_FROM_RE_DQ);
 const userVerifiedMatch = command.match(USER_VERIFIED_RE_DQ);
+const researchNotNeededMatch = command.match(RESEARCH_NOT_NEEDED_RE_DQ);
+const researchNotNeededLooksLike = !researchNotNeededMatch && RESEARCH_NOT_NEEDED_LOOKSLIKE_RE.test(command);
+const planNotNeededMatch = command.match(PLAN_NOT_NEEDED_RE_DQ);
+const planNotNeededLooksLike = !planNotNeededMatch && PLAN_NOT_NEEDED_LOOKSLIKE_RE.test(command);
 const writeTestsNotNeededMatch = command.match(WRITE_TESTS_NOT_NEEDED_RE_DQ);
-const docsNotNeededMatch = command.match(DOCS_NOT_NEEDED_RE_DQ);
-const docsNotNeededLooksLike = !docsNotNeededMatch && DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(command);
-if (!markMatch && !resetMatch && !userVerifiedMatch && !writeTestsNotNeededMatch && !docsNotNeededMatch && !docsNotNeededLooksLike) done(); // not a marker command
+const writeTestsNotNeededLooksLike = !writeTestsNotNeededMatch && WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(command);
+const docsNotNeededLooksLike = DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(command);
+if (!markMatch && !resetMatch && !userVerifiedMatch
+    && !researchNotNeededMatch   && !researchNotNeededLooksLike
+    && !planNotNeededMatch       && !planNotNeededLooksLike
+    && !writeTestsNotNeededMatch && !writeTestsNotNeededLooksLike
+    && !docsNotNeededLooksLike) done(); // not a marker command
 
 // If the echo itself failed, don't apply (handle multiple possible response shapes)
 const toolResponse = input.tool_response || {};
@@ -107,48 +115,99 @@ if (exitCode !== 0) {
 // Resolve session ID from hook stdin (preferred), fall back to CLAUDE_ENV_FILE
 const sessionId = input.session_id || resolveSessionId();
 
-// --- WRITE_TESTS_NOT_NEEDED handler ---
-if (writeTestsNotNeededMatch) {
+// --- RESEARCH_NOT_NEEDED handler ---
+if (researchNotNeededLooksLike) {
+  done(
+    `workflow-mark: malformed RESEARCH_NOT_NEEDED — ` +
+      `expected: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: REASON>>" ` +
+      `(reason must be >=3 non-space chars, no '>')`
+  );
+}
+if (researchNotNeededMatch) {
+  const v = validateSkipReason(researchNotNeededMatch[1]);
+  if (!v.ok) {
+    done(
+      `workflow-mark: RESEARCH_NOT_NEEDED rejected — ${v.msg} ` +
+        `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <better reason>>"`
+    );
+  }
   if (!sessionId) {
     done(
-      `workflow-mark: could not resolve session_id — write_tests NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"`
+      `workflow-mark: could not resolve session_id — research NOT recorded. ` +
+        `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ${v.reason}>>"`
     );
   }
   try {
-    markStep(sessionId, "write_tests", "complete");
+    markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
+  } catch (e) {
+    done(`workflow-mark: failed to write state — ${e.message}. research NOT recorded.`);
+  }
+}
+
+// --- PLAN_NOT_NEEDED handler ---
+if (planNotNeededLooksLike) {
+  done(
+    `workflow-mark: malformed PLAN_NOT_NEEDED — ` +
+      `expected: echo "<<WORKFLOW_PLAN_NOT_NEEDED: REASON>>" ` +
+      `(reason must be >=3 non-space chars, no '>')`
+  );
+}
+if (planNotNeededMatch) {
+  const v = validateSkipReason(planNotNeededMatch[1]);
+  if (!v.ok) {
+    done(
+      `workflow-mark: PLAN_NOT_NEEDED rejected — ${v.msg} ` +
+        `Re-run: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <better reason>>"`
+    );
+  }
+  if (!sessionId) {
+    done(
+      `workflow-mark: could not resolve session_id — plan NOT recorded. ` +
+        `Re-run: echo "<<WORKFLOW_PLAN_NOT_NEEDED: ${v.reason}>>"`
+    );
+  }
+  try {
+    markStep(sessionId, "plan", "skipped", { skip_reason: v.reason });
+  } catch (e) {
+    done(`workflow-mark: failed to write state — ${e.message}. plan NOT recorded.`);
+  }
+}
+
+// --- WRITE_TESTS_NOT_NEEDED handler ---
+if (writeTestsNotNeededLooksLike) {
+  done(
+    `workflow-mark: malformed WRITE_TESTS_NOT_NEEDED — ` +
+      `expected: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: REASON>>" ` +
+      `(reason must be >=3 non-space chars, no '>')`
+  );
+}
+if (writeTestsNotNeededMatch) {
+  const v = validateSkipReason(writeTestsNotNeededMatch[1]);
+  if (!v.ok) {
+    done(
+      `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — ${v.msg} ` +
+        `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <better reason>>"`
+    );
+  }
+  if (!sessionId) {
+    done(
+      `workflow-mark: could not resolve session_id — write_tests NOT recorded. ` +
+        `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ${v.reason}>>"`
+    );
+  }
+  try {
+    markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason });
   } catch (e) {
     done(`workflow-mark: failed to write state — ${e.message}. write_tests NOT recorded.`);
   }
 }
 
-// --- DOCS_NOT_NEEDED handler ---
+// --- DOCS_NOT_NEEDED deprecation handler ---
 if (docsNotNeededLooksLike) {
   done(
-    `workflow-mark: DOCS_NOT_NEEDED rejected — malformed sentinel. ` +
-      `Expected exactly: echo "<<WORKFLOW_DOCS_NOT_NEEDED: REASON>>" ` +
-      `where REASON contains no '>' and is at least 3 non-space characters.`
+    `workflow-mark: WORKFLOW_DOCS_NOT_NEEDED is not accepted — ` +
+      `update docs/ or *.md files and stage them (no skip path).`
   );
-}
-if (docsNotNeededMatch) {
-  const v = validateDocsSkipReason(docsNotNeededMatch[1]);
-  if (!v.ok) {
-    done(
-      `workflow-mark: DOCS_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_DOCS_NOT_NEEDED: <better reason>>"`
-    );
-  }
-  if (!sessionId) {
-    done(
-      `workflow-mark: could not resolve session_id — docs NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_DOCS_NOT_NEEDED: ${v.reason}>>"`
-    );
-  }
-  try {
-    markStep(sessionId, "docs", "complete", { skip_reason: v.reason });
-  } catch (e) {
-    done(`workflow-mark: failed to write state — ${e.message}. docs NOT recorded.`);
-  }
 }
 
 // --- USER_VERIFIED handler ---
@@ -183,17 +242,17 @@ if (markMatch) {
   // write_tests and docs must go through evidence (staged files) or NOT_NEEDED sentinels
   if (stepName === "write_tests") {
     done(
-      `workflow-mark: write_tests NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
+      `workflow-mark: write_tests NOT recorded — MARK_STEP not accepted for this step. ` +
         `Stage tests/ changes (run /write-tests then git add tests/) ` +
-        `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED>>"`
+        `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"` +
+        ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
     );
   }
   if (stepName === "docs") {
     done(
-      `workflow-mark: docs NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
-        `Stage doc changes (run /update-docs then git add docs/) ` +
-        `OR declare not needed: echo "<<WORKFLOW_DOCS_NOT_NEEDED: <reason>>"` +
-        ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
+      `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
+        `Update docs/ or *.md files and stage them ` +
+        `(run /update-docs then git add docs/) — no skip path.`
     );
   }
 

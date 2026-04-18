@@ -59,9 +59,4 @@ Determine the docs location based on the current project:
 After completing this skill, stage the updated doc files:
 `git add docs/`
 The commit gate detects staged docs/ or .md changes as evidence of completion.
-If no doc changes were needed for this change, run instead:
-`echo "<<WORKFLOW_DOCS_NOT_NEEDED: <reason>>"`
-
-Provide a real justification for why no docs were updated (e.g.,
-`hook-internal refactor, no user-visible behavior`).
-The reason must not contain `>`. Vague or one-word reasons are rejected.
+Docs updates are mandatory for every task — there is no skip path.
