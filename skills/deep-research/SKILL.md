@@ -27,3 +27,7 @@ Investigate external information related to the given task.
 After completing this skill, run:
 `echo "<<WORKFLOW_MARK_STEP_research_complete>>"`
 (This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
+
+If research is genuinely not needed for this task, run instead:
+`echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
+(reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>'.)
