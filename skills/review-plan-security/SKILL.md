@@ -43,6 +43,9 @@ Source: OWASP MCP Top 10 (MCP03 Excessive Permissions, MCP04 Tool Poisoning), LL
 - LLM/agent outputs that trigger actions are validated before execution
 - Tool descriptions and return values from untrusted MCP servers are treated as untrusted input
 - Supply chain: new dependencies are from reputable sources with active maintenance
+- MCP tool descriptions are reviewed for embedded instruction overrides (MCP04 Tool Poisoning)
+- MCP servers are sourced from trusted, auditable publishers; behavioral changes after initial approval are treated as re-review triggers (Rug Pull, MCP09)
+- Tool return values are validated before acted on; injected instructions in tool results do not propagate (Return Value Injection, MCP05)
 
 For concrete detection patterns, see `/review-code-security` Axis 2.
 
@@ -54,5 +57,13 @@ Source: OWASP WSTG (Input Validation), CWE Top 25 #2 (CWE-79 XSS), #3 (CWE-89 SQ
 - File paths from external input are validated against traversal (CWE-22 Path Traversal)
 - SQL queries use parameterized statements, not string concatenation (CWE-89)
 - URLs and redirects are validated against allowlists (CWE-601 Open Redirect)
+- Instruction-override phrases in untrusted input (e.g. `ignore previous instructions`, `system:`) are flagged and not forwarded to the LLM as trusted context (OWASP LLM Top 10 LLM01)
+- Base64-encoded strings in untrusted input are not auto-decoded and fed to LLM/shell without explicit validation
 
 For concrete detection patterns, see `/review-code-security` Axis 3.
+
+## Source Integrity
+
+Source files must not contain Unicode characters that diverge display from execution (Trojan Source, CVE-2021-42574). Hidden/invisible chars (zero-width, Bidi overrides) are auto-detected by `scan-outbound.sh` at pre-commit; see `/review-code-security` Axis 1 automated coverage.
+
+For PostToolUse-level prompt-injection defense on tool results (e.g. `WebFetch` output), see planned Phase 5 hook (`docs/todo.md`).
