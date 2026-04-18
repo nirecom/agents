@@ -35,5 +35,7 @@ if (isPrivateRepo(repoDir)) approve();
 block(
   "Japanese text detected in doc-append command.\n" +
   "This is a public repository — history.md must be written in English.\n" +
-  "Please rewrite the content in English."
+  "1. Rewrite the content in English.\n" +
+  "2. Report to the user that Japanese was found in the doc-append arguments and show what was changed.\n" +
+  "3. Re-run doc-append with the English-only content."
 );

@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SCANNER="$DOTFILES_DIR/bin/check-private-info.sh"
+SCANNER="$DOTFILES_DIR/bin/scan-outbound.sh"
 
 # Auto-unstage settings.json if the only change is effortLevel
 SETTINGS="claude-global/settings.json"
@@ -68,7 +68,7 @@ if [ -z "$STAGED_FILES" ]; then
 fi
 
 # Files to skip
-SKIP_PATTERNS="bin/check-private-info.sh|\.private-info-allowlist"
+SKIP_PATTERNS="bin/scan-outbound.sh|\.private-info-allowlist"
 
 FOUND_VIOLATIONS=0
 
