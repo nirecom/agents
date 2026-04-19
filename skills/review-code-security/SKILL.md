@@ -62,6 +62,14 @@ Called at Step 5 (Test & Verify) when the implementation touches external input,
 | Instruction override in input | Untrusted input containing `ignore previous`, `you are now`, `system:` forwarded to LLM as context | LLM01 |
 | Base64 obfuscation | Base64 string from untrusted input decoded and passed to LLM/shell | LLM01 |
 
+## Completion
+
+After reporting findings, run (as a standalone Bash command — no pipes, no && chaining):
+
+```
+echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"
+```
+
 ## Relationship to Other Tools
 
 - `/review-plan-security` — architecture-level checklist (Step 2, before code exists)

@@ -186,6 +186,7 @@
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_PLAN_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
       "Bash(uv run bin/doc-rotate.py *)"
     ],
@@ -296,6 +297,11 @@
           {
             "type": "command",
             "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-mark.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-run-tests.js\"",
             "timeout": 5
           }
         ]
