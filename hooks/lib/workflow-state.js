@@ -28,12 +28,12 @@ const VALID_STEPS = [
   "research",
   "plan",
   "write_tests",
-  "code",
-  "verify",
+  "run_tests",
+  "review_security",
   "docs",
   "user_verification",
 ];
-const SKIPPABLE_STEPS = ["research", "plan", "write_tests"];
+const SKIPPABLE_STEPS = ["research", "plan", "write_tests", "review_security"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
@@ -51,7 +51,21 @@ function readState(sessionId) {
   try {
     const filePath = getStatePath(sessionId);
     const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw);
+    const state = JSON.parse(raw);
+    if (state && state.steps) {
+      if (state.steps.verify && !state.steps.run_tests) {
+        state.steps.run_tests = state.steps.verify;
+      }
+      delete state.steps.verify;
+      delete state.steps.code;
+      if (!state.steps.run_tests) {
+        state.steps.run_tests = { status: "pending", updated_at: null };
+      }
+      if (!state.steps.review_security) {
+        state.steps.review_security = { status: "pending", updated_at: null };
+      }
+    }
+    return state;
   } catch (e) {
     return null;
   }

@@ -40,7 +40,7 @@ function hasStagedDocChanges(repoDir) {
 // Normalizes Git Bash Unix-style drive paths: /<drive>/path/to → <DRIVE>:\path\to
 function resolveRepoDir(command) {
   const m = command.match(/git\s+-C\s+(\S+)/);
-  if (!m) return process.cwd();
+  if (!m) return process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const p = m[1];
   const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
   if (driveMatch) {
