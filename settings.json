@@ -99,7 +99,15 @@
       "WebFetch(domain:docs.anthropic.com)",
       "WebFetch(domain:platform.openai.com)",
       "WebFetch(domain:ai.google.dev)",
-      "WebFetch(domain:docs.github.com)"
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:code.claude.com)",
+      "WebFetch(domain:platform.claude.com)",
+      "WebFetch(domain:anthropic.com)",
+      "WebFetch(domain:modelcontextprotocol.io)",
+      "WebFetch(domain:spec.modelcontextprotocol.io)",
+      "WebFetch(domain:ecc.tools)",
+      "WebFetch(domain:docs.langchain.com)",
+      "WebFetch(domain:reference.langchain.com)"
     ],
     "deny": [
       "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
@@ -318,7 +326,7 @@
       }
     ]
   },
-  "effortLevel": "max",
+  "effortLevel": "high",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }
