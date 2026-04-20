@@ -51,7 +51,9 @@ If `[path]` is omitted, defaults to `docs/history.md` relative to CWD — works 
 Install: `dotfileslink.sh` / `dotfileslink.ps1` generate `~/.local/bin/doc-append` at setup time.
 
 **Rotation thresholds** (arbitrary but documented): `history.md` warns at 500 lines, hard limit at 800 lines.
-`architecture.md` warns at 300 lines. Run `doc-rotate.py --dry-run` and get user approval before rotating.
+`architecture.md` warns at 300 lines.
+
+**Auto-rotation**: `doc-append` automatically invokes `doc-rotate.py --threshold-warn 500 --floor 20` after appending when the resulting file is ≥ 500 lines. Rotation also rebuilds `history/index.md`. Manual `doc-rotate.py --dry-run` is only needed when overriding defaults.
 
 After rotation, `history/index.md` is auto-generated with a year-grouped list of all entries for fast lookup. The index includes a Category Distribution summary (count per category) and a backtick badge per entry for at-a-glance category overview. Run `doc-rotate.py <path> --rebuild-index` to regenerate it without rotating (e.g., after manual archive edits or category schema changes).
 
