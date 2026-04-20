@@ -3,6 +3,7 @@
 
 const { execSync } = require("child_process");
 const path = require("path");
+const { parseGitCArg } = require("./parse-git-args");
 
 // Normalize path for shell commands (Windows backslashes → forward slashes)
 function shellPath(p) {
@@ -11,8 +12,7 @@ function shellPath(p) {
 
 // Extract repo directory from a git command string (supports git -C <path>)
 function extractRepoDirFromCommand(command) {
-  const match = command.match(/git\s+-C\s+(\S+)/);
-  return match ? match[1] : null;
+  return parseGitCArg(command);
 }
 
 // Extract hostname from a git remote URL
