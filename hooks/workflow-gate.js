@@ -9,6 +9,7 @@ const {
   SKIPPABLE_STEPS,
   readState,
 } = require("./lib/workflow-state");
+const { parseGitCArg } = require("./lib/parse-git-args");
 
 // Evidence-based check: staged files contain tests/ changes
 function hasStagedTestChanges(repoDir) {
@@ -38,16 +39,19 @@ function hasStagedDocChanges(repoDir) {
 
 // Resolve repo dir from git -C flag in command, or process cwd.
 // Normalizes Git Bash Unix-style drive paths: /<drive>/path/to → <DRIVE>:\path\to
+// Handles bare, double-quoted, and single-quoted -C arguments.
 function resolveRepoDir(command) {
-  const m = command.match(/git\s+-C\s+(\S+)/);
-  if (!m) return process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const p = m[1];
+  const p = parseGitCArg(command);
+  if (!p) return process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  // Unix drive path: /<drive>/path → <DRIVE>:\path
   const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
   if (driveMatch) {
     const drive = driveMatch[1].toUpperCase();
     const rest = driveMatch[2] || "";
     return drive + ":\\" + rest.replace(/\//g, "\\").replace(/^\\/, "");
   }
+  // Normalize Windows drive paths with forward slashes: c:/path → c:\path
+  if (process.platform === "win32" && /^[a-zA-Z]:\//.test(p)) return p.replace(/\//g, "\\");
   return p;
 }
 
@@ -91,8 +95,8 @@ if (require.main === module) {
   const command = toolInput.command || "";
   if (!command) approve();
 
-  const commitMatch = command.match(/^git\s+(?:-C\s+\S+\s+)?commit\s/);
-  if (!commitMatch) approve();
+  if (!/^git\s/.test(command)) approve();
+  if (!/\scommit(\s|$)/.test(command)) approve();
 
   const repoDir = resolveRepoDir(command);
 
