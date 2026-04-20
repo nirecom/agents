@@ -88,7 +88,7 @@
       "Bash(chmod +x */hooks/*)",
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
       "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
-      "Bash(uv run bin/doc-append.py *)",
+      "Bash(doc-append *)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",
@@ -308,7 +308,7 @@
       }
     ]
   },
-  "effortLevel": "medium",
+  "effortLevel": "max",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }

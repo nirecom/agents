@@ -40,10 +40,14 @@ Use the CLI tools instead:
 
 | Tool | When to use |
 |------|-------------|
-| `uv run bin/doc-append.py <path> --schema history ...` | Append a new entry to any history.md |
+| `doc-append [path] --category CATEGORY ...` | Append a new entry to any history.md |
 | `uv run bin/doc-rotate.py <path> ...` | Archive old entries when size threshold is exceeded |
 | `uv run bin/sort-history.py <path>` | Sort an existing history.md into ascending order |
 | `uv run bin/convert-history-table.py <path>` | Convert legacy table-format history.md to `###` format |
+
+`doc-append` categories: `INCIDENT` (numbered, uses `--cause`/`--fix`), `BUGFIX`, `FEATURE`, `REFACTOR`, `CONFIG`, `SECURITY` (all use `--background`/`--changes`).
+If `[path]` is omitted, defaults to `docs/history.md` relative to CWD — works from any repo.
+Install: `dotfileslink.sh` / `dotfileslink.ps1` generate `~/.local/bin/doc-append` at setup time.
 
 **Rotation thresholds** (arbitrary but documented): `history.md` warns at 500 lines, hard limit at 800 lines.
 `architecture.md` warns at 300 lines. Run `doc-rotate.py --dry-run` and get user approval before rotating.
