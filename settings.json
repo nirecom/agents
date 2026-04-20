@@ -305,6 +305,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$DOTFILES_DIR/claude-global/hooks/scan-inbound.js\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
