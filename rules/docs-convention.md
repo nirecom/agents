@@ -42,6 +42,7 @@ Use the CLI tools instead:
 |------|-------------|
 | `doc-append [path] --category CATEGORY ...` | Append a new entry to any history.md |
 | `uv run bin/doc-rotate.py <path> ...` | Archive old entries when size threshold is exceeded |
+| `uv run bin/doc-rotate.py <path> --rebuild-index` | Rebuild `history/index.md` from existing archive files (no rotation) |
 | `uv run bin/sort-history.py <path>` | Sort an existing history.md into ascending order |
 | `uv run bin/convert-history-table.py <path>` | Convert legacy table-format history.md to `###` format |
 
@@ -52,7 +53,7 @@ Install: `dotfileslink.sh` / `dotfileslink.ps1` generate `~/.local/bin/doc-appen
 **Rotation thresholds** (arbitrary but documented): `history.md` warns at 500 lines, hard limit at 800 lines.
 `architecture.md` warns at 300 lines. Run `doc-rotate.py --dry-run` and get user approval before rotating.
 
-After rotation, `history/index.md` is auto-generated with a year-grouped list of all entries for fast lookup.
+After rotation, `history/index.md` is auto-generated with a year-grouped list of all entries for fast lookup. The index includes a Category Distribution summary (count per category) and a backtick badge per entry for at-a-glance category overview. Run `doc-rotate.py <path> --rebuild-index` to regenerate it without rotating (e.g., after manual archive edits or category schema changes).
 
 ## Content Rules
 
