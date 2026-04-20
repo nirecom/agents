@@ -24,7 +24,7 @@ const input = JSON.parse(readStdin());
 if (input.tool_name !== "Bash") approve();
 
 const command = input.tool_input?.command || "";
-if (!command.includes("doc-append.py")) approve();
+if (!/\bdoc-append\b/.test(command)) approve();
 
 // Hiragana, Katakana, Kanji, CJK symbols/punctuation, full-width
 if (!/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(command)) approve();
