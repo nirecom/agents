@@ -25,6 +25,11 @@ Create the following as a TodoWrite checklist and work through each step in orde
 7. **User verification** — Wait for the user to confirm the task is complete.
 8. **Commit** — Run `/commit-push`.
 
+## Docs-only Short-circuit
+
+If the staged diff is entirely under `docs/` and all files are `.md`, steps 1–6 are
+auto-bypassed — only `user_verification` is required before committing.
+
 ## Workflow State Recovery
 
 The main conversation can reset workflow state only when it has enough holistic context
