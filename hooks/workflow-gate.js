@@ -24,6 +24,20 @@ function hasStagedTestChanges(repoDir) {
   }
 }
 
+// Evidence-based check: ALL staged files are docs/*.md (no non-doc files)
+function isDocsOnlyStaged(repoDir) {
+  try {
+    const out = execSync("git diff --cached --name-only", {
+      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    });
+    const files = out.trim().split("\n").filter(Boolean);
+    return files.length > 0 && files.every((f) => f.startsWith("docs/") && f.endsWith(".md"));
+  } catch (e) {
+    process.stderr.write(`workflow-gate: isDocsOnlyStaged failed (cwd=${repoDir}): ${e.message}\n`);
+    return false;
+  }
+}
+
 // Evidence-based check: staged files contain docs/*.md or *.md changes
 function hasStagedDocChanges(repoDir) {
   try {
@@ -99,6 +113,7 @@ if (require.main === module) {
   if (!/\scommit(\s|$)/.test(command)) approve();
 
   const repoDir = resolveRepoDir(command);
+  const docsOnly = isDocsOnlyStaged(repoDir);
 
   // session_id is required — fail-safe if missing
   if (!sessionId) {
@@ -128,6 +143,8 @@ if (require.main === module) {
 
     if (status === "complete") continue;
     if (status === "skipped" && SKIPPABLE_STEPS.includes(step)) continue;
+    // docs-only short-circuit: skip all steps except user_verification
+    if (docsOnly && step !== "user_verification") continue;
     // Evidence-based overrides: staged files are proof of completion
     if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
     if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
@@ -147,7 +164,9 @@ if (require.main === module) {
   };
 
   const lines = [
-    `workflow-gate: the following workflow steps are not complete: ${incomplete.join(", ")}`,
+    docsOnly && incomplete.length === 1 && incomplete[0] === "user_verification"
+      ? "workflow-gate: docs-only commit — only user_verification is required."
+      : `workflow-gate: the following workflow steps are not complete: ${incomplete.join(", ")}`,
     "",
     "To mark a step complete:",
   ];
@@ -165,4 +184,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, isDocsOnlyStaged };
