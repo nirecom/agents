@@ -27,8 +27,11 @@ Create the following as a TodoWrite checklist and work through each step in orde
 
 ## Docs-only Short-circuit
 
-If the staged diff is entirely under `docs/` and all files are `.md`, steps 1–6 are
-auto-bypassed — only `user_verification` is required before committing.
+If every staged file matches the human-facing docs allowlist — any `.md` under `docs/`,
+or one of the root-level files `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
+`LICENSE.md` — steps 1–6 are auto-bypassed. Only `user_verification` is required before
+committing. Root `CLAUDE.md`, `SKILL.md`, and subdirectory `README.md` are behavior/prompt
+code and do NOT qualify.
 
 ## Workflow State Recovery
 
