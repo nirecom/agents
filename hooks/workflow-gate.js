@@ -24,14 +24,22 @@ function hasStagedTestChanges(repoDir) {
   }
 }
 
-// Evidence-based check: ALL staged files are docs/*.md (no non-doc files)
+// Allowlist of file patterns treated as human-facing documentation (not behavior code).
+// Matches:
+//   - any .md under docs/ (including nested: docs/architecture/foo.md)
+//   - root-level human-facing .md files: README / CHANGELOG / CONTRIBUTING / LICENSE
+// Intentionally excludes CLAUDE.md, SKILL.md, subdirectory README.md, etc. —
+// those are behavior/prompt code that require the full workflow gate.
+const DOCS_ONLY_ALLOWLIST = /^(docs\/.+\.md|(README|CHANGELOG|CONTRIBUTING|LICENSE)\.md)$/i;
+
+// Evidence-based check: ALL staged files are human-facing docs (no behavior code)
 function isDocsOnlyStaged(repoDir) {
   try {
     const out = execSync("git diff --cached --name-only", {
       cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
     });
     const files = out.trim().split("\n").filter(Boolean);
-    return files.length > 0 && files.every((f) => f.startsWith("docs/") && f.endsWith(".md"));
+    return files.length > 0 && files.every((f) => DOCS_ONLY_ALLOWLIST.test(f));
   } catch (e) {
     process.stderr.write(`workflow-gate: isDocsOnlyStaged failed (cwd=${repoDir}): ${e.message}\n`);
     return false;
