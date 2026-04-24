@@ -4,8 +4,10 @@
 
 set -euo pipefail
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SCANNER="$DOTFILES_DIR/bin/scan-outbound.sh"
+# --- BEGIN temporary: dotfiles → agents migration ---
+_cfg_dir="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/claude-global}"
+SCANNER="$_cfg_dir/../bin/scan-outbound.sh"
+# --- END temporary: dotfiles → agents migration ---
 
 # Auto-unstage settings.json if the only change is effortLevel
 SETTINGS="claude-global/settings.json"
