@@ -228,7 +228,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/session-start.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/session-start.js\"",
             "timeout": 5
           }
         ]
@@ -240,7 +240,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/post-compact.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-compact.js\"",
             "timeout": 5
           }
         ]
@@ -252,7 +252,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/scan-outbound.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-outbound.js\"",
             "timeout": 5
           }
         ]
@@ -262,7 +262,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/block-dotenv.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-dotenv.js\"",
             "timeout": 5
           }
         ]
@@ -272,7 +272,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-gate.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-gate.js\"",
             "timeout": 5
           }
         ]
@@ -282,7 +282,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-cross-platform.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-cross-platform.js\"",
             "timeout": 5
           }
         ]
@@ -292,7 +292,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/check-japanese-in-docs.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-japanese-in-docs.js\"",
             "timeout": 5
           }
         ]
@@ -302,7 +302,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/block-tests-direct.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-tests-direct.js\"",
             "timeout": 5
           }
         ]
@@ -314,12 +314,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-mark.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-mark.js\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/workflow-run-tests.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-run-tests.js\"",
             "timeout": 5
           }
         ]
@@ -329,14 +329,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$DOTFILES_DIR/claude-global/hooks/scan-inbound.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-inbound.js\"",
             "timeout": 5
           }
         ]
       }
     ]
   },
-  "effortLevel": "medium",
+  "effortLevel": "high",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }
