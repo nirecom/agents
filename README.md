@@ -65,6 +65,28 @@ docs/              — architecture decisions, history, and operational docs
 tests/             — test suite for hooks, skills, and framework behaviors
 ```
 
+## Requirements
+
+### Required
+
+| Tool | Purpose |
+|------|---------|
+| `git` | Repo clone; `core.hooksPath` is set to the repo's `hooks/` directory |
+| `bash` | All shell hooks (`pre-commit`, `commit-msg`) and `bin/` scripts |
+| Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` |
+| PowerShell 5+ (Windows) | `install.ps1`, symlink creation, session-sync wrapper |
+| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | The framework targets Claude Code; without it, hooks/skills have no host |
+
+> Windows: symlink creation requires Developer Mode (Settings → System → For developers) or Administrator privileges.
+
+### Optional
+
+| Tool | Used by |
+|------|---------|
+| [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit` (without it, all repos are scanned conservatively) |
+| `osascript` (macOS) / `notify-send` (Linux) | Toast notifications from `bin/session-sync.sh` |
+
 ## Install
 
 ### Linux / macOS
