@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 node_modules/
 settings.local.json
+rules/language.md
