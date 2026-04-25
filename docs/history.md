@@ -323,3 +323,7 @@ Changes: Added profile-snippet.ps1 and profile-snippet.sh to agents root — set
 ### CONFIG: Exclude rules/language.md from tracking (private symlink) (2026-04-25, pending)
 Background: language.md is a private-repo symlink installed by my-private-repo/install. After agents-split, the symlink target lands at c:/git/agents/rules/language.md. Without a gitignore entry it would appear as untracked in the public agents repo.
 Changes: Added rules/language.md to .gitignore.
+
+### BUGFIX: block-dotenv: extend to Edit/Write/MultiEdit tools (2026-04-26, pending)
+Background: block-dotenv hook only covered Bash/Read/Grep/Glob tools, leaving Edit and Write tools able to overwrite dotenv files. Also, git commit message stripping regex did not handle 'git -C <path> commit' form, causing hook to self-block when commit messages mentioned dotenv.
+Changes: Extended block-dotenv.js to handle Edit, Write, MultiEdit tools via isDotenvPath() on file_path. Fixed commit stripping regex to match 'git -C <path> commit'. Added Edit/Write deny rules for dotenv files in settings.json. Updated hook matcher. Fixed stale HOOK path in test file. Added test coverage.
