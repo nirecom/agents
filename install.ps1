@@ -37,5 +37,9 @@ if ($_profileContent -notlike "*$_marker*") {
 Remove-Variable _snippetPath, _marker, _profileContent, _updated -ErrorAction SilentlyContinue
 
 Write-Host ""
+Write-Host "--- Configuring VS Code settings (GitHub Copilot / Claude Code) ---"
+& "$AgentsRoot\install\win\vscode-settings.ps1"
+
+Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
 Write-Host "Restart PowerShell to apply profile changes." -ForegroundColor Yellow

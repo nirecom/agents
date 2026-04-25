@@ -36,5 +36,9 @@ fi
 unset _rc_file _snippet_path _marker
 
 echo ""
+echo "--- Configuring VS Code settings (GitHub Copilot / Claude Code) ---"
+"$AGENTS_ROOT/install/linux/vscode-settings.sh"
+
+echo ""
 echo "=== Done ==="
 echo "Restart your shell or run: source ~/.bashrc"
