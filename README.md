@@ -1,8 +1,8 @@
 # agents
 
-Personal Claude Code configuration — CLAUDE.md, skills, hooks, agents, and workflow
-enforcement. Designed to extend to other agent frameworks (Codex, Cursor, Gemini CLI)
-in the future.
+Personal AI coding agent configuration for **Claude Code** and **GitHub Copilot** (VS Code).
+Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
+Codex CLI and Gemini CLI planned next.
 
 ## What's Inside
 
@@ -49,16 +49,31 @@ Test writing runs in a `mode: "auto"` subagent restricted to test files only, re
 user confirmations from O(N) per-edit approvals to exactly two: test plan approval and
 final review.
 
+### GitHub Copilot support
+
+`CLAUDE.md` and `rules/` are read natively by Copilot when `chat.useClaudeMdFile: true`
+is set — no duplication needed. The existing `settings.json` hooks fire in Copilot too
+(same JSON protocol; matchers extended with Copilot tool names). Core skills are ported
+to `copilot/prompts/*.prompt.md` and invoked as `/promptname` in Copilot Chat.
+The installer configures all required VS Code settings automatically.
+
+See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full design.
+
 ## Directory Structure
 
 ```
-CLAUDE.md          — global instructions loaded by Claude Code
+CLAUDE.md          — global instructions (Claude Code + Copilot)
 settings.json      — hooks, permissions, model, and effort-level configuration
 rules/             — coding, testing, docs, git, and security conventions
-skills/            — slash commands (/make-plan, /write-tests, /review-code-security, …)
-hooks/             — git and Claude Code hook scripts
-agents/            — agent definition files (planner, reviewer)
+skills/            — slash commands (/make-plan, /write-tests, …) for Claude Code
+copilot/
+  prompts/         — core skills ported as *.prompt.md for GitHub Copilot
+hooks/             — git and Claude Code/Copilot hook scripts
+agents/            — agent definition files (planner, reviewer) — Claude Code only
 bin/               — doc-append, doc-rotate, session-sync, scan-outbound, and other tools
+install/
+  win/             — Windows-specific install subscripts
+  linux/           — Linux/macOS install subscripts
 install.sh         — Linux/macOS installer
 install.ps1        — Windows installer
 docs/              — architecture decisions, history, and operational docs
@@ -86,6 +101,15 @@ tests/             — test suite for hooks, skills, and framework behaviors
 | [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` |
 | [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit` (without it, all repos are scanned conservatively) |
 | `osascript` (macOS) / `notify-send` (Linux) | Toast notifications from `bin/session-sync.sh` |
+| `jq` | `install/linux/vscode-settings.sh` — merging VS Code user settings on Linux/macOS |
+
+### GitHub Copilot
+
+GitHub Copilot for VS Code is required to use `copilot/prompts/`. The installer
+(`install.ps1` / `install.sh`) writes the required VS Code user settings automatically.
+
+> **Note**: `settings.json` is standard JSON. If your VS Code `settings.json` contains
+> comments (JSONC), the installer will warn and skip the merge — remove comments first.
 
 ## Install
 
