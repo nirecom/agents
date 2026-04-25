@@ -1,0 +1,36 @@
+#!/bin/bash
+# commit-msg hook: scan commit message for private information
+# Skips scanning for private repos (detected dynamically via GitHub API)
+
+set -euo pipefail
+
+# --- BEGIN temporary: dotfiles → agents migration ---
+_cfg_dir="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/claude-global}"
+SCANNER="$_cfg_dir/../bin/scan-outbound.sh"
+# --- END temporary: dotfiles → agents migration ---
+
+# Check if this repo is private via GitHub API (skip scanning if private)
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+if [ -n "$REMOTE_URL" ]; then
+    # Extract hostname — non-GitHub hosts are treated as private (skip scanning)
+    REMOTE_HOST="$(echo "$REMOTE_URL" | sed -E 's#^(ssh|https?)://([^@]+@)?([^/:]+).*#\3#' | sed -E 's#^[^@]+@([^:]+):.*#\1#')"
+    if [ -n "$REMOTE_HOST" ] && [ "$REMOTE_HOST" != "github.com" ]; then
+        exit 0
+    fi
+    REPO_ID="$(echo "$REMOTE_URL" | sed 's/\.git$//' | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#')"
+    if [ -n "$REPO_ID" ] && command -v gh >/dev/null 2>&1; then
+        IS_PRIVATE="$(gh api "repos/$REPO_ID" --jq .private 2>/dev/null || true)"
+        if [ "$IS_PRIVATE" = "true" ]; then
+            exit 0
+        fi
+    fi
+fi
+
+# $1 is the commit message file
+if ! "$SCANNER" --stdin "commit-msg" < "$1"; then
+    echo ""
+    echo "Commit blocked: private information detected in commit message."
+    echo "Fix the message, or add exceptions to .private-info-allowlist"
+    exit 1
+fi
+exit 0
