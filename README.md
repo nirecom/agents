@@ -1,9 +1,8 @@
 # agents
 
-Personal agent configuration — currently focused on Claude Code (CLAUDE.md, skills, hooks,
-agents) with the structure ready to absorb Codex / Cursor / Gemini CLI settings as they
-stabilize. Follows the [AGENTS.md](https://github.com/google-deepmind/gemini-cli/blob/main/AGENTS.md)
-emerging convention for multi-agent configuration repos.
+Personal Claude Code configuration — CLAUDE.md, skills, hooks, agents, and workflow
+enforcement. Designed to extend to other agent frameworks (Codex, Cursor, Gemini CLI)
+in the future.
 
 ## What's Inside
 
