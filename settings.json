@@ -1,0 +1,342 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "95"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Read(**/.env.example)",
+      "Read(**/.env.sample)",
+      "Read(**/.env.template)",
+      "Read(**/.env.dist)",
+      "Grep(**/.env.example)",
+      "Grep(**/.env.sample)",
+      "Grep(**/.env.template)",
+      "Grep(**/.env.dist)",
+      "Bash(git status*)",
+      "Bash(git log *)",
+      "Bash(git log)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git show *)",
+      "Bash(git -C * status)",
+      "Bash(git -C * status *)",
+      "Bash(git -C * log)",
+      "Bash(git -C * log *)",
+      "Bash(git -C * diff)",
+      "Bash(git -C * diff *)",
+      "Bash(cd * && git status)",
+      "Bash(cd * && git status *)",
+      "Bash(cd * && git log)",
+      "Bash(cd * && git log *)",
+      "Bash(cd * && git diff)",
+      "Bash(cd * && git diff *)",
+      "Bash(git branch)",
+      "Bash(git branch -a)",
+      "Bash(git branch -r)",
+      "Bash(git branch -v*)",
+      "Bash(git branch --list *)",
+      "Bash(git branch --show-current)",
+      "Bash(git branch --contains *)",
+      "Bash(git tag)",
+      "Bash(git tag -l *)",
+      "Bash(git tag --list *)",
+      "Bash(git remote)",
+      "Bash(git remote -v)",
+      "Bash(git remote show *)",
+      "Bash(git rev-parse *)",
+      "Bash(git stash list)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(less *)",
+      "Bash(wc *)",
+      "Bash(file *)",
+      "Bash(stat *)",
+      "Bash(ls *)",
+      "Bash(ls)",
+      "Bash(find *)",
+      "Bash(ls * | head *)",
+      "Bash(tree *)",
+      "Bash(tree)",
+      "Bash(du *)",
+      "Bash(df *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(ag *)",
+      "Bash(which *)",
+      "Bash(type *)",
+      "Bash(command -v *)",
+      "Bash(uname *)",
+      "Bash(pwd)",
+      "Bash(git add .)",
+      "Bash(git add -A)",
+      "Bash(git add *)",
+      "Bash(git -C * add *)",
+      "Bash(git push)",
+      "Bash(git push origin *)",
+      "Bash(git -C * push)",
+      "Bash(git -C * push origin *)",
+      "Bash(git -C * push -u origin *)",
+      "Bash(git commit *)",
+      "Bash(git -C * commit *)",
+      "Bash(cd * && git commit *)",
+      "Bash(chmod +x *.sh)",
+      "Bash(chmod +x */hooks/*)",
+      "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
+      "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
+      "Bash(doc-append *)",
+      "Write(**/tests/**)",
+      "Edit(**/tests/**)",
+      "WebSearch",
+      "WebFetch(domain:developer.mozilla.org)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:learn.microsoft.com)",
+      "WebFetch(domain:man7.org)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:code.claude.com)",
+      "WebFetch(domain:platform.claude.com)",
+      "WebFetch(domain:anthropic.com)",
+      "WebFetch(domain:modelcontextprotocol.io)",
+      "WebFetch(domain:spec.modelcontextprotocol.io)",
+      "WebFetch(domain:ecc.tools)",
+      "WebFetch(domain:docs.langchain.com)",
+      "WebFetch(domain:reference.langchain.com)"
+    ],
+    "deny": [
+      "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.development)",
+      "Read(**/.env.production)",
+      "Read(**/.env.staging)",
+      "Read(**/.env.test)",
+      "Read(**/.env.dev)",
+      "Read(**/.env.prod)",
+      "Grep(**/.env)",
+      "Grep(**/.env.local)",
+      "Grep(**/.env.development)",
+      "Grep(**/.env.production)",
+      "Grep(**/.env.staging)",
+      "Grep(**/.env.test)",
+      "Grep(**/.env.dev)",
+      "Grep(**/.env.prod)",
+      "Bash(*rm -rf *)",
+      "Bash(*rm -fr *)",
+      "Bash(*find *-exec *)",
+      "Bash(*find *-execdir *)",
+      "Bash(*find *-ok *)",
+      "Bash(*find *-okdir *)",
+      "Bash(*find *-delete*)",
+      "Bash(*find *-fprint*)",
+      "Bash(*find *-fls*)",
+      "Bash(*sudo *)",
+      "Bash(*mkfs *)",
+      "Bash(dd *)",
+      "Bash(*&& dd *)",
+      "Bash(*; dd *)",
+      "Bash(*| dd *)",
+      "Bash(*git push --force*)",
+      "Bash(*git push *--force*)",
+      "Bash(*git push --force-with-lease*)",
+      "Bash(*git push *--force-with-lease*)",
+      "Bash(*git push --mirror*)",
+      "Bash(*git push *--mirror*)",
+      "Bash(*git push --delete*)",
+      "Bash(*git push *--delete*)",
+      "Bash(*git commit --amend*)",
+      "Bash(*git commit *--amend*)",
+      "Bash(*--no-verify*)",
+      "Bash(*git reset --hard*)",
+      "Bash(*git branch -D*)",
+      "Bash(*git branch -d*)",
+      "Bash(*git push origin :*)",
+      "Bash(*git push *origin :*)",
+      "Bash(*curl *|bash*)",
+      "Bash(*curl *| bash*)",
+      "Bash(*curl *|sh*)",
+      "Bash(*curl *| sh*)",
+      "Bash(*wget *|bash*)",
+      "Bash(*wget *| bash*)",
+      "Bash(*wget *|sh*)",
+      "Bash(*wget *| sh*)",
+      "Bash(*~/.ssh/*)",
+      "Read(~/.ssh/**)",
+      "Edit(~/.ssh/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.azure/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.git-credentials)",
+      "Read(~/.docker/config.json)",
+      "Read(~/.kube/**)",
+      "Read(~/.npmrc)",
+      "Read(~/.pypirc)",
+      "Read(~/.gem/credentials)",
+      "Edit(~/.bashrc)",
+      "Edit(~/.zshrc)",
+      "Edit(~/.profile)",
+      "Edit(~/.bash_profile)",
+      "Edit(~/.profile_common)",
+      "Edit(~/.claude/projects/workflow/**)",
+      "Write(~/.claude/projects/workflow/**)",
+      "Edit(**/history.md)",
+      "Write(**/history.md)"
+    ],
+    "ask": [
+      "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
+      "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_PLAN_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
+      "Bash(uv run bin/doc-rotate.py *)"
+    ],
+    "disableBypassPermissionsMode": "disable",
+    "additionalDirectories": [
+      "../ai-specs"
+    ]
+  },
+  "enableAllProjectMcpServers": false,
+  "deniedMcpServers": [
+    {
+      "serverName": "claude_ai_Notion"
+    }
+  ],
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -Command \"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null; $xml = [Windows.Data.Xml.Dom.XmlDocument]::new(); $xml.LoadXml('<toast><visual><binding template=\\\"ToastText02\\\"><text id=\\\"1\\\">Claude Code</text><text id=\\\"2\\\">Permission approval needed</text></binding></visual></toast>'); [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Claude Code').Show([Windows.UI.Notifications.ToastNotification]::new($xml))\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/session-start.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-compact.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-outbound.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-dotenv.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-gate.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-cross-platform.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-japanese-in-docs.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-tests-direct.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-mark.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-run-tests.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/scan-inbound.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "effortLevel": "high",
+  "autoUpdatesChannel": "latest",
+  "model": "opusplan"
+}
