@@ -643,6 +643,77 @@ else
     fail "L2-j(security). path traversal — expected block, got: $L2J_RESULT"
 fi
 
+# L2-k / L2-l: docs/ symlink/junction → external git repo, evidence detection
+REPO_2K_SRC=$(setup_repo)
+REPO_2K_EXT=$(setup_repo)
+mkdir -p "$REPO_2K_EXT/docs"
+JUNCTION_OK=0
+ln -sfn "$REPO_2K_EXT/docs" "$REPO_2K_SRC/docs" 2>/dev/null && JUNCTION_OK=1 || true
+
+if [ "$JUNCTION_OK" = "1" ]; then
+    # L2-k: docs staged in junction target → approve
+    SID_2K="l2k-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    write_state "$SID_2K" "$(cat <<EOF
+{
+  "version": 1, "session_id": "$SID_2K", "git_branch": "main",
+  "created_at": "2026-04-11T10:00:00.000Z",
+  "steps": {
+    "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
+    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
+    "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
+    "docs":              {"status": "pending",  "updated_at": null},
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+  }
+}
+EOF
+)"
+    echo "change" > "$REPO_2K_EXT/docs/todo.md"
+    git -C "$REPO_2K_EXT" add docs/todo.md
+    L2K_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_2K_SRC commit -m test\"},\"session_id\":\"$SID_2K\"}"
+    L2K_RESULT=$(echo "$L2K_JSON" | CLAUDE_PROJECT_DIR="$REPO_2K_SRC" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        node "$GATE_HOOK" 2>/dev/null || true)
+    git -C "$REPO_2K_EXT" reset HEAD -- . 2>/dev/null || true
+    git -C "$REPO_2K_EXT" clean -fdq 2>/dev/null || true
+    if echo "$L2K_RESULT" | grep -q '"approve"'; then
+        pass "L2-k. docs/ symlink/junction → external git repo, docs staged there → approve"
+    else
+        fail "L2-k. docs/ symlink/junction → external git repo — expected approve, got: $L2K_RESULT"
+    fi
+
+    # L2-l: junction exists but no docs staged anywhere → block
+    SID_2L="l2l-$(printf '%04x%04x' $RANDOM $RANDOM)"
+    write_state "$SID_2L" "$(cat <<EOF
+{
+  "version": 1, "session_id": "$SID_2L", "git_branch": "main",
+  "created_at": "2026-04-11T10:00:00.000Z",
+  "steps": {
+    "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
+    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
+    "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
+    "docs":              {"status": "pending",  "updated_at": null},
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+  }
+}
+EOF
+)"
+    L2L_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_2K_SRC commit -m test\"},\"session_id\":\"$SID_2L\"}"
+    L2L_RESULT=$(echo "$L2L_JSON" | CLAUDE_PROJECT_DIR="$REPO_2K_SRC" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+        node "$GATE_HOOK" 2>/dev/null || true)
+    if echo "$L2L_RESULT" | grep -q '"block"'; then
+        pass "L2-l. docs/ symlink/junction, no staged docs → block"
+    else
+        fail "L2-l. docs/ symlink/junction, no staged docs — expected block, got: $L2L_RESULT"
+    fi
+
+    rm -rf "$REPO_2K_SRC/docs"
+else
+    echo "SKIP: L2-k/L2-l (symlink or junction creation not available)"
+fi
+
 # ---------------------------------------------------------------------------
 # Section 3: RESET_FROM hook
 # ---------------------------------------------------------------------------
