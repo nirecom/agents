@@ -65,14 +65,6 @@ if (-not (Test-Path $gitConfigDir)) { New-Item -ItemType Directory -Path $gitCon
 git config --file $GitConfigLocal core.hooksPath "$AgentsRoot\hooks"
 Write-Host "core.hooksPath -> $AgentsRoot\hooks" -ForegroundColor Green
 
-# --- AGENTS_CONFIG_DIR / AGENTS_DIR profile snippet ---
-$ProfileSnippet = "$HOME\.agents_profile.ps1"
-@"
-`$env:AGENTS_CONFIG_DIR = "$AgentsRoot"
-`$env:AGENTS_DIR        = "$AgentsRoot"
-"@ | Set-Content -Path $ProfileSnippet -Encoding UTF8
-Write-Host "Profile snippet written: $ProfileSnippet" -ForegroundColor Green
-
 # --- ~/.local/bin/doc-append.cmd launcher ---
 $LocalBin = "$HOME\.local\bin"
 New-Item -ItemType Directory -Force -Path $LocalBin | Out-Null
