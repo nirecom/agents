@@ -39,9 +39,9 @@ function shellPath(p) {
   return p.split(path.sep).join("/");
 }
 
-// Determine dotfiles directory (this script lives in dotfiles/claude-global/hooks/)
-const DOTFILES_DIR = path.resolve(__dirname, "..", "..");
-const SCANNER = path.join(DOTFILES_DIR, "bin", "scan-outbound.sh");
+// This script lives in agents/hooks/; scanner is at agents/bin/
+const AGENTS_DIR = path.resolve(__dirname, "..");
+const SCANNER = path.join(AGENTS_DIR, "bin", "scan-outbound.sh");
 
 // Parse stdin
 const input = JSON.parse(readStdin());
