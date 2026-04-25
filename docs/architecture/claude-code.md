@@ -238,8 +238,8 @@ bulk-deleted; most had directory versions with no data loss. One-time event.
 
 **Hooks**:
 - `scan-outbound.js` (PreToolUse, matcher: `Bash`) — scans commands for private info patterns
-- `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob`) — blocks `.env` file access.
-  Sanitizes git commit messages to avoid false positives
+- `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
+  Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 7 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
