@@ -1,24 +1,33 @@
 #!/bin/bash
-# Smoke tests for agents repo split step 2 changes.
-# Verifies: AGENTS_CONFIG_DIR/AGENTS_DIR exports in .profile_common and profile.ps1,
-#           settings.json hook path migration (old path gone, new path present).
+# Smoke tests for agents repo split (steps 2, 8, 16).
+# Verifies: settings.json hook path uses $AGENTS_CONFIG_DIR/hooks/,
+#           dotfiles → agents compat blocks removed,
+#           .agents_profile sourcing added on both shells,
+#           dotfileslink scripts write profile snippet with AGENTS_CONFIG_DIR
+#           and CLAUDE.md/settings.json symlink repair logic.
 set -euo pipefail
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SETTINGS="$DOTFILES_DIR/claude-global/settings.json"
-PROFILE_COMMON="$DOTFILES_DIR/.profile_common"
-PROFILE_PS1="$DOTFILES_DIR/install/win/profile.ps1"
+AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DOTFILES_ROOT=""
+if [ -d "$AGENTS_ROOT/../dotfiles" ]; then
+    DOTFILES_ROOT="$(cd "$AGENTS_ROOT/../dotfiles" && pwd)"
+fi
+SETTINGS="$AGENTS_ROOT/settings.json"
+PROFILE_COMMON="${DOTFILES_ROOT:+$DOTFILES_ROOT/.profile_common}"
+PROFILE_PS1="${DOTFILES_ROOT:+$DOTFILES_ROOT/install/win/profile.ps1}"
 ERRORS=0
+SKIPS=0
+PASSES=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
-pass() { echo "PASS: $1"; }
+pass() { echo "PASS: $1"; PASSES=$((PASSES + 1)); }
+skip() { echo "SKIP: $1"; SKIPS=$((SKIPS + 1)); }
 
-for f in "$SETTINGS" "$PROFILE_COMMON" "$PROFILE_PS1"; do
-    if [ ! -f "$f" ]; then
-        echo "FATAL: required file not found: $f"
-        exit 2
-    fi
-done
+# Only the agents-side settings.json is mandatory.
+if [ ! -f "$SETTINGS" ]; then
+    echo "FATAL: required file not found: $SETTINGS"
+    exit 2
+fi
 
 # ---------------------------------------------------------------------------
 # N1: settings.json has 0 occurrences of old path $DOTFILES_DIR/claude-global/hooks/
@@ -47,81 +56,89 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N3: .profile_common exports AGENTS_CONFIG_DIR with :-$DOTFILES_DIR/claude-global fallback
+# N3: .profile_common — compat block removed (no BEGIN temporary marker)
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N3: .profile_common — export AGENTS_CONFIG_DIR ==="
+echo "=== N3: .profile_common — dotfiles→agents compat block removed ==="
 
-if grep -qE 'export AGENTS_CONFIG_DIR=.*:-.*DOTFILES_DIR.*claude-global' "$PROFILE_COMMON"; then
-    pass "N3. .profile_common exports AGENTS_CONFIG_DIR with :-\$DOTFILES_DIR/claude-global fallback"
+if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
+    skip "N3. .profile_common not available (dotfiles repo not adjacent)"
+elif grep -qE 'BEGIN temporary: dotfiles.*agents' "$PROFILE_COMMON"; then
+    fail "N3. .profile_common still contains 'BEGIN temporary: dotfiles → agents' compat block"
 else
-    fail "N3. .profile_common does not export AGENTS_CONFIG_DIR with expected fallback"
+    pass "N3. .profile_common no longer contains the dotfiles→agents compat block"
 fi
 
 # ---------------------------------------------------------------------------
-# N4: .profile_common exports AGENTS_DIR with :-$DOTFILES_DIR fallback
+# N4: .profile_common — no remaining export AGENTS_CONFIG_DIR= line
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N4: .profile_common — export AGENTS_DIR ==="
+echo "=== N4: .profile_common — AGENTS_CONFIG_DIR export removed ==="
 
-if grep -qE 'export AGENTS_DIR=.*:-.*DOTFILES_DIR[^/]' "$PROFILE_COMMON"; then
-    pass "N4. .profile_common exports AGENTS_DIR with :-\$DOTFILES_DIR fallback"
+if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
+    skip "N4. .profile_common not available (dotfiles repo not adjacent)"
+elif grep -qE '^[[:space:]]*export[[:space:]]+AGENTS_CONFIG_DIR=' "$PROFILE_COMMON"; then
+    fail "N4. .profile_common still defines 'export AGENTS_CONFIG_DIR=' (compat block not removed)"
 else
-    fail "N4. .profile_common does not export AGENTS_DIR with expected fallback"
+    pass "N4. .profile_common no longer defines export AGENTS_CONFIG_DIR="
 fi
 
 # ---------------------------------------------------------------------------
-# N5: profile.ps1 sets $env:AGENTS_CONFIG_DIR with $DotfilesDir\claude-global fallback
+# N5: profile.ps1 — compat block removed (no BEGIN temporary marker)
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N5: profile.ps1 — \$env:AGENTS_CONFIG_DIR ==="
+echo "=== N5: profile.ps1 — dotfiles→agents compat block removed ==="
 
-if grep -qE '\$env:AGENTS_CONFIG_DIR.*=.*DotfilesDir.*claude-global' "$PROFILE_PS1"; then
-    pass "N5. profile.ps1 sets \$env:AGENTS_CONFIG_DIR with \$DotfilesDir\\claude-global fallback"
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "N5. profile.ps1 not available (dotfiles repo not adjacent)"
+elif grep -qE 'BEGIN temporary: dotfiles.*agents' "$PROFILE_PS1"; then
+    fail "N5. profile.ps1 still contains 'BEGIN temporary: dotfiles → agents' compat block"
 else
-    fail "N5. profile.ps1 does not set \$env:AGENTS_CONFIG_DIR with expected fallback"
+    pass "N5. profile.ps1 no longer contains the dotfiles→agents compat block"
 fi
 
 # ---------------------------------------------------------------------------
-# N6: profile.ps1 sets $env:AGENTS_DIR with $DotfilesDir fallback
+# N6: profile.ps1 — no remaining $env:AGENTS_CONFIG_DIR assignment
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N6: profile.ps1 — \$env:AGENTS_DIR ==="
+echo "=== N6: profile.ps1 — \$env:AGENTS_CONFIG_DIR removed ==="
 
-if grep -qE '\$env:AGENTS_DIR[[:space:]]*=.*DotfilesDir' "$PROFILE_PS1"; then
-    pass "N6. profile.ps1 sets \$env:AGENTS_DIR with \$DotfilesDir fallback"
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "N6. profile.ps1 not available (dotfiles repo not adjacent)"
+elif grep -qE '\$env:AGENTS_CONFIG_DIR' "$PROFILE_PS1"; then
+    fail "N6. profile.ps1 still references \$env:AGENTS_CONFIG_DIR (compat block not removed)"
 else
-    fail "N6. profile.ps1 does not set \$env:AGENTS_DIR with expected fallback"
+    pass "N6. profile.ps1 no longer references \$env:AGENTS_CONFIG_DIR"
 fi
 
 # ---------------------------------------------------------------------------
-# E1: .profile_common compat block appears AFTER export DOTFILES_DIR line
+# E1: .profile_common uses sibling detection + sources profile-snippet.sh
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E1: .profile_common — AGENTS_CONFIG_DIR defined after DOTFILES_DIR ==="
+echo "=== E1: .profile_common — sibling detection + sources profile-snippet.sh ==="
 
-DOTFILES_DIR_LINE=$(grep -n 'export DOTFILES_DIR=' "$PROFILE_COMMON" | head -1 | cut -d: -f1)
-AGENTS_CONFIG_LINE=$(grep -n 'export AGENTS_CONFIG_DIR=' "$PROFILE_COMMON" | head -1 | cut -d: -f1)
-
-if [ -n "$DOTFILES_DIR_LINE" ] && [ -n "$AGENTS_CONFIG_LINE" ] && [ "$AGENTS_CONFIG_LINE" -gt "$DOTFILES_DIR_LINE" ]; then
-    pass "E1. AGENTS_CONFIG_DIR (line $AGENTS_CONFIG_LINE) appears after DOTFILES_DIR (line $DOTFILES_DIR_LINE)"
+if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
+    skip "E1. .profile_common not available (dotfiles repo not adjacent)"
+elif grep -qE '_agents_dir=' "$PROFILE_COMMON" \
+        && grep -qE '(\.\s+|source\s+).*profile-snippet\.sh' "$PROFILE_COMMON"; then
+    pass "E1. .profile_common uses sibling detection and sources profile-snippet.sh"
 else
-    fail "E1. AGENTS_CONFIG_DIR (line ${AGENTS_CONFIG_LINE:-?}) does not appear after DOTFILES_DIR (line ${DOTFILES_DIR_LINE:-?})"
+    fail "E1. .profile_common does not use sibling detection + profile-snippet.sh sourcing (Option B)"
 fi
 
 # ---------------------------------------------------------------------------
-# E2: profile.ps1 compat block appears AFTER $env:DOTFILES_DIR = $DotfilesDir line
+# E2: profile.ps1 uses sibling detection + sources profile-snippet.ps1
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E2: profile.ps1 — AGENTS_CONFIG_DIR defined after \$env:DOTFILES_DIR ==="
+echo "=== E2: profile.ps1 — sibling detection + sources profile-snippet.ps1 ==="
 
-DOTFILES_ENV_LINE=$(grep -n '\$env:DOTFILES_DIR' "$PROFILE_PS1" | head -1 | cut -d: -f1)
-AGENTS_PS1_LINE=$(grep -n '\$env:AGENTS_CONFIG_DIR' "$PROFILE_PS1" | head -1 | cut -d: -f1)
-
-if [ -n "$DOTFILES_ENV_LINE" ] && [ -n "$AGENTS_PS1_LINE" ] && [ "$AGENTS_PS1_LINE" -gt "$DOTFILES_ENV_LINE" ]; then
-    pass "E2. \$env:AGENTS_CONFIG_DIR (line $AGENTS_PS1_LINE) appears after \$env:DOTFILES_DIR (line $DOTFILES_ENV_LINE)"
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "E2. profile.ps1 not available (dotfiles repo not adjacent)"
+elif grep -qE 'AgentsDir.*=.*Split-Path.*DotfilesDir' "$PROFILE_PS1" \
+        && grep -qE 'Test-Path.*AgentsDir.*profile-snippet\.ps1' "$PROFILE_PS1"; then
+    pass "E2. profile.ps1 uses sibling detection (AgentsDir) and references profile-snippet.ps1"
 else
-    fail "E2. \$env:AGENTS_CONFIG_DIR (line ${AGENTS_PS1_LINE:-?}) does not appear after \$env:DOTFILES_DIR (line ${DOTFILES_ENV_LINE:-?})"
+    fail "E2. profile.ps1 does not use sibling detection + profile-snippet.ps1 sourcing (Option B)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -142,11 +159,13 @@ fi
 echo ""
 echo "=== N7: pre-commit — scanner path uses AGENTS_CONFIG_DIR ==="
 
-PRE_COMMIT="$DOTFILES_DIR/claude-global/hooks/pre-commit"
-if grep -q '_cfg_dir.*AGENTS_CONFIG_DIR' "$PRE_COMMIT" && grep -q 'SCANNER=.*_cfg_dir.*bin/scan-outbound' "$PRE_COMMIT"; then
-    pass "N7. pre-commit uses AGENTS_CONFIG_DIR to locate scan-outbound.sh"
+PRE_COMMIT="$AGENTS_ROOT/hooks/pre-commit"
+if [ ! -f "$PRE_COMMIT" ]; then
+    fail "N7. pre-commit not found at $PRE_COMMIT"
+elif grep -q 'SCANNER=.*_cfg_dir.*bin/scan-outbound' "$PRE_COMMIT"; then
+    pass "N7. pre-commit locates scan-outbound.sh via _cfg_dir relative to hook location"
 else
-    fail "N7. pre-commit does not use AGENTS_CONFIG_DIR for scanner path"
+    fail "N7. pre-commit does not locate scan-outbound.sh via _cfg_dir"
 fi
 
 # ---------------------------------------------------------------------------
@@ -155,11 +174,13 @@ fi
 echo ""
 echo "=== N8: commit-msg — scanner path uses AGENTS_CONFIG_DIR ==="
 
-COMMIT_MSG="$DOTFILES_DIR/claude-global/hooks/commit-msg"
-if grep -q '_cfg_dir.*AGENTS_CONFIG_DIR' "$COMMIT_MSG" && grep -q 'SCANNER=.*_cfg_dir.*bin/scan-outbound' "$COMMIT_MSG"; then
-    pass "N8. commit-msg uses AGENTS_CONFIG_DIR to locate scan-outbound.sh"
+COMMIT_MSG="$AGENTS_ROOT/hooks/commit-msg"
+if [ ! -f "$COMMIT_MSG" ]; then
+    fail "N8. commit-msg not found at $COMMIT_MSG"
+elif grep -q 'SCANNER=.*_cfg_dir.*bin/scan-outbound' "$COMMIT_MSG"; then
+    pass "N8. commit-msg locates scan-outbound.sh via _cfg_dir relative to hook location"
 else
-    fail "N8. commit-msg does not use AGENTS_CONFIG_DIR for scanner path"
+    fail "N8. commit-msg does not locate scan-outbound.sh via _cfg_dir"
 fi
 
 # ---------------------------------------------------------------------------
@@ -168,8 +189,10 @@ fi
 echo ""
 echo "=== N9: scan-outbound.sh — dotfiles-private uses DOTFILES_PRIVATE_DIR fallback ==="
 
-SCAN_OUTBOUND="$DOTFILES_DIR/bin/scan-outbound.sh"
-if grep -q 'DOTFILES_PRIVATE_DIR:-' "$SCAN_OUTBOUND"; then
+SCAN_OUTBOUND="$AGENTS_ROOT/bin/scan-outbound.sh"
+if [ ! -f "$SCAN_OUTBOUND" ]; then
+    fail "N9. scan-outbound.sh not found at $SCAN_OUTBOUND"
+elif grep -q 'DOTFILES_PRIVATE_DIR:-' "$SCAN_OUTBOUND"; then
     pass "N9. scan-outbound.sh uses \${DOTFILES_PRIVATE_DIR:-...} fallback for private allowlist"
 else
     fail "N9. scan-outbound.sh does not use DOTFILES_PRIVATE_DIR fallback"
@@ -181,10 +204,539 @@ fi
 echo ""
 echo "=== N10: .profile_common — session-sync uses AGENTS_DIR ==="
 
-if grep -q 'AGENTS_DIR.*DOTFILES_DIR.*bin/session-sync' "$PROFILE_COMMON"; then
+if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
+    skip "N10. .profile_common not available (dotfiles repo not adjacent)"
+elif grep -q 'AGENTS_DIR.*DOTFILES_DIR.*bin/session-sync' "$PROFILE_COMMON"; then
     pass "N10. .profile_common session-sync uses \${AGENTS_DIR:-\$DOTFILES_DIR}/bin/session-sync.sh"
 else
     fail "N10. .profile_common session-sync does not use AGENTS_DIR fallback"
+fi
+
+# ===========================================================================
+# Step 16 — additional tests for ~/.agents_profile sourcing and
+# dotfileslink snippet content
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# N18: .profile_common uses sibling detection + sources profile-snippet.sh (Normal)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N18: .profile_common — sibling detection + sources profile-snippet.sh (non-comment) ==="
+
+if [ -z "$PROFILE_COMMON" ] || [ ! -f "$PROFILE_COMMON" ]; then
+    skip "N18. .profile_common not available (dotfiles repo not adjacent)"
+elif grep -qE '_agents_dir=' "$PROFILE_COMMON" \
+        && grep -qE '(\.\s+|source\s+).*profile-snippet\.sh' "$PROFILE_COMMON"; then
+    pass "N18. .profile_common uses sibling detection and sources profile-snippet.sh"
+else
+    fail "N18. .profile_common does not use sibling detection + profile-snippet.sh (Option B)"
+fi
+
+# ---------------------------------------------------------------------------
+# N19: profile.ps1 uses sibling detection + sources profile-snippet.ps1 (Normal)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N19: profile.ps1 — sibling detection + sources profile-snippet.ps1 ==="
+
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "N19. profile.ps1 not available (dotfiles repo not adjacent)"
+elif grep -qE 'AgentsDir.*=.*Split-Path.*DotfilesDir' "$PROFILE_PS1" \
+        && grep -qE 'Test-Path.*AgentsDir.*profile-snippet\.ps1' "$PROFILE_PS1"; then
+    pass "N19. profile.ps1 uses sibling detection (AgentsDir) and references profile-snippet.ps1"
+else
+    fail "N19. profile.ps1 does not use sibling detection + profile-snippet.ps1 (Option B)"
+fi
+
+# ---------------------------------------------------------------------------
+# N20: profile.ps1 $symlinkFiles array does NOT contain CLAUDE.md (Edge)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N20: profile.ps1 — \$symlinkFiles array no longer lists CLAUDE.md ==="
+
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "N20. profile.ps1 not available (dotfiles repo not adjacent)"
+else
+    sym_line=$(grep -nE '^\$symlinkFiles[[:space:]]*=' "$PROFILE_PS1" | head -1 || true)
+    if [ -z "$sym_line" ]; then
+        fail "N20. could not find \$symlinkFiles = ... in profile.ps1"
+    else
+        line_num="${sym_line%%:*}"
+        line_content=$(sed -n "${line_num}p" "$PROFILE_PS1")
+        if echo "$line_content" | grep -q 'CLAUDE\.md'; then
+            fail "N20. \$symlinkFiles array still contains CLAUDE.md (line $line_num)"
+        else
+            pass "N20. \$symlinkFiles array does not contain CLAUDE.md"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N21: profile.ps1 $symlinkFiles array does NOT contain settings.json (Edge)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N21: profile.ps1 — \$symlinkFiles array no longer lists settings.json ==="
+
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "N21. profile.ps1 not available (dotfiles repo not adjacent)"
+else
+    sym_line=$(grep -nE '^\$symlinkFiles[[:space:]]*=' "$PROFILE_PS1" | head -1 || true)
+    if [ -z "$sym_line" ]; then
+        fail "N21. could not find \$symlinkFiles = ... in profile.ps1"
+    else
+        line_num="${sym_line%%:*}"
+        line_content=$(sed -n "${line_num}p" "$PROFILE_PS1")
+        if echo "$line_content" | grep -q 'settings\.json'; then
+            fail "N21. \$symlinkFiles array still contains settings.json (line $line_num)"
+        else
+            pass "N21. \$symlinkFiles array does not contain settings.json"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N22: agents dotfileslink.ps1 does NOT generate ~/.agents_profile.ps1 (Option B)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N22: agents/install/win/dotfileslink.ps1 — no ~/.agents_profile.ps1 generation ==="
+
+DOTFILESLINK_PS1="$AGENTS_ROOT/install/win/dotfileslink.ps1"
+if [ ! -f "$DOTFILESLINK_PS1" ]; then
+    fail "N22. dotfileslink.ps1 not found at $DOTFILESLINK_PS1"
+elif grep -q 'agents_profile\.ps1' "$DOTFILESLINK_PS1"; then
+    fail "N22. dotfileslink.ps1 still generates ~/.agents_profile.ps1 (should be removed in Option B)"
+else
+    pass "N22. dotfileslink.ps1 does not generate ~/.agents_profile.ps1"
+fi
+
+# ---------------------------------------------------------------------------
+# N23: agents/profile-snippet.ps1 static file exists with correct content (Option B)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N23: agents/profile-snippet.ps1 — static file exists with correct content ==="
+
+SNIPPET_PS1="$AGENTS_ROOT/profile-snippet.ps1"
+if [ ! -f "$SNIPPET_PS1" ]; then
+    fail "N23. profile-snippet.ps1 not found at $SNIPPET_PS1 (should be committed as static file)"
+else
+    _n23_ok=1
+    # Must use $PSScriptRoot (not hardcoded path)
+    if ! grep -q 'PSScriptRoot' "$SNIPPET_PS1"; then
+        fail "N23a. profile-snippet.ps1 does not use \$PSScriptRoot (hardcoded path risk)"
+        _n23_ok=0
+    fi
+    # Must set AGENTS_CONFIG_DIR
+    if ! grep -q 'AGENTS_CONFIG_DIR' "$SNIPPET_PS1"; then
+        fail "N23b. profile-snippet.ps1 does not set AGENTS_CONFIG_DIR"
+        _n23_ok=0
+    fi
+    # Must reference CLAUDE.md and settings.json (repair logic)
+    if ! grep -q 'CLAUDE\.md' "$SNIPPET_PS1" || ! grep -q 'settings\.json' "$SNIPPET_PS1"; then
+        fail "N23c. profile-snippet.ps1 missing CLAUDE.md/settings.json repair logic"
+        _n23_ok=0
+    fi
+    if [ "$_n23_ok" -eq 1 ]; then
+        pass "N23. profile-snippet.ps1 exists with PSScriptRoot, AGENTS_CONFIG_DIR, and repair logic"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N24: agents dotfileslink.sh does NOT generate ~/.agents_profile (Option B)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N24: agents/install/linux/dotfileslink.sh — no ~/.agents_profile generation ==="
+
+DOTFILESLINK_SH="$AGENTS_ROOT/install/linux/dotfileslink.sh"
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    fail "N24. dotfileslink.sh not found at $DOTFILESLINK_SH"
+elif grep -q 'PROFILE_SNIPPET=.*agents_profile' "$DOTFILESLINK_SH" \
+        || grep -qE "cat\s*>\s*\\\$HOME/\.agents_profile" "$DOTFILESLINK_SH" \
+        || grep -qE 'agents_profile[^_]' "$DOTFILESLINK_SH"; then
+    fail "N24. dotfileslink.sh still generates ~/.agents_profile (should be removed in Option B)"
+else
+    pass "N24. dotfileslink.sh does not generate ~/.agents_profile"
+fi
+
+# ---------------------------------------------------------------------------
+# N25: agents/profile-snippet.sh static file exists with correct content (Option B)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N25: agents/profile-snippet.sh — static file exists with correct content ==="
+
+SNIPPET_SH="$AGENTS_ROOT/profile-snippet.sh"
+if [ ! -f "$SNIPPET_SH" ]; then
+    fail "N25. profile-snippet.sh not found at $SNIPPET_SH (should be committed as static file)"
+else
+    _n25_ok=1
+    # Must use BASH_SOURCE (not hardcoded path)
+    if ! grep -q 'BASH_SOURCE' "$SNIPPET_SH"; then
+        fail "N25a. profile-snippet.sh does not use BASH_SOURCE (hardcoded path risk)"
+        _n25_ok=0
+    fi
+    # Must export AGENTS_CONFIG_DIR
+    if ! grep -qE 'export\s+AGENTS_CONFIG_DIR' "$SNIPPET_SH"; then
+        fail "N25b. profile-snippet.sh does not export AGENTS_CONFIG_DIR"
+        _n25_ok=0
+    fi
+    # Must reference CLAUDE.md and settings.json (repair logic)
+    if ! grep -q 'CLAUDE\.md' "$SNIPPET_SH" || ! grep -q 'settings\.json' "$SNIPPET_SH"; then
+        fail "N25c. profile-snippet.sh missing CLAUDE.md/settings.json repair logic"
+        _n25_ok=0
+    fi
+    if [ "$_n25_ok" -eq 1 ]; then
+        pass "N25. profile-snippet.sh exists with BASH_SOURCE, export AGENTS_CONFIG_DIR, and repair logic"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N26: profile.ps1 has no literal C:\git\agents hardcoded path
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N26: profile.ps1 — no hardcoded C:\\git\\agents literal ==="
+
+if [ -z "$PROFILE_PS1" ] || [ ! -f "$PROFILE_PS1" ]; then
+    skip "N26. profile.ps1 not available (dotfiles repo not adjacent)"
+elif grep -qF 'C:\git\agents' "$PROFILE_PS1" 2>/dev/null; then
+    fail "N26. profile.ps1 still contains hardcoded 'C:\\git\\agents' literal"
+else
+    pass "N26. profile.ps1 contains no hardcoded 'C:\\git\\agents' literal"
+fi
+
+# ---------------------------------------------------------------------------
+# N27: install.sh idempotent rc-append (BEGIN agents profile sourcing marker once)
+# NOTE: install.sh does not yet have rc-append logic — FAIL expected until implemented
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N27: install.sh — idempotent rc-append (marker appears exactly once) ==="
+
+INSTALL_SH="$AGENTS_ROOT/install.sh"
+if [ ! -f "$INSTALL_SH" ]; then
+    fail "N27. install.sh not found at $INSTALL_SH"
+else
+    _n27_td=$(mktemp -d)
+    trap 'rm -rf "$_n27_td"' EXIT
+
+    # Set up fake agents root and fake home
+    _n27_fake_home="$_n27_td/home"
+    _n27_fake_bashrc="$_n27_fake_home/.bashrc"
+    mkdir -p "$_n27_fake_home"
+    touch "$_n27_fake_bashrc"
+
+    # Run install.sh twice in a subshell with fake HOME and AGENTS_ROOT
+    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+
+    _n27_marker_count=$(grep -c 'BEGIN agents profile sourcing' "$_n27_fake_bashrc" 2>/dev/null; true)
+    _n27_marker_count="${_n27_marker_count:-0}"
+
+    trap - EXIT
+    rm -rf "$_n27_td"
+
+    if [ "$_n27_marker_count" -eq 1 ]; then
+        pass "N27. install.sh rc-append is idempotent (marker appears exactly once)"
+    elif [ "$_n27_marker_count" -eq 0 ]; then
+        fail "N27. install.sh did not append BEGIN agents profile sourcing marker to ~/.bashrc"
+    else
+        fail "N27. install.sh appended marker $_n27_marker_count times (not idempotent)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N28: install.ps1 contains idempotent marker logic (static check)
+# NOTE: install.ps1 does not yet have this logic — FAIL expected until implemented
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N28: install.ps1 — contains BEGIN agents profile sourcing marker logic ==="
+
+INSTALL_PS1="$AGENTS_ROOT/install.ps1"
+if [ ! -f "$INSTALL_PS1" ]; then
+    fail "N28. install.ps1 not found at $INSTALL_PS1"
+elif grep -q 'BEGIN agents profile sourcing' "$INSTALL_PS1"; then
+    pass "N28. install.ps1 contains BEGIN agents profile sourcing marker logic"
+else
+    fail "N28. install.ps1 missing idempotent 'BEGIN agents profile sourcing' marker logic"
+fi
+
+# ===========================================================================
+# E2E tests (E2E-1 through E2E-6) — isolation via temp repos
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# E2E-1: bash / agents only (dotfiles absent) — AGENTS_CONFIG_DIR set by profile-snippet.sh
+# NOTE: Requires profile-snippet.sh to exist — FAIL expected until file is created
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== E2E-1: bash / agents only — AGENTS_CONFIG_DIR set by profile-snippet.sh ==="
+
+if [ ! -f "$SNIPPET_SH" ]; then
+    skip "E2E-1. profile-snippet.sh not found (will be created in source code step)"
+else
+    _e2e1_td=$(mktemp -d)
+    trap 'rm -rf "$_e2e1_td"' EXIT
+
+    # Build isolated agents repo with the real snippet
+    _e2e1_agents="$_e2e1_td/agents"
+    mkdir -p "$_e2e1_agents"
+    cp "$SNIPPET_SH" "$_e2e1_agents/profile-snippet.sh"
+
+    # Clean check: dotfiles must NOT exist
+    if [ -d "$_e2e1_td/dotfiles" ]; then
+        skip "E2E-1. unexpected dotfiles dir in temp root — skipping to avoid false result"
+        trap - EXIT; rm -rf "$_e2e1_td"
+    else
+        _e2e1_result=$(HOME="$_e2e1_td/home" bash --norc --noprofile -c "
+            source '$_e2e1_agents/profile-snippet.sh' 2>/dev/null
+            echo \"\$AGENTS_CONFIG_DIR\"
+        " 2>/dev/null | tail -1 || true)
+
+        trap - EXIT
+        rm -rf "$_e2e1_td"
+
+        if [ "$_e2e1_result" = "$_e2e1_agents" ]; then
+            pass "E2E-1. sourcing profile-snippet.sh sets AGENTS_CONFIG_DIR to agents dir"
+        else
+            fail "E2E-1. expected AGENTS_CONFIG_DIR='$_e2e1_agents', got '$_e2e1_result'"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# E2E-2: bash / dotfiles only (agents absent) — sibling detection safe (no error)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== E2E-2: bash / dotfiles only — sibling detection safe when agents absent ==="
+
+_e2e2_td=$(mktemp -d)
+trap 'rm -rf "$_e2e2_td"' EXIT
+
+_e2e2_dotfiles="$_e2e2_td/dotfiles"
+mkdir -p "$_e2e2_dotfiles"
+
+# Clean check: agents must NOT exist
+if [ -d "$_e2e2_td/agents" ]; then
+    skip "E2E-2. unexpected agents dir in temp root — skipping to avoid false result"
+    trap - EXIT; rm -rf "$_e2e2_td"
+else
+    # Minimal sibling detection script (Option B pattern — dotfiles only, no agents)
+    _e2e2_script='
+_agents_dir="$(dirname "$_dotfiles_dir")/agents"
+if [ -f "$_agents_dir/profile-snippet.sh" ]; then
+    . "$_agents_dir/profile-snippet.sh"
+fi
+echo "${AGENTS_CONFIG_DIR:-UNSET}"
+'
+    _e2e2_result=$(env -u AGENTS_CONFIG_DIR bash -c "
+        _dotfiles_dir='$_e2e2_dotfiles'
+        $_e2e2_script
+    " 2>/dev/null || true)
+
+    trap - EXIT
+    rm -rf "$_e2e2_td"
+
+    if [ "$_e2e2_result" = "UNSET" ]; then
+        pass "E2E-2. no error and AGENTS_CONFIG_DIR unset when agents absent"
+    else
+        fail "E2E-2. expected AGENTS_CONFIG_DIR=UNSET, got '$_e2e2_result'"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# E2E-3: bash / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR
+# NOTE: Requires profile-snippet.sh to exist — FAIL expected until file is created
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== E2E-3: bash / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR ==="
+
+if [ ! -f "$SNIPPET_SH" ]; then
+    skip "E2E-3. profile-snippet.sh not found (will be created in source code step)"
+else
+    _e2e3_td=$(mktemp -d)
+    trap 'rm -rf "$_e2e3_td"' EXIT
+
+    _e2e3_dotfiles="$_e2e3_td/dotfiles"
+    _e2e3_agents="$_e2e3_td/agents"
+    mkdir -p "$_e2e3_dotfiles" "$_e2e3_agents"
+    cp "$SNIPPET_SH" "$_e2e3_agents/profile-snippet.sh"
+
+    # Verify only dotfiles + agents exist (clean check)
+    _e2e3_extra=$(ls "$_e2e3_td" | grep -vE '^(dotfiles|agents)$' || true)
+    if [ -n "$_e2e3_extra" ]; then
+        skip "E2E-3. unexpected dirs in temp root: $_e2e3_extra"
+        trap - EXIT; rm -rf "$_e2e3_td"
+    else
+        _e2e3_result=$(HOME="$_e2e3_td/home" env -u AGENTS_CONFIG_DIR bash --norc --noprofile -c "
+            _dotfiles_dir='$_e2e3_dotfiles'
+            _agents_dir=\"\$(dirname \"\$_dotfiles_dir\")/agents\"
+            if [ -f \"\$_agents_dir/profile-snippet.sh\" ]; then
+                source \"\$_agents_dir/profile-snippet.sh\" 2>/dev/null
+            fi
+            echo \"\${AGENTS_CONFIG_DIR:-UNSET}\"
+        " 2>/dev/null | tail -1 || true)
+
+        trap - EXIT
+        rm -rf "$_e2e3_td"
+
+        if [ "$_e2e3_result" = "$_e2e3_agents" ]; then
+            pass "E2E-3. sibling detection sets AGENTS_CONFIG_DIR to agents dir"
+        else
+            fail "E2E-3. expected AGENTS_CONFIG_DIR='$_e2e3_agents', got '$_e2e3_result'"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# E2E-4: pwsh / agents only — profile-snippet.ps1 sets AGENTS_CONFIG_DIR
+# NOTE: Requires profile-snippet.ps1 to exist — FAIL expected until file is created
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== E2E-4: pwsh / agents only — profile-snippet.ps1 sets AGENTS_CONFIG_DIR ==="
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    skip "E2E-4. pwsh not available"
+elif [ ! -f "$SNIPPET_PS1" ]; then
+    skip "E2E-4. profile-snippet.ps1 not found (will be created in source code step)"
+else
+    # Build temp tree inside pwsh so paths are native Windows paths.
+    # Pass the host snippet path (converted to a Windows path if available).
+    _e2e4_snippet_win="$SNIPPET_PS1"
+    if command -v cygpath >/dev/null 2>&1; then
+        _e2e4_snippet_win=$(cygpath -w "$SNIPPET_PS1" 2>/dev/null || echo "$SNIPPET_PS1")
+    fi
+
+    _e2e4_result=$(SNIPPET_SRC="$_e2e4_snippet_win" pwsh -NoProfile -Command '
+        $env:AGENTS_CONFIG_DIR = $null
+        $env:AGENTS_DIR = $null
+        $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+        $agentsDir = Join-Path $tmpRoot "agents"
+        New-Item -ItemType Directory -Force $agentsDir | Out-Null
+        # Clean check: dotfiles must NOT exist alongside
+        if (Test-Path (Join-Path $tmpRoot "dotfiles")) {
+            "SKIP_UNEXPECTED_DOTFILES"
+            return
+        }
+        Copy-Item $env:SNIPPET_SRC (Join-Path $agentsDir "profile-snippet.ps1") -Force
+        $tempHome = Join-Path $tmpRoot "home"
+        New-Item -ItemType Directory -Force $tempHome | Out-Null
+        $env:HOME = $tempHome
+        $env:USERPROFILE = $tempHome
+        . (Join-Path $agentsDir "profile-snippet.ps1") *> $null
+        # Emit expected and actual on two lines so the bash side can parse.
+        "EXPECTED=$agentsDir"
+        "GOT=$($env:AGENTS_CONFIG_DIR)"
+        Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
+    ' 2>/dev/null || true)
+
+    if echo "$_e2e4_result" | grep -q '^SKIP_UNEXPECTED_DOTFILES'; then
+        skip "E2E-4. unexpected dotfiles dir in temp root"
+    else
+        _e2e4_expected=$(echo "$_e2e4_result" | grep '^EXPECTED=' | head -1 | sed 's/^EXPECTED=//' | tr '\\' '/' | tr -d '\r')
+        _e2e4_got=$(echo "$_e2e4_result" | grep '^GOT=' | head -1 | sed 's/^GOT=//' | tr '\\' '/' | tr -d '\r')
+        if [ -n "$_e2e4_expected" ] && [ "$_e2e4_got" = "$_e2e4_expected" ]; then
+            pass "E2E-4. pwsh profile-snippet.ps1 sets AGENTS_CONFIG_DIR to agents dir"
+        else
+            fail "E2E-4. expected AGENTS_CONFIG_DIR='$_e2e4_expected', got '$_e2e4_got'"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# E2E-5: pwsh / dotfiles only (agents absent) — sibling detection safe
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== E2E-5: pwsh / dotfiles only — sibling detection safe when agents absent ==="
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    skip "E2E-5. pwsh not available"
+else
+    _e2e5_td=$(mktemp -d)
+    trap 'rm -rf "$_e2e5_td"' EXIT
+
+    _e2e5_dotfiles="$_e2e5_td/dotfiles"
+    mkdir -p "$_e2e5_dotfiles"
+
+    # Clean check: agents must NOT exist
+    if [ -d "$_e2e5_td/agents" ]; then
+        skip "E2E-5. unexpected agents dir in temp root"
+        trap - EXIT; rm -rf "$_e2e5_td"
+    else
+        _e2e5_result=$(pwsh -NoProfile -Command "
+            Remove-Item Env:AGENTS_CONFIG_DIR -ErrorAction SilentlyContinue
+            \$DotfilesDir = '$_e2e5_dotfiles'
+            \$AgentsDir = (Split-Path \$DotfilesDir -Parent) + [IO.Path]::DirectorySeparatorChar + 'agents'
+            if (Test-Path \"\$AgentsDir\profile-snippet.ps1\") {
+                . \"\$AgentsDir\profile-snippet.ps1\"
+            }
+            if (\$env:AGENTS_CONFIG_DIR) { \$env:AGENTS_CONFIG_DIR } else { 'UNSET' }
+        " 2>/dev/null || true)
+
+        trap - EXIT
+        rm -rf "$_e2e5_td"
+
+        if [ "$_e2e5_result" = "UNSET" ]; then
+            pass "E2E-5. pwsh no error and AGENTS_CONFIG_DIR unset when agents absent"
+        else
+            fail "E2E-5. expected AGENTS_CONFIG_DIR=UNSET, got '$_e2e5_result'"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# E2E-6: pwsh / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR
+# NOTE: Requires profile-snippet.ps1 to exist — FAIL expected until file is created
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== E2E-6: pwsh / dotfiles + agents — sibling detection sets AGENTS_CONFIG_DIR ==="
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    skip "E2E-6. pwsh not available"
+elif [ ! -f "$SNIPPET_PS1" ]; then
+    skip "E2E-6. profile-snippet.ps1 not found (will be created in source code step)"
+else
+    _e2e6_snippet_win="$SNIPPET_PS1"
+    if command -v cygpath >/dev/null 2>&1; then
+        _e2e6_snippet_win=$(cygpath -w "$SNIPPET_PS1" 2>/dev/null || echo "$SNIPPET_PS1")
+    fi
+
+    _e2e6_result=$(SNIPPET_SRC="$_e2e6_snippet_win" pwsh -NoProfile -Command '
+        $env:AGENTS_CONFIG_DIR = $null
+        $env:AGENTS_DIR = $null
+        $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+        $dotfilesDir = Join-Path $tmpRoot "dotfiles"
+        $agentsDir   = Join-Path $tmpRoot "agents"
+        New-Item -ItemType Directory -Force $dotfilesDir | Out-Null
+        New-Item -ItemType Directory -Force $agentsDir | Out-Null
+        # Clean check: only dotfiles + agents
+        $extra = Get-ChildItem $tmpRoot | Where-Object { $_.Name -notin @("dotfiles","agents") }
+        if ($extra) {
+            "SKIP_UNEXPECTED:$($extra.Name -join ",")"
+            return
+        }
+        Copy-Item $env:SNIPPET_SRC (Join-Path $agentsDir "profile-snippet.ps1") -Force
+        $tempHome = Join-Path $tmpRoot "home"
+        New-Item -ItemType Directory -Force $tempHome | Out-Null
+        $env:HOME = $tempHome
+        $env:USERPROFILE = $tempHome
+        # Sibling detection (the pattern profile.ps1 uses)
+        $DotfilesDir = $dotfilesDir
+        $SiblingAgents = (Split-Path $DotfilesDir -Parent) + [IO.Path]::DirectorySeparatorChar + "agents"
+        if (Test-Path (Join-Path $SiblingAgents "profile-snippet.ps1")) {
+            . (Join-Path $SiblingAgents "profile-snippet.ps1") *> $null
+        }
+        "EXPECTED=$agentsDir"
+        "GOT=$($env:AGENTS_CONFIG_DIR)"
+        Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
+    ' 2>/dev/null || true)
+
+    if echo "$_e2e6_result" | grep -q '^SKIP_UNEXPECTED'; then
+        skip "E2E-6. unexpected dirs in temp root"
+    else
+        _e2e6_expected=$(echo "$_e2e6_result" | grep '^EXPECTED=' | head -1 | sed 's/^EXPECTED=//' | tr '\\' '/' | tr -d '\r')
+        _e2e6_got=$(echo "$_e2e6_result" | grep '^GOT=' | head -1 | sed 's/^GOT=//' | tr '\\' '/' | tr -d '\r')
+        if [ -n "$_e2e6_expected" ] && [ "$_e2e6_got" = "$_e2e6_expected" ]; then
+            pass "E2E-6. pwsh sibling detection sets AGENTS_CONFIG_DIR to agents dir"
+        else
+            fail "E2E-6. expected AGENTS_CONFIG_DIR='$_e2e6_expected', got '$_e2e6_got'"
+        fi
+    fi
 fi
 
 # ===========================================================================
@@ -192,7 +744,7 @@ fi
 # Each test creates its own isolated tmpdir and cleans up on exit.
 # ===========================================================================
 
-SPLIT_SCRIPT="$DOTFILES_DIR/bin/split-history.py"
+SPLIT_SCRIPT="$AGENTS_ROOT/bin/split-history.py"
 
 if [ ! -f "$SPLIT_SCRIPT" ]; then
     echo "FATAL: bin/split-history.py not found: $SPLIT_SCRIPT"
@@ -858,6 +1410,11 @@ rm -rf "$_i2_td"
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== Results ==="
+TOTAL=$((PASSES + ERRORS + SKIPS))
+echo "Passed:  $PASSES"
+echo "Failed:  $ERRORS"
+echo "Skipped: $SKIPS"
+echo "Total:   $TOTAL"
 if [ "$ERRORS" -eq 0 ]; then
     echo "All tests passed!"
 else
