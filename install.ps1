@@ -21,7 +21,21 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
 }
 
 Write-Host ""
-Write-Host "=== Done ===" -ForegroundColor Cyan
+Write-Host "--- Adding profile sourcing ---"
+$_snippetPath = "$AgentsRoot\profile-snippet.ps1"
+$_marker = "# --- BEGIN agents profile sourcing ---"
+$_profileContent = if (Test-Path $PROFILE) { Get-Content $PROFILE -Raw } else { "" }
+if ($_profileContent -notlike "*$_marker*") {
+    if (-not (Test-Path (Split-Path $PROFILE))) { New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null }
+    Add-Content -Path $PROFILE -Value "`n$_marker`n. `"$_snippetPath`"`n# --- END agents profile sourcing ---"
+    Write-Host "Added profile sourcing to $PROFILE" -ForegroundColor Green
+} else {
+    $_updated = $_profileContent -replace '(?m)^\. ".*profile-snippet\.ps1"', ". `"$_snippetPath`""
+    [System.IO.File]::WriteAllText($PROFILE, $_updated)
+    Write-Host "Profile sourcing already present in $PROFILE (path updated if needed)" -ForegroundColor Green
+}
+Remove-Variable _snippetPath, _marker, _profileContent, _updated -ErrorAction SilentlyContinue
+
 Write-Host ""
-Write-Host "Add the following to your PowerShell profile:" -ForegroundColor Yellow
-Write-Host "  . `"`$HOME\.agents_profile.ps1`"" -ForegroundColor Yellow
+Write-Host "=== Done ===" -ForegroundColor Cyan
+Write-Host "Restart PowerShell to apply profile changes." -ForegroundColor Yellow
