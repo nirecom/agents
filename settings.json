@@ -106,6 +106,7 @@
       "WebFetch(domain:modelcontextprotocol.io)",
       "WebFetch(domain:spec.modelcontextprotocol.io)",
       "WebFetch(domain:ecc.tools)",
+      "WebFetch(domain:code.visualstudio.com)",
       "WebFetch(domain:docs.langchain.com)",
       "WebFetch(domain:reference.langchain.com)"
     ],
@@ -354,7 +355,7 @@
       }
     ]
   },
-  "effortLevel": "medium",
+  "effortLevel": "high",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }
