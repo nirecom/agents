@@ -1,0 +1,100 @@
+#!/bin/bash
+# Pre-commit hook: scan staged files for private information
+# Skips scanning for private repos (detected dynamically via GitHub API)
+
+set -euo pipefail
+
+# --- BEGIN temporary: dotfiles → agents migration ---
+_cfg_dir="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/claude-global}"
+SCANNER="$_cfg_dir/../bin/scan-outbound.sh"
+# --- END temporary: dotfiles → agents migration ---
+
+# Auto-unstage settings.json if the only change is effortLevel
+SETTINGS="claude-global/settings.json"
+if git diff --cached --name-only | grep -qx "$SETTINGS"; then
+    # Compare HEAD vs staged after stripping effortLevel from both
+    STRIP_EFFORT='let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);delete j.effortLevel;console.log(JSON.stringify(j))})'
+    HEAD_CLEAN="$(git show "HEAD:$SETTINGS" 2>/dev/null | node -e "$STRIP_EFFORT" 2>/dev/null || true)"
+    STAGED_CLEAN="$(git show ":$SETTINGS" 2>/dev/null | node -e "$STRIP_EFFORT" 2>/dev/null || true)"
+    if [ -n "$HEAD_CLEAN" ] && [ "$HEAD_CLEAN" = "$STAGED_CLEAN" ]; then
+        git reset HEAD -- "$SETTINGS" >/dev/null 2>&1
+        echo "pre-commit: auto-unstaged $SETTINGS (effortLevel-only change)"
+    fi
+fi
+
+# Check execute permission on staged .sh files
+SH_NO_EXEC=""
+while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    mode=$(git ls-files -s "$f" | awk '{print $1}')
+    if [ "$mode" = "100644" ]; then
+        SH_NO_EXEC="$SH_NO_EXEC\n  $f"
+    fi
+done <<< "$(git diff --cached --name-only -- '*.sh')"
+if [ -n "$SH_NO_EXEC" ]; then
+    echo "pre-commit: .sh files lacking execute permission:$SH_NO_EXEC"
+    echo "Run: git update-index --chmod=+x <file>"
+    exit 1
+fi
+
+# Block direct commits of .env files (use .env.example / .env.sample / .env.template instead)
+ENV_FILES="$(git diff --cached --name-only --diff-filter=A | grep -E '(^|/)\.env$' || true)"
+if [ -n "$ENV_FILES" ]; then
+    echo "pre-commit: .env file(s) staged for commit:"
+    echo "$ENV_FILES" | sed 's/^/  /'
+    echo "Use .env.example / .env.sample / .env.template instead."
+    exit 1
+fi
+
+# Check if this repo is private via GitHub API (skip scanning if private)
+REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
+if [ -n "$REMOTE_URL" ]; then
+    # Extract hostname — non-GitHub hosts are treated as private (skip scanning)
+    REMOTE_HOST="$(echo "$REMOTE_URL" | sed -E 's#^(ssh|https?)://([^@]+@)?([^/:]+).*#\3#' | sed -E 's#^[^@]+@([^:]+):.*#\1#')"
+    if [ -n "$REMOTE_HOST" ] && [ "$REMOTE_HOST" != "github.com" ]; then
+        exit 0
+    fi
+    REPO_ID="$(echo "$REMOTE_URL" | sed 's/\.git$//' | sed -E 's#.*[:/]([^/]+/[^/]+)$#\1#')"
+    if [ -n "$REPO_ID" ] && command -v gh >/dev/null 2>&1; then
+        IS_PRIVATE="$(gh api "repos/$REPO_ID" --jq .private 2>/dev/null || true)"
+        if [ "$IS_PRIVATE" = "true" ]; then
+            exit 0
+        fi
+    fi
+fi
+
+# Get staged files (added, copied, modified)
+STAGED_FILES="$(git diff-index --cached --name-only --diff-filter=ACM HEAD 2>/dev/null || true)"
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+# Files to skip
+SKIP_PATTERNS="bin/scan-outbound.sh|\.private-info-allowlist"
+
+FOUND_VIOLATIONS=0
+
+while IFS= read -r file; do
+    # Skip scanner-related files
+    if echo "$file" | grep -qE "$SKIP_PATTERNS"; then
+        continue
+    fi
+
+    # Skip binary files
+    if git show ":$file" 2>/dev/null | file --mime - 2>/dev/null | grep -q "binary"; then
+        continue
+    fi
+
+    # Scan staged content
+    if ! git show ":$file" 2>/dev/null | "$SCANNER" --stdin "$file"; then
+        FOUND_VIOLATIONS=1
+    fi
+done <<< "$STAGED_FILES"
+
+if [ "$FOUND_VIOLATIONS" -eq 1 ]; then
+    echo ""
+    echo "Commit blocked: private information detected in staged files."
+    echo "Fix the issues above, or add exceptions to .private-info-allowlist"
+    exit 1
+fi
+exit 0
