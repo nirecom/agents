@@ -312,3 +312,6 @@ Background: 76 test files in tests/ cover both dotfiles-specific and claude-fram
 
 Changes: Created tests/split-plan.md with a per-file classification table (@claude/@dotfiles/@both) covering all 76 test files. Rationale is recorded for ambiguous entries.
 
+### REFACTOR: Fix hook paths + absorb 4 test files from dotfiles (step 13) (2026-04-25, a87fabf)
+Background: Step 13 cleanup on agents side: hooks still had temporary migration block referencing AGENTS_CONFIG_DIR which pointed to old dotfiles/claude-global path.
+Changes: Remove temporary migration block from hooks/pre-commit and hooks/commit-msg; resolve scanner path from hook's own location instead of env var. Update SETTINGS path to settings.json. Absorb 4 test files from dotfiles (main-sort-history.sh, main-translate-history.sh, main-convert-history-table.sh, test_main-sort-history.py) whose bin/ tools live in agents. Fix feature-doc-append-wrapper-permissions-static.sh variable naming. Add .private-info-allowlist with RFC 2606 example.com exemption.
