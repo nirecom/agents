@@ -4,7 +4,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$AgentsRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$AgentsRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 
 # Check Developer Mode / Admin for symlink capability
 $regKey = Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock -ErrorAction SilentlyContinue
