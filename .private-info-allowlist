@@ -32,6 +32,14 @@ rules/*.md:Co-Authored-By
 rules/**:Co-Authored-By
 docs/*:Co-Authored-By
 
+# scan-outbound.md documentation samples (not real private info)
+docs/scan-outbound.md:192.168
+docs/scan-outbound.md:10\.
+docs/scan-outbound.md:user@domain\.tld
+docs/scan-outbound.md:aa:bb:cc:dd:ee:ff
+docs/scan-outbound.md:/Users/
+docs/scan-outbound.md:BEGIN RSA PRIVATE KEY
+
 # NVIDIA package version numbers (false positive as IPv4)
 10.3.9.90
 
