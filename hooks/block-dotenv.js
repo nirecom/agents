@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: block access to .env files
-// Matches: Bash, Read, Grep, Glob tools
+// Matches: Bash, Read, Grep, Glob, Edit, Write, MultiEdit tools
 // Allows: .env.example, .env.sample, .env.template, .env.dist
 
 const fs = require("fs");
@@ -64,7 +64,7 @@ function checkBashCommand(command) {
 
   // Strip git commit -m message arguments — text, not file access
   let sanitized = command;
-  sanitized = sanitized.replace(/\bgit\s+commit\b[^;|&]*/, (match) =>
+  sanitized = sanitized.replace(/\bgit(?:\s+-C\s+\S+)?\s+commit\b[^;|&]*/, (match) =>
     match.replace(
       /-m\s+(?:"(?:[^"\\]|\\.)*"|'[^']*'|\$'(?:[^'\\]|\\.)*'|\$\([^)]*\))\s*/g,
       ""
@@ -141,6 +141,14 @@ switch (toolName) {
   case "Glob":
     if (checkGlobPattern(toolInput.pattern)) {
       block("Searching for .env files is blocked.");
+    }
+    break;
+
+  case "Edit":
+  case "Write":
+  case "MultiEdit":
+    if (isDotenvPath(toolInput.file_path)) {
+      block("Writing .env files is blocked. Use .env.example for documentation.");
     }
     break;
 
