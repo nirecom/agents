@@ -1,0 +1,7 @@
+# scan-outbound.sh allowlist for agents repo
+# Patterns are regex, matched against the detected value.
+# Format: <pattern>  (matches value)
+#         <file-glob>:<pattern>  (matches value in matching files only)
+
+# RFC 2606 reserved domains — safe for test fixtures
+@example\.com$

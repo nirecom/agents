@@ -4,13 +4,11 @@
 
 set -euo pipefail
 
-# --- BEGIN temporary: dotfiles → agents migration ---
-_cfg_dir="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/claude-global}"
-SCANNER="$_cfg_dir/../bin/scan-outbound.sh"
-# --- END temporary: dotfiles → agents migration ---
+_cfg_dir="$(cd "$(dirname "$0")/.." && pwd)"
+SCANNER="$_cfg_dir/bin/scan-outbound.sh"
 
 # Auto-unstage settings.json if the only change is effortLevel
-SETTINGS="claude-global/settings.json"
+SETTINGS="settings.json"
 if git diff --cached --name-only | grep -qx "$SETTINGS"; then
     # Compare HEAD vs staged after stripping effortLevel from both
     STRIP_EFFORT='let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);delete j.effortLevel;console.log(JSON.stringify(j))})'
