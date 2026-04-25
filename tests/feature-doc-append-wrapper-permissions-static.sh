@@ -2,8 +2,8 @@
 # Static validation: settings.json permission rules for doc-append wrapper
 set -euo pipefail
 
-DOTFILES="$(cd "$(dirname "$0")/.." && pwd)"
-SETTINGS="$DOTFILES/claude-global/settings.json"
+AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SETTINGS="$AGENTS_DIR/settings.json"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
