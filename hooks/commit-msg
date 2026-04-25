@@ -4,10 +4,8 @@
 
 set -euo pipefail
 
-# --- BEGIN temporary: dotfiles → agents migration ---
-_cfg_dir="${AGENTS_CONFIG_DIR:-$(cd "$(dirname "$0")/../.." && pwd)/claude-global}"
-SCANNER="$_cfg_dir/../bin/scan-outbound.sh"
-# --- END temporary: dotfiles → agents migration ---
+_cfg_dir="$(cd "$(dirname "$0")/.." && pwd)"
+SCANNER="$_cfg_dir/bin/scan-outbound.sh"
 
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
