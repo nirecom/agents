@@ -3,6 +3,7 @@
 // Replaces check-tests-updated.js and check-docs-updated.js
 
 const fs = require("fs");
+const path = require("path");
 const { execSync } = require("child_process");
 const {
   VALID_STEPS,
@@ -46,17 +47,35 @@ function isDocsOnlyStaged(repoDir) {
   }
 }
 
+// Detect whether docs/ points to a separate git repository (junction / symlink pattern).
+// Returns the external repo root if docs/ resolves to a different git tree, else null.
+function resolveExternalDocsRepo(repoDir) {
+  const docsPath = path.join(repoDir, "docs");
+  try {
+    const out = execSync("git rev-parse --show-toplevel", {
+      cwd: docsPath, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    const norm = (p) => p.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+    if (norm(out) !== norm(repoDir)) return out;
+  } catch (e) {}
+  return null;
+}
+
 // Evidence-based check: staged files contain docs/*.md or *.md changes
 function hasStagedDocChanges(repoDir) {
-  try {
-    const out = execSync("git diff --cached --name-only", {
-      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
-    });
-    return out.trim().split("\n").some((f) => f.startsWith("docs/") || /\.md$/i.test(f));
-  } catch (e) {
-    process.stderr.write(`workflow-gate: hasStagedDocChanges failed (cwd=${repoDir}): ${e.message}\n`);
-    return false;
-  }
+  const hasDocs = (dir) => {
+    try {
+      const out = execSync("git diff --cached --name-only", {
+        cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+      });
+      return out.trim().split("\n").some((f) => f.startsWith("docs/") || /\.md$/i.test(f));
+    } catch (e) {
+      return false;
+    }
+  };
+  if (hasDocs(repoDir)) return true;
+  const externalRepo = resolveExternalDocsRepo(repoDir);
+  return externalRepo !== null && hasDocs(externalRepo);
 }
 
 // Resolve repo dir from git -C flag in command, or process cwd.
@@ -192,4 +211,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, isDocsOnlyStaged };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, isDocsOnlyStaged, resolveExternalDocsRepo };
