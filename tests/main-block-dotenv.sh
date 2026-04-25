@@ -3,7 +3,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK="$DOTFILES_DIR/claude-global/hooks/block-dotenv.js"
+HOOK="$DOTFILES_DIR/hooks/block-dotenv.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -185,6 +185,63 @@ expect_approve "Glob *.js" \
     '{"tool_name":"Glob","tool_input":{"pattern":"**/*.js"}}'
 
 echo ""
+echo "=== Edit tool ==="
+
+expect_block "Edit /project/.env" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/.env","old_string":"a","new_string":"b"}}'
+
+expect_block "Edit /project/.env.local" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/.env.local","old_string":"a","new_string":"b"}}'
+
+expect_block "Edit nested .env.production" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/deep/nested/.env.production","old_string":"a","new_string":"b"}}'
+
+expect_block "Edit Windows .env" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"C:\\project\\.env","old_string":"a","new_string":"b"}}'
+
+expect_approve "Edit .env.example" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/.env.example","old_string":"a","new_string":"b"}}'
+
+expect_approve "Edit .env.template" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/.env.template","old_string":"a","new_string":"b"}}'
+
+expect_approve "Edit normal file" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/src/app.js","old_string":"a","new_string":"b"}}'
+
+expect_approve "Edit .envrc (false positive prevention)" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"/project/.envrc","old_string":"a","new_string":"b"}}'
+
+echo ""
+echo "=== Write tool ==="
+
+expect_block "Write /project/.env" \
+    '{"tool_name":"Write","tool_input":{"file_path":"/project/.env","content":"SECRET=x"}}'
+
+expect_block "Write /project/.env.production" \
+    '{"tool_name":"Write","tool_input":{"file_path":"/project/.env.production","content":"SECRET=x"}}'
+
+expect_approve "Write .env.example" \
+    '{"tool_name":"Write","tool_input":{"file_path":"/project/.env.example","content":"KEY=value"}}'
+
+expect_approve "Write normal file" \
+    '{"tool_name":"Write","tool_input":{"file_path":"/project/src/app.js","content":"console.log(1)"}}'
+
+echo ""
+echo "=== MultiEdit tool ==="
+
+expect_block "MultiEdit /project/.env" \
+    '{"tool_name":"MultiEdit","tool_input":{"file_path":"/project/.env","edits":[]}}'
+
+expect_block "MultiEdit /project/.env.local" \
+    '{"tool_name":"MultiEdit","tool_input":{"file_path":"/project/.env.local","edits":[]}}'
+
+expect_approve "MultiEdit .env.example" \
+    '{"tool_name":"MultiEdit","tool_input":{"file_path":"/project/.env.example","edits":[]}}'
+
+expect_approve "MultiEdit normal file" \
+    '{"tool_name":"MultiEdit","tool_input":{"file_path":"/project/src/app.js","edits":[]}}'
+
+echo ""
 echo "=== Edge cases ==="
 
 expect_approve "missing tool_input" \
@@ -193,14 +250,23 @@ expect_approve "missing tool_input" \
 expect_approve "missing tool_name" \
     '{"tool_input":{"command":"cat .env"}}'
 
-expect_approve "unknown tool" \
-    '{"tool_name":"Edit","tool_input":{"file_path":"/project/.env","new_string":"x"}}'
+expect_approve "unknown tool (Task)" \
+    '{"tool_name":"Task","tool_input":{"description":"do something"}}'
 
 expect_approve "empty command" \
     '{"tool_name":"Bash","tool_input":{"command":""}}'
 
 expect_approve "invalid JSON" \
     'NOT JSON'
+
+expect_approve "Edit with missing file_path" \
+    '{"tool_name":"Edit","tool_input":{"old_string":"a","new_string":"b"}}'
+
+expect_approve "Write with missing file_path" \
+    '{"tool_name":"Write","tool_input":{"content":"x"}}'
+
+expect_approve "MultiEdit with missing file_path" \
+    '{"tool_name":"MultiEdit","tool_input":{"edits":[]}}'
 
 echo ""
 echo "=== Edge: False positive prevention ==="
@@ -255,6 +321,12 @@ expect_approve "git commit -m mentioning .env" \
 
 expect_approve "git commit heredoc mentioning .env" \
     '{"tool_name":"Bash","tool_input":{"command":"git commit -m \"$(cat <<'"'"'EOF'"'"'\nBlock .env file access\nEOF\n)\""}}'
+
+expect_approve "git -C path commit -m mentioning .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"git -C /some/path commit -m \"block .env access\""}}'
+
+expect_approve "git -C path commit heredoc mentioning .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"git -C /some/path commit -m \"$(cat <<'"'"'EOF'"'"'\nBlock .env file access\nEOF\n)\""}}'
 
 echo ""
 echo "=== Results ==="
