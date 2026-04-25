@@ -30,3 +30,6 @@ Update all project documentation to reflect the work just completed.
 ## Completion
 
 Stage updated docs: `git add docs/ README.md`
+
+If `docs/` is a symlink or junction pointing to another repository, run `git add docs/` in
+that target repository instead of (or in addition to) staging here.

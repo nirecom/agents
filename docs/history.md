@@ -334,4 +334,8 @@ Changes: Added copilot/prompts/ with 8 core skills ported to .prompt.md (commit-
 
 ### CONFIG: Deny agent writes to .private-info-allowlist (2026-04-26, )
 Background: Prevent accidental allowlist expansion: .private-info-allowlist must only be edited by humans with clear intent, not by the AI agent.
-Changes: Add deny rules for Edit and Write on .private-info-allowlist to settings.json permissions.
+Changes: Add deny rules for Edit and Write on .private-info-allowlist to settings.json permissions.
+
+### BUGFIX: workflow-gate: junction-aware docs evidence detection (2026-04-26, pending)
+Background: workflow-gate hasStagedDocChanges() assumed docs/ lives in the same git repository as the source code. In repos where docs/ is a junction pointing to an external git repo, docs/ is gitignored in the source repo, so git diff --cached never shows staged doc changes there — making the docs gate permanently impassable.
+Changes: Added resolveExternalDocsRepo() to workflow-gate.js: runs git rev-parse --show-toplevel from within docs/, compares to source repo root, returns the external repo root if they differ (null otherwise). Refactored hasStagedDocChanges() to check the source repo first, then fall back to the external repo if a junction is detected. Added missing path require(). Updated update-docs.prompt.md Completion section to document staging in the junction target repo. Added L2-k/L2-l tests to main-workflow-state-machine.sh covering junction-present+staged->approve and junction-present+unstaged->block.
