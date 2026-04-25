@@ -1,7 +1,51 @@
-# scan-outbound.sh allowlist for agents repo
-# Patterns are regex, matched against the detected value.
-# Format: <pattern>  (matches value)
-#         <file-glob>:<pattern>  (matches value in matching files only)
+# Private information scan exceptions for agents repo
+# Format: [filepath-glob:]pattern (global or per-file, patterns are regex)
 
-# RFC 2606 reserved domains — safe for test fixtures
+# Git SSH URLs (not personal email)
+git@github.com
+git@bitbucket.org
+
+# GitHub noreply email (used in git config)
+noreply.github.com
+
+# RFC 2606 reserved domain — safe for test fixtures
 @example\.com$
+
+# Scanner test data (not real private info) — glob covers all test files
+tests/*:@example.com
+tests/*:git@gitlab.example.com
+tests/*:192.168
+tests/*:10\.
+tests/*:172.16
+tests/*:172.31
+tests/*:172.20
+tests/*:aa:bb:cc:dd:ee:ff
+tests/*:/Users/
+tests/*:/home/
+tests/*:C:\\Users\\
+tests/*:/c/
+tests/*:/d/
+tests/*:/mnt/
+
+# Rules/docs examples (not real private info)
+rules/*.md:Co-Authored-By
+rules/**:Co-Authored-By
+docs/*:Co-Authored-By
+
+# NVIDIA package version numbers (false positive as IPv4)
+10.3.9.90
+
+# Safe MSYS system paths (not private)
+/c/Windows
+/c/Program Files
+/c/ProgramData
+/c/tools
+
+# Docker internal networks (not routable private addresses)
+docker-compose.yml:172\.24\.0
+
+# Docker official Node.js base image home directory (not a real user path)
+docker-compose.yml:/home/node
+*/generate-web-access-section.sh:/home/node
+docs/history*.md:/home/node
+docs/history/**:/home/node
