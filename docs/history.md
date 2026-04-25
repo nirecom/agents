@@ -319,3 +319,7 @@ Changes: Remove temporary migration block from hooks/pre-commit and hooks/commit
 ### FEATURE: Step 16: sibling-static profile-snippet pattern (Option B) (2026-04-25, )
 Background: Step 16 of dotfiles→agents repo split: replaced ~/.agents_profile{.ps1} generated-file approach with sibling-static-source pattern. Motivation: install-not-required for dotfiles+agents mode, git history tracking of repair logic, no generated file management cost.
 Changes: Added profile-snippet.ps1 and profile-snippet.sh to agents root — set AGENTS_CONFIG_DIR/AGENTS_DIR via PSScriptRoot/BASH_SOURCE (no hardcoded paths), include CLAUDE.md/settings.json symlink repair logic. Removed generated ~/.agents_profile{.ps1} from dotfileslink scripts. Updated install.{ps1,sh} to idempotently append profile-snippet sourcing to user shell rc (agents-only mode, BEGIN/END marker). dotfiles: profile.ps1 compat block removed, $AgentsDir hardcode replaced with sibling detection, $symlinkFiles pruned to dotfiles-only items. E2E tests added (E2E-1 through E2E-6): isolated temp-dir tests for agents-only, dotfiles-only, and dotfiles+agents scenarios.
+
+### CONFIG: Exclude rules/language.md from tracking (private symlink) (2026-04-25, pending)
+Background: language.md is a private-repo symlink installed by dotfiles-private/install. After agents-split, the symlink target lands at c:/git/agents/rules/language.md. Without a gitignore entry it would appear as untracked in the public agents repo.
+Changes: Added rules/language.md to .gitignore.
