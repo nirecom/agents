@@ -163,10 +163,10 @@ session data without conflict.
 
 | File | Repository | Responsibility |
 |---|---|---|
-| [install/win/session-sync-init.ps1](https://github.com/nirecom/dotfiles/blob/main/install/win/session-sync-init.ps1) | dotfiles | Initialization — Windows |
-| [install/linux/session-sync-init.sh](https://github.com/nirecom/dotfiles/blob/main/install/linux/session-sync-init.sh) | dotfiles | Initialization — Linux/macOS |
-| [bin/session-sync.ps1](https://github.com/nirecom/dotfiles/blob/main/bin/session-sync.ps1) | dotfiles | Daily operation — Windows |
-| [bin/session-sync.sh](https://github.com/nirecom/dotfiles/blob/main/bin/session-sync.sh) | dotfiles | Daily operation — Linux/macOS |
+| [install/win/session-sync-init.ps1](https://github.com/nirecom/agents/blob/main/install/win/session-sync-init.ps1) | agents | Initialization — Windows |
+| [install/linux/session-sync-init.sh](https://github.com/nirecom/agents/blob/main/install/linux/session-sync-init.sh) | agents | Initialization — Linux/macOS |
+| [bin/session-sync.ps1](https://github.com/nirecom/agents/blob/main/bin/session-sync.ps1) | agents | Daily operation — Windows |
+| [bin/session-sync.sh](https://github.com/nirecom/agents/blob/main/bin/session-sync.sh) | agents | Daily operation — Linux/macOS |
 
 **Sync scope**:
 
@@ -204,12 +204,12 @@ Other machine:  session-sync pull → Launch Claude Code
 In 2026-04, a format migration (`UUID.jsonl` → `UUID/subagents/`) caused 35 files to be
 bulk-deleted; most had directory versions with no data loss. One-time event.
 
-**Symlink structure** (via `claude-global/` — named to avoid conflict with project-level `.claude/`):
-- `claude-global/CLAUDE.md` → `~/.claude/CLAUDE.md`
-- `claude-global/settings.json` → `~/.claude/settings.json`
-- `claude-global/skills/` → `~/.claude/skills/`
-- `claude-global/rules/` → `~/.claude/rules/`
-- `claude-global/agents/` → `~/.claude/agents/`
+**Symlink structure** (managed by `install/{linux,win}/dotfileslink.{sh,ps1}`):
+- `CLAUDE.md` → `~/.claude/CLAUDE.md`
+- `settings.json` → `~/.claude/settings.json`
+- `skills/` → `~/.claude/skills/`
+- `rules/` → `~/.claude/rules/`
+- `agents/` → `~/.claude/agents/`
 
 ---
 
