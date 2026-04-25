@@ -203,7 +203,9 @@
       "Edit(~/.claude/projects/workflow/**)",
       "Write(~/.claude/projects/workflow/**)",
       "Edit(**/history.md)",
-      "Write(**/history.md)"
+      "Write(**/history.md)",
+      "Edit(**/.private-info-allowlist)",
+      "Write(**/.private-info-allowlist)"
     ],
     "ask": [
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")",
