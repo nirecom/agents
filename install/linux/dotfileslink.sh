@@ -37,14 +37,6 @@ mkdir -p "$(dirname "$GIT_CONFIG_LOCAL")"
 git config --file "$GIT_CONFIG_LOCAL" core.hooksPath "$AGENTS_ROOT/hooks"
 echo "core.hooksPath -> $AGENTS_ROOT/hooks"
 
-# --- AGENTS_CONFIG_DIR / AGENTS_DIR profile snippet ---
-PROFILE_SNIPPET="$HOME/.agents_profile"
-cat > "$PROFILE_SNIPPET" << EOF
-export AGENTS_CONFIG_DIR="$AGENTS_ROOT"
-export AGENTS_DIR="$AGENTS_ROOT"
-EOF
-echo "Profile snippet written: $PROFILE_SNIPPET"
-
 # --- ~/.local/bin/doc-append launcher ---
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/doc-append << 'LAUNCHER_EOF'

@@ -21,7 +21,20 @@ else
 fi
 
 echo ""
-echo "=== Done ==="
+echo "--- Adding profile sourcing ---"
+_rc_file="${HOME}/.bashrc"
+_snippet_path="$AGENTS_ROOT/profile-snippet.sh"
+_marker="# --- BEGIN agents profile sourcing ---"
+if ! grep -qF "$_marker" "$_rc_file" 2>/dev/null; then
+    printf '\n%s\n. "%s"\n# --- END agents profile sourcing ---\n' \
+        "$_marker" "$_snippet_path" >> "$_rc_file"
+    echo "Added profile sourcing to $_rc_file"
+else
+    sed -i "s|^\. \".*profile-snippet\.sh\"|. \"$_snippet_path\"|" "$_rc_file"
+    echo "Profile sourcing already present in $_rc_file (path updated if needed)"
+fi
+unset _rc_file _snippet_path _marker
+
 echo ""
-echo "Add the following to your shell profile (~/.bash_profile or ~/.zshrc):"
-echo "  source ~/.agents_profile"
+echo "=== Done ==="
+echo "Restart your shell or run: source ~/.bashrc"
