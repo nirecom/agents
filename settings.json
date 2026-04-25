@@ -127,6 +127,22 @@
       "Grep(**/.env.test)",
       "Grep(**/.env.dev)",
       "Grep(**/.env.prod)",
+      "Edit(**/.env)",
+      "Edit(**/.env.local)",
+      "Edit(**/.env.development)",
+      "Edit(**/.env.production)",
+      "Edit(**/.env.staging)",
+      "Edit(**/.env.test)",
+      "Edit(**/.env.dev)",
+      "Edit(**/.env.prod)",
+      "Write(**/.env)",
+      "Write(**/.env.local)",
+      "Write(**/.env.development)",
+      "Write(**/.env.production)",
+      "Write(**/.env.staging)",
+      "Write(**/.env.test)",
+      "Write(**/.env.dev)",
+      "Write(**/.env.prod)",
       "Bash(*rm -rf *)",
       "Bash(*rm -fr *)",
       "Bash(*find *-exec *)",
@@ -248,7 +264,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -258,7 +274,7 @@
         ]
       },
       {
-        "matcher": "Bash|Read|Grep|Glob",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -268,7 +284,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -278,7 +294,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -288,7 +304,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -298,7 +314,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Write|Edit|MultiEdit|editFiles",
         "hooks": [
           {
             "type": "command",
@@ -310,7 +326,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",
@@ -336,7 +352,7 @@
       }
     ]
   },
-  "effortLevel": "high",
+  "effortLevel": "medium",
   "autoUpdatesChannel": "latest",
   "model": "opusplan"
 }
