@@ -12,12 +12,36 @@ echo ""
 echo "--- Creating symlinks ---"
 "$AGENTS_ROOT/install/linux/dotfileslink.sh"
 
-if type claude >/dev/null 2>&1; then
+echo ""
+echo "--- Checking Node.js (nvm) ---"
+NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+    echo "nvm not found. Installing nvm..."
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash -s -- --skip-shell
     echo ""
-    echo "--- Initializing Claude Code session sync ---"
+    echo "Restart your terminal and re-run install.sh."
+    exit 1
+fi
+. "$NVM_DIR/nvm.sh"
+if ! type npm >/dev/null 2>&1; then
+    echo "Error: nvm is installed but npm not found. Run: nvm install --lts" >&2
+    exit 1
+fi
+
+echo ""
+echo "--- Installing Claude Code ---"
+"$AGENTS_ROOT/install/linux/claude-code.sh"
+
+echo ""
+echo "--- Installing Codex ---"
+"$AGENTS_ROOT/install/linux/codex.sh"
+
+echo ""
+echo "--- Initializing Claude Code session sync ---"
+if type claude >/dev/null 2>&1; then
     "$AGENTS_ROOT/install/linux/session-sync-init.sh"
 else
-    echo "Claude Code not found. Install it and re-run to enable session sync."
+    echo "Claude Code not found. Session sync skipped."
 fi
 
 echo ""

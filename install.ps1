@@ -12,12 +12,37 @@ Write-Host ""
 Write-Host "--- Creating symlinks ---"
 & "$AgentsRoot\install\win\dotfileslink.ps1"
 
-if (Get-Command claude -ErrorAction SilentlyContinue) {
+Write-Host ""
+Write-Host "--- Checking Node.js (fnm) ---"
+if (-not (Get-Command fnm -ErrorAction SilentlyContinue)) {
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "Installing fnm..."
+        winget install --id Schniz.fnm --accept-source-agreements --accept-package-agreements
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "fnm installation failed (exit code: $LASTEXITCODE)."
+        }
+    } else {
+        Write-Warning "winget not found. Install fnm manually: https://github.com/Schniz/fnm"
+    }
     Write-Host ""
-    Write-Host "--- Initializing Claude Code session sync ---"
+    Write-Host "Restart your terminal and re-run install.ps1." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host ""
+Write-Host "--- Installing Claude Code ---"
+& "$AgentsRoot\install\win\claude-code.ps1"
+
+Write-Host ""
+Write-Host "--- Installing Codex ---"
+& "$AgentsRoot\install\win\codex.ps1"
+
+Write-Host ""
+Write-Host "--- Initializing Claude Code session sync ---"
+if (Get-Command claude -ErrorAction SilentlyContinue) {
     & "$AgentsRoot\install\win\session-sync-init.ps1"
 } else {
-    Write-Host "Claude Code not found. Install it and re-run to enable session sync." -ForegroundColor Yellow
+    Write-Host "Claude Code not found. Session sync skipped." -ForegroundColor Yellow
 }
 
 Write-Host ""
