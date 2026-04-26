@@ -23,11 +23,15 @@ Create the following as a TodoWrite checklist and work through each step in orde
 3. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
 4. **Code** — Present a diff in chat before calling Edit. Wait for approval.
-5. **Run tests & Security review** — Run both in parallel (single response, two tool calls):
+5. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Bash: run the test suite (PostToolUse hook auto-marks `run_tests` on exit code).
      Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
    - Agent: `/review-code-security` as a subagent (conditional: external input / secrets /
      third-party integrations). If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
+   - Bash: `review-code-codex --base <merge-base>` for cross-provider adversarial review
+     (always parallel, never blocks workflow). Output is shown directly to the user via
+     the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
+     is visible without relying on Claude's summary.
 6. **Docs** — Run `/update-docs`. Mandatory for every task.
 7. **User verification** — Wait for the user to confirm the task is complete.
 8. **Commit** — Run `/commit-push`.

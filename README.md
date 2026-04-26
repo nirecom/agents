@@ -1,6 +1,9 @@
-# agents
+# Nirecode: The self-driving agent coding framework — secure by default, reliable by design
+<sub>pronounced "ni-re-code" · for **Claude Code** and **GitHub Copilot**</sub>
 
-Personal AI coding agent configuration for **Claude Code** and **GitHub Copilot** (VS Code).
+- **A self-driving development harness** — hooks enforce research → tests → code → security → docs as a per-session state machine. Concurrent sessions are tracked independently; any session resumes seamlessly across machines.
+- **Test cases and security review are scoped to OWASP categories** — codified, not optional.
+
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
 Codex CLI is now supported; Gemini CLI planned.
 
@@ -41,7 +44,9 @@ Concrete test categories — Normal, Error, Edge, Idempotency, and Security — 
 OWASP ASVS V8, OWASP WSTG, CWE Top 25, OWASP LLM Top 10, MCP Top 10. Test layer selection
 follows Martin Fowler's narrow/broad integration distinction and Kent C. Dodds' Testing
 Trophy. Security skills apply the same references at design time (`/review-plan-security`)
-and implementation time (`/review-code-security`).
+and implementation time (`/review-code-security`). At step 5, `review-code-codex`
+also runs an adversarial review via OpenAI Codex CLI (when installed), providing a
+second-provider opinion independent of Claude's model-specific biases.
 
 ### Three-stage planning pipeline
 
@@ -80,7 +85,7 @@ skills/            — slash commands (/clarify-intent, /design-approach, /make-
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, approach-designer, approach-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, and other tools
 install/
   win/             — Windows-specific install subscripts
   linux/           — Linux/macOS install subscripts
