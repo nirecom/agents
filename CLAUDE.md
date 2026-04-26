@@ -8,10 +8,17 @@ Create the following as a TodoWrite checklist and work through each step in orde
    - `/survey-code`: Skip when the change target is already known (single file/function).
    - `/deep-research`: Skip when no external knowledge is needed.
    - If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
-2. **Plan** — Run `/make-plan` (planner/reviewer discussion → approval).
-   - Skip when: the task is a single-file change AND no design decision is needed.
+2. **Plan** — Three-stage planning pipeline. Run each stage in order:
+   - **2a. `/clarify-intent`** — Interview the user to lock in requirements, motivation, scope,
+     and non-goals. Mandatory; cannot be skipped within the Plan step.
+   - **2b. `/design-approach`** — Propose 2-3 high-level approaches via approach-designer +
+     approach-reviewer subagents, then get user sign-off. Skip when only one approach is
+     obviously viable (`SINGLE_APPROACH_JUSTIFIED` from approach-designer).
+   - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
+     Skip when: single-file change AND no design decision is needed.
+   - Skipping `clarify-intent` within Plan requires `<<WORKFLOW_PLAN_NOT_NEEDED>>` — implicit skip is not allowed.
    - Skipping Research does NOT justify skipping Plan.
-   - If unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
+   - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
 3. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
