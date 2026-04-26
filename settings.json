@@ -219,7 +219,10 @@
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
-      "../ai-specs"
+      "../ai-specs",
+      "../dotfiles",
+      "../dotfiles-private",
+      "../agents"
     ]
   },
   "enableAllProjectMcpServers": false,
