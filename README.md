@@ -2,7 +2,7 @@
 
 Personal AI coding agent configuration for **Claude Code** and **GitHub Copilot** (VS Code).
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
-Codex CLI and Gemini CLI planned next.
+Codex CLI is now supported; Gemini CLI planned.
 
 ## What's Inside
 
@@ -98,6 +98,7 @@ tests/             — test suite for hooks, skills, and framework behaviors
 
 | Tool | Used by |
 |------|---------|
+| [fnm](https://github.com/Schniz/fnm) (Windows) / [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) | Installer: installs Claude Code and Codex via npm |
 | [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` |
 | [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit` (without it, all repos are scanned conservatively) |
 | `osascript` (macOS) / `notify-send` (Linux) | Toast notifications from `bin/session-sync.sh` |
@@ -120,6 +121,8 @@ git clone https://github.com/nirecom/agents ~/git/agents
 cd ~/git/agents && ./install.sh
 ```
 
+> If nvm was just installed, restart your terminal before re-running `./install.sh` so that Node.js (npm) is available.
+
 Then add to `~/.bash_profile` or `~/.zshrc`:
 
 ```bash
@@ -133,6 +136,8 @@ git clone https://github.com/nirecom/agents $HOME\git\agents
 Set-Location $HOME\git\agents
 .\install.ps1
 ```
+
+> If fnm was just installed, restart your terminal before re-running `.\install.ps1` so that Node.js (npm) is available.
 
 Then add to your PowerShell profile:
 

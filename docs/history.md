@@ -350,4 +350,8 @@ Changes: Added ../dotfiles, ../dotfiles-private, ../agents to additionalDirector
 
 ### CONFIG: Allow WebFetch for github.com and langfuse.com (2026-04-26, pending)
 Background: Added github.com and langfuse.com to WebFetch allowlist for langfuse project research.
-Changes: Added WebFetch(domain:github.com) and WebFetch(domain:langfuse.com) to permissions.allow in settings.json
+Changes: Added WebFetch(domain:github.com) and WebFetch(domain:langfuse.com) to permissions.allow in settings.json
+
+### FEATURE: Add Claude Code and Codex install to agents installer (2026-04-26, (pending))
+Background: installer only checked for claude; did not install it or Codex. Goal was to consolidate both AI CLI tools into agents/install.ps1 and install.sh, loosely coupled from dotfiles.
+Changes: Added install/win/claude-code.ps1 (@anthropic-ai/claude-code via npm) and install/win/codex.ps1 (@openai/codex via npm). Added install/linux/claude-code.sh (native installer) and install/linux/codex.sh (npm/nvm). install.ps1: checks fnm — if missing, installs via winget then aborts with restart prompt; if present, runs both scripts then session-sync. install.sh: same pattern with nvm.
