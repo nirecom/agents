@@ -422,3 +422,9 @@ Background: The step 5 security review previously relied solely on Claude (claud
 
 Changes: Added bin/review-code-codex (bash script): detects codex CLI, runs adversarial diff review, always emits ## Codex Review: PERFORMED|SKIPPED|FAILED status line via Bash tool (user-visible without relying on Claude's summary), appends JSONL audit log to ~/.claude/projects/codex-review/. Added skills/review-code-codex/SKILL.md as thin wrapper. Updated CLAUDE.md step 5 to include review-code-codex as a third parallel call alongside test suite and /review-code-security. Added symlink installation in dotfileslink.sh (Linux) and review-code-codex.cmd launcher in dotfileslink.ps1 (Windows). Added tests/feature-review-code-codex.sh with 16 test cases covering SKIPPED/PERFORMED/FAILED status labels, visibility invariant, JSONL logging, timeout handling, shell injection safety, and idempotency.
 
+### BUGFIX: Fix HIGH findings in review-code-codex from Codex self-review (2026-04-27, pending)
+
+Background: Running review-code-codex on its own diff revealed three HIGH-severity issues: (1) --base without argument caused unbound-variable crash before emitting status line, violating output contract; (2) git diff failures were silently treated as empty diff (SKIPPED) instead of FAILED, creating false coverage; (3) prompt was passed as command-line argument instead of stdin, risking OS arg length limits on large diffs. Also: PATH-filtering approach in tests broke once codex was actually installed (fnm path not filtered).
+
+Changes: bin/review-code-codex: check $# before accessing $2 for --base; capture git diff stderr and emit FAILED on non-zero exit; pass prompt via stdin ('-') instead of command-line arg. tests/feature-review-code-codex.sh: add cases for --base-missing-arg and git-diff-fail; replace PATH-filtering with MINIMAL_PATH=/usr/local/bin:/usr/bin:/bin to reliably hide codex without removing bash/git.
+

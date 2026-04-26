@@ -54,10 +54,12 @@ run_in_repo() {
 
 # ---------------------------------------------------------------------------
 # 1. SKIPPED — codex CLI not installed
+# Use only minimal system paths so codex (in fnm/nvm/npm dirs) is not found,
+# while bash, git, date, mktemp etc. remain accessible.
 # ---------------------------------------------------------------------------
-PATH_NO_CODEX="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v 'codex' | tr '\n' ':' | sed 's/:$//')"
+MINIMAL_PATH="/usr/local/bin:/usr/bin:/bin"
 EXIT_CODE=0
-OUTPUT=$(run_in_repo "$PATH_NO_CODEX" --base main --no-log 2>&1) || EXIT_CODE=$?
+OUTPUT=$(run_in_repo "$MINIMAL_PATH" --base main --no-log 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 ]]; then
     fail "SKIPPED case: expected exit 0, got $EXIT_CODE"
@@ -83,7 +85,7 @@ fi
 # ---------------------------------------------------------------------------
 # 3. JSONL logging on SKIPPED
 # ---------------------------------------------------------------------------
-(cd "$REPO" && PATH="$PATH_NO_CODEX" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main >/dev/null 2>&1) || true
+(cd "$REPO" && PATH="$MINIMAL_PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main >/dev/null 2>&1) || true
 if ls "$LOG_DIR"/*.jsonl >/dev/null 2>&1; then
     if grep -q '"status":"skipped"' "$LOG_DIR"/*.jsonl; then
         pass "JSONL logging: skipped status written"
@@ -284,6 +286,49 @@ if (( JSONL_COUNT >= 2 )); then
     pass "JSONL idempotency: two runs produced $JSONL_COUNT entries (append-only)"
 else
     fail "JSONL idempotency: expected >=2 entries, got $JSONL_COUNT"
+fi
+
+# ---------------------------------------------------------------------------
+# 11. FAILED — --base without argument (output contract must hold)
+# ---------------------------------------------------------------------------
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO" && HOME="$TMPDIR_BASE" bash "$SCRIPT" --base --no-log 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+    fail "--base missing arg: expected exit 0, got $EXIT_CODE"
+else
+    pass "--base missing arg: exits 0"
+fi
+
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED"; then
+    pass "--base missing arg: FAILED status label present"
+else
+    fail "--base missing arg: status label missing. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# 12. FAILED — git diff fails (invalid base ref)
+# ---------------------------------------------------------------------------
+cat > "$MOCK_BIN/codex" << 'MOCK_EOF'
+#!/usr/bin/env bash
+echo "should not reach here"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" bash "$SCRIPT" --base nonexistent-branch-xyz --no-log 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+    fail "git diff fail: expected exit 0, got $EXIT_CODE"
+else
+    pass "git diff fail: exits 0"
+fi
+
+if echo "$OUTPUT" | grep -q "## Codex Review: FAILED — git diff failed"; then
+    pass "git diff fail: FAILED status label present"
+else
+    fail "git diff fail: status label missing. Output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
