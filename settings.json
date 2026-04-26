@@ -219,7 +219,10 @@
     ],
     "disableBypassPermissionsMode": "disable",
     "additionalDirectories": [
-      "../my-specs-repo"
+      "../my-specs-repo",
+      "../dotfiles",
+      "../my-private-repo",
+      "../agents"
     ]
   },
   "enableAllProjectMcpServers": false,
