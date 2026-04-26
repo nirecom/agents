@@ -328,32 +328,46 @@ Changes: Added rules/language.md to .gitignore.
 Background: block-dotenv hook only covered Bash/Read/Grep/Glob tools, leaving Edit and Write tools able to overwrite dotenv files. Also, git commit message stripping regex did not handle 'git -C <path> commit' form, causing hook to self-block when commit messages mentioned dotenv.
 Changes: Extended block-dotenv.js to handle Edit, Write, MultiEdit tools via isDotenvPath() on file_path. Fixed commit stripping regex to match 'git -C <path> commit'. Added Edit/Write deny rules for dotenv files in settings.json. Updated hook matcher. Fixed stale HOOK path in test file. Added test coverage.
 
-### FEATURE: GitHub Copilot support: shared instructions, hooks, and prompt files (2026-04-26, (pending))
-Background: agents repo was Claude Code-only. Goal was to extend CLAUDE.md, rules/, hooks, and skills to GitHub Copilot (VS Code) without duplicating the SSOT. Research found that Copilot natively reads CLAUDE.md and ~/.claude/rules/ via chat.useClaudeMdFile, shares the same hooks JSON protocol as Claude Code and reads ~/.claude/settings.json directly, and supports .prompt.md slash commands. Subagent delegation (Agent tool) has no Copilot equivalent.
+### FEATURE: GitHub Copilot support: shared instructions, hooks, and prompt files (2026-04-26, (pending))
+
+Background: agents repo was Claude Code-only. Goal was to extend CLAUDE.md, rules/, hooks, and skills to GitHub Copilot (VS Code) without duplicating the SSOT. Research found that Copilot natively reads CLAUDE.md and ~/.claude/rules/ via chat.useClaudeMdFile, shares the same hooks JSON protocol as Claude Code and reads ~/.claude/settings.json directly, and supports .prompt.md slash commands. Subagent delegation (Agent tool) has no Copilot equivalent.
+
 Changes: Added copilot/prompts/ with 8 core skills ported to .prompt.md (commit-push, update-docs, review-code-security, review-plan-security, survey-code, write-tests, make-plan, deep-research). make-plan rewritten as self-review single-pass (draft -> critique -> revise). Added install/win/vscode-settings.ps1 and install/linux/vscode-settings.sh to merge 8 required VS Code settings keys non-destructively with .bak safety. install.ps1 and install.sh call the new subscripts. settings.json hook matchers extended with Copilot tool names (runInTerminal, runCommands, editFiles) via OR patterns. README updated; docs/architecture/copilot.md added.
 
-### CONFIG: Deny agent writes to .private-info-allowlist (2026-04-26, )
-Background: Prevent accidental allowlist expansion: .private-info-allowlist must only be edited by humans with clear intent, not by the AI agent.
+### CONFIG: Deny agent writes to .private-info-allowlist (2026-04-26, )
+
+Background: Prevent accidental allowlist expansion: .private-info-allowlist must only be edited by humans with clear intent, not by the AI agent.
+
 Changes: Add deny rules for Edit and Write on .private-info-allowlist to settings.json permissions.
 
-### BUGFIX: workflow-gate: junction-aware docs evidence detection (2026-04-26, pending)
-Background: workflow-gate hasStagedDocChanges() assumed docs/ lives in the same git repository as the source code. In repos where docs/ is a junction pointing to an external git repo, docs/ is gitignored in the source repo, so git diff --cached never shows staged doc changes there — making the docs gate permanently impassable.
+### BUGFIX: workflow-gate: junction-aware docs evidence detection (2026-04-26, pending)
+
+Background: workflow-gate hasStagedDocChanges() assumed docs/ lives in the same git repository as the source code. In repos where docs/ is a junction pointing to an external git repo, docs/ is gitignored in the source repo, so git diff --cached never shows staged doc changes there — making the docs gate permanently impassable.
+
 Changes: Added resolveExternalDocsRepo() to workflow-gate.js: runs git rev-parse --show-toplevel from within docs/, compares to source repo root, returns the external repo root if they differ (null otherwise). Refactored hasStagedDocChanges() to check the source repo first, then fall back to the external repo if a junction is detected. Added missing path require(). Updated update-docs.prompt.md Completion section to document staging in the junction target repo. Added L2-k/L2-l tests to main-workflow-state-machine.sh covering junction-present+staged->approve and junction-present+unstaged->block.
 
-### CONFIG: Allow WebFetch for code.visualstudio.com; raise effortLevel to high (2026-04-26, pending)
-Background: VS Code Copilot documentation (code.visualstudio.com/docs/copilot/) is frequently referenced. effortLevel raised from medium to high.
+### CONFIG: Allow WebFetch for code.visualstudio.com; raise effortLevel to high (2026-04-26, pending)
+
+Background: VS Code Copilot documentation (code.visualstudio.com/docs/copilot/) is frequently referenced. effortLevel raised from medium to high.
+
 Changes: Added WebFetch(domain:code.visualstudio.com) to permissions.allow. Set effortLevel to "high".
 
-### CONFIG: Add dotfiles/dotfiles-private/agents to additionalDirectories (2026-04-26, pending)
-Background: Cross-repo visibility: when working from any of dotfiles/dotfiles-private/agents, the other two should be visible as additional directories. Confirmed via testing that additionalDirectories relative paths are CWD-relative.
+### CONFIG: Add dotfiles/dotfiles-private/agents to additionalDirectories (2026-04-26, pending)
+
+Background: Cross-repo visibility: when working from any of dotfiles/dotfiles-private/agents, the other two should be visible as additional directories. Confirmed via testing that additionalDirectories relative paths are CWD-relative.
+
 Changes: Added ../dotfiles, ../dotfiles-private, ../agents to additionalDirectories in settings.json alongside existing ../ai-specs.
 
-### CONFIG: Allow WebFetch for github.com and langfuse.com (2026-04-26, pending)
-Background: Added github.com and langfuse.com to WebFetch allowlist for langfuse project research.
+### CONFIG: Allow WebFetch for github.com and langfuse.com (2026-04-26, pending)
+
+Background: Added github.com and langfuse.com to WebFetch allowlist for langfuse project research.
+
 Changes: Added WebFetch(domain:github.com) and WebFetch(domain:langfuse.com) to permissions.allow in settings.json
 
-### FEATURE: Add Claude Code and Codex install to agents installer (2026-04-26, (pending))
-Background: installer only checked for claude; did not install it or Codex. Goal was to consolidate both AI CLI tools into agents/install.ps1 and install.sh, loosely coupled from dotfiles.
+### FEATURE: Add Claude Code and Codex install to agents installer (2026-04-26, (pending))
+
+Background: installer only checked for claude; did not install it or Codex. Goal was to consolidate both AI CLI tools into agents/install.ps1 and install.sh, loosely coupled from dotfiles.
+
 Changes: Added install/win/claude-code.ps1 (@anthropic-ai/claude-code via npm) and install/win/codex.ps1 (@openai/codex via npm). Added install/linux/claude-code.sh (native installer) and install/linux/codex.sh (npm/nvm). install.ps1: checks fnm — if missing, installs via winget then aborts with restart prompt; if present, runs both scripts then session-sync. install.sh: same pattern with nvm.
 
 ### FEATURE: 3-stage planning pipeline: clarify-intent / design-approach / make-detail-plan (2026-04-26, pending)
@@ -365,22 +379,46 @@ Changes: Split the Plan step into three sequential skills inside the existing wo
 Background: agents インストーラーが core.hooksPath を config.local に書いていたが、config.local が dotfiles-private の config.local.linux への symlink になっているため tracked なファイルに絶対パスが書き込まれてしまった。--global に切り替えたが XDG 優先により ~/.config/git/config（dotfiles 管理・tracked）に書かれる問題も発生。どちらの tracked ファイルも汚さないよう明示的に ~/.gitconfig を指定することにした。
 Changes: install/linux/dotfileslink.sh と install/win/dotfileslink.ps1 で git config --file $HOME/.gitconfig core.hooksPath に変更。~/.gitconfig はどのリポジトリにも追跡されない per-user のローカル設定ファイルであり、hooksPath の置き場として適切。
 
-### CONFIG: install.sh: add ANSI color output (2026-04-27, pending)
-Background: On macOS/Linux, install.sh used plain echo with no color formatting, while the Windows install.ps1 already used Write-Host -ForegroundColor. The visual gap made the macOS installer harder to follow at a glance.
+### CONFIG: install.sh: add ANSI color output (2026-04-27, pending)
+
+Background: On macOS/Linux, install.sh used plain echo with no color formatting, while the Windows install.ps1 already used Write-Host -ForegroundColor. The visual gap made the macOS installer harder to follow at a glance.
+
 Changes: Added TTY-detected ANSI color variables (C_CYAN, C_GREEN, C_YELLOW, C_BOLD, C_RESET) to install.sh. === headers print in cyan, --- section markers in bold, === Done === in green, error/warning messages in yellow. No escape codes emitted when stdout is not a terminal (pipe/log safe).
 
-### BUGFIX: profile-snippet.sh: BASH_SOURCE[0] undefined in zsh causes AGENTS_CONFIG_DIR=HOME (2026-04-27, 1a0c112)
-Background: In zsh, BASH_SOURCE[0] is undefined; dirname received an empty string, resolving to CWD (typically $HOME) via cd ., so AGENTS_CONFIG_DIR was set to $HOME. All hooks resolved to $HOME/hooks/*.js, node could not find the files, and every hook silently fail-opened (approved everything).
+### BUGFIX: profile-snippet.sh: BASH_SOURCE[0] undefined in zsh causes AGENTS_CONFIG_DIR=HOME (2026-04-27, 1a0c112)
+
+Background: In zsh, BASH_SOURCE[0] is undefined; dirname received an empty string, resolving to CWD (typically $HOME) via cd ., so AGENTS_CONFIG_DIR was set to $HOME. All hooks resolved to $HOME/hooks/*.js, node could not find the files, and every hook silently fail-opened (approved everything).
+
 Changes: Added ZSH_VERSION branch to profile-snippet.sh: use ${(%):-%x} in zsh to obtain the script own path instead of BASH_SOURCE[0].
 
-### BUGFIX: install.sh incompatible with macOS zsh and symlinked rc files (2026-04-27, 9be47fd)
-Background: install.sh hardcoded ~/.bashrc as the rc file target, so profile-snippet sourcing was never written for zsh users on macOS. Additionally, sed -i '' failed on symlinked rc files (macOS sed refuses in-place edit on symlinks). A separate bug caused an unbound variable error by referencing _rc_file after unset. vscode-settings.sh used GNU-only realpath -m which does not exist on macOS.
+### BUGFIX: install.sh incompatible with macOS zsh and symlinked rc files (2026-04-27, 9be47fd)
+
+Background: install.sh hardcoded ~/.bashrc as the rc file target, so profile-snippet sourcing was never written for zsh users on macOS. Additionally, sed -i '' failed on symlinked rc files (macOS sed refuses in-place edit on symlinks). A separate bug caused an unbound variable error by referencing _rc_file after unset. vscode-settings.sh used GNU-only realpath -m which does not exist on macOS.
+
 Changes: Detect default shell via $SHELL to write profile sourcing to .zshrc / .bashrc / .profile. Replace sed -i '' with perl -i to support symlinked rc files. Save _rc_file before unset to avoid unbound variable in the final message. Drop realpath -m in vscode-settings.sh; fall back to plain realpath with error suppression.
 
-### BUGFIX: install.sh/ps1: restart message shown on every run; printf errors on non-tty (2026-04-27, staged)
-Background: The restart-your-shell message was printed unconditionally at the end of install.sh and install.ps1, even when profile sourcing was already present and no restart was needed. Additionally, printf format strings starting with --- triggered an invalid option error in bash when color variables were empty (non-tty stdout, e.g. when piped).
+### BUGFIX: install.sh/ps1: restart message shown on every run; printf errors on non-tty (2026-04-27, staged)
+
+Background: The restart-your-shell message was printed unconditionally at the end of install.sh and install.ps1, even when profile sourcing was already present and no restart was needed. Additionally, printf format strings starting with --- triggered an invalid option error in bash when color variables were empty (non-tty stdout, e.g. when piped).
+
 Changes: Added _need_restart/_needRestart flag; only print the restart message when sourcing is newly added. Fixed all printf format strings that start with --- to use printf -- to prevent bash from interpreting --- as an option flag.
 
-### CONFIG: installer: gray color for already-done messages on Linux/WSL (2026-04-28, pending)
-Background: On Windows, already-handled items use Write-Host -ForegroundColor DarkGray. On Linux/WSL, these were plain white echo — making re-runs harder to scan.
-Changes: install.sh: added C_GRAY to color block, exported all color vars for child script inheritance. dotfileslink.sh: Symlinks created/core.hooksPath/Generated in green, backups in yellow. claude-code.sh and codex.sh: already installed in gray, installed in green. session-sync-init.sh: already exists in gray, initialized in green, Remote set to unchanged. Profile sourcing messages in green. check-cross-platform.js error message updated to specify --short hash.
+### CONFIG: installer: gray color for already-done messages on Linux/WSL (2026-04-28, pending)
+
+Background: On Windows, already-handled items use Write-Host -ForegroundColor DarkGray. On Linux/WSL, these were plain white echo — making re-runs harder to scan.
+
+Changes: install.sh: added C_GRAY to color block, exported all color vars for child script inheritance. dotfileslink.sh: Symlinks created/core.hooksPath/Generated in green, backups in yellow. claude-code.sh and codex.sh: already installed in gray, installed in green. session-sync-init.sh: already exists in gray, initialized in green, Remote set to unchanged. Profile sourcing messages in green. check-cross-platform.js error message updated to specify --short hash.
+
+
+### REFACTOR: Rebrand to Nirecode (2026-04-26, (pending))
+
+Background: The README h1 was the generic name '# agents', making the framework hard to identify. To establish an independent brand tied to the GitHub handle 'nirecom', /deep-research verified naming conventions across 10 prominent Claude Code framework repositories from primary sources.
+
+Changes: Changed README h1 to 'Nirecode: The self-driving agent coding framework — secure by default, reliable by design'. Added a <sub> line with pronunciation hint and supported tools, plus two feature bullets (self-driving state machine + OWASP-scoped test/security). Repository name 'agents' is kept unchanged for URL compatibility.
+
+### FEATURE: Add cross-provider adversarial review via Codex CLI at workflow step 5 (2026-04-26, pending)
+
+Background: The step 5 security review previously relied solely on Claude (claude-sonnet subagent via /review-code-security), leaving model-specific blind spots unchecked. Adding a second-provider review with OpenAI Codex CLI gives adversarial cross-model coverage — no single model's biases dominate.
+
+Changes: Added bin/review-code-codex (bash script): detects codex CLI, runs adversarial diff review, always emits ## Codex Review: PERFORMED|SKIPPED|FAILED status line via Bash tool (user-visible without relying on Claude's summary), appends JSONL audit log to ~/.claude/projects/codex-review/. Added skills/review-code-codex/SKILL.md as thin wrapper. Updated CLAUDE.md step 5 to include review-code-codex as a third parallel call alongside test suite and /review-code-security. Added symlink installation in dotfileslink.sh (Linux) and review-code-codex.cmd launcher in dotfileslink.ps1 (Windows). Added tests/feature-review-code-codex.sh with 16 test cases covering SKIPPED/PERFORMED/FAILED status labels, visibility invariant, JSONL logging, timeout handling, shell injection safety, and idempotency.
+
