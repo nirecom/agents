@@ -342,4 +342,8 @@ Changes: Added resolveExternalDocsRepo() to workflow-gate.js: runs git rev-parse
 
 ### CONFIG: Allow WebFetch for code.visualstudio.com; raise effortLevel to high (2026-04-26, pending)
 Background: VS Code Copilot documentation (code.visualstudio.com/docs/copilot/) is frequently referenced. effortLevel raised from medium to high.
-Changes: Added WebFetch(domain:code.visualstudio.com) to permissions.allow. Set effortLevel to "high".
+Changes: Added WebFetch(domain:code.visualstudio.com) to permissions.allow. Set effortLevel to "high".
+
+### CONFIG: Add dotfiles/my-private-repo/agents to additionalDirectories (2026-04-26, pending)
+Background: Cross-repo visibility: when working from any of dotfiles/my-private-repo/agents, the other two should be visible as additional directories. Confirmed via testing that additionalDirectories relative paths are CWD-relative.
+Changes: Added ../dotfiles, ../my-private-repo, ../agents to additionalDirectories in settings.json alongside existing ../ai-specs.
