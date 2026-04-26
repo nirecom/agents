@@ -80,3 +80,8 @@ uv run "$AgentsRoot\bin\doc-append.py" %*
 "@
 [System.IO.File]::WriteAllText("$LocalBin\doc-append.cmd", $cmdContent, [System.Text.Encoding]::ASCII)
 Write-Host "Generated: $LocalBin\doc-append.cmd" -ForegroundColor Green
+
+# --- ~/.local/bin/review-code-codex.cmd launcher ---
+$rcCmdContent = "@echo off`r`nwsl bash -c ""review-code-codex %*""`r`n"
+[System.IO.File]::WriteAllText("$LocalBin\review-code-codex.cmd", $rcCmdContent, [System.Text.Encoding]::ASCII)
+Write-Host "Generated: $LocalBin\review-code-codex.cmd" -ForegroundColor Green
