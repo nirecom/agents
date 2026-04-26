@@ -29,7 +29,6 @@ $Patch = [ordered]@{
     "github.copilot.chat.codeGeneration.useInstructionFiles"     = $true
     "chat.includeApplyingInstructions"                           = $true
     "chat.promptFiles"                                           = $true
-    "chat.promptFilesLocations"                                  = @{ "$AgentsRoot\copilot\prompts" = $true }
     "chat.hookFilesLocations"                                    = @{ "$HOME\.claude" = $true }
 }
 
