@@ -182,7 +182,7 @@ if (require.main === module) {
 
   const SKILL_MAP = {
     research: '/survey-code or /deep-research  OR if unnecessary: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    plan: '/make-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
+    plan: '/clarify-intent → /design-approach → /make-detail-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     run_tests: 'run your test suite via Bash (touching tests/) — PostToolUse hook auto-marks based on exit code. Manual fallback: echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>".',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
