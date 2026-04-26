@@ -12,7 +12,7 @@ DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 echo "=== Explicit model: opus tests ==="
 
 # Skills that must have model: opus
-OPUS_SKILLS="deep-research make-plan review-security write-tests"
+OPUS_SKILLS="deep-research make-detail-plan clarify-intent design-approach review-security write-tests"
 for skill in $OPUS_SKILLS; do
     file="$DOTFILES_DIR/claude-global/skills/$skill/SKILL.md"
     if [ ! -f "$file" ]; then
@@ -27,7 +27,7 @@ for skill in $OPUS_SKILLS; do
 done
 
 # Agents that must have model: opus
-OPUS_AGENTS="planner reviewer"
+OPUS_AGENTS="planner reviewer approach-designer approach-reviewer"
 for agent in $OPUS_AGENTS; do
     file="$DOTFILES_DIR/claude-global/agents/$agent.md"
     if [ ! -f "$file" ]; then

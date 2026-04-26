@@ -40,7 +40,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 | Step | How completed |
 |---|---|
 | `research` | `/survey-code` or `/deep-research` skill (emits `WORKFLOW_MARK_STEP` marker) |
-| `plan` | `/make-plan` skill (emits marker) |
+| `plan` | `/clarify-intent` → `/design-approach` → `/make-detail-plan` (3-stage pipeline; marker emitted by `make-detail-plan`) |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` |
 | `run_tests` | PostToolUse hook (`workflow-run-tests.js`) auto-marks based on Bash exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
 | `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
@@ -95,7 +95,7 @@ Compaction → post-compact.js (PostCompact hook)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
   (re-injects session_id so transcript retains the marker after compaction)
 
-Skill runs (/make-plan, /write-tests, etc.)
+Skill runs (/clarify-intent, /design-approach, /make-detail-plan, /write-tests, etc.)
   → Completion section emits: echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"
   → workflow-mark.js (PostToolUse hook) intercepts command
      reads session_id from hook stdin JSON (not CLAUDE_ENV_FILE)
