@@ -58,14 +58,33 @@ Hook configuration path (searched in priority order):
 is extending the `matcher` patterns in `settings.json` to include Copilot tool names
 alongside Claude Code tool names.
 
-### 1.3 Prompt files are slash commands
+### 1.3 Skills: two distinct Copilot mechanisms
 
-`.prompt.md` files with YAML frontmatter are invoked as `/promptname` in Copilot Chat.
+Copilot supports two separate systems for skill invocation:
+
+**Prompt Files** (`.prompt.md`) — manually triggered slash commands (`/promptname`).
 Frontmatter fields: `name`, `description`, `agent`, `model`, `tools`, `argument-hint`.
+VS Code searches `.github/prompts/` and directories listed in `chat.promptFilesLocations`.
 
-VS Code searches for prompts in `.github/prompts/` (workspace) and in any directory
-listed in `chat.promptFilesLocations` (user settings). This allows pointing directly at
-the repo's `copilot/prompts/` without creating symlinks.
+**Agent Skills** (`SKILL.md`) — automatically detected and loaded by Copilot based on
+`description` matching against the user's prompt. Launched 2025-12-18 (VS Code 1.108+).
+Uses the **same `SKILL.md` format as Claude Code** — an open standard shared across
+agents (Copilot, Claude Code, Cursor, Windsurf, and others).
+
+Agent Skills search paths (user-global):
+
+```
+~/.claude/skills/<name>/SKILL.md   ← covered by existing symlink
+~/.copilot/skills/<name>/SKILL.md
+~/.agents/skills/<name>/SKILL.md
+```
+
+Additional paths are configurable via `chat.agentSkillsLocations`.
+
+**Design consequence**: the `~/.claude/skills → agents/skills` symlink installed by
+`dotfileslink` makes all skills available to Copilot automatically — no `copilot/prompts/`
+port is needed for routing. `copilot/prompts/` retains value only for skills that require
+Copilot-specific rewrites (see §4).
 
 ### 1.4 Subagent delegation does not exist in Copilot
 
@@ -93,7 +112,7 @@ install scripts; they are not hand-maintained duplicates.
 | `CLAUDE.md` | `~/.claude/CLAUDE.md` symlink | `chat.useClaudeMdFile: true` reads the same file | Settings toggle only |
 | `rules/*.md` | `~/.claude/rules/` symlink | Same dir read natively by Copilot | Settings toggle only |
 | `settings.json` hooks | Read from `~/.claude/settings.json` | Same file read by Copilot | Matcher OR-extension |
-| Skills | `~/.claude/skills/` symlink, invoked via `/skill` | `copilot/prompts/*.prompt.md`, invoked via `/skill` | Manual port to `.prompt.md` |
+| Skills | `~/.claude/skills/` symlink, invoked via `/skill` | Same `~/.claude/skills/` symlink, auto-detected as Agent Skills (VS Code 1.108+) | Shared via symlink — no port needed |
 | `agents/` (planner, reviewer) | Subagent definitions | **Not ported** — no equivalent | N/A |
 
 ---
@@ -131,42 +150,30 @@ update to this file.
 
 ## 4. Skills Port
 
-### Strategy
+### Current state: Agent Skills supersedes manual porting
 
-Skills were ported manually to `copilot/prompts/`. The Claude Code skill format
-(`skills/<name>/SKILL.md`) and the Copilot prompt format (`copilot/prompts/<name>.prompt.md`)
-differ mainly in frontmatter field names and the absence of Claude-specific tool
-references in the body.
+The original design (written before Agent Skills shipped) ported 8 skills manually to
+`copilot/prompts/*.prompt.md`. Since VS Code 1.108 (2025-12-18), Copilot auto-detects
+all `SKILL.md` files under `~/.claude/skills/` as Agent Skills — including skills that
+were previously excluded (`save-research`, `update-instruction`, `review-tests`).
 
-**Not automated**: a `bin/convert-skill-to-prompt.py` script was considered but rejected.
-With only 8 core skills and non-trivial body rewrites needed (subagent delegation
-removal, tool reference cleanup), manual porting gives better control. If the skill
-count grows significantly, revisit.
+**`copilot/prompts/` has been removed** (2026-04-26). All skills are served via the
+`~/.claude/skills` symlink and the Agent Skills mechanism.
 
-### Skill-by-skill notes
+### Skills requiring Copilot-specific rewrites
 
-| Skill | Copilot fidelity | Notes |
+Three skills have structural differences between Claude Code and Copilot that reduce
+fidelity when using the shared `SKILL.md` directly:
+
+| Skill | Issue | Impact |
 |---|---|---|
-| `commit-push` | Full | Pure procedural instructions; maps 1:1 |
-| `update-docs` | Full | Same; `doc-append` CLI call preserved as text instruction |
-| `review-code-security` | Full | Pattern tables preserved verbatim |
-| `review-plan-security` | Full | Checklist preserved; `TodoWrite` reference removed |
-| `survey-code` | Full | `Explore subagent` reference replaced with direct grep/read instructions |
-| `write-tests` | Partial | `mode: agent` + tools restriction replaces subagent isolation; O(N) confirmations not avoided |
-| `make-plan` | Partial | planner/reviewer loop replaced with draft → self-critique → revise; one pass, no iteration |
-| `deep-research` | Partial | `#fetch` tool dependency; may require agent mode enabled; behavior varies by Copilot version |
+| `make-plan` | Relies on `Agent` tool for planner/reviewer loop | Single-pass self-critique only; lower quality ceiling |
+| `write-tests` | Uses subagent isolation (`mode: agent` + tool restriction) | O(N) confirmation prompts not avoided |
+| `deep-research` | References `#fetch` tool; behavior varies by Copilot version | May require agent mode enabled |
 
-**Excluded from core port**: `save-research`, `update-instruction`, `review-tests`.
-These are workflow-support skills with Claude Code-specific integrations that do not
-have natural equivalents in the Copilot prompt system.
-
-### Prompt file location
-
-Prompts live under `copilot/prompts/` in the repo. VS Code user settings
-(`chat.promptFilesLocations`) point directly to this directory — no symlink is created
-under `~/.copilot/prompts/`. This is **Option A (direct reference)**: the install
-script writes the absolute repo path into VS Code user settings, so the prompts are
-always served from the single repo copy.
+If higher fidelity is needed for these three, adding a `## Copilot Notes` section
+to the relevant `SKILL.md` is the preferred approach — it keeps SKILL.md as the
+single source of truth rather than maintaining a parallel file.
 
 ---
 
@@ -196,8 +203,8 @@ Override for testing: set `VSCODE_USER_SETTINGS_DIR` env var.
 | `chat.useNestedAgentsMdFiles` | `false` | Disables recursive `AGENTS.md` scanning (experimental feature with accidental-pickup risk). |
 | `github.copilot.chat.codeGeneration.useInstructionFiles` | `true` | Enables `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` loading. |
 | `chat.includeApplyingInstructions` | `true` | Activates `applyTo` glob matching for path-scoped instructions. |
-| `chat.promptFiles` | `true` | Enables `.prompt.md` files as `/promptname` slash commands. Without this, `copilot/prompts/` is inert. |
-| `chat.promptFilesLocations` | `{ "<repo>/copilot/prompts": true }` | Adds `copilot/prompts/` to the user-level prompt search path (Option A direct reference). |
+| `chat.promptFiles` | `true` | Enables `.prompt.md` files as `/promptname` slash commands. |
+| `chat.promptFilesLocations` | `{}` | No custom prompt directories needed; Agent Skills covers all skills via `~/.claude/skills`. |
 | `chat.hookFilesLocations` | `{ "$HOME/.claude": true }` | Adds `~/.claude/` to hook search paths. Copilot is expected to scan this by default; explicit registration is a version-drift safety net. |
 
 ### Merge behavior
@@ -247,18 +254,19 @@ Expect: content from `CLAUDE.md` (language policy, workflow steps, etc.) and
 in the response. If Copilot reports no custom instructions, check that
 `chat.useClaudeMdFile` is `true` and that `~/.claude/CLAUDE.md` is not empty.
 
-### 6.3 Prompt files
+### 6.3 Skills (Agent Skills + Prompt Files)
 
-In Copilot Chat, type `/` and confirm:
+**Agent Skills (primary):** In Copilot Chat, type `/` and confirm that skills not present
+in `copilot/prompts/` appear — e.g., `/save-research`, `/review-tests`, `/update-instruction`.
+These are served from `~/.claude/skills/` via the Agent Skills mechanism.
 
-- All 8 prompts appear in the suggestion list (`commit-push`, `update-docs`,
-  `review-code-security`, `review-plan-security`, `survey-code`, `write-tests`,
-  `make-plan`, `deep-research`).
-- Selecting `/commit-push` loads and executes the prompt correctly.
-- `/make-plan` produces a usable plan without the planner/reviewer loop
-  (self-critique version).
+**Prompt Files (legacy):** The 8 ported skills (`commit-push`, `update-docs`,
+`review-code-security`, `review-plan-security`, `survey-code`, `write-tests`,
+`make-plan`, `deep-research`) should also appear. Selecting `/commit-push` loads and
+executes the prompt correctly. `/make-plan` produces a usable plan (self-critique version).
 
-If prompts do not appear, check `chat.promptFiles: true` and verify
+If Agent Skills do not appear, verify that `~/.claude/skills` symlink points to `agents/skills/`.
+If Prompt Files do not appear, check `chat.promptFiles: true` and verify
 `chat.promptFilesLocations` points to the correct absolute path.
 
 ### 6.4 Hooks firing
@@ -312,15 +320,18 @@ The following were explicitly excluded from the initial Copilot port:
 
 ## 8. Future: Codex and Gemini
 
-The directory layout (`copilot/prompts/`) is designed to accept siblings:
+The directory layout is designed to accept siblings:
 
 ```
 agents/
 ├── copilot/
-│   └── prompts/       ← this port
+│   └── prompts/       ← Copilot-specific skill rewrites (make-plan, write-tests, deep-research)
 ├── codex/             ← future: AGENTS.md body + ~/.codex/prompts/ symlinks
 └── gemini/            ← future: GEMINI.md body + ~/.gemini/ hooks
 ```
+
+Skills shared without modification live under `skills/` and are served to all agents via
+the `~/.claude/skills/` symlink and the Agent Skills open standard.
 
 Gemini CLI's hook system is also Claude Code-compatible (same JSON protocol, similar
 hook event names). The `settings.json` matcher extension pattern used for Copilot
