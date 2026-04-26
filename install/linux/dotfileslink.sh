@@ -32,9 +32,7 @@ else
 fi
 
 # --- git core.hooksPath ---
-GIT_CONFIG_LOCAL="$HOME/.config/git/config.local"
-mkdir -p "$(dirname "$GIT_CONFIG_LOCAL")"
-git config --file "$GIT_CONFIG_LOCAL" core.hooksPath "$AGENTS_ROOT/hooks"
+git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
 echo "core.hooksPath -> $AGENTS_ROOT/hooks"
 
 # --- ~/.local/bin/doc-append launcher ---
