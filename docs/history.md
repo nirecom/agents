@@ -346,4 +346,8 @@ Changes: Added WebFetch(domain:code.visualstudio.com) to permissions.allow. Set 
 
 ### CONFIG: Add dotfiles/my-private-repo/agents to additionalDirectories (2026-04-26, pending)
 Background: Cross-repo visibility: when working from any of dotfiles/my-private-repo/agents, the other two should be visible as additional directories. Confirmed via testing that additionalDirectories relative paths are CWD-relative.
-Changes: Added ../dotfiles, ../my-private-repo, ../agents to additionalDirectories in settings.json alongside existing ../ai-specs.
+Changes: Added ../dotfiles, ../my-private-repo, ../agents to additionalDirectories in settings.json alongside existing ../ai-specs.
+
+### CONFIG: Allow WebFetch for github.com and langfuse.com (2026-04-26, pending)
+Background: Added github.com and langfuse.com to WebFetch allowlist for langfuse project research.
+Changes: Added WebFetch(domain:github.com) and WebFetch(domain:langfuse.com) to permissions.allow in settings.json
