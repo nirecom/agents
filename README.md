@@ -53,8 +53,9 @@ final review.
 
 `CLAUDE.md` and `rules/` are read natively by Copilot when `chat.useClaudeMdFile: true`
 is set — no duplication needed. The existing `settings.json` hooks fire in Copilot too
-(same JSON protocol; matchers extended with Copilot tool names). Core skills are ported
-to `copilot/prompts/*.prompt.md` and invoked as `/promptname` in Copilot Chat.
+(same JSON protocol; matchers extended with Copilot tool names). All `skills/` are
+available to Copilot via Agent Skills — the `~/.claude/skills` symlink is auto-detected
+by Copilot (VS Code 1.108+, 2025-12-18), so no separate prompt files are needed.
 The installer configures all required VS Code settings automatically.
 
 See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full design.
@@ -65,9 +66,8 @@ See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full de
 CLAUDE.md          — global instructions (Claude Code + Copilot)
 settings.json      — hooks, permissions, model, and effort-level configuration
 rules/             — coding, testing, docs, git, and security conventions
-skills/            — slash commands (/make-plan, /write-tests, …) for Claude Code
-copilot/
-  prompts/         — core skills ported as *.prompt.md for GitHub Copilot
+skills/            — slash commands (/make-plan, /write-tests, …) for Claude Code and Copilot
+copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer) — Claude Code only
 bin/               — doc-append, doc-rotate, session-sync, scan-outbound, and other tools
@@ -105,7 +105,7 @@ tests/             — test suite for hooks, skills, and framework behaviors
 
 ### GitHub Copilot
 
-GitHub Copilot for VS Code is required to use `copilot/prompts/`. The installer
+GitHub Copilot for VS Code is required for Copilot integration. The installer
 (`install.ps1` / `install.sh`) writes the required VS Code user settings automatically.
 
 > **Note**: `settings.json` is standard JSON. If your VS Code `settings.json` contains

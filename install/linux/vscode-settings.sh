@@ -45,7 +45,6 @@ fi
 
 # Build patch JSON
 PATCH=$(jq -n \
-    --arg agents_prompts "$AGENTS_ROOT/copilot/prompts" \
     --arg claude_dir "$HOME/.claude" \
     '{
         "chat.useClaudeMdFile": true,
@@ -54,7 +53,6 @@ PATCH=$(jq -n \
         "github.copilot.chat.codeGeneration.useInstructionFiles": true,
         "chat.includeApplyingInstructions": true,
         "chat.promptFiles": true,
-        "chat.promptFilesLocations": { ($agents_prompts): true },
         "chat.hookFilesLocations": { ($claude_dir): true }
     }')
 
