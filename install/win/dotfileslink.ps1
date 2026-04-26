@@ -59,10 +59,7 @@ foreach ($link in $links) {
 }
 
 # --- git core.hooksPath ---
-$GitConfigLocal = Join-Path $HOME ".config\git\config.local"
-$gitConfigDir = Split-Path $GitConfigLocal -Parent
-if (-not (Test-Path $gitConfigDir)) { New-Item -ItemType Directory -Path $gitConfigDir -Force | Out-Null }
-git config --file $GitConfigLocal core.hooksPath "$AgentsRoot\hooks"
+git config --file "$HOME\.gitconfig" core.hooksPath "$AgentsRoot\hooks"
 Write-Host "core.hooksPath -> $AgentsRoot\hooks" -ForegroundColor Green
 
 # --- ~/.local/bin/doc-append.cmd launcher ---
