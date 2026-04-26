@@ -354,4 +354,8 @@ Changes: Added WebFetch(domain:github.com) and WebFetch(domain:langfuse.com) to 
 
 ### FEATURE: Add Claude Code and Codex install to agents installer (2026-04-26, (pending))
 Background: installer only checked for claude; did not install it or Codex. Goal was to consolidate both AI CLI tools into agents/install.ps1 and install.sh, loosely coupled from dotfiles.
-Changes: Added install/win/claude-code.ps1 (@anthropic-ai/claude-code via npm) and install/win/codex.ps1 (@openai/codex via npm). Added install/linux/claude-code.sh (native installer) and install/linux/codex.sh (npm/nvm). install.ps1: checks fnm — if missing, installs via winget then aborts with restart prompt; if present, runs both scripts then session-sync. install.sh: same pattern with nvm.
+Changes: Added install/win/claude-code.ps1 (@anthropic-ai/claude-code via npm) and install/win/codex.ps1 (@openai/codex via npm). Added install/linux/claude-code.sh (native installer) and install/linux/codex.sh (npm/nvm). install.ps1: checks fnm — if missing, installs via winget then aborts with restart prompt; if present, runs both scripts then session-sync. install.sh: same pattern with nvm.
+
+### CONFIG: hooksPath の書き込み先を ~/.gitconfig に変更 (2026-04-26, d8b7ee7)
+Background: agents インストーラーが core.hooksPath を config.local に書いていたが、config.local が dotfiles-private の config.local.linux への symlink になっているため tracked なファイルに絶対パスが書き込まれてしまった。--global に切り替えたが XDG 優先により ~/.config/git/config（dotfiles 管理・tracked）に書かれる問題も発生。どちらの tracked ファイルも汚さないよう明示的に ~/.gitconfig を指定することにした。
+Changes: install/linux/dotfileslink.sh と install/win/dotfileslink.ps1 で git config --file $HOME/.gitconfig core.hooksPath に変更。~/.gitconfig はどのリポジトリにも追跡されない per-user のローカル設定ファイルであり、hooksPath の置き場として適切。
