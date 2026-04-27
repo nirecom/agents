@@ -364,3 +364,7 @@ Changes: Split the Plan step into three sequential skills inside the existing wo
 ### CONFIG: hooksPath の書き込み先を ~/.gitconfig に変更 (2026-04-26, d8b7ee7)
 Background: agents インストーラーが core.hooksPath を config.local に書いていたが、config.local が dotfiles-private の config.local.linux への symlink になっているため tracked なファイルに絶対パスが書き込まれてしまった。--global に切り替えたが XDG 優先により ~/.config/git/config（dotfiles 管理・tracked）に書かれる問題も発生。どちらの tracked ファイルも汚さないよう明示的に ~/.gitconfig を指定することにした。
 Changes: install/linux/dotfileslink.sh と install/win/dotfileslink.ps1 で git config --file $HOME/.gitconfig core.hooksPath に変更。~/.gitconfig はどのリポジトリにも追跡されない per-user のローカル設定ファイルであり、hooksPath の置き場として適切。
+
+### CONFIG: install.sh: add ANSI color output (2026-04-27, pending)
+Background: On macOS/Linux, install.sh used plain echo with no color formatting, while the Windows install.ps1 already used Write-Host -ForegroundColor. The visual gap made the macOS installer harder to follow at a glance.
+Changes: Added TTY-detected ANSI color variables (C_CYAN, C_GREEN, C_YELLOW, C_BOLD, C_RESET) to install.sh. === headers print in cyan, --- section markers in bold, === Done === in green, error/warning messages in yellow. No escape codes emitted when stdout is not a terminal (pipe/log safe).
