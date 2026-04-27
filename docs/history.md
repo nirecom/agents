@@ -367,4 +367,16 @@ Changes: install/linux/dotfileslink.sh と install/win/dotfileslink.ps1 で git 
 
 ### CONFIG: install.sh: add ANSI color output (2026-04-27, pending)
 Background: On macOS/Linux, install.sh used plain echo with no color formatting, while the Windows install.ps1 already used Write-Host -ForegroundColor. The visual gap made the macOS installer harder to follow at a glance.
-Changes: Added TTY-detected ANSI color variables (C_CYAN, C_GREEN, C_YELLOW, C_BOLD, C_RESET) to install.sh. === headers print in cyan, --- section markers in bold, === Done === in green, error/warning messages in yellow. No escape codes emitted when stdout is not a terminal (pipe/log safe).
+Changes: Added TTY-detected ANSI color variables (C_CYAN, C_GREEN, C_YELLOW, C_BOLD, C_RESET) to install.sh. === headers print in cyan, --- section markers in bold, === Done === in green, error/warning messages in yellow. No escape codes emitted when stdout is not a terminal (pipe/log safe).
+
+### BUGFIX: profile-snippet.sh: BASH_SOURCE[0] undefined in zsh causes AGENTS_CONFIG_DIR=HOME (2026-04-27, 1a0c112)
+Background: In zsh, BASH_SOURCE[0] is undefined; dirname received an empty string, resolving to CWD (typically $HOME) via cd ., so AGENTS_CONFIG_DIR was set to $HOME. All hooks resolved to $HOME/hooks/*.js, node could not find the files, and every hook silently fail-opened (approved everything).
+Changes: Added ZSH_VERSION branch to profile-snippet.sh: use ${(%):-%x} in zsh to obtain the script own path instead of BASH_SOURCE[0].
+
+### BUGFIX: install.sh incompatible with macOS zsh and symlinked rc files (2026-04-27, 9be47fd)
+Background: install.sh hardcoded ~/.bashrc as the rc file target, so profile-snippet sourcing was never written for zsh users on macOS. Additionally, sed -i '' failed on symlinked rc files (macOS sed refuses in-place edit on symlinks). A separate bug caused an unbound variable error by referencing _rc_file after unset. vscode-settings.sh used GNU-only realpath -m which does not exist on macOS.
+Changes: Detect default shell via $SHELL to write profile sourcing to .zshrc / .bashrc / .profile. Replace sed -i '' with perl -i to support symlinked rc files. Save _rc_file before unset to avoid unbound variable in the final message. Drop realpath -m in vscode-settings.sh; fall back to plain realpath with error suppression.
+
+### BUGFIX: install.sh/ps1: restart message shown on every run; printf errors on non-tty (2026-04-27, staged)
+Background: The restart-your-shell message was printed unconditionally at the end of install.sh and install.ps1, even when profile sourcing was already present and no restart was needed. Additionally, printf format strings starting with --- triggered an invalid option error in bash when color variables were empty (non-tty stdout, e.g. when piped).
+Changes: Added _need_restart/_needRestart flag; only print the restart message when sourcing is newly added. Fixed all printf format strings that start with --- to use printf -- to prevent bash from interpreting --- as an option flag.
