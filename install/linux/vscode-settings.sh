@@ -18,7 +18,7 @@ SETTINGS_FILE="$SETTINGS_DIR/settings.json"
 
 # Canonicalize to resolve any .. sequences before use (CWE-22)
 if command -v realpath >/dev/null 2>&1; then
-    SETTINGS_DIR="$(realpath -m "$SETTINGS_DIR")"
+    SETTINGS_DIR="$(realpath "$SETTINGS_DIR" 2>/dev/null || echo "$SETTINGS_DIR")"
 fi
 
 if [ ! -d "$SETTINGS_DIR" ]; then
