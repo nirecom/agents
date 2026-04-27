@@ -46,7 +46,11 @@ fi
 
 echo ""
 echo "--- Adding profile sourcing ---"
-_rc_file="${HOME}/.bashrc"
+case "${SHELL##*/}" in
+    zsh)  _rc_file="${HOME}/.zshrc" ;;
+    bash) _rc_file="${HOME}/.bashrc" ;;
+    *)    _rc_file="${HOME}/.profile" ;;
+esac
 _snippet_path="$AGENTS_ROOT/profile-snippet.sh"
 _marker="# --- BEGIN agents profile sourcing ---"
 if ! grep -qF "$_marker" "$_rc_file" 2>/dev/null; then
@@ -54,9 +58,10 @@ if ! grep -qF "$_marker" "$_rc_file" 2>/dev/null; then
         "$_marker" "$_snippet_path" >> "$_rc_file"
     echo "Added profile sourcing to $_rc_file"
 else
-    sed -i '' "s|^\. \".*profile-snippet\.sh\"|. \"$_snippet_path\"|" "$_rc_file"
+    perl -i -pe "s|^\\. \\\".*profile-snippet\\.sh\\\"|. \\\"$_snippet_path\\\"|" "$_rc_file"
     echo "Profile sourcing already present in $_rc_file (path updated if needed)"
 fi
+_rc_file_msg="$_rc_file"
 unset _rc_file _snippet_path _marker
 
 echo ""
@@ -65,4 +70,4 @@ echo "--- Configuring VS Code settings (GitHub Copilot / Claude Code) ---"
 
 echo ""
 echo "=== Done ==="
-echo "Restart your shell or run: source ~/.bashrc"
+echo "Restart your shell or run: source $_rc_file_msg"
