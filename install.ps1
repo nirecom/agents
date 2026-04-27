@@ -50,10 +50,12 @@ Write-Host "--- Adding profile sourcing ---"
 $_snippetPath = "$AgentsRoot\profile-snippet.ps1"
 $_marker = "# --- BEGIN agents profile sourcing ---"
 $_profileContent = if (Test-Path $PROFILE) { Get-Content $PROFILE -Raw } else { "" }
+$_needRestart = $false
 if ($_profileContent -notlike "*$_marker*") {
     if (-not (Test-Path (Split-Path $PROFILE))) { New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null }
     Add-Content -Path $PROFILE -Value "`n$_marker`n. `"$_snippetPath`"`n# --- END agents profile sourcing ---"
     Write-Host "Added profile sourcing to $PROFILE" -ForegroundColor Green
+    $_needRestart = $true
 } else {
     $_updated = $_profileContent -replace '(?m)^\. ".*profile-snippet\.ps1"', ". `"$_snippetPath`""
     [System.IO.File]::WriteAllText($PROFILE, $_updated)
@@ -67,4 +69,6 @@ Write-Host "--- Configuring VS Code settings (GitHub Copilot / Claude Code) ---"
 
 Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
-Write-Host "Restart PowerShell to apply profile changes." -ForegroundColor Yellow
+if ($_needRestart) {
+    Write-Host "Restart PowerShell to apply profile changes." -ForegroundColor Yellow
+}
