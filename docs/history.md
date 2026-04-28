@@ -379,4 +379,8 @@ Changes: Detect default shell via $SHELL to write profile sourcing to .zshrc / .
 
 ### BUGFIX: install.sh/ps1: restart message shown on every run; printf errors on non-tty (2026-04-27, staged)
 Background: The restart-your-shell message was printed unconditionally at the end of install.sh and install.ps1, even when profile sourcing was already present and no restart was needed. Additionally, printf format strings starting with --- triggered an invalid option error in bash when color variables were empty (non-tty stdout, e.g. when piped).
-Changes: Added _need_restart/_needRestart flag; only print the restart message when sourcing is newly added. Fixed all printf format strings that start with --- to use printf -- to prevent bash from interpreting --- as an option flag.
+Changes: Added _need_restart/_needRestart flag; only print the restart message when sourcing is newly added. Fixed all printf format strings that start with --- to use printf -- to prevent bash from interpreting --- as an option flag.
+
+### CONFIG: installer: gray color for already-done messages on Linux/WSL (2026-04-28, pending)
+Background: On Windows, already-handled items use Write-Host -ForegroundColor DarkGray. On Linux/WSL, these were plain white echo — making re-runs harder to scan.
+Changes: install.sh: added C_GRAY to color block, exported all color vars for child script inheritance. dotfileslink.sh: Symlinks created/core.hooksPath/Generated in green, backups in yellow. claude-code.sh and codex.sh: already installed in gray, installed in green. session-sync-init.sh: already exists in gray, initialized in green, Remote set to unchanged. Profile sourcing messages in green. check-cross-platform.js error message updated to specify --short hash.

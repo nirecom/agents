@@ -6,10 +6,12 @@ set -euo pipefail
 
 # Colors (only when stdout is a terminal)
 if [ -t 1 ]; then
-    C_CYAN='\033[0;36m'; C_GREEN='\033[0;32m'; C_YELLOW='\033[0;33m'; C_BOLD='\033[1m'; C_RESET='\033[0m'
+    C_CYAN='\033[0;36m'; C_GREEN='\033[0;32m'; C_YELLOW='\033[0;33m'
+    C_GRAY='\033[0;90m'; C_BOLD='\033[1m'; C_RESET='\033[0m'
 else
-    C_CYAN=''; C_GREEN=''; C_YELLOW=''; C_BOLD=''; C_RESET=''
+    C_CYAN=''; C_GREEN=''; C_YELLOW=''; C_GRAY=''; C_BOLD=''; C_RESET=''
 fi
+export C_CYAN C_GREEN C_YELLOW C_GRAY C_BOLD C_RESET
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -64,11 +66,11 @@ _need_restart=false
 if ! grep -qF "$_marker" "$_rc_file" 2>/dev/null; then
     printf '\n%s\n. "%s"\n# --- END agents profile sourcing ---\n' \
         "$_marker" "$_snippet_path" >> "$_rc_file"
-    echo "Added profile sourcing to $_rc_file"
+    printf "${C_GREEN}Added profile sourcing to $_rc_file${C_RESET}\n"
     _need_restart=true
 else
     perl -i -pe "s|^\\. \\\".*profile-snippet\\.sh\\\"|. \\\"$_snippet_path\\\"|" "$_rc_file"
-    echo "Profile sourcing already present in $_rc_file (path updated if needed)"
+    printf "${C_GREEN}Profile sourcing already present in $_rc_file (path updated if needed)${C_RESET}\n"
 fi
 _rc_file_msg="$_rc_file"
 unset _rc_file _snippet_path _marker
