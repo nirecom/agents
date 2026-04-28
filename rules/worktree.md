@@ -18,3 +18,6 @@ do not call `git worktree add` / `git worktree remove` directly:
 
 **Not a fit:** single-file edits, typos, docs changes, read-only investigation, tasks under
 30 minutes (isolation cost > benefit). Work directly on main for these.
+
+See `branch.md` for the prior decision: use a feature branch vs. working directly on main.
+This file covers only the next step: whether that branch also needs an isolated checkout.

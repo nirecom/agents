@@ -4,26 +4,27 @@
 
 Create the following as a TodoWrite checklist and work through each step in order.
 
-1. **Research** — Run `/survey-code` and/or `/deep-research`.
-   - `/survey-code`: Skip when the change target is already known (single file/function).
-   - `/deep-research`: Skip when no external knowledge is needed.
-   - If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
+1. **Clarify intent** — Run `/clarify-intent`. Mandatory; cannot be skipped.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
-   - **2a. `/clarify-intent`** — Interview the user to lock in requirements, motivation, scope,
-     and non-goals. Mandatory; cannot be skipped within the Plan step.
+   - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
+     - `/survey-code`: Skip when the change target is already known (single file/function).
+     - `/deep-research`: Skip when no external knowledge is needed.
+     - If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
    - **2b. `/design-approach`** — Propose 2-3 high-level approaches via approach-designer +
      approach-reviewer subagents, then get user sign-off. Skip when only one approach is
      obviously viable (`SINGLE_APPROACH_JUSTIFIED` from approach-designer).
    - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
      Skip when: single-file change AND no design decision is needed.
-   - Skipping `clarify-intent` within Plan requires `<<WORKFLOW_PLAN_NOT_NEEDED>>` — implicit skip is not allowed.
-   - Skipping Research does NOT justify skipping Plan.
+   - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
    - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
-3. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
+3. **Branch/Worktree decision** — Consult `rules/branch.md` and `rules/worktree.md`. Decide whether
+   to work on main, a feature branch, or a worktree, then record the decision:
+   `echo "<<WORKFLOW_BRANCHING_DECIDED: main|branch: <name>|worktree: <path>>"`
+4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-4. **Code** — Present a diff in chat before calling Edit. Wait for approval.
-5. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
+5. **Code** — Present a diff in chat before calling Edit. Wait for approval.
+6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Bash: run the test suite (PostToolUse hook auto-marks `run_tests` on exit code).
      Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
    - Agent: `/review-code-security` as a subagent (conditional: external input / secrets /
@@ -32,9 +33,9 @@ Create the following as a TodoWrite checklist and work through each step in orde
      (always parallel, never blocks workflow). Output is shown directly to the user via
      the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
      is visible without relying on Claude's summary.
-6. **Docs** — Run `/update-docs`. Mandatory for every task.
-7. **User verification** — Wait for the user to confirm the task is complete.
-8. **Commit** — Run `/commit-push`.
+7. **Docs** — Run `/update-docs`. Mandatory for every task.
+8. **User verification** — Wait for the user to confirm the task is complete.
+9. **Commit** — Run `/commit-push`.
 
 ## Docs-only Short-circuit
 
