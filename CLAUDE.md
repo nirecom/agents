@@ -10,9 +10,8 @@ Create the following as a TodoWrite checklist and work through each step in orde
      - `/survey-code`: Skip when the change target is already known (single file/function).
      - `/deep-research`: Skip when no external knowledge is needed.
      - If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
-   - **2b. `/design-approach`** — Propose 2-3 high-level approaches via approach-designer +
-     approach-reviewer subagents, then get user sign-off. Skip when only one approach is
-     obviously viable (`SINGLE_APPROACH_JUSTIFIED` from approach-designer).
+   - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.
+     Skip when only one approach is viable (`SINGLE_APPROACH_JUSTIFIED`).
    - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
      Skip when: single-file change AND no design decision is needed.
    - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
