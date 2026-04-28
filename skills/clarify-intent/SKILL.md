@@ -47,7 +47,7 @@ See `rules/plan-skip.md` for skip conditions.
 4. Present a one-paragraph summary of what was locked in.
 
 5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
-   unless not needed) then `/design-approach`.
+   unless not needed) then `/make-outline-plan`.
 
 ## Output Schema (`<session-id>-intent.md`)
 

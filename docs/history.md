@@ -438,4 +438,8 @@ Changes: Added bin/lib/codex-core.sh: shared library (codex_core_init, codex_cor
 
 ### BUGFIX: workflow-gate: auto-detect repo via additionalDirectories (2026-04-28, pending)
 Background: When git commit ran without -C from a dotfiles-primary session, resolveRepoDir used CLAUDE_PROJECT_DIR (dotfiles), so evidence checks looked for staged tests/docs in the wrong repo.
-Changes: resolveRepoDir now checks CLAUDE_PROJECT_DIR for staged changes first; if none, scans additionalDirectories from settings.json via __dirname. Falls back when nothing is staged. Fixed stale path in fix-workflow-gate-unix-path.sh; added H1-H3 detection tests.
+Changes: resolveRepoDir now checks CLAUDE_PROJECT_DIR for staged changes first; if none, scans additionalDirectories from settings.json via __dirname. Falls back when nothing is staged. Fixed stale path in fix-workflow-gate-unix-path.sh; added H1-H3 detection tests.
+
+### REFACTOR: Rename design-approach to make-outline-plan (2026-04-28, pending)
+Background: The design-approach skill name caused confusion with UI design work and lacked symmetry with make-detail-plan. Renaming to make-outline-plan (outline vs detail) makes the pairing clear.
+Changes: Renamed skill design-approach to make-outline-plan (directory + SKILL.md), subagents approach-designer to outline-planner and approach-reviewer to outline-reviewer, completion marker WORKFLOW_DESIGN_APPROACH_COMPLETE to WORKFLOW_OUTLINE_PLAN_COMPLETE, and test feature-design-approach.sh to feature-make-outline-plan.sh. The --format approach CLI flag and <session-id>-approach.md output filename were left unchanged (internal artifact labels). Updated 17 files across agents and my-private-repo repos.
