@@ -81,7 +81,22 @@ uv run "$AgentsRoot\bin\doc-append.py" %*
 [System.IO.File]::WriteAllText("$LocalBin\doc-append.cmd", $cmdContent, [System.Text.Encoding]::ASCII)
 Write-Host "Generated: $LocalBin\doc-append.cmd" -ForegroundColor Green
 
-# --- ~/.local/bin/review-code-codex.cmd launcher ---
+# Convert AgentsRoot Windows path to bash-compatible Unix path
+$agentsDrive = $AgentsRoot[0].ToString().ToLower()
+$agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
+
+# --- ~/.local/bin/review-code-codex launchers (cmd + bash shim) ---
 $rcCmdContent = "@echo off`r`nwsl bash -c ""review-code-codex %*""`r`n"
 [System.IO.File]::WriteAllText("$LocalBin\review-code-codex.cmd", $rcCmdContent, [System.Text.Encoding]::ASCII)
 Write-Host "Generated: $LocalBin\review-code-codex.cmd" -ForegroundColor Green
+$rcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-code-codex`" `"`$@`"`n"
+[System.IO.File]::WriteAllText("$LocalBin\review-code-codex", $rcShimContent, [System.Text.Encoding]::ASCII)
+Write-Host "Generated: $LocalBin\review-code-codex (bash shim)" -ForegroundColor Green
+
+# --- ~/.local/bin/review-plan-codex launchers (cmd + bash shim) ---
+$rpcCmdContent = "@echo off`r`nwsl bash -c ""review-plan-codex %*""`r`n"
+[System.IO.File]::WriteAllText("$LocalBin\review-plan-codex.cmd", $rpcCmdContent, [System.Text.Encoding]::ASCII)
+Write-Host "Generated: $LocalBin\review-plan-codex.cmd" -ForegroundColor Green
+$rpcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-plan-codex`" `"`$@`"`n"
+[System.IO.File]::WriteAllText("$LocalBin\review-plan-codex", $rpcShimContent, [System.Text.Encoding]::ASCII)
+Write-Host "Generated: $LocalBin\review-plan-codex (bash shim)" -ForegroundColor Green
