@@ -4,7 +4,7 @@
 #   $HOME/.claude/skills/make-detail-plan/SKILL.md
 #   $HOME/.claude/agents/planner.md
 #   $HOME/.claude/agents/reviewer.md
-#   $HOME/.claude/agents/approach-designer.md
+#   $HOME/.claude/agents/outline-planner.md
 # Exit 0 always — this is a contract test, not a CI gate yet.
 
 # Timeout guard: if running without the sentinel, re-exec under timeout
@@ -20,7 +20,7 @@ fi
 SKILL_MD="$HOME/.claude/skills/make-detail-plan/SKILL.md"
 PLANNER_MD="$HOME/.claude/agents/planner.md"
 REVIEWER_MD="$HOME/.claude/agents/reviewer.md"
-DESIGNER_MD="$HOME/.claude/agents/approach-designer.md"
+DESIGNER_MD="$HOME/.claude/agents/outline-planner.md"
 
 PASS=0
 FAIL=0
@@ -205,9 +205,9 @@ assert_contains "$REVIEWER_MD" '\[[a-z0-9-]+\]' \
 
 echo ""
 # ---------------------------------------------------------------------------
-# approach-designer integration cases
+# outline-planner integration cases
 # ---------------------------------------------------------------------------
-echo "--- approach-designer ---"
+echo "--- outline-planner ---"
 
 # Ad1: DESIGNER_MD exists and contains NEEDS_RESEARCH
 assert_contains "$DESIGNER_MD" "NEEDS_RESEARCH" \
@@ -221,9 +221,9 @@ assert_contains "$DESIGNER_MD" "skill:" \
 assert_contains "$DESIGNER_MD" "question:" \
     "Ad3: DESIGNER_MD contains 'question:' (format field)"
 
-# Ad4: SKILL_MD (make-detail-plan) references approach-designer or design-approach context
-assert_contains "$SKILL_MD" "approach.designer|design.approach|design_approach" \
-    "Ad4: SKILL_MD references approach-designer or design-approach context"
+# Ad4: SKILL_MD (make-detail-plan) references outline-planner or make-outline-plan context
+assert_contains "$SKILL_MD" "outline.planner|make.outline.plan|make_outline_plan" \
+    "Ad4: SKILL_MD references outline-planner or make-outline-plan context"
 
 echo ""
 echo "=== Summary ==="

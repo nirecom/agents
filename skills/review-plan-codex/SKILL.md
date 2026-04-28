@@ -1,6 +1,6 @@
 ---
 name: review-plan-codex
-description: Adversarial plan review via OpenAI Codex CLI. Reviews implementation plans and design approach proposals for blind spots and issues Claude may have missed. Emits PERFORMED/SKIPPED/FAILED status line. Called automatically by make-detail-plan and design-approach during each review round; also invokable directly.
+description: Adversarial plan review via OpenAI Codex CLI. Reviews implementation plans and approach proposals for blind spots and issues Claude may have missed. Emits PERFORMED/SKIPPED/FAILED status line. Called automatically by make-detail-plan and make-outline-plan during each review round; also invokable directly.
 ---
 
 Adversarial plan review via OpenAI Codex CLI.
@@ -14,12 +14,12 @@ fall back to the Claude reviewer and emit a visible fallback message.
 ## Invocation
 
 ```bash
-review-plan-codex --input <path-to-plan-file> --format {detail-plan|approach} [--no-log]
+review-plan-codex --input <path-to-plan-file> --format {detail-plan|outline-plan} [--no-log]
 ```
 
 - `--input <file>` — path to the plan or approach file to review (required)
 - `--format detail-plan` — instructs codex to output `APPROVED` / `NEEDS_REVISION` verdict
-- `--format approach` — instructs codex to output `APPROVED` / `MISSING_ALTERNATIVE` verdict
+- `--format outline-plan` — instructs codex to output `APPROVED` / `MISSING_ALTERNATIVE` verdict
 - `--no-log` — skip JSONL logging (useful in tests)
 
 ## Output contract
@@ -61,7 +61,7 @@ NEEDS_REVISION
 ...
 ```
 
-### `--format approach`
+### `--format outline-plan`
 
 ```
 APPROVED <one-line justification>
@@ -75,7 +75,7 @@ MISSING_ALTERNATIVE: <one-line description of the approach that was not consider
 
 ## Orchestrator fallback logic
 
-The orchestrator (make-detail-plan / design-approach) should:
+The orchestrator (make-detail-plan / make-outline-plan) should:
 
 1. Run `review-plan-codex` via Bash tool.
 2. Read the first line of output:

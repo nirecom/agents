@@ -15,7 +15,7 @@ Draft and revise an implementation plan for the task described in your prompt. Y
 
 1. Read the prior-stage artifacts provided in your prompt context:
    - `<session-id>-intent.md` content — agreed requirements, scope, non-goals from `clarify-intent`
-   - `<session-id>-approach.md` content — confirmed design direction from `design-approach`
+   - `<session-id>-approach.md` content — confirmed approach from `make-outline-plan`
    If not provided, proceed with the task context alone.
 2. Read all relevant source files, docs, and rules before writing anything. Do not plan from assumptions.
    If you conclude that external knowledge is required and cannot be obtained by reading local files, use the NEEDS_RESEARCH escape hatch (see below) instead of guessing.

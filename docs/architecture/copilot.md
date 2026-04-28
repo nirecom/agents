@@ -96,9 +96,9 @@ with isolated tool access and separate context windows. Copilot has no equivalen
 - There is no API for one Copilot session to delegate work to another session.
 
 **Design consequence**: skills that depend on `Agent` tool delegation (primarily
-`/design-approach` and `/make-detail-plan` with their subagent loops) must be rewritten
+`/make-outline-plan` and `/make-detail-plan` with their subagent loops) must be rewritten
 as single-pass prompts with self-critique. The quality ceiling is lower than the Claude
-Code version. The three-stage planning pipeline (`/clarify-intent` → `/design-approach`
+Code version. The three-stage planning pipeline (`/clarify-intent` → `/make-outline-plan`
 → `/make-detail-plan`) is Claude Code-only; Copilot falls back to the legacy
 `/make-plan` single-pass prompt.
 
@@ -170,7 +170,7 @@ fidelity when using the shared `SKILL.md` directly:
 
 | Skill | Issue | Impact |
 |---|---|---|
-| `clarify-intent` / `design-approach` / `make-detail-plan` | 3-stage pipeline relies on `Agent` tool and `AskUserQuestion` | Claude Code-only; Copilot falls back to legacy `/make-plan` single-pass prompt |
+| `clarify-intent` / `make-outline-plan` / `make-detail-plan` | 3-stage pipeline relies on `Agent` tool and `AskUserQuestion` | Claude Code-only; Copilot falls back to legacy `/make-plan` single-pass prompt |
 | `make-plan` (legacy, Copilot fallback) | Relies on `Agent` tool for planner/reviewer loop | Single-pass self-critique only; lower quality ceiling |
 | `write-tests` | Uses subagent isolation (`mode: agent` + tool restriction) | O(N) confirmation prompts not avoided |
 | `deep-research` | References `#fetch` tool; behavior varies by Copilot version | May require agent mode enabled |
