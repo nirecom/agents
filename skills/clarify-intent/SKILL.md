@@ -1,7 +1,7 @@
 ---
 name: clarify-intent
 description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning. Step 1 of the workflow — mandatory pre-Plan requirements interview.
-model: opus
+model: sonnet
 ---
 
 IMPORTANT: This skill REQUIRES an interactive main Claude session. In non-interactive
@@ -49,14 +49,22 @@ See `rules/plan-skip.md` for skip conditions.
 5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
    unless not needed) then `/make-outline-plan`.
 
-## Output Schema (`<session-id>-intent.md`)
+**Note:** Pass only `<session-id>-intent.md` to downstream stages. Do NOT pass `<session-id>-intent-log.md`.
 
-Write the file in Japanese (per `rules/language.md`) with the following sections:
+## Output Schema
+
+Write two files in Japanese (per `rules/language.md`):
+
+### `<session-id>-intent.md` — passed to downstream stages
 
 - **Title**: "Agreed Requirements" + `<session-id>`
 - **Background / Motivation**: 1-2 paragraphs on why this task is needed
 - **Scope**: what is included / what is excluded (non-goals)
 - **Constraints**: list of constraints
+
+### `<session-id>-intent-log.md` — NOT passed downstream, for reference only
+
+- **Title**: "Interview Log" + `<session-id>`
 - **Interview log**: each Q&A round recorded as "Q: ... A: ..."
 
 ## Completion
