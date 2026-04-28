@@ -77,5 +77,6 @@ Write the file in Japanese (per `rules/language.md`) with the following sections
 
 ## Completion
 
-After this skill, run:
-`echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"`
+After this skill:
+1. Run: `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"`
+2. Invoke `make-detail-plan` via the Skill tool (see `rules/plan-skip.md` for skip conditions).

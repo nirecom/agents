@@ -39,8 +39,10 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 
 | Step | How completed |
 |---|---|
-| `research` | `/survey-code` or `/deep-research` skill (emits `WORKFLOW_MARK_STEP` marker) |
-| `plan` | `/clarify-intent` → `/make-outline-plan` → `/make-detail-plan` (3-stage pipeline; marker emitted by `make-detail-plan`) |
+| `clarify_intent` | `/clarify-intent` skill (emits `WORKFLOW_CLARIFY_INTENT_COMPLETE` marker) |
+| `research` | `/survey-code` or `/deep-research` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` |
+| `plan` | `/make-outline-plan` → `/make-detail-plan` (2-stage pipeline; marker emitted by `make-detail-plan`) |
+| `branching_decision` | `echo "<<WORKFLOW_BRANCHING_DECIDED: <decision>>"` after consulting `rules/branch.md` and `rules/worktree.md` |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` |
 | `run_tests` | PostToolUse hook (`workflow-run-tests.js`) auto-marks based on Bash exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
 | `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
@@ -254,13 +256,16 @@ bulk-deleted; most had directory versions with no data loss. One-time event.
   Replaces `check-docs-updated.js` and `check-tests-updated.js`
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_step>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
-  sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command)
+  sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). After each
+  successful step completion, appends a `[workflow]` next-step hint to `additionalContext` via
+  `nextStepHint()` (defined in `hooks/lib/workflow-state.js`) to guide Claude toward the next skill
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — auto-marks `run_tests` based on Bash exit
   code. Detects test runner commands by path pattern (`tests/`) and known runner names. exit 0 →
   `complete`; exit ≠ 0 → `pending` (last-run-wins). Sentinel echoes and read-only commands excluded
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see Session
-  ID flow); otherwise creates fresh state; outputs additionalContext with session_id; runs
+  ID flow); otherwise creates fresh state; outputs `additionalContext` containing session_id,
+  all 9 step statuses, and a `NEXT ACTION:` line pointing to the next pending skill; runs
   zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
