@@ -146,6 +146,8 @@
       "Write(**/.env.test)",
       "Write(**/.env.dev)",
       "Write(**/.env.prod)",
+      "Bash(*Remove-Item*-Recurse*-Force*)",
+      "Bash(*Remove-Item*-Force*-Recurse*)",
       "Bash(*rm -rf *)",
       "Bash(*rm -fr *)",
       "Bash(*find *-exec *)",
