@@ -432,7 +432,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 17. PERFORMED with --format approach, mock returns APPROVED
+# 17. PERFORMED with --format outline-plan, mock returns APPROVED
 # ---------------------------------------------------------------------------
 cat > "$MOCK_BIN/codex" << 'MOCK_EOF'
 #!/usr/bin/env bash
@@ -442,22 +442,22 @@ MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
 EXIT_CODE=0
-OUTPUT=$(run_script "$MOCK_BIN:$PATH" --format approach --no-log 2>&1) || EXIT_CODE=$?
+OUTPUT=$(run_script "$MOCK_BIN:$PATH" --format outline-plan --no-log 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "approach APPROVED: expected exit 0, got $EXIT_CODE"
+    fail "outline-plan APPROVED: expected exit 0, got $EXIT_CODE"
 else
-    pass "approach APPROVED: exits 0"
+    pass "outline-plan APPROVED: exits 0"
 fi
 
 if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
-    pass "approach APPROVED: PERFORMED label present"
+    pass "outline-plan APPROVED: PERFORMED label present"
 else
-    fail "approach APPROVED: PERFORMED label missing. Output: $OUTPUT"
+    fail "outline-plan APPROVED: PERFORMED label missing. Output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
-# 18. PERFORMED with --format approach, mock returns MISSING_ALTERNATIVE
+# 18. PERFORMED with --format outline-plan, mock returns MISSING_ALTERNATIVE
 # ---------------------------------------------------------------------------
 cat > "$MOCK_BIN/codex" << 'MOCK_EOF'
 #!/usr/bin/env bash
@@ -467,24 +467,24 @@ MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
 EXIT_CODE=0
-OUTPUT=$(run_script "$MOCK_BIN:$PATH" --format approach --no-log 2>&1) || EXIT_CODE=$?
+OUTPUT=$(run_script "$MOCK_BIN:$PATH" --format outline-plan --no-log 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "approach MISSING_ALTERNATIVE: expected exit 0, got $EXIT_CODE"
+    fail "outline-plan MISSING_ALTERNATIVE: expected exit 0, got $EXIT_CODE"
 else
-    pass "approach MISSING_ALTERNATIVE: exits 0"
+    pass "outline-plan MISSING_ALTERNATIVE: exits 0"
 fi
 
 if echo "$OUTPUT" | grep -q "## Codex Plan Review: PERFORMED"; then
-    pass "approach MISSING_ALTERNATIVE: PERFORMED label present"
+    pass "outline-plan MISSING_ALTERNATIVE: PERFORMED label present"
 else
-    fail "approach MISSING_ALTERNATIVE: PERFORMED label missing. Output: $OUTPUT"
+    fail "outline-plan MISSING_ALTERNATIVE: PERFORMED label missing. Output: $OUTPUT"
 fi
 
 if echo "$OUTPUT" | grep -q "MISSING_ALTERNATIVE"; then
-    pass "approach MISSING_ALTERNATIVE: verdict in output"
+    pass "outline-plan MISSING_ALTERNATIVE: verdict in output"
 else
-    fail "approach MISSING_ALTERNATIVE: verdict not in output. Output: $OUTPUT"
+    fail "outline-plan MISSING_ALTERNATIVE: verdict not in output. Output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -510,9 +510,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 20. Adversarial preamble: assert "authored by Claude" in prompt for approach
+# 20. Adversarial preamble: assert "authored by Claude" in prompt for outline-plan
 # ---------------------------------------------------------------------------
-CAPTURE_FILE2="$TMPDIR_BASE/captured-prompt-approach.txt"
+CAPTURE_FILE2="$TMPDIR_BASE/captured-prompt-outline-plan.txt"
 cat > "$MOCK_BIN/codex" << MOCK_EOF
 #!/usr/bin/env bash
 cat > "$CAPTURE_FILE2"
@@ -521,12 +521,12 @@ exit 0
 MOCK_EOF
 chmod +x "$MOCK_BIN/codex"
 
-run_script "$MOCK_BIN:$PATH" --format approach --no-log >/dev/null 2>&1 || true
+run_script "$MOCK_BIN:$PATH" --format outline-plan --no-log >/dev/null 2>&1 || true
 
 if [[ -f "$CAPTURE_FILE2" ]] && grep -q "authored by Claude" "$CAPTURE_FILE2"; then
-    pass "Adversarial preamble (approach): 'authored by Claude' present in prompt"
+    pass "Adversarial preamble (outline-plan): 'authored by Claude' present in prompt"
 else
-    fail "Adversarial preamble (approach): 'authored by Claude' not found in captured prompt. File exists: $([ -f "$CAPTURE_FILE2" ] && echo yes || echo no)"
+    fail "Adversarial preamble (outline-plan): 'authored by Claude' not found in captured prompt. File exists: $([ -f "$CAPTURE_FILE2" ] && echo yes || echo no)"
 fi
 
 # ---------------------------------------------------------------------------
