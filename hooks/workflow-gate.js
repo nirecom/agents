@@ -78,22 +78,60 @@ function hasStagedDocChanges(repoDir) {
   return externalRepo !== null && hasDocs(externalRepo);
 }
 
-// Resolve repo dir from git -C flag in command, or process cwd.
+// Return true if dir has any staged changes.
+function hasStagedChanges(dir) {
+  try {
+    const out = execSync("git diff --cached --name-only", {
+      cwd: dir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    });
+    return out.trim().length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Read additionalDirectories from settings.json (resolved relative to the agents root).
+// Client-agnostic: works in VS Code, Claude desktop app, or any other host.
+function findAdditionalDirectories() {
+  try {
+    const agentsRoot = path.resolve(__dirname, "..");
+    const settings = JSON.parse(fs.readFileSync(path.join(agentsRoot, "settings.json"), "utf8"));
+    const dirs = (settings.permissions || settings).additionalDirectories || [];
+    return dirs.map((d) => path.isAbsolute(d) ? d : path.resolve(agentsRoot, d));
+  } catch (e) {
+    return [];
+  }
+}
+
+// Resolve repo dir from git -C flag in command, or detect from staged changes.
+// When no -C is given, checks CLAUDE_PROJECT_DIR first; if it has no staged
+// changes, scans additionalDirectories from settings.json. This allows committing
+// to sibling repos (e.g. agents) from a dotfiles-primary session without requiring
+// explicit git -C in every commit command, and works across all Claude clients.
 // Normalizes Git Bash Unix-style drive paths: /<drive>/path/to → <DRIVE>:\path\to
-// Handles bare, double-quoted, and single-quoted -C arguments.
 function resolveRepoDir(command) {
   const p = parseGitCArg(command);
-  if (!p) return process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  // Unix drive path: /<drive>/path → <DRIVE>:\path
-  const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
-  if (driveMatch) {
-    const drive = driveMatch[1].toUpperCase();
-    const rest = driveMatch[2] || "";
-    return drive + ":\\" + rest.replace(/\//g, "\\").replace(/^\\/, "");
+  if (p) {
+    // Unix drive path: /<drive>/path → <DRIVE>:\path
+    const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
+    if (driveMatch) {
+      const drive = driveMatch[1].toUpperCase();
+      const rest = driveMatch[2] || "";
+      return drive + ":\\" + rest.replace(/\//g, "\\").replace(/^\\/, "");
+    }
+    // Normalize Windows drive paths with forward slashes: c:/path → c:\path
+    if (process.platform === "win32" && /^[a-zA-Z]:\//.test(p)) return p.replace(/\//g, "\\");
+    return p;
   }
-  // Normalize Windows drive paths with forward slashes: c:/path → c:\path
-  if (process.platform === "win32" && /^[a-zA-Z]:\//.test(p)) return p.replace(/\//g, "\\");
-  return p;
+
+  const primary = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const norm = (p) => p.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+  if (hasStagedChanges(primary)) return primary;
+  for (const dir of findAdditionalDirectories()) {
+    if (norm(dir) === norm(primary)) continue;
+    if (hasStagedChanges(dir)) return dir;
+  }
+  return primary;
 }
 
 function readStdin() {
@@ -211,4 +249,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, isDocsOnlyStaged, resolveExternalDocsRepo };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, findAdditionalDirectories };
