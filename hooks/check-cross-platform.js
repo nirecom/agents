@@ -6,7 +6,7 @@
 //
 // Skip mechanisms:
 //   1. Permanent: .cross-platform-skiplist (base tool names, one per line)
-//   2. One-time:  .git/.cross-platform-reviewed (HEAD hash, like .test-reviewed)
+//   2. One-time:  .git/.cross-platform-reviewed (short HEAD hash — git rev-parse --short HEAD)
 
 const { execSync } = require("child_process");
 const fs = require("fs");
@@ -186,5 +186,6 @@ block(
     "\n\nTo resolve:\n" +
     "  1. Add corresponding changes to the counterpart platform, OR\n" +
     "  2. Add tool names to .cross-platform-skiplist (permanent), OR\n" +
-    "  3. Write HEAD hash to .git/.cross-platform-reviewed (one-time skip)"
+    "  3. Write short HEAD hash to .git/.cross-platform-reviewed (one-time skip)\n" +
+    "     Command: git rev-parse --short HEAD > .git/.cross-platform-reviewed"
 );
