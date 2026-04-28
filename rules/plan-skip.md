@@ -3,7 +3,10 @@
 Shared skip rules for the three-stage planning pipeline.
 Each stage's SKILL.md references this file.
 
-| Condition | clarify-intent | design-approach | make-detail-plan |
+`clarify-intent` (step 1) is a mandatory pre-Plan step — it runs regardless of whether Plan
+is skipped and has no skip path.
+
+| Condition | research (2a) | design-approach (2b) | make-detail-plan (2c) |
 |---|---|---|---|
 | Plan step entirely skipped via `<<WORKFLOW_PLAN_NOT_NEEDED: ...>>` | skip | skip | skip |
 | Only one approach obviously viable (`SINGLE_APPROACH_JUSTIFIED`) | run | skip | run |
@@ -11,5 +14,5 @@ Each stage's SKILL.md references this file.
 
 Rules:
 - `SINGLE_APPROACH_JUSTIFIED` is emitted by `approach-designer` only, after clarify-intent has run.
-- There is no path to skip `clarify-intent` within the Plan step other than `WORKFLOW_PLAN_NOT_NEEDED`.
+- `<<WORKFLOW_PLAN_NOT_NEEDED>>` skips the entire Plan stage (research 2a + design-approach 2b + make-detail-plan 2c).
 - Implicit ("obvious") skipping of any stage is not allowed — use the explicit sentinel.
