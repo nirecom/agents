@@ -1,6 +1,6 @@
 ---
 name: clarify-intent
-description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning. Stage 1 of the three-stage planning pipeline. Mandatory when the Plan step is not entirely skipped.
+description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning. Step 1 of the workflow — mandatory pre-Plan requirements interview.
 model: opus
 ---
 
@@ -46,7 +46,8 @@ See `rules/plan-skip.md` for skip conditions.
 
 4. Present a one-paragraph summary of what was locked in.
 
-5. Tell the user to run `/design-approach` next.
+5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
+   unless not needed) then `/design-approach`.
 
 ## Output Schema (`<session-id>-intent.md`)
 
@@ -62,5 +63,4 @@ Write the file in Japanese (per `rules/language.md`) with the following sections
 
 After this skill, run:
 `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
-(This is informational only — the workflow `plan` step is not marked complete here.
-`WORKFLOW_MARK_STEP_plan_complete` is emitted only by `make-detail-plan`.)
+(This marks the `clarify_intent` workflow step complete.)

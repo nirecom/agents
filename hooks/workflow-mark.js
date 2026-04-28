@@ -53,6 +53,9 @@ const REVIEW_SECURITY_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_
 const REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED([: ].*)?>>"$/;
 // Looks-like fallback for removed DOCS_NOT_NEEDED — catches attempts and emits deprecation message.
 const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
+const CLARIFY_INTENT_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"$/;
+const BRANCHING_DECIDED_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_DECIDED: ([^>]+)>>"$/;
+const BRANCHING_DECIDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_DECIDED([: ].*)?>>"$/;
 
 function isSentinel(cmd) {
   return (
@@ -68,7 +71,10 @@ function isSentinel(cmd) {
     WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd)
+    DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
+    CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd) ||
+    BRANCHING_DECIDED_RE_DQ.test(cmd) ||
+    BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd)
   );
 }
 
@@ -158,6 +164,9 @@ for (const cmd of sentinelParts) {
   const reviewSecurityNotNeededLooksLike =
     !reviewSecurityNotNeededMatch && REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
   const docsNotNeededLooksLike = DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
+  const branchingDecidedMatch = cmd.match(BRANCHING_DECIDED_RE_DQ);
+  const branchingDecidedLooksLike =
+    !branchingDecidedMatch && BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd);
 
   // --- RESEARCH_NOT_NEEDED handler ---
   if (researchNotNeededLooksLike) {
@@ -221,6 +230,7 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "plan", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. plan NOT recorded.`
@@ -305,6 +315,60 @@ for (const cmd of sentinelParts) {
       `workflow-mark: WORKFLOW_DOCS_NOT_NEEDED is not accepted — ` +
         `update docs/ or *.md files and stage them (no skip path).`
     );
+    continue;
+  }
+
+  // --- CLARIFY_INTENT_COMPLETE handler ---
+  if (CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd)) {
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
+          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
+      );
+      continue;
+    }
+    try {
+      markStep(sessionId, "clarify_intent", "complete");
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
+      );
+    }
+    continue;
+  }
+
+  // --- BRANCHING_DECIDED handler ---
+  if (branchingDecidedLooksLike) {
+    messages.push(
+      `workflow-mark: malformed BRANCHING_DECIDED — ` +
+        `expected: echo "<<WORKFLOW_BRANCHING_DECIDED: DECISION>>" ` +
+        `(decision must be >=3 non-space chars, no '>')`
+    );
+    continue;
+  }
+  if (branchingDecidedMatch) {
+    const v = validateSkipReason(branchingDecidedMatch[1]);
+    if (!v.ok) {
+      messages.push(
+        `workflow-mark: BRANCHING_DECIDED rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_BRANCHING_DECIDED: <decision>>"`
+      );
+      continue;
+    }
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — branching_decision NOT recorded. ` +
+          `Re-run: echo "<<WORKFLOW_BRANCHING_DECIDED: ${v.reason}>>"`
+      );
+      continue;
+    }
+    try {
+      markStep(sessionId, "branching_decision", "complete", { decision: v.reason });
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to write state — ${e.message}. branching_decision NOT recorded.`
+      );
+    }
     continue;
   }
 
