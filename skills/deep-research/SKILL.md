@@ -24,10 +24,10 @@ Investigate external information related to the given task.
 
 ## Completion
 
-After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP_research_complete>>"`
-(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
+After completing this skill:
+1. Run: `echo "<<WORKFLOW_MARK_STEP_research_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+2. Invoke `make-outline-plan` via the Skill tool.
 
-If research is genuinely not needed for this task, run instead:
-`echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
-(reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>'.)
+If research is genuinely not needed for this task:
+1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')
+2. Invoke `make-outline-plan` via the Skill tool.
