@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Contract tests for design-approach skill (Stage 2: approach-designer + approach-reviewer)
+# Contract tests for make-outline-plan skill (Stage 2: outline-planner + outline-reviewer)
 # Target files (expected to FAIL until implementation is complete):
-#   $HOME/.claude/skills/design-approach/SKILL.md
-#   $HOME/.claude/agents/approach-designer.md
-#   $HOME/.claude/agents/approach-reviewer.md
+#   $HOME/.claude/skills/make-outline-plan/SKILL.md
+#   $HOME/.claude/agents/outline-planner.md
+#   $HOME/.claude/agents/outline-reviewer.md
 # Exit 0 always — this is a contract test, not a CI gate yet.
 
 # Timeout guard: if running without the sentinel, re-exec under timeout
@@ -16,9 +16,9 @@ if [ -z "$_TIMEOUT_WRAPPED" ]; then
     fi
 fi
 
-SKILL_MD="$HOME/.claude/skills/design-approach/SKILL.md"
-DESIGNER_MD="$HOME/.claude/agents/approach-designer.md"
-REVIEWER_MD="$HOME/.claude/agents/approach-reviewer.md"
+SKILL_MD="$HOME/.claude/skills/make-outline-plan/SKILL.md"
+PLANNER_MD="$HOME/.claude/agents/outline-planner.md"
+REVIEWER_MD="$HOME/.claude/agents/outline-reviewer.md"
 
 PASS=0
 FAIL=0
@@ -75,7 +75,7 @@ assert_absent() {
     fi
 }
 
-echo "=== design-approach contract tests ==="
+echo "=== make-outline-plan contract tests ==="
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -83,17 +83,17 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- Normal (SKILL_MD) ---"
 
-# N1: frontmatter name: design-approach
-assert_contains "$SKILL_MD" "name:[[:space:]]*design-approach" \
-    "N1: frontmatter contains 'name: design-approach'"
+# N1: frontmatter name: make-outline-plan
+assert_contains "$SKILL_MD" "name:[[:space:]]*make-outline-plan" \
+    "N1: frontmatter contains 'name: make-outline-plan'"
 
-# N2: approach-designer referenced
-assert_contains "$SKILL_MD" "approach-designer" \
-    "N2: approach-designer referenced in SKILL_MD"
+# N2: outline-planner referenced
+assert_contains "$SKILL_MD" "outline-planner" \
+    "N2: outline-planner referenced in SKILL_MD"
 
-# N3: approach-reviewer referenced
-assert_contains "$SKILL_MD" "approach-reviewer" \
-    "N3: approach-reviewer referenced in SKILL_MD"
+# N3: outline-reviewer referenced
+assert_contains "$SKILL_MD" "outline-reviewer" \
+    "N3: outline-reviewer referenced in SKILL_MD"
 
 # N4: 2-round max mentioned
 assert_contains "$SKILL_MD" "revision_rounds|2.*round|round.*2" \
@@ -113,33 +113,33 @@ assert_contains "$SKILL_MD" "SINGLE_APPROACH_JUSTIFIED" \
 
 echo ""
 # ---------------------------------------------------------------------------
-# Normal cases — DESIGNER_MD
+# Normal cases — PLANNER_MD
 # ---------------------------------------------------------------------------
-echo "--- Normal (DESIGNER_MD) ---"
+echo "--- Normal (PLANNER_MD) ---"
 
 # N8: frontmatter model: opus
-assert_contains "$DESIGNER_MD" "model:[[:space:]]*opus" \
-    "N8: DESIGNER_MD frontmatter contains 'model: opus'"
+assert_contains "$PLANNER_MD" "model:[[:space:]]*opus" \
+    "N8: PLANNER_MD frontmatter contains 'model: opus'"
 
 # N9: 2-3 approaches required or mutually exclusive
-assert_contains "$DESIGNER_MD" "2.{0,30}3.*approach|mutually.exclusive|相互に排他" \
-    "N9: 2-3 approaches required or mutually exclusive stated in DESIGNER_MD"
+assert_contains "$PLANNER_MD" "2.{0,30}3.*approach|mutually.exclusive|相互に排他" \
+    "N9: 2-3 approaches required or mutually exclusive stated in PLANNER_MD"
 
 # N10: file paths prohibited
-assert_contains "$DESIGNER_MD" "file path.*禁止|禁止.*file path|do not.*file path|prohibit.*path|[Ss]trictly forbidden|ファイル.*パス.*禁止|禁止.*ファイル.*パス" \
-    "N10: file paths prohibited stated in DESIGNER_MD"
+assert_contains "$PLANNER_MD" "file path.*禁止|禁止.*file path|do not.*file path|prohibit.*path|[Ss]trictly forbidden|ファイル.*パス.*禁止|禁止.*ファイル.*パス" \
+    "N10: file paths prohibited stated in PLANNER_MD"
 
 # N11: SINGLE_APPROACH_JUSTIFIED defined
-assert_contains "$DESIGNER_MD" "SINGLE_APPROACH_JUSTIFIED" \
-    "N11: SINGLE_APPROACH_JUSTIFIED defined in DESIGNER_MD"
+assert_contains "$PLANNER_MD" "SINGLE_APPROACH_JUSTIFIED" \
+    "N11: SINGLE_APPROACH_JUSTIFIED defined in PLANNER_MD"
 
 # N12: NEEDS_RESEARCH escape hatch
-assert_contains "$DESIGNER_MD" "NEEDS_RESEARCH" \
-    "N12: NEEDS_RESEARCH escape hatch defined in DESIGNER_MD"
+assert_contains "$PLANNER_MD" "NEEDS_RESEARCH" \
+    "N12: NEEDS_RESEARCH escape hatch defined in PLANNER_MD"
 
 # N13: tradeoff per approach
-assert_contains "$DESIGNER_MD" "tradeoff|trade.off|トレードオフ" \
-    "N13: tradeoff per approach mentioned in DESIGNER_MD"
+assert_contains "$PLANNER_MD" "tradeoff|trade.off|トレードオフ" \
+    "N13: tradeoff per approach mentioned in PLANNER_MD"
 
 echo ""
 # ---------------------------------------------------------------------------
@@ -171,7 +171,6 @@ echo "--- Error ---"
 
 # E1: NEEDS_REVISION does NOT appear as a verdict option in REVIEWER_MD;
 #     MISSING_ALTERNATIVE is the only non-APPROVED path.
-#     Check MISSING_ALTERNATIVE exists (positive) and NEEDS_REVISION is absent (negative).
 assert_absent "$REVIEWER_MD" "NEEDS_REVISION" \
     "E1a: NEEDS_REVISION does NOT appear as a verdict in REVIEWER_MD"
 
@@ -184,14 +183,13 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- Edge ---"
 
-# Ed1: SINGLE_APPROACH_JUSTIFIED escape path explicitly defined in DESIGNER_MD
-#      (full sentinel string must appear — already N11, expanded check)
-if [ ! -f "$DESIGNER_MD" ]; then
-    fail "Ed1: SINGLE_APPROACH_JUSTIFIED escape path explicitly defined (file not found: $DESIGNER_MD)"
-elif grep -qF "SINGLE_APPROACH_JUSTIFIED" "$DESIGNER_MD"; then
-    pass "Ed1: SINGLE_APPROACH_JUSTIFIED full sentinel string appears in DESIGNER_MD"
+# Ed1: SINGLE_APPROACH_JUSTIFIED escape path explicitly defined in PLANNER_MD
+if [ ! -f "$PLANNER_MD" ]; then
+    fail "Ed1: SINGLE_APPROACH_JUSTIFIED escape path explicitly defined (file not found: $PLANNER_MD)"
+elif grep -qF "SINGLE_APPROACH_JUSTIFIED" "$PLANNER_MD"; then
+    pass "Ed1: SINGLE_APPROACH_JUSTIFIED full sentinel string appears in PLANNER_MD"
 else
-    fail "Ed1: SINGLE_APPROACH_JUSTIFIED full sentinel string must appear in DESIGNER_MD"
+    fail "Ed1: SINGLE_APPROACH_JUSTIFIED full sentinel string must appear in PLANNER_MD"
 fi
 
 # Ed2: REVIEWER_MD has exactly 2 verdict options: APPROVED and MISSING_ALTERNATIVE;
