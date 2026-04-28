@@ -350,3 +350,80 @@ Describe "session-sync.ps1 output and notifications" {
         $output | Should -Not -Match "Pushed session data" -Because "quiet mode should use toast, not stdout"
     }
 }
+
+Describe "session-sync.ps1 plans sync" {
+    BeforeEach {
+        $script:TestDir = Join-Path $env:TEMP "session-sync-test-$(Get-Random)"
+        $script:RemoteDir = Join-Path $env:TEMP "session-sync-remote-$(Get-Random)"
+        New-Item -ItemType Directory -Path $script:TestDir -Force | Out-Null
+        git init --bare $script:RemoteDir 2>&1 | Out-Null
+        & $InitScript -ClaudeDir $script:TestDir -RemoteUrl $script:RemoteDir
+        $projDir = Join-Path $script:TestDir "projects"
+        git -C $projDir add .gitattributes 2>&1 | Out-Null
+        git -C $projDir commit -m "initial" 2>&1 | Out-Null
+        git -C $projDir push -u origin main 2>&1 | Out-Null
+    }
+
+    AfterEach {
+        Remove-Item -Recurse -Force $script:TestDir -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force $script:RemoteDir -ErrorAction SilentlyContinue
+    }
+
+    It "push copies plans to projects/plans/" {
+        $plansDir = Join-Path $script:TestDir "plans"
+        New-Item -ItemType Directory -Path $plansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $plansDir "abc-intent.md") -Value "intent content"
+        & $SyncScript -Action push -ClaudeDir $script:TestDir
+        $syncedPlan = Join-Path $script:TestDir "projects\plans\abc-intent.md"
+        Test-Path $syncedPlan | Should -BeTrue -Because "plans/abc-intent.md should be copied into projects/plans/"
+    }
+
+    It "pull merges plans into ~/.claude/plans/" {
+        # Seed remote with plans/remote-plan.md
+        $seedDir = Join-Path $env:TEMP "session-sync-plans-seed-$(Get-Random)"
+        git clone $script:RemoteDir $seedDir 2>&1 | Out-Null
+        $seedPlansDir = Join-Path $seedDir "plans"
+        New-Item -ItemType Directory -Path $seedPlansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $seedPlansDir "remote-plan.md") -Value "remote content"
+        git -C $seedDir add . 2>&1 | Out-Null
+        git -C $seedDir commit -m "seed plans" 2>&1 | Out-Null
+        git -C $seedDir push 2>&1 | Out-Null
+        Remove-Item -Recurse -Force $seedDir -ErrorAction SilentlyContinue
+        # Local has its own plan
+        $localPlansDir = Join-Path $script:TestDir "plans"
+        New-Item -ItemType Directory -Path $localPlansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $localPlansDir "local-plan.md") -Value "local content"
+        & $SyncScript -Action pull -ClaudeDir $script:TestDir
+        Test-Path (Join-Path $localPlansDir "remote-plan.md") | Should -BeTrue -Because "remote plan should be merged"
+        Test-Path (Join-Path $localPlansDir "local-plan.md") | Should -BeTrue -Because "local plan should be preserved"
+    }
+
+    It "pull when local plans dir absent creates local plans" {
+        # Seed remote with plans/remote-only.md
+        $seedDir = Join-Path $env:TEMP "session-sync-plans-seed2-$(Get-Random)"
+        git clone $script:RemoteDir $seedDir 2>&1 | Out-Null
+        $seedPlansDir = Join-Path $seedDir "plans"
+        New-Item -ItemType Directory -Path $seedPlansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $seedPlansDir "remote-only.md") -Value "remote only"
+        git -C $seedDir add . 2>&1 | Out-Null
+        git -C $seedDir commit -m "seed plans" 2>&1 | Out-Null
+        git -C $seedDir push 2>&1 | Out-Null
+        Remove-Item -Recurse -Force $seedDir -ErrorAction SilentlyContinue
+        # Ensure local plans dir does NOT exist
+        $localPlansDir = Join-Path $script:TestDir "plans"
+        Remove-Item -Recurse -Force $localPlansDir -ErrorAction SilentlyContinue
+        & $SyncScript -Action pull -ClaudeDir $script:TestDir
+        Test-Path (Join-Path $localPlansDir "remote-only.md") | Should -BeTrue -Because "pull should create local plans/ from remote"
+    }
+
+    It "push when plans dir absent succeeds without error" {
+        # Ensure no plans dir locally
+        $localPlansDir = Join-Path $script:TestDir "plans"
+        Remove-Item -Recurse -Force $localPlansDir -ErrorAction SilentlyContinue
+        # Add a session jsonl so push has something to commit
+        $projDir = Join-Path $script:TestDir "projects\noplans-proj"
+        New-Item -ItemType Directory -Path $projDir -Force | Out-Null
+        Set-Content -Path (Join-Path $projDir "session.jsonl") -Value "data"
+        { & $SyncScript -Action push -ClaudeDir $script:TestDir } | Should -Not -Throw
+    }
+}
