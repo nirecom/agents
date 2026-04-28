@@ -33,12 +33,19 @@ See `rules/plan-skip.md` for skip conditions. Skip this stage when:
    - Run `/deep-research` with the specified question.
    - Re-prompt approach-designer with the research findings. (Research budget: 2 rounds.)
 
-5. Pass the approach-designer's output to **approach-reviewer** subagent
-   (`subagent_type: approach-reviewer`) for review.
+5. **Review the approach with codex first, fall back to Claude if unavailable.**
+   Write the approach-designer's output to a temp file, then:
+   `review-plan-codex --input <temp-file> --format approach`
+   Parse the first line:
+   - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
+     - `APPROVED` → proceed to step 7.
+     - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
+     - Anything else → **format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `approach-reviewer` subagent.
+   - `SKIPPED` / `FAILED` → **codex unavailable**: emit `> codex unavailable (<reason>) — falling back to Claude reviewer for this round.` then launch `approach-reviewer` subagent.
 
-6. If approach-reviewer returns `MISSING_ALTERNATIVE: <description>`:
+6. If verdict is `MISSING_ALTERNATIVE: <description>`:
    - Send the concern back to approach-designer for revision.
-   - Re-review. Repeat for at most **2 revision rounds** (`revision_rounds`).
+   - Re-review from step 5. Repeat for at most **2 revision rounds** (`revision_rounds`).
    - On cap: tell the user which concern is blocking and ask whether to add a missing
      alternative, approve as-is, or change the scope.
 
