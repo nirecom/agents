@@ -25,8 +25,10 @@ function resolveSessionId() {
 }
 
 const VALID_STEPS = [
+  "clarify_intent",
   "research",
   "plan",
+  "branching_decision",
   "write_tests",
   "run_tests",
   "review_security",
@@ -63,6 +65,13 @@ function readState(sessionId) {
       }
       if (!state.steps.review_security) {
         state.steps.review_security = { status: "pending", updated_at: null };
+      }
+      // migration: sessions predating clarify_intent / branching_decision
+      if (!state.steps.clarify_intent) {
+        state.steps.clarify_intent = { status: "complete", updated_at: null };
+      }
+      if (!state.steps.branching_decision) {
+        state.steps.branching_decision = { status: "complete", updated_at: null };
       }
     }
     return state;
