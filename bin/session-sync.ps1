@@ -66,6 +66,13 @@ switch ($Action) {
 
         # Copy history.jsonl into sync area
         Copy-Item (Join-Path $ClaudeDir "history.jsonl") (Join-Path $ProjectsDir ".history.jsonl") -ErrorAction SilentlyContinue
+        # Copy plans into sync area
+        $plansSource = Join-Path $ClaudeDir "plans"
+        $plansDest = Join-Path $ProjectsDir "plans"
+        if (Test-Path $plansSource) {
+            if (-not (Test-Path $plansDest)) { New-Item -ItemType Directory -Path $plansDest -Force | Out-Null }
+            Get-ChildItem -Path $plansSource -File | Copy-Item -Destination $plansDest -Force
+        }
         $ErrorActionPreference = "Continue"
         git -C $ProjectsDir add . 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
@@ -116,6 +123,13 @@ switch ($Action) {
             foreach ($line in $remote + $local) { if ($line -and -not $seen.Contains($line)) { $seen[$line] = $true } }
             $seen.Keys | Set-Content $localHistory
         }
+        # Merge plans from remote into local
+        $syncPlans = Join-Path $ProjectsDir "plans"
+        $localPlans = Join-Path $ClaudeDir "plans"
+        if (Test-Path $syncPlans) {
+            if (-not (Test-Path $localPlans)) { New-Item -ItemType Directory -Path $localPlans -Force | Out-Null }
+            Get-ChildItem -Path $syncPlans -File | Copy-Item -Destination $localPlans -Force
+        }
         Write-Host "Pulled session data." -ForegroundColor Green
     }
     "status" {
@@ -145,6 +159,13 @@ switch ($Action) {
             $seen = [ordered]@{}
             foreach ($line in $remote + $local) { if ($line -and -not $seen.Contains($line)) { $seen[$line] = $true } }
             $seen.Keys | Set-Content $localHistory
+        }
+        # Merge plans from remote into local
+        $syncPlans = Join-Path $ProjectsDir "plans"
+        $localPlans = Join-Path $ClaudeDir "plans"
+        if (Test-Path $syncPlans) {
+            if (-not (Test-Path $localPlans)) { New-Item -ItemType Directory -Path $localPlans -Force | Out-Null }
+            Get-ChildItem -Path $syncPlans -File | Copy-Item -Destination $localPlans -Force
         }
         Write-Host "Reset to remote state." -ForegroundColor Green
     }
