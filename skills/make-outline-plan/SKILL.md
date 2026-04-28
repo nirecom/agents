@@ -1,7 +1,7 @@
 ---
 name: make-outline-plan
-description: Propose 2-3 mutually-exclusive high-level approaches via outline-planner + outline-reviewer, then get user sign-off. Stage 2 of the three-stage planning pipeline. Outputs <session-id>-approach.md.
-model: opus
+description: Propose 2-3 mutually-exclusive high-level approaches via outline-planner + outline-reviewer, then get user sign-off. Stage 2 of the three-stage planning pipeline. Outputs <session-id>-outline.md.
+model: sonnet
 ---
 
 Propose high-level approaches and get user sign-off before detailed planning.
@@ -26,7 +26,7 @@ See `rules/plan-skip.md` for skip conditions. Skip this stage when:
 3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>`:
    - Inform the user that only one approach is viable (citing the reason) and that the skill
      is proceeding directly to `/make-detail-plan`.
-   - Write a minimal `<session-id>-approach.md` noting the justified single approach.
+   - Write a minimal `<session-id>-outline.md` noting the justified single approach.
    - Proceed to emit the completion marker and stop.
 
 4. If outline-planner returns `NEEDS_RESEARCH`:
@@ -53,10 +53,10 @@ See `rules/plan-skip.md` for skip conditions. Skip this stage when:
    - Present the approved approaches to the user via `AskUserQuestion` for selection.
    - One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
-8. Write the user's decision to `~/.claude/plans/<session-id>-approach.md` using the
+8. Write the user's decision to `~/.claude/plans/<session-id>-outline.md` using the
    schema below.
 
-## Output Schema (`<session-id>-approach.md`)
+## Output Schema (`<session-id>-outline.md`)
 
 Write the file in Japanese (per `rules/language.md`) with the following sections:
 
