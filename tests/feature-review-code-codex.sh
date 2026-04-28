@@ -332,6 +332,26 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 13. Adversarial preamble: assert "authored by Claude" in prompt sent to codex
+# ---------------------------------------------------------------------------
+CAPTURE_FILE="$TMPDIR_BASE/captured-code-prompt.txt"
+cat > "$MOCK_BIN/codex" << MOCK_EOF
+#!/usr/bin/env bash
+cat > "$CAPTURE_FILE"
+echo "HIGH: Something looks risky."
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+(cd "$REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log >/dev/null 2>&1) || true
+
+if [[ -f "$CAPTURE_FILE" ]] && grep -q "authored by Claude" "$CAPTURE_FILE"; then
+    pass "Adversarial preamble: 'authored by Claude' present in prompt sent to codex"
+else
+    fail "Adversarial preamble: 'authored by Claude' not found in captured prompt. File exists: $([ -f "$CAPTURE_FILE" ] && echo yes || echo no)"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
