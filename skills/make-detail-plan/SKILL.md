@@ -1,7 +1,7 @@
 ---
 name: make-detail-plan
-description: Stage 3 of three-stage planning pipeline. Produce a file-level implementation plan via planner/reviewer loop, then get user approval. Inputs are confirmed intent (<session-id>-intent.md) and approach (<session-id>-approach.md) from prior stages.
-model: opus
+description: Stage 3 of three-stage planning pipeline. Produce a file-level implementation plan via detail-planner/detail-reviewer loop, then get user approval. Inputs are confirmed intent (<session-id>-intent.md) and outline (<session-id>-outline.md) from prior stages.
+model: sonnet
 ---
 
 Produce a detailed implementation plan via a planner/reviewer discussion loop.
@@ -14,10 +14,10 @@ See `rules/plan-skip.md` for skip conditions (single-file AND no design decision
 
 1. **Read prior-stage artifacts** (if they exist):
    - `~/.claude/plans/<session-id>-intent.md` — agreed requirements, scope, non-goals
-   - `~/.claude/plans/<session-id>-approach.md` — confirmed design direction
+   - `~/.claude/plans/<session-id>-outline.md` — confirmed design direction
    If neither file exists, proceed with the task context alone (no prior stages ran).
 
-2. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: planner`).
+2. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`).
    Pass the full task context **plus** the contents of the intent/approach files above.
 3. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
@@ -30,8 +30,8 @@ See `rules/plan-skip.md` for skip conditions (single-file AND no design decision
         - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
         - Anything else → **format malformed**.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
-      - **Format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `reviewer` subagent.
-      - **Codex unavailable**: emit `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.` then launch `reviewer` subagent.
+      - **Format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
+      - **Codex unavailable**: emit `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
    d. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision, then repeat from step 3a. Each round consumes `revision_rounds`.
 4. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
