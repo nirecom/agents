@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HOOK_UNIX="$REPO_ROOT/claude-global/hooks/workflow-gate.js"
+HOOK_UNIX="$REPO_ROOT/hooks/workflow-gate.js"
 
 # Convert to Windows path for Node.js require
 if command -v cygpath >/dev/null 2>&1; then
@@ -575,6 +575,105 @@ EOF
 else
   echo "  SKIP: git-command.js not yet implemented"
 fi
+
+# ============================================================
+# Section H: additionalDirectories detection tests
+# ============================================================
+echo ""
+echo "=== H. additionalDirectories detection tests ==="
+
+TMPDIR_PRIMARY_UNIX=$(mktemp -d)
+TMPDIR_SIBLING_UNIX=$(mktemp -d)
+# Convert to Windows-native paths for Node.js (Git Bash /tmp/ is not visible to Node)
+if command -v cygpath >/dev/null 2>&1; then
+  TMPDIR_PRIMARY_WIN="$(cygpath -w "$TMPDIR_PRIMARY_UNIX")"
+  TMPDIR_SIBLING_WIN="$(cygpath -w "$TMPDIR_SIBLING_UNIX")"
+else
+  TMPDIR_PRIMARY_WIN="$TMPDIR_PRIMARY_UNIX"
+  TMPDIR_SIBLING_WIN="$TMPDIR_SIBLING_UNIX"
+fi
+# Normalize backslashes → forward slashes for JSON and comparison
+TMPDIR_PRIMARY_JS="${TMPDIR_PRIMARY_WIN//\\//}"
+TMPDIR_SIBLING_JS="${TMPDIR_SIBLING_WIN//\\//}"
+
+# Init two bare git repos (use Unix paths for git commands — Git Bash handles them)
+git -C "$TMPDIR_PRIMARY_UNIX" init -q
+git -C "$TMPDIR_PRIMARY_UNIX" commit --allow-empty -q -m "init"
+git -C "$TMPDIR_SIBLING_UNIX" init -q
+git -C "$TMPDIR_SIBLING_UNIX" commit --allow-empty -q -m "init"
+
+# Temporarily replace settings.json with a mock that lists only the sibling.
+# The hook uses __dirname/../settings.json to load additionalDirectories.
+HOOKS_DIR="$(dirname "$HOOK_UNIX")"
+AGENTS_ROOT="$(dirname "$HOOKS_DIR")"
+REAL_SETTINGS="$AGENTS_ROOT/settings.json"
+MOCK_SETTINGS="$AGENTS_ROOT/settings.json.bak"
+cp "$REAL_SETTINGS" "$MOCK_SETTINGS"
+printf '{"permissions":{"additionalDirectories":["%s"]}}' "$TMPDIR_SIBLING_JS" > "$REAL_SETTINGS"
+
+# H1: primary has staged changes → return primary
+touch "$TMPDIR_PRIMARY_UNIX/file.txt"
+git -C "$TMPDIR_PRIMARY_UNIX" add file.txt
+result=$(
+  CLAUDE_PROJECT_DIR="$TMPDIR_PRIMARY_JS" HOOK_PATH="$HOOK_WIN" run_with_timeout node --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('git commit -m "test"'));
+EOF
+)
+git -C "$TMPDIR_PRIMARY_UNIX" restore --staged file.txt
+if [ "$result" = "$TMPDIR_PRIMARY_JS" ]; then
+  echo "  PASS: H1: staged in primary -> returns primary"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: H1: expected '$TMPDIR_PRIMARY_JS', got '$result'"
+  FAIL=$((FAIL + 1))
+  ERRORS+=("H1: staged in primary -> returns primary")
+fi
+
+# H2: only sibling has staged changes → return sibling
+touch "$TMPDIR_SIBLING_UNIX/file.txt"
+git -C "$TMPDIR_SIBLING_UNIX" add file.txt
+result=$(
+  CLAUDE_PROJECT_DIR="$TMPDIR_PRIMARY_JS" HOOK_PATH="$HOOK_WIN" run_with_timeout node --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('git commit -m "test"'));
+EOF
+)
+git -C "$TMPDIR_SIBLING_UNIX" restore --staged file.txt
+if [ "$result" = "$TMPDIR_SIBLING_JS" ]; then
+  echo "  PASS: H2: staged only in sibling -> returns sibling"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: H2: expected '$TMPDIR_SIBLING_JS', got '$result'"
+  FAIL=$((FAIL + 1))
+  ERRORS+=("H2: staged only in sibling -> returns sibling")
+fi
+
+# H3: nothing staged → return primary (fallback)
+result=$(
+  CLAUDE_PROJECT_DIR="$TMPDIR_PRIMARY_JS" HOOK_PATH="$HOOK_WIN" run_with_timeout node --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('git commit -m "test"'));
+EOF
+)
+if [ "$result" = "$TMPDIR_PRIMARY_JS" ]; then
+  echo "  PASS: H3: nothing staged -> fallback to primary"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: H3: expected '$TMPDIR_PRIMARY_JS', got '$result'"
+  FAIL=$((FAIL + 1))
+  ERRORS+=("H3: nothing staged -> fallback to primary")
+fi
+
+# Restore real settings.json
+mv "$MOCK_SETTINGS" "$REAL_SETTINGS"
+rm -rf "$TMPDIR_PRIMARY_UNIX" "$TMPDIR_SIBLING_UNIX"
 
 # ============================================================
 # Summary
