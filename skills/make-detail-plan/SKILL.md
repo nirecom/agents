@@ -100,6 +100,8 @@ Skipping research does NOT justify skipping the plan step.
 
 ## Completion
 
-After completing this skill, run:
-`echo "<<WORKFLOW_MARK_STEP_plan_complete>>"`
-(This echo must be the ENTIRE Bash command — no pipes, no && chaining, no redirection.)
+After completing this skill:
+1. Run: `echo "<<WORKFLOW_MARK_STEP_plan_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+2. Record the branching decision: consult `rules/branch.md` and `rules/worktree.md`, then run `echo "<<WORKFLOW_BRANCHING_DECIDED: <decision>>"`
+3. Invoke `write-tests` via the Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`).
+

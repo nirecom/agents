@@ -5,7 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { cleanupZombies, createInitialState, writeState, readState,
-        getCurrentContext, findLatestStateForContext } = require("./lib/workflow-state");
+        getCurrentContext, findLatestStateForContext,
+        VALID_STEPS, STEP_HINT } = require("./lib/workflow-state");
 
 function readStdin() {
   const chunks = [];
@@ -98,6 +99,43 @@ try {
   // Fail-open
 }
 
+// Build workflow status block for additionalContext
+function buildWorkflowStatus(sessionId) {
+  const state = sessionId ? readState(sessionId) : null;
+  const statusLines = ["# Workflow status (this session)"];
+  let nextAction = "clarify-intent (state unavailable)";
+
+  if (state && state.steps) {
+    for (const step of VALID_STEPS) {
+      const s = (state.steps[step] || {}).status || "pending";
+      statusLines.push(`- ${step}: ${s}`);
+    }
+    // Find first incomplete step
+    for (const step of VALID_STEPS) {
+      const s = (state.steps[step] || {}).status || "pending";
+      if (s !== "complete" && s !== "skipped") {
+        nextAction = STEP_HINT[step] || step;
+        break;
+      }
+    }
+    // All steps done
+    if (nextAction === "clarify-intent (state unavailable)" &&
+        VALID_STEPS.every(step => ["complete","skipped"].includes((state.steps[step]||{}).status))) {
+      nextAction = "全ステップ完了済み。/commit-push でコミットしてください。";
+    }
+  } else {
+    for (const step of VALID_STEPS) {
+      statusLines.push(`- ${step}: pending`);
+    }
+    nextAction = "clarify-intent — Skill ツールで /clarify-intent を呼び出してください";
+  }
+
+  statusLines.push("");
+  statusLines.push(`NEXT ACTION: ${nextAction}`);
+  statusLines.push("（実装作業の依頼を受けたら、上記 NEXT ACTION から順に進めてください。skill は Skill ツールで起動します。）");
+  return statusLines.join("\n");
+}
+
 // SessionStart hooks must output valid JSON
 const lines = [];
 if (sessionId) {
@@ -109,4 +147,6 @@ if (sessionId) {
     lines.push(`Inherited workflow steps from session ${inheritedFromSessionId} (cwd+branch match)`);
   }
 }
-console.log(JSON.stringify(lines.length ? { additionalContext: lines.join("\n") } : {}));
+lines.push("");
+lines.push(buildWorkflowStatus(sessionId));
+console.log(JSON.stringify({ additionalContext: lines.join("\n") }));

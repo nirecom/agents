@@ -44,8 +44,9 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 
 ## Completion
 
-After completing this skill, stage the updated doc files:
-`git add docs/ README.md`
-(If the project has no `README.md`, omit it — `git add` on a non-existent path errors.)
-The commit gate detects staged docs/ or root `*.md` changes as evidence of completion.
-Docs updates are mandatory for every task — there is no skip path.
+After completing this skill:
+1. Stage the updated doc files: `git add docs/ README.md`
+   (If the project has no `README.md`, omit it — `git add` on a non-existent path errors.)
+   The commit gate detects staged docs/ or root `*.md` changes as evidence of completion.
+   Docs updates are mandatory for every task — there is no skip path.
+2. Wait for the user to verify the changes, then run `echo "<<WORKFLOW_USER_VERIFIED>>"` and invoke `commit-push` via the Skill tool.

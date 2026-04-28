@@ -18,6 +18,7 @@ const {
   markStep,
   createInitialState,
   writeState,
+  nextStepHint,
 } = require("./lib/workflow-state");
 
 function readStdin() {
@@ -195,6 +196,8 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("research");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. research NOT recorded.`
@@ -231,6 +234,8 @@ for (const cmd of sentinelParts) {
     try {
       markStep(sessionId, "plan", "skipped", { skip_reason: v.reason });
       markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("plan");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. plan NOT recorded.`
@@ -266,6 +271,8 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("write_tests");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. write_tests NOT recorded.`
@@ -301,6 +308,8 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "review_security", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("review_security");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. review_security NOT recorded.`
@@ -329,6 +338,8 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "clarify_intent", "complete");
+      const hint = nextStepHint("clarify_intent");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
@@ -364,6 +375,8 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "branching_decision", "complete", { decision: v.reason });
+      const hint = nextStepHint("branching_decision");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. branching_decision NOT recorded.`
@@ -383,6 +396,8 @@ for (const cmd of sentinelParts) {
     }
     try {
       markStep(sessionId, "user_verification", "complete");
+      const hint = nextStepHint("user_verification");
+      if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. user_verification NOT recorded.`
@@ -440,6 +455,10 @@ for (const cmd of sentinelParts) {
 
     try {
       markStep(sessionId, stepName, status);
+      if (status === "complete" || status === "skipped") {
+        const hint = nextStepHint(stepName);
+        if (hint) messages.push(hint);
+      }
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
