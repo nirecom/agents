@@ -54,9 +54,10 @@ The `plan` step separates *what* from *how* via three sequential skills:
 `/clarify-intent` interviews the user to lock in requirements and non-goals;
 `/design-approach` runs approach-designer + approach-reviewer subagents to surface
 2–3 mutually-exclusive high-level directions (file paths and step sequences explicitly
-forbidden — direction only); `/make-detail-plan` runs the planner/reviewer
-implementation-plan loop seeded with the agreed intent and approach.
-Copilot falls back to the legacy `/make-plan` single-pass prompt.
+forbidden — direction only); `/make-detail-plan` runs the planner/reviewer loop seeded with the agreed intent and approach;
+each round, Codex reviews the draft first via `review-plan-codex` — Claude's `reviewer` subagent
+serves as fallback when Codex is unavailable (SKIPPED/FAILED), with a visible fallback message.
+`/design-approach` uses the same codex-first pattern with `--format approach`.
 
 ### TDD via subagent isolation
 
@@ -85,7 +86,8 @@ skills/            — slash commands (/clarify-intent, /design-approach, /make-
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, approach-designer, approach-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, and other tools
+bin/lib/           — shared bash libraries (codex-core.sh)
 install/
   win/             — Windows-specific install subscripts
   linux/           — Linux/macOS install subscripts
