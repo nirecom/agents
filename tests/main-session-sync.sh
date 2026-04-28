@@ -785,6 +785,224 @@ else
 fi
 
 echo ""
+echo "=== plans sync tests ==="
+
+# Independent environment for plans sync tests (PLANS_* prefix to avoid collisions)
+PLANS_REMOTE="$TMPDIR_BASE/plans-remote.git"
+PLANS_HOME="$TMPDIR_BASE/plans-home"
+PLANS_CLAUDE="$PLANS_HOME/.claude"
+PLANS_PROJECTS="$PLANS_CLAUDE/projects"
+git init --bare "$PLANS_REMOTE" >/dev/null 2>&1
+mkdir -p "$PLANS_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_CLAUDE" --remote-url "$PLANS_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_PROJECTS"
+git -C "$PLANS_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$PLANS_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$PLANS_PROJECTS" push -u origin main >/dev/null 2>&1
+
+# --- Normal: Push copies plans to projects/plans/ ---
+echo "[plans] Push copies plans to projects/plans/"
+mkdir -p "$PLANS_CLAUDE/plans"
+echo "intent content" > "$PLANS_CLAUDE/plans/abc-intent.md"
+output=$("$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$PLANS_CLAUDE" 2>&1) || true
+if [ -f "$PLANS_PROJECTS/plans/abc-intent.md" ]; then
+    pass "push copies plans/abc-intent.md to projects/plans/"
+else
+    fail "push did not copy plans/abc-intent.md (output: $output)"
+fi
+
+# --- Edge: Push when plans dir absent ---
+echo "[plans] Push when plans dir absent"
+PLANS_NOPLANS_REMOTE="$TMPDIR_BASE/plans-noplans-remote.git"
+PLANS_NOPLANS_CLAUDE="$TMPDIR_BASE/plans-noplans/.claude"
+PLANS_NOPLANS_PROJECTS="$PLANS_NOPLANS_CLAUDE/projects"
+git init --bare "$PLANS_NOPLANS_REMOTE" >/dev/null 2>&1
+mkdir -p "$PLANS_NOPLANS_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_NOPLANS_CLAUDE" --remote-url "$PLANS_NOPLANS_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_NOPLANS_PROJECTS"
+git -C "$PLANS_NOPLANS_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$PLANS_NOPLANS_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$PLANS_NOPLANS_PROJECTS" push -u origin main >/dev/null 2>&1
+# Add a file so push has something to do
+echo '{"trigger":"push"}' > "$PLANS_NOPLANS_PROJECTS/trigger.jsonl"
+exit_code=0
+output=$("$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$PLANS_NOPLANS_CLAUDE" 2>&1) || exit_code=$?
+if [ $exit_code -eq 0 ]; then
+    pass "push without plans dir succeeds (no error)"
+else
+    fail "push without plans dir returned non-zero exit ($exit_code, output: $output)"
+fi
+
+# --- Normal: Pull merges plans into ~/.claude/plans/ ---
+echo "[plans] Pull merges plans into ~/.claude/plans/"
+PLANS_PULL_REMOTE="$TMPDIR_BASE/plans-pull-remote.git"
+PLANS_PULL_CLAUDE="$TMPDIR_BASE/plans-pull/.claude"
+PLANS_PULL_PROJECTS="$PLANS_PULL_CLAUDE/projects"
+git init --bare "$PLANS_PULL_REMOTE" >/dev/null 2>&1
+# Seed remote with plans/remote-plan.md
+PLANS_PULL_SEED="$TMPDIR_BASE/plans-pull-seed"
+git clone "$PLANS_PULL_REMOTE" "$PLANS_PULL_SEED" >/dev/null 2>&1
+_git_config_user "$PLANS_PULL_SEED"
+git -C "$PLANS_PULL_SEED" checkout -b main >/dev/null 2>&1 || true
+printf '* text eol=lf\n' > "$PLANS_PULL_SEED/.gitattributes"
+mkdir -p "$PLANS_PULL_SEED/plans"
+echo "remote plan content" > "$PLANS_PULL_SEED/plans/remote-plan.md"
+git -C "$PLANS_PULL_SEED" add . >/dev/null 2>&1
+git -C "$PLANS_PULL_SEED" commit -m "seed plans" >/dev/null 2>&1
+git -C "$PLANS_PULL_SEED" push -u origin main >/dev/null 2>&1
+# Init local as clone from seeded remote (provides tracking info for git pull --rebase)
+mkdir -p "$PLANS_PULL_CLAUDE"
+git clone "$PLANS_PULL_REMOTE" "$PLANS_PULL_PROJECTS" >/dev/null 2>&1
+_git_config_user "$PLANS_PULL_PROJECTS"
+git -C "$PLANS_PULL_PROJECTS" config core.hooksPath /dev/null >/dev/null 2>&1
+mkdir -p "$PLANS_PULL_CLAUDE/plans"
+echo "local plan content" > "$PLANS_PULL_CLAUDE/plans/local-plan.md"
+output=$("$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$PLANS_PULL_CLAUDE" 2>&1) || true
+if [ -f "$PLANS_PULL_CLAUDE/plans/remote-plan.md" ]; then
+    pass "pull merges remote plan into local plans/"
+else
+    fail "pull did not place remote plan in local plans/ (output: $output)"
+fi
+if [ -f "$PLANS_PULL_CLAUDE/plans/local-plan.md" ]; then
+    pass "pull preserves local-only plan"
+else
+    fail "pull removed local-only plan"
+fi
+
+# --- Edge: Pull when local plans dir absent ---
+echo "[plans] Pull when local plans dir absent"
+PLANS_PULL2_REMOTE="$TMPDIR_BASE/plans-pull2-remote.git"
+PLANS_PULL2_CLAUDE="$TMPDIR_BASE/plans-pull2/.claude"
+PLANS_PULL2_PROJECTS="$PLANS_PULL2_CLAUDE/projects"
+git init --bare "$PLANS_PULL2_REMOTE" >/dev/null 2>&1
+PLANS_PULL2_SEED="$TMPDIR_BASE/plans-pull2-seed"
+git clone "$PLANS_PULL2_REMOTE" "$PLANS_PULL2_SEED" >/dev/null 2>&1
+_git_config_user "$PLANS_PULL2_SEED"
+git -C "$PLANS_PULL2_SEED" checkout -b main >/dev/null 2>&1 || true
+printf '* text eol=lf\n' > "$PLANS_PULL2_SEED/.gitattributes"
+mkdir -p "$PLANS_PULL2_SEED/plans"
+echo "remote only plan" > "$PLANS_PULL2_SEED/plans/remote-only.md"
+git -C "$PLANS_PULL2_SEED" add . >/dev/null 2>&1
+git -C "$PLANS_PULL2_SEED" commit -m "seed plans" >/dev/null 2>&1
+git -C "$PLANS_PULL2_SEED" push -u origin main >/dev/null 2>&1
+# Init local as clone from seeded remote (provides tracking info for git pull --rebase)
+mkdir -p "$PLANS_PULL2_CLAUDE"
+git clone "$PLANS_PULL2_REMOTE" "$PLANS_PULL2_PROJECTS" >/dev/null 2>&1
+_git_config_user "$PLANS_PULL2_PROJECTS"
+git -C "$PLANS_PULL2_PROJECTS" config core.hooksPath /dev/null >/dev/null 2>&1
+# Make sure local plans dir does NOT exist
+rm -rf "$PLANS_PULL2_CLAUDE/plans"
+output=$("$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$PLANS_PULL2_CLAUDE" 2>&1) || true
+if [ -f "$PLANS_PULL2_CLAUDE/plans/remote-only.md" ]; then
+    pass "pull creates local plans/ from remote when absent"
+else
+    fail "pull did not create local plans/ from remote (output: $output)"
+fi
+
+# --- Edge: Pull when remote has no plans ---
+echo "[plans] Pull when remote has no plans"
+PLANS_PULL3_REMOTE="$TMPDIR_BASE/plans-pull3-remote.git"
+PLANS_PULL3_CLAUDE="$TMPDIR_BASE/plans-pull3/.claude"
+PLANS_PULL3_PROJECTS="$PLANS_PULL3_CLAUDE/projects"
+git init --bare "$PLANS_PULL3_REMOTE" >/dev/null 2>&1
+mkdir -p "$PLANS_PULL3_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_PULL3_CLAUDE" --remote-url "$PLANS_PULL3_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_PULL3_PROJECTS"
+git -C "$PLANS_PULL3_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$PLANS_PULL3_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$PLANS_PULL3_PROJECTS" push -u origin main >/dev/null 2>&1
+mkdir -p "$PLANS_PULL3_CLAUDE/plans"
+echo "local only" > "$PLANS_PULL3_CLAUDE/plans/local-only.md"
+exit_code=0
+output=$("$DOTFILES_DIR/bin/session-sync.sh" pull --claude-dir "$PLANS_PULL3_CLAUDE" 2>&1) || exit_code=$?
+if [ $exit_code -eq 0 ]; then
+    pass "pull without remote plans succeeds"
+else
+    fail "pull without remote plans returned non-zero exit ($exit_code, output: $output)"
+fi
+if [ -f "$PLANS_PULL3_CLAUDE/plans/local-only.md" ]; then
+    pass "pull preserves local-only plan when remote has no plans"
+else
+    fail "pull removed local-only plan when remote has no plans"
+fi
+
+# --- Normal: Reset merges plans ---
+echo "[plans] Reset merges plans"
+PLANS_RESET_REMOTE="$TMPDIR_BASE/plans-reset-remote.git"
+PLANS_RESET_CLAUDE="$TMPDIR_BASE/plans-reset/.claude"
+PLANS_RESET_PROJECTS="$PLANS_RESET_CLAUDE/projects"
+git init --bare "$PLANS_RESET_REMOTE" >/dev/null 2>&1
+PLANS_RESET_SEED="$TMPDIR_BASE/plans-reset-seed"
+git clone "$PLANS_RESET_REMOTE" "$PLANS_RESET_SEED" >/dev/null 2>&1
+_git_config_user "$PLANS_RESET_SEED"
+git -C "$PLANS_RESET_SEED" checkout -b main >/dev/null 2>&1 || true
+printf '* text eol=lf\n' > "$PLANS_RESET_SEED/.gitattributes"
+mkdir -p "$PLANS_RESET_SEED/plans"
+echo "seed plan" > "$PLANS_RESET_SEED/plans/seed.md"
+git -C "$PLANS_RESET_SEED" add . >/dev/null 2>&1
+git -C "$PLANS_RESET_SEED" commit -m "seed plans" >/dev/null 2>&1
+git -C "$PLANS_RESET_SEED" push -u origin main >/dev/null 2>&1
+mkdir -p "$PLANS_RESET_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_RESET_CLAUDE" --remote-url "$PLANS_RESET_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_RESET_PROJECTS"
+output=$("$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$PLANS_RESET_CLAUDE" 2>&1) || true
+if [ -f "$PLANS_RESET_CLAUDE/plans/seed.md" ]; then
+    pass "reset merges remote plan into local plans/"
+else
+    fail "reset did not merge remote plan (output: $output)"
+fi
+
+# --- Normal: Push includes plans in git commit ---
+echo "[plans] Push includes plans in git commit"
+PLANS_COMMIT_REMOTE="$TMPDIR_BASE/plans-commit-remote.git"
+PLANS_COMMIT_CLAUDE="$TMPDIR_BASE/plans-commit/.claude"
+PLANS_COMMIT_PROJECTS="$PLANS_COMMIT_CLAUDE/projects"
+git init --bare "$PLANS_COMMIT_REMOTE" >/dev/null 2>&1
+mkdir -p "$PLANS_COMMIT_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_COMMIT_CLAUDE" --remote-url "$PLANS_COMMIT_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_COMMIT_PROJECTS"
+git -C "$PLANS_COMMIT_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$PLANS_COMMIT_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$PLANS_COMMIT_PROJECTS" push -u origin main >/dev/null 2>&1
+mkdir -p "$PLANS_COMMIT_CLAUDE/plans"
+echo "commit plan content" > "$PLANS_COMMIT_CLAUDE/plans/commit-plan.md"
+"$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$PLANS_COMMIT_CLAUDE" >/dev/null 2>&1 || true
+last_files=$(git -C "$PLANS_COMMIT_PROJECTS" log -1 --name-only --pretty=format: 2>/dev/null | grep -v '^$' || true)
+if echo "$last_files" | grep -q "plans/commit-plan.md"; then
+    pass "push includes plans/commit-plan.md in commit"
+else
+    fail "push commit does not include plans file (files: $last_files)"
+fi
+
+# --- Idempotency: Push twice reports no changes ---
+echo "[plans] Push twice reports no changes"
+PLANS_IDEM_REMOTE="$TMPDIR_BASE/plans-idem-remote.git"
+PLANS_IDEM_CLAUDE="$TMPDIR_BASE/plans-idem/.claude"
+PLANS_IDEM_PROJECTS="$PLANS_IDEM_CLAUDE/projects"
+git init --bare "$PLANS_IDEM_REMOTE" >/dev/null 2>&1
+mkdir -p "$PLANS_IDEM_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_IDEM_CLAUDE" --remote-url "$PLANS_IDEM_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_IDEM_PROJECTS"
+git -C "$PLANS_IDEM_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$PLANS_IDEM_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$PLANS_IDEM_PROJECTS" push -u origin main >/dev/null 2>&1
+mkdir -p "$PLANS_IDEM_CLAUDE/plans"
+echo "stable plan" > "$PLANS_IDEM_CLAUDE/plans/idem-plan.md"
+"$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$PLANS_IDEM_CLAUDE" >/dev/null 2>&1 || true
+output2=$("$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$PLANS_IDEM_CLAUDE" 2>&1) || true
+if echo "$output2" | grep -qi "no changes"; then
+    pass "second push with unchanged plans reports no changes"
+else
+    fail "second push with unchanged plans did not report no changes (output: $output2)"
+fi
+
+echo ""
 echo "=== Results ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
