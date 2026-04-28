@@ -61,6 +61,8 @@ Write the file in Japanese (per `rules/language.md`) with the following sections
 
 ## Completion
 
-After this skill, run:
-`echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
-(This marks the `clarify_intent` workflow step complete.)
+After this skill:
+1. Run: `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"` (hook will return the next-step hint)
+2. Invoke `survey-code` or `deep-research` via the Skill tool if needed
+   (or skip with `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`), then invoke `make-outline-plan`.
+   See `rules/plan-skip.md` for skip conditions.

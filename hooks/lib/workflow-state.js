@@ -245,10 +245,34 @@ function cleanupZombies(maxAgeDays = 7) {
   }
 }
 
+// Describes how to complete each step. Used two ways:
+//   session-start: STEP_HINT[pendingStep]       → "do this step now"
+//   workflow-mark: STEP_HINT[VALID_STEPS[i+1]]  → "do the next step" (offset by 1)
+const STEP_HINT = {
+  clarify_intent:     "Invoke `clarify-intent` via the Skill tool.",
+  research:           "Invoke `survey-code` or `deep-research` (or skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>\"), then invoke `make-outline-plan`.",
+  plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
+  branching_decision: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_DECIDED: <decision>>\".",
+  write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
+  run_tests:          "Run the test suite via Bash.",
+  review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
+  docs:               "Invoke `update-docs`.",
+  user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED>>\", then invoke `commit-push`.",
+};
+
+// After stepName completes, return the hint for the next step (offset by 1).
+function nextStepHint(stepName) {
+  const nextStep = VALID_STEPS[VALID_STEPS.indexOf(stepName) + 1];
+  const hint = nextStep && STEP_HINT[nextStep];
+  return hint ? `[workflow] ${hint}` : null;
+}
+
 module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   VALID_STATUSES,
+  STEP_HINT,
+  nextStepHint,
   resolveSessionId,
   readState,
   writeState,
