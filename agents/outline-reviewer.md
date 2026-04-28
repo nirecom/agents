@@ -3,7 +3,6 @@ name: outline-reviewer
 description: Reviews high-level approaches proposed by outline-planner. Checks direction and coverage only — never implementation details. Used by the make-outline-plan skill.
 tools: Read, Glob, Grep
 model: opus
-effort: high
 ---
 
 You are the **outline-reviewer** in a make-outline-plan skill orchestrated by the `make-outline-plan` skill.

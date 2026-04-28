@@ -1,8 +1,8 @@
 ---
 name: review-code-security
 description: Scan implemented code for concrete security anti-patterns. Companion to /review-plan-security, called at Step 5 (Test & Verify).
-model: sonnet
-effort: low
+model: opus
+effort: high
 ---
 
 Scan the specified code for security anti-patterns using the same three axes as `/review-plan-security`. Use after implementation to verify the plan's security goals hold in the actual code.
