@@ -6,6 +6,14 @@ set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+if [ -z "${C_RESET+x}" ]; then
+    if [ -t 1 ]; then
+        C_GREEN='\033[0;32m'; C_YELLOW='\033[0;33m'; C_GRAY='\033[0;90m'; C_RESET='\033[0m'
+    else
+        C_GREEN=''; C_YELLOW=''; C_GRAY=''; C_RESET=''
+    fi
+fi
+
 # --- ~/.claude/ symlinks ---
 mkdir -p ~/.claude
 
@@ -14,13 +22,13 @@ if [ -d ~/.claude/.git ]; then
 else
     for dir in skills rules agents; do
         if [ -d ~/.claude/$dir ] && [ ! -L ~/.claude/$dir ]; then
-            echo "Backing up ~/.claude/$dir -> ~/.claude/$dir.bak"
+            printf "${C_YELLOW}Backing up ~/.claude/$dir -> ~/.claude/$dir.bak${C_RESET}\n"
             rm -rf ~/.claude/$dir.bak
             mv ~/.claude/$dir ~/.claude/$dir.bak
         fi
     done
     if [ -L ~/.claude/commands ]; then
-        echo "Removing obsolete symlink: ~/.claude/commands"
+        printf "${C_YELLOW}Removing obsolete symlink: ~/.claude/commands${C_RESET}\n"
         rm -f ~/.claude/commands
     fi
     ln -sf "$AGENTS_ROOT/CLAUDE.md" ~/.claude/
@@ -28,12 +36,12 @@ else
     ln -snf "$AGENTS_ROOT/skills" ~/.claude/skills
     ln -snf "$AGENTS_ROOT/rules" ~/.claude/rules
     ln -snf "$AGENTS_ROOT/agents" ~/.claude/agents
-    echo "Symlinks created in ~/.claude/"
+    printf "${C_GREEN}Symlinks created in ~/.claude/${C_RESET}\n"
 fi
 
 # --- git core.hooksPath ---
 git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
-echo "core.hooksPath -> $AGENTS_ROOT/hooks"
+printf "${C_GREEN}core.hooksPath -> $AGENTS_ROOT/hooks${C_RESET}\n"
 
 # --- ~/.local/bin/doc-append launcher ---
 mkdir -p ~/.local/bin
@@ -60,4 +68,4 @@ else
 fi
 EOF
 chmod +x ~/.local/bin/doc-append
-echo "Generated: ~/.local/bin/doc-append"
+printf "${C_GREEN}Generated: ~/.local/bin/doc-append${C_RESET}\n"
