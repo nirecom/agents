@@ -52,12 +52,12 @@ second-provider opinion independent of Claude's model-specific biases.
 
 The `plan` step separates *what* from *how* via three sequential skills:
 `/clarify-intent` interviews the user to lock in requirements and non-goals;
-`/design-approach` runs approach-designer + approach-reviewer subagents to surface
+`/make-outline-plan` runs outline-planner + outline-reviewer subagents to surface
 2–3 mutually-exclusive high-level directions (file paths and step sequences explicitly
 forbidden — direction only); `/make-detail-plan` runs the planner/reviewer loop seeded with the agreed intent and approach;
 each round, Codex reviews the draft first via `review-plan-codex` — Claude's `reviewer` subagent
 serves as fallback when Codex is unavailable (SKIPPED/FAILED), with a visible fallback message.
-`/design-approach` uses the same codex-first pattern with `--format approach`.
+`/make-outline-plan` uses the same codex-first pattern with `--format outline-plan`.
 
 ### TDD via subagent isolation
 
@@ -82,10 +82,10 @@ See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full de
 CLAUDE.md          — global instructions (Claude Code + Copilot)
 settings.json      — hooks, permissions, model, and effort-level configuration
 rules/             — coding, testing, docs, git, and security conventions
-skills/            — slash commands (/clarify-intent, /design-approach, /make-detail-plan, /write-tests, …) for Claude Code and Copilot
+skills/            — slash commands (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests, …) for Claude Code and Copilot
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
-agents/            — agent definition files (planner, reviewer, approach-designer, approach-reviewer) — Claude Code only
+agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
 bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, and other tools
 bin/lib/           — shared bash libraries (codex-core.sh)
 install/
