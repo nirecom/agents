@@ -56,6 +56,11 @@ case "$ACTION" in
         fi
         # Copy history.jsonl into sync area
         cp "$CLAUDE_DIR/history.jsonl" "$PROJECTS_DIR/.history.jsonl" 2>/dev/null || true
+        # Copy plans into sync area
+        if [ -d "$CLAUDE_DIR/plans" ]; then
+            mkdir -p "$PROJECTS_DIR/plans"
+            cp "$CLAUDE_DIR/plans/"* "$PROJECTS_DIR/plans/" 2>/dev/null || true
+        fi
         git -C "$PROJECTS_DIR" add .
         _local_changes=$(git -C "$PROJECTS_DIR" status --porcelain)
         _unpushed=$(git -C "$PROJECTS_DIR" log origin/main..HEAD --oneline 2>/dev/null || true)
@@ -131,6 +136,11 @@ case "$ACTION" in
             fi | awk '!seen[$0]++' > "$CLAUDE_DIR/history.jsonl.tmp"
             mv "$CLAUDE_DIR/history.jsonl.tmp" "$CLAUDE_DIR/history.jsonl"
         fi
+        # Merge plans from remote into local
+        if [ -d "$PROJECTS_DIR/plans" ]; then
+            mkdir -p "$CLAUDE_DIR/plans"
+            cp "$PROJECTS_DIR/plans/"* "$CLAUDE_DIR/plans/" 2>/dev/null || true
+        fi
         echo "Pulled session data."
         ;;
     status)
@@ -153,6 +163,11 @@ case "$ACTION" in
                 cat "$PROJECTS_DIR/.history.jsonl"
             fi | awk '!seen[$0]++' > "$CLAUDE_DIR/history.jsonl.tmp"
             mv "$CLAUDE_DIR/history.jsonl.tmp" "$CLAUDE_DIR/history.jsonl"
+        fi
+        # Merge plans from remote into local
+        if [ -d "$PROJECTS_DIR/plans" ]; then
+            mkdir -p "$CLAUDE_DIR/plans"
+            cp "$PROJECTS_DIR/plans/"* "$CLAUDE_DIR/plans/" 2>/dev/null || true
         fi
         echo "Reset to remote state."
         ;;
