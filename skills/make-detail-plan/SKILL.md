@@ -19,9 +19,21 @@ See `rules/plan-skip.md` for skip conditions (single-file AND no design decision
 
 2. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: planner`).
    Pass the full task context **plus** the contents of the intent/approach files above.
-3. Pass the planner's draft to the **reviewer** subagent (`subagent_type: reviewer`).
-4. If the reviewer returns `NEEDS_REVISION`, send the concerns back to the planner for revision, then re-review. Repeat.
-5. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
+3. **Review the draft with codex first, fall back to Claude if unavailable.**
+   For each review round:
+   a. Write the planner's draft to `~/.claude/plans/<session-id>-detail-draft.md`.
+   b. Run via Bash: `review-plan-codex --input ~/.claude/plans/<session-id>-detail-draft.md --format detail-plan`
+   c. Parse the first line of stdout:
+      - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
+        Extract the first non-blank line as the verdict token.
+        - `APPROVED` → loop done, proceed to step 6.
+        - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
+        - Anything else → **format malformed**.
+      - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
+      - **Format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `reviewer` subagent.
+      - **Codex unavailable**: emit `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.` then launch `reviewer` subagent.
+   d. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision, then repeat from step 3a. Each round consumes `revision_rounds`.
+4. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
    2. **The planner's current plan** — paste or closely summarize. The user cannot see subagent output, so this is their only way to understand what has been designed.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
