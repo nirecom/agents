@@ -23,6 +23,8 @@ If documentation is missing or the commit hook blocks due to missing documentati
 
 Each git command (add, commit, push) must be a **separate Bash call** per `rules/git.md`.
 
+`settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
+
 ## Rules
 
 - Follow all existing commit and push rules
