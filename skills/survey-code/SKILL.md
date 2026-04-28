@@ -2,7 +2,6 @@
 name: survey-code
 description: Explore the codebase to understand existing patterns, constraints, and relevant files before planning.
 model: sonnet
-effort: low
 ---
 
 Investigate the codebase related to the given task.
