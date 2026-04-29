@@ -459,3 +459,7 @@ Changes: model: sonnet — clarify-intent, make-outline-plan (orch), make-detail
 ### FEATURE: document plan mode incompatibility (2026-04-29, pending)
 Background: Plan mode restricts Skill tool invocations, causing the mandatory workflow to be silently skipped. A SessionStart hook approach was investigated but hook additionalContext is not surfaced to Claude in plan mode, making it ineffective.
 Changes: Added plan mode incompatibility notes to README.md (before Docs-only short-circuit bullet) and CLAUDE.md (new section before Docs-only Short-circuit).
+
+### BUGFIX: Fix cleanup STEP_HINT sentinel format (2026-04-29, pending)
+Background: STEP_HINT for cleanup used ':main' suffix in the sentinel, not matched by workflow-mark.js regex (WORKFLOW_MARK_STEP_cleanup_skipped: main).
+Changes: Corrected to echo '<<WORKFLOW_MARK_STEP_cleanup_skipped>>' without suffix.
