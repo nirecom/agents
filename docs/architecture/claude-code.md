@@ -2,7 +2,7 @@
 
 ## 1. Workflow State Machine
 
-All 7 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
+All 10 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
 time by a PreToolUse hook.
 
 ### State file
@@ -23,7 +23,8 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
     "run_tests":         { "status": "complete", "updated_at": "..." },
     "review_security":   { "status": "complete", "updated_at": "..." },
     "docs":              { "status": "complete", "updated_at": "..." },
-    "user_verification": { "status": "complete", "updated_at": "..." }
+    "user_verification": { "status": "complete", "updated_at": "..." },
+    "cleanup":           { "status": "skipped",  "updated_at": "..." }
   }
 }
 ```
@@ -32,7 +33,7 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
 `git_branch` is `null` for non-git directories and detached HEAD.
 
 Statuses: `pending` | `in_progress` | `complete` | `skipped`
-- `skipped`: allowed for `research`, `plan`, `write_tests`, and `review_security`
+- `skipped`: allowed for `research`, `plan`, `write_tests`, `review_security`, and `cleanup`
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
 
 ### Steps and owners
@@ -48,6 +49,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 | `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
 | `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED>>"` — triggers `ask` permission dialog; user must approve |
+| `cleanup` | `/worktree-end` skill (worktree path), or branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
 
 `write_tests` and `docs` accept evidence-based completion: at commit time, `workflow-gate.js`
 checks `git diff --cached --name-only` and treats staged test/doc files as proof of completion,
@@ -242,7 +244,7 @@ bulk-deleted; most had directory versions with no data loss. One-time event.
 - `scan-outbound.js` (PreToolUse, matcher: `Bash`) — scans commands for private info patterns
 - `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
-- `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 7 workflow steps before
+- `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
   for `write_tests` (staged `tests/` files) and `docs` (staged `*.md` files).
@@ -265,8 +267,14 @@ bulk-deleted; most had directory versions with no data loss. One-time event.
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see Session
   ID flow); otherwise creates fresh state; outputs `additionalContext` containing session_id,
-  all 9 step statuses, and a `NEXT ACTION:` line pointing to the next pending skill; runs
+  all 10 step statuses, and a `NEXT ACTION:` line pointing to the next pending skill; runs
   zombie cleanup
+- `stop-cleanup-reminder.js` (Stop) — fires after every Claude response turn; if
+  `user_verification` is complete and `cleanup` is still pending, outputs
+  `{"decision":"block","reason":"..."}` (exit 2) to remind Claude about step 10 (worktree-end
+  or branch deletion). Silent (exit 0) for main path or when cleanup is already done.
+  Reads `session_id` from stdin (provided by Claude Code) as fallback when `CLAUDE_ENV_FILE`
+  is unavailable. Guards against infinite loops via `stop_hook_active` check.
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
 - `check-cross-platform.js` (PreToolUse, matcher: `Bash`) — blocks `git commit` when
