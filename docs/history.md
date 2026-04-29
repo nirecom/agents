@@ -462,4 +462,8 @@ Changes: Added plan mode incompatibility notes to README.md (before Docs-only sh
 
 ### BUGFIX: Fix cleanup STEP_HINT sentinel format (2026-04-29, pending)
 Background: STEP_HINT for cleanup used ':main' suffix in the sentinel, not matched by workflow-mark.js regex (WORKFLOW_MARK_STEP_cleanup_skipped: main).
-Changes: Corrected to echo '<<WORKFLOW_MARK_STEP_cleanup_skipped>>' without suffix.
+Changes: Corrected to echo '<<WORKFLOW_MARK_STEP_cleanup_skipped>>' without suffix.
+
+### FEATURE: Add show-diff.js: display-only PreToolUse hook for code diffs (2026-04-29, pending)
+Background: require-diff-approval.js was a blocking PreToolUse hook requiring /tmp/diff-approved-<HASH> token files before each Edit/Write. It was never registered in settings.json so diff display never worked, causing frequent incidents where code changes were made without showing diffs in chat.
+Changes: Replaced require-diff-approval.js with show-diff.js: a display-only PreToolUse hook that outputs systemMessage with diff preview (no decision field, no blocking). Registered in ~/.claude/settings.json PreToolUse with timeout 10.
