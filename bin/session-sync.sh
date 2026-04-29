@@ -70,7 +70,7 @@ case "$ACTION" in
         fi
         if [ -n "$_local_changes" ]; then
             timestamp=$(date "+%Y-%m-%d %H:%M")
-            git -C "$PROJECTS_DIR" commit -q -m "sync: $(hostname -s) $timestamp"
+            git -C "$PROJECTS_DIR" commit -q -m "sync: $(hostname -s) $timestamp" >/dev/null
         fi
         # Retry loop: handles simultaneous push race (e.g. Windows + macOS committing at the same time)
         _push_ok=0
@@ -126,7 +126,7 @@ case "$ACTION" in
         fi
         ;;
     pull)
-        git -C "$PROJECTS_DIR" pull --rebase 2>&1 | grep -Ev '^\s*(create|delete) mode '; [ "${PIPESTATUS[0]}" -eq 0 ]
+        git -C "$PROJECTS_DIR" pull --rebase 2>&1 | grep -Ev '^[[:space:]]*(create|delete) mode '; [ "${PIPESTATUS[0]}" -eq 0 ]
         # Merge remote history with local (dedup, preserve order)
         if [ -f "$PROJECTS_DIR/.history.jsonl" ]; then
             if [ -f "$CLAUDE_DIR/history.jsonl" ]; then
