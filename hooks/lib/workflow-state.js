@@ -262,7 +262,7 @@ const STEP_HINT = {
   review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
   docs:               "Invoke `update-docs`.",
   user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED>>\", then invoke `commit-push`.",
-  cleanup:            "Run `/worktree-end` (worktree), or delete the branch after PR merge (branch), or skip: echo \"<<WORKFLOW_MARK_STEP_cleanup_skipped: main>>\".",
+  cleanup:            "Run `/worktree-end` (worktree), or delete the branch after PR merge (branch), or skip (main): echo \"<<WORKFLOW_MARK_STEP_cleanup_skipped>>\".",
 };
 
 // After stepName completes, return the hint for the next step (offset by 1).
