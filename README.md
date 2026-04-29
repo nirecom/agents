@@ -20,6 +20,11 @@ blocks `git commit` until every required step completes or is explicitly skipped
   satisfies the corresponding steps — no manual marker required.
 - **State inheritance**: after context compaction or a fresh session on the same cwd+branch,
   prior workflow state is inherited so progress is not lost.
+
+> **Note**: `--permission-mode plan` is incompatible with this workflow. In plan mode the
+> Skill tool is restricted, so skills such as `/clarify-intent` and `/make-outline-plan`
+> cannot be invoked. Always use default mode for implementation tasks.
+
 - **Docs-only short-circuit**: commits that only touch human-facing documentation bypass
   steps 1–6 automatically.
 

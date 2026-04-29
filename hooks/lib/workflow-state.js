@@ -34,8 +34,9 @@ const VALID_STEPS = [
   "review_security",
   "docs",
   "user_verification",
+  "cleanup",
 ];
-const SKIPPABLE_STEPS = ["research", "plan", "write_tests", "review_security"];
+const SKIPPABLE_STEPS = ["research", "plan", "write_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
@@ -72,6 +73,9 @@ function readState(sessionId) {
       }
       if (!state.steps.branching_decision) {
         state.steps.branching_decision = { status: "complete", updated_at: null };
+      }
+      if (!state.steps.cleanup) {
+        state.steps.cleanup = { status: "pending", updated_at: null };
       }
     }
     return state;
@@ -258,6 +262,7 @@ const STEP_HINT = {
   review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
   docs:               "Invoke `update-docs`.",
   user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED>>\", then invoke `commit-push`.",
+  cleanup:            "Run `/worktree-end` (worktree), or delete the branch after PR merge (branch), or skip: echo \"<<WORKFLOW_MARK_STEP_cleanup_skipped: main>>\".",
 };
 
 // After stepName completes, return the hint for the next step (offset by 1).
