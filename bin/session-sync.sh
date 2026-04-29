@@ -82,7 +82,7 @@ case "$ACTION" in
                 git -C "$PROJECTS_DIR" commit -q -m "sync: $(hostname -s) $_ts2" 2>/dev/null || true
             fi
             if ! git -C "$PROJECTS_DIR" pull --rebase origin main >/dev/null 2>&1; then
-                # Auto-resolve JSONL conflicts: strip conflict markers and dedup
+                # Auto-resolve conflicts: non-JSONL (deleted by them) → git rm; JSONL → dedup
                 _conflicts=$(git -C "$PROJECTS_DIR" diff --name-only --diff-filter=U 2>/dev/null || true)
                 _resolved=0
                 for _f in $_conflicts; do
@@ -95,10 +95,15 @@ case "$ACTION" in
                             git -C "$PROJECTS_DIR" add "$_f" 2>/dev/null || true
                             _resolved=1
                             ;;
+                        *)
+                            git -C "$PROJECTS_DIR" rm "$_f" 2>/dev/null || true
+                            _resolved=1
+                            ;;
                     esac
                 done
                 if [ "$_resolved" = "1" ]; then
-                    GIT_EDITOR=true git -C "$PROJECTS_DIR" rebase --continue >/dev/null 2>&1 || true
+                    GIT_EDITOR=true git -C "$PROJECTS_DIR" rebase --continue >/dev/null 2>&1 \
+                        || git -C "$PROJECTS_DIR" rebase --abort 2>/dev/null || true
                 else
                     git -C "$PROJECTS_DIR" rebase --abort 2>/dev/null || true
                 fi
