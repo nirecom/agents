@@ -467,3 +467,7 @@ Changes: Corrected to echo '<<WORKFLOW_MARK_STEP_cleanup_skipped>>' without suff
 ### FEATURE: Add show-diff.js: display-only PreToolUse hook for code diffs (2026-04-29, pending)
 Background: require-diff-approval.js was a blocking PreToolUse hook requiring /tmp/diff-approved-<HASH> token files before each Edit/Write. It was never registered in settings.json so diff display never worked, causing frequent incidents where code changes were made without showing diffs in chat.
 Changes: Replaced require-diff-approval.js with show-diff.js: a display-only PreToolUse hook that outputs systemMessage with diff preview (no decision field, no blocking). Registered in ~/.claude/settings.json PreToolUse with timeout 10.
+
+### BUGFIX: fix: suppress create/delete mode output in session-sync on macOS (BSD grep compat) (2026-04-29)
+Background: macOS (BSD grep) does not support \s in ERE mode (-E flag). The pull action filter '^\s*(create|delete) mode ' used grep -Ev which silently failed to match on macOS, letting all create/delete mode lines through. Additionally, git commit -q on macOS can still emit create/delete mode lines to stdout when new files are staged.
+Changes: bin/session-sync.sh pull: replaced \s with [[:space:]] (POSIX character class, works on both BSD and GNU grep). bin/session-sync.sh push: added >/dev/null to initial commit to suppress stdout create/delete mode output on macOS git.
