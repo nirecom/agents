@@ -475,3 +475,7 @@ Changes: bin/session-sync.sh pull: replaced \s with [[:space:]] (POSIX character
 ### BUGFIX: session-sync push failure on UD conflict + hooksPath always applied (2026-04-29, pending)
 Background: session-sync push failed silently after 3 retries when rebase encountered a delete/modify conflict (file deleted by remote, still present locally). The case block only handled *.jsonl, leaving *.json workflow files unresolved → rebase --abort → push failure. Separately, session-sync-init only set core.hooksPath=/dev/null at first git init; if agents was reinstalled (writing ~/.gitconfig) without re-running session-sync-init, the projects repo inherited the agents hooks and blocked rebase --continue commits.
 Changes: bin/session-sync.sh: added *) catch-all to conflict case (git rm to accept remote deletion); rebase --continue now falls back to rebase --abort on failure. install/linux/session-sync-init.sh and install/win/session-sync-init.ps1: moved core.hooksPath setting outside the init-only block so it is always applied on every run.
+
+### CONFIG: settings: fix Write allow glob for intent-log.md (2026-04-29, pending)
+Background: Added a Write allow rule to settings.json to suppress the permission dialog when clarify-intent writes intent-log.md. The initial pattern ~/.claude/plans/*-intent-log.md did not match because tilde is not expanded to the full absolute path at match time.
+Changes: Changed allow rule to Write(**/.claude/plans/*-intent-log.md) so it matches the full absolute path.
