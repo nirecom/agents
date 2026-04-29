@@ -479,3 +479,11 @@ Changes: bin/session-sync.sh: added *) catch-all to conflict case (git rm to acc
 ### CONFIG: settings: fix Write allow glob for intent-log.md (2026-04-29, pending)
 Background: Added a Write allow rule to settings.json to suppress the permission dialog when clarify-intent writes intent-log.md. The initial pattern ~/.claude/plans/*-intent-log.md did not match because tilde is not expanded to the full absolute path at match time.
 Changes: Changed allow rule to Write(**/.claude/plans/*-intent-log.md) so it matches the full absolute path.
+
+### CONFIG: Move personal WebFetch domains to settings.local.json (2026-04-29, pending)
+Background: Some WebFetch domains in the settings.json allow list were personal-workflow-specific or framework-specific and not appropriate to keep in a public repo.
+Changes: Removed WebFetch(domain:ecc.tools), WebFetch(domain:langfuse.com), WebFetch(domain:docs.langchain.com), and WebFetch(domain:reference.langchain.com) from settings.json. These four entries are moved to settings.local.json (gitignored), whose source file lives in my-private-repo and is deployed via dotfileslink symlink.
+
+### CONFIG: settings: cover both intent-log.md filename formats in allow pattern (2026-04-29, pending)
+Background: Two filename formats exist for intent-log.md: UUID-based sessions produce <uuid>-intent-log.md, while the timestamp fallback produces intent-YYYYMMDD-HHMMSS-log.md. The previous fix (intent-*-log.md only) missed the UUID format.
+Changes: Added both Write(**/.claude/plans/*-intent-log.md) and Write(**/.claude/plans/intent-*-log.md) to cover both filename formats.
