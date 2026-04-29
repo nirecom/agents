@@ -22,14 +22,14 @@ Save research findings from the current conversation to a persistent research-re
    ```
    # <Title>
 
-   調査日: <YYYY-MM-DD>
-   調査動機: <why this research was needed — the question or decision it informed>
+   Date: <YYYY-MM-DD>
+   Motivation: <why this research was needed — the question or decision it informed>
 
-   ## 背景
+   ## Background
 
    <context that motivated the investigation>
 
-   ## 主要な研究結果
+   ## Key Findings
 
    ### 1. <Finding>
    <summary>
@@ -40,11 +40,11 @@ Save research findings from the current conversation to a persistent research-re
    ### 2. <Finding>
    ...
 
-   ## 適用分析
+   ## Applied Analysis
 
    <how findings apply to the project — tables, trade-offs, recommendations>
 
-   ## 結論
+   ## Conclusion
 
    <actionable conclusion with numbered rationale>
    ```
@@ -52,9 +52,16 @@ Save research findings from the current conversation to a persistent research-re
 5. **Wait for user approval** before writing the file.
 6. **Write the file** to `../my-specs-repo/projects/engineering/research-results/<slug>.md`.
 7. **Commit**: Run `git -C ../my-specs-repo add` and `git -C ../my-specs-repo commit` for the new file.
+   This commit is to a separate repository (my-specs-repo). It is NOT the main project commit
+   and must NOT trigger USER_VERIFIED or advance the calling workflow step.
+8. **Return to caller**: After the commit, explicitly state which workflow step to resume
+   (e.g., "save-research complete. Resuming Step 2a (research).") and do not mark
+   any workflow phase as complete.
 
 ## Rules
 
+- **Never set USER_VERIFIED after this skill** — this is an auxiliary tool called mid-workflow.
+  Completing save-research does not constitute completion of the calling workflow step.
 - Do not modify any files in the current project — output goes to my-specs-repo only
 - Always include source URLs for traceability (no URLs = not worth saving)
 - Content language: Japanese (my-specs-repo is a private repository)
