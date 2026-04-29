@@ -340,6 +340,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-diff.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-tests-direct.js\"",
             "timeout": 5
           }
