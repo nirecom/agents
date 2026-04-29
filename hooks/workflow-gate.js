@@ -10,6 +10,10 @@ const {
   SKIPPABLE_STEPS,
   readState,
 } = require("./lib/workflow-state");
+
+// Steps tracked by the workflow but not enforced at commit time.
+// The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
+const NON_GATE_STEPS = ["research"];
 const { parseGitCArg } = require("./lib/parse-git-args");
 
 // Evidence-based check: staged files contain tests/ changes
@@ -203,6 +207,7 @@ if (require.main === module) {
   // Check all steps
   const incomplete = [];
   for (const step of VALID_STEPS) {
+    if (NON_GATE_STEPS.includes(step)) continue;
     const stepState = state.steps && state.steps[step];
     const status = stepState ? stepState.status : "pending";
 
