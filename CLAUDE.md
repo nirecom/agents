@@ -35,6 +35,16 @@ Create the following as a TodoWrite checklist and work through each step in orde
 7. **Docs** — Run `/update-docs`. Mandatory for every task.
 8. **User verification** — Wait for the user to confirm the task is complete.
 9. **Commit** — Run `/commit-push`.
+10. **Cleanup** — Based on the step 3 decision:
+    - **worktree:** Run `/worktree-end` (merge + cleanup). Mandatory; do not skip.
+    - **branch:** Confirm PR is created. After the PR is merged (outside this session),
+      delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
+    - **main:** Skip.
+
+## Plan Mode Incompatibility
+
+`--permission-mode plan` is incompatible with this workflow — Skill tool invocations
+are restricted in that mode. Always use default mode for implementation tasks.
 
 ## Docs-only Short-circuit
 
