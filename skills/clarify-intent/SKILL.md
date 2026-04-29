@@ -64,9 +64,6 @@ Write two files in Japanese (per `rules/language.md`):
 
 ### `<session-id>-intent-log.md` — NOT passed downstream, for reference only
 
-Write this file silently — do NOT present its content to the user.
-If there is nothing meaningful to log (e.g., no interview was conducted), omit this file entirely.
-
 - **Title**: "Interview Log" + `<session-id>`
 - **Interview log**: each Q&A round recorded as "Q: ... A: ..."
 
