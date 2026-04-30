@@ -6,6 +6,7 @@ Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastruct
 
 | File | Role | Target size | Created |
 |------|------|-------------|---------|
+| `overview.md` | Highest-level description of a project or directory — vision, goals, and overall shape. Most abstract document in its location. | Compact | Large projects only |
 | `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`) | <300 lines (split into `architecture/` when exceeded) | Always |
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
 | `history.md` | Completed work with why (background, incidents, decisions) — append-only | <500 lines warn / <800 lines hard (rotate when exceeded) | On first completion |
@@ -13,7 +14,7 @@ Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastruct
 | `infrastructure.md` | **SSOT** for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. | Unlimited | Always (in `my-specs-repo`) |
 | `README.md` | Public-facing entry point — what it does, install, usage, configuration. For external users. | Compact | Public repos |
 
-Do not use `progress.md` or standalone `roadmap.md` — status tracking belongs in `todo.md`,
+Do not use standalone `roadmap.md` — status tracking belongs in `todo.md`,
 completed details in `history.md`, future design specs in `architecture/roadmap.md`.
 
 ## Progressive Disclosure (Cascade)
@@ -77,3 +78,4 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
 - `ops.md`: Keep procedures actionable with real commands
 - Do not duplicate content across documents — cross-reference instead
 - `README.md`: External-facing overview (What / Install / Usage / Configuration). Delegate internals to `architecture.md` and procedures to `ops.md` — do not duplicate. For my-specs-repo projects, `README.md` lives in the source repo root (not in my-specs-repo). Keep concise — link to `docs/` for details.
+- `overview.md`: Project vision and overall shape — what it is and why it exists. The most abstract document in its directory. Does not duplicate `architecture.md` design decisions; instead provides the entry-level mental model for a new reader.
