@@ -8,8 +8,6 @@ Produce a detailed implementation plan via a planner/reviewer discussion loop.
 The confirmed approach and requirements from `clarify-intent` and `make-outline-plan`
 must be read and passed to the planner before drafting begins.
 
-See `rules/plan-skip.md` for skip conditions (single-file AND no design decision → skip).
-
 ## Procedure
 
 1. **Read prior-stage artifacts** (if they exist):

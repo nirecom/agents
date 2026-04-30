@@ -54,6 +54,8 @@ const REVIEW_SECURITY_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_
 const REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED([: ].*)?>>"$/;
 // Looks-like fallback for removed DOCS_NOT_NEEDED — catches attempts and emits deprecation message.
 const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
+const CLARIFY_INTENT_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ([^>]+)>>"$/;
+const CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED([: ].*)?>>"$/;
 const CLARIFY_INTENT_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"$/;
 const BRANCHING_DECIDED_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_DECIDED: ([^>]+)>>"$/;
 const BRANCHING_DECIDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_DECIDED([: ].*)?>>"$/;
@@ -73,6 +75,8 @@ function isSentinel(cmd) {
     REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
     REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
+    CLARIFY_INTENT_NOT_NEEDED_RE_DQ.test(cmd) ||
+    CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd) ||
     BRANCHING_DECIDED_RE_DQ.test(cmd) ||
     BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd)
@@ -165,6 +169,8 @@ for (const cmd of sentinelParts) {
   const reviewSecurityNotNeededLooksLike =
     !reviewSecurityNotNeededMatch && REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
   const docsNotNeededLooksLike = DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
+  const clarifyIntentNotNeededMatch = cmd.match(CLARIFY_INTENT_NOT_NEEDED_RE_DQ);
+  const clarifyIntentNotNeededLooksLike = !clarifyIntentNotNeededMatch && CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
   const branchingDecidedMatch = cmd.match(BRANCHING_DECIDED_RE_DQ);
   const branchingDecidedLooksLike =
     !branchingDecidedMatch && BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd);
@@ -324,6 +330,43 @@ for (const cmd of sentinelParts) {
       `workflow-mark: WORKFLOW_DOCS_NOT_NEEDED is not accepted — ` +
         `update docs/ or *.md files and stage them (no skip path).`
     );
+    continue;
+  }
+
+  // --- CLARIFY_INTENT_NOT_NEEDED handler ---
+  if (clarifyIntentNotNeededLooksLike) {
+    messages.push(
+      `workflow-mark: malformed CLARIFY_INTENT_NOT_NEEDED — ` +
+        `expected: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: REASON>>" ` +
+        `(reason must be >=3 non-space chars, no '>')`
+    );
+    continue;
+  }
+  if (clarifyIntentNotNeededMatch) {
+    const v = validateSkipReason(clarifyIntentNotNeededMatch[1]);
+    if (!v.ok) {
+      messages.push(
+        `workflow-mark: CLARIFY_INTENT_NOT_NEEDED rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <better reason>>"`
+      );
+      continue;
+    }
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
+          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ${v.reason}>>"`
+      );
+      continue;
+    }
+    try {
+      markStep(sessionId, "clarify_intent", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("clarify_intent");
+      if (hint) messages.push(hint);
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
+      );
+    }
     continue;
   }
 

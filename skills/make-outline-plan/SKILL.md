@@ -6,9 +6,8 @@ model: sonnet
 
 Propose high-level approaches and get user sign-off before detailed planning.
 
-See `rules/plan-skip.md` for skip conditions. Skip this stage when:
-- The entire Plan step is being skipped via `<<WORKFLOW_PLAN_NOT_NEEDED: ...>>`
-- `outline-planner` emits `SINGLE_APPROACH_JUSTIFIED` (proceed directly to `make-detail-plan`)
+Skip this stage when the entire Plan step is being skipped via `<<WORKFLOW_PLAN_NOT_NEEDED: ...>>`.
+When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign-off loop and proceed directly to `make-detail-plan`.
 
 ## Inputs
 
@@ -79,4 +78,4 @@ Write the file in Japanese (per `rules/language.md`) with the following sections
 
 After this skill:
 1. Run: `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"`
-2. Invoke `make-detail-plan` via the Skill tool (see `rules/plan-skip.md` for skip conditions).
+2. Invoke `make-detail-plan` via the Skill tool.
