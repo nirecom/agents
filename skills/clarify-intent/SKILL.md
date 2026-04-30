@@ -1,6 +1,6 @@
 ---
 name: clarify-intent
-description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning. Step 1 of the workflow — mandatory pre-Plan requirements interview.
+description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning. Step 1 of the workflow. Skip with WORKFLOW_CLARIFY_INTENT_NOT_NEEDED when intent is already clear.
 model: sonnet
 ---
 
@@ -18,7 +18,11 @@ Inspired by Matt Pocock's `grill-me` skill (https://github.com/mattpocock/skills
 > Walk down each branch of the design tree, resolving dependencies between decisions
 > one-by-one. For each question, provide your recommended answer."
 
-See `rules/plan-skip.md` for skip conditions.
+## Skip Conditions
+
+Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>"` when intent is already clear:
+- A `*-intent.md` from a prior session already covers this request
+- The request is self-contained and unambiguous (single-sentence, no design decision needed)
 
 ## Procedure
 
@@ -40,6 +44,7 @@ See `rules/plan-skip.md` for skip conditions.
    ```
    ~/.claude/plans/<session-id>-intent.md
    ```
+   Use the Write tool directly — do NOT run mkdir first (Write creates parent directories automatically).
    Use the schema below. The `<session-id>` must be the current Claude session ID.
    Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE` if available; otherwise use a
    timestamp (`intent-YYYYMMDD-HHMMSS`) as fallback.
@@ -73,4 +78,3 @@ After this skill:
 1. Run: `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"` (hook will return the next-step hint)
 2. Invoke `survey-code` or `deep-research` via the Skill tool if needed
    (or skip with `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`), then invoke `make-outline-plan`.
-   See `rules/plan-skip.md` for skip conditions.
