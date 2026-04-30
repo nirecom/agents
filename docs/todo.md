@@ -26,3 +26,9 @@
 
 - [ ] 実際のワークフローで動作確認する（worktree または branch を使うタスクで end-to-end 検証）
 - [ ] うまくいかず revert する場合は commit hash `590d8a1` を巻き戻せ
+
+### check-japanese-in-docs.js: dotfiles-private を誤ってパブリック判定するバグ
+
+- [ ] `doc-append` を dotfiles-private ディレクトリから実行しても「This is a public repository」としてブロックされる
+- [ ] フック内のリポジトリ判定ロジック（`gh api` / `git rev-parse` の参照先）を調査し、CWD が正しく伝わっているか確認する
+- [ ] 修正後、dotfiles-private の history.md に日本語で doc-append できることを確認する
