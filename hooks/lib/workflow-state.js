@@ -36,7 +36,7 @@ const VALID_STEPS = [
   "user_verification",
   "cleanup",
 ];
-const SKIPPABLE_STEPS = ["research", "plan", "write_tests", "review_security", "cleanup"];
+const SKIPPABLE_STEPS = ["clarify_intent", "research", "plan", "write_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
@@ -253,7 +253,7 @@ function cleanupZombies(maxAgeDays = 7) {
 //   session-start: STEP_HINT[pendingStep]       → "do this step now"
 //   workflow-mark: STEP_HINT[VALID_STEPS[i+1]]  → "do the next step" (offset by 1)
 const STEP_HINT = {
-  clarify_intent:     "Invoke `clarify-intent` via the Skill tool.",
+  clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
   research:           "Invoke `survey-code` or `deep-research` (or skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>\"), then invoke `make-outline-plan`.",
   plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
   branching_decision: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_DECIDED: <decision>>\".",
