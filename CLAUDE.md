@@ -4,16 +4,19 @@
 
 Create the following as a TodoWrite checklist and work through each step in order.
 
-1. **Clarify intent** — Run `/clarify-intent`. Mandatory; cannot be skipped.
+1. **Clarify intent** — Run `/clarify-intent`.
+   Skip when intent is already clear — `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>"`
+   - A `*-intent.md` from a prior session already covers this request
+   - The request is self-contained and unambiguous (single-sentence, no design decision needed)
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
      - `/survey-code`: Skip when the change target is already known (single file/function).
      - `/deep-research`: Skip when no external knowledge is needed.
      - If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
    - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.
-     Skip when only one approach is viable (`SINGLE_APPROACH_JUSTIFIED`).
+     When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skips user review and proceeds to 2c.
    - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
-     Skip when: single-file change AND no design decision is needed.
+     When single-file AND no design decision needed, skips subagent loop and drafts inline.
    - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
    - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.

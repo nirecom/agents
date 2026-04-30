@@ -224,7 +224,7 @@ if (require.main === module) {
   if (incomplete.length === 0) approve();
 
   const SKILL_MAP = {
-    clarify_intent: '/clarify-intent',
+    clarify_intent: '/clarify-intent  OR if intent is clear: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     research: '/survey-code or /deep-research  OR if unnecessary: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     plan: '/make-outline-plan → /make-detail-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     branching_decision: 'consult rules/branch.md + rules/worktree.md, then: echo "<<WORKFLOW_BRANCHING_DECIDED: main|branch: <name>|worktree: <path>>"',
