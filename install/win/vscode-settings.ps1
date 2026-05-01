@@ -44,15 +44,27 @@ if (Test-Path $SettingsFile) {
             exit 0
         }
     }
-    # Back up before modifying
-    Copy-Item $SettingsFile "$SettingsFile.bak" -Force
 }
 
-# Merge patch into existing
+# Check if any patch key differs from existing (skip write if already up to date)
+$_needsWrite = $false
+foreach ($Key in $Patch.Keys) {
+    if (-not $Existing.ContainsKey($Key)) { $_needsWrite = $true; break }
+    $existingJson = $Existing[$Key] | ConvertTo-Json -Depth 10 -Compress
+    $patchJson = $Patch[$Key] | ConvertTo-Json -Depth 10 -Compress
+    if ($existingJson -ne $patchJson) { $_needsWrite = $true; break }
+}
+
+if (-not $_needsWrite) {
+    Write-Host "VS Code settings already up to date: $SettingsFile" -ForegroundColor DarkGray
+    exit 0
+}
+
+# Merge patch into existing and write
 foreach ($Key in $Patch.Keys) {
     $Existing[$Key] = $Patch[$Key]
 }
-
+if (Test-Path $SettingsFile) { Copy-Item $SettingsFile "$SettingsFile.bak" -Force }
 $Json = $Existing | ConvertTo-Json -Depth 10
 [System.IO.File]::WriteAllText($SettingsFile, $Json)
 Write-Host "VS Code settings updated: $SettingsFile" -ForegroundColor Green

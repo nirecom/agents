@@ -29,16 +29,20 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 $ProjectsDir = Join-Path $ClaudeDir "projects"
 if (-not (Test-Path $ProjectsDir)) { New-Item -ItemType Directory -Path $ProjectsDir -Force | Out-Null }
 
+$_changed = $false
+
 if (Test-Path (Join-Path $ClaudeDir ".git")) {
     Write-Host "Migrating git root from $ClaudeDir to $ProjectsDir..."
     Remove-Item (Join-Path $ClaudeDir ".git") -Recurse -Force
     Remove-Item (Join-Path $ClaudeDir ".gitignore") -Force -ErrorAction SilentlyContinue
     Remove-Item (Join-Path $ClaudeDir ".gitattributes") -Force -ErrorAction SilentlyContinue
+    $_changed = $true
 }
 
 if (-not (Test-Path (Join-Path $ProjectsDir ".git"))) {
     Write-Host "Initializing git repo in $ProjectsDir..."
     git init $ProjectsDir
+    $_changed = $true
 } else {
     Write-Host "Git repo already exists in $ProjectsDir." -ForegroundColor DarkGray
 }
@@ -49,19 +53,40 @@ $gitattributesContent = @"
 * text eol=lf
 *.jsonl merge=union
 "@
-[System.IO.File]::WriteAllText((Join-Path $ProjectsDir ".gitattributes"), ($gitattributesContent -replace "`r`n", "`n") + "`n")
+$_attrsPath = Join-Path $ProjectsDir ".gitattributes"
+$_attrsNormalized = ($gitattributesContent -replace "`r`n", "`n") + "`n"
+$_existingAttrs = if (Test-Path $_attrsPath) { [System.IO.File]::ReadAllText($_attrsPath) } else { $null }
+if ($_existingAttrs -ne $_attrsNormalized) {
+    [System.IO.File]::WriteAllText($_attrsPath, $_attrsNormalized)
+    $_changed = $true
+}
 
 $gitignoreContent = "/workflow/*.tmp`n"
-[System.IO.File]::WriteAllText((Join-Path $ProjectsDir ".gitignore"), $gitignoreContent)
+$_ignorePath = Join-Path $ProjectsDir ".gitignore"
+$_existingIgnore = if (Test-Path $_ignorePath) { [System.IO.File]::ReadAllText($_ignorePath) } else { $null }
+if ($_existingIgnore -ne $gitignoreContent) {
+    [System.IO.File]::WriteAllText($_ignorePath, $gitignoreContent)
+    $_changed = $true
+}
 
 if (-not $NoRemote) {
     $existingRemotes = git -C $ProjectsDir remote 2>$null
     if ($existingRemotes -contains "origin") {
-        git -C $ProjectsDir remote set-url origin $RemoteUrl
+        $currentUrl = git -C $ProjectsDir remote get-url origin 2>$null
+        if ($currentUrl -ne $RemoteUrl) {
+            git -C $ProjectsDir remote set-url origin $RemoteUrl
+            Write-Host "Remote updated to $RemoteUrl" -ForegroundColor Green
+            $_changed = $true
+        }
     } else {
         git -C $ProjectsDir remote add origin $RemoteUrl
+        Write-Host "Remote set to $RemoteUrl" -ForegroundColor Green
+        $_changed = $true
     }
-    Write-Host "Remote set to $RemoteUrl"
 }
 
-Write-Host "Session sync initialized." -ForegroundColor Green
+if ($_changed) {
+    Write-Host "Session sync initialized." -ForegroundColor Green
+} else {
+    Write-Host "Session sync already up to date." -ForegroundColor DarkGray
+}
