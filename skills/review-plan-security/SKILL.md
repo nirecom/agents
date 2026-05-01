@@ -1,6 +1,6 @@
 ---
 name: review-plan-security
-description: Review architecture security across three axes before implementation planning. Companion to /review-code-security (called at Step 5 for code-level patterns).
+description: Review architecture security across three axes before implementation.
 model: opus
 effort: medium
 ---
@@ -12,7 +12,7 @@ Review security implications of the current task across three axes.
 - **TodoWrite is mandatory.** Do not evaluate inline without it.
 - Evaluate all three axes — do not skip axes that seem irrelevant (report N/A instead).
 - Reference specific OWASP/CWE identifiers when reporting risks.
-- This checklist is for architecture/planning review — code-level pattern scanning is covered by `/review-code-security` (companion skill, called at Step 5).
+- This checklist is for architecture/planning review — code-level pattern scanning is covered by `/review-code-security`.
 
 ## Procedure
 
