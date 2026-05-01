@@ -49,6 +49,11 @@ docs/scan-outbound.md:BEGIN RSA PRIVATE KEY
 /c/ProgramData
 /c/tools
 
+# WSL path format examples in bin/ scripts and docs (not real user paths)
+bin/*.py:/mnt/c/
+docs/history*.md:/mnt/c/
+docs/history/**:/mnt/c/
+
 # Docker internal networks (not routable private addresses)
 docker-compose.yml:172\.24\.0
 
