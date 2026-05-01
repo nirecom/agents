@@ -47,6 +47,7 @@ fi
 echo ""
 printf -- "${C_BOLD}--- Installing Claude Code ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/claude-code.sh"
+export PATH="$HOME/.local/bin:$PATH"
 
 echo ""
 printf -- "${C_BOLD}--- Installing Codex ---${C_RESET}\n"
