@@ -4,3 +4,4 @@ __pycache__/
 node_modules/
 settings.local.json
 rules/language.md
+.env
