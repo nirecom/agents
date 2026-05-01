@@ -3,12 +3,23 @@
 
 param(
     [string]$ClaudeDir = (Join-Path $env:USERPROFILE ".claude"),
-    [string]$RemoteUrl = "git@github.com:nirecom/claude-sessions.git",
+    [string]$RemoteUrl = "",
     [switch]$NoRemote
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$defaultRemote = "git@github.com:nirecom/agent-sessions.git"
+if (-not $NoRemote -and -not $RemoteUrl) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $envFile = Join-Path (Split-Path -Parent (Split-Path -Parent $scriptDir)) ".env"
+    if (Test-Path $envFile) {
+        $envLine = Get-Content $envFile | Where-Object { $_ -match '^SESSION_SYNC_REMOTE_URL=' } | Select-Object -First 1
+        if ($envLine) { $RemoteUrl = ($envLine -split '=', 2)[1].Trim('"').Trim("'") }
+    }
+    if (-not $RemoteUrl) { $RemoteUrl = $defaultRemote }
+}
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Warning "Git is required for session sync."

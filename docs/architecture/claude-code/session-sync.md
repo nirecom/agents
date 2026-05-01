@@ -17,7 +17,7 @@ and sync history via a private GitHub repo.
 | `C:\git\` | All other git repositories (Windows) |
 
 **Sync method**: Initialize `~/.claude/projects/` as a git repo, syncing to
-`nirecom/claude-sessions` (private). Init fetches existing remote history
+`nirecom/agent-sessions` (private). Init fetches existing remote history
 (`fetch` + `reset`) before first commit so that 2nd+ machines inherit prior
 session data without conflict.
 
@@ -27,6 +27,16 @@ session data without conflict.
 | [install/linux/session-sync-init.sh](https://github.com/nirecom/agents/blob/main/install/linux/session-sync-init.sh) | agents | Initialization — Linux/macOS |
 | [bin/session-sync.ps1](https://github.com/nirecom/agents/blob/main/bin/session-sync.ps1) | agents | Daily operation — Windows |
 | [bin/session-sync.sh](https://github.com/nirecom/agents/blob/main/bin/session-sync.sh) | agents | Daily operation — Linux/macOS |
+| [.env.example](https://github.com/nirecom/agents/blob/main/.env.example) | agents | Remote URL config template (copy to `.env`) |
+
+**Configuration** (`agents/.env`, gitignored):
+
+```
+SESSION_SYNC_REMOTE_URL=git@github.com:YOUR_USERNAME/agent-sessions.git
+```
+
+Priority at init time: `--remote-url` CLI arg > `.env` > built-in default.
+Changing `.env` after init requires re-running `session-sync-init.sh` / `session-sync-init.ps1`.
 
 **Sync scope**:
 
