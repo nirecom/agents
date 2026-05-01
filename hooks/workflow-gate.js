@@ -94,12 +94,15 @@ function hasStagedChanges(dir) {
   }
 }
 
-// Read additionalDirectories from settings.json (resolved relative to the agents root).
-// Client-agnostic: works in VS Code, Claude desktop app, or any other host.
+// Read additionalDirectories from the assembled ~/.claude/settings.json, falling back
+// to agents/settings.json so the hook works before the first install run.
 function findAdditionalDirectories() {
   try {
     const agentsRoot = path.resolve(__dirname, "..");
-    const settings = JSON.parse(fs.readFileSync(path.join(agentsRoot, "settings.json"), "utf8"));
+    const claudePath = path.join(require("os").homedir(), ".claude", "settings.json");
+    const agentsPath = path.join(agentsRoot, "settings.json");
+    const settingsPath = fs.existsSync(claudePath) ? claudePath : agentsPath;
+    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
     const dirs = (settings.permissions || settings).additionalDirectories || [];
     return dirs.map((d) => path.isAbsolute(d) ? d : path.resolve(agentsRoot, d));
   } catch (e) {

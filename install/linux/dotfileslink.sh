@@ -32,12 +32,19 @@ else
         rm -f ~/.claude/commands
     fi
     ln -sf "$AGENTS_ROOT/CLAUDE.md" ~/.claude/
-    ln -sf "$AGENTS_ROOT/settings.json" ~/.claude/
     ln -snf "$AGENTS_ROOT/skills" ~/.claude/skills
     ln -snf "$AGENTS_ROOT/rules" ~/.claude/rules
     ln -snf "$AGENTS_ROOT/agents" ~/.claude/agents
+    # Remove stale settings.json symlink that used to point directly into agents/
+    if [ -L ~/.claude/settings.json ]; then
+        printf "${C_YELLOW}Removing stale symlink: ~/.claude/settings.json${C_RESET}\n"
+        rm -f ~/.claude/settings.json
+    fi
     printf "${C_GREEN}Symlinks created in ~/.claude/${C_RESET}\n"
 fi
+
+# --- Assemble ~/.claude/settings.json from base + extension ---
+node "$AGENTS_ROOT/install/assemble-settings.js"
 
 # --- git core.hooksPath ---
 git config --file "$HOME/.gitconfig" core.hooksPath "$AGENTS_ROOT/hooks"
