@@ -1,6 +1,6 @@
 ---
 name: review-code-codex
-description: Adversarial code review via OpenAI Codex CLI (cross-provider second opinion). Companion to /review-code-security. Always emits a visible PERFORMED/SKIPPED/FAILED status line so silent failures are impossible.
+description: Adversarial code review via OpenAI Codex CLI (cross-provider second opinion). Run after implementation to review committed or staged code changes against a merge base.
 ---
 
 Cross-provider code review using the OpenAI Codex CLI. Runs in parallel with `/review-code-security`.
