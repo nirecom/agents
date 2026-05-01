@@ -133,6 +133,7 @@ def main():
     else:
         # Read tail to check invariants
         tail_bytes = None
+        tail_text = ""
         has_entry = False
         for size in TAIL_SIZES:
             tail_bytes = _read_tail(path, size)
