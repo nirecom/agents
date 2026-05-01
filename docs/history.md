@@ -88,3 +88,6 @@ Changes: dotfileslink.ps1: added Write-Launcher helper for idempotent launcher w
 Background: tail_text was assigned inside a for loop, so Pylance flagged it as possibly unbound at usage on line 152.
 Changes: Added tail_text = "" initializer before the loop.
 
+### FEATURE: Add repo-visibility tool for gh-based public/private detection (2026-05-01, pending)
+Background: Needed a reliable way to check repo visibility (public/private) from Claude Code without per-repo CLAUDE.md maintenance. Direct gh command failed due to MSYS2 path mangling and lack of -C flag support in gh.
+Changes: Added bin/repo-visibility.py: accepts Windows (c:/git/...) or Linux (/mnt/c/...) paths, normalizes per platform, runs gh repo view to output 'public' or 'private'. Added launchers in dotfileslink.sh (bash wrapper) and dotfileslink.ps1 (.cmd wrapper). Language policy updated in my-private-repo rules/language.md to use repo-visibility command.
