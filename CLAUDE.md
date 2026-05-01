@@ -2,21 +2,16 @@
 
 ## Workflow
 
-Create the following as a TodoWrite checklist and work through each step in order.
+**Mandatory first action**: Before doing anything else — investigation, explanation, or code change — create a TodoWrite checklist with all steps below. Then work through each step in order.
 
 1. **Clarify intent** — Run `/clarify-intent`.
-   Skip when intent is already clear — `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>"`
-   - A `*-intent.md` from a prior session already covers this request
-   - The request is self-contained and unambiguous (single-sentence, no design decision needed)
+   Skip: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>"` then **proceed immediately to step 2**.
+   Skipping this step does NOT authorize skipping any subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
-     - `/survey-code`: Skip when the change target is already known (single file/function).
-     - `/deep-research`: Skip when no external knowledge is needed.
-     - If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
+     If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
    - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.
-     When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skips user review and proceeds to 2c.
    - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
-     When single-file AND no design decision needed, skips subagent loop and drafts inline.
    - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
    - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
@@ -29,8 +24,7 @@ Create the following as a TodoWrite checklist and work through each step in orde
 6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Bash: run the test suite (PostToolUse hook auto-marks `run_tests` on exit code).
      Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
-   - Agent: `/review-code-security` as a subagent (conditional: external input / secrets /
-     third-party integrations). If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
+   - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
    - Bash: `review-code-codex --base <merge-base>` for cross-provider adversarial review
      (always parallel, never blocks workflow). Output is shown directly to the user via
      the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line

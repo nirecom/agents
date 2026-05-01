@@ -121,18 +121,17 @@ function buildWorkflowStatus(sessionId) {
     // All steps done
     if (nextAction === "clarify-intent (state unavailable)" &&
         VALID_STEPS.every(step => ["complete","skipped"].includes((state.steps[step]||{}).status))) {
-      nextAction = "全ステップ完了済み。/commit-push でコミットしてください。";
+      nextAction = "All steps complete. Run /commit-push to commit.";
     }
   } else {
     for (const step of VALID_STEPS) {
       statusLines.push(`- ${step}: pending`);
     }
-    nextAction = "clarify-intent — Skill ツールで /clarify-intent を呼び出してください";
+    nextAction = STEP_HINT.clarify_intent;
   }
 
   statusLines.push("");
   statusLines.push(`NEXT ACTION: ${nextAction}`);
-  statusLines.push("（実装作業の依頼を受けたら、上記 NEXT ACTION から順に進めてください。skill は Skill ツールで起動します。）");
   return statusLines.join("\n");
 }
 
