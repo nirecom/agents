@@ -13,7 +13,8 @@ if [ -z "${C_RESET+x}" ]; then
 fi
 
 CLAUDE_DIR="$HOME/.claude"
-REMOTE_URL="git@github.com:nirecom/claude-sessions.git"
+_DEFAULT_REMOTE="git@github.com:nirecom/agent-sessions.git"
+REMOTE_URL=""
 NO_REMOTE=false
 
 while [ $# -gt 0 ]; do
@@ -24,6 +25,17 @@ while [ $# -gt 0 ]; do
         *) shift ;;
     esac
 done
+
+# Resolve remote URL: --remote-url arg > .env > default
+if [ -z "$REMOTE_URL" ] && ! "$NO_REMOTE"; then
+    _script_dir="$(cd "$(dirname "$0")" && pwd)"
+    _env_file="$(cd "$_script_dir/../.." && pwd)/.env"
+    if [ -f "$_env_file" ]; then
+        _env_val=$(grep -E '^SESSION_SYNC_REMOTE_URL=' "$_env_file" | head -1 | cut -d= -f2- | tr -d "\"'")
+        [ -n "$_env_val" ] && REMOTE_URL="$_env_val"
+    fi
+    REMOTE_URL="${REMOTE_URL:-$_DEFAULT_REMOTE}"
+fi
 
 if ! type git >/dev/null 2>&1; then
     echo "Git is required for session sync." >&2
