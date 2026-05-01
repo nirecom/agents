@@ -11,13 +11,20 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 ## Inputs
 
-- `~/.claude/plans/<session-id>-intent.md` — output of `clarify-intent` (MUST exist)
-- The session-id is the same as used in the intent file
+- `~/.claude/plans/<session-id>-intent.md` — output of `clarify-intent`; may be from a
+  different session (cross-session carry-in is allowed)
+- The session-id used for output files (`*-outline.md`) matches the intent file actually used
 
 ## Procedure
 
-1. Verify `<session-id>-intent.md` exists. If not, abort with: "clarify-intent must run
-   before make-outline-plan. Run /clarify-intent first."
+1. Locate the intent file:
+   a. If `<session-id>-intent.md` exists, use it.
+   b. Otherwise, list all `*-intent.md` files in `~/.claude/plans/`.
+      - If exactly one exists, inform the user and use it.
+      - If multiple exist, present them via `AskUserQuestion` and wait for the user to select one.
+      - If none exist, abort: "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
+   c. Extract the session-id from the chosen file's name; use it for all subsequent output
+      file paths (including `<session-id>-outline.md`).
 
 2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`).
    Pass: the full contents of `<session-id>-intent.md` and the task context.
