@@ -41,7 +41,6 @@ if ((Test-Path $oldCommands) -and (Get-Item $oldCommands -Force).Attributes -ban
 
 $links = @(
     @{ Source = "CLAUDE.md";   Dest = "$ClaudeDir\CLAUDE.md";   IsDir = $false }
-    @{ Source = "settings.json"; Dest = "$ClaudeDir\settings.json"; IsDir = $false }
     @{ Source = "skills";      Dest = "$ClaudeDir\skills";      IsDir = $true }
     @{ Source = "rules";       Dest = "$ClaudeDir\rules";       IsDir = $true }
     @{ Source = "agents";      Dest = "$ClaudeDir\agents";      IsDir = $true }
@@ -68,6 +67,17 @@ foreach ($link in $links) {
     New-Item -ItemType SymbolicLink -Path $dest -Target $source | Out-Null
     Write-Host "Linked: $dest -> $source" -ForegroundColor Green
 }
+
+# --- Assemble ~/.claude/settings.json from base + extension ---
+# Remove stale symlink that used to point settings.json directly into agents/
+$staleSettings = "$ClaudeDir\settings.json"
+$staleItem = Get-Item $staleSettings -Force -ErrorAction SilentlyContinue
+if ($staleItem -and ($staleItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    Remove-Item $staleSettings -Force
+    Write-Host "Removed stale symlink: $staleSettings" -ForegroundColor Yellow
+}
+& node (Join-Path $AgentsRoot "install\assemble-settings.js")
+if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCODE)" }
 
 # --- git core.hooksPath ---
 $_hooksPath = "$AgentsRoot\hooks"
