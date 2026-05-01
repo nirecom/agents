@@ -1,6 +1,6 @@
 ---
 name: review-plan-codex
-description: Adversarial plan review via OpenAI Codex CLI. Reviews implementation plans and approach proposals for blind spots and issues Claude may have missed. Emits PERFORMED/SKIPPED/FAILED status line. Called automatically by make-detail-plan and make-outline-plan during each review round; also invokable directly.
+description: Adversarial plan review via OpenAI Codex CLI. Reviews plans and approach proposals for blind spots and issues Claude may have missed.
 ---
 
 Adversarial plan review via OpenAI Codex CLI.
