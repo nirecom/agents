@@ -121,6 +121,27 @@ if (input.tool_name !== "Bash") done();
 
 const command = ((input.tool_input && input.tool_input.command) || "").trim();
 
+// Hoist: needed by push-reset below and by sentinel logic further down.
+const toolResponse = input.tool_response || {};
+const exitCode =
+  toolResponse.exit_code ??
+  toolResponse.exitCode ??
+  (toolResponse.success === false ? 1 : 0);
+const sessionId = input.session_id || resolveSessionId();
+
+// Reset user_verification after a successful git push so the next push
+// requires re-verification within the same session.
+const GIT_PUSH_RE = /^git(\s+-C\s+\S+)?\s+push\b/;
+if (GIT_PUSH_RE.test(command)) {
+  let msg = "workflow-mark: push detected — user_verification reset to pending.";
+  if (exitCode === 0 && sessionId) {
+    try { markStep(sessionId, "user_verification", "pending"); }
+    catch (e) { msg = `workflow-mark: push detected — user_verification reset FAILED: ${e.message}`; }
+    done(msg);
+  }
+  done();
+}
+
 // Split on `&&` so multiple sentinel echos chained in one Bash call are all processed.
 // All-or-nothing: if any part is NOT a sentinel (e.g. `cd /tmp`, arbitrary shell
 // commands), reject the whole command. This preserves the security property that a
@@ -134,20 +155,11 @@ const allAreSentinels = commandParts.every(isSentinel);
 if (!allAreSentinels) done(); // prefix-chained or mixed-content command — reject
 const sentinelParts = commandParts;
 
-// If the echo itself failed, don't apply any sentinel operation from this command.
-const toolResponse = input.tool_response || {};
-const exitCode =
-  toolResponse.exit_code ??
-  toolResponse.exitCode ??
-  (toolResponse.success === false ? 1 : 0);
 if (exitCode !== 0) {
   done(
     `workflow-mark: echo exited ${exitCode} — ${sentinelParts.length} sentinel operation(s) NOT applied.`
   );
 }
-
-// Resolve session ID from hook stdin (preferred), fall back to CLAUDE_ENV_FILE
-const sessionId = input.session_id || resolveSessionId();
 
 // Accumulate per-part messages; emit them together at end.
 const messages = [];
