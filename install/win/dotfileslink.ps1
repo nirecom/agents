@@ -54,7 +54,8 @@ foreach ($link in $links) {
     $item = Get-Item $dest -Force -ErrorAction SilentlyContinue
     if ($item) {
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-            if ([System.IO.Path]::GetFullPath($item.Target) -eq [System.IO.Path]::GetFullPath($source)) { Write-Host "Already linked: $dest" -ForegroundColor DarkGray; continue }
+            $target = $item.Target
+            if ($target -and [System.IO.Path]::GetFullPath($target) -eq [System.IO.Path]::GetFullPath($source)) { Write-Host "Already linked: $dest" -ForegroundColor DarkGray; continue }
             Write-Host "Relinking: $dest" -ForegroundColor Yellow
             Remove-Item $dest -Force
         } else {
