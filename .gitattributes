@@ -1,0 +1,4 @@
+# All text files use LF (Unix-first repo; WSL/Linux/macOS execution requires LF)
+* text=auto eol=lf
+
+# PowerShell scripts work fine with LF — no override needed

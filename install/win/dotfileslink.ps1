@@ -19,6 +19,16 @@ if (-not $canSymlink) {
     exit 1
 }
 
+function Write-Launcher {
+    param([string]$Path, [string]$Content, [string]$Label)
+    if ((Test-Path $Path) -and ([System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::ASCII) -eq $Content)) {
+        Write-Host "Already generated: $Label" -ForegroundColor DarkGray
+    } else {
+        [System.IO.File]::WriteAllText($Path, $Content, [System.Text.Encoding]::ASCII)
+        Write-Host "Generated: $Label" -ForegroundColor Green
+    }
+}
+
 # --- ~/.claude/ symlinks ---
 $ClaudeDir = "$HOME\.claude"
 if (-not (Test-Path $ClaudeDir)) { New-Item -ItemType Directory -Path $ClaudeDir -Force | Out-Null }
@@ -41,10 +51,10 @@ foreach ($link in $links) {
     $source = Join-Path $AgentsRoot $link.Source
     $dest = $link.Dest
     if (-not (Test-Path $source)) { Write-Warning "Source not found: $source (skipping)"; continue }
-    if (Test-Path $dest -PathType Any) {
-        $item = Get-Item $dest -Force
+    $item = Get-Item $dest -Force -ErrorAction SilentlyContinue
+    if ($item) {
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-            if ($item.Target -eq $source) { Write-Host "Already linked: $dest" -ForegroundColor DarkGray; continue }
+            if ([System.IO.Path]::GetFullPath($item.Target) -eq [System.IO.Path]::GetFullPath($source)) { Write-Host "Already linked: $dest" -ForegroundColor DarkGray; continue }
             Write-Host "Relinking: $dest" -ForegroundColor Yellow
             Remove-Item $dest -Force
         } else {
@@ -59,8 +69,14 @@ foreach ($link in $links) {
 }
 
 # --- git core.hooksPath ---
-git config --file "$HOME\.gitconfig" core.hooksPath "$AgentsRoot\hooks"
-Write-Host "core.hooksPath -> $AgentsRoot\hooks" -ForegroundColor Green
+$_hooksPath = "$AgentsRoot\hooks"
+$_currentHooksPath = git config --file "$HOME\.gitconfig" core.hooksPath 2>$null
+if ($_currentHooksPath -eq $_hooksPath) {
+    Write-Host "core.hooksPath already set: $_hooksPath" -ForegroundColor DarkGray
+} else {
+    git config --file "$HOME\.gitconfig" core.hooksPath $_hooksPath
+    Write-Host "core.hooksPath -> $_hooksPath" -ForegroundColor Green
+}
 
 # --- ~/.local/bin/doc-append.cmd launcher ---
 $LocalBin = "$HOME\.local\bin"
@@ -78,8 +94,7 @@ goto end
 uv run "$AgentsRoot\bin\doc-append.py" %*
 :end
 "@
-[System.IO.File]::WriteAllText("$LocalBin\doc-append.cmd", $cmdContent, [System.Text.Encoding]::ASCII)
-Write-Host "Generated: $LocalBin\doc-append.cmd" -ForegroundColor Green
+Write-Launcher "$LocalBin\doc-append.cmd" $cmdContent "doc-append.cmd"
 
 # Convert AgentsRoot Windows path to bash-compatible Unix path
 $agentsDrive = $AgentsRoot[0].ToString().ToLower()
@@ -87,16 +102,12 @@ $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
 
 # --- ~/.local/bin/review-code-codex launchers (cmd + bash shim) ---
 $rcCmdContent = "@echo off`r`nwsl bash -c ""review-code-codex %*""`r`n"
-[System.IO.File]::WriteAllText("$LocalBin\review-code-codex.cmd", $rcCmdContent, [System.Text.Encoding]::ASCII)
-Write-Host "Generated: $LocalBin\review-code-codex.cmd" -ForegroundColor Green
+Write-Launcher "$LocalBin\review-code-codex.cmd" $rcCmdContent "review-code-codex.cmd"
 $rcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-code-codex`" `"`$@`"`n"
-[System.IO.File]::WriteAllText("$LocalBin\review-code-codex", $rcShimContent, [System.Text.Encoding]::ASCII)
-Write-Host "Generated: $LocalBin\review-code-codex (bash shim)" -ForegroundColor Green
+Write-Launcher "$LocalBin\review-code-codex" $rcShimContent "review-code-codex (bash shim)"
 
 # --- ~/.local/bin/review-plan-codex launchers (cmd + bash shim) ---
 $rpcCmdContent = "@echo off`r`nwsl bash -c ""review-plan-codex %*""`r`n"
-[System.IO.File]::WriteAllText("$LocalBin\review-plan-codex.cmd", $rpcCmdContent, [System.Text.Encoding]::ASCII)
-Write-Host "Generated: $LocalBin\review-plan-codex.cmd" -ForegroundColor Green
+Write-Launcher "$LocalBin\review-plan-codex.cmd" $rpcCmdContent "review-plan-codex.cmd"
 $rpcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-plan-codex`" `"`$@`"`n"
-[System.IO.File]::WriteAllText("$LocalBin\review-plan-codex", $rpcShimContent, [System.Text.Encoding]::ASCII)
-Write-Host "Generated: $LocalBin\review-plan-codex (bash shim)" -ForegroundColor Green
+Write-Launcher "$LocalBin\review-plan-codex" $rpcShimContent "review-plan-codex (bash shim)"
