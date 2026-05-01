@@ -97,6 +97,10 @@ uv run "$AgentsRoot\bin\doc-append.py" %*
 "@
 Write-Launcher "$LocalBin\doc-append.cmd" $cmdContent "doc-append.cmd"
 
+# --- ~/.local/bin/repo-visibility.cmd launcher ---
+$rvCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\repo-visibility.py`" %*`r`n"
+Write-Launcher "$LocalBin\repo-visibility.cmd" $rvCmdContent "repo-visibility.cmd"
+
 # Convert AgentsRoot Windows path to bash-compatible Unix path
 $agentsDrive = $AgentsRoot[0].ToString().ToLower()
 $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')

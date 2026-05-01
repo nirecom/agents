@@ -70,6 +70,14 @@ EOF
 chmod +x ~/.local/bin/doc-append
 printf "${C_GREEN}Generated: ~/.local/bin/doc-append${C_RESET}\n"
 
+# --- ~/.local/bin/repo-visibility launcher ---
+cat > ~/.local/bin/repo-visibility << EOF
+#!/usr/bin/env bash
+exec uv run "$AGENTS_ROOT/bin/repo-visibility.py" "\$@"
+EOF
+chmod +x ~/.local/bin/repo-visibility
+printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
+
 # --- ~/.local/bin/review-code-codex symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-code-codex" ~/.local/bin/review-code-codex
 printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-codex${C_RESET}\n"
