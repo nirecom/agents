@@ -1,6 +1,6 @@
 ---
 name: clarify-intent
-description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning. Step 1 of the workflow. Skip with WORKFLOW_CLARIFY_INTENT_NOT_NEEDED when intent is already clear.
+description: Conduct a decision-tree interview with the user to lock in requirements, motivation, scope, and non-goals before planning.
 model: sonnet
 ---
 
