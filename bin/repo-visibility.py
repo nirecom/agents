@@ -9,7 +9,7 @@ import sys
 def normalize_path(path: str) -> str:
     """Normalize path for the current platform."""
     if sys.platform == "win32":
-        # /mnt/c/... → C:\...
+        # WSL path (/mnt/<drive>/...) → Windows path
         m = re.match(r"^/mnt/([a-zA-Z])/(.*)$", path)
         if m:
             drive = m.group(1).upper()
@@ -17,7 +17,7 @@ def normalize_path(path: str) -> str:
             return f"{drive}:\\{rest}"
         return path
     else:
-        # C:\... or C:/... → /mnt/c/...
+        # Windows path (X:\... or X:/...) → WSL path (/mnt/<drive>/...)
         m = re.match(r"^([A-Za-z])[:\\/](.*)$", path)
         if m:
             drive = m.group(1).lower()
