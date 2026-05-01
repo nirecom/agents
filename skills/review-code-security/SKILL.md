@@ -1,6 +1,6 @@
 ---
 name: review-code-security
-description: Scan implemented code for concrete security anti-patterns. Companion to /review-plan-security, called at Step 5 (Test & Verify).
+description: Scan implemented code for concrete security anti-patterns. Companion to /review-plan-security.
 model: opus
 effort: high
 ---
@@ -9,7 +9,7 @@ Scan the specified code for security anti-patterns using the same three axes as 
 
 ## When to Use
 
-Called at Step 5 (Test & Verify) when the implementation touches external input, secrets handling, or third-party integrations. Pass a file path, diff, or describe the code to review.
+Use when the implementation touches external input, secrets handling, or third-party integrations. Pass a file path, diff, or describe the code to review.
 
 ## Rules
 
@@ -71,5 +71,5 @@ After reporting findings:
 
 ## Relationship to Other Tools
 
-- `/review-plan-security` — architecture-level checklist (Step 2, before code exists)
+- `/review-plan-security` — architecture-level checklist (run before implementation begins)
 - `scan-outbound.sh` — auto-detects hard secrets and private info at pre-commit (see `docs/scan-outbound.md`)
