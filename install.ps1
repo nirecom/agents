@@ -1,6 +1,11 @@
 # Agents framework installer for Windows (PowerShell)
 # Usage: .\install.ps1
 
+if ($IsWindows -eq $false) {
+    Write-Host "Error: install.ps1 must not run on Linux/macOS. Use install.sh instead." -ForegroundColor Red
+    exit 1
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -59,7 +64,7 @@ if ($_profileContent -notlike "*$_marker*") {
 } else {
     $_updated = $_profileContent -replace '(?m)^\. ".*profile-snippet\.ps1"', ". `"$_snippetPath`""
     [System.IO.File]::WriteAllText($PROFILE, $_updated)
-    Write-Host "Profile sourcing already present in $PROFILE (path updated if needed)" -ForegroundColor Green
+    Write-Host "Profile sourcing already present in $PROFILE (path updated if needed)" -ForegroundColor DarkGray
 }
 Remove-Variable _snippetPath, _marker, _profileContent, _updated -ErrorAction SilentlyContinue
 

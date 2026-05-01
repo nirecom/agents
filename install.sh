@@ -13,6 +13,13 @@ else
 fi
 export C_CYAN C_GREEN C_YELLOW C_GRAY C_BOLD C_RESET
 
+_uname_s="$(uname -s)"
+if [[ "$_uname_s" == MINGW* || "$_uname_s" == MSYS* || "$_uname_s" == CYGWIN* ]]; then
+    printf "${C_YELLOW}Windows shell environment detected (%s). Use install.ps1 instead.${C_RESET}\n" "$_uname_s"
+    exit 1
+fi
+unset _uname_s
+
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 printf "${C_CYAN}=== agents installer ===${C_RESET}\n"
@@ -70,7 +77,7 @@ if ! grep -qF "$_marker" "$_rc_file" 2>/dev/null; then
     _need_restart=true
 else
     perl -i -pe "s|^\\. \\\".*profile-snippet\\.sh\\\"|. \\\"$_snippet_path\\\"|" "$_rc_file"
-    printf "${C_GREEN}Profile sourcing already present in $_rc_file (path updated if needed)${C_RESET}\n"
+    printf "${C_GRAY}Profile sourcing already present in $_rc_file (path updated if needed)${C_RESET}\n"
 fi
 _rc_file_msg="$_rc_file"
 unset _rc_file _snippet_path _marker
