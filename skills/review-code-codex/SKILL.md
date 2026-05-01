@@ -1,13 +1,13 @@
 ---
 name: review-code-codex
-description: Adversarial code review via OpenAI Codex CLI (cross-provider second opinion). Step 5 companion to /review-code-security. Always emits a visible PERFORMED/SKIPPED/FAILED status line so silent failures are impossible.
+description: Adversarial code review via OpenAI Codex CLI (cross-provider second opinion). Companion to /review-code-security. Always emits a visible PERFORMED/SKIPPED/FAILED status line so silent failures are impossible.
 ---
 
-Cross-provider code review using the OpenAI Codex CLI. Runs in parallel with `/review-code-security` at workflow step 5.
+Cross-provider code review using the OpenAI Codex CLI. Runs in parallel with `/review-code-security`.
 
 ## When to Use
 
-Called at Step 5 (Run tests & Security review) unconditionally — always run it in parallel with the test suite and `/review-code-security`. It auto-skips when codex is not installed; it never blocks the workflow.
+Run in parallel with the test suite and `/review-code-security` when reviewing code.
 
 ## How to Run
 
