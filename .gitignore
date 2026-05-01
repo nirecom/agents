@@ -3,5 +3,6 @@ __pycache__/
 .pytest_cache/
 node_modules/
 settings.local.json
+settings-extension.json
 rules/language.md
 .env
