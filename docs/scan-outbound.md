@@ -27,7 +27,7 @@ All call `bin/scan-outbound.sh` as the scanner (single source of truth for patte
 | Absolute local paths | `/Users/<name>`, `/home/<name>`, `C:\Users\<name>` | `/Users/john/docs` |
 | Hard secrets | AWS/Anthropic/OpenAI/GitHub/Slack/Google/HuggingFace/Groq/Replicate/Cohere API keys, PEM private keys | `AKIA...`, `sk-ant-api03-...`, `ghp_...`, `-----BEGIN RSA PRIVATE KEY-----` |
 | Hidden Unicode (Trojan Source) | Zero-width: U+200B, U+200C, U+200D, U+FEFF. Bidi overrides: U+202D, U+202E, U+2066–2069 | CVE-2021-42574 |
-| Blocklist patterns | User-defined in `dotfiles-private/.private-info-blocklist` | Hostnames, domain names |
+| Blocklist patterns | User-defined in `.private-info-blocklist` (repo root) | Hostnames, domain names |
 
 ## Setup
 
@@ -41,8 +41,7 @@ Automatically enabled after running `install.sh` / `install.ps1`. The global git
 ## Allowlist (Exception Patterns)
 
 Add exceptions to `.private-info-allowlist`, one pattern per line.
-An optional private allowlist (`../dotfiles-private/.private-info-allowlist`) is also loaded
-for environment-specific patterns. When `dotfiles-private/` is absent, only the local allowlist is used.
+Each repo's `.private-info-allowlist` in its root is the only allowlist loaded.
 
 ```
 # Global pattern (applies to all files)
@@ -56,8 +55,8 @@ tests/*:@example.com
 
 ## Blocklist (Additional Detection Patterns)
 
-The blocklist lives in the sibling private repo (`dotfiles-private/.private-info-blocklist`)
-to avoid exposing blocked patterns in a public repo. One regex per line:
+The blocklist lives in `.private-info-blocklist` at the repo root (gitignored; symlinked from
+a private repo by the installer) to avoid exposing blocked patterns in a public repo. One regex per line:
 
 ```
 # Hostname patterns
@@ -118,8 +117,7 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 | `claude-global/hooks/scan-outbound.js` | Claude Code PreToolUse hook |
 | `claude-global/hooks/lib/is-private-repo.js` | Shared module: dynamic private repo detection via `gh api` |
 | `.private-info-allowlist` | Exception patterns |
-| `../dotfiles-private/.private-info-allowlist` | Environment-specific exception patterns (private repo) |
-| `../dotfiles-private/.private-info-blocklist` | Additional detection patterns (private repo) |
+| `.private-info-blocklist` | Additional detection patterns (gitignored, symlinked from private repo) |
 
 ## Related
 
