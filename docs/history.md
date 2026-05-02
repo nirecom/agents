@@ -98,4 +98,8 @@ Changes: Add install/assemble-settings.js. dotfileslink.ps1/sh: remove settings.
 
 ### FEATURE: Reset user_verification after git push; delete obsolete privacy.md (2026-05-02, pending)
 Background: Once user_verification was marked complete it persisted for the rest of the session, allowing follow-up pushes without re-verification. This created a window where post-push bug fixes could be committed and pushed without user sign-off. rules/privacy.md contained obsolete .context-private/ instructions superseded by rules/private-info.md.
-Changes: hooks/workflow-mark.js: hoist toolResponse/exitCode/sessionId; add push-detection block that resets user_verification to pending on successful git push; markStep failure emits FAILED message instead of silently succeeding. rules/privacy.md: deleted (obsolete).
+Changes: hooks/workflow-mark.js: hoist toolResponse/exitCode/sessionId; add push-detection block that resets user_verification to pending on successful git push; markStep failure emits FAILED message instead of silently succeeding. rules/privacy.md: deleted (obsolete).
+
+### BUGFIX: profile-snippet.ps1: remove settings.json from symlink watchlist (2026-05-02, pending)
+Background: profile-snippet.ps1 listed settings.json alongside CLAUDE.md as a symlink to monitor for breakage. However, settings.json is now an assembled file (written by assemble-settings.js), never a symlink. This caused the broken-symlink check to always fire, triggering dotfileslink.ps1 on every shell start even when nothing was broken.
+Changes: Removed settings.json from the _agentSymlinks watchlist in profile-snippet.ps1. Only CLAUDE.md is now monitored.
