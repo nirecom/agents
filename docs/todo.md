@@ -27,6 +27,16 @@
 - [ ] 実際のワークフローで動作確認する（worktree または branch を使うタスクで end-to-end 検証）
 - [ ] うまくいかず revert する場合は commit hash `590d8a1` を巻き戻せ
 
+### workflow-gate: `git -C "$ENV_VAR"` でパス解決が失敗する
+
+- [ ] `parseGitCArg` が PreToolUse フックで受け取るコマンド文字列に対し、env var が**展開前**のリテラル (`$FORNIX_DIR` 等) のまま渡されるため、`resolveRepoDir` が正しいリポジトリを特定できない
+- [ ] 結果として `hasStagedDocChanges` が誤ったディレクトリを対象にし、docs ステップが通らずコミットがブロックされる
+- [ ] 再現手順: `git -C "$FORNIX_DIR" commit ...` のように env var を使ったコミット → workflow-gate が `docs` 未完了でブロック。`git -C "C:/git/fornix-stream" commit ...` と展開済みパスにすると通る
+- [ ] 修正案 A: `resolveRepoDir` 内で `p` を `process.env` で展開する (`p.replace(/\$(\w+)/g, (_, k) => process.env[k] || '')`)
+- [ ] 修正案 B: `parseGitCArg` 側で shell-style 展開に対応する
+- [ ] 修正後、env var パスでのコミットが docs ステップを正しく通過することを確認する
+- 背景: fornix-stream（データ専用 repo）への salvage bulk import コミット時に発覚（2026-05-02）。`$FORNIX_DIR=C:\git\fornix-stream` で再現済み。
+
 ### check-japanese-in-docs.js: dotfiles-private を誤ってパブリック判定するバグ
 
 - [ ] `doc-append` を dotfiles-private ディレクトリから実行しても「This is a public repository」としてブロックされる
