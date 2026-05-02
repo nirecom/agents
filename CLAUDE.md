@@ -30,7 +30,7 @@
      the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
      is visible without relying on Claude's summary.
 7. **Docs** — Run `/update-docs`. Mandatory for every task.
-8. **User verification** — Wait for the user to confirm the task is complete.
+8. **User verification** — Run `echo "<<WORKFLOW_USER_VERIFIED>>"` immediately; set the Bash `description` to explain what the user is approving.
 9. **Commit** — Run `/commit-push`.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end` (merge + cleanup). Mandatory; do not skip.
