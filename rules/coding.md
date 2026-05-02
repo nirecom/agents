@@ -4,6 +4,7 @@
 
 - Never commit private information (automatically enforced by pre-commit hook and Claude Code PreToolUse hook — see `docs/scan-outbound.md` for the full list of detected patterns). Use generic placeholders or descriptions instead.
   - Fictional email addresses for tests must use the `example.com` domain (RFC 2606 reserved).
+- Before writing machine-specific information to any public file, check `.private-info-blocklist` in the repo root for forbidden patterns. Skip silently if the file does not exist.
 - Always add `.env` to `.gitignore` to exclude secrets from version control.
 - Do NOT add `Co-Authored-By` trailers to commit messages.
 
