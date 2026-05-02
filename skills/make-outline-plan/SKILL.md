@@ -51,7 +51,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 6. If verdict is `MISSING_ALTERNATIVE: <description>`:
    - Send the concern back to outline-planner for revision.
-   - Re-review from step 5. Repeat for at most **2 revision rounds** (`revision_rounds`).
+   - Re-review from step 5. Repeat for at most **1 revision round** (`revision_rounds`).
    - On cap: tell the user which concern is blocking and ask whether to add a missing
      alternative, approve as-is, or change the scope.
 
