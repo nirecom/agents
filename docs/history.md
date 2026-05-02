@@ -102,4 +102,8 @@ Changes: hooks/workflow-mark.js: hoist toolResponse/exitCode/sessionId; add push
 
 ### BUGFIX: profile-snippet.ps1: remove settings.json from symlink watchlist (2026-05-02, pending)
 Background: profile-snippet.ps1 listed settings.json alongside CLAUDE.md as a symlink to monitor for breakage. However, settings.json is now an assembled file (written by assemble-settings.js), never a symlink. This caused the broken-symlink check to always fire, triggering dotfileslink.ps1 on every shell start even when nothing was broken.
-Changes: Removed settings.json from the _agentSymlinks watchlist in profile-snippet.ps1. Only CLAUDE.md is now monitored.
+Changes: Removed settings.json from the _agentSymlinks watchlist in profile-snippet.ps1. Only CLAUDE.md is now monitored.
+
+### CONFIG: codex-core: increase review timeout 60s to 180s (2026-05-02, pending)
+Background: Large plans (187+ lines) were timing out at 60s in review-plan-codex and review-code-codex. Diagnosed via ~/.claude/projects/codex-review logs — a 187-line plan hit the wall exactly at 60s.
+Changes: bin/lib/codex-core.sh: changed timeout 60 to timeout 180; updated FAILED message to 'timeout (180s)'.
