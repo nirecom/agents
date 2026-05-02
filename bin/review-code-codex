@@ -18,6 +18,7 @@ source "$(dirname "$(realpath "$0")")/lib/codex-core.sh"
 
 BASE="main"
 NO_LOG=false
+CONTEXT_FILES=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base)
@@ -27,6 +28,12 @@ while [[ $# -gt 0 ]]; do
       fi
       BASE="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
+    --context)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Review: FAILED — --context requires an argument"
+        exit 0
+      fi
+      CONTEXT_FILES+=("$2"); shift 2 ;;
     *) echo "Unknown argument: $1" >&2; shift ;;
   esac
 done
@@ -67,11 +74,28 @@ if (( DIFF_LINES > MAX_DIFF_LINES )); then
   DIFF_LINES=$MAX_DIFF_LINES
 fi
 
+# Build optional context section
+CONTEXT_SECTION=""
+CONTEXT_BODY=""
+for ctx_file in "${CONTEXT_FILES[@]}"; do
+  if [[ -f "$ctx_file" && -s "$ctx_file" ]]; then
+    CONTEXT_BODY+=$(<"$ctx_file")$'\n\n'
+  fi
+done
+if [[ -n "$CONTEXT_BODY" ]]; then
+  CONTEXT_SECTION="The following context documents describe the design intent for this change. Use them to evaluate whether the implementation matches the stated design goals.
+
+[CONTEXT START]
+${CONTEXT_BODY}[CONTEXT END]
+
+"
+fi
+
 PREAMBLE=$(codex_core_adversarial_preamble "code diff")
 
 PROMPT="${PREAMBLE}
 
-You are doing an adversarial code review. Challenge design decisions, surface hidden assumptions, and question tradeoffs. Focus on:
+${CONTEXT_SECTION}You are doing an adversarial code review. Challenge design decisions, surface hidden assumptions, and question tradeoffs. Focus on:
 - Whether the chosen approach is the safest and simplest one (suggest alternatives if not)
 - Failure modes, rollback paths, and data loss risks
 - Concurrency, auth boundaries, and reliability issues
