@@ -6,3 +6,4 @@ settings.local.json
 settings-extension.json
 rules/language.md
 .env
+.private-info-blocklist
