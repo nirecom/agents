@@ -52,7 +52,7 @@ codex_core_run() {
   codex_out=""
   codex_exit=0
 
-  codex_out=$(timeout 60 codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
+  codex_out=$(timeout 180 codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
 
   case $codex_exit in
     0)
@@ -64,8 +64,8 @@ codex_core_run() {
       codex_core_log performed "" "$_input_lines"
       ;;
     124)
-      echo "## ${CODEX_LABEL}: FAILED — timeout (60s)"
-      codex_core_log failed "timeout (60s)" "$_input_lines"
+      echo "## ${CODEX_LABEL}: FAILED — timeout (180s)"
+      codex_core_log failed "timeout (180s)" "$_input_lines"
       ;;
     *)
       local stderr_tail
