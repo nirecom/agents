@@ -20,7 +20,8 @@ must be read and passed to the planner before drafting begins.
 3. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
    a. Write the planner's draft to `~/.claude/plans/<session-id>-detail-draft.md`.
-   b. Run via Bash: `review-plan-codex --input ~/.claude/plans/<session-id>-detail-draft.md --format detail-plan`
+   b. Run via Bash: `review-plan-codex --input ~/.claude/plans/<session-id>-detail-draft.md --format detail-plan [--context ~/.claude/plans/<session-id>-outline.md]`
+      (omit `--context` if the outline file does not exist)
    c. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
         Extract the first non-blank line as the verdict token.
