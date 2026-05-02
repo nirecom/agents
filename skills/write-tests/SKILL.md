@@ -36,8 +36,8 @@ Write or update tests for the current task.
 After completing this skill:
 1. Stage the test files: `git add tests/`
    The commit gate detects staged tests/ changes as evidence of completion.
-2. Run tests and invoke `review-code-security` via the Skill tool in parallel.
+2. Run tests.
 
 If tests are genuinely not needed for this change:
 1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-2. Run tests and invoke `review-code-security` via the Skill tool in parallel.
+2. Run tests.
