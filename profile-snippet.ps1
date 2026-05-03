@@ -13,3 +13,28 @@ if ($_agentBroken) {
     & "$AgentsRoot\install\win\dotfileslink.ps1"
 }
 Remove-Variable _agentSymlinks, _agentBroken -ErrorAction SilentlyContinue
+
+# Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
+$SessionDir = "$HOME\.claude\projects"
+if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path "$SessionDir\.git")) {
+    Write-Host "git fetch Claude session sync ..."
+    $_fetchSs = Start-Process -FilePath git -ArgumentList "-C $SessionDir fetch" -NoNewWindow -PassThru
+    if (-not $_fetchSs.WaitForExit(3000)) { $_fetchSs.Kill() }
+    elseif ($_fetchSs.ExitCode -eq 0) { git -C $SessionDir merge --ff-only --no-summary FETCH_HEAD 2>$null }
+    Remove-Variable _fetchSs -ErrorAction SilentlyContinue
+}
+
+# Launch VS Code with session sync (push on window close via title polling)
+function codes {
+    $syncScript = "$AgentsRoot\bin\session-sync.ps1"
+    $waitScript = "$AgentsRoot\bin\wait-vscode-window.ps1"
+    $target = if ($args.Count -gt 0) { $args[0] } else { '.' }
+    $codeArgs = $args -join ' '
+    if ($target -match '\.code-workspace$') {
+        $name = [IO.Path]::GetFileNameWithoutExtension((Resolve-Path $target).Path)
+    } else {
+        $name = Split-Path -Leaf (Resolve-Path $target).Path
+    }
+    Start-Process pwsh -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-Command",
+        "code.cmd --new-window $codeArgs; & '$waitScript' '$name'; & '$syncScript' push -Quiet" -WindowStyle Hidden
+}
