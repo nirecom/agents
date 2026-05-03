@@ -8,7 +8,7 @@
 - **One installer, every platform** — Linux, macOS, and Windows (native and WSL2) all handled by a single branching install; hooks and shell rules detect the platform automatically.
 
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
-Codex CLI is now supported; Gemini CLI planned.
+Codex CLI and Gemini CLI are both supported (install with `-Develop`).
 
 ## What's Inside
 
@@ -18,6 +18,60 @@ Most agent frameworks rely on the model to remember process steps. This framewor
 the dev workflow — research → plan → write-tests → code → run-tests → security-review →
 docs → user-verification — as a per-session state machine. A PreToolUse hook physically
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
+
+```mermaid
+flowchart TD
+    classDef terminal  fill:#16a34a,stroke:#14532d,color:#fff,font-weight:bold
+    classDef decision  fill:#b45309,stroke:#92400e,color:#fff
+    classDef skippable fill:#475569,stroke:#334155,color:#fff
+    classDef required  fill:#1d4ed8,stroke:#1e3a8a,color:#fff
+    classDef parallel  fill:#6d28d9,stroke:#4c1d95,color:#fff
+
+    Task([Task]) --> DocCheck{Docs-only<br/>changes?}
+    DocCheck -- Yes --> UV["8 · User verify"]
+    DocCheck -- No  --> S1["1 · clarify-intent<br/>skippable"]
+
+    S1 --> P2a
+
+    subgraph Plan["2 · Plan  —  3-stage pipeline"]
+        direction TB
+        P2a["2a · survey-code / deep-research<br/>skippable"] --> P2b
+        P2b["2b · make-outline-plan<br/>Claude + Codex adversarial loop"] --> P2c
+        P2c["2c · make-detail-plan<br/>Claude + Codex adversarial loop"]
+    end
+
+    Plan --> S3["3 · Branch / Worktree decision<br/>main · branch · worktree"]
+    S3   --> S4["4 · write-tests<br/>before code · skippable"]
+    S4   --> S5["5 · Code<br/>diff in chat → user approves"]
+
+    S5 --> S6a & S6b & S6c
+
+    subgraph Review["6 · Parallel review"]
+        S6a["Run tests"]
+        S6b["/review-code-security"]
+        S6c["review-code-codex<br/>Codex second opinion"]
+    end
+
+    S6a & S6b & S6c --> S7["7 · update-docs"]
+    S7 --> UV
+    UV --> S9["9 · commit-push<br/>blocked until all steps done"]
+
+    S9 --> Cleanup{worktree · branch<br/>or main?}
+    Cleanup -- worktree --> WE["/worktree-end<br/>merge + cleanup"]
+    Cleanup -- branch   --> PR["gh pr create → merge → delete"]
+    Cleanup -- main     --> Done([Done])
+    WE --> Done
+    PR --> Done
+
+    style Plan   fill:#1e3a8a,stroke:#1d4ed8,color:#fff
+    style Review fill:#4c1d95,stroke:#6d28d9,color:#fff
+
+    class Task,Done terminal
+    class DocCheck,Cleanup decision
+    class S1,P2a,S4 skippable
+    class P2b,P2c,S3,S5,S7,UV,S9,WE,PR required
+    class S6a,S6b,S6c parallel
+```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
   satisfies the corresponding steps — no manual marker required.
@@ -144,6 +198,7 @@ GitHub Copilot for VS Code is required for Copilot integration. The installer
 ```bash
 git clone https://github.com/nirecom/agents ~/git/agents
 cd ~/git/agents && ./install.sh
+# Add --develop to also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
 ```
 
 > If nvm was just installed, restart your terminal before re-running `./install.sh` so that Node.js (npm) is available.
@@ -160,6 +215,7 @@ source ~/.agents_profile
 git clone https://github.com/nirecom/agents $HOME\git\agents
 Set-Location $HOME\git\agents
 .\install.ps1
+# Add -Develop to also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
 ```
 
 > If fnm was just installed, restart your terminal before re-running `.\install.ps1` so that Node.js (npm) is available.
