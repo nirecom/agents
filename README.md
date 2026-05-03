@@ -100,6 +100,9 @@ Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and
 `~/.claude/projects/` through a private GitHub repo — conversations started on Windows can
 be resumed on macOS/Linux, and vice versa.
 
+Use `codes [dir]` instead of `code` to open VS Code: it waits for the window to close,
+then automatically pushes the session to the sync repo.
+
 ### Standards-backed testing and security
 
 Concrete test categories — Normal, Error, Edge, Idempotency, and Security — with citations:
