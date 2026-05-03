@@ -17,7 +17,14 @@ Write or update tests for the current task.
    cases in the next step.
 4. List all planned test cases by category (include call-path error cases from step 3).
    Present to the user — do not write code until approved.
-5. **Launch a subagent** (`mode: "default"`) to autonomously:
+5. **Determine the subagent's model** via `judge-task-complexity`:
+   - Invoke the `judge-task-complexity` skill with the task context, source files identified in steps 2–3, and the planned test cases from step 4.
+   - Parse the single-line response (`VERDICT: <opus|sonnet> | <signal IDs>`).
+   - Extract the model token. If parse fails, use `opus`.
+   - Emit in Claude text output (NOT Bash echo):
+     > Model selected: **[opus|sonnet]** (signals: [signal IDs, or "none"])
+
+6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from step 5>`) to autonomously:
    a. Write the test file(s).
    b. Run tests with timeout.
    c. Fix failures and re-run until green.
@@ -25,7 +32,8 @@ Write or update tests for the current task.
    e. Re-run tests until green.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
-6. Present the final test file content to the user for review.
+
+7. Present the final test file content to the user for review.
 
 ## Rules
 
