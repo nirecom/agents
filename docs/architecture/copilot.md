@@ -158,7 +158,7 @@ update to this file.
 The original design (written before Agent Skills shipped) ported 8 skills manually to
 `copilot/prompts/*.prompt.md`. Since VS Code 1.108 (2025-12-18), Copilot auto-detects
 all `SKILL.md` files under `~/.claude/skills/` as Agent Skills — including skills that
-were previously excluded (`save-research`, `update-instruction`, `review-tests`).
+were previously excluded (`save-research`, `update-infrastructure`, `review-tests`).
 
 **`copilot/prompts/` has been removed** (2026-04-26). All skills are served via the
 `~/.claude/skills` symlink and the Agent Skills mechanism.
@@ -261,7 +261,7 @@ in the response. If Copilot reports no custom instructions, check that
 ### 6.3 Skills (Agent Skills + Prompt Files)
 
 **Agent Skills (primary):** In Copilot Chat, type `/` and confirm that skills not present
-in `copilot/prompts/` appear — e.g., `/save-research`, `/review-tests`, `/update-instruction`.
+in `copilot/prompts/` appear — e.g., `/save-research`, `/review-tests`, `/update-infrastructure`.
 These are served from `~/.claude/skills/` via the Agent Skills mechanism.
 
 **Prompt Files (legacy):** The 8 ported skills (`commit-push`, `update-docs`,
