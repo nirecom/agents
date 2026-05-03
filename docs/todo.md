@@ -4,8 +4,8 @@
 
 ### /boost + judge-task-complexity — manual smoke test (post-push)
 
-- [ ] Invoke `/judge-task-complexity` directly: simple task → `VERDICT: sonnet | none`; multi-file + security task → `VERDICT: opus | S1-multi-file, S3-security`
-- [ ] Invoke `/boost test task`: confirm Opus subagent launches
+- [x] Invoke `/judge-task-complexity` directly: simple task → `VERDICT: sonnet | none`; multi-file + security task → `VERDICT: opus | S1-multi-file, S3-security`
+- [x] Invoke `/boost test task`: confirm Opus subagent launches
 - [ ] Run `make-detail-plan`: confirm step 2 calls judge before detail-planner starts
 
 ### intent-log.md の Write パーミッションダイアログ抑制 — 動作確認
