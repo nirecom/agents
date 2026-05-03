@@ -164,6 +164,8 @@
       "Bash(*| dd *)",
       "Bash(*push --force*)",
       "Bash(*push *--force*)",
+      "Bash(*push -f *)",
+      "Bash(*push *-f *)",
       "Bash(*push --mirror*)",
       "Bash(*push *--mirror*)",
       "Bash(*push --delete*)",
