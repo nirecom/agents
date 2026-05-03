@@ -7,6 +7,12 @@
 - [ ] clarify-intent を実行し、intent-log.md 書き込み時にパーミッションダイアログが出ないことを確認する
 - [ ] ダイアログが出る場合は `**/.claude/plans/*-intent-log.md` のグロブパターンを再検討する
 
+### AWS IAM ポリシー設定（server-side enforcement）
+
+- [ ] personal / work 各アカウントに読み取り専用 IAM ポリシーを作成（`docs/architecture/claude-code/settings.md` 参照）
+- [ ] aws-scan-* スキル動作確認を IAM 制限下で実施
+- [ ] AWS_WORK_DIR と AWS_STATE_DIR を各マシンのローカル設定に追記
+
 ### agents repo のライセンスを MIT → Apache-2.0 に変更する
 
 - [ ] `LICENSE` ファイルを Apache-2.0 テキストに差し替える
