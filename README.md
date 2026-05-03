@@ -170,12 +170,6 @@ Then add to your PowerShell profile:
 . "$HOME\.agents_profile.ps1"
 ```
 
-### Standalone (no dotfiles)
-
-The framework works without the [dotfiles](https://github.com/nirecom/dotfiles) repo.
-`$DOTFILES_PRIVATE_DIR` is optional — if unset, `scan-outbound.sh` runs with an empty
-private-info allowlist (warning only).
-
 ## Configuration
 
 Key environment variables set by `dotfileslink`:
