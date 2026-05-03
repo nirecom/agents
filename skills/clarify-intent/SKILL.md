@@ -54,23 +54,17 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
    unless not needed) then `/make-outline-plan`.
 
-**Note:** Pass only `<session-id>-intent.md` to downstream stages. Do NOT pass `<session-id>-intent-log.md`.
-
 ## Output Schema
 
-Write two files in Japanese (per `rules/language.md`):
+Write one file in Japanese (per `rules/language.md`):
 
-### `<session-id>-intent.md` — passed to downstream stages
+### `<session-id>-intent.md`
 
 - **Title**: "Agreed Requirements" + `<session-id>`
 - **Background / Motivation**: 1-2 paragraphs on why this task is needed
 - **Scope**: what is included / what is excluded (non-goals)
 - **Constraints**: list of constraints
-
-### `<session-id>-intent-log.md` — NOT passed downstream, for reference only
-
-- **Title**: "Interview Log" + `<session-id>`
-- **Interview log**: each Q&A round recorded as "Q: ... A: ..."
+- **Interview Log** (optional): each Q&A round recorded as "Q: ... A: ..."
 
 ## Completion
 
