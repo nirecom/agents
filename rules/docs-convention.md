@@ -9,7 +9,8 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 |------|------|-------------|---------|
 | `README.md` | Repo's project pitch and entry point — what it does, install, usage, configuration. Write initial install/setup instructions here first. | Compact | Always |
 | `overview.md` | Highest-level description of a project or directory — vision, goals, and overall shape. Most abstract document in its location. | Compact | Large projects only |
-| `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`) | <300 lines (split into `architecture/` when exceeded) | Always |
+| `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`). When split into `architecture/`, the main file is `architecture/design.md`. | <300 lines (split into `architecture/` when exceeded) | Always |
+| `architecture/design.md` | Main content file when `architecture.md` is split into `architecture/`. Same What/Why scope as `architecture.md`. Other split files use topical names (e.g. `risks.md`, `stacks.md`). | Unlimited | When `architecture.md` exceeds 300 lines |
 | `roadmap.md` | Project-wide goals, milestones, and direction | Compact | Optional |
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
 | `history.md` | Completed work with why (background, incidents, decisions) — append-only | <500 lines warn / <800 lines hard (rotate when exceeded) | On first completion |
@@ -74,7 +75,7 @@ All standard doc types (`todo.md`, `history.md`, `ops.md`) follow the same casca
 |-------|---------|---------|
 | Hub of hubs | `engineering/architecture.md` | One-line per project → links to project `architecture.md` |
 | Project hub | `{project}/architecture.md` | Index or flat design doc |
-| Detail | `{project}/architecture/overview.md` | Full design detail |
+| Detail | `{project}/architecture/design.md` | Full design detail |
 
 When updating a project-level doc in my-specs-repo, also update its parent-level counterpart
 (e.g. `langchain/todo.md` → `engineering/todo.md`).
