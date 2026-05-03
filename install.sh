@@ -1,6 +1,7 @@
 #!/bin/bash
 # Agents framework installer for Linux/macOS
-# Usage: ./install.sh
+# Usage: ./install.sh [--develop] [--full]
+#   --develop : also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
 
 set -euo pipefail
 
@@ -21,6 +22,14 @@ fi
 unset _uname_s
 
 AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+OPT_DEVELOP=false
+for _arg in "$@"; do
+  case "$_arg" in
+    --develop|--full|--base|--toolchain) OPT_DEVELOP=true ;;
+  esac
+done
+unset _arg
 
 printf "${C_CYAN}=== agents installer ===${C_RESET}\n"
 
@@ -49,9 +58,15 @@ printf -- "${C_BOLD}--- Installing Claude Code ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/claude-code.sh"
 export PATH="$HOME/.local/bin:$PATH"
 
-echo ""
-printf -- "${C_BOLD}--- Installing Codex ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/codex.sh"
+if [ "$OPT_DEVELOP" = true ]; then
+    echo ""
+    printf -- "${C_BOLD}--- Installing Codex ---${C_RESET}\n"
+    "$AGENTS_ROOT/install/linux/codex.sh"
+
+    echo ""
+    printf -- "${C_BOLD}--- Installing Gemini CLI + Mermaid CLI ---${C_RESET}\n"
+    "$AGENTS_ROOT/install/linux/gemini.sh"
+fi
 
 echo ""
 printf -- "${C_BOLD}--- Initializing Claude Code session sync ---${C_RESET}\n"
