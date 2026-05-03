@@ -17,8 +17,12 @@ effort: medium
    - RDS: `aws rds describe-db-instances --query 'DBInstances[].{id:DBInstanceIdentifier,engine:Engine}'`
    - VPC/SG: `aws ec2 describe-vpcs`, `aws ec2 describe-security-groups`
    - IAM: `aws iam list-users`, `aws iam list-roles`, `aws iam list-policies --scope Local`
-3. Write to `$AWS_STATE_DIR/resources-<YYYYMMDD>.json`. Single-region scope.
-4. Print to conversation: resource type → count only (no ARNs, IDs, IPs).
+3. Write raw data to `$AWS_STATE_DIR/resources-<YYYYMMDD>.json`. Single-region scope.
+4. Write human-readable summary to `$AWS_STATE_DIR/resources-<YYYYMMDD>.md`:
+   - Header: profile, region, scan timestamp
+   - Table: resource type | count | notes (e.g. running/stopped for EC2)
+   - No ARNs, IDs, or IP addresses.
+5. Print to conversation: resource type → count only (no ARNs, IDs, IPs).
 
 ## Rules
 

@@ -16,8 +16,11 @@ effort: medium
    - API GW HTTP: `aws apigatewayv2 get-apis`
    - CloudFront: `aws cloudfront list-distributions`
 3. Build topology: entry points (ALB/API GW/CloudFront) → compute (ECS/Lambda).
-4. Write to `$AWS_STATE_DIR/apps-<YYYYMMDD>.json`.
-5. Print: counts by type (no ARNs, domain names, IDs).
+4. Write raw data to `$AWS_STATE_DIR/apps-<YYYYMMDD>.json`.
+5. Write human-readable summary to `$AWS_STATE_DIR/apps-<YYYYMMDD>.md`:
+   - Topology table: entry point type | backend type | count
+   - No ARNs, domain names, or IDs
+6. Print: counts by type (no ARNs, domain names, IDs).
 
 ## Rules
 
