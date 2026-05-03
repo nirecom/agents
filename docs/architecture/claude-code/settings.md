@@ -77,3 +77,17 @@
 - VSCode's "Ask before edits" mode covers Edit/Write only — Bash commands do not trigger
   the ask dialog.
 - Hot-reloading of settings.json hook changes is unreliable. Restart Claude Code after changes.
+
+## AWS Permission Posture
+
+Claude Code operates with read-only AWS access during scan skills. Recommended IAM grants:
+- `ec2:Describe*`, `s3:ListBucket`, `s3:GetBucketAcl`, `s3:GetBucketPolicyStatus`
+- `iam:List*`, `iam:Get*` (not Create/Put/Attach/Delete)
+- `ce:GetCostAndUsage`, `ce:GetCostForecast`
+- `ecs:List*`, `ecs:Describe*`, `lambda:List*`, `lambda:Get*`
+- `elasticloadbalancing:Describe*`, `apigateway:GET`, `apigatewayv2:GET`, `cloudfront:List*`, `cloudfront:Get*`
+- `cloudtrail:Describe*`, `cloudtrail:Get*`, `guardduty:List*`, `guardduty:Get*`, `config:Describe*`, `securityhub:Describe*`
+- Explicit deny: `*:Delete*`, `*:Remove*`, `*:Terminate*`, `*:Put*`
+
+`settings.json` deny/ask rules are defense-in-depth. Server-side IAM is the authoritative layer.
+IAM policy setup is tracked in `docs/todo.md`.
