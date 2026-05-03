@@ -59,3 +59,20 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
 - Do not duplicate content across documents — cross-reference instead
 - `README.md`: Project entry point (What / Install / Usage / Configuration). **Initial install/setup instructions must go here, not in `ops.md`.** Delegate internals to `architecture.md` and detailed procedures to `ops.md` — do not duplicate. Keep concise — link to `docs/` for details.
 - `overview.md`: Project vision and overall shape — what it is and why it exists. The most abstract document in its directory. Does not duplicate `architecture.md` design decisions; instead provides the entry-level mental model for a new reader.
+
+## Progressive Disclosure (Cascade)
+
+Same-named files at different hierarchy levels provide the same kind of information
+scoped to that level. Upper levels contain **summary + pointers**, not duplicated content.
+All standard doc types (`todo.md`, `history.md`, `ops.md`) follow the same cascade —
+`architecture.md` is shown as an example below.
+
+| Level | Example | Content |
+|-------|---------|---------|
+| Hub of hubs | `engineering/architecture.md` | One-line per project → links to project `architecture.md` |
+| Project hub | `{project}/architecture.md` | Index or flat design doc |
+| Detail | `{project}/architecture/overview.md` | Full design detail |
+
+When updating a project-level doc in ai-specs, also update its parent-level counterpart
+(e.g. `langchain/todo.md` → `engineering/todo.md`).
+Repo-local `docs/` has no parent level — propagation is not needed.
