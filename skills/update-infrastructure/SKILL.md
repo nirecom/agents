@@ -1,5 +1,5 @@
 ---
-name: update-instruction
+name: update-infrastructure
 description: Update infrastructure.md to reflect infrastructure changes across all stacks and hosts
 model: sonnet
 effort: low
@@ -9,9 +9,8 @@ Update `infrastructure.md` to reflect infrastructure changes across all stacks a
 
 ## Target files
 
-- `infrastructure.md` is searched in this order:
-  - Local directory `../ai-specs/projects/engineering/`
-  - git repo `git@github.com:nirecom/ai-specs.git` (path: `projects/engineering/infrastructure.md`)
+- `infrastructure.md` path: read from the project's `CLAUDE.local.md` before proceeding.
+  (The path is not stored here because this skill lives in a public repo.)
 
 - Source repos (for detecting changes):
   - langchain-stack: `../langchain-stack/` → `git@github.com:nirecom/langchain-stack.git`
