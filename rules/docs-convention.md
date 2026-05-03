@@ -1,38 +1,19 @@
 # Documentation Convention
 
-Documentation updates, todo.md, history.md, architecture.md, ops.md, infrastructure.md management.
-
 ## Standard Files
+
+Standard docs live under `docs/` within each repository, except `README.md`.
+ `docs/` may be a symlink managed by another repo — check before editing.
 
 | File | Role | Target size | Created |
 |------|------|-------------|---------|
 | `README.md` | Repo's project pitch and entry point — what it does, install, usage, configuration. Write initial install/setup instructions here first. | Compact | Always |
 | `overview.md` | Highest-level description of a project or directory — vision, goals, and overall shape. Most abstract document in its location. | Compact | Large projects only |
 | `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`) | <300 lines (split into `architecture/` when exceeded) | Always |
+| `roadmap.md` | Project-wide goals, milestones, and direction | Compact | Optional |
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
 | `history.md` | Completed work with why (background, incidents, decisions) — append-only | <500 lines warn / <800 lines hard (rotate when exceeded) | On first completion |
 | `ops.md` | Day-to-day operations and procedures too detailed for README.md. Initial install instructions belong in README.md, not here. | Unlimited | On demand |
-| `infrastructure.md` | **SSOT** for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. | Unlimited | Always (in `my-specs-repo`) |
-
-Do not use standalone `roadmap.md` — status tracking belongs in `todo.md`,
-completed details in `history.md`, future design specs in `architecture/roadmap.md`.
-
-## Progressive Disclosure (Cascade)
-
-Same-named files at different hierarchy levels provide the same kind of information
-scoped to that level. Upper levels contain **summary + pointers**, not duplicated content.
-All standard doc types (`todo.md`, `history.md`, `ops.md`) follow the same cascade —
-`architecture.md` is shown as an example below.
-
-| Level | Example | Content |
-|-------|---------|---------|
-| Hub of hubs | `engineering/architecture.md` | One-line per project → links to project `architecture.md` |
-| Project hub | `{project}/architecture.md` | Index or flat design doc |
-| Detail | `{project}/architecture/overview.md` | Full design detail |
-
-When updating a project-level doc in my-specs-repo, also update its parent-level counterpart
-(e.g. `langchain/todo.md` → `engineering/todo.md`).
-Repo-local `docs/` has no parent level — propagation is not needed.
 
 ## Append-Only Tools
 
