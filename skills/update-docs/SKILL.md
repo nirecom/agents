@@ -30,6 +30,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
    - Specific additions or modifications
 5. **Apply after confirmation**: Edit files only after user approval
 6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
+   - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 7. **Commit separately**: If docs are in a separate repo, commit each repo independently
 
 ## Rules
