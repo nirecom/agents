@@ -110,4 +110,8 @@ Changes: bin/lib/codex-core.sh: changed timeout 60 to timeout 180; updated FAILE
 
 ### BUGFIX: workflow-gate: expand env vars in resolveRepoDir (2026-05-03, pending)
 Background: PreToolUse hook receives the command string before Bash expansion, so parseGitCArg returned the literal $FORNIX_DIR string. resolveRepoDir treated it as a path, causing hasStagedDocChanges to check the wrong directory and incorrectly block commits with git -C "$FORNIX_DIR" commit. Discovered during fornix-stream salvage bulk import (2026-05-02).
-Changes: Expanded env vars ($VAR / ${VAR}) in resolveRepoDir via process.env lookup after parseGitCArg returns. Undefined vars resolve to empty string (falsy), falling through to the staged-changes fallback. Added test cases N5/N6/N7 to fix-workflow-gate-unix-path.sh.
+Changes: Expanded env vars ($VAR / ${VAR}) in resolveRepoDir via process.env lookup after parseGitCArg returns. Undefined vars resolve to empty string (falsy), falling through to the staged-changes fallback. Added test cases N5/N6/N7 to fix-workflow-gate-unix-path.sh.
+
+### FEATURE: AWS infrastructure access Phase 1a: scan skills + settings.json guards (2026-05-03, pending)
+Background: Phase 1a of AWS account access infrastructure. Goal: auto-collect full account configuration into AWS_STATE_DIR without opening the console. Claude Code gets AWS operation guards via settings.json and ready-to-use scan skill stubs.
+Changes: settings.json: added 18 deny patterns (delete/terminate/remove/detach/release/destroy/etc.) and 14 ask patterns (create/put/update/start/stop/etc.) for aws CLI operations. New SKILL.md stubs: aws-scan (orchestrator), aws-scan-resources (EC2/S3/RDS/VPC/IAM), aws-scan-security (IAM posture/public exposure/security services), aws-scan-cost (Cost Explorer top-5), aws-scan-apps (ECS/Lambda/ALB/API GW topology). docs/architecture/claude-code/settings.md: AWS IAM Posture section added. docs/todo.md: IAM follow-up tasks added.
