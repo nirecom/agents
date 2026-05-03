@@ -18,6 +18,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
    - `README.md` (repo root) is required for all repos. **Create it first if missing — highest priority.**
      - Goal: make the reader think "I want to use this" — crisp features, "what it does for you"
      - Initial install/setup instructions go here, not in `ops.md`
+   - `CHANGELOG.md` (repo root) for public repos. Create if missing (no manual seed needed — first run starts from here).
 3. **Identify gaps**: Compare git log against each document's content. Look for:
    - Unrecorded commits or phases
    - Architecture/design changes not yet documented
@@ -42,8 +43,14 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 ## Completion
 
 After completing this skill:
-1. Stage the updated doc files: `git add docs/ README.md`
+1. Append to `docs/history.md` (internal, detailed):
+   `doc-append docs/history.md --category CATEGORY --subject "..." --date YYYY-MM-DD --commits HASH --background "..." --changes "..."`
+2. Append to `CHANGELOG.md` (external, user-facing summary — omit `--commits`):
+   `doc-append CHANGELOG.md --category CATEGORY --subject "..." --date YYYY-MM-DD --background "..." --changes "..."`
+   `--background` = one sentence on context; `--changes` = what changed from a user perspective (no internal refs).
+   For public repos only. Skip if the repo is private.
+3. Stage the updated doc files: `git add docs/ README.md CHANGELOG.md`
    `README.md` is required for all repos — create it if it does not exist before staging.
    The commit gate detects staged docs/ or root `*.md` changes as evidence of completion.
    Docs updates are mandatory for every task — there is no skip path.
-2. Wait for the user to verify the changes, then run `echo "<<WORKFLOW_USER_VERIFIED>>"` and invoke `commit-push` via the Skill tool.
+4. Wait for the user to verify the changes, then run `echo "<<WORKFLOW_USER_VERIFIED>>"` and invoke `commit-push` via the Skill tool.
