@@ -35,6 +35,16 @@
 - [ ] 検討: `doc-append` による自動採番、既存エントリの一括番号振りスクリプト
 - docs-only short-circuit 導入により当面の必須条件ではない
 
+### Gemini CLI — クロスプロバイダレビュー統合
+
+Codex CLI と同様に、`review-code-gemini` / `review-plan-gemini` を実装してワークフロー step 6 に並列で乗せる。
+- [ ] `bin/review-code-gemini` スクリプト作成（`review-code-codex` を参照）
+- [ ] `bin/review-plan-gemini` スクリプト作成（`review-plan-codex` を参照）
+- [ ] `skills/review-code-gemini` / `skills/review-plan-gemini` SKILL.md 作成
+- [ ] `CLAUDE.md` の step 6 に Gemini レビューを追加
+- [ ] README.md 更新（Gemini CLI supported に変更）
+- 前提: `gemini` CLI インストール済み・API キー設定済み（Google AI Studio）
+
 ### AWS IAM ポリシー設定（server-side enforcement）
 
 - [ ] personal / work 各アカウントに読み取り専用 IAM ポリシーを作成（`docs/architecture/claude-code/settings.md` 参照）
