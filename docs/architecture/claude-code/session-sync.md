@@ -55,11 +55,11 @@ but tasks requiring local filesystem, MCP servers, or NSSM service operations mu
 mode. Local sessions are invisible to Web and vice versa. Self-hosted sync is necessary for
 sharing Local mode session history.
 
-**Automatic sync**:
-- **Terminal startup**: `.profile_common` (Linux/macOS) and `profile.ps1` (Windows) run
+**Automatic sync** (provided by `agents/profile-snippet.{sh,ps1}` — works without dotfiles):
+- **Terminal startup**: `profile-snippet.sh` (Linux/macOS) and `profile-snippet.ps1` (Windows) run
   `git fetch + merge --ff-only` on `~/.claude/projects/` with 3-second timeout
 - **`codes` function**: Opens VS Code in a new window (`--new-window`), polls for window
-  closure via title matching (`wait-vscode-window.ps1` / `.sh`), then runs session-sync push.
+  closure via title matching (`bin/wait-vscode-window.ps1` / `.sh`), then runs session-sync push.
   Each instance independently detects its own window. Push runs in quiet mode: shows a single
   Windows toast notification on completion or failure (WinRT API, no external modules).
   Linux: `notify-send` fallback.
