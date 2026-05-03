@@ -117,7 +117,8 @@ function findAdditionalDirectories() {
 // explicit git -C in every commit command, and works across all Claude clients.
 // Normalizes Git Bash Unix-style drive paths: /<drive>/path/to → <DRIVE>:\path\to
 function resolveRepoDir(command) {
-  const p = parseGitCArg(command);
+  const raw = parseGitCArg(command);
+  const p = raw ? raw.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, a, b) => process.env[a || b] || '') : raw;
   if (p) {
     // Unix drive path: /<drive>/path → <DRIVE>:\path
     const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
