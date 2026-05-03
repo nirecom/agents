@@ -96,6 +96,7 @@ Skipping research does NOT justify skipping the plan step.
 - Read before planning — do not plan from assumptions
 - Orchestrator (main Claude) only summarizes each discussion round to the user — do not dump full transcripts into the conversation
 - Follow `rules/orthogonality.md` for cross-platform and naming consistency
+- **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 6. Never pause for user confirmation during intermediate revision rounds (steps 3–4): write draft files silently and inform the user with plain text only.
 
 ## Completion
 
