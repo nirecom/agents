@@ -80,6 +80,10 @@ Write the file in Japanese (per `rules/language.md`) with the following sections
   they work at the direction level only.
 - `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here. It is emitted only by
   `make-detail-plan`.
+- **One `AskUserQuestion` per run** — called only in step 7 (approach selection).
+  Never pause for user confirmation during intermediate steps: Codex/reviewer
+  revision rounds (step 6) or between-step summaries. Update files silently;
+  inform the user with plain text only.
 
 ## Completion
 
