@@ -122,4 +122,8 @@ Changes: Added skills/judge-task-complexity/SKILL.md: dedicated complexity evalu
 
 ### FEATURE: Submit nirecom/agents to awesome-lists (2026-05-03, )
 Background: awesome-lists submission for nirecom/agents (agents repo split project follow-up)
-Changes: Submitted PR #363 to rohitg00/awesome-claude-code-toolkit adding nirecom/agents to the All Plugins section. hesreallyhim/awesome-claude-code requires manual issue submission via GitHub UI (CLI submissions are blocked by repo policy — user guided with URL and field values). travisvn/awesome-claude-skills on hold until repo reaches 10 stars (currently 1). VoltAgent/awesome-agent-skills deferred.
+Changes: Submitted PR #363 to rohitg00/awesome-claude-code-toolkit adding nirecom/agents to the All Plugins section. hesreallyhim/awesome-claude-code requires manual issue submission via GitHub UI (CLI submissions are blocked by repo policy — user guided with URL and field values). travisvn/awesome-claude-skills on hold until repo reaches 10 stars (currently 1). VoltAgent/awesome-agent-skills deferred.
+
+### REFACTOR: Make session-sync standalone (no dotfiles dependency) (2026-05-03, pending)
+Background: Session-sync auto-fetch and the codes function lived in dotfiles' install/win/profile.ps1 and .profile_common, so machines without dotfiles installed had no automatic sync.
+Changes: Added SessionDir auto-pull and codes function to profile-snippet.{ps1,sh}. Moved bin/wait-vscode-window.{ps1,sh} from dotfiles. Moved tests/main-wait-vscode-window.* and tests/main-profile-codes.* and updated path references to agents repo. Updated docs/architecture/claude-code/session-sync.md.
