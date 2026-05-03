@@ -113,6 +113,11 @@ and implementation time (`/review-code-security`). At step 5, `review-code-codex
 also runs an adversarial review via OpenAI Codex CLI (when installed), providing a
 second-provider opinion independent of Claude's model-specific biases.
 
+`settings.json` enforces a permission deny-list so Claude cannot execute dangerous
+operations even if instructed: force push (`--force`, `-f`, `+<ref>` refspec), direct
+`.env` access, bulk deletion (`rm -rf`, `Remove-Item -Recurse`), and AWS destructive
+commands. See [docs/security-policy.md](docs/security-policy.md) for the full policy.
+
 ### Three-stage planning pipeline
 
 The `plan` step separates *what* from *how* via three sequential skills:
