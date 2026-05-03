@@ -54,9 +54,8 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
 
   **Archived history** — entries rotated out of `history.md` live under `history/` as separate `.md` files. `history/index.md` is the lookup index (year-grouped list of all archived entries). When searching for information not present in `history.md`, consult `history/index.md` first, then read the specific archive file listed there. Never reconstruct history solely from `history.md`.
 
-- `infrastructure.md`: Authoritative source for host specs, network topology, Docker stack composition, port allocation, and cloud resources. When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-instruction` skill to keep it aligned with infrastructure changes.
 - `architecture.md`: Document What/Why. How belongs in `ops.md`
 - `ops.md`: Day-to-day operations and complex procedures too detailed for README.md. Never write initial install steps here — those belong in README.md.
 - Do not duplicate content across documents — cross-reference instead
-- `README.md`: Project entry point (What / Install / Usage / Configuration). **Initial install/setup instructions must go here, not in `ops.md`.** Delegate internals to `architecture.md` and detailed procedures to `ops.md` — do not duplicate. For ai-specs projects, `README.md` lives in the source repo root (not in ai-specs). Keep concise — link to `docs/` for details.
+- `README.md`: Project entry point (What / Install / Usage / Configuration). **Initial install/setup instructions must go here, not in `ops.md`.** Delegate internals to `architecture.md` and detailed procedures to `ops.md` — do not duplicate. Keep concise — link to `docs/` for details.
 - `overview.md`: Project vision and overall shape — what it is and why it exists. The most abstract document in its directory. Does not duplicate `architecture.md` design decisions; instead provides the entry-level mental model for a new reader.
