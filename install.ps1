@@ -1,5 +1,13 @@
+param(
+    [switch]$Develop,
+    [switch]$Full,
+    [switch]$Base,      # kept for backward compat — treated as -Develop
+    [switch]$Toolchain  # kept for backward compat — treated as -Develop
+)
+
 # Agents framework installer for Windows (PowerShell)
-# Usage: .\install.ps1
+# Usage: .\install.ps1 [-Develop] [-Full]
+#   -Develop : also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
 
 if ($IsWindows -eq $false) {
     Write-Host "Error: install.ps1 must not run on Linux/macOS. Use install.sh instead." -ForegroundColor Red
@@ -38,9 +46,15 @@ Write-Host ""
 Write-Host "--- Installing Claude Code ---"
 & "$AgentsRoot\install\win\claude-code.ps1"
 
-Write-Host ""
-Write-Host "--- Installing Codex ---"
-& "$AgentsRoot\install\win\codex.ps1"
+if ($Develop -or $Full -or $Base -or $Toolchain) {
+    Write-Host ""
+    Write-Host "--- Installing Codex ---"
+    & "$AgentsRoot\install\win\codex.ps1"
+
+    Write-Host ""
+    Write-Host "--- Installing Gemini CLI + Mermaid CLI ---"
+    & "$AgentsRoot\install\win\gemini.ps1"
+}
 
 Write-Host ""
 Write-Host "--- Initializing Claude Code session sync ---"
