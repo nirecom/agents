@@ -4,6 +4,7 @@ __pycache__/
 node_modules/
 settings.local.json
 settings-extension.json
+CLAUDE.local.md
 rules/language.md
 .env
 .private-info-blocklist

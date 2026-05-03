@@ -29,13 +29,9 @@
 
 ### workflow-gate: `git -C "$ENV_VAR"` でパス解決が失敗する
 
-- [ ] `parseGitCArg` が PreToolUse フックで受け取るコマンド文字列に対し、env var が**展開前**のリテラル (`$FORNIX_DIR` 等) のまま渡されるため、`resolveRepoDir` が正しいリポジトリを特定できない
-- [ ] 結果として `hasStagedDocChanges` が誤ったディレクトリを対象にし、docs ステップが通らずコミットがブロックされる
-- [ ] 再現手順: `git -C "$FORNIX_DIR" commit ...` のように env var を使ったコミット → workflow-gate が `docs` 未完了でブロック。`git -C "C:/git/fornix-stream" commit ...` と展開済みパスにすると通る
-- [ ] 修正案 A: `resolveRepoDir` 内で `p` を `process.env` で展開する (`p.replace(/\$(\w+)/g, (_, k) => process.env[k] || '')`)
-- [ ] 修正案 B: `parseGitCArg` 側で shell-style 展開に対応する
-- [ ] 修正後、env var パスでのコミットが docs ステップを正しく通過することを確認する
-- 背景: fornix-stream（データ専用 repo）への salvage bulk import コミット時に発覚（2026-05-02）。`$FORNIX_DIR=C:\git\fornix-stream` で再現済み。
+- [ ] `resolveRepoDir` が env var 展開に対応していないため、`git -C "$FORNIX_DIR" commit` のように env var を使うとコミットがブロックされる問題を修正する
+
+**状況:** PreToolUse フックはコマンド文字列を Bash 展開前に受け取るため、`parseGitCArg` が `$FORNIX_DIR` のリテラル文字列を返す。`resolveRepoDir` はこれをパスとして解釈できず、`hasStagedDocChanges` が誤ったディレクトリを参照して docs ステップ未完了と判定する。`git -C "C:/git/fornix-stream" commit ...` と展開済みパスにすると通る。修正案: `resolveRepoDir` 内で `p.replace(/\$(\w+)/g, (_, k) => process.env[k] || '')` で展開する。fornix-stream への salvage bulk import 時に発覚（2026-05-02）。
 
 ### check-japanese-in-docs.js: dotfiles-private を誤ってパブリック判定するバグ
 
