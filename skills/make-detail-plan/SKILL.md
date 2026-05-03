@@ -15,9 +15,20 @@ must be read and passed to the planner before drafting begins.
    - `~/.claude/plans/<session-id>-outline.md` — confirmed design direction
    If neither file exists, proceed with the task context alone (no prior stages ran).
 
-2. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`).
+2. **Determine the planner subagent's model** via `judge-task-complexity`:
+   - Invoke the `judge-task-complexity` skill with the full task context
+     plus the contents of intent/outline files (if they exist).
+   - Parse the single-line response. Expected format: `VERDICT: <opus|sonnet> | <signal IDs or "none">`.
+   - Extract the model token (after `VERDICT:`, before `|`) and the signal list (after `|`).
+   - If parse fails or the model token is neither `opus` nor `sonnet`, use `opus` (err toward higher capability).
+   - Emit in Claude text output (NOT Bash echo):
+     > Model selected: **[opus|sonnet]** (signals: [signal IDs from verdict, or "none"])
+     If parse failed: `> Model selected: **opus** (parse failure — defaulting to opus)`
+
+3. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 2>`).
    Pass the full task context **plus** the contents of the intent/approach files above.
-3. **Review the draft with codex first, fall back to Claude if unavailable.**
+
+4. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
    a. Write the planner's draft to `~/.claude/plans/<session-id>-detail-draft.md`.
    b. Run via Bash: `review-plan-codex --input ~/.claude/plans/<session-id>-detail-draft.md --format detail-plan [--context ~/.claude/plans/<session-id>-outline.md]`
@@ -31,11 +42,13 @@ must be read and passed to the planner before drafting begins.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
       - **Format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
       - **Codex unavailable**: emit `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
-   d. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision, then repeat from step 3a. Each round consumes `revision_rounds`.
-4. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
+   d. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 2), then repeat from step 4a. Each round consumes `revision_rounds`.
+
+5. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
    2. **The planner's current plan** — paste or closely summarize. The user cannot see subagent output, so this is their only way to understand what has been designed.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
+
 6. Once the reviewer returns `APPROVED`, enter plan mode and present the final plan to the user for approval.
 
 ## Research Escalation
@@ -76,7 +89,7 @@ Skip the entire discussion loop when **both** of the following are true:
 - The task is a single-file change
 - No design decision is needed
 
-In that case, draft the plan directly in the main conversation and present it for approval.
+In that case, skip `judge-task-complexity` and draft the plan directly in the main conversation and present it for approval.
 
 ## Skipping the Plan Step Entirely
 
