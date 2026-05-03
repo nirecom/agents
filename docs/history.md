@@ -106,4 +106,8 @@ Changes: Removed settings.json from the _agentSymlinks watchlist in profile-snip
 
 ### CONFIG: codex-core: increase review timeout 60s to 180s (2026-05-02, pending)
 Background: Large plans (187+ lines) were timing out at 60s in review-plan-codex and review-code-codex. Diagnosed via ~/.claude/projects/codex-review logs — a 187-line plan hit the wall exactly at 60s.
-Changes: bin/lib/codex-core.sh: changed timeout 60 to timeout 180; updated FAILED message to 'timeout (180s)'.
+Changes: bin/lib/codex-core.sh: changed timeout 60 to timeout 180; updated FAILED message to 'timeout (180s)'.
+
+### BUGFIX: workflow-gate: expand env vars in resolveRepoDir (2026-05-03, pending)
+Background: PreToolUse hook receives the command string before Bash expansion, so parseGitCArg returned the literal $FORNIX_DIR string. resolveRepoDir treated it as a path, causing hasStagedDocChanges to check the wrong directory and incorrectly block commits with git -C "$FORNIX_DIR" commit. Discovered during fornix-stream salvage bulk import (2026-05-02).
+Changes: Expanded env vars ($VAR / ${VAR}) in resolveRepoDir via process.env lookup after parseGitCArg returns. Undefined vars resolve to empty string (falsy), falling through to the staged-changes fallback. Added test cases N5/N6/N7 to fix-workflow-gate-unix-path.sh.

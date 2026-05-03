@@ -164,6 +164,36 @@ EOF
 )
 assert_eq "E3: dot path -> dot" '.' "$result"
 
+# N5: $VAR -> expanded Windows path (env var in double quotes)
+result=$(FORNIX_DIR_TEST="C:/git/fornix-stream" node_hook --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('git -C "$FORNIX_DIR_TEST" commit -m "msg"'));
+EOF
+)
+assert_eq 'N5: $VAR in double quotes -> expanded+normalized' 'C:\git\fornix-stream' "$result"
+
+# N6: ${VAR} braced form
+result=$(AGENTS_DIR_TEST="C:/git/agents" node_hook --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('git -C "${AGENTS_DIR_TEST}" commit -m "msg"'));
+EOF
+)
+assert_eq 'N6: ${VAR} braced form -> expanded+normalized' 'C:\git\agents' "$result"
+
+# N7: undefined $VAR -> fallback to cwd
+result=$(node_hook --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('git -C "$UNDEFINED_VAR_XYZ_NONEXISTENT" commit -m "msg"'));
+EOF
+)
+assert_eq 'N7: undefined $VAR -> fallback cwd' "$expected_cwd" "$result"
+
 # ============================================================
 # Section B: hasStagedTestChanges / hasStagedDocChanges integration
 # ============================================================
