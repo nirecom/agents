@@ -14,6 +14,7 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 | `todo.md` | Current work pointer — reading from top tells you what to do now | <100 lines | Always |
 | `history.md` | Completed work with why (background, incidents, decisions) — append-only | <500 lines warn / <800 lines hard (rotate when exceeded) | On first completion |
 | `ops.md` | Day-to-day operations and procedures too detailed for README.md. Initial install instructions belong in README.md, not here. | Unlimited | On demand |
+| `infrastructure.md` | SSOT for physical machines, network, Docker stacks, ports, and cloud resources per stack/host. Other docs must reference this — never duplicate host placements. Path is defined in `CLAUDE.local.md`. | Unlimited | Always |
 
 ## Append-Only Tools
 
@@ -59,6 +60,8 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
 - Do not duplicate content across documents — cross-reference instead
 - `README.md`: Project entry point (What / Install / Usage / Configuration). **Initial install/setup instructions must go here, not in `ops.md`.** Delegate internals to `architecture.md` and detailed procedures to `ops.md` — do not duplicate. Keep concise — link to `docs/` for details.
 - `overview.md`: Project vision and overall shape — what it is and why it exists. The most abstract document in its directory. Does not duplicate `architecture.md` design decisions; instead provides the entry-level mental model for a new reader.
+- `infrastructure.md`: When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-infrastructure` skill to keep it aligned with infrastructure changes.
+- `README.md` (ai-specs projects): Lives in the source repo root, not in ai-specs.
 
 ## Progressive Disclosure (Cascade)
 
