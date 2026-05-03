@@ -17,12 +17,12 @@ Write or update tests for the current task.
    cases in the next step.
 4. List all planned test cases by category (include call-path error cases from step 3).
    Present to the user — do not write code until approved.
-5. **Determine the subagent's model** via `judge-task-complexity`:
-   - Invoke the `judge-task-complexity` skill with the task context, source files identified in steps 2–3, and the planned test cases from step 4.
-   - Parse the single-line response (`VERDICT: <opus|sonnet> | <signal IDs>`).
-   - Extract the model token. If parse fails, use `opus`.
+5. **Determine the subagent's model**:
+   - Read `skills/judge-task-complexity/SKILL.md` to load the signal table.
+   - Evaluate all signals against the task context, source files from steps 2–3, and the planned test cases from step 4. Do not short-circuit on the first match.
+   - Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
    - Emit in Claude text output (NOT Bash echo):
-     > Model selected: **[opus|sonnet]** (signals: [signal IDs, or "none"])
+     > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
 6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from step 5>`) to autonomously:
    a. Write the test file(s).

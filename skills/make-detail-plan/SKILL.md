@@ -15,15 +15,12 @@ must be read and passed to the planner before drafting begins.
    - `~/.claude/plans/<session-id>-outline.md` — confirmed design direction
    If neither file exists, proceed with the task context alone (no prior stages ran).
 
-2. **Determine the planner subagent's model** via `judge-task-complexity`:
-   - Invoke the `judge-task-complexity` skill with the full task context
-     plus the contents of intent/outline files (if they exist).
-   - Parse the single-line response. Expected format: `VERDICT: <opus|sonnet> | <signal IDs or "none">`.
-   - Extract the model token (after `VERDICT:`, before `|`) and the signal list (after `|`).
-   - If parse fails or the model token is neither `opus` nor `sonnet`, use `opus` (err toward higher capability).
+2. **Determine the planner subagent's model**:
+   - Read `skills/judge-task-complexity/SKILL.md` to load the signal table.
+   - Evaluate all signals against the full task context plus the contents of intent/outline files (if they exist). Do not short-circuit on the first match.
+   - Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
    - Emit in Claude text output (NOT Bash echo):
-     > Model selected: **[opus|sonnet]** (signals: [signal IDs from verdict, or "none"])
-     If parse failed: `> Model selected: **opus** (parse failure — defaulting to opus)`
+     > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
 3. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 2>`).
    Pass the full task context **plus** the contents of the intent/approach files above.
