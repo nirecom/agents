@@ -8,11 +8,6 @@
 - [x] Invoke `/boost test task`: confirm Opus subagent launches
 - [ ] Run `make-detail-plan`: confirm step 2 calls judge before detail-planner starts
 
-### intent-log.md の Write パーミッションダイアログ抑制 — 動作確認
-
-- [ ] clarify-intent を実行し、intent-log.md 書き込み時にパーミッションダイアログが出ないことを確認する
-- [ ] ダイアログが出る場合は `**/.claude/plans/*-intent-log.md` のグロブパターンを再検討する
-
 ### AWS IAM ポリシー設定（server-side enforcement）
 
 - [ ] personal / work 各アカウントに読み取り専用 IAM ポリシーを作成（`docs/architecture/claude-code/settings.md` 参照）
