@@ -15,11 +15,6 @@
 - 背景: Apache-2.0 は MIT にない特許ライセンス付与条項と特許訴訟終了条項を持つ。
   依存先の Apache-2.0 ライブラリ（LightRAG 等）とのライセンス整合性も高まる。
 
-### Stop hook による branch/worktree 後始末リマインダー
-
-- [ ] 実際のワークフローで動作確認する（worktree または branch を使うタスクで end-to-end 検証）
-- [ ] うまくいかず revert する場合は commit hash `590d8a1` を巻き戻せ
-
 ### workflow-gate: `git -C "$ENV_VAR"` でパス解決が失敗する
 
 - [ ] `resolveRepoDir` が env var 展開に対応していないため、`git -C "$FORNIX_DIR" commit` のように env var を使うとコミットがブロックされる問題を修正する
