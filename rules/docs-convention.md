@@ -8,6 +8,7 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 | File | Role | Target size | Created |
 |------|------|-------------|---------|
 | `README.md` | Repo's project pitch and entry point — what it does, install, usage, configuration. Write initial install/setup instructions here first. | Compact | Always |
+| `CHANGELOG.md` | User-facing release log — what changed and why it matters to users. Written by `/update-docs` via `doc-append CHANGELOG.md` (no `--commits`). Public repos only. | Append-only | Public repos |
 | `overview.md` | Highest-level description of a project or directory — vision, goals, and overall shape. Most abstract document in its location. | Compact | Large projects only |
 | `architecture.md` | What/Why of design decisions (not How — How belongs in `ops.md`). When split into `architecture/`, the main file is `architecture/design.md`. | <300 lines (split into `architecture/` when exceeded) | Always |
 | `architecture/design.md` | Main content file when `architecture.md` is split into `architecture/`. Same What/Why scope as `architecture.md`. Other split files use topical names (e.g. `risks.md`, `stacks.md`). | Unlimited | When `architecture.md` exceeds 300 lines |
@@ -19,12 +20,12 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 
 ## Append-Only Tools
 
-Do NOT use Edit tool to append to `history.md` — Edit requires a prior Read, consuming context.
+Do NOT use Edit tool to append to `history.md` or `CHANGELOG.md` — Edit requires a prior Read, consuming context.
 Use the CLI tools instead:
 
 | Tool | When to use |
 |------|-------------|
-| `doc-append [path] --category CATEGORY ...` | Append a new entry to any history.md |
+| `doc-append [path] --category CATEGORY ...` | Append a new entry to `history.md` or `CHANGELOG.md`. `--commits` is optional (omit for `CHANGELOG.md`). |
 | `uv run bin/doc-rotate.py <path> ...` | Archive old entries when size threshold is exceeded |
 | `uv run bin/doc-rotate.py <path> --rebuild-index` | Rebuild `history/index.md` from existing archive files (no rotation) |
 | `uv run bin/sort-history.py <path>` | Sort an existing history.md into ascending order |

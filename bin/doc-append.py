@@ -20,7 +20,7 @@ import sys
 from datetime import date as Date
 from pathlib import Path
 
-DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2}),")
+DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})")
 INCIDENT_RE = re.compile(r"^### (?:INCIDENT: )?#(\d+):", re.MULTILINE)
 ENTRY_RE = re.compile(r"^### ", re.MULTILINE)
 
@@ -76,11 +76,12 @@ def _count_lines(path: Path) -> int:
 
 def _build_entry(args, incident_num: int | None, eol: bytes) -> bytes:
     e = eol.decode()
+    date_field = f"{args.date}, {args.commits}" if args.commits else args.date
     if args.category == "INCIDENT":
-        header = f"### INCIDENT: #{incident_num}: {args.subject} ({args.date}, {args.commits})"
+        header = f"### INCIDENT: #{incident_num}: {args.subject} ({date_field})"
         body = f"Cause: {args.cause}{e}Fix: {args.fix}"
     else:
-        header = f"### {args.category}: {args.subject} ({args.date}, {args.commits})"
+        header = f"### {args.category}: {args.subject} ({date_field})"
         body = f"Background: {args.background}{e}Changes: {args.changes}"
     return (f"{header}{e}{body}{e}").encode("utf-8").replace(b"\n", eol)
 
@@ -90,7 +91,7 @@ def main():
     parser.add_argument("path", help="Path to history.md")
     parser.add_argument("--subject", required=True)
     parser.add_argument("--date", required=True)
-    parser.add_argument("--commits", required=True)
+    parser.add_argument("--commits", default=None)
     parser.add_argument(
         "--category",
         required=True,

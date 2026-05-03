@@ -94,6 +94,22 @@ else
     pass "--category INCIDENT without --cause: exit nonzero"
 fi
 
+# --- Normal: --commits omitted (CHANGELOG.md use case) ---
+echo "=== Normal: --commits omitted — date-only header ==="
+run_with_timeout doc-append "$TMP/CHANGELOG.md" \
+    --category FEATURE --subject "Changelog entry" --date 2026-02-01 \
+    --background "Context" --changes "User-facing summary"
+if grep -q "Changelog entry (2026-02-01)" "$TMP/CHANGELOG.md"; then
+    pass "--commits omitted: date-only header written"
+else
+    fail "--commits omitted: expected '(2026-02-01)' in header"
+fi
+if grep -q "2026-02-01," "$TMP/CHANGELOG.md"; then
+    fail "--commits omitted: trailing comma found in header"
+else
+    pass "--commits omitted: no trailing comma in header"
+fi
+
 # --- Edge: default path with no docs/ dir ---
 echo "=== Edge: no docs/ dir for default path ==="
 NODIR="$(mktemp -d)"

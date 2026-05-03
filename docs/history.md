@@ -126,4 +126,8 @@ Changes: Submitted PR #363 to rohitg00/awesome-claude-code-toolkit adding nireco
 
 ### REFACTOR: Make session-sync standalone (no dotfiles dependency) (2026-05-03, pending)
 Background: Session-sync auto-fetch and the codes function lived in dotfiles' install/win/profile.ps1 and .profile_common, so machines without dotfiles installed had no automatic sync.
-Changes: Added SessionDir auto-pull and codes function to profile-snippet.{ps1,sh}. Moved bin/wait-vscode-window.{ps1,sh} from dotfiles. Moved tests/main-wait-vscode-window.* and tests/main-profile-codes.* and updated path references to agents repo. Updated docs/architecture/claude-code/session-sync.md.
+Changes: Added SessionDir auto-pull and codes function to profile-snippet.{ps1,sh}. Moved bin/wait-vscode-window.{ps1,sh} from dotfiles. Moved tests/main-wait-vscode-window.* and tests/main-profile-codes.* and updated path references to agents repo. Updated docs/architecture/claude-code/session-sync.md.
+
+### FEATURE: CHANGELOG.md workflow: doc-append --commits optional + update-docs integration (2026-05-04, 2ac70af)
+Background: No user-facing changelog existed for the public agents repo. /update-docs had no mechanism to write one simultaneously with history.md.
+Changes: doc-append: --commits made optional (omitted produces date-only header). update-docs SKILL.md: Completion now calls doc-append twice — docs/history.md (internal, with --commits) and CHANGELOG.md (user-facing, without --commits). docs-convention.md: CHANGELOG.md added to Standard Files and Append-Only Tools. tests/feature-doc-append-wrapper.sh: 2 test cases for --commits omitted.
