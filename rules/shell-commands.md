@@ -16,10 +16,28 @@ When suggesting verification commands for the Windows host, default to **pwsh-co
 Only use Linux commands when explicitly working inside WSL.
 
 **Claude Code's Bash tool vs user's terminal:**
-Claude Code's built-in Bash tool runs in a bash shell — Linux commands work there.
-But when telling the user to run commands manually (e.g., "run this in your terminal"),
-use **PowerShell-native commands**. Do not suggest `openssl`, `cp`, `sed`, `grep`, etc.
-directly — use their PowerShell equivalents.
+Bash tool runs in bash — Linux commands work there. Everywhere else (user-facing commands
+and `.ps1` scripts), use **PowerShell-native commands**. Do not suggest `grep`, `cp`,
+`sed`, `openssl`, etc. directly — see table below.
+
+| bash/Linux | PowerShell equivalent |
+|---|---|
+| `grep <pattern>` | `Select-String <pattern>` |
+| `grep -r` | `Select-String -Recurse` |
+| `cat` | `Get-Content` |
+| `ls` | `Get-ChildItem` |
+| `cp` | `Copy-Item` |
+| `rm` / `rm -rf` | `Remove-Item` / `Remove-Item -Recurse -Force` |
+| `find` | `Get-ChildItem -Recurse -Filter` |
+| `which` | `Get-Command` |
+| `touch` | `New-Item` |
+| `export VAR=val` | `$env:VAR = "val"` |
+| `sed` | `-replace` operator or `[regex]::Replace()` |
+| `openssl rand` | Use `/create-key` skill |
+
+**PowerShell environment variables use `$env:` prefix:**
+- CORRECT: `$env:MY_API_KEY`
+- WRONG: `$MY_API_KEY` (this is a regular PS variable, not an env var)
 
 **curl commands MUST follow all three rules (PowerShell compatibility):**
 1. Use `curl.exe` — NEVER bare `curl` (PowerShell aliases it to `Invoke-WebRequest`)
@@ -43,3 +61,6 @@ Do NOT suggest `curl` → `wget` → Python as a fallback chain. Go straight to 
 
 `docker restart` does not reload `.env`, config files, or compose changes.
 Use `docker compose up -d <service>` instead when any of these have changed.
+
+For when to use `--build` vs `up -d` only, and the rule to always state the docker
+command after every implementation, see `rules/claude-config-source.md`.
