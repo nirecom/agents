@@ -8,6 +8,14 @@
 - [x] Invoke `/boost test task`: confirm Opus subagent launches
 - [ ] Run `make-detail-plan`: confirm step 2 calls judge before detail-planner starts
 
+### session-sync を dotfiles なしで動作させる
+
+session-sync の自動 push（ターミナル終了時）は現在 dotfiles の `.profile_common` にのみ実装されており、agents 単体では機能しない。
+
+- [ ] `profile-snippet.sh` に `trap` で session-sync push を追加（dotfiles 不要）
+- [ ] `profile-snippet.ps1` に相当する処理を追加（PowerShell `Register-EngineEvent PowerShell.Exiting`）
+- [ ] README の Install セクションに dotfiles なし構成でも session-sync が動く旨を反映
+
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [ ] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR
 - [ ] [rohitg00/awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit) へエントリ追加 PR
