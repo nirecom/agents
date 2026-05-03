@@ -168,7 +168,7 @@
       "Bash(*push *--mirror*)",
       "Bash(*push --delete*)",
       "Bash(*push *--delete*)",
-      "Bash(*push *+*:*)",
+      "Bash(*push *+*)",
       "Bash(*git commit --amend*)",
       "Bash(*git commit *--amend*)",
       "Bash(*--no-verify*)",
