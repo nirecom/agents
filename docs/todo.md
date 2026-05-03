@@ -15,8 +15,3 @@
 - 背景: Apache-2.0 は MIT にない特許ライセンス付与条項と特許訴訟終了条項を持つ。
   依存先の Apache-2.0 ライブラリ（LightRAG 等）とのライセンス整合性も高まる。
 
-### workflow-gate: `git -C "$ENV_VAR"` でパス解決が失敗する
-
-- [ ] `resolveRepoDir` が env var 展開に対応していないため、`git -C "$FORNIX_DIR" commit` のように env var を使うとコミットがブロックされる問題を修正する
-
-**状況:** PreToolUse フックはコマンド文字列を Bash 展開前に受け取るため、`parseGitCArg` が `$FORNIX_DIR` のリテラル文字列を返す。`resolveRepoDir` はこれをパスとして解釈できず、`hasStagedDocChanges` が誤ったディレクトリを参照して docs ステップ未完了と判定する。`git -C "C:/git/fornix-stream" commit ...` と展開済みパスにすると通る。修正案: `resolveRepoDir` 内で `p.replace(/\$(\w+)/g, (_, k) => process.env[k] || '')` で展開する。fornix-stream への salvage bulk import 時に発覚（2026-05-02）。
