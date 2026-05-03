@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# Generate a diagram image via Gemini Imagen 3 API.
+# Usage: draw-diagram-gemini --output <file.png> [--model <model>] [--no-log]
+#        Reads the diagram prompt from stdin (text description or Mermaid notation).
+#
+# Always emits one of:
+#   ## Gemini Draw: PERFORMED — <output-path>
+#   ## Gemini Draw: SKIPPED — <reason>
+#   ## Gemini Draw: FAILED — <reason>
+#
+# Always exits 0 so it never blocks the workflow.
+
+set -uo pipefail
+
+OUTPUT=""
+MODEL="gemini-2.5-flash-image"
+NO_LOG=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output)
+      [[ $# -lt 2 ]] && { echo "## Gemini Draw: FAILED — --output requires an argument"; exit 0; }
+      OUTPUT="$2"; shift 2 ;;
+    --model)
+      [[ $# -lt 2 ]] && { echo "## Gemini Draw: FAILED — --model requires an argument"; exit 0; }
+      MODEL="$2"; shift 2 ;;
+    --no-log) NO_LOG=true; shift ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+# Source shared library
+# shellcheck source=lib/gemini-core.sh
+source "$(dirname "$(realpath "$0")")/lib/gemini-core.sh"
+
+gemini_core_init "Gemini Draw"
+
+if [[ -z "$OUTPUT" ]]; then
+  gemini_core_emit_failed "--output <file.png> is required"
+fi
+
+# Load .env from agents root if GEMINI_API_KEY not already set
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+AGENTS_ROOT="$(dirname "$SCRIPT_DIR")"
+if [[ -z "${GEMINI_API_KEY:-}" && -f "$AGENTS_ROOT/.env" ]]; then
+  # shellcheck source=/dev/null
+  set -a; source "$AGENTS_ROOT/.env"; set +a
+fi
+
+if [[ -z "${GEMINI_API_KEY:-}" ]]; then
+  gemini_core_emit_failed "GEMINI_API_KEY is not set (add to agents/.env or export it)"
+fi
+
+if ! command -v curl > /dev/null 2>&1; then
+  gemini_core_emit_failed "curl is required but not installed"
+fi
+
+# Read prompt from stdin
+INPUT_TEXT=$(cat)
+if [[ -z "$INPUT_TEXT" ]]; then
+  gemini_core_emit_failed "no input provided on stdin"
+fi
+
+INPUT_LINES=$(printf '%s' "$INPUT_TEXT" | wc -l)
+
+PROMPT="A clean flowchart diagram with distinct colors for different node types. Terminals in green, required steps in blue, skippable steps in gray, decisions in amber, parallel steps in purple. White text on all nodes. Clear arrows between nodes. The diagram shows: ${INPUT_TEXT}"
+
+# Build JSON payload
+PROMPT_FILE=$(mktemp /tmp/gemini-prompt-XXXXXX.txt)
+PY_BUILD=$(mktemp /tmp/gemini-build-XXXXXX.py)
+printf '%s' "$PROMPT" > "$PROMPT_FILE"
+cat > "$PY_BUILD" << 'PYEOF'
+import json, sys
+prompt = open(sys.argv[1]).read()
+payload = {
+    "contents": [{"parts": [{"text": prompt}]}],
+    "generationConfig": {"responseModalities": ["IMAGE", "TEXT"]}
+}
+print(json.dumps(payload))
+PYEOF
+PAYLOAD=$(uv run python "$PY_BUILD" "$PROMPT_FILE")
+rm -f "$PROMPT_FILE" "$PY_BUILD"
+
+# Call Gemini API (generateContent endpoint)
+TMPFILE=$(mktemp /tmp/gemini-draw-XXXXXX.json)
+STDERR_FILE=$(mktemp /tmp/gemini-draw-err-XXXXXX.txt)
+trap 'rm -f "$TMPFILE" "$STDERR_FILE"' EXIT
+
+API_URL="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}"
+
+HTTP_CODE=$(curl -s -o "$TMPFILE" -w "%{http_code}" -X POST "$API_URL" -H "Content-Type: application/json" -d "$PAYLOAD" 2>"$STDERR_FILE") || {
+  gemini_core_emit_failed "curl failed: $(cat "$STDERR_FILE" | tr '\n' ' ')"
+}
+
+if [[ "$HTTP_CODE" != "200" ]]; then
+  ERROR_BODY=$(cat "$TMPFILE" 2>/dev/null | head -c 500)
+  gemini_core_emit_failed "API HTTP ${HTTP_CODE}: ${ERROR_BODY}"
+fi
+
+# Extract base64 image from generateContent response
+PY_EXTRACT=$(mktemp /tmp/gemini-extract-XXXXXX.py)
+cat > "$PY_EXTRACT" << 'PYEOF'
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+    if "inlineData" in part:
+        print(part["inlineData"]["data"])
+        break
+PYEOF
+B64=$(uv run python "$PY_EXTRACT" "$TMPFILE")
+rm -f "$PY_EXTRACT"
+
+if [[ -z "$B64" ]]; then
+  ERROR_BODY=$(cat "$TMPFILE" | head -c 300)
+  gemini_core_emit_failed "no image in API response: ${ERROR_BODY}"
+fi
+
+# Decode and save
+mkdir -p "$(dirname "$OUTPUT")"
+printf '%s' "$B64" | uv run python -c "import base64,sys; open('$OUTPUT','wb').write(base64.b64decode(sys.stdin.read().strip()))"
+
+gemini_core_log performed "" "$INPUT_LINES"
+echo "## Gemini Draw: PERFORMED — $OUTPUT"
+echo ""
+echo "Image written to: $OUTPUT"

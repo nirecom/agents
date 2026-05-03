@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Render a Mermaid diagram to SVG or PNG via mmdc (Mermaid CLI).
+# Usage: draw-diagram --output <file.svg|file.png> [--theme <theme>] [--no-log]
+#        Reads Mermaid notation from stdin.
+#
+# Always emits one of:
+#   ## Draw Diagram: PERFORMED — <output-path>
+#   ## Draw Diagram: SKIPPED — <reason>
+#   ## Draw Diagram: FAILED — <reason>
+#
+# Always exits 0 so it never blocks the workflow.
+
+set -uo pipefail
+
+OUTPUT=""
+THEME="dark"
+NO_LOG=false
+LABEL="Draw Diagram"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output)
+      [[ $# -lt 2 ]] && { echo "## ${LABEL}: FAILED — --output requires an argument"; exit 0; }
+      OUTPUT="$2"; shift 2 ;;
+    --theme)
+      [[ $# -lt 2 ]] && { echo "## ${LABEL}: FAILED — --theme requires an argument"; exit 0; }
+      THEME="$2"; shift 2 ;;
+    --no-log) NO_LOG=true; shift ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ -z "$OUTPUT" ]]; then
+  echo "## ${LABEL}: FAILED — --output <file.svg|file.png> is required"
+  exit 0
+fi
+
+if ! command -v mmdc > /dev/null 2>&1; then
+  echo "## ${LABEL}: SKIPPED — mmdc not installed"
+  echo "(To install: npm install -g @mermaid-js/mermaid-cli)"
+  exit 0
+fi
+
+INPUT=$(cat)
+if [[ -z "$INPUT" ]]; then
+  echo "## ${LABEL}: FAILED — no Mermaid input provided on stdin"
+  exit 0
+fi
+
+TMPFILE=$(mktemp /tmp/draw-diagram-XXXXXX.mmd)
+STDERR_FILE=$(mktemp /tmp/draw-diagram-err-XXXXXX.txt)
+trap 'rm -f "$TMPFILE" "$STDERR_FILE"' EXIT
+
+printf '%s' "$INPUT" > "$TMPFILE"
+mkdir -p "$(dirname "$OUTPUT")"
+
+if timeout 60 mmdc -i "$TMPFILE" -o "$OUTPUT" -t "$THEME" -b transparent 2>"$STDERR_FILE"; then
+  echo "## ${LABEL}: PERFORMED — $OUTPUT"
+  echo ""
+  echo "Diagram written to: $OUTPUT"
+else
+  EXIT_CODE=$?
+  STDERR_TAIL=$(tail -5 "$STDERR_FILE" | tr '\n' ' ')
+  if [[ $EXIT_CODE -eq 124 ]]; then
+    echo "## ${LABEL}: FAILED — timeout (60s)"
+  else
+    echo "## ${LABEL}: FAILED — mmdc exit ${EXIT_CODE}: ${STDERR_TAIL}"
+  fi
+fi
