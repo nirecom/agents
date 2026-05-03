@@ -9,8 +9,6 @@ Update all project documentation to reflect recent changes.
 Docs directory: `docs/` within the current project root.
 Target files: all `.md` files in `docs/` that already exist, plus `README.md` in the project root.
 
-**llama-swap additional**: when `config.yaml` changes, also update in-repo `model-annotations.yaml` and `optimization-history.md`.
-
 ## Procedure
 
 1. **Gather recent changes**:
