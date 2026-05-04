@@ -2,11 +2,8 @@
 
 ## Workflow
 
-**First action**: run `/clarify-intent` (the PreToolUse gate blocks Edit/Write until this step completes or is skipped). Read, Grep, Glob, and Bash remain available before clarification. Once intent is locked in, the skill creates a TodoWrite checklist for the remaining steps. On the skip path, emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>"` first, then create the TodoWrite checklist immediately.
-
-1. **Clarify intent** — Run `/clarify-intent`.
-   Skip: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>"` then **proceed immediately to step 2**.
-   Skipping this step does NOT authorize skipping any subsequent steps.
+1. **Clarify intent** — **Before anything else:** Run `/clarify-intent`.
+   Skip: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>"` then proceed to step 2. Skipping here does NOT authorize skipping subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
      If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
