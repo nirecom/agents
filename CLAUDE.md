@@ -2,7 +2,7 @@
 
 ## Workflow
 
-**Mandatory first action**: Before doing anything else — investigation, explanation, or code change — create a TodoWrite checklist with all steps below. Then work through each step in order.
+**First action**: run `/clarify-intent` (the PreToolUse gate blocks Edit/Write until this step completes or is skipped). Read, Grep, Glob, and Bash remain available before clarification. Once intent is locked in, the skill creates a TodoWrite checklist for the remaining steps. On the skip path, emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>"` first, then create the TodoWrite checklist immediately.
 
 1. **Clarify intent** — Run `/clarify-intent`.
    Skip: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>"` then **proceed immediately to step 2**.
