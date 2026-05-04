@@ -74,6 +74,16 @@ Write one file in Japanese (per `rules/language.md`):
 ## Completion
 
 After this skill:
-1. Run: `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"` (hook will return the next-step hint)
-2. Invoke `survey-code` or `deep-research` via the Skill tool if needed
+1. Run: `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"` (hook will return the next-step hint, and the early gate disengages)
+2. Create a TodoWrite checklist with the remaining 9 workflow steps (mark `clarify_intent` as completed):
+   - Research (`/survey-code` or `/deep-research`, or skip with NOT_NEEDED)
+   - Plan (`/make-outline-plan` → `/make-detail-plan`, or skip with NOT_NEEDED)
+   - Branching decision (consult `rules/branch.md` + `rules/worktree.md`)
+   - Write tests (`/write-tests`, or skip with NOT_NEEDED)
+   - Code (present diff in chat before Edit)
+   - Run tests + Security review + Codex review in parallel
+   - Docs (`/update-docs`)
+   - User verification (`echo "<<WORKFLOW_USER_VERIFIED>>"`)
+   - Commit + Cleanup (`/commit-push`, then worktree-end / branch-delete / skip per branching decision)
+3. Invoke `survey-code` or `deep-research` via the Skill tool if needed
    (or skip with `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`), then invoke `make-outline-plan`.
