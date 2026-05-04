@@ -336,7 +336,7 @@
         ]
       },
       {
-        "matcher": "Bash|runInTerminal|runCommands",
+        "matcher": "Bash|Edit|Write|MultiEdit|editFiles|NotebookEdit|runInTerminal|runCommands",
         "hooks": [
           {
             "type": "command",

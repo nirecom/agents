@@ -177,6 +177,55 @@ if (require.main === module) {
   const toolInput = input.tool_input || {};
   const sessionId = input.session_id;
 
+  // EARLY GATE: enforce clarify_intent before Edit/Write tools.
+  // Fail-open precedence (do NOT reorder):
+  //   1. No sessionId → fall through (cannot enforce)
+  //   2. readState() returns null → fall through (no state to check)
+  //   3. clarify_intent already complete or skipped → fall through (gate dormant)
+  //   4. otherwise → block (with plans-path allowlist for skill output)
+  //
+  // Multi-hook execution: Claude Code runs all PreToolUse hooks independently;
+  // approve from this hook does NOT short-circuit block-dotenv etc.
+  //
+  // State inheritance: if findLatestStateForContext() inherited a state where
+  // clarify_intent is already complete, gate is dormant by design — inherited
+  // state represents continuing prior work.
+  const EARLY_GATE_TOOLS = new Set([
+    "Edit", "Write", "MultiEdit", "editFiles", "NotebookEdit"
+  ]);
+  if (sessionId && EARLY_GATE_TOOLS.has(toolName)) {
+    const earlyState = readState(sessionId);
+    if (earlyState) {
+      const ci = earlyState.steps && earlyState.steps.clarify_intent;
+      const ciStatus = ci ? ci.status : "pending";
+      if (ciStatus !== "complete" && ciStatus !== "skipped") {
+        // Allowlist: Write tool only, to ~/.claude/plans/** (skill writes intent/outline/detail .md here).
+        // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
+        const filePath = toolInput.file_path || toolInput.path || "";
+        let isPlansAllowed = false;
+        if (toolName === "Write" && filePath) {
+          try {
+            const resolved = path.resolve(filePath);
+            const plansRoot = path.join(require("os").homedir(), ".claude", "plans") + path.sep;
+            isPlansAllowed = resolved.toLowerCase().startsWith(plansRoot.toLowerCase());
+          } catch (e) { /* fall through — block */ }
+        }
+        if (!isPlansAllowed) {
+          block(
+            "workflow-gate: clarify_intent has not been completed for this session.\n" +
+            "Tool \"" + toolName + "\" is blocked until intent is locked in.\n\n" +
+            "To complete:\n" +
+            "  1. Invoke the `clarify-intent` skill via the Skill tool, OR\n" +
+            "  2. If intent is already clear: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\".\n\n" +
+            "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.\n" +
+            "For docs-only edits: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: docs-only edit>>\"\n\n" +
+            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent>>\""
+          );
+        }
+      }
+    }
+  }
+
   if (toolName !== "Bash") approve();
 
   const command = toolInput.command || "";
