@@ -8,3 +8,4 @@ CLAUDE.local.md
 rules/language.md
 .env
 .private-info-blocklist
+.private-info-allowlist
