@@ -27,8 +27,10 @@ must be read and passed to the planner before drafting begins.
 
 4. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
-   a. Write the planner's draft to `~/.claude/plans/<session-id>-detail-draft.md`.
-   b. Run via Bash: `review-plan-codex --input ~/.claude/plans/<session-id>-detail-draft.md --format detail-plan [--context ~/.claude/plans/<session-id>-outline.md]`
+   a. Write the planner's draft to the OS temp directory (NOT to `plans/`):
+      - Windows: `%TEMP%\<session-id>-detail-draft.md`
+      - POSIX:   `/tmp/<session-id>-detail-draft.md`
+   b. Run via Bash: `review-plan-codex --input <temp-file> --format detail-plan [--context ~/.claude/plans/<session-id>-outline.md]`
       (omit `--context` if the outline file does not exist)
    c. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
@@ -46,7 +48,11 @@ must be read and passed to the planner before drafting begins.
    2. **The planner's current plan** — paste or closely summarize. The user cannot see subagent output, so this is their only way to understand what has been designed.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
-6. Once the reviewer returns `APPROVED`, enter plan mode and present the final plan to the user for approval.
+6. Once the reviewer returns `APPROVED`, write the final plan to
+   `~/.claude/plans/<session-id>-detail.md` (not draft). Present it to the user as a
+   clickable link (do not paste the full content in chat):
+   `[<session-id>-detail.md](~/.claude/plans/<session-id>-detail.md)`
+   Then enter plan mode for user approval.
 
 ## Research Escalation
 

@@ -51,7 +51,12 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 
 4. Present a one-paragraph summary of what was locked in.
 
-5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
+5. Confirm the summary via `AskUserQuestion` before proceeding:
+   - One option marked **(recommended)**: proceed to planning.
+   - At least one revision option: update intent.md based on user input, then re-present.
+   - Maximum 1 revision round at this gate; deeper changes resolve in later planning stages.
+
+6. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
    unless not needed) then `/make-outline-plan`.
 
 ## Output Schema
