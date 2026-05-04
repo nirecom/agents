@@ -43,6 +43,9 @@ Automatically enabled after running `install.sh` / `install.ps1`. The global git
 Add exceptions to `.private-info-allowlist`, one pattern per line.
 Each repo's `.private-info-allowlist` in its root is the only allowlist loaded.
 
+`.private-info-allowlist` is write-protected by the `block-dotenv.js` PreToolUse hook —
+Claude Code cannot edit it automatically. Add exceptions manually when genuinely needed.
+
 ```
 # Global pattern (applies to all files)
 git@github.com
