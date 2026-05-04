@@ -1,10 +1,10 @@
-# private-info-blocklist.example — format reference for .private-info-blocklist
+# .private-info-blocklist.example — format reference for .private-info-blocklist
 #
 # Copy to .private-info-blocklist (gitignored) and add your own patterns.
 # Each non-blank, non-comment line is a POSIX extended regex.
 # Matched content triggers a scan-outbound.sh violation.
 #
-# Setup: cp private-info-blocklist.example .private-info-blocklist
+# Setup: cp .private-info-blocklist.example .private-info-blocklist
 # Or let the installer create a symlink from a private repo.
 # See docs/scan-outbound.md for full details.
 

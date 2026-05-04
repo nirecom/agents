@@ -142,4 +142,8 @@ Changes: Added isAllowlistPath check to block-dotenv.js PreToolUse hook to block
 
 ### REFACTOR: Symlink .private-info-allowlist to dotfiles-private; keep .example as public template (2026-05-04)
 Background: Adding host/project-specific allowlist entries (e.g. CHAT_API_KEY_*) directly to agents/.private-info-allowlist would leak private info names through the public repo. Mirror the existing blocklist pattern.
-Changes: Removed agents/.private-info-allowlist from tracking (now gitignored). Added .private-info-allowlist.example as the public template. Added rules/claude-config-source.md note: docker compose --force-recreate is required when only environment values change.
+Changes: Removed agents/.private-info-allowlist from tracking (now gitignored). Added .private-info-allowlist.example as the public template. Added rules/claude-config-source.md note: docker compose --force-recreate is required when only environment values change.
+
+### REFACTOR: Rename private-info-blocklist.example to .private-info-blocklist.example for dotfile naming consistency (2026-05-04)
+Background: After introducing .private-info-allowlist.example, the existing private-info-blocklist.example (without leading dot) became inconsistent. Convention research confirms .env.example pattern (leading dot preserved) is the de facto standard.
+Changes: Renamed private-info-blocklist.example to .private-info-blocklist.example. Updated README.md, docs/scan-outbound.md, and the allowlist example glob path.
