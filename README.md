@@ -93,7 +93,7 @@ MAC addresses, absolute local paths, hard-coded secrets (AWS, Anthropic, OpenAI,
 Slack, and others), PEM private keys, and Trojan Source hidden Unicode characters.
 Repositories identified as private via `gh api` are skipped automatically.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
-To add private patterns, copy `private-info-blocklist.example` to `.private-info-blocklist`.
+To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
 ### Cross-machine session continuity
 
