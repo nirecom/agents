@@ -1,0 +1,25 @@
+# private-info-blocklist.example — format reference for .private-info-blocklist
+#
+# Copy to .private-info-blocklist (gitignored) and add your own patterns.
+# Each non-blank, non-comment line is a POSIX extended regex.
+# Matched content triggers a scan-outbound.sh violation.
+#
+# Setup: cp private-info-blocklist.example .private-info-blocklist
+# Or let the installer create a symlink from a private repo.
+# See docs/scan-outbound.md for full details.
+
+# Hostname / machine name (POSIX word-boundary style)
+# (^|[^[:alnum:]_])myhostname([^[:alnum:]_]|$)
+
+# Corporate / org identifiers
+# mycompany
+# internal-domain\.example\.com
+
+# Block unwanted commit message metadata
+# Co-Authored-By
+
+# API key variable names (match .env assignment lines)
+# ^YOURSERVICE_API_KEY=
+
+# Private local paths
+# C:\\Users\\myname\\private
