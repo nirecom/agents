@@ -103,7 +103,14 @@ Skill runs (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests
      reads session_id from hook stdin JSON (not CLAUDE_ENV_FILE)
      calls markStep(session_id, step, status)
 
-git commit attempt → workflow-gate.js (PreToolUse hook)
+Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToolUse hook, early gate)
+  fires only when clarify_intent step is pending or missing
+  fail-open: missing session_id, null state, or complete/skipped status → fall through (approve)
+  allowlist: Write to ~/.claude/plans/** is permitted (clarify-intent skill writes intent.md/outline.md/detail.md here)
+  blocks otherwise with instructions to invoke /clarify-intent or emit <<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>
+  Read/Grep/Glob/Bash are not in the matcher — they always pass (clarify-intent skill needs them for codebase exploration)
+
+git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   reads session_id from hook stdin JSON
   loads ~/.claude/projects/workflow/<session_id>.json
   docs-only short-circuit: if ALL staged files match the human-facing docs allowlist
