@@ -138,4 +138,8 @@ Changes: Added skills/draw-mermaid/SKILL.md: context-efficient subagent-delegate
 
 ### SECURITY: Block CC writes to .private-info-allowlist via PreToolUse hook (2026-05-04, 27afc41)
 Background: permissions.deny for Edit/Write is bypassed in VSCode ask-before-edits mode, allowing CC to freely append to the scan-outbound allowlist and effectively whitelist private patterns without user approval.
-Changes: Added isAllowlistPath check to block-dotenv.js PreToolUse hook to block Edit/Write/MultiEdit on .private-info-allowlist. Removed dead permissions.deny rules for the same file from settings.json. Added write-protection note to docs/scan-outbound.md Allowlist section.
+Changes: Added isAllowlistPath check to block-dotenv.js PreToolUse hook to block Edit/Write/MultiEdit on .private-info-allowlist. Removed dead permissions.deny rules for the same file from settings.json. Added write-protection note to docs/scan-outbound.md Allowlist section.
+
+### REFACTOR: Symlink .private-info-allowlist to my-private-repo; keep .example as public template (2026-05-04)
+Background: Adding host/project-specific allowlist entries (e.g. CHAT_API_KEY_*) directly to agents/.private-info-allowlist would leak private info names through the public repo. Mirror the existing blocklist pattern.
+Changes: Removed agents/.private-info-allowlist from tracking (now gitignored). Added .private-info-allowlist.example as the public template. Added rules/claude-config-source.md note: docker compose --force-recreate is required when only environment values change.
