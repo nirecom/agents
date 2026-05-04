@@ -40,8 +40,10 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - Re-prompt outline-planner with the research findings. (Research budget: 2 rounds.)
 
 5. **Review the approach with codex first, fall back to Claude if unavailable.**
-   Write the outline-planner's output to a temp file, then:
-   `review-plan-codex --input <temp-file> --format outline-plan`
+   Write the outline-planner's output to the OS temp directory (NOT to `plans/`):
+   - Windows: `%TEMP%\<session-id>-outline-draft.md`
+   - POSIX:   `/tmp/<session-id>-outline-draft.md`
+   Then: `review-plan-codex --input <temp-file> --format outline-plan`
    Parse the first line:
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
      - `APPROVED` → proceed to step 7.
@@ -60,7 +62,9 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
 8. Write the user's decision to `~/.claude/plans/<session-id>-outline.md` using the
-   schema below.
+   schema below. After writing, present the file to the user as a clickable link
+   (do not paste the full content in chat):
+   `[<session-id>-outline.md](~/.claude/plans/<session-id>-outline.md)`
 
 ## Output Schema (`<session-id>-outline.md`)
 
