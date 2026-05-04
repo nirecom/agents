@@ -1,5 +1,11 @@
-# Private information scan exceptions for agents repo
+# Private information scan exceptions — universal (committed to public agents repo)
 # Format: [filepath-glob:]pattern (global or per-file, patterns are regex)
+#
+# Setup:
+#   - Without dotfiles-private: cp this file to .private-info-allowlist and edit
+#   - With dotfiles-private: install/{win,linux}/dotfileslink creates a symlink
+#     from dotfiles-private/.private-info-allowlist to .private-info-allowlist;
+#     personal/private exceptions live there.
 
 # Git SSH URLs (not personal email)
 git@github.com
