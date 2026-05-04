@@ -37,7 +37,7 @@ tests/*:/mnt/
 rules/*.md:Co-Authored-By
 rules/**:Co-Authored-By
 docs/*:Co-Authored-By
-private-info-blocklist.example:Co-Authored-By
+.private-info-blocklist.example:Co-Authored-By
 
 # scan-outbound.md documentation samples (not real private info)
 docs/scan-outbound.md:192.168

@@ -60,7 +60,7 @@ tests/*:@example.com
 
 The blocklist lives in `.private-info-blocklist` at the repo root (gitignored; symlinked from
 a private repo by the installer) to avoid exposing blocked patterns in a public repo. One regex per line.
-`private-info-blocklist.example` (tracked) serves as a format reference — see it for annotated examples.
+`.private-info-blocklist.example` (tracked) serves as a format reference — see it for annotated examples.
 
 ## Manual Scanning
 
