@@ -209,8 +209,6 @@
       "Write(~/.claude/projects/workflow/**)",
       "Edit(**/history.md)",
       "Write(**/history.md)",
-      "Edit(**/.private-info-allowlist)",
-      "Write(**/.private-info-allowlist)",
       "Bash(*aws * delete*)",
       "Bash(*aws * terminate*)",
       "Bash(*aws * remove*)",
