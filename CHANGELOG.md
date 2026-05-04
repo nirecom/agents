@@ -9,3 +9,7 @@ Changes: New /draw-mermaid skill generates Mermaid diagrams via subagent (dark-m
 ### SECURITY: Strengthen settings.json deny rules; add security-policy.md (2026-05-04)
 Background: Push deny rules had coverage gaps.
 Changes: Deny rules now cover additional push flag variants. New docs/security-policy.md documents the permission model. README updated to highlight deny-list as a security feature.
+
+### SECURITY: Block Claude Code writes to .private-info-allowlist (2026-05-04)
+Background: In VSCode ask-before-edits mode, permissions.deny rules for Edit/Write are bypassed, so CC could silently append exceptions to the scan-outbound allowlist.
+Changes: The block-dotenv.js PreToolUse hook now blocks all Edit/Write access to .private-info-allowlist. Exceptions must be added manually.
