@@ -92,7 +92,8 @@ hook and a Claude Code PreToolUse hook. Both detect RFC 1918 addresses, email ad
 MAC addresses, absolute local paths, hard-coded secrets (AWS, Anthropic, OpenAI, GitHub,
 Slack, and others), PEM private keys, and Trojan Source hidden Unicode characters.
 Repositories identified as private via `gh api` are skipped automatically.
-See [docs/scan-outbound.md](docs/scan-outbound.md) for details.
+See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
+To add private patterns, copy `private-info-blocklist.example` to `.private-info-blocklist`.
 
 ### Cross-machine session continuity
 
