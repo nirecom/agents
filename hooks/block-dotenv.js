@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code PreToolUse hook: block access to .env files
+// Claude Code PreToolUse hook: block access to .env files and .private-info-allowlist
 // Matches: Bash, Read, Grep, Glob, Edit, Write, MultiEdit tools
 // Allows: .env.example, .env.sample, .env.template, .env.dist
 
@@ -94,6 +94,12 @@ function checkBashCommand(command) {
   });
 }
 
+function isAllowlistPath(filePath) {
+  if (!filePath) return false;
+  const basename = filePath.replace(/\\/g, "/").split("/").pop();
+  return basename === ".private-info-allowlist";
+}
+
 // For Glob patterns: detect .env search patterns
 function checkGlobPattern(pattern) {
   if (!pattern) return false;
@@ -149,6 +155,9 @@ switch (toolName) {
   case "MultiEdit":
     if (isDotenvPath(toolInput.file_path)) {
       block("Writing .env files is blocked. Use .env.example for documentation.");
+    }
+    if (isAllowlistPath(toolInput.file_path)) {
+      block("Writing .private-info-allowlist is blocked. Edit manually if an exception is genuinely needed.");
     }
     break;
 
