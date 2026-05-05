@@ -60,6 +60,30 @@ AGENT_AUTO_BRANCH=on 下では「decision」よりも「creation」が実態。C
 - [ ] `hooks/lib/workflow-state.js`, `hooks/workflow-mark.js`, `hooks/workflow-gate.js`, `hooks/session-start.js` 等を一斉更新
 - 動機：「名は体を表す」原則に沿わせる（label と内部名の乖離解消）
 
+### Workflow Step 6 のテスト実行を専任 subagent に分離 — 検討
+
+**動機（context window の分離）**：今回の AGENT_AUTO_BRANCH 実装で、**code を直す側と動作確認する側を別 CC session に分けた**結果、F1〜F4 の production bug を効率良く発見・修正できた。最大の理由は context window の分離：「code を書く文脈」と「動作確認する文脈」を同一 context window に詰め込むと、片方が溢れて他方を阻害する。検証側は試行錯誤の log・再現手順・前回の失敗パターンを context に保持し続ける必要があり、main session が抱えると実装側の思考領域を圧迫する。subagent として閉じ込めれば、main conversation は実装と bug fix の思考に集中でき、subagent は検証の試行錯誤を context-isolate できる。
+
+**現状**：
+- Step 6（Run tests & Security review）で `review-code-security` と `review-code-codex` は subagent / parallel で動いている
+- しかし **テスト実行（`bash tests/...`）は main conversation 自身が走らせている**
+- 自動テスト 37/37 pass でも production-shape の bug が漏れたケース（今回の R1〜F4）では、別人格の検証者が必要
+
+**提案**：
+- [ ] Step 6 に `/run-tests` skill（仮称）を導入し、subagent で：
+  - 自動テスト実行（既存の bash tests/...）
+  - production-shape の動作確認手順 `.md` を生成（手動検証用 → 別 session で実行）または subagent 内で simulate
+  - 結果を構造化レポートで返却（pass/fail サマリ + 再現手順 + stderr 抜粋）
+- [ ] main conversation は report を受け取って bug fix に専念（context window を実装側に温存）
+- [ ] CLAUDE.md Step 6 を「`/run-tests` をデフォルト経路に」と更新
+- [ ] 既存の `workflow-run-tests.js` PostToolUse hook（exit code から auto-mark）との関係整理
+
+**前提（CC subagent 機構）**：
+- Claude Code の subagent は **context-isolate を提供する**（main の context window を消費しない）
+- subagent 内から bash 実行 + 結果 grep / parse は可能
+- ただし production 環境で人手が必要な動作確認（実 push、UI 操作、別 PC 切替、CC 再起動など）は subagent では完結しない → そういうケースは「別 CC session 用の検証 doc」を生成して main に返す責務にとどめる
+- 今回の F1〜F4 のうち、subagent で完結可能だったのは F2〜F4（環境設定 + 自動 invoke で再現可能）。F1（CC 自身が出力する additionalContext を見る）は実 CC session が必要
+
 ### 補助リポジトリ（ai-specs 等）に対する AGENT_AUTO_BRANCH の扱い — 検討中
 
 main 直書きが普通だった補助 repo（ai-specs の research-results、メモ系）も AUTO_BRANCH=on の対象になり、毎回 feature branch + ff merge が必要に。
