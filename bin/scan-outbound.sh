@@ -4,7 +4,8 @@
 #   scan-outbound.sh [--stdin [label]] [file ...]
 #   --stdin: read from stdin (optional label for output)
 #   file args: scan named files
-# Exit: 0 = clean, 1 = violations found, 2 = usage error
+# Exit: 0 = clean, 1 = hard violation, 2 = warn-only (no hard), 3 = usage error
+# NOTE: exit 3 was previously exit 2 (usage error). Bumped to free exit 2 for warn-only.
 
 set -euo pipefail
 
@@ -13,13 +14,14 @@ ALLOWLIST="$SCRIPT_DIR/../.private-info-allowlist"
 BLOCKLIST="$SCRIPT_DIR/../.private-info-blocklist"
 
 VIOLATIONS=0
+WARNINGS=0
 MODE=""
 LABEL="stdin"
 
 # Parse arguments
 if [ $# -eq 0 ]; then
     echo "Usage: scan-outbound.sh [--stdin [label]] [file ...]" >&2
-    exit 2
+    exit 3
 fi
 
 if [ "$1" = "--stdin" ]; then
@@ -43,14 +45,29 @@ if [ -f "$ALLOWLIST" ]; then
     done < "$ALLOWLIST"
 fi
 
-# Load blocklist patterns
-BLOCK_PATTERNS=()
+# Load blocklist patterns (split into hard / warn tiers)
+# Lines starting with `warn:` are soft-block patterns; others are hard.
+BLOCK_HARD_PATTERNS=()
+BLOCK_WARN_PATTERNS=()
 if [ -f "$BLOCKLIST" ]; then
+    _bl_lineno=0
     while IFS= read -r line; do
+        _bl_lineno=$((_bl_lineno + 1))
         line="${line%$'\r'}"
         [[ -z "$line" || "$line" =~ ^# ]] && continue
-        BLOCK_PATTERNS+=("$line")
+        if [[ "$line" == warn:* ]]; then
+            pat="${line#warn:}"
+            if [ -z "$pat" ]; then
+                # Empty regex would match every line; skip and warn
+                printf 'Warning: empty warn pattern at %s line %d — skipped\n' "$BLOCKLIST" "$_bl_lineno" >&2
+                continue
+            fi
+            BLOCK_WARN_PATTERNS+=("$pat")
+        else
+            BLOCK_HARD_PATTERNS+=("$line")
+        fi
     done < "$BLOCKLIST"
+    unset _bl_lineno pat
 fi
 
 # Check if a match is allowlisted
@@ -260,13 +277,24 @@ scan_line() {
         fi
     fi
 
-    # Blocklist patterns
-    for pattern in "${BLOCK_PATTERNS[@]+"${BLOCK_PATTERNS[@]}"}"; do
+    # Blocklist patterns (hard tier)
+    for pattern in "${BLOCK_HARD_PATTERNS[@]+"${BLOCK_HARD_PATTERNS[@]}"}"; do
         if [[ "$line" =~ $pattern ]]; then
             local match="${BASH_REMATCH[0]}"
             if ! is_allowed "$file" "$match"; then
                 echo "$file:$lineno: [blocklist] $match"
                 VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+        fi
+    done
+
+    # Blocklist patterns (warn tier — soft-block, exit code 2)
+    for pattern in "${BLOCK_WARN_PATTERNS[@]+"${BLOCK_WARN_PATTERNS[@]}"}"; do
+        if [[ "$line" =~ $pattern ]]; then
+            local match="${BASH_REMATCH[0]}"
+            if ! is_allowed "$file" "$match"; then
+                echo "$file:$lineno: [blocklist-warn] $match"
+                WARNINGS=$((WARNINGS + 1))
             fi
         fi
     done
@@ -296,7 +324,12 @@ fi
 
 if [ "$VIOLATIONS" -gt 0 ]; then
     echo ""
-    echo "Found $VIOLATIONS private information violation(s)"
+    echo "Found $VIOLATIONS hard violation(s), $WARNINGS warning(s)"
     exit 1
+fi
+if [ "$WARNINGS" -gt 0 ]; then
+    echo ""
+    echo "Found $WARNINGS warning(s) (no hard violation)"
+    exit 2
 fi
 exit 0

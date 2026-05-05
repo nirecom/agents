@@ -135,7 +135,10 @@ fi
 # Files to skip
 SKIP_PATTERNS="bin/scan-outbound.sh|\.private-info-allowlist"
 
-FOUND_VIOLATIONS=0
+HARD_HITS=0
+WARN_HITS=0
+HARD_OUT=""
+WARN_OUT=""
 
 while IFS= read -r file; do
     # Skip scanner-related files
@@ -148,16 +151,47 @@ while IFS= read -r file; do
         continue
     fi
 
-    # Scan staged content
-    if ! git show ":$file" 2>/dev/null | "$SCANNER" --stdin "$file"; then
-        FOUND_VIOLATIONS=1
-    fi
+    # Scan staged content. IMPORTANT: capture rc with `|| rc=$?` — under
+    # `set -euo pipefail` the assignment would otherwise abort the hook on
+    # non-zero scanner exit before the case below could branch.
+    SCAN_OUT=""
+    rc=0
+    SCAN_OUT="$(git show ":$file" 2>/dev/null | "$SCANNER" --stdin "$file" 2>&1)" || rc=$?
+    case "$rc" in
+        0) : ;;
+        1) HARD_HITS=$((HARD_HITS + 1)); HARD_OUT="$HARD_OUT"$'\n'"$SCAN_OUT" ;;
+        2) WARN_HITS=$((WARN_HITS + 1)); WARN_OUT="$WARN_OUT"$'\n'"$SCAN_OUT" ;;
+        3) echo "pre-commit: scanner usage error (rc=3)" >&2; exit 1 ;;
+        *) echo "pre-commit: scanner unexpected rc=$rc" >&2; exit 1 ;;
+    esac
 done <<< "$STAGED_FILES"
 
-if [ "$FOUND_VIOLATIONS" -eq 1 ]; then
+# Hard wins: any hard violation blocks immediately.
+if [ "$HARD_HITS" -gt 0 ]; then
+    [ -n "$HARD_OUT" ] && printf '%s\n' "$HARD_OUT"
+    [ -n "$WARN_OUT" ] && printf '%s\n' "$WARN_OUT"
     echo ""
     echo "Commit blocked: private information detected in staged files."
     echo "Fix the issues above, or add exceptions to .private-info-allowlist"
     exit 1
+fi
+
+# Warn-only path: re-display matches, then prompt or auto-block.
+if [ "$WARN_HITS" -gt 0 ]; then
+    printf '%s\n' "$WARN_OUT"
+    echo ""
+    if { : <>/dev/tty; } 2>/dev/null; then
+        printf "Possible private info above. Proceed with commit? [y/N] " > /dev/tty
+        REPLY=""
+        read -r REPLY < /dev/tty || REPLY=""
+        case "$REPLY" in
+            y|Y|yes|YES) echo "pre-commit: warn-only confirmed by user"; exit 0 ;;
+            *) echo "pre-commit: aborted by user"; exit 1 ;;
+        esac
+    else
+        echo "Commit blocked: warn-only patterns detected (no TTY available — auto-blocked)."
+        echo "Re-run interactively or add an exception to .private-info-allowlist."
+        exit 1
+    fi
 fi
 exit 0
