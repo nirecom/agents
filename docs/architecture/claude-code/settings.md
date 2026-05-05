@@ -62,6 +62,18 @@
   platform-specific files (`install/win/` ↔ `install/linux/`) are staged without counterpart
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and
   `.git/.cross-platform-reviewed` (one-time, HEAD hash)
+- `auto-branch-guard.js` (PreToolUse, matcher: `Edit|Write|MultiEdit`) — when
+  `AGENT_AUTO_BRANCH=on` (default), blocks edits when the target file's repo is on
+  the default branch. Default-branch detection: `refs/remotes/origin/HEAD` →
+  local `main`/`master` → `init.defaultBranch` → fallback `main`. Override via
+  `AGENT_DEFAULT_BRANCHES=develop,trunk,...` (comma-separated). Allows: HEAD unborn,
+  detached HEAD, files outside any git repo. Defense-in-depth at commit time via
+  the bash block in `pre-commit`. Falsy values (`off|0|false|no|disabled`,
+  case-insensitive) opt out.
+- `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
+  if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
+  equals current HEAD, resets workflow step `branching_decision` to pending and
+  clears `last_pushed_sha`. Forces fresh branch/worktree creation for the next task.
 
 **Permission glob matching**: Permissions are matched against the entire command string.
 `&&` does not split into subcommands. `Bash(git commit *)` does not match
@@ -81,7 +93,7 @@
 ## AWS Permission Posture
 
 Claude Code operates with read-only AWS access during scan skills. Recommended IAM grants:
-- `ec2:Describe*`, `s3:ListBucket`, `s3:GetBucketAcl`, `s3:GetBucketPolicyStatus`
+- `ec2:Describe*`, `s3:ListAllMyBuckets`, `s3:ListBucket`, `s3:GetBucketAcl`, `s3:GetBucketPolicyStatus`
 - `iam:List*`, `iam:Get*` (not Create/Put/Attach/Delete)
 - `ce:GetCostAndUsage`, `ce:GetCostForecast`
 - `ecs:List*`, `ecs:Describe*`, `lambda:List*`, `lambda:Get*`

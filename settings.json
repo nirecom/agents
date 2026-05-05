@@ -302,6 +302,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-push-workflow-reset.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostCompact": [
       {
         "matcher": "",
@@ -331,6 +343,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-dotenv.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/auto-branch-guard.js\"",
             "timeout": 5
           }
         ]
@@ -416,5 +438,5 @@
   },
   "effortLevel": "medium",
   "autoUpdatesChannel": "latest",
-  "model": "opusplan"
+  "model": "claude-opus-4-7"
 }

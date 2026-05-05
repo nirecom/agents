@@ -7,6 +7,71 @@ set -euo pipefail
 _cfg_dir="$(cd "$(dirname "$0")/.." && pwd)"
 SCANNER="$_cfg_dir/bin/scan-outbound.sh"
 
+# Load $AGENTS_CONFIG_DIR/.env (existing env wins). Mirrors hooks/lib/load-env.js.
+_load_env_file() {
+    local envfile="${AGENTS_CONFIG_DIR:-$_cfg_dir}/.env"
+    [ -r "$envfile" ] || return
+    local line key val
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Skip blank and comment lines
+        case "$line" in ''|\#*) continue ;; esac
+        # Match KEY=VAL (KEY: alphanumeric + underscore, must start with letter/underscore)
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            val="${BASH_REMATCH[2]}"
+            # Strip optional surrounding quotes
+            case "$val" in
+                \"*\") val="${val#\"}"; val="${val%\"}" ;;
+                \'*\') val="${val#\'}"; val="${val%\'}" ;;
+            esac
+            # Set only if not already in env (preserves explicit shell exports)
+            if ! printenv "$key" >/dev/null 2>&1; then
+                export "$key"="$val"
+            fi
+        fi
+    done < "$envfile"
+}
+_load_env_file
+
+# AGENT_AUTO_BRANCH defense-in-depth: block commit on default branch when policy is on.
+# Mirrors hooks/auto-branch-guard.js logic. Bash-side because git hooks run outside Node.
+_is_auto_branch_on() {
+    local v
+    v="$(printf %s "${AGENT_AUTO_BRANCH:-}" | tr '[:upper:]' '[:lower:]')"
+    case "$v" in
+        off|0|false|no|disabled) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+if _is_auto_branch_on; then
+    cur_branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+    if [ -n "$cur_branch" ]; then
+        # Build protected branches list
+        protected=""
+        if [ -n "${AGENT_DEFAULT_BRANCHES:-}" ]; then
+            protected="$(printf %s "$AGENT_DEFAULT_BRANCHES" | tr ',' ' ')"
+        else
+            origin_head="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#.*/##' || true)"
+            [ -n "$origin_head" ] && protected="$protected $origin_head"
+            for cand in main master; do
+                git show-ref --verify --quiet "refs/heads/$cand" 2>/dev/null && protected="$protected $cand"
+            done
+            init_default="$(git config init.defaultBranch 2>/dev/null || true)"
+            [ -n "$init_default" ] && protected="$protected $init_default"
+            [ -z "$(printf %s "$protected" | tr -d ' ')" ] && protected="main"
+        fi
+        for b in $protected; do
+            if [ "$cur_branch" = "$b" ]; then
+                echo "AUTO_BRANCH: commits to default branch '$cur_branch' are blocked." >&2
+                echo "Run: git switch -c <feature-name>" >&2
+                echo "Or set AGENT_AUTO_BRANCH=off in .env to disable." >&2
+                exit 1
+            fi
+        done
+    fi
+fi
+
 # Auto-unstage settings.json if the only change is effortLevel
 SETTINGS="settings.json"
 if git diff --cached --name-only | grep -qx "$SETTINGS"; then

@@ -17,7 +17,10 @@ do not call `git worktree add` / `git worktree remove` directly:
 | High-risk refactor where main should be kept as a known-good rollback target | Main remains reachable at any time |
 
 **Not a fit:** single-file edits, typos, docs changes, read-only investigation, tasks under
-30 minutes (isolation cost > benefit). Work directly on main for these.
+30 minutes (isolation cost > benefit). For these, use a feature branch only — see `branch.md`.
 
-See `branch.md` for the prior decision: use a feature branch vs. working directly on main.
-This file covers only the next step: whether that branch also needs an isolated checkout.
+(With `AGENT_AUTO_BRANCH=on` (default), you must use either a feature branch or a worktree;
+the default branch is blocked. With `AGENT_AUTO_BRANCH=off`, working directly on main is
+also possible — see `branch.md`.)
+
+See `branch.md` for branch naming and the standard branch flow.
