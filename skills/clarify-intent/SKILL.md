@@ -50,9 +50,7 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
    timestamp (`intent-YYYYMMDD-HHMMSS`) as fallback.
 
 4. Present a one-paragraph summary of what was locked in. Do NOT gate on a confirmation
-   `AskUserQuestion` here — the user already reviewed intent.md at the Write step, and
-   can interject freely if the summary is wrong. Subsequent planning stages provide
-   further opportunities for revision.
+   `AskUserQuestion` here — the user already reviewed intent.md at the Write step.
 
 5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
    unless not needed) then `/make-outline-plan`.
