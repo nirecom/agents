@@ -17,3 +17,7 @@ Changes: The block-dotenv.js PreToolUse hook now blocks all Edit/Write access to
 ### FEATURE: Workflow: clarify-intent now mechanically enforced before Edit/Write (2026-05-04)
 Background: Previously Claude would often skip /clarify-intent at session start despite CLAUDE.md instructions, requiring users to manually redirect to the workflow.
 Changes: PreToolUse hook now blocks Edit/Write/MultiEdit/editFiles/NotebookEdit until clarify_intent step is complete or skipped. Read/Grep/Glob/Bash remain available for investigation and skill execution. Skip path: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>". Recovery: echo "<<WORKFLOW_RESET_FROM_clarify_intent>>". TodoWrite checklist creation moved into the clarify-intent skill's Completion section.
+
+### FEATURE: scan-outbound: add warn: prefix for soft-block blocklist patterns (2026-05-04)
+Background: Hard-only blocklist made it hard to register suspicious-but-uncertain patterns without false-positive noise.
+Changes: Prefix any line in .private-info-blocklist with warn: to mark it as a soft-block pattern. On match, Claude Code asks for user confirmation; interactive git commit prompts y/N via /dev/tty; non-interactive contexts (CI, no TTY) auto-block as a safe default. Hard-block patterns continue to fail immediately and win over warn when both match. Scanner exit code 2 is now reserved for warn-only; the previous usage-error code moved from 2 to 3 (breaking change for any external script that parsed exit 2).
