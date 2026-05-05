@@ -24,11 +24,46 @@ if [ -n "$REMOTE_URL" ]; then
     fi
 fi
 
-# $1 is the commit message file
-if ! "$SCANNER" --stdin "commit-msg" < "$1"; then
-    echo ""
-    echo "Commit blocked: private information detected in commit message."
-    echo "Fix the message, or add exceptions to .private-info-allowlist"
-    exit 1
-fi
-exit 0
+# $1 is the commit message file.
+# IMPORTANT: capture rc with `|| rc=$?` — under `set -euo pipefail` the
+# assignment would otherwise abort the hook on non-zero scanner exit.
+SCAN_OUT=""
+rc=0
+SCAN_OUT="$("$SCANNER" --stdin "commit-msg" < "$1" 2>&1)" || rc=$?
+case "$rc" in
+    0)
+        exit 0
+        ;;
+    1)
+        printf '%s\n' "$SCAN_OUT"
+        echo ""
+        echo "Commit blocked: private information detected in commit message."
+        echo "Fix the message, or add exceptions to .private-info-allowlist"
+        exit 1
+        ;;
+    2)
+        printf '%s\n' "$SCAN_OUT"
+        echo ""
+        if { : <>/dev/tty; } 2>/dev/null; then
+            printf "Possible private info in message. Proceed with commit? [y/N] " > /dev/tty
+            REPLY=""
+            read -r REPLY < /dev/tty || REPLY=""
+            case "$REPLY" in
+                y|Y|yes|YES) echo "commit-msg: warn-only confirmed by user"; exit 0 ;;
+                *) echo "commit-msg: aborted by user"; exit 1 ;;
+            esac
+        else
+            echo "Commit blocked: warn-only patterns in message (no TTY available — auto-blocked)."
+            echo "Re-run interactively or add an exception to .private-info-allowlist."
+            exit 1
+        fi
+        ;;
+    3)
+        echo "commit-msg: scanner usage error (rc=3)" >&2
+        exit 1
+        ;;
+    *)
+        echo "commit-msg: scanner unexpected rc=$rc" >&2
+        exit 1
+        ;;
+esac

@@ -2,7 +2,7 @@
 // Claude Code PreToolUse hook: check Edit/Write content for private information
 // Skips scanning for private repos (detected dynamically via GitHub API)
 
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
@@ -109,18 +109,44 @@ if (!content) {
 }
 
 // Run scanner on the content
-try {
+{
   const label = filePath || "stdin";
-  execSync(`bash "${shellPath(SCANNER)}" --stdin "${shellPath(label)}"`, {
+  const result = spawnSync("bash", [shellPath(SCANNER), "--stdin", shellPath(label)], {
     input: content,
     encoding: "utf8",
     timeout: 10000,
-    stdio: ["pipe", "pipe", "pipe"],
   });
-  // Scanner exited 0 = clean
-  approve();
-} catch (e) {
-  // Scanner exited non-zero = violations found
-  const output = (e.stdout || "").trim();
-  block(`Private information detected:\n${output}`);
+  const SCAN_OUT = ((result.stdout || "") + (result.stderr || "")).trim();
+
+  // Fail-closed: timeout / spawn error / unobservable status
+  if (result.error || result.status === null) {
+    block(`Scanner failed (${(result.error && result.error.message) || "no exit status"}):\n${SCAN_OUT}`);
+    return; // defensive: block() exits, but make control flow explicit
+  }
+
+  switch (result.status) {
+    case 0:
+      approve();
+      break;
+    case 1:
+      block(`Private information detected:\n${SCAN_OUT}`);
+      break;
+    case 2:
+      // PreToolUse hook never prompts directly. Return block + reason so Claude
+      // relays the question to the user. Re-display the matched lines so the
+      // user can judge.
+      block(
+        `Possible private information detected (warn-only):\n${SCAN_OUT}\n\n` +
+        `These patterns are flagged as likely false-positive-prone. ` +
+        `Ask the user whether this content is safe to commit. ` +
+        `If the user confirms it is safe, proceed. ` +
+        `If genuinely safe long-term, suggest adding to .private-info-allowlist.`
+      );
+      break;
+    case 3:
+      block(`Scanner usage error (rc=3):\n${SCAN_OUT}`);
+      break;
+    default:
+      block(`Scanner unexpected rc=${result.status}:\n${SCAN_OUT}`);
+  }
 }
