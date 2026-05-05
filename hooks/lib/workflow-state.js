@@ -272,6 +272,27 @@ function nextStepHint(stepName) {
   return hint ? `[workflow] ${hint}` : null;
 }
 
+/**
+ * Record the SHA of the most recent successful push for this session.
+ * Used by post-push-workflow-reset.js to detect when HEAD == last_pushed_sha
+ * (meaning a push completed and the next prompt likely starts a new task).
+ */
+function setLastPushedSha(sessionId, sha) {
+  const state = readState(sessionId);
+  if (!state) return false;
+  state.last_pushed_sha = sha;
+  writeState(sessionId, state);
+  return true;
+}
+
+function clearLastPushedSha(sessionId) {
+  const state = readState(sessionId);
+  if (!state) return false;
+  state.last_pushed_sha = null;
+  writeState(sessionId, state);
+  return true;
+}
+
 module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -287,4 +308,6 @@ module.exports = {
   getWorkflowDir,
   getCurrentContext,
   findLatestStateForContext,
+  setLastPushedSha,
+  clearLastPushedSha,
 };
