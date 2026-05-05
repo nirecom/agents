@@ -12,9 +12,14 @@
    - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
    - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
-3. **Branch/Worktree decision** — Consult `rules/branch.md` and `rules/worktree.md`. Decide whether
-   to work on main, a feature branch, or a worktree, then record the decision:
-   `echo "<<WORKFLOW_BRANCHING_DECIDED: main|branch: <name>|worktree: <path>>"`
+3. **Branch/Worktree creation** —
+   - **`AGENT_AUTO_BRANCH=on` (default)**: editing on the default branch is blocked. Two options:
+     - Branch only: `git switch -c <name>` (naming → `rules/branch.md`)
+     - Branch + Worktree: Run `/worktree-start`
+     Enforced by `auto-branch-guard` (PreToolUse) and `pre-commit`.
+   - **`AGENT_AUTO_BRANCH=off`**: main is allowed for trivial changes. Consult `rules/branch.md` for branch-vs-main, `rules/worktree.md` for branch-vs-worktree.
+   Record: `echo "<<WORKFLOW_BRANCHING_DECIDED: branch: <name>|worktree: <path>|main>>"`
+   (`main` is only valid when AUTO_BRANCH=off.)
 4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
 5. **Code** — Present a diff in chat before calling Edit. Wait for approval.
