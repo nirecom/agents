@@ -60,6 +60,14 @@ AGENT_AUTO_BRANCH=on 下では「decision」よりも「creation」が実態。C
 - [ ] `hooks/lib/workflow-state.js`, `hooks/workflow-mark.js`, `hooks/workflow-gate.js`, `hooks/session-start.js` 等を一斉更新
 - 動機：「名は体を表す」原則に沿わせる（label と内部名の乖離解消）
 
+### 補助リポジトリ（ai-specs 等）に対する AGENT_AUTO_BRANCH の扱い — 検討中
+
+main 直書きが普通だった補助 repo（ai-specs の research-results、メモ系）も AUTO_BRANCH=on の対象になり、毎回 feature branch + ff merge が必要に。
+- [ ] 運用ルール案：feature branch + ff merge を補助 repo でも徹底（記録の追跡可能性が上がる副次効果）
+- [ ] 仕組み案：`.agent/policy.json` のような per-repo 設定を読んで、特定 repo は AUTO_BRANCH 対象外にする
+- [ ] 関連リスク：**docs の中間状態の同期問題** — agents の機能 commit 中に対応する ai-specs research entry を main 直書きすると、機能 commit の前後で docs/research の sync が壊れる可能性。両者を一緒に branch で進めて、完了時に同時 merge する運用が安全
+- 動機：今回の研究 commit で初めて表面化。auxiliary repo の運用が不明確
+
 ### 多セッション並行検出（session-sync mutterings 応用）— 将来拡張
 
 現行の AGENT_AUTO_BRANCH 強制で「default branch race」は構造的に回避済だが、「同一 feature branch を別セッションが同時編集」のような細かい race は検出できない。情報レベルで知りたい場合の拡張。
