@@ -19,6 +19,7 @@ const {
   createInitialState,
   writeState,
   nextStepHint,
+  setLastPushedSha,
 } = require("./lib/workflow-state");
 
 function readStdin() {
@@ -137,6 +138,32 @@ if (GIT_PUSH_RE.test(command)) {
   if (exitCode === 0 && sessionId) {
     try { markStep(sessionId, "user_verification", "pending"); }
     catch (e) { msg = `workflow-mark: push detected — user_verification reset FAILED: ${e.message}`; }
+    // Record last_pushed_sha in workflow state for post-push-workflow-reset hook.
+    // resolveRepoCwd tries: -C <path> in command > CLAUDE_PROJECT_DIR > input.cwd
+    //   > state.cwd (saved at session-start) > process.cwd()
+    // PostToolUse stdin does not always include `cwd`, so falling back to
+    // process.cwd() (= the agents hook lib repo) yields the wrong HEAD.
+    // post-push-workflow-reset.js uses the same resolution to ensure both ends
+    // see the same repo.
+    try {
+      const { execSync } = require("child_process");
+      const { resolveRepoCwd } = require("./lib/path-normalize");
+      const { readState } = require("./lib/workflow-state");
+      const state = readState(sessionId);
+      const repoCwd = resolveRepoCwd({
+        command,
+        input,
+        stateCwd: state && state.cwd,
+      });
+      const sha = execSync("git rev-parse HEAD", {
+        cwd: repoCwd,
+        encoding: "utf8",
+        timeout: 2000,
+      }).trim();
+      if (/^[0-9a-f]{40}$/.test(sha)) {
+        setLastPushedSha(sessionId, sha);
+      }
+    } catch (e) { /* Fail-open */ }
     done(msg);
   }
   done();
