@@ -87,6 +87,10 @@ Write-Host "--- Configuring VS Code settings (GitHub Copilot / Claude Code) ---"
 & "$AgentsRoot\install\win\vscode-settings.ps1"
 
 Write-Host ""
+Write-Host "--- Setting up global gitignore (WORKTREE_NOTES.md) ---"
+& "$AgentsRoot\install\win\global-gitignore.ps1"
+
+Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
 if ($_needRestart) {
     Write-Host "Restart PowerShell to apply profile changes." -ForegroundColor Yellow
