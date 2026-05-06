@@ -10,7 +10,7 @@
 
 set -u
 
-AGENTS_DIR="/c/git/worktrees/parallel-sessions-worktree/agents"
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALLER="$AGENTS_DIR/install/linux/global-gitignore.sh"
 
 PASS=0

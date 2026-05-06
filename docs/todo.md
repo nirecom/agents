@@ -2,6 +2,20 @@
 
 ## Current Work
 
+### install/win/global-gitignore.ps1 の Pester テスト追加
+
+bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-installer-ignore.sh` でカバーされているが、PowerShell 版 (`global-gitignore.ps1`) は無テスト。今回 `.Count` バグ（空 Where-Object 結果での null 参照）が production で初めて発覚したのはこのカバレッジ欠落が原因。
+- [ ] Pester ベースのテストファイル追加 (`tests/feature-parallel-sessions-worktree-installer-ignore.Tests.ps1`)
+- [ ] bash 版と同等のケース網羅: 初回作成、idempotent 再実行、既存ファイル末尾追記、マーカー破損 (BEGIN-only / END-only / 2x BEGIN)、空ファイル、巨大ファイル
+- [ ] CI で Windows 上で実行されるよう設定（GitHub Actions windows-latest 等）
+
+### enforce-worktree.js が `git worktree add` 自体を block する問題
+
+main checkout から `git worktree add` を実行すると mutating Bash として block される。worktree を作る唯一の方法なので、bootstrap 不能になる。
+- [ ] `bash-write-patterns.js` で `git worktree add|prune|repair` 等の安全な subcommand を allow に分類
+- [ ] または `enforce-worktree.js` で `git worktree` を mutating 判定から除外
+- 現状の運用回避: `ENFORCE_WORKTREE=off` に切替えて worktree 作成、on に戻す
+
 ### commit gate の「commit 前ステップが commit 後の状態に依存する」設計矛盾
 
 **根本原因**: workflow-gate は commit 前に全ステップ（review → user_verification）の完了を要求する。しかし一部のステップは commit 後の状態に依存するため、鶏と卵の問題が発生する。
