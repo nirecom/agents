@@ -2,18 +2,30 @@
 
 ## Current Work
 
-### review-code-codex が commit 前に実行できない問題 — ワークフロー設計の欠陥
+### commit gate の「commit 前ステップが commit 後の状態に依存する」設計矛盾
 
-**症状**: `review-code-codex` は `git diff BASE...HEAD` を使うため commit 済み差分のみ対象。しかし commit には workflow-gate の `user_verification` が必要で、`user_verification` は本来 review-code-codex の**後**に行うもの。結果として鶏と卵の問題になる。
+**根本原因**: workflow-gate は commit 前に全ステップ（review → user_verification）の完了を要求する。しかし一部のステップは commit 後の状態に依存するため、鶏と卵の問題が発生する。
 
-**発生条件**: 実装ステップごとに commit を積まず、実装完了まで一度もコミットしない場合（TDD フェーズで tests + implementation を一気に進めたセッションで発生）。
+**前提の整理**:
+- `review-code-codex` (`git diff BASE...HEAD`): **commit 必要**、push 不要
+- `gh pr create`: **commit + push 両方必要**（push なしでは branch がリモートに存在しない）
+
+**既知の発生パターン**:
+
+1. **review-code-codex が実行できない**: commit 済み差分のみ対象だが、commit には user_verification が必要で、user_verification は review 後に行うもの。
+   - 発生条件: 実装完了まで一度もコミットしない場合
+   - 当面の回避策: `git diff --cached` を直接 codex に流す
+
+2. **fixup commit でも user_verification が再要求される**: 本実装 commit 後に小さな修正（SKILL.md 誤削除の復元等）を加えると、同一セッション内でも commit gate が user_verification を再度要求する。review-code-codex も同様に再実行が必要になる。
+   - 発生条件: 同一セッション内で複数回 commit が必要になった場合
+
+3. **PR 作成（`gh pr create`）には commit だけでなく push まで必要**: commit gate を突破して commit した後、さらに `git push` を実行して初めて PR が作れる。/worktree-end の手順では push タイミングが「PR 解決ステップ（Step 2）内で push する」と定義されているが、commit gate との順序関係（commit → user_verification → push → gh pr create）がワークフロー全体として明文化されていない。
+   - 発生条件: /worktree-end 実行時に branch がリモートに未 push の場合
 
 **解決候補**:
 - [ ] `review-code-codex` に `--staged` モードを追加（`git diff --cached` を使う）— 最小変更、後方互換
-- [ ] 中間 commit（WIP）は `user_verification` gate を免除するモードを追加
+- [ ] 中間 commit / fixup commit は `user_verification` gate を免除するモードを追加（`--wip` フラグ等）
 - [ ] ワークフロー手順に「実装ステップごとに WIP commit を積む」を明記（運用回避）
-
-**当面の回避策**: `git diff --cached` を直接 codex に流す（今回実施済み）。
 
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
