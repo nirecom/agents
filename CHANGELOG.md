@@ -21,3 +21,7 @@ Changes: PreToolUse hook now blocks Edit/Write/MultiEdit/editFiles/NotebookEdit 
 ### FEATURE: scan-outbound: add warn: prefix for soft-block blocklist patterns (2026-05-04)
 Background: Hard-only blocklist made it hard to register suspicious-but-uncertain patterns without false-positive noise.
 Changes: Prefix any line in .private-info-blocklist with warn: to mark it as a soft-block pattern. On match, Claude Code asks for user confirmation; interactive git commit prompts y/N via /dev/tty; non-interactive contexts (CI, no TTY) auto-block as a safe default. Hard-block patterns continue to fail immediately and win over warn when both match. Scanner exit code 2 is now reserved for warn-only; the previous usage-error code moved from 2 to 3 (breaking change for any external script that parsed exit 2).
+
+### REFACTOR: blocklist: add warn: examples to .private-info-blocklist.example (2026-05-06)
+Background: The .example file is many users' first reference for the blocklist format; without a sample, the new warn: prefix was discoverable only by reading docs/scan-outbound.md.
+Changes: Added a commented warn: section to .private-info-blocklist.example with two illustrative patterns and a pointer to the docs section that explains the soft-block UX matrix.
