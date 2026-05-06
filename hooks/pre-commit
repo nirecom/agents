@@ -33,24 +33,55 @@ _load_env_file() {
 }
 _load_env_file
 
-# AGENT_AUTO_BRANCH defense-in-depth: block commit on default branch when policy is on.
-# Mirrors hooks/auto-branch-guard.js logic. Bash-side because git hooks run outside Node.
-_is_auto_branch_on() {
+# ENFORCE_WORKTREE defense-in-depth: block commit from main checkout or on default branch.
+# Mirrors hooks/enforce-worktree.js logic. Bash-side because git hooks run outside Node.
+# --- BEGIN temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
+# AGENT_AUTO_BRANCH is read as a fallback with a deprecation warning.
+_is_enforce_worktree_on() {
     local v
-    v="$(printf %s "${AGENT_AUTO_BRANCH:-}" | tr '[:upper:]' '[:lower:]')"
+    if printenv ENFORCE_WORKTREE >/dev/null 2>&1; then
+        v="$(printf %s "${ENFORCE_WORKTREE}" | tr '[:upper:]' '[:lower:]')"
+    elif printenv AGENT_AUTO_BRANCH >/dev/null 2>&1; then
+        echo "pre-commit: AGENT_AUTO_BRANCH is deprecated; rename to ENFORCE_WORKTREE in agents config." >&2
+        v="$(printf %s "${AGENT_AUTO_BRANCH}" | tr '[:upper:]' '[:lower:]')"
+    else
+        v=""
+    fi
     case "$v" in
         off|0|false|no|disabled) return 1 ;;
         *) return 0 ;;
     esac
 }
+# --- END temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 
-if _is_auto_branch_on; then
+if _is_enforce_worktree_on; then
+    # Block commits from main checkout (--git-common-dir == --git-dir)
+    _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+    _git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
+    # Resolve to absolute paths before comparing (handles relative paths, symlinks,
+    # and case differences on case-insensitive filesystems such as macOS/Windows).
+    _git_common_dir_abs="$(cd "$_git_common_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_common_dir" | tr '[:upper:]' '[:lower:]')"
+    _git_dir_abs="$(cd "$_git_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_dir" | tr '[:upper:]' '[:lower:]')"
+    if [ -n "$_git_common_dir_abs" ] && [ -n "$_git_dir_abs" ] && [ "$_git_common_dir_abs" = "$_git_dir_abs" ]; then
+        echo "ENFORCE_WORKTREE: commits from main checkout are blocked." >&2
+        echo "Work from a linked worktree. Run: /worktree-start <task-name>" >&2
+        echo "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." >&2
+        exit 1
+    fi
+
     cur_branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
     if [ -n "$cur_branch" ]; then
         # Build protected branches list
+        # --- BEGIN temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
         protected=""
-        if [ -n "${AGENT_DEFAULT_BRANCHES:-}" ]; then
-            protected="$(printf %s "$AGENT_DEFAULT_BRANCHES" | tr ',' ' ')"
+        _default_branches_var="${DEFAULT_BRANCHES:-}"
+        if [ -z "$_default_branches_var" ] && printenv AGENT_DEFAULT_BRANCHES >/dev/null 2>&1; then
+            echo "pre-commit: AGENT_DEFAULT_BRANCHES is deprecated; rename to DEFAULT_BRANCHES in agents config." >&2
+            _default_branches_var="${AGENT_DEFAULT_BRANCHES:-}"
+        fi
+        # --- END temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
+        if [ -n "$_default_branches_var" ]; then
+            protected="$(printf %s "$_default_branches_var" | tr ',' ' ')"
         else
             origin_head="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#.*/##' || true)"
             [ -n "$origin_head" ] && protected="$protected $origin_head"
@@ -63,9 +94,9 @@ if _is_auto_branch_on; then
         fi
         for b in $protected; do
             if [ "$cur_branch" = "$b" ]; then
-                echo "AUTO_BRANCH: commits to default branch '$cur_branch' are blocked." >&2
-                echo "Run: git switch -c <feature-name>" >&2
-                echo "Or set AGENT_AUTO_BRANCH=off in .env to disable." >&2
+                echo "ENFORCE_WORKTREE: commits to protected branch '$cur_branch' are blocked." >&2
+                echo "Switch to a feature branch. Run: git switch -c feature/<name>" >&2
+                echo "Or set ENFORCE_WORKTREE=off in agents config to disable." >&2
                 exit 1
             fi
         done

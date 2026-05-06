@@ -103,6 +103,10 @@ printf -- "${C_BOLD}--- Configuring VS Code settings (GitHub Copilot / Claude Co
 "$AGENTS_ROOT/install/linux/vscode-settings.sh"
 
 echo ""
+printf -- "${C_BOLD}--- Setting up global gitignore (WORKTREE_NOTES.md) ---${C_RESET}\n"
+"$AGENTS_ROOT/install/linux/global-gitignore.sh"
+
+echo ""
 printf "${C_GREEN}=== Done ===${C_RESET}\n"
 if [ "$_need_restart" = "true" ]; then
     echo "Restart your shell or run: source $_rc_file_msg"
