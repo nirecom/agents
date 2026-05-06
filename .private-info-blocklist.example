@@ -15,6 +15,15 @@
 # mycompany
 # internal-domain\.example\.com
 
+# Soft-block (warn) patterns — prefix a regex with `warn:` to mark it as
+# warn-only. Matching content is flagged but NOT blocked outright; the user
+# is asked for confirmation (interactive `git commit`) or auto-blocked when
+# no TTY is available. Use for high-false-positive-risk combinations where
+# a hard block would be too aggressive. See docs/scan-outbound.md
+# "Soft-block (warn) Patterns" section for full UX matrix.
+# warn:(?i)(api.*myname|myname.*api)
+# warn:experimental-feature-name
+
 # Block unwanted commit message metadata
 # Co-Authored-By
 
