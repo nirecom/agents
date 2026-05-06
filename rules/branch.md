@@ -1,11 +1,14 @@
 # Feature Branch Operations
 
-When `AGENT_AUTO_BRANCH=on` (default): always work on a feature branch.
-The `auto-branch-guard` (PreToolUse) and `pre-commit` hooks block edits and
-commits on the default branch.
+When `ENFORCE_WORKTREE=on` (default): always work from a **linked worktree** on a feature branch.
+The `enforce-worktree` (PreToolUse) and `pre-commit` hooks block edits and commits from the
+main checkout and on the default branch.
 
-This file covers naming and the start/finish flow. For when a worktree is
-additionally needed (escalation), see `worktree.md`.
+For parallel sessions, use `/worktree-start` to create the worktree — see `worktree.md`.
+
+> **Note:** `ENFORCE_WORKTREE=on` blocks all writes from the **main checkout** regardless of
+> which branch is checked out there. A feature branch alone does not satisfy the guard —
+> you must work from a **linked worktree** (via `/worktree-start`) or set `ENFORCE_WORKTREE=off`.
 
 ## How to Start
 
@@ -15,22 +18,16 @@ git switch -c <branch>
 
 Branch names must be ASCII (`[a-zA-Z0-9]` + `-`, `_`, `/`) — see `language.md`.
 
-## Need More Isolation? (escalation to worktree)
-
-If the work additionally requires parallel sessions, an isolated runtime (Docker / DB / long-running
-process), or large amounts of gitignored state, escalate to a worktree — see `worktree.md`.
-
 ## How to Finish
 
-- **PR flow:** `gh pr create` → merge via GitHub UI or `/commit-push`
-- **Local merge:** `git switch main && git merge --ff-only <branch> && git branch -d <branch>`
+- **PR flow (standard):** push → `gh pr create` → merge via `/commit-push` or `/worktree-end`.
 
-No dedicated `branch-start` / `branch-end` skills — `/commit-push` and plain git are sufficient.
+No dedicated `branch-start` / `branch-end` skills — `/commit-push` and `/worktree-end` are sufficient.
 
-## When `AGENT_AUTO_BRANCH=off` (opt-out)
+## When `ENFORCE_WORKTREE=off` (opt-out)
 
 For genuinely trivial changes (one-line typo, lockfile-only update), set
-`AGENT_AUTO_BRANCH=off` in `.env` to disable the guard. Then the table below
+`ENFORCE_WORKTREE=off` in `.env` to disable the guard. Then the table below
 applies for the branch-vs-main decision. Re-enable after.
 
 | Scene | Reason |
@@ -43,4 +40,4 @@ applies for the branch-vs-main decision. Re-enable after.
 
 **Not a fit (off-mode):** single-commit typo / doc fixes, small already-verified config tweaks,
 trivial dependency additions (lock-file-only update), investigation commits under 30 minutes.
-Work directly on main for these.
+Work directly on main for these (with `ENFORCE_WORKTREE=off`).

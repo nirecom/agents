@@ -2,11 +2,18 @@
 
 ## Current Work
 
-### /boost + judge-task-complexity — manual smoke test (post-push)
+### review-code-codex が commit 前に実行できない問題 — ワークフロー設計の欠陥
 
-- [x] Invoke `/judge-task-complexity` directly: simple task → `VERDICT: sonnet | none`; multi-file + security task → `VERDICT: opus | S1-multi-file, S3-security`
-- [x] Invoke `/boost test task`: confirm Opus subagent launches
-- [ ] Run `make-detail-plan`: confirm step 2 calls judge before detail-planner starts
+**症状**: `review-code-codex` は `git diff BASE...HEAD` を使うため commit 済み差分のみ対象。しかし commit には workflow-gate の `user_verification` が必要で、`user_verification` は本来 review-code-codex の**後**に行うもの。結果として鶏と卵の問題になる。
+
+**発生条件**: 実装ステップごとに commit を積まず、実装完了まで一度もコミットしない場合（TDD フェーズで tests + implementation を一気に進めたセッションで発生）。
+
+**解決候補**:
+- [ ] `review-code-codex` に `--staged` モードを追加（`git diff --cached` を使う）— 最小変更、後方互換
+- [ ] 中間 commit（WIP）は `user_verification` gate を免除するモードを追加
+- [ ] ワークフロー手順に「実装ステップごとに WIP commit を積む」を明記（運用回避）
+
+**当面の回避策**: `git diff --cached` を直接 codex に流す（今回実施済み）。
 
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
