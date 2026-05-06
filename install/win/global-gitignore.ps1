@@ -47,8 +47,8 @@ if (-not (Test-Path $GitIgnorePath -PathType Leaf)) {
 $Lines = Get-Content $GitIgnorePath -Raw -Encoding UTF8
 $AllLines = if ($Lines) { $Lines -split "`n" | ForEach-Object { $_.TrimEnd("`r") } } else { @() }
 
-$BeginCount = ($AllLines | Where-Object { $_ -eq $BlockBegin }).Count
-$EndCount   = ($AllLines | Where-Object { $_ -eq $BlockEnd   }).Count
+$BeginCount = @($AllLines | Where-Object { $_ -eq $BlockBegin }).Count
+$EndCount   = @($AllLines | Where-Object { $_ -eq $BlockEnd   }).Count
 
 if ($BeginCount -gt 1 -or $EndCount -gt 1) {
     Write-Error "global-gitignore.ps1: duplicate agents-managed markers in '$GitIgnorePath'. Repair manually and re-run."
