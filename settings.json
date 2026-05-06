@@ -348,11 +348,11 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Bash|Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/auto-branch-guard.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-worktree.js\"",
             "timeout": 5
           }
         ]
