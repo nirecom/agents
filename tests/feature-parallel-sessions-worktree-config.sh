@@ -9,7 +9,7 @@
 
 set -u
 
-AGENTS_DIR="/c/git/worktrees/parallel-sessions-worktree/agents"
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
 else
