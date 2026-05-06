@@ -1,9 +1,9 @@
 ---
 name: commit-push
-description: Commit and push changes to the remote repository
+description: Commit and push changes, then create or reuse a PR with optional merge
 ---
 
-Commit staged/unstaged changes and push to the remote.
+Commit staged/unstaged changes, push to the remote, and open or reuse a PR.
 
 ## Pre-commit check
 
@@ -19,7 +19,9 @@ If documentation is missing or the commit hook blocks due to missing documentati
 1. Stage changes with `git add`
 2. Run `git diff --cached --stat` to show what will be committed
 3. Create the commit with the drafted message
-5. Push to the current branch (`git push`; if no upstream is set, use `git push -u origin <branch>`)
+4. Push to the current branch:
+   - If no upstream is set: `git push -u origin <branch>`
+   - Otherwise: `git push`
 
 Each git command (add, commit, push) must be a **separate Bash call** per `rules/git.md`.
 
@@ -38,7 +40,33 @@ Each command is a **separate Bash call** (rules/git.md — do NOT chain with `&&
 Sleep between attempts: 2s before attempt 2, 5s before attempt 3.
 After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`.
 
+### PR step (after push)
+
+5. **Skip if `ENFORCE_WORKTREE=off`** — direct-main work does not use PRs.
+
+6. **PR resolution (idempotent):**
+   ```
+   gh pr view --json state,url
+   ```
+   - `state == OPEN` → reuse the existing PR URL (do NOT create a duplicate).
+   - No PR or closed → `gh pr create --fill`.
+   Display the PR URL.
+
+7. **AUTO_MERGE_PR check:**
+   - `AUTO_MERGE_PR=off`: display PR URL and stop.
+   - `AUTO_MERGE_PR=on` (default): ask the user.
+
+8. **Ask the user** (when AUTO_MERGE_PR=on):
+   `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
+   - **merge**: `gh pr merge --squash --delete-branch`
+     Then: `git fetch --prune origin`
+     Note: if working from a worktree, run `/worktree-end` afterward for full cleanup.
+   - **wait**: display URL and stop.
+   - **abort**: display URL and stop.
+
 ## Rules
 
-- Follow all existing commit and push rules
-- If push fails, report the error — do not force-push
+- Follow all existing commit and push rules.
+- If push fails, report the error — do not force-push.
+- Merge is always user-confirmed — never auto-merge without `AskUserQuestion`.
+- Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
