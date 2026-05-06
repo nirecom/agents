@@ -25,3 +25,11 @@ Changes: Prefix any line in .private-info-blocklist with warn: to mark it as a s
 ### REFACTOR: blocklist: add warn: examples to .private-info-blocklist.example (2026-05-06)
 Background: The .example file is many users' first reference for the blocklist format; without a sample, the new warn: prefix was discoverable only by reading docs/scan-outbound.md.
 Changes: Added a commented warn: section to .private-info-blocklist.example with two illustrative patterns and a pointer to the docs section that explains the soft-block UX matrix.
+
+### FEATURE: Parallel sessions: enforce worktree, mandatory PR, global gitignore (2026-05-06)
+Background: Concurrent agent sessions could race on the default branch when both wrote to main. No mechanism prevented main-checkout edits even with feature branches checked out.
+Changes: ENFORCE_WORKTREE=on (default) blocks all Edit/Write/Bash-write operations from the main checkout regardless of branch — work must happen in a linked worktree (/worktree-start). Worktrees follow a standard <WORKTREE_BASE_DIR>/<task>/<repo> path layout. /worktree-end now requires PR + merge as the only exit path. Installer adds a global gitignore block for WORKTREE_NOTES.md (idempotent on Linux/macOS/Windows). Set ENFORCE_WORKTREE=off in agents config to opt out for trivial direct-main work. Action required: rename AGENT_AUTO_BRANCH → ENFORCE_WORKTREE and AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES in your agents config now. The old names are deprecated and will be removed.
+
+### BUGFIX: global-gitignore.ps1: .Count error on empty/single Where-Object result (2026-05-06)
+Background: install.ps1 errored at the global-gitignore step on first run when the gitignore file contained no agents-managed markers — Where-Object returned 0 items (null) and .Count failed.
+Changes: Wrap Where-Object pipeline in @() array context so .Count is always safe regardless of result count.
