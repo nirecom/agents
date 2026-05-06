@@ -1,10 +1,9 @@
 ---
 name: worktree-end
-description: Merge PR and clean up a git worktree after task completion
+description: Inventory gitignored state, merge PR, and clean up a git worktree after task completion
 ---
 
-Push the branch, create or reuse a PR, optionally merge, then remove the worktree and
-associated directories.
+Inventory and preserve gitignored state, merge the PR, then remove the worktree safely.
 
 ## Procedure
 
@@ -42,19 +41,39 @@ associated directories.
    Do **not** force-merge or bypass checks.
 
 6. **Gitignored state inventory** (before removing the worktree):
-   Read `WORKTREE_NOTES.md` in the worktree root (created by `/worktree-start`).
-   - List any gitignored files that were copied into the worktree.
-   - If the worktree contains gitignored files **not** recorded in `WORKTREE_NOTES.md`
-     (created during the task), enumerate them and present the list to the user:
-     ```
-     git -C <wt> ls-files --others --ignored --exclude-standard
-     ```
-   - Ask the user: "These gitignored files will be deleted with the worktree. Copy any back to main? [list / skip]"
-     - **list**: user specifies which to copy; copy them to the main checkout before removal.
-     - **skip**: proceed without copying.
-   - Never delete gitignored state silently — always present the inventory first.
+   Run all three commands (NUL-delimited, handles spaces and non-ASCII paths):
+   ```
+   git -C <worktree> ls-files --others --ignored --exclude-standard -z
+   git -C <worktree> ls-files --others --exclude-standard -z
+   git -C <worktree> status --porcelain=v1 -z
+   ```
+   Also read `WORKTREE_NOTES.md` if it exists (created by `/worktree-start`).
 
-7. **Cleanup** (only after confirmed merge success — never before):
+   **Generate backup manifest** — for each gitignored file: path, size, mtime, sha256.
+   Do NOT include secret values in the manifest — metadata only.
+
+   **Docker bind mount impact detection** (both running and stopped containers):
+   ```
+   docker ps -a --format json
+   ```
+   Check whether any `.Mounts.Source` or `env_file` entry references the worktree path.
+   Normalize across path formats (WSL `/mnt/<drive>/`, Windows `<DRIVE>:\`, MSYS `/drive/`)
+   before comparing. Report stopped containers too: "Stopped containers included."
+
+   **Present DRY RUN summary to the user:**
+   - Paths to be deleted / untracked count / ignored count
+   - Preservation candidates (from inventory + WORKTREE_NOTES.md)
+   - Docker mount impact (if any)
+   - Proposed backup destination:
+     - **Default:** `<main_root>/.worktree-backup/<branch>/` (gitignored via `.git/info/exclude`)
+     - Alternatives: main checkout at same relative path, user-specified directory, discard
+   - Commands that will be executed
+
+   After user approval: copy preservation targets to the chosen destination.
+   If Docker containers reference the worktree path, stop them and restart from the main path.
+   Never delete gitignored state silently — always present the inventory first.
+
+7. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
    b. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    c. `git -C <main> worktree prune`
@@ -66,7 +85,7 @@ associated directories.
    f. `git -C <main> fetch --prune origin`
    g. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
-7. **Final report:** PR URL, merge state, branches deleted, worktree path removed.
+8. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
 
 ## Rules
 
@@ -75,4 +94,7 @@ associated directories.
   after reviewing the `rules/ops.md` decision path.
 - `git branch -D` (force-delete) is prohibited — use `-d` only.
 - Do not run cleanup if merge step failed or was skipped.
+- Always propose `.worktree-backup/<branch>/` as the default backup destination; never silently pick a different path.
+- Always check stopped containers, not just running ones, for bind mount conflicts.
+- Secret values must not appear in the backup manifest.
 - `gh --version` must succeed before any gh command — surface installation guidance if not.
