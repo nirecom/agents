@@ -143,16 +143,11 @@ function resolveRepoDir(command) {
 }
 
 function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
   try {
-    while (true) {
-      const bytesRead = fs.readSync(0, buf, 0, buf.length);
-      if (bytesRead === 0) break;
-      chunks.push(buf.slice(0, bytesRead));
-    }
-  } catch (e) {}
-  return Buffer.concat(chunks).toString("utf8");
+    return fs.readFileSync(0, "utf8");
+  } catch (e) {
+    return "";
+  }
 }
 
 function approve() {

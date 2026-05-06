@@ -2,6 +2,7 @@
 <sub>pronounced "ni-re-code" · for **Claude Code** and **GitHub Copilot**</sub>
 
 - **A self-driving development harness** — hooks enforce research → tests → code → security → docs as a per-session state machine. Concurrent sessions are tracked independently; any session resumes seamlessly across machines.
+- **Parallel sessions isolated by construction** — `ENFORCE_WORKTREE=on` (default) blocks all writes from the main checkout at the hook level, regardless of branch. Parallel features each get a linked worktree under `<WORKTREE_BASE_DIR>/<task>/<repo>`; the main checkout is reserved for merge/pull only.
 - **Test cases and security review are scoped to OWASP categories** — codified, not optional.
 - **Windows-native, not an afterthought** — Claude Code skews Linux/macOS. This framework ships PowerShell-first installers, hooks, and shell conventions so Windows developers get the full workflow without workarounds.
 - **Two AI providers, one planning loop** — inside `/make-outline-plan` and `/make-detail-plan`, Claude drafts and Codex (OpenAI) reviews adversarially, turn by turn, until both agree. The blind spots one model carries, the other catches.
