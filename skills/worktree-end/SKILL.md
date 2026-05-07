@@ -23,24 +23,22 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    - No PR or closed → `gh pr create --fill`.
    Display the PR URL.
 
-3. **AUTO_MERGE_PR check:**
-   - `AUTO_MERGE_PR=off`: display the PR URL and stop — do **not** merge or clean up.
-   - `AUTO_MERGE_PR=on` (default): proceed to ask the user.
-
-4. **Ask the user** (when AUTO_MERGE_PR=on):
+3. **Ask the user:**
    `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
-   - **merge**: proceed to step 5.
+   - **merge**: proceed to step 4.
    - **wait**: display URL and stop — do **not** clean up.
    - **abort**: display URL and close-PR guidance, then stop — do **not** clean up.
 
-5. **Merge** (only on explicit user choice):
+   If `AskUserQuestion` is unavailable (e.g. headless `claude -p`), default to **wait**.
+
+4. **Merge** (only on explicit user choice):
    ```
    gh pr merge --squash --delete-branch
    ```
    If merge fails (protected branch policy, CI failure, conflict): surface the error and stop.
    Do **not** force-merge or bypass checks.
 
-6. **Gitignored state inventory** (before removing the worktree):
+5. **Gitignored state inventory** (before removing the worktree):
    Run all three commands (NUL-delimited, handles spaces and non-ASCII paths):
    ```
    git -C <worktree> ls-files --others --ignored --exclude-standard -z
@@ -73,7 +71,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    If Docker containers reference the worktree path, stop them and restart from the main path.
    Never delete gitignored state silently — always present the inventory first.
 
-7. **Cleanup** (only after confirmed merge success and inventory — never before):
+6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
    b. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    c. `git -C <main> worktree prune`
@@ -85,7 +83,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    f. `git -C <main> fetch --prune origin`
    g. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
-8. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
+7. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
 
 ## Rules
 

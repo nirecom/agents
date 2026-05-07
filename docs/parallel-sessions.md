@@ -10,10 +10,10 @@ Three failure modes occur:
 
 1. **Race on default branch.** Session A commits to main; session B's rebase/push
    conflicts. One session's work is silently overwritten or rebased away.
-2. **Gitignored state collision.** Both sessions share one `.env`, one `data/`, one
-   `node_modules`. A long-running process in session A is killed by session B's `npm install`.
-3. **Unclear ownership.** Partial edits from two sessions appear mixed in `git status`.
+2. **Unclear ownership.** Partial edits from two sessions appear mixed in `git status`.
    Attribution and rollback become ambiguous.
+3. **Gitignored state collision.** Both sessions share one `.env`, one `data/`, one
+   `node_modules`. A long-running process in session A is killed by session B's `npm install`.
 
 Git linked worktrees give each session an independent working tree with a shared object
 store. Sessions can work concurrently with full isolation.
@@ -88,35 +88,24 @@ The hook blocks when:
 - The tool targets the **main checkout** (`--git-common-dir == --git-dir`), regardless of branch.
 - The tool targets a **protected branch** (main/master) even inside a linked worktree.
 
-## Off-mode (`ENFORCE_WORKTREE=off`)
+## `ENFORCE_WORKTREE=on` vs `off`
 
-For genuinely trivial changes (single-commit typo, lock-file-only update):
-
-```
-# In agents config (.env)
-ENFORCE_WORKTREE=off
-```
-
-Effect:
-- `enforce-worktree.js` and `pre-commit` skip all blocking.
-- `/commit-push` skips the PR step.
-- `/worktree-end` shows the PR URL but does not prompt for merge.
-
-Re-enable `ENFORCE_WORKTREE=on` immediately after the trivial commit.
-
-## AUTO_MERGE_PR
-
-Controls whether `/commit-push` and `/worktree-end` prompt for merge after creating the PR.
-
-| Value | Behavior |
-|---|---|
-| `on` (default) | Creates PR → `AskUserQuestion`: merge / wait / abort |
-| `off` | Creates PR → displays URL → stops (merge left to user) |
+| Behavior | `on` (default) | `off` |
+|---|---|---|
+| Writes from main checkout | Blocked — `enforce-worktree.js` (PreToolUse) + `pre-commit` | Allowed |
+| Protected-branch commits | Blocked — `pre-commit` | Allowed |
+| Merge gate (`gh pr merge` / `git push origin main`) | Blocks until `user_verification` complete — **unconditional** in both modes | Same — unconditional |
+| PR flow in `/commit-push` | PR created; `AskUserQuestion`: merge / wait / abort | PR step skipped — commit goes direct |
+| Worktree setup required | Yes — `/worktree-start <task>` before work begins | No |
+| Intended use | Parallel features, multi-session work | Single trivial commits (typo, lockfile-only) |
 
 Set in agents config (`.env`):
 ```
-AUTO_MERGE_PR=off   # CI must pass first, merge manually
+ENFORCE_WORKTREE=off   # trivial one-liner; re-enable immediately after
 ```
+
+> **Note:** The merge gate (`user_verification` block on `gh pr merge` and protected-branch push)
+> fires in **both** modes. It is enforced by `workflow-gate.js` independently of the worktree guard.
 
 ## Troubleshooting
 
