@@ -57,7 +57,7 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 
 ## Output Schema
 
-Write one file in Japanese (per `rules/language.md`):
+Write one file (per `rules/language.md`):
 
 ### `<session-id>-intent.md`
 

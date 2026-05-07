@@ -50,8 +50,12 @@ must be read and passed to the planner before drafting begins.
 
 6. Once the reviewer returns `APPROVED`, write the final plan to
    `~/.claude/plans/<session-id>-detail.md` (not draft). Present it to the user as a
-   clickable link (do not paste the full content in chat):
-   `[<session-id>-detail.md](~/.claude/plans/<session-id>-detail.md)`
+   clickable link using the **resolved absolute path** (do not use `~` in the link
+   target — tilde is not expanded in markdown rendering, so the link won't open).
+   Do not paste the full content in chat.
+   - POSIX: `[<session-id>-detail.md](/home/<user>/.claude/plans/<session-id>-detail.md)`
+   - Windows: `[<session-id>-detail.md](C:/Users/<user>/.claude/plans/<session-id>-detail.md)`
+
    Then enter plan mode for user approval.
 
 ## Research Escalation
