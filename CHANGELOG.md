@@ -37,3 +37,11 @@ Changes: Wrap Where-Object pipeline in @() array context so .Count is always saf
 ### FEATURE: commit-gate redesign: merge boundary enforcement + staged diff fallback (2026-05-07)
 Background: The commit gate had three design issues causing friction: user_verification fired prematurely on intermediate feature-branch commits, push detection reset verification state on every push including feature-branch pushes, and review-code-codex skipped review on fresh branches with no committed changes.
 Changes: Merge gate now hard-blocks gh pr merge and git push to protected branches until user_verification is complete. Feature-branch commits in linked worktrees skip the user_verification gate (verification fires at merge time instead). workflow-mark resets verification only after protected-branch push or PR merge. review-code-codex falls back to staged diff when no commits exist past the base branch.
+
+### BUGFIX: enforce-worktree: allow git worktree and directory-creation commands from main checkout (2026-05-07)
+Background: /worktree-start was bootstrapping itself into a deadlock — the commands needed to create a worktree were blocked by the very guard they were trying to satisfy.
+Changes: git worktree add/remove/prune and the PowerShell directory-creation cmdlet are now permitted from the main checkout, with safety guards: chained commands are still blocked, and paths that resolve inside the main repo root are still rejected.
+
+### REFACTOR: rename workflow step branching_decision → branching_complete (2026-05-07)
+Background: The old name "branching_decision" implied a choice; with ENFORCE_WORKTREE=on a worktree is mandatory so no decision is made. The new name aligns with the _COMPLETE naming convention used by all other workflow sentinels.
+Changes: Internal step key and sentinel renamed across all hook files and skill docs. Old sentinel WORKFLOW_BRANCHING_DECIDED is still accepted (backward compatible). Existing session state files with the old key are migrated automatically on first read.
