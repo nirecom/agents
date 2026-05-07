@@ -12,6 +12,7 @@
 // Accepted false-positives (detected as "write" even though they don't write files):
 //   - FD-to-FD redirects: cmd 2>&1, cmd 1>&2 (contain '>' — classified as write)
 //   - echo "a > b" with quoted '>' inside the argument
+// Note: echo "<<WORKFLOW_...>>" is NOT a false-positive — the here-doc anchor fix excludes it.
 
 "use strict";
 
@@ -21,7 +22,7 @@ const WRITE_PATTERNS = [
   // tee (writes to file while passing through)
   { name: "tee", kind: "posix", regex: /(?:^|[\s;|&])tee\b/ },
   // here-doc: <<EOF, <<-EOF, <<'EOF', <<"EOF"
-  { name: "here-doc", kind: "posix", regex: /<<-?['"]?\w/ },
+  { name: "here-doc", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)<<-?['"]?\w/ },
   // here-string: <<<
   { name: "here-string", kind: "posix", regex: /<<</ },
   // PowerShell write cmdlets
