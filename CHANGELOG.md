@@ -51,3 +51,7 @@ Changes: Internal step key and sentinel renamed across all hook files and skill 
 ### FEATURE: enforce-worktree: EXTRA_REPOS directory-scan fallback (depth 1) (2026-05-07)
 Background: Users had to list every repo path individually in ENFORCE_WORKTREE_EXTRA_REPOS even when all repos share a common parent directory.
 Changes: ENFORCE_WORKTREE_EXTRA_REPOS now accepts parent directories in addition to individual repo paths. Any entry that is not itself a git repo is scanned one level deep; all git repos found inside are added to the session scope. Mixed lists (individual paths and parent dirs) work as expected, and spaces around commas are trimmed.
+
+### BUGFIX: git worktree add no longer blocked on Windows + Git Bash (2026-05-07)
+Background: On Windows with Git Bash, running git worktree add via the Bash tool could be falsely blocked even when the target path was outside the repo.
+Changes: isPathOutsideRepo now normalizes POSIX drive-letter paths (e.g. /c/git/foo) to Windows-native form before resolving them. This fixes the misresolution that caused outside paths to appear inside the repo on Windows Node.js.
