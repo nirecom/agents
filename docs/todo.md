@@ -2,6 +2,34 @@
 
 ## Current Work
 
+### enforce-worktree: マルチリポジトリ workspace で `gh` コマンドが誤 block される
+
+**現象**: VS Code の multi-root workspace で、先頭フォルダ以外の repo を操作する際、`gh pr create` 等の `-C` フラグを持たない write 系コマンドが「main checkout」と判定されてブロックされる。
+
+**根本原因**: `hooks/enforce-worktree.js` の `findRepoRootForBash()` は `git -C <path>` の path を解析する一方、`-C` が無い場合は `AGENTS_CONFIG_DIR`（= agents main checkout）にフォールバックする。このため：
+
+| 実際の操作対象 | hook の判定 | 結果 |
+|---|---|---|
+| dotfiles main から agents worktree を編集 | `git -C` → worktree | OK |
+| dotfiles main から agents の `gh pr create` | AGENTS_CONFIG_DIR = agents main | 誤 block |
+| dotfiles main から dotfiles-private 操作 | AGENTS_CONFIG_DIR = agents main | 誤 block |
+
+`commit-push` skill は「worktree session（CWD = worktree）から実行する」前提で設計されているが、multi-root workspace では CWD は先頭フォルダに固定されるため、worktree session への切替が現実的でない。
+
+**運用上の発生頻度**: agents + dotfiles + dotfiles-private を同時に開く現運用では、先頭以外の repo すべてで発生する可能性。
+
+**設計修正の方向性（複数案、未確定）**:
+- **案 A: `gh -R owner/repo` / `--repo` を解析**して、対応する local worktree/checkout を解決する。正確だが、owner/repo → local path のマッピング機構が必要。
+- **案 B: フォールバック先を `AGENTS_CONFIG_DIR` から `process.cwd()` に変更**。単純で副作用も小さいが、CWD 自体が main checkout の場合は依然として block される。
+- **案 C: `gh-pr-write` の細分化** — `create`/`edit`/`close`/`comment`/`review` は main を書き換えないため block 対象から外し、`merge` のみ block 対象に残す。セマンティック的に妥当。
+- **案 D: A + C の組み合わせ** — 完全だが実装量大。
+- **案 E: WORKTREE_NOTES.md / 環境変数で「現在の作業 worktree」をマーク**し、その worktree に対する `gh` 系操作を allow に追加する。
+- **案 F: 現状の運用回避策をドキュメント化** — ENFORCE_WORKTREE=off 切替や worktree session の起動を明記する（fix ではなく workaround）。
+
+**当面の運用回避**:
+- `ENFORCE_WORKTREE=off` に切替えてから `gh pr create` / `gh pr merge` 実行
+- または worktree 内のターミナルから手動実行
+
 ### install/win/global-gitignore.ps1 の Pester テスト追加
 
 bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-installer-ignore.sh` でカバーされているが、PowerShell 版 (`global-gitignore.ps1`) は無テスト。今回 `.Count` バグ（空 Where-Object 結果での null 参照）が production で初めて発覚したのはこのカバレッジ欠落が原因。
