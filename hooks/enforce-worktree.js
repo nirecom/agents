@@ -144,8 +144,13 @@ function hasShellChaining(cmd) {
  */
 function isPathOutsideRepo(targetPath, repoRoot) {
   try {
-    const resolved = path.resolve(targetPath).toLowerCase();
-    const base = path.resolve(repoRoot).toLowerCase();
+    // Normalize POSIX drive-letter paths (e.g. /c/git/foo) to Windows native
+    // form before path.resolve, which on Windows otherwise misresolves them
+    // to C:\c\git\foo. No-op on non-Windows and on already-native paths.
+    const normTarget = normalizeCwd(targetPath) || targetPath;
+    const normBase = normalizeCwd(repoRoot) || repoRoot;
+    const resolved = path.resolve(normTarget).toLowerCase();
+    const base = path.resolve(normBase).toLowerCase();
     return resolved !== base &&
            !resolved.startsWith(base + path.sep) &&
            !resolved.startsWith(base + "/");
