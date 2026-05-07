@@ -126,7 +126,8 @@ state_json() {
     "review_security":   {"status": "$other", "updated_at": "$NOW_ISO"},
     "run_tests":         {"status": "$other", "updated_at": "$NOW_ISO"},
     "docs":              {"status": "$other", "updated_at": "$NOW_ISO"},
-    "user_verification": {"status": "$uv_status", "updated_at": "$NOW_ISO"}
+    "user_verification": {"status": "$uv_status", "updated_at": "$NOW_ISO"},
+    "cleanup":           {"status": "$other", "updated_at": "$NOW_ISO"}
   }
 }
 EOF
@@ -143,6 +144,7 @@ state_json_custom() {
     local research="complete" plan="complete" write_tests="complete"
     local review_security="complete" run_tests="complete" docs="complete"
     local user_verification="pending"
+    local cleanup="complete"
     while [ $# -ge 2 ]; do
         case "$1" in
             research) research="$2";;
@@ -152,6 +154,7 @@ state_json_custom() {
             run_tests) run_tests="$2";;
             docs) docs="$2";;
             user_verification) user_verification="$2";;
+            cleanup) cleanup="$2";;
         esac
         shift 2
     done
@@ -166,7 +169,8 @@ state_json_custom() {
     "review_security":   {"status": "$review_security", "updated_at": "$NOW_ISO"},
     "run_tests":         {"status": "$run_tests", "updated_at": "$NOW_ISO"},
     "docs":              {"status": "$docs", "updated_at": "$NOW_ISO"},
-    "user_verification": {"status": "$user_verification", "updated_at": "$NOW_ISO"}
+    "user_verification": {"status": "$user_verification", "updated_at": "$NOW_ISO"},
+    "cleanup":           {"status": "$cleanup", "updated_at": "$NOW_ISO"}
   }
 }
 EOF
@@ -249,6 +253,8 @@ PAIR_4="$(setup_linked_worktree "secA-wt4")"
 WT_4="${PAIR_4#*|}"
 SID_4="a4-$$"
 write_state "$SID_4" "$(state_json "$SID_4" "feature/secA-wt4" "pending" "complete")"
+echo "wt4-change" > "$WT_4/change.txt"
+git -C "$WT_4" add change.txt
 RES_4="$(run_gate "$WT_4" "$(build_gate_json 'git commit -m x' "$SID_4" "$WT_4")")"
 if is_approve "$RES_4"; then pass "A4. git commit in worktree + uv:pending → approve (uv skipped)"
 else fail "A4. expected approve (worktree uv-skip), got: $RES_4"; fi
