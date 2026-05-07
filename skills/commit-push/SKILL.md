@@ -52,17 +52,14 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
    - No PR or closed → `gh pr create --fill`.
    Display the PR URL.
 
-7. **AUTO_MERGE_PR check:**
-   - `AUTO_MERGE_PR=off`: display PR URL and stop.
-   - `AUTO_MERGE_PR=on` (default): ask the user.
-
-8. **Ask the user** (when AUTO_MERGE_PR=on):
-   `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
+7. Ask the user via `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
    - **merge**: `gh pr merge --squash --delete-branch`
      Then: `git fetch --prune origin`
      Note: if working from a worktree, run `/worktree-end` afterward for full cleanup.
    - **wait**: display URL and stop.
    - **abort**: display URL and stop.
+
+   If `AskUserQuestion` is unavailable (e.g. headless `claude -p`), default to **wait**.
 
 ## Rules
 
