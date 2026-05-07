@@ -118,6 +118,126 @@ function getCurrentBranch(repoCwd) {
   }
 }
 
+/** Strip double- and single-quoted string content so shell operators inside
+ *  quotes are ignored when scanning for chaining metacharacters.
+ *  Does NOT handle PowerShell backtick escapes or here-strings. */
+function stripQuotedSegments(str) {
+  return str
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'[^']*'/g, "''");
+}
+
+/** True if cmd contains shell chaining/pipe operators outside of quotes.
+ *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
+ *  so `& git.exe worktree add` is conservatively rejected. */
+function hasShellChaining(cmd) {
+  return /[|;&]/.test(stripQuotedSegments(cmd));
+}
+
+/**
+ * True when targetPath resolves to a location OUTSIDE repoRoot.
+ * Relative paths are resolved against process.cwd() (the main checkout when
+ * this hook runs), which gives the correct semantic for worktree paths.
+ * Fails open (returns true) when the path cannot be resolved.
+ */
+function isPathOutsideRepo(targetPath, repoRoot) {
+  try {
+    const resolved = path.resolve(targetPath).toLowerCase();
+    const base = path.resolve(repoRoot).toLowerCase();
+    return resolved !== base &&
+           !resolved.startsWith(base + path.sep) &&
+           !resolved.startsWith(base + "/");
+  } catch (e) {
+    return true; // fail-open
+  }
+}
+
+/**
+ * Returns true if cmd is an isolated `git worktree add/remove/prune` command
+ * whose add-target path (when parseable) is outside repoRoot.
+ *
+ * Flags for `git worktree add` that consume the next space-separated token:
+ *   -b <branch>  -B <branch>  --orphan <branch>
+ * (--orphan=<branch> uses = syntax and is a single token — handled correctly.)
+ * `--` (end-of-options) is treated as a flag and skipped; the next token is path.
+ */
+function isAllowedWorktreeCommand(cmd, repoRoot) {
+  if (hasShellChaining(cmd)) return false;
+  if (!/\bgit\b/.test(cmd) || !/\bworktree\s+(?:add|remove|prune)\b/.test(cmd)) return false;
+
+  // remove/prune do not create new checkout paths — always allow from main checkout
+  if (/\bworktree\s+(?:remove|prune)\b/.test(cmd)) return true;
+
+  // For 'add': parse target path (first non-flag arg after 'add')
+  const addMatch = cmd.match(/\bworktree\s+add\s+([\s\S]*)/);
+  if (!addMatch) return true; // can't parse — fail-open
+
+  const tokens = [];
+  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(addMatch[1])) !== null) tokens.push(m[1] || m[2] || m[3]);
+
+  const flagsWithNextValue = new Set(["-b", "-B", "--orphan"]);
+  let skipNext = false;
+  let targetPath = null;
+  for (const tok of tokens) {
+    if (skipNext) { skipNext = false; continue; }
+    if (tok.startsWith("-")) {
+      if (flagsWithNextValue.has(tok)) skipNext = true;
+      continue;
+    }
+    targetPath = tok;
+    break;
+  }
+
+  // Fail-open when path is absent (e.g. git worktree add -b foo — path omitted)
+  return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : true;
+}
+
+/**
+ * Returns true if cmd is an isolated `New-Item -ItemType Directory` command
+ * whose target path is outside repoRoot.
+ * Fails CLOSED (returns false) when no path can be parsed, to prevent
+ * unverified in-repo directory creation.
+ */
+function isAllowedNewItemDirectory(cmd, repoRoot) {
+  if (hasShellChaining(cmd)) return false;
+  if (!/\bNew-Item\b/i.test(cmd)) return false;
+  if (!/-ItemType\s+Directory\b/i.test(cmd)) return false;
+
+  // Try named -Path/-p argument first
+  const pathMatch = cmd.match(/-(?:Path|p)\s+(?:"([^"]+)"|'([^']+)'|(\S+))/i);
+  if (pathMatch) {
+    const targetPath = pathMatch[1] || pathMatch[2] || pathMatch[3];
+    return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : false;
+  }
+
+  // Positional path: first non-flag, non-flag-value token after New-Item
+  const afterCmd = cmd.replace(/^.*?\bNew-Item\b\s*/i, "");
+  const tokens = [];
+  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(afterCmd)) !== null) tokens.push(m[1] || m[2] || m[3]);
+
+  // PS flags that consume the next token as a value
+  const flagsWithNextValue = new Set(["-itemtype", "-name", "-n", "-value", "-encoding"]);
+  let skipNext = false;
+  let targetPath = null;
+  for (const tok of tokens) {
+    if (skipNext) { skipNext = false; continue; }
+    const key = tok.toLowerCase().replace(/^-+/, "-");
+    if (tok.startsWith("-")) {
+      if (flagsWithNextValue.has(key)) skipNext = true;
+      continue;
+    }
+    targetPath = tok;
+    break;
+  }
+
+  // Fail-closed: reject when path cannot be determined
+  return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : false;
+}
+
 // Returns true when repoCwd is the main (non-linked) checkout.
 // In a linked worktree, --git-common-dir and --git-dir differ.
 function isMainCheckout(repoCwd) {
@@ -262,6 +382,15 @@ const protectedBranches = getProtectedBranches(repoRoot);
 if (!currentBranch && !mainCheckout) done();
 
 if (mainCheckout) {
+  // Allow isolated worktree lifecycle commands (Bash only).
+  // These operate on .git/worktrees/ metadata or external paths, not tracked files,
+  // and must be invoked from the main checkout.
+  if (toolName === "Bash") {
+    const cmd = toolInput.command || "";
+    if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
+    if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
+  }
+
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
   done({
     block: true,
