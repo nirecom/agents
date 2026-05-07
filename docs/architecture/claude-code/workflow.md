@@ -41,7 +41,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 | `clarify_intent` | `/clarify-intent` skill (emits `WORKFLOW_CLARIFY_INTENT_COMPLETE` marker) |
 | `research` | `/survey-code` or `/deep-research` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` |
 | `plan` | `/make-outline-plan` → `/make-detail-plan` (2-stage pipeline; marker emitted by `make-detail-plan`) |
-| `branching_decision` | `echo "<<WORKFLOW_BRANCHING_DECIDED: <decision>>"` after consulting `rules/branch.md` and `rules/worktree.md` |
+| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"` after consulting `rules/branch.md` and `rules/worktree.md` (legacy: `WORKFLOW_BRANCHING_DECIDED` also accepted) |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` |
 | `run_tests` | PostToolUse hook (`workflow-run-tests.js`) auto-marks based on Bash exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
 | `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
