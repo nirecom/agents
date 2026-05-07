@@ -2,7 +2,7 @@
 <sub>pronounced "ni-re-code" · for **Claude Code** and **GitHub Copilot**</sub>
 
 - **A self-driving development harness** — hooks enforce research → tests → code → security → docs as a per-session state machine. Concurrent sessions are tracked independently; any session resumes seamlessly across machines.
-- **Parallel sessions isolated by construction** — `ENFORCE_WORKTREE=on` (default) blocks all writes from the main checkout at the hook level, regardless of branch. Parallel features each get a linked worktree under `<WORKTREE_BASE_DIR>/<task>/<repo>`; the main checkout is reserved for merge/pull only.
+- **Parallel sessions isolated by construction** — Run multiple features concurrently without stepping on each other. Each task gets its own linked worktree (`<WORKTREE_BASE_DIR>/<task>/<repo>`) with full isolation; writes to the main checkout are blocked by default. Developers preferring a simpler single-session workflow can disable this with `ENFORCE_WORKTREE=off`. See [docs/parallel-sessions.md](docs/parallel-sessions.md).
 - **Test cases and security review are scoped to OWASP categories** — codified, not optional.
 - **Windows-native, not an afterthought** — Claude Code skews Linux/macOS. This framework ships PowerShell-first installers, hooks, and shell conventions so Windows developers get the full workflow without workarounds.
 - **Two AI providers, one planning loop** — inside `/make-outline-plan` and `/make-detail-plan`, Claude drafts and Codex (OpenAI) reviews adversarially, turn by turn, until both agree. The blind spots one model carries, the other catches.
@@ -36,9 +36,16 @@ flowchart TD
 
     subgraph Plan["2 · Plan  —  3-stage pipeline"]
         direction TB
-        P2a["2a · survey-code / deep-research<br/>skippable"] --> P2b
-        P2b["2b · make-outline-plan<br/>Claude + Codex adversarial loop"] --> P2c
-        P2c["2c · make-detail-plan<br/>Claude + Codex adversarial loop"]
+        P2a["2a · survey-code / deep-research<br/>skippable"] --> P2b_sg
+        subgraph P2b_sg["2b · make-outline-plan"]
+            direction LR
+            P2b_L["Planner<br/>(Claude)"] <--> P2b_R["Reviewer<br/>(Codex)"]
+        end
+        P2b_sg --> P2c_sg
+        subgraph P2c_sg["2c · make-detail-plan"]
+            direction LR
+            P2c_L["Planner<br/>(Claude)"] <--> P2c_R["Reviewer<br/>(Codex)"]
+        end
     end
 
     Plan --> S3["3 · Branch / Worktree decision<br/>main · branch · worktree"]
@@ -65,13 +72,15 @@ flowchart TD
     PR --> Done
 
     style Plan   fill:#1e3a8a,stroke:#1d4ed8,color:#fff
+    style P2b_sg fill:#1e3a8a,stroke:#60a5fa,color:#fff
+    style P2c_sg fill:#1e3a8a,stroke:#60a5fa,color:#fff
     style Review fill:#4c1d95,stroke:#6d28d9,color:#fff
 
     class Task,Done terminal
     class DocCheck,Cleanup decision
     class S1,P2a,S4 skippable
-    class P2b,P2c,S3,S5,S7,UV,S9,WE,PR required
-    class S6a,S6b,S6c parallel
+    class P2b_L,P2c_L,S3,S5,S7,UV,S9,WE,PR required
+    class P2b_R,P2c_R,S6a,S6b,S6c parallel
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
