@@ -33,3 +33,7 @@ Changes: ENFORCE_WORKTREE=on (default) blocks all Edit/Write/Bash-write operatio
 ### BUGFIX: global-gitignore.ps1: .Count error on empty/single Where-Object result (2026-05-06)
 Background: install.ps1 errored at the global-gitignore step on first run when the gitignore file contained no agents-managed markers — Where-Object returned 0 items (null) and .Count failed.
 Changes: Wrap Where-Object pipeline in @() array context so .Count is always safe regardless of result count.
+
+### FEATURE: commit-gate redesign: merge boundary enforcement + staged diff fallback (2026-05-07)
+Background: The commit gate had three design issues causing friction: user_verification fired prematurely on intermediate feature-branch commits, push detection reset verification state on every push including feature-branch pushes, and review-code-codex skipped review on fresh branches with no committed changes.
+Changes: Merge gate now hard-blocks gh pr merge and git push to protected branches until user_verification is complete. Feature-branch commits in linked worktrees skip the user_verification gate (verification fires at merge time instead). workflow-mark resets verification only after protected-branch push or PR merge. review-code-codex falls back to staged diff when no commits exist past the base branch.
