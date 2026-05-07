@@ -82,7 +82,9 @@
     `--method=`). Group B commands additionally verify that the detected repo root is
     in the session scope (CWD repo + `ENFORCE_WORKTREE_EXTRA_REPOS`).
   `ENFORCE_WORKTREE_EXTRA_REPOS`: comma-separated list of additional repo roots
-  treated as in-scope for Group B gh writes. The CWD repo is always included.
+  or parent directories treated as in-scope for Group B gh writes. If an entry
+  is not itself a git repo, its immediate subdirectories are scanned (depth 1)
+  and any git repos found are added. The CWD repo is always included.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and

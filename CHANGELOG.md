@@ -47,3 +47,7 @@ Background: The old name "branching_decision" implied a choice; with ENFORCE_WOR
 Changes: Internal step key and sentinel renamed across all hook files and skill docs. Old sentinel WORKFLOW_BRANCHING_DECIDED is still accepted (backward compatible). Existing session state files with the old key are migrated automatically on first read.
 
 ### BUGFIX: workflow sentinel echo no longer blocked by write-guard when ENFORCE_WORKTREE=on (2026-05-07)
+
+### FEATURE: enforce-worktree: EXTRA_REPOS directory-scan fallback (depth 1) (2026-05-07)
+Background: Users had to list every repo path individually in ENFORCE_WORKTREE_EXTRA_REPOS even when all repos share a common parent directory.
+Changes: ENFORCE_WORKTREE_EXTRA_REPOS now accepts parent directories in addition to individual repo paths. Any entry that is not itself a git repo is scanned one level deep; all git repos found inside are added to the session scope. Mixed lists (individual paths and parent dirs) work as expected, and spaces around commas are trimmed.
