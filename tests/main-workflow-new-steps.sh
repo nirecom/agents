@@ -1,8 +1,8 @@
 #!/bin/bash
-# Tests for new workflow steps: clarify_intent and branching_decision
+# Tests for new workflow steps: clarify_intent and branching_complete
 # Covers:
 #   - workflow-state.js: migration and VALID_STEPS / SKIPPABLE_STEPS exports
-#   - workflow-mark.js: CLARIFY_INTENT_COMPLETE, BRANCHING_DECIDED, PLAN_NOT_NEEDED
+#   - workflow-mark.js: CLARIFY_INTENT_COMPLETE, BRANCHING_COMPLETE (+ backward compat BRANCHING_DECIDED), PLAN_NOT_NEEDED
 #   - workflow-gate.js: gate blocks on new steps, docs-only bypass
 set -euo pipefail
 
@@ -111,7 +111,7 @@ build_mark_json_no_sid() {
         "$esc" "$exit_code" "$esc"
 }
 
-# All steps complete (new schema includes clarify_intent and branching_decision)
+# All steps complete (new schema includes clarify_intent and branching_complete)
 ALL_COMPLETE_JSON() {
     local sid="${1:-test-session}"
     cat <<EOF
@@ -123,12 +123,13 @@ ALL_COMPLETE_JSON() {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
+    "branching_complete":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "skipped",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -146,7 +147,7 @@ ALL_COMPLETE_CI_PENDING_JSON() {
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
+    "branching_complete":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -157,7 +158,7 @@ ALL_COMPLETE_CI_PENDING_JSON() {
 EOF
 }
 
-# All steps complete except branching_decision (pending)
+# All steps complete except branching_complete (pending)
 ALL_COMPLETE_BD_PENDING_JSON() {
     local sid="${1:-test-session}"
     cat <<EOF
@@ -169,7 +170,7 @@ ALL_COMPLETE_BD_PENDING_JSON() {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "pending", "updated_at": null},
+    "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -185,7 +186,7 @@ EOF
 # ===========================================================================
 
 echo ""
-echo "=== Migration: readState backfills missing clarify_intent / branching_decision ==="
+echo "=== Migration: readState backfills missing clarify_intent / branching_complete ==="
 
 # M1: Old state JSON without clarify_intent → readState sets it to {status:"complete"}
 SID="m1-$$"
@@ -216,7 +217,7 @@ else
     fail "M1. Old state without clarify_intent → expected complete, got: $M1_RESULT"
 fi
 
-# M2: Old state JSON without branching_decision → readState sets it to {status:"complete"}
+# M2: Old state JSON without branching_complete → readState sets it to {status:"complete"}
 SID="m2-$$"
 cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 {
@@ -237,12 +238,29 @@ EOF
 M2_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
 const wf = require('./hooks/lib/workflow-state.js');
 const s = wf.readState('$SID');
-console.log(s && s.steps && s.steps.branching_decision ? s.steps.branching_decision.status : 'MISSING');
+console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
 if [ "$M2_RESULT" = "complete" ]; then
-    pass "M2. Old state without branching_decision → readState sets it to complete"
+    pass "M2. Old state without branching_complete → readState sets it to complete"
 else
-    fail "M2. Old state without branching_decision → expected complete, got: $M2_RESULT"
+    fail "M2. Old state without branching_complete → expected complete, got: $M2_RESULT"
+fi
+
+# M2-compat: Old state JSON with branching_decision key (legacy) → migrated to branching_complete
+SID_M2C="test-m2-compat-$$"
+M2C_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+const {readState} = require('./hooks/lib/workflow-state.js');
+const sid = '$SID_M2C';
+const dir = process.env.CLAUDE_WORKFLOW_DIR;
+require('fs').writeFileSync(dir + '/' + sid + '.json',
+  JSON.stringify({version:1,session_id:sid,steps:{branching_decision:{status:'complete',updated_at:null,decision:'worktree: /tmp/wt'}}}));
+const s = readState(sid);
+console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
+" || echo "ERROR")
+if [ "$M2C_RESULT" = "complete" ]; then
+    pass "M2-compat. Old state with branching_decision key → readState migrates to branching_complete"
+else
+    fail "M2-compat. Old state with branching_decision key → expected branching_complete=complete, got: $M2C_RESULT"
 fi
 
 # M3: State that already has both steps → readState does NOT overwrite them
@@ -256,7 +274,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "pending", "updated_at": null},
+    "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -273,7 +291,7 @@ console.log(s && s.steps && s.steps.clarify_intent ? s.steps.clarify_intent.stat
 M3_BD=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
 const wf = require('./hooks/lib/workflow-state.js');
 const s = wf.readState('$SID');
-console.log(s && s.steps && s.steps.branching_decision ? s.steps.branching_decision.status : 'MISSING');
+console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
 if [ "$M3_CI" = "pending" ]; then
     pass "M3a. clarify_intent already present → readState does NOT overwrite (still pending)"
@@ -281,39 +299,40 @@ else
     fail "M3a. expected clarify_intent=pending, got: $M3_CI"
 fi
 if [ "$M3_BD" = "pending" ]; then
-    pass "M3b. branching_decision already present → readState does NOT overwrite (still pending)"
+    pass "M3b. branching_complete already present → readState does NOT overwrite (still pending)"
 else
-    fail "M3b. expected branching_decision=pending, got: $M3_BD"
+    fail "M3b. expected branching_complete=pending, got: $M3_BD"
 fi
 
-# M4: VALID_STEPS exports clarify_intent at index 0 and includes branching_decision
+# M4: VALID_STEPS exports clarify_intent at index 0 and includes branching_complete
 M4_RESULT=$(cd "$DOTFILES_DIR" && node -e "
 const wf = require('./hooks/lib/workflow-state.js');
 const vs = wf.VALID_STEPS;
 const ciIdx = vs.indexOf('clarify_intent');
-const bdIdx = vs.indexOf('branching_decision');
+const bdIdx = vs.indexOf('branching_complete');
 if (ciIdx !== 0) { console.log('clarify_intent at index ' + ciIdx + ', expected 0'); process.exit(1); }
-if (bdIdx === -1) { console.log('branching_decision not in VALID_STEPS'); process.exit(1); }
+if (bdIdx === -1) { console.log('branching_complete not in VALID_STEPS'); process.exit(1); }
 console.log('ok:ci=' + ciIdx + ',bd=' + bdIdx);
 " 2>/dev/null || echo "ERROR")
 if echo "$M4_RESULT" | grep -q "^ok:"; then
-    pass "M4. VALID_STEPS: clarify_intent at index 0, branching_decision present ($M4_RESULT)"
+    pass "M4. VALID_STEPS: clarify_intent at index 0, branching_complete present ($M4_RESULT)"
 else
     fail "M4. VALID_STEPS check failed: $M4_RESULT"
 fi
 
-# M5: SKIPPABLE_STEPS does NOT include clarify_intent or branching_decision
+# M5: SKIPPABLE_STEPS includes clarify_intent (skippable via WORKFLOW_CLARIFY_INTENT_NOT_NEEDED)
+#     but does NOT include branching_complete (always required)
 M5_RESULT=$(cd "$DOTFILES_DIR" && node -e "
 const wf = require('./hooks/lib/workflow-state.js');
 const ss = wf.SKIPPABLE_STEPS;
 const hasCi = ss.includes('clarify_intent');
-const hasBd = ss.includes('branching_decision');
-if (hasCi) { console.log('clarify_intent is in SKIPPABLE_STEPS (should not be)'); process.exit(1); }
-if (hasBd) { console.log('branching_decision is in SKIPPABLE_STEPS (should not be)'); process.exit(1); }
+const hasBd = ss.includes('branching_complete');
+if (!hasCi) { console.log('clarify_intent not in SKIPPABLE_STEPS (should be — WORKFLOW_CLARIFY_INTENT_NOT_NEEDED exists)'); process.exit(1); }
+if (hasBd) { console.log('branching_complete is in SKIPPABLE_STEPS (should not be)'); process.exit(1); }
 console.log('ok');
 " 2>/dev/null || echo "ERROR")
 if [ "$M5_RESULT" = "ok" ]; then
-    pass "M5. SKIPPABLE_STEPS does not include clarify_intent or branching_decision"
+    pass "M5. SKIPPABLE_STEPS includes clarify_intent, excludes branching_complete"
 else
     fail "M5. SKIPPABLE_STEPS check failed: $M5_RESULT"
 fi
@@ -372,48 +391,49 @@ else
 fi
 
 # ===========================================================================
-# BRANCHING_DECIDED sentinel (workflow-mark.js)
+# BRANCHING_COMPLETE sentinel (workflow-mark.js) — backward compat: BRANCHING_DECIDED also accepted
 # ===========================================================================
 
 echo ""
-echo "=== BRANCHING_DECIDED sentinel ==="
+echo "=== BRANCHING_COMPLETE sentinel ==="
+# B1-B2 test the new BRANCHING_COMPLETE sentinel; B3-B8 test backward compat via old BRANCHING_DECIDED sentinel
 
-# B1: echo "<<WORKFLOW_BRANCHING_DECIDED: working on main>>" → branching_decision complete, decision field recorded
+# B1: echo "<<WORKFLOW_BRANCHING_COMPLETE: working on main>>" → branching_complete complete, decision field recorded
 SID="b1-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
-B1_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: working on main>>"' "$SID")
+B1_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_COMPLETE: working on main>>"' "$SID")
 run_mark "$B1_JSON" > /dev/null
-expect_state_step "B1a. BRANCHING_DECIDED 'working on main' → branching_decision=complete" "$SID" "branching_decision" "complete"
-B1_DECISION=$(read_state_field "$SID" "branching_decision" "decision")
+expect_state_step "B1a. BRANCHING_COMPLETE 'working on main' → branching_complete=complete" "$SID" "branching_complete" "complete"
+B1_DECISION=$(read_state_field "$SID" "branching_complete" "decision")
 if [ "$B1_DECISION" = "working on main" ]; then
     pass "B1b. decision field recorded: 'working on main'"
 else
     fail "B1b. expected decision='working on main', got: $B1_DECISION"
 fi
 
-# B2: echo "<<WORKFLOW_BRANCHING_DECIDED: branch: feat/foo>>" → branching_decision complete
+# B2: echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: feat/foo>>" → branching_complete complete
 SID="b2-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
-B2_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: branch: feat/foo>>"' "$SID")
+B2_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: feat/foo>>"' "$SID")
 run_mark "$B2_JSON" > /dev/null
-expect_state_step "B2a. BRANCHING_DECIDED 'branch: feat/foo' → branching_decision=complete" "$SID" "branching_decision" "complete"
-B2_DECISION=$(read_state_field "$SID" "branching_decision" "decision")
+expect_state_step "B2a. BRANCHING_COMPLETE 'branch: feat/foo' → branching_complete=complete" "$SID" "branching_complete" "complete"
+B2_DECISION=$(read_state_field "$SID" "branching_complete" "decision")
 if [ "$B2_DECISION" = "branch: feat/foo" ]; then
     pass "B2b. decision field recorded: 'branch: feat/foo'"
 else
     fail "B2b. expected decision='branch: feat/foo', got: $B2_DECISION"
 fi
 
-# B3: Malformed (no colon+value) → malformed error message
+# B3: Malformed (no colon+value) → malformed error message (backward compat: old sentinel)
 SID="b3-$$"
 write_state "$SID" "$(ALL_COMPLETE_JSON "$SID")"
 B3_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED>>"' "$SID")
 B3_OUT=$(run_mark "$B3_JSON")
-B3_STATUS=$(read_state_status "$SID" "branching_decision")
+B3_STATUS=$(read_state_status "$SID" "branching_complete")
 if [ "$B3_STATUS" = "complete" ]; then
-    pass "B3a. Malformed BRANCHING_DECIDED → branching_decision unchanged (still complete)"
+    pass "B3a. Malformed BRANCHING_DECIDED → branching_complete unchanged (still complete)"
 else
-    fail "B3a. expected branching_decision=complete (unchanged), got: $B3_STATUS"
+    fail "B3a. expected branching_complete=complete (unchanged), got: $B3_STATUS"
 fi
 if echo "$B3_OUT" | grep -qiE "malformed|BRANCHING_DECIDED|decision"; then
     pass "B3b. Malformed BRANCHING_DECIDED → error message in additionalContext"
@@ -421,16 +441,16 @@ else
     fail "B3b. expected malformed error, got: $B3_OUT"
 fi
 
-# B4: Reason too short (≤2 non-space chars) → validation error
+# B4: Reason too short (≤2 non-space chars) → validation error (backward compat: old sentinel)
 SID="b4-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 B4_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: xy>>"' "$SID")
 B4_OUT=$(run_mark "$B4_JSON")
-B4_STATUS=$(read_state_status "$SID" "branching_decision")
+B4_STATUS=$(read_state_status "$SID" "branching_complete")
 if [ "$B4_STATUS" = "pending" ]; then
-    pass "B4a. Short reason 'xy' → branching_decision stays pending"
+    pass "B4a. Short reason 'xy' → branching_complete stays pending"
 else
-    fail "B4a. expected branching_decision=pending, got: $B4_STATUS"
+    fail "B4a. expected branching_complete=pending, got: $B4_STATUS"
 fi
 if echo "$B4_OUT" | grep -qiE "too short|reject|reason"; then
     pass "B4b. Short reason → validation error in additionalContext"
@@ -438,16 +458,16 @@ else
     fail "B4b. expected validation error, got: $B4_OUT"
 fi
 
-# B5: Reason is a placeholder ("no") → dud error
+# B5: Reason is a placeholder ("no") → dud error (backward compat: old sentinel)
 SID="b5-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 B5_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: no>>"' "$SID")
 B5_OUT=$(run_mark "$B5_JSON")
-B5_STATUS=$(read_state_status "$SID" "branching_decision")
+B5_STATUS=$(read_state_status "$SID" "branching_complete")
 if [ "$B5_STATUS" = "pending" ]; then
-    pass "B5a. Placeholder reason 'no' → branching_decision stays pending"
+    pass "B5a. Placeholder reason 'no' → branching_complete stays pending"
 else
-    fail "B5a. expected branching_decision=pending, got: $B5_STATUS"
+    fail "B5a. expected branching_complete=pending, got: $B5_STATUS"
 fi
 if echo "$B5_OUT" | grep -qiE "placeholder|dud|reject"; then
     pass "B5b. Placeholder reason → dud error in additionalContext"
@@ -455,7 +475,7 @@ else
     fail "B5b. expected dud/placeholder error, got: $B5_OUT"
 fi
 
-# B6: No session_id → error message, state not written
+# B6: No session_id → error message, state not written (backward compat: old sentinel)
 B6_CMD='echo "<<WORKFLOW_BRANCHING_DECIDED: main direct work>>"'
 B6_JSON=$(build_mark_json_no_sid "$B6_CMD")
 B6_OUT=$(echo "$B6_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$MARK_HOOK" 2>/dev/null || true)
@@ -465,13 +485,13 @@ else
     fail "B6a. expected 'could not resolve session_id', got: $B6_OUT"
 fi
 
-# B7: Idempotency — running twice stays complete, no error
+# B7: Idempotency — running twice stays complete, no error (backward compat: old sentinel)
 SID="b7-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 B7_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: main direct work>>"' "$SID")
 run_mark "$B7_JSON" > /dev/null
 B7_OUT2=$(run_mark "$B7_JSON")
-expect_state_step "B7a. BRANCHING_DECIDED idempotency → still complete after second run" "$SID" "branching_decision" "complete"
+expect_state_step "B7a. BRANCHING_DECIDED idempotency → still complete after second run" "$SID" "branching_complete" "complete"
 if echo "$B7_OUT2" | node -e "
 try {
   const s = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
@@ -483,17 +503,17 @@ else
     fail "B7b. BRANCHING_DECIDED second run produced error in additionalContext: $B7_OUT2"
 fi
 
-# B8: Security — decision containing '>' does NOT match regex (no state change)
+# B8: Security — decision containing '>' does NOT match regex (no state change) (backward compat: old sentinel)
 SID="b8-$$"
 write_state "$SID" "$(ALL_COMPLETE_BD_PENDING_JSON "$SID")"
 # The '>' in the reason breaks the regex pattern [^>]+ — should not match
 B8_JSON=$(build_mark_json 'echo "<<WORKFLOW_BRANCHING_DECIDED: a>b>>"' "$SID")
 B8_OUT=$(run_mark "$B8_JSON")
-B8_STATUS=$(read_state_status "$SID" "branching_decision")
+B8_STATUS=$(read_state_status "$SID" "branching_complete")
 if [ "$B8_STATUS" = "pending" ]; then
-    pass "B8a. Decision containing '>' → branching_decision stays pending (regex rejection)"
+    pass "B8a. Decision containing '>' → branching_complete stays pending (regex rejection)"
 else
-    fail "B8a. expected branching_decision=pending, got: $B8_STATUS"
+    fail "B8a. expected branching_complete=pending, got: $B8_STATUS"
 fi
 
 # ===========================================================================
@@ -514,7 +534,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "pending", "updated_at": null},
     "plan":              {"status": "pending", "updated_at": null},
-    "branching_decision":{"status": "pending", "updated_at": null},
+    "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -539,7 +559,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "pending", "updated_at": null},
     "plan":              {"status": "pending", "updated_at": null},
-    "branching_decision":{"status": "pending", "updated_at": null},
+    "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -576,7 +596,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
+    "branching_complete":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -598,7 +618,7 @@ else
     fail "G1b. expected /clarify-intent in block message, got: $G1_OUT"
 fi
 
-# G2: State with branching_decision: pending → gate blocks, error includes rules/branch.md
+# G2: State with branching_complete: pending → gate blocks, error includes rules/branch.md
 REPO=$(setup_repo)
 SID="g2-$$"
 cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
@@ -610,7 +630,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "pending", "updated_at": null},
+    "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -622,14 +642,14 @@ EOF
 G2_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git commit -m test\"},\"session_id\":\"$SID\"}"
 G2_OUT=$(run_gate "$G2_JSON")
 if echo "$G2_OUT" | grep -q '"block"'; then
-    pass "G2a. branching_decision pending → gate blocks"
+    pass "G2a. branching_complete pending → gate blocks"
 else
     fail "G2a. expected block, got: $G2_OUT"
 fi
-if echo "$G2_OUT" | grep -qiE "branch\.md|worktree\.md|BRANCHING_DECIDED"; then
+if echo "$G2_OUT" | grep -qiE "branch\.md|worktree\.md|BRANCHING_COMPLETE|BRANCHING_DECIDED"; then
     pass "G2b. block message contains branching guidance hint"
 else
-    fail "G2b. expected rules/branch.md or BRANCHING_DECIDED in block message, got: $G2_OUT"
+    fail "G2b. expected rules/branch.md or BRANCHING_COMPLETE in block message, got: $G2_OUT"
 fi
 
 # G3: State with both complete (all steps complete) → gate approves
@@ -643,15 +663,15 @@ REPO_N=$(cygpath -m "$REPO" 2>/dev/null || echo "$REPO")
 G3_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m test"},"session_id":"%s"}' "$REPO_N" "$SID")
 G3_OUT=$(run_gate "$G3_JSON")
 if echo "$G3_OUT" | grep -q '"approve"'; then
-    pass "G3. All steps (including clarify_intent, branching_decision) complete → gate approves"
+    pass "G3. All steps (including clarify_intent, branching_complete) complete → gate approves"
 else
     fail "G3. expected approve, got: $G3_OUT"
 fi
 
-# G4: docs-only staged files → gate bypasses clarify_intent and branching_decision
+# G4: docs-only staged files → gate bypasses clarify_intent and branching_complete
 REPO=$(setup_repo)
 SID="g4-$$"
-# State where clarify_intent and branching_decision are pending but all others complete
+# State where clarify_intent and branching_complete are pending but all others complete
 cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 {
   "version": 1,
@@ -661,7 +681,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "branching_decision":{"status": "pending", "updated_at": null},
+    "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -678,13 +698,13 @@ REPO_N4=$(cygpath -m "$REPO" 2>/dev/null || echo "$REPO")
 G4_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"git -C %s commit -m docs"},"session_id":"%s"}' "$REPO_N4" "$SID")
 G4_OUT=$(run_gate "$G4_JSON")
 # docs-only: only user_verification is required — gate should block only on user_verification
-# (clarify_intent and branching_decision are bypassed)
+# (clarify_intent and branching_complete are bypassed)
 if echo "$G4_OUT" | grep -q '"block"'; then
-    # It blocks — but should only mention user_verification, not clarify_intent or branching_decision
-    if ! echo "$G4_OUT" | grep -qiE '"clarify_intent"|"branching_decision"'; then
-        pass "G4. docs-only: gate bypasses clarify_intent and branching_decision (blocks only on user_verification)"
+    # It blocks — but should only mention user_verification, not clarify_intent or branching_complete
+    if ! echo "$G4_OUT" | grep -qiE '"clarify_intent"|"branching_complete"'; then
+        pass "G4. docs-only: gate bypasses clarify_intent and branching_complete (blocks only on user_verification)"
     else
-        fail "G4. docs-only: gate should bypass clarify_intent/branching_decision but included them in block: $G4_OUT"
+        fail "G4. docs-only: gate should bypass clarify_intent/branching_complete but included them in block: $G4_OUT"
     fi
 elif echo "$G4_OUT" | grep -q '"approve"'; then
     # user_verification is complete so approve is also valid

@@ -28,7 +28,7 @@ const VALID_STEPS = [
   "clarify_intent",
   "research",
   "plan",
-  "branching_decision",
+  "branching_complete",
   "write_tests",
   "run_tests",
   "review_security",
@@ -67,12 +67,17 @@ function readState(sessionId) {
       if (!state.steps.review_security) {
         state.steps.review_security = { status: "pending", updated_at: null };
       }
-      // migration: sessions predating clarify_intent / branching_decision
+      // migration: sessions predating clarify_intent / branching_complete
       if (!state.steps.clarify_intent) {
         state.steps.clarify_intent = { status: "complete", updated_at: null };
       }
-      if (!state.steps.branching_decision) {
-        state.steps.branching_decision = { status: "complete", updated_at: null };
+      // migration: branching_decision → branching_complete rename
+      if (state.steps.branching_decision && !state.steps.branching_complete) {
+        state.steps.branching_complete = state.steps.branching_decision;
+      }
+      delete state.steps.branching_decision;
+      if (!state.steps.branching_complete) {
+        state.steps.branching_complete = { status: "complete", updated_at: null };
       }
       if (!state.steps.cleanup) {
         state.steps.cleanup = { status: "pending", updated_at: null };
@@ -256,7 +261,7 @@ const STEP_HINT = {
   clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
   research:           "Invoke `survey-code` or `deep-research` (or skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>\"), then invoke `make-outline-plan`.",
   plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
-  branching_decision: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_DECIDED: <decision>>\".",
+  branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
   write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
   run_tests:          "Run the test suite via Bash.",
   review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
