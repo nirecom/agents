@@ -45,3 +45,5 @@ Changes: git worktree add/remove/prune and the PowerShell directory-creation cmd
 ### REFACTOR: rename workflow step branching_decision → branching_complete (2026-05-07)
 Background: The old name "branching_decision" implied a choice; with ENFORCE_WORKTREE=on a worktree is mandatory so no decision is made. The new name aligns with the _COMPLETE naming convention used by all other workflow sentinels.
 Changes: Internal step key and sentinel renamed across all hook files and skill docs. Old sentinel WORKFLOW_BRANCHING_DECIDED is still accepted (backward compatible). Existing session state files with the old key are migrated automatically on first read.
+
+### BUGFIX: workflow sentinel echo no longer blocked by write-guard when ENFORCE_WORKTREE=on (2026-05-07)
