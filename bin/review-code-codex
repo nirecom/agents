@@ -58,10 +58,27 @@ DIFF=$(git diff "${BASE}...HEAD" 2>"$DIFF_ERR") || {
   codex_core_log failed "git diff failed" 0
   exit 0
 }
+
+# Fallback: BASE...HEAD empty (e.g. fresh feature branch, no commits past base) →
+# review staged changes instead. One-way: when committed diff is non-empty,
+# staged changes are NOT additionally appended (avoids duplicate/out-of-order content).
+DIFF_SOURCE="committed"
+if [[ -z "$DIFF" ]]; then
+  DIFF=$(git diff --cached 2>"$DIFF_ERR") || {
+    DIFF_ERR_MSG=$(cat "$DIFF_ERR" | tr '\n' ' ')
+    echo "## Codex Review: FAILED — git diff --cached failed: ${DIFF_ERR_MSG}"
+    codex_core_log failed "git diff --cached failed" 0
+    exit 0
+  }
+  if [[ -n "$DIFF" ]]; then
+    DIFF_SOURCE="staged"
+    echo "Note: BASE...HEAD empty — reviewing staged changes instead."
+  fi
+fi
 DIFF_LINES=$(printf '%s' "$DIFF" | wc -l)
 
 if [[ -z "$DIFF" ]]; then
-  echo "## Codex Review: SKIPPED — empty diff (no changes vs ${BASE})"
+  echo "## Codex Review: SKIPPED — empty diff (no changes vs ${BASE}, no staged changes)"
   codex_core_log skipped "empty diff" 0
   exit 0
 fi
