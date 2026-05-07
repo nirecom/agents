@@ -84,12 +84,20 @@ const WRITE_PATTERNS = [
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
   { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\b.*\b(?:push|pop|drop|clear|apply)\b/ },
   { name: "git-worktree-write", kind: "git", regex: /\bgit\b.*\bworktree\b.*\b(?:add|remove|prune)\b/ },
-  // gh mutating subcommands
-  { name: "gh-pr-write", kind: "gh", regex: /\bgh\b.*\bpr\b.*\b(?:create|edit|close|merge|comment|review)\b/ },
-  { name: "gh-issue-write", kind: "gh", regex: /\bgh\b.*\bissue\b.*\b(?:create|edit|close|delete)\b/ },
+  // gh mutating subcommands.
+  // Only commands that modify repo content or are destructive are kept here (Group B).
+  // Coordination commands (Group A: gh pr create/edit/close/comment/review,
+  // gh issue create/edit/close/comment, gh repo create/edit/rename/archive)
+  // are intentionally NOT classified as write — they only touch GitHub-side
+  // metadata and do not change repo content, so they require neither worktree
+  // enforcement nor session-scope check.
+  { name: "gh-pr-merge", kind: "gh", regex: /\bgh\b.*\bpr\b.*\bmerge\b/ },
+  { name: "gh-issue-delete", kind: "gh", regex: /\bgh\b.*\bissue\b.*\bdelete\b/ },
+  { name: "gh-repo-delete", kind: "gh", regex: /\bgh\b.*\brepo\b.*\bdelete\b/ },
   { name: "gh-release-write", kind: "gh", regex: /\bgh\b.*\brelease\b.*\b(?:create|delete|edit|upload)\b/ },
-  { name: "gh-repo-write", kind: "gh", regex: /\bgh\b.*\brepo\b.*\b(?:create|delete|edit|rename|archive)\b/ },
-  { name: "gh-api-mutate", kind: "gh", regex: /\bgh\b.*\bapi\b.*-X\s+(?:POST|PUT|PATCH|DELETE)\b/i },
+  // gh api: cover all flag forms — `-X DELETE`, `-XDELETE`, `-X=DELETE`,
+  // `--method DELETE`, `--method=DELETE`.
+  { name: "gh-api-mutate", kind: "gh", regex: /\bgh\b.*\bapi\b.*(?:-X[\s=]*|--method[\s=]+)(?:POST|PUT|PATCH|DELETE)\b/i },
 ];
 
 /**

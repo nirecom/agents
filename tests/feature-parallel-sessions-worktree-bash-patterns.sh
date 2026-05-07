@@ -118,21 +118,23 @@ WRITE_CASES=(
     'git stash drop'
     'git worktree add /tmp/w'
     'git worktree remove /tmp/w'
-    'gh pr create --fill'
-    'gh pr edit 1'
-    'gh pr close 1'
     'gh pr merge 1'
-    'gh pr comment 1'
-    'gh pr review 1'
-    'gh issue create'
     'gh release create v1'
-    'gh repo create'
     'gh api -X POST /repos'
     'gh api -X PUT /repos/o/r'
     'gh api -X PATCH /repos/o/r'
     'gh api -X DELETE /repos/o/r'
+    # Group B (session-scoped writes) — added in fix/enforce-worktree-gh-whitelist
+    'gh issue delete 1'
     'gh repo delete owner/repo'
-    'gh repo edit --private'
+    'gh release edit v1'
+    'gh release delete v1'
+    'gh release upload v1 file.zip'
+    'gh api --method POST /repos'
+    'gh api --method DELETE /repos/o/r'
+    'gh api -XDELETE /repos/o/r'
+    'gh api --method=DELETE /repos/o/r'
+    'gh api -X=POST /repos'
     'git tag -d v1'
     'git tag v1.0'
 )
@@ -175,6 +177,22 @@ READ_CASES=(
     'Get-Content foo'
     'git tag -l'
     'git tag --list'
+    # Group A (always-allow gh commands) — fix/enforce-worktree-gh-whitelist
+    # These are reclassified from "write" to "read" so the worktree guard
+    # never blocks them, regardless of cwd / branch / session scope.
+    'gh pr create --fill'
+    'gh pr edit 1'
+    'gh pr close 1'
+    'gh pr comment 1'
+    'gh pr review 1'
+    'gh issue create'
+    'gh issue edit 1'
+    'gh issue close 1'
+    'gh issue comment 1'
+    'gh repo create'
+    'gh repo edit --private'
+    'gh repo rename new-name'
+    'gh repo archive owner/repo'
 )
 
 test_read_cases() {
@@ -355,4 +373,5 @@ test_git_config_flag_commit_write
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
+
 exit $FAIL
