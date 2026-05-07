@@ -82,21 +82,37 @@ setup_linked_worktree() {
 }
 
 # Run the enforce-worktree guard for a Bash tool.
-# Args: command [env-VAR=val ...]
+# Args: command cwd [env-VAR=val ...]
+#
+# `cwd` is the working directory the guard runs from — replaces the legacy
+# AGENTS_CONFIG_DIR fallback. The guard now uses process.cwd() (post-fix:
+# fix/enforce-worktree-gh-whitelist) instead of AGENTS_CONFIG_DIR for the
+# repo-lookup starting directory. Pass an empty string to omit the cd.
 run_bash_guard() {
     local cmd="$1"; shift
+    local cwd="$1"; shift
     local payload
     payload="$(node -e "
       const j = { session_id:'test', tool_name:'Bash', tool_input:{ command: process.argv[1] } };
       console.log(JSON.stringify(j));
     " -- "$cmd" 2>/dev/null)"
-    echo "$payload" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>/dev/null
+    if [ -n "$cwd" ]; then
+        (cd "$cwd" && echo "$payload" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>/dev/null)
+    else
+        echo "$payload" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>/dev/null
+    fi
 }
 
 # Run with raw stdin (for malformed/empty cases).
+# Args: stdin cwd [env-VAR=val ...]
 run_bash_guard_raw() {
     local stdin="$1"; shift
-    printf '%s' "$stdin" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>/dev/null
+    local cwd="$1"; shift
+    if [ -n "$cwd" ]; then
+        (cd "$cwd" && printf '%s' "$stdin" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>/dev/null)
+    else
+        printf '%s' "$stdin" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>/dev/null
+    fi
 }
 
 # ============ Tests ============
@@ -105,7 +121,7 @@ test_main_checkout_on_main_blocks() {
     require_guard "test_main_checkout_on_main_blocks" || return
     local repo; repo="$(setup_main_checkout "g-main-on-main")"
     local out
-    out="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
+    out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "main checkout on main: should block, got allow ($out)"
     else
@@ -118,7 +134,7 @@ test_main_checkout_on_feature_branch_blocks() {
     local repo; repo="$(setup_main_checkout "g-main-on-feat")"
     git -C "$repo" switch -q -c "feature/x"
     local out
-    out="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
+    out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "main checkout on feature branch: should still block (NEW logic)"
     else
@@ -131,7 +147,7 @@ test_linked_worktree_on_feature_allows() {
     local pair; pair="$(setup_linked_worktree "g-wt-feat")"
     local main="${pair%|*}"; local wt="${pair#*|}"
     local out
-    out="$(run_bash_guard "echo x > $wt/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$wt")"
+    out="$(run_bash_guard "echo x > $wt/foo" "$wt" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "linked worktree on feature branch allows Bash write"
     else
@@ -149,7 +165,7 @@ test_linked_worktree_on_main_blocks() {
     git -C "$wt" checkout -q main 2>/dev/null || true
     git -C "$main" switch -q "feature/wt"
     local out
-    out="$(run_bash_guard "echo x > $wt/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$wt")"
+    out="$(run_bash_guard "echo x > $wt/foo" "$wt" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "worktree on protected branch: should block ($out)"
     else
@@ -161,7 +177,7 @@ test_off_mode_main_checkout_allows() {
     require_guard "test_off_mode_main_checkout_allows" || return
     local repo; repo="$(setup_main_checkout "g-off-main")"
     local out
-    out="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=off AGENTS_CONFIG_DIR="$repo")"
+    out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=off)"
     if guard_decision "$out"; then
         pass "ENFORCE_WORKTREE=off allows main checkout"
     else
@@ -176,7 +192,7 @@ test_dash_C_to_main_repo_blocks() {
     # Run from worktree (allowed) but target main checkout via -C -> should block
     local cmd="git -C $main commit --allow-empty -m x"
     local out
-    out="$(run_bash_guard "$cmd" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$wt")"
+    out="$(run_bash_guard "$cmd" "$wt" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "git -C <main-checkout>: should block ($out)"
     else
@@ -189,7 +205,7 @@ test_dash_C_quoted_path() {
     local repo; repo="$(setup_main_checkout "g dashC quoted")"
     local cmd="git -C \"$repo\" commit --allow-empty -m x"
     local out
-    out="$(run_bash_guard "$cmd" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$TMPDIR_BASE")"
+    out="$(run_bash_guard "$cmd" "$TMPDIR_BASE" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "git -C quoted path with spaces: should block ($out)"
     else
@@ -202,7 +218,7 @@ test_non_git_dir_allows() {
     local d="$TMPDIR_BASE/nongit-$$"
     mkdir -p "$d"
     local out
-    out="$(run_bash_guard "echo x > $d/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$d")"
+    out="$(run_bash_guard "echo x > $d/foo" "$d" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "non-git directory allows Bash write"
     else
@@ -217,7 +233,7 @@ test_main_checkout_detached_head_blocks() {
     local sha; sha="$(git -C "$repo" rev-parse HEAD)"
     git -C "$repo" checkout -q "$sha"
     local out
-    out="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
+    out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "main checkout detached HEAD: should block ($out)"
     else
@@ -232,7 +248,7 @@ test_linked_worktree_detached_head_allows() {
     local sha; sha="$(git -C "$wt" rev-parse HEAD)"
     git -C "$wt" checkout -q "$sha"
     local out
-    out="$(run_bash_guard "echo x > $wt/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$wt")"
+    out="$(run_bash_guard "echo x > $wt/foo" "$wt" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "linked worktree detached HEAD: allows"
     else
@@ -243,7 +259,7 @@ test_linked_worktree_detached_head_allows() {
 test_malformed_json_stdin_safe() {
     require_guard "test_malformed_json_stdin_safe" || return
     local out
-    out="$(run_bash_guard_raw "this is not json" ENFORCE_WORKTREE=on)"
+    out="$(run_bash_guard_raw "this is not json" "" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "malformed JSON stdin: fail-safe allow"
     else
@@ -254,7 +270,7 @@ test_malformed_json_stdin_safe() {
 test_empty_stdin_allows() {
     require_guard "test_empty_stdin_allows" || return
     local out
-    out="$(run_bash_guard_raw "" ENFORCE_WORKTREE=on)"
+    out="$(run_bash_guard_raw "" "" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "empty stdin allows"
     else
@@ -266,7 +282,7 @@ test_path_traversal_safe() {
     require_guard "test_path_traversal_safe" || return
     local cmd='git -C "../../../etc/" status'
     local out
-    out="$(run_bash_guard "$cmd" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$TMPDIR_BASE")"
+    out="$(run_bash_guard "$cmd" "$TMPDIR_BASE" ENFORCE_WORKTREE=on)"
     # Non-git path traversal should fail rev-parse -> graceful allow
     if guard_decision "$out"; then
         pass "path traversal in -C: graceful allow (non-git target)"
@@ -279,8 +295,8 @@ test_idempotency() {
     require_guard "test_idempotency" || return
     local repo; repo="$(setup_main_checkout "g-idem")"
     local a b
-    a="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
-    b="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
+    a="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
+    b="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if [ "$a" = "$b" ]; then
         pass "guard is idempotent (same input -> same output)"
     else
@@ -302,7 +318,7 @@ test_git_common_dir_main_blocks() {
         fail "main checkout: git-common-dir=$common_dir git-dir=$git_dir should be equal"
     fi
     local out
-    out="$(run_bash_guard "echo x > $repo/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
+    out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "main checkout: guard should block (--git-common-dir == --git-dir)"
     else
@@ -323,7 +339,7 @@ test_git_common_dir_worktree_allows() {
         fail "linked worktree: expected git-common-dir!=git-dir but both=$common_dir"
     fi
     local out
-    out="$(run_bash_guard "echo x > $wt/foo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$wt")"
+    out="$(run_bash_guard "echo x > $wt/foo" "$wt" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         pass "linked worktree: guard allows when --git-common-dir != --git-dir"
     else
@@ -341,7 +357,7 @@ test_dash_C_relative_path_blocks() {
     }
     local cmd="git -C $rel commit --allow-empty -m x"
     local out
-    out="$(cd "$TMPDIR_BASE" && run_bash_guard "$cmd" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$repo")"
+    out="$(run_bash_guard "$cmd" "$TMPDIR_BASE" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "git -C relative path to main: should block ($out)"
     else
@@ -353,7 +369,7 @@ test_dash_C_semicolon_in_path_safe() {
     require_guard "test_dash_C_semicolon_in_path_safe" || return
     local evil_dir="$TMPDIR_BASE/guard-injected-$$"
     local cmd="git -C \"/tmp/my;mkdir $evil_dir\" status"
-    run_bash_guard "$cmd" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$TMPDIR_BASE" >/dev/null 2>&1
+    run_bash_guard "$cmd" "$TMPDIR_BASE" ENFORCE_WORKTREE=on >/dev/null 2>&1
     if [ -d "$evil_dir" ]; then
         fail "SECURITY: semicolon in -C path executed mkdir"
         rmdir "$evil_dir" 2>/dev/null || true
@@ -366,12 +382,96 @@ test_dash_C_dollar_var_in_path_safe() {
     require_guard "test_dash_C_dollar_var_in_path_safe" || return
     local cmd='git -C "$TMPDIR_BASE" status'
     local out
-    out="$(run_bash_guard "$cmd" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR="$TMPDIR_BASE" 2>/dev/null)"
+    out="$(run_bash_guard "$cmd" "$TMPDIR_BASE" ENFORCE_WORKTREE=on 2>/dev/null)"
     # Must not crash — decision direction is acceptable either way
     if echo "$out" | grep -qE '"decision":"(allow|block)"'; then
         pass "git -C with dollar-var in path: handled without crash"
     else
         pass "git -C with dollar-var in path: no output (graceful non-git path)"
+    fi
+}
+
+# ============ NEW: gh Group A / Group B + session scope ============
+# These tests document the fix/enforce-worktree-gh-whitelist contract.
+# Group A: always-allow (gh pr/issue/repo create/edit/close/comment/review/...)
+#          — classified as "read" post-impl, so guard never sees them.
+# Group B: session-scoped writes (gh pr merge, gh issue delete, gh repo delete,
+#          gh release create/delete/edit/upload, gh api -X POST/PUT/PATCH/DELETE,
+#          gh api --method ...).
+
+test_gh_group_a_from_main_checkout_allows() {
+    require_guard "test_gh_group_a_from_main_checkout_allows" || return
+    local repo; repo="$(setup_main_checkout "g-gh-A-main")"
+    local out
+    out="$(run_bash_guard "gh pr create --fill" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "Group A (gh pr create) from main checkout: allow"
+    else
+        fail "Group A from main checkout: should allow ($out)"
+    fi
+}
+
+test_gh_group_b_from_main_checkout_blocks() {
+    require_guard "test_gh_group_b_from_main_checkout_blocks" || return
+    local repo; repo="$(setup_main_checkout "g-gh-B-main")"
+    local out
+    out="$(run_bash_guard "gh pr merge 1" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        fail "Group B (gh pr merge) from main checkout: should block ($out)"
+    else
+        pass "Group B from main checkout: blocks (mainCheckout)"
+    fi
+}
+
+test_gh_group_b_from_feature_worktree_allows() {
+    require_guard "test_gh_group_b_from_feature_worktree_allows" || return
+    local pair; pair="$(setup_linked_worktree "g-gh-B-wt")"
+    local main="${pair%|*}"; local wt="${pair#*|}"
+    local out
+    out="$(run_bash_guard "gh pr merge 1" "$wt" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "Group B (gh pr merge) from feature worktree in session: allow"
+    else
+        fail "Group B from feature worktree: should allow ($out)"
+    fi
+}
+
+test_gh_group_b_via_git_C_to_out_of_session_repo_blocks() {
+    require_guard "test_gh_group_b_via_git_C_to_out_of_session_repo_blocks" || return
+    # Documented limitation: gh CLI does not honor -C, but the guard's repo
+    # detection does parse `git -C` from any command. To exercise the
+    # session-scope BLOCK path, we use a command containing `git -C <other>`
+    # so detected repoRoot differs from cwd repo.
+    # The actual gh CLI would not target <other>, but the guard's enforcement
+    # is based on detected repo. This test pins the behavior of the
+    # session-scope check itself.
+    local pair_session; pair_session="$(setup_linked_worktree "g-gh-scope-cwd")"
+    local pair_other;   pair_other="$(setup_linked_worktree "g-gh-scope-other")"
+    local wt_session="${pair_session#*|}"
+    local pair_other_main="${pair_other%|*}"
+    local out
+    # cwd = session worktree (in scope), but command targets other repo via git -C
+    # AND uses a gh-write subcommand. Detection picks `git -C <other>` first,
+    # so detected != cwd repo, and other repo is NOT in session → block.
+    out="$(run_bash_guard "git -C $pair_other_main fake && gh pr merge 1" "$wt_session" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        fail "Group B with git -C to out-of-session repo: should block (scope)"
+    else
+        pass "Group B with git -C to out-of-session repo: blocks (out of scope)"
+    fi
+}
+
+test_gh_group_b_from_non_git_dir_blocks() {
+    require_guard "test_gh_group_b_from_non_git_dir_blocks" || return
+    local d="$TMPDIR_BASE/gh-nongit-$$"
+    mkdir -p "$d"
+    local out
+    out="$(run_bash_guard "gh pr merge 1" "$d" ENFORCE_WORKTREE=on)"
+    # gh write from non-git dir must block (no repo to scope to).
+    if guard_decision "$out"; then
+        fail "Group B from non-git dir: should block (no repo) ($out)"
+    else
+        pass "Group B from non-git dir: blocks (repo unknown)"
     fi
 }
 
@@ -396,7 +496,13 @@ test_git_common_dir_worktree_allows
 test_dash_C_relative_path_blocks
 test_dash_C_semicolon_in_path_safe
 test_dash_C_dollar_var_in_path_safe
+test_gh_group_a_from_main_checkout_allows
+test_gh_group_b_from_main_checkout_blocks
+test_gh_group_b_from_feature_worktree_allows
+test_gh_group_b_via_git_C_to_out_of_session_repo_blocks
+test_gh_group_b_from_non_git_dir_blocks
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
+
 exit $FAIL

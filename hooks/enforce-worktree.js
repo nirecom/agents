@@ -14,8 +14,10 @@
 //
 // Bash detection:
 //   - Parses git -C <path> from command string (best-effort regex) for target repo root.
-//   - Falls back to AGENTS_CONFIG_DIR / process.cwd() when no -C is found.
+//   - Falls back to process.cwd() when no -C is found.
 //   - Only write-classified commands are checked (see hooks/lib/bash-write-patterns.js).
+//   - gh write commands (kind:"gh" in WRITE_PATTERNS) get an additional
+//     session-scope check: target repo must be in CWD repo + ENFORCE_WORKTREE_EXTRA_REPOS.
 //
 // Limitations (documented; this is a UX guard, not a security boundary):
 //   - Bash write detection is pattern-based. Python/binary/runtime-expanded writes not caught.
@@ -36,7 +38,7 @@ const path = require("path");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");
-const { classify } = require("./lib/bash-write-patterns");
+const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
 
 function readStdin() {
   try {
@@ -277,7 +279,7 @@ function parseGitCPath(cmd) {
 
 function findRepoRootForBash(cmd) {
   const cArg = parseGitCPath(cmd);
-  const startDir = cArg || process.env.AGENTS_CONFIG_DIR || process.cwd();
+  const startDir = cArg || process.cwd();
   try {
     const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: startDir, encoding: "utf8", timeout: 2000,
@@ -287,6 +289,65 @@ function findRepoRootForBash(cmd) {
   } catch (e) {
     return null;
   }
+}
+
+// Normalize a path for case-aware comparison.
+// Windows: case-insensitive (FS is case-insensitive); POSIX: case-sensitive.
+function normalizeForCompare(p) {
+  try {
+    const resolved = path.resolve(p);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Resolve a directory to its containing git repo root, with normalization for compare.
+function resolveRepoRoot(startDir) {
+  try {
+    const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: startDir, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status !== 0) return null;
+    const out = (r.stdout || "").trim();
+    return out ? normalizeForCompare(out) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Returns the set of repo roots considered "in session scope" for gh write commands.
+// Composition:
+//   - process.cwd() repo root (always included if it resolves to a repo)
+//   - Each path listed in ENFORCE_WORKTREE_EXTRA_REPOS (comma-separated)
+// Behaviour:
+//   - Whitespace around entries is trimmed; empty entries are skipped.
+//   - Nonexistent paths are silently skipped (not an error).
+//   - Paths are passed to git rev-parse via cwd — never to a shell — so
+//     metacharacters in env values cannot be exec'd.
+function getSessionRepoRoots() {
+  const roots = new Set();
+  const cwdRoot = resolveRepoRoot(process.cwd());
+  if (cwdRoot) roots.add(cwdRoot);
+  const extra = (process.env.ENFORCE_WORKTREE_EXTRA_REPOS || "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  for (const dir of extra) {
+    let resolved;
+    try { resolved = path.resolve(dir); } catch (e) { continue; }
+    if (!fs.existsSync(resolved)) continue;
+    const root = resolveRepoRoot(resolved);
+    if (root) roots.add(root);
+  }
+  return roots;
+}
+
+// True if cmd matches any kind:"gh" entry in WRITE_PATTERNS (= Group B gh writes).
+function isGhWriteCommand(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  for (const p of WRITE_PATTERNS) {
+    if (p.kind === "gh" && p.regex.test(cmd)) return true;
+  }
+  return false;
 }
 
 function findRepoRoot(filePath) {
@@ -338,6 +399,35 @@ if (toolName === "Bash") {
   if (!cmd) done();
   if (classify(cmd) !== "write") done(); // read-only command — allow
   repoRoot = findRepoRootForBash(cmd);
+
+  // gh write commands (Group B) get an extra session-scope check before the
+  // standard main/worktree enforcement below. The whitelist defines the set of
+  // repos this session manages; gh writes outside the set are blocked even
+  // from a worktree, on the principle that out-of-session repos are not the
+  // current task's concern.
+  if (isGhWriteCommand(cmd)) {
+    const sessionRoots = getSessionRepoRoots();
+    const detected = repoRoot ? normalizeForCompare(repoRoot) : null;
+
+    if (!detected) {
+      done({
+        block: true,
+        reason:
+          "ENFORCE_WORKTREE: gh write blocked. Reason: cannot determine repo root for this command.\n" +
+          "Run gh from inside a session repo's worktree, or set ENFORCE_WORKTREE=off.",
+      });
+    }
+    if (!sessionRoots.has(detected)) {
+      done({
+        block: true,
+        reason:
+          `ENFORCE_WORKTREE: gh write blocked. Reason: target repo (${repoRoot}) is not in session scope.\n` +
+          "Add this repo to ENFORCE_WORKTREE_EXTRA_REPOS in agents config, or run from a session repo.\n" +
+          "Or set ENFORCE_WORKTREE=off to bypass.",
+      });
+    }
+    // session-scope OK → fall through to existing main/worktree check
+  }
 } else if (["Edit", "Write", "MultiEdit"].includes(toolName)) {
   if (toolName === "MultiEdit" && Array.isArray(toolInput.edits) && toolInput.edits.length > 0) {
     // Check every edit target — a mixed-repo MultiEdit must not slip through.
