@@ -62,14 +62,27 @@
   platform-specific files (`install/win/` ↔ `install/linux/`) are staged without counterpart
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and
   `.git/.cross-platform-reviewed` (one-time, HEAD hash)
-- `auto-branch-guard.js` (PreToolUse, matcher: `Edit|Write|MultiEdit`) — when
-  `AGENT_AUTO_BRANCH=on` (default), blocks edits when the target file's repo is on
-  the default branch. Default-branch detection: `refs/remotes/origin/HEAD` →
-  local `main`/`master` → `init.defaultBranch` → fallback `main`. Override via
-  `AGENT_DEFAULT_BRANCHES=develop,trunk,...` (comma-separated). Allows: HEAD unborn,
-  detached HEAD, files outside any git repo. Defense-in-depth at commit time via
-  the bash block in `pre-commit`. Falsy values (`off|0|false|no|disabled`,
-  case-insensitive) opt out.
+- `enforce-worktree.js` (PreToolUse, matcher: `Bash|Edit|Write|MultiEdit`) — when
+  `ENFORCE_WORKTREE=on` (default), blocks writes from the main checkout regardless
+  of branch, and blocks default-branch edits. Main-checkout detection: `--git-common-dir
+  == --git-dir` (linked worktrees have differing values). Default-branch detection:
+  `refs/remotes/origin/HEAD` → local `main`/`master` → `init.defaultBranch` → fallback
+  `main`. Override via `DEFAULT_BRANCHES=develop,trunk,...` (comma-separated).
+  Allows: HEAD unborn, detached HEAD, files outside any git repo, `git worktree
+  add/remove/prune` lifecycle commands, PowerShell `New-Item -ItemType Directory`.
+  Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
+  (`off|0|false|no|disabled`, case-insensitive) opt out.
+  **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
+  - **Group A (always-allow / classified "read")**: `gh pr create/edit/close/comment/review`,
+    `gh issue create/edit/close/comment`, `gh repo create/edit/rename/archive` — coordination
+    and metadata-only; the guard never fires on these.
+  - **Group B (classified "write", session-scope check)**: `gh pr merge`, `gh issue delete`,
+    `gh repo delete`, `gh release create/edit/delete/upload`, `gh api` with
+    POST/PUT/PATCH/DELETE in any flag form (`-X`, `-XVERB`, `-X=VERB`, `--method`,
+    `--method=`). Group B commands additionally verify that the detected repo root is
+    in the session scope (CWD repo + `ENFORCE_WORKTREE_EXTRA_REPOS`).
+  `ENFORCE_WORKTREE_EXTRA_REPOS`: comma-separated list of additional repo roots
+  treated as in-scope for Group B gh writes. The CWD repo is always included.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and
