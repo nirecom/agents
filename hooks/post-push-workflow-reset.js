@@ -5,7 +5,7 @@
 // the pushed HEAD SHA as `last_pushed_sha` in the session's workflow state.
 // On the next user prompt, this hook checks whether HEAD still equals
 // last_pushed_sha. If so, the user is likely starting a new task — reset the
-// workflow to `branching_decision` (force fresh branch/worktree creation).
+// workflow to `branching_complete` (force fresh branch/worktree creation).
 //
 // This is the "push milestone" detector. It does NOT participate in
 // sibling-session detection (that responsibility was removed in favor of
@@ -69,11 +69,11 @@ try {
       head = null;
     }
     if (head && head === state.last_pushed_sha) {
-      try { markStep(sessionId, "branching_decision", "pending"); } catch (e) {}
+      try { markStep(sessionId, "branching_complete", "pending"); } catch (e) {}
       try { clearLastPushedSha(sessionId); } catch (e) {}
       additionalContext =
         "Push boundary detected: HEAD matches last pushed SHA.\n" +
-        "Workflow reset to branching_decision — re-evaluate branch/worktree before next commit.";
+        "Workflow reset to branching_complete — re-evaluate branch/worktree before next commit.";
     }
   }
 } catch (e) {
