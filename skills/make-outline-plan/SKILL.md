@@ -63,12 +63,15 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 8. Write the user's decision to `~/.claude/plans/<session-id>-outline.md` using the
    schema below. After writing, present the file to the user as a clickable link
-   (do not paste the full content in chat):
-   `[<session-id>-outline.md](~/.claude/plans/<session-id>-outline.md)`
+   using the **resolved absolute path** (do not use `~` in the link target —
+   tilde is not expanded in markdown rendering, so the link won't open). Do not
+   paste the full content in chat.
+   - POSIX: `[<session-id>-outline.md](/home/<user>/.claude/plans/<session-id>-outline.md)`
+   - Windows: `[<session-id>-outline.md](C:/Users/<user>/.claude/plans/<session-id>-outline.md)`
 
 ## Output Schema (`<session-id>-outline.md`)
 
-Write the file in Japanese (per `rules/language.md`) with the following sections:
+Write the file (per `rules/language.md`) with the following sections:
 
 - **Title**: "Confirmed Approach" + `<session-id>`
 - **Adopted approach**: 1 paragraph + rationale for choosing it
