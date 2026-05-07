@@ -336,7 +336,18 @@ function getSessionRepoRoots() {
     try { resolved = path.resolve(dir); } catch (e) { continue; }
     if (!fs.existsSync(resolved)) continue;
     const root = resolveRepoRoot(resolved);
-    if (root) roots.add(root);
+    if (root) {
+      roots.add(root);
+    } else {
+      // Not a git repo itself — scan immediate subdirectories (depth 1).
+      try {
+        for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const sub = resolveRepoRoot(path.join(resolved, entry.name));
+          if (sub) roots.add(sub);
+        }
+      } catch (e) { /* skip non-readable dirs */ }
+    }
   }
   return roots;
 }
@@ -426,7 +437,8 @@ if (toolName === "Bash") {
           "Or set ENFORCE_WORKTREE=off to bypass.",
       });
     }
-    // session-scope OK → fall through to existing main/worktree check
+    // gh writes are GitHub operations, not local file writes — session-scope is sufficient.
+    done();
   }
 } else if (["Edit", "Write", "MultiEdit"].includes(toolName)) {
   if (toolName === "MultiEdit" && Array.isArray(toolInput.edits) && toolInput.edits.length > 0) {
