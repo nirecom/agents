@@ -16,7 +16,7 @@
    - **`ENFORCE_WORKTREE=on` (default)**: all writes from the main checkout are blocked, regardless of branch. Run `/worktree-start` to create a linked worktree on a feature branch.
      Enforced by `enforce-worktree.js` (PreToolUse) and `pre-commit`.
    - **`ENFORCE_WORKTREE=off`**: main checkout writes allowed. Options: branch-only (`git switch -c <name>`, naming → `rules/branch.md`) or main directly for trivial changes. Consult `rules/branch.md` for branch-vs-main.
-   Record: `echo "<<WORKFLOW_BRANCHING_DECIDED: branch: <name>|worktree: <path>|main>>"`
+   Record: `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`
    (`main` is only valid when `ENFORCE_WORKTREE=off`.)
 4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`

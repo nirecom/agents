@@ -2,7 +2,7 @@
 # Tests for AGENT_AUTO_BRANCH enforcement and post-push-workflow-reset hook.
 set -u
 
-AGENTS_DIR="/c/git/agents"
+AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 GUARD_JS="$AGENTS_DIR/hooks/auto-branch-guard.js"
 PRE_COMMIT="$AGENTS_DIR/hooks/pre-commit"
 RESET_JS="$AGENTS_DIR/hooks/post-push-workflow-reset.js"
@@ -488,12 +488,12 @@ test_reset_triggers_when_head_matches() {
     local sid="sess-match"
     local head; head="$(git -C "$repo" rev-parse HEAD)"
     local state_dir="$TMPDIR_BASE/wf-match"
-    local state; state="$(printf '{"version":1,"session_id":"%s","steps":{"branching_decision":{"status":"complete","updated_at":null},"run_tests":{"status":"complete","updated_at":null}},"last_pushed_sha":"%s"}' "$sid" "$head")"
+    local state; state="$(printf '{"version":1,"session_id":"%s","steps":{"branching_complete":{"status":"complete","updated_at":null},"run_tests":{"status":"complete","updated_at":null}},"last_pushed_sha":"%s"}' "$sid" "$head")"
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
     out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
-    if echo "$out" | grep -q "branching_decision"; then
+    if echo "$out" | grep -q "branching_complete"; then
         pass "reset triggered when HEAD matches last_pushed_sha"
     else
         fail "reset NOT triggered (got: $out)"
@@ -539,7 +539,7 @@ test_reset_clears_last_pushed_sha() {
     local sid="sess-clear"
     local head; head="$(git -C "$repo" rev-parse HEAD)"
     local state_dir="$TMPDIR_BASE/wf-clear"
-    local state; state="$(printf '{"version":1,"session_id":"%s","steps":{"branching_decision":{"status":"complete","updated_at":null}},"last_pushed_sha":"%s"}' "$sid" "$head")"
+    local state; state="$(printf '{"version":1,"session_id":"%s","steps":{"branching_complete":{"status":"complete","updated_at":null}},"last_pushed_sha":"%s"}' "$sid" "$head")"
     setup_workflow_state "$sid" "$state_dir" "$state"
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" >/dev/null 2>&1
@@ -563,7 +563,7 @@ test_reset_skips_when_head_differs() {
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
     out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
-    if echo "$out" | grep -q "branching_decision"; then
+    if echo "$out" | grep -q "branching_complete"; then
         fail "reset triggered despite HEAD mismatch (got: $out)"
     else
         pass "reset skipped when HEAD does not match last_pushed_sha"
@@ -667,7 +667,7 @@ test_post_push_reset_handles_unix_style_cwd() {
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$unix_cwd")"
     local out
     out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
-    if echo "$out" | grep -q "branching_decision"; then
+    if echo "$out" | grep -q "branching_complete"; then
         pass "post-push-reset normalizes Unix-style cwd on Windows (F3 regression)"
     else
         fail "post-push-reset failed with Unix-style cwd '$unix_cwd' (got: $out)"
@@ -824,7 +824,7 @@ test_reset_skips_when_no_last_pushed_sha() {
     local payload; payload="$(printf '{"session_id":"%s","cwd":"%s","prompt":"hi"}' "$sid" "$repo")"
     local out
     out="$(echo "$payload" | CLAUDE_WORKFLOW_DIR="$state_dir" run_with_timeout 30 node "$RESET_JS" 2>/dev/null)"
-    if echo "$out" | grep -q "branching_decision"; then
+    if echo "$out" | grep -q "branching_complete"; then
         fail "reset triggered without last_pushed_sha (got: $out)"
     else
         pass "reset skipped when last_pushed_sha is unset"

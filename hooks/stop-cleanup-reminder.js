@@ -20,7 +20,7 @@ if (state.steps?.user_verification?.status !== "complete") process.exit(0);
 const cleanup = state.steps?.cleanup;
 if (cleanup?.status === "complete" || cleanup?.status === "skipped") process.exit(0);
 
-const decision = state.steps?.branching_decision?.decision ?? "";
+const decision = state.steps?.branching_complete?.decision ?? "";
 
 let reason = null;
 if (decision.startsWith("worktree:")) {

@@ -72,7 +72,7 @@
   case-insensitive) opt out.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
-  equals current HEAD, resets workflow step `branching_decision` to pending and
+  equals current HEAD, resets workflow step `branching_complete` to pending and
   clears `last_pushed_sha`. Forces fresh branch/worktree creation for the next task.
 
 **Permission glob matching**: Permissions are matched against the entire command string.

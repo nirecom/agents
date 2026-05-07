@@ -59,6 +59,9 @@ const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?
 const CLARIFY_INTENT_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ([^>]+)>>"$/;
 const CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED([: ].*)?>>"$/;
 const CLARIFY_INTENT_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"$/;
+// New sentinel (preferred); old BRANCHING_DECIDED accepted for backward compat.
+const BRANCHING_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_COMPLETE: ([^>]+)>>"$/;
+const BRANCHING_COMPLETE_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_COMPLETE([: ].*)?>>"$/;
 const BRANCHING_DECIDED_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_DECIDED: ([^>]+)>>"$/;
 const BRANCHING_DECIDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_DECIDED([: ].*)?>>"$/;
 
@@ -80,6 +83,8 @@ function isSentinel(cmd) {
     CLARIFY_INTENT_NOT_NEEDED_RE_DQ.test(cmd) ||
     CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd) ||
+    BRANCHING_COMPLETE_RE_DQ.test(cmd) ||
+    BRANCHING_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
     BRANCHING_DECIDED_RE_DQ.test(cmd) ||
     BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd)
   );
@@ -220,9 +225,12 @@ for (const cmd of sentinelParts) {
   const docsNotNeededLooksLike = DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
   const clarifyIntentNotNeededMatch = cmd.match(CLARIFY_INTENT_NOT_NEEDED_RE_DQ);
   const clarifyIntentNotNeededLooksLike = !clarifyIntentNotNeededMatch && CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  const branchingDecidedMatch = cmd.match(BRANCHING_DECIDED_RE_DQ);
+  // Accept both new (BRANCHING_COMPLETE) and legacy (BRANCHING_DECIDED) sentinel.
+  const branchingDecidedMatch =
+    cmd.match(BRANCHING_COMPLETE_RE_DQ) || cmd.match(BRANCHING_DECIDED_RE_DQ);
   const branchingDecidedLooksLike =
-    !branchingDecidedMatch && BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd);
+    !branchingDecidedMatch &&
+    (BRANCHING_COMPLETE_LOOKSLIKE_RE.test(cmd) || BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd));
 
   // --- RESEARCH_NOT_NEEDED handler ---
   if (researchNotNeededLooksLike) {
@@ -440,11 +448,11 @@ for (const cmd of sentinelParts) {
     continue;
   }
 
-  // --- BRANCHING_DECIDED handler ---
+  // --- BRANCHING_COMPLETE handler (also accepts legacy BRANCHING_DECIDED) ---
   if (branchingDecidedLooksLike) {
     messages.push(
-      `workflow-mark: malformed BRANCHING_DECIDED — ` +
-        `expected: echo "<<WORKFLOW_BRANCHING_DECIDED: DECISION>>" ` +
+      `workflow-mark: malformed BRANCHING_COMPLETE — ` +
+        `expected: echo "<<WORKFLOW_BRANCHING_COMPLETE: DECISION>>" ` +
         `(decision must be >=3 non-space chars, no '>')`
     );
     continue;
@@ -453,25 +461,25 @@ for (const cmd of sentinelParts) {
     const v = validateSkipReason(branchingDecidedMatch[1]);
     if (!v.ok) {
       messages.push(
-        `workflow-mark: BRANCHING_DECIDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_DECIDED: <decision>>"`
+        `workflow-mark: BRANCHING_COMPLETE rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: <decision>>"`
       );
       continue;
     }
     if (!sessionId) {
       messages.push(
-        `workflow-mark: could not resolve session_id — branching_decision NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_DECIDED: ${v.reason}>>"`
+        `workflow-mark: could not resolve session_id — branching_complete NOT recorded. ` +
+          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: ${v.reason}>>"`
       );
       continue;
     }
     try {
-      markStep(sessionId, "branching_decision", "complete", { decision: v.reason });
-      const hint = nextStepHint("branching_decision");
+      markStep(sessionId, "branching_complete", "complete", { decision: v.reason });
+      const hint = nextStepHint("branching_complete");
       if (hint) messages.push(hint);
     } catch (e) {
       messages.push(
-        `workflow-mark: failed to write state — ${e.message}. branching_decision NOT recorded.`
+        `workflow-mark: failed to write state — ${e.message}. branching_complete NOT recorded.`
       );
     }
     continue;
