@@ -11,6 +11,8 @@ const {
   readState,
 } = require("./lib/workflow-state");
 
+const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+
 // Steps tracked by the workflow but not enforced at commit time.
 // The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
 const NON_GATE_STEPS = ["research"];
@@ -80,6 +82,32 @@ function hasStagedDocChanges(repoDir) {
   if (hasDocs(repoDir)) return true;
   const externalRepo = resolveExternalDocsRepo(repoDir);
   return externalRepo !== null && hasDocs(externalRepo);
+}
+
+// Returns true when the commit is happening inside a linked worktree on a
+// non-protected branch. Used to skip user_verification at commit time —
+// verification is enforced later at the merge boundary instead.
+function isWorktreeContext(repoDir) {
+  try {
+    const common = execSync("git rev-parse --git-common-dir", {
+      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    const dir = execSync("git rev-parse --git-dir", {
+      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    const norm = (p) => path.resolve(repoDir, p).toLowerCase();
+    if (norm(common) === norm(dir)) return false;  // main checkout
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (!branch || branch === "HEAD") return false;  // detached HEAD
+    const envBranches = (process.env.DEFAULT_BRANCHES || "").split(",")
+      .map((s) => s.trim()).filter(Boolean);
+    const protectedBranches = envBranches.length ? envBranches : ["main", "master"];
+    return !protectedBranches.includes(branch);
+  } catch (e) {
+    return false;
+  }
 }
 
 // Return true if dir has any staged changes.
@@ -226,6 +254,36 @@ if (require.main === module) {
   const command = toolInput.command || "";
   if (!command) approve();
 
+  // MERGE GATE: hard-block gh pr merge / git push to protected branches when
+  // user_verification is not complete. Runs unconditionally regardless of
+  // ENFORCE_WORKTREE — protected branches are protected in all modes.
+  const mergeHit = isMergeToProtectedCommand(command);
+  if (mergeHit.hit) {
+    if (!sessionId) {
+      block(
+        "workflow-gate: merge to protected branch blocked — session_id missing.\n" +
+        'Run: echo "<<WORKFLOW_USER_VERIFIED>>" first.'
+      );
+    }
+    const mergeState = readState(sessionId);
+    if (!mergeState) {
+      block(
+        "workflow-gate: merge to protected branch blocked — no workflow state.\n" +
+        'Run: echo "<<WORKFLOW_USER_VERIFIED>>" first.'
+      );
+    }
+    const uv = mergeState.steps && mergeState.steps.user_verification;
+    const uvStatus = uv ? uv.status : "missing";
+    if (uvStatus !== "complete") {
+      block(
+        `workflow-gate: ${mergeHit.kind} blocked — user_verification is "${uvStatus}".\n\n` +
+        'Run: echo "<<WORKFLOW_USER_VERIFIED>>"\n' +
+        '(Set Bash description: "User verification: approve if implementation is complete — approving unlocks the merge gate.")'
+      );
+    }
+    approve();
+  }
+
   if (!/^git\s/.test(command)) approve();
   if (!/\scommit(\s|$)/.test(command)) approve();
 
@@ -263,6 +321,10 @@ if (require.main === module) {
     if (status === "skipped" && SKIPPABLE_STEPS.includes(step)) continue;
     // docs-only short-circuit: skip all steps except user_verification
     if (docsOnly && step !== "user_verification") continue;
+    // Worktree context: defer user_verification to merge-time gate.
+    // Feature-branch commits/pushes are intermediate; verification fires
+    // at gh pr merge / git push :main instead (see merge gate above).
+    if (step === "user_verification" && isWorktreeContext(repoDir)) continue;
     // Evidence-based overrides: staged files are proof of completion
     if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
     if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
