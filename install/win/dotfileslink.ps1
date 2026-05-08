@@ -107,6 +107,10 @@ uv run "$AgentsRoot\bin\doc-append.py" %*
 "@
 Write-Launcher "$LocalBin\doc-append.cmd" $cmdContent "doc-append.cmd"
 
+# --- ~/.local/bin/doc-append-plain.cmd launcher ---
+$dapCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\doc-append-plain.py`" %*`r`n"
+Write-Launcher "$LocalBin\doc-append-plain.cmd" $dapCmdContent "doc-append-plain.cmd"
+
 # --- ~/.local/bin/repo-visibility.cmd launcher ---
 $rvCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\repo-visibility.py`" %*`r`n"
 Write-Launcher "$LocalBin\repo-visibility.cmd" $rvCmdContent "repo-visibility.cmd"

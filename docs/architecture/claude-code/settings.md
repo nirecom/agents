@@ -72,6 +72,12 @@
   add/remove/prune` lifecycle commands, PowerShell `New-Item -ItemType Directory`.
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
+  `ENFORCE_WORKTREE_EXCLUDE`: semicolon-separated glob patterns. When ALL staged files
+  match at least one pattern, the main-checkout and protected-branch gates in `pre-commit`
+  are skipped (the private-info scanner still runs). Patterns are absolute paths with `**`
+  (any path segments, including zero) and `*` (any non-separator chars). Matching is
+  case-insensitive on Windows. Implementation: `hooks/lib/glob-match.js`.
+  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;C:\LLM\my-specs-repo\**\todo.md`
   **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
   - **Group A (always-allow / classified "read")**: `gh pr create/edit/close/comment/review`,
     `gh issue create/edit/close/comment`, `gh repo create/edit/rename/archive` — coordination
@@ -81,7 +87,7 @@
     POST/PUT/PATCH/DELETE in any flag form (`-X`, `-XVERB`, `-X=VERB`, `--method`,
     `--method=`). Group B commands additionally verify that the detected repo root is
     in the session scope (CWD repo + `ENFORCE_WORKTREE_EXTRA_REPOS`).
-  `ENFORCE_WORKTREE_EXTRA_REPOS`: comma-separated list of additional repo roots
+  `ENFORCE_WORKTREE_EXTRA_REPOS`: semicolon-separated list of additional repo roots
   or parent directories treated as in-scope for Group B gh writes. If an entry
   is not itself a git repo, its immediate subdirectories are scanned (depth 1)
   and any git repos found are added. The CWD repo is always included.

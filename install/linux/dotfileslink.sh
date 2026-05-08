@@ -77,6 +77,14 @@ EOF
 chmod +x ~/.local/bin/doc-append
 printf "${C_GREEN}Generated: ~/.local/bin/doc-append${C_RESET}\n"
 
+# --- ~/.local/bin/doc-append-plain launcher ---
+cat > ~/.local/bin/doc-append-plain << EOF
+#!/usr/bin/env bash
+exec uv run "$AGENTS_ROOT/bin/doc-append-plain.py" "\$@"
+EOF
+chmod +x ~/.local/bin/doc-append-plain
+printf "${C_GREEN}Generated: ~/.local/bin/doc-append-plain${C_RESET}\n"
+
 # --- ~/.local/bin/repo-visibility launcher ---
 cat > ~/.local/bin/repo-visibility << EOF
 #!/usr/bin/env bash
