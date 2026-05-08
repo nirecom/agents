@@ -84,11 +84,17 @@ const WRITE_PATTERNS = [
   { name: "git-revert", kind: "git", regex: /\bgit\b.*\brevert\b/ },
   // git tag: write (create/delete) but not list (-l, -v, --list, --points-at, etc.)
   { name: "git-tag-write", kind: "git", regex: /\bgit\b.*\btag\b(?!\s+(?:-[lLvnq]|--list|--sort|--contains|--merged|--no-merged|--points-at))/ },
-  { name: "git-branch-mutate", kind: "git", regex: /\bgit\b.*\bbranch\b.*-[dDmMcC]/ },
+  // git-branch-mutate: anchor flags at whitespace-delimited positions to avoid
+  // false-positives where branch names contain literal "-d", "-c", etc.
+  // (e.g., `git branch agents-env-consolidate` formerly matched `-c`).
+  // -d (merged delete) is read-only; only -D/-m/-M/-c/-C are write.
+  { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[DmMcC](?:\s|$)/ },
   { name: "git-checkout-force", kind: "git", regex: /\bgit\b.*\bcheckout\b.*(?:--|\.|\bHEAD\b)/ },
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
   { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\b.*\b(?:push|pop|drop|clear|apply)\b/ },
   { name: "git-worktree-write", kind: "git", regex: /\bgit\b.*\bworktree\b.*\b(?:add|remove|prune)\b/ },
+  // git update-ref: directly rewrites a ref — write op (classifier gap fix).
+  { name: "git-update-ref", kind: "git", regex: /\bgit\b.*\bupdate-ref\b/ },
   // gh mutating subcommands.
   // Only commands that modify repo content or are destructive are kept here (Group B).
   // Coordination commands (Group A: gh pr create/edit/close/comment/review,
@@ -105,19 +111,40 @@ const WRITE_PATTERNS = [
   { name: "gh-api-mutate", kind: "gh", regex: /\bgh\b.*\bapi\b.*(?:-X[\s=]*|--method[\s=]+)(?:POST|PUT|PATCH|DELETE)\b/i },
 ];
 
+// gh "Group A" coordination commands: pr/issue/repo lifecycle that touch
+// GitHub-side metadata only (never tracked repo content). When the only "write"
+// trigger is heredoc/here-string (multi-line body argument), override read.
+const GH_GROUP_A_REGEX = /\bgh\b\s+(?:pr\s+(?:create|edit|close|comment|review)|issue\s+(?:create|edit|close|comment)|repo\s+(?:create|edit|rename|archive))\b/;
+
+// WRITE_PATTERNS names that are merely quoting/heredoc shapes — they signal a
+// multi-line string argument, not file I/O.
+const QUOTING_ONLY_NAMES = new Set([
+  "here-doc", "here-string", "pwsh-here-single", "pwsh-here-double",
+]);
+
 /**
  * Classify a Bash command string as "read" or "write".
- * Returns "write" if any WRITE_PATTERNS pattern matches.
+ * Returns "write" if any WRITE_PATTERNS pattern matches, except: when ALL
+ * matched patterns are quoting-only AND the command is a Group A gh command,
+ * the body is a multi-line string (not file I/O) and the command is "read".
  * Returns "read" if no pattern matches or input is not a string.
  * Never throws.
  */
 function classify(cmd) {
   try {
     if (!cmd || typeof cmd !== "string") return "read";
+    const matchedNames = [];
     for (const p of WRITE_PATTERNS) {
-      if (p.regex.test(cmd)) return "write";
+      if (p.regex.test(cmd)) matchedNames.push(p.name);
     }
-    return "read";
+    if (matchedNames.length === 0) return "read";
+    if (
+      matchedNames.every((n) => QUOTING_ONLY_NAMES.has(n)) &&
+      GH_GROUP_A_REGEX.test(cmd)
+    ) {
+      return "read";
+    }
+    return "write";
   } catch (e) {
     return "read"; // fail-open
   }
