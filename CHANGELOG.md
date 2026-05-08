@@ -59,3 +59,7 @@ Changes: isPathOutsideRepo now normalizes POSIX drive-letter paths (e.g. /c/git/
 ### BUGFIX: bash-write-patterns: /dev/null null-sink misclassified as write (2026-05-08)
 Background: Read-only redirects to /dev/null (e.g. `git status 2>/dev/null`) were classified as write commands and blocked by the enforce-worktree guard from the main checkout.
 Changes: /dev/null null-sink redirects (`2>/dev/null`, `>/dev/null`, `&>/dev/null`, `>>/dev/null`) are now correctly classified as read. Subpaths like `/dev/null/foo` and the documented `2>&1` false positive remain as write.
+
+### FEATURE: ENFORCE_WORKTREE_EXCLUDE: bypass worktree gate for matched files + doc-append-plain command (2026-05-08)
+Background: ENFORCE_WORKTREE blocked all main-checkout commits, including low-risk doc appends to shared todo files across repos.
+Changes: New ENFORCE_WORKTREE_EXCLUDE env var accepts semicolon-separated glob patterns. When all staged files match a pattern, the main-checkout and protected-branch gates in pre-commit are skipped (private-info scan still runs). New doc-append-plain command for append-only plaintext writes to doc files. BREAKING CHANGE: ENFORCE_WORKTREE_EXTRA_REPOS separator changed from comma (`,`) to semicolon (`;`) — if you set this variable, update your `.env` before upgrading.
