@@ -209,7 +209,7 @@ test_N2_mixed_individual_and_parent() {
     local individual_norm; individual_norm="$(norm_path "$main_individual")"
     local parent_norm; parent_norm="$(norm_path "$parent")"
     local child_norm; child_norm="$(norm_path "$parent/child")"
-    local extras="$individual_norm,$parent_norm"
+    local extras="$individual_norm;$parent_norm"
 
     local out
     # Individual entry (direct, not dir-scan).
@@ -254,8 +254,8 @@ test_N3_space_after_comma_trimmed() {
     local a_norm; a_norm="$(norm_path "$main_a")"
     local parent_norm; parent_norm="$(norm_path "$parent")"
     local child_norm; child_norm="$(norm_path "$parent/child")"
-    # Intentional spaces around comma-separated entries.
-    local extras=" $a_norm , $parent_norm "
+    # Intentional spaces around semicolon-separated entries.
+    local extras=" $a_norm ; $parent_norm "
 
     local out
     out="$(run_bash_guard \
@@ -353,7 +353,7 @@ test_E1_nonexistent_path_silently_skipped() {
     local main="${pair%|*}"; local wt="${pair#*|}"
     local valid_norm; valid_norm="$(norm_path "$main")"
 
-    local extras="/totally/nonexistent/path/$$,$valid_norm"
+    local extras="/totally/nonexistent/path/$$;$valid_norm"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
     if guard_decision "$out"; then
@@ -408,7 +408,7 @@ test_E3_file_path_silently_skipped() {
     # would cd to the file itself which may or may not fail — either way, the
     # feature wt (CWD) is always in scope via CWD root, so guard should allow.
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$file_norm,$main_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$file_norm;$main_norm")"
     if guard_decision "$out"; then
         pass "E3: file path in EXTRA_REPOS skipped, valid entry still works [EXISTING]"
     else
@@ -455,7 +455,7 @@ test_IDEM1_duplicate_parent_deduped() {
     local parent_norm; parent_norm="$(norm_path "$parent")"
     local repo1_norm; repo1_norm="$(norm_path "$parent/repo1")"
     # List the same parent twice.
-    local extras="$parent_norm,$parent_norm"
+    local extras="$parent_norm;$parent_norm"
 
     # Two runs must produce identical output (no duplication side-effects).
     local out1 out2
