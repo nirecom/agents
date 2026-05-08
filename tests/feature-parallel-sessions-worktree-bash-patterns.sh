@@ -193,6 +193,11 @@ READ_CASES=(
     'gh repo edit --private'
     'gh repo rename new-name'
     'gh repo archive owner/repo'
+    # /dev/null null-sink — read-only redirects must not be classified as write
+    'git status 2>/dev/null'
+    'ls >/dev/null'
+    'cmd &>/dev/null'
+    'grep pattern file 2>/dev/null'
 )
 
 test_read_cases() {
@@ -347,6 +352,19 @@ test_git_config_flag_commit_write() {
     assert_classify "git -c config flag + commit" 'git -c core.safecrlf=false commit -m x' "write"
 }
 
+test_dev_null_compound() {
+    # null-sink followed by actual write — rm catches it
+    assert_classify "compound: read 2>/dev/null; rm foo" 'git status 2>/dev/null; rm foo' "write"
+    # null-sink followed by another read command — stays read
+    assert_classify "compound: read 2>/dev/null && read" 'git status 2>/dev/null && git log' "read"
+    # append form to /dev/null is also null-sink
+    assert_classify ">>/dev/null append null-sink" 'cmd >>/dev/null' "read"
+    # subpath /dev/null/foo is a real file (not null-sink) — must remain write
+    assert_classify "redirect to /dev/null/foo (not null-sink)" 'cmd > /dev/null/foo' "write"
+    # stdout to /dev/null with 2>&1 — 2>&1 documented FP preserved
+    assert_classify ">/dev/null 2>&1 (documented FP preserved)" 'cmd >/dev/null 2>&1' "write"
+}
+
 # ============ Run all ============
 
 test_write_cases
@@ -370,6 +388,7 @@ test_heredoc_quoted_tokens
 test_fd_redirect_documented_fp
 test_newline_injection_write
 test_git_config_flag_commit_write
+test_dev_null_compound
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
