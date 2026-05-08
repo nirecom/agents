@@ -51,3 +51,7 @@ Changes: Internal step key and sentinel renamed across all hook files and skill 
 ### FEATURE: enforce-worktree: EXTRA_REPOS directory-scan fallback (depth 1) (2026-05-07)
 Background: Users had to list every repo path individually in ENFORCE_WORKTREE_EXTRA_REPOS even when all repos share a common parent directory.
 Changes: ENFORCE_WORKTREE_EXTRA_REPOS now accepts parent directories in addition to individual repo paths. Any entry that is not itself a git repo is scanned one level deep; all git repos found inside are added to the session scope. Mixed lists (individual paths and parent dirs) work as expected, and spaces around commas are trimmed.
+
+### FEATURE: global-gitignore.ps1: Pester integration tests (2026-05-08)
+Background: The Windows installer for global gitignore (install/win/global-gitignore.ps1) had no automated tests; a null-reference bug was only caught in production.
+Changes: Added 15 Pester integration tests covering normal, idempotency, edge, error, and security cases. The .Count null-reference bug from production is now caught by the double-run idempotency test (T04).
