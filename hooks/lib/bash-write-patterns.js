@@ -13,12 +13,17 @@
 //   - FD-to-FD redirects: cmd 2>&1, cmd 1>&2 (contain '>' — classified as write)
 //   - echo "a > b" with quoted '>' inside the argument
 // Note: echo "<<WORKFLOW_...>>" is NOT a false-positive — the here-doc anchor fix excludes it.
+// Note: redirects to /dev/null (e.g. 2>/dev/null) are excluded from write — null-sink
+//       discards output and is common in read-only commands like `git status 2>/dev/null`.
+//       The lookahead uses (?=\s|[;|&]|$) not \b, so /dev/null/foo remains a write.
+//       Windows NUL is intentionally NOT excluded: this pattern is for POSIX bash commands
+//       only. PowerShell null-sink uses Out-Null/> $null and is handled by pwsh-specific patterns.
 
 "use strict";
 
 const WRITE_PATTERNS = [
-  // POSIX redirects: >, >>, 1>, 2>, &>, n>
-  { name: "posix-redirect", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)/ },
+  // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
+  { name: "posix-redirect", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!\s*\/dev\/null(?=\s|[;|&]|$))/ },
   // tee (writes to file while passing through)
   { name: "tee", kind: "posix", regex: /(?:^|[\s;|&])tee\b/ },
   // here-doc: <<EOF, <<-EOF, <<'EOF', <<"EOF"
