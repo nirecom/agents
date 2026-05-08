@@ -29,10 +29,21 @@ bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-i
 3. **PR 作成（`gh pr create`）には commit だけでなく push まで必要**: commit gate を突破して commit した後、さらに `git push` を実行して初めて PR が作れる。/worktree-end の手順では push タイミングが「PR 解決ステップ（Step 2）内で push する」と定義されているが、commit gate との順序関係（commit → user_verification → push → gh pr create）がワークフロー全体として明文化されていない。
    - 発生条件: /worktree-end 実行時に branch がリモートに未 push の場合
 
+4. **worktree commit skip が `git -C <path>` なしだと効かない**: `resolveRepoDir` が `CLAUDE_PROJECT_DIR`（dotfiles 等）にフォールバックし `isWorktreeContext` が false を返すため user_verification が要求される。
+   - 発生条件: worktree 内で素の `git commit`（`-C` なし）を実行した場合
+   - 当面の回避策: `git -C <worktree-path> commit` を明示する
+
+5. **`git branch -d` が enforce-worktree にブロックされる**: bash-write-patterns.js が `git branch` を write 分類するため、worktree 削除後に main checkout からローカルブランチを削除できない。
+   - 発生条件: `git worktree remove` 後に main から `git branch -d` を実行した場合
+   - 当面の回避策: ユーザーが手動で実行する
+   - 根本対処: `/worktree-end` で branch 削除を `worktree remove` より前に実行するよう順序変更
+
 **解決候補**:
 - [x] `review-code-codex` に staged diff フォールバックを追加 — PR #7 で実装済み（commit なし時は `git diff --cached` を自動使用）
 - [ ] 中間 commit / fixup commit は `user_verification` gate を免除するモードを追加（`--wip` フラグ等）
 - [ ] ワークフロー手順に「実装ステップごとに WIP commit を積む」を明記（運用回避）
+- [ ] `resolveRepoDir` に worktrees ディレクトリのスキャンを追加（staged 変更検出の精度向上）
+- [ ] `git branch -d`（マージ済みブランチ削除）を bash-write-patterns.js で read 扱いに変更
 
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
