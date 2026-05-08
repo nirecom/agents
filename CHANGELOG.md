@@ -55,3 +55,7 @@ Changes: ENFORCE_WORKTREE_EXTRA_REPOS now accepts parent directories in addition
 ### BUGFIX: git worktree add no longer blocked on Windows + Git Bash (2026-05-07)
 Background: On Windows with Git Bash, running git worktree add via the Bash tool could be falsely blocked even when the target path was outside the repo.
 Changes: isPathOutsideRepo now normalizes POSIX drive-letter paths (e.g. /c/git/foo) to Windows-native form before resolving them. This fixes the misresolution that caused outside paths to appear inside the repo on Windows Node.js.
+
+### FEATURE: ENFORCE_WORKTREE_EXCLUDE: bypass worktree gate for matched files + doc-append-plain command (2026-05-08)
+Background: ENFORCE_WORKTREE blocked all main-checkout commits, including low-risk doc appends to shared todo files across repos.
+Changes: New ENFORCE_WORKTREE_EXCLUDE env var accepts semicolon-separated glob patterns. When all staged files match a pattern, the main-checkout and protected-branch gates in pre-commit are skipped (private-info scan still runs). New doc-append-plain command for append-only plaintext writes to doc files. ENFORCE_WORKTREE_EXTRA_REPOS separator changed from comma to semicolon — update your config if you use this variable.
