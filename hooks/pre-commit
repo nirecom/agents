@@ -10,7 +10,7 @@ SCANNER="$_cfg_dir/bin/scan-outbound.sh"
 # Load $AGENTS_CONFIG_DIR/.env (existing env wins). Mirrors hooks/lib/load-env.js.
 _load_env_file() {
     local envfile="${AGENTS_CONFIG_DIR:-$_cfg_dir}/.env"
-    [ -r "$envfile" ] || return
+    [ -r "$envfile" ] || return 0
     local line key val
     while IFS= read -r line || [ -n "$line" ]; do
         # Skip blank and comment lines
@@ -55,51 +55,96 @@ _is_enforce_worktree_on() {
 # --- END temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 
 if _is_enforce_worktree_on; then
-    # Block commits from main checkout (--git-common-dir == --git-dir)
-    _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
-    _git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
-    # Resolve to absolute paths before comparing (handles relative paths, symlinks,
-    # and case differences on case-insensitive filesystems such as macOS/Windows).
-    _git_common_dir_abs="$(cd "$_git_common_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_common_dir" | tr '[:upper:]' '[:lower:]')"
-    _git_dir_abs="$(cd "$_git_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_dir" | tr '[:upper:]' '[:lower:]')"
-    if [ -n "$_git_common_dir_abs" ] && [ -n "$_git_dir_abs" ] && [ "$_git_common_dir_abs" = "$_git_dir_abs" ]; then
-        echo "ENFORCE_WORKTREE: commits from main checkout are blocked." >&2
-        echo "Work from a linked worktree. Run: /worktree-start <task-name>" >&2
-        echo "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." >&2
-        exit 1
+    # ENFORCE_WORKTREE_EXCLUDE: when ALL staged files match the exclude patterns,
+    # skip the main-checkout and protected-branch gate below. The private-info
+    # scanner further down still runs. Patterns and paths are passed via env
+    # (never as shell-interpolated args) to prevent metacharacter injection.
+    _enforce_skip=0
+    _exclude_patterns="${ENFORCE_WORKTREE_EXCLUDE:-}"
+    if [ -n "$_exclude_patterns" ]; then
+        _staged="$(git diff --cached --name-only 2>/dev/null || true)"
+        _repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+        if [ -n "$_staged" ] && [ -n "$_repo_top" ]; then
+            _node_rc=0
+            ENFORCE_WORKTREE_EXCLUDE="$_exclude_patterns" \
+            AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
+            _PRECOMMIT_REPO_TOP="$_repo_top" \
+            _PRECOMMIT_STAGED="$_staged" \
+            node -e '
+              const path = require("path");
+              const cfg = process.env.AGENTS_CONFIG_DIR;
+              if (!cfg) process.exit(2);
+              const { parseExcludePatterns, matchesAnyExcludePattern } =
+                require(cfg + "/hooks/lib/glob-match");
+              const top = process.env._PRECOMMIT_REPO_TOP;
+              const patterns = parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE);
+              const files = process.env._PRECOMMIT_STAGED.split(/\r?\n/).filter(Boolean);
+              if (patterns.length === 0) process.exit(2);
+              for (const rel of files) {
+                const abs = path.resolve(top, rel);
+                if (!matchesAnyExcludePattern(abs, patterns)) process.exit(2);
+              }
+              process.exit(0);
+            ' 2>/dev/null || _node_rc=$?
+            if [ "$_node_rc" = "0" ]; then
+                _enforce_skip=1
+            elif [ "$_node_rc" != "2" ]; then
+                # rc=2 is the documented "patterns did not all match" path.
+                # Other non-zero rc indicates a problem (missing node, broken
+                # glob-match.js, etc.). Surface it so users know their EXCLUDE
+                # config was silently bypassed by an error, not by the gate.
+                echo "pre-commit: ENFORCE_WORKTREE_EXCLUDE matcher failed (rc=$_node_rc); falling back to enforce-worktree gate." >&2
+            fi
+        fi
     fi
 
-    cur_branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
-    if [ -n "$cur_branch" ]; then
-        # Build protected branches list
-        # --- BEGIN temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
-        protected=""
-        _default_branches_var="${DEFAULT_BRANCHES:-}"
-        if [ -z "$_default_branches_var" ] && printenv AGENT_DEFAULT_BRANCHES >/dev/null 2>&1; then
-            echo "pre-commit: AGENT_DEFAULT_BRANCHES is deprecated; rename to DEFAULT_BRANCHES in agents config." >&2
-            _default_branches_var="${AGENT_DEFAULT_BRANCHES:-}"
+    if [ "$_enforce_skip" = "0" ]; then
+        # Block commits from main checkout (--git-common-dir == --git-dir)
+        _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+        _git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
+        # Resolve to absolute paths before comparing (handles relative paths, symlinks,
+        # and case differences on case-insensitive filesystems such as macOS/Windows).
+        _git_common_dir_abs="$(cd "$_git_common_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_common_dir" | tr '[:upper:]' '[:lower:]')"
+        _git_dir_abs="$(cd "$_git_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_dir" | tr '[:upper:]' '[:lower:]')"
+        if [ -n "$_git_common_dir_abs" ] && [ -n "$_git_dir_abs" ] && [ "$_git_common_dir_abs" = "$_git_dir_abs" ]; then
+            echo "ENFORCE_WORKTREE: commits from main checkout are blocked." >&2
+            echo "Work from a linked worktree. Run: /worktree-start <task-name>" >&2
+            echo "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." >&2
+            exit 1
         fi
-        # --- END temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
-        if [ -n "$_default_branches_var" ]; then
-            protected="$(printf %s "$_default_branches_var" | tr ',' ' ')"
-        else
-            origin_head="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#.*/##' || true)"
-            [ -n "$origin_head" ] && protected="$protected $origin_head"
-            for cand in main master; do
-                git show-ref --verify --quiet "refs/heads/$cand" 2>/dev/null && protected="$protected $cand"
-            done
-            init_default="$(git config init.defaultBranch 2>/dev/null || true)"
-            [ -n "$init_default" ] && protected="$protected $init_default"
-            [ -z "$(printf %s "$protected" | tr -d ' ')" ] && protected="main"
-        fi
-        for b in $protected; do
-            if [ "$cur_branch" = "$b" ]; then
-                echo "ENFORCE_WORKTREE: commits to protected branch '$cur_branch' are blocked." >&2
-                echo "Switch to a feature branch. Run: git switch -c feature/<name>" >&2
-                echo "Or set ENFORCE_WORKTREE=off in agents config to disable." >&2
-                exit 1
+
+        cur_branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+        if [ -n "$cur_branch" ]; then
+            # Build protected branches list
+            # --- BEGIN temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
+            protected=""
+            _default_branches_var="${DEFAULT_BRANCHES:-}"
+            if [ -z "$_default_branches_var" ] && printenv AGENT_DEFAULT_BRANCHES >/dev/null 2>&1; then
+                echo "pre-commit: AGENT_DEFAULT_BRANCHES is deprecated; rename to DEFAULT_BRANCHES in agents config." >&2
+                _default_branches_var="${AGENT_DEFAULT_BRANCHES:-}"
             fi
-        done
+            # --- END temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
+            if [ -n "$_default_branches_var" ]; then
+                protected="$(printf %s "$_default_branches_var" | tr ',' ' ')"
+            else
+                origin_head="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#.*/##' || true)"
+                [ -n "$origin_head" ] && protected="$protected $origin_head"
+                for cand in main master; do
+                    git show-ref --verify --quiet "refs/heads/$cand" 2>/dev/null && protected="$protected $cand"
+                done
+                init_default="$(git config init.defaultBranch 2>/dev/null || true)"
+                [ -n "$init_default" ] && protected="$protected $init_default"
+                [ -z "$(printf %s "$protected" | tr -d ' ')" ] && protected="main"
+            fi
+            for b in $protected; do
+                if [ "$cur_branch" = "$b" ]; then
+                    echo "ENFORCE_WORKTREE: commits to protected branch '$cur_branch' are blocked." >&2
+                    echo "Switch to a feature branch. Run: git switch -c feature/<name>" >&2
+                    echo "Or set ENFORCE_WORKTREE=off in agents config to disable." >&2
+                    exit 1
+                fi
+            done
+        fi
     fi
 fi
 
