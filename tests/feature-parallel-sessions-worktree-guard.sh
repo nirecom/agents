@@ -475,6 +475,52 @@ test_gh_group_b_from_non_git_dir_blocks() {
     fi
 }
 
+test_main_checkout_ff_only_allowed() {
+    require_guard "test_main_checkout_ff_only_allowed" || return
+    local repo; repo="$(setup_main_checkout "g-ff-only")"
+
+    # Allow: ff-only merge from main checkout
+    local out
+    out="$(run_bash_guard "git merge --ff-only origin/feature" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "main checkout: git merge --ff-only allowed"
+    else
+        fail "main checkout: git merge --ff-only should allow ($out)"
+    fi
+
+    # Allow: ff-only pull from main checkout
+    out="$(run_bash_guard "git pull --ff-only origin main" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "main checkout: git pull --ff-only allowed"
+    else
+        fail "main checkout: git pull --ff-only should allow ($out)"
+    fi
+
+    # Block: plain git merge (no --ff-only)
+    out="$(run_bash_guard "git merge feature" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        fail "main checkout: plain git merge should block"
+    else
+        pass "main checkout: plain git merge blocks"
+    fi
+
+    # Block: --no-ff overrides --ff-only intent
+    out="$(run_bash_guard "git merge --no-ff feature" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        fail "main checkout: git merge --no-ff should block"
+    else
+        pass "main checkout: git merge --no-ff blocks"
+    fi
+
+    # Block: chained command — ff-only is fine but the chain may smuggle a write
+    out="$(run_bash_guard "git merge --ff-only origin/feature && git push" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        fail "main checkout: chained ff-only && push should block"
+    else
+        pass "main checkout: chained ff-only && push blocks (hasShellChaining)"
+    fi
+}
+
 # ============ Run all ============
 
 test_main_checkout_on_main_blocks
@@ -501,6 +547,7 @@ test_gh_group_b_from_main_checkout_blocks
 test_gh_group_b_from_feature_worktree_allows
 test_gh_group_b_via_git_C_to_out_of_session_repo_blocks
 test_gh_group_b_from_non_git_dir_blocks
+test_main_checkout_ff_only_allowed
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
