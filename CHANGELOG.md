@@ -55,3 +55,7 @@ Changes: ENFORCE_WORKTREE_EXTRA_REPOS now accepts parent directories in addition
 ### BUGFIX: git worktree add no longer blocked on Windows + Git Bash (2026-05-07)
 Background: On Windows with Git Bash, running git worktree add via the Bash tool could be falsely blocked even when the target path was outside the repo.
 Changes: isPathOutsideRepo now normalizes POSIX drive-letter paths (e.g. /c/git/foo) to Windows-native form before resolving them. This fixes the misresolution that caused outside paths to appear inside the repo on Windows Node.js.
+
+### BUGFIX: bash-write-patterns: /dev/null null-sink misclassified as write (2026-05-08)
+Background: Read-only redirects to /dev/null (e.g. `git status 2>/dev/null`) were classified as write commands and blocked by the enforce-worktree guard from the main checkout.
+Changes: /dev/null null-sink redirects (`2>/dev/null`, `>/dev/null`, `&>/dev/null`, `>>/dev/null`) are now correctly classified as read. Subpaths like `/dev/null/foo` and the documented `2>&1` false positive remain as write.
