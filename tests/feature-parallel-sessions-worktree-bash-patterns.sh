@@ -109,7 +109,6 @@ WRITE_CASES=(
     'git am'
     'git cherry-pick x'
     'git revert x'
-    'git branch -d x'
     'git branch -D x'
     'git checkout -- f'
     'git restore f'
@@ -177,6 +176,7 @@ READ_CASES=(
     'Get-Content foo'
     'git tag -l'
     'git tag --list'
+    'git branch -d x'
     # Group A (always-allow gh commands) — fix/enforce-worktree-gh-whitelist
     # These are reclassified from "write" to "read" so the worktree guard
     # never blocks them, regardless of cwd / branch / session scope.
@@ -365,6 +365,56 @@ test_dev_null_compound() {
     assert_classify ">/dev/null 2>&1 (documented FP preserved)" 'cmd >/dev/null 2>&1' "write"
 }
 
+test_git_branch_mutate_writes() {
+    assert_classify "branch -D" 'git branch -D x' "write"
+    assert_classify "branch -m rename" 'git branch -m main feat' "write"
+    assert_classify "branch -M force-rename" 'git branch -M old new' "write"
+    assert_classify "branch -c copy" 'git branch -c base feat' "write"
+    assert_classify "branch -C force-copy" 'git branch -C old new' "write"
+    assert_classify "git -C path branch -D" 'git -C /path branch -D x' "write"
+}
+
+test_git_branch_name_no_false_positive() {
+    assert_classify "branch agents-env-consolidate (literal -d in name)" \
+        'git branch agents-env-consolidate' "read"
+    assert_classify "branch --list feat/agents-env-consolidate" \
+        'git branch --list feat/agents-env-consolidate' "read"
+    assert_classify "branch --contains HEAD" 'git branch --contains HEAD' "read"
+    assert_classify "branch -d already-merged (merged-delete is read)" \
+        'git branch -d already-merged' "read"
+}
+
+test_gh_group_a_with_heredoc_classified_read() {
+    local cmd1='gh pr create --body "$(cat <<'"'"'EOF'"'"'
+body text
+EOF
+)"'
+    assert_classify "gh pr create + heredoc body" "$cmd1" "read"
+
+    local cmd2='gh issue create --title T --body "$(cat <<EOF
+content
+EOF
+)"'
+    assert_classify "gh issue create + heredoc body" "$cmd2" "read"
+
+    assert_classify "gh pr edit plain body" 'gh pr edit 1 --body "x"' "read"
+}
+
+test_gh_group_a_with_redirect_still_write() {
+    # redirect (posix-redirect) is not in QUOTING_ONLY → override does not apply
+    assert_classify "gh pr create + redirect to file" \
+        'gh pr create --body "x" > out.txt' "write"
+}
+
+test_git_update_ref_write() {
+    assert_classify "git update-ref create" \
+        'git update-ref refs/heads/feat HEAD' "write"
+    assert_classify "git update-ref delete" \
+        'git update-ref -d refs/heads/old' "write"
+    assert_classify "git -C path update-ref" \
+        'git -C /path update-ref refs/heads/feat HEAD' "write"
+}
+
 # ============ Run all ============
 
 test_write_cases
@@ -389,6 +439,11 @@ test_fd_redirect_documented_fp
 test_newline_injection_write
 test_git_config_flag_commit_write
 test_dev_null_compound
+test_git_branch_mutate_writes
+test_git_branch_name_no_false_positive
+test_gh_group_a_with_heredoc_classified_read
+test_gh_group_a_with_redirect_still_write
+test_git_update_ref_write
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

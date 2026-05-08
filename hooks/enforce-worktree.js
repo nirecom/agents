@@ -130,10 +130,15 @@ function stripQuotedSegments(str) {
 }
 
 /** True if cmd contains shell chaining/pipe operators outside of quotes.
+ *  Also rejects command substitutions ($() and backticks): those spawn a
+ *  shell that runs the inner command, which is effectively chaining for
+ *  exemption-allowance purposes. Without this, `git merge --ff-only $(rm -rf
+ *  /)` would slip past the chaining guard.
  *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
  *  so `& git.exe worktree add` is conservatively rejected. */
 function hasShellChaining(cmd) {
-  return /[|;&]/.test(stripQuotedSegments(cmd));
+  const stripped = stripQuotedSegments(cmd);
+  return /[|;&]|\$\(|`/.test(stripped);
 }
 
 /**
@@ -243,6 +248,29 @@ function isAllowedNewItemDirectory(cmd, repoRoot) {
 
   // Fail-closed: reject when path cannot be determined
   return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : false;
+}
+
+/**
+ * True if cmd is an isolated `git pull --ff-only` or `git merge --ff-only`
+ * command. Allows the merge step from the main checkout — the one operation
+ * main is reserved for ("Main checkout is reserved for merge/pull only").
+ *
+ * Blocks: shell chaining (`&& git push` etc.), `--no-ff` (overrides ff-only
+ * intent), non-git tools (e.g. `svn merge --ff-only`), and `git rebase
+ * --ff-only` (rebase is not merge).
+ */
+function isAllowedFastForwardMerge(cmd) {
+  if (hasShellChaining(cmd)) return false;
+  if (!/\bgit\b/.test(cmd)) return false;
+  if (/\s--no-ff\b/.test(cmd)) return false;
+  // Strict subcommand position: only flag tokens (and their values) may appear
+  // between `git` and the `pull`/`merge` subcommand. This prevents false
+  // matches like `git commit -m "merge --ff-only"` or `git push origin merge
+  // --ff-only` where `merge` appears as an argument value rather than as the
+  // subcommand. Pattern: `(?:-flag value? )*` then subcommand.
+  const isPullFf  = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*pull\b[^|;&]*\s--ff-only\b/.test(cmd);
+  const isMergeFf = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*merge\b[^|;&]*\s--ff-only\b/.test(cmd);
+  return isPullFf || isMergeFf;
 }
 
 // Returns true when repoCwd is the main (non-linked) checkout.
@@ -395,6 +423,10 @@ function done(decision) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+// Wrapped in `if (require.main === module)` so the file can be `require()`d
+// from tests without executing the CLI flow (which reads stdin and exits).
+
+if (require.main === module) {
 
 let input;
 try {
@@ -496,6 +528,7 @@ if (mainCheckout) {
     const cmd = toolInput.command || "";
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
+    if (isAllowedFastForwardMerge(cmd)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
@@ -521,3 +554,7 @@ if (currentBranch && protectedBranches.includes(currentBranch)) {
 }
 
 done(); // linked worktree on feature branch — allow
+
+} // end if (require.main === module)
+
+module.exports = { isAllowedFastForwardMerge };

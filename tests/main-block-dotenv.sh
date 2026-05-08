@@ -314,6 +314,71 @@ expect_approve "printf mentions .env" \
     '{"tool_name":"Bash","tool_input":{"command":"printf \"Setup: cp .env.example .env\\n\""}}'
 
 echo ""
+echo "=== Bash: gh pr/issue body mentioning .env (should approve) ==="
+
+expect_approve "gh pr create --body mentioning .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"gh pr create --body \"Fix: block .env access\""}}'
+
+expect_approve "gh issue create --title and --body mentioning .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"gh issue create --title Bug --body \"The .env file is blocked\""}}'
+
+expect_approve "gh pr comment --body mentioning .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"gh pr comment 1 --body \"Updated .env hook\""}}'
+
+echo ""
+echo "=== Bash: command substitution recursion (should block) ==="
+
+# $() and backticks are NOT inert text — they execute as shell commands.
+# The parser recurses into substitution bodies before stripping.
+expect_block 'gh pr create --body $(cat .env)' \
+    '{"tool_name":"Bash","tool_input":{"command":"gh pr create --body \"$(cat .env)\""}}'
+
+expect_block 'echo $(grep KEY .env)' \
+    '{"tool_name":"Bash","tool_input":{"command":"echo \"$(grep KEY .env)\""}}'
+
+expect_block "backtick command substitution touching .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo `cat .env`"}}'
+
+echo ""
+echo "=== Bash: redirect-to-.env via echo/printf (should block) ==="
+
+# echo/printf positional args are text, but redirect operators are syntax.
+# Redirect-target check runs BEFORE the TEXT_CMDS short-circuit.
+expect_block "echo SECRET > .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo SECRET > .env"}}'
+
+expect_block "printf x >> .env.production" \
+    '{"tool_name":"Bash","tool_input":{"command":"printf x >> .env.production"}}'
+
+expect_block "echo > .env (truncate)" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo > .env"}}'
+
+echo ""
+echo "=== Bash: shell wrapper combined flags (should block) ==="
+
+# bash -lc, -ic, -Oc, etc. — combined login/interactive/option flags must
+# also trigger script recursion.
+expect_block "bash -lc cat .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"bash -lc \"cat .env\""}}'
+
+expect_block "sh -ic cat .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"sh -ic \"cat .env\""}}'
+
+echo ""
+echo "=== Bash: short Unix flags should not bypass .env detection ==="
+
+# -l, -a, -r are NOT in TEXT_FLAGS (they collide with common Unix flags like
+# wc -l, ls -a, cp -r) so .env in the next positional must block.
+expect_block "wc -l .env (line count leak)" \
+    '{"tool_name":"Bash","tool_input":{"command":"wc -l .env"}}'
+
+expect_block "ls -l .env (metadata leak)" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls -l .env"}}'
+
+expect_block "cp -r .env /tmp" \
+    '{"tool_name":"Bash","tool_input":{"command":"cp -r .env /tmp/x"}}'
+
+echo ""
 echo "=== Bash: git commit message containing .env (should approve) ==="
 
 expect_approve "git commit -m mentioning .env" \

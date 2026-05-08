@@ -43,7 +43,7 @@ bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-i
 - [ ] 中間 commit / fixup commit は `user_verification` gate を免除するモードを追加（`--wip` フラグ等）
 - [ ] ワークフロー手順に「実装ステップごとに WIP commit を積む」を明記（運用回避）
 - [ ] `resolveRepoDir` に worktrees ディレクトリのスキャンを追加（staged 変更検出の精度向上）
-- [ ] `git branch -d`（マージ済みブランチ削除）を bash-write-patterns.js で read 扱いに変更
+- [x] `git branch -d`（マージ済みブランチ削除）を bash-write-patterns.js で read 扱いに変更 — fix/enforce-worktree-merge-gate で実装
 
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
@@ -132,45 +132,22 @@ Codex CLI と同様に、`review-code-gemini` / `review-plan-gemini` を実装�
 
 - [ ] enforce-worktree.js の Bash write チェックに ENFORCE_WORKTREE_EXCLUDE を適用（書き込み先ファイルパスがパターンにマッチする場合は許可）
 
-### bash-write-patterns: `gh pr create` Group A コマンドが heredoc 構文で write 誤分類
+### make-outline-plan / make-detail-plan の draft 一時ファイル置き場が脆弱
 
-`bash-write-patterns.js` の設計コメントでは `gh pr create/edit/close/comment/review` 等の Group A coordination commands は「リポジトリ内容を変更しない」ため write 分類しない方針。しかし `gh pr create --body "$(cat <<'EOF'...EOF)"` のように heredoc を使うと `here-doc` POSIX write パターン（`/(?:^|[\s;|&])(?:\d*)<<-?['"]?\w/`）が hit し、enforce-worktree.js の main-checkout ガードでブロックされる。
+`make-outline-plan` と `make-detail-plan` skill は draft を OS 一時ディレクトリ（POSIX: `/tmp/`、Windows: `%TEMP%`）に書き出して `review-plan-codex` に渡す設計。compact / OS クリーンアップで消えると、上流の subagent 出力ごと再生成が必要になる。
 
-- 発生条件: main checkout から `gh pr create` を heredoc 付き `--body` で実行
-- 当面の回避策: `--body-file <path>` でファイルから読み込む
+- 発生条件: planner subagent 返却後 〜 reviewer/codex 呼び出し前に compact が走る、または OS が /tmp をクリーンアップ
+- 実例: 2026-05-08 intent-20260508-213511 セッションで `/tmp/intent-20260508-213511-detail-draft.md` が compact 後に消失し planner を再起動した
 - 根本対処の候補:
-  - [ ] gh コマンド単体の write 分類を Group B のみに限定（gh コマンド全体を heredoc 検出から免除）
-  - [ ] enforce-worktree.js で classify "write" でも gh-pattern にマッチすれば Group A としてスルー
+  - [ ] draft 書き出し先を `~/.claude/plans/drafts/` のような永続位置に変更（skill の SKILL.md を更新）
+  - [ ] draft ファイル名にセッション ID を含めることで衝突回避は維持
 
-### bash-write-patterns: `git branch` の `-[dDmMcC]` 正規表現がブランチ名にマッチして false-positive
+### enforce-worktree.js が Claude config dir (~/.claude/projects/.../memory/) への書き込みも block する
 
-`git-branch-mutate` パターン `/\bgit\b.*\bbranch\b.*-[dDmMcC]/` は `-d`/`-D`/`-m`/`-M`/`-c`/`-C` フラグを検出する目的だが、ブランチ名に `-c` 等を含む場合（例: `agents-env-consolidate`）、`branch <名前>` の名前部分で誤マッチする。`git branch --list refactor/agents-env-consolidate` のような単純な list コマンドまでブロックされる。
+`hooks/enforce-worktree.js` の Edit/Write チェックは `findRepoRoot(filePath)` で書き込み先の親 git repo を探索する。`C:\Users\example\.claude\projects\c--git-agents\memory\` 配下のメモリファイル書き込みが、なぜか agents repo として認識され main checkout ブロックに引っかかる事象あり。
 
-- 発生条件: ブランチ名に `[dDmMcC]` の前にハイフンが含まれる場合
-- 当面の回避策: `git update-ref -d refs/heads/<branch>` で削除（ブロックを通る）
+- 発生条件: main checkout cwd から `~/.claude/projects/<encoded>/memory/*.md` 等への Write/Edit
+- 影響: auto memory システムが main checkout からは使えない
 - 根本対処の候補:
-  - [ ] 正規表現を強化（フラグ位置を限定: `\s-[dDmMcC](?:\s|$)`、または `--delete`/`--move` 等のロング形式のみ検出）
-
-### enforce-worktree: `git merge --ff-only origin/<branch>` が main checkout からブロックされる
-
-フックのエラーメッセージ自体に「Main checkout is reserved for merge/pull only」と書かれているが、実装は `git merge` を一律 write 分類してブロックする。マージ済み PR 後の `git pull --ff-only` / `git merge --ff-only` ができず、ローカル main を最新化する手段がフックを通らない。
-
-- 発生条件: PR マージ後、main checkout から fast-forward しようとする
-- 当面の回避策: `ENFORCE_WORKTREE=off` に変更してから merge / 別ターミナルから手動実行 / `git update-ref` で ref のみ進めて手動で working tree を同期
-- 根本対処の候補:
-  - [ ] enforce-worktree.js の main-checkout ガードに `git pull --ff-only` / `git merge --ff-only` の例外を追加（`isAllowedWorktreeCommand` と同パターンで `isAllowedFastForwardMerge` を実装）
-
-### bash-write-patterns: `git update-ref` が write 分類されない（classifier gap）
-
-`git update-ref` は ref を直接書き換える write 操作だが `WRITE_PATTERNS` に含まれていないため classify が "read" を返す。今回はブランチ削除と fast-forward の workaround として活用したが、本来は write 扱いすべき。
-
-- [ ] `WRITE_PATTERNS` に `git-update-ref` パターンを追加（`/\bgit\b.*\bupdate-ref\b/`）
-
-### block-dotenv: コミットメッセージ・PR 本文中の `.env` 文字列もブロック
-
-`block-dotenv` は `.env` を含むファイル名へのアクセスをブロックするが、Bash コマンド文字列に `.env` が含まれるだけで（コミットメッセージ本文や PR body 等）コマンド全体がブロックされる。`gh pr create --body "...agents/.env equivalent..."` のような自然な文章でも誤検知。
-
-- 発生条件: コマンドラインに literal `.env` が含まれる（ファイルアクセスではなく文字列として）
-- 当面の回避策: `.env` を `agents config file` 等に言い換える / `--body-file` でファイル経由
-- 根本対処の候補:
-  - [ ] `block-dotenv` のスコープをファイルパス引数のみに限定（コマンド文字列全体を grep しない）
+  - [ ] enforce-worktree.js の `findRepoRoot()` ロジック確認（書き込み先パスの repo 解決が cwd repo にフォールバックしていないか）
+  - [ ] ENFORCE_WORKTREE_EXCLUDE のスコープ拡張、もしくは memory dir / claude config dir を明示的に除外
