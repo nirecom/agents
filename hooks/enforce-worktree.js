@@ -324,7 +324,7 @@ function resolveRepoRoot(startDir) {
 // Returns the set of repo roots considered "in session scope" for gh write commands.
 // Composition:
 //   - process.cwd() repo root (always included if it resolves to a repo)
-//   - Each path listed in ENFORCE_WORKTREE_EXTRA_REPOS (comma-separated)
+//   - Each path listed in ENFORCE_WORKTREE_EXTRA_REPOS (semicolon-separated)
 // Behaviour:
 //   - Whitespace around entries is trimmed; empty entries are skipped.
 //   - Nonexistent paths are silently skipped (not an error).
@@ -335,7 +335,7 @@ function getSessionRepoRoots() {
   const cwdRoot = resolveRepoRoot(process.cwd());
   if (cwdRoot) roots.add(cwdRoot);
   const extra = (process.env.ENFORCE_WORKTREE_EXTRA_REPOS || "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
+    .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
     let resolved;
     try { resolved = path.resolve(dir); } catch (e) { continue; }
