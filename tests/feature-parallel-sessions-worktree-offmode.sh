@@ -73,7 +73,7 @@ setup_main_checkout() {
     echo "$repo"
 }
 
-# Run guard with a single ENFORCE_WORKTREE value, on a main checkout, with a Bash write.
+# Run guard with a single ENFORCE_WORKTREE value, on a main worktree, with a Bash write.
 # Returns "allow" or "block".
 run_with_value() {
     local value="$1" repo="$2"

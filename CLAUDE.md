@@ -13,9 +13,9 @@
    - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
 3. **Branch/Worktree creation** —
-   - **`ENFORCE_WORKTREE=on` (default)**: all writes from the main checkout are blocked, regardless of branch. Run `/worktree-start` to create a linked worktree on a feature branch.
+   - **`ENFORCE_WORKTREE=on` (default)**: all writes from the main worktree are blocked, regardless of branch. Run `/worktree-start` to create a linked worktree on a feature branch.
      Enforced by `enforce-worktree.js` (PreToolUse) and `pre-commit`.
-   - **`ENFORCE_WORKTREE=off`**: main checkout writes allowed. Options: branch-only (`git switch -c <name>`, naming → `rules/branch.md`) or main directly for trivial changes. Consult `rules/branch.md` for branch-vs-main.
+   - **`ENFORCE_WORKTREE=off`**: main worktree writes allowed. Options: branch-only (`git switch -c <name>`, naming → `rules/branch.md`) or main directly for trivial changes. Consult `rules/branch.md` for branch-vs-main.
    Record: `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`
    (`main` is only valid when `ENFORCE_WORKTREE=off`.)
 4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.

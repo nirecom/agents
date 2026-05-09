@@ -7,7 +7,7 @@
 //     2. Running on a protected branch even inside a linked worktree.
 //   Allows writes only from a linked worktree on a non-protected branch.
 //
-// Main checkout detection:
+// Main worktree detection:
 //   git rev-parse --git-common-dir == git rev-parse --git-dir
 //   (Linked worktrees have --git-common-dir pointing to the shared .git while --git-dir
 //   points to .git/worktrees/<name> — they differ only in linked worktrees.)
@@ -32,6 +32,7 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
@@ -159,7 +160,7 @@ function hasCommandSequencing(cmd) {
 
 /**
  * True when targetPath resolves to a location OUTSIDE repoRoot.
- * Relative paths are resolved against process.cwd() (the main checkout when
+ * Relative paths are resolved against process.cwd() (the main worktree when
  * this hook runs), which gives the correct semantic for worktree paths.
  * Fails open (returns true) when the path cannot be resolved.
  */
@@ -193,7 +194,7 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd) || !/\bworktree\s+(?:add|remove|prune)\b/.test(cmd)) return false;
 
-  // remove/prune do not create new checkout paths — always allow from main checkout
+  // remove/prune do not create new checkout paths — always allow from main worktree
   if (/\bworktree\s+(?:remove|prune)\b/.test(cmd)) return true;
 
   // For 'add': parse target path (first non-flag arg after 'add')
@@ -268,8 +269,8 @@ function isAllowedNewItemDirectory(cmd, repoRoot) {
 
 /**
  * True if cmd is an isolated `git pull --ff-only` or `git merge --ff-only`
- * command. Allows the merge step from the main checkout — the one operation
- * main is reserved for ("Main checkout is reserved for merge/pull only").
+ * command. Allows the merge step from the main worktree — the one operation
+ * main is reserved for ("Main worktree is reserved for merge/pull only").
  *
  * Blocks: shell chaining (`&& git push` etc.), `--no-ff` (overrides ff-only
  * intent), non-git tools (e.g. `svn merge --ff-only`), and `git rebase
@@ -289,7 +290,112 @@ function isAllowedFastForwardMerge(cmd) {
   return isPullFf || isMergeFf;
 }
 
-// Returns true when repoCwd is the main (non-linked) checkout.
+// Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
+// Per rules/worktree.md, this is the parent directory all linked worktrees live under.
+function getWorktreeBaseDir() {
+  const raw = (process.env.WORKTREE_BASE_DIR || "").trim();
+  const baseRaw = raw || path.join(os.homedir(), "git", "worktrees");
+  const expanded = baseRaw.startsWith("~")
+    ? path.join(os.homedir(), baseRaw.slice(1).replace(/^[\/\\]/, ""))
+    : baseRaw;
+  return path.resolve(expanded);
+}
+
+// True if cmd is `git [opts] [-C path] branch -d|-D <branch> [...]`.
+// Strict subcommand position: only flag tokens (and their values) may appear
+// between `git` and `branch`, mirroring isAllowedFastForwardMerge.
+function isBranchDeleteCommand(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (!/\bgit\b/.test(cmd)) return false;
+  return /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)/.test(cmd);
+}
+
+// Extract the target branch name from `git ... branch -d|-D <branch>`.
+// Returns null if unparseable.
+function parseBranchDeleteTarget(cmd) {
+  if (!isBranchDeleteCommand(cmd)) return null;
+  // After the `branch -d|-D` flag, the next non-flag positional token is the branch.
+  const m = cmd.match(/\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b([^|;&]*)/);
+  if (!m) return null;
+  const tokens = [];
+  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let mm;
+  while ((mm = re.exec(m[1])) !== null) tokens.push(mm[1] || mm[2] || mm[3]);
+  // Find -d or -D, then the next non-flag token
+  let sawDeleteFlag = false;
+  for (const tok of tokens) {
+    if (!sawDeleteFlag) {
+      if (/^-[dD]$/.test(tok)) sawDeleteFlag = true;
+      continue;
+    }
+    if (tok === "--") continue;
+    if (tok.startsWith("-")) continue;
+    return tok;
+  }
+  return null;
+}
+
+/**
+ * True if cmd is `git branch -d|-D <branch>` AND a marker file produced by
+ * /worktree-end authorises this exact deletion.
+ *
+ * Marker contract (written by /worktree-end before `git worktree remove`):
+ *   path:    <git-common-dir>/info/pending-branch-delete
+ *   format:  line 1 = target branch name
+ *            line 2 = absolute path of the worktree being removed
+ *
+ * Both must match: branch name == target, worktree path resolves under
+ * WORKTREE_BASE_DIR. This narrows the exemption to /worktree-end-driven
+ * cleanups; ad-hoc `git branch -D` from any worktree is still blocked.
+ *
+ * The marker lives in the SHARED .git directory (git-common-dir), so it is
+ * readable from both the main worktree and any linked worktree.
+ */
+function isAllowedBranchDeleteViaMarker(cmd, repoRoot) {
+  if (hasShellChaining(cmd)) return false;
+  const target = parseBranchDeleteTarget(cmd);
+  if (!target) return false;
+  if (!repoRoot) return false;
+
+  let commonDir;
+  try {
+    const r = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status !== 0) return false;
+    commonDir = path.resolve(repoRoot, (r.stdout || "").trim());
+  } catch (e) { return false; }
+
+  const markerPath = path.join(commonDir, "info", "pending-branch-delete");
+  let content;
+  try { content = fs.readFileSync(markerPath, "utf8"); }
+  catch (e) { return false; }
+
+  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return false;
+  const markerBranch = lines[0];
+  const markerWorktreePath = lines[1];
+
+  if (markerBranch !== target) return false;
+
+  const baseDir = getWorktreeBaseDir();
+  const norm = (p) => {
+    try {
+      const n = normalizeCwd(p) || p;
+      const r = path.resolve(n);
+      return process.platform === "win32" ? r.toLowerCase() : r;
+    } catch (e) { return null; }
+  };
+  const nBase = norm(baseDir);
+  const nWtree = norm(markerWorktreePath);
+  if (!nBase || !nWtree) return false;
+
+  return nWtree === nBase ||
+         nWtree.startsWith(nBase + path.sep) ||
+         nWtree.startsWith(nBase + "/");
+}
+
+// Returns true when repoCwd is the main worktree (non-linked).
 // In a linked worktree, --git-common-dir and --git-dir differ.
 function isMainCheckout(repoCwd) {
   try {
@@ -549,6 +655,25 @@ if (toolName === "Bash") {
   if (classify(cmd) !== "write") done(); // read-only command — allow
   repoRoot = findRepoRootForBash(cmd);
 
+  // git branch -d/-D: gated exclusively by /worktree-end's marker file.
+  // Allowed when the marker matches the target branch and the recorded
+  // worktree path resolves under WORKTREE_BASE_DIR; blocked unconditionally
+  // otherwise (any worktree, including main and linked).
+  if (isBranchDeleteCommand(cmd)) {
+    if (isAllowedBranchDeleteViaMarker(cmd, repoRoot)) done();
+    done({
+      block: true,
+      reason:
+        "ENFORCE_WORKTREE: git branch -d/-D blocked. Reason: no matching /worktree-end marker.\n" +
+        "Branch deletion is only authorised via /worktree-end, which writes\n" +
+        "<git-common-dir>/info/pending-branch-delete with the target branch and the\n" +
+        "worktree path being removed (must resolve under WORKTREE_BASE_DIR).\n" +
+        "Direct git branch -d/-D from any worktree is prohibited.\n" +
+        "Run: /worktree-end\n" +
+        "Or set ENFORCE_WORKTREE=off in agents config to bypass.",
+    });
+  }
+
   // gh write commands (Group B) get an extra session-scope check before the
   // standard main/worktree enforcement below. The whitelist defines the set of
   // repos this session manages; gh writes outside the set are blocked even
@@ -633,7 +758,7 @@ if (toolName === "Bash") {
         const branchDesc = branch ? `branch '${branch}'` : "detached HEAD";
         done({
           block: true,
-          reason: `ENFORCE_WORKTREE: write blocked. Reason: main checkout (${branchDesc}).\nWork from a linked worktree (/worktree-start) or set ENFORCE_WORKTREE=off.`,
+          reason: `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\nWork from a linked worktree (/worktree-start) or set ENFORCE_WORKTREE=off.`,
         });
       }
       if (branch && protected_.includes(branch)) {
@@ -671,7 +796,7 @@ if (!currentBranch && !mainCheckout) done();
 if (mainCheckout) {
   // Allow isolated worktree lifecycle commands (Bash only).
   // These operate on .git/worktrees/ metadata or external paths, not tracked files,
-  // and must be invoked from the main checkout.
+  // and must be invoked from the main worktree.
   if (toolName === "Bash") {
     const cmd = toolInput.command || "";
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
@@ -683,8 +808,8 @@ if (mainCheckout) {
   done({
     block: true,
     reason:
-      `ENFORCE_WORKTREE: write blocked. Reason: main checkout (${branchDesc}).\n` +
-      "Main checkout is reserved for merge/pull only. Work from a linked worktree.\n" +
+      `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
+      "Main worktree is reserved for merge/pull only. Work from a linked worktree.\n" +
       "Run: /worktree-start <task-name>\n" +
       "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work.",
   });
@@ -705,4 +830,10 @@ done(); // linked worktree on feature branch — allow
 
 } // end if (require.main === module)
 
-module.exports = { isAllowedFastForwardMerge };
+module.exports = {
+  isAllowedFastForwardMerge,
+  isBranchDeleteCommand,
+  parseBranchDeleteTarget,
+  isAllowedBranchDeleteViaMarker,
+  getWorktreeBaseDir,
+};

@@ -3,7 +3,7 @@
 #
 # Integration tests for hooks/pre-commit ENFORCE_WORKTREE_EXCLUDE bypass.
 #
-# Each test sets up a throwaway main checkout with `core.hooksPath` pointing
+# Each test sets up a throwaway main worktree with `core.hooksPath` pointing
 # at the agents-repo `hooks/` directory, stages files, and runs `git commit`
 # (or invokes `hooks/pre-commit` directly) with various EXCLUDE values.
 #
@@ -60,7 +60,7 @@ run_with_timeout() {
     fi
 }
 
-# Create a throwaway main checkout (no linked worktree).
+# Create a throwaway main worktree (no linked worktree).
 # Mirrors the helper used by tests/fix-enforce-worktree-gh-whitelist.sh.
 setup_main_checkout() {
     local name="$1"
@@ -227,7 +227,7 @@ test_edge_exclude_unset_blocks_from_main() {
     local repo; repo="$(setup_main_checkout "ex-unset")"
     stage_file "$repo" "docs/todo.md" "anything"
     if run_pre_commit "$repo" ENFORCE_WORKTREE=on; then
-        fail "EXCLUDE unset: main checkout commit should block (out: $RUN_OUT)"
+        fail "EXCLUDE unset: main worktree commit should block (out: $RUN_OUT)"
     else
         pass "EXCLUDE unset: existing main-checkout block still fires"
     fi

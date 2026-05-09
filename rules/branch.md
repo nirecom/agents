@@ -2,11 +2,11 @@
 
 When `ENFORCE_WORKTREE=on` (default): always work from a **linked worktree** on a feature branch.
 The `enforce-worktree` (PreToolUse) and `pre-commit` hooks block edits and commits from the
-main checkout and on the default branch.
+main worktree and on the default branch.
 
 For parallel sessions, use `/worktree-start` to create the worktree — see `worktree.md`.
 
-> **Note:** `ENFORCE_WORKTREE=on` blocks all writes from the **main checkout** regardless of
+> **Note:** `ENFORCE_WORKTREE=on` blocks all writes from the **main worktree** regardless of
 > which branch is checked out there. A feature branch alone does not satisfy the guard —
 > you must work from a **linked worktree** (via `/worktree-start`) or set `ENFORCE_WORKTREE=off`.
 
