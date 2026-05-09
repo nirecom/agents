@@ -126,11 +126,6 @@ Codex CLI と同様に、`review-code-gemini` / `review-plan-gemini` を実装�
 
 - [ ] 対応策を選択・実装: (1) リモートが private repo と確認できる場合は dotenv ブロックをスキップ、(2) ワンタイムで worktree から初回コミット、(3) per-repo allowlist 機構の追加
 
-### enforce-worktree.js への ENFORCE_WORKTREE_EXCLUDE 対応
-
-現状、EXCLUDE は pre-commit（git コミット時）にのみ実装されており、PreToolUse フック（enforce-worktree.js）での Bash write コマンド判定には未対応。todo.md 等の直接コミットを end-to-end で動作させるには JS 側への対応が必要。
-
-- [ ] enforce-worktree.js の Bash write チェックに ENFORCE_WORKTREE_EXCLUDE を適用（書き込み先ファイルパスがパターンにマッチする場合は許可）
 
 ### make-outline-plan / make-detail-plan の draft 一時ファイル置き場が脆弱
 
@@ -142,12 +137,16 @@ Codex CLI と同様に、`review-code-gemini` / `review-plan-gemini` を実装�
   - [ ] draft 書き出し先を `~/.claude/plans/drafts/` のような永続位置に変更（skill の SKILL.md を更新）
   - [ ] draft ファイル名にセッション ID を含めることで衝突回避は維持
 
-### enforce-worktree.js が Claude config dir (~/.claude/projects/.../memory/) への書き込みも block する
+### worktree-start でのファイルコピー制限緩和
 
-`hooks/enforce-worktree.js` の Edit/Write チェックは `findRepoRoot(filePath)` で書き込み先の親 git repo を探索する。`C:\Users\example\.claude\projects\c--git-agents\memory\` 配下のメモリファイル書き込みが、なぜか agents repo として認識され main checkout ブロックに引っかかる事象あり。
+`worktree-start` 時に `.env` / `.private-info-allowlist` 等を main checkout から worktree へ cp しようとすると、enforce-worktree.js の Bash write ブロックに引っかかる。Write tool でも block-dotenv フックに阻まれる。
 
-- 発生条件: main checkout cwd から `~/.claude/projects/<encoded>/memory/*.md` 等への Write/Edit
-- 影響: auto memory システムが main checkout からは使えない
-- 根本対処の候補:
-  - [ ] enforce-worktree.js の `findRepoRoot()` ロジック確認（書き込み先パスの repo 解決が cwd repo にフォールバックしていないか）
-  - [ ] ENFORCE_WORKTREE_EXCLUDE のスコープ拡張、もしくは memory dir / claude config dir を明示的に除外
+- [ ] 対応策を選択・実装: (1) `git worktree add` 後のコピーを「worktree ライフサイクル操作」として isAllowedWorktreeCommand に追加、(2) `cp` の宛先が repo 外なら allow （`isAllowedNewItemDirectory` と同手法）、(3) worktree 内でのみ実行する shell スクリプトを生成してユーザーに実行させる
+
+### review-plan-codex に intent.md を渡す
+
+現状 `make-detail-plan` / `make-outline-plan` は `--context` に outline.md のみ渡している。intent.md を渡していないため、Codex がスコープ外の懸念（例: `Move-Item` source のケアが not needed と明示してある）を raise することがある。
+
+- [ ] `review-plan-codex --context` に intent.md も追加（複数 `--context` フラグ対応を確認、または intent + outline の合成ファイルを渡す）
+- [ ] `make-detail-plan` / `make-outline-plan` SKILL.md の `review-plan-codex` 呼び出し箇所を更新
+

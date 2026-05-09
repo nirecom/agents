@@ -73,7 +73,7 @@ const WRITE_PATTERNS = [
   { name: "cargo-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])cargo\s+(?:build|install|update|publish|clean)\b/ },
   { name: "go-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])go\s+(?:build|install|get|mod\s+(?:download|tidy|vendor))\b/ },
   // git mutating subcommands
-  { name: "git-commit", kind: "git", regex: /\bgit\b.*\bcommit\b/ },
+  { name: "git-commit", kind: "git", regex: /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*commit\b/ },
   { name: "git-push", kind: "git", regex: /\bgit\b.*\bpush\b/ },
   { name: "git-merge", kind: "git", regex: /\bgit\b.*\bmerge\b/ },
   { name: "git-rebase", kind: "git", regex: /\bgit\b.*\brebase\b/ },

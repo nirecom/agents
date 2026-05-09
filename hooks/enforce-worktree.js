@@ -39,6 +39,11 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 
 const { normalizeCwd } = require("./lib/path-normalize");
 const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
+const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
+const {
+  extractRedirectTargets, extractTeeTargets,
+  extractPwshWriteTargets, extractStagedFiles,
+} = require("./lib/bash-write-targets");
 
 function readStdin() {
   try {
@@ -139,6 +144,16 @@ function stripQuotedSegments(str) {
 function hasShellChaining(cmd) {
   const stripped = stripQuotedSegments(cmd);
   return /[|;&]|\$\(|`/.test(stripped);
+}
+
+// True when cmd contains command-sequencing operators (;, &&, ||) outside quotes.
+// Single | (pipe) is excluded — needed for `cmd | tee file`. &> (redirect) is
+// not matched because the regex requires two & characters for &&.
+// Commands with sequencing must not be fast-pathed through the session-scope
+// allow: the un-extracted portion may contain in-scope writes (e.g. rm, mv).
+function hasCommandSequencing(cmd) {
+  const stripped = stripQuotedSegments(cmd);
+  return /;|&&|\|\|/.test(stripped);
 }
 
 /**
@@ -385,6 +400,86 @@ function getSessionRepoRoots() {
   return roots;
 }
 
+function getExcludePatterns() {
+  return parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE || "");
+}
+
+function isExcluded(filePath, patterns) {
+  if (!patterns || patterns.length === 0) return false;
+  if (!filePath || typeof filePath !== "string") return false;
+  try {
+    const norm = normalizeCwd(filePath) || filePath;
+    const abs = path.resolve(norm);
+    // Full-path match (patterns containing '/' or '**').
+    if (matchesAnyExcludePattern(abs, patterns)) return true;
+    // Gitignore semantics: patterns without '/' also match against basename.
+    const basenamePatterns = patterns.filter((p) => !p.includes("/"));
+    if (basenamePatterns.length === 0) return false;
+    return matchesAnyExcludePattern(path.basename(abs), basenamePatterns);
+  } catch (e) { return false; }
+}
+
+function isInSessionScope(repoRoot, sessionRoots) {
+  if (!repoRoot) return false;
+  const norm = normalizeForCompare(repoRoot);
+  return norm ? sessionRoots.has(norm) : false;
+}
+
+// Collect write targets from all applicable extractors (redirect, tee, PS cmdlets).
+// Any extractor returning null → parseFailure = true (fail-closed).
+function collectBashWriteTargets(cmd) {
+  const targets = [];
+  let parseFailure = false;
+
+  if (/(?:^|[\s;|&])(?:\d*)(?:&>>?|>>?)(?!>|\d)/.test(cmd)) {
+    const r = extractRedirectTargets(cmd);
+    if (r === null) parseFailure = true;
+    else targets.push(...r);
+  }
+  if (/(?:^|[\s;|&])tee\b/.test(cmd)) {
+    const t = extractTeeTargets(cmd);
+    if (t === null) parseFailure = true;
+    else targets.push(...t);
+  }
+  if (/\b(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Move-Item|Copy-Item)\b/i.test(cmd)
+      || /(?:^|[\s;|&])(?:sc|ac|ni|ri|mi|ci)\b/.test(cmd)) {
+    const p = extractPwshWriteTargets(cmd);
+    if (p === null) parseFailure = true;
+    else targets.push(...p);
+  }
+
+  return { targets: targets.length > 0 ? targets : null, parseFailure };
+}
+
+// True if all targets resolve to repos outside the session scope.
+// findRepoRoot()==null (non-git path) is also treated as outside scope (allow).
+function areAllBashTargetsOutsideSessionScope(targets, sessionRoots) {
+  if (!targets || targets.length === 0) return false;
+  for (const t of targets) {
+    const repo = findRepoRoot(t);
+    if (repo !== null && isInSessionScope(repo, sessionRoots)) return false;
+  }
+  return true;
+}
+
+// EXCLUDE check for file-target writes and git commit (staged files).
+function isWriteTargetAllExcluded(cmd, targets, repoRoot, patterns) {
+  if (!patterns || patterns.length === 0) return false;
+  const isGitCommit = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*commit\b/.test(cmd);
+
+  if (isGitCommit) {
+    const staged = extractStagedFiles(repoRoot);
+    if (staged === null || staged.length === 0) return false;
+    if (!staged.every((f) => isExcluded(f, patterns))) return false;
+  }
+
+  if (targets) {
+    if (!targets.every((f) => isExcluded(f, patterns))) return false;
+  }
+
+  return isGitCommit || (targets !== null && targets.length > 0);
+}
+
 // True if cmd matches any kind:"gh" entry in WRITE_PATTERNS (= Group B gh writes).
 function isGhWriteCommand(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
@@ -477,14 +572,54 @@ if (toolName === "Bash") {
     // gh writes are GitHub operations, not local file writes — session-scope is sufficient.
     done();
   }
+
+  // Bug 2 + Bug 1: non-gh Bash writes — check actual write targets.
+  {
+    const sessionRoots = getSessionRepoRoots();
+    const excludePatterns = getExcludePatterns();
+    const { targets, parseFailure } = collectBashWriteTargets(cmd);
+
+    if (!parseFailure) {
+      // Commands with sequencing operators (;, &&, ||) may contain un-extracted
+      // in-scope writes (e.g. `echo x > /tmp/out; rm README.md`). Skip the
+      // session-scope / EXCLUDE fast-paths for those; fall through to the
+      // main-checkout block (fail-closed). Single | (pipe) is allowed — it is
+      // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
+      if (!hasCommandSequencing(cmd)) {
+        // Bug 2: all targets resolve outside session scope (incl. non-git paths) → allow.
+        if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) done();
+
+        // Bug 1: all targets covered by EXCLUDE → allow.
+        if (excludePatterns.length > 0 &&
+            isWriteTargetAllExcluded(cmd, targets, repoRoot, excludePatterns)) {
+          done();
+        }
+      }
+    }
+
+    // git -C <path> style (no file targets extracted): use repoRoot for scope check.
+    if (!targets && !parseFailure && repoRoot) {
+      if (!isInSessionScope(repoRoot, sessionRoots)) done();
+    }
+    // parseFailure → fail-closed: fall through to main-checkout block below.
+  }
 } else if (["Edit", "Write", "MultiEdit"].includes(toolName)) {
+  const sessionRoots = getSessionRepoRoots();
+  const excludePatterns = getExcludePatterns();
+
   if (toolName === "MultiEdit" && Array.isArray(toolInput.edits) && toolInput.edits.length > 0) {
     // Check every edit target — a mixed-repo MultiEdit must not slip through.
     for (const edit of toolInput.edits) {
       const fp = edit.file_path;
       if (!fp || typeof fp !== "string") continue;
+
+      // Bug 1: EXCLUDE match → skip this edit (allow).
+      if (isExcluded(fp, excludePatterns)) continue;
+
       const root = findRepoRoot(fp);
-      if (!root) continue;
+      // Bug 2: non-git path or outside session scope → skip (allow).
+      if (!root || !isInSessionScope(root, sessionRoots)) continue;
+
       const isMC = isMainCheckout(root);
       const branch = getCurrentBranch(root);
       const protected_ = getProtectedBranches(root);
@@ -506,7 +641,14 @@ if (toolName === "Bash") {
   }
   const filePath = toolInput.file_path || toolInput.path;
   if (!filePath || typeof filePath !== "string") done();
+
+  // Bug 1: EXCLUDE match → allow.
+  if (isExcluded(filePath, excludePatterns)) done();
+
   repoRoot = findRepoRoot(filePath);
+
+  // Bug 2: non-git path or outside session scope → allow.
+  if (!repoRoot || !isInSessionScope(repoRoot, sessionRoots)) done();
 } else {
   done(); // unrecognised tool — allow
 }
