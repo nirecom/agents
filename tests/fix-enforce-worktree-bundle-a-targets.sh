@@ -96,6 +96,16 @@ call_staged() {
     " -- "$1" 2>/dev/null
 }
 
+call_cpmv() {
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$MODULE');
+        const r = m.extractCpMvDestination(process.argv[1]);
+        console.log(JSON.stringify(r));
+      } catch (e) { console.log('ERROR: ' + e.message); }
+    " -- "$1" 2>/dev/null
+}
+
 assert_fn_result() {
     local desc="$1" got="$2" expected="$3"
     if [ "$got" = "$expected" ]; then
@@ -301,6 +311,39 @@ test_security_redirect_injection() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# extractCpMvDestination
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_cpmv_destination() {
+    # Normal cases
+    assert_fn_result "cp src dst" \
+        "$(call_cpmv 'cp src dst')" '"dst"'
+    assert_fn_result "cp -r src dst" \
+        "$(call_cpmv 'cp -r src dst')" '"dst"'
+    assert_fn_result "cp -rp src dst (multiple flags)" \
+        "$(call_cpmv 'cp -rp src dst')" '"dst"'
+    assert_fn_result "cp a b c dst (multiple sources)" \
+        "$(call_cpmv 'cp a b c dst')" '"dst"'
+    assert_fn_result "cp absolute outside-repo path" \
+        "$(call_cpmv 'cp -r /c/Users/nire/.claude/plans /c/Users/nire/.claude/plans-bak')" \
+        '"/c/Users/nire/.claude/plans-bak"'
+    assert_fn_result "mv old new" \
+        "$(call_cpmv 'mv old.md new.md')" '"new.md"'
+    assert_fn_result "mv with flags" \
+        "$(call_cpmv 'mv -f src dst')" '"dst"'
+
+    # Fail-closed cases
+    assert_fn_result "cp single arg (no dest) → null" \
+        "$(call_cpmv 'cp src')" 'null'
+    assert_fn_result "cp \$var expansion → null" \
+        "$(call_cpmv 'cp src $DST')" 'null'
+    assert_fn_result "cp command-sub → null" \
+        "$(call_cpmv 'cp src \$(echo dst)')" 'null'
+    assert_fn_result "no cp/mv command → null" \
+        "$(call_cpmv 'echo hello')" 'null'
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -315,6 +358,7 @@ test_pwsh_move_copy_fail_closed
 test_staged_files
 test_idempotency
 test_security_redirect_injection
+test_cpmv_destination
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

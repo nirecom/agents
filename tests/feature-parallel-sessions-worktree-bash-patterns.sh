@@ -109,7 +109,6 @@ WRITE_CASES=(
     'git am'
     'git cherry-pick x'
     'git revert x'
-    'git branch -D x'
     'git checkout -- f'
     'git restore f'
     'git stash push'
@@ -373,12 +372,10 @@ test_dev_null_compound() {
 }
 
 test_git_branch_mutate_writes() {
-    assert_classify "branch -D" 'git branch -D x' "write"
     assert_classify "branch -m rename" 'git branch -m main feat' "write"
     assert_classify "branch -M force-rename" 'git branch -M old new' "write"
     assert_classify "branch -c copy" 'git branch -c base feat' "write"
     assert_classify "branch -C force-copy" 'git branch -C old new' "write"
-    assert_classify "git -C path branch -D" 'git -C /path branch -D x' "write"
 }
 
 test_git_branch_name_no_false_positive() {
@@ -389,6 +386,10 @@ test_git_branch_name_no_false_positive() {
     assert_classify "branch --contains HEAD" 'git branch --contains HEAD' "read"
     assert_classify "branch -d already-merged (merged-delete is read)" \
         'git branch -d already-merged' "read"
+    assert_classify "branch -D force-delete is read (ref-only, not file write)" \
+        'git branch -D fix/planner-drafts-context' "read"
+    assert_classify "git -C path branch -D is read" \
+        'git -C /path branch -D x' "read"
 }
 
 test_gh_group_a_with_heredoc_classified_read() {
