@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/refactor-branching-complete-rename-worktree.sh
 #
-# Tests for enforce-worktree.js: worktree lifecycle commands allowed from main checkout.
+# Tests for enforce-worktree.js: worktree lifecycle commands allowed from main worktree.
 # Covers: git worktree add/remove/prune and New-Item -ItemType Directory.
 #
 # Requires: node, git
@@ -35,7 +35,7 @@ to_unix_style_path() {
 }
 
 # ---------------------------------------------------------------------------
-# Setup: a temp git repo that acts as the main checkout
+# Setup: a temp git repo that acts as the main worktree
 # ---------------------------------------------------------------------------
 TMPDIR_BASE="$(node -e "
 const os=require('os'),path=require('path'),fs=require('fs');
@@ -58,11 +58,11 @@ git -C "$MAIN_REPO" commit -q -m "initial"
 
 # External path (outside the repo)
 EXT_PATH="$TMPDIR_BASE/worktrees/my-task/repo"
-# In-repo path (would be inside the main checkout)
+# In-repo path (would be inside the main worktree)
 INREPO_PATH="$MAIN_REPO/subdir"
 
 # ---------------------------------------------------------------------------
-# Helper: run the hook with a Bash command from the "main checkout" context
+# Helper: run the hook with a Bash command from the "main worktree" context
 # AGENTS_CONFIG_DIR points to MAIN_REPO so New-Item / mkdir fall back there.
 # ---------------------------------------------------------------------------
 run_hook() {
@@ -110,7 +110,7 @@ is_blocked_cwd()  { [[ "$(run_hook_cwd "$1" "$2")" != "{}" ]]; }
 # WL-1: git worktree add <external-path> -b <branch> — ALLOW
 # ---------------------------------------------------------------------------
 if is_allowed "git -C \"$MAIN_REPO\" worktree add \"$EXT_PATH\" -b feature/x"; then
-    pass "WL-1. git worktree add <ext-path> -b branch — allowed from main checkout"
+    pass "WL-1. git worktree add <ext-path> -b branch — allowed from main worktree"
 else
     fail "WL-1. git worktree add <ext-path> -b branch — should be allowed"
 fi
@@ -164,7 +164,7 @@ fi
 # WL-7: git worktree remove <path> — ALLOW
 # ---------------------------------------------------------------------------
 if is_allowed "git -C \"$MAIN_REPO\" worktree remove \"$EXT_PATH\""; then
-    pass "WL-7. git worktree remove <path> — allowed from main checkout"
+    pass "WL-7. git worktree remove <path> — allowed from main worktree"
 else
     fail "WL-7. git worktree remove — should be allowed"
 fi
@@ -173,7 +173,7 @@ fi
 # WL-8: git worktree prune — ALLOW
 # ---------------------------------------------------------------------------
 if is_allowed "git -C \"$MAIN_REPO\" worktree prune"; then
-    pass "WL-8. git worktree prune — allowed from main checkout"
+    pass "WL-8. git worktree prune — allowed from main worktree"
 else
     fail "WL-8. git worktree prune — should be allowed"
 fi

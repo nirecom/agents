@@ -158,9 +158,9 @@ test_group_a_pr_create_from_main_checkout() {
     local repo; repo="$(setup_main_checkout "A-pr-create-main")"
     local out; out="$(run_bash_guard "gh pr create --fill" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        pass "Group A: gh pr create from main checkout allows"
+        pass "Group A: gh pr create from main worktree allows"
     else
-        fail "Group A: gh pr create from main checkout should allow ($out)"
+        fail "Group A: gh pr create from main worktree should allow ($out)"
     fi
 }
 
@@ -197,9 +197,9 @@ test_group_a_remaining_commands_allow_from_main_checkout() {
     for c in "${cmds[@]}"; do
         out="$(run_bash_guard "$c" "$repo" ENFORCE_WORKTREE=on)"
         if guard_decision "$out"; then
-            pass "Group A: '$c' from main checkout allows"
+            pass "Group A: '$c' from main worktree allows"
         else
-            fail "Group A: '$c' from main checkout should allow ($out)"
+            fail "Group A: '$c' from main worktree should allow ($out)"
         fi
     done
 }
@@ -225,9 +225,9 @@ test_group_b_pr_merge_from_main_checkout_blocks() {
     local repo; repo="$(setup_main_checkout "B-merge-main")"
     local out; out="$(run_bash_guard "gh pr merge 1 --squash" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "Group B: gh pr merge from main checkout should block ($out)"
+        fail "Group B: gh pr merge from main worktree should block ($out)"
     else
-        pass "Group B: gh pr merge from main checkout blocks (mainCheckout)"
+        pass "Group B: gh pr merge from main worktree blocks (mainCheckout)"
     fi
 }
 
@@ -276,12 +276,12 @@ test_group_b_other_writes_scope_matrix() {
         else
             fail "Group B: '$c' from session worktree should allow ($out)"
         fi
-        # From main checkout → block
+        # From main worktree → block
         out="$(run_bash_guard "$c" "$main_repo" ENFORCE_WORKTREE=on)"
         if guard_decision "$out"; then
-            fail "Group B: '$c' from main checkout should block ($out)"
+            fail "Group B: '$c' from main worktree should block ($out)"
         else
-            pass "Group B: '$c' from main checkout blocks"
+            pass "Group B: '$c' from main worktree blocks"
         fi
         # From non-git dir → block
         out="$(run_bash_guard "$c" "$nongit" ENFORCE_WORKTREE=on)"
