@@ -194,7 +194,7 @@ test_N1_parent_dir_two_repos_allowed() {
 test_N2_mixed_individual_and_parent() {
     require_guard "N2" || return
 
-    # Individual extra repo (main checkout — direct entry, not via dir-scan).
+    # Individual extra repo (main worktree — direct entry, not via dir-scan).
     local main_individual="$TMPDIR_BASE/N2-individual"
     make_git_repo "$main_individual"
 

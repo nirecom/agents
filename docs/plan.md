@@ -98,7 +98,7 @@ DOs/DONTs は skill の手順そのものに encapsulate。
    - 検出時は「停止中コンテナ含む」「未検出時も image 化されていない開発スクリプトは別途要確認」とレポート
 7. **DRY RUN summary をユーザーに提示**:
    - 削除予定 path / 未追跡件数 / ignored 件数 / 保全対象 / Docker mount 影響 / 実行予定コマンド
-   - 保全先候補: main checkout / 別バックアップディレクトリ / 削除可（保全先は **ユーザー指定**）
+   - 保全先候補: main worktree / 別バックアップディレクトリ / 削除可（保全先は **ユーザー指定**）
 8. ユーザー承認後、保全コピー実行
 9. Bind mount しているプロセスを停止 → main パスから再起動（mount source 切替）
 10. `git worktree remove <path>` 実行（`--force` は **原則禁止**、必要時はステップ 4-8 完了 + 明示再承認後のみ）
