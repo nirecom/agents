@@ -47,7 +47,7 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
    Use the Write tool directly — do NOT run mkdir first (Write creates parent directories automatically).
    Use the schema below. The `<session-id>` must be the current Claude session ID.
    Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE` if available; otherwise use a
-   timestamp (`intent-YYYYMMDD-HHMMSS`) as fallback.
+   timestamp (`YYYYMMDD-HHMMSS`) as fallback.
 
 4. Present a one-paragraph summary of what was locked in. Do NOT gate on a confirmation
    `AskUserQuestion` here — the user already reviewed intent.md at the Write step.

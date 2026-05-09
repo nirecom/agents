@@ -27,12 +27,40 @@ must be read and passed to the planner before drafting begins.
 
 4. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
-   a. Write the planner's draft to the OS temp directory (NOT to `plans/`):
-      - Windows: `%TEMP%\<session-id>-detail-draft.md`
-      - POSIX:   `/tmp/<session-id>-detail-draft.md`
-   b. Run via Bash: `review-plan-codex --input <temp-file> --format detail-plan [--context ~/.claude/plans/<session-id>-outline.md]`
-      (omit `--context` if the outline file does not exist)
-   c. Parse the first line of stdout:
+   a. Write the planner's draft using the Write tool to:
+      `~/.claude/plans/drafts/<session-id>-detail-draft.md`
+
+      Defensive fallback: if `~/.claude/plans/drafts/` does not yet exist, run
+      `mkdir -p ~/.claude/plans/drafts` via Bash first (idempotent).
+   b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
+      On the first review round only, determine which prior-stage files exist:
+      - `~/.claude/plans/<session-id>-intent.md`
+      - `~/.claude/plans/<session-id>-outline.md`
+
+      Write `~/.claude/plans/drafts/<session-id>-context.md` with whichever sections apply
+      (English headers mandatory, source comments mandatory):
+      ```
+      <!-- Source: ~/.claude/plans/<session-id>-intent.md -->
+      ## Section 1: Intent (User Requirements)
+
+      <verbatim contents of <session-id>-intent.md>
+
+      ---
+
+      <!-- Source: ~/.claude/plans/<session-id>-outline.md -->
+      ## Section 2: Outline (Design Proposal)
+
+      <verbatim contents of <session-id>-outline.md>
+      ```
+      Fallback rules:
+      - If only the intent file exists: Section 1 only (no separator, no Section 2).
+      - If only the outline file exists: Section 2 only (no separator, no Section 1).
+      - If neither exists: skip context file; call review-plan-codex without `--context`.
+
+      On revision rounds 2+, reuse the context file from round 1 — do not regenerate.
+   c. Run via Bash: `review-plan-codex --input ~/.claude/plans/drafts/<session-id>-detail-draft.md --format detail-plan [--context ~/.claude/plans/drafts/<session-id>-context.md]`
+      (omit `--context` when no context file was created in step b)
+   d. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
         Extract the first non-blank line as the verdict token.
         - `APPROVED` → loop done, proceed to step 6.
@@ -41,7 +69,7 @@ must be read and passed to the planner before drafting begins.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
       - **Format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
       - **Codex unavailable**: emit `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
-   d. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 2), then repeat from step 4a. Each round consumes `revision_rounds`.
+   e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 2), then repeat from step 4a. Each round consumes `revision_rounds`.
 
 5. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
