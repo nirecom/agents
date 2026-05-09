@@ -24,7 +24,9 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    Display the PR URL.
 
 3. **Ask the user:**
-   `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
+   First output the PR URL as a clickable markdown link in the main conversation:
+   `PR #<N> is open: [<url>](<url>)`
+   Then call `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
    - **merge**: proceed to step 4.
    - **wait**: display URL and stop — do **not** clean up.
    - **abort**: display URL and close-PR guidance, then stop — do **not** clean up.

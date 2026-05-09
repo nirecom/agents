@@ -42,7 +42,8 @@ const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
 const {
   extractRedirectTargets, extractTeeTargets,
-  extractPwshWriteTargets, extractStagedFiles,
+  extractPwshWriteTargets, extractCpMvDestination,
+  extractStagedFiles,
 } = require("./lib/bash-write-targets");
 
 function readStdin() {
@@ -446,6 +447,11 @@ function collectBashWriteTargets(cmd) {
     const p = extractPwshWriteTargets(cmd);
     if (p === null) parseFailure = true;
     else targets.push(...p);
+  }
+  if (/(?:^|[\s;|&])(?:cp|mv)\b/.test(cmd)) {
+    const d = extractCpMvDestination(cmd);
+    if (d === null) parseFailure = true;
+    else targets.push(d);
   }
 
   return { targets: targets.length > 0 ? targets : null, parseFailure };
