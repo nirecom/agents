@@ -63,8 +63,8 @@
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and
   `.git/.cross-platform-reviewed` (one-time, HEAD hash)
 - `enforce-worktree.js` (PreToolUse, matcher: `Bash|Edit|Write|MultiEdit`) — when
-  `ENFORCE_WORKTREE=on` (default), blocks writes from the main checkout regardless
-  of branch, and blocks default-branch edits. Main-checkout detection: `--git-common-dir
+  `ENFORCE_WORKTREE=on` (default), blocks writes from the main worktree regardless
+  of branch, and blocks default-branch edits. Main-worktree detection: `--git-common-dir
   == --git-dir` (linked worktrees have differing values). Default-branch detection:
   `refs/remotes/origin/HEAD` → local `main`/`master` → `init.defaultBranch` → fallback
   `main`. Override via `DEFAULT_BRANCHES=develop,trunk,...` (comma-separated).

@@ -33,7 +33,7 @@ _load_env_file() {
 }
 _load_env_file
 
-# ENFORCE_WORKTREE defense-in-depth: block commit from main checkout or on default branch.
+# ENFORCE_WORKTREE defense-in-depth: block commit from main worktree or on default branch.
 # Mirrors hooks/enforce-worktree.js logic. Bash-side because git hooks run outside Node.
 # --- BEGIN temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 # AGENT_AUTO_BRANCH is read as a fallback with a deprecation warning.
@@ -99,7 +99,7 @@ if _is_enforce_worktree_on; then
     fi
 
     if [ "$_enforce_skip" = "0" ]; then
-        # Block commits from main checkout (--git-common-dir == --git-dir)
+        # Block commits from main worktree (--git-common-dir == --git-dir)
         _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
         _git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
         # Resolve to absolute paths before comparing (handles relative paths, symlinks,
@@ -107,7 +107,7 @@ if _is_enforce_worktree_on; then
         _git_common_dir_abs="$(cd "$_git_common_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_common_dir" | tr '[:upper:]' '[:lower:]')"
         _git_dir_abs="$(cd "$_git_dir" 2>/dev/null && pwd -P || printf '%s' "$_git_dir" | tr '[:upper:]' '[:lower:]')"
         if [ -n "$_git_common_dir_abs" ] && [ -n "$_git_dir_abs" ] && [ "$_git_common_dir_abs" = "$_git_dir_abs" ]; then
-            echo "ENFORCE_WORKTREE: commits from main checkout are blocked." >&2
+            echo "ENFORCE_WORKTREE: commits from main worktree are blocked." >&2
             echo "Work from a linked worktree. Run: /worktree-start <task-name>" >&2
             echo "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." >&2
             exit 1

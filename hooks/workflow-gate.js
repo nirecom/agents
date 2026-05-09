@@ -96,7 +96,7 @@ function isWorktreeContext(repoDir) {
       cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
     }).trim();
     const norm = (p) => path.resolve(repoDir, p).toLowerCase();
-    if (norm(common) === norm(dir)) return false;  // main checkout
+    if (norm(common) === norm(dir)) return false;  // main worktree
     const branch = execSync("git rev-parse --abbrev-ref HEAD", {
       cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
     }).trim();

@@ -6,7 +6,7 @@ do not call `git worktree add` / `git worktree remove` directly:
 - Start: `/worktree-start`
 - End (merge + cleanup): `/worktree-end`
 
-With `ENFORCE_WORKTREE=on` (default): main checkout is reserved for merge/pull only.
+With `ENFORCE_WORKTREE=on` (default): the main worktree is reserved for merge/pull only.
 All writes must happen from a linked worktree. Use `/worktree-start` to create one.
 With `ENFORCE_WORKTREE=off`: direct main work is allowed (trivial changes only).
 Set this in agents config (`.env`) when the isolation cost exceeds the benefit.
