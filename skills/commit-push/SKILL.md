@@ -52,7 +52,9 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
    - No PR or closed → `gh pr create --fill`.
    Display the PR URL.
 
-7. Ask the user via `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
+7. First output the PR URL as a clickable markdown link in the main conversation:
+   `PR #<N> is open: [<url>](<url>)`
+   Then ask via `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
    - **merge**: `gh pr merge --squash --delete-branch`
      Then: `git fetch --prune origin`
      Note: if working from a worktree, run `/worktree-end` afterward for full cleanup.
