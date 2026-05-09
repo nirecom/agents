@@ -123,9 +123,9 @@ test_main_checkout_on_main_blocks() {
     local out
     out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout on main: should block, got allow ($out)"
+        fail "main worktree on main: should block, got allow ($out)"
     else
-        pass "main checkout on main blocks Bash write"
+        pass "main worktree on main blocks Bash write"
     fi
 }
 
@@ -136,9 +136,9 @@ test_main_checkout_on_feature_branch_blocks() {
     local out
     out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout on feature branch: should still block (NEW logic)"
+        fail "main worktree on feature branch: should still block (NEW logic)"
     else
-        pass "main checkout always blocks (even on feature branch)"
+        pass "main worktree always blocks (even on feature branch)"
     fi
 }
 
@@ -179,7 +179,7 @@ test_off_mode_main_checkout_allows() {
     local out
     out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=off)"
     if guard_decision "$out"; then
-        pass "ENFORCE_WORKTREE=off allows main checkout"
+        pass "ENFORCE_WORKTREE=off allows main worktree"
     else
         fail "ENFORCE_WORKTREE=off should allow ($out)"
     fi
@@ -189,14 +189,14 @@ test_dash_C_to_main_repo_blocks() {
     require_guard "test_dash_C_to_main_repo_blocks" || return
     local pair; pair="$(setup_linked_worktree "g-dashC")"
     local main="${pair%|*}"; local wt="${pair#*|}"
-    # Run from worktree (allowed) but target main checkout via -C -> should block
+    # Run from worktree (allowed) but target main worktree via -C -> should block
     local cmd="git -C $main commit --allow-empty -m x"
     local out
     out="$(run_bash_guard "$cmd" "$wt" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
         fail "git -C <main-checkout>: should block ($out)"
     else
-        pass "git -C targets main checkout -> blocks"
+        pass "git -C targets main worktree -> blocks"
     fi
 }
 
@@ -227,7 +227,7 @@ test_non_git_dir_allows() {
 }
 
 test_main_checkout_detached_head_blocks() {
-    # New spec: main checkout is always blocked regardless of HEAD state.
+    # New spec: main worktree is always blocked regardless of HEAD state.
     require_guard "test_main_checkout_detached_head_blocks" || return
     local repo; repo="$(setup_main_checkout "g-detached-main")"
     local sha; sha="$(git -C "$repo" rev-parse HEAD)"
@@ -235,9 +235,9 @@ test_main_checkout_detached_head_blocks() {
     local out
     out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout detached HEAD: should block ($out)"
+        fail "main worktree detached HEAD: should block ($out)"
     else
-        pass "main checkout detached HEAD: blocks (main checkout always blocked)"
+        pass "main worktree detached HEAD: blocks (main worktree always blocked)"
     fi
 }
 
@@ -304,7 +304,7 @@ test_idempotency() {
     fi
 }
 
-# Verify the core detection premise: --git-common-dir == --git-dir on main checkout,
+# Verify the core detection premise: --git-common-dir == --git-dir on main worktree,
 # != --git-dir on linked worktree. Tests both the git invariant and the guard decision.
 test_git_common_dir_main_blocks() {
     require_guard "test_git_common_dir_main_blocks" || return
@@ -313,16 +313,16 @@ test_git_common_dir_main_blocks() {
     common_dir="$(git -C "$repo" rev-parse --git-common-dir 2>/dev/null)"
     git_dir="$(git -C "$repo" rev-parse --git-dir 2>/dev/null)"
     if [ "$(realpath "$common_dir" 2>/dev/null)" = "$(realpath "$git_dir" 2>/dev/null)" ]; then
-        pass "main checkout: --git-common-dir == --git-dir (detection premise holds)"
+        pass "main worktree: --git-common-dir == --git-dir (detection premise holds)"
     else
-        fail "main checkout: git-common-dir=$common_dir git-dir=$git_dir should be equal"
+        fail "main worktree: git-common-dir=$common_dir git-dir=$git_dir should be equal"
     fi
     local out
     out="$(run_bash_guard "echo x > $repo/foo" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout: guard should block (--git-common-dir == --git-dir)"
+        fail "main worktree: guard should block (--git-common-dir == --git-dir)"
     else
-        pass "main checkout: guard blocks when --git-common-dir == --git-dir"
+        pass "main worktree: guard blocks when --git-common-dir == --git-dir"
     fi
 }
 
@@ -405,9 +405,9 @@ test_gh_group_a_from_main_checkout_allows() {
     local out
     out="$(run_bash_guard "gh pr create --fill" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        pass "Group A (gh pr create) from main checkout: allow"
+        pass "Group A (gh pr create) from main worktree: allow"
     else
-        fail "Group A from main checkout: should allow ($out)"
+        fail "Group A from main worktree: should allow ($out)"
     fi
 }
 
@@ -417,9 +417,9 @@ test_gh_group_b_from_main_checkout_blocks() {
     local out
     out="$(run_bash_guard "gh pr merge 1" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "Group B (gh pr merge) from main checkout: should block ($out)"
+        fail "Group B (gh pr merge) from main worktree: should block ($out)"
     else
-        pass "Group B from main checkout: blocks (mainCheckout)"
+        pass "Group B from main worktree: blocks (mainCheckout)"
     fi
 }
 
@@ -479,45 +479,45 @@ test_main_checkout_ff_only_allowed() {
     require_guard "test_main_checkout_ff_only_allowed" || return
     local repo; repo="$(setup_main_checkout "g-ff-only")"
 
-    # Allow: ff-only merge from main checkout
+    # Allow: ff-only merge from main worktree
     local out
     out="$(run_bash_guard "git merge --ff-only origin/feature" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        pass "main checkout: git merge --ff-only allowed"
+        pass "main worktree: git merge --ff-only allowed"
     else
-        fail "main checkout: git merge --ff-only should allow ($out)"
+        fail "main worktree: git merge --ff-only should allow ($out)"
     fi
 
-    # Allow: ff-only pull from main checkout
+    # Allow: ff-only pull from main worktree
     out="$(run_bash_guard "git pull --ff-only origin main" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        pass "main checkout: git pull --ff-only allowed"
+        pass "main worktree: git pull --ff-only allowed"
     else
-        fail "main checkout: git pull --ff-only should allow ($out)"
+        fail "main worktree: git pull --ff-only should allow ($out)"
     fi
 
     # Block: plain git merge (no --ff-only)
     out="$(run_bash_guard "git merge feature" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout: plain git merge should block"
+        fail "main worktree: plain git merge should block"
     else
-        pass "main checkout: plain git merge blocks"
+        pass "main worktree: plain git merge blocks"
     fi
 
     # Block: --no-ff overrides --ff-only intent
     out="$(run_bash_guard "git merge --no-ff feature" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout: git merge --no-ff should block"
+        fail "main worktree: git merge --no-ff should block"
     else
-        pass "main checkout: git merge --no-ff blocks"
+        pass "main worktree: git merge --no-ff blocks"
     fi
 
     # Block: chained command — ff-only is fine but the chain may smuggle a write
     out="$(run_bash_guard "git merge --ff-only origin/feature && git push" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "main checkout: chained ff-only && push should block"
+        fail "main worktree: chained ff-only && push should block"
     else
-        pass "main checkout: chained ff-only && push blocks (hasShellChaining)"
+        pass "main worktree: chained ff-only && push blocks (hasShellChaining)"
     fi
 }
 

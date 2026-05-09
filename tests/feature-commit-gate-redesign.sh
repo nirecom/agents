@@ -253,11 +253,11 @@ RES_4="$(run_gate "$WT_4" "$(build_gate_json 'git commit -m x' "$SID_4" "$WT_4")
 if is_approve "$RES_4"; then pass "A4. git commit in worktree + uv:pending → approve (uv skipped)"
 else fail "A4. expected approve (worktree uv-skip), got: $RES_4"; fi
 
-# 5. git commit in main checkout + uv:pending → block
+# 5. git commit in main worktree + uv:pending → block
 SID_5="a5-$$"
 write_state "$SID_5" "$(state_json "$SID_5" "main" "pending" "complete")"
 RES_5="$(run_gate "$REPO_A" "$(build_gate_json 'git commit -m x' "$SID_5" "$REPO_A")")"
-if is_block "$RES_5"; then pass "A5. git commit in main checkout + uv:pending → block"
+if is_block "$RES_5"; then pass "A5. git commit in main worktree + uv:pending → block"
 else fail "A5. expected block, got: $RES_5"; fi
 
 # 6. gh pr merge + uv:pending → block, output mentions WORKFLOW_USER_VERIFIED
