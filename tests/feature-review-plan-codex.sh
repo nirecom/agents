@@ -592,6 +592,205 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 23. detail-plan --context: context markers appear in prompt
+# ---------------------------------------------------------------------------
+CTX_FILE="$TMPDIR_BASE/ctx-detail.md"
+printf 'INTENT_MARKER_ABCDEF\n---\nOUTLINE_MARKER_GHIJKL\n' > "$CTX_FILE"
+
+CAPTURE23="$TMPDIR_BASE/captured-23.txt"
+sed "s|CAPTURE_PLACEHOLDER|$CAPTURE23|" > "$MOCK_BIN/codex" << 'MOCK_EOF'
+#!/usr/bin/env bash
+cat > "CAPTURE_PLACEHOLDER"
+echo "APPROVED"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+exit_code23=0
+PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" \
+  --input "$PLAN_FILE" --format detail-plan --context "$CTX_FILE" --no-log \
+  >/dev/null 2>&1 || exit_code23=$?
+
+if [[ $exit_code23 -ne 0 ]]; then
+  fail "detail-plan --context: script exited with $exit_code23"
+elif grep -q "INTENT_MARKER_ABCDEF" "$CAPTURE23" && \
+     grep -q "OUTLINE_MARKER_GHIJKL" "$CAPTURE23" && \
+     grep -q "\[CONTEXT START\]" "$CAPTURE23" && \
+     grep -q "\[CONTEXT END\]" "$CAPTURE23"; then
+  pass "detail-plan --context: intent+outline markers and [CONTEXT START]/[CONTEXT END] present in prompt"
+else
+  fail "detail-plan --context: expected markers not found. Captured: $(cat "$CAPTURE23" 2>/dev/null | head -20)"
+fi
+
+# ---------------------------------------------------------------------------
+# 24. outline-plan --context: context marker appears in prompt (NEW wiring)
+# ---------------------------------------------------------------------------
+CTX_FILE2="$TMPDIR_BASE/ctx-outline.md"
+printf 'OUTLINE_CTX_MARKER_XYZ\n' > "$CTX_FILE2"
+
+CAPTURE24="$TMPDIR_BASE/captured-24.txt"
+sed "s|CAPTURE_PLACEHOLDER|$CAPTURE24|" > "$MOCK_BIN/codex" << 'MOCK_EOF'
+#!/usr/bin/env bash
+cat > "CAPTURE_PLACEHOLDER"
+echo "APPROVED directionally sound"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+exit_code24=0
+PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" \
+  --input "$PLAN_FILE" --format outline-plan --context "$CTX_FILE2" --no-log \
+  >/dev/null 2>&1 || exit_code24=$?
+
+if [[ $exit_code24 -ne 0 ]]; then
+  fail "outline-plan --context: script exited with $exit_code24"
+elif grep -q "OUTLINE_CTX_MARKER_XYZ" "$CAPTURE24" && \
+     grep -q "\[CONTEXT START\]" "$CAPTURE24"; then
+  pass "outline-plan --context: context marker and [CONTEXT START] present in prompt (new wiring)"
+else
+  fail "outline-plan --context: expected markers not found. Captured: $(cat "$CAPTURE24" 2>/dev/null | head -20)"
+fi
+
+# ---------------------------------------------------------------------------
+# 25. outline-plan without --context: [CONTEXT START] must NOT appear
+# ---------------------------------------------------------------------------
+CAPTURE25="$TMPDIR_BASE/captured-25.txt"
+sed "s|CAPTURE_PLACEHOLDER|$CAPTURE25|" > "$MOCK_BIN/codex" << 'MOCK_EOF'
+#!/usr/bin/env bash
+cat > "CAPTURE_PLACEHOLDER"
+echo "APPROVED directionally sound"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+exit_code25=0
+PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" \
+  --input "$PLAN_FILE" --format outline-plan --no-log \
+  >/dev/null 2>&1 || exit_code25=$?
+
+if [[ $exit_code25 -ne 0 ]]; then
+  fail "outline-plan no --context: script exited with $exit_code25"
+elif ! grep -q "\[CONTEXT START\]" "$CAPTURE25"; then
+  pass "outline-plan no --context: [CONTEXT START] correctly absent from prompt"
+else
+  fail "outline-plan no --context: [CONTEXT START] unexpectedly present in prompt"
+fi
+
+# ---------------------------------------------------------------------------
+# 26. detail-plan with empty --context file: [CONTEXT START] must NOT appear
+# ---------------------------------------------------------------------------
+CTX_EMPTY="$TMPDIR_BASE/ctx-empty.md"
+touch "$CTX_EMPTY"
+
+CAPTURE26="$TMPDIR_BASE/captured-26.txt"
+sed "s|CAPTURE_PLACEHOLDER|$CAPTURE26|" > "$MOCK_BIN/codex" << 'MOCK_EOF'
+#!/usr/bin/env bash
+cat > "CAPTURE_PLACEHOLDER"
+echo "APPROVED"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+exit_code26=0
+PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" \
+  --input "$PLAN_FILE" --format detail-plan --context "$CTX_EMPTY" --no-log \
+  >/dev/null 2>&1 || exit_code26=$?
+
+if [[ $exit_code26 -ne 0 ]]; then
+  fail "detail-plan empty --context: script exited with $exit_code26"
+elif ! grep -q "\[CONTEXT START\]" "$CAPTURE26"; then
+  pass "detail-plan empty --context: [CONTEXT START] correctly absent (empty file guard)"
+else
+  fail "detail-plan empty --context: [CONTEXT START] unexpectedly present despite empty context file"
+fi
+
+# ---------------------------------------------------------------------------
+# 27. make-detail-plan SKILL.md contains required context sections
+# ---------------------------------------------------------------------------
+DETAIL_SKILL="$AGENTS_ROOT/skills/make-detail-plan/SKILL.md"
+ERRS27=0
+
+check_detail() {
+  local pattern="$1"
+  if ! grep -qF -- "$pattern" "$DETAIL_SKILL"; then
+    fail "make-detail-plan SKILL.md missing: $pattern"
+    ERRS27=$((ERRS27 + 1))
+  fi
+}
+
+check_detail "## Section 1: Intent (User Requirements)"
+check_detail "## Section 2: Outline (Design Proposal)"
+check_detail "If only the intent file exists"
+check_detail "If only the outline file exists"
+check_detail "If neither exists"
+check_detail 'Source: ~/.claude/plans/<session-id>-intent.md'
+check_detail 'Source: ~/.claude/plans/<session-id>-outline.md'
+
+if [[ $ERRS27 -eq 0 ]]; then
+  pass "make-detail-plan SKILL.md: all required context section strings present"
+fi
+
+# ---------------------------------------------------------------------------
+# 28. SKILL.md files use drafts/ paths, not %TEMP% or /tmp/
+# ---------------------------------------------------------------------------
+OUTLINE_SKILL="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
+ERRS28=0
+
+# make-outline-plan: must contain drafts/ path and must NOT contain %TEMP% or /tmp/ draft refs
+if ! grep -qF '~/.claude/plans/drafts/<session-id>-outline-draft.md' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: missing ~/.claude/plans/drafts/<session-id>-outline-draft.md"
+  ERRS28=$((ERRS28 + 1))
+fi
+if grep -qF '%TEMP%' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: still contains %TEMP% reference (should use drafts/)"
+  ERRS28=$((ERRS28 + 1))
+fi
+if grep -qE '/tmp/[^/]*-outline-draft' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: still contains /tmp/<session-id>-outline-draft reference"
+  ERRS28=$((ERRS28 + 1))
+fi
+
+# make-detail-plan: must contain drafts/ path and must NOT contain %TEMP% or /tmp/ draft refs
+if ! grep -qF '~/.claude/plans/drafts/<session-id>-detail-draft.md' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: missing ~/.claude/plans/drafts/<session-id>-detail-draft.md"
+  ERRS28=$((ERRS28 + 1))
+fi
+if grep -qF '%TEMP%' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: still contains %TEMP% reference (should use drafts/)"
+  ERRS28=$((ERRS28 + 1))
+fi
+if grep -qE '/tmp/[^/]*-detail-draft' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: still contains /tmp/<session-id>-detail-draft reference"
+  ERRS28=$((ERRS28 + 1))
+fi
+
+if [[ $ERRS28 -eq 0 ]]; then
+  pass "SKILL.md files: both use ~/.claude/plans/drafts/ paths (not %TEMP% or /tmp/)"
+fi
+
+# ---------------------------------------------------------------------------
+# 29. make-outline-plan SKILL.md contains required context wiring strings
+# ---------------------------------------------------------------------------
+ERRS29=0
+
+check_outline() {
+  local pattern="$1"
+  if ! grep -qF -- "$pattern" "$OUTLINE_SKILL"; then
+    fail "make-outline-plan SKILL.md missing: $pattern"
+    ERRS29=$((ERRS29 + 1))
+  fi
+}
+
+check_outline '--context ~/.claude/plans/drafts/<session-id>-context.md'
+check_outline 'Source: ~/.claude/plans/<session-id>-intent.md'
+check_outline '~/.claude/plans/drafts/<session-id>-context.md'
+check_outline '## Section 1: Intent (User Requirements)'
+
+if [[ $ERRS29 -eq 0 ]]; then
+  pass "make-outline-plan SKILL.md: all required context wiring strings present"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
