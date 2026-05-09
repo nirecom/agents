@@ -87,9 +87,11 @@ const WRITE_PATTERNS = [
   // git-branch-mutate: anchor flags at whitespace-delimited positions to avoid
   // false-positives where branch names contain literal "-d", "-c", etc.
   // (e.g., `git branch agents-env-consolidate` formerly matched `-c`).
-  // -d/-D (delete) modify only git refs, not the working tree — treated as read.
-  // Only rename (-m/-M) and copy (-c/-C) are write (they create new refs).
-  { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[mMcC](?:\s|$)/ },
+  // -d/-D (delete), -m/-M (rename), -c/-C (copy) all mutate refs — write.
+  // Branch deletion is gated by enforce-worktree's marker-file exemption
+  // (isAllowedBranchDeleteViaMarker), which only /worktree-end produces;
+  // direct invocations from any worktree are blocked at the hook level.
+  { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[dDmMcC](?:\s|$)/ },
   { name: "git-checkout-force", kind: "git", regex: /\bgit\b.*\bcheckout\b.*(?:--|\.|\bHEAD\b)/ },
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
   { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\b.*\b(?:push|pop|drop|clear|apply)\b/ },

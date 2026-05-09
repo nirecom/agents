@@ -221,7 +221,7 @@ test_bug2_multiedit_all_non_session_allows() {
 test_bug2_bash_redirect_non_session_allows() {
     # Critical Codex case: redirect target is in non-session repo, cwd is in
     # session repo. Without the fix, findRepoRootForBash returns the cwd repo
-    # (in-session main checkout) and the write is blocked. With the fix, the
+    # (in-session main worktree) and the write is blocked. With the fix, the
     # extracted redirect target is checked against session scope and the
     # non-session target allows.
     require_guard "test_bug2_bash_redirect_non_session_allows" || return
@@ -277,7 +277,7 @@ test_bug2_bash_redirect_non_repo_path_allows() {
 }
 
 test_bug2_bash_redirect_mixed_blocks() {
-    # Invariant: if ANY target is in-session main checkout, block.
+    # Invariant: if ANY target is in-session main worktree, block.
     # Use stdout=in-session, stderr=non-session redirect — both are extracted.
     require_guard "test_bug2_bash_redirect_mixed_blocks" || return
     local in_sess; in_sess="$(setup_main_checkout "B2-mix-in-sess")"
@@ -307,14 +307,14 @@ test_bug2_bash_git_c_non_session_allows() {
 }
 
 test_bug2_regression_edit_in_session_main_blocks() {
-    # Regression: main checkout writes are still blocked even with session-scope.
+    # Regression: main worktree writes are still blocked even with session-scope.
     require_guard "test_bug2_regression_edit_in_session_main_blocks" || return
     local in_sess; in_sess="$(setup_main_checkout "B2-reg-in-sess")"
     local out; out="$(run_edit_guard "$in_sess/README.md" "$in_sess" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "Regression: Edit on in-session main checkout should block ($out)"
+        fail "Regression: Edit on in-session main worktree should block ($out)"
     else
-        pass "Regression: Edit on in-session main checkout blocks"
+        pass "Regression: Edit on in-session main worktree blocks"
     fi
 }
 
@@ -519,9 +519,9 @@ test_regression_exclude_unset_blocks_main() {
     local repo; repo="$(setup_main_checkout "REG-no-excl")"
     local out; out="$(run_edit_guard "$repo/README.md" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "Regression: Edit on main checkout (no EXCLUDE) should block ($out)"
+        fail "Regression: Edit on main worktree (no EXCLUDE) should block ($out)"
     else
-        pass "Regression: Edit on main checkout (no EXCLUDE) blocks"
+        pass "Regression: Edit on main worktree (no EXCLUDE) blocks"
     fi
 }
 
