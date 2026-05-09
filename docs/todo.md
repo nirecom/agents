@@ -73,6 +73,19 @@ multi-file 偽造を要求できる。
 - [ ] `skills/worktree-end/SKILL.md`：register 検査の言及
 - [ ] tests/feature-marker-session-binding.sh：unit + e2e
 
+### enforce-worktree.js: `isBranchDeleteCommand` の subcommand-position regex バグ
+
+PR #21 で追加した `isBranchDeleteCommand` の regex `\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)` は **コマンド全体に対する部分一致**で、heredoc 内などの引用文字列に "git branch dash-d" 系の substring が含まれると意図せず match する。
+
+**実害**: docs(todo) commit 等で commit message subject に "branch dash-d" を書くと、`git -C ... commit -m "...branch dash-d..."` 全体に対して isBranchDeleteCommand が true を返し、marker gate に弾かれる（実際にこの todo を作る commit でこのバグに遭遇）。
+
+**根本原因**: 既存の `git-commit` 等の WRITE_PATTERNS は同じ pattern 構造で同様の偽陽性が起きるが、classify はそもそも fail-safe で "write" 寄りに倒すので問題化しない。一方 marker gate は「branch delete である」を確定するためのチェックなので、同じ pattern では精度不足。
+
+**修正候補**:
+- [ ] subcommand position を厳密に anchor（コマンド先頭または `;`/`&&`/`||` 直後の `git` invocation のみ判定。`-m`/`-c` 等の引数値（quoted）はスキップする shell-aware 解析）
+- [ ] もしくは、classify が既に他の write pattern（`git-commit` 等）にマッチしている場合は marker gate を skip — ただし `git branch -d foo; git commit ...` のような sequencing は元々 `hasShellChaining` で reject されるので衝突は起きにくい
+- [ ] 当面の運用回避：commit message に "branch dash-d" / "branch dash-D" 文字列を書かない（テスト・ドキュメントで不便）
+
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
 - [x] [rohitg00/awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit) へエントリ追加 PR — [PR #363](https://github.com/rohitg00/awesome-claude-code-toolkit/pull/363)
