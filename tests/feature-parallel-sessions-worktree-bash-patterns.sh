@@ -198,6 +198,13 @@ READ_CASES=(
     'ls >/dev/null'
     'cmd &>/dev/null'
     'grep pattern file 2>/dev/null'
+    # Bug 3: git-commit regex must not false-positive on filenames containing "commit"
+    # `git log -- <pathspec>` and `git diff -- <pathspec>` are read-only even when
+    # pathspec contains the literal token "commit" (e.g., hooks/pre-commit).
+    'git log -- hooks/pre-commit'
+    'git log -- pre-commit.js'
+    'git log --grep="commit message"'
+    'git diff -- pre-commit'
 )
 
 test_read_cases() {
@@ -415,6 +422,28 @@ test_git_update_ref_write() {
         'git -C /path update-ref refs/heads/feat HEAD' "write"
 }
 
+# ============ Bug 3: git-commit regex must require commit at subcommand position =====
+# Old regex /\bgit\b.*\bcommit\b/ false-positives on filenames like hooks/pre-commit.
+# New regex must allow `git -<flag> [arg] commit` (subcommand position) as write,
+# but treat `commit` appearing only inside a pathspec/grep arg as read.
+test_git_commit_subcommand_position() {
+    # Real commits — must be classified as write
+    assert_classify "git commit -m" 'git commit -m x' "write"
+    assert_classify "git -c <kv> commit -m" \
+        'git -c core.safecrlf=false commit -m x' "write"
+    assert_classify "git --no-pager commit -m" \
+        'git --no-pager commit -m x' "write"
+    # Read-only commands where "commit" appears as a filename or grep value
+    assert_classify "git log -- hooks/pre-commit (filename pathspec)" \
+        'git log -- hooks/pre-commit' "read"
+    assert_classify "git log -- pre-commit.js (filename pathspec)" \
+        'git log -- pre-commit.js' "read"
+    assert_classify "git log --grep=\"commit message\"" \
+        'git log --grep="commit message"' "read"
+    assert_classify "git diff -- pre-commit (filename pathspec)" \
+        'git diff -- pre-commit' "read"
+}
+
 # ============ Run all ============
 
 test_write_cases
@@ -444,6 +473,7 @@ test_git_branch_name_no_false_positive
 test_gh_group_a_with_heredoc_classified_read
 test_gh_group_a_with_redirect_still_write
 test_git_update_ref_write
+test_git_commit_subcommand_position
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
