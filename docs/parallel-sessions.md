@@ -76,7 +76,7 @@ C:\git\worktrees\
 
 ## Defense Layers
 
-Three enforcement layers prevent accidental writes to the main checkout:
+Three enforcement layers prevent accidental writes to the main worktree:
 
 | Layer | Mechanism | Trigger |
 |---|---|---|
@@ -85,14 +85,14 @@ Three enforcement layers prevent accidental writes to the main checkout:
 | Skill guidance | `/worktree-start` procedure | Session setup |
 
 The hook blocks when:
-- The tool targets the **main checkout** (`--git-common-dir == --git-dir`), regardless of branch.
+- The tool targets the **main worktree** (`--git-common-dir == --git-dir`), regardless of branch.
 - The tool targets a **protected branch** (main/master) even inside a linked worktree.
 
 ## `ENFORCE_WORKTREE=on` vs `off`
 
 | Behavior | `on` (default) | `off` |
 |---|---|---|
-| Writes from main checkout | Blocked — `enforce-worktree.js` (PreToolUse) + `pre-commit` | Allowed |
+| Writes from main worktree | Blocked — `enforce-worktree.js` (PreToolUse) + `pre-commit` | Allowed |
 | Protected-branch commits | Blocked — `pre-commit` | Allowed |
 | Merge gate (`gh pr merge` / `git push origin main`) | Blocks until `user_verification` complete — **unconditional** in both modes | Same — unconditional |
 | PR flow in `/commit-push` | PR created; `AskUserQuestion`: merge / wait / abort | PR step skipped — commit goes direct |
@@ -109,9 +109,9 @@ ENFORCE_WORKTREE=off   # trivial one-liner; re-enable immediately after
 
 ## Troubleshooting
 
-**Bash write blocked on main checkout:**
+**Bash write blocked on main worktree:**
 ```
-ENFORCE_WORKTREE: write blocked. Reason: main checkout (branch 'main').
+ENFORCE_WORKTREE: write blocked. Reason: main worktree (branch 'main').
 ```
 → Run `/worktree-start <task-name>` and continue from the worktree.
 
