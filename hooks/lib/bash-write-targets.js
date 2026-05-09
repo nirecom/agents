@@ -250,6 +250,34 @@ function extractPwshWriteTargets(cmd) {
 }
 
 /**
+ * Extract the destination path of a POSIX cp or mv command.
+ *
+ * cp [flags] source... dest — returns last positional arg (destination)
+ * mv [flags] source dest   — same
+ *
+ * Returns: string on success, null on parse failure (unresolvable token or
+ * fewer than 2 positional args).
+ */
+function extractCpMvDestination(cmd) {
+  if (!cmd || typeof cmd !== "string") return null;
+
+  const RE = /(?:^|[\s;|&])(?:cp|mv)\b(.*?)(?:$|[;|&](?:[^|&]|$))/s;
+  const m = RE.exec(cmd);
+  if (!m) return null;
+
+  const tokens = m[1].trim().split(/\s+/).filter(Boolean);
+  const positionals = [];
+  for (const t of tokens) {
+    if (isUnresolvableToken(t)) return null;
+    if (t === "--") break;
+    if (t.startsWith("-")) continue;
+    positionals.push(t);
+  }
+  if (positionals.length < 2) return null;
+  return positionals[positionals.length - 1];
+}
+
+/**
  * Get the list of staged files in a git repo as absolute paths.
  *
  * Returns: string[] on success (may be empty), null on failure.
@@ -273,5 +301,6 @@ module.exports = {
   extractRedirectTargets,
   extractTeeTargets,
   extractPwshWriteTargets,
+  extractCpMvDestination,
   extractStagedFiles,
 };

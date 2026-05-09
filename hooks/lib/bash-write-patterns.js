@@ -87,8 +87,9 @@ const WRITE_PATTERNS = [
   // git-branch-mutate: anchor flags at whitespace-delimited positions to avoid
   // false-positives where branch names contain literal "-d", "-c", etc.
   // (e.g., `git branch agents-env-consolidate` formerly matched `-c`).
-  // -d (merged delete) is read-only; only -D/-m/-M/-c/-C are write.
-  { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[DmMcC](?:\s|$)/ },
+  // -d/-D (delete) modify only git refs, not the working tree — treated as read.
+  // Only rename (-m/-M) and copy (-c/-C) are write (they create new refs).
+  { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[mMcC](?:\s|$)/ },
   { name: "git-checkout-force", kind: "git", regex: /\bgit\b.*\bcheckout\b.*(?:--|\.|\bHEAD\b)/ },
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
   { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\b.*\b(?:push|pop|drop|clear|apply)\b/ },
