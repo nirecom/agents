@@ -65,6 +65,14 @@ function isTestFile(filePath) {
   );
 }
 
+// ── plan-draft detection ──────────────────────────────────────────────────────
+
+function isPlanDraftFile(filePath) {
+  if (!filePath) return false;
+  const p = filePath.replace(/\\/g, "/");
+  return p.includes("/.claude/plans/drafts/");
+}
+
 // ── diff generation ───────────────────────────────────────────────────────────
 
 function makeDiff(oldStr, newStr, label) {
@@ -109,6 +117,7 @@ if (require.main === module) {
 
   if (!filePath) noopExit();
   if (isTestFile(filePath)) noopExit();
+  if (isPlanDraftFile(filePath)) noopExit();
 
   // ── build diff text ─────────────────────────────────────────────────────────
 
