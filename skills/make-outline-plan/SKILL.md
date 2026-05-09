@@ -40,11 +40,26 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - Re-prompt outline-planner with the research findings. (Research budget: 2 rounds.)
 
 5. **Review the approach with codex first, fall back to Claude if unavailable.**
-   Write the outline-planner's output to the OS temp directory (NOT to `plans/`):
-   - Windows: `%TEMP%\<session-id>-outline-draft.md`
-   - POSIX:   `/tmp/<session-id>-outline-draft.md`
-   Then: `review-plan-codex --input <temp-file> --format outline-plan`
-   Parse the first line:
+   a. Write the outline-planner's output to the Claude-managed drafts directory
+      (survives compaction; OS temp does not):
+      `~/.claude/plans/drafts/<session-id>-outline-draft.md`
+
+      Defensive fallback: if `~/.claude/plans/drafts/` does not yet exist, run
+      `mkdir -p ~/.claude/plans/drafts` via Bash first (idempotent).
+   b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
+      If `~/.claude/plans/<session-id>-intent.md` exists and the context file has not
+      been built this run, write `~/.claude/plans/drafts/<session-id>-context.md`:
+      ```
+      <!-- Source: ~/.claude/plans/<session-id>-intent.md -->
+      ## Section 1: Intent (User Requirements)
+
+      <verbatim contents of <session-id>-intent.md>
+      ```
+      If the intent file does not exist or is empty, skip the context file.
+   c. Run via Bash:
+      `review-plan-codex --input ~/.claude/plans/drafts/<session-id>-outline-draft.md --format outline-plan --context ~/.claude/plans/drafts/<session-id>-context.md`
+      (omit `--context ~/.claude/plans/drafts/<session-id>-context.md` when no context file was created in step b).
+   d. Parse the first line:
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
      - `APPROVED` → proceed to step 7.
      - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
