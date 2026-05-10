@@ -37,13 +37,54 @@ bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-i
    bash-write-patterns.js は `git branch -d/-D` を write 分類のままだが、`/worktree-end` が
    `<git-common-dir>/info/pending-branch-delete` に target branch + worktree path を書き出し、
    enforce-worktree.js が marker と一致した場合のみ削除を許可する。直接の ad-hoc 実行は引き続きブロック。
+   ※ marker 方式は prompt 依存で偽造耐性が弱い → 強化案を別エントリ「enforce-worktree marker の二重検証強化」に記載。
 
 **解決候補**:
 - [x] `review-code-codex` に staged diff フォールバックを追加 — PR #7 で実装済み（commit なし時は `git diff --cached` を自動使用）
 - [ ] 中間 commit / fixup commit は `user_verification` gate を免除するモードを追加（`--wip` フラグ等）
 - [ ] ワークフロー手順に「実装ステップごとに WIP commit を積む」を明記（運用回避）
 - [ ] `resolveRepoDir` に worktrees ディレクトリのスキャンを追加（staged 変更検出の精度向上）
-- [x] `git branch -d`（マージ済みブランチ削除）を bash-write-patterns.js で read 扱いに変更 — fix/enforce-worktree-merge-gate で実装
+- [x] `git branch -d/-D` のブロック解消 — PR #17 (`fix/enforce-worktree-merge-gate`) で `git branch -d` を read 扱いに変更 → PR #20 で `-D` も同様に → PR #21 で read 分類自体を撤回し、`/worktree-end` の marker file 認可方式に置換（最終形は本セクション パターン 5 の取り消し線エントリ参照）
+
+### enforce-worktree marker の二重検証強化
+
+現状の `git branch -d/-D` の marker file 認可（PR #21）は prompt 依存：
+`/worktree-end` SKILL の指示に従って Claude が Write tool で
+`<git-common-dir>/info/pending-branch-delete` を作成しているだけで、
+別 session の Claude も同じパスに任意の (branch, path) ペアを書けば
+gate を回避できる。accidental ミスは防げるが、意図的 bypass は防げない。
+
+**強化案（accidental は完全防御、intentional は多重偽造を要求）**:
+- (a) 既存：marker target == cmd target
+- (b) 既存：marker worktree path が `WORKTREE_BASE_DIR` 配下
+- (c) 新規：marker worktree path が `git worktree list --porcelain` に**現存**
+- (d) 新規：`session-start.js` が SessionStart で
+  `<state-dir>/<session-id>.worktree` に「この session が居る worktree path」を
+  記録 → hook stdin の `session_id` で引いて marker worktree path と一致確認
+
+**副作用**：worktree 撤去後の orphan local branch の事後 cleanup は
+marker 経由不能 → ENFORCE_WORKTREE=off + 手動削除が唯一の道に。
+intentional な register file 上書き bypass は依然可能だが、
+multi-file 偽造を要求できる。
+
+**実装範囲**:
+- [ ] `hooks/session-start.js`：worktree binding 記録（main worktree 内なら何も書かない＝branch 削除権限なし）
+- [ ] `hooks/enforce-worktree.js`：`isAllowedBranchDeleteViaMarker` 拡張で (c) (d) を追加
+- [ ] `skills/worktree-end/SKILL.md`：register 検査の言及
+- [ ] tests/feature-marker-session-binding.sh：unit + e2e
+
+### enforce-worktree.js: `isBranchDeleteCommand` の subcommand-position regex バグ
+
+PR #21 で追加した `isBranchDeleteCommand` の regex `\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)` は **コマンド全体に対する部分一致**で、heredoc 内などの引用文字列に "git branch dash-d" 系の substring が含まれると意図せず match する。
+
+**実害**: docs(todo) commit 等で commit message subject に "branch dash-d" を書くと、`git -C ... commit -m "...branch dash-d..."` 全体に対して isBranchDeleteCommand が true を返し、marker gate に弾かれる（実際にこの todo を作る commit でこのバグに遭遇）。
+
+**根本原因**: 既存の `git-commit` 等の WRITE_PATTERNS は同じ pattern 構造で同様の偽陽性が起きるが、classify はそもそも fail-safe で "write" 寄りに倒すので問題化しない。一方 marker gate は「branch delete である」を確定するためのチェックなので、同じ pattern では精度不足。
+
+**修正候補**:
+- [ ] subcommand position を厳密に anchor（コマンド先頭または `;`/`&&`/`||` 直後の `git` invocation のみ判定。`-m`/`-c` 等の引数値（quoted）はスキップする shell-aware 解析）
+- [ ] もしくは、classify が既に他の write pattern（`git-commit` 等）にマッチしている場合は marker gate を skip — ただし `git branch -d foo; git commit ...` のような sequencing は元々 `hasShellChaining` で reject されるので衝突は起きにくい
+- [ ] 当面の運用回避：commit message に "branch dash-d" / "branch dash-D" 文字列を書かない（テスト・ドキュメントで不便）
 
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
