@@ -86,6 +86,20 @@ PR #21 で追加した `isBranchDeleteCommand` の regex `\bgit\s+(?:-\S+(?:\s+[
 - [ ] もしくは、classify が既に他の write pattern（`git-commit` 等）にマッチしている場合は marker gate を skip — ただし `git branch -d foo; git commit ...` のような sequencing は元々 `hasShellChaining` で reject されるので衝突は起きにくい
 - [ ] 当面の運用回避：commit message に "branch dash-d" / "branch dash-D" 文字列を書かない（テスト・ドキュメントで不便）
 
+### bash-write-patterns: 単純 token regex の引数文字列での偽陽性
+
+`isBranchDeleteCommand` のバグ（上記）と同根の、より広範な問題。`cp`/`mv`/`rm`/`tee`/`touch` などの WRITE_PATTERNS は `(?:^|[\s;|&])cmd\b` で「コマンド先頭または区切り直後」を anchor しているが、**コマンド全体に対する部分一致**なので、これらの token が **別コマンドの quoted 引数に substring として現れる**と誤発火する。
+
+**実害例**:
+- `doc-append --subject "POSIX file cp/mv blocked"` — `cp` パターンと `mv` パターン両方が引数文字列内で発火、commit/edit 操作が write 扱いに。本 retrofit 作業中に実際に遭遇（reword で回避）。
+- 一般的に、CHANGELOG/history.md/commit message 等で UNIX コマンド名を **言及するだけ**でブロックされる。文書化作業の頻繁な阻害要因。
+
+**根本原因**: `isBranchDeleteCommand` と同じく shell-aware なパース（quoted argument を skip する）が必要。既存 patterns は fail-safe で write に倒すため classify レベルでは「過剰ブロック」で済んでいたが、文書化作業の現実的なノイズ源になっている。
+
+**修正候補**:
+- [ ] WRITE_PATTERNS 全体を shell-aware パーサで判定するよう書き換え（quoted 引数を除外してから regex を当てる）
+- [ ] `isBranchDeleteCommand` 修正と同時に対応すると共有設計が立てられる
+
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
 - [x] [rohitg00/awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit) へエントリ追加 PR — [PR #363](https://github.com/rohitg00/awesome-claude-code-toolkit/pull/363)
