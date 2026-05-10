@@ -5,9 +5,11 @@
 ### install/win/global-gitignore.ps1 の Pester テスト追加
 
 bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-installer-ignore.sh` でカバーされているが、PowerShell 版 (`global-gitignore.ps1`) は無テスト。今回 `.Count` バグ（空 Where-Object 結果での null 参照）が production で初めて発覚したのはこのカバレッジ欠落が原因。
-- [ ] Pester ベースのテストファイル追加 (`tests/feature-parallel-sessions-worktree-installer-ignore.Tests.ps1`)
-- [ ] bash 版と同等のケース網羅: 初回作成、idempotent 再実行、既存ファイル末尾追記、マーカー破損 (BEGIN-only / END-only / 2x BEGIN)、空ファイル、巨大ファイル
+- [x] Pester ベースのテストファイル追加 (`tests/feature-parallel-sessions-worktree-installer-ignore.Tests.ps1`)
+- [x] bash 版と同等のケース網羅: 15 ケース (T01-T15) — 14 passed / 1 skipped (T15: TestDrive 上 icacls deny 不可)
 - [ ] CI で Windows 上で実行されるよう設定（GitHub Actions windows-latest 等）
+
+**Verifying** — ユーザー確認待ち
 
 ### commit gate の「commit 前ステップが commit 後の状態に依存する」設計矛盾
 
