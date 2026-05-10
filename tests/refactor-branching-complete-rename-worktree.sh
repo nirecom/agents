@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/refactor-branching-complete-rename-worktree.sh
 #
-# Tests for enforce-worktree.js: worktree lifecycle commands allowed from main checkout.
+# Tests for enforce-worktree.js: worktree lifecycle commands allowed from main worktree.
 # Covers: git worktree add/remove/prune and New-Item -ItemType Directory.
 #
 # Requires: node, git
@@ -20,8 +20,22 @@ run_with_timeout() {
     if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"; else "$@"; fi
 }
 
+# Convert a Windows-style path (C:/foo or C:\foo) to Unix-style (/c/foo).
+# Returns empty string if input is not a Windows-style path.
+to_unix_style_path() {
+    local p="$1"
+    if [[ "$p" =~ ^([A-Za-z]):[/\\] ]]; then
+        local drive_lower
+        drive_lower="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]')"
+        local rest="${p#?:}"
+        rest="${rest//\\/\/}"
+        rest="${rest#/}"
+        echo "/$drive_lower/$rest"
+    fi
+}
+
 # ---------------------------------------------------------------------------
-# Setup: a temp git repo that acts as the main checkout
+# Setup: a temp git repo that acts as the main worktree
 # ---------------------------------------------------------------------------
 TMPDIR_BASE="$(node -e "
 const os=require('os'),path=require('path'),fs=require('fs');
@@ -44,11 +58,11 @@ git -C "$MAIN_REPO" commit -q -m "initial"
 
 # External path (outside the repo)
 EXT_PATH="$TMPDIR_BASE/worktrees/my-task/repo"
-# In-repo path (would be inside the main checkout)
+# In-repo path (would be inside the main worktree)
 INREPO_PATH="$MAIN_REPO/subdir"
 
 # ---------------------------------------------------------------------------
-# Helper: run the hook with a Bash command from the "main checkout" context
+# Helper: run the hook with a Bash command from the "main worktree" context
 # AGENTS_CONFIG_DIR points to MAIN_REPO so New-Item / mkdir fall back there.
 # ---------------------------------------------------------------------------
 run_hook() {
@@ -60,20 +74,43 @@ run_hook() {
                 console.log(d.replace(/\\\\/g,'\\\\\\\\').replace(/\"/g,'\\\\\"').replace(/\n/g,'\\\\n'));
             });
         " 2>/dev/null)")"
-    ENFORCE_WORKTREE=on \
-    AGENTS_CONFIG_DIR="$MAIN_REPO" \
-    run_with_timeout 15 node "$HOOK" <<< "$input" 2>/dev/null
+    ( cd "$MAIN_REPO" && \
+      ENFORCE_WORKTREE=on \
+      AGENTS_CONFIG_DIR="$MAIN_REPO" \
+      run_with_timeout 15 node "$HOOK" <<< "$input" 2>/dev/null )
 }
 
 # Returns 0 if hook allows (output is "{}"), 1 if blocked.
 is_allowed() { [[ "$(run_hook "$1")" == "{}" ]]; }
 is_blocked()  { [[ "$(run_hook "$1")" != "{}" ]]; }
 
+# Like run_hook, but executes node with cwd set to the given directory.
+# This ensures process.cwd() inside the hook is a valid Windows path on Git Bash,
+# so findRepoRootForBash can fall back to process.cwd() correctly.
+run_hook_cwd() {
+    local cmd="$1"
+    local cwd="$2"
+    local input
+    input="$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' \
+        "$(printf '%s' "$cmd" | node -e "
+            let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+                console.log(d.replace(/\\\\/g,'\\\\\\\\').replace(/\"/g,'\\\\\"').replace(/\n/g,'\\\\n'));
+            });
+        " 2>/dev/null)")"
+    ( cd "$cwd" && \
+      ENFORCE_WORKTREE=on \
+      AGENTS_CONFIG_DIR="$MAIN_REPO" \
+      run_with_timeout 15 node "$HOOK" <<< "$input" 2>/dev/null )
+}
+
+is_allowed_cwd() { [[ "$(run_hook_cwd "$1" "$2")" == "{}" ]]; }
+is_blocked_cwd()  { [[ "$(run_hook_cwd "$1" "$2")" != "{}" ]]; }
+
 # ---------------------------------------------------------------------------
 # WL-1: git worktree add <external-path> -b <branch> — ALLOW
 # ---------------------------------------------------------------------------
 if is_allowed "git -C \"$MAIN_REPO\" worktree add \"$EXT_PATH\" -b feature/x"; then
-    pass "WL-1. git worktree add <ext-path> -b branch — allowed from main checkout"
+    pass "WL-1. git worktree add <ext-path> -b branch — allowed from main worktree"
 else
     fail "WL-1. git worktree add <ext-path> -b branch — should be allowed"
 fi
@@ -127,7 +164,7 @@ fi
 # WL-7: git worktree remove <path> — ALLOW
 # ---------------------------------------------------------------------------
 if is_allowed "git -C \"$MAIN_REPO\" worktree remove \"$EXT_PATH\""; then
-    pass "WL-7. git worktree remove <path> — allowed from main checkout"
+    pass "WL-7. git worktree remove <path> — allowed from main worktree"
 else
     fail "WL-7. git worktree remove — should be allowed"
 fi
@@ -136,7 +173,7 @@ fi
 # WL-8: git worktree prune — ALLOW
 # ---------------------------------------------------------------------------
 if is_allowed "git -C \"$MAIN_REPO\" worktree prune"; then
-    pass "WL-8. git worktree prune — allowed from main checkout"
+    pass "WL-8. git worktree prune — allowed from main worktree"
 else
     fail "WL-8. git worktree prune — should be allowed"
 fi
@@ -180,6 +217,47 @@ if is_allowed "git -C \"$MAIN_REPO\" worktree list --porcelain"; then
 else
     fail "WL-12. git worktree list should be allowed (read-only)"
 fi
+
+# ---------------------------------------------------------------------------
+# WL-13/WL-14: POSIX drive-letter paths (Git Bash on Windows) — Windows-only.
+# Without normalizeCwd, path.resolve("/c/git/foo") on Windows misresolves to
+# C:\c\git\foo, breaking the inside/outside comparison.
+# ---------------------------------------------------------------------------
+case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+        UNIX_MAIN_REPO="$(to_unix_style_path "$MAIN_REPO")"
+        UNIX_EXT_PATH="$(to_unix_style_path "$EXT_PATH")"
+        UNIX_INREPO_PATH="$(to_unix_style_path "$INREPO_PATH")"
+
+        if [ -n "$UNIX_MAIN_REPO" ] && [ -n "$UNIX_EXT_PATH" ]; then
+            if is_allowed_cwd "git -C \"$UNIX_MAIN_REPO\" worktree add \"$UNIX_EXT_PATH\" -b feature/x" "$MAIN_REPO"; then
+                pass "WL-13. git worktree add with POSIX-drive paths (ext) — allowed"
+            else
+                fail "WL-13. POSIX-drive external path should be allowed"
+            fi
+        else
+            pass "WL-13. skipped (could not derive POSIX paths)"
+        fi
+
+        if [ -n "$UNIX_MAIN_REPO" ] && [ -n "$UNIX_INREPO_PATH" ]; then
+            # WL-14 is the regression guard for the bug:
+            # pre-fix: normalization missing → /c/.../repo/subdir resolves to
+            # C:\c\...\repo\subdir which does NOT start with C:\...\repo\ → falsely ALLOWED.
+            # post-fix: normalizeCwd converts both sides to C:\... → correctly BLOCKED.
+            if is_blocked_cwd "git -C \"$UNIX_MAIN_REPO\" worktree add \"$UNIX_INREPO_PATH\" -b feature/x" "$MAIN_REPO"; then
+                pass "WL-14. git worktree add with POSIX-drive in-repo path — blocked"
+            else
+                fail "WL-14. POSIX-drive in-repo path should be blocked (pre-fix bug)"
+            fi
+        else
+            pass "WL-14. skipped (could not derive POSIX paths)"
+        fi
+        ;;
+    *)
+        pass "WL-13. skipped on non-Windows (POSIX drive paths are Git Bash-specific)"
+        pass "WL-14. skipped on non-Windows (POSIX drive paths are Git Bash-specific)"
+        ;;
+esac
 
 # ---------------------------------------------------------------------------
 # NI-1: New-Item -ItemType Directory -Force -Path <external-path> — ALLOW

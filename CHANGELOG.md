@@ -52,6 +52,38 @@ Changes: Internal step key and sentinel renamed across all hook files and skill 
 Background: Users had to list every repo path individually in ENFORCE_WORKTREE_EXTRA_REPOS even when all repos share a common parent directory.
 Changes: ENFORCE_WORKTREE_EXTRA_REPOS now accepts parent directories in addition to individual repo paths. Any entry that is not itself a git repo is scanned one level deep; all git repos found inside are added to the session scope. Mixed lists (individual paths and parent dirs) work as expected, and spaces around commas are trimmed.
 
+### BUGFIX: git worktree add no longer blocked on Windows + Git Bash (2026-05-07)
+Background: On Windows with Git Bash, running git worktree add via the Bash tool could be falsely blocked even when the target path was outside the repo.
+Changes: isPathOutsideRepo now normalizes POSIX drive-letter paths (e.g. /c/git/foo) to Windows-native form before resolving them. This fixes the misresolution that caused outside paths to appear inside the repo on Windows Node.js.
+
+### BUGFIX: bash-write-patterns: /dev/null null-sink misclassified as write (2026-05-08)
+Background: Read-only redirects to /dev/null (e.g. `git status 2>/dev/null`) were classified as write commands and blocked by the enforce-worktree guard from the main checkout.
+Changes: /dev/null null-sink redirects (`2>/dev/null`, `>/dev/null`, `&>/dev/null`, `>>/dev/null`) are now correctly classified as read. Subpaths like `/dev/null/foo` and the documented `2>&1` false positive remain as write.
+
+### FEATURE: ENFORCE_WORKTREE_EXCLUDE: bypass worktree gate for matched files + doc-append-plain command (2026-05-08)
+Background: ENFORCE_WORKTREE blocked all main-checkout commits, including low-risk doc appends to shared todo files across repos.
+Changes: New ENFORCE_WORKTREE_EXCLUDE env var accepts semicolon-separated glob patterns. When all staged files match a pattern, the main-checkout and protected-branch gates in pre-commit are skipped (private-info scan still runs). New doc-append-plain command for append-only plaintext writes to doc files. BREAKING CHANGE: ENFORCE_WORKTREE_EXTRA_REPOS separator changed from comma (`,`) to semicolon (`;`) — if you set this variable, update your `.env` before upgrading.
+
+### BUGFIX: fix worktree-to-main flow: hook false-positives (2026-05-08)
+Background: Several PreToolUse hook bugs were blocking the standard worktree-to-main merge workflow (PR create / merge / cleanup) and a security review surfaced additional bypass risks.
+Changes: git branch -d (delete merged branch) is now classified read, not write. git-branch-mutate regex no longer false-positives on branch names containing -d/-c (e.g. feature-env-consolidate). gh pr/issue create/edit/comment with heredoc body is no longer blocked from main checkout. git pull/merge --ff-only is now allowed from main checkout (the operation main is reserved for). git update-ref is now classified write. block-dotenv hook now uses a path-position parser instead of a free-text regex: gh PR/commit messages containing the literal string .env no longer false-positive, while real .env access (including via command substitution like $\(cat .env\), redirect like echo > .env, and shell wrappers like bash -lc "cat .env") still blocks.
+
 ### FEATURE: global-gitignore.ps1: Pester integration tests (2026-05-08)
 Background: The Windows installer for global gitignore (install/win/global-gitignore.ps1) had no automated tests; a null-reference bug was only caught in production.
 Changes: Added 15 Pester integration tests covering normal, idempotency, edge, error, and security cases. The .Count null-reference bug from production is now caught by the double-run idempotency test (T04).
+
+### FEATURE: planner draft persistence + cross-stage context propagation (2026-05-09)
+Background: Planner draft files were written to OS temp and got lost to OS cleanup or context compaction, requiring planner subagent restart. Cross-stage context (intent and outline) was also missing from codex plan review, causing out-of-scope reviewer concerns, and show-diff previewed every draft revision, interrupting the planner/reviewer loop.
+Changes: Planner drafts now persist under ~/.claude/plans/drafts/. Plan-stage context (intent and outline) is automatically passed to the codex plan reviewer. show-diff suppresses preview for draft files only — final plan artifacts still show diffs. Fallback session-id format simplified to a plain timestamp.
+
+### BUGFIX: POSIX file copy/move to non-session paths no longer falsely blocked; PowerShell migration command (2026-05-09)
+Background: Copying or moving files to a destination outside the current session repo was blocked by the worktree-write guard because the destination was not parsed. The plans-directory migration runbook in docs/ops.md was bash-only, leaving Windows users to translate the command themselves.
+Changes: POSIX copy and move commands with destinations resolving outside session scope are now allowed (mirroring the existing redirect/tee/PowerShell extractor behaviour). docs/ops.md gained the PowerShell version of the plans-directory migration command.
+
+### REFACTOR: branch delete now requires worktree-end skill; main worktree terminology aligned to Git official term (2026-05-09)
+Background: Earlier PRs landed two hacks: classifying soft/force branch-delete flags as read so the worktree-write guard would not block them, and using project-internal jargon for the original repository directory. The read classification was location-axis thinking — the right axis is the target branch's worktree binding. The jargon term diverged from Git's official term and made cross-referencing official Git documentation harder.
+Changes: Soft and force branch deletion are now classified as write again. The only authorized path is the /worktree-end skill, which writes a marker file before deletion; the hook validates the marker against the target branch and the recorded worktree path. Direct ad-hoc branch deletion from any worktree is rejected — /worktree-end is the only path. Project-wide terminology now uses Git's official 'main worktree' (vs 'linked worktree') in user-facing error messages, rules, skills, README and CLAUDE.md. The settings.json deny rules for branch-delete commands were removed (no longer needed; the hook governs).
+
+### CONFIG: ENFORCE_WORKTREE_EXCLUDE comment rewritten user-side; new content rule for .env.example (2026-05-10)
+Background: The .env.example comment for ENFORCE_WORKTREE_EXCLUDE described internal hook behaviour that an end user reading the file does not know. There was also no convention defining what belongs in .env.example, so prior edits had drifted into PR-reference and implementation-detail territory.
+Changes: Rewrote the ENFORCE_WORKTREE_EXCLUDE comment to cover only what the user can do, what they can't do, and the value format. rules/docs-convention.md gained a new content rule for .env.example codifying these three required items, applicable going forward to all .env variables.

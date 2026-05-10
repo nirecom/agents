@@ -7,7 +7,7 @@
 //     2. Running on a protected branch even inside a linked worktree.
 //   Allows writes only from a linked worktree on a non-protected branch.
 //
-// Main checkout detection:
+// Main worktree detection:
 //   git rev-parse --git-common-dir == git rev-parse --git-dir
 //   (Linked worktrees have --git-common-dir pointing to the shared .git while --git-dir
 //   points to .git/worktrees/<name> — they differ only in linked worktrees.)
@@ -32,6 +32,7 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
@@ -39,6 +40,12 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 
 const { normalizeCwd } = require("./lib/path-normalize");
 const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
+const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
+const {
+  extractRedirectTargets, extractTeeTargets,
+  extractPwshWriteTargets, extractCpMvDestination,
+  extractStagedFiles,
+} = require("./lib/bash-write-targets");
 
 function readStdin() {
   try {
@@ -130,22 +137,42 @@ function stripQuotedSegments(str) {
 }
 
 /** True if cmd contains shell chaining/pipe operators outside of quotes.
+ *  Also rejects command substitutions ($() and backticks): those spawn a
+ *  shell that runs the inner command, which is effectively chaining for
+ *  exemption-allowance purposes. Without this, `git merge --ff-only $(rm -rf
+ *  /)` would slip past the chaining guard.
  *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
  *  so `& git.exe worktree add` is conservatively rejected. */
 function hasShellChaining(cmd) {
-  return /[|;&]/.test(stripQuotedSegments(cmd));
+  const stripped = stripQuotedSegments(cmd);
+  return /[|;&]|\$\(|`/.test(stripped);
+}
+
+// True when cmd contains command-sequencing operators (;, &&, ||) outside quotes.
+// Single | (pipe) is excluded — needed for `cmd | tee file`. &> (redirect) is
+// not matched because the regex requires two & characters for &&.
+// Commands with sequencing must not be fast-pathed through the session-scope
+// allow: the un-extracted portion may contain in-scope writes (e.g. rm, mv).
+function hasCommandSequencing(cmd) {
+  const stripped = stripQuotedSegments(cmd);
+  return /;|&&|\|\|/.test(stripped);
 }
 
 /**
  * True when targetPath resolves to a location OUTSIDE repoRoot.
- * Relative paths are resolved against process.cwd() (the main checkout when
+ * Relative paths are resolved against process.cwd() (the main worktree when
  * this hook runs), which gives the correct semantic for worktree paths.
  * Fails open (returns true) when the path cannot be resolved.
  */
 function isPathOutsideRepo(targetPath, repoRoot) {
   try {
-    const resolved = path.resolve(targetPath).toLowerCase();
-    const base = path.resolve(repoRoot).toLowerCase();
+    // Normalize POSIX drive-letter paths (e.g. /c/git/foo) to Windows native
+    // form before path.resolve, which on Windows otherwise misresolves them
+    // to C:\c\git\foo. No-op on non-Windows and on already-native paths.
+    const normTarget = normalizeCwd(targetPath) || targetPath;
+    const normBase = normalizeCwd(repoRoot) || repoRoot;
+    const resolved = path.resolve(normTarget).toLowerCase();
+    const base = path.resolve(normBase).toLowerCase();
     return resolved !== base &&
            !resolved.startsWith(base + path.sep) &&
            !resolved.startsWith(base + "/");
@@ -167,7 +194,7 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd) || !/\bworktree\s+(?:add|remove|prune)\b/.test(cmd)) return false;
 
-  // remove/prune do not create new checkout paths — always allow from main checkout
+  // remove/prune do not create new checkout paths — always allow from main worktree
   if (/\bworktree\s+(?:remove|prune)\b/.test(cmd)) return true;
 
   // For 'add': parse target path (first non-flag arg after 'add')
@@ -240,7 +267,135 @@ function isAllowedNewItemDirectory(cmd, repoRoot) {
   return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : false;
 }
 
-// Returns true when repoCwd is the main (non-linked) checkout.
+/**
+ * True if cmd is an isolated `git pull --ff-only` or `git merge --ff-only`
+ * command. Allows the merge step from the main worktree — the one operation
+ * main is reserved for ("Main worktree is reserved for merge/pull only").
+ *
+ * Blocks: shell chaining (`&& git push` etc.), `--no-ff` (overrides ff-only
+ * intent), non-git tools (e.g. `svn merge --ff-only`), and `git rebase
+ * --ff-only` (rebase is not merge).
+ */
+function isAllowedFastForwardMerge(cmd) {
+  if (hasShellChaining(cmd)) return false;
+  if (!/\bgit\b/.test(cmd)) return false;
+  if (/\s--no-ff\b/.test(cmd)) return false;
+  // Strict subcommand position: only flag tokens (and their values) may appear
+  // between `git` and the `pull`/`merge` subcommand. This prevents false
+  // matches like `git commit -m "merge --ff-only"` or `git push origin merge
+  // --ff-only` where `merge` appears as an argument value rather than as the
+  // subcommand. Pattern: `(?:-flag value? )*` then subcommand.
+  const isPullFf  = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*pull\b[^|;&]*\s--ff-only\b/.test(cmd);
+  const isMergeFf = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*merge\b[^|;&]*\s--ff-only\b/.test(cmd);
+  return isPullFf || isMergeFf;
+}
+
+// Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
+// Per rules/worktree.md, this is the parent directory all linked worktrees live under.
+function getWorktreeBaseDir() {
+  const raw = (process.env.WORKTREE_BASE_DIR || "").trim();
+  const baseRaw = raw || path.join(os.homedir(), "git", "worktrees");
+  const expanded = baseRaw.startsWith("~")
+    ? path.join(os.homedir(), baseRaw.slice(1).replace(/^[\/\\]/, ""))
+    : baseRaw;
+  return path.resolve(expanded);
+}
+
+// True if cmd is `git [opts] [-C path] branch -d|-D <branch> [...]`.
+// Strict subcommand position: only flag tokens (and their values) may appear
+// between `git` and `branch`, mirroring isAllowedFastForwardMerge.
+function isBranchDeleteCommand(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (!/\bgit\b/.test(cmd)) return false;
+  return /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)/.test(cmd);
+}
+
+// Extract the target branch name from `git ... branch -d|-D <branch>`.
+// Returns null if unparseable.
+function parseBranchDeleteTarget(cmd) {
+  if (!isBranchDeleteCommand(cmd)) return null;
+  // After the `branch -d|-D` flag, the next non-flag positional token is the branch.
+  const m = cmd.match(/\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b([^|;&]*)/);
+  if (!m) return null;
+  const tokens = [];
+  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let mm;
+  while ((mm = re.exec(m[1])) !== null) tokens.push(mm[1] || mm[2] || mm[3]);
+  // Find -d or -D, then the next non-flag token
+  let sawDeleteFlag = false;
+  for (const tok of tokens) {
+    if (!sawDeleteFlag) {
+      if (/^-[dD]$/.test(tok)) sawDeleteFlag = true;
+      continue;
+    }
+    if (tok === "--") continue;
+    if (tok.startsWith("-")) continue;
+    return tok;
+  }
+  return null;
+}
+
+/**
+ * True if cmd is `git branch -d|-D <branch>` AND a marker file produced by
+ * /worktree-end authorises this exact deletion.
+ *
+ * Marker contract (written by /worktree-end before `git worktree remove`):
+ *   path:    <git-common-dir>/info/pending-branch-delete
+ *   format:  line 1 = target branch name
+ *            line 2 = absolute path of the worktree being removed
+ *
+ * Both must match: branch name == target, worktree path resolves under
+ * WORKTREE_BASE_DIR. This narrows the exemption to /worktree-end-driven
+ * cleanups; ad-hoc `git branch -D` from any worktree is still blocked.
+ *
+ * The marker lives in the SHARED .git directory (git-common-dir), so it is
+ * readable from both the main worktree and any linked worktree.
+ */
+function isAllowedBranchDeleteViaMarker(cmd, repoRoot) {
+  if (hasShellChaining(cmd)) return false;
+  const target = parseBranchDeleteTarget(cmd);
+  if (!target) return false;
+  if (!repoRoot) return false;
+
+  let commonDir;
+  try {
+    const r = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status !== 0) return false;
+    commonDir = path.resolve(repoRoot, (r.stdout || "").trim());
+  } catch (e) { return false; }
+
+  const markerPath = path.join(commonDir, "info", "pending-branch-delete");
+  let content;
+  try { content = fs.readFileSync(markerPath, "utf8"); }
+  catch (e) { return false; }
+
+  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return false;
+  const markerBranch = lines[0];
+  const markerWorktreePath = lines[1];
+
+  if (markerBranch !== target) return false;
+
+  const baseDir = getWorktreeBaseDir();
+  const norm = (p) => {
+    try {
+      const n = normalizeCwd(p) || p;
+      const r = path.resolve(n);
+      return process.platform === "win32" ? r.toLowerCase() : r;
+    } catch (e) { return null; }
+  };
+  const nBase = norm(baseDir);
+  const nWtree = norm(markerWorktreePath);
+  if (!nBase || !nWtree) return false;
+
+  return nWtree === nBase ||
+         nWtree.startsWith(nBase + path.sep) ||
+         nWtree.startsWith(nBase + "/");
+}
+
+// Returns true when repoCwd is the main worktree (non-linked).
 // In a linked worktree, --git-common-dir and --git-dir differ.
 function isMainCheckout(repoCwd) {
   try {
@@ -319,7 +474,7 @@ function resolveRepoRoot(startDir) {
 // Returns the set of repo roots considered "in session scope" for gh write commands.
 // Composition:
 //   - process.cwd() repo root (always included if it resolves to a repo)
-//   - Each path listed in ENFORCE_WORKTREE_EXTRA_REPOS (comma-separated)
+//   - Each path listed in ENFORCE_WORKTREE_EXTRA_REPOS (semicolon-separated)
 // Behaviour:
 //   - Whitespace around entries is trimmed; empty entries are skipped.
 //   - Nonexistent paths are silently skipped (not an error).
@@ -330,7 +485,7 @@ function getSessionRepoRoots() {
   const cwdRoot = resolveRepoRoot(process.cwd());
   if (cwdRoot) roots.add(cwdRoot);
   const extra = (process.env.ENFORCE_WORKTREE_EXTRA_REPOS || "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
+    .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
     let resolved;
     try { resolved = path.resolve(dir); } catch (e) { continue; }
@@ -350,6 +505,91 @@ function getSessionRepoRoots() {
     }
   }
   return roots;
+}
+
+function getExcludePatterns() {
+  return parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE || "");
+}
+
+function isExcluded(filePath, patterns) {
+  if (!patterns || patterns.length === 0) return false;
+  if (!filePath || typeof filePath !== "string") return false;
+  try {
+    const norm = normalizeCwd(filePath) || filePath;
+    const abs = path.resolve(norm);
+    // Full-path match (patterns containing '/' or '**').
+    if (matchesAnyExcludePattern(abs, patterns)) return true;
+    // Gitignore semantics: patterns without '/' also match against basename.
+    const basenamePatterns = patterns.filter((p) => !p.includes("/"));
+    if (basenamePatterns.length === 0) return false;
+    return matchesAnyExcludePattern(path.basename(abs), basenamePatterns);
+  } catch (e) { return false; }
+}
+
+function isInSessionScope(repoRoot, sessionRoots) {
+  if (!repoRoot) return false;
+  const norm = normalizeForCompare(repoRoot);
+  return norm ? sessionRoots.has(norm) : false;
+}
+
+// Collect write targets from all applicable extractors (redirect, tee, PS cmdlets).
+// Any extractor returning null → parseFailure = true (fail-closed).
+function collectBashWriteTargets(cmd) {
+  const targets = [];
+  let parseFailure = false;
+
+  if (/(?:^|[\s;|&])(?:\d*)(?:&>>?|>>?)(?!>|\d)/.test(cmd)) {
+    const r = extractRedirectTargets(cmd);
+    if (r === null) parseFailure = true;
+    else targets.push(...r);
+  }
+  if (/(?:^|[\s;|&])tee\b/.test(cmd)) {
+    const t = extractTeeTargets(cmd);
+    if (t === null) parseFailure = true;
+    else targets.push(...t);
+  }
+  if (/\b(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Move-Item|Copy-Item)\b/i.test(cmd)
+      || /(?:^|[\s;|&])(?:sc|ac|ni|ri|mi|ci)\b/.test(cmd)) {
+    const p = extractPwshWriteTargets(cmd);
+    if (p === null) parseFailure = true;
+    else targets.push(...p);
+  }
+  if (/(?:^|[\s;|&])(?:cp|mv)\b/.test(cmd)) {
+    const d = extractCpMvDestination(cmd);
+    if (d === null) parseFailure = true;
+    else targets.push(d);
+  }
+
+  return { targets: targets.length > 0 ? targets : null, parseFailure };
+}
+
+// True if all targets resolve to repos outside the session scope.
+// findRepoRoot()==null (non-git path) is also treated as outside scope (allow).
+function areAllBashTargetsOutsideSessionScope(targets, sessionRoots) {
+  if (!targets || targets.length === 0) return false;
+  for (const t of targets) {
+    const repo = findRepoRoot(t);
+    if (repo !== null && isInSessionScope(repo, sessionRoots)) return false;
+  }
+  return true;
+}
+
+// EXCLUDE check for file-target writes and git commit (staged files).
+function isWriteTargetAllExcluded(cmd, targets, repoRoot, patterns) {
+  if (!patterns || patterns.length === 0) return false;
+  const isGitCommit = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*commit\b/.test(cmd);
+
+  if (isGitCommit) {
+    const staged = extractStagedFiles(repoRoot);
+    if (staged === null || staged.length === 0) return false;
+    if (!staged.every((f) => isExcluded(f, patterns))) return false;
+  }
+
+  if (targets) {
+    if (!targets.every((f) => isExcluded(f, patterns))) return false;
+  }
+
+  return isGitCommit || (targets !== null && targets.length > 0);
 }
 
 // True if cmd matches any kind:"gh" entry in WRITE_PATTERNS (= Group B gh writes).
@@ -390,6 +630,10 @@ function done(decision) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
+// Wrapped in `if (require.main === module)` so the file can be `require()`d
+// from tests without executing the CLI flow (which reads stdin and exits).
+
+if (require.main === module) {
 
 let input;
 try {
@@ -410,6 +654,25 @@ if (toolName === "Bash") {
   if (!cmd) done();
   if (classify(cmd) !== "write") done(); // read-only command — allow
   repoRoot = findRepoRootForBash(cmd);
+
+  // git branch -d/-D: gated exclusively by /worktree-end's marker file.
+  // Allowed when the marker matches the target branch and the recorded
+  // worktree path resolves under WORKTREE_BASE_DIR; blocked unconditionally
+  // otherwise (any worktree, including main and linked).
+  if (isBranchDeleteCommand(cmd)) {
+    if (isAllowedBranchDeleteViaMarker(cmd, repoRoot)) done();
+    done({
+      block: true,
+      reason:
+        "ENFORCE_WORKTREE: git branch -d/-D blocked. Reason: no matching /worktree-end marker.\n" +
+        "Branch deletion is only authorised via /worktree-end, which writes\n" +
+        "<git-common-dir>/info/pending-branch-delete with the target branch and the\n" +
+        "worktree path being removed (must resolve under WORKTREE_BASE_DIR).\n" +
+        "Direct git branch -d/-D from any worktree is prohibited.\n" +
+        "Run: /worktree-end\n" +
+        "Or set ENFORCE_WORKTREE=off in agents config to bypass.",
+    });
+  }
 
   // gh write commands (Group B) get an extra session-scope check before the
   // standard main/worktree enforcement below. The whitelist defines the set of
@@ -440,14 +703,54 @@ if (toolName === "Bash") {
     // gh writes are GitHub operations, not local file writes — session-scope is sufficient.
     done();
   }
+
+  // Bug 2 + Bug 1: non-gh Bash writes — check actual write targets.
+  {
+    const sessionRoots = getSessionRepoRoots();
+    const excludePatterns = getExcludePatterns();
+    const { targets, parseFailure } = collectBashWriteTargets(cmd);
+
+    if (!parseFailure) {
+      // Commands with sequencing operators (;, &&, ||) may contain un-extracted
+      // in-scope writes (e.g. `echo x > /tmp/out; rm README.md`). Skip the
+      // session-scope / EXCLUDE fast-paths for those; fall through to the
+      // main-checkout block (fail-closed). Single | (pipe) is allowed — it is
+      // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
+      if (!hasCommandSequencing(cmd)) {
+        // Bug 2: all targets resolve outside session scope (incl. non-git paths) → allow.
+        if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) done();
+
+        // Bug 1: all targets covered by EXCLUDE → allow.
+        if (excludePatterns.length > 0 &&
+            isWriteTargetAllExcluded(cmd, targets, repoRoot, excludePatterns)) {
+          done();
+        }
+      }
+    }
+
+    // git -C <path> style (no file targets extracted): use repoRoot for scope check.
+    if (!targets && !parseFailure && repoRoot) {
+      if (!isInSessionScope(repoRoot, sessionRoots)) done();
+    }
+    // parseFailure → fail-closed: fall through to main-checkout block below.
+  }
 } else if (["Edit", "Write", "MultiEdit"].includes(toolName)) {
+  const sessionRoots = getSessionRepoRoots();
+  const excludePatterns = getExcludePatterns();
+
   if (toolName === "MultiEdit" && Array.isArray(toolInput.edits) && toolInput.edits.length > 0) {
     // Check every edit target — a mixed-repo MultiEdit must not slip through.
     for (const edit of toolInput.edits) {
       const fp = edit.file_path;
       if (!fp || typeof fp !== "string") continue;
+
+      // Bug 1: EXCLUDE match → skip this edit (allow).
+      if (isExcluded(fp, excludePatterns)) continue;
+
       const root = findRepoRoot(fp);
-      if (!root) continue;
+      // Bug 2: non-git path or outside session scope → skip (allow).
+      if (!root || !isInSessionScope(root, sessionRoots)) continue;
+
       const isMC = isMainCheckout(root);
       const branch = getCurrentBranch(root);
       const protected_ = getProtectedBranches(root);
@@ -455,7 +758,7 @@ if (toolName === "Bash") {
         const branchDesc = branch ? `branch '${branch}'` : "detached HEAD";
         done({
           block: true,
-          reason: `ENFORCE_WORKTREE: write blocked. Reason: main checkout (${branchDesc}).\nWork from a linked worktree (/worktree-start) or set ENFORCE_WORKTREE=off.`,
+          reason: `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\nWork from a linked worktree (/worktree-start) or set ENFORCE_WORKTREE=off.`,
         });
       }
       if (branch && protected_.includes(branch)) {
@@ -469,7 +772,14 @@ if (toolName === "Bash") {
   }
   const filePath = toolInput.file_path || toolInput.path;
   if (!filePath || typeof filePath !== "string") done();
+
+  // Bug 1: EXCLUDE match → allow.
+  if (isExcluded(filePath, excludePatterns)) done();
+
   repoRoot = findRepoRoot(filePath);
+
+  // Bug 2: non-git path or outside session scope → allow.
+  if (!repoRoot || !isInSessionScope(repoRoot, sessionRoots)) done();
 } else {
   done(); // unrecognised tool — allow
 }
@@ -486,19 +796,20 @@ if (!currentBranch && !mainCheckout) done();
 if (mainCheckout) {
   // Allow isolated worktree lifecycle commands (Bash only).
   // These operate on .git/worktrees/ metadata or external paths, not tracked files,
-  // and must be invoked from the main checkout.
+  // and must be invoked from the main worktree.
   if (toolName === "Bash") {
     const cmd = toolInput.command || "";
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
+    if (isAllowedFastForwardMerge(cmd)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
   done({
     block: true,
     reason:
-      `ENFORCE_WORKTREE: write blocked. Reason: main checkout (${branchDesc}).\n` +
-      "Main checkout is reserved for merge/pull only. Work from a linked worktree.\n" +
+      `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
+      "Main worktree is reserved for merge/pull only. Work from a linked worktree.\n" +
       "Run: /worktree-start <task-name>\n" +
       "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work.",
   });
@@ -516,3 +827,13 @@ if (currentBranch && protectedBranches.includes(currentBranch)) {
 }
 
 done(); // linked worktree on feature branch — allow
+
+} // end if (require.main === module)
+
+module.exports = {
+  isAllowedFastForwardMerge,
+  isBranchDeleteCommand,
+  parseBranchDeleteTarget,
+  isAllowedBranchDeleteViaMarker,
+  getWorktreeBaseDir,
+};

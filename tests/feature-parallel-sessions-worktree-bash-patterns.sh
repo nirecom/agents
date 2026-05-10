@@ -109,8 +109,6 @@ WRITE_CASES=(
     'git am'
     'git cherry-pick x'
     'git revert x'
-    'git branch -d x'
-    'git branch -D x'
     'git checkout -- f'
     'git restore f'
     'git stash push'
@@ -193,6 +191,18 @@ READ_CASES=(
     'gh repo edit --private'
     'gh repo rename new-name'
     'gh repo archive owner/repo'
+    # /dev/null null-sink — read-only redirects must not be classified as write
+    'git status 2>/dev/null'
+    'ls >/dev/null'
+    'cmd &>/dev/null'
+    'grep pattern file 2>/dev/null'
+    # Bug 3: git-commit regex must not false-positive on filenames containing "commit"
+    # `git log -- <pathspec>` and `git diff -- <pathspec>` are read-only even when
+    # pathspec contains the literal token "commit" (e.g., hooks/pre-commit).
+    'git log -- hooks/pre-commit'
+    'git log -- pre-commit.js'
+    'git log --grep="commit message"'
+    'git diff -- pre-commit'
 )
 
 test_read_cases() {
@@ -347,6 +357,103 @@ test_git_config_flag_commit_write() {
     assert_classify "git -c config flag + commit" 'git -c core.safecrlf=false commit -m x' "write"
 }
 
+test_dev_null_compound() {
+    # null-sink followed by actual write — rm catches it
+    assert_classify "compound: read 2>/dev/null; rm foo" 'git status 2>/dev/null; rm foo' "write"
+    # null-sink followed by another read command — stays read
+    assert_classify "compound: read 2>/dev/null && read" 'git status 2>/dev/null && git log' "read"
+    # append form to /dev/null is also null-sink
+    assert_classify ">>/dev/null append null-sink" 'cmd >>/dev/null' "read"
+    # subpath /dev/null/foo is a real file (not null-sink) — must remain write
+    assert_classify "redirect to /dev/null/foo (not null-sink)" 'cmd > /dev/null/foo' "write"
+    # stdout to /dev/null with 2>&1 — 2>&1 documented FP preserved
+    assert_classify ">/dev/null 2>&1 (documented FP preserved)" 'cmd >/dev/null 2>&1' "write"
+}
+
+test_git_branch_mutate_writes() {
+    assert_classify "branch -m rename" 'git branch -m main feat' "write"
+    assert_classify "branch -M force-rename" 'git branch -M old new' "write"
+    assert_classify "branch -c copy" 'git branch -c base feat' "write"
+    assert_classify "branch -C force-copy" 'git branch -C old new' "write"
+}
+
+test_git_branch_name_no_false_positive() {
+    assert_classify "branch agents-env-consolidate (literal -d in name)" \
+        'git branch agents-env-consolidate' "read"
+    assert_classify "branch --list feat/agents-env-consolidate" \
+        'git branch --list feat/agents-env-consolidate' "read"
+    assert_classify "branch --contains HEAD" 'git branch --contains HEAD' "read"
+}
+
+test_git_branch_delete_writes() {
+    # -d/-D were briefly classified as read in PR #20; reverted because
+    # the read/write taxonomy is location-axis thinking, while the right
+    # axis for branch deletion is target-axis. Now: -d/-D are write, gated
+    # exclusively by enforce-worktree's marker-file exemption written by
+    # /worktree-end. Direct ad-hoc invocations from any worktree are blocked.
+    assert_classify "branch -d soft-delete is write" \
+        'git branch -d already-merged' "write"
+    assert_classify "branch -D force-delete is write" \
+        'git branch -D fix/planner-drafts-context' "write"
+    assert_classify "git -C path branch -D is write" \
+        'git -C /path branch -D x' "write"
+    assert_classify "git -C path branch -d is write" \
+        'git -C /path branch -d x' "write"
+}
+
+test_gh_group_a_with_heredoc_classified_read() {
+    local cmd1='gh pr create --body "$(cat <<'"'"'EOF'"'"'
+body text
+EOF
+)"'
+    assert_classify "gh pr create + heredoc body" "$cmd1" "read"
+
+    local cmd2='gh issue create --title T --body "$(cat <<EOF
+content
+EOF
+)"'
+    assert_classify "gh issue create + heredoc body" "$cmd2" "read"
+
+    assert_classify "gh pr edit plain body" 'gh pr edit 1 --body "x"' "read"
+}
+
+test_gh_group_a_with_redirect_still_write() {
+    # redirect (posix-redirect) is not in QUOTING_ONLY → override does not apply
+    assert_classify "gh pr create + redirect to file" \
+        'gh pr create --body "x" > out.txt' "write"
+}
+
+test_git_update_ref_write() {
+    assert_classify "git update-ref create" \
+        'git update-ref refs/heads/feat HEAD' "write"
+    assert_classify "git update-ref delete" \
+        'git update-ref -d refs/heads/old' "write"
+    assert_classify "git -C path update-ref" \
+        'git -C /path update-ref refs/heads/feat HEAD' "write"
+}
+
+# ============ Bug 3: git-commit regex must require commit at subcommand position =====
+# Old regex /\bgit\b.*\bcommit\b/ false-positives on filenames like hooks/pre-commit.
+# New regex must allow `git -<flag> [arg] commit` (subcommand position) as write,
+# but treat `commit` appearing only inside a pathspec/grep arg as read.
+test_git_commit_subcommand_position() {
+    # Real commits — must be classified as write
+    assert_classify "git commit -m" 'git commit -m x' "write"
+    assert_classify "git -c <kv> commit -m" \
+        'git -c core.safecrlf=false commit -m x' "write"
+    assert_classify "git --no-pager commit -m" \
+        'git --no-pager commit -m x' "write"
+    # Read-only commands where "commit" appears as a filename or grep value
+    assert_classify "git log -- hooks/pre-commit (filename pathspec)" \
+        'git log -- hooks/pre-commit' "read"
+    assert_classify "git log -- pre-commit.js (filename pathspec)" \
+        'git log -- pre-commit.js' "read"
+    assert_classify "git log --grep=\"commit message\"" \
+        'git log --grep="commit message"' "read"
+    assert_classify "git diff -- pre-commit (filename pathspec)" \
+        'git diff -- pre-commit' "read"
+}
+
 # ============ Run all ============
 
 test_write_cases
@@ -370,6 +477,14 @@ test_heredoc_quoted_tokens
 test_fd_redirect_documented_fp
 test_newline_injection_write
 test_git_config_flag_commit_write
+test_dev_null_compound
+test_git_branch_mutate_writes
+test_git_branch_name_no_false_positive
+test_git_branch_delete_writes
+test_gh_group_a_with_heredoc_classified_read
+test_gh_group_a_with_redirect_still_write
+test_git_update_ref_write
+test_git_commit_subcommand_position
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

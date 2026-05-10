@@ -64,6 +64,16 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
 - `overview.md`: Project vision and overall shape — what it is and why it exists. The most abstract document in its directory. Does not duplicate `architecture.md` design decisions; instead provides the entry-level mental model for a new reader.
 - `infrastructure.md`: When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-infrastructure` skill to keep it aligned with infrastructure changes.
 - `README.md` (ai-specs projects): Lives in the source repo root, not in ai-specs.
+- `.env.example`: End-user configuration documentation. For each variable, the comment block must cover **only** these three things, written from the user's perspective:
+  1. **What you can do** with this setting (the user-visible effect).
+  2. **What you can't do** (limits, what is NOT changed by this setting).
+  3. **Format** — value syntax, supported pattern features, and at least one example per supported platform.
+- `CHANGELOG.md`: User-facing release log. Write only changes the user feels:
+  - A serious bug got fixed, or this fix introduced a new known issue.
+  - Behaviour changes — workflow steps, command outputs, default behaviour.
+  - Configuration changes — new env vars, renamed/removed options, breaking format changes.
+
+  Do NOT include internal function / module / hook names — those belong in `history.md`.
 
 ## Progressive Disclosure (Cascade)
 

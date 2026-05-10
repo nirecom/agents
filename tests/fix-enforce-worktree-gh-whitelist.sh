@@ -158,9 +158,9 @@ test_group_a_pr_create_from_main_checkout() {
     local repo; repo="$(setup_main_checkout "A-pr-create-main")"
     local out; out="$(run_bash_guard "gh pr create --fill" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        pass "Group A: gh pr create from main checkout allows"
+        pass "Group A: gh pr create from main worktree allows"
     else
-        fail "Group A: gh pr create from main checkout should allow ($out)"
+        fail "Group A: gh pr create from main worktree should allow ($out)"
     fi
 }
 
@@ -197,9 +197,9 @@ test_group_a_remaining_commands_allow_from_main_checkout() {
     for c in "${cmds[@]}"; do
         out="$(run_bash_guard "$c" "$repo" ENFORCE_WORKTREE=on)"
         if guard_decision "$out"; then
-            pass "Group A: '$c' from main checkout allows"
+            pass "Group A: '$c' from main worktree allows"
         else
-            fail "Group A: '$c' from main checkout should allow ($out)"
+            fail "Group A: '$c' from main worktree should allow ($out)"
         fi
     done
 }
@@ -225,9 +225,9 @@ test_group_b_pr_merge_from_main_checkout_blocks() {
     local repo; repo="$(setup_main_checkout "B-merge-main")"
     local out; out="$(run_bash_guard "gh pr merge 1 --squash" "$repo" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        fail "Group B: gh pr merge from main checkout should block ($out)"
+        fail "Group B: gh pr merge from main worktree should block ($out)"
     else
-        pass "Group B: gh pr merge from main checkout blocks (mainCheckout)"
+        pass "Group B: gh pr merge from main worktree blocks (mainCheckout)"
     fi
 }
 
@@ -276,12 +276,12 @@ test_group_b_other_writes_scope_matrix() {
         else
             fail "Group B: '$c' from session worktree should allow ($out)"
         fi
-        # From main checkout → block
+        # From main worktree → block
         out="$(run_bash_guard "$c" "$main_repo" ENFORCE_WORKTREE=on)"
         if guard_decision "$out"; then
-            fail "Group B: '$c' from main checkout should block ($out)"
+            fail "Group B: '$c' from main worktree should block ($out)"
         else
-            pass "Group B: '$c' from main checkout blocks"
+            pass "Group B: '$c' from main worktree blocks"
         fi
         # From non-git dir → block
         out="$(run_bash_guard "$c" "$nongit" ENFORCE_WORKTREE=on)"
@@ -383,7 +383,7 @@ test_extra_repos_whitespace_padded_trimmed() {
     local main_b="${pair_b%|*}"; local wt_b="${pair_b#*|}"
     local a_norm; a_norm="$(norm_path "$main_a")"
     local b_norm; b_norm="$(norm_path "$main_b")"
-    local extras=" $a_norm , $b_norm "
+    local extras=" $a_norm ; $b_norm "
     local out
     out="$(run_bash_guard "gh pr merge 1" "$wt_a" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
@@ -406,7 +406,7 @@ test_extra_repos_nonexistent_silently_skipped() {
     local pair; pair="$(setup_linked_worktree "E-nonex")"
     local main="${pair%|*}"; local wt="${pair#*|}"
     local valid_norm; valid_norm="$(norm_path "$main")"
-    local extras="/totally/nonexistent/path,$valid_norm"
+    local extras="/totally/nonexistent/path;$valid_norm"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
     if guard_decision "$out"; then
@@ -416,21 +416,21 @@ test_extra_repos_nonexistent_silently_skipped() {
     fi
 }
 
-test_extra_repos_only_commas_no_error() {
-    require_guard "test_extra_repos_only_commas_no_error" || return
-    local pair; pair="$(setup_linked_worktree "E-commas")"
+test_extra_repos_only_separators_no_error() {
+    require_guard "test_extra_repos_only_separators_no_error" || return
+    local pair; pair="$(setup_linked_worktree "E-seps")"
     local wt="${pair#*|}"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=,,,")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=;;;")"
     # Must not crash; cwd is in session so allow.
     if echo "$out" | grep -qE '"decision":"(allow|block)"|^\{\}$|^$'; then
-        pass "EXTRA_REPOS=',,,': handled without crash"
+        pass "EXTRA_REPOS=';;;': handled without crash"
     else
         # If output is something like {} it's also fine — guard exited cleanly.
         if [ -z "$out" ] || [ "$out" = "{}" ]; then
-            pass "EXTRA_REPOS=',,,': handled without crash (empty/allow output)"
+            pass "EXTRA_REPOS=';;;': handled without crash (empty/allow output)"
         else
-            fail "EXTRA_REPOS=',,,': unexpected output ($out)"
+            fail "EXTRA_REPOS=';;;': unexpected output ($out)"
         fi
     fi
 }
@@ -597,7 +597,7 @@ test_extra_repos_consulted_via_git_C_indirection
 test_extra_repos_empty_only_cwd_in_scope
 test_extra_repos_whitespace_padded_trimmed
 test_extra_repos_nonexistent_silently_skipped
-test_extra_repos_only_commas_no_error
+test_extra_repos_only_separators_no_error
 
 # Bypass
 test_off_mode_allows_all_gh_writes

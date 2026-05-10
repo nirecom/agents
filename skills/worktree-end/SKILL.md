@@ -9,7 +9,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
 1. **Pre-flight checks:**
    - `gh --version` — abort with installation guidance if gh is not found.
-   - Verify cwd is inside a linked worktree (not the main checkout):
+   - Verify cwd is inside a linked worktree (not the main worktree):
      `git rev-parse --git-common-dir` must differ from `git rev-parse --git-dir`.
      If they are equal, abort: the user must `cd` into the worktree first.
 
@@ -24,7 +24,9 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    Display the PR URL.
 
 3. **Ask the user:**
-   `AskUserQuestion`: "PR is open at <url>. Choose: [merge / wait / abort]"
+   First output the PR URL as a clickable markdown link in the main conversation:
+   `PR #<N> is open: [<url>](<url>)`
+   Then call `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
    - **merge**: proceed to step 4.
    - **wait**: display URL and stop — do **not** clean up.
    - **abort**: display URL and close-PR guidance, then stop — do **not** clean up.
@@ -64,7 +66,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    - Docker mount impact (if any)
    - Proposed backup destination:
      - **Default:** `<main_root>/.worktree-backup/<branch>/` (gitignored via `.git/info/exclude`)
-     - Alternatives: main checkout at same relative path, user-specified directory, discard
+     - Alternatives: main worktree at same relative path, user-specified directory, discard
    - Commands that will be executed
 
    After user approval: copy preservation targets to the chosen destination.
@@ -73,15 +75,39 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
-   b. `git -C <main> worktree remove <path>` (never `--force` — see rules).
-   c. `git -C <main> worktree prune`
-   d. If `<WORKTREE_BASE_DIR>/<task-name>/` directory is now empty, delete it
+   b. **Write branch-delete marker** so the `enforce-worktree` hook will permit
+      step f below. The marker lives in the SHARED `.git` directory so it is
+      readable from both the main worktree and any linked worktree.
+      - Resolve `<git-common-dir>` via `git -C <main> rev-parse --git-common-dir`.
+        The marker path is `<git-common-dir>/info/pending-branch-delete`.
+      - Marker contents (exactly two lines, LF or CRLF both accepted by the hook):
+        ```
+        <branch>
+        <absolute-worktree-path>
+        ```
+        `<absolute-worktree-path>` must be the path being removed in step c, and
+        must resolve under `WORKTREE_BASE_DIR` (the hook re-validates this).
+      - Use the Write tool, not heredoc/echo, to keep the file write atomic.
+   c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
+   d. `git -C <main> worktree prune`
+   e. If `<WORKTREE_BASE_DIR>/<task-name>/` directory is now empty, delete it
       (non-recursive to prevent accidents):
       - POSIX: `rmdir "<WORKTREE_BASE_DIR>/<task-name>"`
       - PowerShell: `Remove-Item "<WORKTREE_BASE_DIR>\<task-name>"` (non-recursive)
-   e. `git -C <main> branch -d <branch>` (soft delete only — `-D` is prohibited).
-   f. `git -C <main> fetch --prune origin`
-   g. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
+   f. `git -C <main> branch -D <branch>` — `-D` (force) is required because
+      squash-merge produces a new commit not recognised by `-d`'s "fully merged"
+      check; the marker written in step b authorises this exact deletion.
+   g. **Remove the marker** at `<git-common-dir>/info/pending-branch-delete`
+      whether step f succeeded or failed (avoid leaving stale markers that
+      would let a later direct invocation slip past the hook).
+   h. `git -C <main> fetch --prune origin`
+   i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
+
+   **Why this dance:** the `enforce-worktree` hook classifies `git branch -d/-D`
+   as a write op and blocks it from any worktree by default. The marker file is
+   the only authorised path; only this skill produces it. Direct ad-hoc
+   `git branch -D` from any worktree is intentionally rejected — this prevents
+   accidental loss of unmerged work and keeps cleanup auditable.
 
 7. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
 
@@ -90,7 +116,11 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - **wait / abort paths: no destructive steps.** Only merge-success path runs cleanup.
 - `git worktree remove --force` is prohibited unless the user gives explicit re-approval
   after reviewing the `rules/ops.md` decision path.
-- `git branch -D` (force-delete) is prohibited — use `-d` only.
+- Branch deletion uses `git branch -D` only inside step 6f, gated by the
+  marker file written in step 6b. Direct ad-hoc `git branch -d/-D` outside this
+  skill is rejected by the `enforce-worktree` hook by design.
+- Always remove the marker (step 6g) — even on failure paths — to avoid leaving
+  a stale authorisation that a later command could exploit.
 - Do not run cleanup if merge step failed or was skipped.
 - Always propose `.worktree-backup/<branch>/` as the default backup destination; never silently pick a different path.
 - Always check stopped containers, not just running ones, for bind mount conflicts.
