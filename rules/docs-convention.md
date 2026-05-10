@@ -68,6 +68,12 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
   1. **What you can do** with this setting (the user-visible effect).
   2. **What you can't do** (limits, what is NOT changed by this setting).
   3. **Format** — value syntax, supported pattern features, and at least one example per supported platform.
+- `CHANGELOG.md`: User-facing release log. Write only changes the user feels:
+  - A serious bug got fixed, or this fix introduced a new known issue.
+  - Behaviour changes — workflow steps, command outputs, default behaviour.
+  - Configuration changes — new env vars, renamed/removed options, breaking format changes.
+
+  Do NOT include internal function / module / hook names — those belong in `history.md`.
 
 ## Progressive Disclosure (Cascade)
 
