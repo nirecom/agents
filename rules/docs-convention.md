@@ -64,6 +64,17 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
 - `overview.md`: Project vision and overall shape — what it is and why it exists. The most abstract document in its directory. Does not duplicate `architecture.md` design decisions; instead provides the entry-level mental model for a new reader.
 - `infrastructure.md`: When adding or moving a service, update `infrastructure.md` first — downstream docs (`architecture.md`, `ops.md`) reference it. Use the `/update-infrastructure` skill to keep it aligned with infrastructure changes.
 - `README.md` (ai-specs projects): Lives in the source repo root, not in ai-specs.
+- `.env.example`: End-user configuration documentation. For each variable, the comment block must cover **only** these three things, written from the user's perspective:
+  1. **What you can do** with this setting (the user-visible effect).
+  2. **What you can't do** (limits, what is NOT changed by this setting).
+  3. **Format** — value syntax, supported pattern features, and at least one example per supported platform.
+
+  Do NOT include in `.env.example`:
+  - Internal hook / module / script names (e.g. `enforce-worktree.js`, `block-dotenv`, `scan-outbound`, `PreToolUse`). The user reading `.env` does not know these.
+  - PR numbers or other change-history references — those belong in `history.md`.
+  - Implementation details (which layer enforces what, how the regex is built, which file path is checked first).
+
+  Use plain functional language for what guards do (e.g. "secret protection" instead of "block-dotenv hook"). Cross-reference behaviour to user-observable outcomes, never to internal architecture.
 
 ## Progressive Disclosure (Cascade)
 
