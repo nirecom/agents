@@ -69,13 +69,6 @@ After rotation, `history/index.md` is auto-generated with a year-grouped list of
   2. **What you can't do** (limits, what is NOT changed by this setting).
   3. **Format** — value syntax, supported pattern features, and at least one example per supported platform.
 
-  Do NOT include in `.env.example`:
-  - Internal hook / module / script names (e.g. `enforce-worktree.js`, `block-dotenv`, `scan-outbound`, `PreToolUse`). The user reading `.env` does not know these.
-  - PR numbers or other change-history references — those belong in `history.md`.
-  - Implementation details (which layer enforces what, how the regex is built, which file path is checked first).
-
-  Use plain functional language for what guards do (e.g. "secret protection" instead of "block-dotenv hook"). Cross-reference behaviour to user-observable outcomes, never to internal architecture.
-
 ## Progressive Disclosure (Cascade)
 
 Same-named files at different hierarchy levels provide the same kind of information
