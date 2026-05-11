@@ -1,3 +1,7 @@
+---
+globs: "tests/**,**/*.sh,**/*.Tests.ps1,test_*.py,**/*.spec.*"
+---
+
 # Claude Code E2E Testing
 
 When writing tests that spawn `claude -p`, three precautions are required:

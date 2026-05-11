@@ -1,7 +1,5 @@
 ---
-paths:
-  - "install/**"
-  - "**/*.Tests.ps1"
+globs: "install/**,**/*.Tests.ps1"
 ---
 
 # Installer Testing
