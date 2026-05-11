@@ -23,20 +23,13 @@ Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
 
 See also `rules/installer.md` for installer and system configuration rules.
 
-## Python
-
-- Do not use bare `python`, `pip`, or `python3` commands. Always use `uv` (`uv run`, `uv pip`, etc.).
-- For one-off scripts: `uv run script.py`
-- For adding dependencies: `uv pip install` or `uv add`
-
-## Node.js
-
-- Do not install Node.js directly. Use a version manager:
-  - **Windows (PowerShell):** `fnm` (`fnm use` / `.node-version` auto-detection)
-  - **WSL2 / macOS / Linux:** `nvm` (`nvm use` / `.nvmrc` auto-detection)
-
 ## File Naming Conventions
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
 
 See also `rules/orthogonality.md` for cross-platform and naming consistency rules.
+
+## Sub-rules (path-scoped via `globs:`)
+
+- [coding/python.md](coding/python.md) — `uv` 使用必須、bare `python`/`pip` 禁止
+- [coding/nodejs.md](coding/nodejs.md) — `fnm`(Windows) / `nvm`(POSIX) 使用必須
