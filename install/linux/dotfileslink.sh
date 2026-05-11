@@ -101,6 +101,10 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-codex${C_RESET}\n"
 ln -sf "$AGENTS_ROOT/bin/review-plan-codex" ~/.local/bin/review-plan-codex
 printf "${C_GREEN}Symlinked: ~/.local/bin/review-plan-codex${C_RESET}\n"
 
+# --- ~/.local/bin/get-config-var symlink ---
+ln -sf "$AGENTS_ROOT/bin/get-config-var" ~/.local/bin/get-config-var
+printf "${C_GREEN}Symlinked: ~/.local/bin/get-config-var${C_RESET}\n"
+
 # --- ~/.local/bin/draw-diagram symlink ---
 ln -sf "$AGENTS_ROOT/bin/draw-diagram" ~/.local/bin/draw-diagram
 printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram${C_RESET}\n"

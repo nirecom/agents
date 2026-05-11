@@ -67,8 +67,8 @@ must be read and passed to the planner before drafting begins.
         - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
         - Anything else → **format malformed**.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
-      - **Format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
-      - **Codex unavailable**: emit `> codex unavailable (<reason from status line>) — falling back to Claude reviewer for this round.` then launch `detail-reviewer` subagent.
+      - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.claude/plans/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
+      - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `~/.claude/plans/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
    e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 2), then repeat from step 4a. Each round consumes `revision_rounds`.
 
 5. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
@@ -84,7 +84,10 @@ must be read and passed to the planner before drafting begins.
    - POSIX: `[<session-id>-detail.md](/home/<user>/.claude/plans/<session-id>-detail.md)`
    - Windows: `[<session-id>-detail.md](C:/Users/<user>/.claude/plans/<session-id>-detail.md)`
 
-   Then enter plan mode for user approval.
+   After writing and presenting the link, check via Bash:
+     `bash -c 'get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON'`
+   - stdout `OFF`: print a one-paragraph summary and emit `<<WORKFLOW_MARK_STEP_plan_complete>>` directly. Skip plan mode.
+   - stdout `ON`: enter plan mode for user approval (existing behavior).
 
 ## Research Escalation
 
@@ -142,7 +145,10 @@ Skipping research does NOT justify skipping the plan step.
 ## Rules
 
 - Read before planning — do not plan from assumptions
-- Orchestrator (main Claude) only summarizes each discussion round to the user — do not dump full transcripts into the conversation
+- Orchestrator chat output during the discussion loop is restricted to:
+  (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
+  (b) the final clickable link to <session-id>-detail.md
+  Diagnostics go to <session-id>-detail-debug.log only.
 - Follow `rules/orthogonality.md` for cross-platform and naming consistency
 - **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 6. Never pause for user confirmation during intermediate revision rounds (steps 3–4): write draft files silently and inform the user with plain text only.
 
