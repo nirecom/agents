@@ -29,10 +29,12 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`).
    Pass: the full contents of `<session-id>-intent.md` and the task context.
 
-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>`:
+3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally followed by `DELIVERY_PLAN: <plan>` on the next line):
+   - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text: "(not provided — planner pre-dates this convention)".
    - Inform the user that only one approach is viable (citing the reason) and that the skill
      is proceeding directly to `/make-detail-plan`.
-   - Write a minimal `<session-id>-outline.md` noting the justified single approach.
+   - Write a minimal `<session-id>-outline.md` noting the justified single approach and including
+     a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or the fallback text).
    - Proceed to emit the completion marker and stop.
 
 4. If outline-planner returns `NEEDS_RESEARCH`:
@@ -73,6 +75,10 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
      alternative, approve as-is, or change the scope.
 
 7. Once outline-reviewer returns `APPROVED`:
+   Before calling `AskUserQuestion`, output a prose rationale summary in the main conversation —
+   one paragraph per approach covering its rationale, trade-offs, and delivery plan.
+   This preamble gives the user the context to choose. Do not write the preamble to outline.md.
+
    Run via Bash:
      `bash -c 'get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
    - stdout `OFF`: write the outline file using the "Pass all approaches to make-detail-plan without selecting" default. Print a one-paragraph summary of the approved approaches and the link to <session-id>-outline.md. Do NOT call `AskUserQuestion`.
@@ -92,6 +98,7 @@ Write the file (per `rules/language.md`) with the following sections:
 
 - **Title**: "Confirmed Approach" + `<session-id>`
 - **Adopted approach**: 1 paragraph + rationale for choosing it
+- **Delivery plan**: triage rationale / execution order / split policy for the adopted approach
 - **Considered alternatives (rejected)**: one entry per rejected approach with reason
 - **Reused existing utilities / building blocks**: list
 - **Confirmed non-goals**: inherited from intent.md + any added during this stage
@@ -101,6 +108,7 @@ Write the file (per `rules/language.md`) with the following sections:
 - Orchestrator chat output during the discussion loop is restricted to:
   (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
   (b) the final clickable link to <session-id>-outline.md
+  (c) the prose rationale preamble emitted in step 7 before `AskUserQuestion`
   No per-round natural-language summaries, no codex/reviewer transcripts,
   no "falling back to Claude reviewer" notices in chat.
   Diagnostics go to <session-id>-outline-debug.log only.
@@ -109,6 +117,7 @@ Write the file (per `rules/language.md`) with the following sections:
 - `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here. It is emitted only by
   `make-detail-plan`.
 - **One `AskUserQuestion` per run** — called only in step 7 (approach selection).
+  A prose rationale summary before the call is required (item (c) above) and does not count as an additional user confirmation.
   Never pause for user confirmation during intermediate steps: Codex/reviewer
   revision rounds (step 6) or between-step summaries. Update files silently;
   inform the user with plain text only.

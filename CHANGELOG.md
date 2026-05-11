@@ -99,3 +99,7 @@ Changes: New /issue-close skill: closes a GitHub Issue safely, in 9 steps — in
 ### FEATURE: CONFIRM_OUTLINE/DETAIL/WORKTREE/TESTS env flags (2026-05-11)
 Background: Confirmation prompts at outline / detail / worktree-start (file copy) / write-tests stages were unconditional, slowing the workflow.
 Changes: Add CONFIRM_OUTLINE, CONFIRM_DETAIL, CONFIRM_WORKTREE, CONFIRM_TESTS env flags (default on). When set to off, the relevant skill displays the final result and auto-continues without AskUserQuestion. Per-round planner/reviewer noise is no longer printed to chat - diagnostics go to <session-id>-{outline,detail}-debug.log instead. New helper bin/get-config-var (POSIX + PowerShell) reads .env values via hooks/lib/load-env.js with a --is-off subcommand for parity with hooks/enforce-worktree.js on/off semantics.
+
+### FEATURE: Delivery plan surfaced at outline stage; importance-first detail plan sections (2026-05-12)
+Background: The delivery plan (execution order, split policy) was previously buried in detail.md without being agreed at outline stage.
+Changes: Each approach option in /make-outline-plan now includes a Delivery plan field, and a prose rationale is shown before the AskUserQuestion so users have context to choose. /make-detail-plan surfaces the outline delivery plan to the main conversation before planning begins. Detail plans now open with the Delivery plan section first (importance-first ordering). When CONFIRM_OUTLINE=off, /clarify-intent captures delivery plan direction so it is never lost.
