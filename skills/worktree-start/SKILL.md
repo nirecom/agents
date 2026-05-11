@@ -56,7 +56,25 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
      the user must create and fill in the actual `.env` file. Claude must not write to `.env`
      directly.
 
-9. Copy files per user instruction (candidates are presented automatically; user approval required).
+9. Run the automated copy using `.worktreeinclude`:
+
+   a. Get the main worktree absolute path (already available from the prior steps, or run
+      `git rev-parse --show-toplevel`). Use forward slashes — Git for Windows already
+      returns forward slashes.
+
+   b. Pipe a JSON payload to the copy script. Build the payload with Node to avoid
+      shell quoting and backslash issues:
+      ```
+      node -e "process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],includeFile:null}))" -- "<mainRoot>" "<step-3-path>" | node bin/worktree-copy-include.js
+      ```
+      Files listed in `.worktreeinclude` that are also gitignored will be copied.
+      Files listed in `.worktreecopyexclude` are always denied, regardless of `.worktreeinclude`.
+
+   c. Display the `"copied"` list to the user.
+   d. If `"denied"` is non-empty, report: "Skipped by .worktreecopyexclude: <files>".
+   e. If `"errors"` is non-empty, report them to the user.
+   f. If stderr contains `WARN:`, display it and ask the user to verify that the
+      pattern is also present in `.gitignore`.
 
 10. Create `WORKTREE_NOTES.md` in the worktree root recording:
     - Resolved worktree path and the `WORKTREE_BASE_DIR` value used
