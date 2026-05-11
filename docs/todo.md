@@ -18,6 +18,19 @@
 
 ## Current Work
 
+### GitHub Issues 移行 — フェーズ状況
+
+detail plan: `~/.claude/plans/20260510-todo-to-github-issues-detail.md`
+採用案: C + A（todo.md ID index 縮退 + /issue-close skill）
+
+- [x] Phase 0: テスト先行（4本）— PR #26
+- [x] Phase 1: SSOT確立（rules/github-issues.md, labels, templates）— PR #26
+- [x] Phase 2: /issue-close + enforce-issue-close hook — PR #26
+- [ ] Phase 3: todo.md → ID index 化（dual-write 開始）
+- [ ] Phase 4a: reconcile テスト GREEN
+- [ ] Phase 4b: dotfiles / dotfiles-private 横展開（`.github/` + `bin/sync-labels.sh`）
+- [ ] 廃止: dual-write 終了後に todo.md をポインタのみに縮小
+
 ### rules: プログレッシブディスクロージャー — Verifying
 
 セッション起動コスト削減のため rules/ を `globs:` スコープ付きサブファイルに分割。
