@@ -454,6 +454,46 @@ test_git_commit_subcommand_position() {
         'git diff -- pre-commit' "read"
 }
 
+# ============ Quoted-arg stripping for file-op patterns ============
+# After stripQuotedArgs is applied to file-op kind patterns, write tokens
+# (cp/mv/rm/touch) appearing only inside quoted arguments must not cause
+# false-positive write classification.
+
+test_quoted_arg_no_false_positive_file_op() {
+    assert_classify "doc-append --subject \"cp files\"" \
+        'doc-append --subject "cp files"' "read"
+    assert_classify "doc-append --subject \"mv old new\"" \
+        'doc-append --subject "mv old new"' "read"
+    assert_classify "doc-append --subject \"rm tmp\"" \
+        'doc-append --subject "rm tmp"' "read"
+    assert_classify "doc-append --subject \"touch file.txt\"" \
+        'doc-append --subject "touch file.txt"' "read"
+}
+
+# Interpreter -c / -Command always classifies as write regardless of payload.
+
+test_interpreter_c_always_write() {
+    assert_classify 'bash -c "rm foo"' 'bash -c "rm foo"' "write"
+    assert_classify 'sh -c "echo hello"' 'sh -c "echo hello"' "write"
+    assert_classify 'pwsh -Command "Get-Content foo"' 'pwsh -Command "Get-Content foo"' "write"
+    assert_classify 'zsh -c "ls"' 'zsh -c "ls"' "write"
+}
+
+# Documented FN: command name itself wrapped in quotes — strip removes it
+# entirely, leaving no token to match. Result is "read".
+
+test_cosmetic_quote_file_op_documented_fn() {
+    assert_classify '"cp" src dst (FN-1: command-name quoted)' \
+        '"cp" src dst' "read"
+}
+
+# Heredoc detection must survive the quoted-arg stripping pass.
+
+test_heredoc_still_classified_after_strip() {
+    assert_classify 'cat <<EOF (post-strip)' 'cat <<EOF' "write"
+    assert_classify "cat <<'EOF' (post-strip)" "cat <<'EOF'" "write"
+}
+
 # ============ Run all ============
 
 test_write_cases
@@ -485,6 +525,10 @@ test_gh_group_a_with_heredoc_classified_read
 test_gh_group_a_with_redirect_still_write
 test_git_update_ref_write
 test_git_commit_subcommand_position
+test_quoted_arg_no_false_positive_file_op
+test_interpreter_c_always_write
+test_cosmetic_quote_file_op_documented_fn
+test_heredoc_still_classified_after_strip
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

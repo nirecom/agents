@@ -122,33 +122,6 @@ multi-file 偽造を要求できる。
 - [ ] `skills/worktree-end/SKILL.md`：register 検査の言及
 - [ ] tests/feature-marker-session-binding.sh：unit + e2e
 
-### enforce-worktree.js: `isBranchDeleteCommand` の subcommand-position regex バグ
-
-PR #21 で追加した `isBranchDeleteCommand` の regex `\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)` は **コマンド全体に対する部分一致**で、heredoc 内などの引用文字列に "git branch dash-d" 系の substring が含まれると意図せず match する。
-
-**実害**: docs(todo) commit 等で commit message subject に "branch dash-d" を書くと、`git -C ... commit -m "...branch dash-d..."` 全体に対して isBranchDeleteCommand が true を返し、marker gate に弾かれる（実際にこの todo を作る commit でこのバグに遭遇）。
-
-**根本原因**: 既存の `git-commit` 等の WRITE_PATTERNS は同じ pattern 構造で同様の偽陽性が起きるが、classify はそもそも fail-safe で "write" 寄りに倒すので問題化しない。一方 marker gate は「branch delete である」を確定するためのチェックなので、同じ pattern では精度不足。
-
-**修正候補**:
-- [ ] subcommand position を厳密に anchor（コマンド先頭または `;`/`&&`/`||` 直後の `git` invocation のみ判定。`-m`/`-c` 等の引数値（quoted）はスキップする shell-aware 解析）
-- [ ] もしくは、classify が既に他の write pattern（`git-commit` 等）にマッチしている場合は marker gate を skip — ただし `git branch -d foo; git commit ...` のような sequencing は元々 `hasShellChaining` で reject されるので衝突は起きにくい
-- [ ] 当面の運用回避：commit message に "branch dash-d" / "branch dash-D" 文字列を書かない（テスト・ドキュメントで不便）
-
-### bash-write-patterns: 単純 token regex の引数文字列での偽陽性
-
-`isBranchDeleteCommand` のバグ（上記）と同根の、より広範な問題。`cp`/`mv`/`rm`/`tee`/`touch` などの WRITE_PATTERNS は `(?:^|[\s;|&])cmd\b` で「コマンド先頭または区切り直後」を anchor しているが、**コマンド全体に対する部分一致**なので、これらの token が **別コマンドの quoted 引数に substring として現れる**と誤発火する。
-
-**実害例**:
-- `doc-append --subject "POSIX file cp/mv blocked"` — `cp` パターンと `mv` パターン両方が引数文字列内で発火、commit/edit 操作が write 扱いに。本 retrofit 作業中に実際に遭遇（reword で回避）。
-- `doc-append --changes "ops.md > Rule 1 > Rule 2 > Rule 3"` — posix-redirect パターン (`(?:\d*)>>?`) がスペース区切りの `>` に発火。Precedence テーブルを --changes 引数に含めようとするとブロックされる（feature/user-escalation 作業中に遭遇）。
-- 一般的に、CHANGELOG/history.md/commit message 等で UNIX コマンド名や `>` 記号を **言及するだけ**でブロックされる。文書化作業の頻繁な阻害要因。
-
-**根本原因**: `isBranchDeleteCommand` と同じく shell-aware なパース（quoted argument を skip する）が必要。既存 patterns は fail-safe で write に倒すため classify レベルでは「過剰ブロック」で済んでいたが、文書化作業の現実的なノイズ源になっている。
-
-**修正候補**:
-- [ ] WRITE_PATTERNS 全体を shell-aware パーサで判定するよう書き換え（quoted 引数を除外してから regex を当てる）
-- [ ] `isBranchDeleteCommand` 修正と同時に対応すると共有設計が立てられる
 
 ### worktree-end: pending-branch-delete マーカー Write 許可 — 別 session と合わせて検討
 

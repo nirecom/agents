@@ -382,6 +382,60 @@ test_e2e_branch_delete_allowed_with_marker() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Test 11: isBranchDeleteCommand must not false-positive on commit messages
+#          where "branch -d" / "branch -D" appears inside a quoted argument.
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_isBranchDeleteCommand_no_FP_in_commit_message() {
+    local r
+    r="$(call_isBranchDeleteCommand 'git commit -m "branch -d fix/foo"')"
+    [ "$r" = "false" ] && pass "isBranchDeleteCommand(git commit -m \"branch -d fix/foo\") == false" \
+                      || fail "isBranchDeleteCommand(commit msg with branch -d) == $r (expected false)"
+    r="$(call_isBranchDeleteCommand 'git commit -m "delete branch -D feature/x"')"
+    [ "$r" = "false" ] && pass "isBranchDeleteCommand(commit msg with branch -D) == false" \
+                      || fail "isBranchDeleteCommand(commit msg with branch -D) == $r (expected false)"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 12: real `git branch -d/-D` with quoted branch name still detected
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_isBranchDeleteCommand_quoted_branch_value() {
+    local r
+    r="$(call_isBranchDeleteCommand 'git branch -D "feature/x"')"
+    [ "$r" = "true" ] && pass "isBranchDeleteCommand(git branch -D \"feature/x\") == true" \
+                     || fail "isBranchDeleteCommand(git branch -D \"feature/x\") == $r (expected true)"
+    r="$(call_isBranchDeleteCommand "git branch -d 'fix/foo'")"
+    [ "$r" = "true" ] && pass "isBranchDeleteCommand(git branch -d 'fix/foo') == true" \
+                     || fail "isBranchDeleteCommand(git branch -d 'fix/foo') == $r (expected true)"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 13: documented false negative — subcommand token in quotes
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_isBranchDeleteCommand_documented_fn() {
+    local r
+    r="$(call_isBranchDeleteCommand 'git "branch" -D foo')"
+    [ "$r" = "false" ] && pass "isBranchDeleteCommand(git \"branch\" -D foo) == false (FN-1: documented)" \
+                      || fail "isBranchDeleteCommand(git \"branch\" -D foo) == $r (expected false; FN-1)"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 14: parseBranchDeleteTarget unwraps quoted branch names
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_parseBranchDeleteTarget_quoted_branch_names() {
+    local r
+    r="$(call_parseTarget 'git branch -D "feature/x"')"
+    [ "$r" = '"feature/x"' ] && pass "parseTarget(git branch -D \"feature/x\") == feature/x" \
+                            || fail "parseTarget(quoted feature/x) == $r"
+    r="$(call_parseTarget "git branch -d 'fix/foo'")"
+    [ "$r" = '"fix/foo"' ] && pass "parseTarget(git branch -d 'fix/foo') == fix/foo" \
+                          || fail "parseTarget(single-quoted fix/foo) == $r"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -399,6 +453,10 @@ test_marker_crlf_accepted
 test_marker_readable_from_linked_worktree
 test_e2e_branch_delete_blocked_without_marker
 test_e2e_branch_delete_allowed_with_marker
+test_isBranchDeleteCommand_no_FP_in_commit_message
+test_isBranchDeleteCommand_quoted_branch_value
+test_isBranchDeleteCommand_documented_fn
+test_parseBranchDeleteTarget_quoted_branch_names
 
 echo ""
 echo "─────────────────────────────────────────"
