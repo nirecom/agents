@@ -21,6 +21,8 @@
 
 "use strict";
 
+const { stripQuotedArgs } = require("./strip-quoted-args");
+
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
   { name: "posix-redirect", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!\s*\/dev\/null(?=\s|[;|&]|$))/ },
@@ -112,6 +114,11 @@ const WRITE_PATTERNS = [
   // gh api: cover all flag forms — `-X DELETE`, `-XDELETE`, `-X=DELETE`,
   // `--method DELETE`, `--method=DELETE`.
   { name: "gh-api-mutate", kind: "gh", regex: /\bgh\b.*\bapi\b.*(?:-X[\s=]*|--method[\s=]+)(?:POST|PUT|PATCH|DELETE)\b/i },
+  // Interpreter -c / -Command: shell/interpreter invocations with inline body.
+  // Tested against ORIGINAL cmd (not stripped) — the inline body is irrelevant;
+  // the interpreter call itself is always a potential write.
+  { name: "interpreter-c", kind: "interpreter",
+    regex: /(?:^|[\s;|&])(?:bash|sh|zsh|dash|fish|pwsh|powershell|cmd)(?:\.exe)?\s+(?:-c\b|-Command\b|-EncodedCommand\b|\/c\b)/i },
 ];
 
 // gh "Group A" coordination commands: pr/issue/repo lifecycle that touch
@@ -125,6 +132,12 @@ const QUOTING_ONLY_NAMES = new Set([
   "here-doc", "here-string", "pwsh-here-single", "pwsh-here-double",
 ]);
 
+// Pattern kinds where classify() tests the stripped (quote-removed) command.
+// Only file-op patterns (cp/mv/rm/touch/chmod etc.) — other kinds (posix, git,
+// gh, interpreter) are tested against the original command so that operators
+// and interpreter flags inside quoted args are still detected.
+const STRIP_KINDS = new Set(["file-op"]);
+
 /**
  * Classify a Bash command string as "read" or "write".
  * Returns "write" if any WRITE_PATTERNS pattern matches, except: when ALL
@@ -136,9 +149,11 @@ const QUOTING_ONLY_NAMES = new Set([
 function classify(cmd) {
   try {
     if (!cmd || typeof cmd !== "string") return "read";
+    const stripped = stripQuotedArgs(cmd);
     const matchedNames = [];
     for (const p of WRITE_PATTERNS) {
-      if (p.regex.test(cmd)) matchedNames.push(p.name);
+      const scanned = STRIP_KINDS.has(p.kind) ? stripped : cmd;
+      if (p.regex.test(scanned)) matchedNames.push(p.name);
     }
     if (matchedNames.length === 0) return "read";
     if (
