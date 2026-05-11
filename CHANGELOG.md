@@ -107,3 +107,7 @@ Changes: Split large rule files into path-scoped sub-files that load only when e
 ### FEATURE: Delivery plan surfaced at outline stage; importance-first detail plan sections (2026-05-12)
 Background: The delivery plan (execution order, split policy) was previously buried in detail.md without being agreed at outline stage.
 Changes: Each approach option in /make-outline-plan now includes a Delivery plan field, and a prose rationale is shown before the AskUserQuestion so users have context to choose. /make-detail-plan surfaces the outline delivery plan to the main conversation before planning begins. Detail plans now open with the Delivery plan section first (importance-first ordering). When CONFIRM_OUTLINE=off, /clarify-intent captures delivery plan direction so it is never lost.
+
+### BUGFIX: /worktree-end marker cleanup now completes without manual intervention (2026-05-12)
+Background: /worktree-end step 6g failed to delete the branch-delete marker file after merging because the deletion was blocked by the write guard.
+Changes: Marker cleanup at step 6g now runs automatically. git push -u origin <branch> from inside a worktree no longer prompts for permission.
