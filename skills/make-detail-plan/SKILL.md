@@ -39,8 +39,7 @@ must be read and passed to the planner before drafting begins.
    a. Write the planner's draft using the Write tool to:
       `~/.claude/plans/drafts/<session-id>-detail-draft.md`
 
-      Defensive fallback: if `~/.claude/plans/drafts/` does not yet exist, run
-      `mkdir -p ~/.claude/plans/drafts` via Bash first (idempotent).
+
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
       On the first review round only, determine which prior-stage files exist:
       - `~/.claude/plans/<session-id>-intent.md`
@@ -94,7 +93,7 @@ must be read and passed to the planner before drafting begins.
    - Windows: `[<session-id>-detail.md](C:/Users/<user>/.claude/plans/<session-id>-detail.md)`
 
    After writing and presenting the link, check via Bash:
-     `bash -c 'get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON'`
+     `get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON`
    - stdout `OFF`: print a one-paragraph summary and emit `<<WORKFLOW_MARK_STEP_plan_complete>>` directly. Skip plan mode.
    - stdout `ON`: enter plan mode for user approval (existing behavior).
 
