@@ -390,6 +390,100 @@ function isAllowedBranchDeleteViaMarker(cmd, repoRoot) {
          nWtree.startsWith(nBase + "/");
 }
 
+function extractRemoveItemPositionals(afterCmd) {
+  const results = [];
+  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let m;
+  let consumeAsTarget = false;
+  while ((m = re.exec(afterCmd)) !== null) {
+    const tok = m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]);
+    if (consumeAsTarget) {
+      const v = tok.replace(/^["']|["']$/g, "").trim();
+      if (v) results.push(v);
+      consumeAsTarget = false;
+      continue;
+    }
+    if (/^-(?:Path|LiteralPath)$/i.test(tok)) { consumeAsTarget = true; continue; }
+    if (tok.startsWith("-")) continue;
+    tok.split(",").map((s) => s.replace(/^["']|["']$/g, "").trim()).filter(Boolean)
+      .forEach((v) => results.push(v));
+  }
+  return results;
+}
+
+// True if cmd is an isolated delete of the pending-branch-delete marker file
+// AND the branch recorded in the marker no longer exists in repoRoot.
+// /worktree-end Step 6g must remove the marker after Step 6f deletes the branch.
+// CWD may have reset to main worktree on Windows after Step 6c (worktree remove),
+// so the delete needs an explicit main-worktree exception.
+// Fail-closed on any unexpected input, multi-target invocation, or non-1 git exit.
+function isAllowedMarkerDelete(cmd, repoRoot) {
+  if (hasShellChaining(cmd)) return false;
+  if (!repoRoot) return false;
+  const isRm = /^\s*rm(?:\s|$)/.test(cmd);
+  const isRemoveItem = /^\s*Remove-Item(?:\s|$)/i.test(cmd);
+  if (!isRm && !isRemoveItem) return false;
+  // Reject recursive flags: POSIX -r/-R/-rf; PowerShell -Recurse and all prefix abbreviations.
+  if (isRm && (/(?:^|\s)-[a-zA-Z]*[rR]/.test(cmd) || /(?:^|\s)--recursive\b/.test(cmd))) return false;
+  if (isRemoveItem && /(?:^|\s)-(?:r|re|rec|recu|recur|recurs|recurse)\b/i.test(cmd)) return false;
+  // Only -LiteralPath is allowed for PowerShell; -Path uses wildcard semantics.
+  if (isRemoveItem && /-Path\b/i.test(cmd) && !/-LiteralPath\b/i.test(cmd)) return false;
+  // Resolve the marker path.
+  let commonDir;
+  try {
+    const r = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status !== 0) return false;
+    commonDir = path.resolve(repoRoot, (r.stdout || "").trim());
+  } catch (e) { return false; }
+  const markerPath = path.join(commonDir, "info", "pending-branch-delete");
+  // Extract all positional targets; require exactly one.
+  let positionals = [];
+  if (isRemoveItem) {
+    const after = cmd.replace(/^\s*Remove-Item\s*/i, "");
+    positionals = extractRemoveItemPositionals(after);
+  } else {
+    const after = cmd.replace(/^\s*rm\s*/, "");
+    const tokens = [];
+    const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+    let m;
+    while ((m = re.exec(after)) !== null)
+      tokens.push(m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]));
+    positionals = tokens.filter((t) => !t.startsWith("-"));
+  }
+  if (positionals.length !== 1) return false;
+  const target = positionals[0];
+  const norm = (p) => {
+    try {
+      const n = normalizeCwd(p) || p;
+      const r = path.resolve(n);
+      return process.platform === "win32" ? r.toLowerCase() : r;
+    } catch (e) { return null; }
+  };
+  const nTarget = norm(target);
+  const nMarker = norm(markerPath);
+  if (!nTarget || !nMarker || nTarget !== nMarker) return false;
+  // Read marker and extract branch name (line 1).
+  let content;
+  try { content = fs.readFileSync(markerPath, "utf8"); }
+  catch (e) { return false; }
+  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 1) return false;
+  const markerBranch = lines[0];
+  // Branch-existence check: status 0 = exists (block), 1 = not found (allow), ≥2 = fatal (fail-closed).
+  try {
+    const r = spawnSync(
+      "git", ["show-ref", "--verify", "--quiet", `refs/heads/${markerBranch}`],
+      { cwd: repoRoot, timeout: 2000 }
+    );
+    if (r.error) return false;
+    if (r.status === null) return false;
+    if (r.status !== 1) return false;
+  } catch (e) { return false; }
+  return true;
+}
+
 // Returns true when repoCwd is the main worktree (non-linked).
 // In a linked worktree, --git-common-dir and --git-dir differ.
 function isMainCheckout(repoCwd) {
@@ -797,6 +891,7 @@ if (mainCheckout) {
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
+    if (isAllowedMarkerDelete(cmd, repoRoot)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
@@ -830,5 +925,6 @@ module.exports = {
   isBranchDeleteCommand,
   parseBranchDeleteTarget,
   isAllowedBranchDeleteViaMarker,
+  isAllowedMarkerDelete,
   getWorktreeBaseDir,
 };
