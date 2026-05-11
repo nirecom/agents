@@ -39,6 +39,7 @@ const path = require("path");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");
+const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
 const {
@@ -127,15 +128,6 @@ function getCurrentBranch(repoCwd) {
   }
 }
 
-/** Strip double- and single-quoted string content so shell operators inside
- *  quotes are ignored when scanning for chaining metacharacters.
- *  Does NOT handle PowerShell backtick escapes or here-strings. */
-function stripQuotedSegments(str) {
-  return str
-    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-    .replace(/'[^']*'/g, "''");
-}
-
 /** True if cmd contains shell chaining/pipe operators outside of quotes.
  *  Also rejects command substitutions ($() and backticks): those spawn a
  *  shell that runs the inner command, which is effectively chaining for
@@ -144,7 +136,7 @@ function stripQuotedSegments(str) {
  *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
  *  so `& git.exe worktree add` is conservatively rejected. */
 function hasShellChaining(cmd) {
-  const stripped = stripQuotedSegments(cmd);
+  const stripped = stripQuotedArgs(cmd);
   return /[|;&]|\$\(|`/.test(stripped);
 }
 
@@ -154,7 +146,7 @@ function hasShellChaining(cmd) {
 // Commands with sequencing must not be fast-pathed through the session-scope
 // allow: the un-extracted portion may contain in-scope writes (e.g. rm, mv).
 function hasCommandSequencing(cmd) {
-  const stripped = stripQuotedSegments(cmd);
+  const stripped = stripQuotedArgs(cmd);
   return /;|&&|\|\|/.test(stripped);
 }
 
@@ -307,10 +299,13 @@ function getWorktreeBaseDir() {
 function isBranchDeleteCommand(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
   if (!/\bgit\b/.test(cmd)) return false;
-  return /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)/.test(cmd);
+  const stripped = stripQuotedArgs(cmd);
+  return /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b[^|;&]*\s-[dD](?:\s|$)/.test(stripped);
 }
 
 // Extract the target branch name from `git ... branch -d|-D <branch>`.
+// Uses the ORIGINAL (un-stripped) cmd so quoted branch names like "fix/foo"
+// are tokenised correctly by the quote-aware re.exec loop below.
 // Returns null if unparseable.
 function parseBranchDeleteTarget(cmd) {
   if (!isBranchDeleteCommand(cmd)) return null;
