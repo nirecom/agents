@@ -123,10 +123,7 @@ extract_headings() {
 echo "=== Test 1: globs: frontmatter validity ==="
 
 GLOBS_FILES=(
-    "rules/test/categories.md"
-    "rules/test/naming.md"
-    "rules/test/layers.md"
-    "rules/docs-convention/history.md"
+    "rules/docs-convention/history-rules.md"
     "rules/docs-convention/todo.md"
     "rules/docs-convention/changelog.md"
     "rules/docs-convention/architecture.md"
@@ -235,16 +232,14 @@ test_heading_coverage \
     "$REPO_ROOT/rules/test.md.bak" \
     "rules/test.md headings" \
     "$REPO_ROOT/rules/test.md" \
-    "$REPO_ROOT/rules/test/categories.md" \
-    "$REPO_ROOT/rules/test/naming.md" \
-    "$REPO_ROOT/rules/test/layers.md"
+    "$REPO_ROOT/skills/test-design-shared/reference.md"
 
 # docs-convention.md group
 test_heading_coverage \
     "$REPO_ROOT/rules/docs-convention.md.bak" \
     "rules/docs-convention.md headings" \
     "$REPO_ROOT/rules/docs-convention.md" \
-    "$REPO_ROOT/rules/docs-convention/history.md" \
+    "$REPO_ROOT/rules/docs-convention/history-rules.md" \
     "$REPO_ROOT/rules/docs-convention/todo.md" \
     "$REPO_ROOT/rules/docs-convention/changelog.md" \
     "$REPO_ROOT/rules/docs-convention/architecture.md" \
@@ -399,14 +394,14 @@ check_charcount() {
 check_charcount \
     "$REPO_ROOT/rules/test.md.bak" \
     "rules/test.md char-count" \
-    "$REPO_ROOT/rules/test/categories.md" \
-    "$REPO_ROOT/rules/test/naming.md" \
-    "$REPO_ROOT/rules/test/layers.md"
+    "$REPO_ROOT/rules/test.md" \
+    "$REPO_ROOT/skills/test-design-shared/reference.md"
 
 check_charcount \
     "$REPO_ROOT/rules/docs-convention.md.bak" \
     "rules/docs-convention.md char-count" \
-    "$REPO_ROOT/rules/docs-convention/history.md" \
+    "$REPO_ROOT/rules/docs-convention.md" \
+    "$REPO_ROOT/rules/docs-convention/history-rules.md" \
     "$REPO_ROOT/rules/docs-convention/todo.md" \
     "$REPO_ROOT/rules/docs-convention/changelog.md" \
     "$REPO_ROOT/rules/docs-convention/architecture.md" \
@@ -416,6 +411,7 @@ check_charcount \
 check_charcount \
     "$REPO_ROOT/rules/coding.md.bak" \
     "rules/coding.md char-count" \
+    "$REPO_ROOT/rules/coding.md" \
     "$REPO_ROOT/rules/coding/python.md" \
     "$REPO_ROOT/rules/coding/nodejs.md"
 
