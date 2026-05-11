@@ -103,3 +103,7 @@ Changes: Add CONFIRM_OUTLINE, CONFIRM_DETAIL, CONFIRM_WORKTREE, CONFIRM_TESTS en
 ### REFACTOR: rules: scope rule files to relevant file types (session overhead reduction) (2026-05-12)
 Background: All rule files loaded globally at session start, consuming context window capacity even when irrelevant to the current task.
 Changes: Split large rule files into path-scoped sub-files that load only when editing matching file types (docs/*.md, *.py, *.ts, docker-compose.yml, test files, etc.). Test design rules (categories, naming conventions, layer selection) moved to skills/test-design-shared/reference.md — loaded by write-tests/review-tests only. Corrected globs: frontmatter in files that had used the unsupported paths: key.
+
+### FEATURE: Delivery plan surfaced at outline stage; importance-first detail plan sections (2026-05-12)
+Background: The delivery plan (execution order, split policy) was previously buried in detail.md without being agreed at outline stage.
+Changes: Each approach option in /make-outline-plan now includes a Delivery plan field, and a prose rationale is shown before the AskUserQuestion so users have context to choose. /make-detail-plan surfaces the outline delivery plan to the main conversation before planning begins. Detail plans now open with the Delivery plan section first (importance-first ordering). When CONFIRM_OUTLINE=off, /clarify-intent captures delivery plan direction so it is never lost.

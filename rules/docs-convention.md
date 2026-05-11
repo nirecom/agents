@@ -44,6 +44,13 @@ When updating a project-level doc in ai-specs, also update its parent-level coun
 (e.g. `langchain/todo.md` → `engineering/todo.md`).
 Repo-local `docs/` has no parent level — propagation is not needed.
 
+## Planning Pipeline Artifacts
+
+Session planning artifacts (`<session-id>-intent.md`, `-outline.md`, `-detail.md` under `~/.claude/plans/`) are governed by their own stage-specific obligations:
+- **Intent stage:** captures scope, constraints, and timeline/dependency context only — does not decide delivery plan. When `CONFIRM_OUTLINE=off`, also captures delivery plan direction (see `skills/clarify-intent/SKILL.md`).
+- **Outline stage:** each approach must declare a **Delivery plan** field (triage rationale / execution order / split policy). When `CONFIRM_DETAIL=off`, the delivery plan must be finalized here. See `skills/make-outline-plan/SKILL.md`.
+- **Detail stage:** opens with **Delivery plan** first (importance-first section ordering). When outline carried a delivery plan forward, it is surfaced to the main conversation before the planner runs. See `skills/make-detail-plan/SKILL.md` and `agents/detail-planner.md`.
+
 ## Sub-rules (path-scoped via `globs:`)
 
 Loaded automatically when editing the relevant file type; also readable on demand:
