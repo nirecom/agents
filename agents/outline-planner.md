@@ -43,6 +43,7 @@ Your output must stay at the level of: design direction, utility/pattern reuse s
 
 **Builds on:** <existing utilities, patterns, or conventions already in the codebase>
 **Trade-off vs other options:** <one line>
+**Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
 
 ---
 
@@ -52,6 +53,7 @@ Your output must stay at the level of: design direction, utility/pattern reuse s
 
 **Builds on:** <...>
 **Trade-off vs other options:** <one line>
+**Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
 
 ---
 
@@ -66,6 +68,7 @@ If only one approach is genuinely viable (not just the easiest), emit **only** t
 
 ```
 SINGLE_APPROACH_JUSTIFIED: <one-line reason why alternatives are not viable>
+DELIVERY_PLAN: <triage rationale / execution order / split policy — one line>
 ```
 
 The make-outline-plan skill will skip the review round and proceed directly to make-detail-plan.
@@ -88,5 +91,7 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - Read intent.md before proposing. Do not invent requirements.
 - Propose at least 2 approaches. Proposing only 1 (without SINGLE_APPROACH_JUSTIFIED) is a protocol violation.
 - Each approach must have a one-line tradeoff vs the other(s).
+- Every approach must include a `Delivery plan:` field. The `SINGLE_APPROACH_JUSTIFIED` reply must include a `DELIVERY_PLAN:` line on the next line. Omitting either is a protocol violation.
+- If the delivery plan cannot be stated in one line for `SINGLE_APPROACH_JUSTIFIED`, consider whether presenting 2 approaches is more appropriate.
 - Follow `rules/orthogonality.md` when evaluating cross-platform impact.
 - Do not write code or call Edit/Write.
