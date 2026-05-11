@@ -16,7 +16,10 @@ Write or update tests for the current task.
    missing field, wrong type, unexpected value). These become integration-path error
    cases in the next step.
 4. List all planned test cases by category (include call-path error cases from step 3).
-   Present to the user — do not write code until approved.
+   Then check via Bash:
+     `bash -c 'get-config-var --is-off CONFIRM_TESTS on && echo OFF || echo ON'`
+   - stdout `OFF`: print the planned cases and proceed to step 5 without approval wait.
+   - stdout `ON`: present the planned cases to the user — do not write code until approved (existing behavior).
 5. **Determine the subagent's model**:
    - Read `skills/judge-task-complexity/SKILL.md` to load the signal table.
    - Evaluate all signals against the task context, source files from steps 2–3, and the planned test cases from step 4. Do not short-circuit on the first match.

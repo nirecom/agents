@@ -131,6 +131,12 @@ Write-Launcher "$LocalBin\review-plan-codex.cmd" $rpcCmdContent "review-plan-cod
 $rpcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-plan-codex`" `"`$@`"`n"
 Write-Launcher "$LocalBin\review-plan-codex" $rpcShimContent "review-plan-codex (bash shim)"
 
+# --- ~/.local/bin/get-config-var launchers (cmd + bash shim) ---
+$gcvCmdContent = "@echo off`r`nwsl bash -c ""get-config-var %*""`r`n"
+Write-Launcher "$LocalBin\get-config-var.cmd" $gcvCmdContent "get-config-var.cmd"
+$gcvShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/get-config-var`" `"`$@`"`n"
+Write-Launcher "$LocalBin\get-config-var" $gcvShimContent "get-config-var (bash shim)"
+
 # --- ~/.local/bin/draw-diagram launchers (cmd + bash shim) ---
 $ddCmdContent = "@echo off`r`nwsl bash -c ""draw-diagram %*""`r`n"
 Write-Launcher "$LocalBin\draw-diagram.cmd" $ddCmdContent "draw-diagram.cmd"

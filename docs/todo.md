@@ -2,6 +2,19 @@
 
 ## Current Work
 
+### CC workflow 確認フラグ追加 (CONFIRM_OUTLINE / DETAIL / WORKTREE / TESTS) — Verifying
+
+4 つの `CONFIRM_*=on/off` フラグを導入し、off 時に各スキル (make-outline-plan / make-detail-plan / worktree-start / write-tests) の確認プロンプトを抑制して自動続行できるようにした。planner↔reviewer ループの中間ドラフト・per-round 自然言語サマリーも chat から削除 (debug.log にのみ出力)。
+
+- [x] `bin/get-config-var` (POSIX + PowerShell) を新規追加。`--is-off` サブコマンドで OFF 判定を `hooks/enforce-worktree.js` と parity させた
+- [x] `install/linux/dotfileslink.sh` と `install/win/dotfileslink.ps1` に shim 配置
+- [x] `.env.example` に 4 フラグを追加 (`AUTO_MERGE_PR=on` 直後)
+- [x] 4 SKILL.md にゲート追加 + 中間ドラフト emit を debug.log への append に置換
+- [x] `agents/{outline,detail}-reviewer.md` の fallback notice 文言を更新
+- [x] tests: `feature-confirm-flags-helper.sh` + `feature-confirm-flags-static.sh` 全 PASS
+- [ ] **ユーザ検証**: 実際にどれかのフラグを off にしてフロー全体 (make-outline-plan → make-detail-plan → worktree-start → write-tests) を1回通す
+- [ ] 検証 OK 後、history.md に移動 + CHANGELOG 追記 (FEATURE)
+
 ### install/win/global-gitignore.ps1 の Pester テスト追加
 
 bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-installer-ignore.sh` でカバーされているが、PowerShell 版 (`global-gitignore.ps1`) は無テスト。今回 `.Count` バグ（空 Where-Object 結果での null 参照）が production で初めて発覚したのはこのカバレッジ欠落が原因。

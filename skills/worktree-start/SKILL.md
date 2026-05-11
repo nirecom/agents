@@ -56,7 +56,10 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
      the user must create and fill in the actual `.env` file. Claude must not write to `.env`
      directly.
 
-9. Copy files per user instruction (candidates are presented automatically; user approval required).
+9. Determine copy mode via Bash:
+     `bash -c 'get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
+   - stdout `OFF`: copy all "Copy recommended" entries automatically. Never copy "Copy prohibited" (production secrets, deploy keys, cloud credentials). Never write `.env` directly. Print the resulting copy log inline. Do NOT call `AskUserQuestion`.
+   - stdout `ON`: present candidates via `AskUserQuestion` as today (existing behavior).
 
 10. Create `WORKTREE_NOTES.md` in the worktree root recording:
     - Resolved worktree path and the `WORKTREE_BASE_DIR` value used

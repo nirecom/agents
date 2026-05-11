@@ -83,3 +83,7 @@ Changes: Soft and force branch deletion are now classified as write again. The o
 ### CONFIG: ENFORCE_WORKTREE_EXCLUDE comment rewritten user-side; new content rule for .env.example (2026-05-10)
 Background: The .env.example comment for ENFORCE_WORKTREE_EXCLUDE described internal hook behaviour that an end user reading the file does not know. There was also no convention defining what belongs in .env.example, so prior edits had drifted into PR-reference and implementation-detail territory.
 Changes: Rewrote the ENFORCE_WORKTREE_EXCLUDE comment to cover only what the user can do, what they can't do, and the value format. rules/docs-convention.md gained a new content rule for .env.example codifying these three required items, applicable going forward to all .env variables.
+
+### FEATURE: CONFIRM_OUTLINE/DETAIL/WORKTREE/TESTS env flags (2026-05-11)
+Background: Confirmation prompts at outline / detail / worktree-start (file copy) / write-tests stages were unconditional, slowing the workflow.
+Changes: Add CONFIRM_OUTLINE, CONFIRM_DETAIL, CONFIRM_WORKTREE, CONFIRM_TESTS env flags (default on). When set to off, the relevant skill displays the final result and auto-continues without AskUserQuestion. Per-round planner/reviewer noise is no longer printed to chat - diagnostics go to <session-id>-{outline,detail}-debug.log instead. New helper bin/get-config-var (POSIX + PowerShell) reads .env values via hooks/lib/load-env.js with a --is-off subcommand for parity with hooks/enforce-worktree.js on/off semantics.
