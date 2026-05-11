@@ -99,3 +99,7 @@ Changes: New /issue-close skill: closes a GitHub Issue safely, in 9 steps — in
 ### FEATURE: CONFIRM_OUTLINE/DETAIL/WORKTREE/TESTS env flags (2026-05-11)
 Background: Confirmation prompts at outline / detail / worktree-start (file copy) / write-tests stages were unconditional, slowing the workflow.
 Changes: Add CONFIRM_OUTLINE, CONFIRM_DETAIL, CONFIRM_WORKTREE, CONFIRM_TESTS env flags (default on). When set to off, the relevant skill displays the final result and auto-continues without AskUserQuestion. Per-round planner/reviewer noise is no longer printed to chat - diagnostics go to <session-id>-{outline,detail}-debug.log instead. New helper bin/get-config-var (POSIX + PowerShell) reads .env values via hooks/lib/load-env.js with a --is-off subcommand for parity with hooks/enforce-worktree.js on/off semantics.
+
+### REFACTOR: rules: scope rule files to relevant file types (session overhead reduction) (2026-05-12)
+Background: All rule files loaded globally at session start, consuming context window capacity even when irrelevant to the current task.
+Changes: Split large rule files into path-scoped sub-files that load only when editing matching file types (docs/*.md, *.py, *.ts, docker-compose.yml, test files, etc.). Test design rules (categories, naming conventions, layer selection) moved to skills/test-design-shared/reference.md — loaded by write-tests/review-tests only. Corrected globs: frontmatter in files that had used the unsupported paths: key.

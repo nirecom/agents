@@ -18,6 +18,18 @@
 
 ## Current Work
 
+### rules: プログレッシブディスクロージャー — Verifying
+
+セッション起動コスト削減のため rules/ を `globs:` スコープ付きサブファイルに分割。
+テスト設計ルールは Supporting Files パターン（`skills/test-design-shared/reference.md`）に移行。
+
+- [x] Group A: 4ファイルの壊れた `paths:` フロントマターを `globs:` に修正
+- [x] Group B: `test.md`・`docs-convention.md`・`coding.md` を薄いポインタに縮小、詳細を `docs-convention/`・`coding/`・`skills/test-design-shared/` に移動
+- [x] Group C: メモリキュレーション（third-party 関連 2 件統合、force-push policy クリーンアップ、MEMORY.md 再インデックス）
+- [x] テストスイート全 31 件 PASS、セキュリティ APPROVED
+- [ ] **ユーザ検証**: 変更後のルールが期待通り動作することを確認
+- [ ] 検証 OK 後、history.md に移動 + CHANGELOG 追記 (REFACTOR)
+
 ### CC workflow 確認フラグ追加 (CONFIRM_OUTLINE / DETAIL / WORKTREE / TESTS) — Verifying
 
 4 つの `CONFIRM_*=on/off` フラグを導入し、off 時に各スキル (make-outline-plan / make-detail-plan / worktree-start / write-tests) の確認プロンプトを抑制して自動続行できるようにした。planner↔reviewer ループの中間ドラフト・per-round 自然言語サマリーも chat から削除 (debug.log にのみ出力)。
@@ -143,6 +155,7 @@ PR #21 で追加した `isBranchDeleteCommand` の regex `\bgit\s+(?:-\S+(?:\s+[
 - `doc-append --subject "POSIX file cp/mv blocked"` — `cp` パターンと `mv` パターン両方が引数文字列内で発火、commit/edit 操作が write 扱いに。本 retrofit 作業中に実際に遭遇（reword で回避）。
 - `doc-append --changes "ops.md > Rule 1 > Rule 2 > Rule 3"` — posix-redirect パターン (`(?:\d*)>>?`) がスペース区切りの `>` に発火。Precedence テーブルを --changes 引数に含めようとするとブロックされる（feature/user-escalation 作業中に遭遇）。
 - 一般的に、CHANGELOG/history.md/commit message 等で UNIX コマンド名や `>` 記号を **言及するだけ**でブロックされる。文書化作業の頻繁な阻害要因。
+- `bash script.sh 2>&1 | head` — `2>&1` が posix-redirect パターンに合致し write 扱いに。FD-to-FD リダイレクトは実ファイル書き込みではないが既知の偽陽性として認識済み（bash-write-patterns.js コメント参照）。
 
 **根本原因**: `isBranchDeleteCommand` と同じく shell-aware なパース（quoted argument を skip する）が必要。既存 patterns は fail-safe で write に倒すため classify レベルでは「過剰ブロック」で済んでいたが、文書化作業の現実的なノイズ源になっている。
 
