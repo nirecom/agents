@@ -1,0 +1,31 @@
+name: Incident
+description: A bug, outage, or production problem
+title: "<short subject>"
+labels: ["type:incident"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for incidents/bugs. On close, `/issue-close <N>`
+        will write an `INCIDENT` entry to `docs/history.md` using the
+        Cause/Fix fields below.
+  - type: textarea
+    id: cause
+    attributes:
+      label: Cause
+      description: Root cause. What went wrong and why?
+      placeholder: |
+        Cause: ...
+      value: "Cause: "
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix
+      description: How was it resolved? Mitigation, follow-up.
+      placeholder: |
+        Fix: ...
+      value: "Fix: "
+    validations:
+      required: true
