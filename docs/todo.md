@@ -57,7 +57,7 @@ PR #2 以来、push の allow rule は `-C` あり版 (`Bash(git -C * push -u or
 `-C` 不要が `rules/git.md` 的にも自然になり、`git push -u origin <branch>` (no -C) が
 発行される。対応 allow rule が未登録のため interactive permission dialog が出る。
 
-- [ ] `settings.json` の allow に `Bash(git push -u origin *)` を追加
+- [x] `settings.json` の allow に `Bash(git push -u origin *)` を追加 — `fix/settings-marker-cleanup` で解消
 - [ ] 同様に `Bash(git push origin *)` (既存) と並んで `git fetch origin *` / `git pull origin *` の
       `-u` 系統との整合性も点検する (push に限らず EnterWorktree-friendly な allow set への棚卸し)
 - [ ] `Bash(git push -u origin */*)`  の必要性確認 (`*` がスラッシュをマッチするかの実機検証)
@@ -282,9 +282,7 @@ Step 6h は `git fetch --prune origin` のみ。squash-merge 後にローカル 
 
 `/worktree-end` Step 6g で `<git-common-dir>/info/pending-branch-delete` を削除しようとすると、`rm` / `Remove-Item` が bash-write-patterns.js に write 分類され、enforce-worktree.js にブロックされる（main worktree CWD から）。
 
-**実害**: ブランチ削除済みなので stale marker が機能的に悪用されることはないが、cleanup が不完全になる。
-
-- [ ] 対応策を選択・実装: (1) marker ファイル削除を `isAllowedWorktreeCommand` の例外として追加（marker path が `.git/info/pending-branch-delete` に一致し、かつ記録された branch が存在しない場合のみ許可）、(2) marker を worktree の `.git` ファイル隣（例 `<worktree>/.git-pending-branch-delete`）に置いて worktree removal で自動消去、(3) ENFORCE_WORKTREE_EXCLUDE に `.git/info/pending-branch-delete` glob を追加
+- [x] `fix/settings-marker-cleanup` で解消: `isAllowedMarkerDelete` 述語を `enforce-worktree.js` に追加、settings.json allow rules を追加
 
 
 
@@ -292,8 +290,15 @@ Step 6h は `git fetch --prune origin` のみ。squash-merge 後にローカル 
 
 `/worktree-end` writes a marker file at `.git/info/pending-branch-delete` to authorise the branch deletion. The path is not in the allow list, so each run produces a permission prompt.
 
-- [ ] Add `"Write(**/.git/info/pending-branch-delete)"` to `settings.json` allow list
-- [ ] Document the stale marker manual cleanup (next /worktree-end overwrites it, so non-blocking): `del C:\gitgents\.git\info\pending-branch-delete`
+- [x] `fix/settings-marker-cleanup` で解消: `Write(**/.git/info/pending-branch-delete)` を settings.json allow に追加
+
+### get-config-var: worktree に .env がないと設定値が読めない
+
+ワークツリーでは `block-dotenv.js` フックが `.env` のコピーをブロックするため、`worktree-start` 時に `.env` がコピーされない。そのため、ワークツリー CWD から `get-config-var` を呼ぶと `.env` を見つけられずデフォルト値にフォールバックする（例: `CONFIRM_TESTS=off` が `on` として扱われる）。
+
+対処: `get-config-var` をメインリポジトリの `.env` を参照させるには、`AGENTS_CONFIG_DIR` を明示するか、`cd "$AGENTS_DIR" && get-config-var ...` のようにメイン repo パスを渡す。
+
+- [ ] skill 内の `get-config-var` 呼び出しをすべて見直し、ワークツリー CWD 非依存な呼び出し方式に統一（`AGENTS_CONFIG_DIR` 明示 or `cd "$AGENTS_DIR" &&` プレフィックス）
 
 ### doc-append-plain: missing bash launcher (POSIX-side gap)
 
