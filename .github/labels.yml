@@ -1,0 +1,19 @@
+# Label definitions for GitHub Issues.
+# Applied via `bin/sync-labels.sh` (uses `gh label create --force`).
+# Format: list of {name, color, description}. Colors are 6-digit hex without '#'.
+
+- name: "type:task"
+  color: "0e8a16"
+  description: "Normal work item. Closes to a FEATURE entry in history.md."
+
+- name: "type:incident"
+  color: "d93f0b"
+  description: "Incident or bug. Closes to an INCIDENT entry in history.md."
+
+- name: "status:cancelled"
+  color: "bfbfbf"
+  description: "Cancelled without completion. Applied after close."
+
+- name: "status:migrated"
+  color: "5319e7"
+  description: "Merged into another issue. Applied after close."
