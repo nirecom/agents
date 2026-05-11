@@ -52,7 +52,7 @@ C:\git\worktrees\
 │  Confirms task-name + branch type → path
 │  mkdir -p <base>/<task>
 │  git worktree add <path> -b <type>/<task>
-│  Copies gitignored state (.env etc.)
+│  Copies gitignored state via .worktreeinclude (automated)
 │  Writes WORKTREE_NOTES.md
 │
 │  ← work happens here (multiple sessions OK) →
@@ -73,6 +73,39 @@ C:\git\worktrees\
      git branch -d <branch>
      git fetch --prune
 ```
+
+## Gitignored State: `.worktreeinclude`
+
+`/worktree-start` automatically copies gitignored files from the main worktree to the
+new linked worktree. Two files in the repo root control what is copied:
+
+| File | Purpose |
+|---|---|
+| `.worktreeinclude` | Allowlist — gitignore-syntax patterns for files to copy |
+| `.worktreecopyexclude` | Denylist — overrides `.worktreeinclude`; entries here are never copied |
+
+**Copy conditions:** a file must match `.worktreeinclude` **and** be gitignored (`git ls-files --others --ignored`). Tracked files are never copied.
+
+**Default `.worktreeinclude`** (agents repo):
+```
+.env
+.env.local
+.env.development
+.env.test
+.private-info-allowlist
+```
+
+**Default `.worktreecopyexclude`** (always denied):
+```
+.env.production
+.env.staging
+*.pem / *.p12
+*deploy*key* / *credential*.json / *service-account*.json
+```
+
+The copy is **blackbox** — Claude never reads file contents, only paths. The mechanism (`bin/worktree-copy-include.js`) returns a JSON report: `{ copied[], skipped[], denied[], errors[] }`.
+
+Negation patterns (`!foo`) in `.worktreecopyexclude` are stripped and warned — the denylist cannot be opt-out overridden.
 
 ## Defense Layers
 
