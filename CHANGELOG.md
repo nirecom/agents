@@ -83,3 +83,7 @@ Changes: Soft and force branch deletion are now classified as write again. The o
 ### CONFIG: ENFORCE_WORKTREE_EXCLUDE comment rewritten user-side; new content rule for .env.example (2026-05-10)
 Background: The .env.example comment for ENFORCE_WORKTREE_EXCLUDE described internal hook behaviour that an end user reading the file does not know. There was also no convention defining what belongs in .env.example, so prior edits had drifted into PR-reference and implementation-detail territory.
 Changes: Rewrote the ENFORCE_WORKTREE_EXCLUDE comment to cover only what the user can do, what they can't do, and the value format. rules/docs-convention.md gained a new content rule for .env.example codifying these three required items, applicable going forward to all .env variables.
+
+### FEATURE: User escalation rules: autonomy-first and safe command presentation (2026-05-11)
+Background: Claude Code was asking users to run commands that it could execute itself, and presenting multiple commands in a single ask.
+Changes: Claude Code now tries tools before asking the user to run anything (Autonomy-First). When a user ask is unavoidable, exactly one command is presented at a time and the next step is only shown after the user reports the result (One-Command-at-a-Time). When multiple non-destructive steps must run in sequence, they are bundled into a single fail-fast script so the user is asked once, not once per step (Script-First).

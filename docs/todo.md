@@ -92,7 +92,8 @@ PR #21 で追加した `isBranchDeleteCommand` の regex `\bgit\s+(?:-\S+(?:\s+[
 
 **実害例**:
 - `doc-append --subject "POSIX file cp/mv blocked"` — `cp` パターンと `mv` パターン両方が引数文字列内で発火、commit/edit 操作が write 扱いに。本 retrofit 作業中に実際に遭遇（reword で回避）。
-- 一般的に、CHANGELOG/history.md/commit message 等で UNIX コマンド名を **言及するだけ**でブロックされる。文書化作業の頻繁な阻害要因。
+- `doc-append --changes "ops.md > Rule 1 > Rule 2 > Rule 3"` — posix-redirect パターン (`(?:\d*)>>?`) がスペース区切りの `>` に発火。Precedence テーブルを --changes 引数に含めようとするとブロックされる（feature/user-escalation 作業中に遭遇）。
+- 一般的に、CHANGELOG/history.md/commit message 等で UNIX コマンド名や `>` 記号を **言及するだけ**でブロックされる。文書化作業の頻繁な阻害要因。
 
 **根本原因**: `isBranchDeleteCommand` と同じく shell-aware なパース（quoted argument を skip する）が必要。既存 patterns は fail-safe で write に倒すため classify レベルでは「過剰ブロック」で済んでいたが、文書化作業の現実的なノイズ源になっている。
 
