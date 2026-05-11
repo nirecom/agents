@@ -1,0 +1,126 @@
+#!/bin/bash
+# Mock gh CLI for issue-migration tests.
+# Dispatches based on argument patterns and GH_MOCK_SCENARIO env var.
+
+SCENARIO="${GH_MOCK_SCENARIO:-default}"
+
+# Join all args for matching
+ARGS="$*"
+
+case "$SCENARIO" in
+  issue_task)
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Test task issue","body":"Background: test\nChanges: did stuff","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_incident)
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Outage","body":"Cause: bug\nFix: patched","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:incident"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_no_labels)
+    case "$ARGS" in
+      "issue view 42 --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Plain issue","body":"Background: x\nChanges: y","closedAt":"2026-05-10T00:00:00Z","labels":[]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  issue_view_fail)
+    case "$ARGS" in
+      "issue view "*)
+        echo "gh: not found" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  no_subissues)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  all_closed_subissues)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  one_open_subissue)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        # Count of open
+        if [[ "$ARGS" == *'select(.state=="open")'*'length'* ]]; then
+          echo "1"
+        else
+          # Detail listing
+          echo '[{"number":11,"title":"Open child","state":"open"}]'
+        fi
+        exit 0
+        ;;
+    esac
+    ;;
+  three_open_subissues)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        if [[ "$ARGS" == *'length'* && "$ARGS" != *"map"* ]]; then
+          echo "3"
+        else
+          echo '[{"number":11,"title":"A","state":"open"},{"number":12,"title":"B","state":"open"},{"number":13,"title":"C","state":"open"}]'
+        fi
+        exit 0
+        ;;
+    esac
+    ;;
+  paginated_one_open)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        echo "1"
+        exit 0
+        ;;
+    esac
+    ;;
+  paginated_all_closed)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  all_cancelled_or_migrated)
+    case "$ARGS" in
+      "api repos/owner/repo/issues/10/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  api_fail)
+    case "$ARGS" in
+      "api "*)
+        echo "gh: API error" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  default|*)
+    # Unknown scenario or default fallthrough
+    echo "MOCK GH: unknown scenario=$SCENARIO args=$ARGS" >&2
+    exit 2
+    ;;
+esac
+
+# If we got here, scenario matched but no case did
+echo "MOCK GH: no match for scenario=$SCENARIO args=$ARGS" >&2
+exit 2

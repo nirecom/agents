@@ -1,0 +1,64 @@
+#!/bin/bash
+# Mock doc-append for issue-migration tests.
+# Parses arguments and appends a recognizable line to the target history.md file.
+#
+# Usage mirrors real doc-append:
+#   doc-append <path> --category CATEGORY --background "..." --changes "..." [--issue N] [--commit hash]
+
+set -u
+
+if [ "${DOC_APPEND_FAIL:-0}" = "1" ]; then
+    echo "MOCK doc-append: forced failure" >&2
+    exit 1
+fi
+
+TARGET="${1:-docs/history.md}"
+shift || true
+
+CATEGORY=""
+BACKGROUND=""
+CHANGES=""
+ISSUE=""
+COMMIT=""
+SUBJECT=""
+CAUSE=""
+FIX=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --category) CATEGORY="$2"; shift 2 ;;
+        --background) BACKGROUND="$2"; shift 2 ;;
+        --changes) CHANGES="$2"; shift 2 ;;
+        --issue) ISSUE="$2"; shift 2 ;;
+        --commit) COMMIT="$2"; shift 2 ;;
+        --commits) COMMIT="$2"; shift 2 ;;
+        --subject) SUBJECT="$2"; shift 2 ;;
+        --cause) CAUSE="$2"; shift 2 ;;
+        --fix) FIX="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+mkdir -p "$(dirname "$TARGET")"
+[ -f "$TARGET" ] || : > "$TARGET"
+
+DATE="$(date +%Y-%m-%d 2>/dev/null || echo 2026-05-10)"
+
+{
+    echo ""
+    if [ -n "$ISSUE" ]; then
+        echo "### #${ISSUE}: ${SUBJECT:-Mock subject} (${DATE}${COMMIT:+, ${COMMIT}})"
+    else
+        echo "### ${SUBJECT:-Mock subject} (${DATE}${COMMIT:+, ${COMMIT}})"
+    fi
+    echo "Category: ${CATEGORY}"
+    if [ "$CATEGORY" = "INCIDENT" ]; then
+        echo "Cause: ${CAUSE}"
+        echo "Fix: ${FIX}"
+    else
+        echo "Background: ${BACKGROUND}"
+        echo "Changes: ${CHANGES}"
+    fi
+} >> "$TARGET"
+
+exit 0
