@@ -56,10 +56,30 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
      the user must create and fill in the actual `.env` file. Claude must not write to `.env`
      directly.
 
-9. Determine copy mode via Bash:
+9. Run the automated copy using `.worktreeinclude`:
+
+   a. Get the main worktree absolute path (already available from the prior steps, or run
+      `git rev-parse --show-toplevel`). Use forward slashes — Git for Windows already
+      returns forward slashes.
+
+   b. Pipe a JSON payload to the copy script. Build the payload with Node to avoid
+      shell quoting and backslash issues:
+      ```
+      node -e "process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],includeFile:null}))" -- "<mainRoot>" "<step-3-path>" | node bin/worktree-copy-include.js
+      ```
+      Files listed in `.worktreeinclude` that are also gitignored will be copied.
+      Files listed in `.worktreecopyexclude` are always denied, regardless of `.worktreeinclude`.
+
+   c. Display the `"copied"` list to the user.
+   d. If `"denied"` is non-empty, report: "Skipped by .worktreecopyexclude: <files>".
+   e. If `"errors"` is non-empty, report them to the user.
+   f. If stderr contains `WARN:`, display it and ask the user to verify that the
+      pattern is also present in `.gitignore`.
+
+   Then check CONFIRM_WORKTREE via Bash:
      `bash -c 'get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
-   - stdout `OFF`: copy all "Copy recommended" entries automatically. Never copy "Copy prohibited" (production secrets, deploy keys, cloud credentials). Never write `.env` directly. Print the resulting copy log inline. Do NOT call `AskUserQuestion`.
-   - stdout `ON`: present candidates via `AskUserQuestion` as today (existing behavior).
+   - stdout `OFF`: auto-continue without `AskUserQuestion`.
+   - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
 
 10. Create `WORKTREE_NOTES.md` in the worktree root recording:
     - Resolved worktree path and the `WORKTREE_BASE_DIR` value used

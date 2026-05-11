@@ -1,0 +1,7 @@
+# Worktree-only files: copy from main worktree on worktree-start.
+# Syntax: full gitignore semantics. All patterns must also be gitignored.
+.env
+.env.local
+.env.development
+.env.test
+.private-info-allowlist

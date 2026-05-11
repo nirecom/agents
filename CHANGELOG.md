@@ -68,6 +68,10 @@ Changes: New ENFORCE_WORKTREE_EXCLUDE env var accepts semicolon-separated glob p
 Background: Several PreToolUse hook bugs were blocking the standard worktree-to-main merge workflow (PR create / merge / cleanup) and a security review surfaced additional bypass risks.
 Changes: git branch -d (delete merged branch) is now classified read, not write. git-branch-mutate regex no longer false-positives on branch names containing -d/-c (e.g. feature-env-consolidate). gh pr/issue create/edit/comment with heredoc body is no longer blocked from main checkout. git pull/merge --ff-only is now allowed from main checkout (the operation main is reserved for). git update-ref is now classified write. block-dotenv hook now uses a path-position parser instead of a free-text regex: gh PR/commit messages containing the literal string .env no longer false-positive, while real .env access (including via command substitution like $\(cat .env\), redirect like echo > .env, and shell wrappers like bash -lc "cat .env") still blocks.
 
+### FEATURE: global-gitignore.ps1: Pester integration tests (2026-05-08)
+Background: The Windows installer for global gitignore (install/win/global-gitignore.ps1) had no automated tests; a null-reference bug was only caught in production.
+Changes: Added 15 Pester integration tests covering normal, idempotency, edge, error, and security cases. The .Count null-reference bug from production is now caught by the double-run idempotency test (T04).
+
 ### FEATURE: planner draft persistence + cross-stage context propagation (2026-05-09)
 Background: Planner draft files were written to OS temp and got lost to OS cleanup or context compaction, requiring planner subagent restart. Cross-stage context (intent and outline) was also missing from codex plan review, causing out-of-scope reviewer concerns, and show-diff previewed every draft revision, interrupting the planner/reviewer loop.
 Changes: Planner drafts now persist under ~/.claude/plans/drafts/. Plan-stage context (intent and outline) is automatically passed to the codex plan reviewer. show-diff suppresses preview for draft files only — final plan artifacts still show diffs. Fallback session-id format simplified to a plain timestamp.
@@ -83,6 +87,14 @@ Changes: Soft and force branch deletion are now classified as write again. The o
 ### CONFIG: ENFORCE_WORKTREE_EXCLUDE comment rewritten user-side; new content rule for .env.example (2026-05-10)
 Background: The .env.example comment for ENFORCE_WORKTREE_EXCLUDE described internal hook behaviour that an end user reading the file does not know. There was also no convention defining what belongs in .env.example, so prior edits had drifted into PR-reference and implementation-detail territory.
 Changes: Rewrote the ENFORCE_WORKTREE_EXCLUDE comment to cover only what the user can do, what they can't do, and the value format. rules/docs-convention.md gained a new content rule for .env.example codifying these three required items, applicable going forward to all .env variables.
+
+### FEATURE: User escalation rules: autonomy-first and safe command presentation (2026-05-11)
+Background: Claude Code was asking users to run commands that it could execute itself, and presenting multiple commands in a single ask.
+Changes: Claude Code now tries tools before asking the user to run anything (Autonomy-First). When a user ask is unavoidable, exactly one command is presented at a time and the next step is only shown after the user reports the result (One-Command-at-a-Time). When multiple non-destructive steps must run in sequence, they are bundled into a single fail-fast script so the user is asked once, not once per step (Script-First).
+
+### FEATURE: GitHub Issues migration foundation: /issue-close, sub-issue gate, reconcile (2026-05-11)
+Background: Adds the foundation for migrating per-repo work tracking to GitHub Issues. Covers structured issue templates, a label schema, and a transaction-safe close pipeline that atomically appends every closed issue to docs/history.md before calling gh issue close.
+Changes: New /issue-close skill: closes a GitHub Issue safely, in 9 steps — including sub-issue gate (blocks parent close when any child is still open), 2-phase pending/appended sentinel comment on the issue for crash recovery, automatic history.md append, and todo.md cleanup. New /issue-reconcile skill: backfills history.md for issues that were closed outside Claude Code (web UI, mobile, other terminal). New enforce-issue-close.js hook blocks bare gh issue close calls not routed through the skill, preventing history.md misses. GitHub Issue templates for task and incident workflows; label schema with bin/sync-labels.sh for idempotent label creation.
 
 ### FEATURE: CONFIRM_OUTLINE/DETAIL/WORKTREE/TESTS env flags (2026-05-11)
 Background: Confirmation prompts at outline / detail / worktree-start (file copy) / write-tests stages were unconditional, slowing the workflow.
