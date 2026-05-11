@@ -76,6 +76,11 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
    f. If stderr contains `WARN:`, display it and ask the user to verify that the
       pattern is also present in `.gitignore`.
 
+   Then check CONFIRM_WORKTREE via Bash:
+     `bash -c 'get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
+   - stdout `OFF`: auto-continue without `AskUserQuestion`.
+   - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
+
 10. Create `WORKTREE_NOTES.md` in the worktree root recording:
     - Resolved worktree path and the `WORKTREE_BASE_DIR` value used
     - Branch name and creation date

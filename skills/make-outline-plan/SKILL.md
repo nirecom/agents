@@ -63,8 +63,8 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
      - `APPROVED` → proceed to step 7.
      - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
-     - Anything else → **format malformed**: emit `> codex output malformed (could not parse verdict) — falling back to Claude reviewer for this round.` then launch `outline-reviewer` subagent.
-   - `SKIPPED` / `FAILED` → **codex unavailable**: emit `> codex unavailable (<reason>) — falling back to Claude reviewer for this round.` then launch `outline-reviewer` subagent.
+     - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.claude/plans/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `~/.claude/plans/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
 
 6. If verdict is `MISSING_ALTERNATIVE: <description>`:
    - Send the concern back to outline-planner for revision.
@@ -73,8 +73,10 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
      alternative, approve as-is, or change the scope.
 
 7. Once outline-reviewer returns `APPROVED`:
-   - Present the approved approaches to the user via `AskUserQuestion` for selection.
-   - One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
+   Run via Bash:
+     `bash -c 'get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
+   - stdout `OFF`: write the outline file using the "Pass all approaches to make-detail-plan without selecting" default. Print a one-paragraph summary of the approved approaches and the link to <session-id>-outline.md. Do NOT call `AskUserQuestion`.
+   - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection (existing behavior). One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
 8. Write the user's decision to `~/.claude/plans/<session-id>-outline.md` using the
    schema below. After writing, present the file to the user as a clickable link
@@ -96,8 +98,12 @@ Write the file (per `rules/language.md`) with the following sections:
 
 ## Rules
 
-- Orchestrator (main Claude) only summarizes each discussion round to the user —
-  do not dump full subagent transcripts into the conversation.
+- Orchestrator chat output during the discussion loop is restricted to:
+  (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
+  (b) the final clickable link to <session-id>-outline.md
+  No per-round natural-language summaries, no codex/reviewer transcripts,
+  no "falling back to Claude reviewer" notices in chat.
+  Diagnostics go to <session-id>-outline-debug.log only.
 - outline-planner and outline-reviewer are never shown implementation details —
   they work at the direction level only.
 - `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here. It is emitted only by
