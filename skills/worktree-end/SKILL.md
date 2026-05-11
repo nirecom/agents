@@ -98,8 +98,16 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       squash-merge produces a new commit not recognised by `-d`'s "fully merged"
       check; the marker written in step b authorises this exact deletion.
    g. **Remove the marker** at `<git-common-dir>/info/pending-branch-delete`
-      whether step f succeeded or failed (avoid leaving stale markers that
-      would let a later direct invocation slip past the hook).
+      whether step f succeeded or failed (avoid leaving stale markers).
+      - POSIX: `rm "<git-common-dir>/info/pending-branch-delete"`
+      - PowerShell: `Remove-Item -LiteralPath "<git-common-dir>\info\pending-branch-delete"`
+        (use `-LiteralPath`, not `-Path`, to avoid wildcard expansion)
+
+      The `enforce-worktree` hook permits this via `isAllowedMarkerDelete`:
+      target must equal the marker path AND the branch on line 1 must no longer
+      exist. Multi-target invocations and fatal git errors fail closed.
+      If step f failed the marker is retained — the next `/worktree-end` run
+      will overwrite it.
    h. `git -C <main> fetch --prune origin`
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
@@ -119,8 +127,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Branch deletion uses `git branch -D` only inside step 6f, gated by the
   marker file written in step 6b. Direct ad-hoc `git branch -d/-D` outside this
   skill is rejected by the `enforce-worktree` hook by design.
-- Always remove the marker (step 6g) — even on failure paths — to avoid leaving
-  a stale authorisation that a later command could exploit.
+- Always attempt marker removal (step 6g); the hook retains the marker if
+  branch delete (step f) failed.
 - Do not run cleanup if merge step failed or was skipped.
 - Always propose `.worktree-backup/<branch>/` as the default backup destination; never silently pick a different path.
 - Always check stopped containers, not just running ones, for bind mount conflicts.
