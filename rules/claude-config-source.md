@@ -1,3 +1,7 @@
+---
+globs: "**/docker-compose.yml,**/docker-compose.yaml,**/docker-compose.*.yml,**/docker-compose.*.yaml,**/compose.yml,**/compose.yaml,**/Dockerfile,**/Dockerfile.*,**/.env,**/.env.*"
+---
+
 # Docker Compose: Applying Changes
 
 After implementing any change to a Docker-managed service, always tell the user the
