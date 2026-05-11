@@ -46,8 +46,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
       (survives compaction; OS temp does not):
       `~/.claude/plans/drafts/<session-id>-outline-draft.md`
 
-      Defensive fallback: if `~/.claude/plans/drafts/` does not yet exist, run
-      `mkdir -p ~/.claude/plans/drafts` via Bash first (idempotent).
+
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
       If `~/.claude/plans/<session-id>-intent.md` exists and the context file has not
       been built this run, write `~/.claude/plans/drafts/<session-id>-context.md`:
@@ -80,7 +79,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    This preamble gives the user the context to choose. Do not write the preamble to outline.md.
 
    Run via Bash:
-     `bash -c 'get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
+     `get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON`
    - stdout `OFF`: write the outline file using the "Pass all approaches to make-detail-plan without selecting" default. Print a one-paragraph summary of the approved approaches and the link to <session-id>-outline.md. Do NOT call `AskUserQuestion`.
    - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection (existing behavior). One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
