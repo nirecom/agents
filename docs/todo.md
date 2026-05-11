@@ -15,6 +15,25 @@
 - [ ] **ユーザ検証**: 実際にどれかのフラグを off にしてフロー全体 (make-outline-plan → make-detail-plan → worktree-start → write-tests) を1回通す
 - [ ] 検証 OK 後、history.md に移動 + CHANGELOG 追記 (FEATURE)
 
+### settings.json: `Bash(git push -u origin *)` allow rule が `-C` 無し form で未登録
+
+PR #2 以来、push の allow rule は `-C` あり版 (`Bash(git -C * push -u origin *)`) と
+`-C` 無し・`-u` 無し版 (`Bash(git push origin *)`) のみで、`-C` 無し・`-u` あり版
+(`Bash(git push -u origin *)`) が抜けている。
+
+**今まで顕在化しなかった理由**: `rules/git.md` の「CWD 外の git repo は `-C` で操作せよ」
+原則に従い、過去のセッションは main worktree CWD から `git -C <wt> push -u origin <br>` を
+実行していたため `-C` あり版にマッチして自動許可されていた。
+
+**今回露出した経緯**: `EnterWorktree` でセッション CWD が worktree 内に切り替わると、
+`-C` 不要が `rules/git.md` 的にも自然になり、`git push -u origin <branch>` (no -C) が
+発行される。対応 allow rule が未登録のため interactive permission dialog が出る。
+
+- [ ] `settings.json` の allow に `Bash(git push -u origin *)` を追加
+- [ ] 同様に `Bash(git push origin *)` (既存) と並んで `git fetch origin *` / `git pull origin *` の
+      `-u` 系統との整合性も点検する (push に限らず EnterWorktree-friendly な allow set への棚卸し)
+- [ ] `Bash(git push -u origin */*)`  の必要性確認 (`*` がスラッシュをマッチするかの実機検証)
+
 ### install/win/global-gitignore.ps1 の Pester テスト追加
 
 bash 版 (`global-gitignore.sh`) は `tests/feature-parallel-sessions-worktree-installer-ignore.sh` でカバーされているが、PowerShell 版 (`global-gitignore.ps1`) は無テスト。今回 `.Count` バグ（空 Where-Object 結果での null 参照）が production で初めて発覚したのはこのカバレッジ欠落が原因。
