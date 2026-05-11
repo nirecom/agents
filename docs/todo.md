@@ -18,6 +18,18 @@
 
 ## Current Work
 
+### rules: プログレッシブディスクロージャー — Verifying
+
+セッション起動コスト削減のため rules/ を `globs:` スコープ付きサブファイルに分割。
+テスト設計ルールは Supporting Files パターン（`skills/test-design-shared/reference.md`）に移行。
+
+- [x] Group A: 4ファイルの壊れた `paths:` フロントマターを `globs:` に修正
+- [x] Group B: `test.md`・`docs-convention.md`・`coding.md` を薄いポインタに縮小、詳細を `docs-convention/`・`coding/`・`skills/test-design-shared/` に移動
+- [x] Group C: メモリキュレーション（third-party 関連 2 件統合、force-push policy クリーンアップ、MEMORY.md 再インデックス）
+- [x] テストスイート全 31 件 PASS、セキュリティ APPROVED
+- [ ] **ユーザ検証**: 変更後のルールが期待通り動作することを確認
+- [ ] 検証 OK 後、history.md に移動 + CHANGELOG 追記 (REFACTOR)
+
 ### CC workflow 確認フラグ追加 (CONFIRM_OUTLINE / DETAIL / WORKTREE / TESTS) — Verifying
 
 4 つの `CONFIRM_*=on/off` フラグを導入し、off 時に各スキル (make-outline-plan / make-detail-plan / worktree-start / write-tests) の確認プロンプトを抑制して自動続行できるようにした。planner↔reviewer ループの中間ドラフト・per-round 自然言語サマリーも chat から削除 (debug.log にのみ出力)。
