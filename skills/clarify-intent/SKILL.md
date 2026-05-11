@@ -29,7 +29,15 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 1. Read the user's rough request. Identify the root of the decision tree: what is the single
    most important question whose answer unlocks all downstream questions?
 
-2. Conduct a decision-tree interview using `AskUserQuestion`. Rules:
+2. Check `CONFIRM_OUTLINE` flag:
+   Run via Bash: `bash -c 'get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
+   - stdout `OFF`: the outline stage's `AskUserQuestion` (approach selection) will be skipped,
+     so delivery plan direction must be captured here. Include a question about delivery plan
+     direction (single PR vs. phased, execution order) in the step 3 interview, treating it as
+     a required question even if the 5-round limit would otherwise exclude it.
+   - stdout `ON`: proceed normally — delivery plan direction is the outline stage's responsibility.
+
+3. Conduct a decision-tree interview using `AskUserQuestion`. Rules:
    - **1 question per invocation** — never batch multiple questions into one call.
    - Each option MUST include exactly one marked **(recommended)** option so the user can
      ratify the recommendation rather than having to invent an answer from scratch.
@@ -40,7 +48,7 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
    - If a question can be answered by exploring the codebase (e.g., "does X already exist?"),
      explore via Read/Grep/Glob instead of asking.
 
-3. After the interview (or at the 5-round cap), write the agreed requirements to:
+4. After the interview (or at the 5-round cap), write the agreed requirements to:
    ```
    ~/.claude/plans/<session-id>-intent.md
    ```
@@ -49,10 +57,10 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
    Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE` if available; otherwise use a
    timestamp (`YYYYMMDD-HHMMSS`) as fallback.
 
-4. Present a one-paragraph summary of what was locked in. Do NOT gate on a confirmation
+5. Present a one-paragraph summary of what was locked in. Do NOT gate on a confirmation
    `AskUserQuestion` here — the user already reviewed intent.md at the Write step.
 
-5. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
+6. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
    unless not needed) then `/make-outline-plan`.
 
 ## Output Schema

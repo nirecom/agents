@@ -15,17 +15,26 @@ must be read and passed to the planner before drafting begins.
    - `~/.claude/plans/<session-id>-outline.md` — confirmed design direction
    If neither file exists, proceed with the task context alone (no prior stages ran).
 
-2. **Determine the planner subagent's model**:
+2. **Surface the delivery plan to the main conversation.**
+   Read outline.md's `## Delivery plan` section (or the `Delivery plan:` field in the Adopted approach section).
+   - If present and substantive: emit a one-paragraph summary in chat prefixed
+     "Delivery plan (from outline stage):". This appears before the planner subagent runs.
+   - If absent or "(not provided)": emit
+     "Delivery plan: (not surfaced from outline — detail-planner will draft fresh as the first section of detail.md)."
+   Plain text only — do not call AskUserQuestion and do not pause for confirmation.
+   Use English terms only: "delivery plan", "progression", or "execution order".
+
+3. **Determine the planner subagent's model**:
    - Read `skills/judge-task-complexity/SKILL.md` to load the signal table.
    - Evaluate all signals against the full task context plus the contents of intent/outline files (if they exist). Do not short-circuit on the first match.
    - Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
-3. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 2>`).
+4. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
    Pass the full task context **plus** the contents of the intent/approach files above.
 
-4. **Review the draft with codex first, fall back to Claude if unavailable.**
+5. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
    a. Write the planner's draft using the Write tool to:
       `~/.claude/plans/drafts/<session-id>-detail-draft.md`
@@ -63,20 +72,20 @@ must be read and passed to the planner before drafting begins.
    d. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
         Extract the first non-blank line as the verdict token.
-        - `APPROVED` → loop done, proceed to step 6.
+        - `APPROVED` → loop done, proceed to step 7.
         - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
         - Anything else → **format malformed**.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
       - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.claude/plans/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
       - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `~/.claude/plans/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
-   e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 2), then repeat from step 4a. Each round consumes `revision_rounds`.
+   e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 3), then repeat from step 5a. Each round consumes `revision_rounds`.
 
-5. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
+6. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
    2. **The planner's current plan** — paste or closely summarize. The user cannot see subagent output, so this is their only way to understand what has been designed.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
-6. Once the reviewer returns `APPROVED`, write the final plan to
+7. Once the reviewer returns `APPROVED`, write the final plan to
    `~/.claude/plans/<session-id>-detail.md` (not draft). Present it to the user as a
    clickable link using the **resolved absolute path** (do not use `~` in the link
    target — tilde is not expanded in markdown rendering, so the link won't open).
@@ -145,12 +154,14 @@ Skipping research does NOT justify skipping the plan step.
 ## Rules
 
 - Read before planning — do not plan from assumptions
+- The outline's Delivery plan must be surfaced in step 2 before the planner subagent runs. This is required, not optional.
 - Orchestrator chat output during the discussion loop is restricted to:
   (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
   (b) the final clickable link to <session-id>-detail.md
+  (c) the `Delivery plan (...)` summary emitted by step 2 before the discussion loop begins
   Diagnostics go to <session-id>-detail-debug.log only.
 - Follow `rules/orthogonality.md` for cross-platform and naming consistency
-- **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 6. Never pause for user confirmation during intermediate revision rounds (steps 3–4): write draft files silently and inform the user with plain text only.
+- **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 7. Never pause for user confirmation during intermediate revision rounds (steps 4–5): write draft files silently and inform the user with plain text only.
 
 ## Completion
 

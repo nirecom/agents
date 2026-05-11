@@ -24,7 +24,10 @@ Draft and revise an implementation plan for the task described in your prompt. Y
    - Read at most 8 source files, prioritized by relevance.
    - Do NOT re-read `rules/` — they are already in your system prompt.
    If you conclude that external knowledge is required and cannot be obtained by reading local files, use the NEEDS_RESEARCH escape hatch (see below) instead of guessing.
-3. Produce a plan with these sections:
+3. Produce a plan with these sections — IN THIS ORDER (importance-first, most abstract first):
+   - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
+     outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
+     Use English terms only: "delivery plan", "progression", or "execution order".
    - **Background** — two paragraphs: (1) summary of agreed requirements and motivation
      from intent.md; (2) confirmed approach from outline.md and why it was chosen.
      If no prior-stage artifacts exist, write a one-paragraph Goal instead.
@@ -58,6 +61,8 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 
 ## Rules
 
+- The **Delivery plan** section must appear first. Do not place it after Background or Files to modify.
+- When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
 - Follow `rules/orthogonality.md`, `rules/coding.md`, `rules/test.md`, `rules/docs-convention.md`.
 - Do not write code or call Edit/Write — you only produce plans.
