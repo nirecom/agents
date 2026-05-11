@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Usage:
+#   get-config-var <NAME> [<default>]                  -> prints resolved value to stdout
+#   get-config-var --is-off <NAME> [<default>]         -> exit 0 if value is OFF, 1 otherwise (stdout empty)
+#
+# Reads $AGENTS_CONFIG_DIR/.env via hooks/lib/load-env.js.
+# Process env wins over .env (parity with load-env.js).
+# Always exits 0/1/2 (2 = usage error). Never writes to .env.
+
+set -u
+
+MODE="value"
+if [ "${1:-}" = "--is-off" ]; then
+  MODE="is-off"; shift
+fi
+
+GETCV_NAME="${1:-}"
+GETCV_DEFAULT="${2:-}"
+
+if [ -z "$GETCV_NAME" ]; then
+  printf 'usage: get-config-var [--is-off] <NAME> [<default>]\n' >&2
+  exit 2
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+GETCV_LOADENV="$SCRIPT_DIR/../hooks/lib/load-env.js"
+
+VAL="$(GETCV_NAME="$GETCV_NAME" GETCV_DEFAULT="$GETCV_DEFAULT" GETCV_LOADENV="$GETCV_LOADENV" node -e '
+  try { require(process.env.GETCV_LOADENV).loadDefaultEnv(); } catch (e) {}
+  const v = process.env[process.env.GETCV_NAME];
+  process.stdout.write(v && v.length ? v : (process.env.GETCV_DEFAULT || ""));
+')"
+
+if [ "$MODE" = "is-off" ]; then
+  v_lower="$(printf '%s' "$VAL" | tr '[:upper:]' '[:lower:]')"
+  case "$v_lower" in
+    off|0|false|no|disabled) exit 0 ;;
+    *) exit 1 ;;
+  esac
+fi
+
+printf '%s' "$VAL"
