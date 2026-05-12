@@ -9,7 +9,8 @@ Dangerous operations are placed in `deny` so Claude cannot execute them even if 
 
 | Category | Examples |
 |---|---|
-| Force push | `git push --force`, `git push -f`, `+<ref>` refspec form |
+| Force push (denied) | `git push --force`, `git push -f`, `+<ref>` refspec form |
+| Force push (allowed) | `git push --force-with-lease` — auto-permitted on feature branches |
 | `.env` direct access | Read/Edit/Write on `.env`, `.env.local`, `.env.production`, etc. |
 | Bulk deletion | `rm -rf`, `Remove-Item -Recurse -Force`, `find -delete`, `find -exec rm` |
 | AWS destructive ops | `aws * delete`, `aws * terminate`, `aws * destroy`, `aws s3 rm`, etc. |
@@ -23,8 +24,8 @@ Dangerous operations are placed in `deny` so Claude cannot execute them even if 
 
 **Glob matching is text-based.** Rules match against the raw shell command string.
 This means:
-- `*push --force*` catches `--force` and `--force-with-lease` (substring match)
-- `*push -f*` catches both `git push -f origin main` and `git push -f` (end of command)
+- `*push --force` / `*push --force *` / `*push *--force` / `*push *--force *` catch bare `--force` at end-of-command or before a space — the `-with-lease` suffix prevents any match against `--force-with-lease`
+- `*push -f*` / `*push *-f` / `*push *-f *` catch bare `-f`; `-f ` (dash-f-space) is not a substring of `--force-with-lease`
 - `*push *+*` catches `+<ref>` force-push refspec syntax
 - Commands built through variables, aliases, or shell expansion are not reliably caught
 
