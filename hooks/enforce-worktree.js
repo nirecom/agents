@@ -282,6 +282,41 @@ function isAllowedFastForwardMerge(cmd) {
   return isPullFf || isMergeFf;
 }
 
+/**
+ * True if cmd is an isolated `bash -c '...'` matching exactly the
+ * read-only CONFIRM_* probe shape used by planning skills:
+ *   bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
+ *
+ * Does NOT call hasShellChaining() — the probe body intentionally uses
+ * && and || as control flow. Safety is enforced by structural clause matching.
+ * Coupling: if the skill probe string changes, update this matcher in sync.
+ * See docs/architecture/claude-code/workflow.md for the contract.
+ */
+function isAllowedReadOnlyConfigCheck(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const m = cmd.match(/^\s*bash\s+-c\s+(['"])([\s\S]+)\1\s*$/);
+  if (!m) return false;
+  const quote = m[1];
+  let body = m[2];
+  // Allow escaped same-quote inside body (e.g. `cd \"$AGENTS_CONFIG_DIR\"` when outer is `"`).
+  // The clause regexes below are anchored, so any unescaped quote that breaks the
+  // structure will be caught at the clause-match step.
+  body = body.replace(quote === '"' ? /\\"/g : /\\'/g, quote);
+  if (body.includes("`")) return false;
+  if (body.includes("$(")) return false;
+  if (body.includes(">") || body.includes("<")) return false;
+  if (body.includes(";")) return false;
+  if (body.replace(/\|\|/g, "").includes("|")) return false;
+  const clauses = body.split(/\s*&&\s*/);
+  if (clauses.length !== 3) return false;
+  const [c1, c2, c3Raw] = clauses;
+  const c3 = c3Raw.replace(/\s*\|\|\s*echo\s+ON\s*$/, "").trimEnd();
+  if (!/^cd\s+(?:"?\$AGENTS_CONFIG_DIR"?)\s*$/.test(c1.trim())) return false;
+  if (!/^get-config-var\s+--is-off\s+[A-Z][A-Z0-9_]*\s+(?:on|off)\s*$/.test(c2.trim())) return false;
+  if (!/^echo\s+OFF\s*$/.test(c3.trim())) return false;
+  return true;
+}
+
 // Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
 // Per rules/worktree.md, this is the parent directory all linked worktrees live under.
 function getWorktreeBaseDir() {
@@ -923,6 +958,7 @@ if (mainCheckout) {
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedMarkerDelete(cmd, repoRoot)) done();
+    if (isAllowedReadOnlyConfigCheck(cmd)) done();
   }
 
   // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
@@ -964,6 +1000,7 @@ module.exports = {
   parseBranchDeleteTarget,
   isAllowedBranchDeleteViaMarker,
   isAllowedMarkerDelete,
+  isAllowedReadOnlyConfigCheck,
   isMarkerFilePath,
   getWorktreeBaseDir,
 };
