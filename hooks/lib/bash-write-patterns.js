@@ -162,10 +162,85 @@ function classify(cmd) {
     ) {
       return "read";
     }
+    // Re-classify bash -c / pwsh -Command when only interpreter-c matches
+    // and the inner body is read-only.
+    const nonQuotingMatches = matchedNames.filter((n) => !QUOTING_ONLY_NAMES.has(n));
+    if (
+      nonQuotingMatches.length === 1 &&
+      nonQuotingMatches[0] === "interpreter-c" &&
+      isReadOnlyInterpreterC(cmd)
+    ) {
+      return "read";
+    }
     return "write";
   } catch (e) {
     return "read"; // fail-open
   }
 }
 
-module.exports = { WRITE_PATTERNS, classify };
+/**
+ * Returns true if cmd is a bash/sh/zsh -c '...' or pwsh -Command '...'
+ * invocation where all inner body segments (split by &&/||/;) are "read".
+ * Fail-closed: any unrecognized form returns false.
+ */
+function isReadOnlyInterpreterC(cmd) {
+  try {
+    if (!cmd || typeof cmd !== "string") return false;
+    // Reject unsafe constructs at outer level
+    if (/\$'/.test(cmd)) return false;   // ANSI-C quoting
+    if (/<<</.test(cmd)) return false;    // here-string
+    if (/<<[^<]/.test(cmd)) return false; // here-doc
+    if (/`/.test(cmd)) return false;      // backtick substitution
+    // Reject outer chaining (& inside quotes is stripped first)
+    const stripped = stripQuotedArgs(cmd);
+    if (/[|;&]|\$\(/.test(stripped)) return false;
+
+    const trimmed = cmd.trim();
+    let body = null;
+
+    // bash/sh/zsh family: -c flag (or combined like -xc)
+    const bashSingle = trimmed.match(
+      /^(?:bash|sh|zsh|dash|fish)(?:\.exe)?\s+(?:-\w*c\w*)\s+'([^']*)'\s*$/i
+    );
+    if (bashSingle) body = bashSingle[1];
+
+    if (body === null) {
+      const bashDouble = trimmed.match(
+        /^(?:bash|sh|zsh|dash|fish)(?:\.exe)?\s+(?:-\w*c\w*)\s+"((?:[^"\\]|\\.)*)"\s*$/i
+      );
+      if (bashDouble) body = bashDouble[1];
+    }
+
+    // pwsh/powershell family: -Command only (not -c)
+    if (body === null) {
+      const pwshSingle = trimmed.match(
+        /^(?:pwsh|powershell)(?:\.exe)?\s+-Command\s+'([^']*)'\s*$/i
+      );
+      if (pwshSingle) body = pwshSingle[1];
+    }
+
+    if (body === null) {
+      const pwshDouble = trimmed.match(
+        /^(?:pwsh|powershell)(?:\.exe)?\s+-Command\s+"((?:[^"\\]|\\.)*)"\s*$/i
+      );
+      if (pwshDouble) body = pwshDouble[1];
+    }
+
+    if (body === null) return false; // unrecognized form → fail-closed
+
+    // Reject newlines / NUL in inner body — segment split does not handle
+    // line-separated statements; failing closed is safer than misclassifying.
+    if (/[\r\n\0]/.test(body)) return false;
+
+    const segments = body.split(/&&|\|\||;/).map((s) => s.trim()).filter(Boolean);
+    if (segments.length === 0) return false;
+
+    // Depth-1 guard: refuse nested interpreter invocations
+    const NESTED_INTERP_RE = /(?:^|[\s;|&])(?:bash|sh|zsh|dash|fish|pwsh|powershell)(?:\.exe)?\s+(?:-\w*c|-Command)\b/i;
+    if (segments.some((s) => NESTED_INTERP_RE.test(s))) return false;
+
+    return segments.every((s) => classify(s) === "read");
+  } catch (e) { return false; }
+}
+
+module.exports = { WRITE_PATTERNS, classify, isReadOnlyInterpreterC };
