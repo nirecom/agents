@@ -93,7 +93,7 @@ must be read and passed to the planner before drafting begins.
    - Windows: `[<session-id>-detail.md](C:/Users/<user>/.claude/plans/<session-id>-detail.md)`
 
    After writing and presenting the link, check via Bash:
-     `get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON`
+     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON'`
    - stdout `OFF`: print a one-paragraph summary and emit `<<WORKFLOW_MARK_STEP_plan_complete>>` directly. Skip plan mode.
    - stdout `ON`: enter plan mode for user approval (existing behavior).
 

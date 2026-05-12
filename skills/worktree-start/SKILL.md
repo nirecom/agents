@@ -35,7 +35,13 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
    - POSIX: `mkdir -p "<WORKTREE_BASE_DIR>/<task-name>"`
    - PowerShell: `New-Item -ItemType Directory -Force -Path "<WORKTREE_BASE_DIR>\<task-name>"`
 
-6. Create the worktree:
+   **Do NOT chain or pipe this command** (no `;`, `&&`, `||`, `|`, `$()`, backticks).
+   `enforce-worktree.js` only grants its `New-Item -ItemType Directory` exemption to
+   isolated commands — any shell operator removes the exemption and the command is
+   rejected as a write from the main worktree. Run it as its own Bash call.
+   The same rule applies to step 6 (`git worktree add`).
+
+6. Create the worktree (isolated command — same chaining caveat as step 5):
    ```
    git worktree add <path> -b <type>/<task-name>
    ```
@@ -77,7 +83,7 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
       pattern is also present in `.gitignore`.
 
    Then check CONFIRM_WORKTREE via Bash:
-     `bash -c 'get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
+     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
    - stdout `OFF`: auto-continue without `AskUserQuestion`.
    - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
 

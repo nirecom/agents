@@ -17,7 +17,7 @@ Write or update tests for the current task.
    cases in the next step.
 4. List all planned test cases by category (include call-path error cases from step 3).
    Then check via Bash:
-     `bash -c 'get-config-var --is-off CONFIRM_TESTS on && echo OFF || echo ON'`
+     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_TESTS on && echo OFF || echo ON'`
    - stdout `OFF`: print the planned cases and proceed to step 5 without approval wait.
    - stdout `ON`: present the planned cases to the user — do not write code until approved (existing behavior).
 5. **Determine the subagent's model**:
