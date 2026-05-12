@@ -111,3 +111,7 @@ Changes: Each approach option in /make-outline-plan now includes a Delivery plan
 ### BUGFIX: /worktree-end marker cleanup now completes without manual intervention (2026-05-12)
 Background: /worktree-end step 6g failed to delete the branch-delete marker file after merging because the deletion was blocked by the write guard.
 Changes: Marker cleanup at step 6g now runs automatically. git push -u origin <branch> from inside a worktree no longer prompts for permission.
+
+### FEATURE: Planning workflow no longer prompts for routine skill operations (2026-05-12)
+Background: Permission prompts interrupted the planning workflow for get-config-var flag checks, reading prior-stage plan files, and debug log writes.
+Changes: Planning skills (clarify-intent, make-outline-plan, make-detail-plan, write-tests, worktree-start) now run without permission prompts for their standard Bash and Read operations.
