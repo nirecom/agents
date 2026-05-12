@@ -115,3 +115,7 @@ Changes: Marker cleanup at step 6g now runs automatically. git push -u origin <b
 ### FEATURE: Planning workflow no longer prompts for routine skill operations (2026-05-12)
 Background: Permission prompts interrupted the planning workflow for get-config-var flag checks, reading prior-stage plan files, and debug log writes.
 Changes: Planning skills (clarify-intent, make-outline-plan, make-detail-plan, write-tests, worktree-start) now run without permission prompts for their standard Bash and Read operations.
+
+### BUGFIX: /worktree-end keeps local main in sync with origin (2026-05-12)
+Background: After /worktree-end merged a PR, local main stayed at the pre-merge commit, so newly merged files were not visible until the next manual pull.
+Changes: /worktree-end step 6h now fast-forwards local main to origin after fetching. Uses --ff-only, so a diverged local main halts the step with a non-zero exit instead of silently merging.
