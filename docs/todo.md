@@ -251,6 +251,21 @@ main worktree CWD でドキュメントを直接コミット (`ENFORCE_WORKTREE_
 - [ ] 実セッションで `/worktree-end` を実行し、orphan ディレクトリが正しく削除されること
 - [ ] 非空ディレクトリを与えた場合 refuse されること
 
+### worktree-end: `git worktree remove` が CWD ロックで物理ディレクトリ削除できない
+
+`/worktree-end` を worktree 内 CWD から実行すると、`git worktree remove` が git 登録の解除には成功するが、OS レベルの CWD ロック（Windows: プロセスが CWD として保持するディレクトリは削除不可）により物理ディレクトリの削除が EPERM で失敗する。
+
+**現状**: git 登録解除後にディレクトリが残り、`cleanup-orphan-dir.js` も非空のため refuse する。セッション終了後に手動 `Remove-Item -Recurse <path>` が必要。
+
+**根本原因**: worktree-end skill が worktree 内 CWD から `git worktree remove <自ディレクトリ>` を呼ぶと自分の足元を削ろうとする。
+
+**解決候補**:
+- (a) `git worktree remove` の前に `cd <main-repo>` して CWD を外す（Bash tool の CWD 持続性を利用）
+- (b) 別プロセス（pwsh -Command など）で削除を遅延実行（shell profile 発火の問題あり）
+- (c) worktree-end SKILL.md に「手動削除が必要な場合がある」旨を明記し、ユーザー指示コマンドを提示する（現状の暫定対応）
+
+- [ ] (a) を試して SKILL.md の Step 6c 前に CWD 変更ステップを追加する
+
 ### planning skills の CONFIRM_* チェックが main worktree から実行できない **[Verifying]**
 
 発見: PR #35 (`fix/settings-getconfig`) の作業中に確認。
