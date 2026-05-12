@@ -11,7 +11,7 @@
 | Category | Target | Examples |
 |:---|:---|:---|
 | Environment files | `.env`, `.env.*` | Denied in Read, Grep, and Bash |
-| Destructive commands | Force push, hard reset, deletion | `git push --force`, `rm -rf`, `dd` |
+| Destructive commands | Force push (bare), hard reset, deletion | `git push --force`, `git push -f`, `rm -rf`, `dd`; `--force-with-lease` is in **allow** |
 | Credentials | SSH keys, AWS, Docker, kube | `~/.ssh/**`, `~/.aws/**`, `~/.kube/**`, etc. |
 | Direct dotfile editing | Home directory dotfiles | `~/.bashrc`, `~/.zshrc`, etc. denied in Edit |
 
