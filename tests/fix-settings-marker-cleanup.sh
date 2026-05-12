@@ -123,7 +123,7 @@ setup_repo_branch_gone() {
     mkdir -p "$repo"
     (cd "$repo" && \
         git -c user.email=t@example.com -c user.name=t init -q -b main . && \
-        git -c user.email=t@example.com -c user.name=t commit --allow-empty -q -m init)
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
     mkdir -p "$repo/.git/info"
     printf '%s\n%s\n' "$branch" "$wtree" > "$repo/.git/info/pending-branch-delete"
     # No branch creation — branch is "gone"
@@ -135,7 +135,7 @@ setup_repo_branch_present() {
     mkdir -p "$repo"
     (cd "$repo" && \
         git -c user.email=t@example.com -c user.name=t init -q -b main . && \
-        git -c user.email=t@example.com -c user.name=t commit --allow-empty -q -m init && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init && \
         git -c user.email=t@example.com -c user.name=t branch "$branch")
     mkdir -p "$repo/.git/info"
     printf '%s\n%s\n' "$branch" "$wtree" > "$repo/.git/info/pending-branch-delete"
@@ -147,7 +147,7 @@ setup_repo_git_broken() {
     mkdir -p "$repo"
     (cd "$repo" && \
         git -c user.email=t@example.com -c user.name=t init -q -b main . && \
-        git -c user.email=t@example.com -c user.name=t commit --allow-empty -q -m init)
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
     mkdir -p "$repo/.git/info"
     printf '%s\n%s\n' "$branch" "$wtree" > "$repo/.git/info/pending-branch-delete"
     # Corrupt HEAD so subsequent git plumbing calls fail
@@ -214,7 +214,9 @@ T4_marker_delete_blocked_target_mismatch() {
                       || fail "T4 marker_delete_blocked_target_mismatch == $r"
 }
 
-T5_marker_delete_blocked_no_marker() {
+T5_marker_delete_allowed_no_marker() {
+    # Non-existent marker: deletion is a no-op, so it should be allowed.
+    # This handles manual cleanup of stale markers from aborted /worktree-end runs.
     local repo="$TMPDIR_BASE/t5-repo"
     mkdir -p "$repo"
     (cd "$repo" && \
@@ -225,8 +227,8 @@ T5_marker_delete_blocked_no_marker() {
     local marker="$(marker_path_for "$repo")"
     local r
     WORKTREE_BASE_DIR="$TMPDIR_BASE/t5-wbase" r="$(call_isAllowedMarkerDelete "rm \"$marker\"" "$repo")"
-    [ "$r" = "false" ] && pass "T5 marker_delete_blocked_no_marker (fail-closed)" \
-                      || fail "T5 marker_delete_blocked_no_marker == $r"
+    [ "$r" = "true" ] && pass "T5 marker_delete_allowed_no_marker (no-op)" \
+                     || fail "T5 marker_delete_allowed_no_marker == $r"
 }
 
 T6_marker_delete_blocked_chaining() {
@@ -471,6 +473,119 @@ T21_settings_no_match_unrelated() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# isMarkerFilePath (T22–T24) and Write/Edit hook exceptions (T25–T27)
+# ─────────────────────────────────────────────────────────────────────────────
+
+call_isMarkerFilePath() {
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$MODULE');
+        console.log(JSON.stringify(m.isMarkerFilePath(process.argv[1], process.argv[2])));
+      } catch (e) { console.log('ERROR: ' + e.message); }
+    " -- "$1" "$2" 2>/dev/null
+}
+
+hook_payload_write() {
+    local fp="$1"
+    node -e "
+      const fp = process.argv[1];
+      console.log(JSON.stringify({tool_name:'Write', tool_input:{file_path:fp}}));
+    " -- "$fp"
+}
+
+hook_payload_edit() {
+    local fp="$1"
+    node -e "
+      const fp = process.argv[1];
+      console.log(JSON.stringify({tool_name:'Edit', tool_input:{file_path:fp}}));
+    " -- "$fp"
+}
+
+T22_isMarkerFilePath_matches() {
+    local repo="$TMPDIR_BASE/t22-repo"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    local marker="$(marker_path_for "$repo")"
+    local r
+    r="$(call_isMarkerFilePath "$marker" "$repo")"
+    [ "$r" = "true" ] && pass "T22 isMarkerFilePath_matches" \
+                     || fail "T22 isMarkerFilePath_matches == $r"
+}
+
+T23_isMarkerFilePath_no_match_other_file() {
+    local repo="$TMPDIR_BASE/t23-repo"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty -q -m init)
+    local r
+    r="$(call_isMarkerFilePath "$repo/.git/info/exclude" "$repo")"
+    [ "$r" = "false" ] && pass "T23 isMarkerFilePath_no_match_other_file" \
+                      || fail "T23 isMarkerFilePath_no_match_other_file == $r"
+}
+
+T24_isMarkerFilePath_no_match_repo_file() {
+    local repo="$TMPDIR_BASE/t24-repo"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty -q -m init)
+    local r
+    r="$(call_isMarkerFilePath "$repo/README.md" "$repo")"
+    [ "$r" = "false" ] && pass "T24 isMarkerFilePath_no_match_repo_file" \
+                      || fail "T24 isMarkerFilePath_no_match_repo_file == $r"
+}
+
+T25_e2e_hook_allows_write_to_marker() {
+    local repo="$TMPDIR_BASE/t25-repo"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    local marker="$(marker_path_for "$repo")"
+    local payload out
+    payload="$(hook_payload_write "$marker")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    case "$out" in
+        *"\"decision\":\"block\""*) fail "T25 e2e_hook_allows_write_to_marker blocked: $out" ;;
+        *) pass "T25 e2e_hook_allows_write_to_marker" ;;
+    esac
+}
+
+T26_e2e_hook_allows_edit_to_marker() {
+    local repo="$TMPDIR_BASE/t26-repo"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    local marker="$(marker_path_for "$repo")"
+    local payload out
+    payload="$(hook_payload_edit "$marker")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    case "$out" in
+        *"\"decision\":\"block\""*) fail "T26 e2e_hook_allows_edit_to_marker blocked: $out" ;;
+        *) pass "T26 e2e_hook_allows_edit_to_marker" ;;
+    esac
+}
+
+T27_e2e_hook_blocks_write_to_tracked_file() {
+    local repo="$TMPDIR_BASE/t27-repo"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty -q -m init)
+    local payload out
+    payload="$(hook_payload_write "$repo/README.md")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    case "$out" in
+        *"\"decision\":\"block\""*) pass "T27 e2e_hook_blocks_write_to_tracked_file" ;;
+        *) fail "T27 e2e_hook_blocks_write_to_tracked_file not blocked: $out" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -478,7 +593,7 @@ T1_marker_delete_allowed_posix
 T2_marker_delete_allowed_pwsh_litpath
 T3_marker_delete_blocked_branch_exists
 T4_marker_delete_blocked_target_mismatch
-T5_marker_delete_blocked_no_marker
+T5_marker_delete_allowed_no_marker
 T6_marker_delete_blocked_chaining
 T7_marker_delete_blocked_recursive_rm
 T7b_marker_delete_blocked_recursive_rm_short
@@ -497,6 +612,12 @@ T18_classify_removeitem_still_write
 T19_settings_posix_pattern_matches
 T20_settings_pwsh_pattern_matches
 T21_settings_no_match_unrelated
+T22_isMarkerFilePath_matches
+T23_isMarkerFilePath_no_match_other_file
+T24_isMarkerFilePath_no_match_repo_file
+T25_e2e_hook_allows_write_to_marker
+T26_e2e_hook_allows_edit_to_marker
+T27_e2e_hook_blocks_write_to_tracked_file
 
 echo ""
 echo "─────────────────────────────────────────"
