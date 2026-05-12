@@ -144,3 +144,44 @@ To reset from a specific step (e.g., re-running code phase):
 echo "<<WORKFLOW_RESET_FROM_<step>>>"
 ```
 Marks all prior steps `complete`, resets target step and after to `pending`.
+
+## Exemptions
+
+### Read-only config probe from the main worktree
+
+`enforce-worktree.js` blocks all Bash writes from the main worktree, including
+`bash -c '...'` (classified as write by the `interpreter-c` pattern). `isAllowedReadOnlyConfigCheck`
+in `enforce-worktree.js` adds a narrow exemption for the exact probe shape used
+by planning skills to read `CONFIRM_*` flags:
+
+```
+bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
+```
+
+The matcher structurally validates each of the three `&&`-separated clauses and
+rejects anything outside this exact shape (no `;`, no `|` outside `||`, no `>`,
+no command substitution). **Coupling risk:** the matcher is tied to the literal
+probe string. If the skill probe is changed (different key name, different
+clause order, different interpreter), the matcher silently re-blocks and the
+CONFIRM_* flag is treated as ON. Any future change to the probe string must
+update the matcher in lockstep.
+
+### WIP commit signal (`git -c workflow.wip=1`)
+
+For fixup / intermediate commits between substantive work, `workflow-gate.js`
+recognizes the per-command global option:
+
+```
+git -c workflow.wip=1 commit -m "..."
+```
+
+When detected, the gate skips ONLY `user_verification`. All automated gates
+(`run_tests`, `review_security`, `docs`) still fire. The gate does NOT mutate
+state in the WIP path — `user_verification` remains `pending`, so the next
+non-WIP commit re-blocks until the user verifies.
+
+The `-c key=value` form is parsed by `parseGitConfigValues` (in
+`hooks/lib/parse-git-args.js`) and only recognized when it appears **before**
+the subcommand verb (matching git's own option-parsing semantics). The
+`commit-push` skill's `--wip` flag generates this exact form. See
+`skills/commit-push/SKILL.md` for usage.
