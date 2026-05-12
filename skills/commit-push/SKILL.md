@@ -49,7 +49,13 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
    gh pr view --json state,url
    ```
    - `state == OPEN` → reuse the existing PR URL (do NOT create a duplicate).
-   - No PR or closed → `gh pr create --fill`.
+   - No PR or closed → create with `gh pr create`:
+     - Always specify `--head <branch>` explicitly — when the Bash tool CWD is the main
+       worktree, `gh` would otherwise default to `main` as the head branch and fail.
+     - Use `--body "single-line string"` (no heredoc). Heredoc (`$(cat <<'EOF' ... EOF)`)
+       triggers a write classification in enforce-worktree.js and gets blocked.
+     - For a minimal PR: `gh pr create --head <branch> --fill`
+     - With a custom body: `gh pr create --head <branch> --title "..." --body "..."`
    Display the PR URL.
 
 7. First output the PR URL as a clickable markdown link in the main conversation:
