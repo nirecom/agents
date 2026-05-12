@@ -464,10 +464,12 @@ function isAllowedMarkerDelete(cmd, repoRoot) {
   const nTarget = norm(target);
   const nMarker = norm(markerPath);
   if (!nTarget || !nMarker || nTarget !== nMarker) return false;
-  // Read marker and extract branch name (line 1).
+  // Read marker. ENOENT → file is absent, allow deletion as a no-op (handles
+  // manual cleanup of stale markers from aborted /worktree-end runs).
+  // Any other error is unexpected → fail-closed.
   let content;
   try { content = fs.readFileSync(markerPath, "utf8"); }
-  catch (e) { return false; }
+  catch (e) { return e.code === "ENOENT"; }
   const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 1) return false;
   const markerBranch = lines[0];
@@ -482,6 +484,35 @@ function isAllowedMarkerDelete(cmd, repoRoot) {
     if (r.status !== 1) return false;
   } catch (e) { return false; }
   return true;
+}
+
+/**
+ * True if filePath resolves to the pending-branch-delete marker at
+ * <git-common-dir>/info/pending-branch-delete for the given repoRoot.
+ * Allows Write/Edit tool calls to the marker from the main worktree:
+ * /worktree-end writes this file before calling git branch -d.
+ */
+function isMarkerFilePath(filePath, repoRoot) {
+  if (!filePath || !repoRoot) return false;
+  let commonDir;
+  try {
+    const r = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status !== 0) return false;
+    commonDir = path.resolve(repoRoot, (r.stdout || "").trim());
+  } catch (e) { return false; }
+  const markerPath = path.join(commonDir, "info", "pending-branch-delete");
+  const norm = (p) => {
+    try {
+      const n = normalizeCwd(p) || p;
+      const r = path.resolve(n);
+      return process.platform === "win32" ? r.toLowerCase() : r;
+    } catch (e) { return null; }
+  };
+  const nTarget = norm(filePath);
+  const nMarker = norm(markerPath);
+  return !!(nTarget && nMarker && nTarget === nMarker);
 }
 
 // Returns true when repoCwd is the main worktree (non-linked).
@@ -894,6 +925,13 @@ if (mainCheckout) {
     if (isAllowedMarkerDelete(cmd, repoRoot)) done();
   }
 
+  // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
+  // this file from the main worktree before authorising git branch -d.
+  if (["Write", "Edit"].includes(toolName)) {
+    const fp = toolInput.file_path || toolInput.path;
+    if (fp && isMarkerFilePath(fp, repoRoot)) done();
+  }
+
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
   done({
     block: true,
@@ -926,5 +964,6 @@ module.exports = {
   parseBranchDeleteTarget,
   isAllowedBranchDeleteViaMarker,
   isAllowedMarkerDelete,
+  isMarkerFilePath,
   getWorktreeBaseDir,
 };
