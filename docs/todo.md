@@ -1,21 +1,5 @@
 # Todo
 
-## Policy
-
-### force-push 方針
-
-- `git push --force-with-lease` を **feature branch / worktree 側のリモート ref に対しては許可**。
-  ただし実行前に毎回理由を明示すること（例: rebase で SHA が書き換わったため非 fast-forward）。
-- **main / master への force push は緊急時のみ**。手順:
-  ユーザが `ENFORCE_WORKTREE=off` を一時設定 → CC が force-push を実行 →
-  完了後にユーザが `ENFORCE_WORKTREE=on` に戻す。
-- 現状の settings.json は `git push --force*` を一律 auto-deny しているため、feature branch 側でも
-  CC が直接実行できない。下記の検討タスクで運用化する。
-  - [ ] `git push --force-with-lease origin feature/*` を settings.json allow rule に追加可否を検討
-    （/main や /master を明示的に deny にしつつ feature/* のみ allow にできるか pattern 設計）
-  - [ ] worktree 側への force-with-lease を CC が直接実行できる安全な仕組みを設計
-    （案: enforce-worktree hook 経由でブランチ名チェック、または bin/safe-force-push ラッパ作成）
-
 ## Current Work
 
 ### GitHub Issues 移行 — フェーズ状況
