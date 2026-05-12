@@ -109,6 +109,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       If step f failed the marker is retained — the next `/worktree-end` run
       will overwrite it.
    h. `git -C <main> fetch --prune origin`
+      `git -C <main> pull --ff-only`
+         (`--ff-only`: diverge 時はサイレントマージせず停止する)
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
    **Why this dance:** the `enforce-worktree` hook classifies `git branch -d/-D`
