@@ -8,8 +8,10 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
+const crypto = require("crypto");
 
 const MAX_DIFF = 3000;
+const MAX_READ_SIZE = 1024 * 1024; // 1 MiB cap for overwrite-side reads
 
 // ── stdin ─────────────────────────────────────────────────────────────────────
 
@@ -75,18 +77,23 @@ function isPlanDraftFile(filePath) {
 
 // ── diff generation ───────────────────────────────────────────────────────────
 
-function makeDiff(oldStr, newStr, label) {
+function makeDiff(oldStr, newStr, label, opts) {
+  opts = opts || {};
   const dir = os.tmpdir();
-  const ts = Date.now();
-  const tmpOld = path.join(dir, `sd-old-${ts}`);
-  const tmpNew = path.join(dir, `sd-new-${ts}`);
+  // pid + 8-byte random suffix avoids collisions across concurrent hook
+  // invocations within the same millisecond.
+  const suffix = `${process.pid}-${crypto.randomBytes(8).toString("hex")}`;
+  const tmpOld = path.join(dir, `sd-old-${suffix}`);
+  const tmpNew = path.join(dir, `sd-new-${suffix}`);
   try {
     fs.writeFileSync(tmpOld, oldStr);
     fs.writeFileSync(tmpNew, newStr);
+    const oldLabel = opts.oldLabel || `a/${label}`;
+    const newLabel = opts.newLabel || `b/${label}`;
     const r = spawnSync("diff", [
       "-u",
-      "--label", `a/${label}`,
-      "--label", `b/${label}`,
+      "--label", oldLabel,
+      "--label", newLabel,
       tmpOld,
       tmpNew,
     ]);
@@ -121,15 +128,25 @@ if (require.main === module) {
 
   // ── build diff text ─────────────────────────────────────────────────────────
 
-  if (input.tool_name === "Write" || input.tool_name === "editFiles") {
+  if (input.tool_name === "Write") {
     const content = ti.content || "";
-    const preview = content.slice(0, 400);
-    const diffText =
-      `[Write ${content.length} chars to ${filePath}]\n\n` +
-      preview +
-      (content.length > 400 ? "\n... (truncated)" : "");
-    showAndExit(filePath, diffText);
-  } else if (input.tool_name === "MultiEdit") {
+    // Treat oversized or unreadable existing files as new-file diff so the
+    // hook never loads multi-MB files into memory.
+    let existsAndReadable = false;
+    try {
+      const st = fs.statSync(filePath);
+      existsAndReadable = st.isFile() && st.size <= MAX_READ_SIZE;
+    } catch (_) {}
+    if (existsAndReadable) {
+      let oldStr = "";
+      try { oldStr = fs.readFileSync(filePath, "utf8"); } catch (_) {}
+      const diffText = makeDiff(oldStr, content, filePath);
+      showAndExit(filePath, diffText);
+    } else {
+      const diffText = makeDiff("", content, filePath, { oldLabel: "/dev/null" });
+      showAndExit(filePath, diffText);
+    }
+  } else if (input.tool_name === "MultiEdit" || input.tool_name === "editFiles") {
     const edits = Array.isArray(ti.edits) ? ti.edits : [];
     if (edits.length === 0) noopExit();
     const diffText = edits
