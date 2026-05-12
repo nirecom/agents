@@ -79,7 +79,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    This preamble gives the user the context to choose. Do not write the preamble to outline.md.
 
    Run via Bash:
-     `get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON`
+     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
    - stdout `OFF`: write the outline file using the "Pass all approaches to make-detail-plan without selecting" default. Print a one-paragraph summary of the approved approaches and the link to <session-id>-outline.md. Do NOT call `AskUserQuestion`.
    - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection (existing behavior). One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
