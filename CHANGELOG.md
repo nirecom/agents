@@ -139,3 +139,7 @@ Changes: Running git commit as git -c workflow.wip=1 commit -m "..." (or via /co
 ### FEATURE: Test output now runs in a dedicated subagent, keeping the main session clean (2026-05-13)
 Background: Test output was accumulating in the main conversation, consuming token budget and obscuring context.
 Changes: Step 6 now delegates test execution to a test-runner subagent. Only a compact YAML summary (pass/fail status, failing test names, last 40 log lines) returns to the main session. A dual sentinel prevents stale pass state from surviving a newly failing test run.
+
+### BUGFIX: enforce-worktree unblocks docs push, read-only config checks, and orphan-dir cleanup (2026-05-13)
+Background: Three git workflow operations were incorrectly blocked by the write guard in the main worktree.
+Changes: git push origin main from the main worktree is now allowed when every file in the outgoing commits is covered by the exclude pattern (e.g., docs-only changes). Read-only bash -c invocations (such as config flag checks used by planning skills) are no longer blocked. After git worktree remove, the leftover empty directory can now be cleaned up via a dedicated node script instead of the blocked recursive-delete approach.
