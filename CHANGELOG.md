@@ -123,3 +123,7 @@ Changes: /worktree-end step 6h now fast-forwards local main to origin after fetc
 ### FEATURE: planning pipeline UX improvements (2026-05-12)
 Background: Intermediate plan draft files triggered permission dialogs on every revision round; Write diff previews showed a plain header instead of actual diffs.
 Changes: Intermediate planning draft files (written during /make-outline-plan and /make-detail-plan) no longer trigger permission dialogs. Write operations now show proper diff previews: new files display a /dev/null header with all lines as additions; overwrites show a real diff against the existing file content.
+
+### BUGFIX: pending-branch-delete marker no longer prompts on create / edit / delete (2026-05-12)
+Background: /worktree-end writes the pending-branch-delete marker from the main worktree before deleting the merged branch. Each write triggered a permission prompt, and deleting a stale marker left over from an aborted run also prompted.
+Changes: Writing, editing, or deleting <git-common-dir>/info/pending-branch-delete from the main worktree no longer triggers a permission prompt. Deleting a non-existent marker is treated as a safe no-op.

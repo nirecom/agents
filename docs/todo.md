@@ -132,22 +132,6 @@ multi-file 偽造を要求できる。
 - [ ] tests/feature-marker-session-binding.sh：unit + e2e
 
 
-### worktree-end: pending-branch-delete マーカー Write 許可 — 別 session と合わせて検討
-
-`/worktree-end` が `<git-common-dir>/info/pending-branch-delete` を書くたびに Write 確認プロンプトが出る。
-`settings.json` の `permissions.allow` に追加すれば解消するが、パターン選択に要検討事項がある。
-
-**セキュリティレビュー結果（2026-05-10）**:
-- `Write(**/.git/info/pending-branch-delete)`: リスクなし（用途固定・特定ファイル名）
-- `Write(**/.git/info/**)`: 中〜高リスク
-  - `exclude` 書き換え → git tracking から機密ファイルを隠せる（scan-outbound をすり抜けるベクター）
-  - `attributes` 書き換え → 既存 filter ドライバと組み合わせると任意コード実行につながる
-
-**推奨**: 特定ファイル名の narrow パターン `Write(**/.git/info/pending-branch-delete)` を採用。
-
-**ブロッカー**: 別 session でワークフロー修正中。settings.json 変更はそちらのセッションと合わせて実施。
-- [ ] 別 session のワークフロー修正が落ち着いたら `Write(**/.git/info/pending-branch-delete)` を `settings.json` の allow に追加
-- [ ] stale マーカーを手動削除: `Remove-Item C:\git\agents\.git\info\pending-branch-delete`
 
 ### awesome-lists 投稿（agents repo split プロジェクトの残作業）
 - [x] [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) へエントリ追加 PR — [issue #1750](https://github.com/hesreallyhim/awesome-claude-code/issues/1750)
