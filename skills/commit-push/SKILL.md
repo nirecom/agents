@@ -69,6 +69,23 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
 
    If `AskUserQuestion` is unavailable (e.g. headless `claude -p`), default to **wait**.
 
+## WIP mode (`--wip`)
+
+When invoked with `--wip` (for fixup / intermediate commits between substantive work):
+
+- Issue the commit as `git -c workflow.wip=1 commit -m "..."`. The `-c workflow.wip=1`
+  pair MUST appear **before** the `commit` subcommand verb — git ignores `-c` placed
+  after the subcommand, and `workflow-gate.js` only recognizes the pre-subcommand form.
+- The gate skips ONLY `user_verification` for that commit. All other gates
+  (`run_tests`, `review_security`, `docs`) still fire.
+- Also skip the `review-code-codex` invocation by convention in `--wip` mode (this is a
+  skill-level convention; the gate does not track it).
+- Do NOT set `workflow.wip` in git config globally — the signal must be scoped to the
+  single commit invocation to avoid leakage across commits.
+- Works with `--amend`: `git -c workflow.wip=1 commit --amend ...`.
+
+See `docs/architecture/claude-code/workflow.md` for the signal contract.
+
 ## Rules
 
 - Follow all existing commit and push rules.
