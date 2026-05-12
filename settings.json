@@ -124,7 +124,9 @@
       "WebFetch(domain:anthropic.com)",
       "WebFetch(domain:modelcontextprotocol.io)",
       "WebFetch(domain:spec.modelcontextprotocol.io)",
-      "WebFetch(domain:code.visualstudio.com)"
+      "WebFetch(domain:code.visualstudio.com)",
+      "Bash(node * hooks/cleanup-orphan-dir.js *)",
+      "Bash(node *\\hooks\\cleanup-orphan-dir.js *)"
     ],
     "deny": [
       "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
