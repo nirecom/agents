@@ -294,7 +294,7 @@ main worktree CWD でドキュメントを直接コミット (`ENFORCE_WORKTREE_
 
 **対応候補**:
 - [ ] `enforce-worktree.js` の Bash 分岐で、main worktree からの push 対象が `EXCLUDE`/`docs-only-allowlist` に該当する場合は pass through する exemption を追加（commit 通過条件と push 通過条件を一致させる）
-- [ ] pre-commit が EXCLUDE bypass で commit を通したことを検出して push も通す（直前 commit のファイル群を見て判定）
+- [ ] pre-commit が EXCLUDE bypass で commit を通したことを検出して push も通す。条件: **直前 commit (HEAD) のファイルが全て EXCLUDE 対象**であること。1ファイルでも EXCLUDE 外があれば push をブロックする（部分一致は許可しない＝安全側に倒す）
 
 ### worktree-end: orphan worktree ディレクトリの再帰削除が enforce-worktree にブロックされる
 
