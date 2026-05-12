@@ -91,9 +91,15 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    d. `git -C <main> worktree prune`
    e. If `<WORKTREE_BASE_DIR>/<task-name>/` directory is now empty, delete it
-      (non-recursive to prevent accidents):
-      - POSIX: `rmdir "<WORKTREE_BASE_DIR>/<task-name>"`
-      - PowerShell: `Remove-Item "<WORKTREE_BASE_DIR>\<task-name>"` (non-recursive)
+      via the dedicated cleanup script (works from main and linked worktrees;
+      bare `rmdir`/`Remove-Item` from the main worktree is blocked by
+      `enforce-worktree.js`):
+      ```
+      node hooks/cleanup-orphan-dir.js "<WORKTREE_BASE_DIR>/<task-name>"
+      ```
+      The script refuses non-empty dirs, paths outside `WORKTREE_BASE_DIR`,
+      registered worktrees, and symlinks. Non-empty target → exit non-zero
+      (investigate manually rather than recurse-delete).
    f. `git -C <main> branch -D <branch>` — `-D` (force) is required because
       squash-merge produces a new commit not recognised by `-d`'s "fully merged"
       check; the marker written in step b authorises this exact deletion.
@@ -135,4 +141,6 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Always propose `.worktree-backup/<branch>/` as the default backup destination; never silently pick a different path.
 - Always check stopped containers, not just running ones, for bind mount conflicts.
 - Secret values must not appear in the backup manifest.
+- Use `hooks/cleanup-orphan-dir.js` for the orphan directory cleanup step (6e) —
+  never `rm -rf` or `Remove-Item -Recurse -Force` from the main worktree.
 - `gh --version` must succeed before any gh command — surface installation guidance if not.
