@@ -119,3 +119,7 @@ Changes: Planning skills (clarify-intent, make-outline-plan, make-detail-plan, w
 ### BUGFIX: /worktree-end keeps local main in sync with origin (2026-05-12)
 Background: After /worktree-end merged a PR, local main stayed at the pre-merge commit, so newly merged files were not visible until the next manual pull.
 Changes: /worktree-end step 6h now fast-forwards local main to origin after fetching. Uses --ff-only, so a diverged local main halts the step with a non-zero exit instead of silently merging.
+
+### FEATURE: planning pipeline UX improvements (2026-05-12)
+Background: Intermediate plan draft files triggered permission dialogs on every revision round; Write diff previews showed a plain header instead of actual diffs.
+Changes: Intermediate planning draft files (written during /make-outline-plan and /make-detail-plan) no longer trigger permission dialogs. Write operations now show proper diff previews: new files display a /dev/null header with all lines as additions; overwrites show a real diff against the existing file content.
