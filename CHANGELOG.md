@@ -135,3 +135,7 @@ Changes: The specific probe shape used by planning skills is now permitted from 
 ### FEATURE: Fixup commits no longer require re-verification (2026-05-12)
 Background: Small fixup commits made after user_verification was already granted re-triggered the full verification gate, requiring user approval again even for low-risk intermediate changes.
 Changes: Running git commit as git -c workflow.wip=1 commit -m "..." (or via /commit-push --wip) skips user_verification for that commit only. All other gates (run_tests, review_security, docs) still apply. The next non-WIP commit re-triggers verification as normal.
+
+### FEATURE: Test output now runs in a dedicated subagent, keeping the main session clean (2026-05-13)
+Background: Test output was accumulating in the main conversation, consuming token budget and obscuring context.
+Changes: Step 6 now delegates test execution to a test-runner subagent. Only a compact YAML summary (pass/fail status, failing test names, last 40 log lines) returns to the main session. A dual sentinel prevents stale pass state from surviving a newly failing test run.
