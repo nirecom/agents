@@ -21,9 +21,27 @@
 4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
 5. **Code** — Present a diff in chat before calling Edit. Wait for approval.
-6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
-   - Bash: run the test suite (PostToolUse hook auto-marks `run_tests` on exit code).
-     Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
+6. **Run tests & Security review** — Start three actions in parallel (single response, multiple tool calls):
+   - Agent: `Agent({subagent_type: "test-runner", model: "sonnet", prompt: <see template>})`.
+     Test output is absorbed by the subagent; only a structured YAML summary returns to main.
+     After ALL three parallel calls return, emit the appropriate sentinel as a separate Bash call:
+     - `status: pass` → `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
+     - `status: fail | timeout | runner-error` → `echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>"`,
+       then surface the agent's `summary` / `failing_tests` / `log_tail` to the user.
+     The failure-path sentinel is mandatory — without it, a previously-complete `run_tests`
+     state from an earlier run would let a now-failing build through the commit gate.
+     Prompt template:
+     ```
+     Run the project test suite.
+     Test command: <explicit command, or "auto-detect">
+     Working directory: <cwd or explicit path>
+     Timeout: 120s
+     Return the structured YAML summary per your output contract.
+     ```
+     Model selection: default `sonnet`. Escalate to `opus` only when the test surface is
+     unusually large or failure-summary parsing demands architectural reasoning.
+     Direct Bash test runs still work — PostToolUse hook (workflow-run-tests.js) auto-marks
+     based on exit code, keeping backward compatibility.
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
    - Bash: `review-code-codex --base <merge-base>` for cross-provider adversarial review
      (always parallel, never blocks workflow). Output is shown directly to the user via

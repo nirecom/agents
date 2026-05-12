@@ -263,7 +263,7 @@ const STEP_HINT = {
   plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
   branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
   write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
-  run_tests:          "Run the test suite via Bash.",
+  run_tests:          "Invoke the test-runner agent (or run tests directly via Bash).",
   review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
   docs:               "Invoke `update-docs`.",
   user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED>>\", then invoke `commit-push`.",

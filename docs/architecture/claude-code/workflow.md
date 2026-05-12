@@ -43,7 +43,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 | `plan` | `/make-outline-plan` → `/make-detail-plan` (2-stage pipeline; marker emitted by `make-detail-plan`) |
 | `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"` after consulting `rules/branch.md` and `rules/worktree.md` (legacy: `WORKFLOW_BRANCHING_DECIDED` also accepted) |
 | `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` |
-| `run_tests` | PostToolUse hook (`workflow-run-tests.js`) auto-marks based on Bash exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
+| `run_tests` | test-runner agent (preferred) — main context invokes via Agent tool, then emits `WORKFLOW_MARK_STEP_run_tests_complete` or `_pending` based on agent return. Direct Bash path retained: PostToolUse hook (`workflow-run-tests.js`) auto-marks based on exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
 | `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
 | `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED>>"` — triggers `ask` permission dialog; user must approve |

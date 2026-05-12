@@ -344,7 +344,7 @@ if (require.main === module) {
     plan: '/make-outline-plan → /make-detail-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     branching_complete: 'consult rules/branch.md + rules/worktree.md, then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: <name>|worktree: <path>>"',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    run_tests: 'run your test suite via Bash (touching tests/) — PostToolUse hook auto-marks based on exit code. Manual fallback: echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>".',
+    run_tests: 'invoke the test-runner agent via the Agent tool, then emit the sentinel matching its returned status: echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>" on pass, echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>" on fail/timeout. Direct Bash test runs still work — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then git add docs/)',
     user_verification: 'run immediately: echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
