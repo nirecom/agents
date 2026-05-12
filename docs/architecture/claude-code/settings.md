@@ -8,12 +8,14 @@
 
 **Deny rules** — four categories (wildcard prefix `*` to catch compound commands):
 
-| Category | Target | Examples |
-|:---|:---|:---|
-| Environment files | `.env`, `.env.*` | Denied in Read, Grep, and Bash |
-| Destructive commands | Force push, hard reset, deletion | `git push --force`, `rm -rf`, `dd` |
-| Credentials | SSH keys, AWS, Docker, kube | `~/.ssh/**`, `~/.aws/**`, `~/.kube/**`, etc. |
-| Direct dotfile editing | Home directory dotfiles | `~/.bashrc`, `~/.zshrc`, etc. denied in Edit |
+| Category | Target |
+|:---|:---|
+| Environment files | `.env`, `.env.*` |
+| Destructive commands | Force push, hard reset, deletion |
+| Credentials | SSH keys, AWS, Docker, kube |
+| Direct dotfile editing | Home directory dotfiles |
+
+See `docs/security-policy.md` for the full pattern list.
 
 **Hook format**: Nested format — `matcher` + `hooks` array. Timeout in seconds.
 
