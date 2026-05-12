@@ -22,8 +22,7 @@
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
 5. **Code** — Present a diff in chat before calling Edit. Wait for approval.
 6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
-   - Bash: run the test suite (PostToolUse hook auto-marks `run_tests` on exit code).
-     Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
+   - Skill: `/run-tests`
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
    - Bash: `review-code-codex --base <merge-base>` for cross-provider adversarial review
      (always parallel, never blocks workflow). Output is shown directly to the user via
