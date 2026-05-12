@@ -127,3 +127,11 @@ Changes: Intermediate planning draft files (written during /make-outline-plan an
 ### BUGFIX: pending-branch-delete marker no longer prompts on create / edit / delete (2026-05-12)
 Background: /worktree-end writes the pending-branch-delete marker from the main worktree before deleting the merged branch. Each write triggered a permission prompt, and deleting a stale marker left over from an aborted run also prompted.
 Changes: Writing, editing, or deleting <git-common-dir>/info/pending-branch-delete from the main worktree no longer triggers a permission prompt. Deleting a non-existent marker is treated as a safe no-op.
+
+### BUGFIX: CONFIRM_* flags now take effect when working from the main worktree (2026-05-12)
+Background: Planning skills probe CONFIRM_OUTLINE, CONFIRM_DETAIL, and similar flags by running a shell command from main. That command was classified as a write and blocked, so the flags were always treated as on regardless of the configured value.
+Changes: The specific probe shape used by planning skills is now permitted from the main worktree. CONFIRM_* flags set to off are honoured in all session contexts.
+
+### FEATURE: Fixup commits no longer require re-verification (2026-05-12)
+Background: Small fixup commits made after user_verification was already granted re-triggered the full verification gate, requiring user approval again even for low-risk intermediate changes.
+Changes: Running git commit as git -c workflow.wip=1 commit -m "..." (or via /commit-push --wip) skips user_verification for that commit only. All other gates (run_tests, review_security, docs) still apply. The next non-WIP commit re-triggers verification as normal.

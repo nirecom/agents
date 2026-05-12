@@ -521,6 +521,140 @@ test_main_checkout_ff_only_allowed() {
     fi
 }
 
+# ============ NEW: fix-B — read-only config check passthrough ============
+# Allow specifically-shaped `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'`
+# probe commands from the main worktree. All deviations must still block.
+
+test_read_only_config_check_passthrough() {
+    require_guard "test_read_only_config_check_passthrough" || return
+    local repo; repo="$(setup_main_checkout "g-rocc")"
+    local out
+
+    # --- Positive (allow) — 4 cases ---
+
+    # 1. Canonical form with quoted cd and trailing `|| echo ON`
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 1. canonical bash -c probe: allow"
+    else
+        fail "fix-B 1. expected allow, got: $out"
+    fi
+
+    # 2. Unquoted cd target
+    out="$(run_bash_guard "bash -c 'cd \$AGENTS_CONFIG_DIR && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 2. unquoted cd target: allow"
+    else
+        fail "fix-B 2. expected allow, got: $out"
+    fi
+
+    # 3. Double-outer-quote form
+    out="$(run_bash_guard "bash -c \"cd \\\"\$AGENTS_CONFIG_DIR\\\" && get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON\"" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 3. double-outer-quote form: allow"
+    else
+        fail "fix-B 3. expected allow, got: $out"
+    fi
+
+    # 4. Without trailing `|| echo ON`
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off CONFIRM_WORKTREE on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 4. without || echo ON: allow"
+    else
+        fail "fix-B 4. expected allow, got: $out"
+    fi
+
+    # --- Negative (block) — 11 cases ---
+
+    # 5. Extra semicolon clause
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on && echo OFF; rm README.md'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 5. extra ; clause should block, got allow: $out"
+    else
+        pass "fix-B 5. extra ; clause: block"
+    fi
+
+    # 6. Wrong cd target
+    out="$(run_bash_guard "bash -c 'cd /etc && get-config-var --is-off X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 6. wrong cd target should block, got allow: $out"
+    else
+        pass "fix-B 6. wrong cd target: block"
+    fi
+
+    # 7. Wrong predicate (rm instead of get-config-var)
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && rm -rf foo && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 7. wrong predicate should block, got allow: $out"
+    else
+        pass "fix-B 7. wrong predicate: block"
+    fi
+
+    # 8. Backtick in body
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off \`whoami\` on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 8. backtick substitution should block, got allow: $out"
+    else
+        pass "fix-B 8. backtick substitution: block"
+    fi
+
+    # 9. $(...) substitution
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off \$(cat /etc/passwd) on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 9. \$() substitution should block, got allow: $out"
+    else
+        pass "fix-B 9. \$() substitution: block"
+    fi
+
+    # 10. Output redirect
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on > /tmp/out && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 10. output redirect should block, got allow: $out"
+    else
+        pass "fix-B 10. output redirect: block"
+    fi
+
+    # 11. Single pipe
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on | tee /tmp/out && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 11. single pipe should block, got allow: $out"
+    else
+        pass "fix-B 11. single pipe: block"
+    fi
+
+    # 12. Wrong final clause
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on && echo BAD'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 12. wrong final clause should block, got allow: $out"
+    else
+        pass "fix-B 12. wrong final clause: block"
+    fi
+
+    # 13. Non-bash interpreter (pwsh)
+    out="$(run_bash_guard "pwsh -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 13. non-bash interpreter should block, got allow: $out"
+    else
+        pass "fix-B 13. non-bash interpreter: block"
+    fi
+
+    # 14. --is-on flag (only --is-off allowed)
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-on X on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 14. --is-on should block, got allow: $out"
+    else
+        pass "fix-B 14. --is-on: block"
+    fi
+
+    # 15. Lowercase key
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off confirm_outline on && echo OFF'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        fail "fix-B 15. lowercase key should block, got allow: $out"
+    else
+        pass "fix-B 15. lowercase key: block"
+    fi
+}
+
 # ============ Run all ============
 
 test_main_checkout_on_main_blocks
@@ -548,6 +682,7 @@ test_gh_group_b_from_feature_worktree_allows
 test_gh_group_b_via_git_C_to_out_of_session_repo_blocks
 test_gh_group_b_from_non_git_dir_blocks
 test_main_checkout_ff_only_allowed
+test_read_only_config_check_passthrough
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
