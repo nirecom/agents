@@ -30,7 +30,7 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
    most important question whose answer unlocks all downstream questions?
 
 2. Check `CONFIRM_OUTLINE` flag:
-   Run via Bash: `bash -c 'get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
+   Run via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
    - stdout `OFF`: the outline stage's `AskUserQuestion` (approach selection) will be skipped,
      so delivery plan direction must be captured here. Include a question about delivery plan
      direction (single PR vs. phased, execution order) in the step 3 interview, treating it as
