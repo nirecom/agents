@@ -120,13 +120,16 @@ state_json() {
   "version": 1, "session_id": "$sid", "git_branch": $branch_json,
   "created_at": "$NOW_ISO",
   "steps": {
-    "research":          {"status": "$other", "updated_at": "$NOW_ISO"},
-    "plan":              {"status": "$other", "updated_at": "$NOW_ISO"},
-    "write_tests":       {"status": "$other", "updated_at": "$NOW_ISO"},
-    "review_security":   {"status": "$other", "updated_at": "$NOW_ISO"},
-    "run_tests":         {"status": "$other", "updated_at": "$NOW_ISO"},
-    "docs":              {"status": "$other", "updated_at": "$NOW_ISO"},
-    "user_verification": {"status": "$uv_status", "updated_at": "$NOW_ISO"}
+    "clarify_intent":     {"status": "$other", "updated_at": "$NOW_ISO"},
+    "research":           {"status": "$other", "updated_at": "$NOW_ISO"},
+    "plan":               {"status": "$other", "updated_at": "$NOW_ISO"},
+    "branching_complete": {"status": "$other", "updated_at": "$NOW_ISO"},
+    "write_tests":        {"status": "$other", "updated_at": "$NOW_ISO"},
+    "review_security":    {"status": "$other", "updated_at": "$NOW_ISO"},
+    "run_tests":          {"status": "$other", "updated_at": "$NOW_ISO"},
+    "docs":               {"status": "$other", "updated_at": "$NOW_ISO"},
+    "user_verification":  {"status": "$uv_status", "updated_at": "$NOW_ISO"},
+    "cleanup":            {"status": "$other", "updated_at": "$NOW_ISO"}
   }
 }
 EOF
@@ -140,18 +143,22 @@ state_json_custom() {
     local branch_json
     if [ "$branch" = "null" ]; then branch_json="null"; else branch_json="\"$branch\""; fi
     # defaults
-    local research="complete" plan="complete" write_tests="complete"
+    local clarify_intent="complete" research="complete" plan="complete"
+    local branching_complete="complete" write_tests="complete"
     local review_security="complete" run_tests="complete" docs="complete"
-    local user_verification="pending"
+    local user_verification="pending" cleanup="complete"
     while [ $# -ge 2 ]; do
         case "$1" in
+            clarify_intent) clarify_intent="$2";;
             research) research="$2";;
             plan) plan="$2";;
+            branching_complete) branching_complete="$2";;
             write_tests) write_tests="$2";;
             review_security) review_security="$2";;
             run_tests) run_tests="$2";;
             docs) docs="$2";;
             user_verification) user_verification="$2";;
+            cleanup) cleanup="$2";;
         esac
         shift 2
     done
@@ -160,13 +167,16 @@ state_json_custom() {
   "version": 1, "session_id": "$sid", "git_branch": $branch_json,
   "created_at": "$NOW_ISO",
   "steps": {
-    "research":          {"status": "$research", "updated_at": "$NOW_ISO"},
-    "plan":              {"status": "$plan", "updated_at": "$NOW_ISO"},
-    "write_tests":       {"status": "$write_tests", "updated_at": "$NOW_ISO"},
-    "review_security":   {"status": "$review_security", "updated_at": "$NOW_ISO"},
-    "run_tests":         {"status": "$run_tests", "updated_at": "$NOW_ISO"},
-    "docs":              {"status": "$docs", "updated_at": "$NOW_ISO"},
-    "user_verification": {"status": "$user_verification", "updated_at": "$NOW_ISO"}
+    "clarify_intent":     {"status": "$clarify_intent", "updated_at": "$NOW_ISO"},
+    "research":           {"status": "$research", "updated_at": "$NOW_ISO"},
+    "plan":               {"status": "$plan", "updated_at": "$NOW_ISO"},
+    "branching_complete": {"status": "$branching_complete", "updated_at": "$NOW_ISO"},
+    "write_tests":        {"status": "$write_tests", "updated_at": "$NOW_ISO"},
+    "review_security":    {"status": "$review_security", "updated_at": "$NOW_ISO"},
+    "run_tests":          {"status": "$run_tests", "updated_at": "$NOW_ISO"},
+    "docs":               {"status": "$docs", "updated_at": "$NOW_ISO"},
+    "user_verification":  {"status": "$user_verification", "updated_at": "$NOW_ISO"},
+    "cleanup":            {"status": "$cleanup", "updated_at": "$NOW_ISO"}
   }
 }
 EOF
@@ -558,6 +568,166 @@ MOCK_EOF
         fail "E24. expected PERFORMED+commit-sentinel only; capture-exists=$([ -f "$CAPTURE" ] && echo y || echo n) out: $OUT_24"
     fi
 fi
+
+# ============================================================================
+# Section F: WIP commit skips user_verification (12)
+# ============================================================================
+test_wip_commit_skips_user_verification() {
+    echo ""
+    echo "=== Section F: WIP commit skips user_verification ==="
+
+    local REPO_F; REPO_F="$(setup_main_checkout "secF-repo")"
+    # Seed a non-docs staged file so resolveRepoDir() short-circuits on the test
+    # repo instead of falling through to the session's additionalDirectories
+    # (which would otherwise pick up an unrelated worktree's staged tests/).
+    echo seed > "$REPO_F/sentinel.txt"
+    git -C "$REPO_F" add sentinel.txt
+
+    # --- Positive (approve) — 4 cases ---
+
+    # F1. git -c workflow.wip=1 commit + uv:pending, others complete → approve
+    local SID_F1="f1-$$"
+    write_state "$SID_F1" "$(state_json "$SID_F1" "main" "pending" "complete")"
+    local RES_F1
+    RES_F1="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F1" "$REPO_F")")"
+    if is_approve "$RES_F1"; then
+        pass "F1. git -c workflow.wip=1 commit + uv:pending → approve"
+    else
+        fail "F1. expected approve, got: $RES_F1"
+    fi
+
+    # F2. workflow.wip=true → approve
+    local SID_F2="f2-$$"
+    write_state "$SID_F2" "$(state_json "$SID_F2" "main" "pending" "complete")"
+    local RES_F2
+    RES_F2="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=true commit -m "wip"' "$SID_F2" "$REPO_F")")"
+    if is_approve "$RES_F2"; then
+        pass "F2. workflow.wip=true → approve"
+    else
+        fail "F2. expected approve, got: $RES_F2"
+    fi
+
+    # F3. -c workflow.wip=1 + -C "/some/path" → approve (flag ordering)
+    local SID_F3="f3-$$"
+    write_state "$SID_F3" "$(state_json "$SID_F3" "main" "pending" "complete")"
+    local RES_F3
+    RES_F3="$(run_gate "$REPO_F" "$(build_gate_json "git -c workflow.wip=1 -C \"$REPO_F\" commit -m \"wip\"" "$SID_F3" "$REPO_F")")"
+    if is_approve "$RES_F3"; then
+        pass "F3. flag ordering (-c then -C) → approve"
+    else
+        fail "F3. expected approve, got: $RES_F3"
+    fi
+
+    # F4. -c "workflow.wip=1" (quoted) → approve
+    local SID_F4="f4-$$"
+    write_state "$SID_F4" "$(state_json "$SID_F4" "main" "pending" "complete")"
+    local RES_F4
+    RES_F4="$(run_gate "$REPO_F" "$(build_gate_json 'git -c "workflow.wip=1" commit -m "wip"' "$SID_F4" "$REPO_F")")"
+    if is_approve "$RES_F4"; then
+        pass "F4. quoted -c \"workflow.wip=1\" → approve"
+    else
+        fail "F4. expected approve, got: $RES_F4"
+    fi
+
+    # --- Negative (block) — 7 cases ---
+
+    # F5. workflow.wip=0 → block (zero does not skip)
+    local SID_F5="f5-$$"
+    write_state "$SID_F5" "$(state_json "$SID_F5" "main" "pending" "complete")"
+    local RES_F5
+    RES_F5="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=0 commit -m "wip"' "$SID_F5" "$REPO_F")")"
+    if is_block "$RES_F5"; then
+        pass "F5. workflow.wip=0 → block (zero ≠ skip)"
+    else
+        fail "F5. expected block, got: $RES_F5"
+    fi
+
+    # F6. wip=1 + run_tests:pending, uv:complete, others complete → block on run_tests
+    local SID_F6="f6-$$"
+    write_state "$SID_F6" "$(state_json_custom "$SID_F6" "main" \
+        run_tests pending user_verification complete)"
+    local RES_F6
+    RES_F6="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F6" "$REPO_F")")"
+    if is_block "$RES_F6"; then
+        pass "F6. wip=1 + run_tests:pending → block (run_tests not skipped)"
+    else
+        fail "F6. expected block, got: $RES_F6"
+    fi
+
+    # F7. wip=1 + review_security:pending → block on review_security
+    local SID_F7="f7-$$"
+    write_state "$SID_F7" "$(state_json_custom "$SID_F7" "main" \
+        review_security pending user_verification complete)"
+    local RES_F7
+    RES_F7="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F7" "$REPO_F")")"
+    if is_block "$RES_F7"; then
+        pass "F7. wip=1 + review_security:pending → block (review_security not skipped)"
+    else
+        fail "F7. expected block, got: $RES_F7"
+    fi
+
+    # F8. wip=1 + docs:pending → block on docs
+    local SID_F8="f8-$$"
+    write_state "$SID_F8" "$(state_json_custom "$SID_F8" "main" \
+        docs pending user_verification complete)"
+    local RES_F8
+    RES_F8="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F8" "$REPO_F")")"
+    if is_block "$RES_F8"; then
+        pass "F8. wip=1 + docs:pending → block (docs not skipped)"
+    else
+        fail "F8. expected block, got: $RES_F8"
+    fi
+
+    # F9. irrelevant -c key → block
+    local SID_F9="f9-$$"
+    write_state "$SID_F9" "$(state_json "$SID_F9" "main" "pending" "complete")"
+    local RES_F9
+    RES_F9="$(run_gate "$REPO_F" "$(build_gate_json 'git -c somethingelse=1 commit -m "wip"' "$SID_F9" "$REPO_F")")"
+    if is_block "$RES_F9"; then
+        pass "F9. irrelevant -c key → block"
+    else
+        fail "F9. expected block, got: $RES_F9"
+    fi
+
+    # F10. flag-string in commit message body, not a real flag → block
+    local SID_F10="f10-$$"
+    write_state "$SID_F10" "$(state_json "$SID_F10" "main" "pending" "complete")"
+    local RES_F10
+    RES_F10="$(run_gate "$REPO_F" "$(build_gate_json 'git commit -m "git -c workflow.wip=1"' "$SID_F10" "$REPO_F")")"
+    if is_block "$RES_F10"; then
+        pass "F10. flag-string in commit message → block (not a flag)"
+    else
+        fail "F10. expected block, got: $RES_F10"
+    fi
+
+    # F11. -c after `commit` subcommand → block (post-subcommand position not recognized by git)
+    local SID_F11="f11-$$"
+    write_state "$SID_F11" "$(state_json "$SID_F11" "main" "pending" "complete")"
+    local RES_F11
+    RES_F11="$(run_gate "$REPO_F" "$(build_gate_json 'git commit -c workflow.wip=1 -m "wip"' "$SID_F11" "$REPO_F")")"
+    if is_block "$RES_F11"; then
+        pass "F11. -c after commit subcommand → block (post-subcommand)"
+    else
+        fail "F11. expected block, got: $RES_F11"
+    fi
+
+    # --- Idempotency — 1 case ---
+
+    # F12. After WIP approve, state file uv must still be pending (gate must not write state)
+    local SID_F12="f12-$$"
+    write_state "$SID_F12" "$(state_json "$SID_F12" "main" "pending" "complete")"
+    local RES_F12
+    RES_F12="$(run_gate "$REPO_F" "$(build_gate_json 'git -c workflow.wip=1 commit -m "wip"' "$SID_F12" "$REPO_F")")"
+    local UV_F12
+    UV_F12="$(read_state_step "$SID_F12" "user_verification")"
+    if is_approve "$RES_F12" && [ "$UV_F12" = "pending" ]; then
+        pass "F12. WIP approve does not mutate state (uv stays pending)"
+    else
+        fail "F12. expected approve+uv=pending, got approve=$(is_approve "$RES_F12" && echo y || echo n) uv=$UV_F12 res=$RES_F12"
+    fi
+}
+
+test_wip_commit_skips_user_verification
 
 # ============================================================================
 # Results

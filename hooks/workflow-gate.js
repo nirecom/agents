@@ -16,7 +16,7 @@ const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 // Steps tracked by the workflow but not enforced at commit time.
 // The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
 const NON_GATE_STEPS = ["research"];
-const { parseGitCArg } = require("./lib/parse-git-args");
+const { parseGitCArg, parseGitConfigValues } = require("./lib/parse-git-args");
 
 // Evidence-based check: staged files contain tests/ changes
 function hasStagedTestChanges(repoDir) {
@@ -289,6 +289,10 @@ if (require.main === module) {
 
   const repoDir = resolveRepoDir(command);
   const docsOnly = isDocsOnlyStaged(repoDir);
+  // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
+  // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
+  const wipValues = parseGitConfigValues(command, "workflow.wip");
+  const isWip = wipValues.some((v) => v === "1" || v.toLowerCase() === "true");
 
   // session_id is required — fail-safe if missing
   if (!sessionId) {
@@ -325,6 +329,7 @@ if (require.main === module) {
     // Feature-branch commits/pushes are intermediate; verification fires
     // at gh pr merge / git push :main instead (see merge gate above).
     if (step === "user_verification" && isWorktreeContext(repoDir)) continue;
+    if (step === "user_verification" && isWip) continue;
     // Evidence-based overrides: staged files are proof of completion
     if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
     if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
