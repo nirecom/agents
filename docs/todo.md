@@ -285,6 +285,25 @@ B-Hybrid（Phase 1）完了後に着手する。`hooks/lib/worktree-copy.js` 等
 
 - [ ] Phase 2 実装（B-Hybrid 完了・動作確認後に別セッションで実施）
 
+### worktree-start: npm install ステップ欠落（B-Hybrid Phase 1 follow-up）
+
+B-Hybrid Phase 1 で `bin/worktree-copy-include.js` を導入したが、これは `node_modules/ignore` に依存する。worktree-start スキルには `npm install` ステップが含まれておらず、main worktree で `node_modules/ignore` が欠落していると `Cannot find module 'ignore'` で worktree-start 手順 9 が失敗する。
+
+また、`npm install` は main worktree CWD から実行すると enforce-worktree.js でブロックされる（write classified）。
+
+- [ ] 対応案を検討:
+  - (a) リポジトリに `node_modules/ignore` をコミット（bundled dependency 化）
+  - (b) `bin/worktree-copy-include.js` を `ignore` 依存なしに書き直す（gitignore パーサーを内製化）
+  - (c) `npm install` を worktree 内でのみ許可する allow rule + worktree-start スキルに自動 `npm install` ステップ追加
+
+### worktree-start: .worktreeinclude 経由 .env / .private コピーの end-to-end 検証
+
+`.worktreeinclude` + `bin/worktree-copy-include.js` + `.worktreecopyexclude` の仕組みは実装済みだが、上記 npm 依存問題により実環境で動作未確認。npm 問題解消後に以下を確認する必要がある:
+
+- [ ] `.env` が `block-dotenv.js` フックをすり抜けて worktree-copy-include.js 経由でコピーされること（hook の Bash write 分類 vs Node 直接書き込みの挙動差を確認）
+- [ ] `.private-info-allowlist` がコピーされ、worktree 内で `.private-info-blocklist` 系チェックが機能すること
+- [ ] `.worktreecopyexclude`（`.env.production`、`*.pem` 等）が確実に拒否されること
+
 ### worktree-end: Step 6h に git pull が抜けている
 
 Step 6h は `git fetch --prune origin` のみ。squash-merge 後にローカル main が origin/main に fast-forward されないため、新ファイルが VS Code 等に表示されない。
