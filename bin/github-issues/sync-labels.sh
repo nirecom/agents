@@ -1,7 +1,7 @@
 #!/bin/bash
 # Apply .github/labels.yml to the current repository via `gh label create --force`.
 #
-# Usage: bin/sync-labels.sh [path-to-labels.yml]
+# Usage: bin/github-issues/sync-labels.sh [path-to-labels.yml]
 #
 # Idempotent — `--force` overwrites existing labels with matching names so this
 # can be re-run safely as the labels.yml evolves.
