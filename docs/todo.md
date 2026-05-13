@@ -31,3 +31,6 @@
 - [ ] #249 prevention: --ours/--theirs semantics inversion between merge and rebase
 - [ ] #250 enforce-worktree: allow gh issue create/edit from main worktree
 - [ ] #251 worktree-end: git worktree remove が CWD ロックで物理ディレクトリ削除できない (EPERM)
+- [ ] #252 refactor(hooks): extract path-match lib for shared path-normalization logic
+- [ ] #253 Permission architecture: migrate path-based decisions from settings.json glob rules to PreToolUse hooks
+- [ ] #254 cleanup(settings.json): audit and remove dead path-based allow/deny rules

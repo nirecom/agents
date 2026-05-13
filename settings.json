@@ -103,12 +103,6 @@
       "Bash(printf * >> */.claude/plans/*)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
-      "Write(~/.claude/plans/drafts/**)",
-      "Edit(~/.claude/plans/drafts/**)",
-      "Write(**/.claude/plans/drafts/**)",
-      "Edit(**/.claude/plans/drafts/**)",
-      "Write(**\\.claude\\plans\\drafts\\**)",
-      "Edit(**\\.claude\\plans\\drafts\\**)",
       "WebSearch",
       "WebFetch(domain:developer.mozilla.org)",
       "WebFetch(domain:docs.python.org)",
@@ -422,6 +416,16 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-diff.js\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/approve-plan-writes.js\"",
+            "timeout": 5
           }
         ]
       },
