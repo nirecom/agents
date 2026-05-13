@@ -151,3 +151,7 @@ Changes: Open tasks are now GitHub Issues (#222-#245 in nirecom/agents). docs/to
 ### BUGFIX: show-diff no longer previews plan files outside drafts/ (2026-05-13)
 Background: Diff preview suppressed only planning draft files, not final plan artifacts (intent, outline, detail).
 Changes: All files under ~/.claude/plans/ are now excluded from diff preview (previously only plans/drafts/).
+
+### BUGFIX: Pre-commit .env guard now correctly skips private repos (2026-05-13)
+Background: Private GitHub repos and non-GitHub remotes were blocked when staging a new .env file.
+Changes: Private repos and non-GitHub remotes now skip the .env-add check. Public GitHub repos continue to block direct .env commits. Also: hook-disabling git commands (git -c core.hooksPath=..., GIT_CONFIG_PARAMETERS=..., etc.) are now blocked even from linked worktrees.
