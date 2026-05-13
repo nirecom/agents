@@ -79,6 +79,11 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
    c. Display the `"copied"` list to the user.
    d. If `"denied"` is non-empty, report: "Skipped by .worktreecopyexclude: <files>".
    e. If `"errors"` is non-empty, report them to the user.
+      **Symlink note:** "Symlink source rejected: .env" is expected when `.env` is a
+      symlink (common in dotfiles setups). It does NOT require manual action if
+      `AGENTS_CONFIG_DIR` is already set in the parent shell environment — verify
+      with `echo "$AGENTS_CONFIG_DIR"` after `EnterWorktree`. Only escalate if
+      the variable is unset.
    f. If stderr contains `WARN:`, display it and ask the user to verify that the
       pattern is also present in `.gitignore`.
 
