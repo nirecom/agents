@@ -21,7 +21,7 @@ Open the issue (`gh issue view <N>`) for full context. Close via `/issue-close <
 | `status:cancelled` | Cancelled without completion. Set after close. |
 | `status:migrated` | Merged into another issue. Set after close. |
 
-Apply labels with `bin/sync-labels.sh` (reads `.github/labels.yml`,
+Apply labels with `bin/github-issues/sync-labels.sh` (reads `.github/labels.yml`,
 runs `gh label create --force`).
 
 ## Close path

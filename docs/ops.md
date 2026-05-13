@@ -9,7 +9,7 @@ Day-to-day task management using GitHub Issues. Full rules in [`rules/github-iss
 ### Initial setup (once per repo)
 
 ```bash
-bash bin/sync-labels.sh
+bash bin/github-issues/sync-labels.sh
 ```
 
 Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and `priority:*` labels from `.github/labels.yml`. Safe to re-run (uses `--force`).

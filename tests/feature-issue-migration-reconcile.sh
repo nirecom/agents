@@ -1,16 +1,16 @@
 #!/bin/bash
-# Tests for the reconcile path of bin/issue-to-history.sh — backfill history
+# Tests for the reconcile path of bin/github-issues/issue-to-history.sh — backfill history
 # entries for issues that were closed without going through /issue-close.
 #
 # Includes a check that the jq sentinel detector correctly identifies the
 # `<!-- issue-close-sentinel: ... -->` marker in issue comments.
 #
-# RED: this suite fails clean while bin/issue-to-history.sh is missing.
+# RED: this suite fails clean while bin/github-issues/issue-to-history.sh is missing.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET="$AGENTS_DIR/bin/issue-to-history.sh"
+TARGET="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
 MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
 
 PASS=0
@@ -29,7 +29,7 @@ run_with_timeout() {
 }
 
 if [ ! -f "$TARGET" ]; then
-    echo "FAIL: bin/issue-to-history.sh not found (implementation missing)"
+    echo "FAIL: bin/github-issues/issue-to-history.sh not found (implementation missing)"
     echo ""
     echo "Results: 0 passed, 1 failed"
     exit 1

@@ -143,3 +143,11 @@ Changes: Step 6 now delegates test execution to a test-runner subagent. Only a c
 ### BUGFIX: enforce-worktree unblocks docs push, read-only config checks, and orphan-dir cleanup (2026-05-13)
 Background: Three git workflow operations were incorrectly blocked by the write guard in the main worktree.
 Changes: git push origin main from the main worktree is now allowed when every file in the outgoing commits is covered by the exclude pattern (e.g., docs-only changes). Read-only bash -c invocations (such as config flag checks used by planning skills) are no longer blocked. After git worktree remove, the leftover empty directory can now be cleaned up via a dedicated node script instead of the blocked recursive-delete approach.
+
+### FEATURE: Work tracking migrated from docs/todo.md to GitHub Issues (2026-05-13)
+Background: Commits to docs/todo.md caused merge conflicts across concurrent sessions, blocking push and worktree cleanup.
+Changes: Open tasks are now GitHub Issues (#222-#245 in nirecom/agents). docs/todo.md is now a one-line-per-issue index; open the issue for full context. Browse all tasks in chronological order via the 'agents — Issue Timeline' project board (Content Date field).
+
+### BUGFIX: show-diff no longer previews plan files outside drafts/ (2026-05-13)
+Background: Diff preview suppressed only planning draft files, not final plan artifacts (intent, outline, detail).
+Changes: All files under ~/.claude/plans/ are now excluded from diff preview (previously only plans/drafts/).
