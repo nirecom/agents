@@ -4,11 +4,11 @@
 # After running, rewrite docs/todo.md as a thin ID index.
 #
 # Usage:
-#   bin/migrate-todo-to-issues.sh [--dry-run]
+#   bin/github-issues/migration/migrate-todo.sh [--dry-run]
 #   --dry-run: print titles without calling gh
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 FILE_TODO="$AGENTS_DIR/docs/todo.md"
 
 DRY_RUN=0

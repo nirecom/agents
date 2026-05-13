@@ -4,13 +4,13 @@
 # then immediately closed (historical record — not an active task).
 #
 # Usage:
-#   bin/migrate-history-to-issues.sh [--dry-run]
+#   bin/github-issues/migration/migrate-history.sh [--dry-run]
 #   --dry-run: print titles/labels without calling gh
 #
-# Prerequisites: labels must exist (run bin/sync-labels.sh if needed).
+# Prerequisites: labels must exist (run bin/github-issues/sync-labels.sh if needed).
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 FILE_2026="$AGENTS_DIR/docs/history/2026.md"
 FILE_CURRENT="$AGENTS_DIR/docs/history.md"
 

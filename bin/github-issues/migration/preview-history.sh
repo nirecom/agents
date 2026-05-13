@@ -4,7 +4,7 @@
 # Run before migrate-history-to-issues.sh to review titles, labels, and counts.
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 FILE_2026="$AGENTS_DIR/docs/history/2026.md"
 FILE_CURRENT="$AGENTS_DIR/docs/history.md"
 

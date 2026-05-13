@@ -1,7 +1,7 @@
 #!/bin/bash
 # Convert a (typically closed) GitHub issue into a docs/history.md entry.
 #
-# Usage: bin/issue-to-history.sh <issue-number> [--commit <hash>]
+# Usage: bin/github-issues/issue-to-history.sh <issue-number> [--commit <hash>]
 #
 # Requires AGENTS_CONFIG_DIR (the docs/ root). The script cd's there before
 # writing so consumer repos can pass their own value to target the right

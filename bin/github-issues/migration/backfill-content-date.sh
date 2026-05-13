@@ -4,8 +4,8 @@
 # Halts on first error.
 #
 # Usage:
-#   bin/backfill-issue-content-date.sh <from> <to>
-#   bin/backfill-issue-content-date.sh 68 221    # remaining history entries
+#   bin/github-issues/migration/backfill-content-date.sh <from> <to>
+#   bin/github-issues/migration/backfill-content-date.sh 68 221    # remaining history entries
 set -euo pipefail
 
 OWNER=nirecom

@@ -60,7 +60,7 @@ Ask whether to **append**, **skip**, or **stop**.
 On "append":
 
 ```bash
-ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/issue-to-history.sh" "$NUM"
+ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM"
 ```
 
 The script is internally idempotent — running it on `history-only` does

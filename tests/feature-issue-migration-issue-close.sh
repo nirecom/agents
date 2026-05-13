@@ -1,14 +1,14 @@
 #!/bin/bash
-# Tests for bin/issue-to-history.sh — issue-close path that converts a closed
+# Tests for bin/github-issues/issue-to-history.sh — issue-close path that converts a closed
 # GitHub issue into a docs/history.md entry.
 #
-# RED: this suite fails clean while bin/issue-to-history.sh does not exist yet.
+# RED: this suite fails clean while bin/github-issues/issue-to-history.sh does not exist yet.
 # GREEN: once the implementation lands, every test below should pass.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET="$AGENTS_DIR/bin/issue-to-history.sh"
+TARGET="$AGENTS_DIR/bin/github-issues/issue-to-history.sh"
 MOCK_DIR="$AGENTS_DIR/tests/fixtures/gh-mock"
 
 PASS=0
@@ -28,7 +28,7 @@ run_with_timeout() {
 
 # --- Existence gate (RED while implementation is missing) -------------------
 if [ ! -f "$TARGET" ]; then
-    echo "FAIL: bin/issue-to-history.sh not found (implementation missing)"
+    echo "FAIL: bin/github-issues/issue-to-history.sh not found (implementation missing)"
     echo ""
     echo "Results: 0 passed, 1 failed"
     exit 1
