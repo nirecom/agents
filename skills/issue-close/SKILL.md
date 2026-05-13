@@ -1,6 +1,6 @@
 ---
 name: issue-close
-description: Close a GitHub Issue and write its history.md entry in one transaction-safe flow. Routes through bin/issue-to-history.sh and bin/issue-close-gate.sh; updates docs/todo.md.
+description: Close a GitHub Issue and write its history.md entry in one transaction-safe flow. Routes through bin/github-issues/issue-to-history.sh and bin/issue-close-gate.sh; updates docs/todo.md.
 ---
 
 Close a GitHub Issue safely:
@@ -49,7 +49,7 @@ sentinel was never promoted. Run the Step E idempotency check first
 - If history already has the entry, post a new `appended` sentinel
   (`ISSUE_CLOSE_SKILL=1 gh issue comment <N> --body "<!-- issue-close-sentinel: appended -->"`)
   and exit successfully.
-- If history is missing the entry, run `ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/issue-to-history.sh" <N>`
+- If history is missing the entry, run `ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" <N>`
   to append, then post the `appended` sentinel.
 
 ## Step B: sub-issue gate
@@ -94,10 +94,10 @@ Failure here is safe — no side effects yet. Abort and surface the error.
 ## Step E: idempotent doc-append
 
 ```bash
-ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/issue-to-history.sh" <N> [--commit <hash>]
+ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" <N> [--commit <hash>]
 ```
 
-`bin/issue-to-history.sh` checks `docs/history.md` and `docs/history/`
+`bin/github-issues/issue-to-history.sh` checks `docs/history.md` and `docs/history/`
 for `#<N>:` before appending — if found, it exits 0 without re-writing.
 
 On failure, abort. The sentinel stays at `pending`, so the next invocation
