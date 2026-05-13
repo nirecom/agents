@@ -155,3 +155,7 @@ Changes: All files under ~/.claude/plans/ are now excluded from diff preview (pr
 ### BUGFIX: Pre-commit .env guard now correctly skips private repos (2026-05-13)
 Background: Private GitHub repos and non-GitHub remotes were blocked when staging a new .env file.
 Changes: Private repos and non-GitHub remotes now skip the .env-add check. Public GitHub repos continue to block direct .env commits. Also: hook-disabling git commands (git -c core.hooksPath=..., GIT_CONFIG_PARAMETERS=..., etc.) are now blocked even from linked worktrees.
+
+### FEATURE: Planning skills: eliminate VS Code permission dialogs for plan file writes (2026-05-13)
+Background: VS Code's ask-before-edits mode bypasses settings.json allow rules for Write/Edit tools — planning skill writes to ~/.claude/plans/ triggered repeated permission dialogs on every session.
+Changes: Planning skill file writes (clarify-intent, make-outline-plan, make-detail-plan) no longer prompt for permission in VS Code. Writes to ~/.claude/plans/ and its subdirectories are auto-approved via a new PreToolUse hook.
