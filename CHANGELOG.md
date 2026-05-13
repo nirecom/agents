@@ -128,6 +128,22 @@ Changes: Intermediate planning draft files (written during /make-outline-plan an
 Background: /worktree-end writes the pending-branch-delete marker from the main worktree before deleting the merged branch. Each write triggered a permission prompt, and deleting a stale marker left over from an aborted run also prompted.
 Changes: Writing, editing, or deleting <git-common-dir>/info/pending-branch-delete from the main worktree no longer triggers a permission prompt. Deleting a non-existent marker is treated as a safe no-op.
 
+### BUGFIX: CONFIRM_* flags now take effect when working from the main worktree (2026-05-12)
+Background: Planning skills probe CONFIRM_OUTLINE, CONFIRM_DETAIL, and similar flags by running a shell command from main. That command was classified as a write and blocked, so the flags were always treated as on regardless of the configured value.
+Changes: The specific probe shape used by planning skills is now permitted from the main worktree. CONFIRM_* flags set to off are honoured in all session contexts.
+
+### FEATURE: Fixup commits no longer require re-verification (2026-05-12)
+Background: Small fixup commits made after user_verification was already granted re-triggered the full verification gate, requiring user approval again even for low-risk intermediate changes.
+Changes: Running git commit as git -c workflow.wip=1 commit -m "..." (or via /commit-push --wip) skips user_verification for that commit only. All other gates (run_tests, review_security, docs) still apply. The next non-WIP commit re-triggers verification as normal.
+
+### FEATURE: Test output now runs in a dedicated subagent, keeping the main session clean (2026-05-13)
+Background: Test output was accumulating in the main conversation, consuming token budget and obscuring context.
+Changes: Step 6 now delegates test execution to a test-runner subagent. Only a compact YAML summary (pass/fail status, failing test names, last 40 log lines) returns to the main session. A dual sentinel prevents stale pass state from surviving a newly failing test run.
+
+### BUGFIX: enforce-worktree unblocks docs push, read-only config checks, and orphan-dir cleanup (2026-05-13)
+Background: Three git workflow operations were incorrectly blocked by the write guard in the main worktree.
+Changes: git push origin main from the main worktree is now allowed when every file in the outgoing commits is covered by the exclude pattern (e.g., docs-only changes). Read-only bash -c invocations (such as config flag checks used by planning skills) are no longer blocked. After git worktree remove, the leftover empty directory can now be cleaned up via a dedicated node script instead of the blocked recursive-delete approach.
+
 ### FEATURE: Work tracking migrated from docs/todo.md to GitHub Issues (2026-05-13)
 Background: Commits to docs/todo.md caused merge conflicts across concurrent sessions, blocking push and worktree cleanup.
 Changes: Open tasks are now GitHub Issues (#222-#245 in nirecom/agents). docs/todo.md is now a one-line-per-issue index; open the issue for full context. Browse all tasks in chronological order via the 'agents — Issue Timeline' project board (Content Date field).

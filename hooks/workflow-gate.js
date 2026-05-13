@@ -16,7 +16,7 @@ const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 // Steps tracked by the workflow but not enforced at commit time.
 // The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
 const NON_GATE_STEPS = ["research"];
-const { parseGitCArg } = require("./lib/parse-git-args");
+const { parseGitCArg, parseGitConfigValues } = require("./lib/parse-git-args");
 
 // Evidence-based check: staged files contain tests/ changes
 function hasStagedTestChanges(repoDir) {
@@ -289,6 +289,10 @@ if (require.main === module) {
 
   const repoDir = resolveRepoDir(command);
   const docsOnly = isDocsOnlyStaged(repoDir);
+  // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
+  // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
+  const wipValues = parseGitConfigValues(command, "workflow.wip");
+  const isWip = wipValues.some((v) => v === "1" || v.toLowerCase() === "true");
 
   // session_id is required — fail-safe if missing
   if (!sessionId) {
@@ -325,6 +329,7 @@ if (require.main === module) {
     // Feature-branch commits/pushes are intermediate; verification fires
     // at gh pr merge / git push :main instead (see merge gate above).
     if (step === "user_verification" && isWorktreeContext(repoDir)) continue;
+    if (step === "user_verification" && isWip) continue;
     // Evidence-based overrides: staged files are proof of completion
     if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
     if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
@@ -339,7 +344,7 @@ if (require.main === module) {
     plan: '/make-outline-plan → /make-detail-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     branching_complete: 'consult rules/branch.md + rules/worktree.md, then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: <name>|worktree: <path>>"',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    run_tests: 'run your test suite via Bash (touching tests/) — PostToolUse hook auto-marks based on exit code. Manual fallback: echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>".',
+    run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then git add docs/)',
     user_verification: 'run immediately: echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',

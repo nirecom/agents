@@ -53,4 +53,40 @@ function parseGitGlobalOptions(command) {
   return { subcommand: null, rest: "" };
 }
 
-module.exports = { parseGitCArg, parseGitGlobalOptions };
+/**
+ * Collect values of `git -c <key>=<value>` global options matching the given key.
+ * Returns an array (may be empty) of value strings. Only inspects global options
+ * before the subcommand verb — `-c` appearing after the subcommand (e.g.
+ * `git commit -c <ref>`) is a different flag and is ignored.
+ * Quote-aware (strips matching outer quotes from the key=value token).
+ */
+function parseGitConfigValues(command, key) {
+  const tail = command.replace(/^\s*git\b\s*/, "");
+  const tokens = tail.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+  const FLAGS_WITH_ARG_NO_EQ = new Set([
+    "-C", "--git-dir", "--work-tree", "--namespace",
+    "--config-env", "--exec-path", "--super-prefix",
+  ]);
+  const values = [];
+  for (let i = 0; i < tokens.length; i++) {
+    let t = tokens[i];
+    if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+      t = t.slice(1, -1);
+    }
+    if (!t.startsWith("-")) break; // subcommand reached
+    if (t === "-c" && i + 1 < tokens.length) {
+      let v = tokens[i + 1];
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      const eq = v.indexOf("=");
+      if (eq > 0 && v.slice(0, eq) === key) values.push(v.slice(eq + 1));
+      i++;
+    } else if (FLAGS_WITH_ARG_NO_EQ.has(t) && !t.includes("=")) {
+      i++;
+    }
+  }
+  return values;
+}
+
+module.exports = { parseGitCArg, parseGitGlobalOptions, parseGitConfigValues };

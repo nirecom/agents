@@ -282,6 +282,41 @@ function isAllowedFastForwardMerge(cmd) {
   return isPullFf || isMergeFf;
 }
 
+/**
+ * True if cmd is an isolated `bash -c '...'` matching exactly the
+ * read-only CONFIRM_* probe shape used by planning skills:
+ *   bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
+ *
+ * Does NOT call hasShellChaining() — the probe body intentionally uses
+ * && and || as control flow. Safety is enforced by structural clause matching.
+ * Coupling: if the skill probe string changes, update this matcher in sync.
+ * See docs/architecture/claude-code/workflow.md for the contract.
+ */
+function isAllowedReadOnlyConfigCheck(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const m = cmd.match(/^\s*bash\s+-c\s+(['"])([\s\S]+)\1\s*$/);
+  if (!m) return false;
+  const quote = m[1];
+  let body = m[2];
+  // Allow escaped same-quote inside body (e.g. `cd \"$AGENTS_CONFIG_DIR\"` when outer is `"`).
+  // The clause regexes below are anchored, so any unescaped quote that breaks the
+  // structure will be caught at the clause-match step.
+  body = body.replace(quote === '"' ? /\\"/g : /\\'/g, quote);
+  if (body.includes("`")) return false;
+  if (body.includes("$(")) return false;
+  if (body.includes(">") || body.includes("<")) return false;
+  if (body.includes(";")) return false;
+  if (body.replace(/\|\|/g, "").includes("|")) return false;
+  const clauses = body.split(/\s*&&\s*/);
+  if (clauses.length !== 3) return false;
+  const [c1, c2, c3Raw] = clauses;
+  const c3 = c3Raw.replace(/\s*\|\|\s*echo\s+ON\s*$/, "").trimEnd();
+  if (!/^cd\s+(?:"?\$AGENTS_CONFIG_DIR"?)\s*$/.test(c1.trim())) return false;
+  if (!/^get-config-var\s+--is-off\s+[A-Z][A-Z0-9_]*\s+(?:on|off)\s*$/.test(c2.trim())) return false;
+  if (!/^echo\s+OFF\s*$/.test(c3.trim())) return false;
+  return true;
+}
+
 // Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
 // Per rules/worktree.md, this is the parent directory all linked worktrees live under.
 function getWorktreeBaseDir() {
@@ -513,6 +548,101 @@ function isMarkerFilePath(filePath, repoRoot) {
   const nTarget = norm(filePath);
   const nMarker = norm(markerPath);
   return !!(nTarget && nMarker && nTarget === nMarker);
+}
+
+/**
+ * Resolve the upstream tracking ref for the current branch.
+ * If remote is specified, only returns an upstream on that remote.
+ */
+function resolveUpstream(repoRoot, remote) {
+  try {
+    const branchRes = spawnSync("git", ["symbolic-ref", "--short", "HEAD"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (branchRes.status !== 0) return null;
+    const branch = (branchRes.stdout || "").trim();
+    if (!branch) return null;
+    const upRes = spawnSync("git", ["rev-parse", "--abbrev-ref", `${branch}@{upstream}`], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (upRes.status !== 0) return null;
+    const upstream = (upRes.stdout || "").trim();
+    if (!upstream) return null;
+    if (remote && !upstream.startsWith(`${remote}/`)) return null;
+    return upstream;
+  } catch (e) { return null; }
+}
+
+/**
+ * Allow `git push` from the main worktree when every file in every outgoing
+ * commit is covered by ENFORCE_WORKTREE_EXCLUDE. Uses `git log --name-only`
+ * to enumerate all touched files (not just net diff — a file touched then
+ * reverted within the range still counts).
+ * Fail-closed on unsupported refspec shapes, missing upstream, or git errors.
+ */
+function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
+  try {
+    if (!excludePatterns || excludePatterns.length === 0) return false;
+    if (hasShellChaining(cmd)) return false;
+    if (!/\bgit\b.*\bpush\b/.test(cmd)) return false;
+
+    const stripped = stripQuotedArgs(cmd);
+    const tokens = stripped.trim().split(/\s+/);
+    const pushIdx = tokens.findIndex((t) => t === "push");
+    if (pushIdx === -1) return false;
+
+    const KNOWN_FLAGS = new Set([
+      "-q", "--quiet", "-v", "--verbose",
+      "--porcelain", "-n", "--dry-run", "--atomic",
+    ]);
+    const UPSTREAM_FLAGS = new Set(["-u", "--set-upstream"]);
+    const positionals = [];
+    let sawUpstreamFlag = false;
+    for (const t of tokens.slice(pushIdx + 1)) {
+      if (UPSTREAM_FLAGS.has(t)) { sawUpstreamFlag = true; continue; }
+      if (KNOWN_FLAGS.has(t)) continue;
+      if (t.startsWith("-")) return false; // unknown flag → fail-closed
+      positionals.push(t);
+    }
+    // -u/--set-upstream requires an explicit <remote> <branch> — fail-closed otherwise
+    if (sawUpstreamFlag && positionals.length !== 2) return false;
+
+    let upstreamRef;
+    if (positionals.length === 0) {
+      upstreamRef = resolveUpstream(repoRoot);
+    } else if (positionals.length === 1) {
+      upstreamRef = resolveUpstream(repoRoot, positionals[0]);
+    } else if (positionals.length === 2) {
+      const [remote, branch] = positionals;
+      if (branch.includes(":") || branch.startsWith("refs/") || branch.startsWith("+")) return false;
+      if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) return false;
+      const checkRes = spawnSync("git", ["rev-parse", "--verify", `${remote}/${branch}`], {
+        cwd: repoRoot, timeout: 2000,
+      });
+      if (checkRes.status !== 0) return false;
+      upstreamRef = `${remote}/${branch}`;
+    } else {
+      return false; // multiple refspecs → fail-closed
+    }
+    if (!upstreamRef) return false;
+
+    const logRes = spawnSync(
+      "git", ["log", "--name-only", "--pretty=format:", `${upstreamRef}..HEAD`],
+      { cwd: repoRoot, encoding: "utf8", timeout: 10000 }
+    );
+    if (logRes.status !== 0) return false;
+
+    // Anchor relative paths from git log against repoRoot (not process.cwd):
+    // isExcluded internally calls path.resolve which would otherwise resolve
+    // against the hook's cwd, mis-matching absolute-style EXCLUDE patterns.
+    const files = (logRes.stdout || "")
+      .split("\n")
+      .map((f) => f.trim())
+      .filter(Boolean)
+      .map((f) => path.resolve(repoRoot, normalizeCwd(f) || f));
+    if (files.length === 0) return true; // no outgoing commits → allow
+    return files.every((f) => isExcluded(f, excludePatterns));
+  } catch (e) { return false; }
 }
 
 // Returns true when repoCwd is the main worktree (non-linked).
@@ -923,6 +1053,8 @@ if (mainCheckout) {
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedMarkerDelete(cmd, repoRoot)) done();
+    if (isAllowedReadOnlyConfigCheck(cmd)) done();
+    if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
   }
 
   // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
@@ -964,6 +1096,8 @@ module.exports = {
   parseBranchDeleteTarget,
   isAllowedBranchDeleteViaMarker,
   isAllowedMarkerDelete,
+  isAllowedReadOnlyConfigCheck,
   isMarkerFilePath,
   getWorktreeBaseDir,
+  isAllowedPushAllExcluded,
 };
