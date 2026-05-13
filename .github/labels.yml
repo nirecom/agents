@@ -1,5 +1,5 @@
 # Label definitions for GitHub Issues.
-# Applied via `bin/sync-labels.sh` (uses `gh label create --force`).
+# Applied via `bin/github-issues/sync-labels.sh` (uses `gh label create --force`).
 # Format: list of {name, color, description}. Colors are 6-digit hex without '#'.
 
 - name: "type:task"
