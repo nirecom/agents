@@ -13,6 +13,9 @@ const crypto = require("crypto");
 const MAX_DIFF = 3000;
 const MAX_READ_SIZE = 1024 * 1024; // 1 MiB cap for overwrite-side reads
 
+const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+const { isUnderPath } = require("./lib/path-match");
+
 // ── stdin ─────────────────────────────────────────────────────────────────────
 
 function readStdin() {
@@ -71,8 +74,8 @@ function isTestFile(filePath) {
 
 function isPlanFile(filePath) {
   if (!filePath) return false;
-  const p = filePath.replace(/\\/g, "/");
-  return p.includes("/.claude/plans/");
+  try { return isUnderPath(filePath, getWorkflowPlansDir()); }
+  catch { return false; }
 }
 
 // ── diff generation ───────────────────────────────────────────────────────────

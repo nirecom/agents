@@ -7,8 +7,6 @@ SETTINGS="$REPO_ROOT/settings.json"
 RULES=(
   "Bash(bash -c 'get-config-var *')"
   'Bash(get-config-var *)'
-  'Read(**/.claude/plans/**)'
-  'Bash(printf * >> */.claude/plans/*)'
 )
 
 # a) Each rule is present exactly once
@@ -22,24 +20,17 @@ for rule in 'Bash(doc-append *)' 'Write(**/tests/**)' 'Edit(**/tests/**)'; do
   grep -qF "$rule" "$SETTINGS" || { echo "FAIL: missing regression entry: $rule"; exit 1; }
 done
 
-# c) Placement: rules appear between doc-append and Write(**/tests/**)
-region=$(awk '/Bash\(doc-append \*\)/{p=1} p{print} /Write\(\*\*\/tests\/\*\*\)/{p=0}' "$SETTINGS")
-for rule in "${RULES[@]}"; do
-  echo "$region" | grep -qF "$rule" || { echo "FAIL: rule not in expected placement: $rule"; exit 1; }
-done
-
-# d) Negative: broad plans/** rules and superseded narrow drafts rules must be absent
+# c) Negative: no plans-path allow rules needed — ~/.workflow-plans/ is not a protected path
+# Old .claude/plans rules must be absent; no new .workflow-plans rules should be added
 for rule in \
-  'Write(**/.claude/plans/**)' \
-  'Edit(**/.claude/plans/**)' \
-  'Write(~/.claude/plans/drafts/**)' \
-  'Edit(~/.claude/plans/drafts/**)' \
-  'Write(**/.claude/plans/drafts/**)' \
-  'Edit(**/.claude/plans/drafts/**)' \
-  'Write(**\\.claude\\plans\\drafts\\**)' \
-  'Edit(**\\.claude\\plans\\drafts\\**)'; do
+  'Read(**/.claude/plans/**)' \
+  'Bash(printf * >> */.claude/plans/*)' \
+  'Read(**/.workflow-plans/**)' \
+  'Bash(printf * >> */.workflow-plans/*)' \
+  'Write(**/.workflow-plans/**)' \
+  'Edit(**/.workflow-plans/**)'; do
   if grep -qF "$rule" "$SETTINGS"; then
-    echo "FAIL: rule must have been removed but still present: $rule"
+    echo "FAIL: plans allow rule must be absent but found: $rule"
     exit 1
   fi
 done

@@ -2,8 +2,9 @@
 # Tests for isPlanFile detection in hooks/show-diff.js.
 #
 # These tests assert the CORRECT POST-FIX behavior (isPlanFile, checking
-# /.claude/plans/ broadly).  Before the fix (isPlanDraftFile, narrow check),
-# T1 / T3 / T6 will FAIL — that is expected and proves the fix is needed.
+# ~/.workflow-plans/ broadly via isUnderPath).  Tests use WORKFLOW_PLANS_DIR
+# to control the resolved plans directory, so they work regardless of the
+# actual home directory path.
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,6 +22,12 @@ run_with_timeout() {
     perl -e 'alarm 120; exec @ARGV' -- "$@"
   fi
 }
+
+# Resolve Node-visible home dir (forward slashes, Windows-native on Windows)
+NODE_HOME="$(run_with_timeout node -e "process.stdout.write(require('os').homedir().replace(/\\\\/g,'/'))")"
+
+# Set WORKFLOW_PLANS_DIR to the real home's .workflow-plans so isUnderPath matches
+export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
 
 run_hook() {
   local json="$1"
@@ -51,61 +58,59 @@ expect_nonempty() {
   fi
 }
 
-# ── T1: POSIX path under /.claude/plans/ (non-drafts) ────────────────────────
-# Post-fix: noop.  Pre-fix: FAIL (isPlanDraftFile misses this path).
-echo "=== T1: /.claude/plans/foo-intent.md ==="
+# Build Windows backslash version for T6/T7
+WIN_PLANS_DIR="$(echo "$WORKFLOW_PLANS_DIR" | sed 's|/|\\|g')"
+
+# ── T1: POSIX path under ~/.workflow-plans/ (non-drafts) ───────────────────
+echo "=== T1: \$WORKFLOW_PLANS_DIR/foo-intent.md ==="
 expect_empty "T1 plan intent file is noop" \
-  '{"tool_name":"Write","tool_input":{"file_path":"/.claude/plans/foo-intent.md","content":"x"}}'
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/foo-intent.md\",\"content\":\"x\"}}"
 
-# ── T2: POSIX path under /.claude/plans/drafts/ ──────────────────────────────
-# Already working before the fix (narrow check covers drafts).
-echo "=== T2: /.claude/plans/drafts/foo.md ==="
+# ── T2: POSIX path under ~/.workflow-plans/drafts/ ─────────────────────────
+echo "=== T2: \$WORKFLOW_PLANS_DIR/drafts/foo.md ==="
 expect_empty "T2 plan drafts file is noop" \
-  '{"tool_name":"Write","tool_input":{"file_path":"/.claude/plans/drafts/foo.md","content":"x"}}'
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/drafts/foo.md\",\"content\":\"x\"}}"
 
-# ── T3: POSIX path — date-stamped detail plan ────────────────────────────────
-# Post-fix: noop.  Pre-fix: FAIL (isPlanDraftFile misses non-drafts subpath).
-echo "=== T3: /.claude/plans/20260512-issues-migration-detail.md ==="
+# ── T3: POSIX path — date-stamped detail plan ──────────────────────────────
+echo "=== T3: \$WORKFLOW_PLANS_DIR/20260512-issues-migration-detail.md ==="
 expect_empty "T3 date-stamped detail plan is noop" \
-  '{"tool_name":"Write","tool_input":{"file_path":"/.claude/plans/20260512-issues-migration-detail.md","content":"x"}}'
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260512-issues-migration-detail.md\",\"content\":\"x\"}}"
 
-# ── T4: plans-archive (similar prefix but NOT /.claude/plans/) ───────────────
-# Not a plan file — diff should be shown.
-echo "=== T4: /.claude/plans-archive/foo.md ==="
-expect_nonempty "T4 plans-archive path shows diff" \
-  '{"tool_name":"Write","tool_input":{"file_path":"/.claude/plans-archive/foo.md","content":"x"}}'
+# ── T4: workflow-plans-archive (similar prefix but NOT ~/.workflow-plans/) ─
+# Not a plan file — diff should be shown. Tests trailing-slash boundary:
+# isUnderPath($WORKFLOW_PLANS_DIR-archive/foo, $WORKFLOW_PLANS_DIR) === false
+echo "=== T4: \$WORKFLOW_PLANS_DIR-archive/foo.md ==="
+expect_nonempty "T4 workflow-plans-archive path shows diff" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR-archive/foo.md\",\"content\":\"x\"}}"
 
-# ── T5: /src/plans/foo.md (no .claude prefix) ────────────────────────────────
+# ── T5: /src/plans/foo.md (no plans prefix) ────────────────────────────────
 # Not a plan file — diff should be shown.
 echo "=== T5: /src/plans/foo.md ==="
 expect_nonempty "T5 src/plans path shows diff" \
   '{"tool_name":"Write","tool_input":{"file_path":"/src/plans/foo.md","content":"x"}}'
 
-# ── T6: Windows backslash path under .claude\plans\ ─────────────────────────
-# Post-fix: noop (backslashes normalized to /). Pre-fix: FAIL.
-echo "=== T6: C:\\Users\\user\\.claude\\plans\\foo.md (Windows path) ==="
+# ── T6: Windows backslash path under plans dir ─────────────────────────────
+echo "=== T6: ${WIN_PLANS_DIR}\\foo.md (Windows path) ==="
 expect_empty "T6 Windows plans path is noop" \
-  '{"tool_name":"Write","tool_input":{"file_path":"C:\\Users\\user\\.claude\\plans\\foo.md","content":"x"}}'
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\foo.md\",\"content\":\"x\"}}"
 
-# ── T7: Windows backslash path under .claude\plans\drafts\ ──────────────────
-# Already working before fix.
-echo "=== T7: C:\\Users\\user\\.claude\\plans\\drafts\\bar.md (Windows path) ==="
+# ── T7: Windows backslash path under plans\drafts\ ─────────────────────────
+echo "=== T7: ${WIN_PLANS_DIR}\\drafts\\bar.md (Windows path) ==="
 expect_empty "T7 Windows plans/drafts path is noop" \
-  '{"tool_name":"Write","tool_input":{"file_path":"C:\\Users\\user\\.claude\\plans\\drafts\\bar.md","content":"x"}}'
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\drafts\\\\bar.md\",\"content\":\"x\"}}"
 
-# ── T8: Empty file_path ───────────────────────────────────────────────────────
-# Hook should early-return (noop) for empty path.
+# ── T8: Empty file_path ────────────────────────────────────────────────────
 echo "=== T8: empty file_path ==="
 expect_empty "T8 empty file_path is noop" \
   '{"tool_name":"Write","tool_input":{"file_path":"","content":"x"}}'
 
-# ── T9: Non-watched tool (Bash) ───────────────────────────────────────────────
+# ── T9: Non-watched tool (Bash) ───────────────────────────────────────────
 # Hook only watches Write/Edit/MultiEdit/editFiles — Bash is ignored.
 echo "=== T9: Bash tool (non-watched) ==="
 expect_empty "T9 Bash tool is noop" \
   '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
 
-# ── Results ───────────────────────────────────────────────────────────────────
+# ── Results ──────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
 if [ "$ERRORS" -eq 0 ]; then

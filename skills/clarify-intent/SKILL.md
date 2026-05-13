@@ -50,7 +50,7 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 
 4. After the interview (or at the 5-round cap), write the agreed requirements to:
    ```
-   ~/.claude/plans/<session-id>-intent.md
+   ~/.workflow-plans/<session-id>-intent.md
    ```
    Use the Write tool directly — do NOT run mkdir first (Write creates parent directories automatically).
    Use the schema below. The `<session-id>` must be the current Claude session ID.
