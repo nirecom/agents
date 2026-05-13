@@ -127,3 +127,11 @@ Changes: Intermediate planning draft files (written during /make-outline-plan an
 ### BUGFIX: pending-branch-delete marker no longer prompts on create / edit / delete (2026-05-12)
 Background: /worktree-end writes the pending-branch-delete marker from the main worktree before deleting the merged branch. Each write triggered a permission prompt, and deleting a stale marker left over from an aborted run also prompted.
 Changes: Writing, editing, or deleting <git-common-dir>/info/pending-branch-delete from the main worktree no longer triggers a permission prompt. Deleting a non-existent marker is treated as a safe no-op.
+
+### FEATURE: Work tracking migrated from docs/todo.md to GitHub Issues (2026-05-13)
+Background: Commits to docs/todo.md caused merge conflicts across concurrent sessions, blocking push and worktree cleanup.
+Changes: Open tasks are now GitHub Issues (#222-#245 in nirecom/agents). docs/todo.md is now a one-line-per-issue index; open the issue for full context. Browse all tasks in chronological order via the 'agents — Issue Timeline' project board (Content Date field).
+
+### BUGFIX: show-diff no longer previews plan files outside drafts/ (2026-05-13)
+Background: Diff preview suppressed only planning draft files, not final plan artifacts (intent, outline, detail).
+Changes: All files under ~/.claude/plans/ are now excluded from diff preview (previously only plans/drafts/).
