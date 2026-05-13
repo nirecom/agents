@@ -334,3 +334,7 @@ Changes: Created 157 closed issues (#65-#221) from completed history entries (bi
 ### BUGFIX: show-diff.js: extend plan-file suppression from plans/drafts/ to all plans/ (2026-05-13, pending)
 Background: The 2026-05-12 planning pipeline UX PR suppressed diff previews only for plans/drafts/, leaving final plan artifacts (*-intent.md, *-outline.md, *-detail.md) still triggering previews.
 Changes: Renamed isPlanDraftFile to isPlanFile; widened path check from /.claude/plans/drafts/ to /.claude/plans/. Added tests/feature-show-diff-plan-file.sh (9 cases: T1-T9). skills/worktree-start/SKILL.md step 9e: added note that 'Symlink source rejected: .env' is expected when .env is a symlink in dotfiles setups.
+
+### BUGFIX: pre-commit dotenv order fix + enforce-worktree hooks bypass block (2026-05-13, pending)
+Background: Fix 1: hooks/pre-commit dotenv-add block ran before private-repo check, blocking .env commits on private repos. Fix 2: hooks/enforce-worktree.js lacked detection of git hooks bypass patterns.
+Changes: Fix 1: swapped block order in hooks/pre-commit so private-repo check runs first. Fix 2: added hasGitHooksBypass() to hooks/enforce-worktree.js detecting core.hooksPath bypass via -c, --config-env, GIT_CONFIG_PARAMETERS, GIT_CONFIG_KEY_N. Tests: fix-pre-commit-dotenv-order.sh (7) + fix-enforce-worktree-hooks-bypass.sh (53); all pass.
