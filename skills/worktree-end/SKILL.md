@@ -1,6 +1,7 @@
 ---
 name: worktree-end
 description: Inventory gitignored state, merge PR, and clean up a git worktree after task completion
+user-invocable: false
 ---
 
 Inventory and preserve gitignored state, merge the PR, then remove the worktree safely.
@@ -23,22 +24,47 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    - No PR or closed → `gh pr create --fill`.
    Display the PR URL.
 
-3. **Ask the user:**
-   First output the PR URL as a clickable markdown link in the main conversation:
-   `PR #<N> is open: [<url>](<url>)`
-   Then call `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
-   - **merge**: proceed to step 4.
-   - **wait**: display URL and stop — do **not** clean up.
-   - **abort**: display URL and close-PR guidance, then stop — do **not** clean up.
+   Capture: `PR_NUMBER=$(gh pr view --json number --jq .number)`
+   Abort if empty — skill cannot proceed without a resolved PR.
 
-   If `AskUserQuestion` is unavailable (e.g. headless `claude -p`), default to **wait**.
+3. **Merge decision:**
 
-4. **Merge** (only on explicit user choice):
+   Output `PR #<N> is open: [<url>](<url>)`
+
+   Check `AUTO_MERGE_PR` (default `on`):
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off AUTO_MERGE_PR on && echo OFF || echo ON'`
+
+   - **`on`**: Announce `AUTO_MERGE_PR=on → merging now.` → step 4.
+   - **`off`**: `AskUserQuestion`: "PR #<N> — merge, wait-for-web-merge, or abort?"
+     - **merge** → step 4.
+     - **wait-for-web-merge** → step 3a.
+     - **abort** → stop; no cleanup; no sentinel.
+
+   If `AskUserQuestion` unavailable, default to **wait-for-web-merge**.
+
+3a. **Web-merge wait:**
+
+   Display `PR #<N>: merge via GitHub UI, then reply here.` and the PR URL. Stop.
+   On user reply: `gh pr view "$PR_NUMBER" --json state`
+   - `MERGED` → step 3b.
+   - `OPEN` / `CLOSED` / error → re-display and stop again.
+
+   `$PR_NUMBER` is session-local; `/clear` or new session requires re-invoking `/worktree-end`.
+
+3b. **Post-web-merge sync:**
+
+   `git fetch --prune origin`
+   `echo "<<WORKFLOW_USER_VERIFIED>>"` (description: `"User confirmed PR #<N> merged via web UI"`)
+   → step 5. Skip step 4.
+
+4. **Local merge:**
+
+   Emit `echo "<<WORKFLOW_USER_VERIFIED>>"` (description: `"PR #<N> — approving merge to main"`),
+   then:
    ```
    gh pr merge --squash --delete-branch
    ```
-   If merge fails (protected branch policy, CI failure, conflict): surface the error and stop.
-   Do **not** force-merge or bypass checks.
+   If merge fails: surface error and stop. Do **not** force-merge or bypass checks.
 
 5. **Gitignored state inventory** (before removing the worktree):
    Run all three commands (NUL-delimited, handles spaces and non-ASCII paths):
@@ -115,7 +141,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       whether step f succeeded or failed (avoid stale markers).
       - POSIX: `rm "<marker-path>"`
       - PowerShell: `Remove-Item -LiteralPath "<marker-path>"`
-   h. `git -C <main> fetch --prune origin` then `git -C <main> pull --ff-only`
+   h. `git -C <main> fetch --prune origin`
+      `git -C <main> pull --ff-only`
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
 7. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
@@ -132,3 +159,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Secret values must not appear in the backup manifest.
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup (6e) — never `rm -rf`/`Remove-Item -Recurse -Force`.
 - `gh --version` must succeed before any gh command.
+- `<<WORKFLOW_USER_VERIFIED>>` is emitted in step 4 (before `gh pr merge`) or step 3b
+  (after `state == MERGED`). Never on abort or while polling.
+- `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
+- `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
+- This skill does NOT modify `workflow-gate.js`.

@@ -404,6 +404,22 @@ Changes: See the BUGFIX entry above titled enforce-issue-close: inline ISSUE_CLO
 Background: Windows OS held a CWD lock on the linked worktree path when session CWD was inside it, causing the removal step to fail with EPERM.
 Changes: See the BUGFIX entry above for full implementation details (#267, #268, #251 fixed together in PR #276).
 
+### FEATURE: worktree-start / worktree-end hidden from slash-command autocomplete (#281) (2026-05-15, pending)
+Background: /workflow-init required typing 'workf' (5 chars) to uniquely complete because worktree-start and worktree-end shared the 'work' prefix. Users never invoke these skills directly — they are workflow-internal only.
+Changes: Added user-invocable: false to SKILL.md frontmatter of skills/worktree-start and skills/worktree-end. Claude Code's documented frontmatter field hides the skill from the / autocomplete menu while keeping Skill-tool invocation intact. Result: 'wo' + Enter now uniquely completes to /workflow-init.
+
+### FEATURE: worktree-start / worktree-end hidden from slash-command autocomplete (#281) (2026-05-15, pending)
+Background: /workflow-init required typing 'workf' (5 chars) to uniquely complete because worktree-start and worktree-end shared the 'work' prefix. Users never invoke these skills directly — they are workflow-internal only.
+Changes: Added user-invocable: false to SKILL.md frontmatter of skills/worktree-start and skills/worktree-end. Claude Code's documented frontmatter field hides the skill from the / autocomplete menu while keeping Skill-tool invocation intact. Result: 'wo' + Enter now uniquely completes to /workflow-init.
+
+### FEATURE: review-skill-size — Step 6 skill size/quality review script (#284) (2026-05-15)
+Background: CC tends to write verbose skill definitions. Added an automated size/quality check to Step 6 so that any session editing a SKILL.md file gets a non-blocking review.
+Changes: Added bin/review-skill-size — a bash script that detects changed skills/*/SKILL.md files (excluding _archived/), warns when a file exceeds 100 lines, and always prints a qualitative checklist for checks 2/3/4 (remove verbose prose, extract complex logic to external scripts, split overscoped skills). Integrated into CLAUDE.md Step 6 as a parallel Bash call (review-skill-size --base <merge-base>). Added tests/feature-review-skill-size.sh with 7 smoke test cases. Closes #284.
+
+### FEATURE: review-skill-size — Step 6 skill size/quality review script (#284) (2026-05-15)
+Background: CC tends to write verbose skill definitions. Added an automated size/quality check to Step 6 so that any session editing a SKILL.md file gets a non-blocking review.
+Changes: Added bin/review-skill-size — a bash script that detects changed skills/*/SKILL.md files (excluding _archived/), warns when a file exceeds 100 lines, and always prints a qualitative checklist for checks 2/3/4 (remove verbose prose, extract complex logic to external scripts, split overscoped skills). Integrated into CLAUDE.md Step 6 as a parallel Bash call (review-skill-size --base <merge-base>). Added tests/feature-review-skill-size.sh with 7 smoke test cases. Closes #284.
+
 ### FEATURE: Add /issue-create skill — type:task enforcement + Projects v2 auto-attach (#246) (2026-05-15)
 Background: Sessions needed a sanctioned CLI path for creating task issues that enforces type:task and attaches to Projects v2 automatically. Raw gh issue create risked wrong labels and manual project attachment.
 Changes: New bin/github-issues/issue-create.sh: wraps gh issue create; unconditionally applies type:task; rejects caller-supplied type:* labels (exit 2); supports --body/--body-file (mutually exclusive); Projects v2 attach non-fatal on failure (ISSUE_CREATE_OWNER/ISSUE_CREATE_PROJECT_NUM env overrides). New skills/issue-create/SKILL.md: user-invocable skill with scope, pre-flight, procedure, label policy. Updated rules/github-issues.md: added Issue creation section. Updated CLAUDE.md: added /issue-create note under Step 1. New tests/feature-issue-create-skill.sh: 15 cases (S1-S11 behavior + D1-D4 docs).

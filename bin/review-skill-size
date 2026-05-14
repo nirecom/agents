@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Skill file size / quality review.
+# Usage: review-skill-size [--base <ref>]
+#
+# Always emits one of:
+#   ## Skill Size Review: PERFORMED
+#   ## Skill Size Review: SKIPPED — <reason>
+#
+# Always exits 0 — never blocks the workflow.
+
+set -uo pipefail
+
+BASE_REF="origin/main"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Skill Size Review: SKIPPED (--base requires an argument)"; exit 0
+      fi
+      BASE_REF="$2"; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+  echo "## Skill Size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+}
+
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD 2>"$ERR") || {
+  echo "## Skill Size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
+}
+
+TARGETS=$(printf '%s\n' "$CHANGED" | grep -E '^skills/.+/SKILL\.md$' | grep -v '/_archived/' || true)
+
+if [[ -z "$TARGETS" ]]; then
+  echo "## Skill Size Review: SKIPPED — no SKILL.md files changed"; exit 0
+fi
+
+echo "## Skill Size Review: PERFORMED"
+echo ""
+COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+echo "Changed SKILL.md files: $COUNT"
+echo ""
+
+echo "[Line count check]"
+while IFS= read -r file; do
+  [[ -f "$file" ]] || continue
+  lines=$(wc -l < "$file" | tr -d ' ')
+  if (( lines > 100 )); then
+    echo "WARN: $file — $lines lines (exceeds 100 lines)"
+  fi
+done <<< "$TARGETS"
+echo ""
+
+cat <<'EOF'
+### Manual review checklist (checks ②③④ — not auto-detected)
+
+Review the changed SKILL.md file(s) for the following:
+
+- [2] Remove redundant examples and verbose prose. SKILL.md is a behavior contract, not a tutorial.
+- [3] If logically complex conditional logic is written inline in the skill, extract it
+      into an external script under bin/ or skills/<name>/lib/. SKILL.md should call
+      the script, not re-implement the algorithm.
+- [4] If the skill still cannot be brought under 100 lines after the above, the skill
+      may be overscoped — consider splitting into multiple skills or requesting a skill
+      reorganization.
+
+This is advisory output — no action is blocked.
+EOF
+
+exit 0
