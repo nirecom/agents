@@ -403,3 +403,11 @@ Changes: See the BUGFIX entry above titled enforce-issue-close: inline ISSUE_CLO
 ### BUGFIX: #251: worktree-end worktree-removal fails with EPERM on Windows (CWD lock) (2026-05-15, 9321e9e)
 Background: Windows OS held a CWD lock on the linked worktree path when session CWD was inside it, causing the removal step to fail with EPERM.
 Changes: See the BUGFIX entry above for full implementation details (#267, #268, #251 fixed together in PR #276).
+
+### FEATURE: worktree-start / worktree-end hidden from slash-command autocomplete (#281) (2026-05-15, pending)
+Background: /workflow-init required typing 'workf' (5 chars) to uniquely complete because worktree-start and worktree-end shared the 'work' prefix. Users never invoke these skills directly — they are workflow-internal only.
+Changes: Added user-invocable: false to SKILL.md frontmatter of skills/worktree-start and skills/worktree-end. Claude Code's documented frontmatter field hides the skill from the / autocomplete menu while keeping Skill-tool invocation intact. Result: 'wo' + Enter now uniquely completes to /workflow-init.
+
+### FEATURE: worktree-start / worktree-end hidden from slash-command autocomplete (#281) (2026-05-15, pending)
+Background: /workflow-init required typing 'workf' (5 chars) to uniquely complete because worktree-start and worktree-end shared the 'work' prefix. Users never invoke these skills directly — they are workflow-internal only.
+Changes: Added user-invocable: false to SKILL.md frontmatter of skills/worktree-start and skills/worktree-end. Claude Code's documented frontmatter field hides the skill from the / autocomplete menu while keeping Skill-tool invocation intact. Result: 'wo' + Enter now uniquely completes to /workflow-init.

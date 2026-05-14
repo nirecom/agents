@@ -1,6 +1,7 @@
 ---
 name: worktree-start
 description: Set up a git worktree for a parallel-session task and copy required gitignored state
+user-invocable: false
 ---
 
 Set up a new linked worktree and initialize its gitignored state before starting work.
