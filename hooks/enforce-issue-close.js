@@ -53,6 +53,23 @@ if (!CLOSE_RE.test(cmd)) {
   process.exit(0);
 }
 
+// Inline-skill bypass: /issue-close invokes `gh issue close` with
+// ISSUE_CLOSE_SKILL=1 as an inline env-var prefix (the env var only reaches
+// the gh subprocess, not this hook process). We recognise ONLY the exact
+// command shape the skill generates (see skills/issue-close/SKILL.md:149):
+//
+//   ISSUE_CLOSE_SKILL=1 gh issue close <N> --reason completed
+//
+// Strict-shape: no other env vars, digits-only issue id, `--reason completed`
+// required, end-anchored ($). HWS = `[ \t]` (horizontal only — excludes \n/\r).
+// If /issue-close ever changes its invocation shape, update this AND the tests.
+const INLINE_SKILL_RE =
+  /^[ \t]*ISSUE_CLOSE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+close[ \t]+\d+[ \t]+--reason[ \t]+completed[ \t]*$/;
+
+if (INLINE_SKILL_RE.test(cmd)) {
+  process.exit(0);
+}
+
 // Skill bypass.
 if (process.env.ISSUE_CLOSE_SKILL === "1") {
   process.exit(0);
