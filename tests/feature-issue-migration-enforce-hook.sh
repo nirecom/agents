@@ -52,6 +52,25 @@ run_hook_skilled() {
     return $RC
 }
 
+# Like run_hook, but explicitly unsets ISSUE_CLOSE_SKILL so the in-command
+# string-parsing path is exercised — not the env-bypass.
+#
+# Bash command-substitution subshells inherit functions and variables from
+# the parent shell, so `run_with_timeout` (defined in the parent script) is
+# still callable inside the subshell, and `unset` only affects the subshell.
+# `env -u` is not used here because it cannot invoke a bash function.
+run_hook_no_env() {
+    local json="$1"
+    OUT=$(
+        unset ISSUE_CLOSE_SKILL
+        echo "$json" | run_with_timeout 15 node "$HOOK" 2>/tmp/.enforce_hook_err.$$
+    )
+    RC=$?
+    ERR=$(cat /tmp/.enforce_hook_err.$$ 2>/dev/null)
+    rm -f /tmp/.enforce_hook_err.$$
+    return $RC
+}
+
 expect_block() {
     local desc="$1" json="$2"
     run_hook "$json"
@@ -141,6 +160,96 @@ if [ "$RC" -eq 0 ]; then
     pass "R2: empty input → exit 0"
 else
     fail "R2: empty input → exit 0 (rc=$RC)"
+fi
+
+# --- N11: skill's exact shape → allowed ---
+# This matches the actual skill invocation per skills/issue-close/SKILL.md:149.
+# --reason completed is REQUIRED, not optional.
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}'
+if [ "$RC" -eq 0 ]; then
+    pass "N11: skill's exact shape allows close"
+else
+    fail "N11: skill's exact shape allows close (rc=$RC stderr=$ERR)"
+fi
+
+# --- N12: without --reason completed → blocked (strict-shape: reason is mandatory) ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N12: missing --reason completed is blocked"
+else
+    fail "N12: missing --reason completed is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N13: --reason not_planned → blocked (skill uses only --reason completed) ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason not_planned"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N13: '... close 123 --reason not_planned' is blocked (not audited)"
+else
+    fail "N13: '... close 123 --reason not_planned' is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N14: wrong value → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=0 gh issue close 123"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N14: ISSUE_CLOSE_SKILL=0 is blocked"
+else
+    fail "N14: ISSUE_CLOSE_SKILL=0 is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N15: semicolon between prefix and gh → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1; gh issue close 123"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N15: 'ISSUE_CLOSE_SKILL=1; gh issue close' is blocked"
+else
+    fail "N15: 'ISSUE_CLOSE_SKILL=1; gh issue close' is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N16: intervening command → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 echo ok; gh issue close 123"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N16: 'ISSUE_CLOSE_SKILL=1 echo ok; gh issue close' is blocked"
+else
+    fail "N16: 'ISSUE_CLOSE_SKILL=1 echo ok; gh issue close' is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N17: extra env var before marker → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"GH_TOKEN=xxx ISSUE_CLOSE_SKILL=1 gh issue close 123"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N17: extra env var before marker is blocked (strict-shape policy)"
+else
+    fail "N17: extra env var before marker is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N18: compound command after a fully-valid first close → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed; gh issue close 456"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N18: compound second 'gh issue close' after valid first is blocked"
+else
+    fail "N18: compound second 'gh issue close' after valid first is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N19: command substitution in args → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 $(gh issue close 456)"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N19: command-substitution in args is blocked"
+else
+    fail "N19: command-substitution in args is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N20: non-digit issue id → blocked ---
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close abc"}}'
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N20: non-digit issue id is blocked"
+else
+    fail "N20: non-digit issue id is blocked (rc=$RC stderr=$ERR)"
+fi
+
+# --- N21: newline between marker and gh → blocked ---
+run_hook_no_env "$(printf '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1\\ngh issue close 123"}}')"
+if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    pass "N21: newline between marker and gh is blocked"
+else
+    fail "N21: newline between marker and gh is blocked (rc=$RC stderr=$ERR)"
 fi
 
 echo ""

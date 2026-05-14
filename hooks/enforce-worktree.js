@@ -1058,6 +1058,29 @@ try {
 
 if (!isEnforceWorktreeOn()) done();
 
+// Defence-in-depth: if process.cwd() is unresolvable (e.g. after
+// git worktree remove from inside the removed worktree), fail-open.
+// Root cause fix: skills/worktree-end/SKILL.md step 6b.5 (cd <main> before remove).
+// See issue #268. Fail-open ONLY for ENOENT / missing-dir — not all errors.
+let _cwd;
+try {
+  _cwd = process.cwd();
+} catch (e) {
+  if (e && e.code === "ENOENT") {
+    process.stderr.write(
+      "enforce-worktree: fail-open — process.cwd() threw ENOENT (issue #268 backstop).\n"
+    );
+    done();
+  }
+  throw e; // unexpected error: do not silently fail-open
+}
+if (!fs.existsSync(_cwd)) {
+  process.stderr.write(
+    "enforce-worktree: fail-open — process.cwd() points to a deleted directory (issue #268 backstop).\n"
+  );
+  done();
+}
+
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 
