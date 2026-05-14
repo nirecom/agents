@@ -1,16 +1,10 @@
 # GitHub Issues Workflow
 
-## todo.md as ID index
+## Active task list
 
-After migration, `docs/todo.md` is a thin index over GitHub Issues:
-
-```
-- [ ] #42 Short title
-- [ ] #43 Another title
-```
-
-Open the issue (`gh issue view <N>`) for full context. Close via `/issue-close <N>`
-— the line is removed from `todo.md` automatically.
+GitHub Issues is the single source of truth for active tasks. `docs/todo.md` is
+a pointer to the GitHub Issues list — no per-task entries are kept locally.
+Open issues with `gh issue list --state open` or `gh issue view <N>`.
 
 ## Labels
 
@@ -26,17 +20,28 @@ runs `gh label create --force`).
 
 ## Close path
 
+**Flow 1 — PR-based close (`closes #N` in PR description):**
+
+1. When creating the PR, include `Closes #<N>` in `--body`. GitHub auto-closes
+   the issue on merge.
+2. After the PR is merged, run `/issue-close <N>`. The skill's triage script
+   detects `CLOSED + (none)` and routes to the `auto_close_path` action:
+   sub-issue gate → doc-append → parent update → resolved-by/sentinel comments.
+   No manual `gh issue close` needed.
+
+**Flow 2 — session-based close (no PR, or issue closed mid-session):**
+
 Inside a Claude Code session, `/issue-close <N>` is the **only sanctioned path**.
-- It runs the transaction-safe steps in `skills/issue-close/SKILL.md`:
-  state check → sub-issue gate → sentinel comment → doc-append → close → todo.md edit.
-- The `enforce-issue-close.js` PreToolUse hook blocks bare `gh issue close` from
-  the Bash tool, suggesting `/issue-close` instead.
+The triage script encodes all state-to-step routing; each step is idempotent.
+The `enforce-issue-close.js` PreToolUse hook blocks bare `gh issue close` from
+the Bash tool, suggesting `/issue-close` instead.
 
 **Out-of-band closes** (web UI, mobile, another shell, scripts) bypass this hook —
-the guard is best-effort, scoped to Claude Code's Bash tool. Recover with
-`/issue-reconcile`: it scans closed issues whose comments lack the
-`<!-- issue-close-sentinel: appended -->` marker and prompts to backfill
-`history.md`.
+the guard is best-effort, scoped to Claude Code's Bash tool. `closes #N`
+auto-closes are handled by `/issue-close` directly via the `auto_close_path`
+action. For other out-of-band closes (where `/issue-close` was never run), use
+`/issue-reconcile` to scan closed issues whose comments lack the
+`<!-- issue-close-sentinel: appended -->` marker and backfill `history.md`.
 
 ## Sub-issues
 
@@ -51,21 +56,7 @@ The close path's Step B gates the parent: if any child issue is in state `open`,
 closing the parent is blocked. Cancelled/migrated children must already be closed
 (label alone is not enough).
 
-## dual-write period (~1 month from Phase 3 start)
-
-During dual-write:
-- New tasks: create the issue first, then append `- [ ] #N <title>` to `todo.md`.
-- Completion: `/issue-close <N>` removes the line and writes `history.md`.
-- Weekly: run `/issue-reconcile` to backfill any UI/mobile closes.
-
-End conditions (all of):
-1. ≥ 4 weeks since Phase 3 start.
-2. ≥ 5 successful `/issue-close` invocations with clean `history.md` entries.
-3. `gh issue list --state open` count matches `todo.md` line count, sustained
-   for ≥ 1 week.
-
-Decommission: shrink `todo.md` to a pointer at the GitHub Issues list and drop
-the workflow's references to it.
+<!-- dual-write period ended; docs/todo.md is now a pointer only (migrated 2026-05-14, issue #222). -->
 
 ## Environment
 
