@@ -38,7 +38,10 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - Apply the **full** `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3)
      using `CONFIRM_OUTLINE` as the flag. Even with a single viable approach,
      the written artifact itself may need revision — protocol Step 3 covers that.
-   - Proceed to emit the completion marker and stop.
+     If the user picks "Revise" in protocol Step 3, ask what to change, re-run
+     outline-planner with the feedback, then loop back to Step 2 (delegation).
+   - Proceed to emit `WORKFLOW_OUTLINE_PLAN_COMPLETE` (see Completion section)
+     and stop.
 
 4. If outline-planner returns `NEEDS_RESEARCH`:
    - Run `/deep-research` with the specified question.
