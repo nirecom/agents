@@ -59,10 +59,10 @@ teardown_tmp() {
 # --- N1: type:task → FEATURE entry with #42: ---
 setup_tmp
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
-if grep -q "#42:" "$TMP/docs/history.md" && grep -q "FEATURE" "$TMP/docs/history.md"; then
-    pass "N1: type:task label produces FEATURE entry"
+if grep -qE "^### FEATURE: .+ \(.+, #42\)$" "$TMP/docs/history.md"; then
+    pass "N1: type:task label produces FEATURE entry with #N in parenthetical"
 else
-    fail "N1: type:task label produces FEATURE entry"
+    fail "N1: type:task label produces FEATURE entry with #N in parenthetical"
 fi
 teardown_tmp
 
@@ -101,9 +101,9 @@ setup_tmp
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
-COUNT=$(grep -c "#42:" "$TMP/docs/history.md" 2>/dev/null || echo 0)
+COUNT=$(grep -cE "^### FEATURE: .+ \(.+, #42\)$" "$TMP/docs/history.md" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$COUNT" -eq 1 ]; then
-    pass "I1: re-run is idempotent (single #42: entry)"
+    pass "I1: re-run is idempotent (single FEATURE entry with #42)"
 else
     fail "I1: re-run is idempotent (rc=$RC count=$COUNT)"
 fi
@@ -111,10 +111,10 @@ teardown_tmp
 
 # --- I2: entry already in rotated archive ---
 setup_tmp
-echo "### #42: Old archived entry (2025-01-01)" > "$TMP/docs/history/2025.md"
+echo "### FEATURE: Old archived entry (2025-01-01, #42)" > "$TMP/docs/history/2025.md"
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
-NEW_COUNT=$(grep -c "#42:" "$TMP/docs/history.md" 2>/dev/null; true)
+NEW_COUNT=$(grep -cE "^### " "$TMP/docs/history.md" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$NEW_COUNT" -eq 0 ]; then
     pass "I2: rotated archive entry suppresses re-append"
 else
@@ -167,6 +167,57 @@ if [ ! -f "$INJECTED_FILE" ] && [ "$RC" -ne 0 ]; then
     pass "S1: shell-injected issue number is rejected, no side effect"
 else
     fail "S1: shell-injected issue number was NOT contained (rc=$RC injected=$([ -f "$INJECTED_FILE" ] && echo yes || echo no))"
+fi
+teardown_tmp
+
+# --- N5: FEATURE header conforms to '### FEATURE: Subject (DATE, #N)' ---
+setup_tmp
+GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+if grep -qE "^### FEATURE: .+ \([0-9]{4}-[0-9]{2}-[0-9]{2}, #42\)$" "$TMP/docs/history.md"; then
+    pass "N5: FEATURE header format (DATE, #N)"
+else
+    fail "N5: FEATURE header format (DATE, #N)"
+fi
+teardown_tmp
+
+# --- N6: --commit produces 'date, commit, #N' ordering ---
+setup_tmp
+GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 --commit abc1234 >/dev/null 2>&1
+if grep -qE "^### FEATURE: .+ \([0-9]{4}-[0-9]{2}-[0-9]{2}, abc1234, #42\)$" "$TMP/docs/history.md"; then
+    pass "N6: commit+issue order (date, commit, #N)"
+else
+    fail "N6: commit+issue order (date, commit, #N)"
+fi
+teardown_tmp
+
+# --- N7: date derived from closedAt, not today ---
+setup_tmp
+GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+EXPECTED_DATE=$(grep -oE '"closedAt":"[0-9]{4}-[0-9]{2}-[0-9]{2}' "$MOCK_DIR/gh" | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+if [ -n "$EXPECTED_DATE" ] && grep -qE "\(${EXPECTED_DATE}[,)]" "$TMP/docs/history.md"; then
+    pass "N7: date derived from closedAt (${EXPECTED_DATE})"
+else
+    fail "N7: date not from closedAt (expected ${EXPECTED_DATE:-unknown})"
+fi
+teardown_tmp
+
+# --- N8: subject must not contain '(closes #N)' ---
+setup_tmp
+GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+if grep -q "closes #42" "$TMP/docs/history.md"; then
+    fail "N8: subject must not contain (closes #N)"
+else
+    pass "N8: subject clean (no 'closes #N' contamination)"
+fi
+teardown_tmp
+
+# --- N9: INCIDENT header carries #N in date parenthetical ---
+setup_tmp
+GH_MOCK_SCENARIO=issue_incident run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+if grep -qE "^### INCIDENT: .+ \(.+, #42\)$" "$TMP/docs/history.md"; then
+    pass "N9: INCIDENT header carries #N in parenthetical"
+else
+    fail "N9: INCIDENT header missing #N in parenthetical"
 fi
 teardown_tmp
 
