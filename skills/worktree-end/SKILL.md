@@ -76,10 +76,16 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
    b. **Write branch-delete marker** so the `enforce-worktree` hook will permit
-      step f below. The marker lives in the SHARED `.git` directory so it is
-      readable from both the main worktree and any linked worktree.
+      step f below. The marker lives outside `.git/` because `.git/` is a Claude
+      Code protected path that prompts on every write regardless of `settings.json`
+      allow rules (same pattern as PR #256 which moved `.claude/plans/` →
+      `~/.workflow-plans/`).
       - Resolve `<git-common-dir>` via `git -C <main> rev-parse --git-common-dir`.
-        The marker path is `<git-common-dir>/info/pending-branch-delete`.
+      - Compute `<repo-id>` = first 12 hex chars of sha1 of `<git-common-dir>` absolute path.
+      - Compute `<encoded-branch>` = `encodeURIComponent(<branch>)` (e.g. `feature/foo` → `feature%2Ffoo`).
+      - Compute `<plans>` = `$WORKFLOW_PLANS_DIR` if set, else `~/.workflow-plans`.
+      - Marker path: `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`.
+        Store this resolved path in `<marker-path>` for reuse in step g.
       - Marker contents (exactly two lines, LF or CRLF both accepted by the hook):
         ```
         <branch>
@@ -88,6 +94,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
         `<absolute-worktree-path>` must be the path being removed in step c, and
         must resolve under `WORKTREE_BASE_DIR` (the hook re-validates this).
       - Use the Write tool, not heredoc/echo, to keep the file write atomic.
+        The Write tool auto-creates parent directories (`worktree-end/` is created
+        on first use).
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    d. `git -C <main> worktree prune`
    e. If `<WORKTREE_BASE_DIR>/<task-name>/` directory is now empty, delete it
@@ -103,15 +111,18 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    f. `git -C <main> branch -D <branch>` — `-D` (force) is required because
       squash-merge produces a new commit not recognised by `-d`'s "fully merged"
       check; the marker written in step b authorises this exact deletion.
-   g. **Remove the marker** at `<git-common-dir>/info/pending-branch-delete`
-      whether step f succeeded or failed (avoid leaving stale markers).
-      - POSIX: `rm "<git-common-dir>/info/pending-branch-delete"`
-      - PowerShell: `Remove-Item -LiteralPath "<git-common-dir>\info\pending-branch-delete"`
+   g. **Remove the marker** at `<marker-path>` (the same resolved path computed
+      in step b — do **not** recompute from `$WORKFLOW_PLANS_DIR` here, reuse the
+      string verbatim) — whether step f succeeded or failed (avoid leaving stale
+      markers).
+      - POSIX: `rm "<marker-path>"`
+      - PowerShell: `Remove-Item -LiteralPath "<marker-path>"`
         (use `-LiteralPath`, not `-Path`, to avoid wildcard expansion)
 
       The `enforce-worktree` hook permits this via `isAllowedMarkerDelete`:
-      target must equal the marker path AND the branch on line 1 must no longer
-      exist. Multi-target invocations and fatal git errors fail closed.
+      target must be under `<plans>/worktree-end/` AND filename must start
+      with `pending-branch-delete-<this-repo-id>--` AND the branch on line 1
+      must no longer exist. Multi-target invocations and fatal git errors fail closed.
       If step f failed the marker is retained — the next `/worktree-end` run
       will overwrite it.
    h. `git -C <main> fetch --prune origin`
