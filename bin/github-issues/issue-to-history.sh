@@ -57,8 +57,8 @@ HISTORY_DIR="docs/history"
 # --- Idempotency: skip if `### #N:` heading already present in history.md or rotated archive ---
 # Anchor on `### ` prefix to avoid false-positive matches against in-body references
 # like "follow-up from #42:" or "see also #42: ...".
-if grep -rqE "^### #${ISSUE_NUM}:" "$HISTORY_FILE" "$HISTORY_DIR" 2>/dev/null; then
-    echo "Already in history (entry ### #${ISSUE_NUM}: exists). Skipping append."
+if grep -rqE "(^### #${ISSUE_NUM}:)|(^### [^(]+ \([^)]+, #${ISSUE_NUM}\))" "$HISTORY_FILE" "$HISTORY_DIR" 2>/dev/null; then
+    echo "Already in history (entry for #${ISSUE_NUM} exists). Skipping append."
     exit 0
 fi
 
@@ -92,7 +92,8 @@ PARSED=$(printf '%s' "$ISSUE_JSON" | node -e '
             process.stdout.write(
                 String(j.title || "") + SEP +
                 String(j.body || "") + SEP +
-                (j.labels || []).map(l => l.name).join(",")
+                (j.labels || []).map(l => l.name).join(",") + SEP +
+            String(j.closedAt || "")
             );
         } catch (e) { process.exit(1); }
     });
@@ -105,6 +106,17 @@ fi
 TITLE=$(printf '%s' "$PARSED" | awk -v RS=$'\x1e' 'NR==1{print}')
 BODY=$(printf '%s' "$PARSED" | awk -v RS=$'\x1e' 'NR==2{print}')
 LABELS=$(printf '%s' "$PARSED" | awk -v RS=$'\x1e' 'NR==3{print}')
+CLOSED_AT=$(printf '%s' "$PARSED" | awk -v RS=$'\x1e' 'NR==4{print}')
+
+# --- Resolve entry date: closedAt (YYYY-MM-DD), else today ---
+if [ -n "$CLOSED_AT" ]; then
+    CLOSED_DATE="${CLOSED_AT%%T*}"
+else
+    CLOSED_DATE="$(date +%Y-%m-%d)"
+fi
+if ! printf '%s' "$CLOSED_DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+    CLOSED_DATE="$(date +%Y-%m-%d)"
+fi
 
 # --- Category from labels (default FEATURE) ---
 if printf '%s' "$LABELS" | grep -q 'type:incident'; then
@@ -142,15 +154,17 @@ extract_field() {
 if [ "$CATEGORY" = "INCIDENT" ]; then
     CAUSE=$(extract_field Cause)
     FIX=$(extract_field Fix)
-    ARGS=(--category INCIDENT --issue "$ISSUE_NUM" --subject "$TITLE" --cause "$CAUSE" --fix "$FIX")
+    ARGS=(--category INCIDENT --date "$CLOSED_DATE" --subject "$TITLE" --cause "$CAUSE" --fix "$FIX")
 else
     BACKGROUND=$(extract_field Background)
     CHANGES=$(extract_field Changes)
-    ARGS=(--category "$CATEGORY" --issue "$ISSUE_NUM" --subject "$TITLE" --background "$BACKGROUND" --changes "$CHANGES")
+    ARGS=(--category "$CATEGORY" --date "$CLOSED_DATE" --subject "$TITLE" --background "$BACKGROUND" --changes "$CHANGES")
 fi
 
 if [ -n "$COMMIT" ]; then
-    ARGS+=(--commit "$COMMIT")
+    ARGS+=(--commits "${COMMIT}, #${ISSUE_NUM}")
+else
+    ARGS+=(--commits "#${ISSUE_NUM}")
 fi
 
 # --- Append ---

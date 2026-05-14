@@ -167,3 +167,11 @@ Changes: Planning artifacts moved to ~/.workflow-plans/ (configurable via WORKFL
 ### BUGFIX: Planning confirmations now respect CONFIRM_* flags; plan diffs visible again (2026-05-14)
 Background: Planning skill confirmations were always triggered by the protected .claude/ path, regardless of CONFIRM_* flag settings.
 Changes: Confirmations now follow CONFIRM_INTENT/OUTLINE/DETAIL flags reliably — prompting only when the flag is on. Final plan artifacts (intent.md, outline.md, detail.md) now show diffs again; they were previously suppressed alongside draft files.
+
+### BUGFIX: issue-to-history.sh: correct date, header format, and idempotency (2026-05-14)
+Background: issue-to-history.sh produced history entries with wrong dates and malformed headers due to missing --date, wrong argument names, and an incomplete idempotency check.
+Changes: History entries now use the issue's actual close date. The issue number is embedded in the header (parenthetical format). Duplicate-append detection now recognises both old and new header formats.
+
+### FEATURE: clarify-intent auto-detects the GitHub issue being closed (2026-05-14)
+Background: The issue number to close had to be remembered and passed manually to /issue-close at the end of a session.
+Changes: clarify-intent now detects #N references in your opening message and records the issue as closes_issues — no extra question asked when unambiguous. CLAUDE.md Step 10 now reminds you to invoke /issue-close <N> using the recorded number.

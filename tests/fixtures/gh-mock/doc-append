@@ -23,6 +23,7 @@ COMMIT=""
 SUBJECT=""
 CAUSE=""
 FIX=""
+DATE_ARG=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -35,6 +36,7 @@ while [ $# -gt 0 ]; do
         --subject) SUBJECT="$2"; shift 2 ;;
         --cause) CAUSE="$2"; shift 2 ;;
         --fix) FIX="$2"; shift 2 ;;
+        --date) DATE_ARG="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
@@ -43,13 +45,14 @@ mkdir -p "$(dirname "$TARGET")"
 [ -f "$TARGET" ] || : > "$TARGET"
 
 DATE="$(date +%Y-%m-%d 2>/dev/null || echo 2026-05-10)"
+if [ -n "${DATE_ARG:-}" ]; then DATE="$DATE_ARG"; fi
 
 {
     echo ""
-    if [ -n "$ISSUE" ]; then
-        echo "### #${ISSUE}: ${SUBJECT:-Mock subject} (${DATE}${COMMIT:+, ${COMMIT}})"
+    if [ "$CATEGORY" = "INCIDENT" ]; then
+        echo "### INCIDENT: #1: ${SUBJECT:-Mock subject} (${DATE}${COMMIT:+, ${COMMIT}})"
     else
-        echo "### ${SUBJECT:-Mock subject} (${DATE}${COMMIT:+, ${COMMIT}})"
+        echo "### ${CATEGORY:-FEATURE}: ${SUBJECT:-Mock subject} (${DATE}${COMMIT:+, ${COMMIT}})"
     fi
     echo "Category: ${CATEGORY}"
     if [ "$CATEGORY" = "INCIDENT" ]; then
