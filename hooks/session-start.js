@@ -127,7 +127,7 @@ function buildWorkflowStatus(sessionId) {
     for (const step of VALID_STEPS) {
       statusLines.push(`- ${step}: pending`);
     }
-    nextAction = STEP_HINT.clarify_intent;
+    nextAction = STEP_HINT.workflow_init;
   }
 
   statusLines.push("");

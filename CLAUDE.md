@@ -2,8 +2,13 @@
 
 ## Workflow
 
-1. **Clarify intent** — **Before anything else:** Run `/clarify-intent`.
-   Skip: `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>"` then proceed to step 2. Skipping here does NOT authorize skipping subsequent steps.
+1. **Workflow init** — **Before anything else:** Run `/workflow-init`.
+   Routes the session based on GH issue context:
+   - `#N` + `intent:clarified` label → skip clarify-intent, proceed to outline planning.
+   - `#N` + no label → pre-fill clarify-intent with issue body for a short confirmation interview.
+   - No `#N` → run clarify-intent normally; auto-create a tracking issue at completion.
+   For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
+   Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
      If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
