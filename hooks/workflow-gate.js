@@ -201,40 +201,60 @@ if (require.main === module) {
   const toolInput = input.tool_input || {};
   const sessionId = input.session_id;
 
-  // EARLY GATE: enforce clarify_intent before Edit/Write tools.
+  // EARLY GATE: 2-tier enforcement before Edit/Write tools.
+  //   Tier 1: workflow_init must be complete/skipped first.
+  //   Tier 2: clarify_intent must be complete/skipped (only checked once Tier 1 clears).
   // Fail-open precedence (do NOT reorder):
   //   1. No sessionId → fall through (cannot enforce)
   //   2. readState() returns null → fall through (no state to check)
-  //   3. clarify_intent already complete or skipped → fall through (gate dormant)
-  //   4. otherwise → block (with plans-path allowlist for skill output)
+  //   3. plans-path Write allowlist → fall through (skill output path)
+  //   4. Tier 1 not clear → block (references /workflow-init)
+  //   5. Tier 2 not clear → block (references /clarify-intent)
+  //   6. Both clear → fall through (gate dormant)
   //
   // Multi-hook execution: Claude Code runs all PreToolUse hooks independently;
   // approve from this hook does NOT short-circuit block-dotenv etc.
   //
-  // State inheritance: if findLatestStateForContext() inherited a state where
-  // clarify_intent is already complete, gate is dormant by design — inherited
-  // state represents continuing prior work.
+  // State inheritance: if findLatestStateForContext() inherited a state where both
+  // steps are already complete, gate is dormant by design — inherited state represents
+  // continuing prior work.
   const EARLY_GATE_TOOLS = new Set([
     "Edit", "Write", "MultiEdit", "editFiles", "NotebookEdit"
   ]);
   if (sessionId && EARLY_GATE_TOOLS.has(toolName)) {
     const earlyState = readState(sessionId);
     if (earlyState) {
-      const ci = earlyState.steps && earlyState.steps.clarify_intent;
-      const ciStatus = ci ? ci.status : "pending";
-      if (ciStatus !== "complete" && ciStatus !== "skipped") {
-        // Allowlist: Write tool only, to ~/.workflow-plans/** (skill writes intent/outline/detail .md here).
-        // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
-        const filePath = toolInput.file_path || toolInput.path || "";
-        let isPlansAllowed = false;
-        if (toolName === "Write" && filePath) {
-          try {
-            const resolved = path.resolve(filePath);
-            const plansRoot = path.resolve(getWorkflowPlansDir()) + path.sep;
-            isPlansAllowed = resolved.toLowerCase().startsWith(plansRoot.toLowerCase());
-          } catch (e) { console.error(`workflow-gate: ${e.message}`); /* fall through — block */ }
+      // Plans-path allowlist: Write tool only, to ~/.workflow-plans/**
+      // (skill writes intent/outline/detail .md here while workflow_init is still pending).
+      // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
+      const filePath = toolInput.file_path || toolInput.path || "";
+      let isPlansAllowed = false;
+      if (toolName === "Write" && filePath) {
+        try {
+          const resolved = path.resolve(filePath);
+          const plansRoot = path.resolve(getWorkflowPlansDir()) + path.sep;
+          isPlansAllowed = resolved.toLowerCase().startsWith(plansRoot.toLowerCase());
+        } catch (e) { console.error(`workflow-gate: ${e.message}`); }
+      }
+      if (!isPlansAllowed) {
+        // Tier 1: workflow_init
+        const wi = earlyState.steps && earlyState.steps.workflow_init;
+        const wiStatus = wi ? wi.status : "pending";
+        if (wiStatus !== "complete" && wiStatus !== "skipped") {
+          block(
+            "workflow-gate: workflow_init has not been completed for this session.\n" +
+            "Tool \"" + toolName + "\" is blocked until the workflow is routed.\n\n" +
+            "To complete:\n" +
+            "  1. Invoke the `workflow-init` skill via the Skill tool, OR\n" +
+            "  2. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".\n\n" +
+            "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.\n\n" +
+            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_workflow_init>>\""
+          );
         }
-        if (!isPlansAllowed) {
+        // Tier 2: clarify_intent (only reached once workflow_init has cleared)
+        const ci = earlyState.steps && earlyState.steps.clarify_intent;
+        const ciStatus = ci ? ci.status : "pending";
+        if (ciStatus !== "complete" && ciStatus !== "skipped") {
           block(
             "workflow-gate: clarify_intent has not been completed for this session.\n" +
             "Tool \"" + toolName + "\" is blocked until intent is locked in.\n\n" +
@@ -340,6 +360,7 @@ if (require.main === module) {
   if (incomplete.length === 0) approve();
 
   const SKILL_MAP = {
+    workflow_init: '/workflow-init  OR for docs-only: echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"',
     clarify_intent: '/clarify-intent  OR if intent is clear: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     research: '/survey-code or /deep-research  OR if unnecessary: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     plan: '/make-outline-plan → /make-detail-plan  OR if unnecessary: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
