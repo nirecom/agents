@@ -59,13 +59,13 @@ The parent cannot be closed while any child is `open` (`/issue-close` enforces t
 ## Plans Directory Migration
 
 One-time operator runbook: rename `intent-<timestamp>-*.md` files in
-`~/.claude/plans/` to strip the `intent-` prefix (e.g.
+`~/.workflow-plans/` to strip the `intent-` prefix (e.g.
 `intent-20260510-001819-intent.md` → `20260510-001819-intent.md`).
 Run **once** after the PR for this change is merged. Idempotent.
 
 **PowerShell (Windows):**
 ```powershell
-cd ~/.claude/plans
+cd ~/.workflow-plans
 foreach ($f in Get-ChildItem -Name "intent-*.md") {
     $target = $f -replace '^intent-', ''
     if (Test-Path $target) { Write-Warning "SKIP: $target already exists (not overwriting $f)"; continue }
@@ -75,7 +75,7 @@ foreach ($f in Get-ChildItem -Name "intent-*.md") {
 
 **bash (WSL / macOS / Linux):**
 ```bash
-cd ~/.claude/plans
+cd ~/.workflow-plans
 for f in intent-*.md; do
   [[ -f "$f" ]] || continue
   target="${f#intent-}"

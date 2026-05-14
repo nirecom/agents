@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if command -v cygpath >/dev/null 2>&1; then
+  NODE_DIR="$(cygpath -m "$SCRIPT_DIR")"
+else
+  NODE_DIR="$SCRIPT_DIR"
+fi
+node -e "
+  try { process.stdout.write(require('$NODE_DIR/../hooks/lib/workflow-plans-dir').getWorkflowPlansDir()); }
+  catch (e) { process.stderr.write('workflow-plans-dir: ' + e.message + '\\n'); process.exit(2); }
+"

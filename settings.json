@@ -99,8 +99,6 @@
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",
       "Bash(get-config-var *)",
-      "Read(**/.claude/plans/**)",
-      "Bash(printf * >> */.claude/plans/*)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",
@@ -416,16 +414,6 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-diff.js\"",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/approve-plan-writes.js\"",
-            "timeout": 5
           }
         ]
       },

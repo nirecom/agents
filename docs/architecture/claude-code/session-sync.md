@@ -80,3 +80,7 @@ bulk-deleted; most had directory versions with no data loss. One-time event.
 - `skills/` → `~/.claude/skills/`
 - `rules/` → `~/.claude/rules/`
 - `agents/` → `~/.claude/agents/`
+
+## Plans directory resolution
+
+`bin/session-sync.{sh,ps1}` copies session planning artifacts (intent/outline/detail `.md` files) between the local machine and the sync repository. The local directory is resolved via `bin/workflow-plans-dir`, which honours the `WORKFLOW_PLANS_DIR` env var (default: `~/.workflow-plans/`). The transport directory on the sync mount is always `plans/` and is not affected by this setting.
