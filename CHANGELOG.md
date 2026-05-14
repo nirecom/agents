@@ -215,3 +215,7 @@ Changes: A new non-blocking review step (review-skill-size) now runs automatical
 ### FEATURE: Skill size review at workflow Step 6 (#284) (2026-05-15)
 Background: Skill definitions tend to grow verbose over time.
 Changes: A new non-blocking review step (review-skill-size) now runs automatically in parallel at workflow Step 6 whenever a SKILL.md file is changed. It warns when a skill exceeds 100 lines and always prints a checklist of qualitative improvements to consider.
+
+### FEATURE: New /issue-create skill — create task issues with automatic Projects v2 attachment (2026-05-15)
+Background: No sanctioned way existed to create type:task issues from a Claude Code session without risking missing labels or forgetting the Projects v2 attachment step.
+Changes: New /issue-create skill creates type:task issues and attaches them to Projects v2 automatically. Caller-supplied type:* labels are rejected (use raw gh issue create for incident issues). Projects v2 attach failure is non-fatal — the issue is always created and a warning is printed if attachment fails.
