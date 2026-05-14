@@ -56,6 +56,10 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
        triggers a write classification in enforce-worktree.js and gets blocked.
      - For a minimal PR: `gh pr create --head <branch> --fill`
      - With a custom body: `gh pr create --head <branch> --title "..." --body "..."`
+     - When the PR closes a tracked issue, include `Closes #<N>` in `--body` so
+       GitHub auto-closes the issue on merge. After merge, run `/issue-close <N>`
+       — the skill's triage detects `CLOSED + (none)` and writes `history.md` +
+       posts a resolved-by sentinel.
    Display the PR URL.
 
 7. First output the PR URL as a clickable markdown link in the main conversation:
