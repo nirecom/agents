@@ -20,4 +20,4 @@
 
 - name: "intent:clarified"
   color: "1d76db"
-  description: "Issue body has been ratified through /clarify-intent. /workflow-init Path A reads it directly without re-running the interview."
+  description: "Issue body ratified via /clarify-intent. /workflow-init Path A skips the interview."
