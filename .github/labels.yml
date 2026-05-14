@@ -17,3 +17,7 @@
 - name: "status:migrated"
   color: "5319e7"
   description: "Merged into another issue. Applied after close."
+
+- name: "intent:clarified"
+  color: "1d76db"
+  description: "Issue body has been ratified through /clarify-intent. /workflow-init Path A reads it directly without re-running the interview."

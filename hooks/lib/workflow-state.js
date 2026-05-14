@@ -25,6 +25,7 @@ function resolveSessionId() {
 }
 
 const VALID_STEPS = [
+  "workflow_init",
   "clarify_intent",
   "research",
   "plan",
@@ -67,6 +68,20 @@ function readState(sessionId) {
       if (!state.steps.review_security) {
         state.steps.review_security = { status: "pending", updated_at: null };
       }
+      // --- BEGIN temporary: old sessions → workflow_init migration (added 2026-05-14) ---
+      // 3 legacy cases:
+      //   ci absent (very old session): past routing — complete
+      //   ci complete/skipped: past routing — complete
+      //   ci pending (in-flight at upgrade time): not yet routed — pending
+      const ci = state.steps.clarify_intent;
+      const ciDone = ci && (ci.status === "complete" || ci.status === "skipped");
+      if (!state.steps.workflow_init) {
+        state.steps.workflow_init = {
+          status: (!ci || ciDone) ? "complete" : "pending",
+          updated_at: null,
+        };
+      }
+      // --- END temporary: old sessions → workflow_init migration ---
       // migration: sessions predating clarify_intent / branching_complete
       if (!state.steps.clarify_intent) {
         state.steps.clarify_intent = { status: "complete", updated_at: null };
@@ -258,6 +273,7 @@ function cleanupZombies(maxAgeDays = 7) {
 //   session-start: STEP_HINT[pendingStep]       → "do this step now"
 //   workflow-mark: STEP_HINT[VALID_STEPS[i+1]]  → "do the next step" (offset by 1)
 const STEP_HINT = {
+  workflow_init:      "Invoke `workflow-init` via the Skill tool. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".",
   clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
   research:           "Invoke `survey-code` or `deep-research` (or skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>\"), then invoke `make-outline-plan`.",
   plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
