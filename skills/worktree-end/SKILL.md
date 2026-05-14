@@ -82,6 +82,25 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       - `<marker-path>` = `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`. Store for step g.
       - Content (two lines): `<branch>` / `<absolute-worktree-path>` (must resolve under `WORKTREE_BASE_DIR`).
       - Use the Write tool (atomic; auto-creates `worktree-end/` on first use).
+   b.5. **Switch the session CWD to the main worktree** before removing the
+      linked worktree. Run, as its own Bash tool call:
+      ```
+      cd "<main-worktree-root>"
+      ```
+      Quote the path (`<main-worktree-root>` may contain spaces, common on
+      Windows: `C:\Users\Some Name\...`). Use `cd`, not `git -C`: only `cd`
+      updates the Bash tool's persistent CWD. This:
+      - Releases the OS-level CWD lock on Windows so step 6c's
+        `git worktree remove` does not fail with EPERM (issue #251).
+      - Leaves a healthy CWD for subsequent hook invocations after step 6c
+        completes: without this step, `process.cwd()` in subsequent hook
+        processes still points at the deleted linked-worktree path,
+        breaking `enforce-worktree.js` for the rest of the session
+        (issue #268). `enforce-issue-close.js` is unaffected (it does not
+        call `process.cwd()`).
+      Note: step 6c stays as is (`git -C <main> worktree remove <path>`).
+      Combining `cd && git worktree remove` into one Bash call is blocked
+      by `enforce-worktree.js`'s isolated-command rule.
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    d. `git -C <main> worktree prune`
    e. If `<WORKTREE_BASE_DIR>/<task-name>/` is now empty:
