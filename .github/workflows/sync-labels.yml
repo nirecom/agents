@@ -1,0 +1,22 @@
+name: Sync labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/labels.yml'
+      - 'bin/github-issues/sync-labels.sh'
+      - '.github/workflows/sync-labels.yml'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply labels.yml to repository
+        run: bash bin/github-issues/sync-labels.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
