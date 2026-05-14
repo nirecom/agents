@@ -37,14 +37,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Test B — plans/ (non-drafts) → noopExit (isPlanFile suppresses all plan files)
+# Test B — plans/ (non-drafts, final artifact) → systemMessage shown
+# Final artifacts (*-intent.md, *-outline.md, *-detail.md) are NOT suppressed;
+# only drafts/ subdirectory files are suppressed.
 # ---------------------------------------------------------------------------
 INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260510-001819-intent.md\",\"content\":\"hello world\"}}"
 OUTPUT=$(echo "$INPUT" | node "$HOOK")
-if [[ -z "$OUTPUT" ]]; then
-  pass "show-diff: plans/ (non-drafts) path → noopExit"
+if echo "$OUTPUT" | grep -q "systemMessage"; then
+  pass "show-diff: plans/ (non-drafts) final artifact → systemMessage shown"
 else
-  fail "show-diff: plans/ (non-drafts) path → unexpected output: $OUTPUT"
+  fail "show-diff: plans/ (non-drafts) final artifact → expected systemMessage, got: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------

@@ -85,17 +85,14 @@ must be read and passed to the planner before drafting begins.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
 7. Once the reviewer returns `APPROVED`, write the final plan to
-   `~/.workflow-plans/<session-id>-detail.md` (not draft). Present it to the user as a
-   clickable link using the **resolved absolute path** (do not use `~` in the link
-   target — tilde is not expanded in markdown rendering, so the link won't open).
-   Do not paste the full content in chat.
-   - POSIX: `[<session-id>-detail.md](/home/<user>/.workflow-plans/<session-id>-detail.md)`
-   - Windows: `[<session-id>-detail.md](C:/Users/<user>/.workflow-plans/<session-id>-detail.md)`
-
-   After writing and presenting the link, check via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON'`
-   - stdout `OFF`: print a one-paragraph summary and emit `<<WORKFLOW_MARK_STEP_plan_complete>>` directly. Skip plan mode.
-   - stdout `ON`: enter plan mode for user approval (existing behavior).
+   `~/.workflow-plans/<session-id>-detail.md` (not draft). Then apply the
+   confirm-plan-artifact protocol (`skills/confirm-plan-artifact/reference.md`)
+   using `CONFIRM_DETAIL` as the flag and `<session-id>-detail.md` as the artifact.
+   - **Revise** (skill-specific): ask what to change, send feedback to the planner
+     as a new revision request, then loop back to step 5a (re-draft → re-review →
+     re-confirm). Each revision consumes `revision_rounds`.
+   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after the summary.
+   - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after confirmation.
 
 ## Research Escalation
 

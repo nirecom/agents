@@ -74,8 +74,13 @@ function isTestFile(filePath) {
 
 function isPlanFile(filePath) {
   if (!filePath) return false;
-  try { return isUnderPath(filePath, getWorkflowPlansDir()); }
-  catch { return false; }
+  try {
+    if (!isUnderPath(filePath, getWorkflowPlansDir())) return false;
+    // Only suppress intermediate drafts (drafts/ subdirectory).
+    // Final artifacts (*-intent.md, *-outline.md, *-detail.md) are NOT suppressed
+    // so their write preview appears in chat for user review.
+    return isUnderPath(filePath, path.join(getWorkflowPlansDir(), "drafts"));
+  } catch { return false; }
 }
 
 // ── diff generation ───────────────────────────────────────────────────────────
