@@ -75,83 +75,41 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
-   b. **Write branch-delete marker** so the `enforce-worktree` hook will permit
-      step f below. The marker lives outside `.git/` because `.git/` is a Claude
-      Code protected path that prompts on every write regardless of `settings.json`
-      allow rules (same pattern as PR #256 which moved `.claude/plans/` →
-      `~/.workflow-plans/`).
-      - Resolve `<git-common-dir>` via `git -C <main> rev-parse --git-common-dir`.
-      - Compute `<repo-id>` = first 12 hex chars of sha1 of `<git-common-dir>` absolute path.
-      - Compute `<encoded-branch>` = `encodeURIComponent(<branch>)` (e.g. `feature/foo` → `feature%2Ffoo`).
-      - Compute `<plans>` = `$WORKFLOW_PLANS_DIR` if set, else `~/.workflow-plans`.
-      - Marker path: `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`.
-        Store this resolved path in `<marker-path>` for reuse in step g.
-      - Marker contents (exactly two lines, LF or CRLF both accepted by the hook):
-        ```
-        <branch>
-        <absolute-worktree-path>
-        ```
-        `<absolute-worktree-path>` must be the path being removed in step c, and
-        must resolve under `WORKTREE_BASE_DIR` (the hook re-validates this).
-      - Use the Write tool, not heredoc/echo, to keep the file write atomic.
-        The Write tool auto-creates parent directories (`worktree-end/` is created
-        on first use).
+   b. **Write branch-delete marker** (authorises step f via the `enforce-worktree` hook):
+      - `<repo-id>` = first 16 hex chars of sha256 of `git -C <main> rev-parse --git-common-dir` (absolute path).
+      - `<encoded-branch>` = `encodeURIComponent(<branch>)` (e.g. `feature/foo` → `feature%2Ffoo`).
+      - `<plans>` = `$WORKFLOW_PLANS_DIR` if set, else `~/.workflow-plans`.
+      - `<marker-path>` = `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`. Store for step g.
+      - Content (two lines): `<branch>` / `<absolute-worktree-path>` (must resolve under `WORKTREE_BASE_DIR`).
+      - Use the Write tool (atomic; auto-creates `worktree-end/` on first use).
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    d. `git -C <main> worktree prune`
-   e. If `<WORKTREE_BASE_DIR>/<task-name>/` directory is now empty, delete it
-      via the dedicated cleanup script (works from main and linked worktrees;
-      bare `rmdir`/`Remove-Item` from the main worktree is blocked by
-      `enforce-worktree.js`):
+   e. If `<WORKTREE_BASE_DIR>/<task-name>/` is now empty:
       ```
       node hooks/cleanup-orphan-dir.js "<WORKTREE_BASE_DIR>/<task-name>"
       ```
-      The script refuses non-empty dirs, paths outside `WORKTREE_BASE_DIR`,
-      registered worktrees, and symlinks. Non-empty target → exit non-zero
-      (investigate manually rather than recurse-delete).
+      (Refuses non-empty dirs, paths outside `WORKTREE_BASE_DIR`, registered worktrees, and symlinks.)
    f. `git -C <main> branch -D <branch>` — `-D` (force) is required because
       squash-merge produces a new commit not recognised by `-d`'s "fully merged"
       check; the marker written in step b authorises this exact deletion.
-   g. **Remove the marker** at `<marker-path>` (the same resolved path computed
-      in step b — do **not** recompute from `$WORKFLOW_PLANS_DIR` here, reuse the
-      string verbatim) — whether step f succeeded or failed (avoid leaving stale
-      markers).
+   g. **Remove the marker** at `<marker-path>` (reuse step b's value verbatim — do **not** recompute)
+      whether step f succeeded or failed (avoid stale markers).
       - POSIX: `rm "<marker-path>"`
       - PowerShell: `Remove-Item -LiteralPath "<marker-path>"`
-        (use `-LiteralPath`, not `-Path`, to avoid wildcard expansion)
-
-      The `enforce-worktree` hook permits this via `isAllowedMarkerDelete`:
-      target must be under `<plans>/worktree-end/` AND filename must start
-      with `pending-branch-delete-<this-repo-id>--` AND the branch on line 1
-      must no longer exist. Multi-target invocations and fatal git errors fail closed.
-      If step f failed the marker is retained — the next `/worktree-end` run
-      will overwrite it.
-   h. `git -C <main> fetch --prune origin`
-      `git -C <main> pull --ff-only`
-         (`--ff-only`: diverge 時はサイレントマージせず停止する)
+   h. `git -C <main> fetch --prune origin` then `git -C <main> pull --ff-only`
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
-
-   **Why this dance:** the `enforce-worktree` hook classifies `git branch -d/-D`
-   as a write op and blocks it from any worktree by default. The marker file is
-   the only authorised path; only this skill produces it. Direct ad-hoc
-   `git branch -D` from any worktree is intentionally rejected — this prevents
-   accidental loss of unmerged work and keeps cleanup auditable.
 
 7. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
 
 ## Rules
 
 - **wait / abort paths: no destructive steps.** Only merge-success path runs cleanup.
-- `git worktree remove --force` is prohibited unless the user gives explicit re-approval
-  after reviewing the `rules/ops.md` decision path.
-- Branch deletion uses `git branch -D` only inside step 6f, gated by the
-  marker file written in step 6b. Direct ad-hoc `git branch -d/-D` outside this
-  skill is rejected by the `enforce-worktree` hook by design.
-- Always attempt marker removal (step 6g); the hook retains the marker if
-  branch delete (step f) failed.
+- `git worktree remove --force` is prohibited (see `rules/ops.md` decision path).
+- Branch deletion (`git branch -D`) only in step 6f, gated by the marker from step 6b.
+- Always attempt marker removal (step 6g) — whether or not step 6f succeeded.
 - Do not run cleanup if merge step failed or was skipped.
-- Always propose `.worktree-backup/<branch>/` as the default backup destination; never silently pick a different path.
+- Always propose `.worktree-backup/<branch>/` as the default backup destination.
 - Always check stopped containers, not just running ones, for bind mount conflicts.
 - Secret values must not appear in the backup manifest.
-- Use `hooks/cleanup-orphan-dir.js` for the orphan directory cleanup step (6e) —
-  never `rm -rf` or `Remove-Item -Recurse -Force` from the main worktree.
-- `gh --version` must succeed before any gh command — surface installation guidance if not.
+- Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup (6e) — never `rm -rf`/`Remove-Item -Recurse -Force`.
+- `gh --version` must succeed before any gh command.
