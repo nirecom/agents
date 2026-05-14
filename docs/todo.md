@@ -35,3 +35,5 @@
 - [ ] #253 Permission architecture: migrate path-based decisions from settings.json glob rules to PreToolUse hooks
 - [ ] #254 cleanup(settings.json): audit and remove dead path-based allow/deny rules
 - [ ] #257 workflow: integrate /issue-close into Step 10/11 (currently manual)
+- [ ] #261 issue-to-history.sh: missing --date, unknown --issue arg, FEATURE idempotency broken
+- [ ] #262 plan-time premise verification: add a research-stage gate that samples real behavior
