@@ -199,3 +199,7 @@ Changes: If you pass #N with the intent:clarified label: the interview is skippe
 ### BUGFIX: /issue-close skill bypass fix + worktree cleanup stability (#267, #268, #251) (2026-05-15)
 Background: Two hook bugs caused /issue-close and post-worktree commands to fail silently.
 Changes: /issue-close now works correctly when the skill passes ISSUE_CLOSE_SKILL=1 as an inline env-var prefix (the fix detects the exact canonical shape). After /worktree-end removes a worktree, subsequent commands no longer fail with a dead working directory — enforce-worktree.js now fails open with an audit log line. On Windows, git worktree remove no longer fails with EPERM: /worktree-end now switches the session CWD to the main worktree before removing the linked one.
+
+### CONFIG: Auto-sync labels.yml to GitHub (2026-05-15)
+Background: Manual sync was required after editing .github/labels.yml.
+Changes: Merging to main now triggers a GitHub Actions workflow that applies labels.yml to the repository automatically.
