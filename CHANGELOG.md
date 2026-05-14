@@ -203,3 +203,7 @@ Changes: /issue-close now works correctly when the skill passes ISSUE_CLOSE_SKIL
 ### CONFIG: Auto-sync labels.yml to GitHub (2026-05-15)
 Background: Manual sync was required after editing .github/labels.yml.
 Changes: Merging to main now triggers a GitHub Actions workflow that applies labels.yml to the repository automatically.
+
+### FEATURE: worktree-start / worktree-end hidden from slash-command autocomplete (#281) (2026-05-15)
+Background: /workflow-init shared the 'work' prefix with worktree-start and worktree-end, requiring 5 keystrokes to uniquely complete.
+Changes: /workflow-init can now be launched by typing 'wo' + Enter — worktree-start and worktree-end no longer appear in the / autocomplete menu.
