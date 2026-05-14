@@ -391,3 +391,15 @@ Changes: (1) Added INLINE_SKILL_RE strict-shape regex to enforce-issue-close.js;
 ### CONFIG: Auto-sync labels.yml to GitHub via Actions (2026-05-15)
 Background: labels.yml is the SSOT for repo labels but manual sync was required; intent:clarified missed remote until manual run.
 Changes: Added .github/workflows/sync-labels.yml — triggers on push to main touching labels.yml (plus workflow_dispatch). Shortened intent:clarified description to fit GitHub's 100-char limit. Closes #278.
+
+### BUGFIX: #267: enforce-issue-close.js ignores inline ISSUE_CLOSE_SKILL=1 prefix (2026-05-15, 9321e9e)
+Background: PreToolUse hook checked only process.env.ISSUE_CLOSE_SKILL, missing inline VAR=val cmd prefix used by /issue-close skill.
+Changes: See the BUGFIX entry above titled enforce-issue-close: inline ISSUE_CLOSE_SKILL=1 bypass for full implementation details (#267, #268, #251 fixed together in PR #276).
+
+### BUGFIX: #268: enforce-worktree breaks after worktree removal (dead CWD) (2026-05-15, 9321e9e)
+Background: After /worktree-end removed the linked worktree, subsequent hook invocations ran with a dead CWD, breaking enforce-worktree.js for the rest of the session.
+Changes: See the BUGFIX entry above titled enforce-issue-close: inline ISSUE_CLOSE_SKILL=1 bypass for full implementation details (#267, #268, #251 fixed together in PR #276).
+
+### BUGFIX: #251: worktree-end worktree-removal fails with EPERM on Windows (CWD lock) (2026-05-15, 9321e9e)
+Background: Windows OS held a CWD lock on the linked worktree path when session CWD was inside it, causing the removal step to fail with EPERM.
+Changes: See the BUGFIX entry above for full implementation details (#267, #268, #251 fixed together in PR #276).
