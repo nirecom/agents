@@ -10,14 +10,14 @@ fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 pass() { echo "PASS: $1"; }
 
 # --- Check old rule is removed ---
-if grep -q '"Bash(uv run bin/doc-append.py *)"' "$SETTINGS"; then
+if grep -qF '"Bash(uv run bin/doc-append.py *)"' "$SETTINGS"; then
     fail "Old allow rule 'Bash(uv run bin/doc-append.py *)' still present"
 else
     pass "Old allow rule removed"
 fi
 
 # --- Check new rules exist ---
-if grep -q '"Bash(doc-append *)"' "$SETTINGS"; then
+if grep -qF '"Bash(doc-append *)"' "$SETTINGS"; then
     pass "New allow rule 'Bash(doc-append *)' present"
 else
     fail "Missing allow rule: 'Bash(doc-append *)'"

@@ -325,8 +325,8 @@ test_cpmv_destination() {
     assert_fn_result "cp a b c dst (multiple sources)" \
         "$(call_cpmv 'cp a b c dst')" '"dst"'
     assert_fn_result "cp absolute outside-repo path" \
-        "$(call_cpmv 'cp -r /c/Users/nire/.claude/plans /c/Users/nire/.claude/plans-bak')" \
-        '"/c/Users/nire/.claude/plans-bak"'
+        "$(call_cpmv 'cp -r /c/Users/nire/.workflow-plans /c/Users/nire/.workflow-plans-bak')" \
+        '"/c/Users/nire/.workflow-plans-bak"'
     assert_fn_result "mv old new" \
         "$(call_cpmv 'mv old.md new.md')" '"new.md"'
     assert_fn_result "mv with flags" \

@@ -8,7 +8,7 @@ Write or update tests for the current task.
 
 ## Procedure
 
-1. Read `skills/test-design-shared/reference.md` for test case categories, naming conventions, and layer selection rules. Also read `rules/test.md` for timeout, E2E, and installer test patterns.
+1. Read `skills/_shared/test-design.md` for test case categories, naming conventions, and layer selection rules. Also read `rules/test.md` for timeout, E2E, and installer test patterns.
 2. Identify which source file(s) need tests.
 3. **Enumerate call paths**: For each source file from step 2, trace all integration
    paths it participates in — what calls it, what it calls, and what format/contract
@@ -31,7 +31,7 @@ Write or update tests for the current task.
    a. Write the test file(s).
    b. Run tests with timeout.
    c. Fix failures and re-run until green.
-   d. Review test coverage against `skills/test-design-shared/reference.md` categories — fix gaps.
+   d. Review test coverage against `skills/_shared/test-design.md` categories — fix gaps.
    e. Re-run tests until green.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
