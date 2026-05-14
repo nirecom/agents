@@ -163,3 +163,7 @@ Changes: Planning skill file writes (clarify-intent, make-outline-plan, make-det
 ### FEATURE: Planning skill writes no longer trigger VS Code permission dialogs (2026-05-14)
 Background: Planning artifacts were stored under ~/.claude/plans/ — a path protected by Claude Code — causing VS Code ask-before-edits mode to prompt on every Write/Edit call during planning sessions.
 Changes: Planning artifacts moved to ~/.workflow-plans/ (configurable via WORKFLOW_PLANS_DIR env var). Permission dialogs no longer appear during clarify-intent, make-outline-plan, and make-detail-plan skill runs in any mode. Existing ~/.claude/plans/ contents are migrated automatically on first run. Customise the path by setting WORKFLOW_PLANS_DIR=/absolute/path in your agents .env.
+
+### FEATURE: Planning skill confirmations now use a unified confirm-plan protocol; final plan diffs visible in VS Code (2026-05-14)
+Background: The three planning skill confirmation steps (intent, outline, detail) each had duplicated inline logic for showing diffs and prompting the user.
+Changes: Confirm steps now follow a single shared protocol: show-diff auto-preview fires when the plan file is written, then a flag check determines whether to auto-proceed (CONFIRM_*=off) or ask for approval (CONFIRM_*=on). Final plan artifacts (intent.md, outline.md, detail.md) now show diffs in VS Code — previously suppressed alongside drafts.
