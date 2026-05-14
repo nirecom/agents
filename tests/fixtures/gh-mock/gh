@@ -7,11 +7,98 @@ SCENARIO="${GH_MOCK_SCENARIO:-default}"
 # Join all args for matching
 ARGS="$*"
 
+# ----------------------------------------------------------------------------
+# Shared dispatch for `gh --jq` invocations introduced by issue #222 refactor.
+# The real gh CLI accepts `--jq EXPR` and applies it to the JSON response
+# server-side. The mock hardcodes the per-scenario output for known patterns.
+# Handled here (before the per-scenario `case`) so every scenario shares it.
+# ----------------------------------------------------------------------------
+
+# Helper: emit the bare state string for `--json state --jq .state`.
+mock_state_for_scenario() {
+  case "$SCENARIO" in
+    issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended)
+      echo "OPEN" ;;
+    closed_no_sentinel|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending)
+      echo "CLOSED" ;;
+    *)
+      echo "OPEN" ;;
+  esac
+}
+
+# Helper: emit the FIRST sentinel comment body matching the given prefix
+# (`appended`, `pending`, or `any` for the broader `^<!-- issue-close-sentinel:`).
+# Empty string when no match — same as `first // ""` in real jq.
+mock_sentinel_for_scenario() {
+  local kind="$1"   # appended | any
+  case "$SCENARIO" in
+    closed_with_appended_sentinel|closed_with_both|open_with_appended)
+      # Both `any` and `appended` match.
+      echo "<!-- issue-close-sentinel: appended (resolved-by: closes-keyword) -->"
+      ;;
+    open_with_pending|closed_with_pending)
+      if [ "$kind" = "any" ]; then
+        echo "<!-- issue-close-sentinel: pending -->"
+      fi
+      # `appended` lookup → empty
+      ;;
+    *)
+      : # empty
+      ;;
+  esac
+}
+
+# Helper: emit the resolved-by comment for the given hash, when present.
+mock_resolved_by_for_scenario() {
+  local hash="$1"
+  case "$SCENARIO" in
+    closed_with_resolved_comment|closed_with_both)
+      if [ "$hash" = "abc1234" ]; then
+        echo "<!-- resolved-by: abc1234 -->"
+      fi
+      ;;
+    *)
+      : # empty
+      ;;
+  esac
+}
+
+# Cross-scenario dispatch: any --jq invocation we recognize is handled here.
+case "$ARGS" in
+  "issue view "*" --json state --jq"*)
+    mock_state_for_scenario
+    exit 0
+    ;;
+  "issue view "*" --json comments --jq"*"resolved-by: "*)
+    # Extract hash from `resolved-by: <hash> -->` inside the --jq expression.
+    HASH=$(printf '%s' "$ARGS" | sed -nE 's/.*resolved-by: ([0-9a-f]+) -->.*/\1/p')
+    mock_resolved_by_for_scenario "$HASH"
+    exit 0
+    ;;
+  "issue view "*" --json comments --jq"*"issue-close-sentinel: appended"*)
+    mock_sentinel_for_scenario appended
+    exit 0
+    ;;
+  "issue view "*" --json comments --jq"*"issue-close-sentinel:"*)
+    mock_sentinel_for_scenario any
+    exit 0
+    ;;
+  "issue list --state closed"*"--paginate"*"--jq"*".[].number"*)
+    # Newline-separated numbers — one issue per scenario, all use #42.
+    echo "42"
+    exit 0
+    ;;
+esac
+
 case "$SCENARIO" in
   issue_task)
     case "$ARGS" in
       "issue view 42 --json number,title,body,closedAt,labels")
         echo '{"number":42,"title":"Test task issue","body":"Background: test\nChanges: did stuff","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[]}'
         exit 0
         ;;
     esac
@@ -111,6 +198,232 @@ case "$SCENARIO" in
       "api "*)
         echo "gh: API error" >&2
         exit 1
+        ;;
+    esac
+    ;;
+  # --- Issue #222 scenarios: CLOSED-state + resolved-by-commit comments -----
+  # `gh issue comment <N> --body <text>` is supported across all scenarios in
+  # this block: it appends the body to $GH_MOCK_COMMENT_LOG (if set) and
+  # exits 0. Used to verify that the skill / backfill script posts the
+  # expected sentinel and resolved-by comments.
+  closed_no_sentinel)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0
+        ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Closed-by-keyword task","body":"Background: closed via PR\nChanges: feature shipped","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "issue list --state closed"*)
+        # If --jq '.[].number' is part of the call, return raw numbers one per
+        # line (mimics real gh's jq passthrough). Otherwise emit a JSON list.
+        if [[ "$ARGS" == *"--jq"* ]]; then
+          echo "42"
+        else
+          echo '[{"number":42,"title":"Closed-by-keyword task","closedAt":"2026-05-10T00:00:00Z"}]'
+        fi
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          # Extract everything after "--body " up to end. Body may be quoted by caller.
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
+        # No parent — emit empty.
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_with_appended_sentinel)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[{"body":"<!-- issue-close-sentinel: appended (resolved-by: closes-keyword) -->"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue view "*" --json comments"*)
+        echo '[{"body":"<!-- issue-close-sentinel: appended (resolved-by: closes-keyword) -->"}]'
+        exit 0
+        ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Already appended","body":"Background: x\nChanges: y","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "issue list --state closed"*)
+        if [[ "$ARGS" == *"--jq"* ]]; then
+          echo "42"
+        else
+          echo '[{"number":42,"title":"Already appended","closedAt":"2026-05-10T00:00:00Z"}]'
+        fi
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_with_resolved_comment)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[{"body":"<!-- resolved-by: abc1234 -->\nResolved by commit `abc1234`."}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Resolved-by present","body":"Background: x\nChanges: y","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "issue list --state closed"*)
+        echo '[{"number":42,"title":"Resolved-by present","closedAt":"2026-05-10T00:00:00Z"}]'
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_with_both)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[{"body":"<!-- resolved-by: abc1234 -->\nResolved by commit `abc1234`."},{"body":"<!-- issue-close-sentinel: appended (resolved-by: closes-keyword) -->"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Both present","body":"Background: x\nChanges: y","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "issue list --state closed"*)
+        echo '[{"number":42,"title":"Both present","closedAt":"2026-05-10T00:00:00Z"}]'
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  open_with_pending)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[{"body":"<!-- issue-close-sentinel: pending -->"}]}'
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+    esac
+    ;;
+  open_with_appended)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[{"body":"<!-- issue-close-sentinel: appended (resolved-by: closes-keyword) -->"}]}'
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_with_pending)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[{"body":"<!-- issue-close-sentinel: pending -->"}]}'
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+    esac
+    ;;
+  parent_empty)
+    # parent-body-update.sh: parent.number lookup returns empty (no parent).
+    case "$ARGS" in
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
+        # Empty output simulates `.parent.number // empty` when there's no parent.
+        exit 0
+        ;;
+    esac
+    ;;
+  parent_42)
+    # parent-body-update.sh: parent number is 99, body contains "- [ ] #42".
+    case "$ARGS" in
+      "api repos/"*"/issues/42 --jq .parent.number"*)
+        echo "99"
+        exit 0
+        ;;
+      "issue view 99 --json body --jq .body")
+        echo "Parent body line 1\n- [ ] #42 child task\n- [ ] #43 sibling task"
+        exit 0
+        ;;
+      "issue edit 99 --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf 'EDIT_PARENT_99: %s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
         ;;
     esac
     ;;
