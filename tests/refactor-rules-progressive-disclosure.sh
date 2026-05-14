@@ -232,7 +232,7 @@ test_heading_coverage \
     "$REPO_ROOT/rules/test.md.bak" \
     "rules/test.md headings" \
     "$REPO_ROOT/rules/test.md" \
-    "$REPO_ROOT/skills/test-design-shared/reference.md"
+    "$REPO_ROOT/skills/_shared/test-design.md"
 
 # docs-convention.md group
 test_heading_coverage \
@@ -395,7 +395,7 @@ check_charcount \
     "$REPO_ROOT/rules/test.md.bak" \
     "rules/test.md char-count" \
     "$REPO_ROOT/rules/test.md" \
-    "$REPO_ROOT/skills/test-design-shared/reference.md"
+    "$REPO_ROOT/skills/_shared/test-design.md"
 
 check_charcount \
     "$REPO_ROOT/rules/docs-convention.md.bak" \

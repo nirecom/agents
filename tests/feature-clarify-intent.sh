@@ -15,6 +15,9 @@ if [ -z "$_TIMEOUT_WRAPPED" ]; then
 fi
 
 SKILL_MD="$HOME/.claude/skills/clarify-intent/SKILL.md"
+# Note: $HOME/.claude/skills/ is the *skill code* location and is unaffected
+# by the workflow-plans-dir migration. Only planning artifact output paths
+# (formerly ~/.claude/plans/) move to ~/.workflow-plans/.
 
 PASS=0
 FAIL=0
@@ -87,9 +90,9 @@ assert_contains "$SKILL_MD" "name:[[:space:]]*clarify-intent" \
 assert_contains "$SKILL_MD" "interactive|AskUserQuestion" \
     "N2: 'interactive' or 'AskUserQuestion' appears (interactive context requirement)"
 
-# N3: output path ~/.claude/plans/ or $HOME/.claude/plans/ mentioned
-assert_contains "$SKILL_MD" '~/.claude/plans/|\$HOME/.claude/plans/' \
-    "N3: output path ~/.claude/plans/ or \$HOME/.claude/plans/ mentioned"
+# N3: output path ~/.workflow-plans/ or $HOME/.workflow-plans/ mentioned
+assert_contains "$SKILL_MD" '~/.workflow-plans/|\$HOME/.workflow-plans/' \
+    "N3: output path ~/.workflow-plans/ or \$HOME/.workflow-plans/ mentioned"
 
 # N4: <session-id>-intent.md output filename mentioned
 assert_contains "$SKILL_MD" "session.id.*intent\.md|intent\.md" \
@@ -103,9 +106,10 @@ assert_contains "$SKILL_MD" '推奨|recommended|\(推奨\)' \
 assert_contains "$SKILL_MD" "5.*round|round.*5|上限.*5|5.*上限" \
     "N6: 5-round cap mentioned"
 
-# N7: plan-skip.md referenced
-assert_contains "$SKILL_MD" "plan-skip\.md" \
-    "N7: plan-skip.md referenced"
+# N7: skip sentinel (WORKFLOW_CLARIFY_INTENT_NOT_NEEDED) referenced
+# plan-skip.md was removed; skip conditions are now inline in the skill.
+assert_contains "$SKILL_MD" "WORKFLOW_CLARIFY_INTENT_NOT_NEEDED" \
+    "N7: skip sentinel WORKFLOW_CLARIFY_INTENT_NOT_NEEDED referenced"
 
 # N8: grill-me / Matt Pocock attribution mentioned
 assert_contains "$SKILL_MD" "grill.me|Matt Pocock|mattpocock" \

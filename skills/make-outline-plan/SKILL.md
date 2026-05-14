@@ -11,7 +11,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 ## Inputs
 
-- `~/.claude/plans/<session-id>-intent.md` — output of `clarify-intent`; may be from a
+- `~/.workflow-plans/<session-id>-intent.md` — output of `clarify-intent`; may be from a
   different session (cross-session carry-in is allowed)
 - The session-id used for output files (`*-outline.md`) matches the intent file actually used
 
@@ -19,7 +19,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 1. Locate the intent file:
    a. If `<session-id>-intent.md` exists, use it.
-   b. Otherwise, list all `*-intent.md` files in `~/.claude/plans/`.
+   b. Otherwise, list all `*-intent.md` files in `~/.workflow-plans/`.
       - If exactly one exists, inform the user and use it.
       - If multiple exist, present them via `AskUserQuestion` and wait for the user to select one.
       - If none exist, abort: "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
@@ -44,28 +44,28 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 5. **Review the approach with codex first, fall back to Claude if unavailable.**
    a. Write the outline-planner's output to the Claude-managed drafts directory
       (survives compaction; OS temp does not):
-      `~/.claude/plans/drafts/<session-id>-outline-draft.md`
+      `~/.workflow-plans/drafts/<session-id>-outline-draft.md`
 
 
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
-      If `~/.claude/plans/<session-id>-intent.md` exists and the context file has not
-      been built this run, write `~/.claude/plans/drafts/<session-id>-context.md`:
+      If `~/.workflow-plans/<session-id>-intent.md` exists and the context file has not
+      been built this run, write `~/.workflow-plans/drafts/<session-id>-context.md`:
       ```
-      <!-- Source: ~/.claude/plans/<session-id>-intent.md -->
+      <!-- Source: ~/.workflow-plans/<session-id>-intent.md -->
       ## Section 1: Intent (User Requirements)
 
       <verbatim contents of <session-id>-intent.md>
       ```
       If the intent file does not exist or is empty, skip the context file.
    c. Run via Bash:
-      `review-plan-codex --input ~/.claude/plans/drafts/<session-id>-outline-draft.md --format outline-plan --context ~/.claude/plans/drafts/<session-id>-context.md`
-      (omit `--context ~/.claude/plans/drafts/<session-id>-context.md` when no context file was created in step b).
+      `review-plan-codex --input ~/.workflow-plans/drafts/<session-id>-outline-draft.md --format outline-plan --context ~/.workflow-plans/drafts/<session-id>-context.md`
+      (omit `--context ~/.workflow-plans/drafts/<session-id>-context.md` when no context file was created in step b).
    d. Parse the first line:
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
      - `APPROVED` → proceed to step 7.
      - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
-     - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.claude/plans/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
-   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `~/.claude/plans/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+     - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.workflow-plans/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `~/.workflow-plans/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
 
 6. If verdict is `MISSING_ALTERNATIVE: <description>`:
    - Send the concern back to outline-planner for revision.
@@ -83,13 +83,12 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - stdout `OFF`: write the outline file using the "Pass all approaches to make-detail-plan without selecting" default. Print a one-paragraph summary of the approved approaches and the link to <session-id>-outline.md. Do NOT call `AskUserQuestion`.
    - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection (existing behavior). One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
-8. Write the user's decision to `~/.claude/plans/<session-id>-outline.md` using the
-   schema below. After writing, present the file to the user as a clickable link
-   using the **resolved absolute path** (do not use `~` in the link target —
-   tilde is not expanded in markdown rendering, so the link won't open). Do not
-   paste the full content in chat.
-   - POSIX: `[<session-id>-outline.md](/home/<user>/.claude/plans/<session-id>-outline.md)`
-   - Windows: `[<session-id>-outline.md](C:/Users/<user>/.claude/plans/<session-id>-outline.md)`
+8. Write the user's decision to `~/.workflow-plans/<session-id>-outline.md` using the
+   schema below. Then apply the confirm-plan protocol
+   (`skills/_shared/confirm-plan.md`) using `CONFIRM_OUTLINE` as the flag
+   and `<session-id>-outline.md` as the artifact.
+   - **Revise** (skill-specific): ask what to change, re-run the outline-planner with
+     the feedback, then loop back to the protocol's Step 1.
 
 ## Output Schema (`<session-id>-outline.md`)
 

@@ -378,7 +378,7 @@ Describe "session-sync.ps1 plans sync" {
         Test-Path $syncedPlan | Should -BeTrue -Because "plans/abc-intent.md should be copied into projects/plans/"
     }
 
-    It "pull merges plans into ~/.claude/plans/" {
+    It "pull merges plans into ~/.workflow-plans/" {
         # Seed remote with plans/remote-plan.md
         $seedDir = Join-Path $env:TEMP "session-sync-plans-seed-$(Get-Random)"
         git clone $script:RemoteDir $seedDir 2>&1 | Out-Null

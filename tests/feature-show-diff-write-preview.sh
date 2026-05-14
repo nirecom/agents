@@ -4,6 +4,10 @@ set -uo pipefail
 REPO_ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 HOOK="$REPO_ROOT/hooks/show-diff.js"
 
+# Resolve node-visible home for WORKFLOW_PLANS_DIR (same pattern as other show-diff tests)
+NODE_HOME="$(node -e "process.stdout.write(require('os').homedir().replace(/\\\\/g,'/'))")"
+export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
+
 # Portable timeout wrapper (rules/test-rules/macos-timeout.md)
 run_with_timeout() {
   if command -v timeout >/dev/null 2>&1; then
@@ -50,8 +54,8 @@ echo "$out" | grep -qF -- '+new' || fail "test 2: overwrite diff should contain 
 out=$(run_hook "{\"tool_name\":\"editFiles\",\"tool_input\":{\"file_path\":\"$HWORK/existing.md\",\"edits\":[{\"old_string\":\"old\",\"new_string\":\"new\"}]}}")
 echo "$out" | grep -q -- '--- edit 1 ---' || fail "test 3: editFiles should route to MultiEdit branch (--- edit 1 ---)"
 
-# 4) Draft path — output empty (isPlanDraftFile -> noopExit)
-out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/home/user/.claude/plans/drafts/foo.md\",\"content\":\"x\"}}")
+# 4) Draft path — output empty (isPlanFile via isUnderPath -> noopExit)
+out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/drafts/foo.md\",\"content\":\"x\"}}")
 [ -z "$out" ] || fail "test 4: draft path should produce empty output"
 
 # 5) Test file path — output empty (isTestFile -> noopExit)

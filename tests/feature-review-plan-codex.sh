@@ -723,8 +723,8 @@ check_detail "## Section 2: Outline (Design Proposal)"
 check_detail "If only the intent file exists"
 check_detail "If only the outline file exists"
 check_detail "If neither exists"
-check_detail 'Source: ~/.claude/plans/<session-id>-intent.md'
-check_detail 'Source: ~/.claude/plans/<session-id>-outline.md'
+check_detail 'Source: ~/.workflow-plans/<session-id>-intent.md'
+check_detail 'Source: ~/.workflow-plans/<session-id>-outline.md'
 
 if [[ $ERRS27 -eq 0 ]]; then
   pass "make-detail-plan SKILL.md: all required context section strings present"
@@ -737,8 +737,8 @@ OUTLINE_SKILL="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
 ERRS28=0
 
 # make-outline-plan: must contain drafts/ path and must NOT contain %TEMP% or /tmp/ draft refs
-if ! grep -qF '~/.claude/plans/drafts/<session-id>-outline-draft.md' "$OUTLINE_SKILL"; then
-  fail "make-outline-plan SKILL.md: missing ~/.claude/plans/drafts/<session-id>-outline-draft.md"
+if ! grep -qF '~/.workflow-plans/drafts/<session-id>-outline-draft.md' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: missing ~/.workflow-plans/drafts/<session-id>-outline-draft.md"
   ERRS28=$((ERRS28 + 1))
 fi
 if grep -qF '%TEMP%' "$OUTLINE_SKILL"; then
@@ -751,8 +751,8 @@ if grep -qE '/tmp/[^/]*-outline-draft' "$OUTLINE_SKILL"; then
 fi
 
 # make-detail-plan: must contain drafts/ path and must NOT contain %TEMP% or /tmp/ draft refs
-if ! grep -qF '~/.claude/plans/drafts/<session-id>-detail-draft.md' "$DETAIL_SKILL"; then
-  fail "make-detail-plan SKILL.md: missing ~/.claude/plans/drafts/<session-id>-detail-draft.md"
+if ! grep -qF '~/.workflow-plans/drafts/<session-id>-detail-draft.md' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: missing ~/.workflow-plans/drafts/<session-id>-detail-draft.md"
   ERRS28=$((ERRS28 + 1))
 fi
 if grep -qF '%TEMP%' "$DETAIL_SKILL"; then
@@ -765,7 +765,7 @@ if grep -qE '/tmp/[^/]*-detail-draft' "$DETAIL_SKILL"; then
 fi
 
 if [[ $ERRS28 -eq 0 ]]; then
-  pass "SKILL.md files: both use ~/.claude/plans/drafts/ paths (not %TEMP% or /tmp/)"
+  pass "SKILL.md files: both use ~/.workflow-plans/drafts/ paths (not %TEMP% or /tmp/)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -781,9 +781,9 @@ check_outline() {
   fi
 }
 
-check_outline '--context ~/.claude/plans/drafts/<session-id>-context.md'
-check_outline 'Source: ~/.claude/plans/<session-id>-intent.md'
-check_outline '~/.claude/plans/drafts/<session-id>-context.md'
+check_outline '--context ~/.workflow-plans/drafts/<session-id>-context.md'
+check_outline 'Source: ~/.workflow-plans/<session-id>-intent.md'
+check_outline '~/.workflow-plans/drafts/<session-id>-context.md'
 check_outline '## Section 1: Intent (User Requirements)'
 
 if [[ $ERRS29 -eq 0 ]]; then

@@ -3,8 +3,6 @@
 #
 # Tests for:
 #   - hooks/lib/path-match.js (path utility library)
-#   - hooks/approve-plan-writes.js (PreToolUse hook approving writes to ~/.claude/plans/)
-#   - settings.json registration / ordering of approve-plan-writes.js
 
 set -u
 
@@ -21,7 +19,6 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 PM_MODULE="${_AGENTS_DIR_NODE}/hooks/lib/path-match.js"
-HOOK="${_AGENTS_DIR_NODE}/hooks/approve-plan-writes.js"
 SETTINGS_FILE="${_AGENTS_DIR_NODE}/settings.json"
 
 PASS=0
@@ -241,7 +238,7 @@ is_under() {
 
 test_isunder_file_under_plans() {
     local r
-    r="$(is_under "${NODE_HOME}/.claude/plans/foo.md" "${NODE_HOME}/.claude/plans")"
+    r="$(is_under "${NODE_HOME}/.workflow-plans/foo.md" "${NODE_HOME}/.workflow-plans")"
     if [ "$r" = "true" ]; then
         pass "isUnderPath: file directly under plans -> true"
     else
@@ -251,7 +248,7 @@ test_isunder_file_under_plans() {
 
 test_isunder_deeply_nested() {
     local r
-    r="$(is_under "${NODE_HOME}/.claude/plans/drafts/sub/x.md" "${NODE_HOME}/.claude/plans")"
+    r="$(is_under "${NODE_HOME}/.workflow-plans/drafts/sub/x.md" "${NODE_HOME}/.workflow-plans")"
     if [ "$r" = "true" ]; then
         pass "isUnderPath: deeply nested -> true"
     else
@@ -261,7 +258,7 @@ test_isunder_deeply_nested() {
 
 test_isunder_exact_match() {
     local r
-    r="$(is_under "${NODE_HOME}/.claude/plans" "${NODE_HOME}/.claude/plans")"
+    r="$(is_under "${NODE_HOME}/.workflow-plans" "${NODE_HOME}/.workflow-plans")"
     if [ "$r" = "true" ]; then
         pass "isUnderPath: exact match -> true"
     else
@@ -271,7 +268,7 @@ test_isunder_exact_match() {
 
 test_isunder_both_tilde() {
     local r
-    r="$(is_under "~/.claude/plans/foo.md" "~/.claude/plans")"
+    r="$(is_under "~/.workflow-plans/foo.md" "~/.workflow-plans")"
     if [ "$r" = "true" ]; then
         pass "isUnderPath: both tilde-form -> true"
     else
@@ -281,7 +278,7 @@ test_isunder_both_tilde() {
 
 test_isunder_not_under() {
     local r
-    r="$(is_under "${NODE_HOME}/.claude/settings.json" "${NODE_HOME}/.claude/plans")"
+    r="$(is_under "${NODE_HOME}/.claude/settings.json" "${NODE_HOME}/.workflow-plans")"
     if [ "$r" = "false" ]; then
         pass "isUnderPath: not under plans -> false"
     else
@@ -290,9 +287,9 @@ test_isunder_not_under() {
 }
 
 test_isunder_sibling_dir() {
-    # ~/.claude/plans-archive is NOT under ~/.claude/plans (must require trailing slash boundary)
+    # ~/.workflow-plans-archive is NOT under ~/.workflow-plans (must require trailing slash boundary)
     local r
-    r="$(is_under "${NODE_HOME}/.claude/plans-archive/x.md" "${NODE_HOME}/.claude/plans")"
+    r="$(is_under "${NODE_HOME}/.workflow-plans-archive/x.md" "${NODE_HOME}/.workflow-plans")"
     if [ "$r" = "false" ]; then
         pass "isUnderPath: sibling dir (plans-archive) -> false"
     else
@@ -302,7 +299,7 @@ test_isunder_sibling_dir() {
 
 test_isunder_empty_p() {
     local r
-    r="$(is_under "" "${NODE_HOME}/.claude/plans")"
+    r="$(is_under "" "${NODE_HOME}/.workflow-plans")"
     if [ "$r" = "false" ]; then
         pass "isUnderPath: empty p -> false"
     else
@@ -312,7 +309,7 @@ test_isunder_empty_p() {
 
 test_isunder_empty_prefix() {
     local r
-    r="$(is_under "${NODE_HOME}/.claude/plans/foo.md" "")"
+    r="$(is_under "${NODE_HOME}/.workflow-plans/foo.md" "")"
     if [ "$r" = "false" ]; then
         pass "isUnderPath: empty prefix -> false"
     else
@@ -320,121 +317,6 @@ test_isunder_empty_prefix() {
     fi
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# approve-plan-writes.js integration tests
-# ─────────────────────────────────────────────────────────────────────────────
-
-echo ""
-echo "=== approve-plan-writes.js: integration ==="
-
-PLANS_DIR="${NODE_HOME}/.claude/plans"
-
-run_hook() {
-    echo "$1" | run_with_timeout node "$HOOK" 2>/dev/null
-}
-
-expect_approve() {
-    local desc="$1" json="$2"
-    local result
-    result=$(run_hook "$json")
-    if echo "$result" | grep -q '"approve"'; then
-        pass "$desc"
-    else
-        fail "$desc — expected approve, got: $result"
-    fi
-}
-
-expect_approve "Write to ${PLANS_DIR}/foo.md" \
-    "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${PLANS_DIR}/foo.md\",\"content\":\"x\"}}"
-
-expect_approve "Write to ${PLANS_DIR}/drafts/bar.md" \
-    "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${PLANS_DIR}/drafts/bar.md\",\"content\":\"x\"}}"
-
-expect_approve "Edit to ${PLANS_DIR}/foo.md" \
-    "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${PLANS_DIR}/foo.md\",\"old_string\":\"a\",\"new_string\":\"b\"}}"
-
-expect_approve "MultiEdit to ${PLANS_DIR}/foo.md" \
-    "{\"tool_name\":\"MultiEdit\",\"tool_input\":{\"file_path\":\"${PLANS_DIR}/foo.md\",\"edits\":[]}}"
-
-expect_approve "Write to non-plans path (fallthrough)" \
-    '{"tool_name":"Write","tool_input":{"file_path":"/tmp/somefile.txt","content":"x"}}'
-
-expect_approve "Edit to home dir but NOT under plans" \
-    "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"${NODE_HOME}/.claude/settings.json\",\"old_string\":\"a\",\"new_string\":\"b\"}}"
-
-expect_approve "Bash tool (unmatched)" \
-    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
-
-expect_approve "Read tool (unmatched)" \
-    '{"tool_name":"Read","tool_input":{"file_path":"/etc/hosts"}}'
-
-expect_approve "malformed JSON (fail-open)" \
-    'NOT JSON AT ALL'
-
-expect_approve "missing tool_input" \
-    '{"tool_name":"Write"}'
-
-expect_approve "missing file_path" \
-    '{"tool_name":"Write","tool_input":{"content":"x"}}'
-
-expect_approve "path-traversal through plans dir (documented behavior)" \
-    "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${PLANS_DIR}/../../etc/passwd\",\"content\":\"x\"}}"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# settings.json static tests
-# ─────────────────────────────────────────────────────────────────────────────
-
-echo ""
-echo "=== settings.json: registration & ordering ==="
-
-test_registered() {
-    if grep -q "approve-plan-writes.js" "$SETTINGS_FILE"; then
-        pass "approve-plan-writes.js is registered in settings.json"
-    else
-        fail "approve-plan-writes.js NOT registered in settings.json"
-    fi
-}
-
-test_matcher_includes_write() {
-    # Find the hook block containing approve-plan-writes.js and inspect matcher.
-    local r
-    r="$(run_with_timeout node -e "
-        const fs=require('fs');
-        const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const pre=(j.hooks && j.hooks.PreToolUse) || [];
-        let found=null;
-        for (const block of pre) {
-            for (const h of (block.hooks||[])) {
-                if (h.command && h.command.includes('approve-plan-writes.js')) { found=block.matcher; break; }
-            }
-            if (found) break;
-        }
-        process.stdout.write(found || '');
-    " -- "$SETTINGS_FILE")"
-    if echo "$r" | grep -q "Write"; then
-        pass "matcher includes Write: '$r'"
-    else
-        fail "matcher missing Write: '$r'"
-    fi
-}
-
-test_ordering() {
-    local show_diff_line approve_line block_tests_line
-    show_diff_line="$(grep -n "show-diff.js" "$SETTINGS_FILE" | head -1 | cut -d: -f1)"
-    approve_line="$(grep -n "approve-plan-writes.js" "$SETTINGS_FILE" | head -1 | cut -d: -f1)"
-    block_tests_line="$(grep -n "block-tests-direct.js" "$SETTINGS_FILE" | head -1 | cut -d: -f1)"
-
-    if [ -z "$show_diff_line" ] || [ -z "$approve_line" ] || [ -z "$block_tests_line" ]; then
-        fail "ordering: missing one of the hook entries (show-diff=$show_diff_line, approve=$approve_line, block-tests=$block_tests_line)"
-        return
-    fi
-
-    if [ "$approve_line" -gt "$show_diff_line" ] && [ "$approve_line" -lt "$block_tests_line" ]; then
-        pass "ordering: show-diff($show_diff_line) < approve-plan-writes($approve_line) < block-tests-direct($block_tests_line)"
-    else
-        fail "ordering wrong: show-diff=$show_diff_line, approve=$approve_line, block-tests=$block_tests_line"
-    fi
-}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all
@@ -469,10 +351,6 @@ test_isunder_not_under
 test_isunder_sibling_dir
 test_isunder_empty_p
 test_isunder_empty_prefix
-
-test_registered
-test_matcher_includes_write
-test_ordering
 
 echo ""
 echo "─────────────────────────────────────────"

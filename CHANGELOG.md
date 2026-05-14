@@ -159,3 +159,11 @@ Changes: Private repos and non-GitHub remotes now skip the .env-add check. Publi
 ### FEATURE: Planning skills: eliminate VS Code permission dialogs for plan file writes (2026-05-13)
 Background: VS Code's ask-before-edits mode bypasses settings.json allow rules for Write/Edit tools — planning skill writes to ~/.claude/plans/ triggered repeated permission dialogs on every session.
 Changes: Planning skill file writes (clarify-intent, make-outline-plan, make-detail-plan) no longer prompt for permission in VS Code. Writes to ~/.claude/plans/ and its subdirectories are auto-approved via a new PreToolUse hook.
+
+### FEATURE: Planning skill writes no longer trigger VS Code permission dialogs (2026-05-14)
+Background: Planning artifacts were stored under ~/.claude/plans/ — a path protected by Claude Code — causing VS Code ask-before-edits mode to prompt on every Write/Edit call during planning sessions.
+Changes: Planning artifacts moved to ~/.workflow-plans/ (configurable via WORKFLOW_PLANS_DIR env var). Permission dialogs no longer appear during clarify-intent, make-outline-plan, and make-detail-plan skill runs in any mode. Existing ~/.claude/plans/ contents are migrated automatically on first run. Customise the path by setting WORKFLOW_PLANS_DIR=/absolute/path in your agents .env.
+
+### BUGFIX: Planning confirmations now respect CONFIRM_* flags; plan diffs visible again (2026-05-14)
+Background: Planning skill confirmations were always triggered by the protected .claude/ path, regardless of CONFIRM_* flag settings.
+Changes: Confirmations now follow CONFIRM_INTENT/OUTLINE/DETAIL flags reliably — prompting only when the flag is on. Final plan artifacts (intent.md, outline.md, detail.md) now show diffs again; they were previously suppressed alongside draft files.

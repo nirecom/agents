@@ -50,15 +50,18 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 
 4. After the interview (or at the 5-round cap), write the agreed requirements to:
    ```
-   ~/.claude/plans/<session-id>-intent.md
+   ~/.workflow-plans/<session-id>-intent.md
    ```
    Use the Write tool directly — do NOT run mkdir first (Write creates parent directories automatically).
    Use the schema below. The `<session-id>` must be the current Claude session ID.
    Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE` if available; otherwise use a
    timestamp (`YYYYMMDD-HHMMSS`) as fallback.
 
-5. Present a one-paragraph summary of what was locked in. Do NOT gate on a confirmation
-   `AskUserQuestion` here — the user already reviewed intent.md at the Write step.
+5. Apply the confirm-plan protocol (`skills/_shared/confirm-plan.md`)
+   using `CONFIRM_INTENT` as the flag and `<session-id>-intent.md` as the artifact.
+   - **Revise** (skill-specific): ask the user what to change, update intent.md with the
+     Write tool (re-run the interview loop if scope changes are significant), then loop
+     back to the protocol's Step 1.
 
 6. Proceed to Plan step 2 — starting with Research (2a: `/survey-code` or `/deep-research`,
    unless not needed) then `/make-outline-plan`.
