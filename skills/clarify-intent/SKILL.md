@@ -29,6 +29,16 @@ Skip this skill and emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>>
 1. Read the user's rough request. Identify the root of the decision tree: what is the single
    most important question whose answer unlocks all downstream questions?
 
+1a. **Auto-detect closes_issues**: Before the interview, scan the user's initial message
+    for `#<digits>` tokens (GitHub issue references):
+    - Exactly one `#N` found and context is unambiguous (e.g., "implement #261", "fix #42"):
+      record as `closes_issues: [N]` without asking.
+    - Multiple `#N` found or ambiguous: ask one `AskUserQuestion` during the step 3
+      interview to identify the single issue this session closes. Counts toward the
+      5-round budget but is treated as required.
+    - Zero `#N` found or task is clearly issue-free: set `closes_issues: []`; do not ask.
+    **One issue per session** is the basic premise. Never auto-add all detected numbers.
+
 2. Check `CONFIRM_OUTLINE` flag:
    Run via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
    - stdout `OFF`: the outline stage's `AskUserQuestion` (approach selection) will be skipped,
@@ -77,6 +87,21 @@ Write one file (per `rules/language.md`):
 - **Scope**: what is included / what is excluded (non-goals)
 - **Constraints**: list of constraints
 - **Interview Log** (optional): each Q&A round recorded as "Q: ... A: ..."
+- **closes_issues**: GitHub issue numbers this session is expected to close.
+  Always present. Serialized as a markdown list of integers (no `#` prefix).
+  Write an empty list when no issues are being closed.
+
+  Non-empty example:
+  ```
+  ## closes_issues
+  - 261
+  ```
+
+  Empty example:
+  ```
+  ## closes_issues
+  (empty)
+  ```
 
 ## Completion
 

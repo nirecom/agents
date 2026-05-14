@@ -168,6 +168,14 @@ Changes: Planning artifacts moved to ~/.workflow-plans/ (configurable via WORKFL
 Background: Planning skill confirmations were always triggered by the protected .claude/ path, regardless of CONFIRM_* flag settings.
 Changes: Confirmations now follow CONFIRM_INTENT/OUTLINE/DETAIL flags reliably — prompting only when the flag is on. Final plan artifacts (intent.md, outline.md, detail.md) now show diffs again; they were previously suppressed alongside draft files.
 
+### BUGFIX: issue-to-history.sh: correct date, header format, and idempotency (2026-05-14)
+Background: issue-to-history.sh produced history entries with wrong dates and malformed headers due to missing --date, wrong argument names, and an incomplete idempotency check.
+Changes: History entries now use the issue's actual close date. The issue number is embedded in the header (parenthetical format). Duplicate-append detection now recognises both old and new header formats.
+
+### FEATURE: clarify-intent auto-detects the GitHub issue being closed (2026-05-14)
+Background: The issue number to close had to be remembered and passed manually to /issue-close at the end of a session.
+Changes: clarify-intent now detects #N references in your opening message and records the issue as closes_issues — no extra question asked when unambiguous. CLAUDE.md Step 10 now reminds you to invoke /issue-close <N> using the recorded number.
+
 ### BUGFIX: Planning workflow: plan artifact links now always shown before auto-proceeding (2026-05-14)
 Background: In CONFIRM_*=off mode the planning workflow would skip the clickable link to intent.md / outline.md / detail.md and proceed directly, leaving no record in chat of what was written.
 Changes: Clickable absolute-path links to intent.md, outline.md, and detail.md are now shown in chat before auto-proceeding, regardless of CONFIRM_* flag setting. Also: make-outline-plan's single-approach path now correctly surfaces the artifact link and respects the revise loop.

@@ -37,6 +37,12 @@
       delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.
 
+    After cleanup, read `<session-id>-intent.md`'s `## closes_issues` section.
+    If it contains exactly one issue number, run `/issue-close <N>`.
+    If the section reads `(empty)` or is absent, skip.
+    (Multi-issue sessions are not expected. If the list has more than one entry,
+    run `/issue-close` for each sequentially — no dependency sorting, no retry.)
+
 ## Plan Mode Incompatibility
 
 `--permission-mode plan` is incompatible with this workflow — Skill tool invocations
