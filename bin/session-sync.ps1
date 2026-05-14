@@ -19,6 +19,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectsDir = Join-Path $ClaudeDir "projects"
+$helperJs = if ($env:AGENTS_CONFIG_DIR) { Join-Path $env:AGENTS_CONFIG_DIR "hooks/lib/workflow-plans-dir.js" } else { $null }
+$PlansDir = if ($helperJs -and (Test-Path $helperJs)) {
+    & node -e "process.stdout.write(require('$($helperJs -replace '\\','/'  )').getWorkflowPlansDir())" 2>$null
+} else { Join-Path $env:USERPROFILE ".workflow-plans" }
+if (-not $PlansDir) { $PlansDir = Join-Path $env:USERPROFILE ".workflow-plans" }
 
 if (-not (Test-Path (Join-Path $ProjectsDir ".git"))) {
     Write-Error "Session sync not initialized. Run install.ps1 or install\win\session-sync-init.ps1 first."
@@ -67,7 +72,7 @@ switch ($Action) {
         # Copy history.jsonl into sync area
         Copy-Item (Join-Path $ClaudeDir "history.jsonl") (Join-Path $ProjectsDir ".history.jsonl") -ErrorAction SilentlyContinue
         # Copy plans into sync area
-        $plansSource = Join-Path $ClaudeDir "plans"
+        $plansSource = $PlansDir
         $plansDest = Join-Path $ProjectsDir "plans"
         if (Test-Path $plansSource) {
             if (-not (Test-Path $plansDest)) { New-Item -ItemType Directory -Path $plansDest -Force | Out-Null }
@@ -125,7 +130,7 @@ switch ($Action) {
         }
         # Merge plans from remote into local
         $syncPlans = Join-Path $ProjectsDir "plans"
-        $localPlans = Join-Path $ClaudeDir "plans"
+        $localPlans = $PlansDir
         if (Test-Path $syncPlans) {
             if (-not (Test-Path $localPlans)) { New-Item -ItemType Directory -Path $localPlans -Force | Out-Null }
             Get-ChildItem -Path $syncPlans -File | Copy-Item -Destination $localPlans -Force
@@ -162,7 +167,7 @@ switch ($Action) {
         }
         # Merge plans from remote into local
         $syncPlans = Join-Path $ProjectsDir "plans"
-        $localPlans = Join-Path $ClaudeDir "plans"
+        $localPlans = $PlansDir
         if (Test-Path $syncPlans) {
             if (-not (Test-Path $localPlans)) { New-Item -ItemType Directory -Path $localPlans -Force | Out-Null }
             Get-ChildItem -Path $syncPlans -File | Copy-Item -Destination $localPlans -Force
