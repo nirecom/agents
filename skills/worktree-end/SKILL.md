@@ -1,6 +1,7 @@
 ---
 name: worktree-end
 description: Inventory gitignored state, merge PR, and clean up a git worktree after task completion
+user-invocable: false
 ---
 
 Inventory and preserve gitignored state, merge the PR, then remove the worktree safely.
