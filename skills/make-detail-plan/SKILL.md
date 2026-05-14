@@ -91,7 +91,8 @@ must be read and passed to the planner before drafting begins.
    - **Revise** (skill-specific): ask what to change, send feedback to the planner
      as a new revision request, then loop back to step 5a (re-draft → re-review →
      re-confirm). Each revision consumes `revision_rounds`.
-   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after the summary.
+   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after presenting
+     the clickable link AND a one-paragraph summary (per protocol Steps 2 + 3).
    - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after confirmation.
 
 ## Research Escalation
