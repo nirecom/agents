@@ -62,16 +62,20 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
        posts a resolved-by sentinel.
    Display the PR URL.
 
-7. First output the PR URL as a clickable markdown link in the main conversation:
-   `PR #<N> is open: [<url>](<url>)`
-   Then ask via `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
-   - **merge**: `gh pr merge --squash --delete-branch`
-     Then: `git fetch --prune origin`
-     Note: if working from a worktree, run `/worktree-end` afterward for full cleanup.
-   - **wait**: display URL and stop.
-   - **abort**: display URL and stop.
+7. **Merge prompt:**
 
-   If `AskUserQuestion` is unavailable (e.g. headless `claude -p`), default to **wait**.
+   Check `ENFORCE_WORKTREE`:
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off ENFORCE_WORKTREE on && echo OFF || echo ON'`
+
+   **(a) `ENFORCE_WORKTREE=on`:** Output `PR #<N> is open: [<url>](<url>)` and stop.
+   `/worktree-end` owns the merge prompt and sentinel for worktree mode.
+
+   **(b) `ENFORCE_WORKTREE=off` (unchanged):** Output `PR #<N> is open: [<url>](<url>)`,
+   then `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
+   - **merge**: `gh pr merge --squash --delete-branch`, then `git fetch --prune origin`
+   - **wait** / **abort**: display URL and stop.
+
+   If `AskUserQuestion` is unavailable, default to **wait**.
 
 ## WIP mode (`--wip`)
 
@@ -95,4 +99,6 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
 - Follow all existing commit and push rules.
 - If push fails, report the error — do not force-push.
 - Merge is always user-confirmed — never auto-merge without `AskUserQuestion`.
+  Exception: `/worktree-end` when `AUTO_MERGE_PR=on` (worktree mode only).
+  In worktree mode this skill defers entirely to `/worktree-end` (Step 7a).
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
