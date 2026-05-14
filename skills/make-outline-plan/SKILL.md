@@ -35,6 +35,9 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
      is proceeding directly to `/make-detail-plan`.
    - Write a minimal `<session-id>-outline.md` noting the justified single approach and including
      a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or the fallback text).
+   - Apply the **full** `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3)
+     using `CONFIRM_OUTLINE` as the flag. Even with a single viable approach,
+     the written artifact itself may need revision — protocol Step 3 covers that.
    - Proceed to emit the completion marker and stop.
 
 4. If outline-planner returns `NEEDS_RESEARCH`:
@@ -74,21 +77,24 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
      alternative, approve as-is, or change the scope.
 
 7. Once outline-reviewer returns `APPROVED`:
-   Before calling `AskUserQuestion`, output a prose rationale summary in the main conversation —
-   one paragraph per approach covering its rationale, trade-offs, and delivery plan.
-   This preamble gives the user the context to choose. Do not write the preamble to outline.md.
+   Output a prose rationale summary in the main conversation — one paragraph per
+   approach covering its rationale, trade-offs, and delivery plan. This preamble
+   gives the user the context to choose. Do not write the preamble to outline.md.
 
-   Run via Bash:
+   Then decide the chosen approach. Run via Bash:
      `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
-   - stdout `OFF`: write the outline file using the "Pass all approaches to make-detail-plan without selecting" default. Print a one-paragraph summary of the approved approaches and the link to <session-id>-outline.md. Do NOT call `AskUserQuestion`.
-   - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection (existing behavior). One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
+   - stdout `OFF`: set the chosen approach to "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`. Do NOT write the outline file yet — Step 8 handles the write.
+   - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection. One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback. The user's selection is the chosen approach. Do NOT write the outline file yet — Step 8 handles the write.
 
-8. Write the user's decision to `~/.workflow-plans/<session-id>-outline.md` using the
-   schema below. Then apply the confirm-plan protocol
-   (`skills/_shared/confirm-plan.md`) using `CONFIRM_OUTLINE` as the flag
-   and `<session-id>-outline.md` as the artifact.
-   - **Revise** (skill-specific): ask what to change, re-run the outline-planner with
-     the feedback, then loop back to the protocol's Step 1.
+8. Write the chosen approach to `~/.workflow-plans/<session-id>-outline.md` using
+   the schema below. Then apply the **full** `skills/_shared/confirm-plan.md`
+   protocol (Steps 1+2+3) using `CONFIRM_OUTLINE` as the flag.
+   Step 7's `AskUserQuestion` was about *which approach to pick*; protocol Step 3
+   asks about *the written artifact itself* (proceed/revise) — they are distinct
+   user touchpoints. In ON mode, the user will see two `AskUserQuestion` calls
+   per run, which is intentional.
+   - **Revise** (skill-specific): ask what to change, re-run the outline-planner
+     with the feedback, then loop back to Step 7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -114,8 +120,11 @@ Write the file (per `rules/language.md`) with the following sections:
   they work at the direction level only.
 - `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here. It is emitted only by
   `make-detail-plan`.
-- **One `AskUserQuestion` per run** — called only in step 7 (approach selection).
-  A prose rationale summary before the call is required (item (c) above) and does not count as an additional user confirmation.
+- **Two `AskUserQuestion` calls per run in ON mode** — one for approach selection
+  in step 7, one for artifact review in step 8 (via protocol Step 3). They are
+  distinct user touchpoints: step 7 asks "which approach to pick" *before* the
+  file is written; step 8 asks "proceed or revise" *after* reviewing the written
+  file. In OFF mode neither AskUserQuestion fires.
   Never pause for user confirmation during intermediate steps: Codex/reviewer
   revision rounds (step 6) or between-step summaries. Update files silently;
   inform the user with plain text only.
