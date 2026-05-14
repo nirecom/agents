@@ -34,7 +34,7 @@ NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u
 
 # Resolve the actual plans dir from Node so the test path matches what the hook expects
 # (path.resolve() on /c/Users/... yields C:\c\Users\... on Windows, not the home dir).
-PLANS_DIR_NATIVE=$(node -e "console.log(require('path').join(require('os').homedir(), '.claude', 'plans').replace(/\\\\/g, '/'))")
+PLANS_DIR_NATIVE=$(node -e "console.log(require('path').join(require('os').homedir(), '.workflow-plans').replace(/\\\\/g, '/'))")
 
 pending_state() {
     local sid="$1"
@@ -127,7 +127,7 @@ SID="sid-skipped-edit"
 write_state "$SID" "$(skipped_state "$SID")"
 assert_decision "skipped_edit_approves" "$(input_edit "$SID" "/c/git/myproject/src/foo.js")" "approve"
 
-# 8. pending + Write(.claude/plans/...) → approve  [skill output path allowlist]
+# 8. pending + Write(.workflow-plans/...) → approve  [skill output path allowlist]
 SID="sid-pending-plans"
 write_state "$SID" "$(pending_state "$SID")"
 assert_decision "pending_write_plans_approves" "$(input_write "$SID" "$PLANS_DIR_NATIVE/test-intent.md")" "approve"
@@ -153,7 +153,9 @@ mkdir -p "$COMMIT_REPO"
     git config user.name Test
     echo hello > a.txt
     git add a.txt
-    git commit -q -m initial
+    # Use core.hooksPath="" to bypass the global hooks (core.hooksPath is set globally
+    # to C:\git\agents\hooks which includes enforce-worktree; temp repos must bypass it)
+    git -c core.hooksPath="" commit -q -m initial
     echo world >> a.txt
     git add a.txt
 )
