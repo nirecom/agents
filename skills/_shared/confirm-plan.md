@@ -17,10 +17,13 @@ preview itself.
 
 **Step 2 — Present the clickable absolute-path link (MANDATORY)**
 After the Write call, present the artifact as a clickable absolute-path link
-in chat **before** any other output (workflow markers, summaries, completion
-sentinels, or further tool calls). This step is mandatory in **every** mode
-(OFF and ON). Resolve the full path — never use `~` (tilde is not expanded in
-markdown rendering, so the link will not open).
+in chat **before any chat output that follows the write** (workflow markers,
+prose summaries, completion sentinels). Tool calls that are part of the
+protocol itself (e.g. the Step 3 Bash flag check) are not "output" in this
+sense and may run between the link and the user-visible summary. This step
+is mandatory in **every** mode (OFF and ON). Resolve the full path — never
+use `~` (tilde is not expanded in markdown rendering, so the link will not
+open).
 - Windows: `[<session-id>-<artifact>.md](C:/Users/<user>/.workflow-plans/<session-id>-<artifact>.md)`
 - POSIX: `[<session-id>-<artifact>.md](/home/<user>/.workflow-plans/<session-id>-<artifact>.md)`
 
@@ -28,8 +31,9 @@ markdown rendering, so the link will not open).
 ```bash
 bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on && echo OFF || echo ON'
 ```
-- `OFF`: Print a one-paragraph summary **that includes the link from Step 2**,
-  then proceed without `AskUserQuestion`.
+- `OFF`: Print a one-paragraph prose summary describing what was written.
+  The clickable link from Step 2 is already in the chat — do not duplicate
+  it inside the summary. Then proceed without `AskUserQuestion`.
 - `ON`: Call `AskUserQuestion`:
   > "Review the [artifact] above. Proceed with this, or revise?"
   - **Proceed**: continue to the next step.
