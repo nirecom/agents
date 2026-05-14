@@ -203,3 +203,7 @@ Changes: /issue-close now works correctly when the skill passes ISSUE_CLOSE_SKIL
 ### CONFIG: Auto-sync labels.yml to GitHub (2026-05-15)
 Background: Manual sync was required after editing .github/labels.yml.
 Changes: Merging to main now triggers a GitHub Actions workflow that applies labels.yml to the repository automatically.
+
+### FEATURE: New /issue-create skill — create task issues with automatic Projects v2 attachment (2026-05-15)
+Background: No sanctioned way existed to create type:task issues from a Claude Code session without risking missing labels or forgetting the Projects v2 attachment step.
+Changes: New /issue-create skill creates type:task issues and attaches them to Projects v2 automatically. Caller-supplied type:* labels are rejected (use raw gh issue create for incident issues). Projects v2 attach failure is non-fatal — the issue is always created and a warning is printed if attachment fails.

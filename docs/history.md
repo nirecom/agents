@@ -403,3 +403,7 @@ Changes: See the BUGFIX entry above titled enforce-issue-close: inline ISSUE_CLO
 ### BUGFIX: #251: worktree-end worktree-removal fails with EPERM on Windows (CWD lock) (2026-05-15, 9321e9e)
 Background: Windows OS held a CWD lock on the linked worktree path when session CWD was inside it, causing the removal step to fail with EPERM.
 Changes: See the BUGFIX entry above for full implementation details (#267, #268, #251 fixed together in PR #276).
+
+### FEATURE: Add /issue-create skill — type:task enforcement + Projects v2 auto-attach (#246) (2026-05-15)
+Background: Sessions needed a sanctioned CLI path for creating task issues that enforces type:task and attaches to Projects v2 automatically. Raw gh issue create risked wrong labels and manual project attachment.
+Changes: New bin/github-issues/issue-create.sh: wraps gh issue create; unconditionally applies type:task; rejects caller-supplied type:* labels (exit 2); supports --body/--body-file (mutually exclusive); Projects v2 attach non-fatal on failure (ISSUE_CREATE_OWNER/ISSUE_CREATE_PROJECT_NUM env overrides). New skills/issue-create/SKILL.md: user-invocable skill with scope, pre-flight, procedure, label policy. Updated rules/github-issues.md: added Issue creation section. Updated CLAUDE.md: added /issue-create note under Step 1. New tests/feature-issue-create-skill.sh: 15 cases (S1-S11 behavior + D1-D4 docs).

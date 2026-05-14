@@ -18,6 +18,19 @@ Open issues with `gh issue list --state open` or `gh issue view <N>`.
 Apply labels with `bin/github-issues/sync-labels.sh` (reads `.github/labels.yml`,
 runs `gh label create --force`).
 
+## Issue creation
+
+Use `/issue-create` to create task issues from a Claude Code session. The skill
+enforces `type:task` and attaches the new issue to Projects v2 automatically.
+For incident issues, use the `.github/ISSUE_TEMPLATE/incident.yml` web UI template
+or `gh issue create --label "type:incident"` directly.
+
+    /issue-create --title "<title>" --body "<body>" [--label ... --assignee ... --milestone ...]
+
+Projects v2 attach failure is non-fatal: the issue is created regardless, and a
+warning is printed. Re-run `gh project item-add 1 --owner nirecom --url <issue-url>`
+manually if recovery is needed.
+
 ## Close path
 
 **Flow 1 — PR-based close (`closes #N` in PR description):**
