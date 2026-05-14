@@ -15,25 +15,19 @@ hook fires automatically and emits the diff as a `systemMessage`, so the user
 sees the full content inline in chat. No extra agent action is needed for the
 preview itself.
 
-**Step 2 — Present the clickable absolute-path link (MANDATORY)**
-After the Write call, present the artifact as a clickable absolute-path link
-in chat **before any chat output that follows the write** (workflow markers,
-prose summaries, completion sentinels). Tool calls that are part of the
-protocol itself (e.g. the Step 3 Bash flag check) are not "output" in this
-sense and may run between the link and the user-visible summary. This step
-is mandatory in **every** mode (OFF and ON). Resolve the full path — never
-use `~` (tilde is not expanded in markdown rendering, so the link will not
-open).
-- Windows: `[<session-id>-<artifact>.md](C:/Users/<user>/.workflow-plans/<session-id>-<artifact>.md)`
-- POSIX: `[<session-id>-<artifact>.md](/home/<user>/.workflow-plans/<session-id>-<artifact>.md)`
+**Step 2 — Breadcrumb (MANDATORY)**
+The `show-plan-link.js` PostToolUse hook emits `Plan file written: <absolute-path>`
+into the chat after the write. Do not duplicate or paraphrase it. If the line is
+absent (hook not yet deployed), print the absolute path as plain text — not a
+markdown link, not a tilde path. Mandatory in **every** mode.
 
 **Step 3 — `CONFIRM_<STEP>` check**
 ```bash
 bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on && echo OFF || echo ON'
 ```
 - `OFF`: Print a one-paragraph prose summary describing what was written.
-  The clickable link from Step 2 is already in the chat — do not duplicate
-  it inside the summary. Then proceed without `AskUserQuestion`.
+  The `Plan file written:` breadcrumb from the hook is already in the chat —
+  do not duplicate the path inside the summary. Then proceed without `AskUserQuestion`.
 - `ON`: Call `AskUserQuestion`:
   > "Review the [artifact] above. Proceed with this, or revise?"
   - **Proceed**: continue to the next step.
@@ -45,7 +39,7 @@ bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on &&
 - The revise → re-write → preview → re-confirm loop has no explicit cap;
   trust the user to say "Proceed" when satisfied.
 - Do not paste the full artifact content in chat — the show-diff preview plus
-  the clickable link are sufficient. Pasting duplicates context unnecessarily.
+  the `Plan file written:` hook line are sufficient. Pasting duplicates context unnecessarily.
 - Each skill defines what "Revise" means concretely (e.g., re-run the planner,
   update inline, re-run the interview). This reference covers only the outer
   protocol.

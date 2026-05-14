@@ -44,6 +44,13 @@ See `docs/security-policy.md` for the full pattern list.
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). After each
   successful step completion, appends a `[workflow]` next-step hint to `additionalContext` via
   `nextStepHint()` (defined in `hooks/lib/workflow-state.js`) to guide Claude toward the next skill
+- `show-plan-link.js` (PostToolUse, matcher: `Write`) — emits `systemMessage` with the absolute path
+  of any final plan artifact written directly under `~/.workflow-plans/` (basename
+  `*-(intent|outline|detail).md`; `drafts/` excluded). When
+  `CLAUDE_CODE_ENTRYPOINT === "claude-vscode"`, also best-effort spawns `code -r <path>` via
+  `cmd.exe` (Windows) or directly (POSIX) to refocus the file in the existing VS Code window.
+  Fail-open on tool failure, malformed stdin, or missing `code` binary. Idempotent on
+  confirm-plan revision re-writes.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — auto-marks `run_tests` based on Bash exit
   code. Detects test runner commands by path pattern (`tests/`) and known runner names. exit 0 →
   `complete`; exit ≠ 0 → `pending` (last-run-wins). Sentinel echoes and read-only commands excluded
