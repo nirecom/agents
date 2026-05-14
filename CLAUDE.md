@@ -33,6 +33,8 @@
      (always parallel, never blocks workflow). Output is shown directly to the user via
      the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
      is visible without relying on Claude's summary.
+   - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
+     (always parallel, non-blocking; warnings only, never blocks workflow)
 7. **Docs** — Run `/update-docs`. Mandatory for every task.
 8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 9.
