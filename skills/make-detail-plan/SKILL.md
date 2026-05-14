@@ -11,8 +11,8 @@ must be read and passed to the planner before drafting begins.
 ## Procedure
 
 1. **Read prior-stage artifacts** (if they exist):
-   - `~/.claude/plans/<session-id>-intent.md` — agreed requirements, scope, non-goals
-   - `~/.claude/plans/<session-id>-outline.md` — confirmed design direction
+   - `~/.workflow-plans/<session-id>-intent.md` — agreed requirements, scope, non-goals
+   - `~/.workflow-plans/<session-id>-outline.md` — confirmed design direction
    If neither file exists, proceed with the task context alone (no prior stages ran).
 
 2. **Surface the delivery plan to the main conversation.**
@@ -37,25 +37,25 @@ must be read and passed to the planner before drafting begins.
 5. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
    a. Write the planner's draft using the Write tool to:
-      `~/.claude/plans/drafts/<session-id>-detail-draft.md`
+      `~/.workflow-plans/drafts/<session-id>-detail-draft.md`
 
 
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
       On the first review round only, determine which prior-stage files exist:
-      - `~/.claude/plans/<session-id>-intent.md`
-      - `~/.claude/plans/<session-id>-outline.md`
+      - `~/.workflow-plans/<session-id>-intent.md`
+      - `~/.workflow-plans/<session-id>-outline.md`
 
-      Write `~/.claude/plans/drafts/<session-id>-context.md` with whichever sections apply
+      Write `~/.workflow-plans/drafts/<session-id>-context.md` with whichever sections apply
       (English headers mandatory, source comments mandatory):
       ```
-      <!-- Source: ~/.claude/plans/<session-id>-intent.md -->
+      <!-- Source: ~/.workflow-plans/<session-id>-intent.md -->
       ## Section 1: Intent (User Requirements)
 
       <verbatim contents of <session-id>-intent.md>
 
       ---
 
-      <!-- Source: ~/.claude/plans/<session-id>-outline.md -->
+      <!-- Source: ~/.workflow-plans/<session-id>-outline.md -->
       ## Section 2: Outline (Design Proposal)
 
       <verbatim contents of <session-id>-outline.md>
@@ -66,7 +66,7 @@ must be read and passed to the planner before drafting begins.
       - If neither exists: skip context file; call review-plan-codex without `--context`.
 
       On revision rounds 2+, reuse the context file from round 1 — do not regenerate.
-   c. Run via Bash: `review-plan-codex --input ~/.claude/plans/drafts/<session-id>-detail-draft.md --format detail-plan [--context ~/.claude/plans/drafts/<session-id>-context.md]`
+   c. Run via Bash: `review-plan-codex --input ~/.workflow-plans/drafts/<session-id>-detail-draft.md --format detail-plan [--context ~/.workflow-plans/drafts/<session-id>-context.md]`
       (omit `--context` when no context file was created in step b)
    d. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
@@ -75,8 +75,8 @@ must be read and passed to the planner before drafting begins.
         - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
         - Anything else → **format malformed**.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
-      - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.claude/plans/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
-      - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `~/.claude/plans/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
+      - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.workflow-plans/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
+      - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `~/.workflow-plans/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
    e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 3), then repeat from step 5a. Each round consumes `revision_rounds`.
 
 6. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
@@ -85,17 +85,14 @@ must be read and passed to the planner before drafting begins.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
 7. Once the reviewer returns `APPROVED`, write the final plan to
-   `~/.claude/plans/<session-id>-detail.md` (not draft). Present it to the user as a
-   clickable link using the **resolved absolute path** (do not use `~` in the link
-   target — tilde is not expanded in markdown rendering, so the link won't open).
-   Do not paste the full content in chat.
-   - POSIX: `[<session-id>-detail.md](/home/<user>/.claude/plans/<session-id>-detail.md)`
-   - Windows: `[<session-id>-detail.md](C:/Users/<user>/.claude/plans/<session-id>-detail.md)`
-
-   After writing and presenting the link, check via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_DETAIL on && echo OFF || echo ON'`
-   - stdout `OFF`: print a one-paragraph summary and emit `<<WORKFLOW_MARK_STEP_plan_complete>>` directly. Skip plan mode.
-   - stdout `ON`: enter plan mode for user approval (existing behavior).
+   `~/.workflow-plans/<session-id>-detail.md` (not draft). Then apply the
+   confirm-plan protocol (`skills/_shared/confirm-plan.md`)
+   using `CONFIRM_DETAIL` as the flag and `<session-id>-detail.md` as the artifact.
+   - **Revise** (skill-specific): ask what to change, send feedback to the planner
+     as a new revision request, then loop back to step 5a (re-draft → re-review →
+     re-confirm). Each revision consumes `revision_rounds`.
+   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after the summary.
+   - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after confirmation.
 
 ## Research Escalation
 

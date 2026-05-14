@@ -3,7 +3,7 @@
 #
 # Implementation complete. Tests verify the production contract.
 
-# Implementation tracked in: ~/.claude/plans/intent-20260505-211305-detail.md
+# Implementation tracked in: ~/.workflow-plans/intent-20260505-211305-detail.md
 #
 # Targets: install/linux/install.sh global gitignore append section
 #          (idempotent block in $XDG_CONFIG_HOME/git/ignore for WORKTREE_NOTES.md)

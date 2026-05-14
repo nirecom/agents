@@ -15,7 +15,7 @@ Review test case completeness against source code.
 
 2. **Launch Explore subagent**: Spawn an Explore subagent with the following instructions:
    - Read the test file(s) and corresponding source file(s)
-   - Read `skills/test-design-shared/reference.md` for the Test Case Categories checklist
+   - Read `skills/_shared/test-design.md` for the Test Case Categories checklist
    - Evaluate test coverage against every category and sub-category in the checklist
    - For each category, report what IS covered, what is MISSING, and what is N/A (with reason)
    - For missing cases, suggest specific test descriptions
@@ -34,5 +34,5 @@ Review test case completeness against source code.
 
 - Always launch the subagent — do not skip the review even if tests look complete
 - The subagent must read actual file contents, not just file names
-- The checklist definition lives in `skills/test-design-shared/reference.md` — do not duplicate it here
+- The checklist definition lives in `skills/_shared/test-design.md` — do not duplicate it here
 - Create the marker file only after the review is genuinely complete
