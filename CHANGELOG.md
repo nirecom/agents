@@ -187,3 +187,6 @@ Changes: Marker moved to ~/.workflow-plans/worktree-end/ (same pattern as the .c
 ### FEATURE: issue-fix-history cross-reference (#222) (2026-05-14)
 Background: Issues closed via closes #N in PR descriptions left no history.md entry.
 Changes: `/issue-close` now recovers from GitHub auto-close (no re-close needed) and posts a resolved-by commit comment. New backfill script covers past closed issues. docs/todo.md is now a GitHub Issues pointer only.
+### FEATURE: show-plan-link.js: reliable plan file path display via PostToolUse hook (2026-05-15)
+Background: The confirm-plan protocol's Step 2 (showing the written plan file path) was executed by the LLM, making it unreliable across sessions — tildes, Windows backslashes, and a VS Code extension webview bug prevented clickable links.
+Changes: Plan file path now always appears in chat via a deterministic PostToolUse hook instead of LLM instruction. When running inside the VS Code extension, the hook also opens the file in the current window automatically.
