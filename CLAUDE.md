@@ -34,10 +34,8 @@
      the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
      is visible without relying on Claude's summary.
 7. **Docs** — Run `/update-docs`. Mandatory for every task.
-8. **User verification** — Mode-dependent:
-   - **`ENFORCE_WORKTREE=on`:** Skip. `/worktree-end` owns `<<WORKFLOW_USER_VERIFIED>>`
-     emission — emitted immediately before `gh pr merge` (local path) or after
-     `gh pr view "$PR_NUMBER" --json state` returns `MERGED` (web-merge path).
+8. **User verification:**
+   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 9.
    - **`ENFORCE_WORKTREE=off`:** Run `echo "<<WORKFLOW_USER_VERIFIED>>"` immediately;
      set the Bash `description` to explain what the user is approving.
 9. **Commit** — Run `/commit-push`.
