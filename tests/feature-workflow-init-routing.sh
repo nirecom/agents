@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+# Pre-implementation tests for /workflow-init routing skill and workflow_init step.
+# Tests M1-S9 (behavioral): FAIL until source code changes land (detail.md Steps 1-3).
+# Tests C10-C12 (content checks): FAIL until new files are written (detail.md Steps 4-7).
+set -euo pipefail
+
+# Timeout guard
+if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
+    export _TIMEOUT_WRAPPED=1
+    if command -v timeout >/dev/null 2>&1; then
+        exec timeout 120 bash "$0" "$@"
+    else
+        exec perl -e 'alarm 120; exec @ARGV' -- bash "$0" "$@"
+    fi
+fi
+
+AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
+MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
+STATE_LIB="$AGENTS_DIR/hooks/lib/workflow-state.js"
+WORKFLOW_INIT_MD="$AGENTS_DIR/skills/workflow-init/SKILL.md"
+CLARIFY_INTENT_MD="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
+AGENTS_CLAUDE_MD="$AGENTS_DIR/CLAUDE.md"
+LABELS_YML="$AGENTS_DIR/.github/labels.yml"
+ERRORS=0
+
+fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
+pass() { echo "PASS: $1"; }
+
+run_with_timeout() {
+    if command -v timeout >/dev/null 2>&1; then timeout 120 "$@"
+    else perl -e 'alarm 120; exec @ARGV' -- "$@"; fi
+}
+
+# ---------------------------------------------------------------------------
+# Windows-compatible tmpdir
+# ---------------------------------------------------------------------------
+_NODE_TMPDIR=$(node -e "process.stdout.write(require('os').tmpdir())" 2>/dev/null || echo "")
+if [[ "$_NODE_TMPDIR" =~ ^[A-Za-z]: ]]; then
+    _DRIVE=$(echo "$_NODE_TMPDIR" | cut -c1 | tr 'A-Z' 'a-z')
+    _REST=$(echo "$_NODE_TMPDIR" | cut -c3- | tr '\\' '/')
+    _BASH_WIN_TMPDIR="/${_DRIVE}${_REST}"
+    TMPDIR_BASE=$(mktemp -d "${_BASH_WIN_TMPDIR}/cctests.XXXXXXXX")
+else
+    TMPDIR_BASE=$(mktemp -d)
+fi
+WORKFLOW_DIR="$TMPDIR_BASE/workflow-state"
+mkdir -p "$WORKFLOW_DIR"
+export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
+trap 'rm -rf "$TMPDIR_BASE"' EXIT
+
+NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Resolve the plans dir as Node sees it (Windows path munging safe)
+PLANS_DIR_NATIVE=$(node -e "console.log(require('path').join(require('os').homedir(), '.workflow-plans').replace(/\\\\/g, '/'))")
+
+# ---------------------------------------------------------------------------
+# State helpers
+# ---------------------------------------------------------------------------
+write_state() {
+    local sid="$1" json="$2"
+    mkdir -p "$WORKFLOW_DIR"
+    printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
+}
+
+# Legacy state: no workflow_init key, clarify_intent absent
+state_ci_absent() {
+    local sid="$1"
+    printf '{"version":1,"session_id":"%s","created_at":"%s","cwd":"/tmp","git_branch":"main","steps":{"research":{"status":"pending","updated_at":null},"plan":{"status":"pending","updated_at":null},"branching_complete":{"status":"pending","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"run_tests":{"status":"pending","updated_at":null},"review_security":{"status":"pending","updated_at":null},"docs":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null},"cleanup":{"status":"pending","updated_at":null}}}' \
+        "$sid" "$NOW_ISO"
+}
+
+# Legacy state: no workflow_init key, clarify_intent = complete
+state_ci_complete() {
+    local sid="$1"
+    printf '{"version":1,"session_id":"%s","created_at":"%s","cwd":"/tmp","git_branch":"main","steps":{"clarify_intent":{"status":"complete","updated_at":"%s"},"research":{"status":"pending","updated_at":null},"plan":{"status":"pending","updated_at":null},"branching_complete":{"status":"pending","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"run_tests":{"status":"pending","updated_at":null},"review_security":{"status":"pending","updated_at":null},"docs":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null},"cleanup":{"status":"pending","updated_at":null}}}' \
+        "$sid" "$NOW_ISO" "$NOW_ISO"
+}
+
+# Legacy state: no workflow_init key, clarify_intent = skipped
+state_ci_skipped() {
+    local sid="$1"
+    printf '{"version":1,"session_id":"%s","created_at":"%s","cwd":"/tmp","git_branch":"main","steps":{"clarify_intent":{"status":"skipped","updated_at":"%s"},"research":{"status":"pending","updated_at":null},"plan":{"status":"pending","updated_at":null},"branching_complete":{"status":"pending","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"run_tests":{"status":"pending","updated_at":null},"review_security":{"status":"pending","updated_at":null},"docs":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null},"cleanup":{"status":"pending","updated_at":null}}}' \
+        "$sid" "$NOW_ISO" "$NOW_ISO"
+}
+
+# Legacy state: no workflow_init key, clarify_intent = pending (in-flight session at upgrade time)
+state_ci_pending() {
+    local sid="$1"
+    printf '{"version":1,"session_id":"%s","created_at":"%s","cwd":"/tmp","git_branch":"main","steps":{"clarify_intent":{"status":"pending","updated_at":null},"research":{"status":"pending","updated_at":null},"plan":{"status":"pending","updated_at":null},"branching_complete":{"status":"pending","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"run_tests":{"status":"pending","updated_at":null},"review_security":{"status":"pending","updated_at":null},"docs":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null},"cleanup":{"status":"pending","updated_at":null}}}' \
+        "$sid" "$NOW_ISO"
+}
+
+# New state with explicit workflow_init + clarify_intent statuses
+state_wi_ci() {
+    local sid="$1" wi_status="$2" ci_status="$3"
+    printf '{"version":1,"session_id":"%s","created_at":"%s","cwd":"/tmp","git_branch":"main","steps":{"workflow_init":{"status":"%s","updated_at":null},"clarify_intent":{"status":"%s","updated_at":null},"research":{"status":"pending","updated_at":null},"plan":{"status":"pending","updated_at":null},"branching_complete":{"status":"pending","updated_at":null},"write_tests":{"status":"pending","updated_at":null},"run_tests":{"status":"pending","updated_at":null},"review_security":{"status":"pending","updated_at":null},"docs":{"status":"pending","updated_at":null},"user_verification":{"status":"pending","updated_at":null},"cleanup":{"status":"pending","updated_at":null}}}' \
+        "$sid" "$NOW_ISO" "$wi_status" "$ci_status"
+}
+
+# Read workflow_init.status via readState() (applies migration).
+# Run node from AGENTS_DIR so relative require paths work on Windows (MSYS2 paths fail in native node require).
+read_wi_status() {
+    local sid="$1"
+    (cd "$AGENTS_DIR" && node -e "
+const { readState } = require('./hooks/lib/workflow-state.js');
+const s = readState('$sid');
+const wi = s && s.steps && s.steps.workflow_init;
+process.stdout.write(wi ? wi.status : 'MISSING');
+" 2>/dev/null) || echo "ERROR"
+}
+
+# ---------------------------------------------------------------------------
+# Gate helpers (mirror feature-clarify-intent-gate.sh)
+# ---------------------------------------------------------------------------
+run_gate() {
+    local input="$1"
+    echo "$input" | run_with_timeout node "$GATE_HOOK" 2>/dev/null || true
+}
+
+assert_decision() {
+    local test_name="$1" input="$2" expected="$3"
+    local output actual
+    output=$(run_gate "$input")
+    actual=$(echo "$output" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(d).decision||'')}catch(e){process.stdout.write('')}})")
+    if [ "$actual" = "$expected" ]; then
+        pass "$test_name"
+    else
+        fail "$test_name (expected=$expected, got=$actual)"
+    fi
+}
+
+assert_message_contains() {
+    local test_name="$1" input="$2" pattern="$3"
+    local output msg
+    output=$(run_gate "$input")
+    # Gate outputs {decision, reason} — extract reason field
+    msg=$(echo "$output" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{const p=JSON.parse(d);process.stdout.write(p.reason||p.message||'')}catch(e){process.stdout.write('')}})")
+    if printf '%s' "$msg" | grep -qF "$pattern"; then
+        pass "$test_name"
+    else
+        fail "$test_name (pattern '$pattern' not found in block reason)"
+    fi
+}
+
+assert_message_absent() {
+    local test_name="$1" input="$2" pattern="$3"
+    local output msg
+    output=$(run_gate "$input")
+    # Gate outputs {decision, reason} — extract reason field
+    msg=$(echo "$output" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{const p=JSON.parse(d);process.stdout.write(p.reason||p.message||'')}catch(e){process.stdout.write('')}})")
+    if printf '%s' "$msg" | grep -qF "$pattern"; then
+        fail "$test_name (unexpected pattern '$pattern' found in reason)"
+    else
+        pass "$test_name"
+    fi
+}
+
+assert_contains() {
+    local file="$1" pattern="$2" desc="$3"
+    if [ ! -f "$file" ]; then fail "$desc (file not found: $file)"; return 1; fi
+    if grep -qE "$pattern" "$file"; then pass "$desc"; else fail "$desc (pattern not found: $pattern in $file)"; fi
+}
+
+input_edit()  { local sid="$1" fp="$2"; printf '{"session_id":"%s","tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"x","new_string":"y"}}' "$sid" "$fp"; }
+input_write() { local sid="$1" fp="$2"; printf '{"session_id":"%s","tool_name":"Write","tool_input":{"file_path":"%s","content":"hello"}}' "$sid" "$fp"; }
+
+# Build a PostToolUse-style JSON for workflow-mark.js
+build_mark_json() {
+    local cmd="$1" sid="$2"
+    local esc="${cmd//\\/\\\\}"
+    esc="${esc//\"/\\\"}"
+    printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""},"session_id":"%s"}' \
+        "$esc" "$esc" "$sid"
+}
+
+# ============================================================
+echo "=== M: Migration tests ==="
+echo ""
+
+# M1: ci absent → workflow_init backfilled as complete (no ci key = very old session)
+SID="mig-ci-absent"
+write_state "$SID" "$(state_ci_absent "$SID")"
+actual=$(read_wi_status "$SID")
+[ "$actual" = "complete" ] && pass "M1: ci_absent → workflow_init:complete" \
+    || fail "M1: ci_absent → workflow_init:complete (got: $actual)"
+
+# M2: ci complete → workflow_init backfilled as complete
+SID="mig-ci-complete"
+write_state "$SID" "$(state_ci_complete "$SID")"
+actual=$(read_wi_status "$SID")
+[ "$actual" = "complete" ] && pass "M2: ci_complete → workflow_init:complete" \
+    || fail "M2: ci_complete → workflow_init:complete (got: $actual)"
+
+# M3: ci skipped → workflow_init backfilled as complete
+SID="mig-ci-skipped"
+write_state "$SID" "$(state_ci_skipped "$SID")"
+actual=$(read_wi_status "$SID")
+[ "$actual" = "complete" ] && pass "M3: ci_skipped → workflow_init:complete" \
+    || fail "M3: ci_skipped → workflow_init:complete (got: $actual)"
+
+# M4: ci pending (in-flight session at upgrade time) → workflow_init backfilled as pending
+SID="mig-ci-pending"
+write_state "$SID" "$(state_ci_pending "$SID")"
+actual=$(read_wi_status "$SID")
+[ "$actual" = "pending" ] && pass "M4: ci_pending → workflow_init:pending" \
+    || fail "M4: ci_pending → workflow_init:pending (got: $actual)"
+
+# ============================================================
+echo ""
+echo "=== G: Early gate tests ==="
+echo ""
+
+# G5: Tier 1 — workflow_init:pending → Edit blocked; message references workflow-init
+SID="gate-tier1"
+write_state "$SID" "$(state_wi_ci "$SID" "pending" "pending")"
+assert_decision   "G5a: workflow_init:pending → Edit blocked"             "$(input_edit "$SID" "/c/git/proj/src/foo.js")" "block"
+assert_message_contains "G5b: Tier 1 block message references workflow-init" "$(input_edit "$SID" "/c/git/proj/src/foo.js")" "workflow-init"
+
+# G6: Tier 2 — workflow_init:complete + clarify_intent:pending → Edit blocked; message references clarify-intent
+#     AND does NOT reference workflow-init (Tier 1 already cleared)
+SID="gate-tier2"
+write_state "$SID" "$(state_wi_ci "$SID" "complete" "pending")"
+assert_decision   "G6a: clarify_intent:pending → Edit still blocked"      "$(input_edit "$SID" "/c/git/proj/src/foo.js")" "block"
+assert_message_contains "G6b: Tier 2 block message references clarify-intent" "$(input_edit "$SID" "/c/git/proj/src/foo.js")" "clarify-intent"
+assert_message_absent   "G6c: Tier 2 block does NOT mention workflow_init gate" "$(input_edit "$SID" "/c/git/proj/src/foo.js")" "workflow_init has not been completed"
+
+# G7: Both complete → Edit approved (gate dormant)
+SID="gate-dormant"
+write_state "$SID" "$(state_wi_ci "$SID" "complete" "complete")"
+assert_decision "G7: workflow_init:complete + clarify_intent:complete → Edit approved" \
+    "$(input_edit "$SID" "/c/git/proj/src/foo.js")" "approve"
+
+# G8: workflow_init:pending + Write to ~/.workflow-plans/ → approved (plans-path allowlist)
+SID="gate-plans-allowlist"
+write_state "$SID" "$(state_wi_ci "$SID" "pending" "pending")"
+assert_decision "G8: workflow_init:pending + Write to plans dir → approved (allowlist)" \
+    "$(input_write "$SID" "$PLANS_DIR_NATIVE/${SID}-intent.md")" "approve"
+
+# ============================================================
+echo ""
+echo "=== S: Sentinel test ==="
+echo ""
+
+# S9: <<WORKFLOW_MARK_STEP_workflow_init_complete>> accepted by workflow-mark.js
+#     (workflow_init must be in VALID_STEPS for the sentinel to record the step)
+SID="mark-wi-complete"
+write_state "$SID" "$(state_wi_ci "$SID" "pending" "pending")"
+MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"' "$SID")
+MARK_OUTPUT=$(echo "$MARK_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
+
+# Verify state was updated to complete
+actual_after=$( (cd "$AGENTS_DIR" && node -e "
+const { readState } = require('./hooks/lib/workflow-state.js');
+const s = readState('$SID');
+const wi = s && s.steps && s.steps.workflow_init;
+process.stdout.write(wi ? wi.status : 'MISSING');
+" 2>/dev/null) || echo "ERROR")
+
+if [ "$actual_after" = "complete" ]; then
+    pass "S9: MARK_STEP_workflow_init_complete accepted and recorded"
+elif printf '%s' "$MARK_OUTPUT" | grep -q "NOT recorded"; then
+    fail "S9: MARK_STEP_workflow_init_complete rejected by workflow-mark.js (output: $MARK_OUTPUT)"
+else
+    fail "S9: MARK_STEP_workflow_init_complete — state not updated (got: $actual_after)"
+fi
+
+# ============================================================
+echo ""
+echo "=== C: Content checks ==="
+echo ""
+
+echo "--- C10: skills/workflow-init/SKILL.md ---"
+assert_contains "$WORKFLOW_INIT_MD" "Path A" \
+    "C10a: SKILL.md contains Path A (intent:clarified)"
+assert_contains "$WORKFLOW_INIT_MD" "Path B" \
+    "C10b: SKILL.md contains Path B (issue, no label)"
+assert_contains "$WORKFLOW_INIT_MD" "Path C" \
+    "C10c: SKILL.md contains Path C (no issue)"
+assert_contains "$WORKFLOW_INIT_MD" "WORKFLOW_MARK_STEP_workflow_init_complete" \
+    "C10d: SKILL.md Path A emits WORKFLOW_MARK_STEP_workflow_init_complete"
+assert_contains "$WORKFLOW_INIT_MD" "WORKFLOW_CLARIFY_INTENT_NOT_NEEDED" \
+    "C10e: SKILL.md Path A emits WORKFLOW_CLARIFY_INTENT_NOT_NEEDED"
+assert_contains "$WORKFLOW_INIT_MD" "intent:clarified" \
+    "C10f: SKILL.md references intent:clarified label"
+
+echo ""
+echo "--- C11: skills/clarify-intent/SKILL.md Completion section ---"
+assert_contains "$CLARIFY_INTENT_MD" "gh issue create" \
+    "C11a: clarify-intent Completion contains 'gh issue create'"
+assert_contains "$CLARIFY_INTENT_MD" "gh issue edit.*--add-label|--add-label" \
+    "C11b: clarify-intent Completion contains 'gh issue edit --add-label'"
+assert_contains "$CLARIFY_INTENT_MD" "intent:clarified" \
+    "C11c: clarify-intent Completion references 'intent:clarified'"
+assert_contains "$CLARIFY_INTENT_MD" "workflow_init" \
+    "C11d: clarify-intent TodoWrite checklist marks workflow_init as completed"
+
+echo ""
+echo "--- C12: CLAUDE.md and .github/labels.yml ---"
+assert_contains "$AGENTS_CLAUDE_MD" "/workflow-init" \
+    "C12a: CLAUDE.md Step 1 references /workflow-init"
+assert_contains "$LABELS_YML" "intent:clarified" \
+    "C12b: .github/labels.yml contains intent:clarified"
+
+# ============================================================
+echo ""
+echo "=== Summary ==="
+if [ "$ERRORS" -eq 0 ]; then
+    echo "All tests passed."
+else
+    echo "$ERRORS test(s) failed."
+fi
+exit "$ERRORS"
