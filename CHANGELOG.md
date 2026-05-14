@@ -179,3 +179,7 @@ Changes: clarify-intent now detects #N references in your opening message and re
 ### BUGFIX: Planning workflow: plan artifact links now always shown before auto-proceeding (2026-05-14)
 Background: In CONFIRM_*=off mode the planning workflow would skip the clickable link to intent.md / outline.md / detail.md and proceed directly, leaving no record in chat of what was written.
 Changes: Clickable absolute-path links to intent.md, outline.md, and detail.md are now shown in chat before auto-proceeding, regardless of CONFIRM_* flag setting. Also: make-outline-plan's single-approach path now correctly surfaces the artifact link and respects the revise loop.
+
+### BUGFIX: C:/Program Files/Git/worktree-end marker writes no longer trigger permission prompts (2026-05-14)
+Background: The branch-delete marker written by /worktree-end was stored inside .git/ — a Claude Code protected path — causing permission prompts in default and acceptEdits modes even with settings.json allow rules in place.
+Changes: Marker moved to ~/.workflow-plans/worktree-end/ (same pattern as the .claude/plans/ → ~/.workflow-plans/ fix). /worktree-end marker writes and deletes no longer trigger permission prompts in any mode. The marker path is configurable via WORKFLOW_PLANS_DIR.
