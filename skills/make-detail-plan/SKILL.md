@@ -86,7 +86,7 @@ must be read and passed to the planner before drafting begins.
 
 7. Once the reviewer returns `APPROVED`, write the final plan to
    `~/.workflow-plans/<session-id>-detail.md` (not draft). Then apply the
-   confirm-plan-artifact protocol (`skills/confirm-plan-artifact/reference.md`)
+   confirm-plan protocol (`skills/_shared/confirm-plan.md`)
    using `CONFIRM_DETAIL` as the flag and `<session-id>-detail.md` as the artifact.
    - **Revise** (skill-specific): ask what to change, send feedback to the planner
      as a new revision request, then loop back to step 5a (re-draft → re-review →

@@ -84,8 +84,8 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection (existing behavior). One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback.
 
 8. Write the user's decision to `~/.workflow-plans/<session-id>-outline.md` using the
-   schema below. Then apply the confirm-plan-artifact protocol
-   (`skills/confirm-plan-artifact/reference.md`) using `CONFIRM_OUTLINE` as the flag
+   schema below. Then apply the confirm-plan protocol
+   (`skills/_shared/confirm-plan.md`) using `CONFIRM_OUTLINE` as the flag
    and `<session-id>-outline.md` as the artifact.
    - **Revise** (skill-specific): ask what to change, re-run the outline-planner with
      the feedback, then loop back to the protocol's Step 1.
