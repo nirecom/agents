@@ -73,6 +73,11 @@ closing the parent is blocked. Cancelled/migrated children must already be close
 
 ## Environment
 
+- `gh` CLI must be authenticated with the `project` scope for Projects v2
+  operations (used by `/issue-create`). Add with
+  `gh auth refresh -s project` (browser-based OAuth). Default `gh auth login`
+  scopes do NOT include `project`. Audit of which repo owns gh install + scope
+  setup is tracked in #295.
 - `AGENTS_CONFIG_DIR` must be set in every session that uses `/issue-close`
   (the skill aborts with a clear error if unset). Consumer repos (dotfiles,
   dotfiles-private) inherit the same variable.

@@ -51,6 +51,13 @@ if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not found" >&2; exit 1
 fi
 
+# Soft preflight: warn if `project` scope is absent. Non-fatal so issue creation
+# still proceeds; only the Projects v2 attach step will fail (also non-fatal).
+if ! gh auth status 2>&1 | grep -q "'project'"; then
+    echo "warn: gh auth lacks 'project' scope — Projects v2 attach will fail." >&2
+    echo "warn: Run 'gh auth refresh -s project' to add it (browser-based OAuth)." >&2
+fi
+
 if [ -z "$TITLE" ]; then
     echo "Error: --title required" >&2; exit 2
 fi

@@ -19,6 +19,10 @@ attachment.
 
 - `AGENTS_CONFIG_DIR` must be set.
 - `gh` must be authenticated against the current repository.
+- `gh` must have the `project` scope for Projects v2 attach. Add with
+  `gh auth refresh -s project` (browser-based OAuth). The script warns
+  on stderr if the scope is missing; issue creation still proceeds but
+  the attach step fails.
 - The `type:task` label must exist (run `bin/github-issues/sync-labels.sh` if missing).
 
 ## Procedure
