@@ -208,6 +208,10 @@ Changes: Merging to main now triggers a GitHub Actions workflow that applies lab
 Background: /workflow-init shared the 'work' prefix with worktree-start and worktree-end, requiring 5 keystrokes to uniquely complete.
 Changes: /workflow-init can now be launched by typing 'wo' + Enter — worktree-start and worktree-end no longer appear in the / autocomplete menu.
 
-### FEATURE: /worktree-end owns USER_VERIFIED sentinel + AUTO_MERGE_PR + web-merge-wait (2026-05-15)
-Background: In worktree-based sessions, the user-verification sentinel was emitted before committing to a feature branch — too early to represent a meaningful merge approval.
-Changes: /worktree-end is now the sole emitter of <<WORKFLOW_USER_VERIFIED>> in worktree mode, firing immediately before gh pr merge. With AUTO_MERGE_PR=on (default), merge proceeds without a separate confirmation prompt. AUTO_MERGE_PR=off shows a merge / wait-for-web-merge / abort prompt; the web-merge-wait path lets you merge via the GitHub UI and then reply in the session — the skill detects the merged state and emits the sentinel before cleaning up.
+### FEATURE: Skill size review at workflow Step 6 (#284) (2026-05-15)
+Background: Skill definitions tend to grow verbose over time.
+Changes: A new non-blocking review step (review-skill-size) now runs automatically in parallel at workflow Step 6 whenever a SKILL.md file is changed. It warns when a skill exceeds 100 lines and always prints a checklist of qualitative improvements to consider.
+
+### FEATURE: Skill size review at workflow Step 6 (#284) (2026-05-15)
+Background: Skill definitions tend to grow verbose over time.
+Changes: A new non-blocking review step (review-skill-size) now runs automatically in parallel at workflow Step 6 whenever a SKILL.md file is changed. It warns when a skill exceeds 100 lines and always prints a checklist of qualitative improvements to consider.
