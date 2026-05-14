@@ -835,8 +835,8 @@ else
     fail "push without plans dir returned non-zero exit ($exit_code, output: $output)"
 fi
 
-# --- Normal: Pull merges plans into ~/.claude/plans/ ---
-echo "[plans] Pull merges plans into ~/.claude/plans/"
+# --- Normal: Pull merges plans into ~/.workflow-plans/ ---
+echo "[plans] Pull merges plans into ~/.workflow-plans/"
 PLANS_PULL_REMOTE="$TMPDIR_BASE/plans-pull-remote.git"
 PLANS_PULL_CLAUDE="$TMPDIR_BASE/plans-pull/.claude"
 PLANS_PULL_PROJECTS="$PLANS_PULL_CLAUDE/projects"
@@ -1000,6 +1000,41 @@ if echo "$output2" | grep -qi "no changes"; then
     pass "second push with unchanged plans reports no changes"
 else
     fail "second push with unchanged plans did not report no changes (output: $output2)"
+fi
+
+# --- Regression: WORKFLOW_PLANS_DIR override is honored ---
+# When WORKFLOW_PLANS_DIR is set, session-sync should source plans from
+# that directory rather than the default. This is a regression guard for
+# the .claude/plans → .workflow-plans migration.
+echo "[plans] WORKFLOW_PLANS_DIR override is honored"
+WPD_REMOTE="$TMPDIR_BASE/wpd-remote.git"
+WPD_CLAUDE="$TMPDIR_BASE/wpd/.claude"
+WPD_PROJECTS="$WPD_CLAUDE/projects"
+WPD_CUSTOM="$TMPDIR_BASE/test-custom-plans"
+git init --bare "$WPD_REMOTE" >/dev/null 2>&1
+mkdir -p "$WPD_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$WPD_CLAUDE" --remote-url "$WPD_REMOTE" >/dev/null 2>&1
+_git_config_user "$WPD_PROJECTS"
+git -C "$WPD_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$WPD_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$WPD_PROJECTS" push -u origin main >/dev/null 2>&1
+# Seed the custom plans dir (NOT the default location)
+mkdir -p "$WPD_CUSTOM"
+echo "custom-dir plan content" > "$WPD_CUSTOM/custom-plan.md"
+# session-sync.sh has not yet been updated to honor WORKFLOW_PLANS_DIR; mark
+# this assertion as PENDING. Once the source is migrated, the env var should
+# control which directory is synced.
+if grep -q "WORKFLOW_PLANS_DIR" "$DOTFILES_DIR/bin/session-sync.sh" 2>/dev/null; then
+    output=$(WORKFLOW_PLANS_DIR="$WPD_CUSTOM" "$DOTFILES_DIR/bin/session-sync.sh" push --claude-dir "$WPD_CLAUDE" 2>&1) || true
+    last_files=$(git -C "$WPD_PROJECTS" log -1 --name-only --pretty=format: 2>/dev/null | grep -v '^$' || true)
+    if echo "$last_files" | grep -q "custom-plan.md"; then
+        pass "WORKFLOW_PLANS_DIR=$WPD_CUSTOM honored — custom-plan.md included in push"
+    else
+        fail "WORKFLOW_PLANS_DIR override not honored (files: $last_files; output: $output)"
+    fi
+else
+    echo "  PENDING: WORKFLOW_PLANS_DIR support not yet implemented in bin/session-sync.sh"
 fi
 
 echo ""

@@ -12,6 +12,7 @@ const {
 } = require("./lib/workflow-state");
 
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 
 // Steps tracked by the workflow but not enforced at commit time.
 // The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
@@ -222,16 +223,16 @@ if (require.main === module) {
       const ci = earlyState.steps && earlyState.steps.clarify_intent;
       const ciStatus = ci ? ci.status : "pending";
       if (ciStatus !== "complete" && ciStatus !== "skipped") {
-        // Allowlist: Write tool only, to ~/.claude/plans/** (skill writes intent/outline/detail .md here).
+        // Allowlist: Write tool only, to ~/.workflow-plans/** (skill writes intent/outline/detail .md here).
         // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
         const filePath = toolInput.file_path || toolInput.path || "";
         let isPlansAllowed = false;
         if (toolName === "Write" && filePath) {
           try {
             const resolved = path.resolve(filePath);
-            const plansRoot = path.join(require("os").homedir(), ".claude", "plans") + path.sep;
+            const plansRoot = path.resolve(getWorkflowPlansDir()) + path.sep;
             isPlansAllowed = resolved.toLowerCase().startsWith(plansRoot.toLowerCase());
-          } catch (e) { /* fall through — block */ }
+          } catch (e) { console.error(`workflow-gate: ${e.message}`); /* fall through — block */ }
         }
         if (!isPlansAllowed) {
           block(
