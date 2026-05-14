@@ -183,3 +183,7 @@ Changes: Clickable absolute-path links to intent.md, outline.md, and detail.md a
 ### BUGFIX: C:/Program Files/Git/worktree-end marker writes no longer trigger permission prompts (2026-05-14)
 Background: The branch-delete marker written by /worktree-end was stored inside .git/ — a Claude Code protected path — causing permission prompts in default and acceptEdits modes even with settings.json allow rules in place.
 Changes: Marker moved to ~/.workflow-plans/worktree-end/ (same pattern as the .claude/plans/ → ~/.workflow-plans/ fix). /worktree-end marker writes and deletes no longer trigger permission prompts in any mode. The marker path is configurable via WORKFLOW_PLANS_DIR.
+
+### FEATURE: issue-fix-history cross-reference (#222) (2026-05-14)
+Background: Issues closed via closes #N in PR descriptions left no history.md entry.
+Changes: `/issue-close` now recovers from GitHub auto-close (no re-close needed) and posts a resolved-by commit comment. New backfill script covers past closed issues. docs/todo.md is now a GitHub Issues pointer only.

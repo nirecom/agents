@@ -39,6 +39,8 @@
 
     After cleanup, read `<session-id>-intent.md`'s `## closes_issues` section.
     If it contains exactly one issue number, run `/issue-close <N>`.
+    (`/issue-close` handles the `CLOSED + (none)` state correctly — PR auto-close
+    via `closes #N` is the expected trigger for this path.)
     If the section reads `(empty)` or is absent, skip.
     (Multi-issue sessions are not expected. If the list has more than one entry,
     run `/issue-close` for each sequentially — no dependency sorting, no retry.)
