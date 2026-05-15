@@ -84,8 +84,12 @@ case "$ARGS" in
     exit 0
     ;;
   "issue list --state closed"*"--paginate"*"--jq"*".[].number"*)
-    # Newline-separated numbers — one issue per scenario, all use #42.
-    echo "42"
+    # Allow override via GH_MOCK_ISSUE_NUMBERS (newline-separated).
+    if [ -n "${GH_MOCK_ISSUE_NUMBERS:-}" ]; then
+        printf '%s\n' "$GH_MOCK_ISSUE_NUMBERS"
+    else
+        echo "42"
+    fi
     exit 0
     ;;
 esac
