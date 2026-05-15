@@ -58,7 +58,7 @@ fi
 
 # Ensure mock helpers are executable (Windows checkouts may strip the bit).
 # Note: the jq shim was removed after the issue #222 refactor (gh --jq only).
-for f in gh doc-append; do
+for f in gh doc-append git; do
     if [ -f "$MOCK_DIR/$f" ] && [ ! -x "$MOCK_DIR/$f" ]; then
         chmod +x "$MOCK_DIR/$f" 2>/dev/null || true
     fi
@@ -444,16 +444,184 @@ else
 fi
 teardown_tmp
 
-# --- R4: missing history.md entry → warn + skip
+# --- R4: missing history.md entry + no git-log hit → no-hash J-2 posted
 setup_tmp
-# history.md intentionally empty.
-OUT=$(GH_MOCK_SCENARIO=closed_no_sentinel \
-    run_with_timeout 30 bash "$BACKFILL_SCRIPT" 2>&1)
-if ! grep -qE "(resolved-by|issue-close-sentinel)" "$GH_MOCK_COMMENT_LOG" 2>/dev/null \
-   && echo "$OUT" | grep -qiE 'warn|skip|not (found|in history)|missing'; then
-    pass "R4: missing history.md entry → warn + skip"
+# history.md intentionally empty; GIT_MOCK_LOG_FOR_42 not set → no-hash class.
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+if [ "$RC" -eq 0 ] \
+   && grep -q "issue-close-sentinel: appended (resolved-by: backfill-no-hash)" \
+        "$GH_MOCK_COMMENT_LOG" 2>/dev/null; then
+    pass "R4: missing history + no git-log hit → no-hash J-2 posted"
 else
-    fail "R4: out=$OUT log=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)"
+    fail "R4: rc=$RC log=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)"
+fi
+teardown_tmp
+
+# --- R5: hash from history.md → J-1 + J-2 posted
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Closed-by-keyword task (2026-05-10, abc1234, #42)
+Background: closed via PR
+Changes: feature shipped
+EOF
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: abc1234 -->" \
+   && echo "$LOG" | grep -q "Resolved by commit" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill, commit=abc1234)"; then
+    pass "R5: hash from history → J-1 + J-2 posted"
+else
+    fail "R5: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R6: --dry-run shows classification, no comments posted
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Closed-by-keyword task (2026-05-10, abc1234, #42)
+Background: closed via PR
+Changes: feature shipped
+EOF
+OUT=$(GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run 2>&1)
+RC=$?
+if [ "$RC" -eq 0 ] \
+   && echo "$OUT" | grep -q "\[dry-run class=hash-from-history\]" \
+   && ! grep -qE "(resolved-by|issue-close-sentinel)" "$GH_MOCK_COMMENT_LOG" 2>/dev/null; then
+    pass "R6: --dry-run shows class, no comments posted"
+else
+    fail "R6: rc=$RC out=$OUT log=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)"
+fi
+teardown_tmp
+
+# --- R7: J-1 idempotency — existing resolved-by → J-1 skipped, J-2 posted
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Already has resolved-by (2026-05-10, abc1234, #42)
+Background: x
+Changes: y
+EOF
+GH_MOCK_SCENARIO=closed_with_resolved_comment \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+# J-1 must NOT be re-posted (no new "Resolved by commit" line)
+# J-2 sentinel MUST be posted
+J1_FRESH=$(echo "$LOG" | grep "Resolved by commit" | grep -vc "issue-close-sentinel" || true)
+SENTINEL=$(echo "$LOG" | grep -c "issue-close-sentinel: appended" || true)
+if [ "$RC" -eq 0 ] && [ "$J1_FRESH" -eq 0 ] && [ "$SENTINEL" -ge 1 ]; then
+    pass "R7: existing resolved-by → J-1 skipped (idempotent), J-2 posted"
+else
+    fail "R7: rc=$RC j1_fresh=$J1_FRESH sentinel=$SENTINEL log=$LOG"
+fi
+teardown_tmp
+
+# --- R8: git-log fallback + boundary check (#42 does not match #420 pattern)
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Pending hash (2026-05-10, pending, #42)
+Background: x
+Changes: y
+EOF
+# GIT_MOCK_LOG_FOR_42 → real hash; GIT_MOCK_LOG_FOR_420 → wronghash (must not appear)
+GIT_MOCK_LOG_FOR_42=deadbee \
+GIT_MOCK_LOG_FOR_420=wronghash \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: deadbee" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill-gitlog, commit=deadbee)" \
+   && ! echo "$LOG" | grep -q "wronghash"; then
+    pass "R8: git-log fallback used; boundary check: #42 pattern does not match #420"
+else
+    fail "R8: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R9: no-hash — history has (pending) + git-log empty → J-2 only
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: No hash available (2026-05-10, pending, #42)
+Background: x
+Changes: y
+EOF
+# GIT_MOCK_LOG_FOR_42 intentionally NOT set
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+J1_POSTED=$(echo "$LOG" | grep -c "Resolved by commit" || true)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill-no-hash)" \
+   && [ "$J1_POSTED" -eq 0 ]; then
+    pass "R9: no-hash class → J-2 only (no J-1)"
+else
+    fail "R9: rc=$RC j1_posted=$J1_POSTED log=$LOG"
+fi
+teardown_tmp
+
+# --- R10: --canary posts exactly 1 per class (3 total)
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: hist-42 (2026-05-10, abc1234, #42)
+Background: x
+Changes: y
+
+### FEATURE: gitlog-43 (2026-05-10, pending, #43)
+Background: x
+Changes: y
+
+### FEATURE: nohash-44 (2026-05-10, pending, #44)
+Background: x
+Changes: y
+EOF
+export GH_MOCK_ISSUE_NUMBERS="42
+43
+44"
+export GIT_MOCK_LOG_FOR_43=deadbee
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --canary >/dev/null 2>&1
+RC=$?
+unset GH_MOCK_ISSUE_NUMBERS GIT_MOCK_LOG_FOR_43
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+SENTINEL_COUNT=$(echo "$LOG" | grep -c "issue-close-sentinel: appended" || true)
+if [ "$RC" -eq 0 ] && [ "$SENTINEL_COUNT" -eq 3 ]; then
+    pass "R10: --canary posts 1 per class (3 total: hash-from-history, hash-from-gitlog, no-hash)"
+else
+    fail "R10: rc=$RC sentinel_count=$SENTINEL_COUNT log=$LOG"
+fi
+teardown_tmp
+
+# --- R11: AGENTS_CONFIG_DIR unset → non-zero exit
+(unset AGENTS_CONFIG_DIR; bash "$BACKFILL_SCRIPT" >/dev/null 2>&1)
+RC=$?
+if [ "$RC" -ne 0 ]; then
+    pass "R11: AGENTS_CONFIG_DIR unset → non-zero exit"
+else
+    fail "R11: AGENTS_CONFIG_DIR unset should fail (rc=$RC)"
+fi
+
+# --- R12: unknown flag → non-zero exit
+setup_tmp
+bash "$BACKFILL_SCRIPT" --unknown-flag >/dev/null 2>&1
+RC=$?
+if [ "$RC" -ne 0 ]; then
+    pass "R12: unknown flag → non-zero exit"
+else
+    fail "R12: unknown flag should fail (rc=$RC)"
 fi
 teardown_tmp
 

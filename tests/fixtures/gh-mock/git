@@ -1,0 +1,17 @@
+#!/bin/bash
+# Minimal git mock for backfill-commit-comments.sh tests.
+# Recognized: git [-C <path>] log --all --oneline -E --grep=<pattern>
+ARGS="$*"
+case "$ARGS" in
+  *"log --all --oneline"*)
+    N=$(printf '%s' "$ARGS" | grep -oE '#[0-9]+' | head -n 1 | tr -d '#')
+    [ -z "$N" ] && exit 0
+    var="GIT_MOCK_LOG_FOR_${N}"
+    val="${!var:-}"
+    [ -n "$val" ] && printf '%s Closes #%s\n' "$val" "$N"
+    exit 0
+    ;;
+esac
+# Unknown git subcommands: exit silently.
+# IMPORTANT: Do NOT forward to real git — this script IS git on PATH (infinite recursion).
+exit 0
