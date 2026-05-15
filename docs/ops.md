@@ -11,15 +11,15 @@ Task management using GitHub Issues as the single source of truth. Full rules in
 finish before Step 3 so chronological history occupies the early issue numbers
 and active TODOs land in later numbers.
 
-After migration, the **日常運用** sections cover ongoing work.
+After migration, the **Operations** sections cover ongoing work.
 
 Each section is labeled:
-- *初期設定* — once per repo, idempotent
-- *後付け migration (one-time)* — bulk one-shot operation; re-running creates duplicates
-- *後付け migration* — catch-up safe (idempotent or range-scoped)
-- *日常運用* — ongoing day-to-day operations
+- *Setup* — once per repo, idempotent
+- *Migration (one-time)* — bulk one-shot operation; re-running creates duplicates
+- *Migration (catch-up)* — safe to re-run (idempotent or range-scoped)
+- *Operations* — ongoing day-to-day work
 
-### Step 1 — Label sync — *初期設定*
+### Step 1 — Label sync — *Setup*
 
 ```bash
 bash bin/github-issues/sync-labels.sh
@@ -27,7 +27,7 @@ bash bin/github-issues/sync-labels.sh
 
 Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and `priority:*` labels from `.github/labels.yml`. Safe to re-run (uses `--force`).
 
-### Step 2 — Migrate docs/history.md → closed issues — *後付け migration (one-time)*
+### Step 2 — Migrate docs/history.md → closed issues — *Migration (one-time)*
 
 ```bash
 bash bin/github-issues/migration/preview-history.sh           # review titles + counts
@@ -43,7 +43,7 @@ These get the **early issue numbers** (#1 onward) so the chronological record si
 
 ⚠️ **Re-running creates duplicates.** Safe to dry-run, but only execute the bulk-create once. Verify counts against `preview-history.sh` output before running.
 
-### Step 3 — Migrate docs/todo.md → open issues — *後付け migration (one-time)*
+### Step 3 — Migrate docs/todo.md → open issues — *Migration (one-time)*
 
 ```bash
 bash bin/github-issues/migration/migrate-todo.sh --dry-run
@@ -57,7 +57,7 @@ These get the **later issue numbers** (continuing after Step 2 completes).
 
 ⚠️ **Run only after Step 2 completes**, so the numbering cleanly separates history (early) from active work (later). Re-running creates duplicate issues AND overwrites `todo.md` — commit the rewritten `todo.md` before considering whether to re-run.
 
-### Step 4 — Backfill Projects v2 Content Date — *後付け migration*
+### Step 4 — Backfill Projects v2 Content Date — *Migration (catch-up)*
 
 ```bash
 bash bin/github-issues/migration/backfill-content-date.sh <from> <to>
@@ -67,7 +67,7 @@ Extracts `YYYY-MM-DD` from each migrated issue's first body line and sets the Pr
 
 Required only if Projects v2 is in use. The `OWNER` / `REPO` / `PROJECT_NUM` / `PROJECT_ID` / `FIELD_ID` constants in the script are repo-specific — edit before running on a new repo.
 
-### Step 5 — Backfill J-1/J-2 sentinel comments — *後付け migration / 日常運用*
+### Step 5 — Backfill J-1/J-2 sentinel comments — *Migration (catch-up) / Operations*
 
 Use this when closed issues are missing the "Resolved by commit" comment (J-1) and/or
 the machine-readable sentinel (J-2) that `/issue-close` normally posts.
@@ -127,23 +127,23 @@ Final output: `Backfilled: N, Skipped: M`
 
 **Re-running is safe** — issues that already have an appended sentinel are skipped.
 
-### New task — *日常運用*
+### New task — *Operations*
 
-1. Create the issue on GitHub (use `.github/ISSUE_TEMPLATE/task.yml` or `incident.yml`).
-2. Append to `docs/todo.md`:
-   ```
-   - [ ] #N Short title
-   ```
+`/workflow-init` auto-creates a tracking task issue when you start a session
+without an existing `#N`. To create an issue mid-workflow without starting
+a fresh session, use `/issue-create` from within Claude Code. For incidents
+or out-of-band creation, use `.github/ISSUE_TEMPLATE/incident.yml` (or
+`task.yml`) on the GitHub web UI.
 
-### Close a task — *日常運用*
+### Close a task — *Operations*
 
 ```
 /issue-close <N>
 ```
 
-This runs the full transaction-safe flow: sub-issue gate → sentinel comment → history.md append → `gh issue close` → todo.md line removal. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
+This runs the full transaction-safe flow: sub-issue gate → sentinel comment → history.md append → `gh issue close`. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
 
-### Recover from out-of-band closes — *日常運用 / 後付け migration*
+### Recover from out-of-band closes — *Operations / Migration (catch-up)*
 
 Issues closed via web UI, mobile, or another terminal bypass the hook. For **open** issues that need their close-side state reconciled:
 
@@ -153,7 +153,7 @@ Issues closed via web UI, mobile, or another terminal bypass the hook. For **ope
 
 Run this weekly or whenever you close issues outside Claude Code. For **already-closed** issues missing J-1/J-2 comments, use Step 5 above instead.
 
-### Sub-issues — *日常運用*
+### Sub-issues — *Operations*
 
 Create via `gh api` (the `gh` CLI does not support sub-issues yet):
 
