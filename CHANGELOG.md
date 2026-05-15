@@ -231,3 +231,7 @@ Changes: backfill-commit-comments.sh now posts both a human-readable 'Resolved b
 ### FEATURE: Session title now shows the linked issue number and title in VS Code sidebar (#299) (2026-05-15)
 Background: The Claude Code VS Code extension always showed a generic auto-generated session title — there was no way to tell which task a session was working on at a glance.
 Changes: When you run /workflow-init with a GitHub issue number, or complete /clarify-intent, the VS Code sidebar session title is automatically updated to "#N <issue title>". Manually renamed sessions are left unchanged.
+
+### BUGFIX: worktree-end cleanup operations on Windows/VS Code now work correctly (2026-05-15)
+Background: Four linked bugs caused worktree-end cleanup to fail on VS Code/Windows and blocked planning workflow commands from the main worktree.
+Changes: The combined cd+git-worktree-remove form is now allowed when VS Code resets the Bash CWD between calls. Stash, restore, and file-restore checkout are now permitted from the main worktree once all linked worktrees have been removed. FD-to-FD output redirects (2>&1, 1>&2) are no longer misclassified as write operations. The orphan directory cleanup step uses an absolute path that remains valid after CWD resets.
