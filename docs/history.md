@@ -443,3 +443,15 @@ Changes: hooks/enforce-worktree.js: added findFirstUnquotedAnd(cmd) — quote-aw
 ### BUGFIX: backfill-commit-comments.sh: drop unsupported --paginate flag (#300 hotfix) (2026-05-15, pending)
 Background: After PR #301 merged the new backfill-commit-comments.sh and the dry-run was executed, it processed 0 of 175 closed issues. Root cause: gh issue list does not support --paginate (only gh api does); the script's gh issue list --state closed --limit 1000 --paginate ... call printed an error to stderr that was swallowed by 2>/dev/null, leaving ALL_NUMBERS empty. Tests passed because the gh mock dispatch pattern also matched on --paginate, masking the real-CLI incompatibility.
 Changes: Drop --paginate from the gh issue list call (--limit 1000 is sufficient for foreseeable closed-issue counts; consumer repos with >1000 closed issues can use gh api workflow). Update gh mock dispatch pattern to match --limit instead of --paginate so tests stay aligned with real-CLI behavior. Tests: 40 pass.
+
+### BUGFIX: tracking: worktree-end x CWD issues parent (#296) (2026-05-15, 396a534, #296)
+Background: Parent tracking issue grouping four enforce-worktree CWD bugs (#242 orphan-dir path, #243 FD-redirect false-positive, #294 cd+worktree-remove combined form, #297 post-cleanup stash/restore/checkout) blocking worktree-end and planning workflows from the main worktree.
+Changes: All four child issues resolved by PR #304 (squash commit 396a534). See main BUGFIX entry for #242, #243, #294, #297 for implementation details.
+
+### BUGFIX: planning skills: CONFIRM_* checks blocked by FD-redirect false-positive in bash-write-patterns.js (#243) (2026-05-15, 396a534, #243)
+Background: Read-only planning commands using 2 and 1 FD-to-FD redirects were falsely classified as writes by bash-write-patterns.js, blocking skill steps such as CONFIRM_* flag checks from the main worktree.
+Changes: posix-redirect regex in hooks/lib/bash-write-patterns.js: added negative-lookahead for FD-to-FD redirects so that 2-to-1 and 1-to-2 forms are excluded from write classification. Part of BUGFIX entry for #242, #243, #294, #297.
+
+### BUGFIX: enforce-worktree: allow cd+git-worktree-remove combined form for VS Code CWD-reset behavior (#294) (2026-05-15, 396a534, #294)
+Background: enforce-worktree.js lacked an exemption for the cd-main-then-git-worktree-remove pattern, required when VS Code extension host resets the Bash CWD between calls during worktree-end cleanup step 6b.5.
+Changes: Added findFirstUnquotedAnd() and isAllowedCdWorktreeRemove() to hooks/enforce-worktree.js. Part of BUGFIX entry for #242, #243, #294, #297.
