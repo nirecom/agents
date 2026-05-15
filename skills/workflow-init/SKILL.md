@@ -44,6 +44,10 @@ echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"
 echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"
 ```
 
+A2.5. `cc-session-title set-issue <N> "<title>"` where `<title>` is the `.title` field
+      from the JSON fetched in **global step 3** (already in scope before Path A executed).
+      Separate Bash call.
+
 A3. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
 
 A4. Invoke `survey-code` or `deep-research` if needed (or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `make-outline-plan`.
@@ -60,6 +64,9 @@ B1. Write `~/.workflow-plans/drafts/<session-id>-issue-prefill.md`:
 ```
 
 B2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
+
+B2.5. `cc-session-title set-issue <N> "<title>"` (title from global step 3 — same provenance
+      as Path A). Separate Bash call.
 
 B3. Invoke `clarify-intent` with `#<N>` in args so step 1a auto-detect fires.
 
