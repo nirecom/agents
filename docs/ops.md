@@ -6,7 +6,7 @@ Day-to-day operational procedures for the agents repo.
 
 Day-to-day task management using GitHub Issues. Full rules in [`rules/github-issues.md`](../rules/github-issues.md).
 
-### Initial setup (once per repo)
+### Initial setup — *初期設定*
 
 ```bash
 bash bin/github-issues/sync-labels.sh
@@ -14,7 +14,7 @@ bash bin/github-issues/sync-labels.sh
 
 Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and `priority:*` labels from `.github/labels.yml`. Safe to re-run (uses `--force`).
 
-### New task
+### New task — *日常運用*
 
 1. Create the issue on GitHub (use `.github/ISSUE_TEMPLATE/task.yml` or `incident.yml`).
 2. Append to `docs/todo.md`:
@@ -22,7 +22,7 @@ Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and
    - [ ] #N Short title
    ```
 
-### Close a task
+### Close a task — *日常運用*
 
 ```
 /issue-close <N>
@@ -30,7 +30,7 @@ Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and
 
 This runs the full transaction-safe flow: sub-issue gate → sentinel comment → history.md append → `gh issue close` → todo.md line removal. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
 
-### Recover from out-of-band closes
+### Recover from out-of-band closes — *日常運用 / 後付け migration*
 
 Issues closed via web UI, mobile, or another terminal bypass the hook. Backfill with:
 
@@ -40,7 +40,7 @@ Issues closed via web UI, mobile, or another terminal bypass the hook. Backfill 
 
 Run this weekly or whenever you close issues outside Claude Code.
 
-### Retroactive backfill of J-1/J-2 comments (one-time migration)
+### Retroactive backfill of J-1/J-2 comments — *後付け migration*
 
 Use this when closed issues are missing the "Resolved by commit" comment (J-1) and/or
 the machine-readable sentinel (J-2) that `/issue-close` normally posts.
@@ -100,7 +100,7 @@ Final output: `Backfilled: N, Skipped: M`
 
 **Re-running is safe** — issues that already have an appended sentinel are skipped.
 
-### Sub-issues
+### Sub-issues — *日常運用*
 
 Create via `gh api` (the `gh` CLI does not support sub-issues yet):
 
