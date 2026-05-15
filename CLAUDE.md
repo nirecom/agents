@@ -7,6 +7,7 @@
    - `#N` + `intent:clarified` label → skip clarify-intent, proceed to outline planning.
    - `#N` + no label → pre-fill clarify-intent with issue body for a short confirmation interview.
    - No `#N` → run clarify-intent normally; auto-create a tracking issue at completion.
+   - To create task issues mid-workflow (e.g. for follow-ups), use `/issue-create`.
    For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
    Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:

@@ -216,6 +216,10 @@ Changes: A new non-blocking review step (review-skill-size) now runs automatical
 Background: Skill definitions tend to grow verbose over time.
 Changes: A new non-blocking review step (review-skill-size) now runs automatically in parallel at workflow Step 6 whenever a SKILL.md file is changed. It warns when a skill exceeds 100 lines and always prints a checklist of qualitative improvements to consider.
 
+### FEATURE: New /issue-create skill — create task issues with automatic Projects v2 attachment (2026-05-15)
+Background: No sanctioned way existed to create type:task issues from a Claude Code session without risking missing labels or forgetting the Projects v2 attachment step.
+Changes: New /issue-create skill creates type:task issues and attaches them to Projects v2 automatically. Caller-supplied type:* labels are rejected (use raw gh issue create for incident issues). Projects v2 attach failure is non-fatal — the issue is always created and a warning is printed if attachment fails.
+
 ### FEATURE: Plan file path now shown in non-VS Code environments (#290) (2026-05-15)
 Background: The plan file preview relied on CLAUDE_CODE_ENTRYPOINT, an unofficial internal variable, to detect VS Code. This caused the code -r spawn to not work reliably in CLI or other terminal environments.
 Changes: VS Code detection now uses the standard TERM_PROGRAM=vscode environment variable. In non-VS Code environments (plain CLI, other terminals), the plan file path is surfaced via the systemMessage only — no code spawn is attempted.
