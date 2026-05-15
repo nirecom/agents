@@ -26,7 +26,9 @@
    (`main` is only valid when `ENFORCE_WORKTREE=off`.)
 4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-5. **Code** — Present a diff in chat before calling Edit. Wait for approval.
+5. **Code** —
+   - **`ENFORCE_WORKTREE=on`:** Call Edit directly — no diff presentation or approval required.
+   - **`ENFORCE_WORKTREE=off`:** Present a diff in chat before calling Edit. Wait for approval.
 6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Skill: `/run-tests`
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
@@ -36,12 +38,14 @@
      is visible without relying on Claude's summary.
    - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
      (always parallel, non-blocking; warnings only, never blocks workflow)
-7. **Docs** — Run `/update-docs`. Mandatory for every task.
+7. **Docs** —
+   - **`ENFORCE_WORKTREE=on`:** Skip `/update-docs` — docs review is deferred to PR review.
+   - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
 8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 9.
    - **`ENFORCE_WORKTREE=off`:** Run `echo "<<WORKFLOW_USER_VERIFIED>>"` immediately;
      set the Bash `description` to explain what the user is approving.
-9. **Commit** — Run `/commit-push`.
+9. **Commit** — Run `/commit-push`. After the PR is created, display the PR URL in chat so the user can confirm it.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end` (merge + sentinel emit + cleanup). Mandatory; do not skip.
     - **branch:** Confirm PR is created. After the PR is merged (outside this session),
