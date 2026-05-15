@@ -46,9 +46,11 @@ See `docs/security-policy.md` for the full pattern list.
   `nextStepHint()` (defined in `hooks/lib/workflow-state.js`) to guide Claude toward the next skill
 - `show-plan-link.js` (PostToolUse, matcher: `Write`) — emits `systemMessage` with the absolute path
   of any final plan artifact written directly under `~/.workflow-plans/` (basename
-  `*-(intent|outline|detail).md`; `drafts/` excluded). When
-  `CLAUDE_CODE_ENTRYPOINT === "claude-vscode"`, also best-effort spawns `code -r <path>` via
-  `cmd.exe` (Windows) or directly (POSIX) to refocus the file in the existing VS Code window.
+  `*-(intent|outline|detail).md`; `drafts/` excluded). When `TERM_PROGRAM === "vscode"`
+  (set by VS Code's integrated terminal; POSIX convention), also best-effort spawns
+  `code -r <path>` via `cmd.exe` (Windows) or directly (POSIX) to refocus the file in
+  the existing VS Code window. In non-VS Code environments (plain CLI, other terminals)
+  the `code` spawn is skipped and only the `systemMessage` path is surfaced to the user.
   Fail-open on tool failure, malformed stdin, or missing `code` binary. Idempotent on
   confirm-plan revision re-writes.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — auto-marks `run_tests` based on Bash exit
