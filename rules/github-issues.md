@@ -1,5 +1,12 @@
 # GitHub Issues Workflow
 
+## Notation
+
+GitHub Issues and PRs share the same number space. Always distinguish them in prose:
+
+- **Issues**: `#N` (no prefix)
+- **Pull requests**: `PR #N`
+
 ## Active task list
 
 GitHub Issues is the single source of truth for active tasks. `docs/todo.md` is
