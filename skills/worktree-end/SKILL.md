@@ -125,13 +125,16 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
         (issue #268). `enforce-issue-close.js` is unaffected (it does not
         call `process.cwd()`).
       Note: step 6c stays as is (`git -C <main> worktree remove <path>`).
-      Combining `cd && git worktree remove` into one Bash call is blocked
-      by `enforce-worktree.js`'s isolated-command rule.
+      The combined form `cd "<main>" && git -C "<main>" worktree remove "<path>"`
+      is also permitted (issue #294) via `isAllowedCdWorktreeRemove` — useful
+      on Windows / VS Code where the Bash tool's CWD resets between calls.
+      Constraints: no `--force`/`-f`, no further chaining, cd target = main worktree,
+      any `-C <path>` must also resolve to the main worktree.
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
    d. `git -C <main> worktree prune`
    e. If `<WORKTREE_BASE_DIR>/<task-name>/` is now empty:
       ```
-      node hooks/cleanup-orphan-dir.js "<WORKTREE_BASE_DIR>/<task-name>"
+      node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" "<WORKTREE_BASE_DIR>/<task-name>"
       ```
       (Refuses non-empty dirs, paths outside `WORKTREE_BASE_DIR`, registered worktrees, and symlinks.)
    f. `git -C <main> branch -D <branch>` — `-D` (force) is required because

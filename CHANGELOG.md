@@ -223,3 +223,7 @@ Changes: New /issue-create skill creates type:task issues and attaches them to P
 ### FEATURE: Plan file path now shown in non-VS Code environments (#290) (2026-05-15)
 Background: The plan file preview relied on CLAUDE_CODE_ENTRYPOINT, an unofficial internal variable, to detect VS Code. This caused the code -r spawn to not work reliably in CLI or other terminal environments.
 Changes: VS Code detection now uses the standard TERM_PROGRAM=vscode environment variable. In non-VS Code environments (plain CLI, other terminals), the plan file path is surfaced via the systemMessage only — no code spawn is attempted.
+
+### BUGFIX: worktree-end cleanup operations on Windows/VS Code now work correctly (2026-05-15)
+Background: Four linked bugs caused worktree-end cleanup to fail on VS Code/Windows and blocked planning workflow commands from the main worktree.
+Changes: The combined cd+git-worktree-remove form is now allowed when VS Code resets the Bash CWD between calls. Stash, restore, and file-restore checkout are now permitted from the main worktree once all linked worktrees have been removed. FD-to-FD output redirects (2>&1, 1>&2) are no longer misclassified as write operations. The orphan directory cleanup step uses an absolute path that remains valid after CWD resets.
