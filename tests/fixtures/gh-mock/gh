@@ -83,8 +83,10 @@ case "$ARGS" in
     mock_sentinel_for_scenario any
     exit 0
     ;;
-  "issue list --state closed"*"--paginate"*"--jq"*".[].number"*)
+  "issue list --state closed"*"--limit"*"--jq"*".[].number"*)
     # Allow override via GH_MOCK_ISSUE_NUMBERS (newline-separated).
+    # NOTE: gh issue list does NOT support --paginate (unlike gh api).
+    # The script uses --limit 1000 instead. Mock pattern matches accordingly.
     if [ -n "${GH_MOCK_ISSUE_NUMBERS:-}" ]; then
         printf '%s\n' "$GH_MOCK_ISSUE_NUMBERS"
     else

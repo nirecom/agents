@@ -235,3 +235,7 @@ Changes: When you run /workflow-init with a GitHub issue number, or complete /cl
 ### BUGFIX: worktree-end cleanup operations on Windows/VS Code now work correctly (2026-05-15)
 Background: Four linked bugs caused worktree-end cleanup to fail on VS Code/Windows and blocked planning workflow commands from the main worktree.
 Changes: The combined cd+git-worktree-remove form is now allowed when VS Code resets the Bash CWD between calls. Stash, restore, and file-restore checkout are now permitted from the main worktree once all linked worktrees have been removed. FD-to-FD output redirects (2>&1, 1>&2) are no longer misclassified as write operations. The orphan directory cleanup step uses an absolute path that remains valid after CWD resets.
+
+### BUGFIX: backfill-commit-comments.sh: drop unsupported --paginate flag (2026-05-15)
+Background: After running backfill-commit-comments.sh against the agents repo, it reported 'Backfilled: 0, Skipped: 0' even though closed issues without sentinels existed.
+Changes: The script no longer passes --paginate to gh issue list (the CLI does not support it; only gh api does). Issue listing now works; the script processes closed issues as documented.
