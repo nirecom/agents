@@ -93,6 +93,14 @@ EOF
 chmod +x ~/.local/bin/repo-visibility
 printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
 
+# --- ~/.local/bin/cc-session-title launcher ---
+cat > ~/.local/bin/cc-session-title << EOF
+#!/usr/bin/env bash
+exec uv run "$AGENTS_ROOT/bin/cc-session-title.py" "\$@"
+EOF
+chmod +x ~/.local/bin/cc-session-title
+printf "${C_GREEN}Generated: ~/.local/bin/cc-session-title${C_RESET}\n"
+
 # --- ~/.local/bin/review-code-codex symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-code-codex" ~/.local/bin/review-code-codex
 printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-codex${C_RESET}\n"
