@@ -119,6 +119,12 @@ Write-Launcher "$LocalBin\repo-visibility.cmd" $rvCmdContent "repo-visibility.cm
 $agentsDrive = $AgentsRoot[0].ToString().ToLower()
 $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
 
+# --- ~/.local/bin/cc-session-title launchers (cmd + bash shim) ---
+$cstCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\cc-session-title.py`" %*`r`n"
+Write-Launcher "$LocalBin\cc-session-title.cmd" $cstCmdContent "cc-session-title.cmd"
+$cstShimContent = "#!/usr/bin/env bash`nexec uv run `"$agentsUnixPath/bin/cc-session-title.py`" `"`$@`"`n"
+Write-Launcher "$LocalBin\cc-session-title" $cstShimContent "cc-session-title (bash shim)"
+
 # --- ~/.local/bin/review-code-codex launchers (cmd + bash shim) ---
 $rcCmdContent = "@echo off`r`nwsl bash -c ""review-code-codex %*""`r`n"
 Write-Launcher "$LocalBin\review-code-codex.cmd" $rcCmdContent "review-code-codex.cmd"
