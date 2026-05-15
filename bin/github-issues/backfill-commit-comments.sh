@@ -103,7 +103,7 @@ CANARY_DONE_HIST=0
 CANARY_DONE_GITLOG=0
 CANARY_DONE_NOHASH=0
 
-ALL_NUMBERS=$(gh issue list --state closed --limit 1000 --paginate \
+ALL_NUMBERS=$(gh issue list --state closed --limit 1000 \
     --json number --jq '.[].number' 2>/dev/null || true)
 
 while IFS= read -r N; do
