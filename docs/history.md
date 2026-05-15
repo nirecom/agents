@@ -419,3 +419,7 @@ Changes: Added bin/review-skill-size — a bash script that detects changed skil
 ### FEATURE: review-skill-size — Step 6 skill size/quality review script (#284) (2026-05-15)
 Background: CC tends to write verbose skill definitions. Added an automated size/quality check to Step 6 so that any session editing a SKILL.md file gets a non-blocking review.
 Changes: Added bin/review-skill-size — a bash script that detects changed skills/*/SKILL.md files (excluding _archived/), warns when a file exceeds 100 lines, and always prints a qualitative checklist for checks 2/3/4 (remove verbose prose, extract complex logic to external scripts, split overscoped skills). Integrated into CLAUDE.md Step 6 as a parallel Bash call (review-skill-size --base <merge-base>). Added tests/feature-review-skill-size.sh with 7 smoke test cases. Closes #284.
+
+### FEATURE: Switch VS Code detection in show-plan-link.js to TERM_PROGRAM (2026-05-15, pending)
+Background: CLAUDE_CODE_ENTRYPOINT is a Claude Code internal variable not guaranteed by Anthropic public API. TERM_PROGRAM=vscode is the POSIX-standard signal set by VS Code's integrated terminal. closes #290.
+Changes: hooks/show-plan-link.js: gate on TERM_PROGRAM === 'vscode' instead of CLAUDE_CODE_ENTRYPOINT === 'claude-vscode'; updated NOTE comment. tests/feature-show-plan-link.sh: T16 driven by TERM_PROGRAM=vscode; added T20 (non-VS Code negative), T21 (legacy var regression guard), T22 (fail-open with failing code shim); default unset extended. docs/architecture/claude-code/settings.md: updated description.
