@@ -142,6 +142,24 @@ function hasShellChaining(cmd) {
   return /[|;&]|\$\(|`/.test(stripped);
 }
 
+/**
+ * Returns the index of the first unquoted `&&` in cmd, or -1 if none.
+ * Tracks single- and double-quote state so `&&` inside quoted paths is ignored.
+ *
+ * Note: does not track backslash escapes. This matches the same simplification
+ * used by hasShellChaining / stripQuotedArgs — acceptable for a UX guard.
+ */
+function findFirstUnquotedAnd(cmd) {
+  let inSingle = false, inDouble = false;
+  for (let i = 0; i < cmd.length - 1; i++) {
+    const c = cmd[i];
+    if (c === "'" && !inDouble) { inSingle = !inSingle; continue; }
+    if (c === '"' && !inSingle) { inDouble = !inDouble; continue; }
+    if (!inSingle && !inDouble && c === "&" && cmd[i + 1] === "&") return i;
+  }
+  return -1;
+}
+
 // True when cmd contains command-sequencing operators (;, &&, ||) outside quotes.
 // Single | (pipe) is excluded — needed for `cmd | tee file`. &> (redirect) is
 // not matched because the regex requires two & characters for &&.
@@ -215,6 +233,77 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
 
   // Fail-open when path is absent (e.g. git worktree add -b foo — path omitted)
   return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : true;
+}
+
+/**
+ * True when cmd is exactly:
+ *   cd "<main-worktree>" && git [-C "<main-worktree>"] worktree (remove|prune) [...]
+ *
+ * Rationale (#294): VS Code resets the Bash tool's CWD on each call on Windows,
+ * so the documented two-separate-call sequence (step 6b.5: `cd <main>` then
+ * step 6c: `git -C <main> worktree remove <linked>`) breaks. This combined form
+ * runs both in a single Bash call, which is CWD-reset-immune.
+ *
+ * Safety constraints (all must hold):
+ *   - Exactly one unquoted && (no further chaining via ||, ;, |, $(, backtick)
+ *   - LHS is `cd <path>` where <path> resolves to repoRoot (the main worktree)
+ *   - RHS is `git [-C <path>] worktree remove|prune [args]` — no worktree add,
+ *     no --force / -f
+ *   - If RHS contains -C <path>, that path must also resolve to repoRoot
+ *
+ * Does NOT call hasShellChaining() — && is the specifically allowed operator.
+ * Safety is enforced by structural clause matching above.
+ */
+function isAllowedCdWorktreeRemove(cmd, repoRoot) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (!repoRoot) return false;
+
+  // Find the one allowed && using a quote-aware scanner.
+  const andIdx = findFirstUnquotedAnd(cmd);
+  if (andIdx < 0) return false;
+  const lhs = cmd.slice(0, andIdx).trim();
+  const rhs = cmd.slice(andIdx + 2).trim();
+  if (!lhs || !rhs) return false;
+
+  // No second && and no other chaining on either side.
+  if (findFirstUnquotedAnd(rhs) >= 0) return false;
+  const lhsStripped = stripQuotedArgs(lhs);
+  const rhsStripped = stripQuotedArgs(rhs);
+  if (/[|;]|\$\(|`/.test(lhsStripped)) return false;
+  if (/[|;]|\$\(|`/.test(rhsStripped)) return false;
+
+  // LHS: `cd <path>` where <path> resolves to repoRoot (the main worktree).
+  const cdMatch = lhs.match(/^cd\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*$/);
+  if (!cdMatch) return false;
+  const cdPath = cdMatch[1] || cdMatch[2] || cdMatch[3];
+  if (!cdPath) return false;
+  try {
+    const normCd   = normalizeCwd(cdPath)   || cdPath;
+    const normBase = normalizeCwd(repoRoot) || repoRoot;
+    if (path.resolve(normCd).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
+  } catch (e) { return false; }
+
+  // RHS: git [-C <main>] worktree (remove|prune) [...] — no add, no --force/-f.
+  if (!/^git\b/.test(rhs)) return false;
+  if (!/\bworktree\s+(?:remove|prune)\b/.test(rhs)) return false;
+  if (/\s--force\b/.test(rhs)) return false;
+  if (/(?:^|\s)-f(?:\s|$)/.test(rhs)) return false;
+
+  // If RHS has -C <path>, it must resolve to repoRoot.
+  // Reject multiple -C flags — parseGitCPath only validates the first;
+  // git uses the last (or cumulative), creating an ambiguity gap.
+  if ((rhs.match(/\s-C\s/g) || []).length > 1) return false;
+  if (/\s-C\s/.test(rhs)) {
+    const cArg = parseGitCPath(rhs);
+    if (!cArg) return false;
+    try {
+      const normC    = normalizeCwd(cArg)    || cArg;
+      const normBase = normalizeCwd(repoRoot) || repoRoot;
+      if (path.resolve(normC).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
+    } catch (e) { return false; }
+  }
+
+  return true;
 }
 
 /**
@@ -697,6 +786,84 @@ function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
       .map((f) => path.resolve(repoRoot, normalizeCwd(f) || f));
     if (files.length === 0) return true; // no outgoing commits → allow
     return files.every((f) => isExcluded(f, excludePatterns));
+  } catch (e) { return false; }
+}
+
+/**
+ * True when cmd is an approved cleanup-class git command AND no linked
+ * worktrees remain (confirming cleanup has completed).
+ *
+ * Approved commands (issue #297):
+ *   git [-C <repoRoot>] stash (push|pop|apply|drop|clear) [...]
+ *   git [-C <repoRoot>] restore [--staged] <paths>        — no --source
+ *   git [-C <repoRoot>] checkout -- <paths>               — `--` required; no -b/-B/-f
+ *   git [-C <repoRoot>] checkout HEAD -- <paths>          — same
+ *
+ * Hard restrictions:
+ *   - hasShellChaining → reject
+ *   - -C flag, if present, must resolve to repoRoot (not another repo)
+ *   - checkout: only path-restore forms (requires `--` separator; no branch flags)
+ *   - stash: only push|pop|apply|drop|clear (not branch|show|store|create|list)
+ *   - restore: no --source (would rewrite from arbitrary tree)
+ *   - Linked-worktrees probe: spawnSync git worktree list --porcelain must return
+ *     exactly 1 entry. Fail-closed on git error.
+ */
+function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (!repoRoot) return false;
+  if (hasShellChaining(cmd)) return false;
+  if (!/\bgit\b/.test(cmd)) return false;
+
+  // -C path, if present, must resolve to repoRoot.
+  // Reject multiple -C flags — parseGitCPath only validates the first;
+  // git uses the last (or cumulative), creating an ambiguity gap.
+  if ((cmd.match(/\s-C\s/g) || []).length > 1) return false;
+  if (/\s-C\s/.test(cmd)) {
+    const cArg = parseGitCPath(cmd);
+    if (!cArg) return false;
+    try {
+      const normC    = normalizeCwd(cArg)    || cArg;
+      const normBase = normalizeCwd(repoRoot) || repoRoot;
+      if (path.resolve(normC).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
+    } catch (e) { return false; }
+  }
+
+  // Find the git subcommand (skip `git`, optional `-C <path>`, optional global flags).
+  const stripped = stripQuotedArgs(cmd);
+  const subMatch = stripped.match(
+    /\bgit\b(?:\s+-C\s+\S+)?(?:\s+-\S+(?:\s+\S+)?)*\s+(stash|restore|checkout)\b([\s\S]*)$/
+  );
+  if (!subMatch) return false;
+  const sub  = subMatch[1];
+  const rest = subMatch[2] || "";
+
+  if (sub === "stash") {
+    const firstToken = rest.trim().split(/\s+/)[0] || "";
+    const ALLOWED_STASH = new Set(["", "push", "pop", "apply", "drop", "clear"]);
+    // A leading `-` flag is a push modifier (e.g. `git stash -u`) — allowed.
+    if (!ALLOWED_STASH.has(firstToken) && !firstToken.startsWith("-")) return false;
+  } else if (sub === "restore") {
+    if (/\s--source(?:=|\s)/.test(cmd)) return false;
+  } else { // checkout
+    // Path-restore form: requires `--` separator before the file paths.
+    if (!/\s--(?:\s|$)/.test(rest)) return false;
+    // Reject branch-creation flags before the `--`.
+    const beforeSep = rest.split(/\s--(?:\s|$)/)[0] || "";
+    if (/(^|\s)-[bBf](\s|$)/.test(beforeSep)) return false;
+    // Allow only no-token-before-`--` (→ `git checkout -- <paths>`) or
+    // exactly `HEAD` before `--` (→ `git checkout HEAD -- <paths>`).
+    const before = beforeSep.trim();
+    if (before !== "" && before !== "HEAD") return false;
+  }
+
+  // Runtime gate: no linked worktrees remain.
+  try {
+    const r = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status !== 0) return false;
+    const wtCount = ((r.stdout || "").match(/^worktree\s/gm) || []).length;
+    return wtCount === 1; // main worktree only = cleanup complete
   } catch (e) { return false; }
 }
 
@@ -1251,11 +1418,13 @@ if (mainCheckout) {
   if (toolName === "Bash") {
     const cmd = toolInput.command || "";
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
+    if (isAllowedCdWorktreeRemove(cmd, repoRoot)) done();
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedMarkerDelete(cmd, repoRoot)) done();
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
+    if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
   }
 
   // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
@@ -1302,4 +1471,7 @@ module.exports = {
   getWorktreeBaseDir,
   isAllowedPushAllExcluded,
   hasGitHooksBypass,
+  findFirstUnquotedAnd,
+  isAllowedMainWorktreeCleanup,
+  isAllowedCdWorktreeRemove,
 };

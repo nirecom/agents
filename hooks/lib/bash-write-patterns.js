@@ -10,8 +10,9 @@
 //   - Writes through variables expanded at shell runtime: cmd=$(cat) > file
 //
 // Accepted false-positives (detected as "write" even though they don't write files):
-//   - FD-to-FD redirects: cmd 2>&1, cmd 1>&2 (contain '>' — classified as write)
 //   - echo "a > b" with quoted '>' inside the argument
+// Note: FD-to-FD redirects (cmd 2>&1, cmd 1>&2) are correctly classified as read —
+// the posix-redirect lookahead excludes `>&<digit>` (see line 28).
 // Note: echo "<<WORKFLOW_...>>" is NOT a false-positive — the here-doc anchor fix excludes it.
 // Note: redirects to /dev/null (e.g. 2>/dev/null) are excluded from write — null-sink
 //       discards output and is common in read-only commands like `git status 2>/dev/null`.
@@ -25,7 +26,7 @@ const { stripQuotedArgs } = require("./strip-quoted-args");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
-  { name: "posix-redirect", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!\s*\/dev\/null(?=\s|[;|&]|$))/ },
+  { name: "posix-redirect", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!&\d)(?!\s*\/dev\/null(?=\s|[;|&]|$))/ },
   // tee (writes to file while passing through)
   { name: "tee", kind: "posix", regex: /(?:^|[\s;|&])tee\b/ },
   // here-doc: <<EOF, <<-EOF, <<'EOF', <<"EOF"
