@@ -224,6 +224,14 @@ Changes: New /issue-create skill creates type:task issues and attaches them to P
 Background: The plan file preview relied on CLAUDE_CODE_ENTRYPOINT, an unofficial internal variable, to detect VS Code. This caused the code -r spawn to not work reliably in CLI or other terminal environments.
 Changes: VS Code detection now uses the standard TERM_PROGRAM=vscode environment variable. In non-VS Code environments (plain CLI, other terminals), the plan file path is surfaced via the systemMessage only — no code spawn is attempted.
 
+### FEATURE: backfill-commit-comments.sh now posts human-readable 'Resolved by commit' and uses git-log fallback (#300) (2026-05-15)
+Background: Issues closed via 'closes #N' PR keyword or web UI bypassed /issue-close and were missing the human-readable 'Resolved by commit' comment and the machine-readable sentinel that the standard close workflow posts.
+Changes: backfill-commit-comments.sh now posts both a human-readable 'Resolved by commit HASH' comment and a sentinel for each closed issue that lacks them. Commit hashes are discovered from history.md headings first, then git log (with boundary-safe grep to prevent issue number substring collisions). Issues with no discoverable hash get a sentinel-only comment. New --canary flag posts to one issue per class first so you can verify the output on GitHub before running the full batch. Re-running is safe — already-backfilled issues are skipped automatically.
+
+### FEATURE: Session title now shows the linked issue number and title in VS Code sidebar (#299) (2026-05-15)
+Background: The Claude Code VS Code extension always showed a generic auto-generated session title — there was no way to tell which task a session was working on at a glance.
+Changes: When you run /workflow-init with a GitHub issue number, or complete /clarify-intent, the VS Code sidebar session title is automatically updated to "#N <issue title>". Manually renamed sessions are left unchanged.
+
 ### BUGFIX: worktree-end cleanup operations on Windows/VS Code now work correctly (2026-05-15)
 Background: Four linked bugs caused worktree-end cleanup to fail on VS Code/Windows and blocked planning workflow commands from the main worktree.
 Changes: The combined cd+git-worktree-remove form is now allowed when VS Code resets the Bash CWD between calls. Stash, restore, and file-restore checkout are now permitted from the main worktree once all linked worktrees have been removed. FD-to-FD output redirects (2>&1, 1>&2) are no longer misclassified as write operations. The orphan directory cleanup step uses an absolute path that remains valid after CWD resets.
