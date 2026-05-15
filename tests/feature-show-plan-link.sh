@@ -31,7 +31,8 @@ mkdir -p "$PLANS_DIR"
 trap 'rm -rf "$PLANS_DIR"' EXIT
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
-# Unset VS Code entrypoint by default (restored per-test that needs it)
+# Unset VS Code detection vars by default (restored per-test that needs them).
+unset TERM_PROGRAM 2>/dev/null || true
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
 
 run_hook() {
@@ -179,8 +180,8 @@ echo "=== T15: exit_code: 1 ==="
 expect_empty "T15 failed write (exit_code 1) is noop" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"exit_code\":1}}"
 
-# ── T16: CLAUDE_CODE_ENTRYPOINT=claude-vscode + matching path + PATH shim ──
-echo "=== T16: VS Code entrypoint + shim ==="
+# ── T16: TERM_PROGRAM=vscode + matching path + PATH shim ──
+echo "=== T16: VS Code TERM_PROGRAM + shim ==="
 BIN_DIR="${NODE_TMPDIR}/show-plan-link-shim-$$"
 mkdir -p "$BIN_DIR"
 MARKER_FILE="$BIN_DIR/code-invoked"
@@ -192,7 +193,7 @@ exit 0
 SHIM
 chmod +x "$BIN_DIR/code"
 
-T16_RESULT=$(CLAUDE_CODE_ENTRYPOINT=claude-vscode PATH="$BIN_DIR:$PATH" \
+T16_RESULT=$(TERM_PROGRAM=vscode PATH="$BIN_DIR:$PATH" \
   run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}")
 
 T16_MSG=$(echo "$T16_RESULT" | run_with_timeout node -e "
@@ -201,18 +202,21 @@ T16_MSG=$(echo "$T16_RESULT" | run_with_timeout node -e "
 " 2>/dev/null)
 
 if ! echo "$T16_MSG" | grep -q "Plan file written:"; then
-  fail "T16 VS Code — no systemMessage emitted: $T16_RESULT"
+  fail "T16 VS Code TERM_PROGRAM — no systemMessage emitted: $T16_RESULT"
 else
-  # Give the detached child a moment to write the marker
-  sleep 0.3
+  # bounded wait loop (replaces fixed sleep) — slow CI safe
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -f "$MARKER_FILE" ] && break
+    sleep 0.1
+  done
   if [ -f "$MARKER_FILE" ]; then
-    pass "T16 VS Code entrypoint — systemMessage emitted AND code shim invoked"
+    pass "T16 VS Code TERM_PROGRAM — systemMessage emitted AND code shim invoked"
   else
     # On Windows, spawn uses cmd.exe which won't find bash shim — acceptable
     if [ "$(uname -s 2>/dev/null)" = "Linux" ] || [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
-      fail "T16 VS Code — systemMessage emitted but code shim was not invoked"
+      fail "T16 VS Code TERM_PROGRAM — systemMessage emitted but code shim was not invoked"
     else
-      pass "T16 VS Code entrypoint — systemMessage emitted (shim check skipped on Windows)"
+      pass "T16 VS Code TERM_PROGRAM — systemMessage emitted (shim check skipped on Windows)"
     fi
   fi
 fi
@@ -248,6 +252,114 @@ fi
 echo "=== T19: success: false ==="
 expect_empty "T19 success=false (legacy field) is noop" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":false}}"
+
+# ── T20: No VS Code detection vars — systemMessage emitted, code NOT spawned ──
+echo "=== T20: non-VS Code (no env var) — no code spawn ==="
+BIN_DIR20="${NODE_TMPDIR}/show-plan-link-shim20-$$"
+mkdir -p "$BIN_DIR20"
+MARKER_FILE20="$BIN_DIR20/code-invoked"
+cat > "$BIN_DIR20/code" << 'SHIM'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/code-invoked"
+exit 0
+SHIM
+chmod +x "$BIN_DIR20/code"
+
+T20_RESULT=$(
+  unset TERM_PROGRAM
+  unset CLAUDE_CODE_ENTRYPOINT
+  export PATH="$BIN_DIR20:$PATH"
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+)
+
+T20_MSG=$(echo "$T20_RESULT" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+
+if ! echo "$T20_MSG" | grep -q "Plan file written:"; then
+  fail "T20 non-VS Code — systemMessage missing: $T20_RESULT"
+else
+  # bounded wait loop (replaces fixed sleep) — slow CI safe
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -f "$MARKER_FILE20" ] && break
+    sleep 0.1
+  done
+  if [ -f "$MARKER_FILE20" ]; then
+    fail "T20 non-VS Code — code shim was invoked but must NOT be"
+  else
+    pass "T20 non-VS Code — systemMessage emitted AND code shim NOT invoked"
+  fi
+fi
+rm -rf "$BIN_DIR20"
+
+# ── T21: Legacy CLAUDE_CODE_ENTRYPOINT alone must NOT trigger code spawn ──
+# regression guard: legacy variable must NOT trigger VS Code path
+echo "=== T21: legacy CLAUDE_CODE_ENTRYPOINT only — no code spawn ==="
+BIN_DIR21="${NODE_TMPDIR}/show-plan-link-shim21-$$"
+mkdir -p "$BIN_DIR21"
+MARKER_FILE21="$BIN_DIR21/code-invoked"
+cat > "$BIN_DIR21/code" << 'SHIM'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/code-invoked"
+exit 0
+SHIM
+chmod +x "$BIN_DIR21/code"
+
+T21_RESULT=$(
+  unset TERM_PROGRAM
+  export CLAUDE_CODE_ENTRYPOINT=claude-vscode
+  export PATH="$BIN_DIR21:$PATH"
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+)
+
+T21_MSG=$(echo "$T21_RESULT" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+
+if ! echo "$T21_MSG" | grep -q "Plan file written:"; then
+  fail "T21 legacy var — systemMessage missing: $T21_RESULT"
+else
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -f "$MARKER_FILE21" ] && break
+    sleep 0.1
+  done
+  if [ -f "$MARKER_FILE21" ]; then
+    fail "T21 legacy CLAUDE_CODE_ENTRYPOINT — code shim was invoked but must NOT be"
+  else
+    pass "T21 legacy CLAUDE_CODE_ENTRYPOINT — correctly ignored, code shim NOT invoked"
+  fi
+fi
+rm -rf "$BIN_DIR21"
+
+# ── T22: TERM_PROGRAM=vscode + failing code shim → fail-open ──
+# Two-tier output protocol invariant: systemMessage always emits even when
+# the code spawn fails. We keep $PATH intact so node/bash remain available;
+# only the 'code' binary is shadowed by a non-zero-exit shim.
+echo "=== T22: VS Code path with failing code shim — fail-open ==="
+BIN_DIR22="${NODE_TMPDIR}/show-plan-link-shim22-$$"
+mkdir -p "$BIN_DIR22"
+cat > "$BIN_DIR22/code" << 'SHIM'
+#!/usr/bin/env bash
+exit 127  # simulate command-not-found / spawn failure
+SHIM
+chmod +x "$BIN_DIR22/code"
+
+T22_RESULT=$(TERM_PROGRAM=vscode PATH="$BIN_DIR22:$PATH" \
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}")
+
+T22_MSG=$(echo "$T22_RESULT" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+
+if echo "$T22_MSG" | grep -q "Plan file written:"; then
+  pass "T22 fail-open — systemMessage emitted even when code shim fails"
+else
+  fail "T22 fail-open — systemMessage missing: $T22_RESULT"
+fi
+rm -rf "$BIN_DIR22"
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

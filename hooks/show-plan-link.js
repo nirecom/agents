@@ -6,9 +6,10 @@
 // Output protocol: emits { "systemMessage": "..." } only.
 // Sibling PostToolUse hooks emit `additionalContext` — different field, no collision.
 //
-// NOTE on CLAUDE_CODE_ENTRYPOINT: "claude-vscode" is confirmed via secondary
-// sources (env-var gists, blog posts); not in official Anthropic docs.
-// Degrades gracefully — systemMessage always emits; only code -r is skipped.
+// NOTE on TERM_PROGRAM: VS Code's integrated terminal sets TERM_PROGRAM=vscode
+// (official VS Code behavior; POSIX convention; cross-shell). Degrades
+// gracefully — systemMessage always emits; only code -r is skipped when
+// TERM_PROGRAM !== "vscode".
 //
 // NOTE on Windows spawn: Node.js 20.12+ (CVE-2024-27980) refuses to spawn
 // .cmd/.bat files without shell:true. We use cmd.exe directly with args as
@@ -59,7 +60,7 @@ function isFinalPlanArtifact(filePath) {
 }
 
 function openInVsCode(absPath) {
-  if (process.env.CLAUDE_CODE_ENTRYPOINT !== "claude-vscode") return;
+  if (process.env.TERM_PROGRAM !== "vscode") return;
   try {
     let child;
     if (process.platform === "win32") {
