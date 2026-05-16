@@ -691,6 +691,263 @@ else
 fi
 teardown_tmp
 
+# --- R16: Tier 0a — closedByPullRequestsReferences → mergeCommit.oid → hash-from-pr-link
+setup_tmp
+export GH_MOCK_PR_MERGE_COMMIT_FOR_42="cafe1234"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+unset GH_MOCK_PR_MERGE_COMMIT_FOR_42
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: cafe1234 -->" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill-pr-link, commit=cafe1234)"; then
+    pass "R16: Tier 0a — PR mergeCommit.oid → hash-from-pr-link"
+else
+    fail "R16: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R17: Tier 0b — body contains hex → hash-from-body
+setup_tmp
+export GH_MOCK_BODY_FOR_42="Resolved upstream in deadb0de — see thread."
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+unset GH_MOCK_BODY_FOR_42
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: deadb0de -->" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill-body, commit=deadb0de)"; then
+    pass "R17: Tier 0b — issue body hex → hash-from-body"
+else
+    fail "R17: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R18: Tier 1.5 — git log -S history introducer → hash-from-history-introducer
+setup_tmp
+export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r18.log"
+export GH_MOCK_TITLE_FOR_42="feat: backfill hash discovery extension"
+export GIT_MOCK_LOG_S_RESULT="beef5678 docs(history): record backfill tier expansion"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+ARGV=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
+unset GIT_MOCK_ARGV_LOG
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG"  | grep -q "resolved-by: beef5678 -->" \
+   && echo "$LOG"  | grep -q "issue-close-sentinel: appended (resolved-by: backfill-history-introducer, commit=beef5678)" \
+   && echo "$ARGV" | grep -q -- '--reverse' \
+   && echo "$ARGV" | grep -q 'feat: backfill hash discovery extension' \
+   && echo "$ARGV" | grep -q -- '-- docs/history.md' \
+   && ! echo "$ARGV" | grep -q 'diff-filter'; then
+    pass "R18: Tier 1.5 — flags=--all --reverse -S, no --diff-filter"
+else
+    fail "R18: rc=$RC log=$LOG argv=$ARGV"
+fi
+teardown_tmp
+
+# --- R19: priority chain — Tier 0a wins when all tiers can hit
+setup_tmp
+export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r19.log"
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Priority test (2026-05-10, abc12345, #42)
+Background: also references deadb0de in body
+Changes: shipped
+EOF
+export GH_MOCK_PR_MERGE_COMMIT_FOR_42="cafe1234"
+export GH_MOCK_BODY_FOR_42="See commit deadb0de for context."
+export GH_MOCK_TITLE_FOR_42="Priority test header"
+export GIT_MOCK_LOG_S_RESULT="beef5678 docs(history): record priority test"
+export GIT_MOCK_LOG_FOR_42="feedface"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+unset GH_MOCK_PR_MERGE_COMMIT_FOR_42 GH_MOCK_BODY_FOR_42 GH_MOCK_TITLE_FOR_42 \
+      GIT_MOCK_LOG_S_RESULT GIT_MOCK_LOG_FOR_42
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+ARGV_R19=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
+unset GIT_MOCK_ARGV_LOG
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG"      | grep -q "resolved-by: cafe1234 -->" \
+   && echo "$LOG"      | grep -q "issue-close-sentinel: appended (resolved-by: backfill-pr-link, commit=cafe1234)" \
+   && ! echo "$LOG"    | grep -qE "(deadb0de|abc12345|beef5678|feedface)" \
+   && ! echo "$ARGV_R19" | grep -q 'Priority test header'; then
+    pass "R19: priority — Tier 0a wins, Tier 1.5 not invoked"
+else
+    fail "R19: rc=$RC log=$LOG argv=$ARGV_R19"
+fi
+teardown_tmp
+
+# --- R20: Tier 0b rejects 41+ char hex runs (no bogus SHA from truncation)
+setup_tmp
+# 41 chars: truncating to 40 would be syntactically valid but semantically bogus.
+export GH_MOCK_BODY_FOR_42="Spurious hex: 0123456789abcdef0123456789abcdef0123456789a"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r20.out" 2>&1
+RC=$?
+unset GH_MOCK_BODY_FOR_42
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-body' "$TMP/r20.out" \
+   && ! grep -q '0123456789abcdef0123456789abcdef0123456789' "$TMP/r20.out"; then
+    pass "R20: Tier 0b — 41-char hex run rejected (falls through)"
+else
+    fail "R20: rc=$RC out=$(cat "$TMP/r20.out")"
+fi
+teardown_tmp
+
+# --- R21: canary cap = 6 classes; per-issue slug dispatch verified
+setup_tmp
+export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r21.log"
+
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: e1 (2026-05-01, aaa1111, #101)
+### FEATURE: e2 (2026-05-02, aaa2222, #102)
+EOF
+
+export GH_MOCK_PR_MERGE_COMMIT_FOR_103="bbbb111"
+export GH_MOCK_PR_MERGE_COMMIT_FOR_104="bbbb222"
+export GH_MOCK_BODY_FOR_105="See cccc111"
+export GH_MOCK_BODY_FOR_106="See cccc222"
+export GH_MOCK_TITLE_FOR_107="canary 107 entry"
+export GH_MOCK_TITLE_FOR_108="canary 108 entry"
+export GIT_MOCK_LOG_S_RESULT_canary_107_entry="dddd111 docs: 107"
+export GIT_MOCK_LOG_S_RESULT_canary_108_entry="dddd222 docs: 108"
+export GIT_MOCK_LOG_FOR_109="eeee111"
+export GIT_MOCK_LOG_FOR_110="eeee222"
+
+GH_MOCK_SCENARIO=canary_six_class \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --canary --dry-run >"$TMP/r21.out" 2>&1
+RC=$?
+unset GH_MOCK_PR_MERGE_COMMIT_FOR_103 GH_MOCK_PR_MERGE_COMMIT_FOR_104 \
+      GH_MOCK_BODY_FOR_105 GH_MOCK_BODY_FOR_106 \
+      GH_MOCK_TITLE_FOR_107 GH_MOCK_TITLE_FOR_108 \
+      GIT_MOCK_LOG_S_RESULT_canary_107_entry GIT_MOCK_LOG_S_RESULT_canary_108_entry \
+      GIT_MOCK_LOG_FOR_109 GIT_MOCK_LOG_FOR_110 GIT_MOCK_ARGV_LOG
+
+DRY_COUNT=$(grep -c '^\[dry-run class=' "$TMP/r21.out" 2>/dev/null || echo 0)
+SKIP_COUNT=$(grep -c '^\[canary-skip class=' "$TMP/r21.out" 2>/dev/null || echo 0)
+
+if [ "$RC" -eq 0 ] \
+   && [ "$DRY_COUNT"  -eq 6 ] \
+   && [ "$SKIP_COUNT" -eq 6 ] \
+   && grep -q 'class=hash-from-pr-link' "$TMP/r21.out" \
+   && grep -q 'class=hash-from-body' "$TMP/r21.out" \
+   && grep -qE 'class=hash-from-history[^-]' "$TMP/r21.out" \
+   && grep -q 'class=hash-from-history-introducer' "$TMP/r21.out" \
+   && grep -q 'class=hash-from-gitlog' "$TMP/r21.out" \
+   && grep -q 'class=no-hash' "$TMP/r21.out" \
+   && grep -q 'canary-skip class=hash-from-pr-link' "$TMP/r21.out" \
+   && grep -q 'canary-skip class=hash-from-body' "$TMP/r21.out" \
+   && grep -qE 'canary-skip class=hash-from-history[^-]' "$TMP/r21.out" \
+   && grep -q 'canary-skip class=hash-from-history-introducer' "$TMP/r21.out" \
+   && grep -q 'canary-skip class=hash-from-gitlog' "$TMP/r21.out" \
+   && grep -q 'canary-skip class=no-hash' "$TMP/r21.out" \
+   && grep -q 'hash=dddd111' "$TMP/r21.out" \
+   && ! grep -q 'hash=dddd222' "$TMP/r21.out"; then
+    pass "R21: canary cap = 6 classes; per-issue slug dispatch verified; canary-skip per duplicate"
+else
+    fail "R21: rc=$RC dry=$DRY_COUNT skip=$SKIP_COUNT out=$(cat "$TMP/r21.out")"
+fi
+teardown_tmp
+
+# --- R22: regression — non-comment lines must NOT contain --diff-filter
+if ! grep -nE '^[[:space:]]*[^#[:space:]].*--diff-filter' "$BACKFILL_SCRIPT" >/dev/null 2>&1; then
+    pass "R22: script has no --diff-filter in code (comments allowed)"
+else
+    fail "R22: script contains --diff-filter outside comments — would exclude history.md append commits"
+fi
+
+# --- R23: Tier 0a — empty mergeCommit (no merged PR) → falls through to next tier
+setup_tmp
+export GH_MOCK_PR_MERGE_COMMIT_FOR_42=""
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r23.out" 2>&1
+RC=$?
+unset GH_MOCK_PR_MERGE_COMMIT_FOR_42
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-pr-link' "$TMP/r23.out"; then
+    pass "R23: Tier 0a — empty PR merge commit → falls through (hash-from-pr-link not selected)"
+else
+    fail "R23: rc=$RC out=$(cat "$TMP/r23.out")"
+fi
+teardown_tmp
+
+# --- R24: Tier 0b — exactly 7-char hex (minimum boundary) → hash-from-body
+setup_tmp
+export GH_MOCK_BODY_FOR_42="deadbee"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+unset GH_MOCK_BODY_FOR_42
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: deadbee -->" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill-body, commit=deadbee)"; then
+    pass "R24: Tier 0b — 7-char hex (minimum boundary) accepted → hash-from-body"
+else
+    fail "R24: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R25: Tier 0b — 6-char hex (below minimum) → falls through
+setup_tmp
+export GH_MOCK_BODY_FOR_42="deadbe"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r25.out" 2>&1
+RC=$?
+unset GH_MOCK_BODY_FOR_42
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-body' "$TMP/r25.out"; then
+    pass "R25: Tier 0b — 6-char hex (below minimum) rejected → falls through"
+else
+    fail "R25: rc=$RC out=$(cat "$TMP/r25.out")"
+fi
+teardown_tmp
+
+# --- R27: Tier 1.5 — title < 8 chars → git log not invoked, falls through
+setup_tmp
+export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r27.log"
+export GH_MOCK_TITLE_FOR_42="short"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r27.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42
+ARGV_R27=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
+unset GIT_MOCK_ARGV_LOG
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-history-introducer' "$TMP/r27.out" \
+   && ! echo "$ARGV_R27" | grep -q -- '-S'; then
+    pass "R27: Tier 1.5 — title < 8 chars → git log -S not invoked, no hash-from-history-introducer"
+else
+    fail "R27: rc=$RC out=$(cat "$TMP/r27.out") argv=$ARGV_R27"
+fi
+teardown_tmp
+
+# --- R28: Tier 1.5 — empty title → falls through (no git log invoked)
+setup_tmp
+export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r28.log"
+export GH_MOCK_TITLE_FOR_42=""
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r28.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42
+ARGV_R28=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
+unset GIT_MOCK_ARGV_LOG
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-history-introducer' "$TMP/r28.out" \
+   && ! echo "$ARGV_R28" | grep -q -- '-S'; then
+    pass "R28: Tier 1.5 — empty title → git log -S not invoked, no hash-from-history-introducer"
+else
+    fail "R28: rc=$RC out=$(cat "$TMP/r28.out") argv=$ARGV_R28"
+fi
+teardown_tmp
+
 # ============================================================================
 # D-series — SKILL.md regression guards (minimal, after refactor)
 # ============================================================================

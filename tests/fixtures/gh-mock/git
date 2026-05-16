@@ -3,6 +3,19 @@
 # Recognized: git [-C <path>] log --all --oneline -E --grep=<pattern>
 ARGS="$*"
 case "$ARGS" in
+  *"log --all"*"--reverse"*"-S"*"-- docs/history.md"*)
+    # Tier 1.5: argv capture for R18/R19/R22 assertions.
+    : "${GIT_MOCK_ARGV_LOG:=${TMPDIR:-/tmp}/git-mock-argv.log}"
+    printf '%s\n' "$ARGS" >> "$GIT_MOCK_ARGV_LOG"
+    # Per-issue slug dispatch via title-derived slug (separator-based extraction).
+    needle=$(printf '%s' "$ARGS" | sed -nE 's/.*-S (.+) -- docs\/history.*/\1/p')
+    needle=$(printf '%s' "$needle" | sed -E 's/[[:space:]]+$//')
+    slug=$(printf '%s' "$needle" | tr -c 'a-zA-Z0-9' '_' | tr 'A-Z' 'a-z')
+    var="GIT_MOCK_LOG_S_RESULT_${slug}"
+    val="${!var:-${GIT_MOCK_LOG_S_RESULT:-}}"
+    [ -n "$val" ] && printf '%s\n' "$val"
+    exit 0
+    ;;
   *"log --all --oneline"*)
     N=$(printf '%s' "$ARGS" | grep -oE '#[0-9]+' | head -n 1 | tr -d '#')
     [ -z "$N" ] && exit 0
