@@ -15,11 +15,33 @@ hook fires automatically and emits the diff as a `systemMessage`, so the user
 sees the full content inline in chat. No extra agent action is needed for the
 preview itself.
 
-**Step 2 — Breadcrumb (MANDATORY)**
-The `show-plan-link.js` PostToolUse hook emits `Plan file written: <absolute-path>`
-into the chat after the write. Do not duplicate or paraphrase it. If the line is
-absent (hook not yet deployed), print the absolute path as plain text — not a
-markdown link, not a tilde path. Mandatory in **every** mode.
+**Step 2 — Breadcrumb (orchestrator output: FORBIDDEN)**
+
+The `show-plan-link.js` PostToolUse hook emits exactly one line into the chat
+immediately after the Write tool returns:
+
+    Plan file written: <absolute-path>
+
+This line is the **only** path surfaced to the user. The orchestrator MUST NOT
+output any path representation. Specifically, the orchestrator MUST NOT:
+
+- duplicate the hook line (verbatim or otherwise)
+- translate it (e.g., "計画ファイルを書きました…", "outline.md を書きました…")
+- paraphrase it ("Plan written to…", "Wrote outline to…", etc.)
+- wrap the path in a markdown link (`[text](path)` syntax)
+- present a bare relative path or tilde-prefixed path
+- present a `file:///`-scheme URI
+- emit a second path representation after the hook line (no `(フルパス: ...)` annotations)
+- prepend or append any path to a Japanese sentence
+
+Rationale: workflow-plan files under `~/.workflow-plans/` do not render as
+clickable links in VS Code. The hook's breadcrumb plus the automatic `code -r`
+auto-open are the *only* sanctioned UX.
+
+If the hook line is absent (hook not yet deployed), the orchestrator MAY print
+the absolute path as plain text on its own line — still subject to all
+prohibitions above (no markdown link, no tilde, no forward-slash on Windows,
+no dual-path). Mandatory in **every** mode (CONFIRM_<STEP>=on or off).
 
 **Step 3 — `CONFIRM_<STEP>` check**
 ```bash
