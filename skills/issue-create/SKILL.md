@@ -60,6 +60,13 @@ NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
 - **Projects v2**: `PROJECT_NUM=1` and owner `nirecom` are the defaults, matching
   `bin/github-issues/migration/backfill-content-date.sh`. Override via
   `ISSUE_CREATE_PROJECT_NUM` / `ISSUE_CREATE_OWNER` env vars.
+- **Content Date field**: after a successful Projects v2 attach, the script automatically
+  sets the "Content Date" custom field to the issue's creation date (`YYYY-MM-DD`).
+  Defaults: `ISSUE_CREATE_FIELD_ID=PVTF_lAHOAMF_jc4BXf9EzhSsYwA`,
+  `ISSUE_CREATE_PROJECT_ID=PVT_kwHOAMF_jc4BXf9E`. Override via env vars when
+  using a different project. Content Date set failure is non-fatal — a warning is
+  emitted on stderr and the issue URL is still returned normally.
+  Requires `gh project item-add --format json --jq` support (available since gh v2.x).
 - **Attach failure is non-fatal**: the issue is created regardless. A warning is
   printed; re-run `gh project item-add` manually if recovery is needed.
 - **Untrusted content**: title/body are passed as separate arguments to `gh` —
