@@ -275,7 +275,7 @@ function cleanupZombies(maxAgeDays = 7) {
 const STEP_HINT = {
   workflow_init:      "Invoke `workflow-init` via the Skill tool. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".",
   clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
-  research:           "Invoke `survey-code` or `deep-research` (or skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>\"), then invoke `make-outline-plan`.",
+  research:           "Invoke `survey-code` AND `survey-history` in parallel (premise verification), and/or `deep-research` (external knowledge). Skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>\". Then invoke `make-outline-plan`.",
   plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
   branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
   write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
@@ -314,6 +314,27 @@ function clearLastPushedSha(sessionId) {
   return true;
 }
 
+function setPremiseContradiction(sessionId, summary) {
+  const state = readState(sessionId);
+  if (!state) return false;
+  state.premise_contradiction = { summary, set_at: new Date().toISOString() };
+  writeState(sessionId, state);
+  return true;
+}
+
+function clearPremiseContradiction(sessionId) {
+  const state = readState(sessionId);
+  if (!state) return false;
+  state.premise_contradiction = null;
+  writeState(sessionId, state);
+  return true;
+}
+
+function getPremiseContradiction(sessionId) {
+  const state = readState(sessionId);
+  return (state && state.premise_contradiction) || null;
+}
+
 module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -331,4 +352,7 @@ module.exports = {
   findLatestStateForContext,
   setLastPushedSha,
   clearLastPushedSha,
+  setPremiseContradiction,
+  clearPremiseContradiction,
+  getPremiseContradiction,
 };
