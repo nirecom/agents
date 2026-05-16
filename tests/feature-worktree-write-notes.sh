@@ -95,47 +95,22 @@ json_field() {
     " -- "$field" <<< "$out" 2>/dev/null
 }
 
-# Run the bin script with a payload. Stdout only.
+# Run the bin script with argv + COPIED_JSON env. Stdout only.
+# Usage: run_bin mainRoot worktreePath branch [baseDir] [copiedJSON]
 run_bin() {
-    local payload="$1"
-    printf '%s' "$payload" | run_with_timeout 120 node "$BIN_JS" 2>/dev/null
+    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}"
+    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" 2>/dev/null
 }
 
 run_bin_stderr() {
-    local payload="$1"
-    printf '%s' "$payload" | run_with_timeout 120 node "$BIN_JS" 2>&1 >/dev/null
+    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}"
+    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" 2>&1 >/dev/null
 }
 
 run_bin_exitcode() {
-    local payload="$1"
-    printf '%s' "$payload" | run_with_timeout 120 node "$BIN_JS" >/dev/null 2>&1
+    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}"
+    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" >/dev/null 2>&1
     echo "$?"
-}
-
-# Build a JSON payload safely via node (handles spaces, backslashes).
-# Usage: make_payload mainRoot worktreePath branch [createdDate] [resolvedPath] [baseDir] [copiedFilesJSON] [excludePattern]
-make_payload() {
-    local main="$1"
-    local wt="$2"
-    local branch="$3"
-    local created="${4:-}"
-    local resolved="${5:-}"
-    local base="${6:-}"
-    local copied="${7:-[]}"
-    local excludePattern="${8:-}"
-    node -e "
-        const j = {
-            mainRoot: process.argv[1],
-            worktreePath: process.argv[2],
-            branch: process.argv[3]
-        };
-        if (process.argv[4]) j.createdDate = process.argv[4];
-        if (process.argv[5]) j.resolvedPath = process.argv[5];
-        if (process.argv[6]) j.baseDir = process.argv[6];
-        try { j.copiedFiles = JSON.parse(process.argv[7]); } catch(e){ j.copiedFiles = []; }
-        if (process.argv[8]) j.excludePattern = process.argv[8];
-        process.stdout.write(JSON.stringify(j));
-    " -- "$main" "$wt" "$branch" "$created" "$resolved" "$base" "$copied" "$excludePattern" 2>/dev/null
 }
 
 # Make a fresh main-style git repo (with `.git` dir).
@@ -630,13 +605,8 @@ test_N7_cli_happy_path() {
     local wt;   wt="$(setup_worktree_dest "n7-wt")"
     local main_node; main_node="$(node_path "$main")"
 
-    local payload
-    payload="$(make_payload "$main_node" "$wt" "feature/n7" "2024-01-15" "$wt" "" '["a.env","b/.env.local"]' "WORKTREE_NOTES.md")"
-
-    # Single CLI invocation — capture stdout and exit code together.
-    local out; local code
-    out="$(printf '%s' "$payload" | run_with_timeout 120 node "$BIN_JS" 2>/dev/null)"
-    code=$?
+    local out; out="$(run_bin "$main_node" "$wt" "feature/n7" "" '{"copied":["a.env","b/.env.local"]}')"
+    local code=$?
     local notesWritten; notesWritten="$(json_field "$out" "notesWritten")"
     local excludeAdded; excludeAdded="$(json_field "$out" "excludeAdded")"
     local errors; errors="$(json_field "$out" "errors")"
@@ -657,10 +627,7 @@ test_I4_cli_idempotent() {
     local wt;   wt="$(setup_worktree_dest "i4-wt")"
     local main_node; main_node="$(node_path "$main")"
 
-    local payload
-    payload="$(make_payload "$main_node" "$wt" "feature/i4" "2024-01-15" "$wt" "" '["a.env"]' "WORKTREE_NOTES.md")"
-
-    run_bin "$payload" >/dev/null 2>&1
+    run_bin "$main_node" "$wt" "feature/i4" "" '{"copied":["a.env"]}' >/dev/null 2>&1
     local notes_file="$TMPDIR_BASE/i4-wt/WORKTREE_NOTES.md"
     local before_md5
     before_md5="$(node -e "
@@ -668,8 +635,8 @@ test_I4_cli_idempotent() {
         process.stdout.write(c.createHash('md5').update(fs.readFileSync(process.argv[1])).digest('hex'));
     " -- "$notes_file" 2>/dev/null)"
 
-    local code2; code2="$(run_bin_exitcode "$payload")"
-    local out2; out2="$(run_bin "$payload")"
+    local code2; code2="$(run_bin_exitcode "$main_node" "$wt" "feature/i4" "" '{"copied":["a.env"]}')"
+    local out2; out2="$(run_bin "$main_node" "$wt" "feature/i4" "" '{"copied":["a.env"]}')"
     local excludeAdded2; excludeAdded2="$(json_field "$out2" "excludeAdded")"
     local reason2; reason2="$(json_field "$out2" "excludeSkipReason")"
 
@@ -687,37 +654,36 @@ test_I4_cli_idempotent() {
     fi
 }
 
-# ---- Err3: CLI invalid JSON ----
-test_Err3_cli_invalid_json() {
-    require_bin "test_Err3_cli_invalid_json" || return
-    local code; code="$(run_bin_exitcode "this is not json")"
-    local errmsg; errmsg="$(run_bin_stderr "this is not json")"
+# ---- Err3: CLI invalid COPIED_JSON ----
+test_Err3_cli_invalid_copied_json() {
+    require_bin "test_Err3_cli_invalid_copied_json" || return
+    local main; main="$(setup_main_repo "err3-main")"
+    local wt;   wt="$(setup_worktree_dest "err3-wt")"
+    local main_node; main_node="$(node_path "$main")"
+
+    local code; code="$(run_bin_exitcode "$main_node" "$wt" "feature/err3" "" 'this is not json')"
+    local errmsg; errmsg="$(run_bin_stderr "$main_node" "$wt" "feature/err3" "" 'this is not json')"
 
     if [ "$code" != "0" ] && [ -n "$errmsg" ]; then
-        pass "Err3: CLI invalid JSON → exit 1, stderr non-empty"
+        pass "Err3: CLI invalid COPIED_JSON → exit 1, stderr non-empty"
     else
         fail "Err3: expected non-zero exit + stderr, got code=$code stderr=$errmsg"
     fi
 }
 
-# ---- Err4: CLI missing branch ----
+# ---- Err4: CLI missing branch (positional arg) ----
 test_Err4_cli_missing_branch() {
     require_bin "test_Err4_cli_missing_branch" || return
     local main; main="$(setup_main_repo "err4-main")"
     local wt;   wt="$(setup_worktree_dest "err4-wt")"
     local main_node; main_node="$(node_path "$main")"
 
-    local payload
-    payload="$(node -e "
-        const j = {mainRoot: process.argv[1], worktreePath: process.argv[2]};
-        process.stdout.write(JSON.stringify(j));
-    " -- "$main_node" "$wt" 2>/dev/null)"
+    # branch argv is empty → CLI prints usage to stderr and exits 1
+    local code; code="$(run_bin_exitcode "$main_node" "$wt" "")"
+    local errmsg; errmsg="$(run_bin_stderr "$main_node" "$wt" "")"
 
-    local code; code="$(run_bin_exitcode "$payload")"
-    local errmsg; errmsg="$(run_bin_stderr "$payload")"
-
-    if [ "$code" != "0" ] && echo "$errmsg" | grep -qi "branch"; then
-        pass "Err4: CLI missing 'branch' → exit non-zero, stderr mentions 'branch'"
+    if [ "$code" != "0" ] && echo "$errmsg" | grep -qi "branch\|usage"; then
+        pass "Err4: CLI missing branch arg → exit non-zero, usage mentions branch"
     else
         fail "Err4: code=$code stderr=$errmsg"
     fi
@@ -728,20 +694,16 @@ test_Err5_cli_notesWritten_failure() {
     require_bin "test_Err5_cli_notesWritten_failure" || return
     local main; main="$(setup_main_repo "err5-main")"
     local main_node; main_node="$(node_path "$main")"
-    # worktreePath is a path under an existing FILE — mkdirSync recursive fails
+    # worktreePath under an existing FILE — mkdirSync recursive fails
     local block_file="$TMPDIR_BASE/err5-block"
-    : > "$block_file"   # block_file is a regular file
+    : > "$block_file"
     local bad_wt="${block_file}/cannot/create/here"
     local bad_wt_node; bad_wt_node="$(node_path "$bad_wt")"
 
-    local payload
-    payload="$(make_payload "$main_node" "$bad_wt_node" "feature/err5" "2024-01-15" "$bad_wt_node" "" '[]' "WORKTREE_NOTES.md")"
-
-    local code; code="$(run_bin_exitcode "$payload")"
-    local out; out="$(run_bin "$payload")"
+    local code; code="$(run_bin_exitcode "$main_node" "$bad_wt_node" "feature/err5" "" '{"copied":[]}')"
+    local out; out="$(run_bin "$main_node" "$bad_wt_node" "feature/err5" "" '{"copied":[]}')"
     local errors; errors="$(json_field "$out" "errors")"
 
-    # Either exit 1 with errors[] populated, or exit 1 with stderr — both meet the contract.
     if [ "$code" != "0" ]; then
         pass "Err5: CLI notesWritten failure → exit non-zero (errors=$errors)"
     else
@@ -756,24 +718,9 @@ test_N8_env_unset_defaults() {
     local wt;   wt="$(setup_worktree_dest "n8-wt")"
     local main_node; main_node="$(node_path "$main")"
 
-    # Build payload WITHOUT baseDir field, then run with WORKTREE_BASE_DIR unset.
-    local payload
-    payload="$(node -e "
-        const j = {
-            mainRoot: process.argv[1],
-            worktreePath: process.argv[2],
-            branch: 'feature/n8',
-            createdDate: '2024-01-15',
-            resolvedPath: process.argv[2],
-            copiedFiles: [],
-            excludePattern: 'WORKTREE_NOTES.md'
-        };
-        process.stdout.write(JSON.stringify(j));
-    " -- "$main_node" "$wt" 2>/dev/null)"
-
     (
         unset WORKTREE_BASE_DIR
-        printf '%s' "$payload" | run_with_timeout 120 node "$BIN_JS" >/dev/null 2>&1
+        COPIED_JSON='{"copied":[]}' run_with_timeout 120 node "$BIN_JS" "$main_node" "$wt" "feature/n8" "" >/dev/null 2>&1
     )
 
     local notes_file="$TMPDIR_BASE/n8-wt/WORKTREE_NOTES.md"
@@ -791,23 +738,9 @@ test_N9_env_set_uses_value() {
     local wt;   wt="$(setup_worktree_dest "n9-wt")"
     local main_node; main_node="$(node_path "$main")"
 
-    local payload
-    payload="$(node -e "
-        const j = {
-            mainRoot: process.argv[1],
-            worktreePath: process.argv[2],
-            branch: 'feature/n9',
-            createdDate: '2024-01-15',
-            resolvedPath: process.argv[2],
-            copiedFiles: [],
-            excludePattern: 'WORKTREE_NOTES.md'
-        };
-        process.stdout.write(JSON.stringify(j));
-    " -- "$main_node" "$wt" 2>/dev/null)"
-
     (
         export WORKTREE_BASE_DIR="C:/custom/path"
-        printf '%s' "$payload" | run_with_timeout 120 node "$BIN_JS" >/dev/null 2>&1
+        COPIED_JSON='{"copied":[]}' run_with_timeout 120 node "$BIN_JS" "$main_node" "$wt" "feature/n9" "" >/dev/null 2>&1
     )
 
     local notes_file="$TMPDIR_BASE/n9-wt/WORKTREE_NOTES.md"
@@ -825,10 +758,10 @@ test_CMD1_skill_template_basic() {
     local wt;   wt="$(setup_worktree_dest "cmd1-wt")"
     local main_node; main_node="$(node_path "$main")"
 
+    # SKILL.md POSIX form — verbatim what users invoke.
     bash -c "
         COPIED_JSON='{\"copied\":[\"foo.env\",\"bar.local\"],\"skipped\":[],\"denied\":[],\"errors\":[]}' \
-        node -e \"const c=JSON.parse(process.env.COPIED_JSON).copied||[];process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:process.argv[3],createdDate:new Date().toISOString().slice(0,10),resolvedPath:process.argv[2],baseDir:process.argv[4]||null,copiedFiles:c,excludePattern:'WORKTREE_NOTES.md'}))\" -- '$main_node' '$wt' 'feature/test' '' \
-        | node '$BIN_JS'
+        node '$BIN_JS' '$main_node' '$wt' 'feature/test'
     " >/dev/null 2>&1
 
     local notes_file="$TMPDIR_BASE/cmd1-wt/WORKTREE_NOTES.md"
@@ -850,9 +783,8 @@ test_CMD2_skill_template_filename_with_spaces() {
     local main_node; main_node="$(node_path "$main")"
 
     bash -c "
-        COPIED_JSON='{\"copied\":[\"my file.env\"],\"skipped\":[],\"denied\":[],\"errors\":[]}' \
-        node -e \"const c=JSON.parse(process.env.COPIED_JSON).copied||[];process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:process.argv[3],createdDate:new Date().toISOString().slice(0,10),resolvedPath:process.argv[2],baseDir:process.argv[4]||null,copiedFiles:c,excludePattern:'WORKTREE_NOTES.md'}))\" -- '$main_node' '$wt' 'feature/test' '' \
-        | node '$BIN_JS'
+        COPIED_JSON='{\"copied\":[\"my file.env\"]}' \
+        node '$BIN_JS' '$main_node' '$wt' 'feature/test'
     " >/dev/null 2>&1
 
     local notes_file="$TMPDIR_BASE/cmd2-wt/WORKTREE_NOTES.md"
@@ -870,17 +802,13 @@ test_CMD3_skill_template_windows_path() {
     local wt;   wt="$(setup_worktree_dest "cmd3-wt")"
     local main_node; main_node="$(node_path "$main")"
 
-    # JSON literal: "sub\\dir\\file" — bash heredoc preserves backslashes.
-    # In the JSON-on-disk that the bin script reads, this becomes `sub\dir\file`
-    # (single backslashes), recorded as-is.
+    # JSON literal: "sub\\dir\\file" → after JSON.parse → "sub\dir\file".
     bash -c "
-        COPIED_JSON='{\"copied\":[\"sub\\\\dir\\\\file\"],\"skipped\":[],\"denied\":[],\"errors\":[]}' \
-        node -e \"const c=JSON.parse(process.env.COPIED_JSON).copied||[];process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:process.argv[3],createdDate:new Date().toISOString().slice(0,10),resolvedPath:process.argv[2],baseDir:process.argv[4]||null,copiedFiles:c,excludePattern:'WORKTREE_NOTES.md'}))\" -- '$main_node' '$wt' 'feature/test' '' \
-        | node '$BIN_JS'
+        COPIED_JSON='{\"copied\":[\"sub\\\\dir\\\\file\"]}' \
+        node '$BIN_JS' '$main_node' '$wt' 'feature/test'
     " >/dev/null 2>&1
 
     local notes_file="$TMPDIR_BASE/cmd3-wt/WORKTREE_NOTES.md"
-    # Expected line: `- sub\dir\file` — use grep -e to handle leading dash.
     if [ -f "$notes_file" ] && grep -F -q -e '- sub\dir\file' "$notes_file"; then
         pass "CMD3: Windows-style path 'sub\\dir\\file' → recorded as-is"
     else
@@ -905,7 +833,7 @@ test_Sec1_run_traversal_in_copiedFiles
 test_Sec2_run_traversal_in_mainRoot
 test_N7_cli_happy_path
 test_I4_cli_idempotent
-test_Err3_cli_invalid_json
+test_Err3_cli_invalid_copied_json
 test_Err4_cli_missing_branch
 test_Err5_cli_notesWritten_failure
 test_N8_env_unset_defaults

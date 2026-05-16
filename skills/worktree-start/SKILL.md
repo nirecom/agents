@@ -93,32 +93,22 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
    - stdout `OFF`: auto-continue without `AskUserQuestion`.
    - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
 
-10. Generate `WORKTREE_NOTES.md` and register it in `.git/info/exclude` in a single command.
-
-    Set the full stdout JSON from Step 9 (b) to the `COPIED_JSON` environment variable, then
-    invoke `bin/worktree-write-notes.js`. `copiedFiles` is passed via env var to avoid shell
-    quoting issues; never pass the JSON as a shell argument.
-
-    `<mainRoot>` must be the **main repository root** (not a linked worktree path). Use the
-    value already resolved in Step 9 (a) via `git rev-parse --show-toplevel` from the main
-    worktree.
+10. Generate `WORKTREE_NOTES.md` + register in `.git/info/exclude`. Pass Step 9 (b) stdout
+    via `COPIED_JSON` env var (the script reads `.copied` from it).
 
     POSIX:
     ```
-    COPIED_JSON='<step-9-stdout-json>' node -e "const c=JSON.parse(process.env.COPIED_JSON).copied||[];process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:process.argv[3],createdDate:new Date().toISOString().slice(0,10),resolvedPath:process.argv[2],baseDir:process.argv[4]||null,copiedFiles:c,excludePattern:'WORKTREE_NOTES.md'}))" -- "<mainRoot>" "<step-3-path>" "<type>/<task-name>" "<WORKTREE_BASE_DIR or empty>" | node bin/worktree-write-notes.js
+    COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>"
     ```
 
-    PowerShell (two steps — env var assignment is separated from the pipeline):
+    PowerShell:
     ```
-    $env:COPIED_JSON = '<step-9-stdout-json>'
-    node -e "const c=JSON.parse(process.env.COPIED_JSON).copied||[];process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],branch:process.argv[3],createdDate:new Date().toISOString().slice(0,10),resolvedPath:process.argv[2],baseDir:process.argv[4]||null,copiedFiles:c,excludePattern:'WORKTREE_NOTES.md'}))" -- "<mainRoot>" "<step-3-path>" "<type>/<task-name>" "<WORKTREE_BASE_DIR or empty>" | node bin/worktree-write-notes.js
+    $env:COPIED_JSON = '<step-9-stdout>'
+    node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>"
     ```
 
-    Verify the stdout JSON has `notesWritten:true`. If `errors` is non-empty, report the
-    contents to the user. If the CLI exits with code 1, WORKTREE_NOTES.md was not written —
-    investigate the error and re-run.
-
-    The notes format is owned by `hooks/lib/worktree-notes.js`; do not inline edit the body.
+    `<mainRoot>`: main repository root from Step 9 (a) — never a linked worktree path.
+    Exit 0 with `notesWritten:true` = success. Exit 1 = investigate stderr and re-run.
 
 11. Final report: worktree path, branch, and which gitignored state was copied.
 
@@ -128,10 +118,7 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
 - Never copy production secrets (`.env.production`, cloud credentials, deploy keys) to a worktree.
 - Always record copied state in `WORKTREE_NOTES.md` so `/worktree-end` can inventory it later.
 - Task name validation: reject names that fail `[a-zA-Z0-9_-]+` — do not proceed with invalid names.
-- `WORKTREE_NOTES.md` generation and `.git/info/exclude` registration are consolidated in
-  `bin/worktree-write-notes.js`. Do not invoke `Write` or `git update-index` manually for this.
-- `<mainRoot>` passed to `bin/worktree-write-notes.js` must always be the **main repository root**
-  (the directory containing `.git/` as a real directory). Never pass a linked worktree path.
-- Known limitation: filenames containing single quotes break the POSIX `COPIED_JSON='...'`
-  template. If such a filename appears in the Step 9 copied list, fall back to writing the
-  payload to a temp file and piping it via `< file`.
+- WORKTREE_NOTES.md generation is owned by `bin/worktree-write-notes.js`. Do not write the
+  file or edit `.git/info/exclude` manually.
+- Known limit: filenames containing `'` break the POSIX `COPIED_JSON='...'` quoting. Fall
+  back to `COPIED_JSON="$(cat file.json)"` if needed.
