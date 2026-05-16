@@ -3,8 +3,8 @@
 
 Usage:
     cc-session-title set-issue <N> "<issue-title>"
-    cc-session-title add-pr <N>          (stub — Phase 2)
-    cc-session-title mark-complete       (stub — Phase 3)
+    cc-session-title add-pr <N>
+    cc-session-title mark-complete
 """
 
 import argparse
@@ -57,6 +57,36 @@ def format_set_issue_title(n: int, issue_title: str) -> str:
     return f"#{n} {issue_title.strip()}"
 
 
+# End-anchored: only a PR-list at the tail of the title counts as "already appended".
+# Prevents PR-references embedded in the issue title body from corrupting detection.
+PR_SUFFIX_RE = re.compile(r'( PR #\d+(?:, PR #\d+)*)$')
+
+
+def format_add_pr_title(current_title: str | None, n: int) -> str | None:
+    if current_title is None or not is_workflow_generated(current_title):
+        return None
+    suffix_match = PR_SUFFIX_RE.search(current_title)
+    if suffix_match:
+        suffix = suffix_match.group(1)
+        if re.search(rf'PR #{n}(?!\d)', suffix):
+            return None
+        return f"{current_title}, PR #{n}"
+    return f"{current_title} PR #{n}"
+
+
+COMPLETE_MARKER = '✓'
+
+
+def format_mark_complete_title(current_title: str | None) -> str | None:
+    if current_title is None:
+        return None
+    if current_title.startswith(COMPLETE_MARKER):
+        return None
+    if not is_workflow_generated(current_title):
+        return None
+    return f"{COMPLETE_MARKER}{current_title}"
+
+
 def _projects_dir() -> Path:
     override = os.environ.get('CLAUDE_PROJECTS_DIR')
     if override:
@@ -94,6 +124,40 @@ def run_set_issue(n: int, issue_title: str, cwd: str) -> int:
     return 0
 
 
+def run_add_pr(n: int, cwd: str) -> int:
+    path = _find_current_jsonl(cwd)
+    if path is None:
+        print('cc-session-title: no JSONL found in project dir; skipping', file=sys.stderr)
+        return 0
+    session_id = path.stem
+    existing = path.read_text(encoding='utf-8', errors='replace')
+    current = latest_custom_title(existing)
+    new_title = format_add_pr_title(current, n)
+    if new_title is None:
+        return 0
+    record = build_record(session_id, new_title)
+    with open(path, 'a', encoding='utf-8', newline='') as f:
+        f.write(record)
+    return 0
+
+
+def run_mark_complete(cwd: str) -> int:
+    path = _find_current_jsonl(cwd)
+    if path is None:
+        print('cc-session-title: no JSONL found in project dir; skipping', file=sys.stderr)
+        return 0
+    session_id = path.stem
+    existing = path.read_text(encoding='utf-8', errors='replace')
+    current = latest_custom_title(existing)
+    new_title = format_mark_complete_title(current)
+    if new_title is None:
+        return 0
+    record = build_record(session_id, new_title)
+    with open(path, 'a', encoding='utf-8', newline='') as f:
+        f.write(record)
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog='cc-session-title')
     sub = parser.add_subparsers(dest='cmd', required=True)
@@ -106,11 +170,10 @@ def main(argv=None) -> int:
     cwd = os.getcwd()
     if args.cmd == 'set-issue':
         return run_set_issue(args.number, args.title, cwd)
-    if args.cmd in ('add-pr', 'mark-complete'):
-        # Exit 1 so accidental Phase 1 callers surface in workflow output.
-        # Phase 2/3 replace these branches with run_add_pr() / run_mark_complete().
-        print(f'cc-session-title: {args.cmd} not yet implemented (Phase 2/3)', file=sys.stderr)
-        return 1
+    if args.cmd == 'add-pr':
+        return run_add_pr(args.number, cwd)
+    if args.cmd == 'mark-complete':
+        return run_mark_complete(cwd)
     return 1
 
 
