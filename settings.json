@@ -96,6 +96,8 @@
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
       "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_PREMISE_FAIL: *>>\")",
+      "Bash(echo \"<<WORKFLOW_PREMISE_ACK>>\")",
       "Bash(doc-append *)",
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",
