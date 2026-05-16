@@ -72,6 +72,18 @@ function shouldOpenInVsCode() {
 
 function openInVsCode(absPath) {
   if (!shouldOpenInVsCode()) return;
+  // --- BEGIN test-only: SHOW_PLAN_LINK_NO_SPAWN bypass ---
+  // Skip actual spawn so tests can verify this code path without launching
+  // real VS Code. Set SHOW_PLAN_LINK_MARKER_FILE to observe invocation.
+  // Never set SHOW_PLAN_LINK_NO_SPAWN=1 in production.
+  if (process.env.SHOW_PLAN_LINK_NO_SPAWN === "1") {
+    const marker = process.env.SHOW_PLAN_LINK_MARKER_FILE;
+    if (marker) {
+      try { fs.writeFileSync(marker, "1"); } catch (_) {}
+    }
+    return;
+  }
+  // --- END test-only: SHOW_PLAN_LINK_NO_SPAWN bypass ---
   try {
     let child;
     if (process.platform === "win32") {
