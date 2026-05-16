@@ -625,6 +625,72 @@ else
 fi
 teardown_tmp
 
+# --- R13: Fix A+B — INCIDENT: #N: heading with hash in first paren → hash-from-history
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### INCIDENT: #42: Some incident title (abc1234) (2026-05-10)
+Cause: x
+Fix: y
+EOF
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: abc1234 -->" \
+   && echo "$LOG" | grep -q "Resolved by commit" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill, commit=abc1234)"; then
+    pass "R13: Fix A+B — INCIDENT: #N: format, hash in first paren → hash-from-history"
+else
+    fail "R13: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R14: archive path — history.md empty, hash in docs/history/2026.md
+setup_tmp
+# history.md is intentionally empty (setup_tmp creates it blank)
+cat > "$TMP/docs/history/2026.md" <<'EOF'
+### INCIDENT: #42: Archived incident title (abc1234) (2026-01-15)
+Cause: old cause
+Fix: old fix
+EOF
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: abc1234 -->" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill, commit=abc1234)"; then
+    pass "R14: archive path — hash extracted from docs/history/*.md (HISTORY_DIR branch)"
+else
+    fail "R14: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
+# --- R15: Fix B only — hash in first paren group, date in last → tail -n 1 bypass needed
+# Pattern already matches (#42) via [,)]; Fix A is NOT required here.
+# Only Fix B (removing tail -n 1) makes this pass.
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Hash-first heading (abc1234) (#42) (2026-05-10)
+Background: hash appears before issue number
+Changes: shipped
+EOF
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+if [ "$RC" -eq 0 ] \
+   && echo "$LOG" | grep -q "resolved-by: abc1234 -->" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill, commit=abc1234)"; then
+    pass "R15: Fix B — hash in first paren group, date-only in last → hash extracted"
+else
+    fail "R15: rc=$RC log=$LOG"
+fi
+teardown_tmp
+
 # ============================================================================
 # D-series — SKILL.md regression guards (minimal, after refactor)
 # ============================================================================

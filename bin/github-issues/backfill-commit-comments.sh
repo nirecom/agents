@@ -38,17 +38,17 @@ fi
 HISTORY_FILE="${AGENTS_CONFIG_DIR}/docs/history.md"
 HISTORY_DIR="${AGENTS_CONFIG_DIR}/docs/history"
 
-# Tier 1: extract 7-40 hex chars from the last bracket group in a history.md heading.
+# Tier 1: extract 7-40 hex chars from any bracket group in a history.md heading.
 discover_hash_from_history() {
     local n="$1" entry hash
     entry=""
     [ -f "$HISTORY_FILE" ] && \
-        entry=$(grep -E "^### .*#${n}[,)]|^### #${n}: " "$HISTORY_FILE" 2>/dev/null | head -n 1 || true)
+        entry=$(grep -E "^### .*#${n}[,):]|^### #${n}: " "$HISTORY_FILE" 2>/dev/null | head -n 1 || true)
     if [ -z "$entry" ] && [ -d "$HISTORY_DIR" ] && ls "$HISTORY_DIR"/*.md >/dev/null 2>&1; then
-        entry=$(grep -hE "^### .*#${n}[,)]|^### #${n}: " "$HISTORY_DIR"/*.md 2>/dev/null | head -n 1 || true)
+        entry=$(grep -hE "^### .*#${n}[,):]|^### #${n}: " "$HISTORY_DIR"/*.md 2>/dev/null | head -n 1 || true)
     fi
     [ -z "$entry" ] && return 1
-    hash=$(printf '%s' "$entry" | grep -oE '\([^)]*\)' | tail -n 1 \
+    hash=$(printf '%s' "$entry" | grep -oE '\([^)]*\)' \
         | grep -oE '[0-9a-f]{7,40}' | head -n 1 || true)
     [ -z "$hash" ] && return 2
     printf '%s' "$hash"
