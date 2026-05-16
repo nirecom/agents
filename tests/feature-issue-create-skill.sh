@@ -34,7 +34,7 @@ run_with_timeout() {
 if [ ! -f "$TARGET" ]; then
     echo "FAIL: bin/github-issues/issue-create.sh not found (implementation missing)"
     echo ""
-    echo "Results: 0 passed, 15 failed"
+    echo "Results: 0 passed, 19 failed"
     exit 1
 fi
 
@@ -55,6 +55,9 @@ if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
     printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
 fi
 case "$ARGS" in
+  auth\ status*)
+    echo "Token scopes: 'gist', 'project', 'read:org', 'repo'"
+    exit 0 ;;
   issue\ create\ *)
     echo "https://github.com/nirecom/agents/issues/9999"
     exit 0 ;;
@@ -62,6 +65,18 @@ case "$ARGS" in
     if [ "${GH_MOCK_PROJECT_FAIL:-0}" = "1" ]; then
         echo "error: project attach failed" >&2
         exit 1
+    fi
+    echo "PVTI_mock_item_id_9999"
+    exit 0 ;;
+  issue\ view\ *createdAt*)
+    if [ "${GH_MOCK_CREATEDAT_EMPTY:-0}" = "1" ]; then
+        echo ""; exit 0
+    fi
+    echo "2026-05-15"
+    exit 0 ;;
+  project\ item-edit\ *)
+    if [ "${GH_MOCK_ITEM_EDIT_FAIL:-0}" = "1" ]; then
+        echo "error: item-edit failed" >&2; exit 1
     fi
     exit 0 ;;
   *)
@@ -80,7 +95,7 @@ teardown_mock() {
         rm -rf "$TMP"
     fi
     TMP=""
-    unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_FAIL 2>/dev/null || true
+    unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_FAIL GH_MOCK_CREATEDAT_EMPTY GH_MOCK_ITEM_EDIT_FAIL 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -284,6 +299,80 @@ elif grep -q "/issue-create" "$CLAUDE_MD"; then
 else
     fail "D4: CLAUDE.md does not mention /issue-create — RED until implementation"
 fi
+
+# ---------------------------------------------------------------------------
+# T1: Content Date happy path — item-add with --format json, item-edit with right args, no warnings
+# ---------------------------------------------------------------------------
+setup_mock
+STDERR_OUT="$TMP/t1-stderr.txt"
+run_with_timeout 30 bash "$TARGET" --title "Date test" --body "body" >/dev/null 2>"$STDERR_OUT"
+RC=$?
+if [ "$RC" -eq 0 ] \
+   && grep -qE "issue view 9999" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -qE "project item-add.*--format json.*--jq|project item-add.*--jq.*--format json" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -q "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -q -- "--date 2026-05-15" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -q -- "--field-id PVTF_lAHOAMF_jc4BXf9EzhSsYwA" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -q -- "--project-id PVT_kwHOAMF_jc4BXf9E" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && ! grep -qi "warn:" "$STDERR_OUT" 2>/dev/null; then
+    pass "T1: Content Date set: correct issue#, --format json in item-add, right date/ids, no warnings"
+else
+    fail "T1: Content Date happy-path incorrect (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null) stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
+fi
+teardown_mock
+
+# ---------------------------------------------------------------------------
+# T2: createdAt fetch fails → item-edit skipped, non-fatal (exit 0)
+# ---------------------------------------------------------------------------
+setup_mock
+export GH_MOCK_CREATEDAT_EMPTY=1
+STDERR_OUT="$TMP/t2-stderr.txt"
+run_with_timeout 30 bash "$TARGET" --title "No createdAt" --body "body" >/dev/null 2>"$STDERR_OUT"
+RC=$?
+if [ "$RC" -eq 0 ] \
+   && ! grep -q "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -qi "failed to fetch createdAt" "$STDERR_OUT" 2>/dev/null; then
+    pass "T2: createdAt failure skips item-edit (non-fatal)"
+else
+    fail "T2: createdAt failure handling incorrect (rc=$RC stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
+fi
+teardown_mock
+
+# ---------------------------------------------------------------------------
+# T3: item-edit fails → non-fatal (exit 0, URL on stdout, warning on stderr)
+# ---------------------------------------------------------------------------
+setup_mock
+export GH_MOCK_ITEM_EDIT_FAIL=1
+STDOUT_OUT="$TMP/t3-stdout.txt"
+STDERR_OUT="$TMP/t3-stderr.txt"
+run_with_timeout 30 bash "$TARGET" --title "Edit fail" --body "body" >"$STDOUT_OUT" 2>"$STDERR_OUT"
+RC=$?
+if [ "$RC" -eq 0 ] \
+   && grep -qE "https://github.com/.+/issues/[0-9]+" "$STDOUT_OUT" 2>/dev/null \
+   && grep -qi "failed to set Content Date" "$STDERR_OUT" 2>/dev/null; then
+    pass "T3: item-edit failure is non-fatal (exit 0, URL on stdout, warning on stderr)"
+else
+    fail "T3: item-edit non-fatal handling incorrect (rc=$RC stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
+fi
+teardown_mock
+
+# ---------------------------------------------------------------------------
+# T4: ISSUE_CREATE_FIELD_ID / ISSUE_CREATE_PROJECT_ID env-var overrides honored
+# ---------------------------------------------------------------------------
+setup_mock
+export ISSUE_CREATE_FIELD_ID=PVTF_override_field
+export ISSUE_CREATE_PROJECT_ID=PVT_override_project
+run_with_timeout 30 bash "$TARGET" --title "Override" --body "body" >/dev/null 2>/dev/null
+RC=$?
+if [ "$RC" -eq 0 ] \
+   && grep -q -- "--field-id PVTF_override_field" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+   && grep -q -- "--project-id PVT_override_project" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+    pass "T4: ISSUE_CREATE_FIELD_ID / ISSUE_CREATE_PROJECT_ID env-var overrides honored"
+else
+    fail "T4: env-var override not honored (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+fi
+unset ISSUE_CREATE_FIELD_ID ISSUE_CREATE_PROJECT_ID
+teardown_mock
 
 # ---------------------------------------------------------------------------
 # Summary
