@@ -40,6 +40,7 @@ const path = require("path");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");
+const { resolveSessionId, getWorkflowDir } = require("./lib/workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
@@ -1224,6 +1225,28 @@ try {
 }
 
 if (!isEnforceWorktreeOn()) done();
+
+// Session-scoped escape hatch: if the current session has a marker file,
+// treat as ENFORCE_WORKTREE=off for this session only. Set via:
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF[: reason]>>"
+// Restore by deleting the marker. Fail-closed when sessionId is unresolvable.
+try {
+  const sid = (input && input.session_id) || resolveSessionId();
+  if (sid && /^[A-Za-z0-9_-]+$/.test(sid)) {
+    const markerPath = path.join(getWorkflowDir(), `${sid}.worktree-off`);
+    if (fs.existsSync(markerPath)) {
+      process.stderr.write(
+        `enforce-worktree: session override active (marker: ${markerPath}). ` +
+          `Delete the marker to restore enforcement.\n`
+      );
+      done();
+    }
+  }
+} catch (e) {
+  process.stderr.write(
+    `enforce-worktree: marker check failed (${e.message}); enforcement remains ON.\n`
+  );
+}
 
 // Defence-in-depth: if process.cwd() is unresolvable (e.g. after
 // git worktree remove from inside the removed worktree), fail-open.
