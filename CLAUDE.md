@@ -2,12 +2,8 @@
 
 ## Workflow
 
-1. **Workflow init** — **Before anything else:** Run `/workflow-init`.
-   Routes the session based on GH issue context:
-   - `#N` + `intent:clarified` label → skip clarify-intent, proceed to outline planning.
-   - `#N` + no label → pre-fill clarify-intent with issue body for a short confirmation interview.
-   - No `#N` → run clarify-intent normally; auto-create a tracking issue at completion.
-   - To create task issues mid-workflow (e.g. for follow-ups), use `/issue-create`.
+1. **Workflow init** — **Before anything else:** Run `/workflow-init` (routes by GH issue context; see `skills/workflow-init/SKILL.md`).
+   Mid-workflow follow-up issues: use `/issue-create`.
    For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
    Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
@@ -52,13 +48,8 @@
       delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.
 
-    After cleanup, read `<session-id>-intent.md`'s `## closes_issues` section.
-    If it contains exactly one issue number, run `/issue-close <N>`.
-    (`/issue-close` handles the `CLOSED + (none)` state correctly — PR auto-close
-    via `closes #N` is the expected trigger for this path.)
-    If the section reads `(empty)` or is absent, skip.
-    (Multi-issue sessions are not expected. If the list has more than one entry,
-    run `/issue-close` for each sequentially — no dependency sorting, no retry.)
+    Then run `/issue-close --from-session` (reads `closes_issues` from the session
+    intent.md and routes to the correct close path; skips if empty).
 
 ## Plan Mode Incompatibility
 
