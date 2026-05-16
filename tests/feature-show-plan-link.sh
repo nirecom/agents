@@ -153,15 +153,12 @@ if [ -n "$result12" ]; then
     let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
     process.stdout.write(d.systemMessage || '');
   " 2>/dev/null)
-  if echo "$msg12" | grep -q "Plan file written:" && echo "$msg12" | grep -qv "\\\\\\\\"; then
-    pass "T12 backslash path normalized to forward slashes in systemMessage"
-  elif echo "$msg12" | grep -q "Plan file written:"; then
-    pass "T12 backslash path produces systemMessage"
+  if echo "$msg12" | grep -q "Plan file written:"; then
+    pass "T12 backslash path produces systemMessage (path format asserted by T23)"
   else
     fail "T12 backslash path — unexpected result: $result12"
   fi
 else
-  # On POSIX, backslash paths may not resolve to the plans dir — noop is acceptable
   pass "T12 backslash path (POSIX: noop is acceptable — path does not resolve to plans dir)"
 fi
 
@@ -293,9 +290,9 @@ else
 fi
 rm -rf "$BIN_DIR20"
 
-# ── T21: Legacy CLAUDE_CODE_ENTRYPOINT alone must NOT trigger code spawn ──
-# regression guard: legacy variable must NOT trigger VS Code path
-echo "=== T21: legacy CLAUDE_CODE_ENTRYPOINT only — no code spawn ==="
+# ── T21: CLAUDE_CODE_ENTRYPOINT=claude-vscode alone MUST trigger code spawn ──
+# Axis 2 contract: extension/webview sessions are detected by CLAUDE_CODE_ENTRYPOINT.
+echo "=== T21: CLAUDE_CODE_ENTRYPOINT=claude-vscode alone → code spawned ==="
 BIN_DIR21="${NODE_TMPDIR}/show-plan-link-shim21-$$"
 mkdir -p "$BIN_DIR21"
 MARKER_FILE21="$BIN_DIR21/code-invoked"
@@ -326,9 +323,12 @@ else
     sleep 0.1
   done
   if [ -f "$MARKER_FILE21" ]; then
-    fail "T21 legacy CLAUDE_CODE_ENTRYPOINT — code shim was invoked but must NOT be"
+    pass "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode alone → code shim invoked"
   else
-    pass "T21 legacy CLAUDE_CODE_ENTRYPOINT — correctly ignored, code shim NOT invoked"
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+      Linux|Darwin) fail "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode alone — code shim NOT invoked" ;;
+      *) pass "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode alone — systemMessage emitted (shim check skipped on Windows)" ;;
+    esac
   fi
 fi
 rm -rf "$BIN_DIR21"
@@ -360,6 +360,181 @@ else
   fail "T22 fail-open — systemMessage missing: $T22_RESULT"
 fi
 rm -rf "$BIN_DIR22"
+
+# ── T23: Windows backslash output in systemMessage ──────────────────────────
+echo "=== T23: Windows backslash output in systemMessage ==="
+IS_WINDOWS=0
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS=1 ;;
+esac
+[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS=1
+
+if [ "$IS_WINDOWS" = "1" ]; then
+  T23_INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+  T23_RESULT=$(run_hook "$T23_INPUT")
+  T23_MSG=$(echo "$T23_RESULT" | run_with_timeout node -e \
+    "let d; try { d=JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e){process.exit(1);}
+     process.stdout.write(d.systemMessage||'');" 2>/dev/null)
+  if   echo "$T23_MSG" | grep -qE '^Plan file written: [A-Za-z]:\\' \
+    && ! echo "$T23_MSG" | grep -q '~/' \
+    && ! echo "$T23_MSG" | grep -q 'file:///' \
+    && ! echo "$T23_MSG" | grep -q '(' ; then
+    pass "T23 Windows: drive-letter backslash; no tilde, no file://, no dual-path annotation"
+  else
+    fail "T23 Windows backslash check — message: $T23_MSG"
+  fi
+else
+  pass "T23 skipped on POSIX (Windows-only invariant)"
+fi
+
+# ── T24: TERM_PROGRAM=vscode only → code spawned ──────────────────────────
+echo "=== T24: TERM_PROGRAM=vscode only → code spawned ==="
+BIN_DIR24="${NODE_TMPDIR}/show-plan-link-shim24-$$"
+mkdir -p "$BIN_DIR24"
+MARKER_FILE24="$BIN_DIR24/code-invoked"
+cat > "$BIN_DIR24/code" << 'SHIM'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/code-invoked"
+exit 0
+SHIM
+chmod +x "$BIN_DIR24/code"
+
+T24_RESULT=$(
+  export TERM_PROGRAM=vscode
+  unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+  unset SHOW_PLAN_LINK_NO_AUTO_OPEN 2>/dev/null || true
+  export PATH="$BIN_DIR24:$PATH"
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+)
+T24_MSG=$(echo "$T24_RESULT" | run_with_timeout node -e "
+  let d; try { d=JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e){process.exit(1);}
+  process.stdout.write(d.systemMessage||'');
+" 2>/dev/null)
+if ! echo "$T24_MSG" | grep -q "Plan file written:"; then
+  fail "T24 TERM_PROGRAM-only — no systemMessage: $T24_RESULT"
+else
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$MARKER_FILE24" ] && break; sleep 0.1; done
+  if [ -f "$MARKER_FILE24" ]; then
+    pass "T24 TERM_PROGRAM=vscode only → code shim invoked"
+  else
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+      Linux|Darwin) fail "T24 TERM_PROGRAM=vscode only — code shim NOT invoked" ;;
+      *) pass "T24 TERM_PROGRAM=vscode only — systemMessage emitted (shim check skipped on Windows)" ;;
+    esac
+  fi
+fi
+rm -rf "$BIN_DIR24"
+
+# ── T25: CLAUDE_CODE_ENTRYPOINT=claude-vscode only → code spawned ─────────
+echo "=== T25: CLAUDE_CODE_ENTRYPOINT=claude-vscode only → code spawned ==="
+BIN_DIR25="${NODE_TMPDIR}/show-plan-link-shim25-$$"
+mkdir -p "$BIN_DIR25"
+MARKER_FILE25="$BIN_DIR25/code-invoked"
+cat > "$BIN_DIR25/code" << 'SHIM'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/code-invoked"
+exit 0
+SHIM
+chmod +x "$BIN_DIR25/code"
+
+T25_RESULT=$(
+  unset TERM_PROGRAM 2>/dev/null || true
+  export CLAUDE_CODE_ENTRYPOINT=claude-vscode
+  unset SHOW_PLAN_LINK_NO_AUTO_OPEN 2>/dev/null || true
+  export PATH="$BIN_DIR25:$PATH"
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+)
+T25_MSG=$(echo "$T25_RESULT" | run_with_timeout node -e "
+  let d; try { d=JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e){process.exit(1);}
+  process.stdout.write(d.systemMessage||'');
+" 2>/dev/null)
+if ! echo "$T25_MSG" | grep -q "Plan file written:"; then
+  fail "T25 CLAUDE_CODE_ENTRYPOINT-only — no systemMessage: $T25_RESULT"
+else
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$MARKER_FILE25" ] && break; sleep 0.1; done
+  if [ -f "$MARKER_FILE25" ]; then
+    pass "T25 CLAUDE_CODE_ENTRYPOINT=claude-vscode only → code shim invoked"
+  else
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+      Linux|Darwin) fail "T25 CLAUDE_CODE_ENTRYPOINT-only — code shim NOT invoked" ;;
+      *) pass "T25 CLAUDE_CODE_ENTRYPOINT-only — systemMessage emitted (shim check skipped on Windows)" ;;
+    esac
+  fi
+fi
+rm -rf "$BIN_DIR25"
+
+# ── T26: both signals → code spawned exactly once ─────────────────────────
+echo "=== T26: both signals → code spawned ==="
+BIN_DIR26="${NODE_TMPDIR}/show-plan-link-shim26-$$"
+mkdir -p "$BIN_DIR26"
+MARKER_FILE26="$BIN_DIR26/code-invoked"
+cat > "$BIN_DIR26/code" << 'SHIM'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/code-invoked"
+exit 0
+SHIM
+chmod +x "$BIN_DIR26/code"
+
+T26_RESULT=$(
+  export TERM_PROGRAM=vscode
+  export CLAUDE_CODE_ENTRYPOINT=claude-vscode
+  unset SHOW_PLAN_LINK_NO_AUTO_OPEN 2>/dev/null || true
+  export PATH="$BIN_DIR26:$PATH"
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+)
+T26_MSG=$(echo "$T26_RESULT" | run_with_timeout node -e "
+  let d; try { d=JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e){process.exit(1);}
+  process.stdout.write(d.systemMessage||'');
+" 2>/dev/null)
+if ! echo "$T26_MSG" | grep -q "Plan file written:"; then
+  fail "T26 both signals — no systemMessage: $T26_RESULT"
+else
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$MARKER_FILE26" ] && break; sleep 0.1; done
+  if [ -f "$MARKER_FILE26" ]; then
+    pass "T26 both signals → code shim invoked"
+  else
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+      Linux|Darwin) fail "T26 both signals — code shim NOT invoked" ;;
+      *) pass "T26 both signals — systemMessage emitted (shim check skipped on Windows)" ;;
+    esac
+  fi
+fi
+rm -rf "$BIN_DIR26"
+
+# ── T27: opt-out SHOW_PLAN_LINK_NO_AUTO_OPEN=1 overrides all signals ───────
+echo "=== T27: opt-out overrides all signals — no code spawn ==="
+BIN_DIR27="${NODE_TMPDIR}/show-plan-link-shim27-$$"
+mkdir -p "$BIN_DIR27"
+MARKER_FILE27="$BIN_DIR27/code-invoked"
+cat > "$BIN_DIR27/code" << 'SHIM'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/code-invoked"
+exit 0
+SHIM
+chmod +x "$BIN_DIR27/code"
+
+T27_RESULT=$(
+  export TERM_PROGRAM=vscode
+  export CLAUDE_CODE_ENTRYPOINT=claude-vscode
+  export SHOW_PLAN_LINK_NO_AUTO_OPEN=1
+  export PATH="$BIN_DIR27:$PATH"
+  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+)
+T27_MSG=$(echo "$T27_RESULT" | run_with_timeout node -e "
+  let d; try { d=JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e){process.exit(1);}
+  process.stdout.write(d.systemMessage||'');
+" 2>/dev/null)
+if ! echo "$T27_MSG" | grep -q "Plan file written:"; then
+  fail "T27 opt-out — no systemMessage: $T27_RESULT"
+else
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$MARKER_FILE27" ] && break; sleep 0.1; done
+  if [ -f "$MARKER_FILE27" ]; then
+    fail "T27 opt-out — code shim invoked but MUST NOT be (SHOW_PLAN_LINK_NO_AUTO_OPEN=1)"
+  else
+    pass "T27 opt-out: SHOW_PLAN_LINK_NO_AUTO_OPEN=1 → code shim correctly suppressed"
+  fi
+fi
+rm -rf "$BIN_DIR27"
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
