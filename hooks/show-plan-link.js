@@ -72,6 +72,19 @@ function shouldOpenInVsCode() {
 
 function openInVsCode(absPath) {
   if (!shouldOpenInVsCode()) return;
+  // --- BEGIN test-only: SHOW_PLAN_LINK_NO_SPAWN bypass (#326) ---
+  // Added in #326: on Windows cmd.exe resolves "code" via PATHEXT and ignores
+  // extensionless bash shims, so test shims cannot intercept the real code.cmd.
+  // This flag lets tests skip the real VS Code spawn without PATH tricks.
+  // Set SHOW_PLAN_LINK_MARKER_FILE to observe invocation. Never set in production.
+  if (process.env.SHOW_PLAN_LINK_NO_SPAWN === "1") {
+    const marker = process.env.SHOW_PLAN_LINK_MARKER_FILE;
+    if (marker) {
+      try { fs.writeFileSync(marker, "1"); } catch (_) {}
+    }
+    return;
+  }
+  // --- END test-only: SHOW_PLAN_LINK_NO_SPAWN bypass ---
   try {
     let child;
     if (process.platform === "win32") {
