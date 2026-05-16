@@ -62,6 +62,12 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
        posts a resolved-by sentinel.
    Display the PR URL.
 
+   Capture the PR number and update the VS Code session title (best-effort):
+   ```
+   PR_NUMBER=$(gh pr view --json number --jq .number)
+   uv run "$AGENTS_CONFIG_DIR/bin/cc-session-title.py" add-pr "$PR_NUMBER" || true
+   ```
+
 7. **Merge prompt:**
 
    Check `ENFORCE_WORKTREE`:
@@ -72,7 +78,8 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
 
    **(b) `ENFORCE_WORKTREE=off` (unchanged):** Output `PR #<N> is open: [<url>](<url>)`,
    then `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
-   - **merge**: `gh pr merge --squash --delete-branch`, then `git fetch --prune origin`
+   - **merge**: `gh pr merge --squash --delete-branch`, then `git fetch --prune origin`,
+     then update session title (best-effort): `uv run "$AGENTS_CONFIG_DIR/bin/cc-session-title.py" mark-complete || true`
    - **wait** / **abort**: display URL and stop.
 
    If `AskUserQuestion` is unavailable, default to **wait**.
