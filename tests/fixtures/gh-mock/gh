@@ -87,12 +87,55 @@ case "$ARGS" in
     # Allow override via GH_MOCK_ISSUE_NUMBERS (newline-separated).
     # NOTE: gh issue list does NOT support --paginate (unlike gh api).
     # The script uses --limit 1000 instead. Mock pattern matches accordingly.
+    if [ "${GH_MOCK_SCENARIO:-}" = "canary_six_class" ]; then
+        printf '%s\n' 101 102 103 104 105 106 107 108 109 110 111 112
+        exit 0
+    fi
     if [ -n "${GH_MOCK_ISSUE_NUMBERS:-}" ]; then
         printf '%s\n' "$GH_MOCK_ISSUE_NUMBERS"
     else
         echo "42"
     fi
     exit 0
+    ;;
+  # Tier 0a: closedByPullRequestsReferences dispatch (per-issue env var override)
+  "issue view "*" --json closedByPullRequestsReferences --jq"*)
+    N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue view ([0-9]+) .*/\1/p')
+    var="GH_MOCK_PR_MERGE_COMMIT_FOR_${N}"
+    if [ -n "${!var+x}" ]; then
+        val="${!var}"
+        if [ -n "$val" ]; then
+            printf '%s' "$val"
+        fi
+        exit 0
+    fi
+    ;;
+  # Tier 0b: body dispatch (per-issue env var override)
+  "issue view "*" --json body --jq"*)
+    N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue view ([0-9]+) .*/\1/p')
+    var="GH_MOCK_BODY_FOR_${N}"
+    if [ -n "${!var+x}" ]; then
+        printf '%s' "${!var}"
+        exit 0
+    fi
+    ;;
+  # Tier 1.5: title dispatch (per-issue env var override)
+  "issue view "*" --json title --jq"*)
+    N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue view ([0-9]+) .*/\1/p')
+    var="GH_MOCK_TITLE_FOR_${N}"
+    if [ -n "${!var+x}" ]; then
+        printf '%s' "${!var}"
+        exit 0
+    fi
+    ;;
+  # Issue list dispatch: canary_six_class scenario returns 12 issues
+  "issue list --state closed "*"--json number --jq"*)
+    case "${GH_MOCK_SCENARIO:-}" in
+      canary_six_class)
+          printf '%s\n' 101 102 103 104 105 106 107 108 109 110 111 112
+          exit 0
+          ;;
+    esac
     ;;
 esac
 
@@ -429,6 +472,38 @@ case "$SCENARIO" in
           BODY="${ARGS#*--body }"
           printf 'EDIT_PARENT_99: %s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
         fi
+        exit 0
+        ;;
+    esac
+    ;;
+  canary_six_class)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[]}'
+        exit 0
+        ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue comment "*" --body "*)
+        if [ -n "${GH_MOCK_COMMENT_LOG:-}" ]; then
+          BODY="${ARGS#*--body }"
+          printf '%s\n' "$BODY" >> "$GH_MOCK_COMMENT_LOG"
+        fi
+        exit 0
+        ;;
+      "issue list --state closed"*)
+        if [[ "$ARGS" == *"--jq"* ]]; then
+          printf '%s\n' 101 102 103 104 105 106 107 108 109 110 111 112
+        fi
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
         exit 0
         ;;
     esac
