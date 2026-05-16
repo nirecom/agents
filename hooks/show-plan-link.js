@@ -6,10 +6,14 @@
 // Output protocol: emits { "systemMessage": "..." } only.
 // Sibling PostToolUse hooks emit `additionalContext` — different field, no collision.
 //
-// NOTE on TERM_PROGRAM: VS Code's integrated terminal sets TERM_PROGRAM=vscode
-// (official VS Code behavior; POSIX convention; cross-shell). Degrades
-// gracefully — systemMessage always emits; only code -r is skipped when
-// TERM_PROGRAM !== "vscode".
+// NOTE on VS Code detection (shouldOpenInVsCode()):
+// Two positive signals are checked; the first match wins:
+//   1. TERM_PROGRAM === "vscode"  — integrated terminal (POSIX convention; cross-shell)
+//   2. CLAUDE_CODE_ENTRYPOINT === "claude-vscode" — extension/webview session
+//      (TERM_PROGRAM is not propagated into the VS Code extension webview)
+// Opt-out: SHOW_PLAN_LINK_NO_AUTO_OPEN=1 short-circuits all detection.
+// Rejected: VSCODE_IPC_HOOK_CLI — leaks into external terminals launched from VS Code;
+//   false-positive risk; adds no coverage beyond the two primaries above.
 //
 // NOTE on Windows spawn: Node.js 20.12+ (CVE-2024-27980) refuses to spawn
 // .cmd/.bat files without shell:true. We use cmd.exe directly with args as
@@ -59,8 +63,15 @@ function isFinalPlanArtifact(filePath) {
   return /^.+-(intent|outline|detail)\.md$/.test(getBasename(f));
 }
 
+function shouldOpenInVsCode() {
+  if (process.env.SHOW_PLAN_LINK_NO_AUTO_OPEN === "1") return false;
+  if (process.env.TERM_PROGRAM === "vscode") return true;
+  if (process.env.CLAUDE_CODE_ENTRYPOINT === "claude-vscode") return true;
+  return false;
+}
+
 function openInVsCode(absPath) {
-  if (process.env.TERM_PROGRAM !== "vscode") return;
+  if (!shouldOpenInVsCode()) return;
   try {
     let child;
     if (process.platform === "win32") {
@@ -99,7 +110,12 @@ if (require.main === module) {
   const filePath = (input.tool_input && input.tool_input.file_path) || "";
   if (!isFinalPlanArtifact(filePath)) noopExit();
 
-  const absPath = normalizeSlashes(path.resolve(filePath));
+  // Windows: native backslash absolute path (Explorer/cmd.exe compatible).
+  // POSIX:   forward-slash (normalizeSlashes is a no-op on already-forward-slash strings).
+  const resolved = path.resolve(filePath);
+  const absPath = process.platform === "win32"
+    ? resolved.replace(/\//g, "\\")
+    : normalizeSlashes(resolved);
 
   openInVsCode(absPath);
 
@@ -107,4 +123,4 @@ if (require.main === module) {
   process.exit(0);
 }
 
-module.exports = { isFinalPlanArtifact };
+module.exports = { isFinalPlanArtifact, shouldOpenInVsCode };

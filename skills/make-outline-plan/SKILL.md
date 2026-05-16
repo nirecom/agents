@@ -160,7 +160,10 @@ Write the file (per `rules/language.md`) with the following sections:
 
 - Orchestrator chat output during the discussion loop is restricted to:
   (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
-  (b) the final clickable link to <session-id>-outline.md
+  (b) NO path output — the `show-plan-link.js` PostToolUse hook emits the sole
+      authoritative breadcrumb (`Plan file written: <abs-path>`) automatically.
+      The orchestrator MUST NOT print, duplicate, translate, paraphrase, or
+      reformat that path in any form. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the prose rationale preamble emitted in step 7 before `AskUserQuestion`
   No per-round natural-language summaries, no codex/reviewer transcripts,
   no "falling back to Claude reviewer" notices in chat.

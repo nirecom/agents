@@ -91,8 +91,10 @@ must be read and passed to the planner before drafting begins.
    - **Revise** (skill-specific): ask what to change, send feedback to the planner
      as a new revision request, then loop back to step 5a (re-draft → re-review →
      re-confirm). Each revision consumes `revision_rounds`.
-   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after presenting
-     the clickable link AND a one-paragraph summary (per protocol Steps 2 + 3).
+   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after the
+     one-paragraph summary (per protocol Step 3). DO NOT present any path —
+     the `show-plan-link.js` hook's `Plan file written:` line is the sole
+     surfaced breadcrumb (per protocol Step 2).
    - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after confirmation.
 
 ## Research Escalation
@@ -154,7 +156,10 @@ Skipping research does NOT justify skipping the plan step.
 - The outline's Delivery plan must be surfaced in step 2 before the planner subagent runs. This is required, not optional.
 - Orchestrator chat output during the discussion loop is restricted to:
   (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
-  (b) the final clickable link to <session-id>-detail.md
+  (b) NO path output — the `show-plan-link.js` PostToolUse hook emits the sole
+      authoritative breadcrumb (`Plan file written: <abs-path>`) automatically.
+      The orchestrator MUST NOT print, duplicate, translate, paraphrase, or
+      reformat that path in any form. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the `Delivery plan (...)` summary emitted by step 2 before the discussion loop begins
   Diagnostics go to <session-id>-detail-debug.log only.
 - Follow `rules/orthogonality.md` for cross-platform and naming consistency
