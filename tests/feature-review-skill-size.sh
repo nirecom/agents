@@ -104,8 +104,8 @@ else
     fail "Case 2: PERFORMED not found. Output: $OUTPUT"
 fi
 
-if echo "$OUTPUT" | grep -q "exceeds 100 lines"; then
-    fail "Case 2: unexpected 'exceeds 100 lines' warning for 50-line file"
+if echo "$OUTPUT" | grep -q "exceeds 100-line safety net"; then
+    fail "Case 2: unexpected 'exceeds 100-line safety net' warning for 50-line file"
 else
     pass "Case 2: no line-count warning for 50-line file"
 fi
@@ -141,10 +141,10 @@ else
     fail "Case 3: PERFORMED not found. Output: $OUTPUT"
 fi
 
-if echo "$OUTPUT" | grep -q "exceeds 100 lines"; then
+if echo "$OUTPUT" | grep -q "exceeds 100-line safety net"; then
     pass "Case 3: line-count warning present for 150-line file"
 else
-    fail "Case 3: 'exceeds 100 lines' warning missing. Output: $OUTPUT"
+    fail "Case 3: 'exceeds 100-line safety net' warning missing. Output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -222,10 +222,10 @@ else
     fail "Case 6: PERFORMED not found. Output: $OUTPUT"
 fi
 
-if echo "$OUTPUT" | grep -q "exceeds 100 lines"; then
+if echo "$OUTPUT" | grep -q "exceeds 100-line safety net"; then
     pass "Case 6: line-count warning present with explicit --base"
 else
-    fail "Case 6: 'exceeds 100 lines' warning missing. Output: $OUTPUT"
+    fail "Case 6: 'exceeds 100-line safety net' warning missing. Output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------

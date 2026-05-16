@@ -127,6 +127,14 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    - stdout `OFF`: set the chosen approach to "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`. Do NOT write the outline file yet — Step 8 handles the write.
    - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection. One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback. The user's selection is the chosen approach. Do NOT write the outline file yet — Step 8 handles the write.
 
+   **AskUserQuestion content guard**: the `question` field must be a single short
+   selection prompt (one sentence). Do NOT embed approach bodies, rationales, or
+   trade-offs in `question` or option `description` — those belong in the prose
+   preamble above. Each option's `description` is limited to a one-line summary
+   of the approach (≤80 chars). The `AskUserQuestion` dialog is narrow and
+   unreadable for long content; the preamble in main conversation is the venue
+   for substance.
+
 8. Write the chosen approach to `~/.workflow-plans/<session-id>-outline.md` using
    the schema below. Then apply the **full** `skills/_shared/confirm-plan.md`
    protocol (Steps 1+2+3) using `CONFIRM_OUTLINE` as the flag.
@@ -166,6 +174,11 @@ Write the file (per `rules/language.md`) with the following sections:
   distinct user touchpoints: step 7 asks "which approach to pick" *before* the
   file is written; step 8 asks "proceed or revise" *after* reviewing the written
   file. In OFF mode neither AskUserQuestion fires.
+- **AskUserQuestion is for choices, not content.** `question` is one sentence;
+  option `description` is one line (≤80 chars). Approach bodies, rationales, and
+  trade-offs go in the main-conversation prose preamble (step 7) — never inside
+  `question` or option fields. The dialog UI is narrow; long content there is
+  unreadable.
   Never pause for user confirmation during intermediate steps: Codex/reviewer
   revision rounds (step 6) or between-step summaries. Update files silently;
   inform the user with plain text only.

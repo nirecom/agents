@@ -5,7 +5,15 @@ description: Close a GitHub Issue and write its history.md entry in one transact
 
 Triage routes to the correct subset of steps; each step is idempotent and resumable.
 
-Usage: `/issue-close <N> [--commit <hash>]`
+Usage: `/issue-close <N> [--commit <hash>]` or `/issue-close --from-session [--commit <hash>]`
+
+`--from-session` resolves `<N>` from the current session's intent.md:
+read `CLAUDE_SESSION_ID` (via `$CLAUDE_ENV_FILE`, fallback env), locate
+`${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`, parse the
+`## closes_issues` section (integer list). Zero or `(empty)` → skip silently.
+Exactly one → continue with that `<N>`. Multiple → run the close flow for each
+sequentially (no dependency sorting, no retry). Intent file missing → skip with
+a one-line warning. All remaining steps below are unchanged.
 
 ## Pre-flight
 

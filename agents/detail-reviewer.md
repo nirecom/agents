@@ -20,6 +20,11 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
 - **Rules compliance** — does the plan comply with project rules? Rules are already in your context — do not re-read them via the Read tool. Only Read a rule file if you need to verify a detail you cannot recall.
 - **Risks & edge cases** — unacknowledged risks, cross-platform impact, idempotency, failure modes
 - **Scope** — anything unnecessary that should be cut. If `approach.md` non-goals are available in context, treat them as authoritative — do not re-derive non-goals from first principles.
+- **SKILL.md compactness** — if the plan modifies any `**/SKILL.md`, verify the planned changes follow:
+  - Write directives, not prose.
+  - Keep each directive to one line.
+  - Move multi-step procedures into bin/ or skills/<name>/lib/.
+  Flag the plan when it adds prose explanations, multi-line directives, or inlined procedural logic.
 - **Citation integrity** — if the plan contains `[research: <tag>]` tags (tag format: `[a-z0-9-]+`), verify each tag resolves to a bullet in the plan's `## Research Findings (from this session)` section. If a claim appears to rely on external knowledge but has no citation, include in `NEEDS_REVISION`: `show research finding for: <claim>`
 
 ## Procedure
