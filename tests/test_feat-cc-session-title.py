@@ -341,28 +341,38 @@ class TestRunSetIssue:
         assert first["customTitle"] == "#100 old"
         assert second["customTitle"] == "#42 New Title"
 
-    # c. Manual custom-title (not workflow-generated) → file unchanged
-    def test_skips_when_manual_custom_title(self, m):
+    # c. Manual custom-title → unconditional overwrite appends new record
+    def test_overwrites_manual_custom_title(self, m):
         cwd_encoded = self._cwd_encoded(m)
         session_id = "session-ccc"
         original = json.dumps({"type": "custom-title", "customTitle": "User typed this"}) + "\n"
         f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
 
-        original_content = f.read_text(encoding="utf-8")
         result = m.run_set_issue(42, "New Title", os.getcwd())
         assert result == 0
-        assert f.read_text(encoding="utf-8") == original_content
 
-    # d. Custom-title "# notes" (not matching ^(#\d+\s|✓)) → file unchanged
-    def test_skips_when_hash_note_custom_title(self, m):
+        new_lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(new_lines) == 2
+        appended = json.loads(new_lines[-1])
+        assert appended["type"] == "custom-title"
+        assert appended["sessionId"] == session_id
+        assert appended["customTitle"] == "#42 New Title"
+
+    # d. Custom-title "# notes" → unconditional overwrite appends new record
+    def test_overwrites_hash_note_custom_title(self, m):
         cwd_encoded = self._cwd_encoded(m)
         session_id = "session-ddd"
         original = json.dumps({"type": "custom-title", "customTitle": "# notes"}) + "\n"
         f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
 
-        original_content = f.read_text(encoding="utf-8")
-        m.run_set_issue(42, "New Title", os.getcwd())
-        assert f.read_text(encoding="utf-8") == original_content
+        result = m.run_set_issue(42, "New Title", os.getcwd())
+        assert result == 0
+
+        new_lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(new_lines) == 2
+        appended = json.loads(new_lines[-1])
+        assert appended["type"] == "custom-title"
+        assert appended["customTitle"] == "#42 New Title"
 
     # e. Two JSONL files with different mtimes → newer file gets append
     def test_uses_newest_jsonl(self, m):
