@@ -59,13 +59,9 @@ echo ""
 cat <<'EOF'
 ### Manual review checklist — apply to every changed SKILL.md (regardless of line count)
 
-- [1] Conciseness: remove redundant examples, verbose prose, low-value boilerplate.
-      Every line must justify its presence. SKILL.md is a behavior contract, not a tutorial.
-- [2] Extract logically complex conditional logic into bin/ or skills/<name>/lib/.
-      SKILL.md should call the script, not re-implement the algorithm.
-- [3] 100-line safety net (only when WARN above): if the skill still cannot be brought
-      under 100 lines after [1] and [2], it may be overscoped — consider splitting or
-      reorganizing.
+- [1] Write directives, not prose.
+- [2] Keep each directive to one line.
+- [3] Move multi-step procedures into bin/ or skills/<name>/lib/.
 
 This is advisory output — no action is blocked.
 EOF

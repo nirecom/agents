@@ -3,6 +3,7 @@
 ## Workflow
 
 1. **Workflow init** — **Before anything else:** Run `/workflow-init` (routes by GH issue context; see `skills/workflow-init/SKILL.md`).
+   Mid-workflow follow-up issues: use `/issue-create`.
    For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
    Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order:
