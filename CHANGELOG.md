@@ -243,3 +243,7 @@ Changes: The script no longer passes --paginate to gh issue list (the CLI does n
 ### CONFIG: Disable 1M context for skill/subagent calls (2026-05-16)
 Background: Skill invocations caused frequent 'Extra usage is required for 1M context' errors because model aliases like opus and sonnet resolve to 1M-context defaults in Opus 4.7 / Sonnet 4.6, even when the main session is set to standard context.
 Changes: 1M context is now disabled system-wide for all skill and subagent calls via CLAUDE_CODE_DISABLE_1M_CONTEXT=1. The session-restart error should no longer appear.
+
+### CONFIG: ENFORCE_WORKTREE_EXCLUDE default now matches docs/history.md (2026-05-16)
+Background: Closing an issue from main with /issue-close appends to docs/history.md, but the default empty ENFORCE_WORKTREE_EXCLUDE made every such commit require temporarily setting ENFORCE_WORKTREE=off.
+Changes: Set the .env.example default to **/docs/history.md so the /issue-close append path is unblocked out of the box. Dropped the obsolete todo.md example (active task list moved to GitHub Issues). Documented the pull/rebase gap: push-from-main is covered when all outgoing commits match, but pull/rebase from main still requires temporarily setting ENFORCE_WORKTREE=off.
