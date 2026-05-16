@@ -197,7 +197,95 @@ class TestFormatSetIssueTitle:
 
 
 # ---------------------------------------------------------------------------
-# 6. run_set_issue integration
+# 6. format_add_pr_title
+# ---------------------------------------------------------------------------
+
+class TestFormatAddPrTitle:
+    @pytest.fixture(autouse=True)
+    def require_func(self, m):
+        if not hasattr(m, 'format_add_pr_title'):
+            pytest.skip("format_add_pr_title not yet implemented")
+
+    def test_first_pr_uses_space_separator(self, m):
+        assert m.format_add_pr_title("#299 Foo", 310) == "#299 Foo PR #310"
+
+    def test_second_pr_uses_comma_separator(self, m):
+        assert m.format_add_pr_title("#299 Foo PR #310", 311) == "#299 Foo PR #310, PR #311"
+
+    def test_third_pr_uses_comma_separator(self, m):
+        assert m.format_add_pr_title("#299 Foo PR #310, PR #311", 312) == "#299 Foo PR #310, PR #311, PR #312"
+
+    def test_idempotent_when_pr_already_first(self, m):
+        assert m.format_add_pr_title("#299 Foo PR #310", 310) is None
+
+    def test_idempotent_when_pr_already_mid_list(self, m):
+        assert m.format_add_pr_title("#299 Foo PR #310, PR #311", 310) is None
+
+    # PR reference in issue title BODY — must not corrupt separator choice
+    def test_pr_ref_in_body_no_pr_appended_yet(self, m):
+        # Body contains "PR #123" but no real PR has been appended yet
+        # → should use SPACE separator (not comma) for the first real PR
+        assert m.format_add_pr_title("#299 Fix PR #123 regression", 310) == "#299 Fix PR #123 regression PR #310"
+
+    def test_pr_ref_in_body_with_real_pr(self, m):
+        # Body has "PR #123", one real PR already appended → second real PR uses comma
+        assert m.format_add_pr_title("#299 Fix PR #123 regression PR #310", 311) == "#299 Fix PR #123 regression PR #310, PR #311"
+
+    def test_pr_ref_in_body_idempotent(self, m):
+        # Already has PR #310 at tail → idempotent (return None)
+        assert m.format_add_pr_title("#299 Fix PR #123 regression PR #310", 310) is None
+
+    def test_pr_ref_in_body_same_number_as_body_ref(self, m):
+        # Body reference "PR #123" must NOT block appending the actual PR #123
+        assert m.format_add_pr_title("#299 Fix PR #123 regression", 123) == "#299 Fix PR #123 regression PR #123"
+
+    def test_word_boundary_longer_not_blocked_by_shorter(self, m):
+        # PR #31 in suffix should not block appending PR #310
+        assert m.format_add_pr_title("#299 X PR #31", 310) == "#299 X PR #31, PR #310"
+
+    def test_word_boundary_shorter_not_blocked_by_longer(self, m):
+        # PR #310 in suffix should not block appending PR #31
+        assert m.format_add_pr_title("#299 X PR #310", 31) == "#299 X PR #310, PR #31"
+
+    def test_checkmark_title_still_appends(self, m):
+        # ✓-prefixed titles are workflow-generated, so append should work
+        assert m.format_add_pr_title("✓#299 Foo", 310) == "✓#299 Foo PR #310"
+
+    def test_returns_none_for_plain_title(self, m):
+        assert m.format_add_pr_title("My work", 1) is None
+
+    def test_returns_none_for_none_input(self, m):
+        assert m.format_add_pr_title(None, 1) is None
+
+
+# ---------------------------------------------------------------------------
+# 7. format_mark_complete_title
+# ---------------------------------------------------------------------------
+
+class TestFormatMarkCompleteTitle:
+    @pytest.fixture(autouse=True)
+    def require_func(self, m):
+        if not hasattr(m, 'format_mark_complete_title'):
+            pytest.skip("format_mark_complete_title not yet implemented")
+
+    def test_adds_checkmark_to_issue_title(self, m):
+        assert m.format_mark_complete_title("#299 Foo") == "✓#299 Foo"
+
+    def test_preserves_pr_list(self, m):
+        assert m.format_mark_complete_title("#299 Foo PR #310, PR #311") == "✓#299 Foo PR #310, PR #311"
+
+    def test_idempotent_when_already_marked(self, m):
+        assert m.format_mark_complete_title("✓#299 Foo") is None
+
+    def test_returns_none_for_plain_title(self, m):
+        assert m.format_mark_complete_title("My work") is None
+
+    def test_returns_none_for_none_input(self, m):
+        assert m.format_mark_complete_title(None) is None
+
+
+# ---------------------------------------------------------------------------
+# 8. run_set_issue integration
 # ---------------------------------------------------------------------------
 
 def make_jsonl(tmp_path, cwd_encoded, session_id, content):
@@ -330,18 +418,245 @@ class TestRunSetIssue:
 
 
 # ---------------------------------------------------------------------------
-# 7. main stubs
+# 9. run_add_pr integration
 # ---------------------------------------------------------------------------
 
-class TestMainStubs:
-    def test_add_pr_not_implemented(self, m, capsys):
-        result = m.main(["add-pr", "123"])
-        assert result == 1
-        captured = capsys.readouterr()
-        assert "not yet implemented" in captured.err.lower()
+class TestRunAddPr:
+    @pytest.fixture(autouse=True)
+    def require_func(self, m):
+        if not hasattr(m, 'run_add_pr'):
+            pytest.skip("run_add_pr not yet implemented")
 
-    def test_mark_complete_not_implemented(self, m, capsys):
-        result = m.main(["mark-complete"])
-        assert result == 1
+    @pytest.fixture(autouse=True)
+    def set_projects_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_PROJECTS_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
+
+    def _cwd_encoded(self, m):
+        return m.encode_cwd(os.getcwd())
+
+    def test_appends_first_pr(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-add-pr-a"
+        original = json.dumps({"type": "custom-title", "customTitle": "#299 Foo"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        result = m.run_add_pr(310, os.getcwd())
+        assert result == 0
+
+        lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        appended = json.loads(lines[-1])
+        assert appended["customTitle"] == "#299 Foo PR #310"
+
+    def test_appends_second_pr_with_comma(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-add-pr-b"
+        original = json.dumps({"type": "custom-title", "customTitle": "#299 Foo PR #310"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        m.run_add_pr(311, os.getcwd())
+
+        lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        appended = json.loads(lines[-1])
+        assert appended["customTitle"] == "#299 Foo PR #310, PR #311"
+
+    def test_idempotent_skip_when_pr_present(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-add-pr-c"
+        original = json.dumps({"type": "custom-title", "customTitle": "#299 Foo PR #310"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        original_content = f.read_text(encoding="utf-8")
+        result = m.run_add_pr(310, os.getcwd())
+        assert result == 0
+        assert f.read_text(encoding="utf-8") == original_content
+
+    def test_pr_ref_in_body_first_real_pr(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-add-pr-d"
+        original = json.dumps({"type": "custom-title", "customTitle": "#299 Fix PR #123 regression"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        m.run_add_pr(310, os.getcwd())
+
+        lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        appended = json.loads(lines[-1])
+        # Space separator (not comma) because no real PR was in the suffix yet
+        assert appended["customTitle"] == "#299 Fix PR #123 regression PR #310"
+
+    def test_skip_when_manual_title(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-add-pr-e"
+        original = json.dumps({"type": "custom-title", "customTitle": "User typed this"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        original_content = f.read_text(encoding="utf-8")
+        result = m.run_add_pr(310, os.getcwd())
+        assert result == 0
+        assert f.read_text(encoding="utf-8") == original_content
+
+    def test_skip_when_no_custom_title(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-add-pr-f"
+        original = json.dumps({"type": "ai-title", "title": "Auto"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        original_content = f.read_text(encoding="utf-8")
+        result = m.run_add_pr(310, os.getcwd())
+        assert result == 0
+        assert f.read_text(encoding="utf-8") == original_content
+
+    def test_no_jsonl_returns_zero(self, m, capsys):
+        cwd_encoded = self._cwd_encoded(m)
+        d = self.tmp_path / cwd_encoded
+        d.mkdir(parents=True, exist_ok=True)
+
+        result = m.run_add_pr(310, os.getcwd())
+        assert result == 0
         captured = capsys.readouterr()
-        assert "not yet implemented" in captured.err.lower()
+        assert captured.err
+
+    def test_missing_project_dir_returns_zero(self, m, capsys):
+        result = m.run_add_pr(310, "/nonexistent/path/xyz")
+        assert result == 0
+        captured = capsys.readouterr()
+        assert captured.err
+
+
+# ---------------------------------------------------------------------------
+# 10. run_mark_complete integration
+# ---------------------------------------------------------------------------
+
+class TestRunMarkComplete:
+    @pytest.fixture(autouse=True)
+    def require_func(self, m):
+        if not hasattr(m, 'run_mark_complete'):
+            pytest.skip("run_mark_complete not yet implemented")
+
+    @pytest.fixture(autouse=True)
+    def set_projects_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_PROJECTS_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
+
+    def _cwd_encoded(self, m):
+        return m.encode_cwd(os.getcwd())
+
+    def test_prepends_checkmark(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-mark-a"
+        original = json.dumps({"type": "custom-title", "customTitle": "#299 Foo"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        result = m.run_mark_complete(os.getcwd())
+        assert result == 0
+
+        lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        appended = json.loads(lines[-1])
+        assert appended["customTitle"] == "✓#299 Foo"
+
+    def test_preserves_pr_list(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-mark-b"
+        original = json.dumps({"type": "custom-title", "customTitle": "#299 Foo PR #310, PR #311"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        m.run_mark_complete(os.getcwd())
+
+        lines = f.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 2
+        appended = json.loads(lines[-1])
+        assert appended["customTitle"] == "✓#299 Foo PR #310, PR #311"
+
+    def test_idempotent_when_already_marked(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-mark-c"
+        original = json.dumps({"type": "custom-title", "customTitle": "✓#299 Foo"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        original_content = f.read_text(encoding="utf-8")
+        result = m.run_mark_complete(os.getcwd())
+        assert result == 0
+        assert f.read_text(encoding="utf-8") == original_content
+
+    def test_skip_when_manual_title(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-mark-d"
+        original = json.dumps({"type": "custom-title", "customTitle": "My manual title"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        original_content = f.read_text(encoding="utf-8")
+        result = m.run_mark_complete(os.getcwd())
+        assert result == 0
+        assert f.read_text(encoding="utf-8") == original_content
+
+    def test_skip_when_no_custom_title(self, m):
+        cwd_encoded = self._cwd_encoded(m)
+        session_id = "session-mark-e"
+        original = json.dumps({"type": "ai-title", "title": "Auto generated"}) + "\n"
+        f = make_jsonl(self.tmp_path, cwd_encoded, session_id, original)
+
+        original_content = f.read_text(encoding="utf-8")
+        result = m.run_mark_complete(os.getcwd())
+        assert result == 0
+        assert f.read_text(encoding="utf-8") == original_content
+
+    def test_no_jsonl_returns_zero(self, m, capsys):
+        cwd_encoded = self._cwd_encoded(m)
+        d = self.tmp_path / cwd_encoded
+        d.mkdir(parents=True, exist_ok=True)
+
+        result = m.run_mark_complete(os.getcwd())
+        assert result == 0
+        captured = capsys.readouterr()
+        assert captured.err
+
+    def test_missing_project_dir_returns_zero(self, m, capsys):
+        result = m.run_mark_complete("/nonexistent/path/xyz")
+        assert result == 0
+        captured = capsys.readouterr()
+        assert captured.err
+
+
+# ---------------------------------------------------------------------------
+# 11. main dispatch
+# ---------------------------------------------------------------------------
+
+class TestMainDispatch:
+    @pytest.fixture(autouse=True)
+    def set_projects_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_PROJECTS_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
+
+    def _seed_workflow_title(self, m, tmp_path, title="#299 Test"):
+        cwd_encoded = m.encode_cwd(os.getcwd())
+        return make_jsonl(tmp_path, cwd_encoded, "session-dispatch",
+                          json.dumps({"type": "custom-title", "customTitle": title}) + "\n")
+
+    def test_set_issue_dispatch_returns_zero(self, m):
+        cwd_encoded = m.encode_cwd(os.getcwd())
+        d = self.tmp_path / cwd_encoded
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "session-si.jsonl").write_text(
+            json.dumps({"type": "ai-title", "title": "Auto"}) + "\n", encoding="utf-8"
+        )
+        result = m.main(["set-issue", "299", "Test title"])
+        assert result == 0
+
+    def test_add_pr_dispatch_returns_zero(self, m):
+        self._seed_workflow_title(m, self.tmp_path)
+        result = m.main(["add-pr", "310"])
+        assert result == 0
+
+    def test_mark_complete_dispatch_returns_zero(self, m):
+        self._seed_workflow_title(m, self.tmp_path)
+        result = m.main(["mark-complete"])
+        assert result == 0
+
+    def test_unknown_subcommand_exits_nonzero(self, m):
+        with pytest.raises(SystemExit) as exc_info:
+            m.main(["unknown-cmd"])
+        assert exc_info.value.code != 0
