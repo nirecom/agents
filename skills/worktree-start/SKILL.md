@@ -93,22 +93,22 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
    - stdout `OFF`: auto-continue without `AskUserQuestion`.
    - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
 
-10. Create `WORKTREE_NOTES.md` in the worktree root recording:
-    - Resolved worktree path and the `WORKTREE_BASE_DIR` value used
-    - Branch name and creation date
-    - Gitignored files copied from main
-    ```
-    # Worktree Notes
-    Branch: <type>/<task-name>
-    Created: <date>
-    Path: <resolved-path>
-    WORKTREE_BASE_DIR: <value or "(default)">
+10. Generate `WORKTREE_NOTES.md` + register in `.git/info/exclude`. Pass Step 9 (b) stdout
+    via `COPIED_JSON` env var (the script reads `.copied` from it).
 
-    ## Gitignored files copied from main
-    - <file1>
-    - <file2>
+    POSIX:
     ```
-    Add `WORKTREE_NOTES.md` to `.git/info/exclude` if not already covered by `.gitignore`.
+    COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>"
+    ```
+
+    PowerShell:
+    ```
+    $env:COPIED_JSON = '<step-9-stdout>'
+    node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>"
+    ```
+
+    `<mainRoot>`: main repository root from Step 9 (a) — never a linked worktree path.
+    Exit 0 with `notesWritten:true` = success. Exit 1 = investigate stderr and re-run.
 
 11. Final report: worktree path, branch, and which gitignored state was copied.
 
@@ -118,3 +118,7 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
 - Never copy production secrets (`.env.production`, cloud credentials, deploy keys) to a worktree.
 - Always record copied state in `WORKTREE_NOTES.md` so `/worktree-end` can inventory it later.
 - Task name validation: reject names that fail `[a-zA-Z0-9_-]+` — do not proceed with invalid names.
+- WORKTREE_NOTES.md generation is owned by `bin/worktree-write-notes.js`. Do not write the
+  file or edit `.git/info/exclude` manually.
+- Known limit: filenames containing `'` break the POSIX `COPIED_JSON='...'` quoting. Fall
+  back to `COPIED_JSON="$(cat file.json)"` if needed.
