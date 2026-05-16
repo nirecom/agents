@@ -14,6 +14,28 @@ Set this in agents config (`.env`) when the isolation cost exceeds the benefit.
 See `branch.md` for branch naming and the standard branch flow.
 See `docs/parallel-sessions.md` for the full lifecycle guide.
 
+## Session-scoped escape hatch
+
+For maintenance or recovery work that must happen from the main worktree within
+a single session (e.g. `/worktree-end` × Windows CWD-lock recovery), use the
+session-scoped sentinel instead of editing `.env` globally:
+
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>>"
+
+The `: <reason>` is optional but recommended. This writes a per-session marker
+file so that only the current session treats `ENFORCE_WORKTREE` as off. All
+other concurrent Claude Code sessions remain at `on`.
+
+To restore enforcement within the same session, emit the matching sentinel:
+
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"
+
+The hook layer resolves the session ID (Anthropic bug #27987 prevents
+`$CLAUDE_SESSION_ID` from being propagated to Bash subprocesses) and deletes
+the marker keyed to the current session. The operation is idempotent — if no
+marker exists, it is a silent no-op. Enforcement also restores automatically
+in the next session, since the marker is keyed on the current session ID.
+
 ## Standard Path
 
 Worktrees follow a two-level layout: `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`.
