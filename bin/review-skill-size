@@ -44,28 +44,28 @@ COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
 echo "Changed SKILL.md files: $COUNT"
 echo ""
 
-echo "[Line count check]"
+echo "[Line counts]"
 while IFS= read -r file; do
   [[ -f "$file" ]] || continue
   lines=$(wc -l < "$file" | tr -d ' ')
   if (( lines > 100 )); then
-    echo "WARN: $file — $lines lines (exceeds 100 lines)"
+    echo "WARN: $file — $lines lines (exceeds 100-line safety net)"
+  else
+    echo "INFO: $file — $lines lines"
   fi
 done <<< "$TARGETS"
 echo ""
 
 cat <<'EOF'
-### Manual review checklist (checks ②③④ — not auto-detected)
+### Manual review checklist — apply to every changed SKILL.md (regardless of line count)
 
-Review the changed SKILL.md file(s) for the following:
-
-- [2] Remove redundant examples and verbose prose. SKILL.md is a behavior contract, not a tutorial.
-- [3] If logically complex conditional logic is written inline in the skill, extract it
-      into an external script under bin/ or skills/<name>/lib/. SKILL.md should call
-      the script, not re-implement the algorithm.
-- [4] If the skill still cannot be brought under 100 lines after the above, the skill
-      may be overscoped — consider splitting into multiple skills or requesting a skill
-      reorganization.
+- [1] Conciseness: remove redundant examples, verbose prose, low-value boilerplate.
+      Every line must justify its presence. SKILL.md is a behavior contract, not a tutorial.
+- [2] Extract logically complex conditional logic into bin/ or skills/<name>/lib/.
+      SKILL.md should call the script, not re-implement the algorithm.
+- [3] 100-line safety net (only when WARN above): if the skill still cannot be brought
+      under 100 lines after [1] and [2], it may be overscoped — consider splitting or
+      reorganizing.
 
 This is advisory output — no action is blocked.
 EOF
