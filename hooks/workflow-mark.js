@@ -695,6 +695,14 @@ for (const cmd of sentinelParts) {
           `workflow-mark: ENFORCE_WORKTREE_OFF reason rejected — ${v.msg} (override still applied)`
         );
       }
+    } else {
+      // Soft recommendation — encourage attaching a reason for accountability.
+      messages.push(
+        `workflow-mark: ENFORCE_WORKTREE_OFF emitted without reason. ` +
+          `For accountability, next time include a reason: ` +
+          `echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <why bypass is necessary>>>" ` +
+          `(reason: >=3 non-space chars, no '>', not a placeholder).`
+      );
     }
     try {
       const dir = getWorkflowDir();
@@ -720,7 +728,7 @@ for (const cmd of sentinelParts) {
   }
 
   // --- ENFORCE_WORKTREE_ON handler ---
-  const enforceOnMatch = ENFORCE_WORKTREE_ON_RE_DQ.test(cmd);
+  const enforceOnMatch = cmd.match(ENFORCE_WORKTREE_ON_RE_DQ);
   const enforceOnLooksLike =
     !enforceOnMatch && ENFORCE_WORKTREE_ON_LOOKSLIKE_RE.test(cmd);
   if (enforceOnLooksLike) {
@@ -741,6 +749,24 @@ for (const cmd of sentinelParts) {
     if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
       messages.push(`workflow-mark: invalid session_id format — restore NOT applied.`);
       continue;
+    }
+    const rawOnReason = enforceOnMatch[1]; // undefined when no reason given
+    if (rawOnReason !== undefined) {
+      const v = validateSkipReason(rawOnReason);
+      if (!v.ok) {
+        // Warn but still apply — reason quality must not block restoration.
+        messages.push(
+          `workflow-mark: ENFORCE_WORKTREE_ON reason rejected — ${v.msg} (restore still applied)`
+        );
+      }
+    } else {
+      // Soft recommendation — encourage attaching a reason for accountability.
+      messages.push(
+        `workflow-mark: ENFORCE_WORKTREE_ON emitted without reason. ` +
+          `For accountability, next time include a reason: ` +
+          `echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <why restoring now>>>" ` +
+          `(reason: >=3 non-space chars, no '>', not a placeholder).`
+      );
     }
     try {
       const dir = getWorkflowDir();
