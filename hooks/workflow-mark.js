@@ -6,12 +6,12 @@
 // independently):
 //   echo "<<WORKFLOW_MARK_STEP_<step>_<status>>>"   — mark a step
 //   echo "<<WORKFLOW_RESET_FROM_<step>>>"            — reset state from a step
-//   echo "<<WORKFLOW_USER_VERIFIED>>"                — record user verification
+//   echo "<<WORKFLOW_USER_VERIFIED[: <reason>]>>"    — record user verification (reason optional)
 //   echo "<<WORKFLOW_{RESEARCH,PLAN,WRITE_TESTS}_NOT_NEEDED: <reason>>"
 //
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF[: <reason>]>>"  — session-scoped ENFORCE_WORKTREE bypass
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"               — restore enforcement (delete marker)
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON[: <reason>]>>"   — restore enforcement (delete marker)
 
 const fs = require("fs");
 const path = require("path");
@@ -50,8 +50,9 @@ const MARKER_RE_DQ =
 const MARKER_RE_SQ =
   /^echo\s+'<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>'$/;
 const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
-// USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly
-const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED>>"$/;
+// USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly.
+// Reason is optional (orthogonal with ENFORCE_WORKTREE_OFF/ON design); preserved as match[1] for telemetry.
+const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED(?:: ([^>]+))?>>"$/;
 const RESEARCH_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ([^>]+)>>"$/;
 const RESEARCH_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED([: ].*)?>>"$/;
 const PLAN_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_PLAN_NOT_NEEDED: ([^>]+)>>"$/;
@@ -79,7 +80,7 @@ const ENFORCE_WORKTREE_OFF_RE_DQ =
 const ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF([: ].*)?>>"$/;
 const ENFORCE_WORKTREE_ON_RE_DQ =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"$/;
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON(?:: ([^>]+))?>>"$/;
 const ENFORCE_WORKTREE_ON_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON([: ].*)?>>"$/;
 
@@ -725,7 +726,8 @@ for (const cmd of sentinelParts) {
   if (enforceOnLooksLike) {
     messages.push(
       `workflow-mark: malformed ENFORCE_WORKTREE_ON — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"`
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>" or ` +
+        `echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: REASON>>"`
     );
     continue;
   }
