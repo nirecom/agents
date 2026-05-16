@@ -159,7 +159,7 @@ echo "=== make-detail-plan: preserved instructions ==="
 if require_file "$DETAIL_SKILL"; then
     for needle in \
         "Read before planning" \
-        "Follow \`rules/orthogonality.md\`" \
+        "Follow \`rules/plan-principles.md\`" \
         "One user-facing confirmation per run"
     do
         if has_fixed "$needle" "$DETAIL_SKILL"; then
