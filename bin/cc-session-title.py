@@ -114,9 +114,6 @@ def run_set_issue(n: int, issue_title: str, cwd: str) -> int:
         return 0
     session_id = path.stem
     existing = path.read_text(encoding='utf-8', errors='replace')
-    current = latest_custom_title(existing)
-    if not is_workflow_generated(current):
-        return 0
     new_title = format_set_issue_title(n, issue_title)
     record = build_record(session_id, new_title)
     with open(path, 'a', encoding='utf-8', newline='') as f:
