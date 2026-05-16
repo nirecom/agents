@@ -26,7 +26,7 @@ Emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>"` when a prior `*-int
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
-6. Research (`/survey-code` or `/deep-research`, or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `/make-outline-plan`.
+6. Research (`/survey-code` and/or `/survey-history` and/or `/deep-research`, or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `/make-outline-plan`.
 
 ## Completion
 
