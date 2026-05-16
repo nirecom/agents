@@ -26,14 +26,15 @@ The `: <reason>` is optional but recommended. This writes a per-session marker
 file so that only the current session treats `ENFORCE_WORKTREE` as off. All
 other concurrent Claude Code sessions remain at `on`.
 
-To restore enforcement within the same session, ask Claude to delete the marker:
+To restore enforcement within the same session, emit the matching sentinel:
 
-    rm "$HOME/.claude/projects/workflow/<session-id>.worktree-off"
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"
 
-Note: `$CLAUDE_SESSION_ID` is not propagated to Bash subprocesses (Anthropic
-bug #27987). Ask Claude to delete via the Bash tool — the hook layer resolves
-the session ID correctly. Enforcement also restores automatically in the next
-session, since the marker is keyed on the current session ID.
+The hook layer resolves the session ID (Anthropic bug #27987 prevents
+`$CLAUDE_SESSION_ID` from being propagated to Bash subprocesses) and deletes
+the marker keyed to the current session. The operation is idempotent — if no
+marker exists, it is a silent no-op. Enforcement also restores automatically
+in the next session, since the marker is keyed on the current session ID.
 
 ## Standard Path
 

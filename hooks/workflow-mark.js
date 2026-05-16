@@ -11,6 +11,7 @@
 //
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF[: <reason>]>>"  — session-scoped ENFORCE_WORKTREE bypass
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"               — restore enforcement (delete marker)
 
 const fs = require("fs");
 const path = require("path");
@@ -77,6 +78,10 @@ const ENFORCE_WORKTREE_OFF_RE_DQ =
   /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF(?:: ([^>]+))?>>"$/;
 const ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF([: ].*)?>>"$/;
+const ENFORCE_WORKTREE_ON_RE_DQ =
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"$/;
+const ENFORCE_WORKTREE_ON_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON([: ].*)?>>"$/;
 
 function isSentinel(cmd) {
   return (
@@ -105,7 +110,9 @@ function isSentinel(cmd) {
     PREMISE_ACK_RE_DQ.test(cmd) ||
     PREMISE_ACK_LOOKSLIKE_RE.test(cmd) ||
     ENFORCE_WORKTREE_OFF_RE_DQ.test(cmd) ||
-    ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(cmd)
+    ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(cmd) ||
+    ENFORCE_WORKTREE_ON_RE_DQ.test(cmd) ||
+    ENFORCE_WORKTREE_ON_LOOKSLIKE_RE.test(cmd)
   );
 }
 
@@ -706,6 +713,48 @@ for (const cmd of sentinelParts) {
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write ENFORCE_WORKTREE override marker — ${e.message}. Override NOT applied.`
+      );
+    }
+    continue;
+  }
+
+  // --- ENFORCE_WORKTREE_ON handler ---
+  const enforceOnMatch = ENFORCE_WORKTREE_ON_RE_DQ.test(cmd);
+  const enforceOnLooksLike =
+    !enforceOnMatch && ENFORCE_WORKTREE_ON_LOOKSLIKE_RE.test(cmd);
+  if (enforceOnLooksLike) {
+    messages.push(
+      `workflow-mark: malformed ENFORCE_WORKTREE_ON — ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"`
+    );
+    continue;
+  }
+  if (enforceOnMatch) {
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE restore NOT applied.`
+      );
+      continue;
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+      messages.push(`workflow-mark: invalid session_id format — restore NOT applied.`);
+      continue;
+    }
+    try {
+      const dir = getWorkflowDir();
+      const markerPath = path.join(dir, `${sessionId}.worktree-off`);
+      try {
+        fs.unlinkSync(markerPath);
+        messages.push(
+          `workflow-mark: ENFORCE_WORKTREE session override cleared (marker removed: ${markerPath}).`
+        );
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+        // Idempotent: silent no-op when marker is already absent.
+      }
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to clear ENFORCE_WORKTREE override marker — ${e.message}. Restore NOT applied.`
       );
     }
     continue;

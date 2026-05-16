@@ -362,6 +362,88 @@ test_A6_chained_sentinels_accepted() {
     fi
 }
 
+# ----------------------------------------------------------------------------
+# A8-A11: WORKFLOW_ENFORCE_WORKTREE_ON sentinel — restores enforcement by
+# deleting the per-session marker. Mirrors the OFF handler symmetrically so
+# Claude Code can flip enforcement back ON without resolving its own session ID.
+# ----------------------------------------------------------------------------
+
+test_A8_on_sentinel_deletes_marker() {
+    require_files "A8" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="abc123"
+    # Pre-existing marker (e.g. set earlier in the session via OFF sentinel).
+    write_marker_file "$wfdir" "$sid"
+    [ -f "$wfdir/$sid.worktree-off" ] || { fail "A8 setup: marker not written"; return; }
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    run_workflow_mark "$payload" "$wfdir"
+    if [ ! -f "$wfdir/$sid.worktree-off" ]; then
+        pass "A8: ON sentinel deleted the existing marker"
+    else
+        fail "A8: marker still present after ON sentinel (out: $MARK_OUT)"
+    fi
+}
+
+test_A9_on_sentinel_no_marker_idempotent() {
+    require_files "A9" || return
+    # ON sentinel with no existing marker must be a silent no-op (idempotent).
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="abc123"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local rc=0
+    run_workflow_mark "$payload" "$wfdir" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        fail "A9: ON sentinel with no marker crashed rc=$rc (out: $MARK_OUT)"
+        return
+    fi
+    if [ -f "$wfdir/$sid.worktree-off" ]; then
+        fail "A9: ON sentinel created a marker (should be no-op, out: $MARK_OUT)"
+        return
+    fi
+    pass "A9: ON sentinel with no existing marker — silent no-op"
+}
+
+test_A10_on_sentinel_no_session_id() {
+    require_files "A10" || return
+    # No session_id, no CLAUDE_ENV_FILE → cannot determine which marker to delete.
+    # Must not crash, must not delete anything outside scope, must surface a warning.
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    write_marker_file "$wfdir" "someone-else"
+    local payload
+    payload='{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON>>\""}, "tool_response":{"exit_code":0}}'
+    local rc=0
+    run_workflow_mark "$payload" "$wfdir" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        fail "A10: hook crashed with no session_id rc=$rc (out: $MARK_OUT)"
+        return
+    fi
+    # Other-session marker MUST still exist (no cross-session deletion).
+    if [ ! -f "$wfdir/someone-else.worktree-off" ]; then
+        fail "A10: ON sentinel without session_id deleted unrelated marker (out: $MARK_OUT)"
+        return
+    fi
+    pass "A10: no session_id → ON sentinel is a no-op, no cross-session deletion"
+}
+
+test_A11_on_sentinel_session_isolation() {
+    require_files "A11" || return
+    # ON sentinel must only delete the calling session's marker, not others'.
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    write_marker_file "$wfdir" "session-A"
+    write_marker_file "$wfdir" "session-B"
+    local payload; payload="$(build_mark_payload "session-A" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    run_workflow_mark "$payload" "$wfdir"
+    if [ -f "$wfdir/session-A.worktree-off" ]; then
+        fail "A11: session-A marker NOT deleted (out: $MARK_OUT)"
+        return
+    fi
+    if [ ! -f "$wfdir/session-B.worktree-off" ]; then
+        fail "A11: session-B marker incorrectly deleted (cross-session leak, out: $MARK_OUT)"
+        return
+    fi
+    pass "A11: ON sentinel deletes only the calling session's marker"
+}
+
 # ============================================================================
 # B. enforce-worktree.js consumption
 # ============================================================================
@@ -500,6 +582,43 @@ test_C2_marker_deletion_restores_block() {
     assert_guard_block "C2: marker rm → guard blocks again" "$rc"
 }
 
+test_C3_off_on_round_trip_via_sentinels() {
+    require_files "C3" || return
+    # Full lifecycle via sentinels alone (no manual marker manipulation):
+    # OFF sentinel → guard allows → ON sentinel → guard blocks again.
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="abc123"
+    local repo; repo="$(setup_main_checkout "c3-main")"
+
+    # Step 1: OFF sentinel creates marker.
+    local off_payload; off_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    run_workflow_mark "$off_payload" "$wfdir"
+    if [ ! -f "$wfdir/$sid.worktree-off" ]; then
+        fail "C3 step1: OFF sentinel did not create marker (out: $MARK_OUT)"
+        return
+    fi
+
+    # Step 2: guard allows the write.
+    local gpay; gpay="$(build_guard_payload_write "$sid" "Write" "$repo/foo.txt")"
+    local rc1=0; run_enforce_worktree "$gpay" "$wfdir" "$repo" || rc1=$?
+    if [ "$rc1" -ne 0 ]; then
+        fail "C3 step2: guard did not allow under marker (rc=$rc1, out: $GUARD_OUT)"
+        return
+    fi
+
+    # Step 3: ON sentinel deletes the marker.
+    local on_payload; on_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    run_workflow_mark "$on_payload" "$wfdir"
+    if [ -f "$wfdir/$sid.worktree-off" ]; then
+        fail "C3 step3: ON sentinel did not delete marker (out: $MARK_OUT)"
+        return
+    fi
+
+    # Step 4: guard blocks again.
+    local rc2=0; run_enforce_worktree "$gpay" "$wfdir" "$repo" || rc2=$?
+    assert_guard_block "C3: OFF → ON round trip restores enforcement" "$rc2"
+}
+
 # ============================================================================
 # SEC. Path traversal / metachar protection
 # ============================================================================
@@ -611,6 +730,31 @@ test_SEC4_guard_input_traversal_blocked() {
     assert_guard_block "SEC4: ../evil session_id rejected before existsSync — bypass NOT granted" "$rc"
 }
 
+test_SEC5_on_sentinel_traversal_blocked() {
+    require_files "SEC5" || return
+    # ON sentinel with a traversal session ID must NOT delete the planted marker
+    # outside <wfdir>. Mirrors SEC1 but for the ON path (unlink instead of write).
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local parent; parent="$(dirname "$wfdir")"   # = $TMPDIR_BASE, inside sandbox
+    # Plant a "victim" marker outside wfdir.
+    printf '{"set_at":"x"}' > "$parent/victim.worktree-off"
+    local payload; payload="$(build_mark_payload "../victim" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local rc=0
+    run_workflow_mark "$payload" "$wfdir" || rc=$?
+    local still_there=0
+    [ -f "$parent/victim.worktree-off" ] && still_there=1
+    rm -f "$parent/victim.worktree-off" 2>/dev/null || true
+    if [ "$rc" -ne 0 ]; then
+        fail "SEC5: workflow-mark.js crashed rc=$rc on traversal input (out: $MARK_OUT)"
+        return
+    fi
+    if [ "$still_there" -eq 0 ]; then
+        fail "SEC5: ON sentinel with traversal session ID deleted planted marker (out: $MARK_OUT)"
+        return
+    fi
+    pass "SEC5: ON sentinel with ../victim session ID — planted marker preserved"
+}
+
 # ============================================================================
 # Run all (wrap in 120s wall-clock timeout if available)
 # ============================================================================
@@ -624,6 +768,11 @@ run_all() {
     test_A5_no_session_id_no_crash
     test_A6_chained_sentinels_accepted
     test_A7_idempotent_marker_write
+    # A8-A11: WORKFLOW_ENFORCE_WORKTREE_ON sentinel
+    test_A8_on_sentinel_deletes_marker
+    test_A9_on_sentinel_no_marker_idempotent
+    test_A10_on_sentinel_no_session_id
+    test_A11_on_sentinel_session_isolation
     # B: enforce-worktree consumption
     test_B1_marker_allows_write
     test_B1b_marker_allows_edit
@@ -634,11 +783,13 @@ run_all() {
     # C: round trip
     test_C1_round_trip_creates_and_allows
     test_C2_marker_deletion_restores_block
+    test_C3_off_on_round_trip_via_sentinels
     # SEC
     test_SEC1_path_traversal_rejected
     test_SEC2_shell_metachars_rejected
     test_SEC3_env_file_traversal_blocked
     test_SEC4_guard_input_traversal_blocked
+    test_SEC5_on_sentinel_traversal_blocked
 }
 
 if command -v timeout >/dev/null 2>&1; then
