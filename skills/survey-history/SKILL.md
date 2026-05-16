@@ -24,9 +24,12 @@ made after the relevant issue was opened that might invalidate its premises.
    a. **Git log since issue opened:**
       `git log --since=<openedAt> --pretty=format:"%h %ad %s" --date=short`
 
-   b. **docs/history.md entries since issue opened:**
-      Grep `docs/history.md` for date strings ≥ openedAt (format `YYYY-MM-DD`).
-      Read the surrounding context (±5 lines) for each match.
+   b. **History docs entries since issue opened** (follow progressive disclosure per `rules/file-investigation.md`):
+      - Grep `docs/history.md` for date strings ≥ openedAt (format `YYYY-MM-DD`).
+        Read the surrounding context (±5 lines) for each match.
+      - If `docs/history/index.md` exists, grep it for the same date range to find archived
+        entries. For each matching archive file listed in the index, read the relevant
+        section of that file (e.g. `docs/history/2025-*.md`) to retrieve the full entry.
 
    c. **Merged PRs since issue opened:**
       `gh pr list --state merged --search "merged:>=<openedAt>" --limit 20 --json number,title,mergedAt`
