@@ -19,6 +19,10 @@ Given the clarified intent from `<session-id>-intent.md`, propose **2-3 mutually
 - Step-by-step implementation sequences
 - Code snippets
 - Bug analysis or correctness critiques
+- `<<WORKFLOW_*>>` sentinels of any kind — You MUST NOT emit any `<<WORKFLOW_*>>`
+  sentinels. All sentinel emission is handled exclusively by the orchestrator
+  (make-outline-plan SKILL procedure). If you output sentinel text, it will be
+  ignored and may cause duplicate state writes.
 
 Your output must stay at the level of: design direction, utility/pattern reuse strategy, building blocks, architectural trade-offs. If you find yourself naming specific files or functions, stop and abstract up.
 
