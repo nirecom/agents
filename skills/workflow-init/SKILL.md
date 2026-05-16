@@ -50,7 +50,7 @@ A2.5. `cc-session-title set-issue <N> "<title>"` where `<title>` is the `.title`
 
 A3. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
 
-A4. Invoke `survey-code` or `deep-research` if needed (or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `make-outline-plan`.
+A4. Invoke `survey-code` and/or `survey-history` and/or `deep-research` if needed (or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `make-outline-plan`.
 
 ---
 

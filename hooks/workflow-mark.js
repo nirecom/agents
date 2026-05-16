@@ -20,6 +20,8 @@ const {
   writeState,
   nextStepHint,
   setLastPushedSha,
+  setPremiseContradiction,
+  clearPremiseContradiction,
 } = require("./lib/workflow-state");
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 
@@ -64,6 +66,10 @@ const BRANCHING_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_COMPLETE: ([^>]+)>
 const BRANCHING_COMPLETE_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_COMPLETE([: ].*)?>>"$/;
 const BRANCHING_DECIDED_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_DECIDED: ([^>]+)>>"$/;
 const BRANCHING_DECIDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_DECIDED([: ].*)?>>"$/;
+const PREMISE_FAIL_RE_DQ = /^echo "<<WORKFLOW_PREMISE_FAIL: ([^>]+)>>"$/;
+const PREMISE_FAIL_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PREMISE_FAIL([: ].*)?>>"$/;
+const PREMISE_ACK_RE_DQ = /^echo "<<WORKFLOW_PREMISE_ACK>>"$/;
+const PREMISE_ACK_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PREMISE_ACK([: ].*)?>>"$/;
 
 function isSentinel(cmd) {
   return (
@@ -86,7 +92,11 @@ function isSentinel(cmd) {
     BRANCHING_COMPLETE_RE_DQ.test(cmd) ||
     BRANCHING_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
     BRANCHING_DECIDED_RE_DQ.test(cmd) ||
-    BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd)
+    BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd) ||
+    PREMISE_FAIL_RE_DQ.test(cmd) ||
+    PREMISE_FAIL_LOOKSLIKE_RE.test(cmd) ||
+    PREMISE_ACK_RE_DQ.test(cmd) ||
+    PREMISE_ACK_LOOKSLIKE_RE.test(cmd)
   );
 }
 
@@ -562,6 +572,72 @@ for (const cmd of sentinelParts) {
     } catch (e) {
       messages.push(
         `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
+      );
+    }
+    continue;
+  }
+
+  // --- PREMISE_FAIL handler ---
+  const premiseFailLooksLike =
+    !cmd.match(PREMISE_FAIL_RE_DQ) && PREMISE_FAIL_LOOKSLIKE_RE.test(cmd);
+  const premiseFailMatch = cmd.match(PREMISE_FAIL_RE_DQ);
+  if (premiseFailLooksLike) {
+    messages.push(
+      `workflow-mark: malformed PREMISE_FAIL — ` +
+        `expected: echo "<<WORKFLOW_PREMISE_FAIL: SUMMARY>>" ` +
+        `(summary must be >=3 non-space chars, no '>')`
+    );
+    continue;
+  }
+  if (premiseFailMatch) {
+    const v = validateSkipReason(premiseFailMatch[1]);
+    if (!v.ok) {
+      messages.push(
+        `workflow-mark: PREMISE_FAIL rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_PREMISE_FAIL: <summary>>"`
+      );
+      continue;
+    }
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — premise contradiction NOT recorded.`
+      );
+      continue;
+    }
+    try {
+      setPremiseContradiction(sessionId, v.reason);
+      messages.push(`workflow-mark: premise contradiction recorded.`);
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to write state — ${e.message}. Premise contradiction NOT recorded.`
+      );
+    }
+    continue;
+  }
+
+  // --- PREMISE_ACK handler ---
+  const premiseAckLooksLike =
+    !PREMISE_ACK_RE_DQ.test(cmd) && PREMISE_ACK_LOOKSLIKE_RE.test(cmd);
+  if (premiseAckLooksLike) {
+    messages.push(
+      `workflow-mark: malformed PREMISE_ACK — ` +
+        `expected: echo "<<WORKFLOW_PREMISE_ACK>>" (no payload)`
+    );
+    continue;
+  }
+  if (PREMISE_ACK_RE_DQ.test(cmd)) {
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — premise acknowledgement NOT recorded.`
+      );
+      continue;
+    }
+    try {
+      clearPremiseContradiction(sessionId);
+      messages.push(`workflow-mark: premise contradiction cleared (acknowledged).`);
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to write state — ${e.message}. Premise acknowledgement NOT recorded.`
       );
     }
     continue;

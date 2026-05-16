@@ -13,9 +13,47 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 - `~/.workflow-plans/<session-id>-intent.md` — output of `clarify-intent`; may be from a
   different session (cross-session carry-in is allowed)
+- `~/.workflow-plans/<session-id>-survey-code.md` — optional; output of `survey-code` (contains `## Verified Claims`)
+- `~/.workflow-plans/<session-id>-survey-history.md` — optional; output of `survey-history` (contains `## Verified Claims`)
+- `state.premise_contradiction` (optional) — set by `WORKFLOW_PREMISE_FAIL` during Research stage.
+  Sentinels in Step 0 are emitted directly by the orchestrator (Bash tool), never by any subagent.
 - The session-id used for output files (`*-outline.md`) matches the intent file actually used
 
 ## Procedure
+
+0. **Surface premise contradictions from Research artifacts.**
+
+   0a. Determine session-id from `CLAUDE_SESSION_ID` env. Check whether both
+       `~/.workflow-plans/<session-id>-survey-code.md` and
+       `~/.workflow-plans/<session-id>-survey-history.md` exist.
+       - If research was skipped (state.steps.research.status === "skipped"):
+         skip Steps 0b–0d and proceed directly to Step 0e.
+       - If one or both artifact files are missing AND research is not skipped:
+         present a one-line warning in chat ("Research artifacts incomplete —
+         running make-outline-plan without full premise verification") and proceed
+         to Step 0e. Do not block.
+
+   0b. Read the `## Verified Claims` section from each existing artifact. Collect
+       all items with `verdict: contradicted`.
+
+   0c. If any contradicted claims exist: orchestrator runs the following Bash call
+       (description: "Record premise contradiction in workflow state"):
+       `echo "<<WORKFLOW_PREMISE_FAIL: <one-line summary of contradictions>>>"`
+       Then present a brief contradiction summary in chat and call AskUserQuestion:
+       "(a) Revise intent.md and re-run /clarify-intent, or (b) Acknowledge and
+       proceed (premise is outdated; I accept the risk)."
+
+   0d. If user selects (b): orchestrator runs
+       `echo "<<WORKFLOW_PREMISE_ACK>>"` (clears state.premise_contradiction).
+       If user selects (a): abort the skill with instruction to re-run /clarify-intent.
+
+   0e. Orchestrator runs `echo "<<WORKFLOW_MARK_STEP_research_complete>>"` to mark
+       Research complete (aggregating survey-code and survey-history, which no longer
+       emit this sentinel individually).
+       Note: if deep-research was also run and already emitted research_complete,
+       markStep is idempotent — this emit is harmless.
+
+   Proceed to Step 1.
 
 1. Locate the intent file:
    a. If `<session-id>-intent.md` exists, use it.
