@@ -22,13 +22,13 @@ session-scoped sentinel instead of editing `.env` globally:
 
     echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>>"
 
-The `: <reason>` is optional but recommended. This writes a per-session marker
-file so that only the current session treats `ENFORCE_WORKTREE` as off. All
-other concurrent Claude Code sessions remain at `on`.
+Attach `: <reason>` (bare form emits a warning). This writes a per-session
+marker file so that only the current session treats `ENFORCE_WORKTREE` as off.
+All other concurrent Claude Code sessions remain at `on`.
 
 To restore enforcement within the same session, emit the matching sentinel:
 
-    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <reason>>>"
 
 The hook layer resolves the session ID (Anthropic bug #27987 prevents
 `$CLAUDE_SESSION_ID` from being propagated to Bash subprocesses) and deletes
