@@ -9,12 +9,14 @@ Investigate the codebase related to the given task.
 ## Procedure
 
 0. **Claim extraction** (run before reading any code):
-   Read `~/.workflow-plans/<session-id>-intent.md`. Extract up to 5 behavioral/factual
-   claims from the Background/Motivation and Scope sections. Target claim patterns:
-   "X is blocked", "X does Y", "X is broken", "X cannot Z". Aesthetic claims
-   ("this code is ugly") and pure preference statements are out of scope.
-   Works with Japanese and English intent.md content.
-   If no verifiable claims are found, proceed to Step 1 with an empty claim list.
+   Input precedence (read whichever exists first):
+     (a) `~/.workflow-plans/<session-id>-intent.md` — preferred (post-clarify-intent calls)
+     (b) `~/.workflow-plans/<session-id>-context.md` — fallback (pre-clarify-intent calls
+         from workflow-init; use "User initial prompt" and "Issue body" sections)
+   If neither exists: proceed to Step 1 with an empty claim list.
+   Extract up to 5 behavioral/factual claims from Background/Motivation and Scope.
+   Target: "X is blocked", "X does Y", "X is broken", "X cannot Z". Exclude aesthetic
+   claims and pure preferences. Works with Japanese and English content.
 
 1. Identify candidate files and areas using Glob and Grep.
 2. Read relevant source files, configs, tests, and docs.
@@ -32,7 +34,7 @@ Investigate the codebase related to the given task.
      evidence: <file:line or "no matching code found">
    ```
    If no claims were extracted in Step 0, write the section with the note
-   "No verifiable behavioral/factual claims found in intent.md."
+   "No verifiable behavioral/factual claims found in intent.md or context.md."
 6. Present findings for user review before proceeding to plan.
 
 ## Rules
@@ -47,6 +49,8 @@ Investigate the codebase related to the given task.
 
 After completing this skill:
 1. Invoke `make-outline-plan` via the Skill tool.
+   Note: when invoked as a parallel Agent subagent by workflow-init, skip this step —
+   Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.
 
 Skip this skill when the change target is already known (single file/function).
 
