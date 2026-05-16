@@ -9,10 +9,29 @@ made after the relevant issue was opened that might invalidate its premises.
 
 ## Procedure
 
-1. Read `~/.workflow-plans/<session-id>-intent.md`. Extract the issue number N from
-   the `## closes_issues` section.
-   - If the section is absent, reads `(empty)`, or contains no integer: emit
-     `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: no issue number in closes_issues — history check skipped>>"` and stop.
+1. **Input and issue number resolution:**
+   Input precedence (read whichever exists first):
+     (a) `~/.workflow-plans/<session-id>-intent.md` — preferred (post-clarify-intent calls)
+     (b) `~/.workflow-plans/<session-id>-context.md` — fallback (pre-clarify-intent calls
+         from workflow-init)
+   Issue number N:
+   - From intent.md: extract from `## closes_issues` section (existing behavior).
+   - From context.md: read `issue-number` from `## Session metadata`.
+   - If N is `(none)`, absent, or non-integer → proceed in **keyword-only mode** (Step 2.5).
+
+2.5 **Keyword-only mode** (no issue number available):
+    Output header MUST include: `**DEGRADED MODE** — no issue context; results are best-effort`
+    - Skip Step 2 (gh issue view) — no issue = no reliable issue data.
+    - Skip `gh pr list` — no issue context means PR filter is unreliable.
+    - Use `--since='1 year ago'` for git log scope (avoids unbounded history scan).
+    - Source keywords from context.md `## Keywords` section if present;
+      otherwise extract from `## User initial prompt` inline (≥4 chars, stop-words excluded).
+    - Run Step 3a and 3b only (git log + history docs); skip Step 3c (gh pr list).
+    - All claims produced in this mode get `verdict: indeterminate`
+      (never `holds` or `contradicted` — insufficient evidence without issue context).
+    - Rationale: without issue context, gh pr list has no filter; git log needs a date cap;
+      verdicts require traceable evidence.
+    After writing the artifact (Step 5), stop. Do NOT invoke make-outline-plan.
 
 2. Run: `gh issue view <N> --json createdAt --jq .createdAt`
    - On success: record `openedAt` (ISO-8601 date string).
@@ -63,17 +82,19 @@ made after the relevant issue was opened that might invalidate its premises.
   both survey-code and survey-history before emitting it
 - Do NOT emit premise-fail or premise-ack sentinels — these are emitted exclusively
   by the `make-outline-plan` orchestrator
-- When invoked as a subagent (from agents/survey-history.md), do NOT emit any
-  `WORKFLOW_RESEARCH_NOT_NEEDED` sentinel either — the invoking orchestrator handles it
+- When invoked as a subagent, do NOT emit `WORKFLOW_RESEARCH_NOT_NEEDED` — the orchestrator handles it
 - gh CLI failures are non-fatal: log them in the artifact and continue
 
 ## Completion
 
 After completing this skill:
 1. Invoke `make-outline-plan` via the Skill tool.
+   Note: when invoked as a parallel Agent subagent by workflow-init, skip this step —
+   Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.
 
 ## Skip conditions
 
-- `closes_issues` absent or empty → emit `WORKFLOW_RESEARCH_NOT_NEEDED` (see Step 1)
+- `closes_issues` absent or empty and no context.md → emit `WORKFLOW_RESEARCH_NOT_NEEDED`
+- No issue number available → use keyword-only mode (Step 2.5); do NOT skip entirely
 - docs-only or typo task with no behavioral claims → emit
   `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only task — history check not applicable>>"`

@@ -243,3 +243,7 @@ Changes: The script no longer passes --paginate to gh issue list (the CLI does n
 ### CONFIG: Disable 1M context for skill/subagent calls (2026-05-16)
 Background: Skill invocations caused frequent 'Extra usage is required for 1M context' errors because model aliases like opus and sonnet resolve to 1M-context defaults in Opus 4.7 / Sonnet 4.6, even when the main session is set to standard context.
 Changes: 1M context is now disabled system-wide for all skill and subagent calls via CLAUDE_CODE_DISABLE_1M_CONTEXT=1. The session-restart error should no longer appear.
+
+### REFACTOR: #327: survey-code/survey-history now run before the planning interview (2026-05-16)
+Background: Code survey and history review previously ran only after clarify-intent completed, so CC could not catch wrong premises during the interview.
+Changes: workflow-init now launches both survey agents in parallel (all workflow paths) before the clarify-intent interview begins. CC has codebase context and git history available throughout the interview, enabling earlier detection of already-fixed issues or contradicted assumptions.

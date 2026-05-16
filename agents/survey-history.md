@@ -11,7 +11,7 @@ changes made after a tracked issue was opened that might invalidate its stated p
 
 ## Role
 
-Given a `<session-id>-intent.md` file, investigate:
+Given a `<session-id>-intent.md` OR `<session-id>-context.md` file, investigate:
 1. Git commits merged since the issue was opened
 2. `docs/history.md` entries dated after the issue was opened
 3. GitHub PRs merged since the issue was opened
@@ -43,3 +43,5 @@ Produce a `<session-id>-survey-history.md` artifact with:
   (the main agent's SKILL procedure), not by this subagent.
   If you output sentinel text, it will be ignored and may cause duplicate state writes.
 - gh CLI failures are non-fatal — log them in the artifact under `## Data gaps`
+- When invoked as a parallel Agent subagent by workflow-init:
+  Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.

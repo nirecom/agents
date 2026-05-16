@@ -26,7 +26,14 @@ Emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>"` when a prior `*-int
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
-6. Research (`/survey-code` and/or `/survey-history` and/or `/deep-research`, or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `/make-outline-plan`.
+6. Check whether workflow-init's survey artifacts exist (both paths are absolute):
+   - Both present → surveys are already complete. Optionally invoke `/deep-research`
+     if external knowledge is required; otherwise emit:
+     `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init>>"`
+   - Either missing (workflow-init survey Agent failed) → invoke the missing survey(s):
+     - Missing `<session-id>-survey-code.md` → invoke `/survey-code`
+     - Missing `<session-id>-survey-history.md` → invoke `/survey-history`
+   Then invoke `/make-outline-plan`.
 
 ## Completion
 
@@ -42,4 +49,8 @@ After confirm-plan protocol returns, reconcile with GitHub:
 Then:
 1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
-3. Invoke `survey-code` or `deep-research` (or `<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>`), then `make-outline-plan`.
+3. Check whether workflow-init's survey artifacts exist:
+   - Both present → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.
+   - Either missing → invoke the missing survey(s) directly before proceeding.
+   Optionally invoke `/deep-research` if external knowledge is required.
+   Then invoke `make-outline-plan`.
