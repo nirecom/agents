@@ -521,6 +521,24 @@ for (const cmd of sentinelParts) {
       );
       continue;
     }
+    const rawUvReason = userVerifiedMatch[1]; // undefined when no reason given
+    if (rawUvReason !== undefined) {
+      const v = validateSkipReason(rawUvReason);
+      if (!v.ok) {
+        // Warn but still apply — reason quality must not block verification.
+        messages.push(
+          `workflow-mark: USER_VERIFIED reason rejected — ${v.msg} (verification still recorded)`
+        );
+      }
+    } else {
+      // Soft recommendation — mirrors ENFORCE_WORKTREE_ON/OFF accountability pattern.
+      messages.push(
+        `workflow-mark: USER_VERIFIED emitted without reason. ` +
+          `For accountability, next time include a reason: ` +
+          `echo "<<WORKFLOW_USER_VERIFIED: <what user is approving>>>" ` +
+          `(reason: >=3 non-space chars, no '>', not a placeholder).`
+      );
+    }
     try {
       markStep(sessionId, "user_verification", "complete");
       const hint = nextStepHint("user_verification");
