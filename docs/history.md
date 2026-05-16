@@ -455,3 +455,7 @@ Changes: posix-redirect regex in hooks/lib/bash-write-patterns.js: added negativ
 ### BUGFIX: enforce-worktree: allow cd+git-worktree-remove combined form for VS Code CWD-reset behavior (#294) (2026-05-15, 396a534, #294)
 Background: enforce-worktree.js lacked an exemption for the cd-main-then-git-worktree-remove pattern, required when VS Code extension host resets the Bash CWD between calls during worktree-end cleanup step 6b.5.
 Changes: Added findFirstUnquotedAnd() and isAllowedCdWorktreeRemove() to hooks/enforce-worktree.js. Part of BUGFIX entry for #242, #243, #294, #297.
+
+### CONFIG: Disable 1M context for skill/subagent calls (CLAUDE_CODE_DISABLE_1M_CONTEXT) (2026-05-16)
+Background: Skill/agent frontmatter with model: opus or model: sonnet resolves to 1M-context defaults (Opus 4.7 and Sonnet 4.6 are natively 1M), causing frequent 'Extra usage is required for 1M context' API errors when Sonnet 1M is not covered by the active plan. The UI-level non-1M model selection constrains only the main session, not subagents.
+Changes: Added CLAUDE_CODE_DISABLE_1M_CONTEXT=1 to the env block in settings.json. This env var (officially added in Claude Code changelog) forces all sessions and subagent invocations to use standard-context (200K) mode, preventing alias resolution from silently upgrading to 1M.

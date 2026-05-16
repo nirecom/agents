@@ -239,3 +239,7 @@ Changes: The combined cd+git-worktree-remove form is now allowed when VS Code re
 ### BUGFIX: backfill-commit-comments.sh: drop unsupported --paginate flag (2026-05-15)
 Background: After running backfill-commit-comments.sh against the agents repo, it reported 'Backfilled: 0, Skipped: 0' even though closed issues without sentinels existed.
 Changes: The script no longer passes --paginate to gh issue list (the CLI does not support it; only gh api does). Issue listing now works; the script processes closed issues as documented.
+
+### CONFIG: Disable 1M context for skill/subagent calls (2026-05-16)
+Background: Skill invocations caused frequent 'Extra usage is required for 1M context' errors because model aliases like opus and sonnet resolve to 1M-context defaults in Opus 4.7 / Sonnet 4.6, even when the main session is set to standard context.
+Changes: 1M context is now disabled system-wide for all skill and subagent calls via CLAUDE_CODE_DISABLE_1M_CONTEXT=1. The session-restart error should no longer appear.
