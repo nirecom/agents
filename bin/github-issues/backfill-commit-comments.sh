@@ -151,12 +151,13 @@ has_resolved_by() {
 }
 
 # J-2 idempotency: check for existing appended sentinel.
-# "m" flag: ^ matches start of any line so the sentinel is found in merged-format
-# comments (where it appears on line 2, after the resolved-by marker).
+# Use (^|\n) prefix instead of "m" flag: jq's "m" flag is Oniguruma's
+# multi-line dot mode (not PCRE line-anchor mode), so ^ still anchors to
+# string start. The (^|\n) prefix matches both line-1 and line-2+ sentinels.
 has_appended_sentinel() {
     local n="$1" hit
     hit=$(gh issue view "$n" --json comments \
-        --jq '[.comments[].body | select(test("^<!-- issue-close-sentinel: appended"; "m"))] | first // ""' \
+        --jq '[.comments[].body | select(test("(^|\\n)<!-- issue-close-sentinel: appended"))] | first // ""' \
         2>/dev/null) || hit=""
     [ -n "$hit" ]
 }

@@ -30,7 +30,7 @@ mock_state_for_scenario() {
 # (`appended`, `pending`, or `any` for the broader `^<!-- issue-close-sentinel:`).
 # Empty string when no match — same as `first // ""` in real jq.
 mock_sentinel_for_scenario() {
-  local kind="$1"   # appended | appended_with_m_flag | any
+  local kind="$1"   # appended | appended_with_newline_prefix | any
   case "$SCENARIO" in
     closed_with_appended_sentinel|closed_with_both|open_with_appended)
       # Both `any` and `appended` (with or without "m" flag) match — sentinel
@@ -38,14 +38,14 @@ mock_sentinel_for_scenario() {
       echo "<!-- issue-close-sentinel: appended (resolved-by: closes-keyword) -->"
       ;;
     closed_with_merged_sentinel)
-      # Merged format: sentinel sits on LINE 2 of the comment body. Only the
-      # "m" multiline flag makes `^` match line starts inside a string, so
-      # the lookup succeeds only when has_appended_sentinel() includes "m".
-      if [ "$kind" = "appended_with_m_flag" ] || [ "$kind" = "any" ]; then
+      # Merged format: sentinel sits on LINE 2 of the comment body. The
+      # (^|\n) prefix in the jq regex matches line-starts inside a string,
+      # so the lookup succeeds only when has_appended_sentinel() uses (^|\n).
+      if [ "$kind" = "appended_with_newline_prefix" ] || [ "$kind" = "any" ]; then
         echo "<!-- issue-close-sentinel: appended (resolved-by: backfill-history-introducer, commit=abc1234) -->"
       fi
-      # `appended` lookup (no "m" flag) → empty: simulates that without "m",
-      # a line-2 sentinel is invisible to the idempotency check.
+      # `appended` lookup (no (^|\n) prefix) → empty: simulates that without
+      # the prefix, a line-2 sentinel is invisible to the idempotency check.
       ;;
     open_with_pending|closed_with_pending)
       if [ "$kind" = "any" ]; then
@@ -87,8 +87,8 @@ case "$ARGS" in
     exit 0
     ;;
   "issue view "*" --json comments --jq"*"issue-close-sentinel: appended"*)
-    if [[ "$ARGS" == *'"m"'* ]]; then
-        mock_sentinel_for_scenario appended_with_m_flag
+    if [[ "$ARGS" == *'(^|\\n)'* ]]; then
+        mock_sentinel_for_scenario appended_with_newline_prefix
     else
         mock_sentinel_for_scenario appended
     fi
