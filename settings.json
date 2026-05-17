@@ -420,6 +420,16 @@
         ]
       },
       {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-user-verified-context.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Write|Edit|MultiEdit|editFiles",
         "hooks": [
           {
@@ -453,11 +463,6 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-run-tests.js\"",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-user-verified-context.js\"",
-            "timeout": 10
           }
         ]
       },

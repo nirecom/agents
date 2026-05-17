@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tests for hooks/show-user-verified-context.js
-# PostToolUse Bash hook: detects <<WORKFLOW_USER_VERIFIED>> in tool_input.command,
-# emits "User verification context:" systemMessage with staged files and open PR URL.
+# PreToolUse Bash hook: detects <<WORKFLOW_USER_VERIFIED>> in tool_input.command,
+# emits "User verification context:" systemMessage with staged files and open PR URL
+# BEFORE the permission dialog renders (sentinel is permissions.ask-listed).
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -50,7 +51,7 @@ git -C "$GIT_REPO" add foo.txt
 
 # ── U1: Positive — sentinel in command → systemMessage ───────────────────
 echo "=== U1: sentinel in command → User verification context: ==="
-U1_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U1_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U1_RESULT=$(run_hook "$U1_JSON")
 U1_MSG=$(echo "$U1_RESULT" | extract_msg)
 if echo "$U1_MSG" | grep -q "User verification context:" && echo "$U1_MSG" | grep -q "Staged files:"; then
@@ -61,7 +62,7 @@ fi
 
 # ── U2: Wrong tool (Write) → noop ─────────────────────────────────────────
 echo "=== U2: wrong tool (Write) → noop ==="
-U2_JSON="{\"tool_name\":\"Write\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\"},\"tool_response\":{\"success\":true}}"
+U2_JSON="{\"tool_name\":\"Write\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\"}}"
 U2_RESULT=$(run_hook "$U2_JSON")
 if [ -z "$U2_RESULT" ]; then
   pass "U2 wrong tool → noop"
@@ -71,7 +72,7 @@ fi
 
 # ── U3: Sentinel in stdout only, NOT in command → noop ─────────────────────
 echo "=== U3: sentinel in stdout only (not command) → noop ==="
-U3_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat some-file.txt\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U3_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat some-file.txt\",\"cwd\":\"$GIT_REPO\"}}"
 U3_RESULT=$(run_hook "$U3_JSON")
 if [ -z "$U3_RESULT" ]; then
   pass "U3 sentinel in stdout only → noop (command-based detection)"
@@ -86,7 +87,7 @@ mkdir -p "$EMPTY_REPO"
 git -C "$EMPTY_REPO" init -q
 git -C "$EMPTY_REPO" config user.email "test@example.com"
 git -C "$EMPTY_REPO" config user.name "Test"
-U4_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$EMPTY_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U4_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$EMPTY_REPO\"}}"
 U4_RESULT=$(run_hook "$U4_JSON")
 U4_MSG=$(echo "$U4_RESULT" | extract_msg)
 if echo "$U4_MSG" | grep -q "User verification context:" && echo "$U4_MSG" | grep -q "(none)"; then
@@ -115,7 +116,7 @@ echo "https://github.com/nirecom/agents/pull/314"
 exit 0
 SHIM
   chmod +x "$GH_BIN_DIR/gh"
-  U5_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+  U5_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
   U5_RESULT=$(PATH="$GH_BIN_DIR:$PATH" run_hook "$U5_JSON")
   U5_MSG=$(echo "$U5_RESULT" | extract_msg)
   if echo "$U5_MSG" | grep -q "Open PR: https://github.com/nirecom/agents/pull/314"; then
@@ -134,7 +135,7 @@ cat > "$GH_FAIL_DIR/gh" << 'SHIM'
 exit 1
 SHIM
 chmod +x "$GH_FAIL_DIR/gh"
-U6_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U6_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U6_RESULT=$(PATH="$GH_FAIL_DIR:$PATH" run_hook "$U6_JSON")
 U6_MSG=$(echo "$U6_RESULT" | extract_msg)
 if echo "$U6_MSG" | grep -q "Staged files:" && ! echo "$U6_MSG" | grep -q "Open PR:"; then
@@ -145,7 +146,7 @@ fi
 
 # ── U7: gh not on PATH → graceful, no crash ────────────────────────────────
 echo "=== U7: gh not on PATH → graceful degradation ==="
-U7_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U7_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 # Simulate "gh not on PATH" by shadowing gh with an always-fail shim,
 # without stripping node or other tools from PATH.
 GH_ABSENT_DIR="$WORK_DIR/gh-absent"
@@ -167,7 +168,7 @@ fi
 echo "=== U8: non-git cwd → graceful ==="
 NON_GIT="$WORK_DIR/non-git"
 mkdir -p "$NON_GIT"
-U8_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$NON_GIT\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U8_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$NON_GIT\"}}"
 U8_RESULT=$(run_hook "$U8_JSON")
 U8_MSG=$(echo "$U8_RESULT" | extract_msg)
 if echo "$U8_MSG" | grep -q "User verification context:"; then
@@ -178,7 +179,7 @@ fi
 
 # ── U9: Idempotency — two runs produce identical output ────────────────────
 echo "=== U9: idempotency ==="
-U9_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U9_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
 U9_R1=$(run_hook "$U9_JSON")
 U9_R2=$(run_hook "$U9_JSON")
 if [ "$U9_R1" = "$U9_R2" ] && [ -n "$U9_R1" ]; then
@@ -189,7 +190,7 @@ fi
 
 # ── U10: Partial sentinel (no << / >>) → noop ──────────────────────────────
 echo "=== U10: partial sentinel → noop ==="
-U10_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo WORKFLOW_USER_VERIFIED\",\"cwd\":\"$GIT_REPO\"},\"tool_response\":{\"stdout\":\"WORKFLOW_USER_VERIFIED\\n\",\"exit_code\":0}}"
+U10_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo WORKFLOW_USER_VERIFIED\",\"cwd\":\"$GIT_REPO\"}}"
 U10_RESULT=$(run_hook "$U10_JSON")
 if [ -z "$U10_RESULT" ]; then
   pass "U10 partial sentinel (no <</>>) → noop"
@@ -207,13 +208,24 @@ git -C "$OTHER_REPO" config user.name "Test"
 echo "bar" > "$OTHER_REPO/bar.txt"
 git -C "$OTHER_REPO" add bar.txt
 # No cwd field in the JSON input
-U11_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\"},\"tool_response\":{\"stdout\":\"<<WORKFLOW_USER_VERIFIED>>\\n\",\"exit_code\":0}}"
+U11_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\"}}"
 U11_RESULT=$(CLAUDE_PROJECT_DIR="$OTHER_REPO" run_hook "$U11_JSON")
 U11_MSG=$(echo "$U11_RESULT" | extract_msg)
 if echo "$U11_MSG" | grep -q "bar.txt" && ! echo "$U11_MSG" | grep -q "foo.txt"; then
   pass "U11 CLAUDE_PROJECT_DIR fallback — correct repo used (bar.txt from other-repo)"
 else
   fail "U11 — expected bar.txt from other-repo, got: $U11_MSG"
+fi
+
+# ── U12: PreToolUse payload (no tool_response) → systemMessage produced ─────
+echo "=== U12: PreToolUse payload without tool_response → systemMessage ==="
+U12_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+U12_RESULT=$(run_hook "$U12_JSON")
+U12_MSG=$(echo "$U12_RESULT" | extract_msg)
+if echo "$U12_MSG" | grep -q "User verification context:" && echo "$U12_MSG" | grep -q "foo.txt"; then
+  pass "U12 PreToolUse payload (no tool_response) → systemMessage with staged file"
+else
+  fail "U12 — expected User verification context: with foo.txt, got: $U12_MSG"
 fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
