@@ -7,8 +7,7 @@
    For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
    Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order.
-   Read `rules/plan-principles.md` first (elevate perspective / orthogonality /
-   name reflects substance) — these meta-principles govern every plan stage.
+   Read `rules/core-principles.md` first — it governs every plan stage.
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
      If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
    - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.
@@ -30,7 +29,7 @@
 6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Skill: `/run-tests`
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
-   - Bash: `review-code-codex --base <merge-base>` for cross-provider adversarial review
+   - Bash: `review-code-codex --base <merge-base> --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` for cross-provider adversarial review
      (always parallel, never blocks workflow). Output is shown directly to the user via
      the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
      is visible without relying on Claude's summary.
