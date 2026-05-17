@@ -8,6 +8,23 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
 ## Procedure
 
+### Step 0 — Resolve <PLANS_DIR>
+
+Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
 1. **Pre-flight checks:**
    - `gh --version` — abort with installation guidance if gh is not found.
    - Verify cwd is inside a linked worktree (not the main worktree):
@@ -115,7 +132,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    b. **Write branch-delete marker** (authorises step f via the `enforce-worktree` hook):
       - `<repo-id>` = first 16 hex chars of sha256 of `git -C <main> rev-parse --git-common-dir` (absolute path).
       - `<encoded-branch>` = `encodeURIComponent(<branch>)` (e.g. `feature/foo` → `feature%2Ffoo`).
-      - `<plans>` = `$WORKFLOW_PLANS_DIR` if set, else `~/.workflow-plans`.
+      - `<plans>` = `<PLANS_DIR>` (resolved via Step 0 at top of Procedure).
       - `<marker-path>` = `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`. Store for step g.
       - Content (two lines): `<branch>` / `<absolute-worktree-path>` (must resolve under `WORKTREE_BASE_DIR`).
       - Use the Write tool (atomic; auto-creates `worktree-end/` on first use).

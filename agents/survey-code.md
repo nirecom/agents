@@ -35,7 +35,10 @@ Follow the procedure in `skills/survey-code/SKILL.md`. Produce a `<session-id>-s
 ## Constraints
 
 - Read project source files only — do not modify them. Writing the output artifact
-  to `~/.workflow-plans/<session-id>-survey-code.md` is required and allowed.
+  to the absolute artifact path supplied by the orchestrator (default location
+  resolved by `bin/workflow-plans-dir`) is required and allowed.
+- The orchestrator passes the resolved artifact path explicitly. Do not assume
+  the default location — read the path from the invocation prompt.
 - You MUST NOT emit any `<<WORKFLOW_*>>` sentinels. Sentinel emission is handled
   exclusively by the orchestrator, not by this subagent.
 - gh CLI failures are non-fatal — log them in the artifact under `## Data gaps`
