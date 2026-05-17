@@ -30,9 +30,19 @@ flowchart TD
 
     Task([Task]) --> DocCheck{Docs-only<br/>changes?}
     DocCheck -- Yes --> UV["8 · User verify"]
-    DocCheck -- No  --> S0["0 · workflow-init<br/>survey · route · context"]
+    DocCheck -- No  --> S0_sg
 
-    S0  --> S1["1 · clarify-intent<br/>skippable"]
+    subgraph S0_sg["0 · workflow-init"]
+        direction TB
+        S0_R["Issue routing"]
+        subgraph S0_surv["Parallel surveys"]
+            direction LR
+            S0_SC["survey-code"] ~~~ S0_SH["survey-history"]
+        end
+        S0_R --> S0_surv
+    end
+
+    S0_sg --> S1["1 · clarify-intent<br/>skippable"]
     S1  --> P2a
 
     subgraph Plan["2 · Plan  —  3-stage pipeline"]
@@ -74,6 +84,8 @@ flowchart TD
     PR --> IC
     IC --> Done([Done])
 
+    style S0_sg  fill:#1e3a8a,stroke:#1d4ed8,color:#fff
+    style S0_surv fill:#4c1d95,stroke:#6d28d9,color:#fff
     style Plan   fill:#1e3a8a,stroke:#1d4ed8,color:#fff
     style P2b_sg fill:#1e3a8a,stroke:#60a5fa,color:#fff
     style P2c_sg fill:#1e3a8a,stroke:#60a5fa,color:#fff
@@ -82,8 +94,8 @@ flowchart TD
     class Task,Done terminal
     class DocCheck,Cleanup decision
     class S1,P2a,S4 skippable
-    class P2b_L,P2c_L,S0,S3,S5,S7,UV,S9,WE,PR,IC required
-    class P2b_R,P2c_R,S6a,S6b,S6c,S6d parallel
+    class P2b_L,P2c_L,S0_R,S3,S5,S7,UV,S9,WE,PR,IC required
+    class P2b_R,P2c_R,S0_SC,S0_SH,S6a,S6b,S6c,S6d parallel
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
