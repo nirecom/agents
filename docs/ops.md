@@ -169,6 +169,27 @@ The parent cannot be closed while any child is `open` (`/issue-close` enforces t
 
 ---
 
+## Worktree-end / Merge Operations
+
+### `AUTO_MERGE_PR=on` — do not press the GitHub UI merge button
+
+Under the default `AUTO_MERGE_PR=on` mode, `/worktree-end` performs the squash-merge
+locally via `gh pr merge --squash --delete-branch`. The skill **does not** currently
+detect a PR that was already merged via the GitHub web UI before `/worktree-end` ran —
+the `on` path jumps straight from Step 3 to Step 4 without a `gh pr view --json state`
+pre-check. If you press "Squash & merge" on the web first, the local `gh pr merge`
+call fails on a PR that is already MERGED, and the cleanup path stalls.
+
+**Constraint:** with `AUTO_MERGE_PR=on`, leave the merge to Claude Code — do not press
+the GitHub UI merge button. Tracked in #358 (auto-detect of pre-merged PRs); when
+that lands, this constraint goes away.
+
+The `off` mode (`AUTO_MERGE_PR=off`) already supports a `wait-for-web-merge` branch
+that polls `gh pr view --json state` for `MERGED`. If you prefer the UI-merge workflow,
+set `AUTO_MERGE_PR=off` in `.env`.
+
+---
+
 ## Plans Directory Migration
 
 One-time operator runbook: rename `intent-<timestamp>-*.md` files in the
