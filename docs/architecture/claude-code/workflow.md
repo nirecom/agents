@@ -106,7 +106,7 @@ Skill runs (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests
 Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToolUse hook, early gate)
   fires only when clarify_intent step is pending or missing
   fail-open: missing session_id, null state, or complete/skipped status → fall through (approve)
-  allowlist: Write to ~/.workflow-plans/** by default (configurable via WORKFLOW_PLANS_DIR; resolved at runtime by getWorkflowPlansDir()) is permitted (clarify-intent skill writes intent.md/outline.md/detail.md here)
+  allowlist: Write to ~/.workflow-plans/** by default (configurable via WORKFLOW_PLANS_DIR) is permitted (clarify-intent skill writes intent.md/outline.md/detail.md here)
   blocks otherwise with instructions to invoke /clarify-intent or emit <<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>
   Read/Grep/Glob/Bash are not in the matcher — they always pass (clarify-intent skill needs them for codebase exploration)
 
