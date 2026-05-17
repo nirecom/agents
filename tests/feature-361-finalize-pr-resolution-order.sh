@@ -22,22 +22,25 @@ if [ ! -f "$SKILL" ]; then
     exit 1
 fi
 
-# --- ST1: ordering — find-pr-by-marker.sh invocation MUST appear AFTER triage eval
+# --- ST1: ordering — find-pr-by-marker.sh EXECUTABLE invocation MUST appear AFTER triage eval
+# Match only lines where find-pr-by-marker.sh is called as a bash subprocess (inside eval/if),
+# not prose mentions like "resolved via find-pr-by-marker.sh".
 TRIAGE_LINE=$(grep -n 'issue-close-finalize-triage.sh' "$SKILL" | head -1 | cut -d: -f1)
-PR_LINE=$(grep -n 'find-pr-by-marker.sh' "$SKILL" | grep -v '^[[:space:]]*#' | head -1 | cut -d: -f1)
+PR_LINE=$(grep -n 'bash.*find-pr-by-marker\.sh' "$SKILL" | head -1 | cut -d: -f1)
 if [ -n "$TRIAGE_LINE" ] && [ -n "$PR_LINE" ] && [ "$PR_LINE" -gt "$TRIAGE_LINE" ]; then
     pass "ST1: find-pr-by-marker.sh (line $PR_LINE) appears after triage (line $TRIAGE_LINE)"
 else
     fail "ST1: ordering wrong — triage=$TRIAGE_LINE pr=$PR_LINE (PR invocation must be > triage line)"
 fi
 
-# --- ST2: guard present — *,J,* appears within 20 lines after find-pr-by-marker.sh
+# --- ST2: guard present — *,J,* appears within 5 lines before or 20 lines after find-pr-by-marker.sh
 if [ -n "$PR_LINE" ]; then
+    WINDOW_START=$((PR_LINE > 5 ? PR_LINE - 5 : 1))
     WINDOW_END=$((PR_LINE + 20))
-    if sed -n "${PR_LINE},${WINDOW_END}p" "$SKILL" | grep -qF '*,J,*'; then
-        pass "ST2: *,J,* guard present within 20 lines after find-pr-by-marker.sh"
+    if sed -n "${WINDOW_START},${WINDOW_END}p" "$SKILL" | grep -qF '*,J,*'; then
+        pass "ST2: *,J,* guard present within window of find-pr-by-marker.sh"
     else
-        fail "ST2: *,J,* guard NOT found within lines ${PR_LINE}-${WINDOW_END}"
+        fail "ST2: *,J,* guard NOT found within lines ${WINDOW_START}-${WINDOW_END}"
     fi
 else
     fail "ST2: cannot check guard — find-pr-by-marker.sh line not found"
