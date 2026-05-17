@@ -13,7 +13,7 @@
 #   FT2: OPEN + pending        → resume_e, E,F,G,H,J  (recovery for stuck)
 #   FT3: OPEN + appended       → resume_h, G,H,J
 #   FT4: CLOSED + appended     → resume_j, J
-#   FT5: CLOSED + no sentinel  → auto_close_path, B,E,G,J
+#   FT5: CLOSED + no sentinel  → auto_close_path, E,G,J
 #   FT6: CLOSED + pending + hist → stuck_sentinel_only, J
 #   FT7: CLOSED + pending + no hist → stuck_append_sentinel, E,J
 #   FT8: non-numeric N         → error
@@ -147,13 +147,31 @@ else
 fi
 teardown_tmp
 
-# --- FT5: CLOSED + no sentinel → auto_close_path (B,E,G,J)
+# --- FT5: CLOSED + no sentinel → auto_close_path (E,G,J)
+# Bug #366: previously asserted B,E,G,J. After the fix, Step B (sub-issue gate)
+# is no longer scheduled by auto_close_path — the issue is already CLOSED, so
+# gating its closure on open sub-issues is meaningless and causes spurious
+# failures when the parent has open children that were intentionally left open.
 setup_tmp
 run_triage closed_no_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "B,E,G,J" ]; then
-    pass "FT5: CLOSED:(none) → auto_close_path (B,E,G,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J" ]; then
+    pass "FT5: CLOSED:(none) → auto_close_path (E,G,J)"
 else
     fail "FT5: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
+fi
+teardown_tmp
+
+# --- FT5b: CLOSED + no sentinel + open sub-issue → auto_close_path (E,G,J)
+# Regression trap for bug #366. If a future change re-introduces B into
+# auto_close_path, downstream execution against this scenario exits non-zero
+# (count=1 open sub-issue); at the triage layer the regression surfaces as
+# T_NEXT_STEPS mismatch (B reappears in the list).
+setup_tmp
+run_triage closed_no_sentinel_open_subissue
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J" ]; then
+    pass "FT5b: CLOSED:(none) + open sub-issue → auto_close_path (E,G,J), no Step B"
+else
+    fail "FT5b: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 

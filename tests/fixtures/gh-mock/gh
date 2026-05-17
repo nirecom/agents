@@ -19,7 +19,7 @@ mock_state_for_scenario() {
   case "$SCENARIO" in
     issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended)
       echo "OPEN" ;;
-    closed_no_sentinel|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending|closed_with_merged_sentinel)
+    closed_no_sentinel|closed_no_sentinel_open_subissue|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending|closed_with_merged_sentinel)
       echo "CLOSED" ;;
     *)
       echo "OPEN" ;;
@@ -343,6 +343,43 @@ case "$SCENARIO" in
         ;;
       "api repos/"*"/issues/"*" --jq .parent.number"*)
         # No parent — emit empty.
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_no_sentinel_open_subissue)
+    # Trap scenario for FT5b. Sub-issue count=1; if auto_close_path ever
+    # re-schedules Step B, gate exits non-zero here.
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0
+        ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Closed-by-keyword task","body":"Background: closed via PR\nChanges: feature shipped","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "issue list --state closed"*)
+        if [[ "$ARGS" == *"--jq"* ]]; then
+          echo "42"
+        else
+          echo '[{"number":42,"title":"Closed-by-keyword task","closedAt":"2026-05-10T00:00:00Z"}]'
+        fi
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo "1"
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
         exit 0
         ;;
     esac
