@@ -84,3 +84,12 @@ bulk-deleted; most had directory versions with no data loss. One-time event.
 ## Plans directory resolution
 
 `bin/session-sync.{sh,ps1}` copies session planning artifacts (intent/outline/detail `.md` files) between the local machine and the sync repository. The local directory is resolved via `bin/workflow-plans-dir`, which honours the `WORKFLOW_PLANS_DIR` env var (default: `~/.workflow-plans/`). The transport directory on the sync mount is always `plans/` and is not affected by this setting.
+
+The copy-based transport (not symlink/bind-mount) is intentional — symlinks
+into `~/.claude/` would trigger Claude Code's protected-path ask dialog
+(precedent: PR #256 / history 2026-05-14), and a bind-mount/junction would
+tie session-sync to OS-specific filesystem features. Skill orchestrator, JS
+hooks, and `session-sync.{sh,ps1}` all resolve via the same helper
+(`bin/workflow-plans-dir`); skill prompts reach the helper through the
+orchestrator-injects protocol documented in
+`skills/_shared/resolve-plans-dir.md`.
