@@ -17,6 +17,40 @@ function parseGitCArg(command) {
   return rest.slice(0, closeIdx);
 }
 
+// Extract the absolute literal path following a leading `cd` command.
+// Form: `cd <absolute-path> [&&|;|whitespace] ...`
+// Returns unquoted path or null when:
+//   - no leading `cd`
+//   - unterminated quote
+//   - relative path (./foo, foo)
+//   - tilde (~) path
+//   - shell-variable reference ($X, ${X}) — hooks see the raw command string
+//     BEFORE Bash variable expansion; env-var paths cannot be resolved here.
+//     Callers must fall back to process.cwd() in that case.
+// First cd only: for `cd /a && cd /b && git`, returns /a (conservative).
+function parseCdCommand(command) {
+  if (!command || typeof command !== "string") return null;
+  const m = command.match(/^\s*cd\s+(["']?)(\S.*)/);
+  if (!m) return null;
+  const quote = m[1];
+  const rest = m[2];
+  let raw;
+  if (!quote) {
+    const bare = rest.match(/^[^\s;|&]+/);
+    if (!bare) return null;
+    raw = bare[0];
+  } else {
+    const closeIdx = rest.indexOf(quote);
+    if (closeIdx === -1) return null;
+    raw = rest.slice(0, closeIdx);
+  }
+  if (/\$/.test(raw)) return null;     // env-var reference
+  if (raw.startsWith("~")) return null; // tilde
+  const isAbsolute = raw.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(raw);
+  if (!isAbsolute) return null;
+  return raw;
+}
+
 /**
  * Parses the leading "git [global-opts...]" portion of a command and returns
  * { subcommand, rest }. Skips global git options that may appear before the
@@ -89,4 +123,4 @@ function parseGitConfigValues(command, key) {
   return values;
 }
 
-module.exports = { parseGitCArg, parseGitGlobalOptions, parseGitConfigValues };
+module.exports = { parseGitCArg, parseCdCommand, parseGitGlobalOptions, parseGitConfigValues };
