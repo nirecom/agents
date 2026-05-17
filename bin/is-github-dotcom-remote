@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Detects whether the current git repo's origin remote is github.com.
+# Exit 0 = github.com, 1 = non-GitHub, 2 = unknown/error (fail-open)
+#
+# Usage: is-github-dotcom-remote [<repo-dir>]
+#   Default <repo-dir> is the current directory ($PWD).
+set -u
+
+DIR="${1:-.}"
+
+url=$(git -C "$DIR" remote get-url origin 2>/dev/null) || exit 2
+[ -z "$url" ] && exit 2
+
+host=""
+
+# URL scheme (https://, http://, ssh://, git://, etc.)
+if [[ "$url" =~ ^[a-zA-Z][a-zA-Z0-9+.-]*://([^@/]+@)?([^/:]+) ]]; then
+    host="${BASH_REMATCH[2]}"
+# SCP-like: user@host:path (e.g. git@github.com:owner/repo.git)
+elif [[ "$url" =~ ^[^@/:]+@([^:]+): ]]; then
+    host="${BASH_REMATCH[1]}"
+else
+    exit 2
+fi
+
+[ -z "$host" ] && exit 2
+
+host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+
+if [ "$host" = "github.com" ]; then
+    exit 0
+else
+    exit 1
+fi
