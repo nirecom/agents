@@ -34,7 +34,7 @@ output any path representation. Specifically, the orchestrator MUST NOT:
 - emit a second path representation after the hook line (no `(フルパス: ...)` annotations)
 - prepend or append any path to a Japanese sentence
 
-Rationale: workflow-plan files under `~/.workflow-plans/` **by default**
+Rationale: workflow-plan files under `~/.workflow-plans/` by default
 (configurable via WORKFLOW_PLANS_DIR — see skills/_shared/resolve-plans-dir.md)
 do not render as clickable links in VS Code. The hook's breadcrumb plus the automatic `code -r`
 auto-open are the *only* sanctioned UX.
