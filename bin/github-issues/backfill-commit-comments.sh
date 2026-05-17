@@ -3,7 +3,7 @@
 #
 # Retroactive migration: for each closed GitHub issue that lacks an
 # `<!-- issue-close-sentinel: appended -->` comment, post J-1 + J-2 comments
-# to match the format produced by `/issue-close` in real time.
+# to match the format produced by `/issue-close-finalize` in real time.
 #
 # 6-tier hash discovery (priority high → low):
 #   Tier 0a — gh closedByPullRequestsReferences → mergeCommit.oid (single query)

@@ -70,7 +70,7 @@ Required only if Projects v2 is in use. The `OWNER` / `REPO` / `PROJECT_NUM` / `
 ### Step 5 — Backfill J-1/J-2 sentinel comments — *Migration (catch-up) / Operations*
 
 Use this when closed issues are missing the "Resolved by commit" comment (J-1) and/or
-the machine-readable sentinel (J-2) that `/issue-close` normally posts.
+the machine-readable sentinel (J-2) that `/issue-close-finalize` normally posts.
 Triggers: completing Step 2 (migrated issues have neither comment), `closes #N` PR
 auto-close, web UI / mobile / out-of-band close.
 
@@ -138,10 +138,14 @@ or out-of-band creation, use `.github/ISSUE_TEMPLATE/incident.yml` (or
 ### Close a task — *Operations*
 
 ```
-/issue-close <N>
+# Phase 1 — run from the linked worktree before /commit-push
+/issue-close-stage <N>
+
+# Phase 2 — run from the main worktree after the PR is merged
+/issue-close-finalize <N>
 ```
 
-This runs the full transaction-safe flow: sub-issue gate → sentinel comment → history.md append → `gh issue close`. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
+The two phases together run the full transaction-safe flow: sub-issue gate → pending sentinel comment → history.md append → parent body update → `gh issue close` → resolved-by + appended sentinel. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
 
 ### Recover from out-of-band closes — *Operations / Migration (catch-up)*
 
@@ -165,7 +169,7 @@ gh api repos/{owner}/{repo}/issues/<PARENT_N>/sub_issues \
   -f sub_issue_id="$CHILD_ID"
 ```
 
-The parent cannot be closed while any child is `open` (`/issue-close` enforces this automatically).
+The parent cannot be closed while any child is `open` (`/issue-close-stage` and `/issue-close-finalize` enforce this automatically).
 
 ---
 
