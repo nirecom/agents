@@ -113,7 +113,6 @@ assert_file_contains "A7" "WI subagent guard against make-outline-plan"     "$WI
 assert_file_contains "A8a" "WI retains Path A"                              "$WI_SKILL" "Path A"
 assert_file_contains "A8b" "WI retains Path B"                              "$WI_SKILL" "Path B"
 assert_file_contains "A8c" "WI retains Path C"                              "$WI_SKILL" "Path C"
-assert_file_contains "A9" "WI still uses cc-session-title"                  "$WI_SKILL" "cc-session-title"
 
 # ===========================================================================
 # Group B — survey-code/SKILL.md input precedence

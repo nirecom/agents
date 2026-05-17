@@ -44,11 +44,6 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    Capture: `PR_NUMBER=$(gh pr view --json number --jq .number)`
    Abort if empty — skill cannot proceed without a resolved PR.
 
-   Update session title with the PR number (best-effort):
-   ```
-   uv run "$AGENTS_CONFIG_DIR/bin/cc-session-title.py" add-pr "$PR_NUMBER" || true
-   ```
-
 3. **Merge decision:**
 
    Output `PR #<N> is open: [<url>](<url>)`
@@ -79,8 +74,6 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    Follow `skills/_shared/user-verified.md` to emit the sentinel
    (description: `"User confirmed PR #<N> merged via web UI"`). The PreToolUse hook
    re-surfaces the PR URL above the permission dialog.
-   Update session title to mark workflow complete (best-effort):
-   `uv run "$AGENTS_CONFIG_DIR/bin/cc-session-title.py" mark-complete || true`
    → step 5. Skip step 4.
 
 4. **Local merge:**
@@ -173,11 +166,6 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
 7. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
-
-   After the final report, update the session title to mark the workflow complete (best-effort — all cleanup has succeeded at this point):
-   ```
-   uv run "$AGENTS_CONFIG_DIR/bin/cc-session-title.py" mark-complete || true
-   ```
 
 ## Rules
 
