@@ -127,6 +127,8 @@ Final output: `Backfilled: N, Skipped: M`
 
 **Re-running is safe** — issues that already have an appended sentinel are skipped.
 
+> **Note on jq regex:** The idempotency check uses `(^|\\n)<!-- issue-close-sentinel: appended` (no `"m"` flag). jq's `m` flag is Oniguruma's multi-line dot mode — it does **not** make `^` match line starts. The `(^|\\n)` prefix handles both line-1 and line-2+ sentinels (the merged J-1+J-2 format places the sentinel on line 2).
+
 ### New task — *Operations*
 
 `/workflow-init` auto-creates a tracking task issue when you start a session
