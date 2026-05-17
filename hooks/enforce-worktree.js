@@ -45,6 +45,17 @@ const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
+const { parseCdCommand } = require("./lib/parse-git-args");
+
+// Cache for payload-derived absolute paths for the CURRENT hook invocation.
+// Populated once at the dispatch site by setPayloadDerivedPaths(); read by
+// getSessionRepoRoots(). Implicitly reset per process (one invocation = one
+// process). Issue #321 — payload-derived repo resolution.
+let _payloadDerivedPaths = [];
+function setPayloadDerivedPaths(paths) {
+  _payloadDerivedPaths = (paths || []).filter(Boolean);
+}
+function _getPayloadDerivedPaths() { return _payloadDerivedPaths.slice(); }
 const {
   extractRedirectTargets, extractTeeTargets,
   extractPwshWriteTargets, extractCpMvDestination,
@@ -907,7 +918,11 @@ function parseGitCPath(cmd) {
 
 function findRepoRootForBash(cmd) {
   const cArg = parseGitCPath(cmd);
-  const startDir = cArg || process.cwd();
+  // Payload-derived `cd <absolute-path> && ...` extraction (issue #321).
+  // No CLAUDE_PROJECT_DIR fallback — Approach E rejects it (start-time-fixed,
+  // does not follow Bash `cd`).
+  const cdArg = cArg ? null : parseCdCommand(cmd);
+  const startDir = cArg || cdArg || process.cwd();
   try {
     const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: startDir, encoding: "utf8", timeout: 2000,
@@ -957,6 +972,14 @@ function getSessionRepoRoots() {
   const roots = new Set();
   const cwdRoot = resolveRepoRoot(process.cwd());
   if (cwdRoot) roots.add(cwdRoot);
+  // Include payload-derived paths from the CURRENT hook invocation (issue #321).
+  // Scope is limited to THIS command's explicitly named paths — we do NOT
+  // enumerate all linked worktrees of cwdRoot (that would broaden the gh-write
+  // guard beyond user intent).
+  for (const p of _payloadDerivedPaths) {
+    const r = resolveRepoRoot(p);
+    if (r) roots.add(r);
+  }
   const extra = (process.env.ENFORCE_WORKTREE_EXTRA_REPOS || "")
     .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
@@ -1274,6 +1297,31 @@ if (!fs.existsSync(_cwd)) {
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 
+// Populate payload-derived-path cache for this invocation (issue #321).
+// Read by getSessionRepoRoots() to scope the gh-write guard to the paths
+// the CURRENT command names explicitly.
+{
+  const derived = [];
+  if (toolName === "Bash") {
+    const _cmd = toolInput.command || "";
+    const _cArg = parseGitCPath(_cmd);
+    if (_cArg && path.isAbsolute(_cArg)) derived.push(_cArg);
+    const _cdArg = parseCdCommand(_cmd);
+    if (_cdArg) derived.push(_cdArg);
+  } else if (toolName === "Edit" || toolName === "Write" || toolName === "MultiEdit") {
+    const fp = toolInput.file_path || toolInput.path;
+    if (fp && typeof fp === "string" && path.isAbsolute(fp)) derived.push(fp);
+    if (toolName === "MultiEdit" && Array.isArray(toolInput.edits)) {
+      for (const e of toolInput.edits) {
+        if (e && typeof e.file_path === "string" && path.isAbsolute(e.file_path)) {
+          derived.push(e.file_path);
+        }
+      }
+    }
+  }
+  setPayloadDerivedPaths(derived);
+}
+
 let repoRoot = null;
 
 if (toolName === "Bash") {
@@ -1497,4 +1545,9 @@ module.exports = {
   findFirstUnquotedAnd,
   isAllowedMainWorktreeCleanup,
   isAllowedCdWorktreeRemove,
+  findRepoRootForBash,
+  getSessionRepoRoots,
+  parseGitCPath,
+  setPayloadDerivedPaths,
+  _getPayloadDerivedPaths,
 };
