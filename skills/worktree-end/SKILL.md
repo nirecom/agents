@@ -59,15 +59,19 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 3b. **Post-web-merge sync:**
 
    `git fetch --prune origin`
-   `echo "<<WORKFLOW_USER_VERIFIED>>"` (description: `"User confirmed PR #<N> merged via web UI"`)
+   Follow `skills/_shared/user-verified.md` to emit the sentinel
+   (description: `"User confirmed PR #<N> merged via web UI"`). The PreToolUse hook
+   re-surfaces the PR URL above the permission dialog.
    Update session title to mark workflow complete (best-effort):
    `uv run "$AGENTS_CONFIG_DIR/bin/cc-session-title.py" mark-complete || true`
    → step 5. Skip step 4.
 
 4. **Local merge:**
 
-   Emit `echo "<<WORKFLOW_USER_VERIFIED>>"` (description: `"PR #<N> — approving merge to main"`),
-   then:
+   Follow `skills/_shared/user-verified.md` to emit the sentinel
+   (description: `"PR #<N> — approving merge to main"`). The PreToolUse hook
+   surfaces the PR URL above the permission dialog so the user approves from
+   an informed position. Then:
    ```
    gh pr merge --squash --delete-branch
    ```
@@ -171,7 +175,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup (6e) — never `rm -rf`/`Remove-Item -Recurse -Force`.
 - `gh --version` must succeed before any gh command.
 - `<<WORKFLOW_USER_VERIFIED>>` is emitted in step 4 (before `gh pr merge`) or step 3b
-  (after `state == MERGED`). Never on abort or while polling.
+  (after `state == MERGED`), via `skills/_shared/user-verified.md`. Never on abort
+  or while polling.
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.

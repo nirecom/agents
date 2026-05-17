@@ -41,10 +41,13 @@
    - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
 8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 9.
-   - **`ENFORCE_WORKTREE=off`:** Run `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"`
-     immediately. Attach `: <reason>` (bare form emits a soft warning); the reason
-     becomes part of the on-disk audit record. Set the Bash `description` to
-     explain what the user is approving.
+   - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,
+     skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit
+     `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (the `: <reason>` is mandatory
+     and becomes part of the on-disk audit record), and set the Bash
+     `description` to explain what the user is approving. The PreToolUse hook
+     surfaces staged files (and an open PR URL, if any) above the permission
+     dialog.
 9. **Commit** — Run `/commit-push`. After the PR is created, display the PR URL in chat so the user can confirm it.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end` (merge + sentinel emit + cleanup). Mandatory; do not skip.
