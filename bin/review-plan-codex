@@ -15,7 +15,7 @@ set -uo pipefail
 INPUT=""
 FORMAT=""
 NO_LOG=false
-CONTEXT=""
+CONTEXT_FILES=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
         echo "## Codex Plan Review: FAILED — --context requires an argument"
         exit 0
       fi
-      CONTEXT="$2"; shift 2 ;;
+      CONTEXT_FILES+=("$2"); shift 2 ;;
     *) echo "Unknown argument: $1" >&2; shift ;;
   esac
 done
@@ -82,13 +82,15 @@ if (( INPUT_LINES > MAX_PLAN_LINES )); then
   INPUT_LINES=$MAX_PLAN_LINES
 fi
 
-# Load optional context file
+# Load optional context files (accumulate in argv order)
 CONTEXT_CONTENT=""
-if [[ -n "$CONTEXT" ]]; then
-  if [[ -f "$CONTEXT" && -s "$CONTEXT" ]]; then
-    CONTEXT_CONTENT=$(<"$CONTEXT")
+for ctx_file in "${CONTEXT_FILES[@]:-}"; do
+  [[ -z "$ctx_file" ]] && continue
+  if [[ -f "$ctx_file" && -s "$ctx_file" ]]; then
+    CONTEXT_CONTENT+=$(<"$ctx_file")
+    CONTEXT_CONTENT+=$'\n\n'
   fi
-fi
+done
 
 # Build prompt
 PREAMBLE=$(codex_core_adversarial_preamble "implementation plan")

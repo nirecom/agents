@@ -97,5 +97,5 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - Each approach must have a one-line tradeoff vs the other(s).
 - Every approach must include a `Delivery plan:` field. The `SINGLE_APPROACH_JUSTIFIED` reply must include a `DELIVERY_PLAN:` line on the next line. Omitting either is a protocol violation.
 - If the delivery plan cannot be stated in one line for `SINGLE_APPROACH_JUSTIFIED`, consider whether presenting 2 approaches is more appropriate.
-- Follow `rules/plan-principles.md` — apply §1 (elevate perspective) to find symmetric cases, §2 (orthogonality) to ensure cross-platform / family coverage, §3 (name reflects substance) when proposing new file or symbol names.
+- Follow `rules/core-principles.md`.
 - Do not write code or call Edit/Write.
