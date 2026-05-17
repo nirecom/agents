@@ -17,7 +17,21 @@ const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 // Steps tracked by the workflow but not enforced at commit time.
 // The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
 const NON_GATE_STEPS = ["research"];
-const { parseGitCArg, parseGitConfigValues } = require("./lib/parse-git-args");
+const { parseGitCArg, parseCdCommand, parseGitConfigValues } = require("./lib/parse-git-args");
+
+// Normalize Unix-style drive paths and Windows forward-slash paths to canonical
+// platform form. Returns input unchanged for already-canonical or POSIX paths.
+function normalizeForWindows(p) {
+  if (!p) return p;
+  const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
+  if (driveMatch) {
+    const drive = driveMatch[1].toUpperCase();
+    const rest = driveMatch[2] || "";
+    return drive + ":\\" + rest.replace(/\//g, "\\").replace(/^\\/, "");
+  }
+  if (process.platform === "win32" && /^[a-zA-Z]:\//.test(p)) return p.replace(/\//g, "\\");
+  return p;
+}
 
 // Evidence-based check: staged files contain tests/ changes
 function hasStagedTestChanges(repoDir) {
@@ -139,27 +153,22 @@ function findAdditionalDirectories() {
   }
 }
 
-// Resolve repo dir from git -C flag in command, or detect from staged changes.
-// When no -C is given, checks CLAUDE_PROJECT_DIR first; if it has no staged
-// changes, scans additionalDirectories from settings.json. This allows committing
-// to sibling repos (e.g. agents) from a dotfiles-primary session without requiring
-// explicit git -C in every commit command, and works across all Claude clients.
-// Normalizes Git Bash Unix-style drive paths: /<drive>/path/to → <DRIVE>:\path\to
+// Resolve repo dir from explicit path in the command, or detect from staged changes.
+// Resolution order:
+//   1. `git -C <path>` argument (with env-var expansion + Windows normalization)
+//   2. `cd <abs-path> && ...` leading command (Windows normalization)
+//   3. CLAUDE_PROJECT_DIR / process.cwd() (primary), then additionalDirectories,
+//      preferring whichever has staged changes
+// Tier 2 covers Bash sessions whose process.cwd() has drifted to the main worktree
+// while the user is operating in a linked worktree (CC issue #27343 / #321).
 function resolveRepoDir(command) {
   const raw = parseGitCArg(command);
-  const p = raw ? raw.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, a, b) => process.env[a || b] || '') : raw;
-  if (p) {
-    // Unix drive path: /<drive>/path → <DRIVE>:\path
-    const driveMatch = p.match(/^\/([a-zA-Z])(\/.*)?$/);
-    if (driveMatch) {
-      const drive = driveMatch[1].toUpperCase();
-      const rest = driveMatch[2] || "";
-      return drive + ":\\" + rest.replace(/\//g, "\\").replace(/^\\/, "");
-    }
-    // Normalize Windows drive paths with forward slashes: c:/path → c:\path
-    if (process.platform === "win32" && /^[a-zA-Z]:\//.test(p)) return p.replace(/\//g, "\\");
-    return p;
-  }
+  const expanded = raw ? raw.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, a, b) => process.env[a || b] || '') : raw;
+  const cArg = normalizeForWindows(expanded);
+  if (cArg) return cArg;
+
+  const cdArg = normalizeForWindows(parseCdCommand(command));
+  if (cdArg) return cdArg;
 
   const primary = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const norm = (p) => p.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();

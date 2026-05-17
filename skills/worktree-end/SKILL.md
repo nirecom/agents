@@ -115,35 +115,31 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       - `<marker-path>` = `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`. Store for step g.
       - Content (two lines): `<branch>` / `<absolute-worktree-path>` (must resolve under `WORKTREE_BASE_DIR`).
       - Use the Write tool (atomic; auto-creates `worktree-end/` on first use).
-   b.5. **Switch the session CWD to the main worktree** before removing the
-      linked worktree. Run, as its own Bash tool call:
+   b.5. **Switch the session CWD to the main worktree** before step 6c.
+      Run as its own Bash call (literal absolute path — no `$VAR` / `~`):
       ```
       cd "<main-worktree-root>"
       ```
-      Quote the path (`<main-worktree-root>` may contain spaces, common on
-      Windows: `C:\Users\Some Name\...`). Use `cd`, not `git -C`: only `cd`
-      updates the Bash tool's persistent CWD. This:
-      - Releases the OS-level CWD lock on Windows so step 6c's
-        `git worktree remove` does not fail with EPERM (issue #251).
-      - Leaves a healthy CWD for subsequent hook invocations after step 6c
-        completes: without this step, `process.cwd()` in subsequent hook
-        processes still points at the deleted linked-worktree path,
-        breaking `enforce-worktree.js` for the rest of the session
-        (issue #268). `enforce-issue-close.js` is unaffected (it does not
-        call `process.cwd()`).
-      Note: step 6c stays as is (`git -C <main> worktree remove <path>`).
-      The combined form `cd "<main>" && git -C "<main>" worktree remove "<path>"`
-      is also permitted (issue #294) via `isAllowedCdWorktreeRemove` — useful
-      on Windows / VS Code where the Bash tool's CWD resets between calls.
-      Constraints: no `--force`/`-f`, no further chaining, cd target = main worktree,
-      any `-C <path>` must also resolve to the main worktree.
+      `cd` (not `git -C`) is required: it updates the Bash tool's CWD,
+      releasing the Windows CWD lock (#251) and keeping `process.cwd()`
+      healthy so `enforce-worktree.js` does not mis-classify subsequent
+      commands (#268, #321). The combined form
+      `cd "<main>" && git -C "<main>" worktree remove "<path>"` is also
+      permitted via `isAllowedCdWorktreeRemove` for Windows/VS Code where
+      the Bash CWD resets between calls (#294).
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
+   c.1. **VS Code CWD-lock recovery** (Windows; only on EPERM / "busy" /
+      "not empty" from step 6c). Ask the user to run `Developer: Reload Window`
+      (Ctrl+Shift+P), then retry step 6c once. If it still fails, stop and
+      surface the error (issue #333).
    d. `git -C <main> worktree prune`
-   e. If `<WORKTREE_BASE_DIR>/<task-name>/` is now empty:
+   e. **Orphan-dir cleanup** at `<WORKTREE_BASE_DIR>/<task-name>`:
       ```
       node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" "<WORKTREE_BASE_DIR>/<task-name>"
       ```
-      (Refuses non-empty dirs, paths outside `WORKTREE_BASE_DIR`, registered worktrees, and symlinks.)
+      If it refuses with "not empty" (Windows recreated files after 6c),
+      re-run with `--force-if-not-registered` — requires the step 5
+      inventory to be complete (issue #322).
    f. `git -C <main> branch -D <branch>` — `-D` (force) is required because
       squash-merge produces a new commit not recognised by `-d`'s "fully merged"
       check; the marker written in step b authorises this exact deletion.
