@@ -39,8 +39,6 @@ Produce a `<session-id>-survey-history.md` artifact with:
 - Read project source files only — do not modify them. Writing the output artifact
   to the absolute artifact path supplied by the orchestrator (default location
   resolved by `bin/workflow-plans-dir`) is required and allowed.
-- The orchestrator passes the resolved artifact path explicitly. Do not assume
-  the default location — read the path from the invocation prompt.
 - You MUST NOT emit any `<<WORKFLOW_*>>` sentinels. Sentinel emission (including
   `WORKFLOW_RESEARCH_NOT_NEEDED`) is handled exclusively by the orchestrator
   (the main agent's SKILL procedure), not by this subagent.
