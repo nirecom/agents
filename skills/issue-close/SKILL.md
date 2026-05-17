@@ -7,9 +7,27 @@ Triage routes to the correct subset of steps; each step is idempotent and resuma
 
 Usage: `/issue-close <N> [--commit <hash>]` or `/issue-close --from-session [--commit <hash>]`
 
-`--from-session` resolves `<N>` from the current session's intent.md:
-read `CLAUDE_SESSION_ID` (via `$CLAUDE_ENV_FILE`, fallback env), locate
-`${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`, parse the
+`--from-session` resolves `<N>` from the current session's intent.md.
+
+### Step 0 — Resolve <PLANS_DIR>
+
+Before the `--from-session` resolution below, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
+`--from-session` resolution: read `CLAUDE_SESSION_ID` (via `$CLAUDE_ENV_FILE`,
+fallback env), locate `<PLANS_DIR>/<session-id>-intent.md`, parse the
 `## closes_issues` section (integer list). Zero or `(empty)` → skip silently.
 Exactly one → continue with that `<N>`. Multiple → run the close flow for each
 sequentially (no dependency sorting, no retry). Intent file missing → skip with

@@ -9,10 +9,31 @@ made after the relevant issue was opened that might invalidate its premises.
 
 ## Procedure
 
+### Step 0 — Resolve <PLANS_DIR>
+
+Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+When invoked as a parallel Agent subagent by workflow-init, the orchestrator
+passes `artifact_path` and `context_path` as resolved absolute strings — use
+those instead of running Step 0.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
 1. **Input and issue number resolution:**
    Input precedence (read whichever exists first):
-     (a) `~/.workflow-plans/<session-id>-intent.md` — preferred (post-clarify-intent calls)
-     (b) `~/.workflow-plans/<session-id>-context.md` — fallback (pre-clarify-intent calls
+     (a) `<PLANS_DIR>/<session-id>-intent.md` — preferred (post-clarify-intent calls)
+     (b) `<PLANS_DIR>/<session-id>-context.md` — fallback (pre-clarify-intent calls
          from workflow-init)
    Issue number N:
    - From intent.md: extract from `## closes_issues` section (existing behavior).
@@ -60,7 +81,7 @@ made after the relevant issue was opened that might invalidate its premises.
    Score each commit/PR subject by keyword match count.
    Keep: score ≥ 1 entries, plus the top 5 by score regardless of threshold.
 
-5. Write `~/.workflow-plans/<session-id>-survey-history.md`:
+5. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
    ```
    ## Survey history — changes since issue #<N> opened (<openedAt>)
 
@@ -77,7 +98,7 @@ made after the relevant issue was opened that might invalidate its premises.
 ## Rules
 
 - Read project source files only — do not modify them. Writing the output artifact
-  to `~/.workflow-plans/<session-id>-survey-history.md` is required and allowed.
+  to `<PLANS_DIR>/<session-id>-survey-history.md` is required and allowed.
 - Do NOT emit the research-complete sentinel — `make-outline-plan` Step 0 aggregates
   both survey-code and survey-history before emitting it
 - Do NOT emit premise-fail or premise-ack sentinels — these are emitted exclusively

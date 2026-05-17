@@ -8,10 +8,31 @@ Investigate the codebase related to the given task.
 
 ## Procedure
 
+### Step 0 — Resolve <PLANS_DIR>
+
+Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+When invoked as a parallel Agent subagent by workflow-init, the orchestrator
+passes `artifact_path` and `context_path` as resolved absolute strings — use
+those instead of running Step 0.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
 0. **Claim extraction** (run before reading any code):
    Input precedence (read whichever exists first):
-     (a) `~/.workflow-plans/<session-id>-intent.md` — preferred (post-clarify-intent calls)
-     (b) `~/.workflow-plans/<session-id>-context.md` — fallback (pre-clarify-intent calls
+     (a) `<PLANS_DIR>/<session-id>-intent.md` — preferred (post-clarify-intent calls)
+     (b) `<PLANS_DIR>/<session-id>-context.md` — fallback (pre-clarify-intent calls
          from workflow-init; use "User initial prompt" and "Issue body" sections)
    If neither exists: proceed to Step 1 with an empty claim list.
    Extract up to 5 behavioral/factual claims from Background/Motivation and Scope.
@@ -25,7 +46,7 @@ Investigate the codebase related to the given task.
    - `verdict: contradicted` — evidence in code contradicts the claim
    - `verdict: indeterminate` — insufficient evidence to confirm or deny
 4. Summarize: existing patterns, architectural constraints, relevant files (with line numbers), and anything that affects implementation.
-5. Write findings to `~/.workflow-plans/<session-id>-survey-code.md`. The file must
+5. Write findings to `<PLANS_DIR>/<session-id>-survey-code.md`. The file must
    include a `## Verified Claims` section:
    ```
    ## Verified Claims

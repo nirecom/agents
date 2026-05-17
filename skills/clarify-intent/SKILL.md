@@ -12,17 +12,34 @@ Emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>"` when a prior `*-int
 
 ## Procedure
 
+### Step 0 — Resolve <PLANS_DIR>
+
+Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
 1. Read the user's request; identify the root question that unlocks all downstream decisions.
 
 1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (step 1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple/ambiguous → ask in step 3 (counts toward 5-round cap). None → `closes_issues: []`. One issue per session.
 
-1b. **Pre-fill detection**: Check `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed; first AskUserQuestion: "Approve framing / Revise / Start over". Approve or Revise → skip background question. Start over → delete file, proceed normally.
+1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed; first AskUserQuestion: "Approve framing / Revise / Start over". Approve or Revise → skip background question. Start over → delete file, proceed normally.
 
 2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap).
 
 3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
-4. Write `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections: Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`).
+4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections: Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`).
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
