@@ -51,7 +51,7 @@ NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
 - `type:task` is attached unconditionally by the script.
 - Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
   passed via `--label`. The script rejects any `type:*` value to avoid
-  confusing `/issue-close` routing.
+  confusing `/issue-close-finalize` routing.
 
 ## Behavioral notes
 

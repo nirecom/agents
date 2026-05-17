@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests for the reconcile path of bin/github-issues/issue-to-history.sh — backfill history
-# entries for issues that were closed without going through /issue-close.
+# entries for issues that were closed without going through /issue-close-stage + /issue-close-finalize.
 #
 # Includes a check that the jq sentinel detector correctly identifies the
 # `<!-- issue-close-sentinel: ... -->` marker in issue comments.

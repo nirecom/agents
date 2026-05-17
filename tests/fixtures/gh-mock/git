@@ -24,6 +24,14 @@ case "$ARGS" in
     [ -n "$val" ] && printf '%s Closes #%s\n' "$val" "$N"
     exit 0
     ;;
+  *"log --oneline HEAD"*"-- docs/history"*)
+    # check_history_entry reachability check in issue-close-triage-lib.sh.
+    # Returns a fake commit mentioning issue #N if GIT_MOCK_HISTORY_COMMIT_N is set.
+    if [ -n "${GIT_MOCK_HISTORY_COMMIT_N:-}" ]; then
+        printf 'abc1234 docs(history): record issue #%s\n' "$GIT_MOCK_HISTORY_COMMIT_N"
+    fi
+    exit 0
+    ;;
 esac
 # Unknown git subcommands: exit silently.
 # IMPORTANT: Do NOT forward to real git — this script IS git on PATH (infinite recursion).

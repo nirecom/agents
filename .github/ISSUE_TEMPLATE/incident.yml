@@ -6,9 +6,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template for incidents/bugs. On close, `/issue-close <N>`
-        will write an `INCIDENT` entry to `docs/history.md` using the
-        Cause/Fix fields below.
+        Use this template for incidents/bugs. On close,
+        `/issue-close-stage <N>` (Phase 1, in the linked worktree) writes an
+        `INCIDENT` entry to `docs/history.md` using the Cause/Fix fields
+        below, and `/issue-close-finalize <N>` (Phase 2, from the main
+        worktree) closes the issue.
   - type: textarea
     id: cause
     attributes:

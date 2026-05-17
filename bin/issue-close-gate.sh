@@ -1,5 +1,5 @@
 #!/bin/bash
-# Block /issue-close when the parent issue has any open sub-issues.
+# Block /issue-close-stage / /issue-close-finalize when the parent issue has any open sub-issues.
 #
 # Usage: bin/issue-close-gate.sh <owner/repo> <issue-number>
 #
