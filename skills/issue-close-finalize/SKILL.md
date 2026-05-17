@@ -17,8 +17,8 @@ sequentially (no dependency sorting, no retry). Intent file missing → skip wit
 a one-line warning.
 
 The merge commit hash is **not** taken from a `--commit` flag — it is resolved
-from the PR via `find-pr-by-marker.sh` (see Pre-flight). This ensures the
-`resolved-by` sentinel cites the actual merge SHA, not a stale local hash.
+from the PR via `find-pr-by-marker.sh` in Step A.5 (after triage). This ensures
+the `resolved-by` sentinel cites the actual merge SHA, not a stale local hash.
 
 ## Pre-flight
 
@@ -27,16 +27,8 @@ from the PR via `find-pr-by-marker.sh` (see Pre-flight). This ensures the
 `gh issue close` and `gh issue comment` invocations need `ISSUE_CLOSE_SKILL=1`
 to bypass the `enforce-issue-close.js` hook.
 
-Resolve the PR and merge SHA for the issue:
-
-```bash
-eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" <N>)"
-# Sets PR_NUMBER and MERGE_COMMIT. Exit 1 surfaces "no PR found for #<N>".
-```
-
-`find-pr-by-marker.sh` tries the `<!-- issue-close-pr-of: <N> -->` body marker
-first (inserted by `/commit-push`), then falls back to
-`closedByPullRequestsReferences`.
+PR/SHA resolution is deferred to Step A.5 (after triage) and runs only when
+`NEXT_STEPS` contains `J`. (#361)
 
 ## Step A: triage
 
@@ -50,18 +42,42 @@ other step. The triage script is the single source of truth for routing —
 including stuck-state recovery and `closes #N` auto-close paths.
 
 `ACTION=auto_close_path` (CLOSED state with no Phase 1 sentinel — the issue was
-closed via `closes #N` keyword without `/issue-close-stage` ever running) still
-needs `B,E,G,J`. **Existing limit:** Step E (doc-append) writes to
-`docs/history.md` from the main worktree and is therefore blocked under
-`ENFORCE_WORKTREE=on`. This is unchanged by this PR and tracked separately.
+closed via `closes #N` keyword without `/issue-close-stage` ever running) runs
+`E,G,J` (Step B intentionally omitted; see Step B header). **Existing limit:**
+Step E (doc-append) writes to `docs/history.md` from the main worktree and is
+therefore blocked under `ENFORCE_WORKTREE=on`. This is unchanged and tracked
+separately.
 
-## Step B: sub-issue gate (auto_close_path only)
+## Step A.5: PR/SHA resolution (J-only)
+
+<!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
+
+Only when `NEXT_STEPS` contains `J` (the resolved-by sentinel emission step):
+
+```bash
+if [[ ",$NEXT_STEPS," == *,J,* ]]; then
+    eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" <N>)"
+    # Sets PR_NUMBER and MERGE_COMMIT. Exit 1 surfaces "no PR found for #<N>".
+fi
+```
+
+`find-pr-by-marker.sh` tries the `<!-- issue-close-pr-of: <N> -->` body marker
+first (inserted by `/commit-push`), then falls back to
+`closedByPullRequestsReferences`.
+
+Recovery routes that do not need a resolved-by sentinel omit this step,
+surfacing the real diagnostic instead of a generic "PR not found" error. (#361)
+
+## Step B: sub-issue gate (Phase 1 / issue-close-stage only)
 
 ```bash
 bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" <owner/repo> <N>
 ```
 
 Non-zero → BLOCK; surface stderr and stop.
+
+Phase 2's `auto_close_path` deliberately skips this gate — the parent is
+already CLOSED, so blocking on open sub-issues only stalls bookkeeping. (#366)
 
 ## Step E: idempotent doc-append (auto_close_path and stuck-recovery only)
 
@@ -98,8 +114,9 @@ path — without it the `resolved-by` sentinel cannot be emitted.
 
 ## End
 
-Report: issue #N closed, PR #PR_NUMBER (merge $MERGE_COMMIT), any G/H/J or
-parent-update warnings.
+Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>}
+(merge ${MERGE_COMMIT:-<not resolved>}), any G/H/J or parent-update warnings.
+(`PR_NUMBER` and `MERGE_COMMIT` are only set when `NEXT_STEPS` contains `J`.)
 
 ## Safety notes
 
