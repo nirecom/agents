@@ -39,7 +39,7 @@
    - **`ENFORCE_WORKTREE=on`:** Skip `/update-docs` — docs review is deferred to PR review.
    - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
 8. **User verification:**
-   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 9.
+   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5.
    - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,
      skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit
      `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (the `: <reason>` is mandatory
@@ -47,15 +47,31 @@
      `description` to explain what the user is approving. The PreToolUse hook
      surfaces staged files (and an open PR URL, if any) above the permission
      dialog.
-9. **Commit** — Run `/commit-push`. After the PR is created, display the PR URL in chat so the user can confirm it.
+8.5. **Phase 1 issue close** — For each issue N in the session's `closes_issues`
+   (parsed from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`),
+   run `/issue-close-stage <N>` from the linked worktree. Phase 1 performs the
+   sub-issue gate, posts the pending sentinel, commits the `docs/history.md`
+   entry on the feature branch, and updates the parent body if applicable.
+   Skip silently when `closes_issues` is empty. Skip entirely when
+   `ENFORCE_WORKTREE=off` (the 2-phase split does not apply to direct-main work
+   — `/issue-close-finalize` runs the full chain at Step 10b instead).
+9. **Commit** — Run `/commit-push`. Pre-flights Phase 1 completion per
+   `closes_issues` (aborts if missing) and appends `<!-- issue-close-pr-of: <N> -->`
+   markers to the PR body so `find-pr-by-marker.sh` can resolve the merge SHA in
+   Phase 2. After the PR is created, display the PR URL in chat so the user can
+   confirm it.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end` (merge + sentinel emit + cleanup). Mandatory; do not skip.
     - **branch:** Confirm PR is created. After the PR is merged (outside this session),
       delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.
 
-    Then run `/issue-close --from-session` (reads `closes_issues` from the session
-    intent.md and routes to the correct close path; skips if empty).
+10b. **Phase 2 issue close** — After the PR is merged, run
+    `/issue-close-finalize --from-session` from the main worktree (reads
+    `closes_issues` from the session intent.md and routes to the correct close
+    path; skips if empty). Phase 2 is API-only on the normal path: promote the
+    sentinel, close the issue, and post the resolved-by + appended sentinels.
+    Safe from the main worktree under `ENFORCE_WORKTREE=on`.
 
 ## Plan Mode Incompatibility
 

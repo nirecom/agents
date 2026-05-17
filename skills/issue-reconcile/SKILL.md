@@ -1,11 +1,12 @@
 ---
 name: issue-reconcile
-description: Backfill docs/history.md for issues that were closed outside the /issue-close path (web UI, mobile, another shell). Best-effort scan + interactive confirmation.
+description: Backfill docs/history.md for issues that were closed outside the /issue-close-stage + /issue-close-finalize path (web UI, mobile, another shell). Best-effort scan + interactive confirmation.
 ---
 
-`/issue-close` is the sanctioned close path inside Claude Code, but the
-`enforce-issue-close.js` hook only covers Claude Code's Bash tool. Issues
-closed elsewhere have no `<!-- issue-close-sentinel: appended -->` comment
+`/issue-close-stage` + `/issue-close-finalize` is the sanctioned close path
+inside Claude Code, but the `enforce-issue-close.js` hook only covers Claude
+Code's Bash tool. Issues closed elsewhere have no
+`<!-- issue-close-sentinel: appended -->` comment
 and never trigger `doc-append`. This skill walks closed issues, detects
 missing sentinels, and backfills entries.
 

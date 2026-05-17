@@ -18,8 +18,9 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SKILL_FILE="$AGENTS_DIR/skills/issue-close/SKILL.md"
-TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-triage.sh"
+SKILL_FILE="$AGENTS_DIR/skills/issue-close-finalize/SKILL.md"
+STAGE_TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-stage-triage.sh"
+TRIAGE_SCRIPT="$AGENTS_DIR/bin/github-issues/issue-close-finalize-triage.sh"
 PARENT_SCRIPT="$AGENTS_DIR/bin/github-issues/parent-body-update.sh"
 SENTINELS_SCRIPT="$AGENTS_DIR/bin/github-issues/post-close-sentinels.sh"
 BACKFILL_SCRIPT="$AGENTS_DIR/bin/github-issues/backfill-commit-comments.sh"
@@ -42,11 +43,12 @@ run_with_timeout() {
 
 # --- Existence gate (RED until every script lands) --------------------------
 missing=()
-[ -f "$SKILL_FILE" ]      || missing+=("skills/issue-close/SKILL.md")
-[ -f "$TRIAGE_SCRIPT" ]   || missing+=("bin/github-issues/issue-close-triage.sh")
-[ -f "$PARENT_SCRIPT" ]   || missing+=("bin/github-issues/parent-body-update.sh")
-[ -f "$SENTINELS_SCRIPT" ] || missing+=("bin/github-issues/post-close-sentinels.sh")
-[ -f "$BACKFILL_SCRIPT" ] || missing+=("bin/github-issues/backfill-commit-comments.sh")
+[ -f "$SKILL_FILE" ]           || missing+=("skills/issue-close-finalize/SKILL.md")
+[ -f "$STAGE_TRIAGE_SCRIPT" ]  || missing+=("bin/github-issues/issue-close-stage-triage.sh")
+[ -f "$TRIAGE_SCRIPT" ]        || missing+=("bin/github-issues/issue-close-finalize-triage.sh")
+[ -f "$PARENT_SCRIPT" ]        || missing+=("bin/github-issues/parent-body-update.sh")
+[ -f "$SENTINELS_SCRIPT" ]     || missing+=("bin/github-issues/post-close-sentinels.sh")
+[ -f "$BACKFILL_SCRIPT" ]      || missing+=("bin/github-issues/backfill-commit-comments.sh")
 if [ "${#missing[@]}" -gt 0 ]; then
     for f in "${missing[@]}"; do
         echo "FAIL: precondition missing — $f"
@@ -158,13 +160,27 @@ teardown_tmp
 # T-series — issue-close-triage.sh routing
 # ============================================================================
 
-# --- T1: OPEN + no sentinel → proceed + B,D,E,F,G,H,J
+# --- T1a: stage triage — OPEN + no sentinel → proceed (B,D,E,F,G)
 setup_tmp
-run_triage issue_task
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "proceed" ] && [ "$T_NEXT_STEPS" = "B,D,E,F,G,H,J" ]; then
-    pass "T1: OPEN + no sentinel → proceed (B,D,E,F,G,H,J)"
+if out=$(cd "$TMP" && GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$STAGE_TRIAGE_SCRIPT" 42 2>/dev/null); then
+    RC=0; else RC=$?; fi
+eval "$out" 2>/dev/null || true
+if [ "$RC" -eq 0 ] && [ "${ACTION:-}" = "proceed" ] && [ "${NEXT_STEPS:-}" = "B,D,E,F,G" ]; then
+    pass "T1a: stage triage OPEN + no sentinel → proceed (B,D,E,F,G)"
 else
-    fail "T1: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
+    fail "T1a: rc=$RC action=${ACTION:-} next=${NEXT_STEPS:-}"
+fi
+teardown_tmp
+
+# --- T1b: finalize triage — OPEN + no sentinel → error (Phase 1 not done)
+setup_tmp
+GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$TRIAGE_SCRIPT" 42 2>/tmp/t1b_err.$$ >/dev/null
+RC=$?
+T1B_ERR=$(cat /tmp/t1b_err.$$); rm -f /tmp/t1b_err.$$
+if [ "$RC" -ne 0 ] && echo "$T1B_ERR" | grep -qi "issue-close-stage"; then
+    pass "T1b: finalize triage OPEN:(none) → error (mentions /issue-close-stage)"
+else
+    fail "T1b: rc=$RC stderr=$T1B_ERR (expected non-zero + issue-close-stage mention)"
 fi
 teardown_tmp
 
@@ -1056,11 +1072,11 @@ fi
 # D-series — SKILL.md regression guards (minimal, after refactor)
 # ============================================================================
 
-# --- D1: SKILL.md mentions issue-close-triage.sh as routing SSOT
-if grep -q "issue-close-triage.sh" "$SKILL_FILE"; then
-    pass "D1: SKILL.md references issue-close-triage.sh (routing SSOT)"
+# --- D1: SKILL.md mentions issue-close-finalize-triage.sh as routing SSOT
+if grep -q "issue-close-finalize-triage.sh" "$SKILL_FILE"; then
+    pass "D1: SKILL.md references issue-close-finalize-triage.sh (routing SSOT)"
 else
-    fail "D1: SKILL.md missing reference to issue-close-triage.sh"
+    fail "D1: SKILL.md missing reference to issue-close-finalize-triage.sh"
 fi
 
 # --- D2: SKILL.md still documents Step J
