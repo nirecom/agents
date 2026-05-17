@@ -151,10 +151,12 @@ has_resolved_by() {
 }
 
 # J-2 idempotency: check for existing appended sentinel.
+# "m" flag: ^ matches start of any line so the sentinel is found in merged-format
+# comments (where it appears on line 2, after the resolved-by marker).
 has_appended_sentinel() {
     local n="$1" hit
     hit=$(gh issue view "$n" --json comments \
-        --jq '[.comments[].body | select(test("^<!-- issue-close-sentinel: appended"))] | first // ""' \
+        --jq '[.comments[].body | select(test("^<!-- issue-close-sentinel: appended"; "m"))] | first // ""' \
         2>/dev/null) || hit=""
     [ -n "$hit" ]
 }
@@ -225,16 +227,18 @@ while IFS= read -r N; do
 
     if [ -n "$HASH" ]; then
         if has_resolved_by "$N" "$HASH"; then
-            echo "[skip-j1] #${N} resolved-by:${HASH} already present"
+            echo "[skip-j1 class=${CLASS}] #${N} resolved-by:${HASH} already present — posting sentinel only"
+            ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "$SENTINEL_BODY"
         else
-            echo "[post-j1 class=${CLASS}] #${N} commit=${HASH}"
+            echo "[post class=${CLASS}] #${N} commit=${HASH}"
             ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "<!-- resolved-by: ${HASH} -->
+${SENTINEL_BODY}
 Resolved by commit \`${HASH}\`."
         fi
+    else
+        echo "[post class=${CLASS}] #${N}"
+        ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "$SENTINEL_BODY"
     fi
-
-    echo "[post-j2 class=${CLASS}] #${N}"
-    ISSUE_CLOSE_SKILL=1 gh issue comment "$N" --body "$SENTINEL_BODY"
 
     POSTED=$((POSTED + 1))
     case "$CLASS" in
