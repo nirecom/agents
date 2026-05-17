@@ -93,13 +93,17 @@ EOF
 chmod +x ~/.local/bin/repo-visibility
 printf "${C_GREEN}Generated: ~/.local/bin/repo-visibility${C_RESET}\n"
 
-# --- ~/.local/bin/cc-session-title launcher ---
-cat > ~/.local/bin/cc-session-title << EOF
-#!/usr/bin/env bash
-exec uv run "$AGENTS_ROOT/bin/cc-session-title.py" "\$@"
-EOF
-chmod +x ~/.local/bin/cc-session-title
-printf "${C_GREEN}Generated: ~/.local/bin/cc-session-title${C_RESET}\n"
+# --- BEGIN temporary: cc-session-title launcher cleanup ---
+# Remove stale launchers from the cc-session-title removal (PRs #303, #313, #331).
+# Idempotent: rm -f silently no-ops when the file is absent.
+# Safe to delete this block after all developer machines have run dotfileslink once.
+for stale in ~/.local/bin/cc-session-title ~/.local/bin/cc-session-title.cmd; do
+    if [ -e "$stale" ] || [ -L "$stale" ]; then
+        rm -f "$stale"
+        printf "${C_YELLOW}Removed stale launcher: $stale${C_RESET}\n"
+    fi
+done
+# --- END temporary: cc-session-title launcher cleanup ---
 
 # --- ~/.local/bin/review-code-codex symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-code-codex" ~/.local/bin/review-code-codex
