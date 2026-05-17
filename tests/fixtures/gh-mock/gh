@@ -87,7 +87,7 @@ case "$ARGS" in
     exit 0
     ;;
   "issue view "*" --json comments --jq"*"issue-close-sentinel: appended"*)
-    if [[ "$ARGS" == *'(^|\n)'* ]]; then
+    if [[ "$ARGS" == *'(^|\\n)'* ]]; then
         mock_sentinel_for_scenario appended_with_newline_prefix
     else
         mock_sentinel_for_scenario appended

@@ -1061,7 +1061,7 @@ teardown_tmp
 # --- R33: regression — has_appended_sentinel() jq regex must use (^|\n) prefix
 # grep for the literal string '(^|\n)<!-- issue-close-sentinel: appended' to confirm
 # the correct pattern is present in the jq expression.
-if grep -A5 'has_appended_sentinel()' "$BACKFILL_SCRIPT" | grep -qF '(^|\n)<!-- issue-close-sentinel: appended'; then
+if grep -A5 'has_appended_sentinel()' "$BACKFILL_SCRIPT" | grep -qF '(^|\\n)<!-- issue-close-sentinel: appended'; then
     pass "R33: has_appended_sentinel() jq expression uses (^|\\n) prefix — merged-format sentinel correctly detected"
 else
     fail "R33: has_appended_sentinel() missing (^|\\n) prefix — merged-format sentinel on line 2 not detected"
