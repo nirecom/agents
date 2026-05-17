@@ -1044,8 +1044,7 @@ fi
 teardown_tmp
 
 # --- R32: idempotency — merged-format comment (sentinel on line 2) → 0 comments posted
-# This test REQUIRES has_appended_sentinel() to use the "m" multiline flag.
-# The mock returns a non-empty sentinel ONLY when "m" is present in the jq expression.
+# The mock returns the sentinel for merged-format when the jq expression uses (^|\n) prefix.
 setup_tmp
 GH_MOCK_SCENARIO=closed_with_merged_sentinel \
     run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
@@ -1053,19 +1052,19 @@ RC=$?
 LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
 COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' || true)
 if [ "$RC" -eq 0 ] && [ "$COMMENT_COUNT" -eq 0 ] && [ -z "$LOG" ]; then
-    pass "R32: merged-format sentinel (line 2) → detected via \"m\" flag, 0 new comments"
+    pass "R32: merged-format sentinel (line 2) → detected via (^|\n) prefix, 0 new comments"
 else
-    fail "R32: rc=$RC comments=$COMMENT_COUNT log=$LOG (expected: 0 comments, requires \"m\" flag in has_appended_sentinel)"
+    fail "R32: rc=$RC comments=$COMMENT_COUNT log=$LOG (expected: 0 comments — merged-format sentinel not detected)"
 fi
 teardown_tmp
 
-# --- R33: regression — has_appended_sentinel() jq test() must use '; "m"' flag syntax
-# grep for '; "m"' (semicolon+space before the flag) to match the jq expression itself,
-# not a comment that merely contains the word "m".
-if grep -A5 'has_appended_sentinel()' "$BACKFILL_SCRIPT" | grep -q '; "m"'; then
-    pass "R33: has_appended_sentinel() jq expression contains \"; \\\"m\\\"\" multiline flag"
+# --- R33: regression — has_appended_sentinel() jq regex must use (^|\n) prefix
+# grep for the literal string '(^|\n)<!-- issue-close-sentinel: appended' to confirm
+# the correct pattern is present in the jq expression.
+if grep -A5 'has_appended_sentinel()' "$BACKFILL_SCRIPT" | grep -qF '(^|\n)<!-- issue-close-sentinel: appended'; then
+    pass "R33: has_appended_sentinel() jq expression uses (^|\\n) prefix — merged-format sentinel correctly detected"
 else
-    fail "R33: has_appended_sentinel() missing \"; \\\"m\\\"\" — merged-format sentinel on line 2 would not be detected"
+    fail "R33: has_appended_sentinel() missing (^|\\n) prefix — merged-format sentinel on line 2 not detected"
 fi
 
 # ============================================================================
