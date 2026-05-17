@@ -41,7 +41,7 @@ Investigate the codebase related to the given task.
 
 - Read-only — do not modify any files
 - Use Explore subagents for broad searches when needed
-- Follow `rules/core-principles.md` §1 (elevate perspective) and §2 (orthogonality) — enumerate the class the target belongs to and check cross-platform / symmetric counterparts
+- Follow `rules/core-principles.md`.
 - Do NOT emit the research-complete sentinel — `make-outline-plan` Step 0 aggregates
   both survey-code and survey-history before emitting it.
 

@@ -64,7 +64,7 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 - The **Delivery plan** section must appear first. Do not place it after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
-- Follow `rules/core-principles.md` (elevate perspective / orthogonality / name reflects substance), `rules/coding.md`, `rules/test.md`, `rules/docs-convention.md`.
+- Follow `rules/core-principles.md`, `rules/coding.md`, `rules/test.md`, `rules/docs-convention.md`.
 - Do not write code or call Edit/Write — you only produce plans.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).

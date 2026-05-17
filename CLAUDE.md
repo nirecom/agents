@@ -7,8 +7,7 @@
    For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
    Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 2. **Plan** — Three-stage planning pipeline. Run each stage in order.
-   Read `rules/core-principles.md` first (elevate perspective / orthogonality /
-   name reflects substance) — these meta-principles govern every plan stage.
+   Read `rules/core-principles.md` first — it governs every plan stage.
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
      If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
    - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.

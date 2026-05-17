@@ -3,25 +3,16 @@
 Cross-cutting principles applied to planning, design review, and code review.
 Loaded into every planner, reviewer, and Codex adversarial review context.
 Read this at /make-outline-plan and /make-detail-plan stages, and whenever
-adding or modifying a file in a family (hooks, sentinels, rules, env entries,
-cross-platform installers, etc.).
+adding or modifying a member of any class.
 
 ## 1. Elevate Perspective
 
-Before fixing or adding, raise the abstraction one level above the immediate
-task and check exhaustively whether the same problem occurs in other cases.
+Solve from the class, not from the immediate task.
 
-**Apply when:**
-- Changing a pattern, regex, or convention.
-- Fixing a bug — the same bug may exist in symmetric places.
-- Adding a new rule, hook, sentinel, skill, or config entry.
-
-**How:**
-1. Name the class the immediate target belongs to ("this is one of N
-   sentinels", "this is one of M hooks").
-2. Enumerate the other members of that class.
-3. Check each — does the change apply there too? Does the bug exist there?
-4. Decide per member and per class: apply / skip with reason / surface as follow-up, OR — taking the class as a whole — merge symmetric members or replace the class with a faster alternative when that reaches the goal sooner.
+1. Identify the root / abstract / parent class that includes your current task.
+   Can the class as a whole be merged, replaced, or restructured to reach
+   the goal sooner?
+2. If the class remains, apply the same change to every sibling member.
 
 **Anti-pattern:** Fixing case A while leaving symmetric cases B, C, D
 untouched because the user did not explicitly point at them. If the user
@@ -29,63 +20,35 @@ has to enumerate each symmetric case for you, you skipped §1.
 
 ## 2. Orthogonality
 
-§1 applied to symmetric pairs / families: when pattern X is required in
-case A, ensure all symmetric cases share the same treatment. The list
-below is not exhaustive — apply §1 to discover new families.
+§1 specialized to symmetric pairs / families. When a treatment is required
+for one member of a class, every symmetric member shares the same treatment
+unless a member-specific reason justifies skipping.
 
-### Known orthogonal pairs / families
-
-- **`.env` ↔ `.env.example`** — variable add/remove/rename happens in
-  both. `.env` is real secrets (never committed); `.env.example`
-  documents required variables with placeholders.
-- **Cross-platform** — when adding/modifying for one platform (e.g.
-  `install/win/`), apply the equivalent change to other platforms
-  (e.g. `install/linux/`) unless a platform-specific reason justifies
-  skipping.
-- **Naming** — when adding files in an existing convention (hooks,
-  markers, config), follow the established naming pattern. Check
-  existing counterparts before choosing a name.
-- **Sentinel families (bare + reason forms)** — every sentinel in
-  `settings.json` `ask` array must have both `<<SENTINEL>>` and
-  `<<SENTINEL: *>>` entries, and the hook handler must treat both
-  forms symmetrically (regex captures reason; bare emits soft warning
-  for accountability).
-
-Discovery of a new orthogonal family is itself an application of §1.
-When you notice asymmetry, fix it and add the family here.
+**Anti-pattern:** Treating sibling members as independent when they share a
+contract. Forgetting a counterpart exists is the same failure mode as §1 —
+the class went unexamined.
 
 ## 3. Name Reflects Substance
 
-A file, function, variable, sentinel, or rule name must convey what it
-contains. A reader who sees only the name should know what to expect
-and when to consult it.
+Every name must convey what it contains. A reader who sees only the
+name should know what to expect and when to consult it.
 
-**Apply when:**
-- Creating a new file, function, rule, sentinel, or config entry.
-- Renaming an existing one.
-- Reviewing a proposed name (yours or someone else's).
+1. Does the name describe the contents precisely — not more, not less?
+2. Does it collide with another name's scope?
+3. Will it be discovered at the right time?
+4. Does it follow the surrounding naming convention?
 
-**Checks:**
-- Does the name describe the contents precisely (not more, not less)?
-- Does it collide with another name's scope? (Generic names like
-  `design`, `utils`, `misc`, `helpers` typically do.)
-- Will it be discovered at the right time? A rule needed at plan time
-  should be findable when planning (e.g. `plan-` prefix).
-- Does it follow the surrounding naming convention?
-
-**Anti-pattern:** Names that swallow content from unrelated areas
-(`design-principles.md` colliding with `architecture/design.md`),
-or names that require reading the body to know what the file covers.
+**Anti-pattern:** Names that swallow content from unrelated areas, or
+names that require reading the body to know what the file covers.
 
 ## 4. Single Source of Truth
 
-One canonical file owns each fact. Every other location references it, not copies it.
+One canonical location owns each fact. Every other location references it, not copies it.
 
-**Rules:**
-- **Reference the master.** Do not reproduce authoritative content in a second canonical location — link or cite it instead.
-- **No duplication.** When the same value appears in two canonical files, designate one as the master; the other becomes a reference.
-- **Extract the shared part.** When two canonical files share a common section, lift it into a shared file that both reference.
+1. Reference the master — never reproduce authoritative content; link or cite it.
+2. No duplication — when the same content appears in two canonical locations, designate one as master and the other becomes a reference.
+3. Extract the shared part — when two canonical locations share a section, lift it into a shared location both reference.
 
-Summaries, snapshots, caches, and append-only stream records (e.g. `history.md`) are excluded from this rule — they serve a distinct access pattern, not canonical ownership.
+Summaries, snapshots, caches, and append-only stream records are excluded — they serve a distinct access pattern, not canonical ownership.
 
-**Anti-pattern:** Reproducing a host placement table in both `architecture.md` and `ops.md`; restating a rule from `rules/coding.md` inside a SKILL.md; duplicating env-var documentation across `.env.example` and `README.md` without a single canonical home.
+**Anti-pattern:** Restating a master's content at every reference site, so the master and its echoes drift out of sync.

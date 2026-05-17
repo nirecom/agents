@@ -366,10 +366,10 @@ test_B10_elevate_perspective_per_class_wording() {
         fail "B10: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "per class" "$f"; then
-        pass "B10: §1 step 4 contains 'per class' wording"
+    if grep -qF "merged, replaced, or restructured" "$f"; then
+        pass "B10: §1 contains class-level alternative wording"
     else
-        fail "B10: §1 step 4 does NOT contain 'per class' wording"
+        fail "B10: §1 does NOT contain class-level alternative wording"
     fi
 }
 
