@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// PostToolUse hook: when a Bash tool runs the <<WORKFLOW_USER_VERIFIED>> sentinel,
-// emit a "User verification context:" systemMessage listing staged files and the
-// open PR URL (if any), so the orchestrator can proceed to /commit-push without
-// re-asking the user.
+// PreToolUse hook: when a Bash tool is about to run the <<WORKFLOW_USER_VERIFIED>>
+// sentinel, emit a "User verification context:" systemMessage listing staged files
+// and the open PR URL (if any) BEFORE the permission dialog, so the user sees the
+// context alongside the approval prompt.
 //
-// Detection is on tool_input.command (like workflow-mark.js), NOT tool_response.stdout,
-// to avoid false positives from cat/grep/test commands whose output happens to contain
-// the sentinel string.
+// See skills/_shared/user-verified.md for the protocol.
+//
+// Detection is on tool_input.command (like workflow-mark.js). PreToolUse payloads
+// have no tool_response field, so no exit-code gating is performed.
 //
 // Fail-open on all error paths — must never block the workflow.
 "use strict";
@@ -76,10 +77,6 @@ if (require.main === module) {
     (input.tool_input && typeof input.tool_input.command === "string")
       ? input.tool_input.command : "";
   if (!USER_VERIFIED_RE.test(command)) noopExit();
-
-  const resp = input.tool_response || {};
-  const exitCode = resp.exit_code ?? resp.exitCode ?? (resp.success === false ? 1 : 0);
-  if (exitCode !== 0) noopExit();
 
   const cwd = resolveCwd(input);
   const staged = getStagedFiles(cwd);
