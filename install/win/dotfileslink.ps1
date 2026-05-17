@@ -119,11 +119,17 @@ Write-Launcher "$LocalBin\repo-visibility.cmd" $rvCmdContent "repo-visibility.cm
 $agentsDrive = $AgentsRoot[0].ToString().ToLower()
 $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
 
-# --- ~/.local/bin/cc-session-title launchers (cmd + bash shim) ---
-$cstCmdContent = "@echo off`r`nuv run `"$AgentsRoot\bin\cc-session-title.py`" %*`r`n"
-Write-Launcher "$LocalBin\cc-session-title.cmd" $cstCmdContent "cc-session-title.cmd"
-$cstShimContent = "#!/usr/bin/env bash`nexec uv run `"$agentsUnixPath/bin/cc-session-title.py`" `"`$@`"`n"
-Write-Launcher "$LocalBin\cc-session-title" $cstShimContent "cc-session-title (bash shim)"
+# --- BEGIN temporary: cc-session-title launcher cleanup ---
+# Remove stale launchers from the cc-session-title removal (PRs #303, #313, #331).
+# Idempotent: Remove-Item -ErrorAction SilentlyContinue tolerates absent files.
+# Safe to delete this block after all developer machines have run dotfileslink.ps1 once.
+foreach ($stale in @("$LocalBin\cc-session-title", "$LocalBin\cc-session-title.cmd", "$LocalBin\cc-session-title.py")) {
+    if (Test-Path -LiteralPath $stale) {
+        Remove-Item -LiteralPath $stale -Force -ErrorAction SilentlyContinue
+        Write-Host "Removed stale launcher: $stale" -ForegroundColor Yellow
+    }
+}
+# --- END temporary: cc-session-title launcher cleanup ---
 
 # --- ~/.local/bin/review-code-codex launchers (cmd + bash shim) ---
 $rcCmdContent = "@echo off`r`nwsl bash -c ""review-code-codex %*""`r`n"

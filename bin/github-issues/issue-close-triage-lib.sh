@@ -37,17 +37,19 @@ check_history_entry() {
     local pattern="^### (#${n}:|[^#].*\(#${n}[,) ])"
 
     # (a) header-style file content check + (b) commit reachability check.
+    # Subshell with set +o pipefail: grep -q exits early (SIGPIPE to git log) but
+    # the overall exit code is grep's, not git log's 141.
     if grep -qE "$pattern" docs/history.md 2>/dev/null; then
-        if git log --oneline HEAD -- docs/history.md docs/history/ 2>/dev/null \
-            | grep -qE "#${n}([^0-9]|$)"; then
+        if ( set +o pipefail; git log --oneline HEAD -- docs/history.md docs/history/ \
+            2>/dev/null | grep -qE "#${n}([^0-9]|$)" ); then
             return 0
         fi
     fi
 
     # Same for archived history under docs/history/*.md.
     if grep -rqE "$pattern" docs/history/ 2>/dev/null; then
-        if git log --oneline HEAD -- docs/history.md docs/history/ 2>/dev/null \
-            | grep -qE "#${n}([^0-9]|$)"; then
+        if ( set +o pipefail; git log --oneline HEAD -- docs/history.md docs/history/ \
+            2>/dev/null | grep -qE "#${n}([^0-9]|$)" ); then
             return 0
         fi
     fi
