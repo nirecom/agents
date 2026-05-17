@@ -79,7 +79,7 @@ flowchart TD
     S9 --> Cleanup{worktree · branch<br/>or main?}
     Cleanup -- worktree --> WE["/worktree-end<br/>merge + cleanup"]
     Cleanup -- branch   --> PR["gh pr create → merge → delete"]
-    Cleanup -- main     --> IC["/issue-close<br/>--from-session"]
+    Cleanup -- main     --> IC["/issue-close-finalize<br/>--from-session"]
     WE --> IC
     PR --> IC
     IC --> Done([Done])
