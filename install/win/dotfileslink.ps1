@@ -123,7 +123,7 @@ $agentsUnixPath = "/$agentsDrive" + $AgentsRoot.Substring(2).Replace('\', '/')
 # Remove stale launchers from the cc-session-title removal (PRs #303, #313, #331).
 # Idempotent: Remove-Item -ErrorAction SilentlyContinue tolerates absent files.
 # Safe to delete this block after all developer machines have run dotfileslink.ps1 once.
-foreach ($stale in @("$LocalBin\cc-session-title", "$LocalBin\cc-session-title.cmd")) {
+foreach ($stale in @("$LocalBin\cc-session-title", "$LocalBin\cc-session-title.cmd", "$LocalBin\cc-session-title.py")) {
     if (Test-Path -LiteralPath $stale) {
         Remove-Item -LiteralPath $stale -Force -ErrorAction SilentlyContinue
         Write-Host "Removed stale launcher: $stale" -ForegroundColor Yellow
