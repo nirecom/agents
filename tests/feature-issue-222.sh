@@ -910,6 +910,23 @@ else
 fi
 teardown_tmp
 
+# --- R26: Tier 1.5 blacklist — blacklisted hash falls through to no-hash
+setup_tmp
+export GH_MOCK_TITLE_FOR_42="bulk import candidate title"
+export GIT_MOCK_LOG_S_RESULT="3969773 feat(agents-split): add 39 tests from dotfiles (step 11)"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r26.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT
+if [ "$RC" -eq 0 ] \
+   && grep -q 'class=no-hash' "$TMP/r26.out" \
+   && ! grep -q 'class=hash-from-history-introducer' "$TMP/r26.out"; then
+    pass "R26: Tier 1.5 blacklist — blacklisted hash 3969773 falls through to no-hash"
+else
+    fail "R26: rc=$RC out=$(cat "$TMP/r26.out")"
+fi
+teardown_tmp
+
 # --- R27: Tier 1.5 — title < 8 chars → git log not invoked, falls through
 setup_tmp
 export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r27.log"
@@ -945,6 +962,25 @@ if [ "$RC" -eq 0 ] \
     pass "R28: Tier 1.5 — empty title → git log -S not invoked, no hash-from-history-introducer"
 else
     fail "R28: rc=$RC out=$(cat "$TMP/r28.out") argv=$ARGV_R28"
+fi
+teardown_tmp
+
+# --- R29: Tier 1.5 blacklist with Tier 2 fallback — blacklisted hash → hash-from-gitlog
+setup_tmp
+export GH_MOCK_TITLE_FOR_42="bulk import candidate title"
+export GIT_MOCK_LOG_S_RESULT="3969773 feat(agents-split): add 39 tests from dotfiles (step 11)"
+export GIT_MOCK_LOG_FOR_42="deadbee"
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r29.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_LOG_FOR_42
+if [ "$RC" -eq 0 ] \
+   && grep -q 'class=hash-from-gitlog' "$TMP/r29.out" \
+   && grep -q 'hash=deadbee' "$TMP/r29.out" \
+   && ! grep -q 'class=hash-from-history-introducer' "$TMP/r29.out"; then
+    pass "R29: Tier 1.5 blacklist + Tier 2 fallback — blacklisted hash 3969773, Tier 2 returns deadbee"
+else
+    fail "R29: rc=$RC out=$(cat "$TMP/r29.out")"
 fi
 teardown_tmp
 
