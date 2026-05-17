@@ -11,21 +11,38 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 ## Inputs
 
-- `~/.workflow-plans/<session-id>-intent.md` — output of `clarify-intent`; may be from a
+- `<PLANS_DIR>/<session-id>-intent.md` — output of `clarify-intent`; may be from a
   different session (cross-session carry-in is allowed)
-- `~/.workflow-plans/<session-id>-survey-code.md` — optional; output of `survey-code` (contains `## Verified Claims`)
-- `~/.workflow-plans/<session-id>-survey-history.md` — optional; output of `survey-history` (contains `## Verified Claims`)
+- `<PLANS_DIR>/<session-id>-survey-code.md` — optional; output of `survey-code` (contains `## Verified Claims`)
+- `<PLANS_DIR>/<session-id>-survey-history.md` — optional; output of `survey-history` (contains `## Verified Claims`)
 - `state.premise_contradiction` (optional) — set by `WORKFLOW_PREMISE_FAIL` during Research stage.
   Sentinels in Step 0 are emitted directly by the orchestrator (Bash tool), never by any subagent.
 - The session-id used for output files (`*-outline.md`) matches the intent file actually used
 
 ## Procedure
 
+### Step 0 — Resolve <PLANS_DIR>
+
+Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
 0. **Surface premise contradictions from Research artifacts.**
 
    0a. Determine session-id from `CLAUDE_SESSION_ID` env. Check whether both
-       `~/.workflow-plans/<session-id>-survey-code.md` and
-       `~/.workflow-plans/<session-id>-survey-history.md` exist.
+       `<PLANS_DIR>/<session-id>-survey-code.md` and
+       `<PLANS_DIR>/<session-id>-survey-history.md` exist.
        - If research was skipped (state.steps.research.status === "skipped"):
          skip Steps 0b–0d and proceed directly to Step 0e.
        - If one or both artifact files are missing AND research is not skipped:
@@ -57,7 +74,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 1. Locate the intent file:
    a. If `<session-id>-intent.md` exists, use it.
-   b. Otherwise, list all `*-intent.md` files in `~/.workflow-plans/`.
+   b. Otherwise, list all `*-intent.md` files in `<PLANS_DIR>/`.
       - If exactly one exists, inform the user and use it.
       - If multiple exist, present them via `AskUserQuestion` and wait for the user to select one.
       - If none exist, abort: "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
@@ -88,28 +105,28 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 5. **Review the approach with codex first, fall back to Claude if unavailable.**
    a. Write the outline-planner's output to the Claude-managed drafts directory
       (survives compaction; OS temp does not):
-      `~/.workflow-plans/drafts/<session-id>-outline-draft.md`
+      `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`
 
 
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
-      If `~/.workflow-plans/<session-id>-intent.md` exists and the context file has not
-      been built this run, write `~/.workflow-plans/drafts/<session-id>-context.md`:
+      If `<PLANS_DIR>/<session-id>-intent.md` exists and the context file has not
+      been built this run, write `<PLANS_DIR>/drafts/<session-id>-context.md`:
       ```
-      <!-- Source: ~/.workflow-plans/<session-id>-intent.md -->
+      <!-- Source: <PLANS_DIR>/<session-id>-intent.md -->
       ## Section 1: Intent (User Requirements)
 
       <verbatim contents of <session-id>-intent.md>
       ```
       If the intent file does not exist or is empty, skip the context file.
    c. Run via Bash:
-      `review-plan-codex --input ~/.workflow-plans/drafts/<session-id>-outline-draft.md --format outline-plan --context ~/.workflow-plans/drafts/<session-id>-context.md`
-      (omit `--context ~/.workflow-plans/drafts/<session-id>-context.md` when no context file was created in step b).
+      `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-outline-draft.md --format outline-plan --context <PLANS_DIR>/drafts/<session-id>-context.md`
+      (omit `--context <PLANS_DIR>/drafts/<session-id>-context.md` when no context file was created in step b).
    d. Parse the first line:
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
      - `APPROVED` → proceed to step 7.
      - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
-     - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.workflow-plans/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
-   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `~/.workflow-plans/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+     - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
 
 6. If verdict is `MISSING_ALTERNATIVE: <description>`:
    - Send the concern back to outline-planner for revision.
@@ -135,7 +152,7 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
    unreadable for long content; the preamble in main conversation is the venue
    for substance.
 
-8. Write the chosen approach to `~/.workflow-plans/<session-id>-outline.md` using
+8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` using
    the schema below. Then apply the **full** `skills/_shared/confirm-plan.md`
    protocol (Steps 1+2+3) using `CONFIRM_OUTLINE` as the flag.
    Step 7's `AskUserQuestion` was about *which approach to pick*; protocol Step 3
