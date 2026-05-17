@@ -120,3 +120,11 @@ Changes: Deleted bin/cc-session-title.py and its two test files (test_feat-cc-se
 ### REFACTOR: Add .py to cc-session-title installer cleanup list (#299) (2026-05-17)
 Background: Initial removal commit only purged ~/.local/bin/cc-session-title{,.cmd}; the .py file (deployed by an earlier iteration of the launcher) was missed.
 Changes: Extended cleanup arrays in install/linux/dotfileslink.sh and install/win/dotfileslink.ps1 to also remove ~/.local/bin/cc-session-title.py on next dotfileslink run.
+
+### BUGFIX: issue-close-finalize: skip sub-issue gate on auto_close_path when parent already CLOSED (#366) (2026-05-18)
+Background: auto_close_path route (issues closed via 'closes #N' without Phase 1) included Step B (sub-issue gate) in NEXT_STEPS. The gate's intent is pre-close protection; once the parent is CLOSED it only stalls bookkeeping behind long-lived tracker sub-issues indefinitely.
+Changes: Drop B from auto_close_path NEXT_STEPS in issue-close-finalize-triage.sh. Update SKILL.md Step B header to clarify Phase 1 only scope. Add FT5b trap test with closed_no_sentinel_open_subissue fixture.
+
+### BUGFIX: issue-close-finalize: defer PR/SHA resolution to after triage, guarded by J-step membership (#361) (2026-05-18)
+Background: find-pr-by-marker.sh was invoked unconditionally in the SKILL.md Pre-flight section before triage ran. Recovery routes (resume_h, stuck_sentinel_only) that do not include Step J would abort with 'PR not found' rather than surfacing the real diagnostic.
+Changes: Remove find-pr-by-marker.sh from Pre-flight. Add Step A.5 with [[ ,, == *,J,* ]] guard so PR/SHA resolution only runs when the resolved-by sentinel step is scheduled. Add static contract test feature-361-finalize-pr-resolution-order.sh verifying ordering and guard presence.

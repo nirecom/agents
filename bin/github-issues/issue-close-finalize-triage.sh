@@ -6,10 +6,10 @@
 # Caller: `eval "$(bash issue-close-finalize-triage.sh <N>)"`.
 #
 # NEXT_STEPS is a comma-separated list of step letters the caller must execute
-# in order. Step letters: G=parent-body-update, H=gh-issue-close,
-# J=resolved-by+sentinel. (B, E retained only for the auto_close_path action
-# where the issue was closed via `closes #N` keyword without /issue-close-stage
-# ever having been run.)
+# in order. Step letters: B=sub-issue-gate (Phase 1 only), E=doc-append,
+# G=parent-body-update, H=gh-issue-close, J=resolved-by+sentinel.
+# auto_close_path omits B intentionally — the parent is already CLOSED, so the
+# gate's pre-close protection is moot. (#366)
 #
 # Uses `gh --jq` (built into the gh CLI) — no external jq dependency.
 # Exit non-zero on argument / environment / gh failures.
@@ -71,10 +71,13 @@ case "${STATE}:${SENTINEL}" in
         ;;
     CLOSED:)
         # Issue was closed via `closes #N` keyword without /issue-close-stage.
-        # Run the full close chain from main worktree — Step E (doc-append)
-        # is the existing limit and is blocked under ENFORCE_WORKTREE=on.
+        # Step B (sub-issue gate) is intentionally omitted: it protects against
+        # closing a parent with open children, but the parent is already CLOSED
+        # here — gating now only stalls bookkeeping behind long-lived tracker
+        # sub-issues. Step E (doc-append) remains the existing limit and is
+        # blocked under ENFORCE_WORKTREE=on. (#366)
         ACTION=auto_close_path
-        NEXT_STEPS="B,E,G,J"
+        NEXT_STEPS="E,G,J"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:pending)

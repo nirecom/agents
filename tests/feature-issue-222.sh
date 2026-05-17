@@ -214,11 +214,12 @@ else
 fi
 teardown_tmp
 
-# --- T5: CLOSED + no sentinel → auto_close_path + B,E,G,J
+# --- T5: CLOSED + no sentinel → auto_close_path + E,G,J
+# Bug #366: Step B (sub-issue gate) is no longer scheduled by auto_close_path.
 setup_tmp
 run_triage closed_no_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "B,E,G,J" ]; then
-    pass "T5: CLOSED + no sentinel → auto_close_path (B,E,G,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J" ]; then
+    pass "T5: CLOSED + no sentinel → auto_close_path (E,G,J)"
 else
     fail "T5: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
