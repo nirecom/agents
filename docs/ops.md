@@ -171,14 +171,21 @@ The parent cannot be closed while any child is `open` (`/issue-close` enforces t
 
 ## Plans Directory Migration
 
-One-time operator runbook: rename `intent-<timestamp>-*.md` files in
-`~/.workflow-plans/` to strip the `intent-` prefix (e.g.
+One-time operator runbook: rename `intent-<timestamp>-*.md` files in the
+active plans directory to strip the `intent-` prefix (e.g.
 `intent-20260510-001819-intent.md` → `20260510-001819-intent.md`).
 Run **once** after the PR for this change is merged. Idempotent.
 
+**Setup (resolve the active plans directory once per shell):**
+```bash
+# Defaults to ~/.workflow-plans; respects WORKFLOW_PLANS_DIR override in .env.
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")
+echo "PLANS_DIR=$PLANS_DIR"
+```
+
 **PowerShell (Windows):**
 ```powershell
-cd ~/.workflow-plans
+cd ~/.workflow-plans  # default; use $PLANS_DIR if WORKFLOW_PLANS_DIR is set
 foreach ($f in Get-ChildItem -Name "intent-*.md") {
     $target = $f -replace '^intent-', ''
     if (Test-Path $target) { Write-Warning "SKIP: $target already exists (not overwriting $f)"; continue }
@@ -188,7 +195,7 @@ foreach ($f in Get-ChildItem -Name "intent-*.md") {
 
 **bash (WSL / macOS / Linux):**
 ```bash
-cd ~/.workflow-plans
+cd "$PLANS_DIR"  # default ~/.workflow-plans; respects WORKFLOW_PLANS_DIR
 for f in intent-*.md; do
   [[ -f "$f" ]] || continue
   target="${f#intent-}"

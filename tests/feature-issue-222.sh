@@ -984,6 +984,74 @@ else
 fi
 teardown_tmp
 
+# --- R30: merged format — hash from history → exactly 1 comment posted, J-1+J-2 in same body
+setup_tmp
+cat >> "$TMP/docs/history.md" <<'EOF'
+
+### FEATURE: Merged format test (2026-05-10, abc1234, #42)
+Background: closed via PR
+Changes: feature shipped
+EOF
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' 2>/dev/null || echo 0)
+if [ "$RC" -eq 0 ] \
+   && [ "$COMMENT_COUNT" -eq 1 ] \
+   && echo "$LOG" | grep -q "resolved-by: abc1234 -->" \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended" \
+   && echo "$LOG" | grep -q "Resolved by commit"; then
+    pass "R30: merged format — 1 comment call, body has J-1+J-2 combined"
+else
+    fail "R30: rc=$RC comments=$COMMENT_COUNT log=$LOG"
+fi
+teardown_tmp
+
+# --- R31: merged format, no-hash class → sentinel only, no "Resolved by commit" line
+setup_tmp
+# history.md empty, no git-log match → no-hash class
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' || true)
+RESOLVED_LINE=$(echo "$LOG" | grep -c "Resolved by commit" || true)
+if [ "$RC" -eq 0 ] \
+   && [ "$COMMENT_COUNT" -eq 1 ] \
+   && echo "$LOG" | grep -q "issue-close-sentinel: appended (resolved-by: backfill-no-hash)" \
+   && [ "$RESOLVED_LINE" -eq 0 ]; then
+    pass "R31: merged format, no-hash — 1 comment call, sentinel only, no visible resolved-by line"
+else
+    fail "R31: rc=$RC comments=$COMMENT_COUNT resolved_line=$RESOLVED_LINE log=$LOG"
+fi
+teardown_tmp
+
+# --- R32: idempotency — merged-format comment (sentinel on line 2) → 0 comments posted
+# This test REQUIRES has_appended_sentinel() to use the "m" multiline flag.
+# The mock returns a non-empty sentinel ONLY when "m" is present in the jq expression.
+setup_tmp
+GH_MOCK_SCENARIO=closed_with_merged_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" >/dev/null 2>&1
+RC=$?
+LOG=$(cat "$GH_MOCK_COMMENT_LOG" 2>/dev/null)
+COMMENT_COUNT=$(echo "$LOG" | grep -c '^---COMMENT---$' || true)
+if [ "$RC" -eq 0 ] && [ "$COMMENT_COUNT" -eq 0 ] && [ -z "$LOG" ]; then
+    pass "R32: merged-format sentinel (line 2) → detected via \"m\" flag, 0 new comments"
+else
+    fail "R32: rc=$RC comments=$COMMENT_COUNT log=$LOG (expected: 0 comments, requires \"m\" flag in has_appended_sentinel)"
+fi
+teardown_tmp
+
+# --- R33: regression — has_appended_sentinel() jq test() must use '; "m"' flag syntax
+# grep for '; "m"' (semicolon+space before the flag) to match the jq expression itself,
+# not a comment that merely contains the word "m".
+if grep -A5 'has_appended_sentinel()' "$BACKFILL_SCRIPT" | grep -q '; "m"'; then
+    pass "R33: has_appended_sentinel() jq expression contains \"; \\\"m\\\"\" multiline flag"
+else
+    fail "R33: has_appended_sentinel() missing \"; \\\"m\\\"\" — merged-format sentinel on line 2 would not be detected"
+fi
+
 # ============================================================================
 # D-series — SKILL.md regression guards (minimal, after refactor)
 # ============================================================================
