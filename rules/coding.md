@@ -27,7 +27,7 @@ See also `rules/installer.md` for installer and system configuration rules.
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
 
-See also `rules/plan-principles.md` for the top-level design principles (elevate perspective / orthogonality / name reflects substance) that govern cross-platform consistency and naming.
+See also `rules/core-principles.md` for the top-level design principles.
 
 ## Sub-rules (path-scoped via `globs:`)
 
