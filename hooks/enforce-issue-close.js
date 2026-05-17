@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: block raw `gh issue close` invocations through
-// the Bash tool. Forces routing via the /issue-close skill, which sets
-// ISSUE_CLOSE_SKILL=1 to bypass this guard.
+// the Bash tool. Forces routing via /issue-close-finalize (Phase 2), which
+// sets ISSUE_CLOSE_SKILL=1 to bypass this guard. Phase 1 (/issue-close-stage)
+// does not call `gh issue close` and therefore is not affected by this hook.
 //
 // Scope: Claude Code Bash tool only. Web UI, mobile, gh from another shell —
 // all bypass this hook. Use /issue-reconcile to recover from those.
@@ -53,16 +54,17 @@ if (!CLOSE_RE.test(cmd)) {
   process.exit(0);
 }
 
-// Inline-skill bypass: /issue-close invokes `gh issue close` with
+// Inline-skill bypass: /issue-close-finalize invokes `gh issue close` with
 // ISSUE_CLOSE_SKILL=1 as an inline env-var prefix (the env var only reaches
 // the gh subprocess, not this hook process). We recognise ONLY the exact
-// command shape the skill generates (see skills/issue-close/SKILL.md:149):
+// command shape the skill generates (see skills/issue-close-finalize/SKILL.md):
 //
 //   ISSUE_CLOSE_SKILL=1 gh issue close <N> --reason completed
 //
 // Strict-shape: no other env vars, digits-only issue id, `--reason completed`
 // required, end-anchored ($). HWS = `[ \t]` (horizontal only — excludes \n/\r).
-// If /issue-close ever changes its invocation shape, update this AND the tests.
+// If /issue-close-finalize ever changes its invocation shape, update this AND
+// the tests.
 const INLINE_SKILL_RE =
   /^[ \t]*ISSUE_CLOSE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+close[ \t]+\d+[ \t]+--reason[ \t]+completed[ \t]*$/;
 
@@ -76,7 +78,8 @@ if (process.env.ISSUE_CLOSE_SKILL === "1") {
 }
 
 process.stderr.write(
-  "`gh issue close` を直接実行することはできません。/issue-close を使用してください。\n" +
-  "（skills/issue-close で transaction-safe な close + history.md 追記 + todo.md 更新を行います）\n"
+  "`gh issue close` を直接実行することはできません。/issue-close-finalize を使用してください。\n" +
+  "（Phase 1 が未完了なら先に /issue-close-stage <N> を linked worktree から実行してください。\n" +
+  " skills/issue-close-finalize で transaction-safe な close + resolved-by sentinel を post します）\n"
 );
 process.exit(2);

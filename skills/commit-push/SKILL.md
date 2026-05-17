@@ -14,6 +14,25 @@ If tests are missing or the commit hook blocks due to missing tests:
 If documentation is missing or the commit hook blocks due to missing documentation updates:
 - Invoke the `/update-docs` skill first, then resume commit-push.
 
+## Phase 1 (issue-close-stage) pre-flight
+
+For each issue N in the session's `closes_issues` list (parsed from
+`${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` —
+the `## closes_issues` section), run from the worktree root:
+
+```bash
+bash "$AGENTS_CONFIG_DIR/bin/github-issues/check-phase1-complete.sh" <N>
+```
+
+Non-zero → abort `/commit-push` and surface stderr (it names the missing
+condition: sentinel, history entry, or both). Resolve by invoking
+`/issue-close-stage <N>` from the linked worktree, then re-run `/commit-push`.
+
+**Skip this pre-flight when:**
+- `closes_issues` is empty, or the session intent file is missing.
+- Running from the main worktree (main-worktree commit-push is only valid when
+  `ENFORCE_WORKTREE=off`, where the 2-phase split does not apply).
+
 ## Procedure
 
 1. Stage changes with `git add`
@@ -57,9 +76,16 @@ After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`
      - For a minimal PR: `gh pr create --head <branch> --fill`
      - With a custom body: `gh pr create --head <branch> --title "..." --body "..."`
      - When the PR closes a tracked issue, include `Closes #<N>` in `--body` so
-       GitHub auto-closes the issue on merge. After merge, run `/issue-close <N>`
-       — the skill's triage detects `CLOSED + (none)` and writes `history.md` +
-       posts a resolved-by sentinel.
+       GitHub auto-closes the issue on merge. After merge, run
+       `/issue-close-finalize <N>` (or `--from-session`) from the main worktree
+       to promote the sentinel, close the issue, and post resolved-by.
+     - **Append a marker line per closed issue** to `--body` so
+       `find-pr-by-marker.sh` can resolve the merge commit later. One line per
+       issue, hardcoded literal (no variable interpolation in the body string):
+       ```
+       <!-- issue-close-pr-of: <N> -->
+       ```
+       Place the marker(s) at the end of the body, after the `Closes #<N>` line.
    Display the PR URL.
 
    Capture the PR number and update the VS Code session title (best-effort):

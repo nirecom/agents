@@ -5,7 +5,7 @@
 # parent's body. No-op when there is no parent.
 #
 # Security notes:
-# - <N> must be digits-only (validated by /issue-close before calling).
+# - <N> must be digits-only (validated by /issue-close-stage / /issue-close-finalize before calling).
 # - PARENT_BODY is treated as opaque text and passed as a single argv to
 #   `gh issue edit --body` — it cannot escape into the shell.
 # - The match uses a word boundary (`\b`) so `#42` does not match `#420`.

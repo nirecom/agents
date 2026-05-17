@@ -123,16 +123,45 @@ case "$ARGS" in
     fi
     exit 0
     ;;
-  # Tier 0a: closedByPullRequestsReferences dispatch (per-issue env var override)
+  # find-pr-by-marker.sh primary: marker-based PR search (issue-close-pr-of:N in PR body).
+  # GH_MOCK_MARKER_PR_RESULT controls output (tab-separated number\tsha), empty = no match.
+  "pr list"*"issue-close-pr-of:"*"--state merged"*"--jq"*)
+    if [ -n "${GH_MOCK_MARKER_PR_RESULT:-}" ]; then
+        printf '%s\n' "$GH_MOCK_MARKER_PR_RESULT"
+    fi
+    exit 0
+    ;;
+  # find-pr-by-marker.sh fallback step 2: pr view N --json mergeCommit --jq .mergeCommit.oid
+  "pr view "*" --json mergeCommit --jq"*)
+    PR_N=$(printf '%s' "$ARGS" | sed -nE 's/.*pr view ([0-9]+) .*/\1/p')
+    var="GH_MOCK_PR_MERGE_SHA_FOR_${PR_N}"
+    val="${!var:-}"
+    [ -n "$val" ] && printf '%s' "$val"
+    exit 0
+    ;;
+  # closedByPullRequestsReferences dispatch — two callers with different --jq shapes:
+  #   find-pr-by-marker.sh wants .closedByPullRequestsReferences[0].number  (contains ".number")
+  #   backfill-commit-comments.sh (Tier 0a) wants mergeCommit.oid           (does not contain ".number")
   "issue view "*" --json closedByPullRequestsReferences --jq"*)
     N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue view ([0-9]+) .*/\1/p')
-    var="GH_MOCK_PR_MERGE_COMMIT_FOR_${N}"
-    if [ -n "${!var+x}" ]; then
-        val="${!var}"
-        if [ -n "$val" ]; then
-            printf '%s' "$val"
+    if [[ "$ARGS" == *".number"* ]]; then
+        # find-pr-by-marker.sh: wants .closedByPullRequestsReferences[0].number
+        var="GH_MOCK_CLOSED_BY_PR_NUM_FOR_${N}"
+        if [ -n "${!var+x}" ]; then
+            val="${!var}"
+            [ -n "$val" ] && printf '%s' "$val"
+            exit 0
         fi
-        exit 0
+    else
+        # backfill-commit-comments.sh (Tier 0a): wants mergeCommit.oid
+        var="GH_MOCK_PR_MERGE_COMMIT_FOR_${N}"
+        if [ -n "${!var+x}" ]; then
+            val="${!var}"
+            if [ -n "$val" ]; then
+                printf '%s' "$val"
+            fi
+            exit 0
+        fi
     fi
     ;;
   # Tier 0b: body dispatch (per-issue env var override)

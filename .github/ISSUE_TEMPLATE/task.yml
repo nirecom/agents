@@ -6,9 +6,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template for normal work items. On close, `/issue-close <N>`
-        will write a `FEATURE` entry to `docs/history.md` using the
-        Background/Changes fields below.
+        Use this template for normal work items. On close,
+        `/issue-close-stage <N>` (Phase 1, in the linked worktree) writes a
+        `FEATURE` entry to `docs/history.md` using the Background/Changes
+        fields below, and `/issue-close-finalize <N>` (Phase 2, from the main
+        worktree) closes the issue.
   - type: textarea
     id: background
     attributes:
