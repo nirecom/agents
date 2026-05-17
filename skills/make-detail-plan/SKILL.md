@@ -10,9 +10,26 @@ must be read and passed to the planner before drafting begins.
 
 ## Procedure
 
+### Step 0 — Resolve <PLANS_DIR>
+
+Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+
+```bash
+PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
+```
+
+Capture the printed absolute path and substitute it for every <PLANS_DIR>
+placeholder in the remainder of this SKILL.md. Subagent prompts must receive
+the resolved absolute path as a literal string (subagents cannot expand $VAR).
+Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+
+Canonical documentation: skills/_shared/resolve-plans-dir.md.
+
 1. **Read prior-stage artifacts** (if they exist):
-   - `~/.workflow-plans/<session-id>-intent.md` — agreed requirements, scope, non-goals
-   - `~/.workflow-plans/<session-id>-outline.md` — confirmed design direction
+   - `<PLANS_DIR>/<session-id>-intent.md` — agreed requirements, scope, non-goals
+   - `<PLANS_DIR>/<session-id>-outline.md` — confirmed design direction
    If neither file exists, proceed with the task context alone (no prior stages ran).
 
 2. **Surface the delivery plan to the main conversation.**
@@ -37,25 +54,25 @@ must be read and passed to the planner before drafting begins.
 5. **Review the draft with codex first, fall back to Claude if unavailable.**
    For each review round:
    a. Write the planner's draft using the Write tool to:
-      `~/.workflow-plans/drafts/<session-id>-detail-draft.md`
+      `<PLANS_DIR>/drafts/<session-id>-detail-draft.md`
 
 
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
       On the first review round only, determine which prior-stage files exist:
-      - `~/.workflow-plans/<session-id>-intent.md`
-      - `~/.workflow-plans/<session-id>-outline.md`
+      - `<PLANS_DIR>/<session-id>-intent.md`
+      - `<PLANS_DIR>/<session-id>-outline.md`
 
-      Write `~/.workflow-plans/drafts/<session-id>-context.md` with whichever sections apply
+      Write `<PLANS_DIR>/drafts/<session-id>-context.md` with whichever sections apply
       (English headers mandatory, source comments mandatory):
       ```
-      <!-- Source: ~/.workflow-plans/<session-id>-intent.md -->
+      <!-- Source: <PLANS_DIR>/<session-id>-intent.md -->
       ## Section 1: Intent (User Requirements)
 
       <verbatim contents of <session-id>-intent.md>
 
       ---
 
-      <!-- Source: ~/.workflow-plans/<session-id>-outline.md -->
+      <!-- Source: <PLANS_DIR>/<session-id>-outline.md -->
       ## Section 2: Outline (Design Proposal)
 
       <verbatim contents of <session-id>-outline.md>
@@ -66,7 +83,7 @@ must be read and passed to the planner before drafting begins.
       - If neither exists: skip context file; call review-plan-codex without `--context`.
 
       On revision rounds 2+, reuse the context file from round 1 — do not regenerate.
-   c. Run via Bash: `review-plan-codex --input ~/.workflow-plans/drafts/<session-id>-detail-draft.md --format detail-plan [--context ~/.workflow-plans/drafts/<session-id>-context.md]`
+   c. Run via Bash: `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-detail-draft.md --format detail-plan [--context <PLANS_DIR>/drafts/<session-id>-context.md]`
       (omit `--context` when no context file was created in step b)
    d. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
@@ -75,8 +92,8 @@ must be read and passed to the planner before drafting begins.
         - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
         - Anything else → **format malformed**.
       - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
-      - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `~/.workflow-plans/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
-      - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `~/.workflow-plans/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
+      - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
+      - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
    e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 3), then repeat from step 5a. Each round consumes `revision_rounds`.
 
 6. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
@@ -85,7 +102,7 @@ must be read and passed to the planner before drafting begins.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
 7. Once the reviewer returns `APPROVED`, write the final plan to
-   `~/.workflow-plans/<session-id>-detail.md` (not draft). Then apply the
+   `<PLANS_DIR>/<session-id>-detail.md` (not draft). Then apply the
    confirm-plan protocol (`skills/_shared/confirm-plan.md`)
    using `CONFIRM_DETAIL` as the flag and `<session-id>-detail.md` as the artifact.
    - **Revise** (skill-specific): ask what to change, send feedback to the planner
