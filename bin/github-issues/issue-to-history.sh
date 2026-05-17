@@ -45,7 +45,7 @@ done
 
 # --- Environment check ---
 if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    echo "Error: AGENTS_CONFIG_DIR is not set. /issue-close must be run from a session that has it configured." >&2
+    echo "Error: AGENTS_CONFIG_DIR is not set. /issue-close-stage and /issue-close-finalize must be run from a session that has it configured." >&2
     exit 1
 fi
 

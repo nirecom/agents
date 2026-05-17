@@ -74,10 +74,10 @@ run_hook_no_env() {
 expect_block() {
     local desc="$1" json="$2"
     run_hook "$json"
-    if [ "$RC" -eq 2 ] && echo "$ERR" | grep -q "/issue-close"; then
+    if [ "$RC" -eq 2 ] && (echo "$ERR" | grep -q "issue-close-finalize" || echo "$ERR" | grep -q "issue-close-stage"); then
         pass "$desc"
     else
-        fail "$desc — expected exit 2 + /issue-close stderr (rc=$RC stderr=$ERR)"
+        fail "$desc — expected exit 2 + skill name in stderr (rc=$RC stderr=$ERR)"
     fi
 }
 
@@ -163,7 +163,7 @@ else
 fi
 
 # --- N11: skill's exact shape → allowed ---
-# This matches the actual skill invocation per skills/issue-close/SKILL.md:149.
+# This matches the actual skill invocation per skills/issue-close-finalize/SKILL.md.
 # --reason completed is REQUIRED, not optional.
 run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}'
 if [ "$RC" -eq 0 ]; then
