@@ -1,6 +1,7 @@
-# Plan Principles
+# Core Principles
 
-Three meta-principles applied **before** drafting an outline or detail plan.
+Cross-cutting principles applied to planning, design review, and code review.
+Loaded into every planner, reviewer, and Codex adversarial review context.
 Read this at /make-outline-plan and /make-detail-plan stages, and whenever
 adding or modifying a file in a family (hooks, sentinels, rules, env entries,
 cross-platform installers, etc.).
@@ -20,7 +21,7 @@ task and check exhaustively whether the same problem occurs in other cases.
    sentinels", "this is one of M hooks").
 2. Enumerate the other members of that class.
 3. Check each — does the change apply there too? Does the bug exist there?
-4. Decide per member: apply, skip with reason, or surface as follow-up.
+4. Decide per member and per class: apply / skip with reason / surface as follow-up, OR — taking the class as a whole — merge symmetric members or replace the class with a faster alternative when that reaches the goal sooner.
 
 **Anti-pattern:** Fixing case A while leaving symmetric cases B, C, D
 untouched because the user did not explicitly point at them. If the user
@@ -75,3 +76,16 @@ and when to consult it.
 **Anti-pattern:** Names that swallow content from unrelated areas
 (`design-principles.md` colliding with `architecture/design.md`),
 or names that require reading the body to know what the file covers.
+
+## 4. Single Source of Truth
+
+One canonical file owns each fact. Every other location references it, not copies it.
+
+**Rules:**
+- **Reference the master.** Do not reproduce authoritative content in a second canonical location — link or cite it instead.
+- **No duplication.** When the same value appears in two canonical files, designate one as the master; the other becomes a reference.
+- **Extract the shared part.** When two canonical files share a common section, lift it into a shared file that both reference.
+
+Summaries, snapshots, caches, and append-only stream records (e.g. `history.md`) are excluded from this rule — they serve a distinct access pattern, not canonical ownership.
+
+**Anti-pattern:** Reproducing a host placement table in both `architecture.md` and `ops.md`; restating a rule from `rules/coding.md` inside a SKILL.md; duplicating env-var documentation across `.env.example` and `README.md` without a single canonical home.

@@ -4,7 +4,7 @@
 # Integration tests for the refactor/design-principles branch.
 #
 # Section A: USER_VERIFIED sentinel — soft warnings + state recording
-# Section B: Static checks — rules/plan-principles.md, rules/orthogonality.md,
+# Section B: Static checks — rules/core-principles.md,
 #            skills/make-detail-plan/SKILL.md, skills/survey-code/SKILL.md
 
 set -u
@@ -251,51 +251,51 @@ try {
 # B. Static checks
 # ============================================================================
 
-test_B1_plan_principles_exists() {
-    local f="$AGENTS_DIR/rules/plan-principles.md"
+test_B1_core_principles_exists() {
+    local f="$AGENTS_DIR/rules/core-principles.md"
     if [ -f "$f" ]; then
-        pass "B1: rules/plan-principles.md exists"
+        pass "B1: rules/core-principles.md exists"
     else
-        fail "B1: rules/plan-principles.md NOT found"
+        fail "B1: rules/core-principles.md NOT found"
     fi
 }
 
 test_B2_elevate_perspective_header() {
-    local f="$AGENTS_DIR/rules/plan-principles.md"
+    local f="$AGENTS_DIR/rules/core-principles.md"
     if [ ! -f "$f" ]; then
-        fail "B2: rules/plan-principles.md not found (prerequisite)"
+        fail "B2: rules/core-principles.md not found (prerequisite)"
         return
     fi
     if grep -qF "## 1. Elevate Perspective" "$f"; then
         pass "B2: '## 1. Elevate Perspective' header present"
     else
-        fail "B2: '## 1. Elevate Perspective' header NOT found in rules/plan-principles.md"
+        fail "B2: '## 1. Elevate Perspective' header NOT found in rules/core-principles.md"
     fi
 }
 
 test_B3_orthogonality_header() {
-    local f="$AGENTS_DIR/rules/plan-principles.md"
+    local f="$AGENTS_DIR/rules/core-principles.md"
     if [ ! -f "$f" ]; then
-        fail "B3: rules/plan-principles.md not found (prerequisite)"
+        fail "B3: rules/core-principles.md not found (prerequisite)"
         return
     fi
     if grep -qF "## 2. Orthogonality" "$f"; then
         pass "B3: '## 2. Orthogonality' header present"
     else
-        fail "B3: '## 2. Orthogonality' header NOT found in rules/plan-principles.md"
+        fail "B3: '## 2. Orthogonality' header NOT found in rules/core-principles.md"
     fi
 }
 
 test_B4_name_reflects_substance_header() {
-    local f="$AGENTS_DIR/rules/plan-principles.md"
+    local f="$AGENTS_DIR/rules/core-principles.md"
     if [ ! -f "$f" ]; then
-        fail "B4: rules/plan-principles.md not found (prerequisite)"
+        fail "B4: rules/core-principles.md not found (prerequisite)"
         return
     fi
     if grep -qF "## 3. Name Reflects Substance" "$f"; then
         pass "B4: '## 3. Name Reflects Substance' header present"
     else
-        fail "B4: '## 3. Name Reflects Substance' header NOT found in rules/plan-principles.md"
+        fail "B4: '## 3. Name Reflects Substance' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -308,29 +308,103 @@ test_B5_orthogonality_md_removed() {
     fi
 }
 
-test_B6_make_detail_plan_references_plan_principles() {
+test_B6_make_detail_plan_references_core_principles() {
     local f="$AGENTS_DIR/skills/make-detail-plan/SKILL.md"
     if [ ! -f "$f" ]; then
         fail "B6: skills/make-detail-plan/SKILL.md not found"
         return
     fi
-    if grep -qF "rules/plan-principles.md" "$f"; then
-        pass "B6: skills/make-detail-plan/SKILL.md references rules/plan-principles.md"
+    if grep -qF "rules/core-principles.md" "$f"; then
+        pass "B6: skills/make-detail-plan/SKILL.md references rules/core-principles.md"
     else
-        fail "B6: skills/make-detail-plan/SKILL.md does NOT reference rules/plan-principles.md"
+        fail "B6: skills/make-detail-plan/SKILL.md does NOT reference rules/core-principles.md"
     fi
 }
 
-test_B7_survey_code_references_plan_principles() {
+test_B7_survey_code_references_core_principles() {
     local f="$AGENTS_DIR/skills/survey-code/SKILL.md"
     if [ ! -f "$f" ]; then
         fail "B7: skills/survey-code/SKILL.md not found"
         return
     fi
-    if grep -qF "rules/plan-principles.md" "$f"; then
-        pass "B7: skills/survey-code/SKILL.md references rules/plan-principles.md"
+    if grep -qF "rules/core-principles.md" "$f"; then
+        pass "B7: skills/survey-code/SKILL.md references rules/core-principles.md"
     else
-        fail "B7: skills/survey-code/SKILL.md does NOT reference rules/plan-principles.md"
+        fail "B7: skills/survey-code/SKILL.md does NOT reference rules/core-principles.md"
+    fi
+}
+
+test_B8_no_residual_plan_principles_references() {
+    local hits
+    hits=$(cd "$AGENTS_DIR" && git ls-files -z \
+           | xargs -0 grep -l 'plan-principles' 2>/dev/null \
+           | grep -v '^docs/history' \
+           | grep -v '^tests/' || true)
+    if [ -z "$hits" ]; then
+        pass "B8: no residual 'plan-principles' references in tracked canonical files"
+    else
+        fail "B8: residual 'plan-principles' references found in: $hits"
+    fi
+}
+
+test_B9_ssot_section_header() {
+    local f="$AGENTS_DIR/rules/core-principles.md"
+    if [ ! -f "$f" ]; then
+        fail "B9: rules/core-principles.md not found (prerequisite)"
+        return
+    fi
+    if grep -qF "## 4. Single Source of Truth" "$f"; then
+        pass "B9: '## 4. Single Source of Truth' header present"
+    else
+        fail "B9: '## 4. Single Source of Truth' header NOT found"
+    fi
+}
+
+test_B10_elevate_perspective_per_class_wording() {
+    local f="$AGENTS_DIR/rules/core-principles.md"
+    if [ ! -f "$f" ]; then
+        fail "B10: rules/core-principles.md not found (prerequisite)"
+        return
+    fi
+    if grep -qF "per class" "$f"; then
+        pass "B10: §1 step 4 contains 'per class' wording"
+    else
+        fail "B10: §1 step 4 does NOT contain 'per class' wording"
+    fi
+}
+
+test_B11_outline_reviewer_references_core_principles() {
+    local f="$AGENTS_DIR/agents/outline-reviewer.md"
+    if [ ! -f "$f" ]; then
+        fail "B11: agents/outline-reviewer.md not found"
+        return
+    fi
+    if grep -qF "rules/core-principles.md" "$f"; then
+        pass "B11: agents/outline-reviewer.md references rules/core-principles.md"
+    else
+        fail "B11: agents/outline-reviewer.md does NOT reference rules/core-principles.md"
+    fi
+}
+
+test_B12_detail_reviewer_references_core_principles() {
+    local f="$AGENTS_DIR/agents/detail-reviewer.md"
+    if [ ! -f "$f" ]; then
+        fail "B12: agents/detail-reviewer.md not found"
+        return
+    fi
+    if grep -qF "rules/core-principles.md" "$f"; then
+        pass "B12: agents/detail-reviewer.md references rules/core-principles.md"
+    else
+        fail "B12: agents/detail-reviewer.md does NOT reference rules/core-principles.md"
+    fi
+}
+
+test_B13_plan_principles_old_path_removed() {
+    local f="$AGENTS_DIR/rules/plan-principles.md"
+    if [ ! -f "$f" ]; then
+        pass "B13: rules/plan-principles.md does not exist (correctly renamed)"
+    else
+        fail "B13: rules/plan-principles.md still exists (should have been renamed)"
     fi
 }
 
@@ -345,13 +419,19 @@ run_all() {
     test_A3_short_reason_records_and_warns
     test_A4_no_session_id_not_recorded
     # B: static checks
-    test_B1_plan_principles_exists
+    test_B1_core_principles_exists
     test_B2_elevate_perspective_header
     test_B3_orthogonality_header
     test_B4_name_reflects_substance_header
     test_B5_orthogonality_md_removed
-    test_B6_make_detail_plan_references_plan_principles
-    test_B7_survey_code_references_plan_principles
+    test_B6_make_detail_plan_references_core_principles
+    test_B7_survey_code_references_core_principles
+    test_B8_no_residual_plan_principles_references
+    test_B9_ssot_section_header
+    test_B10_elevate_perspective_per_class_wording
+    test_B11_outline_reviewer_references_core_principles
+    test_B12_detail_reviewer_references_core_principles
+    test_B13_plan_principles_old_path_removed
 }
 
 if command -v timeout >/dev/null 2>&1; then

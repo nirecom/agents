@@ -55,3 +55,4 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
 - Never request `NEEDS_RESEARCH` — if you lack context, approve and note the gap in your justification.
 - Do not write the revised approaches yourself — that is the outline-planner's job.
 - Do not call Edit/Write.
+- Apply `rules/core-principles.md` when judging approach soundness — §1 (is a faster alternative class missing?), §2 (are symmetric counterparts addressed?), §3 (do proposed names reflect substance?), §4 (does the approach duplicate an existing canonical source?).
