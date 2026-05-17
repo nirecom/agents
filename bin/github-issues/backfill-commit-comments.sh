@@ -41,6 +41,11 @@ fi
 HISTORY_FILE="${AGENTS_CONFIG_DIR}/docs/history.md"
 HISTORY_DIR="${AGENTS_CONFIG_DIR}/docs/history"
 
+# Tier 1.5 blacklist: commits that bulk-import many history entries at once.
+# When git log -S resolves to one of these, fall through to the next tier to
+# avoid false attribution (e.g. 3969773 = feat(agents-split): add 39 tests).
+TIER15_BLACKLIST="3969773"
+
 # Tier 0a: closedByPullRequestsReferences → first merged PR's mergeCommit.oid.
 # Closed-unmerged PRs have mergeCommit=null and are filtered out by --jq.
 discover_hash_from_pr_link() {
@@ -101,6 +106,10 @@ discover_hash_from_history_introducer() {
     [ -z "$line" ] && return 1
     hash=$(printf '%s' "$line" | awk '{print $1}')
     printf '%s' "$hash" | grep -qE '^[0-9a-f]{7,40}$' || return 1
+    local bl
+    for bl in $TIER15_BLACKLIST; do
+        case "$hash" in "$bl"*) return 1 ;; esac
+    done
     printf '%s' "$hash"
 }
 
