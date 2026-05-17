@@ -30,13 +30,14 @@ flowchart TD
 
     Task([Task]) --> DocCheck{Docs-only<br/>changes?}
     DocCheck -- Yes --> UV["8 · User verify"]
-    DocCheck -- No  --> S1["1 · clarify-intent<br/>skippable"]
+    DocCheck -- No  --> S0["0 · workflow-init<br/>survey · route · context"]
 
-    S1 --> P2a
+    S0  --> S1["1 · clarify-intent<br/>skippable"]
+    S1  --> P2a
 
     subgraph Plan["2 · Plan  —  3-stage pipeline"]
         direction TB
-        P2a["2a · survey-code / deep-research<br/>skippable"] --> P2b_sg
+        P2a["2a · survey / deep-research<br/>fallback · skippable"] --> P2b_sg
         subgraph P2b_sg["2b · make-outline-plan"]
             direction LR
             P2b_L["Planner<br/>(Claude)"] <--> P2b_R["Reviewer<br/>(Codex)"]
@@ -50,26 +51,28 @@ flowchart TD
 
     Plan --> S3["3 · Branch / Worktree decision<br/>main · branch · worktree"]
     S3   --> S4["4 · write-tests<br/>before code · skippable"]
-    S4   --> S5["5 · Code<br/>diff in chat → user approves"]
+    S4   --> S5["5 · Code<br/>on: Edit direct / off: diff → approve"]
 
-    S5 --> S6a & S6b & S6c
+    S5 --> S6a & S6b & S6c & S6d
 
     subgraph Review["6 · Parallel review"]
         S6a["Run tests"]
         S6b["/review-code-security"]
         S6c["review-code-codex<br/>Codex second opinion"]
+        S6d["review-skill-size"]
     end
 
-    S6a & S6b & S6c --> S7["7 · update-docs"]
+    S6a & S6b & S6c & S6d --> S7["7 · update-docs"]
     S7 --> UV
     UV --> S9["9 · commit-push<br/>blocked until all steps done"]
 
     S9 --> Cleanup{worktree · branch<br/>or main?}
     Cleanup -- worktree --> WE["/worktree-end<br/>merge + cleanup"]
     Cleanup -- branch   --> PR["gh pr create → merge → delete"]
-    Cleanup -- main     --> Done([Done])
-    WE --> Done
-    PR --> Done
+    Cleanup -- main     --> IC["/issue-close<br/>--from-session"]
+    WE --> IC
+    PR --> IC
+    IC --> Done([Done])
 
     style Plan   fill:#1e3a8a,stroke:#1d4ed8,color:#fff
     style P2b_sg fill:#1e3a8a,stroke:#60a5fa,color:#fff
@@ -79,8 +82,8 @@ flowchart TD
     class Task,Done terminal
     class DocCheck,Cleanup decision
     class S1,P2a,S4 skippable
-    class P2b_L,P2c_L,S3,S5,S7,UV,S9,WE,PR required
-    class P2b_R,P2c_R,S6a,S6b,S6c parallel
+    class P2b_L,P2c_L,S0,S3,S5,S7,UV,S9,WE,PR,IC required
+    class P2b_R,P2c_R,S6a,S6b,S6c,S6d parallel
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically
