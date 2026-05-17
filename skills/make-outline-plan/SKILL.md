@@ -119,8 +119,8 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       ```
       If the intent file does not exist or is empty, skip the context file.
    c. Run via Bash:
-      `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-outline-draft.md --format outline-plan --context <PLANS_DIR>/drafts/<session-id>-context.md`
-      (omit `--context <PLANS_DIR>/drafts/<session-id>-context.md` when no context file was created in step b).
+      `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-outline-draft.md --format outline-plan --context <PLANS_DIR>/drafts/<session-id>-context.md --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"`
+      (omit `--context <PLANS_DIR>/drafts/<session-id>-context.md` when no context file was created in step b; always include the core-principles context).
    d. Parse the first line:
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
      - `APPROVED` → proceed to step 7.

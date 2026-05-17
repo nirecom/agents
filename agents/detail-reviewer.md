@@ -26,6 +26,7 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   - Move multi-step procedures into bin/ or skills/<name>/lib/.
   Flag the plan when it adds prose explanations, multi-line directives, or inlined procedural logic.
 - **Citation integrity** — if the plan contains `[research: <tag>]` tags (tag format: `[a-z0-9-]+`), verify each tag resolves to a bullet in the plan's `## Research Findings (from this session)` section. If a claim appears to rely on external knowledge but has no citation, include in `NEEDS_REVISION`: `show research finding for: <claim>`
+- **Core principles** — verify the plan applies `rules/core-principles.md`.
 
 ## Procedure
 
