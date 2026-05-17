@@ -349,6 +349,79 @@ test_i3() {
 }
 test_i3
 
+# ---------------------------------------------------------------------------
+# I4: bridge resolves correctly when AGENTS_CONFIG_DIR is unset.
+# The bridge derives its own location via $SCRIPT_DIR / pwd -P and never
+# consults AGENTS_CONFIG_DIR for that resolution, so an absolute-path
+# invocation must still return the default $HOME/.workflow-plans.
+# ---------------------------------------------------------------------------
+echo "--- I4: bridge resolves without AGENTS_CONFIG_DIR ---"
+test_i4() {
+    if [ ! -f "$REAL_BRIDGE" ]; then
+        skip "I4 bin/workflow-plans-dir not yet created"
+        return
+    fi
+    local result result_norm expected
+    result="$(run_with_timeout env -u AGENTS_CONFIG_DIR -u WORKFLOW_PLANS_DIR "$REAL_BRIDGE" 2>&1 || true)"
+    result_norm=$(printf '%s' "$result" | sed 's#\\#/#g')
+    expected="$NODE_HOME/.workflow-plans"
+    if [ "$result_norm" = "$expected" ]; then
+        pass "I4 bridge resolves correctly without AGENTS_CONFIG_DIR (got $result_norm)"
+    else
+        fail "I4 expected '$expected', got '$result_norm'"
+    fi
+}
+test_i4
+
+# ---------------------------------------------------------------------------
+# I5: relative WORKFLOW_PLANS_DIR makes the bridge exit 2 and emit a stderr
+# line prefixed `workflow-plans-dir:`.
+# ---------------------------------------------------------------------------
+echo "--- I5: bridge rejects relative WORKFLOW_PLANS_DIR ---"
+test_i5() {
+    if [ ! -f "$REAL_BRIDGE" ]; then
+        skip "I5 bin/workflow-plans-dir not yet created"
+        return
+    fi
+    local stderr_out exit_code
+    # Capture stderr (discard stdout) and exit code separately. We run the
+    # bridge twice — once to grab the stderr text, once to grab the exit
+    # status — because Bash makes capturing both from a single invocation
+    # awkward and we do not care about timing here.
+    stderr_out="$(run_with_timeout env WORKFLOW_PLANS_DIR=foo/bar "$REAL_BRIDGE" 2>&1 >/dev/null || true)"
+    exit_code=0
+    run_with_timeout env WORKFLOW_PLANS_DIR=foo/bar "$REAL_BRIDGE" >/dev/null 2>&1 || exit_code=$?
+    if [ "$exit_code" = "2" ] && echo "$stderr_out" | grep -q "^workflow-plans-dir:"; then
+        pass "I5 relative path: exit 2, stderr starts with 'workflow-plans-dir:'"
+    else
+        fail "I5 expected exit 2 + stderr 'workflow-plans-dir:...' got exit=$exit_code stderr='$stderr_out'"
+    fi
+}
+test_i5
+
+# ---------------------------------------------------------------------------
+# I6: the inlined Step 0 fallback chain that SKILL.md files will carry —
+#     bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+#       || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
+# When the helper is unreachable (bad AGENTS_CONFIG_DIR) but the user has
+# exported WORKFLOW_PLANS_DIR, the fallback must honour that override
+# rather than silently dropping to the home default.
+# ---------------------------------------------------------------------------
+echo "--- I6: inlined fallback chain honours WORKFLOW_PLANS_DIR ---"
+test_i6() {
+    local result
+    result="$(run_with_timeout bash -c '
+        export WORKFLOW_PLANS_DIR=/tmp/custom-plans-i6
+        bash "/nonexistent/path/bin/workflow-plans-dir" 2>/dev/null || printf "%s\n" "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
+    ')"
+    if [ "$result" = "/tmp/custom-plans-i6" ]; then
+        pass "I6 inlined fallback chain honours exported WORKFLOW_PLANS_DIR"
+    else
+        fail "I6 expected '/tmp/custom-plans-i6', got '$result'"
+    fi
+}
+test_i6
+
 echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL  SKIP: $SKIP"
