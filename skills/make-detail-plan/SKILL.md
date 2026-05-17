@@ -83,8 +83,8 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       - If neither exists: skip context file; call review-plan-codex without `--context`.
 
       On revision rounds 2+, reuse the context file from round 1 — do not regenerate.
-   c. Run via Bash: `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-detail-draft.md --format detail-plan [--context <PLANS_DIR>/drafts/<session-id>-context.md]`
-      (omit `--context` when no context file was created in step b)
+   c. Run via Bash: `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-detail-draft.md --format detail-plan [--context <PLANS_DIR>/drafts/<session-id>-context.md] --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"`
+      (omit the session context file `--context` when no context file was created in step b; always include the core-principles context)
    d. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
         Extract the first non-blank line as the verdict token.
@@ -179,7 +179,7 @@ Skipping research does NOT justify skipping the plan step.
       reformat that path in any form. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the `Delivery plan (...)` summary emitted by step 2 before the discussion loop begins
   Diagnostics go to <session-id>-detail-debug.log only.
-- Follow `rules/plan-principles.md` — §1 (elevate perspective) before drafting, §2 (orthogonality) for cross-platform / symmetric coverage, §3 (name reflects substance) for any new file or symbol names introduced by the plan
+- Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 7. Never pause for user confirmation during intermediate revision rounds (steps 4–5): write draft files silently and inform the user with plain text only.
 
 ## Completion
