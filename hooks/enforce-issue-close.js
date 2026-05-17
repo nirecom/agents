@@ -78,8 +78,8 @@ if (process.env.ISSUE_CLOSE_SKILL === "1") {
 }
 
 process.stderr.write(
-  "`gh issue close` を直接実行することはできません。/issue-close-finalize を使用してください。\n" +
-  "（Phase 1 が未完了なら先に /issue-close-stage <N> を linked worktree から実行してください。\n" +
-  " skills/issue-close-finalize で transaction-safe な close + resolved-by sentinel を post します）\n"
+  "Direct `gh issue close` is not allowed. Use /issue-close-finalize <N> instead.\n" +
+  "(If Phase 1 is not yet done, first run /issue-close-stage <N> from a linked worktree.\n" +
+  " /issue-close-finalize then performs a transaction-safe close and posts the resolved-by sentinel.)\n"
 );
 process.exit(2);

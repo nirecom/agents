@@ -1,6 +1,7 @@
 ---
 name: issue-close-stage
 description: Phase 1 of the 2-phase issue-close split. Runs INSIDE the linked worktree BEFORE the PR is merged. Sub-issue gate, pending sentinel, doc-append + commit, sentinel promote, parent body update.
+user-invocable: false
 ---
 
 Triage routes to the correct subset of steps; each step is idempotent and resumable.

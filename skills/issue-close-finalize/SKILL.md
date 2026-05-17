@@ -1,6 +1,7 @@
 ---
 name: issue-close-finalize
 description: Phase 2 of the 2-phase issue-close split. Runs from the main worktree AFTER the PR is merged. API-only on the normal path (no file writes). Promotes the sentinel, closes the issue, posts the resolved-by + appended sentinels.
+user-invocable: false
 ---
 
 Triage routes to the correct subset of steps; each step is idempotent and resumable.

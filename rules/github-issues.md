@@ -82,9 +82,6 @@ where neither `/issue-close-stage` nor `/issue-close-finalize` ever ran, use
 `/issue-reconcile` to scan closed issues whose comments lack the
 `<!-- issue-close-sentinel: appended -->` marker and backfill `history.md`.
 
-**Legacy `/issue-close`** still exists as a deprecation alias — it prints
-a migration notice pointing at the two new skills and exits non-zero.
-
 ## Sub-issues
 
 Use GitHub Sub-issues for phase/parallel breakdowns. The official `gh` CLI does
