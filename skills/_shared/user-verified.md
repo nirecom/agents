@@ -13,12 +13,11 @@ Run, as its own Bash tool call:
 
     echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"
 
-Attach `: <reason>` describing what the user is approving (e.g.
-`"PR #314 — approving merge to main"` or
-`"Approving the staged diff before /commit-push"`). The bare form
-`<<WORKFLOW_USER_VERIFIED>>` is still accepted but emits a soft warning; the
-reason becomes part of the on-disk audit record. Set the Bash `description`
-to the same short sentence so the permission dialog shows it.
+The `: <reason>` portion is mandatory — describe what the user is approving
+(e.g. `"PR #314 — approving merge to main"` or
+`"Approving the staged diff before /commit-push"`). The reason becomes part
+of the on-disk audit record. Set the Bash `description` to the same short
+sentence so the permission dialog shows it.
 
 The sentinel command is in `permissions.ask` (`settings.json`), so Claude Code
 will present a permission dialog. Do not pre-empt the dialog with
@@ -57,5 +56,5 @@ authoritative source and duplication would confuse the display.
   `AskUserQuestion` only; the sentinel emit in step 4 is still subject to the
   permission dialog and the hook still fires.
 - Detection is strictly on `tool_input.command` matching the
-  `<<WORKFLOW_USER_VERIFIED>>` / `<<WORKFLOW_USER_VERIFIED: <reason>>>` family.
-  Sentinel-shaped strings in stdout (cat/grep output) do not trigger the hook.
+  `<<WORKFLOW_USER_VERIFIED: <reason>>>` form. Sentinel-shaped strings in
+  stdout (cat/grep output) do not trigger the hook.
