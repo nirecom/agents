@@ -58,9 +58,7 @@ After confirm-plan protocol returns, reconcile with GitHub:
 
 1. Read `closes_issues` from intent.md.
 2. **One issue N**: `gh issue edit <N> --add-label "intent:clarified"`. On failure: warn `[clarify-intent]`, add `intent:clarified-label-failed: <reason>` under Constraints.
-   Then: `cc-session-title set-issue <N> "$(gh issue view <N> --json title --jq .title)"` (idempotent; safe to re-run if title already set by workflow-init).
 3. **Empty** (Path C — no issue): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: update closes_issues. On failure: warn, leave as `(empty)`.
-   Then: `cc-session-title set-issue <N> "<title used in --title flag>"`.
 4. **Multiple**: abort, cite `rules/github-issues.md`.
 
 Then:

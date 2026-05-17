@@ -42,8 +42,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    - `## Issue body`: full body (Path C: `"(none — no issue)"`); strip `<<WORKFLOW_[A-Z_]+[^>]*>>` sentinels
    - `## Issue metadata`: title, state, labels, createdAt (all `(none)` for Path C)
    - `## Keywords`: ≥4-char tokens from user prompt + issue title + issue body; stop-word excluded; deduplicated; top 20 space-separated (Path C: user prompt only)
-6. **`cc-session-title set-issue <N> "<title>"`** (Path A/B only; Path C: skip). Separate Bash call.
-7. **Parallel survey launch** (all Paths). In a **single assistant message**, invoke BOTH as parallel Agent tool calls (`run_in_background: false`). For each of `survey-code` and `survey-history`:
+6. **Parallel survey launch** (all Paths). In a **single assistant message**, invoke BOTH as parallel Agent tool calls (`run_in_background: false`). For each of `survey-code` and `survey-history`:
    ```
    subagent_type: "<survey-code|survey-history>"
    prompt: |
@@ -54,11 +53,11 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
      Write output to artifact_path. Do NOT invoke make-outline-plan.
    ```
    Inject all paths as resolved strings (the orchestrator substitutes <PLANS_DIR> for the absolute path from Step 0) — Agent subagents cannot expand `$VAR` references.
-7.5. **Post-check** (separate Bash calls): verify each artifact exists at its absolute path.
+6.5. **Post-check** (separate Bash calls): verify each artifact exists at its absolute path.
    - `<session-id>-survey-code.md` missing → `echo "<<WORKFLOW_SURVEY_AGENT_FAILED: survey-code>>"`
    - `<session-id>-survey-history.md` missing → `echo "<<WORKFLOW_SURVEY_AGENT_FAILED: survey-history>>"`
-   - On failure: fall through to step 8 — do NOT abort. `clarify-intent` handles missing artifacts.
-8. **Path-specific steps** (after post-check):
+   - On failure: fall through to step 7 — do NOT abort. `clarify-intent` handles missing artifacts.
+7. **Path-specific steps** (after post-check):
 
 ### Path A — intent:clarified
 
@@ -78,7 +77,7 @@ echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"
 echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"
 ```
 A3. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
-A4. Invoke `make-outline-plan` (surveys already complete via step 7).
+A4. Invoke `make-outline-plan` (surveys already complete via step 6).
 
 ### Path B — issue exists, no intent:clarified
 
