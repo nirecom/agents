@@ -117,65 +117,65 @@ else
 fi
 teardown_tmp
 
-# --- FT2: OPEN + pending → resume_e (E,F,G,H,J)
+# --- FT2: OPEN + pending → resume_e (E,F,G,H,J,K)
 setup_tmp
 run_triage open_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "E,F,G,H,J" ]; then
-    pass "FT2: OPEN:pending → resume_e (E,F,G,H,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "E,F,G,H,J,K" ]; then
+    pass "FT2: OPEN:pending → resume_e (E,F,G,H,J,K)"
 else
     fail "FT2: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT3: OPEN + appended → resume_h (G,H,J)
+# --- FT3: OPEN + appended → resume_h (G,H,J,K)
 setup_tmp
 run_triage open_with_appended
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_h" ] && [ "$T_NEXT_STEPS" = "G,H,J" ]; then
-    pass "FT3: OPEN:appended → resume_h (G,H,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_h" ] && [ "$T_NEXT_STEPS" = "G,H,J,K" ]; then
+    pass "FT3: OPEN:appended → resume_h (G,H,J,K)"
 else
     fail "FT3: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT4: CLOSED + appended → resume_j (J)
+# --- FT4: CLOSED + appended → resume_j (J,K)
 setup_tmp
 run_triage closed_with_appended_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "J" ]; then
-    pass "FT4: CLOSED:appended → resume_j (J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
+    pass "FT4: CLOSED:appended → resume_j (J,K)"
 else
     fail "FT4: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT5: CLOSED + no sentinel → auto_close_path (E,G,J)
+# --- FT5: CLOSED + no sentinel → auto_close_path (E,G,J,K)
 # Bug #366: previously asserted B,E,G,J. After the fix, Step B (sub-issue gate)
 # is no longer scheduled by auto_close_path — the issue is already CLOSED, so
 # gating its closure on open sub-issues is meaningless and causes spurious
 # failures when the parent has open children that were intentionally left open.
 setup_tmp
 run_triage closed_no_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J" ]; then
-    pass "FT5: CLOSED:(none) → auto_close_path (E,G,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
+    pass "FT5: CLOSED:(none) → auto_close_path (E,G,J,K)"
 else
     fail "FT5: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT5b: CLOSED + no sentinel + open sub-issue → auto_close_path (E,G,J)
+# --- FT5b: CLOSED + no sentinel + open sub-issue → auto_close_path (E,G,J,K)
 # Regression trap for bug #366. If a future change re-introduces B into
 # auto_close_path, downstream execution against this scenario exits non-zero
 # (count=1 open sub-issue); at the triage layer the regression surfaces as
 # T_NEXT_STEPS mismatch (B reappears in the list).
 setup_tmp
 run_triage closed_no_sentinel_open_subissue
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J" ]; then
-    pass "FT5b: CLOSED:(none) + open sub-issue → auto_close_path (E,G,J), no Step B"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
+    pass "FT5b: CLOSED:(none) + open sub-issue → auto_close_path (E,G,J,K), no Step B"
 else
     fail "FT5b: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT6: CLOSED + pending + history present → stuck_sentinel_only (J)
+# --- FT6: CLOSED + pending + history present → stuck_sentinel_only (J,K)
 setup_tmp
 cat >> "$TMP/docs/history.md" <<'EOF'
 
@@ -184,19 +184,19 @@ Background: x
 Changes: y
 EOF
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J" ]; then
-    pass "FT6: CLOSED:pending + history → stuck_sentinel_only (J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
+    pass "FT6: CLOSED:pending + history → stuck_sentinel_only (J,K)"
 else
     fail "FT6: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT7: CLOSED + pending + no history → stuck_append_sentinel (E,J)
+# --- FT7: CLOSED + pending + no history → stuck_append_sentinel (E,J,K)
 setup_tmp
 # history.md intentionally empty
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_append_sentinel" ] && [ "$T_NEXT_STEPS" = "E,J" ]; then
-    pass "FT7: CLOSED:pending + no history → stuck_append_sentinel (E,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_append_sentinel" ] && [ "$T_NEXT_STEPS" = "E,J,K" ]; then
+    pass "FT7: CLOSED:pending + no history → stuck_append_sentinel (E,J,K)"
 else
     fail "FT7: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
