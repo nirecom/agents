@@ -53,7 +53,32 @@ When `NON_GITHUB=0` or exit 2 (unknown, fail-open): continue with steps 1–7 as
 3. **Fetch issue**: `gh issue view <N> --json number,title,body,labels,state,createdAt`
    - Fails → `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort.
    - `CLOSED` → ask: reopen / pick different #N / continue as Path C.
-   - `OPEN` → extract `labels[].name` → step 4.
+   - `OPEN` →
+     (a) `WIP=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check <N> 2>/dev/null)`
+         and capture exit code `WIP_RC=$?`.
+         - `WIP_RC == 0` and `WIP == same` → continue (this session already owns WIP).
+         - `WIP_RC == 0` and `WIP == none` → if `intent:clarified` ∈ labels: call
+           `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` to claim WIP
+           for this session (resume-clarified gap: clarify-intent's set hook only fires when
+           clarify-intent runs in the current session — without this, a new session opening an
+           already-clarified issue never claims WIP). If `intent:clarified` ∉ labels: continue
+           (clarify-intent's Completion section will call `wip-state set <N>` at planning
+           completion). In both sub-cases continue.
+         - `WIP_RC == 0` and `WIP == other` → `AskUserQuestion`:
+           ```
+           question: "Issue #<N> は別 session が作業中の可能性があります。続行しますか？"
+           options:
+             - label: "続行 (recommended)"
+               description: "WIP を自分の session に上書きして作業を進める"
+             - label: "中止"
+               description: "他 session の作業と衝突する可能性 — このセッションを終了する"
+           ```
+           On "続行": call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (overrides fingerprint). On "中止": emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<N>>>"` and stop.
+         - `WIP_RC != 0` or `WIP` empty/unexpected → warn
+           `[workflow-init: wip-state check failed (rc=$WIP_RC, out='$WIP') — proceeding as 'none']`
+           and continue without prompting.
+           (WIP detection is advisory; transient gh/auth failures must not block legitimate work.)
+     (b) extract `labels[].name` → step 4.
 4. **Route**: `intent:clarified` ∈ labels → Path A; otherwise → Path B.
 5. **Write `<PLANS_DIR>/<session-id>-context.md`** (all Paths). Sections:
    - `## Session metadata`: session-id, ISO-8601 timestamp, path (A/B/C), issue-number (`<N>` or `(none)`)

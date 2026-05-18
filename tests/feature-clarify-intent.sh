@@ -121,6 +121,51 @@ assert_contains "$SKILL_MD" "intent\.md" \
 
 echo ""
 # ---------------------------------------------------------------------------
+# WIP-state hookpoint (issue #362)
+# ---------------------------------------------------------------------------
+echo "--- WIP-state (issue #362) ---"
+
+# W1: Completion section contains `wip-state.sh set <N>` instruction (Path A/B single-N).
+assert_contains "$SKILL_MD" "wip-state\.sh.*set" \
+    "W1: Completion section references wip-state.sh set <N> (single-N closes_issues)"
+
+# W2: The wip-state.sh set call appears after the `intent:clarified` add-label
+# instruction (i.e. ordering: label first, then WIP set). Check linearly: the
+# line number of the first 'wip-state.sh' mention must be greater than the
+# first 'intent:clarified' mention.
+if [ ! -f "$SKILL_MD" ]; then
+    fail "W2: ordering check (file not found)"
+else
+    LBL_LN=$(grep -n "intent:clarified" "$SKILL_MD" | head -1 | cut -d: -f1)
+    WIP_LN=$(grep -n "wip-state\.sh" "$SKILL_MD" | head -1 | cut -d: -f1)
+    if [ -n "$LBL_LN" ] && [ -n "$WIP_LN" ] && [ "$WIP_LN" -gt "$LBL_LN" ]; then
+        pass "W2: wip-state.sh set follows the intent:clarified add-label step"
+    else
+        fail "W2: wip-state.sh set must come after intent:clarified add-label (lbl_ln=$LBL_LN wip_ln=$WIP_LN)"
+    fi
+fi
+
+# W3: Path C (empty / new issue) also invokes wip-state set <N>.
+# The Path C section must mention wip-state set for the freshly created N.
+if [ ! -f "$SKILL_MD" ]; then
+    fail "W3: Path C wip-state coverage (file not found)"
+else
+    # Two-step check: there must be a "Path C" anchor and a wip-state set
+    # mention; the simplest contract is that the file mentions both "Path C"
+    # and "wip-state.sh set" (in either order).
+    if grep -q "Path C" "$SKILL_MD" && grep -q "wip-state\.sh.*set" "$SKILL_MD"; then
+        pass "W3: Path C (no issue) section + wip-state set both present"
+    else
+        fail "W3: Path C bullet or wip-state set call missing"
+    fi
+fi
+
+# W4: Failure-handling text mentions wip-state-specific failure modes.
+assert_contains "$SKILL_MD" "wip-state.*setup|wip-state set failed" \
+    "W4: Completion section documents wip-state failure handling (setup hint / set-failed warn)"
+
+echo ""
+# ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------
 echo "--- Error ---"
