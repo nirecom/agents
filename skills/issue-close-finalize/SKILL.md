@@ -126,6 +126,17 @@ Both sub-steps are idempotent (skipped when an equivalent comment already
 exists). The merge SHA from `find-pr-by-marker.sh` is mandatory on the normal
 path — without it the `resolved-by` sentinel cannot be emitted.
 
+## Step K: clear WIP state
+
+```bash
+bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" clear <N>
+```
+
+Sets Projects v2 Status=Done, clears the session-fingerprint field, and deletes
+`$PLANS_DIR/wip-lock-<N>.md`. Idempotent; uniformly warn-and-continue on gh
+failures (canonical close already happened in Step H; Projects v2 desync is
+recoverable by re-running `wip-state clear <N>` manually).
+
 ## End
 
 Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>}
