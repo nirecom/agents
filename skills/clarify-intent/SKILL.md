@@ -54,11 +54,26 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 ## Completion
 
-After confirm-plan protocol returns, reconcile with GitHub:
+After confirm-plan protocol returns, run the non-GitHub gate:
+
+```bash
+NON_GITHUB=0
+"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
+case $rc in
+  0) ;;                # GitHub — proceed with gh
+  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
+  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
+esac
+if [ "${NON_GITHUB:-0}" = "1" ]; then
+  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping clarify-intent gh issue ops]"
+fi
+```
+
+Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_GITHUB=1`):
 
 1. Read `closes_issues` from intent.md.
-2. **One issue N**: `gh issue edit <N> --add-label "intent:clarified"`. On failure: warn `[clarify-intent]`, add `intent:clarified-label-failed: <reason>` under Constraints.
-3. **Empty** (Path C — no issue): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: update closes_issues. On failure: warn, leave as `(empty)`.
+2. **One issue N** (skip when `NON_GITHUB=1`): `gh issue edit <N> --add-label "intent:clarified"`. On failure: warn `[clarify-intent]`, add `intent:clarified-label-failed: <reason>` under Constraints.
+3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: update closes_issues. On failure: warn, leave as `(empty)`.
 4. **Multiple**: abort, cite `rules/github-issues.md`.
 
 Then:
