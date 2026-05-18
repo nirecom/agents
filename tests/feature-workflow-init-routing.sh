@@ -313,14 +313,14 @@ assert_contains "$WORKFLOW_INIT_MD" "wip-state\.sh.*check" \
 assert_contains "$WORKFLOW_INIT_MD" "advisory|proceeding as|wip-state check failed|rc=" \
     "C13b: wip-state check failure-handling policy documented (advisory; proceed as none)"
 
-# C13c: AskUserQuestion Japanese text appears verbatim (or close variant).
-# Required phrases: "別 session が作業中" + "続行" + "中止".
-assert_contains "$WORKFLOW_INIT_MD" "別.*session.*作業中|別session.*作業中" \
-    "C13c: AskUserQuestion text contains '別 session が作業中' Japanese phrasing"
-assert_contains "$WORKFLOW_INIT_MD" "続行" \
-    "C13c2: AskUserQuestion text contains 続行 option"
-assert_contains "$WORKFLOW_INIT_MD" "中止" \
-    "C13c3: AskUserQuestion text contains 中止 option"
+# C13c: AskUserQuestion text identifies the conflict scenario + Continue/Abort options.
+# Public-repo policy: docs must be English (rules/language.md).
+assert_contains "$WORKFLOW_INIT_MD" "in progress in another session|another session" \
+    "C13c: AskUserQuestion text identifies the cross-session conflict scenario"
+assert_contains "$WORKFLOW_INIT_MD" "Continue \(recommended\)|Continue.*recommended" \
+    "C13c2: AskUserQuestion offers a 'Continue (recommended)' option"
+assert_contains "$WORKFLOW_INIT_MD" "Abort" \
+    "C13c3: AskUserQuestion offers an 'Abort' option"
 
 # C13d: resume-clarified gap text — `check == none` + `intent:clarified` ∈ labels
 # triggers wip-state set <N> from workflow-init itself.

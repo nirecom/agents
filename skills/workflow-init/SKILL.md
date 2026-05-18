@@ -59,21 +59,18 @@ When `NON_GITHUB=0` or exit 2 (unknown, fail-open): continue with steps 1–7 as
          - `WIP_RC == 0` and `WIP == same` → continue (this session already owns WIP).
          - `WIP_RC == 0` and `WIP == none` → if `intent:clarified` ∈ labels: call
            `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` to claim WIP
-           for this session (resume-clarified gap: clarify-intent's set hook only fires when
-           clarify-intent runs in the current session — without this, a new session opening an
-           already-clarified issue never claims WIP). If `intent:clarified` ∉ labels: continue
-           (clarify-intent's Completion section will call `wip-state set <N>` at planning
-           completion). In both sub-cases continue.
+           (covers resume of an already-clarified issue, where clarify-intent will not run).
+           Otherwise continue — clarify-intent's Completion section will set WIP itself.
          - `WIP_RC == 0` and `WIP == other` → `AskUserQuestion`:
            ```
-           question: "Issue #<N> は別 session が作業中の可能性があります。続行しますか？"
+           question: "Issue #<N> may be in progress in another session. Continue?"
            options:
-             - label: "続行 (recommended)"
-               description: "WIP を自分の session に上書きして作業を進める"
-             - label: "中止"
-               description: "他 session の作業と衝突する可能性 — このセッションを終了する"
+             - label: "Continue (recommended)"
+               description: "Override the WIP fingerprint with this session and proceed."
+             - label: "Abort"
+               description: "Stop this session to avoid conflicting with the other session."
            ```
-           On "続行": call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (overrides fingerprint). On "中止": emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<N>>>"` and stop.
+           On "Continue": call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (overrides fingerprint). On "Abort": emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<N>>>"` and stop.
          - `WIP_RC != 0` or `WIP` empty/unexpected → warn
            `[workflow-init: wip-state check failed (rc=$WIP_RC, out='$WIP') — proceeding as 'none']`
            and continue without prompting.
