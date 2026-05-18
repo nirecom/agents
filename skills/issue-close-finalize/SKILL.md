@@ -22,6 +22,20 @@ the `resolved-by` sentinel cites the actual merge SHA, not a stale local hash.
 
 ## Pre-flight
 
+```bash
+NON_GITHUB=0
+"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
+case $rc in
+  0) ;;                # GitHub — proceed with gh
+  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
+  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
+esac
+if [ "${NON_GITHUB:-0}" = "1" ]; then
+  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping issue-close-finalize]"
+  exit 0
+fi
+```
+
 `AGENTS_CONFIG_DIR` must be set. Resolve `<owner/repo>` via
 `gh repo view --json owner,name --jq '.owner.login + "/" + .name'`. All
 `gh issue close` and `gh issue comment` invocations need `ISSUE_CLOSE_SKILL=1`

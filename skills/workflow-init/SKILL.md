@@ -29,6 +29,25 @@ Reuse across all subsequent steps in this skill invocation — do not re-resolve
 
 Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
+### Step 0.5 — Non-GitHub remote gate
+
+```bash
+NON_GITHUB=0
+"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
+case $rc in
+  0) ;;                # GitHub — proceed with gh
+  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
+  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
+esac
+if [ "${NON_GITHUB:-0}" = "1" ]; then
+  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping workflow-init issue routing]"
+fi
+```
+
+When `NON_GITHUB=1`: skip steps 1–4 (issue detection, `gh issue view`, and route logic) and proceed directly as **Path C**. Steps 5–7 (context.md write, survey launch, Path C path-specific steps C1–C2) run as normal.
+
+When `NON_GITHUB=0` or exit 2 (unknown, fail-open): continue with steps 1–7 as normal.
+
 1. **Detect `#N`** (regex `#\d+`): 0 → Path C; 1 → step 2; 2+ → `AskUserQuestion` to pick one.
 2. **Session ID**: read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `date +%Y%m%d-%H%M%S`.
 3. **Fetch issue**: `gh issue view <N> --json number,title,body,labels,state,createdAt`
