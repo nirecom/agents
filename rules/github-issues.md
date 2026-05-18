@@ -27,10 +27,7 @@ runs `gh label create --force`).
 
 ## Issue creation
 
-Use `/issue-create` to create task issues from a Claude Code session. The skill
-automatically surveys existing issues for duplicates, parents, and siblings before
-creating a new one — so duplicate/parent/sibling detection is handled; no manual
-prompt needed. The survey drives one of five verdicts:
+`/issue-create` surveys existing issues, then dispatches one of five verdicts:
 
 | Verdict | Action |
 |---|---|
@@ -40,10 +37,9 @@ prompt needed. The survey drives one of five verdicts:
 | `make-parent` | Create the new issue as parent of existing siblings (user confirmation) |
 | `sibling` | Create the new issue with `Related to #N` cross-reference in body |
 
-The skill enforces `type:task` and attaches the new issue to Projects v2 automatically.
-For incident issues, use the `.github/ISSUE_TEMPLATE/incident.yml` web UI template
-or `gh issue create --label "type:incident"` directly. Non-GitHub remotes skip the
-survey phase.
+- `type:task` is enforced; the issue is attached to Projects v2 automatically.
+- Incident issues: use `.github/ISSUE_TEMPLATE/incident.yml` or `gh issue create --label "type:incident"` directly.
+- Non-GitHub remotes skip the survey phase.
 
     /issue-create --title "<title>" --body "<body>" [--label ... --assignee ... --milestone ...]
 
