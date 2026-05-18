@@ -16,6 +16,22 @@ If documentation is missing or the commit hook blocks due to missing documentati
 
 ## Phase 1 (issue-close-stage) pre-flight
 
+```bash
+NON_GITHUB=0
+"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
+case $rc in
+  0) ;;                # GitHub — proceed with gh
+  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
+  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
+esac
+if [ "${NON_GITHUB:-0}" = "1" ]; then
+  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping Phase 1 pre-flight]"
+fi
+```
+
+When `NON_GITHUB=1`: skip the entire pre-flight block below (including `check-phase1-complete.sh`).
+When `NON_GITHUB=0` or exit 2 (fail-open): run the pre-flight as normal.
+
 For each issue N in the session's `closes_issues` list (parsed from
 `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` —
 the `## closes_issues` section), run from the worktree root:
@@ -60,6 +76,21 @@ Sleep between attempts: 2s before attempt 2, 5s before attempt 3.
 After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`.
 
 ### PR step (after push)
+
+```bash
+NON_GITHUB=0
+"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
+case $rc in
+  0) ;;                # GitHub — proceed with gh
+  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
+  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
+esac
+if [ "${NON_GITHUB:-0}" = "1" ]; then
+  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping gh pr create]"
+  # Phase 2: alternative-platform MR creation will be added here.
+  exit 0
+fi
+```
 
 5. **Skip if `ENFORCE_WORKTREE=off`** — direct-main work does not use PRs.
 
