@@ -133,6 +133,10 @@ Changes: Drop B from auto_close_path NEXT_STEPS in issue-close-finalize-triage.s
 Background: find-pr-by-marker.sh was invoked unconditionally in the SKILL.md Pre-flight section before triage ran. Recovery routes (resume_h, stuck_sentinel_only) that do not include Step J would abort with 'PR not found' rather than surfacing the real diagnostic.
 Changes: Remove find-pr-by-marker.sh from Pre-flight. Add Step A.5 with [[ ,, == *,J,* ]] guard so PR/SHA resolution only runs when the resolved-by sentinel step is scheduled. Add static contract test feature-361-finalize-pr-resolution-order.sh verifying ordering and guard presence.
 
+### FEATURE: Add WIP signaling via Projects v2 Status field (#362) (2026-05-18, #362)
+Background: GitHub Issues has only open/closed states; parallel Claude Code sessions have no way to signal one session is actively working an issue. Projects v2 Status and a session-fingerprint text field (sha256(session_id:N)[:8]) provide the signaling layer.
+Changes: New bin/github-issues/wip-state.sh helper with set/check/clear/setup verbs. Integrated into clarify-intent Completion (set after intent:clarified label), workflow-init Step 3 (check on OPEN issue; AskUserQuestion on conflict), and issue-close-finalize Step K (clear on close). Updated issue-close-finalize-triage.sh to include K in all NEXT_STEPS paths. Added tests/feature-wip-state.sh (31 cases), feature-issue-close-finalize-wip-clear.sh (6 cases), and WIP assertions to feature-clarify-intent.sh and feature-workflow-init-routing.sh.
+
 ### FEATURE: /issue-create: auto-survey existing issues before creating (2026-05-18, #378)
 Background: Every time the user creates a new issue via /issue-create, they must manually instruct survey/reopen/sub-issue/sibling steps. This automates all five outcomes inside the skill using a new dispatch wrapper script.
 Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles five verdicts (none/reopen/sub-of/make-parent/sibling). skills/issue-create/SKILL.md rewritten to 4-phase procedure: Gather/Survey/Confirm/Dispatch. rules/github-issues.md updated with new survey behavior and sub-issue node-id clarification.
