@@ -73,7 +73,10 @@ Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_G
 
 1. Read `closes_issues` from intent.md.
 2. **One issue N** (skip when `NON_GITHUB=1`): `gh issue edit <N> --add-label "intent:clarified"`. On failure: warn `[clarify-intent]`, add `intent:clarified-label-failed: <reason>` under Constraints.
-3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: update closes_issues. On failure: warn, leave as `(empty)`.
+   Then (single-N only): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>`.
+   Exit 1 (Status set failure) → warn `[clarify-intent: wip-state set failed — Projects v2 Status not updated]` and continue.
+   Exit 2 (missing env / session-id) → same warn and point at `wip-state setup` / `CLAUDE_ENV_FILE`.
+3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: update closes_issues. Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above). On failure: warn, leave as `(empty)`.
 4. **Multiple**: abort, cite `rules/github-issues.md`.
 
 Then:
