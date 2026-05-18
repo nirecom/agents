@@ -132,3 +132,7 @@ Changes: Drop B from auto_close_path NEXT_STEPS in issue-close-finalize-triage.s
 ### BUGFIX: issue-close-finalize: defer PR/SHA resolution to after triage, guarded by J-step membership (#361) (2026-05-18)
 Background: find-pr-by-marker.sh was invoked unconditionally in the SKILL.md Pre-flight section before triage ran. Recovery routes (resume_h, stuck_sentinel_only) that do not include Step J would abort with 'PR not found' rather than surfacing the real diagnostic.
 Changes: Remove find-pr-by-marker.sh from Pre-flight. Add Step A.5 with [[ ,, == *,J,* ]] guard so PR/SHA resolution only runs when the resolved-by sentinel step is scheduled. Add static contract test feature-361-finalize-pr-resolution-order.sh verifying ordering and guard presence.
+
+### FEATURE: /issue-create: auto-survey existing issues before creating (2026-05-18, #378)
+Background: Every time the user creates a new issue via /issue-create, they must manually instruct survey/reopen/sub-issue/sibling steps. This automates all five outcomes inside the skill using a new dispatch wrapper script.
+Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles five verdicts (none/reopen/sub-of/make-parent/sibling). skills/issue-create/SKILL.md rewritten to 4-phase procedure: Gather/Survey/Confirm/Dispatch. rules/github-issues.md updated with new survey behavior and sub-issue node-id clarification.
