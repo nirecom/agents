@@ -784,6 +784,23 @@ else
 fi
 teardown_mock
 
+# ===========================================================================
+# Test 31: non-numeric <N> → exit 2, no shell injection (set/check/clear).
+# ===========================================================================
+setup_mock
+RC_SET=0; RC_CHECK=0; RC_CLEAR=0
+run_with_timeout 10 bash "$TARGET" set   "42; touch /tmp/T31_INJECT" >/dev/null 2>&1; RC_SET=$?
+run_with_timeout 10 bash "$TARGET" check "42; touch /tmp/T31_INJECT" >/dev/null 2>&1; RC_CHECK=$?
+run_with_timeout 10 bash "$TARGET" clear "42; touch /tmp/T31_INJECT" >/dev/null 2>&1; RC_CLEAR=$?
+if [ "$RC_SET" -eq 2 ] && [ "$RC_CHECK" -eq 2 ] && [ "$RC_CLEAR" -eq 2 ] \
+        && [ ! -f /tmp/T31_INJECT ]; then
+    pass "T31: non-numeric N rejected (exit 2) across set/check/clear; no injection"
+else
+    fail "T31: rc_set=$RC_SET rc_check=$RC_CHECK rc_clear=$RC_CLEAR inject=$([ -f /tmp/T31_INJECT ] && echo yes || echo no)"
+    rm -f /tmp/T31_INJECT 2>/dev/null
+fi
+teardown_mock
+
 # ---------------------------------------------------------------------------
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

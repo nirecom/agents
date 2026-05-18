@@ -85,6 +85,10 @@ preflight_field_ids() {
     fi
 }
 
+validate_n() {
+    [[ "${1:-}" =~ ^[0-9]+$ ]] || { echo "Error: issue number must be a positive integer, got: '${1:-}'" >&2; exit 2; }
+}
+
 resolve_session_id() {
     if [ -z "${CLAUDE_ENV_FILE:-}" ] || [ ! -r "${CLAUDE_ENV_FILE}" ]; then
         echo "Error: CLAUDE_ENV_FILE not set or unreadable — required for fingerprint" >&2
@@ -190,7 +194,7 @@ delete_lock_file() {
 # ---------------------------------------------------------------------------
 cmd_set() {
     local n="$1"
-    [ -z "$n" ] && { echo "Error: issue number required" >&2; exit 2; }
+    validate_n "$n"
     preflight_field_ids
 
     local sid
@@ -262,7 +266,7 @@ cmd_set() {
 # ---------------------------------------------------------------------------
 cmd_check() {
     local n="$1"
-    [ -z "$n" ] && { echo "Error: issue number required" >&2; exit 2; }
+    validate_n "$n"
     preflight_field_ids
 
     local sid
@@ -341,7 +345,7 @@ cmd_check() {
 # ---------------------------------------------------------------------------
 cmd_clear() {
     local n="$1"
-    [ -z "$n" ] && { echo "Error: issue number required" >&2; exit 2; }
+    validate_n "$n"
     preflight_field_ids
 
     local item_id
