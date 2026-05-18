@@ -34,7 +34,7 @@ parse_sentinel() {
 #   CWD must be a working tree root containing docs/history.md.
 check_history_entry() {
     local n="$1"
-    local pattern="^### (#${n}:|[^#].*\(#${n}[,) ])"
+    local pattern="^### (#${n}:|[^#].*#${n}[,) ])"
 
     # (a) header-style file content check + (b) commit reachability check.
     # Subshell with set +o pipefail: grep -q exits early (SIGPIPE to git log) but
