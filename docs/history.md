@@ -121,6 +121,10 @@ Changes: Deleted bin/cc-session-title.py and its two test files (test_feat-cc-se
 Background: Initial removal commit only purged ~/.local/bin/cc-session-title{,.cmd}; the .py file (deployed by an earlier iteration of the launcher) was missed.
 Changes: Extended cleanup arrays in install/linux/dotfileslink.sh and install/win/dotfileslink.ps1 to also remove ~/.local/bin/cc-session-title.py on next dotfileslink run.
 
+### FEATURE: Phase 1: gate gh operations by remote host (2026-05-17, #367)
+Background: agents workflow assumed GitHub remote implicitly. On non-GitHub hosts (generic git hosting) all gh CLI calls failed. Phase 1 auto-detects non-GitHub remote and skips gh operations to allow the rest of the workflow (plan/test/commit/push) to function.
+Changes: Add bin/is-github-dotcom-remote helper (exit 0=GitHub, 1=non-GitHub, 2=unknown). Gate workflow-init, clarify-intent, commit-push, issue-close-stage, issue-close-finalize against non-GitHub remotes. Add tests and manual review checklist.
+
 ### BUGFIX: issue-close-finalize: skip sub-issue gate on auto_close_path when parent already CLOSED (#366) (2026-05-18)
 Background: auto_close_path route (issues closed via 'closes #N' without Phase 1) included Step B (sub-issue gate) in NEXT_STEPS. The gate's intent is pre-close protection; once the parent is CLOSED it only stalls bookkeeping behind long-lived tracker sub-issues indefinitely.
 Changes: Drop B from auto_close_path NEXT_STEPS in issue-close-finalize-triage.sh. Update SKILL.md Step B header to clarify Phase 1 only scope. Add FT5b trap test with closed_no_sentinel_open_subissue fixture.
