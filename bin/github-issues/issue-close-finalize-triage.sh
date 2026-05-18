@@ -7,9 +7,9 @@
 #
 # NEXT_STEPS is a comma-separated list of step letters the caller must execute
 # in order. Step letters: B=sub-issue-gate (Phase 1 only), E=doc-append,
-# G=parent-body-update, H=gh-issue-close, J=resolved-by+sentinel.
-# auto_close_path omits B intentionally — the parent is already CLOSED, so the
-# gate's pre-close protection is moot. (#366)
+# G=parent-body-update, H=gh-issue-close, J=resolved-by+sentinel,
+# K=wip-state-clear. auto_close_path omits B intentionally — the parent is
+# already CLOSED, so the gate's pre-close protection is moot. (#366)
 #
 # Uses `gh --jq` (built into the gh CLI) — no external jq dependency.
 # Exit non-zero on argument / environment / gh failures.
@@ -56,17 +56,17 @@ case "${STATE}:${SENTINEL}" in
         ;;
     OPEN:pending)
         ACTION=resume_e
-        NEXT_STEPS="E,F,G,H,J"
+        NEXT_STEPS="E,F,G,H,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     OPEN:appended)
         ACTION=resume_h
-        NEXT_STEPS="G,H,J"
+        NEXT_STEPS="G,H,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:appended)
         ACTION=resume_j
-        NEXT_STEPS="J"
+        NEXT_STEPS="J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:)
@@ -77,7 +77,7 @@ case "${STATE}:${SENTINEL}" in
         # sub-issues. Step E (doc-append) remains the existing limit and is
         # blocked under ENFORCE_WORKTREE=on. (#366)
         ACTION=auto_close_path
-        NEXT_STEPS="E,G,J"
+        NEXT_STEPS="E,G,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:pending)
@@ -97,10 +97,10 @@ case "${STATE}:${SENTINEL}" in
         fi
         if [ "$HIST_HIT" -eq 1 ]; then
             ACTION=stuck_sentinel_only
-            NEXT_STEPS="J"
+            NEXT_STEPS="J,K"
         else
             ACTION=stuck_append_sentinel
-            NEXT_STEPS="E,J"
+            NEXT_STEPS="E,J,K"
         fi
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;

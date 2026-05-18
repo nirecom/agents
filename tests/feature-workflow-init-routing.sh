@@ -302,6 +302,43 @@ assert_contains "$AGENTS_CLAUDE_MD" "/workflow-init" \
 assert_contains "$LABELS_YML" "intent:clarified" \
     "C12b: .github/labels.yml contains intent:clarified"
 
+echo ""
+echo "--- C13: workflow-init step 3 OPEN branch wip-state hookpoint (#362) ---"
+
+# C13a: SKILL.md step 3 OPEN branch contains `wip-state.sh check <N>`.
+assert_contains "$WORKFLOW_INIT_MD" "wip-state\.sh.*check" \
+    "C13a: workflow-init SKILL.md references wip-state.sh check <N>"
+
+# C13b: failure-handling policy — when wip-state check fails (rc != 0), treat as 'none' and proceed.
+assert_contains "$WORKFLOW_INIT_MD" "advisory|proceeding as|wip-state check failed|rc=" \
+    "C13b: wip-state check failure-handling policy documented (advisory; proceed as none)"
+
+# C13c: AskUserQuestion text identifies the conflict scenario + Continue/Abort options.
+# Public-repo policy: docs must be English (rules/language.md).
+assert_contains "$WORKFLOW_INIT_MD" "in progress in another session|another session" \
+    "C13c: AskUserQuestion text identifies the cross-session conflict scenario"
+assert_contains "$WORKFLOW_INIT_MD" "Continue \(recommended\)|Continue.*recommended" \
+    "C13c2: AskUserQuestion offers a 'Continue (recommended)' option"
+assert_contains "$WORKFLOW_INIT_MD" "Abort" \
+    "C13c3: AskUserQuestion offers an 'Abort' option"
+
+# C13d: resume-clarified gap text — `check == none` + `intent:clarified` ∈ labels
+# triggers wip-state set <N> from workflow-init itself.
+# Look for the conjunction: 'none' AND 'intent:clarified' AND 'wip-state' set.
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "C13d: workflow-init resume-clarified branch (file not found)"
+elif grep -q "none" "$WORKFLOW_INIT_MD" \
+   && grep -q "intent:clarified" "$WORKFLOW_INIT_MD" \
+   && grep -qE "wip-state.*set|set.*wip-state" "$WORKFLOW_INIT_MD"; then
+    pass "C13d: workflow-init resume-clarified branch — wip-state set fires on (none + intent:clarified)"
+else
+    fail "C13d: resume-clarified branch text missing (need none + intent:clarified + wip-state set)"
+fi
+
+# C13e: abort path emits WORKFLOW_ABORTED_WIP_CONFLICT sentinel.
+assert_contains "$WORKFLOW_INIT_MD" "WORKFLOW_ABORTED_WIP_CONFLICT" \
+    "C13e: 'abort' branch emits <<WORKFLOW_ABORTED_WIP_CONFLICT>> sentinel"
+
 # ============================================================
 echo ""
 echo "=== Summary ==="
