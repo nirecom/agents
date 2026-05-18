@@ -27,10 +27,19 @@ runs `gh label create --force`).
 
 ## Issue creation
 
-Use `/issue-create` to create task issues from a Claude Code session. The skill
-enforces `type:task` and attaches the new issue to Projects v2 automatically.
-For incident issues, use the `.github/ISSUE_TEMPLATE/incident.yml` web UI template
-or `gh issue create --label "type:incident"` directly.
+`/issue-create` surveys existing issues, then dispatches one of five verdicts:
+
+| Verdict | Action |
+|---|---|
+| `none` | Create a new standalone issue |
+| `reopen` | Reopen an existing duplicate (with user confirmation) |
+| `sub-of` | Create the new issue and attach it under an existing parent |
+| `make-parent` | Create the new issue as parent of existing siblings (user confirmation) |
+| `sibling` | Create the new issue with `Related to #N` cross-reference in body |
+
+- `type:task` is enforced; the issue is attached to Projects v2 automatically.
+- Incident issues: use `.github/ISSUE_TEMPLATE/incident.yml` or `gh issue create --label "type:incident"` directly.
+- Non-GitHub remotes skip the survey phase.
 
     /issue-create --title "<title>" --body "<body>" [--label ... --assignee ... --milestone ...]
 
@@ -88,8 +97,9 @@ Use GitHub Sub-issues for phase/parallel breakdowns. The official `gh` CLI does
 not yet support sub-issues (cli/cli#10298), so the skill uses `gh api` directly.
 
 Key fact: `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` expects the
-**database id** (integer) in `sub_issue_id`, not the issue number. Use
-`gh issue view <N> --json id --jq .id` to fetch it.
+child's **GraphQL node id** in `sub_issue_id`, not the issue number. Use
+`gh issue view <N> --json id --jq .id` to fetch it (`.id` returns the node id,
+e.g. `I_kwDO...`). The path parameter `{N}` is the parent's issue number (integer).
 
 The close path's Step B gates the parent: if any child issue is in state `open`,
 closing the parent is blocked. Cancelled/migrated children must already be closed
