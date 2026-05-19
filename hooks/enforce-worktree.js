@@ -438,6 +438,12 @@ function getWorktreeEndDir() {
   return path.join(getWorkflowPlansDir(), "worktree-end");
 }
 
+const MARKER_PREFIXES = {
+  BRANCH_DELETE: "pending-branch-delete-",
+  CWD_UNLOCK: "pending-cwd-unlock-",
+};
+const ALL_MARKER_PREFIXES = Object.values(MARKER_PREFIXES);
+
 // Stable per-repo id for marker filenames. Computed from the absolute path of
 // the repo's git-common-dir (shared across all linked worktrees of the same repo)
 // so every worktree of repo R produces the same id.
@@ -454,17 +460,17 @@ function getRepoId(repoRoot) {
   } catch (e) { return null; }
 }
 
-// Compute the marker file path for a given (repoRoot, branch) pair.
-// Filename: pending-branch-delete-<repo-id>--<encodeURIComponent(branch)>
+// Compute the marker file path for a given (repoRoot, branch, prefix) triple.
+// Filename: <prefix><repo-id>--<encodeURIComponent(branch)>
 // encodeURIComponent makes any git-legal branch name filesystem-safe
 // (e.g. feature/foo → feature%2Ffoo, zero collision risk).
 // Returns null when repo-id resolution fails — caller MUST fail-closed.
-function getMarkerPath(repoRoot, branch) {
+function getMarkerPath(repoRoot, branch, prefix = MARKER_PREFIXES.BRANCH_DELETE) {
   if (!branch || typeof branch !== "string") return null;
   try {
     const id = getRepoId(repoRoot);
     if (!id) return null;
-    const fname = "pending-branch-delete-" + id + "--" + encodeURIComponent(branch);
+    const fname = prefix + id + "--" + encodeURIComponent(branch);
     return path.join(getWorktreeEndDir(), fname);
   } catch (e) { return null; }
 }
@@ -577,13 +583,13 @@ function extractRemoveItemPositionals(afterCmd) {
   return results;
 }
 
-// True if cmd is an isolated delete of the pending-branch-delete marker file
-// AND the branch recorded in the marker no longer exists in repoRoot.
+// True if cmd is an isolated delete of a marker file AND the marker's recorded
+// branch no longer exists in repoRoot. Dispatches deletability check by prefix.
 // /worktree-end Step 6g must remove the marker after Step 6f deletes the branch.
 // CWD may have reset to main worktree on Windows after Step 6c (worktree remove),
 // so the delete needs an explicit main-worktree exception.
 // Fail-closed on any unexpected input, multi-target invocation, or non-1 git exit.
-function isAllowedMarkerDelete(cmd, repoRoot) {
+function isAllowedMarkerDelete(cmd, repoRoot, prefixes = ALL_MARKER_PREFIXES) {
   if (hasShellChaining(cmd)) return false;
   if (!repoRoot) return false;
   const isRm = /^\s*rm(?:\s|$)/.test(cmd);
@@ -631,19 +637,35 @@ function isAllowedMarkerDelete(cmd, repoRoot) {
                 nTarget.startsWith(wtDir + "/");
   if (!inDir) return false;
 
-  // Validate: filename must start with pending-branch-delete-<this-repo-id>--.
+  // Validate: filename must start with <known-prefix><this-repo-id>--.
   const id = getRepoId(repoRoot);
   if (!id) return false;
   const targetBase = path.basename(target);
   const targetBaseNorm = process.platform === "win32" ? targetBase.toLowerCase() : targetBase;
-  const expectedPrefix = process.platform === "win32"
-    ? ("pending-branch-delete-" + id + "--").toLowerCase()
-    : ("pending-branch-delete-" + id + "--");
-  if (!targetBaseNorm.startsWith(expectedPrefix)) return false;
 
-  // Read marker. ENOENT → no-op delete is allowed (stale marker cleanup).
-  // Any other read error → fail-closed.
-  // Use nTarget (normalized) to match the path that passed validation.
+  let matchedPrefix = null;
+  for (const px of prefixes) {
+    const expected = process.platform === "win32"
+      ? (px + id + "--").toLowerCase()
+      : (px + id + "--");
+    if (targetBaseNorm.startsWith(expected)) { matchedPrefix = px; break; }
+  }
+  if (!matchedPrefix) return false;
+
+  // Dispatch deletability check by matched prefix.
+  if (matchedPrefix === MARKER_PREFIXES.BRANCH_DELETE) {
+    return isBranchDeleteMarkerDeletable(nTarget, repoRoot);
+  }
+  if (matchedPrefix === MARKER_PREFIXES.CWD_UNLOCK) {
+    return isCwdUnlockMarkerDeletable(nTarget);
+  }
+  return false;
+}
+
+// Extracted from isAllowedMarkerDelete (behavior unchanged from pre-PR1).
+// Allows deletion of a pending-branch-delete- marker when the recorded branch
+// no longer exists. ENOENT → no-op (stale marker cleanup) is also allowed.
+function isBranchDeleteMarkerDeletable(nTarget, repoRoot) {
   let content;
   try { content = fs.readFileSync(nTarget, "utf8"); }
   catch (e) { return e.code === "ENOENT"; }
@@ -665,14 +687,22 @@ function isAllowedMarkerDelete(cmd, repoRoot) {
   return true;
 }
 
+// Allows deletion of a pending-cwd-unlock- marker once deferred cleanup
+// completes. The marker is removed by bin/worktree-end-resume-load.js
+// after cleanup succeeds. ENOENT → no-op (stale marker) is also allowed.
+function isCwdUnlockMarkerDeletable(nTarget) {
+  try { fs.accessSync(nTarget); }
+  catch (e) { return e.code === "ENOENT"; }
+  return true;
+}
+
 /**
- * True if filePath is a valid pending-branch-delete marker location for repoRoot.
- * Validates: path is under <workflow-plans>/worktree-end/, filename starts with
- * pending-branch-delete-<this-repo-id>--, and has a non-empty branch suffix.
- * Allows Write/Edit tool calls to the marker from the main worktree:
- * /worktree-end writes this file before calling git branch -d.
+ * True if filePath is a valid marker location for repoRoot under one of the
+ * given prefixes. Validates: path under <workflow-plans>/worktree-end/, filename
+ * starts with <prefix><this-repo-id>--, and has a non-empty branch suffix.
+ * Allows Write/Edit tool calls to markers from the main worktree.
  */
-function isMarkerFilePath(filePath, repoRoot) {
+function isMarkerFilePath(filePath, repoRoot, prefixes = ALL_MARKER_PREFIXES) {
   if (!filePath || !repoRoot) return false;
 
   const id = getRepoId(repoRoot);
@@ -697,13 +727,18 @@ function isMarkerFilePath(filePath, repoRoot) {
 
   const targetBase = path.basename(filePath);
   const targetBaseNorm = process.platform === "win32" ? targetBase.toLowerCase() : targetBase;
-  const expectedPrefix = process.platform === "win32"
-    ? ("pending-branch-delete-" + id + "--").toLowerCase()
-    : ("pending-branch-delete-" + id + "--");
-  if (!targetBaseNorm.startsWith(expectedPrefix)) return false;
+
+  let matchedPrefix = null;
+  for (const px of prefixes) {
+    const expected = process.platform === "win32"
+      ? (px + id + "--").toLowerCase()
+      : (px + id + "--");
+    if (targetBaseNorm.startsWith(expected)) { matchedPrefix = expected; break; }
+  }
+  if (!matchedPrefix) return false;
 
   // Branch portion (after `--`) must be non-empty.
-  return targetBase.length > expectedPrefix.length;
+  return targetBase.length > matchedPrefix.length;
 }
 
 /**
@@ -1550,4 +1585,7 @@ module.exports = {
   parseGitCPath,
   setPayloadDerivedPaths,
   _getPayloadDerivedPaths,
+  MARKER_PREFIXES,
+  getRepoId,
+  getMarkerPath,
 };
