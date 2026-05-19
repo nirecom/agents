@@ -155,6 +155,7 @@ expect_pass  "D9: Get-LocalUser (query)" '{"tool_name":"Bash","tool_input":{"com
 expect_block "D10: useradd" '{"tool_name":"Bash","tool_input":{"command":"useradd foo"}}'
 expect_block "D11: userdel" '{"tool_name":"Bash","tool_input":{"command":"userdel foo"}}'
 expect_block "D12: usermod -G" '{"tool_name":"Bash","tool_input":{"command":"usermod -G wheel foo"}}'
+expect_block "D12b: usermod -aG (compound flag)" '{"tool_name":"Bash","tool_input":{"command":"usermod -aG sudo alice"}}'
 expect_pass  "D13: usermod -c (no -G)" "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"usermod -c 'Foo Bar' foo\"}}"
 expect_block "D14: groupadd" '{"tool_name":"Bash","tool_input":{"command":"groupadd wheel"}}'
 expect_block "D15: groupdel" '{"tool_name":"Bash","tool_input":{"command":"groupdel wheel"}}'
@@ -234,6 +235,44 @@ expect_block "BP3: inline 'export SYSTEM_OPS_APPROVED=1 && winget install' still
 
 expect_block "BP4: inline 'SYSTEM_OPS_APPROVED=1 winget install' still blocked" \
     '{"tool_name":"Bash","tool_input":{"command":"SYSTEM_OPS_APPROVED=1 winget install jq"}}'
+
+# ============================================================================
+# Tool name coverage — runInTerminal and runCommands
+# ============================================================================
+run_hook_block_env '{"tool_name":"runInTerminal","tool_input":{"command":"winget install jq"}}'
+if [ "$RC" -eq 2 ]; then
+    pass "TOOL1: runInTerminal winget install blocked"
+else
+    fail "TOOL1: runInTerminal — expected exit 2 (rc=$RC stderr=$ERR)"
+fi
+
+run_hook_block_env '{"tool_name":"runCommands","tool_input":{"commands":["winget install jq"]}}'
+if [ "$RC" -eq 2 ]; then
+    pass "TOOL2: runCommands winget install blocked"
+else
+    fail "TOOL2: runCommands — expected exit 2 (rc=$RC stderr=$ERR)"
+fi
+
+run_hook_block_env '{"tool_name":"runCommands","tool_input":{"commands":["ls","winget install jq"]}}'
+if [ "$RC" -eq 2 ]; then
+    pass "TOOL3: runCommands multi-cmd with winget blocked"
+else
+    fail "TOOL3: runCommands multi-cmd — expected exit 2 (rc=$RC stderr=$ERR)"
+fi
+
+run_hook_block_env '{"tool_name":"runCommands","tool_input":{"commands":["ls","pwd"]}}'
+if [ "$RC" -eq 0 ]; then
+    pass "TOOL4: runCommands safe commands pass"
+else
+    fail "TOOL4: runCommands safe — expected exit 0 (rc=$RC stderr=$ERR)"
+fi
+
+run_hook_block_env '{"tool_name":"OtherTool","tool_input":{"command":"winget install jq"}}'
+if [ "$RC" -eq 0 ]; then
+    pass "TOOL5: non-Bash tool_name passes (hook scoped to Bash/runInTerminal/runCommands)"
+else
+    fail "TOOL5: OtherTool — expected exit 0 (rc=$RC stderr=$ERR)"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

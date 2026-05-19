@@ -1,5 +1,24 @@
 # Operational Safety
 
+## System-State-Changing Operations
+
+The following categories require **explicit user approval** before execution.
+The `hooks/enforce-system-ops.js` PreToolUse hook enforces this automatically.
+Escalate via Rule 2 of `rules/user-escalation.md`.
+
+| Category | Blocked commands |
+|---|---|
+| A — Package install | `winget install/uninstall/upgrade`, `choco install`, `scoop install`, `brew install/uninstall`, `apt/apt-get install/remove/upgrade`, `npm -g`, `pnpm -g`, `yarn global add`, `pip install` (non-user), `pipx install` |
+| B — Power | `Restart-Computer`, `Stop-Computer`, `shutdown /r\|/h\|/s`, `reboot`, `halt`, `poweroff` |
+| C — Service | `Stop-Service`, `Set-Service`, `Remove-Service`, `sc.exe stop\|delete\|config`, `systemctl stop\|disable\|mask`, `service <name> stop` |
+| D — User/group | `New-LocalUser`, `Remove-LocalUser`, `Add/Remove-LocalGroupMember`, `net user /add\|/delete`, `net localgroup /add`, `useradd`, `userdel`, `usermod -G`, `groupadd`, `groupdel` |
+| E — System config | `reg delete HKLM\|HKCR`, `Remove-Item HKLM:`, `bcdedit /set\|delete\|create`, `Set-ExecutionPolicy`, `Disable/Enable-WindowsOptionalFeature`, `Add/Remove-WindowsCapability` |
+| F — Disk/FS | `format`, `diskpart`, `mkfs.*`, `dd if/of=/dev/*`, `wsl --unregister` |
+
+**Bypass for installer scripts:** set `SYSTEM_OPS_APPROVED=1` in the environment that launches
+Claude Code. Inline prefix (`SYSTEM_OPS_APPROVED=1 cmd`) does NOT bypass the hook.
+See `rules/installer.md` for the full list of covered commands and bypass details.
+
 ## Risky Operations Decision Path
 
 The following are all treated with the same decision path:

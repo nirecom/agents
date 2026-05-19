@@ -8,6 +8,8 @@ When running git commands outside the current working directory, always use
 CORRECT: `git -C /path/to/repo log --oneline -5`
 WRONG:   `cd /path/to/repo && git log --oneline -5`
 
+`enforce-worktree.js` / `workflow-gate.js` honor `-C`'s target as the worktree (not CWD).
+
 ## Write Commands
 
 Run git write commands (any subcommand that modifies state) as **separate sequential Bash calls** — do NOT chain them with `&&`.
