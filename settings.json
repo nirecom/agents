@@ -390,6 +390,16 @@
         ]
       },
       {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-system-ops.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Edit|Write|MultiEdit|editFiles|NotebookEdit|runInTerminal|runCommands",
         "hooks": [
           {

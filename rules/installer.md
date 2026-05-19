@@ -8,6 +8,17 @@
   - Never patch binary or encrypted config files to inject settings. (Precedent: Google Japanese Input config.)
 - **Clean up mistakes immediately.** If a registry entry turns out to be ineffective, delete it before proceeding with any other fix.
 
+## System-Wide Package Managers
+
+System-wide package install/uninstall/upgrade requires explicit user approval (Rule 2 of
+`rules/user-escalation.md`). The `hooks/enforce-system-ops.js` PreToolUse hook enforces
+this — see the hook source for the exact command set. Per-repo and user-scope variants
+(e.g. `npm install` without `-g`, `pip install --user`, `uv pip install`) pass through.
+
+Legitimate installer scripts under `install/` have a controlled bypass; see those scripts
+for the mechanism. The protection is structural (inherited env only), so model-issued
+inline forms cannot bypass.
+
 ## Winget Install
 
 - Always check `$LASTEXITCODE` after `winget install` and report failure with exit code and re-run guidance
