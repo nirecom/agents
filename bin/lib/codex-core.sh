@@ -98,3 +98,123 @@ codex_core_emit_failed() {
   echo "## ${CODEX_LABEL}: FAILED — ${reason}"
   exit 0
 }
+
+# ---------------------------------------------------------------------------
+# Round-log SSOT (issue #329)
+# ---------------------------------------------------------------------------
+
+codex_core_severity_tokens() { printf 'HIGH\nMEDIUM\nLOW\n'; }
+
+# Hard-prerequisite guard. Reviewer scripts MUST call this after codex_core_check_cli.
+codex_core_check_jq() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '## %s: FAILED — jq not installed (required for round-log JSON encoding)\n\nInstall jq:\n  - Windows: winget install jqlang.jq\n  - macOS:   brew install jq\n  - Debian/Ubuntu: sudo apt install jq\n\nSee docs/setup.md for full prerequisite list.\n' \
+      "${CODEX_LABEL:-Codex Review}"
+    return 1
+  fi
+  return 0
+}
+
+# Appends one JSONL row. Returns 0 on success, 1 on any write failure (fail-closed).
+codex_core_round_log_append() {
+  local log_path="$1" session_id="$2" label="$3" verdict="$4" sev_summary="${5:-}"
+  local parent; parent=$(dirname "$log_path")
+  mkdir -p "$parent" 2>/dev/null || return 1
+  local current_round
+  current_round=$(( $(codex_core_round_count "$log_path" "$session_id" "$label") + 1 ))
+  jq -nc \
+    --arg session "$session_id" \
+    --arg label   "$label" \
+    --arg verdict "$verdict" \
+    --arg sev     "$sev_summary" \
+    --argjson round "$current_round" \
+    '{ts:(now|todate), session:$session, label:$label, round:$round, verdict:$verdict, severity_summary:$sev}' \
+    >> "$log_path" 2>/dev/null || return 1
+  return 0
+}
+
+# Prints the number of rows in log_path matching (session_id, label). Prints 0 if file missing.
+codex_core_round_count() {
+  local log_path="$1" session_id="$2" label="$3"
+  [[ -f "$log_path" && -r "$log_path" ]] || { echo 0; return 0; }
+  jq -s --arg s "$session_id" --arg l "$label" \
+    '[.[] | select(.session==$s and .label==$l)] | length' \
+    "$log_path" 2>/dev/null || echo 0
+}
+
+# codex_core_hard_cap_check <log> <session> <label> <cap> <extensions_used> <max_extensions>
+# limit = cap + extensions_used. Returns 2 when round_count >= limit.
+codex_core_hard_cap_check() {
+  local log_path="$1" session_id="$2" label="$3" cap="$4" extensions_used="$5" max_extensions="$6"
+  local count limit ceiling_note
+  count=$(codex_core_round_count "$log_path" "$session_id" "$label")
+  limit=$(( cap + extensions_used ))
+  if (( count >= limit )); then
+    if (( extensions_used >= max_extensions )); then
+      ceiling_note="absolute ceiling reached"
+    else
+      ceiling_note="extension available"
+    fi
+    echo "## ${CODEX_LABEL:-$label}: FAILED — round cap reached (${count}/${limit} rounds, cap=${cap} extensions_used=${extensions_used} max_extensions=${max_extensions}; ${ceiling_note})"
+    return 2
+  fi
+  return 0
+}
+
+# codex_core_validate_severity --mode=<prefixed-numbered|grouped> <file>
+# Returns 0 (APPROVED/valid), 3 (MALFORMED/format violation).
+codex_core_validate_severity() {
+  local mode=""
+  case "${1:-}" in
+    --mode=*) mode="${1#--mode=}"; shift ;;
+    *) echo "## ${CODEX_LABEL:-Validator}: FAILED — codex_core_validate_severity: --mode required"; return 3 ;;
+  esac
+  local f="${1:-}"
+  [[ -f "$f" ]] || { echo "## ${CODEX_LABEL:-Validator}: FAILED — validate_severity: file not found: $f"; return 3; }
+  local body verdict
+  body=$(<"$f")
+  verdict=$(printf '%s\n' "$body" | awk 'NF{print; exit}')
+  case "$mode" in
+    prefixed-numbered)
+      if [[ "$verdict" =~ ^APPROVED($|\ .+$) ]]; then return 0; fi
+      if [[ "$verdict" != "NEEDS_REVISION" ]]; then
+        echo "## ${CODEX_LABEL:-Validator}: FAILED — MALFORMED: first token must be exactly 'APPROVED' (optionally followed by ' <justification>') or 'NEEDS_REVISION', got: $verdict"
+        return 3
+      fi
+      local concerns; concerns=$(printf '%s\n' "$body" | awk 'NR>1 && NF')
+      [[ -n "$concerns" ]] || { echo "## ${CODEX_LABEL:-Validator}: FAILED — severity format violation: NEEDS_REVISION with no concerns"; return 3; }
+      while IFS= read -r line; do
+        [[ "$line" =~ ^[0-9]+\.\ \[(HIGH|MEDIUM|LOW)\]\ .+ ]] || {
+          echo "## ${CODEX_LABEL:-Validator}: FAILED — severity format violation: concern does not match '<N>. [<SEV>] ...': $line"
+          return 3
+        }
+      done <<<"$concerns"
+      return 0 ;;
+    grouped)
+      if grep -qiE '^no issues? found\.?$' "$f" 2>/dev/null; then return 0; fi
+      if ! grep -qE '^## (HIGH|MEDIUM|LOW)\b' "$f" 2>/dev/null; then
+        echo "## ${CODEX_LABEL:-Validator}: FAILED — severity format violation: grouped mode requires '## HIGH|MEDIUM|LOW' headers or 'No issues found'"
+        return 3
+      fi
+      local err
+      err=$(awk '
+        BEGIN { in_sec=0; saw_body=0; sec="" }
+        /^## (HIGH|MEDIUM|LOW)([[:space:]]|$)/ {
+          if (in_sec && !saw_body) { print "section " sec " has no bullets or (none)"; exit 1 }
+          in_sec=1; saw_body=0; sec=$0; next
+        }
+        /^## / { if (in_sec && !saw_body) { print "section " sec " has no bullets or (none)"; exit 1 } in_sec=0; next }
+        in_sec && NF {
+          if ($0 ~ /^[[:space:]]*(-|\*|[0-9]+\.)[[:space:]]/) { saw_body=1; next }
+          if ($0 ~ /^[[:space:]]*\(none\)[[:space:]]*$/)       { saw_body=1; next }
+          print "finding outside group section (mixed format): " $0; exit 1
+        }
+        END { if (in_sec && !saw_body) { print "section " sec " has no bullets or (none)"; exit 1 } }
+      ' "$f" 2>&1) || {
+        echo "## ${CODEX_LABEL:-Validator}: FAILED — severity format violation: ${err:-grouped body check failed}"
+        return 3
+      }
+      return 0 ;;
+    *) echo "## ${CODEX_LABEL:-Validator}: FAILED — validate_severity: unknown mode: $mode"; return 3 ;;
+  esac
+}

@@ -215,6 +215,37 @@ else
 fi
 
 echo ""
+# ---------------------------------------------------------------------------
+# Issue #329: Accepted Tradeoffs section + carry-over log symmetry
+# ---------------------------------------------------------------------------
+echo "--- Issue #329 ---"
+
+AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SKILL_REPO="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
+PLANNER_REPO="$AGENTS_ROOT/agents/outline-planner.md"
+
+# #329-1: Accepted Tradeoffs section in SKILL.md
+if grep -qF "Accepted Tradeoffs" "$SKILL_REPO" 2>/dev/null; then
+    pass "#329-1: 'Accepted Tradeoffs' section present in make-outline-plan/SKILL.md"
+else
+    fail "#329-1: 'Accepted Tradeoffs' section missing from make-outline-plan/SKILL.md"
+fi
+
+# #329-2: Accepted Tradeoffs section in outline-planner.md
+if grep -qF "Accepted Tradeoffs" "$PLANNER_REPO" 2>/dev/null; then
+    pass "#329-2: 'Accepted Tradeoffs' section present in agents/outline-planner.md"
+else
+    fail "#329-2: 'Accepted Tradeoffs' section missing from agents/outline-planner.md"
+fi
+
+# #329-3: carry-over log / planner-response symmetry with detail-plan
+if grep -qE "round.*log|carry.*over|planner-response" "$SKILL_REPO" 2>/dev/null; then
+    pass "#329-3: carry-over log / round-log / planner-response mention in make-outline-plan/SKILL.md"
+else
+    fail "#329-3: carry-over/round-log/planner-response missing from make-outline-plan/SKILL.md"
+fi
+
+echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 

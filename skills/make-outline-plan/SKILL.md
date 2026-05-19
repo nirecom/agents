@@ -102,11 +102,23 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    - Run `/deep-research` with the specified question.
    - Re-prompt outline-planner with the research findings. (Research budget: 2 rounds.)
 
+4a. **Accepted Tradeoffs carry-forward** (before invoking outline-planner on initial draft):
+   1. Run `extract-accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md` and capture the block.
+   2. Instruct outline-planner to copy that block VERBATIM into `<session-id>-outline.md` as a
+      top-level `## Accepted Tradeoffs` section. Outline-planner MAY append additional tradeoffs
+      newly settled at the outline stage as further `### <title>` entries — it MUST NOT remove
+      or rephrase intent-stage tradeoffs.
+   3. After outline-planner returns, verify via:
+      `grep -q '^## Accepted Tradeoffs$' <PLANS_DIR>/<session-id>-outline.md`
+      If absent, re-prompt outline-planner once with the missing-section reminder; second
+      omission → halt with an explicit error to the user.
+
+   `EXTENSIONS_USED` counter initialized to 0 at loop start.
+
 5. **Review the approach with codex first, fall back to Claude if unavailable.**
    a. Write the outline-planner's output to the Claude-managed drafts directory
       (survives compaction; OS temp does not):
       `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`
-
 
    b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
       If `<PLANS_DIR>/<session-id>-intent.md` exists and the context file has not
@@ -119,20 +131,72 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       ```
       If the intent file does not exist or is empty, skip the context file.
    c. Run via Bash:
-      `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-outline-draft.md --format outline-plan --context <PLANS_DIR>/drafts/<session-id>-context.md --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"`
-      (omit `--context <PLANS_DIR>/drafts/<session-id>-context.md` when no context file was created in step b; always include the core-principles context).
+      ```
+      review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-outline-draft.md \
+                        --format outline-plan \
+                        --session-id <session-id> \
+                        --log-dir <PLANS_DIR>/drafts \
+                        --cap 1 --max-extensions 1 --extensions-used $EXTENSIONS_USED \
+                        --accepted-tradeoffs <PLANS_DIR>/<session-id>-outline.md \
+                        [--context <PLANS_DIR>/drafts/<session-id>-context.md] \
+                        [--context <PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md] \
+                        --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"
+      ```
+      (omit the `--context` args that point to files that don't yet exist)
    d. Parse the first line:
    - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
-     - `APPROVED` → proceed to step 7.
-     - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
+     - `APPROVED` (bare or `APPROVED <justification>`) → proceed to step 7.
+     - `MISSING_ALTERNATIVE: …` → extract numbered concerns → persist raw codex output → Step 5d.1 → Step 5e → proceed to step 6.
+     - `FAILED — round cap reached` → Step 6 (cap-menu dispatch).
      - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
-   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+   - `SKIPPED` / `FAILED — …` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
 
-6. If verdict is `MISSING_ALTERNATIVE: <description>`:
-   - Send the concern back to outline-planner for revision.
-   - Re-review from step 5. Repeat for at most **1 revision round** (`revision_rounds`).
-   - On cap: tell the user which concern is blocking and ask whether to add a missing
-     alternative, approve as-is, or change the scope.
+   d.1. **Raw-codex persistence** (on NEEDS_REVISION / MISSING_ALTERNATIVE):
+      Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output -->` from
+      review-plan-codex stdout and write it to:
+          `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
+      (N = current round = count of prior outline-plan round-log entries + 1).
+      Pass this path as a literal string in the next outline-planner invocation so the planner
+      reads the raw codex output directly via Read tool.
+
+   e. **Symmetric round log + planner-response trailer** (after every NEEDS_REVISION round):
+      1. Append to `<PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md`:
+         ```
+         ## Round <N> (<ISO-timestamp>)
+         Verdict: NEEDS_REVISION
+         Concerns (verbatim from codex):
+         <numbered concern lines>
+
+         Planner's intended response (next round):
+         <extracted verbatim from outline-planner's ROUND_RESPONSE trailer>
+         ```
+      2. Extract planner trailer per `agents/outline-planner.md` contract (`<!-- begin-planner-response -->` block).
+      3. Codex receives this log via `--context` on the next round (Step 5c).
+
+6. **Cap-reach dispatch** (review-plan-codex returned `FAILED — round cap reached`):
+   a. `BUDGET_REMAINING = MAX_EXTENSIONS - EXTENSIONS_USED`
+   b. Derive `ALL_HIGH` from concerns in `<session-id>-outline-codex-round-<N>-raw.md`.
+   c. CC re-reads draft + concerns → `CC_AGREES_HIGH`.
+   d. ```
+      menu_json=$(review-loop-cap-menu \
+        --budget-remaining $BUDGET_REMAINING \
+        --all-high $ALL_HIGH --cc-agrees-high $CC_AGREES_HIGH \
+        --label "Outline Plan Review")
+      rc=$?
+      ```
+   e. Dispatch:
+      - `rc==42` (AUTO_EXTEND) → `EXTENSIONS_USED += 1`; loop to 5c
+      - `rc==0`, user picks `land`   → Step 7
+      - `rc==0`, user picks `adjust` → halt; re-run `/clarify-intent`
+      - `rc==0`, user picks `extend` → `EXTENSIONS_USED += 1`; loop to 5c
+      - `rc==2` (arg error)          → halt; surface helper stderr
+
+   `AskUserQuestion` uses `question=$(jq -r '.question' <<<"$menu_json")` and
+   `options=$(jq -c '.options' <<<"$menu_json")`.
+
+   If `revision_rounds` cap (1 round) is reached without APPROVED before cap-menu fires:
+   tell the user which concern is blocking and ask whether to add a missing
+   alternative, approve as-is, or change the scope.
 
 7. Once outline-reviewer returns `APPROVED`:
    Output a prose rationale summary in the main conversation — one paragraph per

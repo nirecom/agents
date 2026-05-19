@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# Pure helper: compute the cap-menu JSON for the orchestrator (make-outline-plan,
+# make-detail-plan, CLAUDE.md Step 6). Never reads or writes state.
+#
+# Usage:
+#   review-loop-cap-menu --budget-remaining N [--label LABEL]
+#                        [--all-high BOOL] [--cc-agrees-high BOOL]
+#
+# Exit codes:
+#   0  — JSON emitted to stdout
+#   42 — AUTO_EXTEND (all-high + cc-agrees-high + budget_remaining > 0); no JSON
+#   2  — argument error
+#
+# JSON schema:
+#   {
+#     "question":         string,
+#     "label":            string,
+#     "budget_remaining": integer,
+#     "absolute_ceiling": boolean,
+#     "default":          "land",
+#     "options": [{"label": string, "description": string, "value": "land|adjust|extend"}, ...]
+#   }
+set -uo pipefail
+
+BUDGET_REMAINING=""
+LABEL="Review"
+ALL_HIGH="false"
+CC_AGREES_HIGH="false"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --budget-remaining) BUDGET_REMAINING="$2"; shift 2 ;;
+    --label)            LABEL="$2";            shift 2 ;;
+    --all-high)         ALL_HIGH="$2";         shift 2 ;;
+    --cc-agrees-high)   CC_AGREES_HIGH="$2";   shift 2 ;;
+    *) echo "review-loop-cap-menu: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+[[ -n "$BUDGET_REMAINING" ]] || { echo "review-loop-cap-menu: --budget-remaining is required" >&2; exit 2; }
+[[ "$BUDGET_REMAINING" =~ ^[0-9]+$ ]] || { echo "review-loop-cap-menu: --budget-remaining must be a non-negative integer, got: $BUDGET_REMAINING" >&2; exit 2; }
+
+# AUTO_EXTEND: all concerns HIGH, CC agrees, and budget remains
+if [[ "$ALL_HIGH" == "true" && "$CC_AGREES_HIGH" == "true" && "$BUDGET_REMAINING" -gt 0 ]]; then
+  exit 42
+fi
+
+ABSOLUTE_CEILING="false"
+[[ "$BUDGET_REMAINING" -eq 0 ]] && ABSOLUTE_CEILING="true"
+
+# Build options array (jq -n produces valid JSON from shell vars)
+if [[ "$BUDGET_REMAINING" -gt 0 ]]; then
+  OPTIONS_JSON='[
+    {"label":"Land","description":"Accept the current plan/code as-is and proceed to the next workflow step.","value":"land"},
+    {"label":"Adjust","description":"Halt the pipeline and adjust scope, requirements, or approach before restarting.","value":"adjust"},
+    {"label":"Extend","description":"Spend one more extension round — the reviewer runs again with the revised output.","value":"extend"}
+  ]'
+  QUESTION="Round cap reached for ${LABEL}. Choose: Land (proceed as-is), Adjust (halt and revise scope), or Extend (one more review round; ${BUDGET_REMAINING} extension(s) remaining)."
+else
+  OPTIONS_JSON='[
+    {"label":"Land","description":"Accept the current plan/code as-is and proceed to the next workflow step.","value":"land"},
+    {"label":"Adjust","description":"Halt the pipeline and adjust scope, requirements, or approach before restarting.","value":"adjust"}
+  ]'
+  QUESTION="Round cap reached for ${LABEL} — absolute ceiling reached, no more extensions available. Choose: Land (proceed as-is) or Adjust (halt and revise scope)."
+fi
+
+jq -n \
+  --arg question   "$QUESTION" \
+  --arg label      "$LABEL" \
+  --argjson budget "$BUDGET_REMAINING" \
+  --argjson ceiling "$([[ "$ABSOLUTE_CEILING" == "true" ]] && echo true || echo false)" \
+  --argjson options "$OPTIONS_JSON" \
+  '{
+    question:         $question,
+    label:            $label,
+    budget_remaining: $budget,
+    absolute_ceiling: $ceiling,
+    default:          "land",
+    options:          $options
+  }'

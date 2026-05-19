@@ -83,22 +83,77 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       - If neither exists: skip context file; call review-plan-codex without `--context`.
 
       On revision rounds 2+, reuse the context file from round 1 — do not regenerate.
-   c. Run via Bash: `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-detail-draft.md --format detail-plan [--context <PLANS_DIR>/drafts/<session-id>-context.md] --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"`
-      (omit the session context file `--context` when no context file was created in step b; always include the core-principles context)
+   c. Run via Bash:
+      ```
+      review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-detail-draft.md \
+                        --format detail-plan \
+                        --session-id <session-id> \
+                        --log-dir <PLANS_DIR>/drafts \
+                        --cap 2 --max-extensions 2 --extensions-used $EXTENSIONS_USED \
+                        --accepted-tradeoffs <PLANS_DIR>/<session-id>-outline.md \
+                        [--context <PLANS_DIR>/drafts/<session-id>-context.md] \
+                        [--context <PLANS_DIR>/drafts/<session-id>-concerns-log.md] \
+                        --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"
+      ```
+      `--accepted-tradeoffs` points to outline.md (SSOT carrying intent-stage + outline-stage tradeoffs after `make-outline-plan` Step 4a). `EXTENSIONS_USED` initialized to 0 at loop start.
+      Omit `--context` args that point to files that don't exist yet.
    d. Parse the first line of stdout:
       - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
         Extract the first non-blank line as the verdict token.
-        - `APPROVED` → loop done, proceed to step 7.
-        - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
+        - `APPROVED` (bare or `APPROVED <justification>`) → loop done, proceed to step 7.
+        - `NEEDS_REVISION` → extract numbered concerns and proceed to step 5d.1 then 5e.
+        - `FAILED — round cap reached` → step 6 (cap-menu dispatch).
         - Anything else → **format malformed**.
-      - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
+      - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` (other reason) → **codex unavailable**.
       - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
       - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
-   e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 3), then repeat from step 5a. Each round consumes `revision_rounds`.
 
-6. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
+   d.1. **Raw-codex persistence** (on NEEDS_REVISION):
+      Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output -->` from
+      review-plan-codex stdout and write it to:
+          `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
+      Pass this path as a literal string in the next detail-planner invocation so the planner
+      reads the raw codex output directly via Read tool.
+
+   e. **Symmetric round log + planner-response trailer** (after every NEEDS_REVISION round):
+      1. Append to `<PLANS_DIR>/drafts/<session-id>-concerns-log.md`:
+         ```
+         ## Round <N> (<ISO-timestamp>)
+         Verdict: NEEDS_REVISION
+         Concerns (verbatim from codex):
+         <numbered concern lines>
+
+         Planner's intended response (next round):
+         <extracted verbatim from detail-planner's ROUND_RESPONSE trailer>
+         ```
+      2. Extract planner trailer per `agents/detail-planner.md` contract (`<!-- begin-planner-response -->` block).
+      3. Codex receives this log via `--context` on the next round (Step 5c).
+      4. Send concerns to detail-planner for revision (using the same model from step 3).
+
+6. **Cap-reach dispatch** (review-plan-codex returned `FAILED — round cap reached`):
+   a. `BUDGET_REMAINING = MAX_EXTENSIONS - EXTENSIONS_USED`
+   b. Inspect `<session-id>-codex-round-<N>-raw.md` → derive `ALL_HIGH`.
+   c. CC re-reads draft + concerns → `CC_AGREES_HIGH`.
+   d. ```
+      menu_json=$(review-loop-cap-menu \
+        --budget-remaining $BUDGET_REMAINING \
+        --all-high $ALL_HIGH --cc-agrees-high $CC_AGREES_HIGH \
+        --label "Detail Plan Review")
+      rc=$?
+      ```
+   e. Dispatch:
+      - `rc==42` (AUTO_EXTEND)      → `EXTENSIONS_USED += 1`; loop to 5c
+      - `rc==0`, user picks `land`   → Step 7
+      - `rc==0`, user picks `adjust` → escalate to user with loop status / current plan / blocking concerns
+      - `rc==0`, user picks `extend` → `EXTENSIONS_USED += 1`; loop to 5c
+      - `rc==2` (arg error)          → halt; surface helper stderr
+
+   When `BUDGET_REMAINING` reaches 0 (`EXTENSIONS_USED == MAX_EXTENSIONS`), helper renders only
+   Land/Adjust (`.absolute_ceiling==true`); the next codex invocation fires `FAILED — absolute ceiling reached`.
+
+   **Research/malformed-retry cap escalation**: if a research or malformed-retry cap is hit (see Research Escalation), message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
-   2. **The planner's current plan** — paste or closely summarize. The user cannot see subagent output, so this is their only way to understand what has been designed.
+   2. **The planner's current plan** — paste or closely summarize.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
 7. Once the reviewer returns `APPROVED`, write the final plan to
