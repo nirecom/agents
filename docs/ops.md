@@ -11,6 +11,9 @@ Task management using GitHub Issues as the single source of truth. Full rules in
 finish before Step 3 so chronological history occupies the early issue numbers
 and active TODOs land in later numbers.
 
+> **Recommended:** Use `/migrate-repo` skill for automated canary-gated execution.
+> The commands below document individual steps for manual recovery only.
+
 After migration, the **Operations** sections cover ongoing work.
 
 Each section is labeled:
@@ -30,9 +33,10 @@ Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and
 ### Step 2 — Migrate docs/history.md → closed issues — *Migration (one-time)*
 
 ```bash
-bash bin/github-issues/migration/preview-history.sh           # review titles + counts
-bash bin/github-issues/migration/migrate-history.sh --dry-run # final check, no API calls
-bash bin/github-issues/migration/migrate-history.sh           # creates closed issues
+bash bin/github-issues/migration/preview-history.sh <repo_dir>              # review titles + counts
+bash bin/github-issues/migration/migrate-history.sh <repo_dir> --dry-run    # final check, no API calls
+bash bin/github-issues/migration/migrate-history.sh <repo_dir> --canary 1   # first canary
+bash bin/github-issues/migration/migrate-history.sh <repo_dir>              # full run
 ```
 
 Each `### entry` in `docs/history.md` and `docs/history/*.md` becomes one **closed** issue with:
@@ -46,12 +50,13 @@ These get the **early issue numbers** (#1 onward) so the chronological record si
 ### Step 3 — Migrate docs/todo.md → open issues — *Migration (one-time)*
 
 ```bash
-bash bin/github-issues/migration/migrate-todo.sh --dry-run
-bash bin/github-issues/migration/migrate-todo.sh
+bash bin/github-issues/migration/migrate-todo.sh <repo_dir> --dry-run
+bash bin/github-issues/migration/migrate-todo.sh <repo_dir> --canary 1
+bash bin/github-issues/migration/migrate-todo.sh <repo_dir>
 ```
 
-Each `### section` in `docs/todo.md` becomes one **open** issue with `type:task`.
-After running, `docs/todo.md` is rewritten as a thin ID index pointing to the issues.
+Each `## section` in `docs/todo.md` becomes one **open** issue with `type:task`.
+After full migration completes (no canary, all sections done), `docs/todo.md` is rewritten as a thin ID index pointing to the issues.
 
 These get the **later issue numbers** (continuing after Step 2 completes).
 
@@ -60,12 +65,13 @@ These get the **later issue numbers** (continuing after Step 2 completes).
 ### Step 4 — Backfill Projects v2 Content Date — *Migration (catch-up)*
 
 ```bash
-bash bin/github-issues/migration/backfill-content-date.sh <from> <to>
+MIGRATE_PROJECT_NUM=<n> MIGRATE_PROJECT_ID=<PVT_…> MIGRATE_FIELD_ID=<PVTF_…> \
+  bash bin/github-issues/migration/backfill-content-date.sh <repo_dir>
 ```
 
-Extracts `YYYY-MM-DD` from each migrated issue's first body line and sets the Projects v2 "Content Date" field. Range-based — can be re-run for any subrange to catch up new entries.
+Extracts `YYYY-MM-DD` from each migrated issue's first body line and sets the Projects v2 "Content Date" field. Iterates over the issue numbers recorded in `.migration-state.json` (`.history.migrated[].issue_number`) — `/migrate-repo` wires the env vars from `create-project.sh` automatically.
 
-Required only if Projects v2 is in use. The `OWNER` / `REPO` / `PROJECT_NUM` / `PROJECT_ID` / `FIELD_ID` constants in the script are repo-specific — edit before running on a new repo.
+Required only if Projects v2 is in use.
 
 ### Step 5 — Backfill J-1/J-2 sentinel comments — *Migration (catch-up) / Operations*
 
@@ -88,15 +94,15 @@ auto-close, web UI / mobile / out-of-band close.
 3. No hash found → no-hash class (J-2 only)
 
 **Prerequisites:**
-- `AGENTS_CONFIG_DIR` must be set (points to the agents repo root)
+- `REPO_DIR` (or `AGENTS_CONFIG_DIR` as fallback) points to the target repo root
 - `gh auth status` is authenticated
-- Run from the agents repo directory
+- Run from inside the target repo, or pass `REPO_DIR=/path/to/repo` env var
 
 **Migration procedure:**
 
 ```bash
 # 5a — Dry-run: see what will be posted without touching GitHub
-bash bin/github-issues/backfill-commit-comments.sh --dry-run
+REPO_DIR=/path/to/repo bash bin/github-issues/backfill-commit-comments.sh --dry-run
 ```
 
 Output format: `[dry-run class=CLASS] #N hash=HASH_OR_none`
@@ -106,8 +112,8 @@ and `hash-from-gitlog` entries (spot-check a few against the actual history.md e
 git log). `no-hash` issues will get a sentinel-only comment — acceptable.
 
 ```bash
-# 5b — Canary: post to 1 issue per class (max 3 total)
-bash bin/github-issues/backfill-commit-comments.sh --canary
+# 5b — Canary: post to 1 issue per class (max 6 total)
+REPO_DIR=/path/to/repo bash bin/github-issues/backfill-commit-comments.sh --canary
 ```
 
 After this runs, open each posted comment on GitHub and verify:
@@ -119,7 +125,7 @@ Once satisfied, proceed to the full run.
 
 ```bash
 # 5c — Full run: process all remaining closed issues
-bash bin/github-issues/backfill-commit-comments.sh
+REPO_DIR=/path/to/repo bash bin/github-issues/backfill-commit-comments.sh
 ```
 
 The canary issues are automatically skipped (idempotency check on the sentinel comment).

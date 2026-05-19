@@ -1,26 +1,51 @@
 #!/usr/bin/env bash
-# Batch migration: create GitHub Issues from docs/todo.md.
-# Each ### section becomes one open issue (type:task label, NOT closed).
-# After running, rewrite docs/todo.md as a thin ID index.
+# Batch migration: create GitHub Issues from <REPO_DIR>/docs/todo.md.
+# Each ## section becomes one open issue (type:task label, NOT closed).
+# After full migration completes (no canary, not dry-run, all sections done),
+# rewrite docs/todo.md as a thin ID index.
 #
 # Usage:
-#   bin/github-issues/migration/migrate-todo.sh [--dry-run]
-#   --dry-run: print titles without calling gh
-set -euo pipefail
+#   bin/github-issues/migration/migrate-todo.sh <repo_dir> [--dry-run] [--canary N]
+#     --dry-run : print titles without calling gh
+#     --canary N: stop when cumulative migrated count reaches N (not N additional)
+#
+# State integration: skips already-migrated entries via state_is_migrated.
+set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-FILE_TODO="$AGENTS_DIR/docs/todo.md"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/state.sh"
 
+REPO_DIR="${1:?usage: migrate-todo.sh <repo_dir> [--dry-run] [--canary N]}"
+shift
 DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
+CANARY_LIMIT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift ;;
+    --canary)  CANARY_LIMIT="${2:?--canary requires N}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+
+REPO_DIR="$(cd "$REPO_DIR" && pwd)"
+FILE_TODO="$REPO_DIR/docs/todo.md"
+
+if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] No GitHub API calls will be made"
   echo ""
+fi
+
+# State load (non-dry-run only).
+if [ "$DRY_RUN" -eq 0 ]; then
+  state_init "$REPO_DIR"
+  state_load "$REPO_DIR"
 fi
 
 TMPDIR_ENTRIES=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_ENTRIES"' EXIT
 
+# Parse `## Section` headers (not ###). Each section becomes one issue.
 awk -v outdir="$TMPDIR_ENTRIES" '
   function flush(n, heading, body,   f) {
     if (n == 0) return
@@ -29,43 +54,86 @@ awk -v outdir="$TMPDIR_ENTRIES" '
     f = sprintf("%s/%04d.title", outdir, n); print heading > f; close(f)
     f = sprintf("%s/%04d.body",  outdir, n); printf "%s", body > f; close(f)
   }
-  /^### / {
+  /^## / {
     flush(n, heading, body)
-    n++; heading = substr($0, 5); body = $0 "\n"; next
+    n++; heading = substr($0, 4); body = $0 "\n"; next
   }
   n > 0 { body = body $0 "\n" }
   END    { flush(n, heading, body) }
 ' "$FILE_TODO"
 
-total=$(find "$TMPDIR_ENTRIES" -name "*.title" | wc -l | tr -d ' ')
-echo "Issues to create: $total (expected 24)"
-if [ "$total" -ne 24 ]; then
-  echo "ERROR: unexpected section count -- check docs/todo.md"
-  exit 1
-fi
-echo ""
+total=$(find "$TMPDIR_ENTRIES" -name "*.title" 2>/dev/null | wc -l | tr -d ' ')
+echo "Sections discovered: $total"
 
-n=0
+if [ "$total" -eq 0 ]; then
+  echo "No sections to migrate."
+  exit 0
+fi
+
+processed=0
+created_this_run=0
 for title_file in $(find "$TMPDIR_ENTRIES" -name "*.title" | sort); do
-  n=$((n + 1))
   base="${title_file%.title}"
+  idx_name="$(basename "$base")"
+  entry_id="t-${idx_name}"
   title=$(cat "$base.title")
   body_file="$base.body"
 
-  printf "[%d/%d] %s\n" "$n" "$total" "$title"
+  if [ "$DRY_RUN" -eq 0 ]; then
+    if [ -n "$CANARY_LIMIT" ]; then
+      cur=$(state_count_migrated todo)
+      if [ "$cur" -ge "$CANARY_LIMIT" ]; then
+        echo "[canary] cumulative migrated=$cur >= $CANARY_LIMIT — stopping"
+        break
+      fi
+    fi
+    if state_is_migrated todo "$entry_id"; then
+      echo "[skip] $entry_id already migrated"
+      continue
+    fi
+  fi
+
+  processed=$((processed + 1))
+  printf "[%s] %s\n" "$entry_id" "$title"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "  -> would: gh issue create (open, type:task)"
     continue
   fi
 
-  issue_url=$(cd "$AGENTS_DIR" && gh issue create \
+  issue_url=$(cd "$REPO_DIR" && gh issue create \
     --title "$title" \
     --label "type:task" \
     --body-file "$body_file")
-  issue_num=$(echo "$issue_url" | grep -oE '[0-9]+$')
+  issue_num="${issue_url##*/}"
+  if [ -z "$issue_num" ]; then
+    echo "ERROR: could not parse issue number from: $issue_url" >&2
+    exit 1
+  fi
   echo "  -> created #$issue_num"
+
+  state_record_migrated todo "$entry_id" "$issue_num" "$title"
+  created_this_run=$((created_this_run + 1))
 done
 
+# Bug fix: only rewrite todo.md after FULL migration (no canary, not dry-run,
+# all sections migrated).
+if [ -z "$CANARY_LIMIT" ] && [ "$DRY_RUN" -eq 0 ] && \
+   [ "$(state_count_migrated todo)" -eq "$total" ]; then
+  cp "$REPO_DIR/docs/todo.md" "$REPO_DIR/docs/todo.md.bak"
+  {
+    printf "# Active Tasks\n\nSee GitHub Issues for current work.\n\n"
+    jq -r '.todo.migrated[] | "- #\(.issue_number) — \(.title)"' "$STATE_FILE"
+  } > "$REPO_DIR/docs/todo.md"
+  tmp="${STATE_FILE}.tmp"
+  jq '.todo.todo_md_rewritten = true' "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+  echo "  -> todo.md rewritten as ID index (backup: docs/todo.md.bak)"
+fi
+
 echo ""
-echo "=== Migration complete: $n issues created (open) ==="
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "=== Dry run complete: $processed sections would be migrated ==="
+else
+  echo "=== Migration step complete: $created_this_run new issues created this run ==="
+fi
