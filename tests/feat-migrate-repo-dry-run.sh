@@ -60,14 +60,11 @@ EOF
 - task-001: do something
 EOF
 
-    # Strict gh-mock: any invocation exits 99 (should never be called in dry-run).
+    # gh-mock for dry-run: log all calls, return sensible no-op values.
+    # Destructive calls (issue create/close) must not appear in the log.
     MOCK_DIR="$TMP/mock"
     mkdir -p "$MOCK_DIR"
-    cat > "$MOCK_DIR/gh" <<'EOF'
-#!/bin/bash
-echo "gh called: $*" >> "${MOCK_LOG:-/dev/null}"
-exit 99
-EOF
+    cp "$AGENTS_DIR/tests/fixtures/migration/gh-mock.sh" "$MOCK_DIR/gh"
     chmod +x "$MOCK_DIR/gh"
 
     MOCK_LOG="$TMP/mock.log"
@@ -117,11 +114,13 @@ else
     fail "D4: missing 'Step 3 ordering gate: SKIPPED' in stdout"
 fi
 
-# --- D5: gh never called
-if [ ! -s "$MOCK_LOG" ]; then
-    pass "D5: gh mock never invoked"
+# --- D5: no destructive gh calls (issue create / issue close) in dry-run.
+# Read-only calls (e.g. gh issue list for pre-flight) are permitted.
+destructive=$(grep -E '^gh issue create|^gh issue close' "$MOCK_LOG" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$destructive" -eq 0 ]; then
+    pass "D5: no destructive gh calls (create/close) in dry-run"
 else
-    fail "D5: gh was called: $(cat "$MOCK_LOG")"
+    fail "D5: gh called: $(grep -E '^gh issue create|^gh issue close' "$MOCK_LOG" | head -1)"
 fi
 
 teardown_fixture

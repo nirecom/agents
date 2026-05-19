@@ -39,6 +39,16 @@ case "$cmd" in
                 echo "https://github.com/example/repo/issues/$n"
                 exit 0
                 ;;
+            list)
+                # Return one issue when MOCK_HAS_ISSUES=1, else empty list.
+                echo "gh issue list $*" >> "$LOG"
+                if [ "${MOCK_HAS_ISSUES:-}" = "1" ]; then
+                    echo '[{"number":5}]'
+                else
+                    echo '[]'
+                fi
+                exit 0
+                ;;
             view)
                 # Return minimal JSON node id when --json id is requested.
                 echo '{"id":"I_kwDOmockNode"}'
