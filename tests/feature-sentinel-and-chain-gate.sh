@@ -146,35 +146,21 @@ expect_block "SG-4d" 'echo "<<WORKFLOW_MARK_STEP_docs_complete>>" && rm /tmp/x'
 expect_block "SG-4e" 'echo "<<WORKFLOW_RESET_FROM_research>>" && rm /tmp/x'
 
 # ===========================================================================
-# SG-STATIC-1: rules/git.md write commands section coverage
+# SG-STATIC-1: rules/git.md states the chain prohibition
 # ===========================================================================
+# Rationale: the hook is the source of truth (it hard-stops chained writes),
+# so the doc only needs to state the rule — no command enumeration required.
 
 echo ""
-echo "=== SG-STATIC-1: rules/git.md write commands enumeration ==="
+echo "=== SG-STATIC-1: rules/git.md states the chain prohibition ==="
 
 if [ ! -f "$RULES_GIT_MD" ]; then
     fail "SG-STATIC-1 — rules/git.md not found at $RULES_GIT_MD"
+elif grep -qE 'separate sequential Bash calls' "$RULES_GIT_MD" \
+     && grep -qE 'do NOT chain them with `&&`' "$RULES_GIT_MD"; then
+    pass "SG-STATIC-1"
 else
-    section=$(awk '
-      /^Commonly-used write commands/ {flag=1; next}
-      /^Read-only commands/ {flag=0}
-      flag {print}
-    ' "$RULES_GIT_MD")
-    static_failed=0
-    static_missing=()
-    for cmd in add commit push fetch pull merge rebase reset revert cherry-pick \
-               am apply update-ref rm mv clean branch checkout switch restore \
-               tag worktree stash; do
-        if ! printf '%s\n' "$section" | grep -qE "\`${cmd}([\` /-]|\$)"; then
-            static_failed=1
-            static_missing+=("$cmd")
-        fi
-    done
-    if [ "$static_failed" -eq 0 ]; then
-        pass "SG-STATIC-1"
-    else
-        fail "SG-STATIC-1 — missing in write bullet section: ${static_missing[*]}"
-    fi
+    fail "SG-STATIC-1 — rules/git.md must state the separate-calls / no-&&-chain rule"
 fi
 
 # ===========================================================================

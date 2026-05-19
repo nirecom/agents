@@ -10,16 +10,7 @@ WRONG:   `cd /path/to/repo && git log --oneline -5`
 
 ## Write Commands
 
-When running `git add`, `git commit`, and `git push`, always run them as **separate sequential Bash calls** — do NOT chain them with `&&`.
-
-CORRECT (separate calls):
-1. `git add file1 file2`
-2. `git commit -m "message"`
-3. `git push`
-
-WRONG (chained): `git add file1 && git commit -m "msg" && git push`
-
-This ensures each command matches its individual permission rule in `settings.json`.
+Run git write commands (any subcommand that modifies state) as **separate sequential Bash calls** — do NOT chain them with `&&`.
 
 ## Force Push
 
