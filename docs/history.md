@@ -144,3 +144,7 @@ Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles 
 ### FEATURE: wip-state.sh setup: auto-create session-fingerprint field if missing (2026-05-19, #383)
 Background: cmd_setup hard-errored when the session-fingerprint Projects v2 text field did not exist, requiring manual UI creation. Broke zero-touch onboarding for new repos and bulk issue migration (#247).
 Changes: Added ensure_field helper inside cmd_setup: auto-creates missing session-fingerprint field via createProjectV2Field mutation, re-discovers it after creation, idempotent no-op when field exists. Added project-scope hard-gate (gh auth status check) before mutation.
+
+### FEATURE: issue-migration: reusable helper scripts for history/todo migration to other repos (2026-05-19, #247)
+Background: nirecom/agents の移行（history.md → closed issues, todo.md → open issues, Projects v2 Content Date backfill）は repo 固有のスクリプトで ad-hoc に実施されていた。他 repo への横展開のために、bin/github-issues/migration/ 配下に再利用可能な helper 群が必要。
+Changes: bin/github-issues/migration/ 配下に state.sh / orchestrate.sh / create-project.sh を新規追加。既存の migrate-history.sh / migrate-todo.sh / backfill-content-date.sh / preview-history.sh / backfill-commit-comments.sh を REPO_DIR 引数化。Canary パターン（1→確認→2→確認→全件）と state machine（.migration-state.json）で resumable に。migrate-todo.sh の todo.md → ID index 書き換えバグも修正。/migrate-repo skill (skills/migrate-repo/SKILL.md) で全体を一括起動。実装言語は元の issue 本文では .py を想定していたが、隣接スクリプトの慣例に合わせて .sh を採用。

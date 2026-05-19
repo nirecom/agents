@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
 # Preview: list all history entries queued for GitHub Issues migration.
 # Reads source files directly — no intermediate manifest.
-# Run before migrate-history-to-issues.sh to review titles, labels, and counts.
+# Run before migrate-history.sh to review titles, labels, and counts.
+#
+# Usage:
+#   bin/github-issues/migration/preview-history.sh <repo_dir>
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-FILE_2026="$AGENTS_DIR/docs/history/2026.md"
-FILE_CURRENT="$AGENTS_DIR/docs/history.md"
+REPO_DIR="${1:?usage: preview-history.sh <repo_dir> [--history-files <list>]}"
+shift
+HISTORY_FILES_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --history-files) HISTORY_FILES_ARG="${2:?--history-files requires comma-separated list}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
+REPO_DIR="$(cd "$REPO_DIR" && pwd)"
+HISTORY_FILE="$REPO_DIR/docs/history.md"
+HISTORY_DIR="$REPO_DIR/docs/history"
 
 # extract_headings <file>
 # Prints one line per ### entry: "<type:task|type:incident>\t<clean title>"
@@ -25,37 +37,50 @@ extract_headings() {
 }
 
 echo "=== History migration preview ==="
+echo "Repo: $REPO_DIR"
 echo ""
 
 n=0
 
-echo "--- docs/history/2026.md ---"
-count_2026=0
-while IFS=$'\t' read -r label title; do
-  n=$((n + 1))
-  count_2026=$((count_2026 + 1))
-  printf "H-%03d [%s] %s\n" "$n" "$label" "$title"
-done < <(extract_headings "$FILE_2026")
-
-echo ""
-echo "--- docs/history.md (current) ---"
-count_current=0
-while IFS=$'\t' read -r label title; do
-  n=$((n + 1))
-  count_current=$((count_current + 1))
-  printf "H-%03d [%s] %s\n" "$n" "$label" "$title"
-done < <(extract_headings "$FILE_CURRENT")
-
-echo ""
-echo "=== Count verification ==="
-printf "docs/history/2026.md : %d entries\n" "$count_2026"
-printf "docs/history.md      : %d entries\n" "$count_current"
-printf "Total                : %d entries\n" "$n"
-echo ""
-echo "Expected: 2026=82, current=75, total=157"
-if [ "$count_2026" -eq 82 ] && [ "$count_current" -eq 75 ] && [ "$n" -eq 157 ]; then
-  echo "PASS: counts match"
+# Build the ordered file list (explicit or auto-discovered).
+ALL_PREVIEW_FILES=()
+if [ -n "$HISTORY_FILES_ARG" ]; then
+  IFS=',' read -ra _raw_files <<< "$HISTORY_FILES_ARG"
+  for _rel in "${_raw_files[@]}"; do
+    _abs="$HISTORY_DIR/$_rel"
+    if [ ! -f "$_abs" ]; then
+      echo "ERROR: --history-files: file not found: $_abs" >&2
+      exit 1
+    fi
+    ALL_PREVIEW_FILES+=("$_abs")
+  done
 else
-  echo "FAIL: count mismatch -- review before running migration"
-  exit 1
+  if [ -d "$HISTORY_DIR" ]; then
+    while IFS= read -r f; do
+      case "$(basename "$f")" in
+        index.md) ;;
+        *) ALL_PREVIEW_FILES+=("$f") ;;
+      esac
+    done < <(find "$HISTORY_DIR" -maxdepth 1 -name "*.md" 2>/dev/null | sort)
+  fi
+  [ -f "$HISTORY_FILE" ] && ALL_PREVIEW_FILES+=("$HISTORY_FILE")
 fi
+
+# Print entries from each file in order.
+for _f in "${ALL_PREVIEW_FILES[@]+${ALL_PREVIEW_FILES[@]}}"; do
+  [ -z "$_f" ] && continue
+  [ -f "$_f" ] || continue
+  rel="${_f#"$REPO_DIR/"}"
+  echo "--- $rel ---"
+  file_count=0
+  while IFS=$'\t' read -r label title; do
+    n=$((n + 1))
+    file_count=$((file_count + 1))
+    printf "H-%03d [%s] %s\n" "$n" "$label" "$title"
+  done < <(extract_headings "$_f")
+  echo "    (subtotal: $file_count entries)"
+  echo ""
+done
+
+echo "=== Count summary ==="
+printf "Grand total         : %d entries\n" "$n"

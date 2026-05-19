@@ -1,24 +1,45 @@
 #!/usr/bin/env bash
-# Backfill Projects v2 "Content Date" field for a range of Issues.
+# Backfill Projects v2 "Content Date" field for migrated Issues.
 # Extracts YYYY-MM-DD from each issue's first body line (the migrated heading).
 # Halts on first error.
 #
 # Usage:
-#   bin/github-issues/migration/backfill-content-date.sh <from> <to>
-#   bin/github-issues/migration/backfill-content-date.sh 68 221    # remaining history entries
+#   MIGRATE_PROJECT_ID=PVT_... MIGRATE_FIELD_ID=PVTF_... MIGRATE_PROJECT_NUM=N \
+#     bin/github-issues/migration/backfill-content-date.sh <repo_dir>
+#
+# Reads the list of migrated issue numbers from .migration-state.json
+# (.history.migrated[].issue_number).
 set -euo pipefail
 
-OWNER=nirecom
-REPO=nirecom/agents
-PROJECT_NUM=1
-PROJECT_ID=PVT_kwHOAMF_jc4BXf9E
-FIELD_ID=PVTF_lAHOAMF_jc4BXf9EzhSsYwA
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/state.sh"
 
-FROM="${1:?from issue number}"
-TO="${2:?to issue number}"
+REPO_DIR="${1:?usage: backfill-content-date.sh <repo_dir>}"
+REPO_DIR="$(cd "$REPO_DIR" && pwd)"
 
-for n in $(seq "$FROM" "$TO"); do
-  body=$(gh issue view "$n" --repo "$REPO" --json body --jq '.body' 2>&1)
+: "${MIGRATE_PROJECT_ID:?MIGRATE_PROJECT_ID must be set (Projects v2 node id)}"
+: "${MIGRATE_FIELD_ID:?MIGRATE_FIELD_ID must be set (Content Date field id)}"
+: "${MIGRATE_PROJECT_NUM:?MIGRATE_PROJECT_NUM must be set (project number)}"
+
+state_load "$REPO_DIR"
+
+OWNER=$(cd "$REPO_DIR" && gh repo view --json owner --jq .owner.login)
+REPO_NAME=$(cd "$REPO_DIR" && gh repo view --json name --jq .name)
+REPO_SLUG="${OWNER}/${REPO_NAME}"
+
+migrated_numbers=$(jq -r '.history.migrated[].issue_number' "$STATE_FILE")
+if [ -z "$migrated_numbers" ]; then
+  echo "No migrated history entries found in state — nothing to backfill."
+  exit 0
+fi
+
+count_ok=0
+count_total=0
+while IFS= read -r n; do
+  [ -z "$n" ] && continue
+  count_total=$((count_total + 1))
+  body=$(gh issue view "$n" --repo "$REPO_SLUG" --json body --jq '.body' 2>&1)
   if [[ -z "$body" ]]; then
     echo "FAILED #$n: empty body"
     exit 1
@@ -31,19 +52,20 @@ for n in $(seq "$FROM" "$TO"); do
     exit 1
   fi
 
-  item_id=$(gh project item-add "$PROJECT_NUM" --owner "$OWNER" \
-    --url "https://github.com/$REPO/issues/$n" --format json --jq '.id' 2>&1)
+  item_id=$(gh project item-add "$MIGRATE_PROJECT_NUM" --owner "$OWNER" \
+    --url "https://github.com/$REPO_SLUG/issues/$n" --format json --jq '.id' 2>&1)
 
   if [[ -z "$item_id" ]] || [[ "$item_id" == *"error"* ]]; then
     echo "FAILED #$n: item-add returned: $item_id"
     exit 1
   fi
 
-  gh project item-edit --id "$item_id" --field-id "$FIELD_ID" \
-    --project-id "$PROJECT_ID" --date "$date" >/dev/null 2>&1
+  gh project item-edit --id "$item_id" --field-id "$MIGRATE_FIELD_ID" \
+    --project-id "$MIGRATE_PROJECT_ID" --date "$date" >/dev/null 2>&1
 
   echo "OK #$n date=$date"
-done
+  count_ok=$((count_ok + 1))
+done <<< "$migrated_numbers"
 
 echo ""
-echo "Done: backfilled $((TO - FROM + 1)) issues"
+echo "Done: backfilled $count_ok / $count_total issues"
