@@ -140,3 +140,7 @@ Changes: New bin/github-issues/wip-state.sh helper with set/check/clear/setup ve
 ### FEATURE: /issue-create: auto-survey existing issues before creating (2026-05-18, #378)
 Background: Every time the user creates a new issue via /issue-create, they must manually instruct survey/reopen/sub-issue/sibling steps. This automates all five outcomes inside the skill using a new dispatch wrapper script.
 Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles five verdicts (none/reopen/sub-of/make-parent/sibling). skills/issue-create/SKILL.md rewritten to 4-phase procedure: Gather/Survey/Confirm/Dispatch. rules/github-issues.md updated with new survey behavior and sub-issue node-id clarification.
+
+### FEATURE: issue-migration: reusable helper scripts for history/todo migration to other repos (2026-05-19, #247)
+Background: nirecom/agents の移行（history.md → closed issues, todo.md → open issues, Projects v2 Content Date backfill）は repo 固有のスクリプトで ad-hoc に実施されていた。他 repo への横展開のために、bin/github-issues/migration/ 配下に再利用可能な helper 群が必要。
+Changes: bin/github-issues/migration/ 配下に state.sh / orchestrate.sh / create-project.sh を新規追加。既存の migrate-history.sh / migrate-todo.sh / backfill-content-date.sh / preview-history.sh / backfill-commit-comments.sh を REPO_DIR 引数化。Canary パターン（1→確認→2→確認→全件）と state machine（.migration-state.json）で resumable に。migrate-todo.sh の todo.md → ID index 書き換えバグも修正。/migrate-repo skill (skills/migrate-repo/SKILL.md) で全体を一括起動。実装言語は元の issue 本文では .py を想定していたが、隣接スクリプトの慣例に合わせて .sh を採用。
