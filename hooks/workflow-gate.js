@@ -284,6 +284,76 @@ if (require.main === module) {
   const command = toolInput.command || "";
   if (!command) approve();
 
+  // SENTINEL CHAIN GUARD (closes #382): reject `<<WORKFLOW_*>> && <non-sentinel>` chains.
+  //
+  // Policy: predict the cases that workflow-mark.js (PostToolUse) will silently
+  // drop and surface them as PreToolUse errors. workflow-mark.js is unchanged
+  // (issue #382 non-goal): it splits on /\s*&&\s*/ and applies #110 all-or-nothing
+  // — every part must match isSentinel() or none of them are processed. So the
+  // drop-prediction is exactly:
+  //
+  //     drop-predict := (split has >1 part) AND (not every part isSentinel)
+  //                     AND (a real sentinel echo form is actually present)
+  //
+  // The last conjunct distinguishes a real sentinel chain from incidental
+  // `<<WORKFLOW_` substrings (e.g. `grep '<<WORKFLOW_' file && wc -l`).
+  //
+  // Quote convention parity: CHAIN_BOUNDARY_SENTINEL_*_RE mirror isSentinel() exactly —
+  //   - DQ form is accepted for every sentinel category.
+  //   - SQ form is accepted ONLY for MARK_STEP_* (matching MARKER_RE_SQ).
+  // If we accepted SQ for all categories, we would block chains like
+  // `echo '<<WORKFLOW_USER_VERIFIED>>' && rm /tmp/x` that workflow-mark.js
+  // treats as a non-sentinel (no SQ regex for USER_VERIFIED), creating a
+  // new asymmetry. Keeping the two recognizers symmetric eliminates that.
+  if (/<<WORKFLOW_/.test(command)) {
+    const {
+      isSentinel,
+      isStrictSentinel,
+      CHAIN_BOUNDARY_SENTINEL_DQ_RE,
+      CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE,
+    } = require("./lib/sentinel-patterns");
+    // Step 1 — standalone sentinel (incl. reasons containing '&&'): approve.
+    // Uses isStrictSentinel (not isSentinel) because LOOKSLIKE regexes use
+    // greedy `.*` that can span across `>>` and match chained commands as if
+    // they were single sentinels. Strict DQ regexes use `[^>]+` for reason
+    // fields, which correctly rejects chained commands.
+    if (!isStrictSentinel(command)) {
+      // Step 2 — mirror workflow-mark.js naive split.
+      const parts = command
+        .split(/\s*&&\s*/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parts.length > 1) {
+        const allSentinel = parts.every(isSentinel);
+        if (!allSentinel) {
+          // Step 3 — distinguish real chain-boundary sentinel involvement from
+          // incidental occurrences (e.g. diagnostic grep patterns, or sentinel
+          // text quoted inside another command's argument).
+          if (
+            CHAIN_BOUNDARY_SENTINEL_DQ_RE.test(command) ||
+            CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE.test(command)
+          ) {
+            block(
+              "workflow-gate: sentinel command chained with non-sentinel via `&&` is blocked.\n" +
+              "Sentinel echoes must be standalone Bash calls (or chained only with other sentinels).\n" +
+              "Without this guard, workflow-mark.js (PostToolUse) splits on `&&` and applies\n" +
+              "all-or-nothing dispatch (issue #110): when even one part is not a recognized\n" +
+              "sentinel, ALL state updates are silently dropped. This includes the case where\n" +
+              "a sentinel's reason text itself contains `&&` (the naive splitter fragments it).\n\n" +
+              "Fix: split into separate Bash calls. Example:\n" +
+              '  call 1: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only change>>"\n' +
+              "  call 2: <the other command>"
+            );
+          }
+          // else: incidental substring (no real sentinel echo present) — approve.
+        }
+        // else: all-sentinel chain — workflow-mark.js #110 will dispatch each.
+      }
+      // else parts.length == 1: not a chain; not a recognized standalone sentinel
+      // either (Step 1 would have caught it). Pass through — nothing to gate here.
+    }
+  }
+
   // MERGE GATE: hard-block gh pr merge / git push to protected branches when
   // user_verification is not complete. Runs unconditionally regardless of
   // ENFORCE_WORKTREE — protected branches are protected in all modes.
