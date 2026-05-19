@@ -8,26 +8,16 @@
   - Never patch binary or encrypted config files to inject settings. (Precedent: Google Japanese Input config.)
 - **Clean up mistakes immediately.** If a registry entry turns out to be ineffective, delete it before proceeding with any other fix.
 
-## Package Manager Commands (System-Wide)
+## System-Wide Package Managers
 
-Running any system-wide package manager without explicit user approval is prohibited.
-This covers all categories listed in `rules/ops.md` under "System-State-Changing Operations".
+System-wide package install/uninstall/upgrade requires explicit user approval (Rule 2 of
+`rules/user-escalation.md`). The `hooks/enforce-system-ops.js` PreToolUse hook enforces
+this — see the hook source for the exact command set. Per-repo and user-scope variants
+(e.g. `npm install` without `-g`, `pip install --user`, `uv pip install`) pass through.
 
-**Blocked commands** (require explicit user approval via Rule 2 of `rules/user-escalation.md`):
-`winget install/uninstall/upgrade`, `choco install/uninstall`, `scoop install/uninstall`,
-`brew install/uninstall/upgrade`, `apt/apt-get install/remove/upgrade`, `npm -g`/`--global`,
-`pnpm -g`/`--global`, `yarn global add/remove`, `pip install` (without `--user`),
-`python -m pip install` (without `--user`), `pipx install`.
-
-**Not blocked** (query-only):
-`winget search`, `apt list`, `brew info`, `npm install` (per-repo), `pip install --user`,
-`uv pip install`.
-
-**Installer script bypass:**
-Legitimate installer scripts (e.g., `install.ps1`, `install/linux/*.sh`) set
-`SYSTEM_OPS_APPROVED=1` before Claude Code launches. This allows the hook to pass.
-Inline prefix (`SYSTEM_OPS_APPROVED=1 cmd` in the same Bash call) does NOT bypass the guard
-— the hook reads its inherited `process.env`, not the command's inline prefix.
+Legitimate installer scripts under `install/` have a controlled bypass; see those scripts
+for the mechanism. The protection is structural (inherited env only), so model-issued
+inline forms cannot bypass.
 
 ## Winget Install
 
