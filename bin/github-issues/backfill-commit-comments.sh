@@ -33,13 +33,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
-    echo "Error: AGENTS_CONFIG_DIR not set" >&2
-    exit 1
-fi
-
-HISTORY_FILE="${AGENTS_CONFIG_DIR}/docs/history.md"
-HISTORY_DIR="${AGENTS_CONFIG_DIR}/docs/history"
+REPO_DIR="${REPO_DIR:-${AGENTS_CONFIG_DIR:?REPO_DIR or AGENTS_CONFIG_DIR must be set}}"
+REPO_DIR="$(cd "$REPO_DIR" && pwd)"
+HISTORY_FILE="${REPO_DIR}/docs/history.md"
+HISTORY_DIR="${REPO_DIR}/docs/history"
+# Ensure gh CLI targets the correct repo via the working directory's remote.
+cd "$REPO_DIR"
 
 # Tier 1.5 blacklist: commits that bulk-import many history entries at once.
 # When git log -S resolves to one of these, fall through to the next tier to
@@ -101,7 +100,7 @@ discover_hash_from_history_introducer() {
     title=$(gh issue view "$n" --json title --jq '.title // ""' 2>/dev/null || true)
     [ -z "$title" ] && return 1
     [ "${#title}" -lt 8 ] && return 1
-    line=$(git -C "$AGENTS_CONFIG_DIR" log --all --reverse --oneline \
+    line=$(git -C "$REPO_DIR" log --all --reverse --oneline \
         -S "$title" -- docs/history.md docs/history/ 2>/dev/null | head -n 1 || true)
     [ -z "$line" ] && return 1
     hash=$(printf '%s' "$line" | awk '{print $1}')
@@ -116,7 +115,7 @@ discover_hash_from_history_introducer() {
 # Tier 2: boundary-safe git log search. -E + ([^0-9]|$) prevents #42 matching #420.
 discover_hash_from_gitlog() {
     local n="$1" line hash
-    line=$(git -C "$AGENTS_CONFIG_DIR" log --all --oneline -E \
+    line=$(git -C "$REPO_DIR" log --all --oneline -E \
         --grep="#${n}([^0-9]|\$)" 2>/dev/null | head -n 1 || true)
     [ -z "$line" ] && return 0
     hash=$(printf '%s' "$line" | awk '{print $1}')
