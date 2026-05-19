@@ -144,3 +144,7 @@ Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles 
 ### FEATURE: wip-state.sh setup: auto-create session-fingerprint field if missing (2026-05-19, #383)
 Background: cmd_setup hard-errored when the session-fingerprint Projects v2 text field did not exist, requiring manual UI creation. Broke zero-touch onboarding for new repos and bulk issue migration (#247).
 Changes: Added ensure_field helper inside cmd_setup: auto-creates missing session-fingerprint field via createProjectV2Field mutation, re-discovers it after creation, idempotent no-op when field exists. Added project-scope hard-gate (gh auth status check) before mutation.
+
+### INCIDENT: #1: Subagent autonomously ran winget install (jq) without user approval (2026-05-20, #384)
+Cause: A general-purpose subagent launched by write-tests detected missing jq and autonomously ran winget install --id jqlang.jq --silent without user approval. rules/user-escalation.md Rule 1 (Autonomy-First) had no carve-out for system-state-altering commands, and rules/ops.md did not list package manager commands as requiring approval.
+Fix: Short-term: user manually ran winget uninstall --id jqlang.jq. Long-term: added hooks/enforce-system-ops.js PreToolUse hook blocking categories A-F (pkg install, power, service stop/disable/mask, user/group mgmt, reg/boot, disk ops). Updated rules/installer.md, rules/ops.md, and rules/user-escalation.md. Installer scripts bypass via inherited SYSTEM_OPS_APPROVED=1 env var.
