@@ -28,6 +28,24 @@ const {
   getWorkflowDir,
 } = require("./lib/workflow-state");
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+// Sentinel recognition centralized in hooks/lib/sentinel-patterns.js (SSOT).
+const {
+  isSentinel,
+  MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, USER_VERIFIED_RE_DQ,
+  RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
+  PLAN_NOT_NEEDED_RE_DQ, PLAN_NOT_NEEDED_LOOKSLIKE_RE,
+  WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
+  REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
+  DOCS_NOT_NEEDED_LOOKSLIKE_RE,
+  CLARIFY_INTENT_NOT_NEEDED_RE_DQ, CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE,
+  CLARIFY_INTENT_COMPLETE_RE_DQ,
+  BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
+  BRANCHING_DECIDED_RE_DQ, BRANCHING_DECIDED_LOOKSLIKE_RE,
+  PREMISE_FAIL_RE_DQ, PREMISE_FAIL_LOOKSLIKE_RE,
+  PREMISE_ACK_RE_DQ, PREMISE_ACK_LOOKSLIKE_RE,
+  ENFORCE_WORKTREE_OFF_RE_DQ, ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE,
+  ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
+} = require("./lib/sentinel-patterns");
 
 function readStdin() {
   const chunks = [];
@@ -40,81 +58,6 @@ function readStdin() {
     }
   } catch (e) {}
   return Buffer.concat(chunks).toString("utf8");
-}
-
-// Strict anchored regex: each sub-command must be exactly this echo.
-// Rejects pipes, ;, redirects, prefixed cd, printf, etc. by construction.
-// Chained `&&` is handled at the splitter layer — each part is matched individually.
-const MARKER_RE_DQ =
-  /^echo\s+"<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>"$/;
-const MARKER_RE_SQ =
-  /^echo\s+'<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>'$/;
-const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
-// USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly.
-// Reason is optional (orthogonal with ENFORCE_WORKTREE_OFF/ON design); preserved as match[1] for telemetry.
-const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED(?:: ([^>]+))?>>"$/;
-const RESEARCH_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ([^>]+)>>"$/;
-const RESEARCH_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED([: ].*)?>>"$/;
-const PLAN_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_PLAN_NOT_NEEDED: ([^>]+)>>"$/;
-const PLAN_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PLAN_NOT_NEEDED([: ].*)?>>"$/;
-const WRITE_TESTS_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ([^>]+)>>"$/;
-const WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED([: ].*)?>>"$/;
-const REVIEW_SECURITY_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ([^>]+)>>"$/;
-const REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED([: ].*)?>>"$/;
-// Looks-like fallback for removed DOCS_NOT_NEEDED — catches attempts and emits deprecation message.
-const DOCS_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_DOCS_NOT_NEEDED([: ].*)?>>"$/;
-const CLARIFY_INTENT_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ([^>]+)>>"$/;
-const CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED([: ].*)?>>"$/;
-const CLARIFY_INTENT_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"$/;
-// New sentinel (preferred); old BRANCHING_DECIDED accepted for backward compat.
-const BRANCHING_COMPLETE_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_COMPLETE: ([^>]+)>>"$/;
-const BRANCHING_COMPLETE_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_COMPLETE([: ].*)?>>"$/;
-const BRANCHING_DECIDED_RE_DQ = /^echo "<<WORKFLOW_BRANCHING_DECIDED: ([^>]+)>>"$/;
-const BRANCHING_DECIDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_BRANCHING_DECIDED([: ].*)?>>"$/;
-const PREMISE_FAIL_RE_DQ = /^echo "<<WORKFLOW_PREMISE_FAIL: ([^>]+)>>"$/;
-const PREMISE_FAIL_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PREMISE_FAIL([: ].*)?>>"$/;
-const PREMISE_ACK_RE_DQ = /^echo "<<WORKFLOW_PREMISE_ACK>>"$/;
-const PREMISE_ACK_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PREMISE_ACK([: ].*)?>>"$/;
-const ENFORCE_WORKTREE_OFF_RE_DQ =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF(?:: ([^>]+))?>>"$/;
-const ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF([: ].*)?>>"$/;
-const ENFORCE_WORKTREE_ON_RE_DQ =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON(?:: ([^>]+))?>>"$/;
-const ENFORCE_WORKTREE_ON_LOOKSLIKE_RE =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON([: ].*)?>>"$/;
-
-function isSentinel(cmd) {
-  return (
-    MARKER_RE_DQ.test(cmd) ||
-    MARKER_RE_SQ.test(cmd) ||
-    RESET_FROM_RE_DQ.test(cmd) ||
-    USER_VERIFIED_RE_DQ.test(cmd) ||
-    RESEARCH_NOT_NEEDED_RE_DQ.test(cmd) ||
-    RESEARCH_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    PLAN_NOT_NEEDED_RE_DQ.test(cmd) ||
-    PLAN_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) ||
-    WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    REVIEW_SECURITY_NOT_NEEDED_RE_DQ.test(cmd) ||
-    REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    CLARIFY_INTENT_NOT_NEEDED_RE_DQ.test(cmd) ||
-    CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
-    CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd) ||
-    BRANCHING_COMPLETE_RE_DQ.test(cmd) ||
-    BRANCHING_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
-    BRANCHING_DECIDED_RE_DQ.test(cmd) ||
-    BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd) ||
-    PREMISE_FAIL_RE_DQ.test(cmd) ||
-    PREMISE_FAIL_LOOKSLIKE_RE.test(cmd) ||
-    PREMISE_ACK_RE_DQ.test(cmd) ||
-    PREMISE_ACK_LOOKSLIKE_RE.test(cmd) ||
-    ENFORCE_WORKTREE_OFF_RE_DQ.test(cmd) ||
-    ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(cmd) ||
-    ENFORCE_WORKTREE_ON_RE_DQ.test(cmd) ||
-    ENFORCE_WORKTREE_ON_LOOKSLIKE_RE.test(cmd)
-  );
 }
 
 const SKIP_REASON_DUDS = new Set([
