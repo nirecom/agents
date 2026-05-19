@@ -18,6 +18,10 @@ Before presenting any command for the user to run, work through this checklist i
 - Attempt execution via the appropriate tool(s) before asking the user.
 - Escalate only when the tool path is genuinely blocked.
 - Do NOT repeat the same ask. If repetition seems needed, find a different approach — not a re-packaging of the same blocked action.
+- **Exception — system-state-changing commands:** Commands in `rules/ops.md`
+  categories A–F are out of scope for Autonomy-First. Always escalate via Rule 2.
+  The `hooks/enforce-system-ops.js` hook enforces this. Inline `SYSTEM_OPS_APPROVED=1`
+  in a model-issued Bash command does NOT bypass the hook.
 
 ## Rule 2 — One-Command-at-a-Time
 
@@ -40,6 +44,7 @@ Before presenting any command for the user to run, work through this checklist i
 
 | Priority | Rule | Beats |
 |---|---|---|
+| 0 | `rules/ops.md` categories A–F — system-state-changing ops; always escalate | Rules 1–3 |
 | 1 | `rules/ops.md` — destructive ops decision path | Rules 1–3 |
 | 2 | Rule 1 — Autonomy-First | Rules 2–3 |
 | 3 | Rule 2 — One-Command-at-a-Time | Rule 3 |
