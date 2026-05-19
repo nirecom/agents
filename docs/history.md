@@ -1,9 +1,6 @@
 # History (agents)
 
 ## Archived
-- [2026](history/2026.md) — 82 entries
-
-## Archived
 - [2026](history/2026.md) — 103 entries
 
 ### FEATURE: Add /issue-create skill — type:task enforcement + Projects v2 auto-attach (#246) (2026-05-15)
@@ -152,3 +149,7 @@ Changes: bin/github-issues/migration/ 配下に state.sh / orchestrate.sh / crea
 ### FEATURE: worktree-end: deferred-resume cleanup for Windows EPERM (closes #251 and #357) (2026-05-19, #251, #357)
 Background: Step 6c (git worktree remove) of /worktree-end fails with EPERM on Windows + VS Code. The previous in-session workarounds (#294: 'cd <main>' chain; #333: Reload Window) could not release the session-level CWD lock held by the VS Code extension host when the session had entered the worktree via the EnterWorktree tool. The variant resurfaced as #357 and could only be recovered by a full Claude Code restart.
 Changes: Introduced a deferred-resume escape path. When Step 6c fails with EPERM/busy/not-empty, /worktree-end writes a 3-line marker at ~/.workflow-plans/worktree-end/pending-cwd-unlock-<repo-id>--<branch> (branch / worktree-path / 'pre-remove' stage) and exits gracefully with instructions to run /worktree-end --resume in a new session. The new entry point bin/worktree-end-resume-load.js validates the marker (WORKTREE_BASE_DIR path-traversal guard, KNOWN_STAGES whitelist) and replays the remaining cleanup (worktree remove, prune, orphan-dir, branch -D, fetch + pull). hooks/enforce-worktree.js is generalized to support multiple marker prefixes via a MARKER_PREFIXES constant plus prefix-loop dispatch in isMarkerFilePath / isAllowedMarkerDelete (PR1). 52 tests pass; security review PASS.
+
+### FEATURE: sentinel chain guard + rules/git.md write commands expansion (#382) (2026-05-20)
+Background: Sentinel echo commands chained with && could bypass hook classification in workflow-gate.js (the sentinel echo dropped silently while the chained non-sentinel command ran unguarded). Separately, rules/git.md only covered git add/commit/push, leaving other write subcommands (fetch, pull, merge, rebase, worktree, stash, etc.) undocumented as chain-prohibited.
+Changes: Extracted shared sentinel recognition primitives to hooks/lib/sentinel-patterns.js (SSOT refactor; workflow-mark.js now imports from it). Added sentinel chain guard to hooks/workflow-gate.js blocking echo <<WORKFLOW_*>> && <non-sentinel> forms. Expanded rules/git.md Write Commands section to enumerate all git write subcommands. Added test suite tests/feature-sentinel-and-chain-gate.sh (15 cases, all passing).
