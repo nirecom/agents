@@ -1,9 +1,6 @@
 # History (agents)
 
 ## Archived
-- [2026](history/2026.md) — 82 entries
-
-## Archived
 - [2026](history/2026.md) — 103 entries
 
 ### FEATURE: Add /issue-create skill — type:task enforcement + Projects v2 auto-attach (#246) (2026-05-15)
@@ -144,6 +141,18 @@ Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles 
 ### FEATURE: wip-state.sh setup: auto-create session-fingerprint field if missing (2026-05-19, #383)
 Background: cmd_setup hard-errored when the session-fingerprint Projects v2 text field did not exist, requiring manual UI creation. Broke zero-touch onboarding for new repos and bulk issue migration (#247).
 Changes: Added ensure_field helper inside cmd_setup: auto-creates missing session-fingerprint field via createProjectV2Field mutation, re-discovers it after creation, idempotent no-op when field exists. Added project-scope hard-gate (gh auth status check) before mutation.
+
+### FEATURE: issue-migration: reusable helper scripts for history/todo migration to other repos (2026-05-19, #247)
+Background: nirecom/agents の移行（history.md → closed issues, todo.md → open issues, Projects v2 Content Date backfill）は repo 固有のスクリプトで ad-hoc に実施されていた。他 repo への横展開のために、bin/github-issues/migration/ 配下に再利用可能な helper 群が必要。
+Changes: bin/github-issues/migration/ 配下に state.sh / orchestrate.sh / create-project.sh を新規追加。既存の migrate-history.sh / migrate-todo.sh / backfill-content-date.sh / preview-history.sh / backfill-commit-comments.sh を REPO_DIR 引数化。Canary パターン（1→確認→2→確認→全件）と state machine（.migration-state.json）で resumable に。migrate-todo.sh の todo.md → ID index 書き換えバグも修正。/migrate-repo skill (skills/migrate-repo/SKILL.md) で全体を一括起動。実装言語は元の issue 本文では .py を想定していたが、隣接スクリプトの慣例に合わせて .sh を採用。
+
+### FEATURE: worktree-end: deferred-resume cleanup for Windows EPERM (closes #251 and #357) (2026-05-19, #251, #357)
+Background: Step 6c (git worktree remove) of /worktree-end fails with EPERM on Windows + VS Code. The previous in-session workarounds (#294: 'cd <main>' chain; #333: Reload Window) could not release the session-level CWD lock held by the VS Code extension host when the session had entered the worktree via the EnterWorktree tool. The variant resurfaced as #357 and could only be recovered by a full Claude Code restart.
+Changes: Introduced a deferred-resume escape path. When Step 6c fails with EPERM/busy/not-empty, /worktree-end writes a 3-line marker at ~/.workflow-plans/worktree-end/pending-cwd-unlock-<repo-id>--<branch> (branch / worktree-path / 'pre-remove' stage) and exits gracefully with instructions to run /worktree-end --resume in a new session. The new entry point bin/worktree-end-resume-load.js validates the marker (WORKTREE_BASE_DIR path-traversal guard, KNOWN_STAGES whitelist) and replays the remaining cleanup (worktree remove, prune, orphan-dir, branch -D, fetch + pull). hooks/enforce-worktree.js is generalized to support multiple marker prefixes via a MARKER_PREFIXES constant plus prefix-loop dispatch in isMarkerFilePath / isAllowedMarkerDelete (PR1). 52 tests pass; security review PASS.
+
+### FEATURE: sentinel chain guard + rules/git.md write commands expansion (#382) (2026-05-20)
+Background: Sentinel echo commands chained with && could bypass hook classification in workflow-gate.js (the sentinel echo dropped silently while the chained non-sentinel command ran unguarded). Separately, rules/git.md only covered git add/commit/push, leaving other write subcommands (fetch, pull, merge, rebase, worktree, stash, etc.) undocumented as chain-prohibited.
+Changes: Extracted shared sentinel recognition primitives to hooks/lib/sentinel-patterns.js (SSOT refactor; workflow-mark.js now imports from it). Added sentinel chain guard to hooks/workflow-gate.js blocking echo <<WORKFLOW_*>> && <non-sentinel> forms. Expanded rules/git.md Write Commands section to enumerate all git write subcommands. Added test suite tests/feature-sentinel-and-chain-gate.sh (15 cases, all passing).
 
 ### INCIDENT: #1: Subagent autonomously ran winget install (jq) without user approval (2026-05-20, #384)
 Cause: A general-purpose subagent launched by write-tests detected missing jq and autonomously ran winget install --id jqlang.jq --silent without user approval. rules/user-escalation.md Rule 1 (Autonomy-First) had no carve-out for system-state-altering commands, and rules/ops.md did not list package manager commands as requiring approval.

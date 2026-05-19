@@ -26,6 +26,11 @@ Reuse across all subsequent steps in this skill invocation — do not re-resolve
 Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 1. **Pre-flight checks:**
+   - If `--resume` flag is present:
+     ```
+     node bin/worktree-end-resume-load.js --plans-dir <PLANS_DIR>
+     ```
+     Exit after resume completes (exit 0) or fails (exit 1). Skip steps 2–6 entirely.
    - `gh --version` — abort with installation guidance if gh is not found.
    - Verify cwd is inside a linked worktree (not the main worktree):
      `git rev-parse --git-common-dir` must differ from `git rev-parse --git-dir`.
@@ -141,11 +146,26 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       `cd "<main>" && git -C "<main>" worktree remove "<path>"` is also
       permitted via `isAllowedCdWorktreeRemove` for Windows/VS Code where
       the Bash CWD resets between calls (#294).
+   b.6. **Write deferred-cleanup marker** (`pending-cwd-unlock-`):
+      Compute marker path via `getMarkerPath(mainRoot, branch, MARKER_PREFIXES.CWD_UNLOCK)`.
+      Write 3-line content (Use the Write tool — atomic; auto-creates `worktree-end/` on first use):
+      ```
+      <branch>
+      <absolute-worktree-path>
+      pre-remove
+      ```
+      This marker authorises `/worktree-end --resume` to complete cleanup in a new session.
+      Note: the existing `pending-branch-delete-` marker (step b) is kept on disk — it is
+      required to authorise `git branch -D` in the resume path (Risk #16).
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
-   c.1. **VS Code CWD-lock recovery** (Windows; only on EPERM / "busy" /
-      "not empty" from step 6c). Ask the user to run `Developer: Reload Window`
-      (Ctrl+Shift+P), then retry step 6c once. If it still fails, stop and
-      surface the error (issue #333).
+   c.1. **Deferred-fork graceful exit** (Windows; only on EPERM / "busy" /
+      "not empty" from step 6c). The `pending-cwd-unlock-` marker written in
+      step b.6 is already on disk. Display:
+      ```
+      Worktree removal deferred.
+      Run /worktree-end --resume in a new session to complete cleanup.
+      ```
+      Stop. Do NOT delete the marker here — the next session reads it.
    d. `git -C <main> worktree prune`
    e. **Orphan-dir cleanup** at `<WORKTREE_BASE_DIR>/<task-name>`:
       ```
