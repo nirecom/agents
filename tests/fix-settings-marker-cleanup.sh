@@ -123,6 +123,34 @@ marker_path_for() {
     " -- "$repo" "$branch" 2>/dev/null
 }
 
+cwd_unlock_marker_path_for() {
+    local repo="$1" branch="$2"
+    node -e "
+      const crypto = require('crypto');
+      const path = require('path');
+      const { spawnSync } = require('child_process');
+      const repo = process.argv[1];
+      const branch = process.argv[2];
+      const plans = process.env.WORKFLOW_PLANS_DIR;
+      const r = spawnSync('git', ['rev-parse', '--git-common-dir'],
+        { cwd: repo, encoding: 'utf8' });
+      const common = path.resolve(repo, r.stdout.trim());
+      const id = crypto.createHash('sha256').update(common).digest('hex').slice(0,16);
+      const enc = encodeURIComponent(branch);
+      const p = path.join(plans, 'worktree-end', 'pending-cwd-unlock-' + id + '--' + enc);
+      console.log(p.replace(/\\\\/g, '/'));
+    " -- "$repo" "$branch" 2>/dev/null
+}
+
+call_getMarkerPath() {
+    run_with_timeout 30 node -e "
+      try {
+        const m = require('$MODULE');
+        console.log(m.getMarkerPath(process.argv[1], process.argv[2]));
+      } catch(e) { console.log('ERROR: ' + e.message); }
+    " -- "$1" "$2" 2>/dev/null
+}
+
 setup_repo_branch_gone() {
     # branch absent, marker present
     local repo="$1" branch="$2" wtree="$3"
@@ -643,6 +671,189 @@ T27_e2e_hook_blocks_write_to_tracked_file() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# D1–D9 — PR1 backward compatibility + new prefix tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+# D1 — getMarkerPath backward compat (default prefix = pending-branch-delete-)
+# Expected: FAIL until PR1 exports getMarkerPath
+D1_getMarkerPath_backward_compat() {
+    local repo="$TMPDIR_BASE/d1-repo"
+    local plans="$TMPDIR_BASE/d1-plans"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    export WORKFLOW_PLANS_DIR="$plans"
+    local r
+    r="$(call_getMarkerPath "$repo" "fix/foo")"
+    unset WORKFLOW_PLANS_DIR
+    case "$r" in
+        *"pending-branch-delete-"*) pass "D1 getMarkerPath_backward_compat" ;;
+        *) fail "D1 getMarkerPath_backward_compat == $r" ;;
+    esac
+}
+
+# D2 — isMarkerFilePath backward compat (2-arg recognizes BRANCH_DELETE marker)
+# Verifies the default-parameter behavior: omitting the 3rd `prefixes` arg
+# still recognizes the legacy pending-branch-delete- marker.
+D2_isMarkerFilePath_backward_compat() {
+    local repo="$TMPDIR_BASE/d2-repo"
+    local plans="$TMPDIR_BASE/d2-plans"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    export WORKFLOW_PLANS_DIR="$plans"
+    local marker
+    marker="$(marker_path_for "$repo" "fix/foo")"
+    local r
+    r="$(call_isMarkerFilePath "$marker" "$repo")"
+    unset WORKFLOW_PLANS_DIR
+    [ "$r" = "true" ] && pass "D2 isMarkerFilePath_backward_compat" \
+                     || fail "D2 isMarkerFilePath_backward_compat == $r"
+}
+
+# D3 — isAllowedMarkerDelete backward compat (2-arg, allows pending-branch-delete- rm)
+D3_isAllowedMarkerDelete_backward_compat() {
+    local repo="$TMPDIR_BASE/d3-repo"
+    local wbase="$TMPDIR_BASE/d3-wbase"
+    local plans="$TMPDIR_BASE/d3-plans"
+    mkdir -p "$wbase/foo"
+    export WORKFLOW_PLANS_DIR="$plans"
+    setup_repo_branch_gone "$repo" "fix/foo" "$wbase/foo/agents"
+    local marker
+    marker="$(marker_path_for "$repo" "fix/foo")"
+    local r
+    WORKTREE_BASE_DIR="$wbase" r="$(call_isAllowedMarkerDelete "rm \"$marker\"" "$repo")"
+    unset WORKFLOW_PLANS_DIR
+    [ "$r" = "true" ] && pass "D3 isAllowedMarkerDelete_backward_compat" \
+                     || fail "D3 isAllowedMarkerDelete_backward_compat == $r"
+}
+
+# D4 — isMarkerFilePath recognizes pending-cwd-unlock- marker (PR2)
+# Expected: FAIL until PR2 adds CWD_UNLOCK to ALL_MARKER_PREFIXES
+D4_isMarkerFilePath_cwd_unlock_pr2() {
+    local repo="$TMPDIR_BASE/d4-repo"
+    local plans="$TMPDIR_BASE/d4-plans"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    export WORKFLOW_PLANS_DIR="$plans"
+    local cwd_marker
+    cwd_marker="$(cwd_unlock_marker_path_for "$repo" "fix/foo")"
+    local r
+    r="$(call_isMarkerFilePath "$cwd_marker" "$repo")"
+    unset WORKFLOW_PLANS_DIR
+    [ "$r" = "true" ] && pass "D4 isMarkerFilePath_cwd_unlock_pr2" \
+                     || fail "D4 isMarkerFilePath_cwd_unlock_pr2 == $r"
+}
+
+# D5 — Hook allows Write to pending-cwd-unlock- marker (PR2)
+# Expected: FAIL until PR2
+D5_hook_allows_write_cwd_unlock_pr2() {
+    local repo="$TMPDIR_BASE/d5-repo"
+    local plans="$TMPDIR_BASE/d5-plans"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    export WORKFLOW_PLANS_DIR="$plans"
+    local cwd_marker
+    cwd_marker="$(cwd_unlock_marker_path_for "$repo" "fix/foo")"
+    local payload out
+    payload="$(hook_payload_write "$cwd_marker")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    unset WORKFLOW_PLANS_DIR
+    case "$out" in
+        *"\"decision\":\"block\""*) fail "D5 hook_allows_write_cwd_unlock_pr2 blocked: $out" ;;
+        *) pass "D5 hook_allows_write_cwd_unlock_pr2" ;;
+    esac
+}
+
+# D6 — Hook allows rm of pending-cwd-unlock- marker (PR2, branch gone)
+# Expected: FAIL until PR2
+D6_hook_allows_rm_cwd_unlock_pr2() {
+    local repo="$TMPDIR_BASE/d6-repo"
+    local wbase="$TMPDIR_BASE/d6-wbase"
+    local plans="$TMPDIR_BASE/d6-plans"
+    mkdir -p "$wbase/foo"
+    export WORKFLOW_PLANS_DIR="$plans"
+    # Setup minimal repo without the feature branch
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    local cwd_marker
+    cwd_marker="$(cwd_unlock_marker_path_for "$repo" "fix/foo")"
+    mkdir -p "$(dirname "$cwd_marker")"
+    printf '%s\n%s\n%s\n' "fix/foo" "$wbase/foo/agents" "pre-remove" > "$cwd_marker"
+    local payload out
+    payload="$(hook_payload_bash "rm \"$cwd_marker\"")"
+    out="$(ENFORCE_WORKTREE=on WORKTREE_BASE_DIR="$wbase" run_hook "$payload" "$repo")"
+    unset WORKFLOW_PLANS_DIR
+    case "$out" in
+        *"\"decision\":\"block\""*) fail "D6 hook_allows_rm_cwd_unlock_pr2 blocked: $out" ;;
+        *) pass "D6 hook_allows_rm_cwd_unlock_pr2" ;;
+    esac
+}
+
+# D7 — Unknown prefix pending-foo- is blocked
+# Must PASS in PR1: unknown prefixes are rejected by existing code
+D7_unknown_prefix_blocked() {
+    local repo="$TMPDIR_BASE/d7-repo"
+    local wbase="$TMPDIR_BASE/d7-wbase"
+    local plans="$TMPDIR_BASE/d7-plans"
+    mkdir -p "$wbase/foo"
+    export WORKFLOW_PLANS_DIR="$plans"
+    mkdir -p "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
+    local repo_id
+    repo_id=$(node -e "
+      const crypto=require('crypto'), path=require('path'), {spawnSync}=require('child_process');
+      const r=spawnSync('git',['rev-parse','--git-common-dir'],{cwd:process.argv[1],encoding:'utf8'});
+      const common=path.resolve(process.argv[1],r.stdout.trim());
+      console.log(crypto.createHash('sha256').update(common).digest('hex').slice(0,16));
+    " -- "$repo" 2>/dev/null)
+    local bad_marker="$plans/worktree-end/pending-foo-${repo_id}--feature%2Ftest"
+    mkdir -p "$(dirname "$bad_marker")"
+    printf '%s\n%s\n' "feature/test" "$wbase/foo/agents" > "$bad_marker"
+    local r
+    WORKTREE_BASE_DIR="$wbase" r="$(call_isAllowedMarkerDelete "rm \"$bad_marker\"" "$repo")"
+    unset WORKFLOW_PLANS_DIR
+    [ "$r" = "false" ] && pass "D7 unknown_prefix_blocked" \
+                      || fail "D7 unknown_prefix_blocked == $r"
+}
+
+# D8 — classify() is prefix-independent for cwd-unlock marker
+# Must PASS before and after PR2: classify() is prefix-independent
+D8_classify_prefix_independent() {
+    local r
+    r="$(call_classify 'rm "/tmp/.workflow-plans/worktree-end/pending-cwd-unlock-abc123def456--fix%2Ffoo"')"
+    [ "$r" = "write" ] && pass "D8 classify_prefix_independent" \
+                      || fail "D8 classify_prefix_independent == $r"
+}
+
+# D9 — module.exports exposes MARKER_PREFIXES, getRepoId, getMarkerPath (PR1)
+# Expected: FAIL until PR1 exports MARKER_PREFIXES, getRepoId, getMarkerPath
+D9_module_exports_marker_api() {
+    local r
+    r=$(node -e "
+      try {
+        const m = require('$MODULE');
+        const ok = typeof m.MARKER_PREFIXES === 'object' &&
+                   typeof m.getRepoId === 'function' &&
+                   typeof m.getMarkerPath === 'function';
+        console.log(ok ? 'true' : 'false');
+      } catch(e) { console.log('ERROR: ' + e.message); }
+    " 2>/dev/null)
+    [ "$r" = "true" ] && pass "D9 module_exports_marker_api" \
+                     || fail "D9 module_exports_marker_api == $r"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -672,6 +883,15 @@ T24_isMarkerFilePath_no_match_repo_file
 T25_e2e_hook_allows_write_to_marker
 T26_e2e_hook_allows_edit_to_marker
 T27_e2e_hook_blocks_write_to_tracked_file
+D1_getMarkerPath_backward_compat
+D2_isMarkerFilePath_backward_compat
+D3_isAllowedMarkerDelete_backward_compat
+D4_isMarkerFilePath_cwd_unlock_pr2
+D5_hook_allows_write_cwd_unlock_pr2
+D6_hook_allows_rm_cwd_unlock_pr2
+D7_unknown_prefix_blocked
+D8_classify_prefix_independent
+D9_module_exports_marker_api
 
 echo ""
 echo "─────────────────────────────────────────"
