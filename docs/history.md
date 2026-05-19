@@ -140,3 +140,7 @@ Changes: New bin/github-issues/wip-state.sh helper with set/check/clear/setup ve
 ### FEATURE: /issue-create: auto-survey existing issues before creating (2026-05-18, #378)
 Background: Every time the user creates a new issue via /issue-create, they must manually instruct survey/reopen/sub-issue/sibling steps. This automates all five outcomes inside the skill using a new dispatch wrapper script.
 Changes: New bin/github-issues/issue-create-dispatch.sh dispatch script handles five verdicts (none/reopen/sub-of/make-parent/sibling). skills/issue-create/SKILL.md rewritten to 4-phase procedure: Gather/Survey/Confirm/Dispatch. rules/github-issues.md updated with new survey behavior and sub-issue node-id clarification.
+
+### FEATURE: wip-state.sh setup: auto-create session-fingerprint field if missing (2026-05-19, #383)
+Background: cmd_setup hard-errored when the session-fingerprint Projects v2 text field did not exist, requiring manual UI creation. Broke zero-touch onboarding for new repos and bulk issue migration (#247).
+Changes: Added ensure_field helper inside cmd_setup: auto-creates missing session-fingerprint field via createProjectV2Field mutation, re-discovers it after creation, idempotent no-op when field exists. Added project-scope hard-gate (gh auth status check) before mutation.
