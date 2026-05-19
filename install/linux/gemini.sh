@@ -1,5 +1,6 @@
 #!/bin/bash
 # gemini.sh - Install Gemini CLI via npm
+export SYSTEM_OPS_APPROVED=1
 
 if [ -z "${C_RESET+x}" ]; then
     if [ -t 1 ]; then
