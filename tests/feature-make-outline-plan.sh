@@ -215,6 +215,41 @@ else
 fi
 
 echo ""
+# ---------------------------------------------------------------------------
+# Issue #329: Accepted Tradeoffs section + carry-over log symmetry
+# ---------------------------------------------------------------------------
+echo "--- Issue #329 ---"
+
+AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SKILL_REPO="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
+PLANNER_REPO="$AGENTS_ROOT/agents/outline-planner.md"
+
+# #329-1: Accepted Tradeoffs section in SKILL.md
+if grep -qF "Accepted Tradeoffs" "$SKILL_REPO" 2>/dev/null; then
+    pass "#329-1: 'Accepted Tradeoffs' section present in make-outline-plan/SKILL.md"
+else
+    fail "#329-1: 'Accepted Tradeoffs' section missing from make-outline-plan/SKILL.md"
+fi
+
+# #329-2: Accepted Tradeoffs section in outline-planner.md
+if grep -qF "Accepted Tradeoffs" "$PLANNER_REPO" 2>/dev/null; then
+    pass "#329-2: 'Accepted Tradeoffs' section present in agents/outline-planner.md"
+else
+    fail "#329-2: 'Accepted Tradeoffs' section missing from agents/outline-planner.md"
+fi
+
+# #329-3: round-log + planner-response trailer mechanism. After the _shared/
+# extraction, the SKILL.md references skills/_shared/codex-review-loop.md and
+# the shared spec carries the round-log / planner-response wording (SSOT).
+SHARED_LOOP="$AGENTS_ROOT/skills/_shared/codex-review-loop.md"
+if grep -qF "_shared/codex-review-loop.md" "$SKILL_REPO" 2>/dev/null && \
+   grep -qE "round.*log|planner-response" "$SHARED_LOOP" 2>/dev/null; then
+    pass "#329-3: SKILL.md references _shared/codex-review-loop.md; shared spec covers round-log / planner-response"
+else
+    fail "#329-3: SKILL.md must reference _shared/codex-review-loop.md, and shared spec must cover round-log / planner-response"
+fi
+
+echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 
