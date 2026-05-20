@@ -204,8 +204,24 @@ tests/             — test suite for hooks, skills, and framework behaviors
 | Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` |
 | PowerShell 5+ (Windows) | `install.ps1`, symlink creation, session-sync wrapper |
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | The framework targets Claude Code; without it, hooks/skills have no host |
+| `jq` (≥1.6) | `bin/review-plan-codex`, `bin/review-loop-cap-menu` — round-log JSON encoding and cap-menu output (hard prerequisite; missing jq → early-exit FAILED with install guidance) |
 
 > Windows: symlink creation requires Developer Mode (Settings → System → For developers) or Administrator privileges.
+
+#### jq install
+
+```
+# Windows
+winget install jqlang.jq
+
+# macOS
+brew install jq
+
+# Debian / Ubuntu
+sudo apt install jq
+```
+
+Reviewer scripts call `codex_core_check_jq` at startup; missing jq results in early exit with the same install commands echoed.
 
 ### Optional
 
@@ -215,7 +231,6 @@ tests/             — test suite for hooks, skills, and framework behaviors
 | [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` |
 | [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit` (without it, all repos are scanned conservatively) |
 | `osascript` (macOS) / `notify-send` (Linux) | Toast notifications from `bin/session-sync.sh` |
-| `jq` | `install/linux/vscode-settings.sh` — merging VS Code user settings on Linux/macOS |
 
 ### GitHub Copilot
 

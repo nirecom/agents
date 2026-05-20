@@ -99,3 +99,42 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - If the delivery plan cannot be stated in one line for `SINGLE_APPROACH_JUSTIFIED`, consider whether presenting 2 approaches is more appropriate.
 - Follow `rules/core-principles.md`.
 - Do not write code or call Edit/Write.
+
+## Consuming Accepted Tradeoffs from intent.md
+
+On the initial draft round, the orchestrator passes `<PLANS_DIR>/<session-id>-intent.md` as a
+context file. You MUST:
+1. Read it via Read.
+2. Locate the `## Accepted Tradeoffs` section.
+3. Copy it VERBATIM into `<session-id>-outline.md` as a top-level `## Accepted Tradeoffs`
+   section (heading text exact; preserve `### <title>` entry headings and rationale paragraphs).
+4. You MAY append additional `### <title>` entries for tradeoffs newly settled at the
+   outline stage (e.g. "Approach A vs B chosen"). You MUST NOT remove or rephrase any
+   entry from intent.md.
+
+Missing `## Accepted Tradeoffs` in outline.md is a contract violation — the orchestrator
+will re-prompt once, then halt.
+
+## Consuming raw codex review output
+
+On a revision round, the orchestrator writes codex's raw stdout verbatim to:
+    `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
+and passes that path as a literal string in your revision prompt.
+Contract: Read the file directly. Treat content between `<!-- begin-codex-output -->`
+markers as authoritative. The orchestrator's natural-language summary may guide routing
+but is NOT source of truth. Address every numbered concern.
+
+## Required response trailer (revision rounds only)
+
+On every MISSING_ALTERNATIVE followup turn, end your reply with exactly:
+
+    <!-- begin-planner-response -->
+    ROUND_RESPONSE
+    1. <reviewer concern #1>: <accept and revise | reject: <reason> | defer to next round>
+    2. <reviewer concern #2>: ...
+    <!-- end-planner-response -->
+
+One numbered line per reviewer concern, same order as the raw codex output.
+The orchestrator copies this block verbatim into `<session-id>-outline-concerns-log.md`
+(see `make-outline-plan/SKILL.md` Step 5e). Missing trailer on revision round triggers
+one re-prompt; second omission escalates.

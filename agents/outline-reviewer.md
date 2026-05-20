@@ -56,3 +56,12 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
 - Do not write the revised approaches yourself — that is the outline-planner's job.
 - Do not call Edit/Write.
 - Apply `rules/core-principles.md` when judging approach soundness.
+- Symmetry with Research Escalation: `skills/make-detail-plan/SKILL.md` establishes
+  "Approve further research / provide answer / adjust scope" on research cap. The
+  revision-rounds cap is the symmetric pair. Both caps now route through
+  `bin/review-loop-cap-menu`. Do NOT propose alternative escalation flows that bypass
+  this helper.
+- Outline.md MUST contain a top-level `## Accepted Tradeoffs` section carrying the
+  intent.md tradeoffs verbatim plus any newly-settled outline-stage entries. If absent
+  or missing intent-stage entries, mark the outline `MISSING_ALTERNATIVE` with a HIGH
+  concern noting the missing section.
