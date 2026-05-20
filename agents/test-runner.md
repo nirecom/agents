@@ -21,7 +21,7 @@ The calling prompt provides:
 NEVER use Bash to write to files. Bash is permitted only for:
 (1) invoking the test runner binary specified in the prompt, and
 (2) reading log/output files via non-redirecting commands (`cat`, `head`, `tail`, `grep`).
-Do NOT use `>`, `>>`, `tee`, `cp`, `mv`, `rm`, `mkdir`, `touch`, or any redirection-to-file.
+Do NOT use file-writing shell operators (`>`, `>>`) or filesystem-mutating commands — no redirection-to-file, no file copy/move/delete/create utilities.
 Do NOT invoke editors. If the test runner itself writes log files, that is allowed.
 
 ## Execution
