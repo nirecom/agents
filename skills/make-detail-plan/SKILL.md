@@ -12,20 +12,9 @@ must be read and passed to the planner before drafting begins.
 
 ### Step 0 — Resolve <PLANS_DIR>
 
-Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
-
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
-
-Capture the printed absolute path and substitute it for every <PLANS_DIR>
-placeholder in the remainder of this SKILL.md. Subagent prompts must receive
-the resolved absolute path as a literal string (subagents cannot expand $VAR).
-Reuse across all subsequent steps in this skill invocation — do not re-resolve.
-
-Canonical documentation: skills/_shared/resolve-plans-dir.md.
+Apply `skills/_shared/resolve-plans-dir.md` once at the start of Procedure;
+substitute the resolved absolute path for every `<PLANS_DIR>` placeholder
+below. Reuse across all subsequent steps — do not re-resolve.
 
 1. **Read prior-stage artifacts** (if they exist):
    - `<PLANS_DIR>/<session-id>-intent.md` — agreed requirements, scope, non-goals
@@ -51,54 +40,41 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 4. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
    Pass the full task context **plus** the contents of the intent/approach files above.
 
-5. **Review the draft with codex first, fall back to Claude if unavailable.**
-   For each review round:
-   a. Write the planner's draft using the Write tool to:
-      `<PLANS_DIR>/drafts/<session-id>-detail-draft.md`
+5. **Codex review loop.** Apply `skills/_shared/codex-review-loop.md` with these parameters:
+   - FORMAT: `detail-plan`
+   - DRAFT_FILE: `<PLANS_DIR>/drafts/<session-id>-detail-draft.md`
+   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
+   - CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-concerns-log.md`
+   - DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-detail-debug.log`
+   - CAP: 2
+   - MAX_EXTENSIONS: 2
+   - PLANNER_AGENT: `detail-planner`
+   - REVIEWER_AGENT: `detail-reviewer`
+   - ACCEPTED_TRADEOFFS_FILE: `<PLANS_DIR>/<session-id>-outline.md` (SSOT carrying intent-stage + outline-stage tradeoffs after `make-outline-plan` Step 4a)
+   - NON_APPROVED_VERDICT: `NEEDS_REVISION`
 
+   Detail-specific addenda:
+   - The `EXTENSIONS_USED` counter is initialized to 0 at loop start.
+   - Re-invoke `detail-planner` for revision rounds using the same model from step 3.
 
-   b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
-      On the first review round only, determine which prior-stage files exist:
-      - `<PLANS_DIR>/<session-id>-intent.md`
-      - `<PLANS_DIR>/<session-id>-outline.md`
+   Outcomes:
+   - APPROVED → proceed to step 7.
+   - NEEDS_REVISION → loop continues (each round consumes `revision_rounds`; cap is 2).
+   - `FAILED — round cap reached` → proceed to step 6.
 
-      Write `<PLANS_DIR>/drafts/<session-id>-context.md` with whichever sections apply
-      (English headers mandatory, source comments mandatory):
-      ```
-      <!-- Source: <PLANS_DIR>/<session-id>-intent.md -->
-      ## Section 1: Intent (User Requirements)
+6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
+   - LABEL: `"Detail Plan Review"`
+   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
+   - MAX_EXTENSIONS: 2
 
-      <verbatim contents of <session-id>-intent.md>
+   Detail-specific dispatch override: `rc==0`, user picks `adjust` → escalate
+   to the user with loop status / current plan / blocking concerns. All other
+   outcomes route per the shared spec; on AUTO_EXTEND or `extend`, loop back
+   into the step 5 review round.
 
-      ---
-
-      <!-- Source: <PLANS_DIR>/<session-id>-outline.md -->
-      ## Section 2: Outline (Design Proposal)
-
-      <verbatim contents of <session-id>-outline.md>
-      ```
-      Fallback rules:
-      - If only the intent file exists: Section 1 only (no separator, no Section 2).
-      - If only the outline file exists: Section 2 only (no separator, no Section 1).
-      - If neither exists: skip context file; call review-plan-codex without `--context`.
-
-      On revision rounds 2+, reuse the context file from round 1 — do not regenerate.
-   c. Run via Bash: `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-detail-draft.md --format detail-plan [--context <PLANS_DIR>/drafts/<session-id>-context.md] --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"`
-      (omit the session context file `--context` when no context file was created in step b; always include the core-principles context)
-   d. Parse the first line of stdout:
-      - `## Codex Plan Review: PERFORMED` → read inside `<!-- begin-codex-output -->` fences.
-        Extract the first non-blank line as the verdict token.
-        - `APPROVED` → loop done, proceed to step 7.
-        - `NEEDS_REVISION` → extract numbered concerns (lines starting `1.`, `2.`, …) and treat as reviewer concerns. If no concerns parse, treat as malformed (below).
-        - Anything else → **format malformed**.
-      - `## Codex Plan Review: SKIPPED — …` or `FAILED — …` → **codex unavailable**.
-      - **Format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
-      - **Codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason from status line>)` to `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` and silently launch `detail-reviewer` subagent. Do NOT emit to chat.
-   e. Whether from codex or Claude reviewer: if result is `NEEDS_REVISION`, send concerns back to planner for revision (using the same model from step 3), then repeat from step 5a. Each round consumes `revision_rounds`.
-
-6. **Escalate to the user** if the loop reaches **2 revision rounds** without approval, or a research/malformed-retry cap is hit (see Research Escalation). When escalating, message in this order:
+   **Research/malformed-retry cap escalation**: if a research or malformed-retry cap is hit (see Research Escalation), message in this order:
    1. **Loop status** — which counter/cap was hit and how many rounds occurred.
-   2. **The planner's current plan** — paste or closely summarize. The user cannot see subagent output, so this is their only way to understand what has been designed.
+   2. **The planner's current plan** — paste or closely summarize.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
 7. Once the reviewer returns `APPROVED`, write the final plan to
