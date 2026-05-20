@@ -82,6 +82,22 @@ case "$ARGS" in
     fi
     exit 0 ;;
   issue\ reopen\ *)
+    RNUM=$(echo "$ARGS" | awk '{print $3}')
+    eval "RFAIL=\${GH_MOCK_REOPEN_FAIL_${RNUM}:-0}"
+    if [ "$RFAIL" = "1" ]; then
+        echo "error: cannot reopen issue $RNUM" >&2
+        exit 1
+    fi
+    exit 0 ;;
+  api\ repos/*/issues/*\ --jq*)
+    # parent-ancestor-reopen.sh: api repos/<owner>/<repo>/issues/<N> --jq .parent.number // empty
+    INUM=$(echo "$ARGS" | awk '{print $2}' | awk -F/ '{print $NF}')
+    eval "ABSENT=\${GH_MOCK_PARENT_ABSENT_${INUM}:-0}"
+    if [ "$ABSENT" = "1" ]; then
+        echo ""; exit 0
+    fi
+    eval "PNUM=\${GH_MOCK_PARENT_NUM_${INUM}:-}"
+    echo "$PNUM"
     exit 0 ;;
   issue\ view\ *--json\ id*)
     # Extract issue number from args (positional after "issue view")
@@ -122,6 +138,7 @@ teardown_mock() {
     TMP=""
     unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_FAIL GH_MOCK_CREATEDAT_EMPTY GH_MOCK_ITEM_EDIT_FAIL 2>/dev/null || true
     unset GH_MOCK_SUBISSUE_API_FAIL GH_MOCK_NEW_ISSUE_NUM GH_MOCK_ISSUE_STATE_42 GH_MOCK_ISSUE_STATE_43 GH_MOCK_ISSUE_STATE_100 2>/dev/null || true
+    unset GH_MOCK_PARENT_NUM_200 GH_MOCK_PARENT_ABSENT_100 GH_MOCK_REOPEN_FAIL_100 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -610,6 +627,80 @@ elif grep -qi "survey" "$SKILL_MD" && grep -qi "verdict" "$SKILL_MD" && grep -qi
     pass "D6: SKILL.md contains Survey, Verdict, and Confirm (case-insensitive)"
 else
     fail "D6: SKILL.md missing one of Survey/Verdict/Confirm — RED until implementation"
+fi
+
+# ---------------------------------------------------------------------------
+# DV10: sub-of + parent CLOSED → ancestor reopen called, stdout last line = URL
+# ---------------------------------------------------------------------------
+if [ ! -x "$DISPATCH" ]; then
+    fail "DV10: dispatch script missing — RED until implementation"
+else
+    setup_mock
+    export GH_MOCK_NEW_ISSUE_NUM=200
+    export GH_MOCK_PARENT_NUM_200=100
+    export GH_MOCK_ISSUE_STATE_100=CLOSED
+    STDOUT_OUT="$TMP/dv10-stdout.txt"
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    RC=$?
+    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
+    if [ "$RC" -eq 0 ] \
+       && grep -q "issue reopen 100" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && echo "$LAST_LINE" | grep -q "/issues/200$"; then
+        pass "DV10: sub-of parent CLOSED → ancestor reopen called, stdout last line = URL"
+    else
+        fail "DV10: sub-of parent CLOSED expected reopen + URL (rc=$RC last='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+    fi
+    teardown_mock
+fi
+
+# ---------------------------------------------------------------------------
+# DV11: sub-of + parent OPEN → reopen NOT called, stdout last line = URL
+# ---------------------------------------------------------------------------
+if [ ! -x "$DISPATCH" ]; then
+    fail "DV11: dispatch script missing — RED until implementation"
+else
+    setup_mock
+    export GH_MOCK_NEW_ISSUE_NUM=200
+    export GH_MOCK_PARENT_NUM_200=100
+    export GH_MOCK_ISSUE_STATE_100=OPEN
+    STDOUT_OUT="$TMP/dv11-stdout.txt"
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    RC=$?
+    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
+    if [ "$RC" -eq 0 ] \
+       && ! grep -q "issue reopen" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && echo "$LAST_LINE" | grep -q "/issues/200$"; then
+        pass "DV11: sub-of parent OPEN → no reopen, stdout last line = URL"
+    else
+        fail "DV11: sub-of parent OPEN should skip reopen (rc=$RC last='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+    fi
+    teardown_mock
+fi
+
+# ---------------------------------------------------------------------------
+# DV12: sub-of + REOPEN_FAIL_100 → dispatch exit 0, WARN to stderr, stdout last line = URL
+# ---------------------------------------------------------------------------
+if [ ! -x "$DISPATCH" ]; then
+    fail "DV12: dispatch script missing — RED until implementation"
+else
+    setup_mock
+    export GH_MOCK_NEW_ISSUE_NUM=200
+    export GH_MOCK_PARENT_NUM_200=100
+    export GH_MOCK_ISSUE_STATE_100=CLOSED
+    export GH_MOCK_REOPEN_FAIL_100=1
+    STDOUT_OUT="$TMP/dv12-stdout.txt"
+    STDERR_OUT="$TMP/dv12-stderr.txt"
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>"$STDERR_OUT"
+    RC=$?
+    LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
+    if [ "$RC" -eq 0 ] \
+       && grep -qi "warn" "$STDERR_OUT" 2>/dev/null \
+       && echo "$LAST_LINE" | grep -q "/issues/200$"; then
+        pass "DV12: reopen failure non-fatal → exit 0, WARN to stderr, URL on stdout"
+    else
+        fail "DV12: reopen failure should be non-fatal (rc=$RC last='$LAST_LINE' stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
+    fi
+    teardown_mock
 fi
 
 # ---------------------------------------------------------------------------
