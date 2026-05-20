@@ -914,6 +914,23 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   } catch (e) { return false; }
 }
 
+// Allows history.md writes from the main worktree when /issue-close-finalize sets
+// ISSUE_CLOSE_SKILL=1 as an inline env prefix.  Three-axis AND:
+//   1. Command string starts with ISSUE_CLOSE_SKILL=1 (inline prefix — not process.env)
+//   2. Paths are confined to docs/history.md and docs/history/
+//   3. Shape is git-add or git-commit with docs(history): subject
+function isAllowedHistoryWriteViaIssueCloseSkill(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (hasShellChaining(cmd)) return false;
+  // Axis 1: inline env prefix
+  if (!/^ISSUE_CLOSE_SKILL=1[ \t]+/.test(cmd)) return false;
+  // Axis 2+3: git add (history paths only)
+  if (/^ISSUE_CLOSE_SKILL=1[ \t]+git[ \t]+add[ \t]+docs\/history\.md[ \t]+docs\/history\/[ \t]*$/.test(cmd)) return true;
+  // Axis 2+3: git commit with docs(history): subject
+  if (/^ISSUE_CLOSE_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(history\):[^"']*["'][ \t]*$/.test(cmd)) return true;
+  return false;
+}
+
 // Returns true when repoCwd is the main worktree (non-linked).
 // In a linked worktree, --git-common-dir and --git-dir differ.
 function isMainCheckout(repoCwd) {
@@ -1531,6 +1548,7 @@ if (mainCheckout) {
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
+    if (isAllowedHistoryWriteViaIssueCloseSkill(cmd)) done();
   }
 
   // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
@@ -1579,6 +1597,7 @@ module.exports = {
   hasGitHooksBypass,
   findFirstUnquotedAnd,
   isAllowedMainWorktreeCleanup,
+  isAllowedHistoryWriteViaIssueCloseSkill,
   isAllowedCdWorktreeRemove,
   findRepoRootForBash,
   getSessionRepoRoots,

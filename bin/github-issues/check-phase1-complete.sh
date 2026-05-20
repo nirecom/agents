@@ -4,14 +4,10 @@
 # Verify Phase 1 (issue-close-stage) completion for issue #<N>. Called by
 # /commit-push as a pre-flight before pushing the PR.
 #
-# Two conditions must BOTH hold:
-#   (a) a sentinel comment (pending or appended) exists on the issue
-#   (b) docs/history.md or docs/history/*.md contains a #<N>: entry that is
-#       reachable from HEAD (i.e. actually committed, not merely in working tree)
+# Condition: a sentinel comment (pending or appended) exists on the issue.
+# (History entry check removed — doc-append now runs in Phase 2 from main.)
 #
-# CWD must be a working tree root containing docs/history.md
-# (check_history_entry uses CWD-relative paths). /commit-push runs this from
-# the worktree root.
+# /commit-push runs this from the worktree root.
 
 set -uo pipefail
 
@@ -41,24 +37,11 @@ SENTINEL_RAW=$(gh issue view "$N" --json comments \
 
 SENTINEL=$(parse_sentinel "$SENTINEL_RAW")
 case "$SENTINEL" in
-    pending|appended) SENTINEL_OK=1 ;;
-    *)                SENTINEL_OK=0 ;;
+    pending|appended)
+        exit 0
+        ;;
+    *)
+        echo "Error: Phase 1 not started for #${N}. Run /issue-close-stage ${N} from this worktree." >&2
+        exit 1
+        ;;
 esac
-
-HIST_OK=0
-if check_history_entry "$N"; then
-    HIST_OK=1
-fi
-
-if [ "$SENTINEL_OK" -eq 1 ] && [ "$HIST_OK" -eq 1 ]; then
-    exit 0
-fi
-
-if [ "$SENTINEL_OK" -eq 0 ] && [ "$HIST_OK" -eq 0 ]; then
-    echo "Error: Phase 1 not started for #${N}. Run /issue-close-stage ${N} from this worktree." >&2
-elif [ "$SENTINEL_OK" -eq 0 ]; then
-    echo "Error: sentinel missing for #${N} (history entry present). Run /issue-close-stage ${N} to post the sentinel." >&2
-else
-    echo "Error: history entry missing for #${N} (sentinel present). Re-run /issue-close-stage ${N} to resume Step E." >&2
-fi
-exit 1
