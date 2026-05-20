@@ -13,13 +13,17 @@
 set -uo pipefail
 
 # --- Argument parsing ---
-if [ $# -lt 1 ]; then
+if [ $# -lt 1 ] && [ -z "${DRY_RUN:-}" ]; then
     echo "Usage: $0 <issue-number> [--commit <hash>]" >&2
     exit 1
 fi
 
-ISSUE_NUM="$1"
-shift
+if [ $# -ge 1 ]; then
+    ISSUE_NUM="$1"
+    shift
+else
+    ISSUE_NUM="${ISSUE_NUMBER:-0}"
+fi
 
 # Pure digits only — guards against shell injection via positional arg.
 if ! printf '%s' "$ISSUE_NUM" | grep -qE '^[0-9]+$'; then
@@ -44,15 +48,25 @@ while [ $# -gt 0 ]; do
 done
 
 # --- Environment check ---
-if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
+if [ -z "${DRY_RUN:-}" ] && [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
     echo "Error: AGENTS_CONFIG_DIR is not set. /issue-close-stage and /issue-close-finalize must be run from a session that has it configured." >&2
     exit 1
 fi
 
-cd "$AGENTS_CONFIG_DIR" || { echo "Error: failed to cd into AGENTS_CONFIG_DIR=$AGENTS_CONFIG_DIR" >&2; exit 1; }
+if [ -z "${DRY_RUN:-}" ]; then
+  cd "$AGENTS_CONFIG_DIR" || { echo "Error: failed to cd into AGENTS_CONFIG_DIR=$AGENTS_CONFIG_DIR" >&2; exit 1; }
+fi
 
 HISTORY_FILE="docs/history.md"
 HISTORY_DIR="docs/history"
+
+# --- DRY_RUN mode: use env-provided fields, skip gh + doc-append (test/smoke use only) ---
+if [ -n "${DRY_RUN:-}" ]; then
+    BODY="${ISSUE_BODY:-}"
+    TITLE="${ISSUE_TITLE:-smoke}"
+    CATEGORY="${ISSUE_CATEGORY:-FEATURE}"
+    CLOSED_DATE="$(date +%Y-%m-%d)"
+else
 
 # --- Idempotency: skip if `### #N:` heading already present in history.md or rotated archive ---
 # Anchor on `### ` prefix to avoid false-positive matches against in-body references
@@ -125,31 +139,13 @@ else
     CATEGORY="FEATURE"
 fi
 
+fi # end DRY_RUN else
+
 # --- Extract Background/Changes or Cause/Fix from body ---
-# Captures everything from `Field:` until the next known field header (or EOF),
-# so multi-line textarea content from GitHub issue forms is preserved. Newlines
-# inside the captured value are normalized to spaces because doc-append expects
-# single-line arguments.
-extract_field() {
-    # $1 = field name (Background, Changes, Cause, Fix)
-    printf '%s\n' "$BODY" | awk -v F="$1" '
-        BEGIN { cap = 0; out = "" }
-        $0 ~ "^(Background|Changes|Cause|Fix):" {
-            if (cap) { cap = 0 }
-            if ($0 ~ "^"F":") {
-                line = $0
-                sub("^"F":[ \t]*", "", line)
-                out = line
-                cap = 1
-                next
-            }
-        }
-        cap && /./ {
-            out = (out == "" ? $0 : out " " $0)
-        }
-        END { print out }
-    '
-}
+# Recognizes inline (Field: value), H2 (## Field), and H3 (### Field) shapes,
+# case-insensitive. Newlines are normalized to spaces for doc-append single-line args.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$_SCRIPT_DIR/lib/extract-field.sh"
 
 if [ "$CATEGORY" = "INCIDENT" ]; then
     CAUSE=$(extract_field Cause)
@@ -167,7 +163,12 @@ else
     ARGS+=(--commits "#${ISSUE_NUM}")
 fi
 
-# --- Append ---
+# --- Append (or dry-run print) ---
+if [ -n "${DRY_RUN:-}" ]; then
+    echo "DRY_RUN: ${ARGS[*]}"
+    exit 0
+fi
+
 if ! doc-append "$HISTORY_FILE" "${ARGS[@]}"; then
     echo "Error: doc-append failed" >&2
     exit 1
