@@ -2,114 +2,48 @@
 
 ## Workflow
 
-1. **Workflow init** — **Before anything else:** Run `/workflow-init` (routes by GH issue context; see `skills/workflow-init/SKILL.md`).
-   Mid-workflow follow-up issues: use `/issue-create`.
-   For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
-   Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
-2. **Plan** — Three-stage planning pipeline. Run each stage in order.
-   Read `rules/core-principles.md` first — it governs every plan stage.
-   - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
-     If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
-   - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.
-   - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
-   - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
-   - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
-   Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
-3. **Branch/Worktree creation** —
-   - **`ENFORCE_WORKTREE=on` (default)**: all writes from the main worktree are blocked, regardless of branch. Run `/worktree-start` to create a linked worktree on a feature branch.
-     Enforced by `enforce-worktree.js` (PreToolUse) and `pre-commit`.
-   - **`ENFORCE_WORKTREE=off`**: main worktree writes allowed. Options: branch-only (`git switch -c <name>`, naming → `rules/branch.md`) or main directly for trivial changes. Consult `rules/branch.md` for branch-vs-main.
-   Record: `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`
-   (`main` is only valid when `ENFORCE_WORKTREE=off`.)
-4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
-   - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-5. **Code** —
-   - **`ENFORCE_WORKTREE=on`:** Call Edit directly — no diff presentation or approval required.
-   - **`ENFORCE_WORKTREE=off`:** Present a diff in chat before calling Edit. Wait for approval.
-6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
-   - Skill: `/run-tests`
-   - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
-   - Bash: `review-code-codex --base <merge-base> --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` for cross-provider adversarial review
-     (always parallel, never blocks workflow). Output is shown directly to the user via
-     the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
-     is visible without relying on Claude's summary.
-   - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
-     (always parallel, non-blocking; warnings only, never blocks workflow)
-7. **Docs** —
-   - **`ENFORCE_WORKTREE=on`:** Skip `/update-docs` — docs review is deferred to PR review.
-   - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
-8. **User verification:**
-   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5.
-   - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,
-     skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit
-     `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (the `: <reason>` is mandatory
-     and becomes part of the on-disk audit record), and set the Bash
-     `description` to explain what the user is approving. The PreToolUse hook
-     surfaces staged files (and an open PR URL, if any) above the permission
-     dialog.
-8.5. **Phase 1 issue close** — For each issue N in the session's `closes_issues`
-   (parsed from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`),
-   run `/issue-close-stage <N>` from the linked worktree. Phase 1 performs the
-   sub-issue gate, posts the pending sentinel, commits the `docs/history.md`
-   entry on the feature branch, and updates the parent body if applicable.
-   Skip silently when `closes_issues` is empty. Skip entirely when
-   `ENFORCE_WORKTREE=off` (the 2-phase split does not apply to direct-main work
-   — `/issue-close-finalize` runs the full chain at Step 10b instead).
-9. **Commit** — Run `/commit-push`. Pre-flights Phase 1 completion per
-   `closes_issues` (aborts if missing) and appends `<!-- issue-close-pr-of: <N> -->`
-   markers to the PR body so `find-pr-by-marker.sh` can resolve the merge SHA in
-   Phase 2. After the PR is created, display the PR URL in chat so the user can
-   confirm it.
-10. **Cleanup** — Based on the step 3 decision:
-    - **worktree:** Run `/worktree-end` (merge + sentinel emit + cleanup). Mandatory; do not skip.
-    - **branch:** Confirm PR is created. After the PR is merged (outside this session),
-      delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
-    - **main:** Skip.
+Steps below assume `ENFORCE_WORKTREE=on` (default). For `=off` differences, see `rules/worktree.md`.
 
-10b. **Phase 2 issue close** — After the PR is merged, run
-    `/issue-close-finalize --from-session` from the main worktree (reads
-    `closes_issues` from the session intent.md and routes to the correct close
-    path; skips if empty). Phase 2 is API-only on the normal path: promote the
-    sentinel, close the issue, and post the resolved-by + appended sentinels.
-    Safe from the main worktree under `ENFORCE_WORKTREE=on`.
+1. **Workflow init** — Run `/workflow-init` first (routes by GH issue context; see `skills/workflow-init/SKILL.md`). Mid-workflow follow-up issues: `/issue-create`. Docs-only edits may skip via `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (does not authorize skipping later steps).
+2. **Plan** — Three-stage pipeline; read `rules/core-principles.md` first.
+   - **2a. Research** — `/survey-code` and/or `/deep-research`. Skip: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
+   - **2b.** `/make-outline-plan` — 2-3 approaches, user sign-off.
+   - **2c.** `/make-detail-plan` — file-level plan via planner/reviewer loop.
+   - Skipping 2a does NOT justify skipping 2b/2c. Skip whole Plan: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
+   - Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
+3. **Branch/Worktree** — Run `/worktree-start` to create a linked worktree on a feature branch (main-worktree writes are blocked by `enforce-worktree.js` + `pre-commit`). Record: `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"` (`main` valid only when `ENFORCE_WORKTREE=off`).
+4. **Write tests** — Always before source changes. Run `/write-tests`. Skip: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
+5. **Code** — Call Edit directly (no diff approval required under `=on`).
+6. **Run tests & Security review** — All in parallel (single response, multiple tool calls):
+   - `/run-tests`
+   - `/review-code-security` subagent (skip: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`)
+   - `review-code-codex --base <merge-base> --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` (non-blocking; status line shown directly via Bash result)
+   - `review-skill-size --base <merge-base>` (non-blocking, warnings only)
+7. **Docs** — Skip `/update-docs`; docs review deferred to PR review.
+8. **User verification** — No action under `=on`; proceed to 8.5.
+8.5. **Phase 1 issue close** — For each N in session `closes_issues` (parsed from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`), run `/issue-close-stage <N>` from the linked worktree (sub-issue gate, pending sentinel, `docs/history.md` commit, parent body update). Skip silently when empty.
+9. **Commit** — Run `/commit-push` (pre-flights Phase 1 completion; appends `<!-- issue-close-pr-of: <N> -->` to PR body for `find-pr-by-marker.sh`). Display PR URL after creation.
+10. **Cleanup** — Per step 3 decision: **worktree** → `/worktree-end` (mandatory); **branch/main** → see `rules/branch.md`.
+10b. **Phase 2 issue close** — After PR merge, run `/issue-close-finalize --from-session` from the main worktree (API-only on normal path; safe under `=on`). See `rules/github-issues.md`.
 
 ## Plan Mode Incompatibility
 
-`--permission-mode plan` is incompatible with this workflow — Skill tool invocations
-are restricted in that mode. Always use default mode for implementation tasks.
+`--permission-mode plan` is incompatible with this workflow (Skill tool restricted). Use default mode.
 
 ## Docs-only Short-circuit
 
-If every staged file matches the human-facing docs allowlist — any `.md` under `docs/`,
-or one of the root-level files `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
-`LICENSE.md` — steps 1–6 are auto-bypassed. Only `user_verification` is required before
-committing. Root `CLAUDE.md`, `SKILL.md`, and subdirectory `README.md` are behavior/prompt
-code and do NOT qualify.
+If every staged file is in the human-facing docs allowlist — any `.md` under `docs/`, or root `README.md` / `CHANGELOG.md` / `CONTRIBUTING.md` / `LICENSE.md` — steps 1–6 are auto-bypassed; only `user_verification` is required before commit. Root `CLAUDE.md`, `SKILL.md`, and subdirectory `README.md` are behavior/prompt code and do NOT qualify.
 
 ## Workflow State Recovery
 
-The main conversation can reset workflow state only when it has enough holistic context
-to judge that a reset is genuinely warranted. Skills and subagents must not reset.
-
-```
-echo "<<WORKFLOW_RESET_FROM_<step>>>"
-```
+Only the main conversation may reset workflow state (skills/subagents must not): `echo "<<WORKFLOW_RESET_FROM_<step>>>"`
 
 ## Mid-workflow finding capture
 
-While running the workflow — at any point up to and including Step 5 of
-`/worktree-end` (last-chance review immediately before Step 5.5 runs) — if you
-discover a bug unrelated to the current task, a related follow-up task, or a
-next-task candidate, append a bullet to the matching section of
-`<worktree>/WORKTREE_NOTES.md`:
+At any point up to Step 5 of `/worktree-end` (Step 5.5 backs up `WORKTREE_NOTES.md` — later findings go to `/issue-create`), append unrelated bugs / follow-up tasks / next-task candidates to `<worktree>/WORKTREE_NOTES.md`:
 
 - `## BugsFound` — defects observed during the workflow
-- `## RelatedTasks` — adjacent work to address in a separate session
+- `## RelatedTasks` — adjacent work for a separate session
 - `## NextTasks` — follow-ups specific to the current change
 
-Edit `WORKTREE_NOTES.md` directly (worktree directory; gitignored; not subject
-to `enforce-worktree`). Replace `- (none)` on first append.
-
-**Cutoff:** `/worktree-end` Step 5.5 copies `WORKTREE_NOTES.md` to the backup
-destination. Findings discovered AFTER Step 5.5 will not appear in the Final
-Report — open a new issue via `/issue-create` instead.
+Edit `WORKTREE_NOTES.md` directly (gitignored; not subject to `enforce-worktree`). Replace `- (none)` on first append.
