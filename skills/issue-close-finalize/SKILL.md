@@ -136,6 +136,40 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-body-update.sh" <owner/repo> <
 
 No-op when the issue has no parent.
 
+### Step G.5: parent close proposal (only when Step G runs)
+
+Initialize counters before the proposal loop:
+
+```bash
+PROPOSAL_ACCEPTED=0; PROPOSAL_DECLINED=0; PROPOSAL_SKIPPED=0
+```
+
+**G.5-1** — Pre-check:
+
+```bash
+PROPOSAL_PARENT=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-close-proposal-prepare.sh" \
+    <owner/repo> <N>)
+```
+
+Exit 1 → `PROPOSAL_SKIPPED++`; stop. Exit 2 → warn + `PROPOSAL_SKIPPED++`; stop.
+
+**G.5-2** — LLM eval + ask: run `gh issue view $PROPOSAL_PARENT --json title,body` and read the parent's body. Judge whether the parent's own work is complete: no unchecked `- [ ]` items, no pending markers, and the issue reads as a pure tracking container → yes; when in doubt → no. On no → `PROPOSAL_DECLINED++`; stop. On yes → AskUserQuestion asking the user to confirm closing `#$PROPOSAL_PARENT`. User declines → `PROPOSAL_DECLINED++`; stop.
+
+**G.5-3** — On user yes:
+
+1. `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-close-proposal-execute.sh" $PROPOSAL_PARENT`
+2. `/issue-close-finalize $PROPOSAL_PARENT` (triage reads CLOSED → `auto_close_path`; Step E writes a history.md entry + commit for each accepted proposal)
+
+`PROPOSAL_ACCEPTED++`; set `N=$PROPOSAL_PARENT`; loop back to G.5-1.
+
+End report (emit only when Step G is in NEXT_STEPS):
+
+```bash
+if [[ ",$NEXT_STEPS," == *,G,* ]]; then
+    echo "parent close proposals: $PROPOSAL_ACCEPTED accepted / $PROPOSAL_DECLINED declined / $PROPOSAL_SKIPPED skipped"
+fi
+```
+
 ## Step H: close the issue
 
 ```bash
