@@ -10,6 +10,7 @@
 # Environment:
 #   MOCK_LOG       — file to append invocation lines to (required for create logging).
 #   MOCK_COUNTER   — file holding the next issue number (auto-initialized to 101).
+#   MOCK_HAS_EXISTING_PROJECT — set to "1" to make `gh project list` return a matching project.
 #
 # Exit 99 from this script means an unexpected branch was hit (test failure marker).
 
@@ -60,20 +61,103 @@ case "$cmd" in
                 ;;
         esac
         ;;
-    project)
+    repo)
         sub="${1:-}"; shift || true
-        echo "gh project $sub $*" >> "$LOG"
-        # Return JSON-ish for create / field-create if needed.
-        echo '{"number":99,"id":"PVT_mock","fields":{"nodes":[]}}'
-        exit 0
-        ;;
-    api)
-        echo "gh api $*" >> "$LOG"
-        echo '{}'
+        echo "gh repo $sub $*" >> "$LOG"
+        case "$sub" in
+            view)
+                has_jq=0; json_field=""; prev=""
+                for arg in "$@"; do
+                    [ "$prev" = "--json" ] && json_field="$arg"
+                    [ "$arg" = "--jq" ] && has_jq=1
+                    prev="$arg"
+                done
+                if [ "$has_jq" = "1" ]; then
+                    case "$json_field" in
+                        owner) echo "mockowner" ;;
+                        name)  echo "mockrepo" ;;
+                        *)     echo "" ;;
+                    esac
+                else
+                    echo '{"owner":{"login":"mockowner"},"name":"mockrepo"}'
+                fi
+                ;;
+            *) echo '{}' ;;
+        esac
         exit 0
         ;;
     auth)
-        # Pretend we are authenticated.
+        sub="${1:-}"; shift || true
+        echo "gh auth $sub $*" >> "$LOG"
+        [ "$sub" = "status" ] && echo "Logged in. Scopes: project, repo"
+        exit 0
+        ;;
+    project)
+        sub="${1:-}"; shift || true
+        echo "gh project $sub $*" >> "$LOG"
+        case "$sub" in
+            list)
+                if [ "${MOCK_HAS_EXISTING_PROJECT:-}" = "1" ]; then
+                    echo '{"projects":[{"number":99,"title":"mockrepo migration","id":"PVT_kwDOmock"}]}'
+                else
+                    echo '{"projects":[]}'
+                fi
+                ;;
+            view)
+                echo '{"id":"PVT_kwDOmock","number":99}'
+                ;;
+            field-list)
+                echo '{"fields":[{"name":"Status","id":"PVTF_status"}]}'
+                ;;
+            field-create)
+                echo '{"id":"PVTF_contentdate_mock"}'
+                ;;
+            *)
+                echo '{"number":99,"id":"PVT_mock","fields":{"nodes":[]}}'
+                ;;
+        esac
+        exit 0
+        ;;
+    api)
+        first="${1:-}"
+        echo "gh api $*" >> "$LOG"
+        if [ "$first" = "graphql" ]; then
+            query_body=""
+            jq_filter=""
+            prev_arg=""
+            for arg in "$@"; do
+                case "$arg" in
+                    query=*) query_body="${arg#query=}" ;;
+                    --jq)    : ;; # next arg is the filter
+                    *)
+                        [ "$prev_arg" = "--jq" ] && jq_filter="$arg"
+                        ;;
+                esac
+                prev_arg="$arg"
+            done
+            json_out=""
+            case "$query_body" in
+                *createProjectV2Field*)
+                    json_out='{"data":{"createProjectV2Field":{"projectV2Field":{"id":"PVTF_contentdate_mock"}}}}' ;;
+                *createProjectV2*)
+                    json_out='{"data":{"createProjectV2":{"projectV2":{"id":"PVT_kwDOmock","number":99}}}}' ;;
+                *viewer*id*)
+                    json_out='{"data":{"viewer":{"id":"MDQ6User_mock123"}}}' ;;
+                *user*login*)
+                    json_out='{"data":{"user":{"id":"MDQ6User_mock123"}}}' ;;
+                *organization*login*)
+                    json_out='{"data":{"organization":{"id":"MDEyOk9yZ_mock123"}}}' ;;
+                *)
+                    json_out='{"data":{}}' ;;
+            esac
+            if [ -n "$jq_filter" ] && command -v jq >/dev/null 2>&1; then
+                echo "$json_out" | jq -r "$jq_filter"
+            else
+                echo "$json_out"
+            fi
+        else
+            echo '{}'
+        fi
         exit 0
         ;;
     *)
