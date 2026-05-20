@@ -184,7 +184,16 @@ test_N1_writeNotes_exact_content() {
         '' \
         '## Gitignored files copied from main' \
         '- a.env' \
-        '- b/.env.local')"
+        '- b/.env.local' \
+        '' \
+        '## BugsFound' \
+        '- (none)' \
+        '' \
+        '## RelatedTasks' \
+        '- (none)' \
+        '' \
+        '## NextTasks' \
+        '- (none)')"
 
     local actual
     actual="$(cat "$notes_file")"
@@ -285,7 +294,16 @@ test_I1_writeNotes_idempotent() {
         '' \
         '## Gitignored files copied from main' \
         '- a.env' \
-        '- b/.env.local')"
+        '- b/.env.local' \
+        '' \
+        '## BugsFound' \
+        '- (none)' \
+        '' \
+        '## RelatedTasks' \
+        '- (none)' \
+        '' \
+        '## NextTasks' \
+        '- (none)')"
     local actual; actual="$(cat "$notes_file")"
     if [ "$actual" = "$expected" ]; then
         pass "I1: writeNotes is idempotent (second call produces identical content)"
