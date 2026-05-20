@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "scanned_files": 1,
+  "hot_regions": [
+    {
+      "file": "TARGET_FILE_PLACEHOLDER",
+      "line": 3,
+      "matched_keyword": "rm -rf",
+      "keyword_source": "settings.json",
+      "context": ["# Risky Ops", "", "- `rm -rf` (POSIX)"]
+    },
+    {
+      "file": "TARGET_FILE_PLACEHOLDER",
+      "line": 5,
+      "matched_keyword": "Remove-Item",
+      "keyword_source": "bash-write-patterns.js",
+      "context": ["", "- `rm -rf` (POSIX)", "- `Remove-Item -Recurse -Force` (PowerShell)", "", ""]
+    },
+    {
+      "file": "TARGET_FILE_PLACEHOLDER",
+      "line": 7,
+      "matched_keyword": "git commit",
+      "keyword_source": "bash-write-patterns.js",
+      "context": ["- `Remove-Item -Recurse -Force` (PowerShell)", "", "- `git commit --amend` to rewrite history", "See hook for details.", ""]
+    }
+  ]
+}
