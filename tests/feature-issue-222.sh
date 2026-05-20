@@ -160,13 +160,16 @@ teardown_tmp
 # T-series — issue-close-triage.sh routing
 # ============================================================================
 
-# --- T1a: stage triage — OPEN + no sentinel → proceed (B,D,E,F,G)
+# --- T1a: stage triage — OPEN + no sentinel → proceed (B,D,F,G)
+# After issue #325, Phase 1's Step E (doc-append) is removed — history.md
+# writes happen in Phase 2 instead. T2/T5/T7 below use the FINALIZE triage
+# and still include Step E because Phase 2 owns it now.
 setup_tmp
 if out=$(cd "$TMP" && GH_MOCK_SCENARIO=issue_task run_with_timeout 15 bash "$STAGE_TRIAGE_SCRIPT" 42 2>/dev/null); then
     RC=0; else RC=$?; fi
 eval "$out" 2>/dev/null || true
-if [ "$RC" -eq 0 ] && [ "${ACTION:-}" = "proceed" ] && [ "${NEXT_STEPS:-}" = "B,D,E,F,G" ]; then
-    pass "T1a: stage triage OPEN + no sentinel → proceed (B,D,E,F,G)"
+if [ "$RC" -eq 0 ] && [ "${ACTION:-}" = "proceed" ] && [ "${NEXT_STEPS:-}" = "B,D,F,G" ]; then
+    pass "T1a: stage triage OPEN + no sentinel → proceed (B,D,F,G)"
 else
     fail "T1a: rc=$RC action=${ACTION:-} next=${NEXT_STEPS:-}"
 fi
