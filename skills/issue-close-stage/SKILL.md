@@ -1,6 +1,6 @@
 ---
 name: issue-close-stage
-description: Phase 1 of the 2-phase issue-close split. Runs INSIDE the linked worktree BEFORE the PR is merged. Sub-issue gate, pending sentinel, doc-append + commit, sentinel promote, parent body update.
+description: Phase 1 of the 2-phase issue-close split. Runs INSIDE the linked worktree BEFORE the PR is merged. Sub-issue gate, pending sentinel, sentinel promote, parent body update.
 user-invocable: false
 ---
 
@@ -71,33 +71,6 @@ safe to post on public repos.
 numeric segment in the URL is the REST API comment ID needed by Step F's PATCH
 call.
 
-## Step E: idempotent doc-append + commit (with rotation handling)
-
-```bash
-ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" <N>
-```
-
-`doc-append` (invoked by `issue-to-history.sh`) auto-fires `doc-rotate.py`
-when `docs/history.md` crosses 500 lines. Rotation can:
-- Trim `docs/history.md` (deleted lines).
-- Create or update `docs/history/YYYY.md` (year archive files).
-- Update `docs/history/index.md` (rotation-rebuilt index).
-
-To capture both additions and deletions across both paths, stage both with `-A`:
-
-```bash
-git add -A docs/history.md docs/history/
-if [ -z "$(git status --porcelain docs/history.md docs/history/)" ]; then
-    echo "Error: doc-append produced no changes for #<N>" >&2
-    exit 1
-fi
-git commit -m "docs(history): record issue #<N>"
-```
-
-The empty-staging check catches the case where `doc-append` was a no-op
-(entry already present), which would otherwise leave Step F running against a
-sentinel that has no committed history entry behind it.
-
 ## Step F: promote sentinel to `appended`
 
 ```bash
@@ -129,11 +102,6 @@ the PR is merged run `/issue-close-finalize --from-session`.
 
 ## Safety notes
 
-- **Recovery**: if Step E (doc-append) fails after Step D (sentinel posted),
-  the sentinel remains on the issue but the local `docs/history.md` lacks the
-  `#<N>:` entry. `check-phase1-complete.sh` (called by `/commit-push`) will
-  detect this and abort the push. Re-running `/issue-close-stage <N>` routes
-  via triage `ACTION=resume_e` and retries E only.
 - **Untrusted content**: never `eval` issue body, title, or comments.
 - **Sentinel body**: hardcoded literal — never interpolate variables or add
   metadata. The Phase 1 marker is shared with `check-phase1-complete.sh` and
