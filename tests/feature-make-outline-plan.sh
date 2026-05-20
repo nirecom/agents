@@ -238,11 +238,15 @@ else
     fail "#329-2: 'Accepted Tradeoffs' section missing from agents/outline-planner.md"
 fi
 
-# #329-3: carry-over log / planner-response symmetry with detail-plan
-if grep -qE "round.*log|carry.*over|planner-response" "$SKILL_REPO" 2>/dev/null; then
-    pass "#329-3: carry-over log / round-log / planner-response mention in make-outline-plan/SKILL.md"
+# #329-3: round-log + planner-response trailer mechanism. After the _shared/
+# extraction, the SKILL.md references skills/_shared/codex-review-loop.md and
+# the shared spec carries the round-log / planner-response wording (SSOT).
+SHARED_LOOP="$AGENTS_ROOT/skills/_shared/codex-review-loop.md"
+if grep -qF "_shared/codex-review-loop.md" "$SKILL_REPO" 2>/dev/null && \
+   grep -qE "round.*log|planner-response" "$SHARED_LOOP" 2>/dev/null; then
+    pass "#329-3: SKILL.md references _shared/codex-review-loop.md; shared spec covers round-log / planner-response"
 else
-    fail "#329-3: carry-over/round-log/planner-response missing from make-outline-plan/SKILL.md"
+    fail "#329-3: SKILL.md must reference _shared/codex-review-loop.md, and shared spec must cover round-log / planner-response"
 fi
 
 echo ""
