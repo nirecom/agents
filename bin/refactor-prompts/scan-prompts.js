@@ -29,18 +29,9 @@ if (keywordsArg !== "-") {
 // Read keyword list from stdin
 // ---------------------------------------------------------------------------
 function readStdin() {
-  const chunks = [];
-  const buf = Buffer.alloc(4096);
-  try {
-    while (true) {
-      const n = fs.readSync(0, buf, 0, buf.length);
-      if (n === 0) break;
-      chunks.push(buf.slice(0, n));
-    }
-  } catch {
-    // EOF
-  }
-  return Buffer.concat(chunks).toString("utf8").replace(/\r\n/g, "\n");
+  // fs.readFileSync(0) reads the whole stdin into a fresh buffer in one call,
+  // avoiding the buffer-reuse pitfall of looping readSync into a shared Buffer.
+  return fs.readFileSync(0, "utf8").replace(/\r\n/g, "\n");
 }
 
 let keywordsDoc;
