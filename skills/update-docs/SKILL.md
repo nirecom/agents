@@ -53,4 +53,4 @@ After completing this skill:
    `README.md` is required for all repos — create it if it does not exist before staging.
    The commit gate detects staged docs/ or root `*.md` changes as evidence of completion.
    Docs updates are mandatory for every task — there is no skip path.
-4. Wait for the user to verify the changes, then run `echo "<<WORKFLOW_USER_VERIFIED>>"` and invoke `commit-push` via the Skill tool.
+4. Wait for the user to verify the changes, then run `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` and invoke `commit-push` via the Skill tool.

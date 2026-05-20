@@ -199,7 +199,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 - Secret values must not appear in the backup manifest.
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup (6e) — never `rm -rf`/`Remove-Item -Recurse -Force`.
 - `gh --version` must succeed before any gh command.
-- `<<WORKFLOW_USER_VERIFIED>>` is emitted in step 4 (before `gh pr merge`) or step 3b
+- `<<WORKFLOW_USER_VERIFIED: <reason>>>` is emitted in step 4 (before `gh pr merge`) or step 3b
   (after `state == MERGED`), via `skills/_shared/user-verified.md`. Never on abort
   or while polling.
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
