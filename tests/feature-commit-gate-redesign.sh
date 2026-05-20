@@ -403,6 +403,35 @@ else
     fail "C17. idempotency: a=$RES_17A b=$RES_17B state-equal=$([ "$SNAPSHOT_17_BEFORE" = "$SNAPSHOT_17_AFTER" ] && echo yes || echo no)"
 fi
 
+# 17b. Positive: payload cwd = linked worktree, CLAUDE_PROJECT_DIR = main → Tier 3 wins
+PAIR_17B="$(setup_linked_worktree "secC-wt17b")"
+MAIN_17B="${PAIR_17B%|*}"
+WT_17B="${PAIR_17B#*|}"
+echo "x" > "$WT_17B/file.txt"
+git -C "$WT_17B" add file.txt
+SID_17B="c17b-$$"
+write_state "$SID_17B" "$(state_json "$SID_17B" "feature/secC-wt17b-main" "pending" "complete")"
+RES_17B="$(run_gate "$MAIN_17B" "$(build_gate_json 'git commit -m x' "$SID_17B" "$WT_17B")")"
+if is_approve "$RES_17B"; then pass "C17b. payload cwd = linked worktree → resolves to worktree, uv skipped"
+else fail "C17b. expected approve (worktree gate), got: $RES_17B"; fi
+
+# 17c. Negative: payload cwd = main checkout → Tier 3 falls through, Tier 4 wins
+PRIMARY_17C="$(setup_main_checkout "secC-17c-primary")"
+PAYLOAD_17C="$(setup_main_checkout "secC-17c-payload")"
+echo "src" > "$PRIMARY_17C/src.txt"
+mkdir -p "$PRIMARY_17C/tests"
+echo "t" > "$PRIMARY_17C/tests/t.sh"
+git -C "$PRIMARY_17C" add src.txt tests/t.sh
+SID_17C="c17c-$$"
+write_state "$SID_17C" "$(state_json_custom "$SID_17C" "main" \
+    write_tests pending user_verification complete)"
+RES_17C="$(run_gate "$PRIMARY_17C" "$(build_gate_json 'git commit -m x' "$SID_17C" "$PAYLOAD_17C")")"
+if is_approve "$RES_17C"; then
+    pass "C17c. payload cwd = main checkout → falls through, primary staged-change search wins"
+else
+    fail "C17c. expected approve (payload cwd should NOT override primary), got: $RES_17C"
+fi
+
 # ============================================================================
 # Section D: workflow-mark.js push reset (4)
 # ============================================================================
