@@ -125,6 +125,27 @@ function isWorktreeContext(repoDir) {
   }
 }
 
+// isLinkedWorktree — narrower than isWorktreeContext: returns true iff `path`
+// is a valid git directory AND its common-dir differs from its git-dir
+// (i.e., a linked worktree, not the main worktree). Used by resolveRepoDir to
+// gate the payload-cwd tier without conflating repo resolution with the
+// user_verification skip policy at line 431.
+function isLinkedWorktree(dirPath) {
+  if (!dirPath) return false;
+  try {
+    const common = execSync('git rev-parse --git-common-dir', {
+      cwd: dirPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000,
+    }).trim();
+    const dir = execSync('git rev-parse --git-dir', {
+      cwd: dirPath, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000,
+    }).trim();
+    const norm = (p) => path.resolve(dirPath, p).toLowerCase();
+    return norm(common) !== norm(dir);
+  } catch {
+    return false;
+  }
+}
+
 // Return true if dir has any staged changes.
 function hasStagedChanges(dir) {
   try {
@@ -157,11 +178,11 @@ function findAdditionalDirectories() {
 // Resolution order:
 //   1. `git -C <path>` argument (with env-var expansion + Windows normalization)
 //   2. `cd <abs-path> && ...` leading command (Windows normalization)
-//   3. CLAUDE_PROJECT_DIR / process.cwd() (primary), then additionalDirectories,
+//   3. `input.cwd` (Bash hook payload) — authoritative when it resolves to a
+//      linked worktree (isLinkedWorktree gate). Closes #380, #394.
+//   4. CLAUDE_PROJECT_DIR / process.cwd() (primary), then additionalDirectories,
 //      preferring whichever has staged changes
-// Tier 2 covers Bash sessions whose process.cwd() has drifted to the main worktree
-// while the user is operating in a linked worktree (CC issue #27343 / #321).
-function resolveRepoDir(command) {
+function resolveRepoDir(command, input) {
   const raw = parseGitCArg(command);
   const expanded = raw ? raw.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, a, b) => process.env[a || b] || '') : raw;
   const cArg = normalizeForWindows(expanded);
@@ -169,6 +190,15 @@ function resolveRepoDir(command) {
 
   const cdArg = normalizeForWindows(parseCdCommand(command));
   if (cdArg) return cdArg;
+
+  // Tier 3 — hook payload cwd, gated by isLinkedWorktree. Authoritative under
+  // Windows VS Code where process.cwd() drifts to the main worktree (CC #27343).
+  // Gate prevents stale/main-checkout cwd from bypassing Tier 4's staged-change
+  // search across CLAUDE_PROJECT_DIR + additionalDirectories.
+  const payloadCwd = input && typeof input.cwd === 'string' ? input.cwd : null;
+  const normPayloadCwd = normalizeForWindows(payloadCwd);
+  if (normPayloadCwd && isLinkedWorktree(normPayloadCwd)) return normPayloadCwd;
+  // else: fall through to Tier 4
 
   const primary = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const norm = (p) => p.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
@@ -387,7 +417,7 @@ if (require.main === module) {
   if (!/^git\s/.test(command)) approve();
   if (!/\scommit(\s|$)/.test(command)) approve();
 
-  const repoDir = resolveRepoDir(command);
+  const repoDir = resolveRepoDir(command, input);
   const docsOnly = isDocsOnlyStaged(repoDir);
   // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
   // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
@@ -448,7 +478,7 @@ if (require.main === module) {
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then git add docs/)',
-    user_verification: 'run immediately: echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
+    user_verification: 'If ENFORCE_WORKTREE=on AND committing from a linked worktree: do NOT emit the sentinel — user_verification is deferred to the merge boundary (gh pr merge / git push to main).  Otherwise: run immediately — echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
   };
 
   const lines = [
