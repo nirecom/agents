@@ -2,16 +2,22 @@
 # Tests for issue #325 — /issue-close-stage skill triage script.
 #
 # Phase 1 (`/issue-close-stage`) runs inside the linked worktree BEFORE PR merge.
-# Steps B,D,E,F,G. Does doc-append, commits to feature branch.
+# After issue #325 centralized history.md writes into Phase 2, Phase 1 steps
+# are B,D,F,G (Step E — doc-append — has been moved to Phase 2 entirely).
 #
 # Routing scenarios for issue-close-stage-triage.sh:
-#   ST1: OPEN + no sentinel        → proceed, B,D,E,F,G
-#   ST2: OPEN + pending + no hist  → resume_e, E,F,G
-#   ST3: OPEN + pending + hist hit → phase1_done, ""
+#   ST1: OPEN + no sentinel        → proceed, B,D,F,G
+#   ST2: OPEN + pending            → resume_f, F,G
 #   ST4: OPEN + appended           → resume_g, G
 #   ST5: CLOSED:*                  → error (mentions /issue-close-finalize)
 #   ST6: non-numeric N             → error (injection guard)
 #   ST7: AGENTS_CONFIG_DIR unset   → error
+#
+# Note: pre-#325 ST3 (`phase1_done` short-circuit when history.md already
+# contained an entry for #N) was removed — Phase 1 no longer touches
+# history.md, so the only signal that determines Phase 1 completion is
+# the sentinel state. ST2's branching on history presence collapses into
+# a single `resume_f` case.
 #
 # RED: this suite fails clean while the script + shared lib are missing.
 
@@ -76,8 +82,8 @@ teardown_tmp() {
 }
 
 # Helper: run stage triage for a scenario; capture STATE/SENTINEL/ACTION/NEXT_STEPS.
-# CRITICAL: cd into $TMP because check_history_entry reads docs/history.md
-# relative to CWD.
+# CRITICAL: cd into $TMP because the triage script reads docs/history.md
+# relative to CWD when needed.
 run_stage_triage() {
     local scenario="$1"
     unset STATE SENTINEL ACTION NEXT_STEPS
@@ -99,47 +105,25 @@ run_stage_triage() {
 # ST-series — stage triage routing
 # ============================================================================
 
-# --- ST1: OPEN + no sentinel → proceed (B,D,E,F,G)
+# --- ST1: OPEN + no sentinel → proceed (B,D,F,G)
 setup_tmp
 run_stage_triage issue_task
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "proceed" ] && [ "$T_NEXT_STEPS" = "B,D,E,F,G" ]; then
-    pass "ST1: OPEN + no sentinel → proceed (B,D,E,F,G)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "proceed" ] && [ "$T_NEXT_STEPS" = "B,D,F,G" ]; then
+    pass "ST1: OPEN + no sentinel → proceed (B,D,F,G)"
 else
     fail "ST1: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- ST2: OPEN + pending + no history → resume_e (E,F,G)
+# --- ST2: OPEN + pending → resume_f (F,G)
+# After #325, Phase 1 doesn't touch history.md, so pending always resumes at F
+# regardless of history.md content.
 setup_tmp
-# docs/history.md intentionally empty (setup_tmp creates it blank).
 run_stage_triage open_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "E,F,G" ]; then
-    pass "ST2: OPEN + pending + no history → resume_e (E,F,G)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_f" ] && [ "$T_NEXT_STEPS" = "F,G" ]; then
+    pass "ST2: OPEN + pending → resume_f (F,G)"
 else
     fail "ST2: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
-fi
-teardown_tmp
-
-# --- ST3: OPEN + pending + history present + git log confirms commit → phase1_done
-setup_tmp
-cat >> "$TMP/docs/history.md" <<'EOF'
-
-### #42: Already staged (2026-05-10, abc1234)
-Background: test
-Changes: done
-EOF
-GIT_MOCK_HISTORY_COMMIT_N=42 \
-    GH_MOCK_SCENARIO=open_with_pending \
-    run_with_timeout 15 bash -c "cd '$TMP' && bash '$STAGE_TRIAGE_SCRIPT' 42 2>/dev/null" > /tmp/st3_out.$$ 2>/dev/null
-T_RC=$?
-eval "$(cat /tmp/st3_out.$$)" 2>/dev/null || true
-rm -f /tmp/st3_out.$$
-T_ACTION="${ACTION:-}"
-T_NEXT_STEPS="${NEXT_STEPS:-}"
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "phase1_done" ] && [ -z "$T_NEXT_STEPS" ]; then
-    pass "ST3: OPEN + pending + history present + git log hit → phase1_done"
-else
-    fail "ST3: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
