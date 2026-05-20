@@ -199,6 +199,10 @@ case "$VERDICT" in
             echo "Retry: gh api -X POST repos/<slug>/issues/${PARENT}/sub_issues -f sub_issue_id=${child_node_id}" >&2
             exit 1
         fi
+        slug="$(get_repo_slug)"
+        if ! bash "$(dirname "${BASH_SOURCE[0]}")/parent-ancestor-reopen.sh" "$slug" "$child_number"; then
+            echo "WARN: ancestor reopen had failures for #${child_number} — see above" >&2
+        fi
         echo "$url"
         ;;
 
