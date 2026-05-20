@@ -478,7 +478,7 @@ if (require.main === module) {
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then git add docs/)',
-    user_verification: 'If ENFORCE_WORKTREE=on AND committing from a linked worktree: do NOT emit the sentinel — user_verification is deferred to the merge boundary (gh pr merge / git push to main).  Otherwise: run immediately — echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
+    user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to merge boundary: gh pr merge / git push to main).\nENFORCE_WORKTREE=off or main worktree → run immediately: echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
   };
 
   const lines = [
