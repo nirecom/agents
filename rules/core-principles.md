@@ -52,3 +52,5 @@ One canonical location owns each fact. Every other location references it, not c
 Summaries, snapshots, caches, and append-only stream records are excluded — they serve a distinct access pattern, not canonical ownership.
 
 **Anti-pattern:** Restating a master's content at every reference site, so the master and its echoes drift out of sync.
+
+**Specialization for prompt content:** see `rules/prompt-criteria.md` §3 for SSOT rules specific to rules/skills/agents.
