@@ -51,6 +51,13 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 3. **Merge decision:**
 
+   **PR state gate** (runs before AUTO_MERGE_PR check — applies to both on/off modes):
+   `gh pr view "$PR_NUMBER" --json state --jq .state`
+   - `MERGED` → step 3b (skip AUTO_MERGE_PR check and step 4).
+   - `CLOSED` → surface error "PR #<N> was closed without merging." and stop.
+   - `OPEN` → continue below.
+   - error / empty / any other state → surface error "Unable to determine PR #<N> state." and stop.
+
    Output `PR #<N> is open: [<url>](<url>)`
 
    Check `AUTO_MERGE_PR` (default `on`):
@@ -128,7 +135,11 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
    b. **Write branch-delete marker** (authorises step f via the `enforce-worktree` hook):
-      - `<repo-id>` = first 16 hex chars of sha256 of `git -C <main> rev-parse --git-common-dir` (absolute path).
+      - `<repo-id>` = output of (hook path and main-root passed as argv — platform-safe):
+        ```
+        node -e "const {getRepoId}=require(process.argv[1]); const id=getRepoId(process.argv[2]); if(!id){process.stderr.write('getRepoId failed\n');process.exit(1);}console.log(id);" -- "$AGENTS_CONFIG_DIR/hooks/enforce-worktree.js" "<absolute-main-root>"
+        ```
+        If the command exits non-zero, abort — do not proceed with a null repo-id.
       - `<encoded-branch>` = `encodeURIComponent(<branch>)` (e.g. `feature/foo` → `feature%2Ffoo`).
       - `<plans>` = `<PLANS_DIR>` (resolved via Step 0 at top of Procedure).
       - `<marker-path>` = `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`. Store for step g.
@@ -202,6 +213,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 - `<<WORKFLOW_USER_VERIFIED>>` is emitted in step 4 (before `gh pr merge`) or step 3b
   (after `state == MERGED`), via `skills/_shared/user-verified.md`. Never on abort
   or while polling.
+- Step 3 PR state gate runs before the AUTO_MERGE_PR check; applies to both on/off modes; `MERGED` always routes to step 3b.
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.

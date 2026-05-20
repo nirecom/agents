@@ -853,6 +853,75 @@ D9_module_exports_marker_api() {
                      || fail "D9 module_exports_marker_api == $r"
 }
 
+# D10a — SKILL.md step 6b: old sha256 recipe absent AND new argv-safe snippet present
+# Compound check: negative (old text gone) + positive (new text present)
+# RED before commit 3: step6b_old_recipe_absent FAILS (old text still there)
+#                    AND step6b_has_argv_require FAILS (new text not yet there)
+# GREEN after commit 3: both sub-checks pass
+D10a_skill_md_step6b_updated() {
+    local skill="$AGENTS_DIR/skills/worktree-end/SKILL.md"
+    # Negative: old sha256-of-raw-git-common-dir prescription must be gone
+    ! grep -qF 'first 16 hex chars of sha256' "$skill" \
+        && pass "D10a step6b_old_recipe_absent" \
+        || fail "D10a step6b_old_recipe_absent: old sha256 prescription still present in SKILL.md"
+    # Positive: new argv-safe getRepoId snippet must be present
+    grep -qF 'require(process.argv[1])' "$skill" \
+        && pass "D10a step6b_has_argv_require" \
+        || fail "D10a step6b_has_argv_require: new getRepoId snippet not found in SKILL.md"
+}
+
+# D10b — old recipe (raw sha256 of git-common-dir) produces DIFFERENT id than getRepoId()
+# Proves root cause: from main worktree, git-common-dir returns ".git" (relative);
+# path.resolve() inside getRepoId() normalizes to absolute → different sha256.
+# PASS in any environment where git rev-parse --git-common-dir is relative (i.e., ".git").
+# Does NOT change with SKILL.md commits — validates the bug exists independently.
+D10b_old_recipe_disagrees_with_getrepoid() {
+    local repo="$AGENTS_DIR"
+    local old_id
+    old_id=$(run_with_timeout 30 node -e "
+      const {execSync} = require('child_process');
+      const crypto = require('crypto');
+      const rawDir = execSync('git rev-parse --git-common-dir',
+        {cwd: process.argv[1], encoding: 'utf8'}).trim();
+      const hash = crypto.createHash('sha256').update(rawDir).digest('hex').slice(0, 16);
+      console.log(hash);
+    " -- "$repo" 2>/dev/null)
+    local new_id
+    new_id=$(run_with_timeout 30 node -e "
+      const {getRepoId} = require(process.argv[1]);
+      const id = getRepoId(process.argv[2]);
+      if (!id) { process.stderr.write('getRepoId failed\n'); process.exit(1); }
+      console.log(id);
+    " -- "$MODULE" "$repo" 2>/dev/null)
+    [ "$old_id" != "$new_id" ] \
+        && pass "D10b old_recipe_disagrees_with_getrepoid: root cause confirmed" \
+        || fail "D10b old_recipe_disagrees_with_getrepoid: IDs match — root cause not reproduced (git-common-dir already absolute?)"
+}
+
+# D10c — new SKILL.md recipe (node + getRepoId) agrees with validator (marker_path_for)
+# Regression protection: writer and validator must produce the same repo-id.
+# PASS from commit 1 onward (getRepoId already exported).
+D10c_new_recipe_matches_validator() {
+    local repo="$AGENTS_DIR"
+    local plans="$TMPDIR_BASE/d10-plans"
+    export WORKFLOW_PLANS_DIR="$plans"
+    local validator_marker
+    validator_marker="$(marker_path_for "$repo" "feature/test")"
+    unset WORKFLOW_PLANS_DIR
+    local validator_id
+    validator_id=$(basename "$validator_marker" | sed 's/pending-branch-delete-//;s/--.*//')
+    local writer_id
+    writer_id=$(run_with_timeout 30 node -e "
+      const {getRepoId} = require(process.argv[1]);
+      const id = getRepoId(process.argv[2]);
+      if (!id) { process.stderr.write('getRepoId failed\n'); process.exit(1); }
+      console.log(id);
+    " -- "$MODULE" "$repo" 2>/dev/null)
+    [ "$writer_id" = "$validator_id" ] \
+        && pass "D10c new_recipe_matches_validator" \
+        || fail "D10c new_recipe_matches_validator: writer=$writer_id validator=$validator_id"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -892,6 +961,9 @@ D6_hook_allows_rm_cwd_unlock_pr2
 D7_unknown_prefix_blocked
 D8_classify_prefix_independent
 D9_module_exports_marker_api
+D10a_skill_md_step6b_updated
+D10b_old_recipe_disagrees_with_getrepoid
+D10c_new_recipe_matches_validator
 
 echo ""
 echo "─────────────────────────────────────────"
