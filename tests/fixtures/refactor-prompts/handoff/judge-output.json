@@ -1,0 +1,29 @@
+{
+  "edits": [
+    {
+      "file": "TARGET_FILE_PLACEHOLDER",
+      "line": 3,
+      "verdict": "delete",
+      "old_text": "- `rm -rf` (POSIX)",
+      "new_text": null,
+      "reason": "Pure restatement of hook literal"
+    },
+    {
+      "file": "TARGET_FILE_PLACEHOLDER",
+      "line": 5,
+      "verdict": "category-rewrite",
+      "old_text": "- `Remove-Item -Recurse -Force` (PowerShell)",
+      "new_text": "- PowerShell destructive file removal (see hooks for blocked commands)",
+      "reason": "Replace specific cmdlet with category wording"
+    },
+    {
+      "file": "TARGET_FILE_PLACEHOLDER",
+      "line": 7,
+      "verdict": "defer",
+      "old_text": null,
+      "new_text": null,
+      "reason": "Context unclear — could be process trigger",
+      "context_excerpt": "- `git commit --amend` to rewrite history"
+    }
+  ]
+}

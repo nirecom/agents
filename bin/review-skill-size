@@ -59,9 +59,7 @@ echo ""
 cat <<'EOF'
 ### Manual review checklist — apply to every changed SKILL.md (regardless of line count)
 
-- [1] Write directives, not prose.
-- [2] Keep each directive to one line.
-- [3] Move multi-step procedures into bin/ or skills/<name>/lib/.
+Criteria SSOT: rules/prompt-criteria.md (§1 Form — directives, one-line, multi-step → CLI).
 
 This is advisory output — no action is blocked.
 EOF
