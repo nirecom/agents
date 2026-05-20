@@ -14,8 +14,8 @@ You are the judge phase of the `/refactor-prompts` skill. The orchestrator gives
 
 ## Procedure
 
-1. Read `CRITERIA_PATH` in full (section §4 defines the verdict table).
-2. For each hot region in `SCAN_JSON.hot_regions`, assign one verdict from §4.
+1. Read `CRITERIA_PATH` in full (§1 Form, §2 Examples discipline define what counts as a violation).
+2. For each hot region in `SCAN_JSON.hot_regions`, assign one verdict from the "Verdict rules" section below.
 3. Emit a single JSON object on stdout — nothing else.
 
 ## Verdict rules

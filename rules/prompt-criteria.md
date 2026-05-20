@@ -1,3 +1,7 @@
+---
+globs: "rules/**/*.md,skills/**/SKILL.md,agents/**/*.md"
+---
+
 # Prompt-Content Quality Criteria
 
 SSOT for prompt-style content quality. Applies to: `rules/*.md`, `skills/*/SKILL.md`, `agents/*.md`.
@@ -52,18 +56,3 @@ Never reproduce content from another authoritative file. Link or reference inste
 
 When pointing to a master file, do not restate its content. A one-line pointer is enough.
 
-## 4. Hot-region triage (used by `/refactor-prompts`)
-
-When `/refactor-prompts` scans files for hot regions, the judge subagent classifies each
-region using this table:
-
-| Verdict | Meaning | Effect |
-|---|---|---|
-| `delete` | Pure restatement of a hook-blocked literal — no informational value beyond the hook | Edit removes the line or region |
-| `category-rewrite` | Multiple sibling literals → collapse to one category-level statement | Edit replaces with category wording |
-| `keep-trigger` | Sentinel or literal the reader must reproduce verbatim | No edit |
-| `keep-context` | Mention is contextual, informative, not an enumeration | No edit |
-| `defer` | Unsure or unsafe to auto-edit | No edit. Region listed in PR body only. |
-
-**`defer` means NO file modification and NO HTML comment.** Deferred regions surface exclusively
-in the PR body under `## Deferred regions (human review required)`.
