@@ -23,20 +23,9 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 ### Step 0 — Resolve <PLANS_DIR>
 
-Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
-
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
-
-Capture the printed absolute path and substitute it for every <PLANS_DIR>
-placeholder in the remainder of this SKILL.md. Subagent prompts must receive
-the resolved absolute path as a literal string (subagents cannot expand $VAR).
-Reuse across all subsequent steps in this skill invocation — do not re-resolve.
-
-Canonical documentation: skills/_shared/resolve-plans-dir.md.
+Apply `skills/_shared/resolve-plans-dir.md` once at the start of Procedure;
+substitute the resolved absolute path for every `<PLANS_DIR>` placeholder
+below. Reuse across all subsequent steps — do not re-resolve.
 
 0. **Surface premise contradictions from Research artifacts.**
 
@@ -102,37 +91,49 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    - Run `/deep-research` with the specified question.
    - Re-prompt outline-planner with the research findings. (Research budget: 2 rounds.)
 
-5. **Review the approach with codex first, fall back to Claude if unavailable.**
-   a. Write the outline-planner's output to the Claude-managed drafts directory
-      (survives compaction; OS temp does not):
-      `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`
+4a. **Accepted Tradeoffs carry-forward** (before invoking outline-planner on initial draft):
+   1. Run `extract-accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md` and capture the block.
+   2. Instruct outline-planner to copy that block VERBATIM into `<session-id>-outline.md` as a
+      top-level `## Accepted Tradeoffs` section. Outline-planner MAY append additional tradeoffs
+      newly settled at the outline stage as further `### <title>` entries — it MUST NOT remove
+      or rephrase intent-stage tradeoffs.
+   3. After outline-planner returns, verify via:
+      `grep -q '^## Accepted Tradeoffs$' <PLANS_DIR>/<session-id>-outline.md`
+      If absent, re-prompt outline-planner once with the missing-section reminder; second
+      omission → halt with an explicit error to the user.
 
+   `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
-   b. **Build the review context file** (once per skill invocation; reuse across revision rounds).
-      If `<PLANS_DIR>/<session-id>-intent.md` exists and the context file has not
-      been built this run, write `<PLANS_DIR>/drafts/<session-id>-context.md`:
-      ```
-      <!-- Source: <PLANS_DIR>/<session-id>-intent.md -->
-      ## Section 1: Intent (User Requirements)
+5. **Codex review loop.** Apply `skills/_shared/codex-review-loop.md` with these parameters:
+   - FORMAT: `outline-plan`
+   - DRAFT_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`
+   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
+   - CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md`
+   - DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-outline-debug.log`
+   - CAP: 1
+   - MAX_EXTENSIONS: 1
+   - PLANNER_AGENT: `outline-planner`
+   - REVIEWER_AGENT: `outline-reviewer`
+   - ACCEPTED_TRADEOFFS_FILE: `<PLANS_DIR>/<session-id>-intent.md`
+   - NON_APPROVED_VERDICT: `MISSING_ALTERNATIVE`
 
-      <verbatim contents of <session-id>-intent.md>
-      ```
-      If the intent file does not exist or is empty, skip the context file.
-   c. Run via Bash:
-      `review-plan-codex --input <PLANS_DIR>/drafts/<session-id>-outline-draft.md --format outline-plan --context <PLANS_DIR>/drafts/<session-id>-context.md --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"`
-      (omit `--context <PLANS_DIR>/drafts/<session-id>-context.md` when no context file was created in step b; always include the core-principles context).
-   d. Parse the first line:
-   - `## Codex Plan Review: PERFORMED` → extract verdict from inside fences:
-     - `APPROVED` → proceed to step 7.
-     - `MISSING_ALTERNATIVE: …` → use as the concern, proceed to step 6.
-     - Anything else → **format malformed**: append `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` via Bash `printf '%s\n' "..." >> <path>` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
-   - `SKIPPED` / `FAILED` → **codex unavailable**: append `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` and silently launch `outline-reviewer` subagent. Do NOT emit to chat.
+   Outcomes:
+   - APPROVED → proceed to step 7.
+   - MISSING_ALTERNATIVE → loop continues (`revision_rounds` budget: 1 round).
+     Each round consumes the budget; if the budget is exhausted without APPROVED
+     before cap-menu fires, tell the user which concern is blocking and ask whether
+     to add a missing alternative, approve as-is, or change the scope.
+   - `FAILED — round cap reached` → proceed to step 6.
 
-6. If verdict is `MISSING_ALTERNATIVE: <description>`:
-   - Send the concern back to outline-planner for revision.
-   - Re-review from step 5. Repeat for at most **1 revision round** (`revision_rounds`).
-   - On cap: tell the user which concern is blocking and ask whether to add a missing
-     alternative, approve as-is, or change the scope.
+6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
+   - LABEL: `"Outline Plan Review"`
+   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
+   - MAX_EXTENSIONS: 1
+
+   Outline-specific dispatch override: `rc==0`, user picks `adjust` → halt and
+   re-run `/clarify-intent` (not generic user-escalation). All other outcomes
+   route per the shared spec; on AUTO_EXTEND or `extend`, loop back into the
+   step 5 review round.
 
 7. Once outline-reviewer returns `APPROVED`:
    Output a prose rationale summary in the main conversation — one paragraph per
