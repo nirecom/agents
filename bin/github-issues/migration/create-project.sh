@@ -29,8 +29,8 @@ fi
 
 state_load "$REPO_DIR"
 
-OWNER=$(gh -C "$REPO_DIR" repo view --json owner --jq .owner.login)
-REPO_NAME=$(gh -C "$REPO_DIR" repo view --json name --jq .name)
+OWNER=$(cd "$REPO_DIR" && gh repo view --json owner --jq .owner.login)
+REPO_NAME=$(cd "$REPO_DIR" && gh repo view --json name --jq .name)
 
 gh auth status --hostname github.com 2>&1 | grep -q 'project' || {
   echo "ERROR: gh missing 'project' scope. Run: gh auth refresh -s project" >&2
