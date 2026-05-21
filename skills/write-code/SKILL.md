@@ -15,7 +15,7 @@ Edit source code for the current task.
    - `OFF`: proceed to step 3.
    - `ON`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-3. Read `skills/judge-task-complexity/SKILL.md`. Emit in Claude text output (NOT Bash echo):
+3. Read `skills/_shared/judge-task-complexity.md`. Emit in Claude text output (NOT Bash echo):
    > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
 4. **Launch subagent** (`Agent` tool, `mode: "default"`, model = verdict from step 3) with a prompt containing:

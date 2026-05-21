@@ -215,10 +215,10 @@ if require_file "$WRITE_CODE_SKILL"; then
     else
         fail "SKILL.md missing 'Model selected:'"
     fi
-    if has_fixed "skills/judge-task-complexity/SKILL.md" "$WRITE_CODE_SKILL"; then
-        pass "SKILL.md contains path 'skills/judge-task-complexity/SKILL.md'"
+    if has_fixed "skills/_shared/judge-task-complexity.md" "$WRITE_CODE_SKILL"; then
+        pass "SKILL.md contains path 'skills/_shared/judge-task-complexity.md'"
     else
-        fail "SKILL.md missing path 'skills/judge-task-complexity/SKILL.md'"
+        fail "SKILL.md missing path 'skills/_shared/judge-task-complexity.md'"
     fi
 fi
 

@@ -1,10 +1,8 @@
----
-name: judge-task-complexity
-description: Evaluate task context and return a model routing verdict (opus or sonnet) with matched signal IDs. Called by other skills before launching a subagent. Not intended to be invoked directly by users.
-model: sonnet
----
+> Shared rubric. Read explicitly by `make-detail-plan`, `write-tests`, and
+> `write-code` before launching a subagent. Not invoked via the Skill tool —
+> the caller reads this rubric and emits the verdict in its own output.
 
-Evaluate the task context passed by the caller and return a single-line verdict.
+Evaluate the task context against the signals below and emit a single-line verdict.
 
 ## Complexity Signals
 
@@ -25,7 +23,7 @@ Evaluate the task context passed by the caller and return a single-line verdict.
 
 ## Output Format
 
-Emit exactly one line as your entire response.
+The caller emits exactly one line in its own output:
 
 If signals matched:
 ```
