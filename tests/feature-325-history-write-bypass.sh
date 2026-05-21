@@ -28,6 +28,14 @@
 
 set -u
 
+PUSH_TEST_TMPS=()
+cleanup_push_tmps() {
+    for d in "${PUSH_TEST_TMPS[@]}"; do
+        [ -n "$d" ] && [ -d "$d" ] && rm -rf "$d"
+    done
+}
+trap cleanup_push_tmps EXIT
+
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
@@ -94,6 +102,106 @@ assert_block() {
     esac
 }
 
+setup_push_test_repo() {
+    # Args: $1=issue_num, $2=subject_override (empty=use default), $3=files_csv, $4=default_branch (default:main)
+    local issue_num="$1"; local subject_override="${2:-}"; local files_csv="$3"
+    local default_branch="${4:-main}"
+    local tmp; tmp=$(mktemp -d)
+    PUSH_TEST_TMPS+=("$tmp")
+    local upstream="$tmp/upstream.git"; local work="$tmp/work"
+    git init --bare --initial-branch="$default_branch" "$upstream" >/dev/null
+    git init --initial-branch="$default_branch" "$work" >/dev/null
+    git -C "$work" config core.hooksPath /dev/null
+    (cd "$work"
+        git remote add origin "$upstream"
+        git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+        git push -u origin "$default_branch" >/dev/null 2>&1
+        git remote set-head origin "$default_branch" >/dev/null 2>&1
+        mkdir -p docs/history
+        IFS=',' read -ra FILES <<< "$files_csv"
+        for f in "${FILES[@]}"; do mkdir -p "$(dirname "$f")"; echo "x" >> "$f"; done
+        git add -A
+        local subj="${subject_override:-docs(history): record issue #${issue_num}}"
+        git -c user.email=a@b -c user.name=a commit --no-verify -m "$subj" >/dev/null
+    )
+    echo "$work"
+}
+
+setup_push_test_repo_no_head() {
+    local issue_num="$1"; local default_branch="${2:-main}"
+    local tmp; tmp=$(mktemp -d)
+    PUSH_TEST_TMPS+=("$tmp")
+    local upstream="$tmp/upstream.git"; local work="$tmp/work"
+    git init --bare --initial-branch="$default_branch" "$upstream" >/dev/null
+    git init --initial-branch="$default_branch" "$work" >/dev/null
+    git -C "$work" config core.hooksPath /dev/null
+    (cd "$work"
+        git remote add origin "$upstream"
+        git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+        git push -u origin "$default_branch" >/dev/null 2>&1
+        mkdir -p docs/history
+        echo "x" >> docs/history.md
+        git add docs/history.md
+        git -c user.email=a@b -c user.name=a commit --no-verify -m "docs(history): record issue #${issue_num}" >/dev/null
+    )
+    echo "$work"
+}
+
+setup_push_test_repo_detached_wt() {
+    local issue_num="$1"
+    local tmp; tmp=$(mktemp -d)
+    PUSH_TEST_TMPS+=("$tmp")
+    local upstream="$tmp/upstream.git"; local work="$tmp/work"
+    git init --bare --initial-branch=main "$upstream" >/dev/null
+    git init --initial-branch=main "$work" >/dev/null
+    git -C "$work" config core.hooksPath /dev/null
+    (cd "$work"
+        git remote add origin "$upstream"
+        git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+        git push -u origin main >/dev/null 2>&1
+        git remote set-head origin main >/dev/null 2>&1
+        mkdir -p docs/history
+        echo "x" >> docs/history.md
+        git add docs/history.md
+        git -c user.email=a@b -c user.name=a commit --no-verify -m "docs(history): record issue #${issue_num}" >/dev/null
+        git switch -c feature/x >/dev/null 2>&1
+        git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m "feat: work" >/dev/null
+    )
+    echo "$work"
+}
+
+check_bypass_push() {
+    local cmd="$1"; local repo="$2"
+    run_with_timeout 15 node -e "
+        const m = require('$GUARD_JS');
+        const fn = m.isAllowedHistoryPushViaIssueCloseSkill;
+        if (typeof fn !== 'function') { console.log('missing'); process.exit(0); }
+        console.log(fn(process.argv[1], process.argv[2]) ? 'allow' : 'reject');
+    " -- "$cmd" "$repo" 2>/dev/null
+}
+
+assert_push_allow() {
+    local cmd="$1"; local repo="$2"; local label="$3"
+    local got; got="$(check_bypass_push "$cmd" "$repo")"
+    case "$got" in
+        allow)   pass "$label" ;;
+        reject)  fail "$label (got reject)" ;;
+        missing) fail "$label (RED: isAllowedHistoryPushViaIssueCloseSkill not exported yet)" ;;
+        *)       fail "$label (unexpected: '$got')" ;;
+    esac
+}
+
+assert_push_block() {
+    local cmd="$1"; local repo="$2"; local label="$3"
+    local got; got="$(check_bypass_push "$cmd" "$repo")"
+    case "$got" in
+        reject)  pass "$label" ;;
+        allow)   fail "$label (got allow — bypass over-broad)" ;;
+        missing) pass "$label (RED-safe: function not exported yet)" ;;
+        *)       fail "$label (unexpected: '$got')" ;;
+    esac
+}
+
 # ============================================================================
 # H-series — narrow bypass for /issue-close-finalize history writes
 # ============================================================================
@@ -141,6 +249,136 @@ assert_block \
 assert_block \
     'ISSUE_CLOSE_SKILL=1 git add docs/history.md && git commit -m "docs(history): x"' \
     "H7: ISSUE_CLOSE_SKILL=1 with shell chaining (&&) → block"
+
+# ============================================================================
+# P-series — push bypass for /issue-close-finalize (git push)
+# ============================================================================
+
+# --- P1: canonical push shape, docs/history.md only → allow
+_p1_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_allow \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p1_repo" \
+    "P1: ISSUE_CLOSE_SKILL=1 git push origin main (single history file) → allow"
+
+# --- P2: push with rotation file docs/history/2026.md → allow
+_p2_repo="$(setup_push_test_repo 42 "" "docs/history.md,docs/history/2026.md")"
+assert_push_allow \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p2_repo" \
+    "P2: ISSUE_CLOSE_SKILL=1 git push origin main (history + rotation file) → allow"
+
+# --- P3: missing ISSUE_CLOSE_SKILL=1 prefix → block
+_p3_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_block \
+    'git push origin main' \
+    "$_p3_repo" \
+    "P3: bare 'git push origin main' (no ISSUE_CLOSE_SKILL prefix) → block"
+
+# --- P4: push to non-default branch → block
+_p4_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin feature/x' \
+    "$_p4_repo" \
+    "P4: ISSUE_CLOSE_SKILL=1 git push origin feature/x (not default branch) → block"
+
+# --- P5: subject does not match docs(history) pattern → block
+_p5_repo="$(setup_push_test_repo 42 "feat: unrelated" "docs/history.md")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p5_repo" \
+    "P5: ISSUE_CLOSE_SKILL=1 git push origin main (subject 'feat: unrelated') → block"
+
+# --- P6: file outside docs/history allowlist → block
+_p6_repo="$(setup_push_test_repo 42 "" "src/foo.js")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p6_repo" \
+    "P6: ISSUE_CLOSE_SKILL=1 git push origin main (file src/foo.js) → block"
+
+# --- P7: shell chaining → block
+_p7_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin main && rm -rf /tmp' \
+    "$_p7_repo" \
+    "P7: ISSUE_CLOSE_SKILL=1 git push origin main && rm -rf /tmp (chaining) → block"
+
+# --- P8: unknown flag --force-with-lease → block
+_p8_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push --force-with-lease origin main' \
+    "$_p8_repo" \
+    "P8: ISSUE_CLOSE_SKILL=1 git push --force-with-lease origin main (unknown flag) → block"
+
+# --- P9: refspec (colon form) → block
+_p9_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin refs/heads/main:refs/heads/main' \
+    "$_p9_repo" \
+    "P9: ISSUE_CLOSE_SKILL=1 git push origin refs/heads/main:refs/heads/main (refspec) → block"
+
+# --- P10: 2 outgoing commits — one subject doesn't match → block
+_p10_tmp="$(mktemp -d)"
+PUSH_TEST_TMPS+=("$_p10_tmp")
+_p10_upstream="$_p10_tmp/upstream.git"
+_p10_work="$_p10_tmp/work"
+git init --bare --initial-branch=main "$_p10_upstream" >/dev/null
+git init --initial-branch=main "$_p10_work" >/dev/null
+git -C "$_p10_work" config core.hooksPath /dev/null
+(cd "$_p10_work"
+    git remote add origin "$_p10_upstream"
+    git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+    git push -u origin main >/dev/null 2>&1
+    git remote set-head origin main >/dev/null 2>&1
+    mkdir -p docs/history
+    echo "x" >> docs/history.md
+    git add docs/history.md
+    git -c user.email=a@b -c user.name=a commit --no-verify -m "docs(history): record issue #42" >/dev/null
+    echo "y" >> docs/history.md
+    git add docs/history.md
+    git -c user.email=a@b -c user.name=a commit --no-verify -m "feat: extra" >/dev/null
+)
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p10_work" \
+    "P10: 2 outgoing commits (one non-docs(history) subject) → block"
+
+# --- P11: default branch=master repo, push to 'main' → block
+_p11_repo="$(setup_push_test_repo 42 "" "docs/history.md" "master")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p11_repo" \
+    "P11: default=master, push to 'main' (wrong branch) → block"
+
+# --- P11b: default branch=master repo, push to 'master' → allow
+assert_push_allow \
+    'ISSUE_CLOSE_SKILL=1 git push origin master' \
+    "$_p11_repo" \
+    "P11b: default=master, push to 'master' → allow"
+
+# --- P12: -u/--set-upstream flag → block
+_p12_repo="$(setup_push_test_repo 42 "" "docs/history.md")"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push -u origin main' \
+    "$_p12_repo" \
+    "P12: ISSUE_CLOSE_SKILL=1 git push -u origin main (upstream mutation) → block"
+
+# --- P13: origin/HEAD not set → block (fail-closed)
+_p13_repo="$(setup_push_test_repo_no_head 42)"
+assert_push_block \
+    'ISSUE_CLOSE_SKILL=1 git push origin main' \
+    "$_p13_repo" \
+    "P13: origin/HEAD not set (no remote set-head) → block (fail-closed)"
+
+# --- P14: worktree on feature/x, main has docs(history) commit → allow (uses refs/heads/main)
+_p14_repo="$(setup_push_test_repo_detached_wt 42)"
+_p14_check="$(check_bypass_push 'ISSUE_CLOSE_SKILL=1 git push origin main' "$_p14_repo")"
+case "$_p14_check" in
+    allow)   pass "P14: worktree on feature/x, push main (refs/heads/main range) → allow" ;;
+    reject)  fail "P14: worktree on feature/x, push main (refs/heads/main range) → got reject" ;;
+    missing) fail "P14: RED: isAllowedHistoryPushViaIssueCloseSkill not exported yet" ;;
+    *)       fail "P14: unexpected: '$_p14_check'" ;;
+esac
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
