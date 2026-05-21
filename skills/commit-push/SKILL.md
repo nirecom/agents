@@ -34,7 +34,8 @@ When `NON_GITHUB=0` or exit 2 (fail-open): run the pre-flight as normal.
 
 For each issue N in the session's `closes_issues` list (parsed from
 `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` —
-the `## closes_issues` section), run from the worktree root:
+the `## closes_issues` section; canonical parser: `hooks/lib/parse-closes-issues.js` — do not reimplement),
+run from the worktree root:
 
 ```bash
 bash "$AGENTS_CONFIG_DIR/bin/github-issues/check-phase1-complete.sh" <N>

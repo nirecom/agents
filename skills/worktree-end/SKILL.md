@@ -129,8 +129,39 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    - Commands that will be executed
 
    After user approval: copy preservation targets to the chosen destination.
+   Set backup-path variables for use in Steps 5.5 and 7:
+   ```
+   BACKUP_DIR="<resolved destination>"
+   mkdir -p "$BACKUP_DIR"
+   BACKUP_MANIFEST_PATH="$BACKUP_DIR/manifest.json"
+   ```
+   If the user chose "discard" and no files were copied, set `BACKUP_MANIFEST_PATH=(none)`.
+   (`NOTES_BACKUP_PATH` is defined in Step 5.5 after copying `WORKTREE_NOTES.md`.)
    If Docker containers reference the worktree path, stop them and restart from the main path.
    Never delete gitignored state silently — always present the inventory first.
+
+5.5. **Capture for Final Report** (must run before Step 6c — worktree removal):
+
+   a. Last-chance findings review: append any outstanding bugs/related/next-task findings to `<worktree>/WORKTREE_NOTES.md`. **This is the capture cutoff** — findings after Step 5.5 will not appear in the Final Report.
+
+   b. Capture PR metadata (safe per-field, no shell-interpretation of PR title):
+      ```
+      PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+      PR_URL=$(gh pr view   "$PR_NUMBER" --json url   --jq '.url')
+      PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state')
+      ```
+
+   c. Copy `WORKTREE_NOTES.md` to backup and record the path:
+      ```
+      if [ -f "<worktree>/WORKTREE_NOTES.md" ]; then
+        cp -p "<worktree>/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"
+        NOTES_BACKUP_PATH="$BACKUP_DIR/WORKTREE_NOTES.md"
+      else
+        NOTES_BACKUP_PATH=""
+      fi
+      ```
+
+   d. Cache `BRANCH` (from `git -C <worktree> rev-parse --abbrev-ref HEAD`), `WORKTREE_PATH` (absolute path of the worktree), and `CREATED_DATE` (from `WORKTREE_NOTES.md` header, or current date).
 
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
@@ -196,7 +227,11 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       `git -C <main> pull --ff-only`
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
-7. **Final report:** PR URL, merge state, backup manifest location, branches deleted, worktree path removed.
+7. **Final report:** invoke the renderer and display stdout verbatim.
+   ```
+   PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" BRANCH_DELETED=yes node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" "<PLANS_DIR>/<session-id>-intent.md" "$NOTES_BACKUP_PATH" "<session-id>"
+   ```
+   Do not call `gh` here — all PR/branch state was captured in Step 5.5.
 
 ## Rules
 

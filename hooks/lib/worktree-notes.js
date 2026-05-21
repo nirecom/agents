@@ -46,6 +46,18 @@ function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFile
     }
   }
 
+  lines.push(
+    "",
+    "## BugsFound",
+    "- (none)",
+    "",
+    "## RelatedTasks",
+    "- (none)",
+    "",
+    "## NextTasks",
+    "- (none)",
+  );
+
   return lines.join("\n") + "\n";
 }
 
@@ -216,4 +228,4 @@ function run(input) {
   return result;
 }
 
-module.exports = { writeNotes, appendExclude, run, hasTraversal, normalizePath };
+module.exports = { buildNotesBody, writeNotes, appendExclude, run, hasTraversal, normalizePath };
