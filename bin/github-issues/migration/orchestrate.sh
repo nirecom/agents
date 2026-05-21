@@ -335,8 +335,8 @@ if [ "$FROM_STEP" -le 4 ]; then
   else
     bash "$SCRIPT_DIR/create-project.sh" "$REPO_DIR"
     state_load "$REPO_DIR"
-    proj_num=$(jq -r '.project.number // empty' "$STATE_FILE")
-    proj_id=$(jq -r '.project.node_id // empty' "$STATE_FILE")
+    proj_num=$(jq_text '.project.number // empty' "$STATE_FILE")
+    proj_id=$(jq_text '.project.node_id // empty' "$STATE_FILE")
     field_id=$(state_get_project_field_id "Content Date")
     if [ -z "$proj_num" ] || [ -z "$proj_id" ] || [ -z "$field_id" ]; then
       echo "ERROR: project ids missing from state — Step 4 cannot proceed" >&2
