@@ -96,7 +96,7 @@ echo ""
 echo "=== SG-1: standalone / all-sentinel forms (approve) ==="
 
 expect_approve "SG-1a" 'echo "<<WORKFLOW_USER_VERIFIED: reason>>"'
-expect_approve "SG-1b" 'echo "<<WORKFLOW_USER_VERIFIED>>" && echo "<<WORKFLOW_MARK_STEP_docs_complete>>"'
+expect_approve "SG-1b" 'echo "<<WORKFLOW_USER_VERIFIED: SG-1b approve test>>" && echo "<<WORKFLOW_MARK_STEP_docs_complete>>"'
 
 # ===========================================================================
 # SG-1c / SG-2: reason text contains `&&` — naive split would yield >2
@@ -126,6 +126,7 @@ expect_approve "SG-3c" "grep '<<WORKFLOW_' file && wc -l file"
 # Single-quoted USER_VERIFIED → not a recognized sentinel echo form (only SQ
 # MARK_STEP is accepted); whole-command isSentinel=false; chain-boundary SQ
 # regex matches only MARK_STEP. Approve.
+# Negative fixture: SQ form is intentionally unrecognized
 expect_approve "SG-3d" "echo '<<WORKFLOW_USER_VERIFIED>>' && rm /tmp/x"
 
 # ===========================================================================
@@ -135,8 +136,8 @@ expect_approve "SG-3d" "echo '<<WORKFLOW_USER_VERIFIED>>' && rm /tmp/x"
 echo ""
 echo "=== SG-4: sentinel + non-sentinel chain (block) ==="
 
-expect_block "SG-4a" 'echo "<<WORKFLOW_USER_VERIFIED>>" && rm -rf /tmp/foo'
-expect_block "SG-4b" 'rm /tmp/foo && echo "<<WORKFLOW_USER_VERIFIED>>"'
+expect_block "SG-4a" 'echo "<<WORKFLOW_USER_VERIFIED: SG-4a chain block>>" && rm -rf /tmp/foo'
+expect_block "SG-4b" 'rm /tmp/foo && echo "<<WORKFLOW_USER_VERIFIED: SG-4b chain block>>"'
 # SQ MARK_STEP IS recognized by both isSentinel and the chain-boundary SQ regex.
 expect_block "SG-4c" "echo '<<WORKFLOW_MARK_STEP_docs_complete>>' && rm /tmp/x"
 # DQ MARK_STEP with lowercase suffix — regex character class [A-Za-z_]+ must

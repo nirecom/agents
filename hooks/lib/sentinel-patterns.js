@@ -36,9 +36,9 @@ const MARKER_RE_DQ =
 const MARKER_RE_SQ =
   /^echo\s+'<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>'$/;
 const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
-// USER_VERIFIED: DQ only, single literal space, strictly anchored — matches settings.json ask glob exactly.
-// Reason is optional (orthogonal with ENFORCE_WORKTREE_OFF/ON design); preserved as match[1] for telemetry.
-const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED(?:: ([^>]+))?>>"$/;
+// USER_VERIFIED/ENFORCE_WORKTREE_OFF/ON: reason mandatory; bare form falls through to LOOKSLIKE rejection. Aligns with `_NOT_NEEDED_*` family.
+const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED: ([^>]+)>>"$/;
+const USER_VERIFIED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_USER_VERIFIED([: ].*)?>>"$/;
 const RESEARCH_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ([^>]+)>>"$/;
 const RESEARCH_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED([: ].*)?>>"$/;
 const PLAN_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_PLAN_NOT_NEEDED: ([^>]+)>>"$/;
@@ -62,11 +62,11 @@ const PREMISE_FAIL_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PREMISE_FAIL([: ].*)?>>"$/;
 const PREMISE_ACK_RE_DQ = /^echo "<<WORKFLOW_PREMISE_ACK>>"$/;
 const PREMISE_ACK_LOOKSLIKE_RE = /^echo "<<WORKFLOW_PREMISE_ACK([: ].*)?>>"$/;
 const ENFORCE_WORKTREE_OFF_RE_DQ =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF(?:: ([^>]+))?>>"$/;
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: ([^>]+)>>"$/;
 const ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF([: ].*)?>>"$/;
 const ENFORCE_WORKTREE_ON_RE_DQ =
-  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON(?:: ([^>]+))?>>"$/;
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: ([^>]+)>>"$/;
 const ENFORCE_WORKTREE_ON_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKTREE_ON([: ].*)?>>"$/;
 
@@ -76,6 +76,7 @@ function isSentinel(cmd) {
     MARKER_RE_SQ.test(cmd) ||
     RESET_FROM_RE_DQ.test(cmd) ||
     USER_VERIFIED_RE_DQ.test(cmd) ||
+    USER_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
     RESEARCH_NOT_NEEDED_RE_DQ.test(cmd) ||
     RESEARCH_NOT_NEEDED_LOOKSLIKE_RE.test(cmd) ||
     PLAN_NOT_NEEDED_RE_DQ.test(cmd) ||
@@ -174,6 +175,7 @@ module.exports = {
   CHAIN_BOUNDARY_SENTINEL_DQ_RE,
   CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE,
   MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, USER_VERIFIED_RE_DQ,
+  USER_VERIFIED_LOOKSLIKE_RE,
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   PLAN_NOT_NEEDED_RE_DQ, PLAN_NOT_NEEDED_LOOKSLIKE_RE,
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,

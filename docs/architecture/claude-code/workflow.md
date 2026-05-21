@@ -46,7 +46,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 | `run_tests` | `/run-tests` skill (preferred) — invokes test-runner agent internally, emits sentinel automatically. Direct Bash path retained: PostToolUse hook (`workflow-run-tests.js`) auto-marks based on exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
 | `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
-| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED>>"` — triggers `ask` permission dialog; user must approve |
+| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` — triggers `ask` permission dialog; user must approve (reason mandatory; `validateSkipReason` warns but applies when reason is weak — soft-validation) |
 | `cleanup` | `/worktree-end` skill (worktree path), or branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
 
 `write_tests` and `docs` accept evidence-based completion: at commit time, `workflow-gate.js`
@@ -68,9 +68,12 @@ Note: marker format uses `_` as separator (not `:`). Claude Code's permission gl
 treats `:` as a named-parameter separator inside `Bash(...)` rules, causing silent match
 failure (anthropics/claude-code#33601). Using `_` avoids this.
 
-`user_verification` uses a dedicated marker `echo "<<WORKFLOW_USER_VERIFIED>>"` (DQ only,
-single space, no SQ variant). This command is in the `ask` permission category — Claude must
-request user approval via dialog before the echo runs.
+`user_verification` uses a dedicated marker `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"`
+(DQ only, single space, no SQ variant; reason mandatory per #404). This command is in the
+`ask` permission category — Claude must request user approval via dialog before the echo
+runs. Reason quality is soft-validated: `validateSkipReason` warns but still applies the
+state mutation when the reason is a placeholder or too short, so the dialog remains the
+binding gate.
 
 ## Session ID flow
 

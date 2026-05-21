@@ -282,7 +282,7 @@ const STEP_HINT = {
   run_tests:          "Invoke `run-tests` skill via the Skill tool (or run tests directly via Bash).",
   review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
   docs:               "Invoke `update-docs`.",
-  user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED>>\", then invoke `commit-push`.",
+  user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED: <reason>>>\" (reason: >=3 non-space chars, no '>', not a placeholder), then invoke `commit-push`.",
   cleanup:            "Run `/worktree-end` (worktree), or delete the branch after PR merge (branch), or skip (main): echo \"<<WORKFLOW_MARK_STEP_cleanup_skipped>>\".",
 };
 

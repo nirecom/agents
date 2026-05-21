@@ -6,12 +6,12 @@
 // independently):
 //   echo "<<WORKFLOW_MARK_STEP_<step>_<status>>>"   — mark a step
 //   echo "<<WORKFLOW_RESET_FROM_<step>>>"            — reset state from a step
-//   echo "<<WORKFLOW_USER_VERIFIED[: <reason>]>>"    — record user verification (reason optional)
+//   echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"      — record user verification (reason mandatory)
 //   echo "<<WORKFLOW_{RESEARCH,PLAN,WRITE_TESTS}_NOT_NEEDED: <reason>>"
 //
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF[: <reason>]>>"  — session-scoped ENFORCE_WORKTREE bypass
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON[: <reason>]>>"   — restore enforcement (delete marker)
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>>"  — session-scoped ENFORCE_WORKTREE bypass (reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
 
 const fs = require("fs");
 const path = require("path");
@@ -32,6 +32,7 @@ const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 const {
   isSentinel,
   MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, USER_VERIFIED_RE_DQ,
+  USER_VERIFIED_LOOKSLIKE_RE,
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   PLAN_NOT_NEEDED_RE_DQ, PLAN_NOT_NEEDED_LOOKSLIKE_RE,
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
@@ -455,31 +456,32 @@ for (const cmd of sentinelParts) {
     continue;
   }
 
+  // --- USER_VERIFIED LOOKSLIKE handler (intercept bare/malformed forms) ---
+  if (!userVerifiedMatch && USER_VERIFIED_LOOKSLIKE_RE.test(cmd)) {
+    messages.push(
+      `workflow-mark: malformed USER_VERIFIED — ` +
+        `expected: echo "<<WORKFLOW_USER_VERIFIED: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
+    );
+    continue;
+  }
+
   // --- USER_VERIFIED handler ---
   if (userVerifiedMatch) {
     if (!sessionId) {
       messages.push(
         `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_USER_VERIFIED>>" (ask dialog will re-trigger for user approval)`
+          `Re-run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
+          `(reason: >=3 non-space chars, no '>', not a placeholder; ask dialog will re-trigger)`
       );
       continue;
     }
-    const rawUvReason = userVerifiedMatch[1]; // undefined when no reason given
-    if (rawUvReason !== undefined) {
-      const v = validateSkipReason(rawUvReason);
-      if (!v.ok) {
-        // Warn but still apply — reason quality must not block verification.
-        messages.push(
-          `workflow-mark: USER_VERIFIED reason rejected — ${v.msg} (verification still recorded)`
-        );
-      }
-    } else {
-      // Soft recommendation — mirrors ENFORCE_WORKTREE_ON/OFF accountability pattern.
+    const rawUvReason = userVerifiedMatch[1];
+    const v = validateSkipReason(rawUvReason);
+    if (!v.ok) {
+      // Warn but still apply — reason quality must not block verification.
       messages.push(
-        `workflow-mark: USER_VERIFIED emitted without reason. ` +
-          `For accountability, next time include a reason: ` +
-          `echo "<<WORKFLOW_USER_VERIFIED: <what user is approving>>>" ` +
-          `(reason: >=3 non-space chars, no '>', not a placeholder).`
+        `workflow-mark: USER_VERIFIED reason rejected — ${v.msg} (verification still recorded)`
       );
     }
     try {
@@ -502,7 +504,8 @@ for (const cmd of sentinelParts) {
     if (stepName === "user_verification") {
       messages.push(
         `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
-          `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED>>"`
+          `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
+          `(reason: >=3 non-space chars, no '>', not a placeholder)`
       );
       continue;
     }
@@ -628,8 +631,8 @@ for (const cmd of sentinelParts) {
   if (enforceOffLooksLike) {
     messages.push(
       `workflow-mark: malformed ENFORCE_WORKTREE_OFF — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>" or ` +
-        `echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: REASON>>"`
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     continue;
   }
@@ -645,24 +648,14 @@ for (const cmd of sentinelParts) {
       continue;
     }
     let reasonStored = null;
-    const rawReason = enforceOffMatch[1]; // undefined when no reason given
-    if (rawReason !== undefined) {
-      const v = validateSkipReason(rawReason);
-      if (v.ok) {
-        reasonStored = v.reason;
-      } else {
-        // Warn but still apply — reason quality must not block emergency recovery.
-        messages.push(
-          `workflow-mark: ENFORCE_WORKTREE_OFF reason rejected — ${v.msg} (override still applied)`
-        );
-      }
+    const rawReason = enforceOffMatch[1];
+    const v = validateSkipReason(rawReason);
+    if (v.ok) {
+      reasonStored = v.reason;
     } else {
-      // Soft recommendation — encourage attaching a reason for accountability.
+      // Warn but still apply — reason quality must not block emergency recovery.
       messages.push(
-        `workflow-mark: ENFORCE_WORKTREE_OFF emitted without reason. ` +
-          `For accountability, next time include a reason: ` +
-          `echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <why bypass is necessary>>>" ` +
-          `(reason: >=3 non-space chars, no '>', not a placeholder).`
+        `workflow-mark: ENFORCE_WORKTREE_OFF reason rejected — ${v.msg} (override still applied)`
       );
     }
     try {
@@ -695,8 +688,8 @@ for (const cmd of sentinelParts) {
   if (enforceOnLooksLike) {
     messages.push(
       `workflow-mark: malformed ENFORCE_WORKTREE_ON — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>" or ` +
-        `echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: REASON>>"`
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     continue;
   }
@@ -711,22 +704,12 @@ for (const cmd of sentinelParts) {
       messages.push(`workflow-mark: invalid session_id format — restore NOT applied.`);
       continue;
     }
-    const rawOnReason = enforceOnMatch[1]; // undefined when no reason given
-    if (rawOnReason !== undefined) {
-      const v = validateSkipReason(rawOnReason);
-      if (!v.ok) {
-        // Warn but still apply — reason quality must not block restoration.
-        messages.push(
-          `workflow-mark: ENFORCE_WORKTREE_ON reason rejected — ${v.msg} (restore still applied)`
-        );
-      }
-    } else {
-      // Soft recommendation — encourage attaching a reason for accountability.
+    const rawOnReason = enforceOnMatch[1];
+    const v = validateSkipReason(rawOnReason);
+    if (!v.ok) {
+      // Warn but still apply — reason quality must not block restoration.
       messages.push(
-        `workflow-mark: ENFORCE_WORKTREE_ON emitted without reason. ` +
-          `For accountability, next time include a reason: ` +
-          `echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <why restoring now>>>" ` +
-          `(reason: >=3 non-space chars, no '>', not a placeholder).`
+        `workflow-mark: ENFORCE_WORKTREE_ON reason rejected — ${v.msg} (restore still applied)`
       );
     }
     try {

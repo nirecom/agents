@@ -332,7 +332,7 @@ if (require.main === module) {
   //   - DQ form is accepted for every sentinel category.
   //   - SQ form is accepted ONLY for MARK_STEP_* (matching MARKER_RE_SQ).
   // If we accepted SQ for all categories, we would block chains like
-  // `echo '<<WORKFLOW_USER_VERIFIED>>' && rm /tmp/x` that workflow-mark.js
+  // `echo '<<WORKFLOW_USER_VERIFIED>>' && rm /tmp/x` (bare form retained as historical attack-vector example per #404) that workflow-mark.js
   // treats as a non-sentinel (no SQ regex for USER_VERIFIED), creating a
   // new asymmetry. Keeping the two recognizers symmetric eliminates that.
   if (/<<WORKFLOW_/.test(command)) {
@@ -392,14 +392,14 @@ if (require.main === module) {
     if (!sessionId) {
       block(
         "workflow-gate: merge to protected branch blocked — session_id missing.\n" +
-        'Run: echo "<<WORKFLOW_USER_VERIFIED>>" first.'
+        'Run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" first (reason: >=3 non-space chars, no \'>\', not a placeholder).'
       );
     }
     const mergeState = readState(sessionId);
     if (!mergeState) {
       block(
         "workflow-gate: merge to protected branch blocked — no workflow state.\n" +
-        'Run: echo "<<WORKFLOW_USER_VERIFIED>>" first.'
+        'Run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" first (reason: >=3 non-space chars, no \'>\', not a placeholder).'
       );
     }
     const uv = mergeState.steps && mergeState.steps.user_verification;
@@ -407,8 +407,9 @@ if (require.main === module) {
     if (uvStatus !== "complete") {
       block(
         `workflow-gate: ${mergeHit.kind} blocked — user_verification is "${uvStatus}".\n\n` +
-        'Run: echo "<<WORKFLOW_USER_VERIFIED>>"\n' +
-        '(Set Bash description: "User verification: approve if implementation is complete — approving unlocks the merge gate.")'
+        'Run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"\n' +
+        '(reason: >=3 non-space chars, no \'>\', not a placeholder; ' +
+        'set Bash description: "User verification: approve if implementation is complete — approving unlocks the merge gate.")'
       );
     }
     approve();
@@ -478,7 +479,7 @@ if (require.main === module) {
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then git add docs/)',
-    user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to merge boundary) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED>>" — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
+    user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to merge boundary) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" (reason: >=3 non-space chars, no \'>\', not a placeholder) — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
   };
 
   const lines = [

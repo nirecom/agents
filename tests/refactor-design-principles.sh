@@ -118,27 +118,27 @@ try {
 # A. USER_VERIFIED sentinel
 # ============================================================================
 
-test_A1_bare_user_verified_records_and_warns() {
+test_A1_bare_user_verified_rejected_as_malformed() {
     require_mark_js "A1" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="testsession1"
     local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_USER_VERIFIED>>"' 0)"
     run_workflow_mark "$payload" "$wfdir"
 
-    # user_verification must be recorded as complete
+    # Bare form must be rejected — user_verification must remain pending (NOT complete)
     local status; status="$(read_uv_status "$wfdir" "$sid")"
-    if [ "$status" != "complete" ]; then
-        fail "A1: user_verification not recorded as complete (status='$status', out: $MARK_OUT)"
+    if [ "$status" = "complete" ]; then
+        fail "A1: bare USER_VERIFIED was accepted (status=complete, expected pending) (out: $MARK_OUT)"
         return
     fi
 
-    # Must emit the "without reason" warning
-    if ! echo "$MARK_OUT" | grep -q "USER_VERIFIED emitted without reason"; then
-        fail "A1: expected 'USER_VERIFIED emitted without reason' in output (out: $MARK_OUT)"
+    # Must emit a "malformed USER_VERIFIED" error (case-insensitive)
+    if ! echo "$MARK_OUT" | grep -qi "malformed USER_VERIFIED"; then
+        fail "A1: expected 'malformed USER_VERIFIED' in output (out: $MARK_OUT)"
         return
     fi
 
-    pass "A1: bare USER_VERIFIED — recorded as complete + without-reason warning"
+    pass "A1: bare USER_VERIFIED rejected as malformed — status remains pending"
 }
 
 test_A2_valid_reason_records_without_warn() {
@@ -191,13 +191,13 @@ test_A3_short_reason_records_and_warns() {
         return
     fi
 
-    pass "A3: too-short reason — still recorded as complete + reason-rejected warning"
+    pass "A3: too-short reason — warn but apply (soft-validation tradeoff) + reason-rejected warning"
 }
 
 test_A4_no_session_id_not_recorded() {
     require_mark_js "A4" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_USER_VERIFIED>>"' 0)"
+    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_USER_VERIFIED: no session id branch>>"' 0)"
     local rc=0
     # No CLAUDE_ENV_FILE → no session ID resolvable
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
@@ -414,7 +414,7 @@ test_B13_plan_principles_old_path_removed() {
 
 run_all() {
     # A: USER_VERIFIED sentinel
-    test_A1_bare_user_verified_records_and_warns
+    test_A1_bare_user_verified_rejected_as_malformed
     test_A2_valid_reason_records_without_warn
     test_A3_short_reason_records_and_warns
     test_A4_no_session_id_not_recorded

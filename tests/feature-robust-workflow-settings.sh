@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SETTINGS="$DOTFILES_DIR/claude-global/settings.json"
+SETTINGS="$DOTFILES_DIR/settings.json"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -94,6 +94,120 @@ process.exit(ask.some(e => e.includes('WORKFLOW_REVIEW_SECURITY_NOT_NEEDED')) ? 
     pass "SR5. permissions.ask contains WORKFLOW_REVIEW_SECURITY_NOT_NEEDED entry"
 else
     fail "SR5. permissions.ask does NOT contain WORKFLOW_REVIEW_SECURITY_NOT_NEEDED entry"
+fi
+
+# ---------------------------------------------------------------------------
+# SR6: bare WORKFLOW_USER_VERIFIED absent from ask (#404)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== settings.json: SR6 — bare WORKFLOW_USER_VERIFIED absent from ask ==="
+
+if node -e "
+const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+const ask=s.permissions&&s.permissions.ask||[];
+process.exit(ask.every(e => e !== 'Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")') ? 0 : 1);
+" -- "$SETTINGS" 2>/dev/null; then
+    pass "SR6. bare WORKFLOW_USER_VERIFIED absent from permissions.ask"
+else
+    fail "SR6. bare WORKFLOW_USER_VERIFIED still present in permissions.ask"
+fi
+
+# ---------------------------------------------------------------------------
+# SR7: reason-form WORKFLOW_USER_VERIFIED: * present in ask
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== settings.json: SR7 — reason-form WORKFLOW_USER_VERIFIED: * present in ask ==="
+
+if node -e "
+const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+const ask=s.permissions&&s.permissions.ask||[];
+process.exit(ask.some(e => e === 'Bash(echo \"<<WORKFLOW_USER_VERIFIED: *>>\")') ? 0 : 1);
+" -- "$SETTINGS" 2>/dev/null; then
+    pass "SR7. reason-form WORKFLOW_USER_VERIFIED: * present in permissions.ask"
+else
+    fail "SR7. reason-form WORKFLOW_USER_VERIFIED: * NOT in permissions.ask"
+fi
+
+# ---------------------------------------------------------------------------
+# SR8: bare _NOT_NEEDED absent / reason forms present (4 sentinels)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== settings.json: SR8 — _NOT_NEEDED: bare absent + reason form present ==="
+
+SR8_OUT=$(node -e "
+const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+const ask=s.permissions&&s.permissions.ask||[];
+const names=['WORKFLOW_CLARIFY_INTENT_NOT_NEEDED','WORKFLOW_PLAN_NOT_NEEDED','WORKFLOW_WRITE_TESTS_NOT_NEEDED','WORKFLOW_REVIEW_SECURITY_NOT_NEEDED'];
+for (const n of names) {
+  const bare='Bash(echo \"<<'+n+'>>\")';
+  const reason='Bash(echo \"<<'+n+': *>>\")';
+  if (!ask.every(e => e !== bare)) { console.log('BARE PRESENT: '+n); process.exit(1); }
+  if (!ask.some(e => e === reason)) { console.log('REASON MISSING: '+n); process.exit(1); }
+}
+process.exit(0);
+" -- "$SETTINGS" 2>&1) && SR8_OK=1 || SR8_OK=0
+if [ "$SR8_OK" = "1" ]; then
+    pass "SR8. _NOT_NEEDED sentinels: bare absent + reason form present (all 4)"
+else
+    fail "SR8. _NOT_NEEDED contract violated: $SR8_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# SR9: bare ENFORCE_WORKTREE_OFF absent / reason-form present in ask
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== settings.json: SR9 — ENFORCE_WORKTREE_OFF: bare absent + reason in ask ==="
+
+SR9_OUT=$(node -e "
+const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+const ask=s.permissions&&s.permissions.ask||[];
+const bare='Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF>>\")';
+const reason='Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")';
+if (!ask.every(e => e !== bare)) { console.log('BARE PRESENT in ask'); process.exit(1); }
+if (!ask.some(e => e === reason)) { console.log('REASON MISSING in ask'); process.exit(1); }
+process.exit(0);
+" -- "$SETTINGS" 2>&1) && SR9_OK=1 || SR9_OK=0
+if [ "$SR9_OK" = "1" ]; then
+    pass "SR9. ENFORCE_WORKTREE_OFF: bare absent + reason form present in ask"
+else
+    fail "SR9. ENFORCE_WORKTREE_OFF contract violated: $SR9_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# SR10: reason ENFORCE_WORKTREE_ON in allow + ON absent from ask (#404)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== settings.json: SR10 — ENFORCE_WORKTREE_ON: reason in allow + absent from ask ==="
+
+SR10_OUT=$(node -e "
+const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+const ask=s.permissions&&s.permissions.ask||[];
+const allow=s.permissions&&s.permissions.allow||[];
+const reason='Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")';
+if (!allow.some(e => e === reason)) { console.log('REASON ON MISSING in allow'); process.exit(1); }
+if (ask.some(e => e.includes('WORKFLOW_ENFORCE_WORKTREE_ON'))) { console.log('ON still present in ask'); process.exit(1); }
+process.exit(0);
+" -- "$SETTINGS" 2>&1) && SR10_OK=1 || SR10_OK=0
+if [ "$SR10_OK" = "1" ]; then
+    pass "SR10. ENFORCE_WORKTREE_ON: reason in allow + absent from ask"
+else
+    fail "SR10. ENFORCE_WORKTREE_ON contract violated: $SR10_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# SR11: bare ENFORCE_WORKTREE_ON absent from allow
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== settings.json: SR11 — bare ENFORCE_WORKTREE_ON absent from allow ==="
+
+if node -e "
+const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+const allow=s.permissions&&s.permissions.allow||[];
+process.exit(allow.every(e => e !== 'Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON>>\")') ? 0 : 1);
+" -- "$SETTINGS" 2>/dev/null; then
+    pass "SR11. bare WORKFLOW_ENFORCE_WORKTREE_ON absent from permissions.allow"
+else
+    fail "SR11. bare WORKFLOW_ENFORCE_WORKTREE_ON still present in permissions.allow"
 fi
 
 # ---------------------------------------------------------------------------
