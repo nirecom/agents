@@ -28,7 +28,13 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections: Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-accepted-tradeoffs` to suppress re-raised concerns in later codex reviews.
+4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): optional `## Issue` (see below), Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-accepted-tradeoffs` to suppress re-raised concerns in later codex reviews.
+
+   **`## Issue` section rules** (immediately after H1, before Background/Motivation):
+   - **Path B** (issue known via auto-detect): read title from `context.md ## Issue metadata - title:`. Write `## Issue\n#<N>: <title>`.
+   - **Path C** (no issue yet — `closes_issues` empty): OMIT. The section is backfilled by Completion Step 3 after `gh issue create` succeeds.
+   - **context.md missing or title line absent**: OMIT. (Step 4 does not call `gh`; the title source is context.md, not a live gh call.)
+   - Multiple issues (forward-compat): list form, one `- #<N>: <title>` per line.
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
@@ -65,7 +71,7 @@ Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_G
    Then (single-N only): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>`.
    Exit 1 (Status set failure) → warn `[clarify-intent: wip-state set failed — Projects v2 Status not updated]` and continue.
    Exit 2 (missing env / session-id) → same warn and point at `wip-state setup` / `CLAUDE_ENV_FILE`.
-3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: update closes_issues. Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above). On failure: warn, leave as `(empty)`.
+3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: (a) update `closes_issues` from `(empty)` to `- <N>`; (b) insert `## Issue\n#<N>: <title>` immediately after the H1 of intent.md using Read + Edit (title is the `--title` arg from this call — no re-fetch needed). Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above). On failure: warn, leave `closes_issues` as `(empty)` and omit `## Issue`.
 4. **Multiple**: abort, cite `rules/github-issues.md`.
 
 Then:

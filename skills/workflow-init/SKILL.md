@@ -105,6 +105,8 @@ When `NON_GITHUB=0` or exit 2 (unknown, fail-open): continue with steps 1–7 as
 A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 ```
 # Agreed Requirements — <session-id>
+## Issue
+#<N>: <title>
 ## Background / Motivation
 <sentinel-stripped body; if unstructured prepend "(review framing at outline stage)">
 ## Scope / Constraints
@@ -112,6 +114,7 @@ A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 ## closes_issues
 - <N>
 ```
+`<title>` is the issue title from the Step 3 `gh issue view --json title` result (already in scope; no re-read required). If the title is empty or unavailable, OMIT the `## Issue` section entirely.
 A2. Emit (separate Bash calls):
 ```
 echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"
