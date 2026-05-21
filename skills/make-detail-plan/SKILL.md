@@ -31,7 +31,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
    Use English terms only: "delivery plan", "progression", or "execution order".
 
 3. **Determine the planner subagent's model**:
-   - Read `skills/judge-task-complexity/SKILL.md` to load the signal table.
+   - Read `skills/_shared/judge-task-complexity.md` to load the signal table.
    - Evaluate all signals against the full task context plus the contents of intent/outline files (if they exist). Do not short-circuit on the first match.
    - Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
    - Emit in Claude text output (NOT Bash echo):
