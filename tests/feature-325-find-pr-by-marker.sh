@@ -2,8 +2,9 @@
 # Tests for issue #325 — bin/github-issues/find-pr-by-marker.sh
 #
 # Maps issue N → (PR_NUMBER, MERGE_COMMIT) using:
-#   primary:  marker-based PR search (issue-close-pr-of:N in PR body)
-#   fallback: gh issue view --json closedByPullRequestsReferences
+#   primary:  gh issue view --json closedByPullRequestsReferences
+#             (CLOSED state, sort_by mergedAt, last entry's PR + mergeCommit.oid)
+#   fallback: marker-based PR search (issue-close-pr-of:N in PR body)
 #
 # RED: this suite fails clean while the script is missing.
 
@@ -78,24 +79,24 @@ run_find() {
 # F-series — find-pr-by-marker.sh
 # ============================================================================
 
-# --- F1: primary marker hit → PR_NUMBER + MERGE_COMMIT
+# --- F1: marker fallback when closedByPullRequestsReferences empty
 setup_tmp_find
 GH_MOCK_MARKER_PR_RESULT="99	abc1234" GH_MOCK_SCENARIO=closed_no_sentinel run_find 42; RC=$?
 if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "99" ] && [ "$FIND_MERGE_COMMIT" = "abc1234" ]; then
-    pass "F1: primary marker hit → PR_NUMBER=99 MERGE_COMMIT=abc1234"
+    pass "F1: marker fallback when closedByPullRequestsReferences empty → PR 99"
 else
     fail "F1: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT out=$FIND_OUT"
 fi
 teardown_tmp_find
 
-# --- F2: primary miss + closedByPullRequestsReferences fallback → PR 55 dead1234
+# --- F2: closedByPullRequestsReferences primary hit → PR 55 dead1234
 setup_tmp_find
 GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=55 \
 GH_MOCK_PR_MERGE_SHA_FOR_55=dead1234 \
 GH_MOCK_SCENARIO=closed_no_sentinel \
     run_find 42; RC=$?
 if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "55" ] && [ "$FIND_MERGE_COMMIT" = "dead1234" ]; then
-    pass "F2: primary miss + closedByPullRequestsReferences fallback → PR 55 dead1234"
+    pass "F2: closedByPullRequestsReferences primary hit → PR 55 dead1234"
 else
     fail "F2: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
@@ -141,6 +142,33 @@ if [ "$RC" -ne 0 ] && [ ! -f /tmp/F6_INJECT ]; then
 else
     fail "F6: rc=$RC inject=$([ -f /tmp/F6_INJECT ] && echo yes || echo no)"
     rm -f /tmp/F6_INJECT 2>/dev/null
+fi
+teardown_tmp_find
+
+# --- F7: closedByPullRequestsReferences primary wins over stale marker
+# Scenario: marker PR 399 has stale sha. Issue was actually closed by PR 414
+# (via closedByPullRequestsReferences). Primary should win.
+setup_tmp_find
+GH_MOCK_MARKER_PR_RESULT="399	stale111" \
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=414 \
+GH_MOCK_PR_MERGE_SHA_FOR_414=real4567 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "414" ] && [ "$FIND_MERGE_COMMIT" = "real4567" ]; then
+    pass "F7: closedByPullRequestsReferences primary wins over stale marker"
+else
+    fail "F7: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
+fi
+teardown_tmp_find
+
+# --- F8: multiple closedByPullRequestsReferences → sort_by(mergedAt)|last picks most recent
+setup_tmp_find
+GH_MOCK_SCENARIO=closed_multi_reference \
+    run_find 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "200" ]; then
+    pass "F8: closed_multi_reference → sort_by(mergedAt)|last selects PR 200"
+else
+    fail "F8: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR"
 fi
 teardown_tmp_find
 

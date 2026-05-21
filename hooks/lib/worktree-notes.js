@@ -56,6 +56,9 @@ function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFile
     "",
     "## NextTasks",
     "- (none)",
+    "",
+    "## History Notes",
+    "- (none)",
   );
 
   return lines.join("\n") + "\n";
