@@ -1,0 +1,29 @@
+# Allowlist for tests/feature-bare-sentinel-audit.sh
+#
+# Files where bare WORKFLOW_USER_VERIFIED, WORKFLOW_ENFORCE_WORKTREE_OFF, or
+# WORKFLOW_ENFORCE_WORKTREE_ON references are expected (LOOKSLIKE error-handler
+# strings, negative-test fixtures, append-only history, prompt criteria, etc.).
+#
+# One repo-relative path per line. Lines starting with `#` and blank lines are ignored.
+# Audited by tests/feature-bare-sentinel-audit.sh.
+hooks/lib/sentinel-patterns.js
+hooks/show-user-verified-context.js
+hooks/workflow-mark.js
+hooks/workflow-gate.js
+tests/feature-enforce-worktree-session-override.sh
+tests/feature-sentinel-and-chain-gate.sh
+tests/feature-show-user-verified.sh
+tests/refactor-design-principles.sh
+tests/feature-robust-workflow-settings.sh
+tests/main-workflow-state-machine.sh
+tests/main-workflow-skip-sentinels.sh
+tests/main-workflow-and-chain.sh
+tests/feature-commit-gate-redesign.sh
+tests/feature-refactor-prompts-scan.sh
+tests/feature-bare-sentinel-audit.sh
+tests/expected-bare-sentinel-allowlist.txt
+docs/history.md
+docs/history/2026.md
+docs/history/index.md
+CHANGELOG.md
+rules/prompt-criteria.md

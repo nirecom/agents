@@ -227,7 +227,7 @@ test_A1_marker_created_on_sentinel() {
     require_files "A1" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="abc123"
-    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A1 marker test>>"' 0)"
     run_workflow_mark "$payload" "$wfdir"
     if [ -f "$wfdir/$sid.worktree-off" ]; then
         pass "A1: marker file created for valid sentinel"
@@ -261,7 +261,7 @@ test_A3_non_zero_exit_skips() {
     require_files "A3" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="abc123"
-    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 1)"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A3 non-zero exit>>"' 1)"
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
     if [ -f "$wfdir/$sid.worktree-off" ]; then
@@ -280,7 +280,7 @@ test_A4_env_file_fallback() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="xyz"
     local envfile; envfile="$(setup_fake_env_file "$sid")"
-    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A4 env-file fallback>>"' 0)"
     # Note: run_workflow_mark unsets CLAUDE_ENV_FILE; pass it explicitly here.
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE \
@@ -298,7 +298,7 @@ test_A4_env_file_fallback() {
 test_A5_no_session_id_no_crash() {
     require_files "A5" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
-    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A5 no session id>>"' 0)"
     local rc=0
     # No CLAUDE_ENV_FILE → no session ID resolvable.
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
@@ -327,7 +327,7 @@ test_A7_idempotent_marker_write() {
     # tmp+rename pattern). Validates the writeState()-mirroring design choice.
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="abc123"
-    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A7 idempotent write>>"' 0)"
     run_workflow_mark "$payload" "$wfdir"
     run_workflow_mark "$payload" "$wfdir"
     local marker="$wfdir/$sid.worktree-off"
@@ -352,7 +352,7 @@ test_A6_chained_sentinels_accepted() {
     # marker is created alongside the chained sentinel's effects.
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="abc123"
-    local cmd='echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>" && echo "<<WORKFLOW_USER_VERIFIED>>"'
+    local cmd='echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A6 chain test>>" && echo "<<WORKFLOW_USER_VERIFIED: A6 chain test>>"'
     local payload; payload="$(build_mark_payload "$sid" "$cmd" 0)"
     run_workflow_mark "$payload" "$wfdir"
     if [ -f "$wfdir/$sid.worktree-off" ]; then
@@ -375,7 +375,7 @@ test_A8_on_sentinel_deletes_marker() {
     # Pre-existing marker (e.g. set earlier in the session via OFF sentinel).
     write_marker_file "$wfdir" "$sid"
     [ -f "$wfdir/$sid.worktree-off" ] || { fail "A8 setup: marker not written"; return; }
-    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: A8 delete marker>>"' 0)"
     run_workflow_mark "$payload" "$wfdir"
     if [ ! -f "$wfdir/$sid.worktree-off" ]; then
         pass "A8: ON sentinel deleted the existing marker"
@@ -389,7 +389,7 @@ test_A9_on_sentinel_no_marker_idempotent() {
     # ON sentinel with no existing marker must be a silent no-op (idempotent).
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="abc123"
-    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: A9 idempotent on>>"' 0)"
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -410,7 +410,7 @@ test_A10_on_sentinel_no_session_id() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     write_marker_file "$wfdir" "someone-else"
     local payload
-    payload='{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON>>\""}, "tool_response":{"exit_code":0}}'
+    payload='{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: A10 no session id>>\""}, "tool_response":{"exit_code":0}}'
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -431,7 +431,7 @@ test_A11_on_sentinel_session_isolation() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     write_marker_file "$wfdir" "session-A"
     write_marker_file "$wfdir" "session-B"
-    local payload; payload="$(build_mark_payload "session-A" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local payload; payload="$(build_mark_payload "session-A" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: A11 isolation>>"' 0)"
     run_workflow_mark "$payload" "$wfdir"
     if [ -f "$wfdir/session-A.worktree-off" ]; then
         fail "A11: session-A marker NOT deleted (out: $MARK_OUT)"
@@ -442,6 +442,49 @@ test_A11_on_sentinel_session_isolation() {
         return
     fi
     pass "A11: ON sentinel deletes only the calling session's marker"
+}
+
+# ----------------------------------------------------------------------------
+# A12-A13: Bare-form rejection (#404 contract change).
+# Bare WORKFLOW_ENFORCE_WORKTREE_OFF / _ON must be rejected as malformed by the
+# LOOKSLIKE handler — no marker mutation, error surfaced.
+# ----------------------------------------------------------------------------
+
+test_A12_bare_off_malformed() {
+    require_files "A12" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="abc123"
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    run_workflow_mark "$payload" "$wfdir"
+    if [ -f "$wfdir/$sid.worktree-off" ]; then
+        fail "A12: bare OFF was accepted — marker created (expected rejection) (out: $MARK_OUT)"
+        return
+    fi
+    if ! echo "$MARK_OUT" | grep -qi "malformed"; then
+        fail "A12: bare OFF — expected 'malformed' in output (out: $MARK_OUT)"
+        return
+    fi
+    pass "A12: bare ENFORCE_WORKTREE_OFF rejected as malformed — no marker"
+}
+
+test_A13_bare_on_malformed() {
+    require_files "A13" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="abc123"
+    # Pre-existing marker — bare ON must NOT delete it.
+    write_marker_file "$wfdir" "$sid"
+    [ -f "$wfdir/$sid.worktree-off" ] || { fail "A13 setup: marker not written"; return; }
+    local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    run_workflow_mark "$payload" "$wfdir"
+    if [ ! -f "$wfdir/$sid.worktree-off" ]; then
+        fail "A13: bare ON was accepted — marker deleted (expected preservation) (out: $MARK_OUT)"
+        return
+    fi
+    if ! echo "$MARK_OUT" | grep -qi "malformed"; then
+        fail "A13: bare ON — expected 'malformed' in output (out: $MARK_OUT)"
+        return
+    fi
+    pass "A13: bare ENFORCE_WORKTREE_ON rejected as malformed — marker preserved"
 }
 
 # ============================================================================
@@ -559,7 +602,7 @@ test_C1_round_trip_creates_and_allows() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="abc123"
     local repo; repo="$(setup_main_checkout "c1-main")"
-    local mark_payload; mark_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local mark_payload; mark_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: C1 round trip>>"' 0)"
     run_workflow_mark "$mark_payload" "$wfdir"
     if [ ! -f "$wfdir/$sid.worktree-off" ]; then
         fail "C1: marker NOT created in round trip (out: $MARK_OUT)"
@@ -591,7 +634,7 @@ test_C3_off_on_round_trip_via_sentinels() {
     local repo; repo="$(setup_main_checkout "c3-main")"
 
     # Step 1: OFF sentinel creates marker.
-    local off_payload; off_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local off_payload; off_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: C3 step1>>"' 0)"
     run_workflow_mark "$off_payload" "$wfdir"
     if [ ! -f "$wfdir/$sid.worktree-off" ]; then
         fail "C3 step1: OFF sentinel did not create marker (out: $MARK_OUT)"
@@ -607,7 +650,7 @@ test_C3_off_on_round_trip_via_sentinels() {
     fi
 
     # Step 3: ON sentinel deletes the marker.
-    local on_payload; on_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local on_payload; on_payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: C3 step3>>"' 0)"
     run_workflow_mark "$on_payload" "$wfdir"
     if [ -f "$wfdir/$sid.worktree-off" ]; then
         fail "C3 step3: ON sentinel did not delete marker (out: $MARK_OUT)"
@@ -638,7 +681,7 @@ test_SEC1_path_traversal_rejected() {
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local before_count after_count
     before_count="$(count_worktree_off_files "$wfdir")"
-    local payload; payload="$(build_mark_payload "../evil" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+    local payload; payload="$(build_mark_payload "../evil" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: SEC1 traversal>>"' 0)"
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
     after_count="$(count_worktree_off_files "$wfdir")"
@@ -662,7 +705,7 @@ test_SEC2_shell_metachars_rejected() {
     local any_failure=0
     for sid in "${payloads_sid[@]}"; do
         before_count="$(count_worktree_off_files "$wfdir")"
-        local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF>>"' 0)"
+        local payload; payload="$(build_mark_payload "$sid" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: SEC2 metachars>>"' 0)"
         rc=0
         run_workflow_mark "$payload" "$wfdir" || rc=$?
         after_count="$(count_worktree_off_files "$wfdir")"
@@ -738,7 +781,7 @@ test_SEC5_on_sentinel_traversal_blocked() {
     local parent; parent="$(dirname "$wfdir")"   # = $TMPDIR_BASE, inside sandbox
     # Plant a "victim" marker outside wfdir.
     printf '{"set_at":"x"}' > "$parent/victim.worktree-off"
-    local payload; payload="$(build_mark_payload "../victim" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON>>"' 0)"
+    local payload; payload="$(build_mark_payload "../victim" 'echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: SEC5 traversal>>"' 0)"
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
     local still_there=0
@@ -773,6 +816,9 @@ run_all() {
     test_A9_on_sentinel_no_marker_idempotent
     test_A10_on_sentinel_no_session_id
     test_A11_on_sentinel_session_isolation
+    # A12-A13: bare-form rejection (#404)
+    test_A12_bare_off_malformed
+    test_A13_bare_on_malformed
     # B: enforce-worktree consumption
     test_B1_marker_allows_write
     test_B1b_marker_allows_edit
