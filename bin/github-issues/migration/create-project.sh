@@ -38,8 +38,7 @@ gh auth status --hostname github.com 2>&1 | grep -q 'project' || {
 }
 
 existing_num=$(gh project list --owner "$OWNER" --format json \
-  | jq -r --arg t "$REPO_NAME migration" '.projects[] | select(.title==$t) | .number // empty' \
-  | head -1)
+  | jq_text --arg t "$REPO_NAME migration" '[.projects[] | select(.title==$t) | .number] | .[0] // empty')
 
 if [ -n "$existing_num" ]; then
   echo "Using existing project #$existing_num"
@@ -47,11 +46,11 @@ if [ -n "$existing_num" ]; then
     | jq '[.fields[] | {key:.name,value:.id}] | from_entries')
   if ! echo "$field_ids_json" | jq -e '."Content Date"' >/dev/null 2>&1; then
     new_fid=$(gh project field-create "$existing_num" --owner "$OWNER" \
-      --name "Content Date" --data-type DATE --format json | jq -r '.id')
+      --name "Content Date" --data-type DATE --format json | jq_text '.id')
     field_ids_json=$(echo "$field_ids_json" | jq --arg id "$new_fid" '."Content Date" = $id')
   fi
   project_num="$existing_num"
-  node_id=$(gh project view "$existing_num" --owner "$OWNER" --format json | jq -r '.id')
+  node_id=$(gh project view "$existing_num" --owner "$OWNER" --format json | jq_text '.id')
 else
   owner_id=$(gh api graphql -f query="{viewer{id}}" --jq '.data.viewer.id' 2>/dev/null || \
              gh api graphql -f query="{user(login:\"$OWNER\"){id}}" --jq '.data.user.id' 2>/dev/null || \
@@ -59,12 +58,12 @@ else
   result=$(gh api graphql \
     -f query='mutation($o:ID!,$t:String!){createProjectV2(input:{ownerId:$o,title:$t}){projectV2{id number}}}' \
     -f o="$owner_id" -f t="$REPO_NAME migration")
-  project_num=$(echo "$result" | jq -r '.data.createProjectV2.projectV2.number')
-  node_id=$(echo "$result" | jq -r '.data.createProjectV2.projectV2.id')
+  project_num=$(echo "$result" | jq_text '.data.createProjectV2.projectV2.number')
+  node_id=$(echo "$result" | jq_text '.data.createProjectV2.projectV2.id')
   field_result=$(gh api graphql \
     -f query='mutation($p:ID!){createProjectV2Field(input:{projectId:$p,dataType:DATE,name:"Content Date"}){projectV2Field{... on ProjectV2Field{id}}}}' \
     -f p="$node_id")
-  new_fid=$(echo "$field_result" | jq -r '.data.createProjectV2Field.projectV2Field.id')
+  new_fid=$(echo "$field_result" | jq_text '.data.createProjectV2Field.projectV2Field.id')
   field_ids_json=$(jq -n --arg id "$new_fid" '{"Content Date":$id}')
 fi
 

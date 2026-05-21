@@ -28,7 +28,7 @@ OWNER=$(cd "$REPO_DIR" && gh repo view --json owner --jq .owner.login)
 REPO_NAME=$(cd "$REPO_DIR" && gh repo view --json name --jq .name)
 REPO_SLUG="${OWNER}/${REPO_NAME}"
 
-migrated_numbers=$(jq -r '.history.migrated[].issue_number' "$STATE_FILE")
+migrated_numbers=$(jq_text '.history.migrated[].issue_number' "$STATE_FILE")
 if [ -z "$migrated_numbers" ]; then
   echo "No migrated history entries found in state — nothing to backfill."
   exit 0
