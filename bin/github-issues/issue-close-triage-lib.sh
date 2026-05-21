@@ -66,3 +66,23 @@ print_triage_output() {
     printf 'ACTION=%s\n' "$action"
     printf 'NEXT_STEPS=%s\n' "$next_steps"
 }
+
+# validate_sentinel_freshness <created_at>
+#   Returns 0 if fresh (age < threshold), 1 if stale.
+#   Fail-open: empty/malformed/future createdAt → 0.
+#   Threshold (in days): ISSUE_CLOSE_STALE_DAYS (default 30).
+validate_sentinel_freshness() {
+    local created_at="${1:-}"
+    [ -z "$created_at" ] && return 0
+    command -v node >/dev/null 2>&1 || return 0
+    SENTINEL_CREATED_AT="$created_at" \
+    ISSUE_CLOSE_STALE_DAYS="${ISSUE_CLOSE_STALE_DAYS:-30}" \
+    node -e '
+        var d = new Date(process.env.SENTINEL_CREATED_AT);
+        if (isNaN(d.getTime())) process.exit(0);
+        var now = Date.now();
+        if (d.getTime() > now) process.exit(0);
+        var ageDays = (now - d.getTime()) / 86400000;
+        process.exit(ageDays >= Number(process.env.ISSUE_CLOSE_STALE_DAYS) ? 1 : 0);
+    ' 2>/dev/null
+}

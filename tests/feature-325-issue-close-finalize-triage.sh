@@ -12,7 +12,7 @@
 #   FT1: OPEN + no sentinel    → error (mentions /issue-close-stage) ← NEW
 #   FT2: OPEN + pending        → resume_e, E,F,G,H,J  (recovery for stuck)
 #   FT3: OPEN + appended       → resume_h, G,H,J
-#   FT4: CLOSED + appended     → resume_j, J
+#   FT4: CLOSED + appended     → resume_j, E,J,K    (E added: #412 History Notes write)
 #   FT5: CLOSED + no sentinel  → auto_close_path, E,G,J
 #   FT6: CLOSED + pending + hist → stuck_sentinel_only, J
 #   FT7: CLOSED + pending + no hist → stuck_append_sentinel, E,J
@@ -137,11 +137,11 @@ else
 fi
 teardown_tmp
 
-# --- FT4: CLOSED + appended → resume_j (J,K)
+# --- FT4: CLOSED + appended → resume_j (E,J,K)
 setup_tmp
 run_triage closed_with_appended_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
-    pass "FT4: CLOSED:appended → resume_j (J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "E,J,K" ]; then
+    pass "FT4: CLOSED:appended → resume_j (E,J,K)"
 else
     fail "FT4: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -223,6 +223,77 @@ if [ "$RC" -ne 0 ]; then
     pass "FT9: AGENTS_CONFIG_DIR unset → non-zero"
 else
     fail "FT9: rc=$RC"
+fi
+teardown_tmp
+
+# --- FT10: OPEN + stale pending → auto-expired → same as OPEN:(none) → error
+setup_tmp
+GH_MOCK_SCENARIO=open_with_stale_pending \
+    run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/tmp/ft10_err.$$ >/dev/null
+RC=$?
+FT10_ERR=$(cat /tmp/ft10_err.$$); rm -f /tmp/ft10_err.$$
+if [ "$RC" -ne 0 ] && echo "$FT10_ERR" | grep -qi "auto-expired\|issue-close-stage"; then
+    pass "FT10: OPEN + stale pending → auto-expired → error mentions issue-close-stage"
+else
+    fail "FT10: rc=$RC stderr=$FT10_ERR"
+fi
+teardown_tmp
+
+# --- FT11: CLOSED + stale pending → auto-expired → auto_close_path (E,G,J,K)
+setup_tmp
+run_triage closed_with_stale_pending
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
+    pass "FT11: CLOSED + stale pending → auto-expired → auto_close_path (E,G,J,K)"
+else
+    fail "FT11: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
+fi
+teardown_tmp
+
+# --- FT12: OPEN + fresh appended → unaffected (resume_h)
+setup_tmp
+run_triage open_with_appended
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_h" ] && [ "$T_NEXT_STEPS" = "G,H,J,K" ]; then
+    pass "FT12: OPEN + fresh appended → fresh, unaffected → resume_h (G,H,J,K)"
+else
+    fail "FT12: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
+fi
+teardown_tmp
+
+# --- FT13: ISSUE_CLOSE_STALE_DAYS=999 → even 35-day-old sentinel is fresh
+setup_tmp
+# Re-run capturing full output to distinguish "stale expired" from "pending resume"
+TMP_OUT=$(cd "$TMP" && ISSUE_CLOSE_STALE_DAYS=999 GH_MOCK_SCENARIO=open_with_stale_pending \
+    run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/tmp/ft13_err.$$)
+FT13_RC=$?
+FT13_ERR=$(cat /tmp/ft13_err.$$); rm -f /tmp/ft13_err.$$
+unset STATE SENTINEL ACTION NEXT_STEPS
+eval "$TMP_OUT" 2>/dev/null || true
+if [ "$FT13_RC" -eq 0 ] && [ "${ACTION:-}" = "resume_e" ]; then
+    pass "FT13: ISSUE_CLOSE_STALE_DAYS=999 → sentinel not expired → resume_e"
+elif ! echo "$FT13_ERR" | grep -qi "auto-expired"; then
+    pass "FT13: ISSUE_CLOSE_STALE_DAYS=999 → sentinel not auto-expired"
+else
+    fail "FT13: ISSUE_CLOSE_STALE_DAYS=999 unexpectedly expired sentinel (rc=$FT13_RC err=$FT13_ERR)"
+fi
+teardown_tmp
+
+# --- FT14: malformed createdAt → fail-open → OPEN:pending → resume_e
+setup_tmp
+run_triage open_with_malformed_created_at
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ]; then
+    pass "FT14: malformed createdAt → fail-open → resume_e (OPEN:pending)"
+else
+    fail "FT14: rc=$T_RC action=$T_ACTION (expected resume_e for fail-open on malformed date)"
+fi
+teardown_tmp
+
+# --- FT15: future createdAt → fail-open → OPEN:pending → resume_e
+setup_tmp
+run_triage open_with_future_created_at
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ]; then
+    pass "FT15: future createdAt → fail-open → resume_e (OPEN:pending)"
+else
+    fail "FT15: rc=$T_RC action=$T_ACTION (expected resume_e for fail-open on future date)"
 fi
 teardown_tmp
 

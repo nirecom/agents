@@ -47,11 +47,31 @@ SENTINEL_RAW=$(gh issue view "$N" --json comments \
 
 SENTINEL=$(parse_sentinel "$SENTINEL_RAW")
 
-case "${STATE}:${SENTINEL}" in
+# #360: consumer-side staleness validation. Stale `pending` sentinel is treated
+# as if Phase 1 never ran — fall through to the `OPEN:` / `CLOSED:` empty
+# sentinel routes. Fresh sentinels (and `appended` ones) are unaffected.
+EFFECTIVE_SENTINEL="$SENTINEL"
+SENTINEL_STALE=0
+if [ "$SENTINEL" = "pending" ]; then
+    SENTINEL_CREATED_AT=$(gh issue view "$N" --json comments \
+        --jq '[.comments[] | select(.body | test("^<!-- issue-close-sentinel: pending"))] | last | .createdAt // ""' \
+        2>/dev/null) || SENTINEL_CREATED_AT=""
+    if ! validate_sentinel_freshness "$SENTINEL_CREATED_AT"; then
+        EFFECTIVE_SENTINEL=""
+        SENTINEL_STALE=1
+    fi
+fi
+
+case "${STATE}:${EFFECTIVE_SENTINEL}" in
     OPEN:)
-        # Phase 1 was never run. /issue-close-finalize requires the pending
-        # sentinel posted by /issue-close-stage as forcing function.
-        echo "Error: issue #${N} has no Phase 1 sentinel. Run /issue-close-stage ${N} first from the linked worktree." >&2
+        # Phase 1 was never run, or its sentinel was auto-expired (#360).
+        # /issue-close-finalize requires the pending sentinel posted by
+        # /issue-close-stage as forcing function.
+        if [ "$SENTINEL_STALE" -eq 1 ]; then
+            echo "Error: issue #${N} Phase 1 sentinel auto-expired (stale). Run /issue-close-stage ${N} from the linked worktree." >&2
+        else
+            echo "Error: issue #${N} has no Phase 1 sentinel. Run /issue-close-stage ${N} first from the linked worktree." >&2
+        fi
         exit 1
         ;;
     OPEN:pending)
@@ -65,8 +85,10 @@ case "${STATE}:${SENTINEL}" in
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:appended)
+        # #412: Step E (doc-append) added so History Notes from WORKTREE_NOTES.md
+        # sidecar are synthesized into the history entry on resume.
         ACTION=resume_j
-        NEXT_STEPS="J,K"
+        NEXT_STEPS="E,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:)
