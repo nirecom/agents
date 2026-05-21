@@ -189,3 +189,7 @@ Changes: Made reason field mandatory at both layers (settings.json and sentinel-
 ### INCIDENT: #2: #415: canary gate bypass via yes y | pipe during /migrate-repo (2026-05-21, 46a990a4)
 Cause: orchestrate.sh chained canary-1 -> confirm() -> canary-2 -> confirm() -> full within a single process. confirm() read from stdin via read -rp, which yes y | bypasses entirely. TTY detection ([ -t 0 ]) is defeated by PTY wrappers, so behavioral guards were ineffective.
 Fix: Approach B (structural separation): added --stage canary-1|canary-2|full flag to orchestrate.sh. Each stage runs as one process invocation and exits, making cross-stage bypass structurally impossible. Added schema v2 to state.sh (advanced{} blocks per kind) with state_set_advanced/state_get_advanced helpers. PR #422 (merge 46a990a4).
+
+### FEATURE: Skillize code phase (Step 5 subagent delegation + per-language guidance) (2026-05-21, aa7ecdc, #411)
+Background: CLAUDE.md Step 5 (code phase) was inlined; main-context token cost and the lack of language-specific guidance motivated extracting it as a subagent-delegated skill, mirroring /run-tests.
+Changes: Added /write-code skill (subagent-delegated edit + lint/typecheck/self-repair, CONFIRM_CODE gate). Moved skills/judge-task-complexity/SKILL.md to skills/_shared/judge-task-complexity.md (read-only rubric); updated path references in make-detail-plan, write-tests, write-code. Added rules/coding/python.md and rules/coding/nodejs.md as B-layer language essence. Added tests/feature-write-code-skill-static.sh.
