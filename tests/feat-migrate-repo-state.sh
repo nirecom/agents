@@ -52,12 +52,12 @@ teardown_tmp() {
     unset STATE_FILE 2>/dev/null || true
 }
 
-# --- T1: state_init creates file with schema_version=1
+# --- T1: state_init creates file with schema_version=2
 setup_tmp
 state_init "$TMP" >/dev/null 2>&1
 if [ -f "$TMP/.migration-state.json" ] && \
-   [ "$(jq -r '.schema_version' "$TMP/.migration-state.json" 2>/dev/null)" = "1" ]; then
-    pass "T1: state_init creates file with schema_version=1"
+   [ "$(jq -r '.schema_version' "$TMP/.migration-state.json" 2>/dev/null)" = "2" ]; then
+    pass "T1: state_init creates file with schema_version=2"
 else
     fail "T1: state_init did not create valid file"
 fi
