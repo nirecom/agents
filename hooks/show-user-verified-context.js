@@ -15,8 +15,8 @@
 const fs = require("fs");
 const { spawnSync } = require("child_process");
 
-// Match both bare and reason-bearing form: <<WORKFLOW_USER_VERIFIED>> or <<WORKFLOW_USER_VERIFIED: <reason>>>
-const USER_VERIFIED_RE = /<<WORKFLOW_USER_VERIFIED(?:: [^>]+)?>>/;
+// Match the reason-bearing form only — the bare form was removed from the contract (#404).
+const USER_VERIFIED_RE = /<<WORKFLOW_USER_VERIFIED: [^>]+>>/;
 
 function readStdin() {
   const chunks = [];
