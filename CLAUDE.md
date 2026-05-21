@@ -94,3 +94,18 @@ to judge that a reset is genuinely warranted. Skills and subagents must not rese
 ```
 echo "<<WORKFLOW_RESET_FROM_<step>>>"
 ```
+
+## Mid-workflow finding capture
+
+While running the workflow — at any point up to and including Step 5 of
+`/worktree-end` (Step 5.5 backs up `WORKTREE_NOTES.md`; later findings go to
+`/issue-create`) — if you discover a bug unrelated to the current task, a
+related follow-up task, or a next-task candidate, append a bullet to the
+matching section of `<worktree>/WORKTREE_NOTES.md`:
+
+- `## BugsFound` — defects observed during the workflow
+- `## RelatedTasks` — adjacent work to address in a separate session
+- `## NextTasks` — follow-ups specific to the current change
+
+Edit `WORKTREE_NOTES.md` directly (worktree directory; gitignored; not subject
+to `enforce-worktree`). Replace `- (none)` on first append.
