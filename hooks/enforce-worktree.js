@@ -915,7 +915,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
 }
 
 // Allows history.md writes from the main worktree when /issue-close-finalize sets
-// ISSUE_CLOSE_SKILL=1 as an inline env prefix.  Three-axis AND:
+// ISSUE_CLOSE_SKILL=1 as an inline env prefix.  AND of 3 conditions:
 //   1. Command string starts with ISSUE_CLOSE_SKILL=1 (inline prefix — not process.env)
 //   2. Paths are confined to docs/history.md and docs/history/
 //   3. Shape is git-add or git-commit with docs(history): subject
@@ -929,6 +929,106 @@ function isAllowedHistoryWriteViaIssueCloseSkill(cmd) {
   // Axis 2+3: git commit with docs(history): subject
   if (/^ISSUE_CLOSE_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(history\):[^"']*["'][ \t]*$/.test(cmd)) return true;
   return false;
+}
+
+// Returns ONLY the repo's true default branch (origin/HEAD), not the broader
+// "protected" set. Empty string when undetectable (caller MUST fail-closed).
+//
+// Why no env override: any env-based override allows a stale shell var to
+// authorize pushes to a non-default branch. SSOT is git's refs/remotes/origin/HEAD.
+// For repos created via `git remote add` (not `git clone`), run once:
+//   git remote set-head origin <default-branch>
+function getDefaultBranchOnly(repoRoot) {
+  try {
+    const r = spawnSync("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], {
+      cwd: repoRoot, encoding: "utf8", timeout: 2000,
+    });
+    if (r.status === 0) {
+      const v = (r.stdout || "").trim().replace(/^origin\//, "");
+      if (v && /^[A-Za-z0-9._\/-]+$/.test(v)) return v;
+    }
+  } catch (e) {}
+  return ""; // Undetectable — caller MUST fail-closed.
+}
+
+// Allows docs/history push from the main worktree when /issue-close-finalize sets
+// ISSUE_CLOSE_SKILL=1 as an inline env prefix. AND of 4 conditions:
+//   1. Command string starts with ISSUE_CLOSE_SKILL=1 (inline prefix)
+//   2. Shape is exactly: git push origin <default-branch> (with at most -q/--quiet);
+//      remote must be "origin", branch must equal the repo's default branch
+//   3. All outgoing commit subjects match docs(history): record issue #<digits>
+//   4. All touched files confined to docs/history.md or docs/history/
+function isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot) {
+  try {
+    if (!cmd || typeof cmd !== "string" || !repoRoot) return false;
+    if (hasShellChaining(cmd)) return false;
+    if (!/^ISSUE_CLOSE_SKILL=1[ \t]+/.test(cmd)) return false;
+
+    const stripped = stripQuotedArgs(cmd.replace(/^ISSUE_CLOSE_SKILL=1[ \t]+/, ""));
+    const tokens = stripped.trim().split(/\s+/);
+    if (tokens[0] !== "git" || tokens[1] !== "push") return false;
+
+    // Minimal flag allowlist: quiet only. No -u/--set-upstream (upstream mutation),
+    // no --dry-run/--atomic/--porcelain (widens approved shape), no --force*.
+    const KNOWN_FLAGS = new Set(["-q", "--quiet"]);
+    const positionals = [];
+    for (const t of tokens.slice(2)) {
+      if (KNOWN_FLAGS.has(t)) continue;
+      if (t.startsWith("-")) return false; // any other flag → fail-closed
+      positionals.push(t);
+    }
+    if (positionals.length !== 2) return false;
+    const [remote, branch] = positionals;
+
+    // Remote must be the canonical "origin" — the approved bypass shape is
+    // "git push origin <default-branch>" exactly. Any other remote name falls
+    // through to the standard worktree guard.
+    if (remote !== "origin") return false;
+
+    // Branch must be the true default branch only (not just any protected branch).
+    if (branch.includes(":") || branch.startsWith("refs/") || branch.startsWith("+")) return false;
+    if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) return false;
+    const defaultBranch = getDefaultBranchOnly(repoRoot);
+    if (!defaultBranch) return false; // undetectable → fail-closed
+    if (branch !== defaultBranch) return false;
+
+    // Verify both the remote tracking ref AND the local branch ref exist.
+    // git push origin main pushes refs/heads/main, NOT HEAD.
+    const verifyRemoteRes = spawnSync("git", ["rev-parse", "--verify", `${remote}/${branch}`],
+      { cwd: repoRoot, timeout: 2000 });
+    if (verifyRemoteRes.status !== 0) return false;
+    const verifyLocalRes = spawnSync("git", ["rev-parse", "--verify", `refs/heads/${branch}`],
+      { cwd: repoRoot, timeout: 2000 });
+    if (verifyLocalRes.status !== 0) return false;
+
+    const upstreamRef = `${remote}/${branch}`;
+    const localRef = `refs/heads/${branch}`;
+    // Use refs/heads/<branch>..upstreamRef, NOT HEAD..upstreamRef.
+    // The main worktree may be on a different branch or detached when this fires.
+    const range = `${upstreamRef}..${localRef}`;
+
+    // Axis 3: all outgoing commit subjects must match docs(history) pattern.
+    const subjRes = spawnSync("git",
+      ["log", "--pretty=format:%s", range],
+      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
+    if (subjRes.status !== 0) return false;
+    const subjects = (subjRes.stdout || "").split("\n").map(s => s.trim()).filter(Boolean);
+    if (subjects.length === 0) return false; // no-op push → reject
+    const SUBJ_RE = /^docs\(history\): record issue #\d+$/;
+    if (!subjects.every(s => SUBJ_RE.test(s))) return false;
+
+    // Axis 4: all touched files confined to docs/history.md or docs/history/.
+    const logRes = spawnSync("git",
+      ["log", "--name-only", "--pretty=format:", range],
+      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
+    if (logRes.status !== 0) return false;
+    const files = (logRes.stdout || "").split("\n").map(f => f.trim()).filter(Boolean);
+    if (files.length === 0) return false;
+    return files.every(f => {
+      const norm = f.replace(/\\/g, "/");
+      return norm === "docs/history.md" || norm.startsWith("docs/history/");
+    });
+  } catch (e) { return false; }
 }
 
 // Returns true when repoCwd is the main worktree (non-linked).
@@ -1549,6 +1649,7 @@ if (mainCheckout) {
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
     if (isAllowedHistoryWriteViaIssueCloseSkill(cmd)) done();
+    if (isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot)) done();
   }
 
   // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
@@ -1598,6 +1699,8 @@ module.exports = {
   findFirstUnquotedAnd,
   isAllowedMainWorktreeCleanup,
   isAllowedHistoryWriteViaIssueCloseSkill,
+  getDefaultBranchOnly,
+  isAllowedHistoryPushViaIssueCloseSkill,
   isAllowedCdWorktreeRemove,
   findRepoRootForBash,
   getSessionRepoRoots,
