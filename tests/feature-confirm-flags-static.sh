@@ -34,6 +34,7 @@ OUTLINE_SKILL="$REPO_ROOT/skills/make-outline-plan/SKILL.md"
 DETAIL_SKILL="$REPO_ROOT/skills/make-detail-plan/SKILL.md"
 WORKTREE_SKILL="$REPO_ROOT/skills/worktree-start/SKILL.md"
 TESTS_SKILL="$REPO_ROOT/skills/write-tests/SKILL.md"
+WRITE_CODE_SKILL="$REPO_ROOT/skills/write-code/SKILL.md"
 ENV_EXAMPLE="$REPO_ROOT/.env.example"
 LINUX_LINKER="$REPO_ROOT/install/linux/dotfileslink.sh"
 WIN_LINKER="$REPO_ROOT/install/win/dotfileslink.ps1"
@@ -55,6 +56,7 @@ declare -a SKILL_FLAG_PAIRS=(
     "$DETAIL_SKILL|CONFIRM_DETAIL"
     "$TESTS_SKILL|CONFIRM_TESTS"
     "$WORKTREE_SKILL|CONFIRM_WORKTREE"
+    "$WRITE_CODE_SKILL|CONFIRM_CODE"
 )
 for pair in "${SKILL_FLAG_PAIRS[@]}"; do
     file="${pair%%|*}"
@@ -72,7 +74,7 @@ done
 # 2. Each gated SKILL.md invokes `get-config-var --is-off`
 # ---------------------------------------------------------------------------
 echo "=== SKILL.md invokes get-config-var --is-off ==="
-for f in "$OUTLINE_SKILL" "$DETAIL_SKILL" "$TESTS_SKILL" "$WORKTREE_SKILL"; do
+for f in "$OUTLINE_SKILL" "$DETAIL_SKILL" "$TESTS_SKILL" "$WORKTREE_SKILL" "$WRITE_CODE_SKILL"; do
     if require_file "$f"; then
         if has_fixed "get-config-var --is-off" "$f"; then
             pass "get-config-var --is-off present in $(basename "$(dirname "$f")")/SKILL.md"
@@ -187,7 +189,7 @@ fi
 # ---------------------------------------------------------------------------
 echo "=== .env.example: all CONFIRM_* keys present ==="
 if require_file "$ENV_EXAMPLE"; then
-    for key in CONFIRM_OUTLINE CONFIRM_DETAIL CONFIRM_TESTS CONFIRM_WORKTREE; do
+    for key in CONFIRM_OUTLINE CONFIRM_DETAIL CONFIRM_TESTS CONFIRM_WORKTREE CONFIRM_CODE; do
         # Match `KEY=` at start of line (allow leading whitespace)
         if grep -E "^[[:space:]]*${key}=" "$ENV_EXAMPLE" >/dev/null 2>&1; then
             pass ".env.example defines $key"
