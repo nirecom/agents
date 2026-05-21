@@ -32,11 +32,17 @@ Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and
 
 ### Step 2 — Migrate docs/history.md → closed issues — *Migration (one-time)*
 
+Each `--stage` invocation runs ONE canary unit and exits. Inspect the created
+issues on GitHub between stages. Confirm with the user before the next command.
+
 ```bash
-bash bin/github-issues/migration/preview-history.sh <repo_dir>              # review titles + counts
-bash bin/github-issues/migration/migrate-history.sh <repo_dir> --dry-run    # final check, no API calls
-bash bin/github-issues/migration/migrate-history.sh <repo_dir> --canary 1   # first canary
-bash bin/github-issues/migration/migrate-history.sh <repo_dir>              # full run
+bash bin/github-issues/migration/preview-history.sh <repo_dir>                            # review titles + counts
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --dry-run                      # final check, no API calls
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-1
+#   → inspect GitHub. Confirm with user.
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-2
+#   → inspect GitHub. Confirm with user.
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage full
 ```
 
 Each `### entry` in `docs/history.md` and `docs/history/*.md` becomes one **closed** issue with:
@@ -49,14 +55,18 @@ These get the **early issue numbers** (#1 onward) so the chronological record si
 
 ### Step 3 — Migrate docs/todo.md → open issues — *Migration (one-time)*
 
+Same stage-by-stage structure as Step 2.
+
 ```bash
-bash bin/github-issues/migration/migrate-todo.sh <repo_dir> --dry-run
-bash bin/github-issues/migration/migrate-todo.sh <repo_dir> --canary 1
-bash bin/github-issues/migration/migrate-todo.sh <repo_dir>
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage canary-1
+#   → inspect GitHub. Confirm with user.
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage canary-2
+#   → inspect GitHub. Confirm with user.
+bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 3 --stage full
 ```
 
 Each `## section` in `docs/todo.md` becomes one **open** issue with `type:task`.
-After full migration completes (no canary, all sections done), `docs/todo.md` is rewritten as a thin ID index pointing to the issues.
+After `--stage full` completes (all sections done), `docs/todo.md` is rewritten as a thin ID index pointing to the issues.
 
 These get the **later issue numbers** (continuing after Step 2 completes).
 
