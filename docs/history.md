@@ -193,3 +193,15 @@ Fix: Approach B (structural separation): added --stage canary-1|canary-2|full fl
 ### FEATURE: Skillize code phase (Step 5 subagent delegation + per-language guidance) (2026-05-21, aa7ecdc, #411)
 Background: CLAUDE.md Step 5 (code phase) was inlined; main-context token cost and the lack of language-specific guidance motivated extracting it as a subagent-delegated skill, mirroring /run-tests.
 Changes: Added /write-code skill (subagent-delegated edit + lint/typecheck/self-repair, CONFIRM_CODE gate). Moved skills/judge-task-complexity/SKILL.md to skills/_shared/judge-task-complexity.md (read-only rubric); updated path references in make-detail-plan, write-tests, write-code. Added rules/coding/python.md and rules/coding/nodejs.md as B-layer language essence. Added tests/feature-write-code-skill-static.sh.
+
+### FEATURE: find-pr-by-marker.sh: stale marker incorrectly treated as closing PR (2026-05-21, 293b88b, #418)
+Background: find-pr-by-marker.sh used the issue-close-pr-of body marker as primary PR source. Stale markers from abandoned branches were trusted, causing wrong merge commit and PR number in resolved-by sentinels.
+Changes: Swapped primary/fallback: closedByPullRequestsReferences (most-recently merged) is now primary, marker is fallback. Added validate_sentinel_freshness() to triage-lib.sh (ISSUE_CLOSE_STALE_DAYS env, default 30d); stale pending sentinel is treated as Phase 1 not run.
+
+### FEATURE: Phase 2 history.md write: non-GitHub remote gap and issue body insufficiency (2026-05-21, 293b88b, #412)
+Background: Phase 2 issue-to-history.sh assumed gh issue view, breaking on non-GitHub remotes. Issue body alone is also insufficient for history.md because implementation notes (rejected alternatives, sharp edges) are only available inside the worktree during the PR. CLOSED:appended triage path omitted Step E entirely.
+Changes: Added History Notes section to WORKTREE_NOTES.md template. issue-to-history.sh now accepts --history-notes-file, --non-github-mode, --title, --body-file, --closed-date. CLOSED:appended triage NEXT_STEPS changed from J,K to E,J,K.
+
+### FEATURE: Long-lived pending sentinel has no rollback or expiry when Phase 1 branch is abandoned (2026-05-21, 293b88b, #360)
+Background: Phase 1 posted an issue-close-sentinel comment with no TTL. If the branch was abandoned or rebased, the stale sentinel confused triage on re-attempt, routing through recovery instead of running Phase 1 cleanly.
+Changes: Added validate_sentinel_freshness() in issue-close-triage-lib.sh using node-based ISO8601 diff. Controlled by ISSUE_CLOSE_STALE_DAYS env var (default 30d); fail-open on malformed/future dates. Stale pending sentinel is treated as absent, triggering clean Phase 1 re-run.
