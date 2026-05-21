@@ -11,7 +11,7 @@ Usage: `/issue-close-finalize <N>` or `/issue-close-finalize --from-session`
 `--from-session` resolves `<N>` from the current session's intent.md:
 read `CLAUDE_SESSION_ID` (via `$CLAUDE_ENV_FILE`, fallback env), locate
 `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`, parse the
-`## closes_issues` section (integer list). Zero or `(empty)` → skip silently.
+`## closes_issues` section (integer list; canonical parser: `hooks/lib/parse-closes-issues.js` — do not reimplement). Zero or `(empty)` → skip silently.
 Exactly one → continue with that `<N>`. Multiple → run the close flow for each
 sequentially (no dependency sorting, no retry). Intent file missing → skip with
 a one-line warning.
