@@ -193,6 +193,9 @@ test_N1_writeNotes_exact_content() {
         '- (none)' \
         '' \
         '## NextTasks' \
+        '- (none)' \
+        '' \
+        '## History Notes' \
         '- (none)')"
 
     local actual
@@ -303,6 +306,9 @@ test_I1_writeNotes_idempotent() {
         '- (none)' \
         '' \
         '## NextTasks' \
+        '- (none)' \
+        '' \
+        '## History Notes' \
         '- (none)')"
     local actual; actual="$(cat "$notes_file")"
     if [ "$actual" = "$expected" ]; then
