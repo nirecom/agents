@@ -23,9 +23,7 @@
    (`main` is only valid when `ENFORCE_WORKTREE=off`.)
 4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-5. **Code** —
-   - **`ENFORCE_WORKTREE=on`:** Call Edit directly — no diff presentation or approval required.
-   - **`ENFORCE_WORKTREE=off`:** Present a diff in chat before calling Edit. Wait for approval.
+5. **Code** — Run `/write-code`. The skill delegates editing and lint/typecheck/self-repair to a subagent. Behavior is identical under `ENFORCE_WORKTREE=on` and `off` — the Edit permission dialog is the sole approval surface.
 6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Skill: `/run-tests`
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
