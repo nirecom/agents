@@ -21,7 +21,7 @@ Write or update tests for the current task.
    - stdout `OFF`: print the planned cases and proceed to step 5 without approval wait.
    - stdout `ON`: present the planned cases to the user — do not write code until approved (existing behavior).
 5. **Determine the subagent's model**:
-   - Read `skills/judge-task-complexity/SKILL.md` to load the signal table.
+   - Read `skills/_shared/judge-task-complexity.md` to load the signal table.
    - Evaluate all signals against the task context, source files from steps 2–3, and the planned test cases from step 4. Do not short-circuit on the first match.
    - Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
    - Emit in Claude text output (NOT Bash echo):
