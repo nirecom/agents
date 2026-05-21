@@ -17,9 +17,9 @@ ARGS="$*"
 # Helper: emit the bare state string for `--json state --jq .state`.
 mock_state_for_scenario() {
   case "$SCENARIO" in
-    issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended)
+    issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended|open_with_stale_pending|open_with_malformed_created_at|open_with_future_created_at)
       echo "OPEN" ;;
-    closed_no_sentinel|closed_no_sentinel_open_subissue|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending|closed_with_merged_sentinel)
+    closed_no_sentinel|closed_no_sentinel_open_subissue|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending|closed_with_merged_sentinel|closed_with_stale_pending|closed_multi_reference)
       echo "CLOSED" ;;
     *)
       echo "OPEN" ;;
@@ -47,7 +47,7 @@ mock_sentinel_for_scenario() {
       # `appended` lookup (no (^|\n) prefix) → empty: simulates that without
       # the prefix, a line-2 sentinel is invisible to the idempotency check.
       ;;
-    open_with_pending|closed_with_pending)
+    open_with_pending|closed_with_pending|open_with_stale_pending|closed_with_stale_pending|open_with_malformed_created_at|open_with_future_created_at)
       if [ "$kind" = "any" ]; then
         echo "<!-- issue-close-sentinel: pending -->"
       fi
@@ -84,6 +84,32 @@ case "$ARGS" in
     # Extract hash from `resolved-by: <hash> -->` inside the --jq expression.
     HASH=$(printf '%s' "$ARGS" | sed -nE 's/.*resolved-by: ([0-9a-f]+) -->.*/\1/p')
     mock_resolved_by_for_scenario "$HASH"
+    exit 0
+    ;;
+  # validate_sentinel_freshness: returns ISO8601 createdAt of the sentinel comment.
+  # Must match BEFORE the generic "issue-close-sentinel:" sentinel-body dispatch
+  # because the new jq expression contains both ".createdAt" and the marker substring.
+  "issue view "*" --json comments --jq"*".createdAt"*)
+    case "${GH_MOCK_SCENARIO:-}" in
+        open_with_stale_pending|closed_with_stale_pending)
+            # 35 days ago (stale relative to default 30-day threshold)
+            node -e 'console.log(new Date(Date.now()-35*86400000).toISOString())' 2>/dev/null || \
+                echo "2020-01-01T00:00:00Z"
+            ;;
+        open_with_malformed_created_at)
+            echo "not-a-date"
+            ;;
+        open_with_future_created_at)
+            # 30 days in the future
+            node -e 'console.log(new Date(Date.now()+30*86400000).toISOString())' 2>/dev/null || \
+                echo "2099-12-31T00:00:00Z"
+            ;;
+        open_with_pending|open_with_appended|closed_with_pending|closed_with_appended_sentinel|*)
+            # fresh (3 days ago)
+            node -e 'console.log(new Date(Date.now()-3*86400000).toISOString())' 2>/dev/null || \
+                date -u +%Y-%m-%dT%H:%M:%SZ
+            ;;
+    esac
     exit 0
     ;;
   "issue view "*" --json comments --jq"*"issue-close-sentinel: appended"*)
@@ -145,13 +171,26 @@ case "$ARGS" in
   "issue view "*" --json closedByPullRequestsReferences --jq"*)
     N=$(printf '%s' "$ARGS" | sed -nE 's/.*issue view ([0-9]+) .*/\1/p')
     if [[ "$ARGS" == *".number"* ]]; then
-        # find-pr-by-marker.sh: wants .closedByPullRequestsReferences[0].number
+        # find-pr-by-marker.sh: new primary jq returns "<number>\t<sha>".
         var="GH_MOCK_CLOSED_BY_PR_NUM_FOR_${N}"
-        if [ -n "${!var+x}" ]; then
-            val="${!var}"
-            [ -n "$val" ] && printf '%s' "$val"
+        if [ -n "${!var+x}" ] && [ -n "${!var}" ]; then
+            PR_N="${!var}"
+            sha_var="GH_MOCK_PR_MERGE_SHA_FOR_${PR_N}"
+            SHA="${!sha_var:-}"
+            printf '%s\t%s\n' "$PR_N" "$SHA"
             exit 0
         fi
+        # Handle closed_multi_reference scenario specially: two PRs in
+        # closedByPullRequestsReferences (PR 100 older, PR 200 newer).
+        # sort_by(.mergedAt) | last → PR 200.
+        case "${GH_MOCK_SCENARIO:-}" in
+            closed_multi_reference)
+                printf '%s\t%s\n' "200" "newsha200"
+                exit 0
+                ;;
+        esac
+        # No match → empty result.
+        exit 0
     else
         # backfill-commit-comments.sh (Tier 0a): wants mergeCommit.oid
         var="GH_MOCK_PR_MERGE_COMMIT_FOR_${N}"
@@ -523,6 +562,73 @@ case "$SCENARIO" in
     case "$ARGS" in
       "issue view "*" --json state,comments")
         echo '{"state":"CLOSED","comments":[{"body":"<!-- issue-close-sentinel: pending -->"}]}'
+        exit 0
+        ;;
+    esac
+    ;;
+  open_with_stale_pending)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[{"body":"<!-- issue-close-sentinel: pending -->","createdAt":"2020-01-01T00:00:00Z"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_with_stale_pending)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"CLOSED","comments":[{"body":"<!-- issue-close-sentinel: pending -->","createdAt":"2020-01-01T00:00:00Z"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
+        exit 0
+        ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Stale closed","body":"Background: x\nChanges: y","closedAt":"2026-05-10T00:00:00Z","labels":[{"name":"type:task"}]}'
+        exit 0
+        ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo "0"
+        exit 0
+        ;;
+    esac
+    ;;
+  open_with_malformed_created_at)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[{"body":"<!-- issue-close-sentinel: pending -->","createdAt":"not-a-date"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0
+        ;;
+    esac
+    ;;
+  open_with_future_created_at)
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[{"body":"<!-- issue-close-sentinel: pending -->","createdAt":"2099-12-31T00:00:00Z"}]}'
+        exit 0
+        ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0
+        ;;
+    esac
+    ;;
+  closed_multi_reference)
+    # find-pr-by-marker.sh primary: two PRs in closedByPullRequestsReferences,
+    # PR 100 (older) and PR 200 (newer). The .createdAt/.number dispatch above
+    # returns "200\tnewsha200" for this scenario.
+    case "$ARGS" in
+      "issue view "*" --json state")
+        echo '{"state":"CLOSED"}'
         exit 0
         ;;
     esac
