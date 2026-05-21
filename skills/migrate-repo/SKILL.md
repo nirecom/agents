@@ -6,6 +6,14 @@ user-invocable: true
 
 Always run --dry-run first.
 
+## Irreversibility hard rule
+
+`gh issue create` consumes monotonically increasing global issue numbers.
+Numbers cannot be reused, freed, or reassigned. Every canary stage is
+irreversible. The orchestrator is structured so each canary stage runs in a
+separate process: never chain stages, never pipe `yes` into the orchestrator,
+never run two stages in one command.
+
 ## Pre-flight
 
 - `gh auth status` — verify `project` scope is active
@@ -13,12 +21,30 @@ Always run --dry-run first.
 
 ## Procedure
 
-1. Get target repo path from user
+1. Get target repo path from user.
 2. Preview: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --dry-run`
-3. Confirm with user
-4. Migrate: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH"`
+3. Confirm with user.
+4. **History canary 1**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 2 --stage canary-1`
+   STOP.
+   Open the printed Issues URL in browser.
+   Get explicit user approval before running the next command.
+5. **History canary 2**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 2 --stage canary-2`
+   STOP.
+   Open the printed Issues URL in browser.
+   Get explicit user approval before running the next command.
+6. **History full**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 2 --stage full`
+7. **Todo canary 1**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage canary-1`
+   STOP.
+   Open the printed Issues URL in browser.
+   Get explicit user approval before running the next command.
+8. **Todo canary 2**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage canary-2`
+   STOP.
+   Open the printed Issues URL in browser.
+   Get explicit user approval before running the next command.
+9. **Todo full**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage full`
+10. **Step 4 + 5**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 4` (continuous; no `--stage`).
 
-On failure at Step N, resume: `orchestrate.sh "$REPO_PATH" --from-step N`
+On failure at Step N, resume: `orchestrate.sh "$REPO_PATH" --from-step N [--stage ...]`.
 
 ### When archive files need explicit ordering
 
