@@ -60,25 +60,28 @@ DIFF=$(git diff "${BASE}...HEAD" 2>"$DIFF_ERR") || {
 }
 
 # Fallback: BASE...HEAD empty (e.g. fresh feature branch, no commits past base) →
-# review staged changes instead. One-way: when committed diff is non-empty,
-# staged changes are NOT additionally appended (avoids duplicate/out-of-order content).
+# review uncommitted changes (staged + unstaged) via `git diff HEAD`. This is critical
+# for workflow Step 6 where `/write-code` produces unstaged edits that have not yet
+# been committed or staged. Falling back to `git diff --cached` would miss those edits
+# and silently no-op the review. One-way: when committed diff is non-empty, uncommitted
+# changes are NOT additionally appended (avoids duplicate/out-of-order content).
 DIFF_SOURCE="committed"
 if [[ -z "$DIFF" ]]; then
-  DIFF=$(git diff --cached 2>"$DIFF_ERR") || {
+  DIFF=$(git diff HEAD 2>"$DIFF_ERR") || {
     DIFF_ERR_MSG=$(cat "$DIFF_ERR" | tr '\n' ' ')
-    echo "## Codex Review: FAILED — git diff --cached failed: ${DIFF_ERR_MSG}"
-    codex_core_log failed "git diff --cached failed" 0
+    echo "## Codex Review: FAILED — git diff HEAD failed: ${DIFF_ERR_MSG}"
+    codex_core_log failed "git diff HEAD failed" 0
     exit 0
   }
   if [[ -n "$DIFF" ]]; then
-    DIFF_SOURCE="staged"
-    echo "Note: BASE...HEAD empty — reviewing staged changes instead."
+    DIFF_SOURCE="uncommitted"
+    echo "Note: BASE...HEAD empty — reviewing uncommitted changes (staged + unstaged) instead."
   fi
 fi
 DIFF_LINES=$(printf '%s' "$DIFF" | wc -l)
 
 if [[ -z "$DIFF" ]]; then
-  echo "## Codex Review: SKIPPED — empty diff (no changes vs ${BASE}, no staged changes)"
+  echo "## Codex Review: SKIPPED — empty diff (no changes vs ${BASE}, no uncommitted changes)"
   codex_core_log skipped "empty diff" 0
   exit 0
 fi

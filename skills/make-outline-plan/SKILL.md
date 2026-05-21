@@ -6,101 +6,56 @@ model: sonnet
 
 Propose high-level approaches and get user sign-off before detailed planning.
 
-Skip this stage when the entire Plan step is being skipped via `<<WORKFLOW_PLAN_NOT_NEEDED: ...>>`.
+Skip when the entire Plan step is skipped via `<<WORKFLOW_PLAN_NOT_NEEDED: ...>>`.
 When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign-off loop and proceed directly to `make-detail-plan`.
 
 ## Inputs
 
-- `<PLANS_DIR>/<session-id>-intent.md` — output of `clarify-intent`; may be from a
-  different session (cross-session carry-in is allowed)
-- `<PLANS_DIR>/<session-id>-survey-code.md` — optional; output of `survey-code` (contains `## Verified Claims`)
-- `<PLANS_DIR>/<session-id>-survey-history.md` — optional; output of `survey-history` (contains `## Verified Claims`)
-- `state.premise_contradiction` (optional) — set by `WORKFLOW_PREMISE_FAIL` during Research stage.
-  Sentinels in Step 0 are emitted directly by the orchestrator (Bash tool), never by any subagent.
-- The session-id used for output files (`*-outline.md`) matches the intent file actually used
+- `<PLANS_DIR>/<session-id>-intent.md` — output of `clarify-intent` (cross-session carry-in allowed)
+- `<PLANS_DIR>/<session-id>-survey-{code,history}.md` — optional; contain `## Verified Claims`
+- `state.premise_contradiction` — optional; set by `WORKFLOW_PREMISE_FAIL` during Research stage
+- All sentinels in Step 0 are emitted by the orchestrator (Bash tool), never by a subagent.
+- Session-id used for `*-outline.md` matches the intent file actually used.
 
 ## Procedure
 
 ### Step 0 — Resolve <PLANS_DIR>
 
-Apply `skills/_shared/resolve-plans-dir.md` once at the start of Procedure;
-substitute the resolved absolute path for every `<PLANS_DIR>` placeholder
-below. Reuse across all subsequent steps — do not re-resolve.
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Reuse across steps.
 
-0. **Surface premise contradictions from Research artifacts.**
-
-   0a. Determine session-id from `CLAUDE_SESSION_ID` env. Check whether both
-       `<PLANS_DIR>/<session-id>-survey-code.md` and
-       `<PLANS_DIR>/<session-id>-survey-history.md` exist.
-       - If research was skipped (state.steps.research.status === "skipped"):
-         skip Steps 0b–0d and proceed directly to Step 0e.
-       - If one or both artifact files are missing AND research is not skipped:
-         present a one-line warning in chat ("Research artifacts incomplete —
-         running make-outline-plan without full premise verification") and proceed
-         to Step 0e. Do not block.
-
-   0b. Read the `## Verified Claims` section from each existing artifact. Collect
-       all items with `verdict: contradicted`.
-
-   0c. If any contradicted claims exist: orchestrator runs the following Bash call
-       (description: "Record premise contradiction in workflow state"):
-       `echo "<<WORKFLOW_PREMISE_FAIL: <one-line summary of contradictions>>>"`
-       Then present a brief contradiction summary in chat and call AskUserQuestion:
-       "(a) Revise intent.md and re-run /clarify-intent, or (b) Acknowledge and
-       proceed (premise is outdated; I accept the risk)."
-
-   0d. If user selects (b): orchestrator runs
-       `echo "<<WORKFLOW_PREMISE_ACK>>"` (clears state.premise_contradiction).
-       If user selects (a): abort the skill with instruction to re-run /clarify-intent.
-
-   0e. Orchestrator runs `echo "<<WORKFLOW_MARK_STEP_research_complete>>"` to mark
-       Research complete (aggregating survey-code and survey-history, which no longer
-       emit this sentinel individually).
-       Note: if deep-research was also run and already emitted research_complete,
-       markStep is idempotent — this emit is harmless.
-
-   Proceed to Step 1.
+0. **Surface premise contradictions** from Research artifacts.
+   0a. Determine session-id from `CLAUDE_SESSION_ID` env (Step 1 has not run yet — this lookup precedes intent-file resolution).
+       - `state.steps.research.status === "skipped"` → skip to 0e.
+       - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to 0e. Do not block.
+   0b. Read `## Verified Claims` from each existing artifact; collect items with `verdict: contradicted`.
+   0c. Any contradicted claims:
+     1. Emit `<<WORKFLOW_PREMISE_FAIL: <one-line summary>>>` (Bash description: "Record premise contradiction in workflow state").
+     2. Present a brief contradiction summary; `AskUserQuestion`: (a) revise intent.md and re-run `/clarify-intent`, (b) acknowledge and proceed.
+   0d. (a) → abort the skill with instruction to re-run `/clarify-intent`. (b) → emit `<<WORKFLOW_PREMISE_ACK>>` (clears `state.premise_contradiction`).
+   0e. Emit `<<WORKFLOW_MARK_STEP_research_complete>>` to mark Research complete (aggregating survey-code and survey-history, which no longer emit it individually; deep-research's emit, if any, is idempotent).
 
 1. Locate the intent file:
-   a. If `<session-id>-intent.md` exists, use it.
-   b. Otherwise, list all `*-intent.md` files in `<PLANS_DIR>/`.
-      - If exactly one exists, inform the user and use it.
-      - If multiple exist, present them via `AskUserQuestion` and wait for the user to select one.
-      - If none exist, abort: "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
-   c. Extract the session-id from the chosen file's name; use it for all subsequent output
-      file paths (including `<session-id>-outline.md`).
+   a. `<session-id>-intent.md` exists → use it.
+   b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
+   c. Extract session-id from the chosen file's name; use it for all subsequent output paths.
 
-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`).
-   Pass: the full contents of `<session-id>-intent.md` and the task context.
+2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context.
 
-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally followed by `DELIVERY_PLAN: <plan>` on the next line):
-   - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text: "(not provided — planner pre-dates this convention)".
-   - Inform the user that only one approach is viable (citing the reason) and that the skill
-     is proceeding directly to `/make-detail-plan`.
-   - Write a minimal `<session-id>-outline.md` noting the justified single approach and including
-     a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or the fallback text).
-   - Apply the **full** `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3)
-     using `CONFIRM_OUTLINE` as the flag. Even with a single viable approach,
-     the written artifact itself may need revision — protocol Step 3 covers that.
-     If the user picks "Revise" in protocol Step 3, ask what to change, re-run
-     outline-planner with the feedback, then loop back to Step 2 (delegation).
-   - Proceed to emit `WORKFLOW_OUTLINE_PLAN_COMPLETE` (see Completion section)
-     and stop.
+3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
+   - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
+   - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
+   - Write a minimal `<session-id>-outline.md` noting the justified single approach and including a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback). If intent.md contains a `## Issue` H2 block (heading + body up to but not including the next H2), copy it VERBATIM into the minimal outline.md immediately after the H1. Omit if absent.
+   - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to Step 2.
+   - Emit `WORKFLOW_OUTLINE_PLAN_COMPLETE` (Completion) and stop.
 
-4. If outline-planner returns `NEEDS_RESEARCH`:
-   - Run `/deep-research` with the specified question.
-   - Re-prompt outline-planner with the research findings. (Research budget: 2 rounds.)
+4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
-4a. **Accepted Tradeoffs carry-forward** (before invoking outline-planner on initial draft):
-   1. Run `extract-accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md` and capture the block.
-   2. Instruct outline-planner to copy that block VERBATIM into `<session-id>-outline.md` as a
-      top-level `## Accepted Tradeoffs` section. Outline-planner MAY append additional tradeoffs
-      newly settled at the outline stage as further `### <title>` entries — it MUST NOT remove
-      or rephrase intent-stage tradeoffs.
-   3. After outline-planner returns, verify via:
-      `grep -q '^## Accepted Tradeoffs$' <PLANS_DIR>/<session-id>-outline.md`
-      If absent, re-prompt outline-planner once with the missing-section reminder; second
-      omission → halt with an explicit error to the user.
+4a. **`## Issue` carry-forward** (initial draft): instruct outline-planner to copy intent.md's `## Issue` block VERBATIM immediately after the H1. Optional — if intent.md lacks `## Issue`, outline.md must also omit it. No verification grep, no re-prompt on absence (unlike Accepted Tradeoffs).
+
+4b. **Accepted Tradeoffs carry-forward** (initial draft):
+   1. Run `extract-accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md`; capture the block.
+   2. Instruct outline-planner to copy it VERBATIM as a top-level `## Accepted Tradeoffs` section. MAY append new `### <title>` entries newly settled at this stage; MUST NOT remove/rephrase intent-stage tradeoffs.
+   3. Verify: `grep -q '^## Accepted Tradeoffs$' <PLANS_DIR>/<session-id>-outline.md`. Absent → re-prompt outline-planner once; second omission → halt.
 
    `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
@@ -118,56 +73,35 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - NON_APPROVED_VERDICT: `MISSING_ALTERNATIVE`
 
    Outcomes:
-   - APPROVED → proceed to step 7.
-   - MISSING_ALTERNATIVE → loop continues (`revision_rounds` budget: 1 round).
-     Each round consumes the budget; if the budget is exhausted without APPROVED
-     before cap-menu fires, tell the user which concern is blocking and ask whether
-     to add a missing alternative, approve as-is, or change the scope.
-   - `FAILED — round cap reached` → proceed to step 6.
+   - APPROVED → step 7.
+   - MISSING_ALTERNATIVE → loop (revision budget: 1 round). On budget exhaustion before cap-menu fires, tell user which concern is blocking and ask: add missing alternative / approve as-is / change scope.
+   - `FAILED — round cap reached` → step 6.
 
-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
+6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
    - MAX_EXTENSIONS: 1
 
-   Outline-specific dispatch override: `rc==0`, user picks `adjust` → halt and
-   re-run `/clarify-intent` (not generic user-escalation). All other outcomes
-   route per the shared spec; on AUTO_EXTEND or `extend`, loop back into the
-   step 5 review round.
+   Override: `rc==0` + user picks `adjust` → halt and re-run `/clarify-intent` (not generic user-escalation). AUTO_EXTEND / `extend` → loop back into step 5.
 
-7. Once outline-reviewer returns `APPROVED`:
-   Output a prose rationale summary in the main conversation — one paragraph per
-   approach covering its rationale, trade-offs, and delivery plan. This preamble
-   gives the user the context to choose. Do not write the preamble to outline.md.
+7. On `APPROVED`:
+   Output a prose rationale summary in main conversation — one paragraph per approach (rationale + trade-offs + delivery plan). Do NOT write this preamble to outline.md.
 
-   Then decide the chosen approach. Run via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
-   - stdout `OFF`: set the chosen approach to "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`. Do NOT write the outline file yet — Step 8 handles the write.
-   - stdout `ON`: present the approved approaches via `AskUserQuestion` for selection. One option must be "Pass all approaches to make-detail-plan without selecting" as a fallback. The user's selection is the chosen approach. Do NOT write the outline file yet — Step 8 handles the write.
+   Decide the chosen approach:
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
+   - `OFF` → chosen approach = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
+   - `ON` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting".
 
-   **AskUserQuestion content guard**: the `question` field must be a single short
-   selection prompt (one sentence). Do NOT embed approach bodies, rationales, or
-   trade-offs in `question` or option `description` — those belong in the prose
-   preamble above. Each option's `description` is limited to a one-line summary
-   of the approach (≤80 chars). The `AskUserQuestion` dialog is narrow and
-   unreadable for long content; the preamble in main conversation is the venue
-   for substance.
+   Step 8 handles the file write — do NOT write here.
 
-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` using
-   the schema below. Then apply the **full** `skills/_shared/confirm-plan.md`
-   protocol (Steps 1+2+3) using `CONFIRM_OUTLINE` as the flag.
-   Step 7's `AskUserQuestion` was about *which approach to pick*; protocol Step 3
-   asks about *the written artifact itself* (proceed/revise) — they are distinct
-   user touchpoints. In ON mode, the user will see two `AskUserQuestion` calls
-   per run, which is intentional.
-   - **Revise** (skill-specific): ask what to change, re-run the outline-planner
-     with the feedback, then loop back to Step 7.
+8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
 Write the file (per `rules/language.md`) with the following sections:
 
 - **Title**: "Confirmed Approach" + `<session-id>`
+- **Issue** *(optional)*: verbatim copy of intent.md's `## Issue` section. Omit when intent.md has no `## Issue`. Position: immediately after H1, before Adopted approach.
 - **Adopted approach**: 1 paragraph + rationale for choosing it
 - **Delivery plan**: triage rationale / execution order / split policy for the adopted approach
 - **Considered alternatives (rejected)**: one entry per rejected approach with reason
@@ -176,36 +110,18 @@ Write the file (per `rules/language.md`) with the following sections:
 
 ## Rules
 
-- Orchestrator chat output during the discussion loop is restricted to:
-  (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
-  (b) NO path output — the `show-plan-link.js` PostToolUse hook emits the sole
-      authoritative breadcrumb (`Plan file written: <abs-path>`) automatically.
-      The orchestrator MUST NOT print, duplicate, translate, paraphrase, or
-      reformat that path in any form. See `skills/_shared/confirm-plan.md` Step 2.
+- **Chat output during the discussion loop** is restricted to:
+  (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
+  (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the prose rationale preamble emitted in step 7 before `AskUserQuestion`
-  No per-round natural-language summaries, no codex/reviewer transcripts,
-  no "falling back to Claude reviewer" notices in chat.
-  Diagnostics go to <session-id>-outline-debug.log only.
-- outline-planner and outline-reviewer are never shown implementation details —
-  they work at the direction level only.
-- `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here. It is emitted only by
-  `make-detail-plan`.
-- **Two `AskUserQuestion` calls per run in ON mode** — one for approach selection
-  in step 7, one for artifact review in step 8 (via protocol Step 3). They are
-  distinct user touchpoints: step 7 asks "which approach to pick" *before* the
-  file is written; step 8 asks "proceed or revise" *after* reviewing the written
-  file. In OFF mode neither AskUserQuestion fires.
-- **AskUserQuestion is for choices, not content.** `question` is one sentence;
-  option `description` is one line (≤80 chars). Approach bodies, rationales, and
-  trade-offs go in the main-conversation prose preamble (step 7) — never inside
-  `question` or option fields. The dialog UI is narrow; long content there is
-  unreadable.
-  Never pause for user confirmation during intermediate steps: Codex/reviewer
-  revision rounds (step 6) or between-step summaries. Update files silently;
-  inform the user with plain text only.
+  No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
+- outline-planner and outline-reviewer never see implementation details — direction-level only.
+- `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here; only `make-detail-plan` emits it.
+- **Two `AskUserQuestion` calls per run in ON mode** — step 7 (approach selection, before file write) and step 8 (artifact review via protocol Step 3, after write). OFF mode fires neither.
+- **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
+- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
 
 ## Completion
 
-After this skill:
-1. Run: `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"`
+1. `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"`
 2. Invoke `make-detail-plan` via the Skill tool.
