@@ -6,13 +6,13 @@
 #
 # Steps:
 #   1. Label sync + copy .github/ ISSUE_TEMPLATE / labels.yml
-#   2. History canary 1 → confirm → canary 2 → confirm → full
-#   3. Ordering gate (history must be complete before todo migrates) + todo canary
+#   2. History migration — one canary stage per invocation (--stage canary-1|canary-2|full)
+#   3. Ordering gate (history complete) + todo migration — one canary stage per invocation
 #   4. Create Projects v2 board + backfill Content Date
 #   5. Backfill commit comments + clean up state
 #
 # Usage:
-#   bin/github-issues/migration/orchestrate.sh <repo_dir> [--dry-run] [--from-step N]
+#   bin/github-issues/migration/orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--stage canary-1|canary-2|full]
 set -euo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
@@ -21,19 +21,26 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
 
-REPO_DIR="${1:?usage: orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--history-files <list>]}"
+REPO_DIR="${1:?usage: orchestrate.sh <repo_dir> [--dry-run] [--from-step N] [--stage canary-1|canary-2|full] [--history-files <list>]}"
 DRY_RUN=0
 FROM_STEP=1
 HISTORY_FILES=""
+STAGE=""
 shift
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run)       DRY_RUN=1; shift ;;
     --from-step)     FROM_STEP="${2:?--from-step requires N}"; shift 2 ;;
     --history-files) HISTORY_FILES="${2:?--history-files requires comma-separated list}"; shift 2 ;;
+    --stage)         STAGE="${2:?--stage requires canary-1|canary-2|full}"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
+
+case "$STAGE" in
+  ""|canary-1|canary-2|full) ;;
+  *) echo "ERROR: --stage must be canary-1|canary-2|full (got: $STAGE)" >&2; exit 1 ;;
+esac
 
 REPO_DIR="$(cd "$REPO_DIR" && pwd)"
 
@@ -42,6 +49,56 @@ echo "Repo:      $REPO_DIR"
 echo "From-step: $FROM_STEP"
 [ "$DRY_RUN" -eq 1 ] && echo "Mode:      DRY RUN"
 echo ""
+
+history_entries_total() {
+  # HIST_FILE and HIST_DIR must be in scope.
+  local count=0
+  if [ -f "$HIST_FILE" ]; then
+    count=$((count + $(awk '/^### /{n++} END{print n+0}' "$HIST_FILE" 2>/dev/null || echo 0)))
+  fi
+  if [ -d "$HIST_DIR" ]; then
+    while IFS= read -r f; do
+      [ "$(basename "$f")" = "index.md" ] && continue
+      count=$((count + $(awk '/^### /{n++} END{print n+0}' "$f" 2>/dev/null || echo 0)))
+    done < <(find "$HIST_DIR" -name "*.md" -type f)
+  fi
+  echo "$count"
+}
+
+todo_entries_total() {
+  # TODO_FILE must be in scope.
+  if [ -f "$TODO_FILE" ]; then
+    awk '/^## /{n++} END{print n+0}' "$TODO_FILE" 2>/dev/null || echo 0
+  else
+    echo 0
+  fi
+}
+
+_print_next_stage() {
+  local kind="$1" done_stage="$2" next_stage="$3" step="$4"
+  echo ""
+  echo "=== $kind $done_stage complete ==="
+  echo "Inspect the issues created above on GitHub:"
+  local url
+  url="$(cd "$REPO_DIR" && gh repo view --json url --jq '.url + "/issues"' 2>/dev/null || true)"
+  if [ -n "$url" ]; then
+    echo "  $url"
+  else
+    echo "  (could not resolve repo URL — open GitHub manually)"
+  fi
+  if [ "$next_stage" = "done" ]; then
+    local next_step=$((step + 1))
+    echo "$kind migration complete."
+    if [ "$next_step" -le 5 ]; then
+      echo "Next: continue with Step $next_step:"
+      echo "  bash $0 $REPO_DIR --from-step $next_step"
+    fi
+  else
+    echo "Next command (run ONLY after inspecting the issues above):"
+    echo "  bash $0 $REPO_DIR --from-step $step --stage $next_stage"
+  fi
+  echo ""
+}
 
 confirm() {
   local prompt="$1"
@@ -139,30 +196,47 @@ if [ "$FROM_STEP" -le 2 ]; then
       bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" --dry-run \
         "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
     else
-      # Idempotency: if history is already fully migrated, skip canary.
-      total_hist=$(awk '/^### /{n++} END{print n+0}' "$HIST_FILE" 2>/dev/null || echo 0)
-      if [ -d "$HIST_DIR" ]; then
-        for f in "$HIST_DIR"/*.md; do
-          [ -e "$f" ] || continue
-          case "$(basename "$f")" in index.md) continue ;; esac
-          c=$(awk '/^### /{n++} END{print n+0}' "$f" 2>/dev/null || echo 0)
-          total_hist=$((total_hist + c))
-        done
+      if [ -z "$STAGE" ]; then
+        echo "ERROR: Step 2 (history migration) requires --stage." >&2
+        echo "       Start with: bash $0 $REPO_DIR --from-step 2 --stage canary-1" >&2
+        exit 1
       fi
+
       already=$(state_count_migrated history)
+      total_hist=$(history_entries_total)
       if [ "$total_hist" -gt 0 ] && [ "$already" -ge "$total_hist" ]; then
-        echo "  history already fully migrated ($already/$total_hist) — skipping"
-      else
-        bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" --canary 1 \
-          "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
-        confirm "history canary 1 OK? proceed to canary 2"
-        bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" --canary 2 \
-          "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
-        confirm "history canary 2 OK? proceed to full run"
-        bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" \
-          "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
+        echo "  history already fully migrated ($already/$total_hist) — skipping --stage $STAGE"
+        if [ "$STAGE" = "full" ]; then
+          state_set_advanced history full
+          state_set_step 2
+        fi
+        exit 0
       fi
-      state_set_step 2
+
+      case "$STAGE" in
+        canary-1)
+          bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" --canary 1 \
+            "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
+          _print_next_stage history canary-1 canary-2 2
+          exit 0
+          ;;
+        canary-2)
+          state_set_advanced history canary_1
+          bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" --canary 2 \
+            "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
+          _print_next_stage history canary-2 full 2
+          exit 0
+          ;;
+        full)
+          state_set_advanced history canary_2
+          bash "$SCRIPT_DIR/migrate-history.sh" "$REPO_DIR" \
+            "${HIST_FILES_FLAGS[@]+${HIST_FILES_FLAGS[@]}}"
+          state_set_advanced history full
+          state_set_step 2
+          _print_next_stage history full done 2
+          exit 0
+          ;;
+      esac
     fi
   fi
   echo ""
@@ -204,20 +278,48 @@ if [ "$FROM_STEP" -le 3 ]; then
     if [ ! -f "$TODO_FILE" ]; then
       echo "  no docs/todo.md — skipping"
     else
-      todo_total=$(awk '/^## /{n++} END{print n+0}' "$TODO_FILE" 2>/dev/null || echo 0)
+      if [ -z "$STAGE" ]; then
+        echo "ERROR: Step 3 (todo migration) requires --stage." >&2
+        echo "       Start with: bash $0 $REPO_DIR --from-step 3 --stage canary-1" >&2
+        exit 1
+      fi
+
+      todo_total=$(todo_entries_total)
       todo_done=$(state_count_migrated todo)
       if [ "$todo_total" -gt 0 ] && [ "$todo_done" -ge "$todo_total" ]; then
-        echo "  todo already fully migrated ($todo_done/$todo_total) — running full to rewrite todo.md if needed"
-        bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR"
-      else
-        bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR" --canary 1
-        confirm "todo canary 1 OK? proceed to canary 2"
-        bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR" --canary 2
-        confirm "todo canary 2 OK? proceed to full run"
-        bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR"
+        if [ "$STAGE" = "full" ]; then
+          echo "  todo already fully migrated ($todo_done/$todo_total) — running todo.md thin-index rewrite"
+          bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR"
+          state_set_advanced todo full
+          state_set_step 3
+        else
+          echo "  todo already fully migrated ($todo_done/$todo_total) — skipping --stage $STAGE"
+        fi
+        exit 0
       fi
+
+      case "$STAGE" in
+        canary-1)
+          bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR" --canary 1
+          _print_next_stage todo canary-1 canary-2 3
+          exit 0
+          ;;
+        canary-2)
+          state_set_advanced todo canary_1
+          bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR" --canary 2
+          _print_next_stage todo canary-2 full 3
+          exit 0
+          ;;
+        full)
+          state_set_advanced todo canary_2
+          bash "$SCRIPT_DIR/migrate-todo.sh" "$REPO_DIR"
+          state_set_advanced todo full
+          state_set_step 3
+          _print_next_stage todo full done 3
+          exit 0
+          ;;
+      esac
     fi
-    state_set_step 3
   fi
   echo ""
 fi
