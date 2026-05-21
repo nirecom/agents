@@ -6,6 +6,14 @@
 
 _state_file() { echo "${1:?repo_dir required}/.migration-state.json"; }
 
+# jq_text — run jq with --raw-output built-in and strip Windows jq.exe CRLF.
+# Use in place of $(jq -r ...) wherever output is captured into a shell variable.
+# Callers MUST NOT pass -r — it is built into jq_text.
+# Subshell pipefail: propagates jq's exit code through the tr pipe.
+jq_text() {
+  ( set -o pipefail; jq -r "$@" | tr -d '\r' )
+}
+
 state_init() {
   local repo_dir="$1"
   local f; f="$(_state_file "$repo_dir")"
@@ -28,7 +36,7 @@ state_load() {
   local repo_dir="$1"
   export STATE_FILE; STATE_FILE="$(_state_file "$repo_dir")"
   [ -f "$STATE_FILE" ] || { echo "ERROR: state file not found: $STATE_FILE" >&2; return 1; }
-  local ver; ver="$(jq -r '.schema_version' "$STATE_FILE")"
+  local ver; ver="$(jq_text '.schema_version' "$STATE_FILE")"
   case "$ver" in
     1)
       local tmp; tmp="${STATE_FILE}.tmp"
@@ -65,7 +73,7 @@ state_record_migrated() {
 state_count_migrated() {
   local kind="$1"
   : "${STATE_FILE:?call state_load first}"
-  jq -r --arg k "$kind" '.[$k].migrated | length' "$STATE_FILE"
+  jq_text --arg k "$kind" '.[$k].migrated | length' "$STATE_FILE"
 }
 
 state_set_step() {
@@ -89,7 +97,7 @@ state_set_project() {
 state_get_project_field_id() {
   local name="$1"
   : "${STATE_FILE:?call state_load first}"
-  jq -r --arg n "$name" '.project.field_ids[$n] // empty' "$STATE_FILE"
+  jq_text --arg n "$name" '.project.field_ids[$n] // empty' "$STATE_FILE"
 }
 
 state_cleanup() {
@@ -119,7 +127,7 @@ state_set_advanced() {
 state_get_advanced() {
   local kind="$1" stage="$2"
   : "${STATE_FILE:?call state_load first}"
-  jq -r --arg k "$kind" --arg s "$stage" \
+  jq_text --arg k "$kind" --arg s "$stage" \
     '.[$k].advanced[$s] // empty' "$STATE_FILE"
 }
 
