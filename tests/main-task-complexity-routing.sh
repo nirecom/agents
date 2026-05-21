@@ -33,9 +33,9 @@ check_re() {
 # judge-task-complexity/SKILL.md
 # ---------------------------------------------------------------------------
 
-JUDGE="$AGENTS_DIR/skills/judge-task-complexity/SKILL.md"
+JUDGE="$AGENTS_DIR/skills/_shared/judge-task-complexity.md"
 
-check "judge: file exists" "name: judge-task-complexity" "$JUDGE"
+check "judge: file exists" "Shared rubric" "$JUDGE"
 check "judge: signal S1-multi-file" "S1-multi-file" "$JUDGE"
 check "judge: signal S2-architecture" "S2-architecture" "$JUDGE"
 check "judge: signal S3-security" "S3-security" "$JUDGE"
