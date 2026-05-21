@@ -100,6 +100,17 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - Follow `rules/core-principles.md`.
 - Do not write code or call Edit/Write.
 
+## Consuming ## Issue from intent.md
+
+On the initial draft round, read `<PLANS_DIR>/<session-id>-intent.md`. Locate the `## Issue`
+section (H2 between H1 and Background/Motivation).
+- If present: copy it VERBATIM into `<session-id>-outline.md` immediately after the H1.
+- If absent: OMIT from outline.md. Do NOT fabricate, do NOT query `gh`, do NOT reconstruct
+  from `closes_issues`.
+
+The section is **optional** — its absence is a valid state and is NOT a contract violation.
+No re-prompt on absence.
+
 ## Consuming Accepted Tradeoffs from intent.md
 
 On the initial draft round, the orchestrator passes `<PLANS_DIR>/<session-id>-intent.md` as a
