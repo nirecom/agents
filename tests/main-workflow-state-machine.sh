@@ -6,11 +6,11 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-GATE_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-gate.js"
-MARK_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-mark.js"
-SESSION_START="$DOTFILES_DIR/claude-global/hooks/session-start.js"
-WORKFLOW_STATE_LIB="$DOTFILES_DIR/claude-global/hooks/lib/workflow-state.js"
-SETTINGS="$DOTFILES_DIR/claude-global/settings.json"
+GATE_HOOK="$DOTFILES_DIR/hooks/workflow-gate.js"
+MARK_HOOK="$DOTFILES_DIR/hooks/workflow-mark.js"
+SESSION_START="$DOTFILES_DIR/hooks/session-start.js"
+WORKFLOW_STATE_LIB="$DOTFILES_DIR/hooks/lib/workflow-state.js"
+SETTINGS="$DOTFILES_DIR/settings.json"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -784,7 +784,7 @@ REPO_4=$(setup_repo)
 # L4-a: WORKFLOW_USER_VERIFIED → user_verification=complete
 SID_4A="l4a-$(printf '%04x%04x' $RANDOM $RANDOM)"
 write_state "$SID_4A" "$(ALL_PENDING_JSON "$SID_4A")"
-run_mark_hook "$REPO_4" "$(build_mark_json 'echo "<<WORKFLOW_USER_VERIFIED>>"' "$SID_4A")" >/dev/null
+run_mark_hook "$REPO_4" "$(build_mark_json 'echo "<<WORKFLOW_USER_VERIFIED: L4-a state test>>"' "$SID_4A")" >/dev/null
 expect_state_step "L4-a. WORKFLOW_USER_VERIFIED → user_verification=complete" \
     "$SID_4A" "user_verification" "complete"
 
@@ -814,7 +814,7 @@ fi
 # L4-c: session_id missing → user_verification unchanged, exit 0
 SID_4C="l4c-$(printf '%04x%04x' $RANDOM $RANDOM)"
 write_state "$SID_4C" "$(ALL_PENDING_JSON "$SID_4C")"
-L4C_CMD='echo "<<WORKFLOW_USER_VERIFIED>>"'
+L4C_CMD='echo "<<WORKFLOW_USER_VERIFIED: L4-c no session id>>"'
 L4C_ESC=${L4C_CMD//\"/\\\"}
 L4C_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"","stderr":""}}' "$L4C_ESC")
 L4C_EXIT=0
@@ -958,17 +958,23 @@ else
     fail "L6-a. settings.json PostToolUse missing Bash matcher"
 fi
 
-# L6-b: permissions.ask contains both WORKFLOW_USER_VERIFIED and WORKFLOW_RESET_FROM
-if node -e "
+# L6-b: permissions.ask contains reason-form USER_VERIFIED, RESET_FROM,
+# and does NOT contain bare USER_VERIFIED (#404 contract change).
+L6B_OUT=$(node -e "
 const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
 const ask = (s.permissions && s.permissions.ask) || [];
-const hasUV = ask.some(e => e.includes('WORKFLOW_USER_VERIFIED'));
+const reasonUV = ask.some(e => e.includes('WORKFLOW_USER_VERIFIED: *'));
+const noBareUV = ask.every(e => e !== 'Bash(echo \"<<WORKFLOW_USER_VERIFIED>>\")');
 const hasRF = ask.some(e => e.includes('WORKFLOW_RESET_FROM'));
-process.exit(hasUV && hasRF ? 0 : 1);
-" -- "$SETTINGS" 2>/dev/null; then
-    pass "L6-b. permissions.ask has WORKFLOW_USER_VERIFIED and WORKFLOW_RESET_FROM"
+if (!reasonUV) { console.log('MISSING reason-form WORKFLOW_USER_VERIFIED: *'); process.exit(1); }
+if (!noBareUV) { console.log('BARE WORKFLOW_USER_VERIFIED still present in ask'); process.exit(1); }
+if (!hasRF) { console.log('MISSING WORKFLOW_RESET_FROM'); process.exit(1); }
+process.exit(0);
+" -- "$SETTINGS" 2>&1) && L6B_OK=1 || L6B_OK=0
+if [ "$L6B_OK" = "1" ]; then
+    pass "L6-b. permissions.ask: reason-form USER_VERIFIED + RESET_FROM present; bare USER_VERIFIED absent"
 else
-    fail "L6-b. permissions.ask missing WORKFLOW_USER_VERIFIED or WORKFLOW_RESET_FROM"
+    fail "L6-b. permissions.ask contract violated: $L6B_OUT"
 fi
 
 # L6-c: permissions.deny contains ~/.claude/projects/workflow path

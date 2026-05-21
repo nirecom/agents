@@ -38,7 +38,7 @@ extract_msg() {
 }
 
 # Sentinel JSON snippets
-SENTINEL_CMD='echo \"<<WORKFLOW_USER_VERIFIED>>\"'
+SENTINEL_CMD='echo \"<<WORKFLOW_USER_VERIFIED: U1 staged files panel>>\"'
 
 # Set up a temp git repo for staged-file tests
 GIT_REPO="$WORK_DIR/repo"
