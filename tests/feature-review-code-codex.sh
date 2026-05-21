@@ -352,6 +352,68 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 14. Uncommitted-fallback: unstaged-only changes on a fresh branch are reviewed
+#     (regression guard — earlier fallback used `git diff --cached` and missed
+#     unstaged working tree, the common state at workflow Step 6).
+# ---------------------------------------------------------------------------
+FRESH_REPO="$TMPDIR_BASE/fresh-repo"
+mkdir -p "$FRESH_REPO"
+git -C "$FRESH_REPO" init -q
+git -C "$FRESH_REPO" config user.email "test@example.com"
+git -C "$FRESH_REPO" config user.name "Test"
+echo "init" > "$FRESH_REPO/README.md"
+git -C "$FRESH_REPO" add README.md
+git -C "$FRESH_REPO" commit -q -m "initial"
+git -C "$FRESH_REPO" checkout -q -b fresh-branch
+# Unstaged change only — no commits past main, nothing staged.
+echo "unstaged edit" >> "$FRESH_REPO/README.md"
+
+cat > "$MOCK_BIN/codex" << 'MOCK_EOF'
+#!/usr/bin/env bash
+echo "HIGH: noted"
+exit 0
+MOCK_EOF
+chmod +x "$MOCK_BIN/codex"
+
+OUTPUT=$(cd "$FRESH_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
+
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
+    pass "Uncommitted-fallback: unstaged-only changes reviewed (PERFORMED)"
+else
+    fail "Uncommitted-fallback: unstaged-only changes not reviewed. Output: $OUTPUT"
+fi
+
+if echo "$OUTPUT" | grep -q "reviewing uncommitted changes"; then
+    pass "Uncommitted-fallback: note message present"
+else
+    fail "Uncommitted-fallback: note message missing. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# 15. Uncommitted-fallback: staged-only changes on a fresh branch are reviewed
+#     (the prior `git diff --cached` path must still work via `git diff HEAD`).
+# ---------------------------------------------------------------------------
+STAGED_REPO="$TMPDIR_BASE/staged-repo"
+mkdir -p "$STAGED_REPO"
+git -C "$STAGED_REPO" init -q
+git -C "$STAGED_REPO" config user.email "test@example.com"
+git -C "$STAGED_REPO" config user.name "Test"
+echo "init" > "$STAGED_REPO/README.md"
+git -C "$STAGED_REPO" add README.md
+git -C "$STAGED_REPO" commit -q -m "initial"
+git -C "$STAGED_REPO" checkout -q -b staged-branch
+echo "staged edit" >> "$STAGED_REPO/README.md"
+git -C "$STAGED_REPO" add README.md
+
+OUTPUT=$(cd "$STAGED_REPO" && PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" --base main --no-log 2>&1) || true
+
+if echo "$OUTPUT" | grep -q "## Codex Review: PERFORMED"; then
+    pass "Uncommitted-fallback: staged-only changes reviewed (PERFORMED)"
+else
+    fail "Uncommitted-fallback: staged-only changes not reviewed. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

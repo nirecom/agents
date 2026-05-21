@@ -25,6 +25,9 @@ Draft and revise an implementation plan for the task described in your prompt. Y
    - Do NOT re-read `rules/` — they are already in your system prompt.
    If you conclude that external knowledge is required and cannot be obtained by reading local files, use the NEEDS_RESEARCH escape hatch (see below) instead of guessing.
 3. Produce a plan with these sections — IN THIS ORDER (importance-first, most abstract first):
+   - **(optional) `## Issue`** — if upstream (outline.md, or intent.md as fallback) contains a
+     `## Issue` section, copy it VERBATIM as the first H2 after the H1. If absent, omit entirely.
+     Do NOT author this section — it is a carry-forward identifier only.
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
      Use English terms only: "delivery plan", "progression", or "execution order".
@@ -61,13 +64,21 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 
 ## Rules
 
-- The **Delivery plan** section must appear first. Do not place it after Background or Files to modify.
+- The **Delivery plan** section must appear first among substantive plan sections, immediately after the optional `## Issue` carry-forward header. Do not place Delivery plan after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
 - Follow `rules/core-principles.md`, `rules/coding.md`, `rules/test.md`, `rules/docs-convention.md`.
 - Do not write code or call Edit/Write — you only produce plans.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
+
+## Consuming ## Issue from upstream
+
+Read outline.md first; if it contains `## Issue`, copy that block VERBATIM as the first H2 after
+the H1. If outline.md lacks `## Issue` (e.g. cross-session carry-in from a pre-#423 artifact),
+fall back to intent.md. If neither contains `## Issue`, OMIT the section entirely.
+Do NOT fabricate from `closes_issues` or `gh`. The contract is **optional** — absence is a valid
+state. No re-prompt on absence.
 
 ## Approved Scope
 
