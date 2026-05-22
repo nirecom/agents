@@ -1,0 +1,28 @@
+## Final Report — test-session-123
+
+### Closed Issues
+(none)
+
+### Merged PR
+- PR #(none): (none)
+- URL: (none)
+- State: (none)
+
+### Worktree
+- Branch: (none)
+- Path: (none)
+- Created: (none)
+- Removed: ✓
+
+### Backup
+- Manifest: (none)
+- Branches deleted: (none)
+
+### Bugs Found
+- extractSection drops empty lines between bullets
+
+### Related Tasks
+- Update ops.md with new CLI usage
+
+### Next Tasks
+- Add integration test for non-interactive mode
