@@ -59,29 +59,45 @@ DIFF=$(git diff "${BASE}...HEAD" 2>"$DIFF_ERR") || {
   exit 0
 }
 
-# Fallback: BASE...HEAD empty (e.g. fresh feature branch, no commits past base) →
-# review uncommitted changes (staged + unstaged) via `git diff HEAD`. This is critical
-# for workflow Step 6 where `/write-code` produces unstaged edits that have not yet
-# been committed or staged. Falling back to `git diff --cached` would miss those edits
-# and silently no-op the review. One-way: when committed diff is non-empty, uncommitted
-# changes are NOT additionally appended (avoids duplicate/out-of-order content).
-DIFF_SOURCE="committed"
-if [[ -z "$DIFF" ]]; then
-  DIFF=$(git diff HEAD 2>"$DIFF_ERR") || {
-    DIFF_ERR_MSG=$(cat "$DIFF_ERR" | tr '\n' ' ')
-    echo "## Codex Review: FAILED — git diff HEAD failed: ${DIFF_ERR_MSG}"
-    codex_core_log failed "git diff HEAD failed" 0
-    exit 0
-  }
-  if [[ -n "$DIFF" ]]; then
-    DIFF_SOURCE="uncommitted"
-    echo "Note: BASE...HEAD empty — reviewing uncommitted changes (staged + unstaged) instead."
-  fi
+# Collect uncommitted diff (staged + unstaged + untracked) unconditionally.
+# When BASE...HEAD is non-empty, the committed and uncommitted diffs are both sent
+# (Gap 2 fix — see #430). When BASE...HEAD is empty, uncommitted acts as the fallback
+# (Gap 1 fix — untracked files are included via git ls-files + git diff --no-index).
+
+# Phase 2: uncommitted diff を無条件収集（staged + unstaged）
+UNCOMMITTED_DIFF=$(git diff HEAD 2>"$DIFF_ERR") || {
+  DIFF_ERR_MSG=$(cat "$DIFF_ERR" | tr '\n' ' ')
+  echo "## Codex Review: FAILED — git diff HEAD failed: ${DIFF_ERR_MSG}"
+  codex_core_log failed "git diff HEAD failed" 0
+  exit 0
+}
+
+# Phase 2b: untracked files の pseudo-diff を無条件追記
+# git diff --no-index exits 1 when files differ → || true が必須（set -uo pipefail 下）
+# 末尾改行グルー防止: git diff HEAD 結果がある場合は先にセパレータ改行を挿入する
+[[ -n "$UNCOMMITTED_DIFF" ]] && UNCOMMITTED_DIFF+=$'\n'
+while IFS= read -r -d '' untracked_file; do
+  UNCOMMITTED_DIFF+=$(git diff --no-index /dev/null "$untracked_file" 2>/dev/null || true)
+  UNCOMMITTED_DIFF+=$'\n'
+done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
+
+# Phase 3: committed + uncommitted を組み立て
+if [[ -n "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
+  # 両方あり: セパレータ付きで結合（Gap 2 修正）
+  DIFF="[COMMITTED DIFF (BASE...HEAD)]
+${DIFF}
+[UNCOMMITTED CHANGES (working tree vs HEAD)]
+${UNCOMMITTED_DIFF}"
+elif [[ -z "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
+  # committed なし、uncommitted あり: フォールバック（既存動作を維持）
+  echo "Note: BASE...HEAD empty — reviewing uncommitted changes (staged + unstaged + untracked) instead."
+  DIFF="$UNCOMMITTED_DIFF"
 fi
+# 両方空の場合: 後段の SKIPPED ガードが処理する
 DIFF_LINES=$(printf '%s' "$DIFF" | wc -l)
 
 if [[ -z "$DIFF" ]]; then
-  echo "## Codex Review: SKIPPED — empty diff (no changes vs ${BASE}, no uncommitted changes)"
+  echo "## Codex Review: SKIPPED — empty diff (no committed changes vs ${BASE}, no uncommitted changes, no untracked files)"
   codex_core_log skipped "empty diff" 0
   exit 0
 fi
