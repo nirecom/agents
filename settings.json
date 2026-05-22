@@ -201,7 +201,6 @@
       "Bash(*wget *| bash*)",
       "Bash(*wget *|sh*)",
       "Bash(*wget *| sh*)",
-      "Bash(*~/.ssh/*)",
       "Read(~/.ssh/**)",
       "Edit(~/.ssh/**)",
       "Read(~/.gnupg/**)",
@@ -358,6 +357,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-dotenv.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-ssh-private-key.js\"",
             "timeout": 5
           }
         ]
