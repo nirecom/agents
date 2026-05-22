@@ -38,7 +38,7 @@ state_load() {
   [ -f "$STATE_FILE" ] || { echo "ERROR: state file not found: $STATE_FILE" >&2; return 1; }
   local ver; ver="$(jq_text '.schema_version' "$STATE_FILE")"
   case "$ver" in
-    1)
+    1|null)
       local tmp; tmp="${STATE_FILE}.tmp"
       jq '.schema_version = 2
           | .history.advanced //= {canary_1:null,canary_2:null,full:null}
