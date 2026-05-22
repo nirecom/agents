@@ -142,6 +142,10 @@ try {
   approve();
 }
 
+// Session-scoped WORKFLOW override: bypass all .env checks for this session.
+const { isWorkflowOff } = require("./lib/session-markers");
+if (isWorkflowOff(input.session_id)) approve();
+
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
 

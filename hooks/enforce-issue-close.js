@@ -43,6 +43,13 @@ if (!parsed || parsed.tool_name !== "Bash") {
   process.exit(0);
 }
 
+// Session-scoped WORKFLOW override: bypass gh issue close guard for this session.
+{
+  const sid = parsed.session_id;
+  const { isWorkflowOff } = require("./lib/session-markers");
+  if (isWorkflowOff(sid)) { process.exit(0); }
+}
+
 const cmd = (parsed.tool_input && parsed.tool_input.command) || "";
 
 // Match `gh issue close` at start-of-command or after a shell separator

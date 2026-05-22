@@ -255,3 +255,7 @@ Changes: The PreToolUse hook now scans --body, --title, and --body-file content 
 ### CONFIG: plan artifact display: remove VS Code auto-open, suppress diff when CONFIRM_*=off (2026-05-22)
 Background: CONFIRM_DETAIL/OUTLINE/INTENT=off now also suppresses the show-diff.js inline preview for the corresponding artifact. VS Code auto-open (code -r) removed; the inline diff and breadcrumb are the only remaining UX.
 Changes: (1) VS Code tabs no longer open for plan files. (2) show-diff.js skips the diff preview for plan artifacts when the corresponding CONFIRM_* flag is off. Breadcrumb ("Plan file written: ...") still emitted in all modes.
+
+### FEATURE: Session-scoped WORKFLOW_OFF/ON sentinels (2026-05-23)
+Background: Bypassing workflow enforcement for trivial edits required editing global config.
+Changes: New per-session sentinels `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>` / `<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>` toggle workflow enforcement for the current session only. Bypasses block-dotenv, scan-outbound, workflow-gate, enforce-issue-close, and enforce-worktree. `enforce-system-ops` is NEVER bypassed. Subsumes `WORKTREE_OFF`.

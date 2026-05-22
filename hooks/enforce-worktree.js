@@ -1401,6 +1401,18 @@ try {
 
 if (!isEnforceWorktreeOn()) done();
 
+// Session-scoped WORKFLOW override (broader than WORKTREE; bypasses everything
+// except enforce-system-ops). Placed BEFORE the worktree-off check because
+// WORKFLOW_OFF subsumes WORKTREE_OFF.
+{
+  const sid = (input && input.session_id) || resolveSessionId();
+  const { isWorkflowOff, workflowOffNoticeText } = require("./lib/session-markers");
+  if (isWorkflowOff(sid)) {
+    process.stderr.write(workflowOffNoticeText("enforce-worktree", sid) + "\n");
+    process.exit(0);
+  }
+}
+
 // Session-scoped escape hatch: if the current session has a marker file,
 // treat as ENFORCE_WORKTREE=off for this session only. Set via:
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF[: reason]>>"
