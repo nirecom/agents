@@ -84,6 +84,20 @@ or one of the root-level files `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
 committing. Root `CLAUDE.md`, `SKILL.md`, and subdirectory `README.md` are behavior/prompt
 code and do NOT qualify.
 
+## Workflow Session Override (WORKFLOW_OFF)
+
+For trivial edits where full workflow overhead is disproportionate, emit the session-scoped bypass sentinel:
+
+    echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>"
+
+This requires user approval (ask gate). When active, steps 1–9 and all workflow hooks are suspended for the current session (except `enforce-system-ops.js` — OS safety is always enforced). See `rules/workflow-off.md` for the full bypass matrix and restore procedure.
+
+To restore enforcement within the same session:
+
+    echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>"
+
+Enforcement also restores automatically in the next session.
+
 ## Workflow State Recovery
 
 The main conversation can reset workflow state only when it has enough holistic context
