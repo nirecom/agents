@@ -423,6 +423,83 @@ test_gh_group_a_with_redirect_still_write() {
         'gh pr create --body "x" > out.txt' "write"
 }
 
+test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
+    # Case 1: gh pr create heredoc body containing git push
+    local cmd1
+    cmd1=$(printf 'gh pr create --body "$(cat <<EOF\ngit push origin main\nEOF\n)"')
+    assert_classify "gh pr create heredoc body with git push is read" "$cmd1" "read"
+
+    # Case 2: gh issue create heredoc body containing rm -rf
+    local cmd2
+    cmd2=$(printf 'gh issue create --title "T" --body "$(cat <<EOF\nrm -rf /tmp/x\nEOF\n)"')
+    assert_classify "gh issue create heredoc body with rm -rf is read" "$cmd2" "read"
+
+    # Case 3: gh pr edit heredoc body containing npm install
+    local cmd3
+    cmd3=$(printf 'gh pr edit 1 --body "$(cat <<EOF\nnpm install\nEOF\n)"')
+    assert_classify "gh pr edit heredoc body with npm install is read" "$cmd3" "read"
+
+    # Case 4: gh repo edit heredoc body containing posix redirect char
+    local cmd4
+    cmd4=$(printf 'gh repo edit --description "$(cat <<EOF\n> file.txt\nEOF\n)"')
+    assert_classify "gh repo edit heredoc body with redirect char is read" "$cmd4" "read"
+
+    # Case 5: <<-EOF (tab-indented closing) heredoc body containing git commit
+    local cmd5
+    cmd5=$(printf 'gh pr create --body "$(cat <<-EOF\n\tgit commit -m x\n\tEOF\n)"')
+    assert_classify "gh pr create <<-EOF heredoc body with git commit is read" "$cmd5" "read"
+
+    # Case 6: heredoc body with write pattern + external redirect — external redirect wins
+    local cmd6
+    cmd6=$(printf 'gh pr create --body "$(cat <<EOF\ngit push origin\nEOF\n)" > out.txt')
+    assert_classify "gh pr create heredoc body with write pattern plus external redirect is write" "$cmd6" "write"
+
+    # Case 7: non-Group-A command with heredoc body containing git push — no override
+    local cmd7
+    cmd7=$(printf 'echo "$(cat <<EOF\ngit push\nEOF\n)"')
+    assert_classify "non-group-a heredoc body with git push is write" "$cmd7" "write"
+
+    # Case 8: gh pr create heredoc body containing tee -a
+    local cmd8
+    cmd8=$(printf 'gh pr create --body "$(cat <<EOF\ntee -a foo\nEOF\n)"')
+    assert_classify "gh pr create heredoc body with tee -a is read" "$cmd8" "read"
+
+    # Case 9: #369 original repro
+    local cmd9
+    cmd9=$(printf 'gh issue create --title "T" --body "$(cat <<EOF\nThis is the background.\ngit push origin main\nMore text.\nEOF\n)"')
+    assert_classify "gh issue create heredoc body #369 original repro" "$cmd9" "read"
+
+    # Case 10: lazy-match regression — body contains "this is not EOF" as inner line
+    local cmd10
+    cmd10=$(printf 'gh pr create --body "$(cat <<EOF\nthis is not EOF\ngit push\nEOF\n)"')
+    assert_classify "gh pr create heredoc body lazy-match regression with inner EOF-like line" "$cmd10" "read"
+
+    # Case 11: `bash <<EOF` (interpreter heredoc, not cat) — must remain write
+    local cmd11
+    cmd11=$(printf 'gh pr create --body "$(bash <<EOF\nrm -rf /tmp/x\nEOF\n)"')
+    assert_classify "gh pr create with interpreter heredoc (bash <<EOF rm -rf) is write" "$cmd11" "write"
+
+    # Case 12: unquoted heredoc body with command substitution — must remain write
+    local cmd12
+    cmd12=$(printf 'gh pr create --body "$(cat <<EOF\n$(rm -rf /tmp/x)\nEOF\n)"')
+    assert_classify "gh pr create unquoted heredoc body with command substitution is write" "$cmd12" "write"
+
+    # Case 13: quoted heredoc body with literal $() — safe to strip → read
+    local cmd13
+    cmd13=$(printf "gh pr create --body \"\$(cat <<'EOF'\n\$(rm -rf /tmp/x)\nEOF\n)\"")
+    assert_classify "gh pr create quoted heredoc body with literal dollar-paren is read" "$cmd13" "read"
+
+    # Case 14: `cat <<EOF > out.txt` — rest-of-line redirect on opener must remain visible → write
+    local cmd14
+    cmd14=$(printf 'gh pr create --body "x"; cat <<EOF > out.txt\nbody\nEOF')
+    assert_classify "cat heredoc with rest-of-line redirect after opener is write" "$cmd14" "write"
+
+    # Case 15: unquoted heredoc body with backticks — must remain write
+    local cmd15
+    cmd15=$(printf 'gh pr create --body "$(cat <<EOF\n`rm -rf /tmp/x`\nEOF\n)"')
+    assert_classify "gh pr create unquoted heredoc body with backticks is write" "$cmd15" "write"
+}
+
 test_git_update_ref_write() {
     assert_classify "git update-ref create" \
         'git update-ref refs/heads/feat HEAD' "write"
@@ -523,6 +600,7 @@ test_git_branch_name_no_false_positive
 test_git_branch_delete_writes
 test_gh_group_a_with_heredoc_classified_read
 test_gh_group_a_with_redirect_still_write
+test_gh_group_a_heredoc_body_with_write_pattern_is_read
 test_git_update_ref_write
 test_git_commit_subcommand_position
 test_quoted_arg_no_false_positive_file_op

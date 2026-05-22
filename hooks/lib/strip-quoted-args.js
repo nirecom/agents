@@ -12,4 +12,34 @@ function stripQuotedArgs(str) {
   }
 }
 
-module.exports = { stripQuotedArgs };
+// Strip heredoc bodies between the opening tag and closing tag, preserving the
+// opener (so here-doc detection in classify() still fires) and a trailing newline.
+// Supports <<TAG, <<-TAG, <<'TAG', <<"TAG" forms.
+//
+// Safety constraints (#371 codex review HIGH findings):
+//   1. Only strip heredocs preceded by `cat` — interpreter heredocs like
+//      `bash <<EOF` execute their body and must not be stripped.
+//   2. Preserve rest-of-line after the opener (e.g. `> out.txt` redirect on the
+//      same line as `<<EOF`) so external redirects remain visible to scanning.
+//   3. If the opener is unquoted AND the body contains `$(...)` or backticks,
+//      do not strip — shell expansion would execute the inner commands.
+//      Quoted openers (`<<'EOF'` / `<<"EOF"`) prevent expansion → safe.
+function stripHeredocBody(str) {
+  if (!str || typeof str !== "string") return str;
+  try {
+    return str.replace(
+      /(\bcat\s*)(<<-?\s*(['"]?)(\w+)\3)([^\n]*)\n([\s\S]*?)\n\s*\4\s*(?:\n|$)/g,
+      function (match, catPart, opener, quoteChar, _tagName, restOfLine, body) {
+        const isQuoted = quoteChar === "'" || quoteChar === '"';
+        if (!isQuoted && /\$\(|`/.test(body)) {
+          return match;
+        }
+        return catPart + opener + restOfLine + "\n";
+      }
+    );
+  } catch (e) {
+    return str;
+  }
+}
+
+module.exports = { stripQuotedArgs, stripHeredocBody };
