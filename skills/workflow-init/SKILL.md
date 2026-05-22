@@ -111,10 +111,12 @@ A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 <sentinel-stripped body; if unstructured prepend "(review framing at outline stage)">
 ## Scope / Constraints
 <derived from body or "(review at outline stage)">
+## Accepted Tradeoffs
+(none — capture at outline stage)
 ## closes_issues
 - <N>
 ```
-`<title>` is the issue title from the Step 3 `gh issue view --json title` result (already in scope; no re-read required). If the title is empty or unavailable, OMIT the `## Issue` section entirely.
+`<title>` from Step 3 gh result; if unavailable use `#<N>: (title unavailable)`. **Never omit `## Issue`** or **`## Accepted Tradeoffs`** — the latter is the `detail-planner.md` Approved Scope gate.
 A2. Emit (separate Bash calls):
 ```
 echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"
