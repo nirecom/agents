@@ -247,3 +247,7 @@ Changes: 1M context is now disabled system-wide for all skill and subagent calls
 ### REFACTOR: #327: survey-code/survey-history now run before the planning interview (2026-05-16)
 Background: Code survey and history review previously ran only after clarify-intent completed, so CC could not catch wrong premises during the interview.
 Changes: workflow-init now launches both survey agents in parallel (all workflow paths) before the clarify-intent interview begins. CC has codebase context and git history available throughout the interview, enabling earlier detection of already-fixed issues or contradicted assumptions.
+
+### FEATURE: Scan private-info blocklist in gh issue and PR write commands (2026-05-22)
+Background: The private-info scanner previously only checked git commit messages and file edits.
+Changes: The PreToolUse hook now scans --body, --title, and --body-file content when Claude runs gh issue create/edit/comment, gh pr create/edit/comment/review, or similar forge write commands. Hard blocklist hits are blocked immediately; soft (warn:) hits ask you to confirm. Private repos are still skipped.

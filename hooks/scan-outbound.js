@@ -6,6 +6,7 @@ const { execSync, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
+const { isForgeScanTarget, extractTexts } = require("./lib/forge-write-extract");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
 function readStdin() {
@@ -39,6 +40,20 @@ function shellPath(p) {
   return p.split(path.sep).join("/");
 }
 
+// Normalize Unix-style paths to native paths on Windows (Git Bash mktemp etc.)
+function normalizePath(fp) {
+  if (process.platform !== "win32") return fp;
+  // /c/path or /C/path -> C:/path
+  const driveMatch = fp.match(/^\/([a-z])\/(.*)$/i);
+  if (driveMatch) return `${driveMatch[1].toUpperCase()}:/${driveMatch[2]}`;
+  // /tmp/... -> resolve via TEMP env
+  if (fp.startsWith("/tmp/")) {
+    const tmpDir = process.env.TEMP || process.env.TMP || "C:/Windows/Temp";
+    return fp.replace(/^\/tmp\//, `${tmpDir.replace(/\\/g, "/")}/`);
+  }
+  return fp;
+}
+
 // This script lives in agents/hooks/; scanner is at agents/bin/
 const AGENTS_DIR = path.resolve(__dirname, "..");
 const SCANNER = path.join(AGENTS_DIR, "bin", "scan-outbound.sh");
@@ -63,21 +78,44 @@ if (toolName === "Write") {
   content = toolInput.new_string || "";
 } else if (toolName === "Bash") {
   const command = toolInput.command || "";
-  // Only scan git commit messages, approve all other commands immediately
-  const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
-  if (!commitMatch) {
-    approve();
-  }
-  // Extract commit message: support -m "msg", -m 'msg', and heredoc $(cat <<'EOF'...EOF)
-  const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\nEOF/);
-  if (heredocMatch) {
-    content = heredocMatch[1];
+  // Check forge write commands (gh issue/pr create|edit|close|comment|review)
+  if (isForgeScanTarget(command)) {
+    const { inline, filePaths } = extractTexts(command);
+    const parts = [...inline];
+    for (const fp of filePaths) {
+      const normalizedFp = normalizePath(fp);
+      try {
+        const stat = fs.statSync(normalizedFp);
+        if (stat.size > 1024 * 1024) {
+          // File too large to scan inline — fail-open, skip
+        } else {
+          parts.push(fs.readFileSync(normalizedFp, "utf8"));
+        }
+      } catch (e) {
+        // File missing, unreadable, or stat error — fail-open
+      }
+    }
+    content = parts.join("\n");
+    if (!content) {
+      approve();
+    }
   } else {
-    const msgMatch = command.match(/(?:-m\s+)(["'])([\s\S]*?)\1/);
-    content = msgMatch ? msgMatch[2] : "";
-  }
-  if (!content) {
-    approve();
+    // Check git commit messages
+    const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);
+    if (!commitMatch) {
+      approve();
+    }
+    // Extract commit message: support -m "msg", -m 'msg', and heredoc $(cat <<'EOF'...EOF)
+    const heredocMatch = command.match(/<<'?EOF'?\s*\n([\s\S]*?)\nEOF/);
+    if (heredocMatch) {
+      content = heredocMatch[1];
+    } else {
+      const msgMatch = command.match(/(?:-m\s+)(["'])([\s\S]*?)\1/);
+      content = msgMatch ? msgMatch[2] : "";
+    }
+    if (!content) {
+      approve();
+    }
   }
 }
 
