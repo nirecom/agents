@@ -144,6 +144,31 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
    a. Last-chance findings review: append any outstanding bugs/related/next-task findings to `<worktree>/WORKTREE_NOTES.md`. **This is the capture cutoff** — findings after Step 5.5 will not appear in the Final Report.
 
+   (a.5) Issue-create promotion for unconverted WORKTREE_NOTES.md entries (runs before backup):
+
+     1. Check remote and list entries:
+          bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" || skip this sub-step silently.
+          node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" list "$WORKTREE_PATH/WORKTREE_NOTES.md"
+        Filter the JSON output to entries with `hasMarker: false` (already-promoted entries are excluded).
+        If filtered list is empty → skip to (b) silently.
+        Non-interactive (claude -p): emit stderr warning listing unpromoted entries verbatim, skip to (b).
+            stderr: "[worktree-end] WARN: N WORKTREE_NOTES entries not promoted (non-interactive)"
+
+     2. Confirm selection via AskUserQuestion (multi-select): present each unpromoted entry as an option.
+        User selects which entries to promote (all / subset / none).
+
+     3. For each selected entry (process sequentially, not in parallel):
+          a. Invoke /issue-create (full skill — Gather/Survey/Confirm/Dispatch phases).
+          b. Extract issue number from /issue-create stdout (last line):
+                 N=$(echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$')
+          c. Annotate: node "$AGENTS_CONFIG_DIR/bin/worktree-notes-triage.js" annotate \
+                            "$WORKTREE_PATH/WORKTREE_NOTES.md" "$LINE_NUMBER" "$N"
+          d. On /issue-create failure: emit stderr warning, skip annotate, proceed to next entry.
+        Proceed to (b) when all selected entries are processed.
+
+     Note: (a.5) must complete before (b) so annotations are reflected in the backup.
+     Note: ## History Notes section is NOT a triage target.
+
    b. Capture PR metadata (safe per-field, no shell-interpretation of PR title):
       ```
       PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')

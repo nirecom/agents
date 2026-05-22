@@ -35,30 +35,22 @@ Collect the proposed title and body from the user.
 
 ### Phase 2 — Survey
 
-Skip on non-GitHub remotes:
+Dedupe layer for the underlying `bin/github-issues/issue-create.sh`. Skip on non-GitHub remotes:
 
 ```bash
 "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
 # rc != 0 → skip survey, jump to Phase 4 with --verdict none
 ```
 
-**Keyword extraction.** Extract 3–5 significant tokens from the proposed title
-(nouns, verbs, technical identifiers; exclude common stopwords).
-
-**Search:**
+**Keyword search.** Extract 3–5 significant tokens (nouns/verbs/identifiers, no stopwords), then:
 
 ```bash
 gh issue list --state all --limit 30 --search "<kw1> <kw2> <kw3>"
 ```
 
-If zero results, drop the most specific keyword and retry. Up to 3 attempts.
-Still zero → set verdict to `none` and jump to Phase 4.
+Zero results → drop most specific keyword, retry up to 3 times. Still zero → verdict `none`, jump to Phase 4.
 
-**Candidate inspection.** Up to ~10 candidates, fetch:
-
-```bash
-gh issue view <N> --json number,title,body,state,labels
-```
+**Candidate inspection** (up to ~10): `gh issue view <N> --json number,title,body,state,labels`.
 
 **Verdict classification** (Claude's semantic judgement):
 
@@ -94,9 +86,7 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
     [--label "<extra-label>" ...] [--assignee "<user>"] [--milestone "<name>"]
 ```
 
-Stdout is the final issue URL (one line). For `reopen` it is the reopened
-issue's URL; otherwise it is the newly created issue's URL. Report it to the
-user.
+**Stdout contract**: Phase 4 emits exactly one line to stdout on success: the issue URL (`https://github.com/<owner>/<repo>/issues/<N>`). All other output goes to stderr. Callers extract the issue number with: `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
 ## Label policy
 
@@ -107,21 +97,8 @@ user.
 
 ## Behavioral notes
 
-- **Survey first**: this skill surveys existing issues before creation; see
-  Phase 2. The underlying `bin/github-issues/issue-create.sh` does not dedupe
-  by title — the survey phase is the dedupe layer.
-- **Projects v2**: `PROJECT_NUM=1` and owner `nirecom` are the defaults.
-  Override via `ISSUE_CREATE_PROJECT_NUM` / `ISSUE_CREATE_OWNER`.
-- **Content Date field**: after Projects v2 attach, the underlying script sets
-  the "Content Date" custom field to the issue's creation date (`YYYY-MM-DD`).
-  Defaults: `ISSUE_CREATE_FIELD_ID=PVTF_lAHOAMF_jc4BXf9EzhSsYwA`,
-  `ISSUE_CREATE_PROJECT_ID=PVT_kwHOAMF_jc4BXf9E`. Failure is non-fatal.
-- **Attach failure is non-fatal**: the issue is created regardless; warnings on
-  stderr. Re-run `gh project item-add` manually if recovery is needed.
-- **Sub-issue API**: the dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues`
-  with `sub_issue_id` set to the **child's** GraphQL node id (`gh issue view <child> --json id`).
-- **make-parent partial failure**: if a child attach fails mid-loop, the parent
-  is created but `make-parent` exits non-zero with retry instructions on
-  stderr. Atomic semantics are not available (GitHub has no transactions).
-- **Untrusted content**: title/body are passed as separate arguments to `gh` —
-  no shell expansion. Do not interpolate unvalidated user input into `--title`.
+- **Projects v2**: defaults `PROJECT_NUM=1`, owner `nirecom`. Override via `ISSUE_CREATE_PROJECT_NUM` / `ISSUE_CREATE_OWNER`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
+- **Content Date field**: after attach, the script sets "Content Date" to the issue's creation date (`YYYY-MM-DD`). Defaults: `ISSUE_CREATE_FIELD_ID=PVTF_lAHOAMF_jc4BXf9EzhSsYwA`, `ISSUE_CREATE_PROJECT_ID=PVT_kwHOAMF_jc4BXf9E`. Failure is non-fatal.
+- **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's GraphQL node id (`gh issue view <child> --json id`).
+- **make-parent partial failure**: if a child attach fails mid-loop, the parent is created but `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
+- **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
