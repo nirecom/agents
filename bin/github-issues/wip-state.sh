@@ -89,19 +89,32 @@ validate_n() {
     [[ "${1:-}" =~ ^[0-9]+$ ]] || { echo "Error: issue number must be a positive integer, got: '${1:-}'" >&2; exit 2; }
 }
 
+# Resolution order:
+#   1. $CLAUDE_ENV_FILE (readable) → grep CLAUDE_SESSION_ID — keeps native CLI
+#      behavior where the env file is the canonical source.
+#   2. ${CLAUDE_SESSION_ID:-} non-empty → use directly. VS Code Claude Code
+#      does not propagate $CLAUDE_ENV_FILE to Bash subprocesses but does
+#      propagate $CLAUDE_SESSION_ID, so this fallback restores WIP signaling
+#      in that environment (#440). This convention is already established in
+#      skills/issue-close-finalize/SKILL.md (--from-session uses the same
+#      "file first, env fallback" order).
+#   3. Neither available → original error (rc=2).
 resolve_session_id() {
-    if [ -z "${CLAUDE_ENV_FILE:-}" ] || [ ! -r "${CLAUDE_ENV_FILE}" ]; then
-        echo "Error: CLAUDE_ENV_FILE not set or unreadable — required for fingerprint" >&2
-        return 2
-    fi
     local sid
-    sid=$(grep -E '^CLAUDE_SESSION_ID=' "$CLAUDE_ENV_FILE" 2>/dev/null \
-            | head -1 | cut -d= -f2- | tr -d '\r"' )
-    if [ -z "$sid" ]; then
-        echo "Error: CLAUDE_SESSION_ID not found in $CLAUDE_ENV_FILE" >&2
-        return 2
+    if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -r "${CLAUDE_ENV_FILE}" ]; then
+        sid=$(grep -E '^CLAUDE_SESSION_ID=' "$CLAUDE_ENV_FILE" 2>/dev/null \
+                | head -1 | cut -d= -f2- | tr -d '\r"' )
+        if [ -n "$sid" ]; then
+            printf '%s' "$sid"
+            return 0
+        fi
     fi
-    printf '%s' "$sid"
+    if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+        printf '%s' "${CLAUDE_SESSION_ID:-}"
+        return 0
+    fi
+    echo "Error: CLAUDE_SESSION_ID not resolvable (neither \$CLAUDE_ENV_FILE nor \$CLAUDE_SESSION_ID is usable)" >&2
+    return 2
 }
 
 resolve_plans_dir() {
@@ -364,10 +377,22 @@ cmd_clear() {
         echo "[wip-state: Status=Done set failed for #$n (continuing)]" >&2
     fi
 
-    if ! gh project item-edit --id "$item_id" \
+    # When the fingerprint field is already empty, gh project item-edit
+    # --text "" returns rc=1 with stderr "no changes to make for the
+    # item-edit". That is the expected no-op outcome — suppress the warning.
+    # Success path (rc=0) is the normal case (field had a fingerprint to
+    # clear) and falls through silently.
+    local fp_clear_err
+    fp_clear_err=$(gh project item-edit --id "$item_id" \
             --field-id "$WIP_STATE_FINGERPRINT_FIELD_ID" \
             --project-id "$PROJECT_ID" \
-            --text "" >/dev/null 2>&1; then
+            --text "" 2>&1 >/dev/null)
+    local fp_clear_rc=$?
+    if [ "$fp_clear_rc" -eq 0 ]; then
+        : # fingerprint cleared successfully (normal path)
+    elif printf '%s' "$fp_clear_err" | grep -q "no changes to make"; then
+        : # field was already empty — canonical gh no-op signal
+    else
         echo "[wip-state: fingerprint clear failed for #$n (continuing)]" >&2
     fi
 
