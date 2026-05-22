@@ -32,3 +32,24 @@ extract_field() {
         END { print out }
     '
 }
+
+extract_field_with_fallback() {
+    local field="$1"
+    local fallback_title="$2"
+    local fallback_body="$3"
+    local result
+    result="$(extract_field "$field")"
+    if [ -z "$result" ]; then
+        case "$field" in
+            Background|Cause)
+                result="$fallback_title"
+                ;;
+            Changes|Fix)
+                # Skip Markdown heading lines (^#) before picking first non-blank line
+                # (awk 'NF{print; exit}' alone would return "## 背景" for Japanese bodies)
+                result="$(printf '%s\n' "$fallback_body" | grep -v '^#' | awk 'NF{print; exit}' | cut -c1-200)"
+                ;;
+        esac
+    fi
+    printf '%s' "$result"
+}

@@ -33,9 +33,7 @@
      is visible without relying on Claude's summary.
    - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
      (always parallel, non-blocking; warnings only, never blocks workflow)
-7. **Docs** —
-   - **`ENFORCE_WORKTREE=on`:** Skip `/update-docs` — docs review is deferred to PR review.
-   - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
+7. **Docs** — Run `/update-docs`. Mandatory. (The skill handles `docs/history.md` via `bin/compose-history-entry` when `closes_issues` is empty; otherwise Step 8.5 covers it.)
 8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5.
    - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,

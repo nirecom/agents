@@ -200,11 +200,11 @@ _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SCRIPT_DIR/lib/extract-field.sh"
 
 if [ "$CATEGORY" = "INCIDENT" ]; then
-    CAUSE=$(extract_field Cause)
-    FIX=$(extract_field Fix)
+    CAUSE=$(extract_field_with_fallback Cause "$TITLE" "$BODY")
+    FIX=$(extract_field_with_fallback Fix "$TITLE" "$BODY")
 else
-    BACKGROUND=$(extract_field Background)
-    CHANGES=$(extract_field Changes)
+    BACKGROUND=$(extract_field_with_fallback Background "$TITLE" "$BODY")
+    CHANGES=$(extract_field_with_fallback Changes "$TITLE" "$BODY")
 fi
 
 # --- History Notes synthesis (#412) ---
