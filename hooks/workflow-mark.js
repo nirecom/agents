@@ -12,6 +12,8 @@
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>>"  — session-scoped ENFORCE_WORKTREE bypass (reason mandatory)
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>"  — session-scoped ENFORCE_WORKFLOW bypass (reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
 
 const fs = require("fs");
 const path = require("path");
@@ -46,6 +48,8 @@ const {
   PREMISE_ACK_RE_DQ, PREMISE_ACK_LOOKSLIKE_RE,
   ENFORCE_WORKTREE_OFF_RE_DQ, ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE,
   ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
+  ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
+  ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
 } = require("./lib/sentinel-patterns");
 
 function readStdin() {
@@ -727,6 +731,112 @@ for (const cmd of sentinelParts) {
     } catch (e) {
       messages.push(
         `workflow-mark: failed to clear ENFORCE_WORKTREE override marker — ${e.message}. Restore NOT applied.`
+      );
+    }
+    continue;
+  }
+
+  // --- ENFORCE_WORKFLOW_OFF handler ---
+  const workflowOffMatch = cmd.match(ENFORCE_WORKFLOW_OFF_RE_DQ);
+  const workflowOffLooksLike =
+    !workflowOffMatch && ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE.test(cmd);
+  if (workflowOffLooksLike) {
+    messages.push(
+      `workflow-mark: malformed ENFORCE_WORKFLOW_OFF — ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
+    );
+    continue;
+  }
+  if (workflowOffMatch) {
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW override NOT applied.`
+      );
+      continue;
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+      messages.push(`workflow-mark: invalid session_id format — override NOT applied.`);
+      continue;
+    }
+    let reasonStored = null;
+    const rawWorkflowOffReason = workflowOffMatch[1];
+    const wfv = validateSkipReason(rawWorkflowOffReason);
+    if (wfv.ok) {
+      reasonStored = wfv.reason;
+    } else {
+      messages.push(
+        `workflow-mark: ENFORCE_WORKFLOW_OFF reason rejected — ${wfv.msg} (override still applied)`
+      );
+    }
+    try {
+      const dir = getWorkflowDir();
+      fs.mkdirSync(dir, { recursive: true });
+      const markerPath = path.join(dir, `${sessionId}.workflow-off`);
+      const tmp = markerPath + ".tmp";
+      fs.writeFileSync(
+        tmp,
+        JSON.stringify({ reason: reasonStored, set_at: new Date().toISOString() }),
+        { mode: 0o600 }
+      );
+      fs.renameSync(tmp, markerPath);
+      messages.push(
+        `workflow-mark: ENFORCE_WORKFLOW session override applied (marker: ${markerPath}). ` +
+          `Restore with: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>"`
+      );
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to write ENFORCE_WORKFLOW override marker — ${e.message}. Override NOT applied.`
+      );
+    }
+    continue;
+  }
+
+  // --- ENFORCE_WORKFLOW_ON handler ---
+  const workflowOnMatch = cmd.match(ENFORCE_WORKFLOW_ON_RE_DQ);
+  const workflowOnLooksLike =
+    !workflowOnMatch && ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE.test(cmd);
+  if (workflowOnLooksLike) {
+    messages.push(
+      `workflow-mark: malformed ENFORCE_WORKFLOW_ON — ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
+    );
+    continue;
+  }
+  if (workflowOnMatch) {
+    if (!sessionId) {
+      messages.push(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW restore NOT applied.`
+      );
+      continue;
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+      messages.push(`workflow-mark: invalid session_id format — restore NOT applied.`);
+      continue;
+    }
+    const rawWorkflowOnReason = workflowOnMatch[1];
+    const wfOnv = validateSkipReason(rawWorkflowOnReason);
+    if (!wfOnv.ok) {
+      messages.push(
+        `workflow-mark: ENFORCE_WORKFLOW_ON reason rejected — ${wfOnv.msg} (restore still applied)`
+      );
+    }
+    try {
+      const dir = getWorkflowDir();
+      const markerPath = path.join(dir, `${sessionId}.workflow-off`);
+      try {
+        fs.unlinkSync(markerPath);
+        messages.push(
+          `workflow-mark: ENFORCE_WORKFLOW session override cleared (marker removed: ${markerPath}).`
+        );
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+        // Idempotent: silent no-op when marker is already absent.
+      }
+    } catch (e) {
+      messages.push(
+        `workflow-mark: failed to clear ENFORCE_WORKFLOW override marker — ${e.message}. Restore NOT applied.`
       );
     }
     continue;
