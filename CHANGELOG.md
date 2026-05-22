@@ -263,3 +263,7 @@ Changes: New bin/github-issues/bootstrap-labels.sh installs label management fil
 ### FEATURE: backfill-commit-comments: auto-detect bulk-import commits in Tier 1.5 (2026-05-23)
 Background: Tier 1.5 hash discovery used a hardcoded commit-hash blacklist to skip bulk-import commits, requiring manual list maintenance whenever a new bulk import was detected.
 Changes: Replace the hardcoded blacklist with automatic detection. Each candidate commit is inspected by counting the number of new history-entry headings it adds to docs/history.md; commits at or above TIER15_BULK_THRESHOLD (default: 3) are rejected as bulk imports and discovery falls through to the next tier. The threshold is configurable via the TIER15_BULK_THRESHOLD environment variable.
+
+### FEATURE: Session-scoped WORKFLOW_OFF/ON sentinels (2026-05-23)
+Background: Bypassing workflow enforcement for trivial edits required editing global config.
+Changes: New per-session sentinels `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>` / `<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>` toggle workflow enforcement for the current session only. Bypasses block-dotenv, scan-outbound, workflow-gate, enforce-issue-close, and enforce-worktree. `enforce-system-ops` is NEVER bypassed. Subsumes `WORKTREE_OFF`.
