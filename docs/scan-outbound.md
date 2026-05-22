@@ -12,8 +12,11 @@ Checkpoints scan for private information:
 | Git commit (message) | Every `git commit` | Commit-msg hook (`claude-global/hooks/commit-msg`) |
 | Claude Code edit | Every Edit/Write tool call | PreToolUse hook (`claude-global/hooks/scan-outbound.js`) |
 | Claude Code commit | Every `git commit` via Bash tool | PreToolUse hook (`claude-global/hooks/scan-outbound.js`) |
+| Claude Code forge write | Every `gh issue`/`pr` create/edit/close/comment/review via Bash tool | PreToolUse hook (`claude-global/hooks/scan-outbound.js`) |
 
 All call `bin/scan-outbound.sh` as the scanner (single source of truth for patterns).
+
+**Known false-negatives (v1):** `gh repo edit/create/rename/archive` commands are not scanned — they have zero callers in the current codebase. `gh api` raw calls are not scanned regardless of payload. Non-github.com remotes follow the same private-repo skip path as all other commands.
 
 **Private repos are skipped**: detected dynamically via `gh api` (GitHub CLI). If the repo's `private` flag is `true`, scanning is skipped. If `gh` is unavailable or the API call fails, scanning proceeds (fail-open, safe default).
 
