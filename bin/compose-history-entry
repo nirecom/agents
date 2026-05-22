@@ -27,8 +27,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
-
 worktree_root="$(git rev-parse --show-toplevel)"
 
 # Resolve WORKTREE_NOTES.md path
@@ -112,8 +110,10 @@ fi
 
 # Translation (pass-through + non-ASCII warning)
 if [[ "$NO_TRANSLATE" -eq 0 ]]; then
+    # Resolve helper relative to this CLI (repo-agnostic — works from any caller repo)
+    cli_dir="$(cd "$(dirname "$0")" && pwd)"
     # shellcheck source=bin/lib/translate-to-english.sh
-    source "$AGENTS_CONFIG_DIR/bin/lib/translate-to-english.sh"
+    source "$cli_dir/lib/translate-to-english.sh"
     SUBJECT="$(translate_to_english "$SUBJECT")"
     BACKGROUND="$(translate_to_english "$BACKGROUND")"
     CHANGES="$(translate_to_english "$CHANGES")"
@@ -144,8 +144,8 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     exit 0
 fi
 
-# Append entry
-cd "$AGENTS_CONFIG_DIR"
+# Append entry (write to caller's repo — repo-agnostic)
+cd "$worktree_root"
 doc-append "${DOC_APPEND_ARGS[@]}"
 
 # Commit exactly the docs/history paths without disturbing other staged changes.

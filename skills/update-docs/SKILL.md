@@ -43,7 +43,14 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 ## Completion
 
 After completing this skill:
-1. `docs/history.md` entry is handled by Step 7.5 (`bin/compose-history-entry`) — do NOT append here.
+1. **`docs/history.md` entry** — When `closes_issues` is empty (parsed from
+   `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`), run
+   `bin/compose-history-entry` (CLI ships in `$AGENTS_CONFIG_DIR/bin/`) from the
+   current repo. It reads `## History Notes` from `WORKTREE_NOTES.md` (or
+   synthesizes from recent commits if missing), appends to the caller repo's
+   `docs/history.md`, and commits as `docs(history): <subject>`. Repo-agnostic.
+   **Skip when `closes_issues` is non-empty** — Step 8.5 (`/issue-close-stage`)
+   handles it for those sessions.
 2. Append to `CHANGELOG.md` (external, user-facing summary — for public repos only):
    `doc-append CHANGELOG.md --category CATEGORY --subject "..." --date YYYY-MM-DD --background "..." --changes "..."`
    `--background` = one sentence on context; `--changes` = what changed from a user perspective (no internal refs).
