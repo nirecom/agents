@@ -352,16 +352,33 @@ if [ "$FROM_STEP" -le 4 ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Step 5 — Backfill commit comments + cleanup
+# Step 5 — Backfill commit comments
 # -----------------------------------------------------------------------------
 if [ "$FROM_STEP" -le 5 ]; then
-  echo "--- Step 5: backfill commit comments + cleanup ---"
+  echo "--- Step 5: backfill commit comments ---"
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] would run: REPO_DIR=$REPO_DIR bash $AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh"
-    echo "[dry-run] would clean up .migration-state.json on success"
   else
     REPO_DIR="$REPO_DIR" bash "$AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh"
     state_set_step 5
+  fi
+  echo ""
+fi
+
+# -----------------------------------------------------------------------
+# Step 6 — Commit + push migration artifacts (Step 1/3 side effects)
+# -----------------------------------------------------------------------
+if [ "$FROM_STEP" -le 6 ]; then
+  echo "--- Step 6: commit + push migration artifacts ---"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    bash "$SCRIPT_DIR/commit-migration-artifacts.sh" "$REPO_DIR" --dry-run
+    echo "[dry-run] would clean up .migration-state.json on success"
+  else
+    echo "<<WORKFLOW_USER_VERIFIED: migration cleanup commit (Step 1/3 artifacts) approved as part of /migrate-repo run>>"
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: migrate-repo artifact commit>>"
+    ENFORCE_WORKTREE=off "$SCRIPT_DIR/commit-migration-artifacts.sh" "$REPO_DIR"
+    echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: migrate-repo artifact commit complete>>"
+    state_set_step 6
     state_cleanup "$REPO_DIR"
     echo "  state file removed (migration complete)"
   fi
