@@ -153,14 +153,13 @@ fi
 if [ "$FROM_STEP" -le 1 ]; then
   echo "--- Step 1: label sync + .github/ templates ---"
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry-run] would copy $AGENTS_CONFIG_DIR/.github/labels.yml → $REPO_DIR/.github/labels.yml"
+    echo "[dry-run] would run: bash $AGENTS_CONFIG_DIR/bin/github-issues/bootstrap-labels.sh $REPO_DIR"
     echo "[dry-run] would copy $AGENTS_CONFIG_DIR/.github/ISSUE_TEMPLATE → $REPO_DIR/.github/ISSUE_TEMPLATE"
-    echo "[dry-run] would run: bash $AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"
   else
     mkdir -p "$REPO_DIR/.github"
-    if [ -f "$AGENTS_CONFIG_DIR/.github/labels.yml" ]; then
-      cp -n "$AGENTS_CONFIG_DIR/.github/labels.yml" "$REPO_DIR/.github/labels.yml" || true
-    fi
+    bash "$AGENTS_CONFIG_DIR/bin/github-issues/bootstrap-labels.sh" "$REPO_DIR" || {
+        echo "WARNING: bootstrap-labels.sh failed (continuing)" >&2
+      }
     if [ -d "$AGENTS_CONFIG_DIR/.github/ISSUE_TEMPLATE" ]; then
       mkdir -p "$REPO_DIR/.github/ISSUE_TEMPLATE"
       # cp -n per file (POSIX: cp -rn behaves differently across platforms).
@@ -169,10 +168,6 @@ if [ "$FROM_STEP" -le 1 ]; then
         cp -n "$f" "$REPO_DIR/.github/ISSUE_TEMPLATE/" || true
       done
     fi
-    (cd "$REPO_DIR" && bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh" \
-      "$REPO_DIR/.github/labels.yml") || {
-        echo "WARNING: sync-labels.sh failed (continuing)" >&2
-      }
     state_set_step 1
   fi
   echo ""

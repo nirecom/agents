@@ -230,6 +230,14 @@ case "$ARGS" in
           ;;
     esac
     ;;
+  # Label create handler — used by sync-labels.sh / bootstrap-labels.sh.
+  # Logs the full args to $GH_MOCK_LABEL_LOG (if set) and exits 0.
+  "label create "*"--force"*)
+    if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
+        printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
+    fi
+    exit 0
+    ;;
 esac
 
 case "$SCENARIO" in
