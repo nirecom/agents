@@ -42,7 +42,7 @@ never run two stages in one command.
    Open the printed Issues URL in browser.
    Get explicit user approval before running the next command.
 9. **Todo full**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage full`
-10. **Step 4 + 5**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 4` (continuous; no `--stage`).
+10. **Step 4 + 5 + 6**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 4` (continuous; no `--stage`). Step 6 stages the allowlist (`.github/labels.yml`, `.github/ISSUE_TEMPLATE/`, `.gitignore`, `docs/todo.md`), commits with `chore(migration): apply /migrate-repo Step 1/3 artifacts`, and pushes to `origin`.
 
 On failure at Step N, resume: `orchestrate.sh "$REPO_PATH" --from-step N [--stage ...]`.
 
@@ -62,4 +62,4 @@ Filenames are relative to `docs/history/` in the target repo. The current
 
 ## agents repo (Phase 3)
 
-history.md is already migrated → Step 2 skipped (idempotency). Steps 3–5 run.
+history.md is already migrated → Step 2 skipped (idempotency). Steps 3–6 run.
