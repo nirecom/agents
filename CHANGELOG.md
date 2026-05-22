@@ -255,3 +255,7 @@ Changes: The PreToolUse hook now scans --body, --title, and --body-file content 
 ### CONFIG: plan artifact display: remove VS Code auto-open, suppress diff when CONFIRM_*=off (2026-05-22)
 Background: CONFIRM_DETAIL/OUTLINE/INTENT=off now also suppresses the show-diff.js inline preview for the corresponding artifact. VS Code auto-open (code -r) removed; the inline diff and breadcrumb are the only remaining UX.
 Changes: (1) VS Code tabs no longer open for plan files. (2) show-diff.js skips the diff preview for plan artifacts when the corresponding CONFIRM_* flag is off. Breadcrumb ("Plan file written: ...") still emitted in all modes.
+
+### FEATURE: clarify-intent: tracking-issue guard prevents completion with empty closes_issues (2026-05-23)
+Background: When /clarify-intent Completion reached with closes_issues empty (Path C), the workflow could emit WORKFLOW_CLARIFY_INTENT_COMPLETE without creating a tracking issue first. Also, the dual /make-outline-plan invocation (Procedure Step 6 + Completion) caused the skill to exit at Step 6, never reaching Completion.
+Changes: A new guard script (check-closes-issues-nonempty.sh, backed by parse-closes-issues.js SSOT) blocks the completion sentinel when closes_issues is empty. First failure auto-invokes /issue-create and re-checks; second failure escalates to AskUserQuestion (3 options: retry, manual recovery, abort). Procedure Step 6 no longer invokes /make-outline-plan — the skill now exits exclusively via Completion.
