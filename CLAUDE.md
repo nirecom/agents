@@ -36,6 +36,17 @@
 7. **Docs** —
    - **`ENFORCE_WORKTREE=on`:** Skip `/update-docs` — docs review is deferred to PR review.
    - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
+7.5. **History entry** — `closes_issues` is parsed from
+   `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`.
+   **Skip when `closes_issues` is non-empty** — Step 8.5 (`/issue-close-stage`)
+   handles the history entry for those sessions.
+   When `closes_issues` is empty: run `bin/compose-history-entry` from the linked
+   worktree (`ENFORCE_WORKTREE=on`) or main worktree (`ENFORCE_WORKTREE=off`).
+   The CLI appends a `docs/history.md` entry and commits it internally as
+   `docs(history): <subject>`. Runs **before `/commit-push` (Step 9)** so the
+   history commit precedes the source commit.
+   WORKTREE_NOTES.md missing → CLI synthesizes Changes from recent commit subjects
+   (non-fatal; no manual action needed).
 8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5.
    - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,

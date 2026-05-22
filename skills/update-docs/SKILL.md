@@ -43,9 +43,8 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 ## Completion
 
 After completing this skill:
-1. Append to `docs/history.md` (internal, detailed):
-   `doc-append docs/history.md --category CATEGORY --subject "..." --date YYYY-MM-DD --commits HASH --background "..." --changes "..."`
-2. Append to `CHANGELOG.md` (external, user-facing summary — omit `--commits`):
+1. `docs/history.md` entry is handled by Step 7.5 (`bin/compose-history-entry`) — do NOT append here.
+2. Append to `CHANGELOG.md` (external, user-facing summary — for public repos only):
    `doc-append CHANGELOG.md --category CATEGORY --subject "..." --date YYYY-MM-DD --background "..." --changes "..."`
    `--background` = one sentence on context; `--changes` = what changed from a user perspective (no internal refs).
    For public repos only. Skip if the repo is private.
