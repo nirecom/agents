@@ -111,10 +111,12 @@ A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 <sentinel-stripped body; if unstructured prepend "(review framing at outline stage)">
 ## Scope / Constraints
 <derived from body or "(review at outline stage)">
+## Accepted Tradeoffs
+(none — capture at outline stage)
 ## closes_issues
 - <N>
 ```
-`<title>` is the issue title from the Step 3 `gh issue view --json title` result (already in scope; no re-read required). If the title is empty or unavailable, OMIT the `## Issue` section entirely.
+`<title>` is the issue title from the Step 3 `gh issue view --json title` result (already in scope; no re-read required). If the title is empty or unavailable, use `#<N>: (title unavailable)` — **never omit the `## Issue` section**; downstream stages carry it forward verbatim. The `## Accepted Tradeoffs` body `(none — capture at outline stage)` signals that Path A skips the interview and defers refinement to `make-outline-plan` (aligned with the `## Scope / Constraints` fallback `(review at outline stage)`). **Never omit the `## Accepted Tradeoffs` section** — `detail-planner.md` reads it as the Approved Scope gate.
 A2. Emit (separate Bash calls):
 ```
 echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"
