@@ -19,6 +19,7 @@ PROJECT_NUM="${ISSUE_CREATE_PROJECT_NUM:-1}"
 TITLE=""
 BODY=""
 BODY_FILE=""
+BODY_PROVIDED=0
 EXTRA_LABELS=()
 ASSIGNEE=""
 MILESTONE=""
@@ -26,7 +27,7 @@ MILESTONE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --title)      TITLE="${2:?--title requires value}"; shift 2 ;;
-        --body)       BODY="${2:?--body requires value}"; shift 2 ;;
+        --body)       [ $# -lt 2 ] && { echo "--body requires value" >&2; exit 2; }; BODY="$2"; BODY_PROVIDED=1; shift 2 ;;
         --body-file)  BODY_FILE="${2:?--body-file requires value}"; shift 2 ;;
         --label)
             val="${2:?--label requires value}"
@@ -61,18 +62,45 @@ fi
 if [ -z "$TITLE" ]; then
     echo "Error: --title required" >&2; exit 2
 fi
-if [ -z "$BODY" ] && [ -z "$BODY_FILE" ]; then
+if [ "$BODY_PROVIDED" -eq 0 ] && [ -z "$BODY_FILE" ]; then
     echo "Error: --body or --body-file required" >&2; exit 2
 fi
-if [ -n "$BODY" ] && [ -n "$BODY_FILE" ]; then
+if [ "$BODY_PROVIDED" -eq 1 ] && [ -n "$BODY_FILE" ]; then
     echo "Error: --body and --body-file are mutually exclusive" >&2; exit 2
 fi
 if [ -n "$BODY_FILE" ] && [ ! -f "$BODY_FILE" ]; then
     echo "Error: --body-file not found: $BODY_FILE" >&2; exit 1
 fi
 
+# Schema validation (#443): canonical Background + Changes required at creation.
+# ISSUE_CREATE_SKIP_SCHEMA=1 is an emergency escape hatch — sanctioned path is
+# to add the missing fields. (type:* labels are rejected by the --label arg
+# parser above; when type:incident becomes routable, swap the field list to
+# "Cause" "Fix".)
+if [ "${ISSUE_CREATE_SKIP_SCHEMA:-0}" != "1" ]; then
+    # SSOT: shape regex lives in extract-field.sh — source rather than duplicate.
+    # shellcheck source=lib/extract-field.sh
+    . "$(dirname "$0")/lib/extract-field.sh"
+    if [ -n "${BODY_FILE:-}" ]; then
+        SCHEMA_BODY=$(cat "$BODY_FILE")
+    else
+        SCHEMA_BODY="${BODY:-}"
+    fi
+    MISSING=()
+    for F in Background Changes; do
+        [ -z "$(BODY="$SCHEMA_BODY" extract_field "$F")" ] && MISSING+=("$F")
+    done
+    if [ ${#MISSING[@]} -gt 0 ]; then
+        # Loop join — "${arr[*]}" with IFS=', ' uses only the first char (bug).
+        S=""; for F in "${MISSING[@]}"; do S="${S:+$S, }$F"; done
+        echo "Error: missing canonical fields: $S" >&2
+        echo "Hint: ISSUE_CREATE_SKIP_SCHEMA=1 bypasses (emergency only)." >&2
+        exit 3
+    fi
+fi
+
 GH_ARGS=(issue create --title "$TITLE" --label "type:task")
-if [ -n "$BODY" ]; then
+if [ "$BODY_PROVIDED" -eq 1 ]; then
     GH_ARGS+=(--body "$BODY")
 else
     GH_ARGS+=(--body-file "$BODY_FILE")
