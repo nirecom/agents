@@ -22,7 +22,7 @@
 
 "use strict";
 
-const { stripQuotedArgs } = require("./strip-quoted-args");
+const { stripQuotedArgs, stripHeredocBody } = require("./strip-quoted-args");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
@@ -161,7 +161,32 @@ function classify(cmd) {
       matchedNames.every((n) => QUOTING_ONLY_NAMES.has(n)) &&
       GH_GROUP_A_REGEX.test(cmd)
     ) {
-      return "read";
+      // #371 codex-review hardening: the quoting-only early-return only applies
+      // when every heredoc in the command is safe to collapse. Otherwise the
+      // body might execute (interpreter heredoc) or undergo shell expansion
+      // (unquoted opener with $(...) / backticks), and the dangerous content
+      // must remain visible to the classifier.
+      if (isSafeHeredocOnly(cmd)) {
+        return "read";
+      }
+      return "write";
+    }
+    // #371 fix: for Group A commands, strip heredoc body and re-scan.
+    // If the only remaining matches after stripping are quoting-only, return "read".
+    if (GH_GROUP_A_REGEX.test(cmd)) {
+      const bodyStripped = stripHeredocBody(cmd);
+      const reStripped = stripQuotedArgs(bodyStripped);
+      const reMatched = [];
+      for (const p of WRITE_PATTERNS) {
+        const scanned = STRIP_KINDS.has(p.kind) ? reStripped : bodyStripped;
+        if (p.regex.test(scanned)) reMatched.push(p.name);
+      }
+      if (
+        reMatched.length > 0 &&
+        reMatched.every((n) => QUOTING_ONLY_NAMES.has(n))
+      ) {
+        return "read";
+      }
     }
     // Re-classify bash -c / pwsh -Command when only interpreter-c matches
     // and the inner body is read-only.
@@ -176,6 +201,45 @@ function classify(cmd) {
     return "write";
   } catch (e) {
     return "read"; // fail-open
+  }
+}
+
+/**
+ * Returns true if every heredoc in cmd is safe to collapse: opener is preceded
+ * by `cat` (not an interpreter like bash/sh/python), and bodies of unquoted
+ * heredocs do not contain shell expansions ($(...) / backticks). Heredocs that
+ * fail either check carry executable content and must be classified as write
+ * even when the surrounding command is otherwise quoting-only Group A.
+ *
+ * Fail-safe: any unexpected condition returns false (forcing the caller to
+ * treat the command as potentially dangerous).
+ */
+function isSafeHeredocOnly(cmd) {
+  try {
+    if (!cmd || typeof cmd !== "string") return false;
+    // Match every heredoc opener: capture the preceding non-space token (if any)
+    // and the body. Without a `cat` prefix or with an unquoted body containing
+    // $(...) or backticks, the heredoc is unsafe.
+    const re = /(\S*)\s*<<-?\s*(['"]?)(\w+)\2[^\n]*\n([\s\S]*?)\n\s*\3\s*(?:\n|$)/g;
+    let m;
+    let found = false;
+    while ((m = re.exec(cmd)) !== null) {
+      found = true;
+      const prefixToken = m[1];
+      const quoteChar = m[2];
+      const body = m[4];
+      // Prefix must end with `cat` (allow `cat`, `\ncat`, ` cat`, etc.)
+      if (!/(^|[\s;|&(])cat$/.test(prefixToken) && prefixToken !== "cat") {
+        return false;
+      }
+      const isQuoted = quoteChar === "'" || quoteChar === '"';
+      if (!isQuoted && /\$\(|`/.test(body)) {
+        return false;
+      }
+    }
+    return found; // if no heredoc found, this check is N/A — return false to be conservative
+  } catch (e) {
+    return false;
   }
 }
 
