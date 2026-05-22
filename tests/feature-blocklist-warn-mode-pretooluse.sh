@@ -15,6 +15,7 @@ SCANNER_SRC="$DOTFILES_DIR/bin/scan-outbound.sh"
 HOOK_SRC="$DOTFILES_DIR/hooks/scan-outbound.js"
 ISPRIV_SRC="$DOTFILES_DIR/hooks/lib/is-private-repo.js"
 PARSEGIT_SRC="$DOTFILES_DIR/hooks/lib/parse-git-args.js"
+FORGE_SRC="$DOTFILES_DIR/hooks/lib/forge-write-extract.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -44,6 +45,7 @@ cp "$SCANNER_SRC"   "$FAKE_AGENTS/bin/scan-outbound.sh"
 cp "$HOOK_SRC"      "$FAKE_AGENTS/hooks/scan-outbound.js"
 cp "$ISPRIV_SRC"    "$FAKE_AGENTS/hooks/lib/is-private-repo.js"
 [ -f "$PARSEGIT_SRC" ] && cp "$PARSEGIT_SRC" "$FAKE_AGENTS/hooks/lib/parse-git-args.js"
+[ -f "$FORGE_SRC" ] && cp "$FORGE_SRC" "$FAKE_AGENTS/hooks/lib/forge-write-extract.js"
 chmod +x "$FAKE_AGENTS/bin/scan-outbound.sh"
 : > "$FAKE_AGENTS/.private-info-allowlist"
 cat > "$FAKE_AGENTS/.private-info-blocklist" <<'EOF'
