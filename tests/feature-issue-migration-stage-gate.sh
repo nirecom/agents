@@ -103,7 +103,7 @@ export PATH="$GH_MOCK_DIR:$PATH"
 # AGENTS_CONFIG_DIR: build a fake one with mocked sub-scripts so Step 1/5
 # don't run real gh/git operations when tests fall through past Step 2/3.
 FAKE_AGENTS_DIR="$(mktemp -d)"
-mkdir -p "$FAKE_AGENTS_DIR/bin/github-issues" "$FAKE_AGENTS_DIR/.github/ISSUE_TEMPLATE"
+mkdir -p "$FAKE_AGENTS_DIR/bin/github-issues" "$FAKE_AGENTS_DIR/.github/ISSUE_TEMPLATE" "$FAKE_AGENTS_DIR/.github/workflows"
 cat > "$FAKE_AGENTS_DIR/bin/github-issues/sync-labels.sh" <<'EOF'
 #!/usr/bin/env bash
 echo "sync-labels: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
@@ -116,7 +116,16 @@ echo "backfill-commit-comments: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
 exit 0
 EOF
 chmod +x "$FAKE_AGENTS_DIR/bin/github-issues/backfill-commit-comments.sh"
+# bootstrap-labels.sh stub — referenced by /migrate-repo Step 1.3 (issue #283).
+cat > "$FAKE_AGENTS_DIR/bin/github-issues/bootstrap-labels.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "bootstrap-labels stub"
+exit 0
+EOF
+chmod +x "$FAKE_AGENTS_DIR/bin/github-issues/bootstrap-labels.sh"
 : > "$FAKE_AGENTS_DIR/.github/labels.yml"
+# sync-labels.yml workflow placeholder — copied by bootstrap-labels.sh (issue #283).
+echo "# stub" > "$FAKE_AGENTS_DIR/.github/workflows/sync-labels.yml"
 export AGENTS_CONFIG_DIR="$FAKE_AGENTS_DIR"
 
 # Helper: create a clean repo dir with optional history/todo.
