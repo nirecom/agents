@@ -32,6 +32,26 @@ case "$ARGS" in
     fi
     exit 0
     ;;
+  *"show --unified=0"*"--pretty=format:"*"-- docs/history"*)
+    # Tier 1.5 bulk-import detection (issue #344).
+    # The backfill script's is_bulk_history_commit() invokes:
+    #   git show --unified=0 --pretty=format: -m <hash> -- docs/history.md
+    # to count the number of "+### Heading" lines introduced by a commit.
+    # GIT_MOCK_SHOW_HEADINGS_FOR_<hash>=<N> controls how many heading lines
+    # this mock emits. The script's threshold default is 3 — at-or-above is
+    # treated as bulk-import and rejected; below is accepted.
+    hash=$(printf '%s' "$ARGS" | grep -oE '[0-9a-f]{7,40}' | head -n 1)
+    : "${GIT_MOCK_ARGV_LOG:=${TMPDIR:-/tmp}/git-mock-argv.log}"
+    printf '%s\n' "$ARGS" >> "$GIT_MOCK_ARGV_LOG"
+    var="GIT_MOCK_SHOW_HEADINGS_FOR_${hash}"
+    n="${!var:-0}"
+    i=0
+    while [ "$i" -lt "$n" ]; do
+      printf '+### Heading %d\n' "$i"
+      i=$((i + 1))
+    done
+    exit 0
+    ;;
 esac
 # Unknown git subcommands: exit silently.
 # IMPORTANT: Do NOT forward to real git — this script IS git on PATH (infinite recursion).

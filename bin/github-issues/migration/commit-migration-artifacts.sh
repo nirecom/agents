@@ -37,7 +37,9 @@ COMMIT_MSG_SUBJECT="chore(migration): apply /migrate-repo Step 1/3 artifacts"
 ALLOWLIST=(
   ".github/labels.yml"
   ".github/ISSUE_TEMPLATE"
+  ".github/workflows/sync-labels.yml"
   ".gitignore"
+  "bin/github-issues/sync-labels.sh"
   "docs/todo.md"
 )
 
@@ -56,6 +58,21 @@ for entry in "${ALLOWLIST[@]}"; do
     git -C "$REPO_DIR" -c core.autocrlf=false add -- "$entry"
   fi
 done
+
+# Ensure staged .sh files carry the executable bit in the git index, so the
+# pre-commit hook (which requires 100755 on .sh files) does not reject the
+# commit on platforms where core.filemode=false (e.g. Windows).
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    *.sh)
+      mode=$(git -C "$REPO_DIR" ls-files -s -- "$f" 2>/dev/null | awk '{print $1}')
+      if [ "$mode" = "100644" ]; then
+        git -C "$REPO_DIR" update-index --chmod=+x -- "$f" >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
+done < <(git -C "$REPO_DIR" diff --cached --name-only 2>/dev/null | tr -d '\r')
 
 # Unstage any files that git auto-staged beyond the allowlist (e.g. CRLF normalisation).
 while IFS= read -r f; do

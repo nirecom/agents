@@ -40,10 +40,19 @@ HISTORY_DIR="${REPO_DIR}/docs/history"
 # Ensure gh CLI targets the correct repo via the working directory's remote.
 cd "$REPO_DIR"
 
-# Tier 1.5 blacklist: commits that bulk-import many history entries at once.
-# When git log -S resolves to one of these, fall through to the next tier to
-# avoid false attribution (e.g. 3969773 = feat(agents-split): add 39 tests).
-TIER15_BLACKLIST="3969773"
+# Tier 1.5: auto-detect bulk-import commits by counting +### headings added to
+# docs/history.md in a single commit. When the count meets the threshold,
+# fall through to the next tier to avoid false attribution.
+TIER15_BULK_THRESHOLD="${TIER15_BULK_THRESHOLD:-3}"
+
+is_bulk_history_commit() {
+    local h="$1" added
+    added=$(git -C "$REPO_DIR" show --unified=0 --pretty=format: -m "$h" \
+        -- docs/history.md docs/history/ 2>/dev/null \
+        | grep -c '^+### ' || true)
+    [ -z "$added" ] && added=0
+    [ "$added" -ge "$TIER15_BULK_THRESHOLD" ]
+}
 
 # Tier 0a: closedByPullRequestsReferences → first merged PR's mergeCommit.oid.
 # Closed-unmerged PRs have mergeCommit=null and are filtered out by --jq.
@@ -105,10 +114,7 @@ discover_hash_from_history_introducer() {
     [ -z "$line" ] && return 1
     hash=$(printf '%s' "$line" | awk '{print $1}')
     printf '%s' "$hash" | grep -qE '^[0-9a-f]{7,40}$' || return 1
-    local bl
-    for bl in $TIER15_BLACKLIST; do
-        case "$hash" in "$bl"*) return 1 ;; esac
-    done
+    is_bulk_history_commit "$hash" && return 1
     printf '%s' "$hash"
 }
 
