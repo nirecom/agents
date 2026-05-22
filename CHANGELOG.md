@@ -259,3 +259,7 @@ Changes: (1) VS Code tabs no longer open for plan files. (2) show-diff.js skips 
 ### FEATURE: Session-scoped WORKFLOW_OFF/ON sentinels (2026-05-23)
 Background: Bypassing workflow enforcement for trivial edits required editing global config.
 Changes: New per-session sentinels `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>` / `<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>` toggle workflow enforcement for the current session only. Bypasses block-dotenv, scan-outbound, workflow-gate, enforce-issue-close, and enforce-worktree. `enforce-system-ops` is NEVER bypassed. Subsumes `WORKTREE_OFF`.
+
+### FEATURE: clarify-intent: tracking-issue guard prevents completion with empty closes_issues (2026-05-23)
+Background: When /clarify-intent Completion reached with closes_issues empty (Path C), the workflow could emit WORKFLOW_CLARIFY_INTENT_COMPLETE without creating a tracking issue first. Also, the dual /make-outline-plan invocation (Procedure Step 6 + Completion) caused the skill to exit at Step 6, never reaching Completion.
+Changes: A new guard script (check-closes-issues-nonempty.sh, backed by parse-closes-issues.js SSOT) blocks the completion sentinel when closes_issues is empty. First failure auto-invokes /issue-create and re-checks; second failure escalates to AskUserQuestion (3 options: retry, manual recovery, abort). Procedure Step 6 no longer invokes /make-outline-plan — the skill now exits exclusively via Completion.
