@@ -15,6 +15,8 @@ const MAX_READ_SIZE = 1024 * 1024; // 1 MiB cap for overwrite-side reads
 
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { isUnderPath } = require("./lib/path-match");
+const { loadDefaultEnv } = require("./lib/load-env");
+const { isConfirmOff } = require("./lib/plan-confirm-flag");
 
 // ── stdin ─────────────────────────────────────────────────────────────────────
 
@@ -76,10 +78,12 @@ function isPlanFile(filePath) {
   if (!filePath) return false;
   try {
     if (!isUnderPath(filePath, getWorkflowPlansDir())) return false;
-    // Only suppress intermediate drafts (drafts/ subdirectory).
-    // Final artifacts (*-intent.md, *-outline.md, *-detail.md) are NOT suppressed
-    // so their write preview appears in chat for user review.
-    return isUnderPath(filePath, path.join(getWorkflowPlansDir(), "drafts"));
+    // Drafts subdirectory: always suppress (intermediate, noisy).
+    if (isUnderPath(filePath, path.join(getWorkflowPlansDir(), "drafts"))) return true;
+    // Final artifact under CONFIRM_*=off: suppress diff (closes #445).
+    if (isConfirmOff(filePath)) return true;
+    // Final artifact under CONFIRM_*=on or unset: show the diff inline in chat.
+    return false;
   } catch { return false; }
 }
 
@@ -117,6 +121,7 @@ function makeDiff(oldStr, newStr, label, opts) {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 if (require.main === module) {
+  try { loadDefaultEnv(); } catch (_) {}
   let input = {};
   try {
     input = JSON.parse(readStdin());
