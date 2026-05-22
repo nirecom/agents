@@ -28,6 +28,7 @@ NODE_HOME="$(run_with_timeout node -e "process.stdout.write(require('os').homedi
 
 # Set WORKFLOW_PLANS_DIR to the real home's .workflow-plans so isUnderPath matches
 export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
+unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 
 run_hook() {
   local json="$1"
@@ -115,6 +116,125 @@ expect_empty "T8 empty file_path is noop" \
 echo "=== T9: Bash tool (non-watched) ==="
 expect_empty "T9 Bash tool is noop" \
   '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+
+# ══════════════════════════════════════════════════════════════════════════
+# CONFIRM_* diff-suppression tests (#445)
+# show-diff.js must suppress inline diff when CONFIRM_*=off for the matching
+# plan suffix. These tests will FAIL until hooks/show-diff.js is updated to
+# call isConfirmOff() — that is expected and acceptable at the test-writing
+# stage.
+# ══════════════════════════════════════════════════════════════════════════
+
+# Use a per-run temp plans dir so we can create real files (the hook reads
+# the existing file to compute the overwrite-side diff).
+NODE_TMPDIR_CONF="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
+CONF_PLANS_DIR="${NODE_TMPDIR_CONF}/show-diff-conf-$$"
+# Empty cfg dir: prevents loadDefaultEnv() from loading the real .env and
+# leaking CONFIRM_* values into tests that rely on those being unset.
+CONF_EMPTY_CFG_DIR="${NODE_TMPDIR_CONF}/show-diff-conf-cfg-empty-$$"
+mkdir -p "$CONF_PLANS_DIR" "$CONF_EMPTY_CFG_DIR"
+echo "prior content" > "$CONF_PLANS_DIR/foo-intent.md"
+echo "prior content" > "$CONF_PLANS_DIR/foo-outline.md"
+echo "prior content" > "$CONF_PLANS_DIR/foo-detail.md"
+
+# Cleanup at exit (merge with potential existing trap)
+cleanup_conf() { rm -rf "$CONF_PLANS_DIR" "$CONF_EMPTY_CFG_DIR"; }
+trap cleanup_conf EXIT
+
+# Helper: run the hook with overridden env in a subshell. Asserts stdout is empty.
+expect_empty_with_env() {
+  local desc="$1" json="$2"
+  shift 2
+  local result
+  result=$(
+    export WORKFLOW_PLANS_DIR="$CONF_PLANS_DIR"
+    export AGENTS_CONFIG_DIR="$CONF_EMPTY_CFG_DIR"
+    for assignment in "$@"; do
+      key="${assignment%%=*}"
+      val="${assignment#*=}"
+      export "$key=$val"
+    done
+    echo "$json" | run_with_timeout node "$HOOK" 2>/dev/null
+  )
+  if [ -z "$result" ]; then
+    pass "$desc"
+  else
+    fail "$desc — expected empty stdout, got non-empty"
+  fi
+}
+
+# Helper: run the hook with overridden env in a subshell. Asserts stdout is non-empty.
+expect_nonempty_with_env() {
+  local desc="$1" json="$2"
+  shift 2
+  local result
+  result=$(
+    export WORKFLOW_PLANS_DIR="$CONF_PLANS_DIR"
+    export AGENTS_CONFIG_DIR="$CONF_EMPTY_CFG_DIR"
+    for assignment in "$@"; do
+      key="${assignment%%=*}"
+      val="${assignment#*=}"
+      export "$key=$val"
+    done
+    echo "$json" | run_with_timeout node "$HOOK" 2>/dev/null
+  )
+  if [ -n "$result" ]; then
+    pass "$desc"
+  else
+    fail "$desc — expected non-empty stdout (diff), got empty"
+  fi
+}
+
+# ── T-CONF1: CONFIRM_DETAIL=off on detail.md → empty (diff suppressed) ────
+echo "=== T-CONF1: CONFIRM_DETAIL=off on detail.md ==="
+expect_empty_with_env "T-CONF1 CONFIRM_DETAIL=off suppresses diff for detail.md" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-detail.md\",\"content\":\"new content\"}}" \
+  CONFIRM_DETAIL=off
+
+# ── T-CONF2: CONFIRM_OUTLINE=off on outline.md → empty ────────────────────
+echo "=== T-CONF2: CONFIRM_OUTLINE=off on outline.md ==="
+expect_empty_with_env "T-CONF2 CONFIRM_OUTLINE=off suppresses diff for outline.md" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-outline.md\",\"content\":\"new content\"}}" \
+  CONFIRM_OUTLINE=off
+
+# ── T-CONF3: CONFIRM_INTENT=off on intent.md → empty ──────────────────────
+echo "=== T-CONF3: CONFIRM_INTENT=off on intent.md ==="
+expect_empty_with_env "T-CONF3 CONFIRM_INTENT=off suppresses diff for intent.md" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-intent.md\",\"content\":\"new content\"}}" \
+  CONFIRM_INTENT=off
+
+# ── T-CONF4: CONFIRM_DETAIL=on on detail.md → non-empty (diff shown) ──────
+echo "=== T-CONF4: CONFIRM_DETAIL=on on detail.md ==="
+expect_nonempty_with_env "T-CONF4 CONFIRM_DETAIL=on does NOT suppress diff for detail.md" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-detail.md\",\"content\":\"new content\"}}" \
+  CONFIRM_DETAIL=on
+
+# ── T-CONF5: Cross-suffix CONFIRM_INTENT=off on detail.md → non-empty ─────
+echo "=== T-CONF5: cross-suffix CONFIRM_INTENT=off on detail.md ==="
+expect_nonempty_with_env "T-CONF5 cross-suffix CONFIRM_INTENT=off does NOT suppress diff for detail.md" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-detail.md\",\"content\":\"new content\"}}" \
+  CONFIRM_INTENT=off
+
+# ── T-CONF6: .env-overlay (loadDefaultEnv picks up file when env unset) ───
+echo "=== T-CONF6: .env overlay sets CONFIRM_DETAIL=off ==="
+CONF_CFG_DIR="${NODE_TMPDIR_CONF}/show-diff-conf-cfg-$$"
+mkdir -p "$CONF_CFG_DIR"
+printf 'CONFIRM_DETAIL=off\n' > "$CONF_CFG_DIR/.env"
+
+T_CONF6_RESULT=$(
+  export WORKFLOW_PLANS_DIR="$CONF_PLANS_DIR"
+  export AGENTS_CONFIG_DIR="$CONF_CFG_DIR"
+  unset CONFIRM_DETAIL
+  echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$CONF_PLANS_DIR/foo-detail.md\",\"content\":\"new content\"}}" \
+    | run_with_timeout node "$HOOK" 2>/dev/null
+)
+
+if [ -z "$T_CONF6_RESULT" ]; then
+  pass "T-CONF6 .env overlay CONFIRM_DETAIL=off suppresses diff"
+else
+  fail "T-CONF6 .env overlay CONFIRM_DETAIL=off — expected empty stdout, got non-empty"
+fi
+rm -rf "$CONF_CFG_DIR"
 
 # ── Results ──────────────────────────────────────────────────────────────
 echo ""

@@ -251,3 +251,7 @@ Changes: workflow-init now launches both survey agents in parallel (all workflow
 ### FEATURE: Scan private-info blocklist in gh issue and PR write commands (2026-05-22)
 Background: The private-info scanner previously only checked git commit messages and file edits.
 Changes: The PreToolUse hook now scans --body, --title, and --body-file content when Claude runs gh issue create/edit/comment, gh pr create/edit/comment/review, or similar forge write commands. Hard blocklist hits are blocked immediately; soft (warn:) hits ask you to confirm. Private repos are still skipped.
+
+### CONFIG: plan artifact display: remove VS Code auto-open, suppress diff when CONFIRM_*=off (2026-05-22)
+Background: CONFIRM_DETAIL/OUTLINE/INTENT=off now also suppresses the show-diff.js inline preview for the corresponding artifact. VS Code auto-open (code -r) removed; the inline diff and breadcrumb are the only remaining UX.
+Changes: (1) VS Code tabs no longer open for plan files. (2) show-diff.js skips the diff preview for plan artifacts when the corresponding CONFIRM_* flag is off. Breadcrumb ("Plan file written: ...") still emitted in all modes.

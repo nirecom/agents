@@ -34,6 +34,7 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 # Unset VS Code detection vars by default (restored per-test that needs them).
 unset TERM_PROGRAM 2>/dev/null || true
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 
 run_hook() {
   local json="$1"
@@ -179,29 +180,6 @@ echo "=== T15: exit_code: 1 ==="
 expect_empty "T15 failed write (exit_code 1) is noop" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"exit_code\":1}}"
 
-# ── T16: TERM_PROGRAM=vscode + matching path → systemMessage AND spawn attempted ──
-echo "=== T16: VS Code TERM_PROGRAM + spawn-attempt verification ==="
-MARKER_FILE16="${NODE_TMPDIR}/show-plan-link-marker16-$$"
-
-T16_RESULT=$(TERM_PROGRAM=vscode \
-  SHOW_PLAN_LINK_NO_SPAWN=1 \
-  SHOW_PLAN_LINK_MARKER_FILE="$MARKER_FILE16" \
-  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}")
-
-T16_MSG=$(echo "$T16_RESULT" | run_with_timeout node -e "
-  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
-  process.stdout.write(d.systemMessage || '');
-" 2>/dev/null)
-
-if ! echo "$T16_MSG" | grep -q "Plan file written:"; then
-  fail "T16 VS Code TERM_PROGRAM — no systemMessage emitted: $T16_RESULT"
-elif [ -f "$MARKER_FILE16" ]; then
-  pass "T16 VS Code TERM_PROGRAM — systemMessage emitted AND spawn attempted (marker found)"
-else
-  fail "T16 VS Code TERM_PROGRAM — systemMessage emitted but spawn was not attempted (marker missing)"
-fi
-rm -f "$MARKER_FILE16"
-
 # ── T17: WORKFLOW_PLANS_DIR set to custom temp dir ─────────────────────────
 echo "=== T17: custom WORKFLOW_PLANS_DIR ==="
 CUSTOM_DIR="${NODE_TMPDIR}/show-plan-link-custom-$$"
@@ -233,22 +211,11 @@ echo "=== T19: success: false ==="
 expect_empty "T19 success=false (legacy field) is noop" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":false}}"
 
-# ── T20: No VS Code detection vars — systemMessage emitted, code NOT spawned ──
-echo "=== T20: non-VS Code (no env var) — no code spawn ==="
-BIN_DIR20="${NODE_TMPDIR}/show-plan-link-shim20-$$"
-mkdir -p "$BIN_DIR20"
-MARKER_FILE20="$BIN_DIR20/code-invoked"
-cat > "$BIN_DIR20/code" << 'SHIM'
-#!/usr/bin/env bash
-touch "$(dirname "$0")/code-invoked"
-exit 0
-SHIM
-chmod +x "$BIN_DIR20/code"
-
+# ── T20: No VS Code detection vars — systemMessage still emitted ──────────
+echo "=== T20: non-VS Code (no env var) — systemMessage emitted ==="
 T20_RESULT=$(
   unset TERM_PROGRAM
   unset CLAUDE_CODE_ENTRYPOINT
-  export PATH="$BIN_DIR20:$PATH"
   run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
 )
 
@@ -257,39 +224,18 @@ T20_MSG=$(echo "$T20_RESULT" | run_with_timeout node -e "
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
 
-if ! echo "$T20_MSG" | grep -q "Plan file written:"; then
-  fail "T20 non-VS Code — systemMessage missing: $T20_RESULT"
+if echo "$T20_MSG" | grep -q "Plan file written:"; then
+  pass "T20 non-VS Code — systemMessage emitted"
 else
-  # bounded wait loop (replaces fixed sleep) — slow CI safe
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    [ -f "$MARKER_FILE20" ] && break
-    sleep 0.1
-  done
-  if [ -f "$MARKER_FILE20" ]; then
-    fail "T20 non-VS Code — code shim was invoked but must NOT be"
-  else
-    pass "T20 non-VS Code — systemMessage emitted AND code shim NOT invoked"
-  fi
+  fail "T20 non-VS Code — systemMessage missing: $T20_RESULT"
 fi
-rm -rf "$BIN_DIR20"
 
-# ── T21: Legacy CLAUDE_CODE_ENTRYPOINT alone must NOT trigger code spawn ──
-# regression guard: legacy variable must NOT trigger VS Code path
-echo "=== T21: legacy CLAUDE_CODE_ENTRYPOINT only — no code spawn ==="
-BIN_DIR21="${NODE_TMPDIR}/show-plan-link-shim21-$$"
-mkdir -p "$BIN_DIR21"
-MARKER_FILE21="$BIN_DIR21/code-invoked"
-cat > "$BIN_DIR21/code" << 'SHIM'
-#!/usr/bin/env bash
-touch "$(dirname "$0")/code-invoked"
-exit 0
-SHIM
-chmod +x "$BIN_DIR21/code"
-
+# ── T21: CLAUDE_CODE_ENTRYPOINT=claude-vscode → systemMessage still emitted ──
+# Variable is now ignored by the hook; breadcrumb always fires.
+echo "=== T21: CLAUDE_CODE_ENTRYPOINT=claude-vscode — systemMessage emitted ==="
 T21_RESULT=$(
   unset TERM_PROGRAM
   export CLAUDE_CODE_ENTRYPOINT=claude-vscode
-  export PATH="$BIN_DIR21:$PATH"
   run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
 )
 
@@ -298,56 +244,78 @@ T21_MSG=$(echo "$T21_RESULT" | run_with_timeout node -e "
   process.stdout.write(d.systemMessage || '');
 " 2>/dev/null)
 
-if ! echo "$T21_MSG" | grep -q "Plan file written:"; then
-  fail "T21 legacy var — systemMessage missing: $T21_RESULT"
+if echo "$T21_MSG" | grep -q "Plan file written:"; then
+  pass "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode — systemMessage emitted (variable now ignored)"
 else
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    [ -f "$MARKER_FILE21" ] && break
-    sleep 0.1
-  done
-  if [ -f "$MARKER_FILE21" ]; then
-    fail "T21 legacy CLAUDE_CODE_ENTRYPOINT — code shim was invoked but must NOT be"
-  else
-    pass "T21 legacy CLAUDE_CODE_ENTRYPOINT — correctly ignored, code shim NOT invoked"
+  fail "T21 CLAUDE_CODE_ENTRYPOINT=claude-vscode — systemMessage missing: $T21_RESULT"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════
+# CONFIRM_* breadcrumb-always tests (#445)
+# show-plan-link.js emits the systemMessage ALWAYS, regardless of CONFIRM_*
+# ══════════════════════════════════════════════════════════════════════════
+
+# Helper: run hook with CONFIRM_* env vars and assert systemMessage is emitted
+# $1 = description, $2 = file_path (under PLANS_DIR), $3 = expected substring,
+# $4... = KEY=VAL env assignments
+expect_message_with_env() {
+  local desc="$1" file_path="$2" expected="$3"
+  shift 3
+  local result
+  result=$(
+    for assignment in "$@"; do
+      key="${assignment%%=*}"
+      val="${assignment#*=}"
+      export "$key=$val"
+    done
+    echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$file_path\"},\"tool_response\":{\"success\":true}}" \
+      | run_with_timeout node "$HOOK" 2>/dev/null
+  )
+  if [ -z "$result" ]; then
+    fail "$desc — expected systemMessage, got empty stdout"
+    return
   fi
-fi
-rm -rf "$BIN_DIR21"
+  local msg
+  msg=$(echo "$result" | run_with_timeout node -e "
+    let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+    process.stdout.write(d.systemMessage || '');
+  " 2>/dev/null)
+  if echo "$msg" | grep -qF "$expected"; then
+    pass "$desc"
+  else
+    fail "$desc — .systemMessage does not contain '$expected': $msg"
+  fi
+}
 
-# ── T22: VS Code path — spawn bypassed — systemMessage still emitted (fail-open) ──
-# Verifies the two-tier output protocol invariant: systemMessage always emits
-# regardless of whether the VS Code spawn is skipped or fails.
-echo "=== T22: VS Code path — spawn bypassed — fail-open ==="
+# ── T-NEW-1: CONFIRM_DETAIL=off on *-detail.md → systemMessage emitted ─────
+echo "=== T-NEW-1: CONFIRM_DETAIL=off on detail.md — breadcrumb fires ==="
+expect_message_with_env "T-NEW-1 CONFIRM_DETAIL=off — systemMessage emitted regardless" \
+  "$PLANS_DIR/abc-detail.md" "Plan file written:" \
+  CONFIRM_DETAIL=off
 
-T22_RESULT=$(TERM_PROGRAM=vscode \
-  SHOW_PLAN_LINK_NO_SPAWN=1 \
-  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}")
+# ── T-NEW-2: CONFIRM_OUTLINE=off on *-outline.md → systemMessage emitted ───
+echo "=== T-NEW-2: CONFIRM_OUTLINE=off on outline.md — breadcrumb fires ==="
+expect_message_with_env "T-NEW-2 CONFIRM_OUTLINE=off — systemMessage emitted regardless" \
+  "$PLANS_DIR/abc-outline.md" "Plan file written:" \
+  CONFIRM_OUTLINE=off
 
-T22_MSG=$(echo "$T22_RESULT" | run_with_timeout node -e "
-  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
-  process.stdout.write(d.systemMessage || '');
-" 2>/dev/null)
+# ── T-NEW-3: CONFIRM_INTENT=off on *-intent.md → systemMessage emitted ─────
+echo "=== T-NEW-3: CONFIRM_INTENT=off on intent.md — breadcrumb fires ==="
+expect_message_with_env "T-NEW-3 CONFIRM_INTENT=off — systemMessage emitted regardless" \
+  "$PLANS_DIR/abc-intent.md" "Plan file written:" \
+  CONFIRM_INTENT=off
 
-if echo "$T22_MSG" | grep -q "Plan file written:"; then
-  pass "T22 fail-open — systemMessage emitted even when spawn is bypassed"
-else
-  fail "T22 fail-open — systemMessage missing: $T22_RESULT"
-fi
+# ── T-NEW-4: CONFIRM_DETAIL=on on *-detail.md → systemMessage emitted ──────
+echo "=== T-NEW-4: CONFIRM_DETAIL=on on detail.md — breadcrumb fires ==="
+expect_message_with_env "T-NEW-4 CONFIRM_DETAIL=on — systemMessage emitted" \
+  "$PLANS_DIR/abc-detail.md" "Plan file written:" \
+  CONFIRM_DETAIL=on
 
-# ── T23: MARKER_FILE set but NO_SPAWN not set → bypass block not entered ──
-echo "=== T23: MARKER_FILE without NO_SPAWN — bypass not entered ==="
-MARKER_FILE23="${NODE_TMPDIR}/show-plan-link-marker23-$$"
-
-# intentionally NOT setting SHOW_PLAN_LINK_NO_SPAWN
-SHOW_PLAN_LINK_MARKER_FILE="$MARKER_FILE23" \
-  TERM_PROGRAM=vscode \
-  run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" > /dev/null 2>&1 || true
-
-if [ -f "$MARKER_FILE23" ]; then
-  fail "T23 — marker was created even though SHOW_PLAN_LINK_NO_SPAWN was not set"
-else
-  pass "T23 — marker not created when SHOW_PLAN_LINK_NO_SPAWN is not set"
-fi
-rm -f "$MARKER_FILE23"
+# ── T-NEW-5: Cross-suffix CONFIRM_INTENT=off on *-detail.md ────────────────
+echo "=== T-NEW-5: cross-suffix CONFIRM_INTENT=off on detail.md — breadcrumb fires ==="
+expect_message_with_env "T-NEW-5 cross-suffix CONFIRM_INTENT=off on detail.md — systemMessage emitted" \
+  "$PLANS_DIR/abc-detail.md" "Plan file written:" \
+  CONFIRM_INTENT=off
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
