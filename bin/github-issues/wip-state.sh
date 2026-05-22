@@ -110,8 +110,11 @@ resolve_session_id() {
         fi
     fi
     if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
-        printf '%s' "${CLAUDE_SESSION_ID:-}"
-        return 0
+        sid=$(printf '%s' "${CLAUDE_SESSION_ID:-}" | tr -d '\r"')
+        if [ -n "$sid" ]; then
+            printf '%s' "$sid"
+            return 0
+        fi
     fi
     echo "Error: CLAUDE_SESSION_ID not resolvable (neither \$CLAUDE_ENV_FILE nor \$CLAUDE_SESSION_ID is usable)" >&2
     return 2
