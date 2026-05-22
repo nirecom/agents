@@ -32,6 +32,8 @@ SKILL_MD="${AGENTS_DIR}/skills/worktree-end/SKILL.md"
 PASS=0
 FAIL=0
 SKIP=0
+# Guard: ensure AGENTS_CONFIG_DIR does not bleed into pre-agents-gate tests
+unset AGENTS_CONFIG_DIR
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
@@ -539,6 +541,144 @@ test_R8_pr_title_injection_safe() {
     fi
 }
 
+# ============ R9-R14: AGENTS_CONFIG_DIR / CLAUDE_CODE_RESTART_REQUIRED ============
+
+test_R9_cc_restart_section_gated_off() {
+    require_report_bin "R9_cc_restart_section_gated_off" || return
+    local intent="$TMPDIR_BASE/r9-intent.md"
+    local notes="$TMPDIR_BASE/r9-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(unset AGENTS_CONFIG_DIR; CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r9")"
+
+    if echo "$out" | grep -q '^### Claude Code Restart Required$'; then
+        fail "R9: section rendered despite AGENTS_CONFIG_DIR unset"
+    else
+        pass "R9: AGENTS_CONFIG_DIR unset → restart section omitted"
+    fi
+}
+
+test_R10_cc_restart_yes() {
+    require_report_bin "R10_cc_restart_yes" || return
+    local intent="$TMPDIR_BASE/r10-intent.md"
+    local notes="$TMPDIR_BASE/r10-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(AGENTS_CONFIG_DIR=/dummy CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r10")"
+
+    local block
+    block="$(echo "$out" | awk '/^### Claude Code Restart Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qE '^- yes$'; then
+        pass "R10: AGENTS_CONFIG_DIR set, CLAUDE_CODE_RESTART_REQUIRED=yes → '- yes' rendered"
+    else
+        fail "R10: expected '- yes' in restart section
+$block"
+    fi
+}
+
+test_R11_cc_restart_no() {
+    require_report_bin "R11_cc_restart_no" || return
+    local intent="$TMPDIR_BASE/r11-intent.md"
+    local notes="$TMPDIR_BASE/r11-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(AGENTS_CONFIG_DIR=/dummy CLAUDE_CODE_RESTART_REQUIRED=no PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r11")"
+
+    local block
+    block="$(echo "$out" | awk '/^### Claude Code Restart Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qE '^- no$'; then
+        pass "R11: AGENTS_CONFIG_DIR set, CLAUDE_CODE_RESTART_REQUIRED=no → '- no' rendered"
+    else
+        fail "R11: expected '- no' in restart section
+$block"
+    fi
+}
+
+test_R12_cc_restart_empty_agents_dir() {
+    require_report_bin "R12_cc_restart_empty_agents_dir" || return
+    local intent="$TMPDIR_BASE/r12-intent.md"
+    local notes="$TMPDIR_BASE/r12-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(AGENTS_CONFIG_DIR="" CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r12")"
+
+    if echo "$out" | grep -q '^### Claude Code Restart Required$'; then
+        fail "R12: section rendered despite AGENTS_CONFIG_DIR empty"
+    else
+        pass "R12: AGENTS_CONFIG_DIR='' → restart section omitted"
+    fi
+}
+
+test_R13_cc_restart_unset_value() {
+    require_report_bin "R13_cc_restart_unset_value" || return
+    local intent="$TMPDIR_BASE/r13-intent.md"
+    local notes="$TMPDIR_BASE/r13-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(unset CLAUDE_CODE_RESTART_REQUIRED; AGENTS_CONFIG_DIR=/dummy PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r13")"
+
+    local block
+    block="$(echo "$out" | awk '/^### Claude Code Restart Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qE '^- \(none\)$'; then
+        pass "R13: CLAUDE_CODE_RESTART_REQUIRED unset → '- (none)' rendered (safeEnv fallback)"
+    else
+        fail "R13: expected '- (none)' in restart section
+$block"
+    fi
+}
+
+test_R14_cc_restart_section_position() {
+    require_report_bin "R14_cc_restart_section_position" || return
+    local intent="$TMPDIR_BASE/r14-intent.md"
+    local notes="$TMPDIR_BASE/r14-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(AGENTS_CONFIG_DIR=/dummy CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r14")"
+
+    # Get line numbers for the three section headers
+    local backup_line restart_line bugs_line
+    backup_line="$(echo "$out" | grep -n '^### Backup$' | cut -d: -f1)"
+    restart_line="$(echo "$out" | grep -n '^### Claude Code Restart Required$' | cut -d: -f1)"
+    bugs_line="$(echo "$out" | grep -n '^### Bugs Found$' | cut -d: -f1)"
+
+    if [ -n "$restart_line" ] && [ "$backup_line" -lt "$restart_line" ] && [ "$restart_line" -lt "$bugs_line" ]; then
+        pass "R14: ### Claude Code Restart Required is between ### Backup (line $backup_line) and ### Bugs Found (line $bugs_line)"
+    else
+        fail "R14: section position wrong — Backup:$backup_line Restart:$restart_line BugsFound:$bugs_line
+$out"
+    fi
+}
+
 # ============ I-series: integration invariants ============
 
 test_I1_step5_5_capture_then_remove() {
@@ -696,6 +836,13 @@ test_R5_missing_intent_file
 test_R6_uses_shared_parser
 test_R7_pr_state_passthrough
 test_R8_pr_title_injection_safe
+
+test_R9_cc_restart_section_gated_off
+test_R10_cc_restart_yes
+test_R11_cc_restart_no
+test_R12_cc_restart_empty_agents_dir
+test_R13_cc_restart_unset_value
+test_R14_cc_restart_section_position
 
 test_I1_step5_5_capture_then_remove
 test_I2_step5_5_no_backup

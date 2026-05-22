@@ -174,6 +174,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
       PR_URL=$(gh pr view   "$PR_NUMBER" --json url   --jq '.url')
       PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state')
+      CLAUDE_CODE_RESTART_REQUIRED=$(bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/detect-restart.sh" "$PR_NUMBER")
       ```
 
    c. Copy `WORKTREE_NOTES.md` to backup and record the path:
@@ -254,7 +255,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 7. **Final report:** invoke the renderer and display stdout verbatim.
    ```
-   PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" BRANCH_DELETED=yes node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" "<PLANS_DIR>/<session-id>-intent.md" "$NOTES_BACKUP_PATH" "<session-id>"
+   PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" BRANCH_DELETED=yes CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" "<PLANS_DIR>/<session-id>-intent.md" "$NOTES_BACKUP_PATH" "<session-id>"
    ```
    Do not call `gh` here — all PR/branch state was captured in Step 5.5.
 
