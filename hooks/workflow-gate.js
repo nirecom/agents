@@ -240,6 +240,10 @@ if (require.main === module) {
   const toolInput = input.tool_input || {};
   const sessionId = input.session_id;
 
+  // Session-scoped WORKFLOW override: bypass all workflow-gate checks for this session.
+  const { isWorkflowOff } = require("./lib/session-markers");
+  if (isWorkflowOff(sessionId)) approve();
+
   // EARLY GATE: 2-tier enforcement before Edit/Write tools.
   //   Tier 1: workflow_init must be complete/skipped first.
   //   Tier 2: clarify_intent must be complete/skipped (only checked once Tier 1 clears).
