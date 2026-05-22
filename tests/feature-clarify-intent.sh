@@ -171,6 +171,51 @@ assert_contains "$LOCAL_SKILL_MD" "wip-state.*setup|wip-state set failed" \
 
 echo ""
 # ---------------------------------------------------------------------------
+# Guard wiring (issue #449)
+# G tests use LOCAL_SKILL_MD (worktree-relative) — not yet deployed.
+# ---------------------------------------------------------------------------
+echo "--- Guard wiring (issue #449) ---"
+
+# G1: dual invocation eliminated — only 1 'invoke' verb line for make-outline-plan
+# Regex anchored on invocation verb to avoid false-positives from comments/links.
+if [ -f "$LOCAL_SKILL_MD" ]; then
+    COUNT=$(grep -cE '^[[:space:]]*(- )?[Tt]hen invoke (the )?`/?make-outline-plan`' "$LOCAL_SKILL_MD" || true)
+    if [ "$COUNT" -eq 1 ]; then
+        pass "G1: exactly 1 'invoke make-outline-plan' directive (dual invocation eliminated)"
+    else
+        fail "G1: expected 1 invoke directive, got $COUNT (dual invocation present or missing)"
+    fi
+else
+    fail "G1: LOCAL_SKILL_MD not found"
+fi
+
+# G2: the remaining invocation lives below ## Completion (not in Procedure)
+if [ -f "$LOCAL_SKILL_MD" ]; then
+    COMPLETION_LN=$(grep -n '^## Completion' "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
+    INVOKE_LN=$(grep -nE '^[[:space:]]*(- )?[Tt]hen invoke (the )?`/?make-outline-plan`' "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
+    if [ -n "$COMPLETION_LN" ] && [ -n "$INVOKE_LN" ] && [ "$INVOKE_LN" -gt "$COMPLETION_LN" ]; then
+        pass "G2: invoke directive is below ## Completion (ln $INVOKE_LN > $COMPLETION_LN)"
+    else
+        fail "G2: invoke directive not found below Completion (completion_ln=$COMPLETION_LN invoke_ln=${INVOKE_LN:-missing})"
+    fi
+else
+    fail "G2: LOCAL_SKILL_MD not found"
+fi
+
+# G3: guard script reference present in SKILL.md
+assert_contains "$LOCAL_SKILL_MD" "check-closes-issues-nonempty\.sh" \
+    "G3: check-closes-issues-nonempty.sh referenced in SKILL.md"
+
+# G4: SSOT pointer (parse-closes-issues.js) present in SKILL.md
+assert_contains "$LOCAL_SKILL_MD" "parse-closes-issues\.js" \
+    "G4: parse-closes-issues.js SSOT pointer present in SKILL.md"
+
+# G5: terminal-only directive in Procedure Step 6
+assert_contains "$LOCAL_SKILL_MD" "exits exclusively via the Completion" \
+    "G5: Procedure Step 6 contains terminal-only directive"
+
+echo ""
+# ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------
 echo "--- Error ---"
