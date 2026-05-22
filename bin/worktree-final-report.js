@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const { parseClosesIssues } = require("../hooks/lib/parse-closes-issues");
+const notesLib = require("../hooks/lib/worktree-notes-sections");
 
 const [, , intentPath, notesPath, sessionId] = process.argv;
 
@@ -33,17 +34,7 @@ function safeEnv(name) {
 }
 
 function extractSection(text, heading) {
-  const lines = text.split(/\r?\n/);
-  let inSection = false;
-  const bullets = [];
-  for (const line of lines) {
-    if (line === `## ${heading}`) { inSection = true; continue; }
-    if (inSection && (line.startsWith("## ") || line.startsWith("### "))) break;
-    if (inSection && line.startsWith("- ")) bullets.push(line);
-  }
-  if (bullets.length === 0) return "(none)";
-  if (bullets.length === 1 && bullets[0] === "- (none)") return "(none)";
-  return bullets.join("\n");
+  return notesLib.extractSection(text, heading);
 }
 
 const closedIssues = parseClosesIssues(intentPath);
