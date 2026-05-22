@@ -139,6 +139,12 @@ Authorized by `isAllowedHistoryPushViaIssueCloseSkill` (AND of 4 conditions: inl
 all outgoing subjects match `docs(history): record issue #N` +
 all touched files in `docs/history.md` / `docs/history/`).
 
+### Step E failure handling (fail-soft)
+
+On E.1/E.2/E.3/E.4 non-zero: surface stderr if the failure is a gh/network error (e.g. missing `--background`/`--changes`, auth failure, rate limit), emit `[issue-close-finalize: Step E.<n> failed — continuing with G/H/J/K; backfill with /issue-reconcile]`, then proceed directly to Step G. Do NOT re-run Step E.
+Steps H (issue close), J (resolved-by sentinel), and K (WIP clear) remain mandatory.
+Record the failing step name in the End report.
+
 ## Step G: parent body update (sub-issue only)
 
 ```bash
@@ -211,7 +217,8 @@ recoverable by re-running `wip-state clear <N>` manually).
 ## End
 
 Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>}
-(merge ${MERGE_COMMIT:-<not resolved>}), any G/H/J or parent-update warnings.
+(merge ${MERGE_COMMIT:-<not resolved>}), any G/H/J/K or parent-update warnings.
+Step E outcome: `history.md appended` | `no-op (already present)` | `Step E.<n> failed — run /issue-reconcile to backfill`.
 (`PR_NUMBER` and `MERGE_COMMIT` are only set when `NEXT_STEPS` contains `J`.)
 
 ## Safety notes

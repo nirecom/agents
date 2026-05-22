@@ -931,6 +931,105 @@ else
 fi
 teardown_mock
 
+# ===========================================================================
+# T-new-6: set <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → exit 0
+# Regression for #440: VS Code Claude Code does not propagate CLAUDE_ENV_FILE
+# to Bash subprocesses, but CLAUDE_SESSION_ID is exported directly.
+# NOTE: setup_mock sets CLAUDE_ENV_FILE; we unset it here and restore it after
+# the assertion. teardown_mock wipes $TMP so the restore path ($TMP/claude-env)
+# will not exist, but the next setup_mock always overwrites CLAUDE_ENV_FILE
+# with a fresh path — the restore is belt-and-suspenders only.
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
+unset CLAUDE_ENV_FILE
+export CLAUDE_SESSION_ID="env-sid-fixture"
+run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
+RC=$?
+EXPECTED_FP=$(printf '%s:%s' "env-sid-fixture" "42" | sha256sum | cut -c1-8)
+if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+    pass "T-new-6: set <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → exit 0"
+else
+    fail "T-new-6: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+unset CLAUDE_SESSION_ID
+[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
+teardown_mock
+
+# ===========================================================================
+# T-new-7: check <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → 'same'
+# Same isolation note as T-new-6: CLAUDE_ENV_FILE temporarily unset, restored after assertion.
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+export GH_MOCK_STATUS="In Progress"
+SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
+unset CLAUDE_ENV_FILE
+export CLAUDE_SESSION_ID="env-sid-fixture"
+EXPECTED_FP=$(printf '%s:%s' "env-sid-fixture" "42" | sha256sum | cut -c1-8)
+export GH_MOCK_FINGERPRINT="$EXPECTED_FP"
+OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "same" ]; then
+    pass "T-new-7: check <N> with CLAUDE_ENV_FILE absent + CLAUDE_SESSION_ID env → 'same'"
+else
+    fail "T-new-7: rc=$RC out='$OUT'"
+fi
+unset CLAUDE_SESSION_ID
+[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
+teardown_mock
+
+# ===========================================================================
+# T-new-8: clear <N> when fingerprint is already empty — "no changes to make"
+# rc=1 from gh must NOT emit a spurious warning. Assertions:
+#   (a) overall rc == 0
+#   (b) "fingerprint clear failed" is absent from stderr
+#   (c) "Status=Done set failed" is absent from stderr (real failure check)
+#   (d) at least one --single-select-option-id call was logged (Status=Done write)
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+# Override mock gh to simulate "no changes to make" for item-edit --text only;
+# --single-select-option-id (Status set) still succeeds.
+cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
+    printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
+fi
+case "$ARGS" in
+  auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
+  project\ item-edit\ *--single-select-option-id*) exit 0 ;;
+  project\ item-edit\ *--text*)
+    echo "no changes to make for the item-edit" >&2
+    exit 1
+    ;;
+  *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
+esac
+MOCK_EOF
+chmod +x "$TMP/mock-bin/gh"
+STDERR_FILE="$TMP/clear-stderr.log"
+run_with_timeout 60 bash "$TARGET" clear 42 >/dev/null 2>"$STDERR_FILE"
+RC=$?
+WARN_FP_PRESENT=0
+WARN_STATUS_PRESENT=0
+SS_OPT_LOGGED=0
+grep -q "fingerprint clear failed" "$STDERR_FILE" 2>/dev/null && WARN_FP_PRESENT=1
+grep -q "Status=Done set failed" "$STDERR_FILE" 2>/dev/null && WARN_STATUS_PRESENT=1
+grep -q -- "--single-select-option-id" "$GH_MOCK_ARGS_LOG" 2>/dev/null && SS_OPT_LOGGED=1
+if [ "$RC" -eq 0 ] \
+   && [ "$WARN_FP_PRESENT" -eq 0 ] \
+   && [ "$WARN_STATUS_PRESENT" -eq 0 ] \
+   && [ "$SS_OPT_LOGGED" -eq 1 ]; then
+    pass "T-new-8: clear <N> on empty fingerprint — exit 0, no spurious warning, Status=Done set"
+else
+    fail "T-new-8: rc=$RC warn_fp=$WARN_FP_PRESENT warn_status=$WARN_STATUS_PRESENT ss_opt=$SS_OPT_LOGGED stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+fi
+teardown_mock
+
 # ---------------------------------------------------------------------------
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
