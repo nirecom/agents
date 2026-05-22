@@ -229,3 +229,7 @@ Changes: Extended the diff collection block in `bin/review-code-codex` inline (A
 ### FEATURE: wip-state.sh: add CLAUDE_SESSION_ID fallback and suppress spurious clear warning (2026-05-22, c3bd6ec, #440)
 Background: VS Code Claude Code does not propagate CLAUDE_ENV_FILE to Bash subprocesses, so resolve_session_id() in wip-state.sh always returned rc=2 in that environment. WIP signaling (session fingerprint writes and parallel-session collision detection) was silently broken for all VS Code sessions.
 Changes: Added CLAUDE_SESSION_ID direct-env fallback to resolve_session_id() (file-first, env-fallback order). Suppressed spurious fingerprint-clear warning when gh returns rc=1 + 'no changes to make' on an already-empty field. Added T-new-6/7/8 to feature-wip-state.sh covering the new resolution paths.
+
+### FEATURE: issue-close-finalize: fail-soft Step E so J/K always run (2026-05-22, c3bd6ec, #439)
+Background: When Step E (doc-append + commit) failed due to a gh/network error, issue-close-finalize would abort before Step H (issue close), J (resolved-by sentinel), and K (WIP clear), leaving the issue in an inconsistent open state.
+Changes: Step E failure now emits a warning and proceeds to Step G/H/J/K. End report includes Step E outcome line with /issue-reconcile backfill hint. Steps H/J/K remain mandatory regardless of Step E result.
