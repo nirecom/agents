@@ -59,7 +59,7 @@ function getSection(heading) {
   return extractSection(notesText, heading);
 }
 
-const report = [
+const sections = [
   `## Final Report — ${sessionId}`,
   "",
   "### Closed Issues",
@@ -80,6 +80,20 @@ const report = [
   `- Manifest: ${safeEnv("BACKUP_MANIFEST_PATH")}`,
   `- Branches deleted: ${safeEnv("BRANCH_DELETED")}`,
   "",
+];
+
+// Agents-repo-only section: display whether Claude Code restart is needed.
+// Use process.env directly (not safeEnv) for the gate: safeEnv returns "(none)"
+// when unset, which is always truthy and would defeat the gate.
+if (process.env.AGENTS_CONFIG_DIR) {
+  sections.push(
+    "### Claude Code Restart Required",
+    `- ${safeEnv("CLAUDE_CODE_RESTART_REQUIRED")}`,
+    "",
+  );
+}
+
+sections.push(
   "### Bugs Found",
   getSection("BugsFound"),
   "",
@@ -89,6 +103,7 @@ const report = [
   "### Next Tasks",
   getSection("NextTasks"),
   "",
-].join("\n");
+);
 
+const report = sections.join("\n");
 process.stdout.write(report);
