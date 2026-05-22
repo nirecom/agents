@@ -5,15 +5,24 @@ and `make-detail-plan` (CONFIRM_DETAIL) after writing a final plan artifact.
 
 ## Protocol (3 mandatory steps, in order)
 
-All 3 steps run for **every** plan artifact write. Even when
-`CONFIRM_<STEP>=off`, Steps 1 and 2 are mandatory — do not skip, reorder, or
-collapse them. The flag only governs Step 3's behavior (auto-proceed vs. ask).
+Steps 1, 2, and 3 always run. Step 3's *prompt* behavior and Step 1's *diff display*
+are conditional on `CONFIRM_<STEP>`:
+
+- `CONFIRM_<STEP>=on` (default): Step 1's diff preview appears in chat; Step 2's
+  breadcrumb always appears; Step 3 calls `AskUserQuestion`.
+- `CONFIRM_<STEP>=off`: Step 1's diff preview is suppressed by `show-diff.js`; Step 2's
+  breadcrumb still appears (sole path surface for orchestrators); Step 3 auto-proceeds
+  with a one-paragraph prose summary.
 
 **Step 1 — Write the artifact**
 Use the Write tool to write the artifact file. The `show-diff.js` PreToolUse
 hook fires automatically and emits the diff as a `systemMessage`, so the user
 sees the full content inline in chat. No extra agent action is needed for the
 preview itself.
+
+When `CONFIRM_<STEP>=off`, the `show-diff.js` hook suppresses the diff (the inline
+preview is omitted). The prose summary in Step 3 stands in for the preview. Step 2's
+breadcrumb is unchanged.
 
 **Step 2 — Breadcrumb (orchestrator output: FORBIDDEN)**
 
@@ -35,9 +44,10 @@ output any path representation. Specifically, the orchestrator MUST NOT:
 - prepend or append any path to a Japanese sentence
 
 Rationale: workflow-plan files under `~/.workflow-plans/` by default
-(configurable via WORKFLOW_PLANS_DIR — see skills/_shared/resolve-plans-dir.md)
-do not render as clickable links in VS Code. The hook's breadcrumb plus the automatic `code -r`
-auto-open are the *only* sanctioned UX.
+(configurable via WORKFLOW_PLANS_DIR — see `skills/_shared/resolve-plans-dir.md`) do not render as clickable links in VS Code.
+The chat-inline diff (Step 1, when CONFIRM_*=on) and the breadcrumb (Step 2, always)
+are the *only* sanctioned UX. VS Code auto-open via `code -r` was removed in #445 —
+opening a tab forced users to manually close it after Proceed.
 
 If the hook line is absent (hook not yet deployed), the orchestrator MAY print
 the absolute path as plain text on its own line — still subject to all
