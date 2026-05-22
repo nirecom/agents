@@ -255,3 +255,11 @@ Changes: The PreToolUse hook now scans --body, --title, and --body-file content 
 ### CONFIG: plan artifact display: remove VS Code auto-open, suppress diff when CONFIRM_*=off (2026-05-22)
 Background: CONFIRM_DETAIL/OUTLINE/INTENT=off now also suppresses the show-diff.js inline preview for the corresponding artifact. VS Code auto-open (code -r) removed; the inline diff and breadcrumb are the only remaining UX.
 Changes: (1) VS Code tabs no longer open for plan files. (2) show-diff.js skips the diff preview for plan artifacts when the corresponding CONFIRM_* flag is off. Breadcrumb ("Plan file written: ...") still emitted in all modes.
+
+### FEATURE: bootstrap-labels.sh: new CLI for label setup in target repos (2026-05-23)
+Background: /migrate-repo Step 1 had inline label setup logic; no standalone CLI existed for bootstrapping label management in target repos.
+Changes: New bin/github-issues/bootstrap-labels.sh installs label management files (.github/labels.yml, bin/github-issues/sync-labels.sh, .github/workflows/sync-labels.yml) into a target repo (idempotent — pre-existing files are preserved) and runs the initial label sync. /migrate-repo Step 1 now delegates to this command. The migration commit allowlist is extended to include the new sync-labels artifacts so they ship into target repos.
+
+### FEATURE: backfill-commit-comments: auto-detect bulk-import commits in Tier 1.5 (2026-05-23)
+Background: Tier 1.5 hash discovery used a hardcoded commit-hash blacklist to skip bulk-import commits, requiring manual list maintenance whenever a new bulk import was detected.
+Changes: Replace the hardcoded blacklist with automatic detection. Each candidate commit is inspected by counting the number of new history-entry headings it adds to docs/history.md; commits at or above TIER15_BULK_THRESHOLD (default: 3) are rejected as bulk imports and discovery falls through to the next tier. The threshold is configurable via the TIER15_BULK_THRESHOLD environment variable.

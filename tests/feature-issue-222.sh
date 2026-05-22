@@ -930,18 +930,19 @@ else
 fi
 teardown_tmp
 
-# --- R26: Tier 1.5 blacklist — blacklisted hash falls through to no-hash
+# --- R26: Tier 1.5 bulk auto-detection — heading count >= threshold → falls through to no-hash
 setup_tmp
 export GH_MOCK_TITLE_FOR_42="bulk import candidate title"
 export GIT_MOCK_LOG_S_RESULT="3969773 feat(agents-split): add 39 tests from dotfiles (step 11)"
+export GIT_MOCK_SHOW_HEADINGS_FOR_3969773=39
 GH_MOCK_SCENARIO=closed_no_sentinel \
     run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r26.out" 2>&1
 RC=$?
-unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_3969773
 if [ "$RC" -eq 0 ] \
    && grep -q 'class=no-hash' "$TMP/r26.out" \
    && ! grep -q 'class=hash-from-history-introducer' "$TMP/r26.out"; then
-    pass "R26: Tier 1.5 blacklist — blacklisted hash 3969773 falls through to no-hash"
+    pass "R26: Tier 1.5 bulk auto-detection — 39 headings (>= threshold) → no-hash"
 else
     fail "R26: rc=$RC out=$(cat "$TMP/r26.out")"
 fi
@@ -985,20 +986,21 @@ else
 fi
 teardown_tmp
 
-# --- R29: Tier 1.5 blacklist with Tier 2 fallback — blacklisted hash → hash-from-gitlog
+# --- R29: Tier 1.5 bulk auto-detection + Tier 2 fallback — bulk hash → hash-from-gitlog
 setup_tmp
 export GH_MOCK_TITLE_FOR_42="bulk import candidate title"
 export GIT_MOCK_LOG_S_RESULT="3969773 feat(agents-split): add 39 tests from dotfiles (step 11)"
+export GIT_MOCK_SHOW_HEADINGS_FOR_3969773=39
 export GIT_MOCK_LOG_FOR_42="deadbee"
 GH_MOCK_SCENARIO=closed_no_sentinel \
     run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r29.out" 2>&1
 RC=$?
-unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_LOG_FOR_42
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_LOG_FOR_42 GIT_MOCK_SHOW_HEADINGS_FOR_3969773
 if [ "$RC" -eq 0 ] \
    && grep -q 'class=hash-from-gitlog' "$TMP/r29.out" \
    && grep -q 'hash=deadbee' "$TMP/r29.out" \
    && ! grep -q 'class=hash-from-history-introducer' "$TMP/r29.out"; then
-    pass "R29: Tier 1.5 blacklist + Tier 2 fallback — blacklisted hash 3969773, Tier 2 returns deadbee"
+    pass "R29: Tier 1.5 bulk auto-detection + Tier 2 fallback — bulk hash 3969773 (39 headings), Tier 2 returns deadbee"
 else
     fail "R29: rc=$RC out=$(cat "$TMP/r29.out")"
 fi
@@ -1070,6 +1072,87 @@ if grep -A5 'has_appended_sentinel()' "$BACKFILL_SCRIPT" | grep -qF '(^|\\n)<!--
 else
     fail "R33: has_appended_sentinel() missing (^|\\n) prefix — merged-format sentinel on line 2 not detected"
 fi
+
+# --- R34: Tier 1.5 bulk auto-detection — heading count >= threshold → rejected
+setup_tmp
+export GH_MOCK_TITLE_FOR_42="bulk import candidate title with hex cafe0011"
+export GIT_MOCK_LOG_S_RESULT="cafe0011 feat(bulk): import 5 entries"
+export GIT_MOCK_SHOW_HEADINGS_FOR_cafe0011=5
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r34.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_cafe0011
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-history-introducer' "$TMP/r34.out" \
+   && ! grep -q 'hash=cafe0011' "$TMP/r34.out"; then
+    pass "R34: Tier 1.5 — 5 headings (>= threshold 3) → bulk-rejected, hash not used"
+else
+    fail "R34: rc=$RC out=$(cat "$TMP/r34.out")"
+fi
+teardown_tmp
+
+# --- R35: Tier 1.5 bulk auto-detection — heading count < threshold → accepted
+setup_tmp
+export GH_MOCK_TITLE_FOR_42="non-bulk introducer title with hex beef5678"
+export GIT_MOCK_LOG_S_RESULT="beef5678 docs(history): record single entry"
+export GIT_MOCK_SHOW_HEADINGS_FOR_beef5678=2
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r35.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_beef5678
+if [ "$RC" -eq 0 ] \
+   && grep -q 'class=hash-from-history-introducer' "$TMP/r35.out" \
+   && grep -q 'hash=beef5678' "$TMP/r35.out"; then
+    pass "R35: Tier 1.5 — 2 headings (< threshold 3) → accepted, hash used"
+else
+    fail "R35: rc=$RC out=$(cat "$TMP/r35.out")"
+fi
+teardown_tmp
+
+# --- R36: Tier 1.5 bulk auto-detection — exactly at threshold → rejected
+# Boundary: >= 3 is rejected; < 3 (i.e. <= 2) is accepted. TIER15_BULK_THRESHOLD default is 3.
+setup_tmp
+export GH_MOCK_TITLE_FOR_42="threshold boundary title with hex c0ffee0"
+export GIT_MOCK_LOG_S_RESULT="c0ffee0 docs(history): record three entries"
+export GIT_MOCK_SHOW_HEADINGS_FOR_c0ffee0=3
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r36.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_c0ffee0
+if [ "$RC" -eq 0 ] \
+   && ! grep -q 'class=hash-from-history-introducer' "$TMP/r36.out" \
+   && ! grep -q 'hash=c0ffee0' "$TMP/r36.out"; then
+    pass "R36: Tier 1.5 — exactly 3 headings (== threshold) → rejected (>= 3 is bulk)"
+else
+    fail "R36: rc=$RC out=$(cat "$TMP/r36.out")"
+fi
+teardown_tmp
+
+# --- R37: Tier 1.5 argv validation — `git show --unified=0 --pretty=format: -m`
+setup_tmp
+export GIT_MOCK_ARGV_LOG="$TMP/git-argv-r37.log"
+export GH_MOCK_TITLE_FOR_42="argv validation title with hex deadcafe"
+export GIT_MOCK_LOG_S_RESULT="deadcafe docs(history): record argv check"
+export GIT_MOCK_SHOW_HEADINGS_FOR_deadcafe=2
+GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_with_timeout 30 bash "$BACKFILL_SCRIPT" --dry-run >"$TMP/r37.out" 2>&1
+RC=$?
+unset GH_MOCK_TITLE_FOR_42 GIT_MOCK_LOG_S_RESULT GIT_MOCK_SHOW_HEADINGS_FOR_deadcafe
+ARGV_R37=$(cat "$GIT_MOCK_ARGV_LOG" 2>/dev/null)
+unset GIT_MOCK_ARGV_LOG
+# Look for a single line containing all expected flags (separately checked so
+# order between flags doesn't matter — but they all must appear together).
+SHOW_LINE=$(echo "$ARGV_R37" | grep 'show' | grep -- '--unified=0' | grep -- '--pretty=format:' | head -n 1)
+if [ "$RC" -eq 0 ] \
+   && [ -n "$SHOW_LINE" ] \
+   && echo "$SHOW_LINE" | grep -qE '(^| )-m( |$)' \
+   && echo "$SHOW_LINE" | grep -q -- '-- docs/history' \
+   && ! echo "$ARGV_R37" | grep -q -- '--diff-filter'; then
+    pass "R37: Tier 1.5 argv — show --unified=0 --pretty=format: -m -- docs/history (no --diff-filter)"
+else
+    fail "R37: rc=$RC show_line='$SHOW_LINE' argv='$ARGV_R37'"
+fi
+teardown_tmp
 
 # ============================================================================
 # D-series — SKILL.md regression guards (minimal, after refactor)
