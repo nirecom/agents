@@ -394,6 +394,36 @@ expect_approve "git -C path commit heredoc mentioning .env" \
     '{"tool_name":"Bash","tool_input":{"command":"git -C /some/path commit -m \"$(cat <<'"'"'EOF'"'"'\nBlock .env file access\nEOF\n)\""}}'
 
 echo ""
+echo "=== Attached-redirect / attached-flag bypass coverage ==="
+
+expect_block "echo x >.env (attached redirect, no space)" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo x >.env"}}'
+
+expect_block "cat <.env (attached stdin redirect)" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat <.env"}}'
+
+expect_block "cmd 2>.env (attached stderr redirect)" \
+    '{"tool_name":"Bash","tool_input":{"command":"cmd 2>.env"}}'
+
+expect_block "cmd --file=.env (--flag=value path form)" \
+    '{"tool_name":"Bash","tool_input":{"command":"cmd --file=.env"}}'
+
+expect_approve "cmd --body=.env (text-flag = form, no path access)" \
+    '{"tool_name":"Bash","tool_input":{"command":"gh pr create --body=.env"}}'
+
+echo ""
+echo "=== IDE tools (runInTerminal/runCommands/editFiles) ==="
+
+expect_block "runInTerminal cat .env" \
+    '{"tool_name":"runInTerminal","tool_input":{"command":"cat .env"}}'
+
+expect_block "runCommands cat .env" \
+    '{"tool_name":"runCommands","tool_input":{"command":"cat .env"}}'
+
+expect_block "editFiles .env" \
+    '{"tool_name":"editFiles","tool_input":{"file_path":".env"}}'
+
+echo ""
 echo "=== Results ==="
 if [ "$ERRORS" -eq 0 ]; then
     echo "All tests passed!"
