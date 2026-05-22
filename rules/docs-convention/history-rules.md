@@ -25,6 +25,7 @@ globs: "docs/history.md,docs/history/**/*.md"
 | Tool | When to use |
 |------|-------------|
 | `doc-append [path] --category CATEGORY ...` | Append a new entry to `history.md` or `CHANGELOG.md`. `--commits` is optional (omit for `CHANGELOG.md`). |
+| `bin/compose-history-entry [opts]` | Append history entry from WORKTREE_NOTES.md `## History Notes` (closes_issues-empty sessions; Step 7.5). |
 | `uv run bin/doc-rotate.py <path> ...` | Archive old entries when size threshold is exceeded |
 | `uv run bin/doc-rotate.py <path> --rebuild-index` | Rebuild `history/index.md` from existing archive files (no rotation) |
 | `uv run bin/sort-history.py <path>` | Sort an existing history.md into ascending order |
