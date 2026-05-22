@@ -104,6 +104,17 @@ EOF
     echo ".migration-state.json" > "$repo/.gitignore"
     mkdir -p "$repo/docs"
     echo "# Todo" > "$repo/docs/todo.md"
+    # /migrate-repo Step 1.3 (issue #283) label-bootstrap artifacts.
+    mkdir -p "$repo/bin/github-issues"
+    cat > "$repo/bin/github-issues/sync-labels.sh" <<'STUB'
+#!/usr/bin/env bash
+# fixture stub
+STUB
+    chmod +x "$repo/bin/github-issues/sync-labels.sh"
+    mkdir -p "$repo/.github/workflows"
+    cat > "$repo/.github/workflows/sync-labels.yml" <<'STUB'
+# fixture stub
+STUB
 
     # Allowlist-excluded files.
     mkdir -p "$repo/agents"
@@ -141,14 +152,17 @@ else
 fi
 
 # C2 / C10: allowlist files all included.
+# EXPECTED FAILURE until commit-migration-artifacts.sh ALLOWLIST is extended
+# (issue #283) to include sync-labels.sh + sync-labels.yml.
 FILES_IN_COMMIT=$(git -C "$REPO" show --name-only --format= HEAD 2>/dev/null | grep -v '^$')
 c2_missing=()
 for f in ".github/labels.yml" ".github/ISSUE_TEMPLATE/task.yml" \
-         ".github/ISSUE_TEMPLATE/incident.yml" ".gitignore" "docs/todo.md"; do
+         ".github/ISSUE_TEMPLATE/incident.yml" ".gitignore" "docs/todo.md" \
+         "bin/github-issues/sync-labels.sh" ".github/workflows/sync-labels.yml"; do
     echo "$FILES_IN_COMMIT" | grep -Fxq "$f" || c2_missing+=("$f")
 done
 if [ "${#c2_missing[@]}" -eq 0 ]; then
-    pass "C2/C10: all 5 allowlist files in commit (incl. both ISSUE_TEMPLATE)"
+    pass "C2/C10: all 7 allowlist files in commit (incl. both ISSUE_TEMPLATE + sync-labels artifacts)"
 else
     fail "C2/C10: missing from commit: ${c2_missing[*]}"
 fi
@@ -169,11 +183,15 @@ else
 fi
 
 # C6: commit body lists files.
+# EXPECTED FAILURE until commit-migration-artifacts.sh ALLOWLIST is extended
+# (issue #283) to include sync-labels.sh + sync-labels.yml.
 BODY=$(git -C "$REPO" log -1 --format=%b 2>/dev/null)
 # Use -- to prevent grep from interpreting the leading '-' in patterns as an option.
 if echo "$BODY" | grep -Fq -- '- .github/labels.yml' && \
-   echo "$BODY" | grep -Fq -- '- docs/todo.md'; then
-    pass "C6: commit body lists allowlist files"
+   echo "$BODY" | grep -Fq -- '- docs/todo.md' && \
+   echo "$BODY" | grep -Fq -- '- bin/github-issues/sync-labels.sh' && \
+   echo "$BODY" | grep -Fq -- '- .github/workflows/sync-labels.yml'; then
+    pass "C6: commit body lists allowlist files (incl. sync-labels artifacts)"
 else
     fail "C6: body missing file list — body='$BODY'"
 fi

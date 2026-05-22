@@ -18,6 +18,7 @@ never run two stages in one command.
 
 - `gh auth status` — verify `project` scope is active
 - `AGENTS_CONFIG_DIR` must be set
+- Step 1 label setup delegates to `bin/github-issues/bootstrap-labels.sh`.
 
 ## Procedure
 
