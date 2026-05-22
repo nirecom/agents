@@ -233,3 +233,7 @@ Changes: Added CLAUDE_SESSION_ID direct-env fallback to resolve_session_id() (fi
 ### FEATURE: issue-close-finalize: fail-soft Step E so J/K always run (2026-05-22, c3bd6ec, #439)
 Background: When Step E (doc-append + commit) failed due to a gh/network error, issue-close-finalize would abort before Step H (issue close), J (resolved-by sentinel), and K (WIP clear), leaving the issue in an inconsistent open state.
 Changes: Step E failure now emits a warning and proceeds to Step G/H/J/K. End report includes Step E outcome line with /issue-reconcile backfill hint. Steps H/J/K remain mandatory regardless of Step E result.
+
+### FEATURE: workflow-init Path A1 template: add Accepted Tradeoffs section and fix Issue omission (2026-05-22, c3bd6ec, #431)
+Background: The Path A1 intent.md template lacked the ## Accepted Tradeoffs section required by the detail-planner Approved Scope gate. The ## Issue section was conditionally omitted when title was unavailable, causing inconsistency with downstream planner expectations.
+Changes: Added ## Accepted Tradeoffs placeholder to Path A1 template. ## Issue section is now always included; when title is unavailable, uses '#<N>: (title unavailable)' rather than omitting the section.
