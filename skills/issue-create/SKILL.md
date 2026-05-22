@@ -31,7 +31,19 @@ Four phases: **Gather → Survey → Confirm → Dispatch**.
 
 ### Phase 1 — Gather
 
-Collect the proposed title and body from the user.
+Collect title and canonical-schema body from the user.
+
+Required body schema for `type:task` (enforced by `bin/github-issues/issue-create.sh` exit 3):
+
+| Field | Shape variants accepted |
+|---|---|
+| `Background` | `Background: <text>` / `## Background` / `### Background` |
+| `Changes`    | `Changes: <text>` / `## Changes` / `### Changes` |
+
+When the user-provided body is missing one or both required fields, use `AskUserQuestion` with these branches:
+- `fix-now`: re-author the body inline with the missing field(s) added.
+- `template`: prefill the 2-section template `## Background\n<TBD>\n\n## Changes\n<TBD>` and ask the user to fill it.
+- `bypass`: set `ISSUE_CREATE_SKIP_SCHEMA=1` for this invocation — emergency escape hatch; sanctioned path is always to add the missing fields.
 
 ### Phase 2 — Survey
 
@@ -102,3 +114,4 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 - **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's GraphQL node id (`gh issue view <child> --json id`).
 - **make-parent partial failure**: if a child attach fails mid-loop, the parent is created but `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
+- **Schema enforcement (#443)**: `bin/github-issues/issue-create.sh` exits 3 when `Background` or `Changes` is missing. `ISSUE_CREATE_SKIP_SCHEMA=1` is an emergency escape hatch only — the sanctioned path is to add the missing fields. Incident issues (`type:incident`) bypass this skill entirely per Scope.
