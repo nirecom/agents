@@ -26,11 +26,6 @@ Reuse across all subsequent steps in this skill invocation — do not re-resolve
 Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 1. **Pre-flight checks:**
-   - If `--resume` flag is present:
-     ```
-     node bin/worktree-end-resume-load.js --plans-dir <PLANS_DIR>
-     ```
-     Exit after resume completes (exit 0) or fails (exit 1). Skip steps 2–6 entirely.
    - `gh --version` — abort with installation guidance if gh is not found.
    - Verify cwd is inside a linked worktree (not the main worktree):
      `git rev-parse --git-common-dir` must differ from `git rev-parse --git-dir`.
@@ -208,33 +203,22 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       ```
       cd "<main-worktree-root>"
       ```
-      `cd` (not `git -C`) is required: it updates the Bash tool's CWD,
-      releasing the Windows CWD lock (#251) and keeping `process.cwd()`
-      healthy so `enforce-worktree.js` does not mis-classify subsequent
-      commands (#268, #321). The combined form
-      `cd "<main>" && git -C "<main>" worktree remove "<path>"` is also
-      permitted via `isAllowedCdWorktreeRemove` for Windows/VS Code where
-      the Bash CWD resets between calls (#294).
-   b.6. **Write deferred-cleanup marker** (`pending-cwd-unlock-`):
-      Compute marker path via `getMarkerPath(mainRoot, branch, MARKER_PREFIXES.CWD_UNLOCK)`.
-      Write 3-line content (Use the Write tool — atomic; auto-creates `worktree-end/` on first use):
-      ```
-      <branch>
-      <absolute-worktree-path>
-      pre-remove
-      ```
-      This marker authorises `/worktree-end --resume` to complete cleanup in a new session.
-      Note: the existing `pending-branch-delete-` marker (step b) is kept on disk — it is
-      required to authorise `git branch -D` in the resume path (Risk #16).
+      Releases Windows CWD lock (#251) and keeps `process.cwd()` healthy (#268, #321).
    c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
-   c.1. **Deferred-fork graceful exit** (Windows; only on EPERM / "busy" /
-      "not empty" from step 6c). The `pending-cwd-unlock-` marker written in
-      step b.6 is already on disk. Display:
-      ```
-      Worktree removal deferred.
-      Run /worktree-end --resume in a new session to complete cleanup.
-      ```
-      Stop. Do NOT delete the marker here — the next session reads it.
+   c.1. If `git worktree remove` exits non-zero (EPERM, busy, not-empty, or any error):
+      - Print to stderr:
+        ```
+        [worktree-end] WARN: git worktree remove failed for <path> (likely Windows CWD lock).
+        The worktree directory, its branch, and any pending-branch-delete- marker will be
+        cleaned up automatically by /sweep-worktrees (nightly cron, or run manually via
+        `/sweep`). No action required. Proceeding to step 6h (fetch/pull); orphan-dir
+        cleanup, branch deletion, and marker removal are deferred to /sweep-worktrees.
+        ```
+      - Skip steps 6e (orphan-dir cleanup), 6f (branch -D), and 6g (marker removal).
+        Step 6e is skipped because the worktree dir is occupied; it self-resolves when
+        the next sweep cycle removes the worktree. Steps 6f and 6g are skipped because
+        git's cascade rule prevents `branch -D` while the worktree is registered.
+      - Proceed directly to step 6h (fetch/pull).
    d. `git -C <main> worktree prune`
    e. **Orphan-dir cleanup** at `<WORKTREE_BASE_DIR>/<task-name>`:
       ```

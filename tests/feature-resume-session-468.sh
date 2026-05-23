@@ -198,22 +198,6 @@ run_sentinel_case "T14" "t14" "research"
 run_sentinel_case "T15" "t15" "review_security"
 
 echo ""
-echo "=== T16: worktree_end_marker_priority ==="
-T16_SID="sid-t16"
-T16_JSON=$(build_state_json "$T16_SID" "cleanup")
-T16_MARKER="pending-cwd-unlock-${REPO_ID}--feature%2Fresume-session-468"
-run_cli "t16" "$T16_SID" "$T16_JSON" "$T16_MARKER"
-assert_type "T16. marker takes priority over cleanup in_progress" "worktree-end-resume"
-assert_exit "T16. exit 0 for worktree-end-resume" "0"
-
-echo ""
-echo "=== T17: worktree_end_marker_alone ==="
-T17_MARKER="pending-cwd-unlock-${REPO_ID}--feature%2Fresume-session-468"
-run_cli "t17" "" "" "$T17_MARKER"
-assert_type "T17. marker detected even without session state" "worktree-end-resume"
-assert_exit "T17. exit 0 for marker-only detection" "0"
-
-echo ""
 echo "=== T18: exit_code_always_zero ==="
 run_cli "t18a" "missing-state-sid" "" ""
 assert_exit "T18a. exit 0 (T3 case: no state)" "0"
@@ -225,11 +209,6 @@ assert_exit "T18b. exit 0 (T5 case: skill)" "0"
 T18C_JSON=$(build_state_json "sid-t18c" "user_verification")
 run_cli "t18c" "sid-t18c" "$T18C_JSON" ""
 assert_exit "T18c. exit 0 (T12 case: sentinel-wait)" "0"
-
-T18D_MARKER="pending-cwd-unlock-${REPO_ID}--feature%2Fresume-session-468"
-T18D_JSON=$(build_state_json "sid-t18d" "cleanup")
-run_cli "t18d" "sid-t18d" "$T18D_JSON" "$T18D_MARKER"
-assert_exit "T18d. exit 0 (T16 case: worktree-end-resume)" "0"
 
 echo ""
 echo "=== T19: exit_code_unknown_flag ==="
