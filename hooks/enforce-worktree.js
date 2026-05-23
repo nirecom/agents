@@ -248,77 +248,6 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
 }
 
 /**
- * True when cmd is exactly:
- *   cd "<main-worktree>" && git [-C "<main-worktree>"] worktree (remove|prune) [...]
- *
- * Rationale (#294): VS Code resets the Bash tool's CWD on each call on Windows,
- * so the documented two-separate-call sequence (step 6b.5: `cd <main>` then
- * step 6c: `git -C <main> worktree remove <linked>`) breaks. This combined form
- * runs both in a single Bash call, which is CWD-reset-immune.
- *
- * Safety constraints (all must hold):
- *   - Exactly one unquoted && (no further chaining via ||, ;, |, $(, backtick)
- *   - LHS is `cd <path>` where <path> resolves to repoRoot (the main worktree)
- *   - RHS is `git [-C <path>] worktree remove|prune [args]` — no worktree add,
- *     no --force / -f
- *   - If RHS contains -C <path>, that path must also resolve to repoRoot
- *
- * Does NOT call hasShellChaining() — && is the specifically allowed operator.
- * Safety is enforced by structural clause matching above.
- */
-function isAllowedCdWorktreeRemove(cmd, repoRoot) {
-  if (!cmd || typeof cmd !== "string") return false;
-  if (!repoRoot) return false;
-
-  // Find the one allowed && using a quote-aware scanner.
-  const andIdx = findFirstUnquotedAnd(cmd);
-  if (andIdx < 0) return false;
-  const lhs = cmd.slice(0, andIdx).trim();
-  const rhs = cmd.slice(andIdx + 2).trim();
-  if (!lhs || !rhs) return false;
-
-  // No second && and no other chaining on either side.
-  if (findFirstUnquotedAnd(rhs) >= 0) return false;
-  const lhsStripped = stripQuotedArgs(lhs);
-  const rhsStripped = stripQuotedArgs(rhs);
-  if (/[|;]|\$\(|`/.test(lhsStripped)) return false;
-  if (/[|;]|\$\(|`/.test(rhsStripped)) return false;
-
-  // LHS: `cd <path>` where <path> resolves to repoRoot (the main worktree).
-  const cdMatch = lhs.match(/^cd\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*$/);
-  if (!cdMatch) return false;
-  const cdPath = cdMatch[1] || cdMatch[2] || cdMatch[3];
-  if (!cdPath) return false;
-  try {
-    const normCd   = normalizeCwd(cdPath)   || cdPath;
-    const normBase = normalizeCwd(repoRoot) || repoRoot;
-    if (path.resolve(normCd).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
-  } catch (e) { return false; }
-
-  // RHS: git [-C <main>] worktree (remove|prune) [...] — no add, no --force/-f.
-  if (!/^git\b/.test(rhs)) return false;
-  if (!/\bworktree\s+(?:remove|prune)\b/.test(rhs)) return false;
-  if (/\s--force\b/.test(rhs)) return false;
-  if (/(?:^|\s)-f(?:\s|$)/.test(rhs)) return false;
-
-  // If RHS has -C <path>, it must resolve to repoRoot.
-  // Reject multiple -C flags — parseGitCPath only validates the first;
-  // git uses the last (or cumulative), creating an ambiguity gap.
-  if ((rhs.match(/\s-C\s/g) || []).length > 1) return false;
-  if (/\s-C\s/.test(rhs)) {
-    const cArg = parseGitCPath(rhs);
-    if (!cArg) return false;
-    try {
-      const normC    = normalizeCwd(cArg)    || cArg;
-      const normBase = normalizeCwd(repoRoot) || repoRoot;
-      if (path.resolve(normC).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
-    } catch (e) { return false; }
-  }
-
-  return true;
-}
-
-/**
  * Returns true if cmd is an isolated `New-Item -ItemType Directory` command
  * whose target path is outside repoRoot.
  * Fails CLOSED (returns false) when no path can be parsed, to prevent
@@ -440,7 +369,6 @@ function getWorktreeEndDir() {
 
 const MARKER_PREFIXES = {
   BRANCH_DELETE: "pending-branch-delete-",
-  CWD_UNLOCK: "pending-cwd-unlock-",
 };
 const ALL_MARKER_PREFIXES = Object.values(MARKER_PREFIXES);
 
@@ -656,9 +584,6 @@ function isAllowedMarkerDelete(cmd, repoRoot, prefixes = ALL_MARKER_PREFIXES) {
   if (matchedPrefix === MARKER_PREFIXES.BRANCH_DELETE) {
     return isBranchDeleteMarkerDeletable(nTarget, repoRoot);
   }
-  if (matchedPrefix === MARKER_PREFIXES.CWD_UNLOCK) {
-    return isCwdUnlockMarkerDeletable(nTarget);
-  }
   return false;
 }
 
@@ -684,15 +609,6 @@ function isBranchDeleteMarkerDeletable(nTarget, repoRoot) {
     if (r.status === null) return false;
     if (r.status !== 1) return false;
   } catch (e) { return false; }
-  return true;
-}
-
-// Allows deletion of a pending-cwd-unlock- marker once deferred cleanup
-// completes. The marker is removed by bin/worktree-end-resume-load.js
-// after cleanup succeeds. ENOENT → no-op (stale marker) is also allowed.
-function isCwdUnlockMarkerDeletable(nTarget) {
-  try { fs.accessSync(nTarget); }
-  catch (e) { return e.code === "ENOENT"; }
   return true;
 }
 
@@ -1744,7 +1660,6 @@ if (mainCheckout) {
   if (toolName === "Bash") {
     const cmd = toolInput.command || "";
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
-    if (isAllowedCdWorktreeRemove(cmd, repoRoot)) done();
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedMarkerDelete(cmd, repoRoot)) done();
@@ -1808,7 +1723,6 @@ module.exports = {
   isAllowedHistoryPushViaIssueCloseSkill,
   isAllowedHistoryWriteViaComposeDocAppendSkill,
   isAllowedHistoryPushViaComposeDocAppendSkill,
-  isAllowedCdWorktreeRemove,
   findRepoRootForBash,
   getSessionRepoRoots,
   parseGitCPath,
