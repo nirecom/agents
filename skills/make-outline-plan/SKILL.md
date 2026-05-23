@@ -44,18 +44,31 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
-   - Write a minimal `<session-id>-outline.md` noting the justified single approach and including a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback). If intent.md contains a `## Issue` H2 block (heading + body up to but not including the next H2), copy it VERBATIM into the minimal outline.md immediately after the H1. Omit if absent.
+   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT author `## Issue` / `## Class members` / `## Accepted Tradeoffs` — they are machine-injected next.
+   - Assemble the final outline.md by invoking the shared helper (same call as the normal path in Step 4a):
+     ```bash
+     "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \
+       "<PLANS_DIR>/<session-id>-intent.md" \
+       "<PLANS_DIR>/drafts/<session-id>-outline-draft.md" \
+       "<PLANS_DIR>/<session-id>-outline.md"
+     ```
    - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to Step 2.
    - Emit `WORKFLOW_OUTLINE_PLAN_COMPLETE` (Completion) and stop.
 
 4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
-4a. **`## Issue` carry-forward** (initial draft): instruct outline-planner to copy intent.md's `## Issue` block VERBATIM immediately after the H1. Optional — if intent.md lacks `## Issue`, outline.md must also omit it. No verification grep, no re-prompt on absence (unlike Accepted Tradeoffs).
-
-4b. **Accepted Tradeoffs carry-forward** (initial draft):
-   1. Run `extract-accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md`; capture the block.
-   2. Instruct outline-planner to copy it VERBATIM as a top-level `## Accepted Tradeoffs` section. MAY append new `### <title>` entries newly settled at this stage; MUST NOT remove/rephrase intent-stage tradeoffs.
-   3. Verify: `grep -q '^## Accepted Tradeoffs$' <PLANS_DIR>/<session-id>-outline.md`. Absent → re-prompt outline-planner once; second omission → halt.
+4a. **Mandatory sections carry-forward (machine-injected — do not instruct planner to author them):**
+   After outline-planner returns its draft (initial or revised round), the orchestrator mechanically injects the 3 mandatory sections (`## Issue`, `## Class members`, `## Accepted Tradeoffs`) from intent.md into the final outline.md via the shared helper:
+   ```bash
+   "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \
+     "<PLANS_DIR>/<session-id>-intent.md" \
+     "<PLANS_DIR>/drafts/<session-id>-outline-draft.md" \
+     "<PLANS_DIR>/<session-id>-outline.md"
+   ```
+   - The helper extracts the 3 sections from intent.md with headers, strips any planner-authored copies plus the planner's H1 from the draft, and writes the assembled outline.md.
+   - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
+   - Mandatory sections are machine-injected — do NOT instruct planner to author them or duplicate intent.md's wording. Planner-authored copies will be stripped before the final write.
+   - Legacy intent.md (pre-#462) lacking `## Class members` is handled by the helper's soft-fail path (auto-injects a stub) — no orchestrator action needed.
 
    `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
@@ -98,15 +111,19 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
 ## Output Schema (`<session-id>-outline.md`)
 
-Write the file (per `rules/language.md`) with the following sections:
+The file (per `rules/language.md`) contains:
 
-- **Title**: "Confirmed Approach" + `<session-id>`
-- **Issue** *(optional)*: verbatim copy of intent.md's `## Issue` section. Omit when intent.md has no `## Issue`. Position: immediately after H1, before Adopted approach.
-- **Adopted approach**: 1 paragraph + rationale for choosing it
-- **Delivery plan**: triage rationale / execution order / split policy for the adopted approach
-- **Considered alternatives (rejected)**: one entry per rejected approach with reason
-- **Reused existing utilities / building blocks**: list
-- **Confirmed non-goals**: inherited from intent.md + any added during this stage
+- **Title** (H1): "Confirmed Approach" + `<session-id>`
+- **Mandatory sections** (machine-injected by `skills/_shared/assemble-mandatory.sh`, not authored by planner):
+  - `## Issue` — present only when intent.md had one
+  - `## Class members`
+  - `## Accepted Tradeoffs`
+- **Planner-authored body sections** (drafted by outline-planner):
+  - **Adopted approach**: 1 paragraph + rationale for choosing it
+  - **Delivery plan**: triage rationale / execution order / split policy for the adopted approach
+  - **Considered alternatives (rejected)**: one entry per rejected approach with reason
+  - **Reused existing utilities / building blocks**: list
+  - **Confirmed non-goals**: inherited from intent.md + any added during this stage
 
 ## Rules
 

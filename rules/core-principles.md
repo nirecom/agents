@@ -18,6 +18,14 @@ Solve from the class, not from the immediate task.
 untouched because the user did not explicitly point at them. If the user
 has to enumerate each symmetric case for you, you skipped §1.
 
+### Procedure
+
+1. Identify the class containing the immediate task target.
+2. Enumerate sibling members via `survey-code` and `survey-history` (`## Candidate class members` section).
+3. Confirm the impact set in `clarify-intent` interview; record in intent.md `## Class members` with `disposition: fix in scope` or `disposition: track separately` per member.
+4. SKILL machine-injects `## Class members` into outline.md and detail.md via `bin/extract-mandatory-sections` — planners must not author it.
+5. Planners (`outline-planner` / `detail-planner`) MUST cover every `fix in scope` member. Reviewers (`outline-reviewer` / `detail-reviewer`) MUST verify coverage and treat un-covered members as HIGH concerns.
+
 ## 2. Orthogonality
 
 §1 specialized to symmetric pairs / families. When a treatment is required
