@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { spawnSync } = require("child_process");
 const { cleanupZombies, createInitialState, writeState, readState,
         getCurrentContext, findLatestStateForContext,
         VALID_STEPS, STEP_HINT } = require("./lib/workflow-state");
@@ -132,6 +133,26 @@ function buildWorkflowStatus(sessionId) {
 
   statusLines.push("");
   statusLines.push(`NEXT ACTION: ${nextAction}`);
+
+  // Resume hint — non-fatal, fail-open.
+  try {
+    const detectBin = path.join(__dirname, "..", "bin", "resume-session-detect");
+    if (fs.existsSync(detectBin)) {
+      const r = spawnSync(
+        process.execPath, [detectBin],
+        { encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"] }
+      );
+      if (r.status === 0 && r.stdout) {
+        let parsed = null;
+        try { parsed = JSON.parse(r.stdout.trim()); } catch (_) { /* fail-open */ }
+        if (parsed && parsed.type && parsed.type !== "none") {
+          statusLines.push("");
+          statusLines.push("RESUME HINT: Workflow may be mid-step. Run /resume-session to inspect and resume.");
+        }
+      }
+    }
+  } catch (e) { /* fail-open */ }
+
   return statusLines.join("\n");
 }
 
