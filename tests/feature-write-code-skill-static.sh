@@ -259,6 +259,19 @@ if require_file "$NODEJS_RULES" && require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
+# q. Step 6 CONFIRM_CODE post-action gate
+# ---------------------------------------------------------------------------
+echo "=== q. Step 6 CONFIRM_CODE post-action gate ==="
+if require_file "$WRITE_CODE_SKILL"; then
+    hit=$(awk '/Present the final edited file list/{a=NR} a && NR>=a-8 && NR<=a+8 && /CONFIRM_CODE/{print NR; exit}' "$WRITE_CODE_SKILL")
+    if [ -n "$hit" ]; then
+        pass "Step 6 CONFIRM_CODE gate adjacent to 'Present the final edited file list' (line $hit)"
+    else
+        fail "Step 6 CONFIRM_CODE gate missing near 'Present the final edited file list'"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 echo
 if [ "$ERRORS" -eq 0 ]; then
     echo "All static checks passed."

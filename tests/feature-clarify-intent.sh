@@ -329,6 +329,21 @@ else
 fi
 
 echo ""
+echo "--- Issue: clarify-intent Step 1b framing AskUserQuestion removal ---"
+
+# P1: Step 1b must NOT contain 'Approve framing' (AskUserQuestion removed)
+assert_absent "$LOCAL_SKILL_MD" "Approve framing" \
+    "P1: Step 1b removes 'Approve framing' AskUserQuestion option"
+
+# P2: Step 1b must NOT contain 'Start over' (escape eliminated)
+assert_absent "$LOCAL_SKILL_MD" "Start over" \
+    "P2: Step 1b removes 'Start over' escape option"
+
+# P3: Step 1b must contain 'auto-skipped' (background question auto-skip wording)
+assert_contains "$LOCAL_SKILL_MD" "auto-skipped" \
+    "P3: Step 1b contains background-question auto-skip wording"
+
+echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 
