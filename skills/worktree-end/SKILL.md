@@ -167,13 +167,14 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
         Proceed to (b) when all selected entries are processed.
 
      Note: (a.5) must complete before (b) so annotations are reflected in the backup.
-     Note: ## History Notes section is NOT a triage target.
+     Note: ## History Notes and ## Changelog Notes sections are NOT triage targets.
 
    b. Capture PR metadata (safe per-field, no shell-interpretation of PR title):
       ```
       PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
       PR_URL=$(gh pr view   "$PR_NUMBER" --json url   --jq '.url')
       PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state')
+      MERGE_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty')
       CLAUDE_CODE_RESTART_REQUIRED=$(bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/detect-restart.sh" "$PR_NUMBER")
       ```
 
@@ -251,7 +252,30 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       - PowerShell: `Remove-Item -LiteralPath "<marker-path>"`
    h. `git -C <main> fetch --prune origin`
       `git -C <main> pull --ff-only`
-   i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
+   i. Compose doc-append entries (main worktree; only when NOTES_BACKUP_PATH is non-empty).
+
+      Parse closes_issues from <PLANS_DIR>/<session-id>-intent.md.
+      When closes_issues is non-empty: Phase 1/2 already committed history.md; CHANGELOG.md is not yet written.
+        Append --skip-history to skip the history target.
+      When closes_issues is empty: run without --skip-history (both targets active).
+
+        COMPOSE_DOC_APPEND_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/compose-doc-append-entry" \
+          --notes "$NOTES_BACKUP_PATH" \
+          --branch "$BRANCH" \
+          --pr "$PR_NUMBER" \
+          --merge-commit "$MERGE_SHA" \
+          --background "$PR_TITLE" \
+          [--skip-history when closes_issues non-empty]
+
+      `closes_issues` parse: if intent.md is missing or lacks the field,
+      treat as empty (fire CLI without --skip-history; CLI bails with exit 0 if notes sections empty).
+      CLI is always-safe: exits 0 with no commits when both sections are
+      empty. On non-zero exit: do NOT suppress — let stderr surface. Step 6j
+      and Step 7 still run.
+      Push-failure recovery: COMPOSE_DOC_APPEND_SKILL=1 git push origin main.
+      Resume/retry: CLI idempotency prevents duplicate entries on re-run.
+
+   j. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
 7. **Final report:** invoke the renderer and display stdout verbatim.
    ```

@@ -931,6 +931,25 @@ function isAllowedHistoryWriteViaIssueCloseSkill(cmd) {
   return false;
 }
 
+// Allows history.md / CHANGELOG.md writes from the main worktree when
+// /worktree-end Step 6i sets COMPOSE_DOC_APPEND_SKILL=1 as an inline env prefix.
+//   1. Command starts with COMPOSE_DOC_APPEND_SKILL=1 (inline prefix)
+//   2. Shape is one of:
+//      a. bash invocation of compose-doc-append-entry script
+//      b. git-add confined to docs/history.md + docs/history/ OR CHANGELOG.md
+//      c. git-commit with docs(history|changelog): record PR #N subject
+function isAllowedHistoryWriteViaComposeDocAppendSkill(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (hasShellChaining(cmd)) return false;
+  if (!/^COMPOSE_DOC_APPEND_SKILL=1[ \t]+/.test(cmd)) return false;
+  const BASH_SCRIPT = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+bash[ \t]+"[^"]*\/bin\/compose-doc-append-entry"([ \t]|$)/;
+  const ADD_HISTORY = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+add[ \t]+docs\/history\.md[ \t]+docs\/history\/[ \t]*$/;
+  const ADD_CHANGELOG = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+add[ \t]+CHANGELOG\.md[ \t]*$/;
+  const COMMIT_HISTORY = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(history\): record PR #\d+["'][ \t]*$/;
+  const COMMIT_CHANGELOG = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(changelog\): record PR #\d+["'][ \t]*$/;
+  return BASH_SCRIPT.test(cmd) || ADD_HISTORY.test(cmd) || ADD_CHANGELOG.test(cmd) || COMMIT_HISTORY.test(cmd) || COMMIT_CHANGELOG.test(cmd);
+}
+
 // Returns ONLY the repo's true default branch (origin/HEAD), not the broader
 // "protected" set. Empty string when undetectable (caller MUST fail-closed).
 //
@@ -1027,6 +1046,78 @@ function isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot) {
     return files.every(f => {
       const norm = f.replace(/\\/g, "/");
       return norm === "docs/history.md" || norm.startsWith("docs/history/");
+    });
+  } catch (e) { return false; }
+}
+
+// Allows docs/history + CHANGELOG.md push from the main worktree when
+// /worktree-end Step 6i sets COMPOSE_DOC_APPEND_SKILL=1 as an inline env prefix.
+//   1. Command starts with COMPOSE_DOC_APPEND_SKILL=1 (inline prefix)
+//   2. Shape is exactly: git push origin <default-branch> (with at most -q/--quiet)
+//   3. All outgoing commit subjects match docs(history|changelog): record PR #<digits>
+//   4. All touched files confined to docs/history.md, docs/history/, or CHANGELOG.md
+function isAllowedHistoryPushViaComposeDocAppendSkill(cmd, repoRoot) {
+  try {
+    if (!cmd || typeof cmd !== "string" || !repoRoot) return false;
+    if (hasShellChaining(cmd)) return false;
+    if (!/^COMPOSE_DOC_APPEND_SKILL=1[ \t]+/.test(cmd)) return false;
+
+    const stripped = stripQuotedArgs(cmd.replace(/^COMPOSE_DOC_APPEND_SKILL=1[ \t]+/, ""));
+    const tokens = stripped.trim().split(/\s+/);
+    if (tokens[0] !== "git" || tokens[1] !== "push") return false;
+
+    const KNOWN_FLAGS = new Set(["-q", "--quiet"]);
+    const positionals = [];
+    for (const t of tokens.slice(2)) {
+      if (KNOWN_FLAGS.has(t)) continue;
+      if (t.startsWith("-")) return false;
+      positionals.push(t);
+    }
+    if (positionals.length !== 2) return false;
+    const [remote, branch] = positionals;
+
+    if (remote !== "origin") return false;
+
+    if (branch.includes(":") || branch.startsWith("refs/") || branch.startsWith("+")) return false;
+    if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) return false;
+    const defaultBranch = getDefaultBranchOnly(repoRoot);
+    if (!defaultBranch) return false;
+    if (branch !== defaultBranch) return false;
+
+    const verifyRemoteRes = spawnSync("git", ["rev-parse", "--verify", `${remote}/${branch}`],
+      { cwd: repoRoot, timeout: 2000 });
+    if (verifyRemoteRes.status !== 0) return false;
+    const verifyLocalRes = spawnSync("git", ["rev-parse", "--verify", `refs/heads/${branch}`],
+      { cwd: repoRoot, timeout: 2000 });
+    if (verifyLocalRes.status !== 0) return false;
+
+    const upstreamRef = `${remote}/${branch}`;
+    const localRef = `refs/heads/${branch}`;
+    const range = `${upstreamRef}..${localRef}`;
+
+    // Axis 3: all outgoing commit subjects must match docs(history|changelog): record PR #N
+    const subjRes = spawnSync("git",
+      ["log", "--pretty=format:%s", range],
+      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
+    if (subjRes.status !== 0) return false;
+    const subjects = (subjRes.stdout || "").split("\n").map(s => s.trim()).filter(Boolean);
+    if (subjects.length === 0) return false; // empty subject set → reject
+    const SUBJ_HISTORY = /^docs\(history\): record PR #\d+$/;
+    const SUBJ_CHANGELOG = /^docs\(changelog\): record PR #\d+$/;
+    if (!subjects.every(s => SUBJ_HISTORY.test(s) || SUBJ_CHANGELOG.test(s))) return false;
+
+    // Axis 4: all touched files confined to history paths or CHANGELOG.md
+    const logRes = spawnSync("git",
+      ["log", "--name-only", "--pretty=format:", range],
+      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
+    if (logRes.status !== 0) return false;
+    const files = (logRes.stdout || "").split("\n").map(f => f.trim()).filter(Boolean);
+    if (files.length === 0) return false;
+    return files.every(f => {
+      const norm = f.replace(/\\/g, "/");
+      return norm === "docs/history.md"
+        || norm.startsWith("docs/history/")
+        || norm === "CHANGELOG.md";
     });
   } catch (e) { return false; }
 }
@@ -1662,6 +1753,8 @@ if (mainCheckout) {
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
     if (isAllowedHistoryWriteViaIssueCloseSkill(cmd)) done();
     if (isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot)) done();
+    if (isAllowedHistoryWriteViaComposeDocAppendSkill(cmd)) done();
+    if (isAllowedHistoryPushViaComposeDocAppendSkill(cmd, repoRoot)) done();
   }
 
   // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
@@ -1713,6 +1806,8 @@ module.exports = {
   isAllowedHistoryWriteViaIssueCloseSkill,
   getDefaultBranchOnly,
   isAllowedHistoryPushViaIssueCloseSkill,
+  isAllowedHistoryWriteViaComposeDocAppendSkill,
+  isAllowedHistoryPushViaComposeDocAppendSkill,
   isAllowedCdWorktreeRemove,
   findRepoRootForBash,
   getSessionRepoRoots,
