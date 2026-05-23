@@ -295,3 +295,7 @@ Changes: Fixed: Projects v2 boards created by `/migrate-repo` are now automatica
 ### FEATURE: PR #498 (2026-05-23)
 Background: feat(#444): N issues per session — SSOT session model + multi-N routing
 Changes: Workflow sessions now support N issues per session (N >= 1): `/workflow-init` accepts multiple `#N` references, asks which is the primary, and all listed issues are closed in the same PR
+
+### FEATURE: PR #500 (2026-05-23)
+Background: feat(#485): granular plan-skip sentinels OUTLINE_NOT_NEEDED / DETAIL_NOT_NEEDED
+Changes: New: `WORKFLOW_OUTLINE_NOT_NEEDED` and `WORKFLOW_DETAIL_NOT_NEEDED` sentinels replace `WORKFLOW_PLAN_NOT_NEEDED` — plan-step skip is now granular per stage. Set `CONFIRM_OUTLINE=off` or `CONFIRM_DETAIL=off` in agents config to auto-approve the respective skip without a permission dialog.
