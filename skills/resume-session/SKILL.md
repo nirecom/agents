@@ -32,7 +32,6 @@ Parse stdout as JSON. Dispatch by `type` in Step 3.
 | type | Action |
 |---|---|
 | `none` | Output "No interrupted workflow detected." and stop. |
-| `worktree-end-resume` | AskUserQuestion "Pending worktree cleanup found. Resume `/worktree-end`?" (`Resume` / `Cancel`). On Resume: invoke `worktree-end` skill with `--resume`. |
 | `skill` | AskUserQuestion "Workflow paused at `<step>`. Re-run `/<skill>`?" (`Resume` / `Cancel`). On Resume: invoke `<skill>` skill. |
 | `sentinel-wait` (step ≠ `user_verification`) | Display `hint`. AskUserQuestion: `Acknowledged (I'll handle manually)` / `Cancel`. No auto-emit, no auto-skip. |
 | `sentinel-wait` (step = `user_verification`) | Display: "user_verification pending. Emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` manually when ready." AskUserQuestion: `Acknowledged` / `Cancel`. Never auto-emit or auto-advance. |
