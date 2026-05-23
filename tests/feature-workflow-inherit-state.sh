@@ -75,7 +75,8 @@ make_full_state() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete",  "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete",  "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete",  "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete",  "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",   "updated_at": null},
     "code":              {"status": "pending",   "updated_at": null},
     "verify":            {"status": "pending",   "updated_at": null},
@@ -96,7 +97,8 @@ make_all_pending_state() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "pending", "updated_at": null},
+    "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "pending", "updated_at": null},
     "code":              {"status": "pending", "updated_at": null},
     "verify":            {"status": "pending", "updated_at": null},
@@ -134,7 +136,8 @@ make_complete_state() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "code":              {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "verify":            {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
