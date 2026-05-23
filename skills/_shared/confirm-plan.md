@@ -45,9 +45,7 @@ output any path representation. Specifically, the orchestrator MUST NOT:
 
 Rationale: workflow-plan files under `~/.workflow-plans/` by default
 (configurable via WORKFLOW_PLANS_DIR — see `skills/_shared/resolve-plans-dir.md`) do not render as clickable links in VS Code.
-The chat-inline diff (Step 1, when CONFIRM_*=on) and the breadcrumb (Step 2, always)
-are the *only* sanctioned UX. VS Code auto-open via `code -r` was removed in #445 —
-opening a tab forced users to manually close it after Proceed.
+The chat-inline diff (Step 1, when `CONFIRM_*=on`) and the breadcrumb (Step 2, always) are the primary UX. Additionally, when `CONFIRM_*=on` and the session runs under VS Code (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode`), `show-plan-link.js` spawns `code --folder-uri file:///<workspace> -r <file>` so the file opens in the VS Code window whose workspace matches the originating session's `cwd` (fixes the multi-window mis-routing bug #291). The workspace URI is resolved from the hook stdin's `input.cwd` first, falling back to `process.cwd()`, then to bare `code -r` when neither is usable. When `CONFIRM_*=off`, the auto-open is skipped (preserves #445 intent: no transient tabs during auto-confirmed flows). Set `SHOW_PLAN_LINK_NO_AUTO_OPEN=1` to opt out entirely.
 
 If the hook line is absent (hook not yet deployed), the orchestrator MAY print
 the absolute path as plain text on its own line — still subject to all
