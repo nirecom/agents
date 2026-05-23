@@ -261,3 +261,7 @@ Changes: 軽微なメンテ（private repo の .env commit、1ファイル変更
 ### FEATURE: workflow-init: #N 不在時に issue 自動作成が走らないことがある (2026-05-22, 0e800c4c43c3c47a022caa250ab83599dfcb060c, #449)
 Background: `/workflow-init` はユーザー入力に `#N` が含まれない場合、Path C にルーティングされ `/clarify-intent` を起動する。`/clarify-intent` の Completion Step 3 は `closes_issues: (empty)` の場合に `gh issue create` を実行して tracking issue を自動作成する設計になっている。 ## Observed セッション `20260522-193351`（feature/cc-restart-required → PR #447）で、ユーザー入力に `#N` が含まれず Path C にルーティングされたが、`gh issue create` が走らず `<session-id>-intent.md` の `## closes_issues` が `(empty)` のまま workflow が完走、PR #447 が tracking issue なしでマージされた。 ## Expected ユーザー入力に `#N` が含まれないあらゆる workflow 開始で、tracking issue が自動作成され `closes_issues` に反映される。手動介入なしに「全 workflow が必ず issue を持つ」状態を担保する。 ## Related - PR #447 (cc-restart-required, merged) — このギャップが顕在化したセッション - `skills/workflow-init/SKILL.md` Path C - `skills/clarify-intent/SKILL.md` Completion Step 3
 Changes: `/workflow-init` はユーザー入力に `#N` が含まれない場合、Path C にルーティングされ `/clarify-intent` を起動する。`/clarify-intent` の Completion Step 3 は `closes_iss
+
+### FEATURE: Label auto-management setup for non-agents repos (2026-05-22, 32c404995e53609f50c433111fd3ca19ee3aae18, #283)
+Background: Label auto-management setup for non-agents repos
+Changes: Spin-off from #279 (label auto-sync added to agents repo).
