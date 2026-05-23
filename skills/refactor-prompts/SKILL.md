@@ -1,6 +1,7 @@
 ---
 name: refactor-prompts
 description: Scan rules/skills/agents for redundant hook-enumeration examples and auto-generate a cleanup PR.
+context: fork
 ---
 
 1. `/worktree-start` task-name `refactor-prompts-$(date +%Y%m%d)`

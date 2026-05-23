@@ -1,6 +1,7 @@
 ---
 name: create-key
 description: Generate a URL-safe password or opaque secret key for connection URLs and config files
+context: fork
 ---
 
 Generate a cryptographically random key or password for use in configuration.
