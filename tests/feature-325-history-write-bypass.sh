@@ -380,6 +380,293 @@ case "$_p14_check" in
     *)       fail "P14: unexpected: '$_p14_check'" ;;
 esac
 
+# ============================================================================
+# C/Q-series helpers — compose-doc-append-entry bypass (#436)
+# ============================================================================
+
+check_bypass_compose() {
+    local cmd="$1"
+    run_with_timeout 15 node -e "
+        const m = require('$GUARD_JS');
+        const fn = m.isAllowedHistoryWriteViaComposeDocAppendSkill;
+        if (typeof fn !== 'function') { console.log('missing'); process.exit(0); }
+        console.log(fn(process.argv[1]) ? 'allow' : 'reject');
+    " -- "$cmd" 2>/dev/null
+}
+
+assert_compose_allow() {
+    local cmd="$1" label="$2"
+    local got; got="$(check_bypass_compose "$cmd")"
+    case "$got" in
+        allow)   pass "$label" ;;
+        reject)  fail "$label (got reject — bypass not matching expected command shape)" ;;
+        missing) fail "$label (RED: isAllowedHistoryWriteViaComposeDocAppendSkill not exported yet)" ;;
+        *)       fail "$label (unexpected output: '$got')" ;;
+    esac
+}
+
+assert_compose_block() {
+    local cmd="$1" label="$2"
+    local got; got="$(check_bypass_compose "$cmd")"
+    case "$got" in
+        reject)  pass "$label" ;;
+        allow)   fail "$label (got allow — bypass over-broad)" ;;
+        missing) pass "$label (RED-safe: function not exported yet)" ;;
+        *)       fail "$label (unexpected output: '$got')" ;;
+    esac
+}
+
+check_bypass_push_compose() {
+    local cmd="$1"; local repo="$2"
+    run_with_timeout 15 node -e "
+        const m = require('$GUARD_JS');
+        const fn = m.isAllowedHistoryPushViaComposeDocAppendSkill;
+        if (typeof fn !== 'function') { console.log('missing'); process.exit(0); }
+        console.log(fn(process.argv[1], process.argv[2]) ? 'allow' : 'reject');
+    " -- "$cmd" "$repo" 2>/dev/null
+}
+
+assert_push_compose_allow() {
+    local cmd="$1"; local repo="$2"; local label="$3"
+    local got; got="$(check_bypass_push_compose "$cmd" "$repo")"
+    case "$got" in
+        allow)   pass "$label" ;;
+        reject)  fail "$label (got reject)" ;;
+        missing) fail "$label (RED: isAllowedHistoryPushViaComposeDocAppendSkill not exported yet)" ;;
+        *)       fail "$label (unexpected: '$got')" ;;
+    esac
+}
+
+assert_push_compose_block() {
+    local cmd="$1"; local repo="$2"; local label="$3"
+    local got; got="$(check_bypass_push_compose "$cmd" "$repo")"
+    case "$got" in
+        reject)  pass "$label" ;;
+        allow)   fail "$label (got allow — bypass over-broad)" ;;
+        missing) pass "$label (RED-safe: function not exported yet)" ;;
+        *)       fail "$label (unexpected: '$got')" ;;
+    esac
+}
+
+setup_push_test_repo_compose() {
+    # Args: $1=subject, $2=files_csv, $3=default_branch (default:main)
+    local subject="$1"; local files_csv="$2"
+    local default_branch="${3:-main}"
+    local tmp; tmp=$(mktemp -d)
+    PUSH_TEST_TMPS+=("$tmp")
+    local upstream="$tmp/upstream.git"; local work="$tmp/work"
+    git init --bare --initial-branch="$default_branch" "$upstream" >/dev/null
+    git init --initial-branch="$default_branch" "$work" >/dev/null
+    git -C "$work" config core.hooksPath /dev/null
+    (cd "$work"
+        git remote add origin "$upstream"
+        git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+        git push -u origin "$default_branch" >/dev/null 2>&1
+        git remote set-head origin "$default_branch" >/dev/null 2>&1
+        mkdir -p docs/history
+        IFS=',' read -ra FILES <<< "$files_csv"
+        for f in "${FILES[@]}"; do mkdir -p "$(dirname "$f")"; echo "x" >> "$f"; done
+        git add -A
+        git -c user.email=a@b -c user.name=a commit --no-verify -m "$subject" >/dev/null
+    )
+    echo "$work"
+}
+
+# ============================================================================
+# C-series — narrow bypass for compose-doc-append-entry history/changelog writes
+# ============================================================================
+
+# --- C1: canonical git add for history → allow
+assert_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/' \
+    "C1: COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/ → allow"
+
+# --- C2: canonical git add for CHANGELOG → allow
+assert_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md' \
+    "C2: COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md → allow"
+
+# --- C3: canonical git commit for docs(history) → allow
+assert_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): record PR #99"' \
+    'C3: COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): record PR #99" → allow'
+
+# --- C4: canonical git commit for docs(changelog) → allow
+assert_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(changelog): record PR #99"' \
+    'C4: COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(changelog): record PR #99" → allow'
+
+# --- C5: no COMPOSE_DOC_APPEND_SKILL=1 prefix → block
+assert_compose_block \
+    'git add CHANGELOG.md' \
+    "C5: bare 'git add CHANGELOG.md' (no COMPOSE_DOC_APPEND_SKILL prefix) → block"
+
+# --- C6: wrong path (not history or changelog) → block
+assert_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git add src/foo.js' \
+    "C6: COMPOSE_DOC_APPEND_SKILL=1 git add src/foo.js (out-of-allowlist path) → block"
+
+# --- C7: wrong commit subject → block
+assert_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git commit -m "feat: x"' \
+    'C7: COMPOSE_DOC_APPEND_SKILL=1 git commit -m "feat: x" (wrong subject) → block'
+
+# --- C8: shell chaining → block
+assert_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md && git commit -m "docs(history): record PR #1"' \
+    "C8: COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md && git commit ... (chaining) → block"
+
+# --- C9: mixed paths in one add (both history and changelog) → block
+# The predicate only accepts one target at a time per shape
+assert_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md CHANGELOG.md' \
+    "C9: COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md CHANGELOG.md (mixed paths) → block"
+
+# --- C10: sibling ISSUE_CLOSE_SKILL=1 must not accept CHANGELOG.md → block
+assert_compose_block \
+    'ISSUE_CLOSE_SKILL=1 git add CHANGELOG.md' \
+    "C10: ISSUE_CLOSE_SKILL=1 git add CHANGELOG.md (sibling predicate must not over-extend) → block"
+
+# --- C11: tight subject regex — free-form text after 'docs(history):' rejected
+assert_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): freeform text"' \
+    'C11: COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): freeform text" (must require "record PR #N") → block'
+
+# --- C12: bash script invocation → allow
+assert_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 bash "/c/git/agents/bin/compose-doc-append-entry" --notes "/backup/WORKTREE_NOTES.md"' \
+    'C12: COMPOSE_DOC_APPEND_SKILL=1 bash ".../bin/compose-doc-append-entry" --notes ... → allow'
+
+# --- C13: bash invocation of wrong script name → block
+assert_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 bash "/c/git/agents/bin/other-script" --notes "/backup/WORKTREE_NOTES.md"' \
+    'C13: COMPOSE_DOC_APPEND_SKILL=1 bash ".../bin/other-script" (wrong script) → block'
+
+# ============================================================================
+# Q-series — push bypass for compose-doc-append-entry (COMPOSE_DOC_APPEND_SKILL)
+# ============================================================================
+
+# --- Q1: history-only commit → allow push
+_q1_repo="$(setup_push_test_repo_compose "docs(history): record PR #42" "docs/history.md")"
+assert_push_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main' \
+    "$_q1_repo" \
+    "Q1: COMPOSE_DOC_APPEND_SKILL=1 git push origin main (history commit only) → allow"
+
+# --- Q2: changelog-only commit → allow push
+_q2_repo="$(setup_push_test_repo_compose "docs(changelog): record PR #42" "CHANGELOG.md")"
+assert_push_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main' \
+    "$_q2_repo" \
+    "Q2: COMPOSE_DOC_APPEND_SKILL=1 git push origin main (changelog commit only) → allow"
+
+# --- Q3: two commits (history then changelog) → allow push
+_q3_tmp="$(mktemp -d)"
+PUSH_TEST_TMPS+=("$_q3_tmp")
+_q3_upstream="$_q3_tmp/upstream.git"
+_q3_work="$_q3_tmp/work"
+git init --bare --initial-branch=main "$_q3_upstream" >/dev/null
+git init --initial-branch=main "$_q3_work" >/dev/null
+git -C "$_q3_work" config core.hooksPath /dev/null
+(cd "$_q3_work"
+    git remote add origin "$_q3_upstream"
+    git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+    git push -u origin main >/dev/null 2>&1
+    git remote set-head origin main >/dev/null 2>&1
+    mkdir -p docs/history
+    echo "entry1" >> docs/history.md
+    git add docs/history.md
+    git -c user.email=a@b -c user.name=a commit --no-verify -m "docs(history): record PR #42" >/dev/null
+    echo "changelog1" >> CHANGELOG.md
+    git add CHANGELOG.md
+    git -c user.email=a@b -c user.name=a commit --no-verify -m "docs(changelog): record PR #42" >/dev/null
+)
+assert_push_compose_allow \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main' \
+    "$_q3_work" \
+    "Q3: two commits (history + changelog, each to own file) → allow push (Axis-4 union OK)"
+
+# --- Q4: wrong commit subject → block
+_q4_repo="$(setup_push_test_repo_compose "feat: x" "docs/history.md")"
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main' \
+    "$_q4_repo" \
+    "Q4: commit subject 'feat: x' → block (Axis-3)"
+
+# --- Q5: history commit also touches src/foo.js → block
+_q5_tmp="$(mktemp -d)"
+PUSH_TEST_TMPS+=("$_q5_tmp")
+_q5_upstream="$_q5_tmp/upstream.git"
+_q5_work="$_q5_tmp/work"
+git init --bare --initial-branch=main "$_q5_upstream" >/dev/null
+git init --initial-branch=main "$_q5_work" >/dev/null
+git -C "$_q5_work" config core.hooksPath /dev/null
+(cd "$_q5_work"
+    git remote add origin "$_q5_upstream"
+    git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+    git push -u origin main >/dev/null 2>&1
+    git remote set-head origin main >/dev/null 2>&1
+    mkdir -p docs/history src
+    echo "x" >> docs/history.md
+    echo "y" >> src/foo.js
+    git add docs/history.md src/foo.js
+    git -c user.email=a@b -c user.name=a commit --no-verify -m "docs(history): record PR #42" >/dev/null
+)
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main' \
+    "$_q5_work" \
+    "Q5: history commit also touches src/foo.js → block (Axis-4)"
+
+# --- Q6: same as Q1 but no COMPOSE_DOC_APPEND_SKILL=1 prefix → block
+assert_push_compose_block \
+    'git push origin main' \
+    "$_q1_repo" \
+    "Q6: no COMPOSE_DOC_APPEND_SKILL=1 prefix → block (Axis-1)"
+
+# --- Q7: push to feature branch → block
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin feature/x' \
+    "$_q1_repo" \
+    "Q7: push to feature/x (not default branch) → block (Axis-2)"
+
+# --- Q8: --force-with-lease flag → block
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push --force-with-lease origin main' \
+    "$_q1_repo" \
+    "Q8: --force-with-lease flag → block (Axis-2 unknown flag)"
+
+# --- Q9: refspec with colon → block
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main:main' \
+    "$_q1_repo" \
+    "Q9: refspec 'main:main' → block (Axis-2 colon)"
+
+# --- Q10: chaining → block
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main && rm -rf /tmp' \
+    "$_q1_repo" \
+    "Q10: git push origin main && rm -rf /tmp (chaining) → block (Axis-1)"
+
+# --- Q11: empty outgoing range → block
+_q11_tmp="$(mktemp -d)"
+PUSH_TEST_TMPS+=("$_q11_tmp")
+_q11_upstream="$_q11_tmp/upstream.git"
+_q11_work="$_q11_tmp/work"
+git init --bare --initial-branch=main "$_q11_upstream" >/dev/null
+git init --initial-branch=main "$_q11_work" >/dev/null
+git -C "$_q11_work" config core.hooksPath /dev/null
+(cd "$_q11_work"
+    git remote add origin "$_q11_upstream"
+    git -c user.email=a@b -c user.name=a commit --allow-empty --no-verify -m init >/dev/null
+    git push -u origin main >/dev/null 2>&1
+    git remote set-head origin main >/dev/null 2>&1
+    # No additional commits — local and remote are in sync
+)
+assert_push_compose_block \
+    'COMPOSE_DOC_APPEND_SKILL=1 git push origin main' \
+    "$_q11_work" \
+    "Q11: empty outgoing range (no unpushed commits) → block (Axis-3 empty subjects)"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
