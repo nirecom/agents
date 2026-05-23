@@ -92,6 +92,18 @@ assert_file_contains "SC-SKIP" \
     "$SURVEY_CODE_SKILL" \
     "WORKFLOW_RESEARCH_NOT_NEEDED"
 
+# SC-RULES-NO-READONLY: Rules section no longer contains the absolute "Read-only" line
+assert_file_not_contains "SC-RULES-NO-READONLY" \
+    "survey-code SKILL.md no longer claims 'Read-only -- do not modify any files'" \
+    "$SURVEY_CODE_SKILL" \
+    "Read-only — do not modify any files"
+
+# SC-RULES-WRITE-ALLOWED: Rules section explicitly references shared validity contract
+assert_file_contains "SC-RULES-WRITE-ALLOWED" \
+    "survey-code SKILL.md Rules explicitly permits artifact write (references shared contract)" \
+    "$SURVEY_CODE_SKILL" \
+    "survey-artifact-valid.md"
+
 # ===========================================================================
 # Results
 # ===========================================================================
