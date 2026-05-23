@@ -275,3 +275,7 @@ Changes: A new guard script (check-closes-issues-nonempty.sh, backed by parse-cl
 ### FEATURE: PR #483 (2026-05-23)
 Background: fix(install): add launchers for review-loop-cap-menu, review-skill-size, extract-accepted-tradeoffs (#471)
 Changes: Fixed: bare invocation of review-loop-cap-menu, review-skill-size, and extract-accepted-tradeoffs (exit 127) — installers now generate PATH launchers for these tools.
+
+### FEATURE: PR #487 (2026-05-23)
+Background: feat(#468): /resume-session skill; remove /boost
+Changes: Added: `/resume-session` — resume a mid-workflow session by detecting the `in_progress` step and dispatching to the matching skill, or surfacing the pending worktree-end cleanup marker.;Removed: `/boost` — superseded by native VS Code + Claude Code model switching.
