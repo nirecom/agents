@@ -20,12 +20,12 @@ The session's `closes_issues` list lives in
 ### Terminology
 
 - **primary** — the first entry of `closes_issues`. Exactly one primary per
-  session. Represents the session in single-issue contexts (WIP fingerprint,
-  Projects v2 card, the `## Issue` anchor in `intent.md`).
+  session. Represents the session in single-issue contexts (Projects v2 card,
+  the `## Issue` anchor in `intent.md`).
 - **related** — every non-primary entry of `closes_issues`. Each related issue
   is a full first-class member (own `history.md` entry, own `Closes #<N>`
-  line, own close-pr-of marker) but does not represent the session in
-  single-issue contexts.
+  line, own close-pr-of marker, own WIP fingerprint) but does not represent
+  the session in single-issue contexts.
 
 ### Primary confirmation (single-window invariant)
 
