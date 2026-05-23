@@ -3,6 +3,7 @@ name: run-tests
 description: Invokes the test-runner subagent and emits the run_tests workflow sentinel. Used by Workflow Step 6.
 tools: Agent, Bash
 model: sonnet
+user-invocable: false
 ---
 
 Run the project test suite via the test-runner subagent and emit the workflow sentinel.
