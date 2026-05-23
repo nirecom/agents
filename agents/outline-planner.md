@@ -100,31 +100,28 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - Follow `rules/core-principles.md`.
 - Do not write code or call Edit/Write.
 
-## Consuming ## Issue from intent.md
+## Mandatory sections (do not write)
 
-On the initial draft round, read `<PLANS_DIR>/<session-id>-intent.md`. Locate the `## Issue`
-section (H2 between H1 and Background/Motivation).
-- If present: copy it VERBATIM into `<session-id>-outline.md` immediately after the H1.
-- If absent: OMIT from outline.md. Do NOT fabricate, do NOT query `gh`, do NOT reconstruct
-  from `closes_issues`.
+Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — they
+are added automatically; planner-authored copies are stripped before the final
+write. Start your draft from `# <H1 title>` then `## Adopted approach` /
+`## Delivery plan` and subsequent sections.
 
-The section is **optional** — its absence is a valid state and is NOT a contract violation.
-No re-prompt on absence.
+## Consuming `## Class members`
 
-## Consuming Accepted Tradeoffs from intent.md
+Before drafting, read `## Class members` from the intent.md provided to you.
+- Members with `disposition: fix in scope`: your plan MUST explicitly address
+  each one (in the adopted approach narrative, delivery plan, or a dedicated
+  section). Coverage need not be exhaustive at this stage, but every
+  fix-in-scope member must be named or clearly subsumed.
+- Members with `disposition: track separately`: out of scope for this plan —
+  mention in `## Confirmed non-goals` if useful to disambiguate.
+- If `## Class members` contains `(none detected)` or is absent: skip this
+  check.
 
-On the initial draft round, the orchestrator passes `<PLANS_DIR>/<session-id>-intent.md` as a
-context file. You MUST:
-1. Read it via Read.
-2. Locate the `## Accepted Tradeoffs` section.
-3. Copy it VERBATIM into `<session-id>-outline.md` as a top-level `## Accepted Tradeoffs`
-   section (heading text exact; preserve `### <title>` entry headings and rationale paragraphs).
-4. You MAY append additional `### <title>` entries for tradeoffs newly settled at the
-   outline stage (e.g. "Approach A vs B chosen"). You MUST NOT remove or rephrase any
-   entry from intent.md.
-
-Missing `## Accepted Tradeoffs` in outline.md is a contract violation — the orchestrator
-will re-prompt once, then halt.
+**Anti-pattern (`rules/core-principles.md` §1 violation):** Covering only one
+`fix in scope` member while ignoring the others. If the user has to enumerate
+each one for you, you failed §1.
 
 ## Consuming raw codex review output
 
