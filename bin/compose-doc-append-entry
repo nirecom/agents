@@ -15,6 +15,7 @@ MERGE_COMMIT=""
 BACKGROUND=""
 CATEGORY="FEATURE"
 DRY_RUN=0
+SKIP_HISTORY=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -25,6 +26,7 @@ while [[ $# -gt 0 ]]; do
         --background)  BACKGROUND="$2";   shift 2 ;;
         --category)    CATEGORY="$2";     shift 2 ;;
         --dry-run)     DRY_RUN=1;         shift ;;
+        --skip-history) SKIP_HISTORY=1;   shift ;;
         *) echo "compose-doc-append-entry: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
@@ -127,35 +129,37 @@ BG="$(derive_background)"
 TODAY="$(date +%F)"
 
 # --- Target 1: docs/history.md ---
-HISTORY_BULLETS="$(extract_section "History Notes")"
-if [[ -n "$HISTORY_BULLETS" ]]; then
-    if history_sentinel_found; then
-        echo "compose-doc-append-entry: history idempotency sentinel found for branch=${BRANCH} pr=#${PR_NUMBER}, skipping" >&2
-    else
-        SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
-        CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
-        if [[ -n "$MERGE_COMMIT" ]]; then
-            COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
+if [[ "$SKIP_HISTORY" -eq 0 ]]; then
+    HISTORY_BULLETS="$(extract_section "History Notes")"
+    if [[ -n "$HISTORY_BULLETS" ]]; then
+        if history_sentinel_found; then
+            echo "compose-doc-append-entry: history idempotency sentinel found for branch=${BRANCH} pr=#${PR_NUMBER}, skipping" >&2
         else
-            COMMITS_ARG="#${PR_NUMBER}"
-        fi
-        SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
+            SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
+            CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
+            if [[ -n "$MERGE_COMMIT" ]]; then
+                COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
+            else
+                COMMITS_ARG="#${PR_NUMBER}"
+            fi
+            SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
 
-        if [[ "$DRY_RUN" -eq 1 ]]; then
-            echo "[dry-run] uv run doc-append.py docs/history.md --category $CATEGORY --subject \"$SUBJECT\" --date $TODAY --commits \"$COMMITS_ARG\" --background \"$BG\" --changes \"$CHANGES_WITH_SENTINEL\""
-            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/"
-            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git commit -m \"docs(history): record PR #${PR_NUMBER}\""
-        else
-            uv run "$SCRIPT_DIR/doc-append.py" docs/history.md \
-                --category "$CATEGORY" \
-                --subject "$SUBJECT" \
-                --date "$TODAY" \
-                --commits "$COMMITS_ARG" \
-                --background "$BG" \
-                --changes "$CHANGES_WITH_SENTINEL"
-            COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/
-            COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): record PR #${PR_NUMBER}"
-            COMMITS_PRODUCED=$((COMMITS_PRODUCED + 1))
+            if [[ "$DRY_RUN" -eq 1 ]]; then
+                echo "[dry-run] uv run doc-append.py docs/history.md --category $CATEGORY --subject \"$SUBJECT\" --date $TODAY --commits \"$COMMITS_ARG\" --background \"$BG\" --changes \"$CHANGES_WITH_SENTINEL\""
+                echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/"
+                echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git commit -m \"docs(history): record PR #${PR_NUMBER}\""
+            else
+                uv run "$SCRIPT_DIR/doc-append.py" docs/history.md \
+                    --category "$CATEGORY" \
+                    --subject "$SUBJECT" \
+                    --date "$TODAY" \
+                    --commits "$COMMITS_ARG" \
+                    --background "$BG" \
+                    --changes "$CHANGES_WITH_SENTINEL"
+                COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/
+                COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): record PR #${PR_NUMBER}"
+                COMMITS_PRODUCED=$((COMMITS_PRODUCED + 1))
+            fi
         fi
     fi
 fi

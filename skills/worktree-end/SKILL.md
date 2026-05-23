@@ -252,21 +252,23 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       - PowerShell: `Remove-Item -LiteralPath "<marker-path>"`
    h. `git -C <main> fetch --prune origin`
       `git -C <main> pull --ff-only`
-   i. Compose doc-append entries (main worktree; only when NOTES_BACKUP_PATH
-      is non-empty AND closes_issues is empty).
+   i. Compose doc-append entries (main worktree; only when NOTES_BACKUP_PATH is non-empty).
 
       Parse closes_issues from <PLANS_DIR>/<session-id>-intent.md.
-      If non-empty: skip — Phase 1/2 already committed history.md.
-      If empty AND NOTES_BACKUP_PATH non-empty:
+      When closes_issues is non-empty: Phase 1/2 already committed history.md; CHANGELOG.md is not yet written.
+        Append --skip-history to skip the history target.
+      When closes_issues is empty: run without --skip-history (both targets active).
+
         COMPOSE_DOC_APPEND_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/compose-doc-append-entry" \
           --notes "$NOTES_BACKUP_PATH" \
           --branch "$BRANCH" \
           --pr "$PR_NUMBER" \
           --merge-commit "$MERGE_SHA" \
-          --background "$PR_TITLE"
+          --background "$PR_TITLE" \
+          [--skip-history when closes_issues non-empty]
 
       `closes_issues` parse: if intent.md is missing or lacks the field,
-      treat as empty (fire CLI; CLI bails with exit 0 if notes sections empty).
+      treat as empty (fire CLI without --skip-history; CLI bails with exit 0 if notes sections empty).
       CLI is always-safe: exits 0 with no commits when both sections are
       empty. On non-zero exit: do NOT suppress — let stderr surface. Step 6j
       and Step 7 still run.

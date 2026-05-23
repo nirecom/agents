@@ -60,7 +60,7 @@
    confirm it.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end` (merge + sentinel emit + cleanup). Mandatory; do not skip.
-      (Step 6i composes `docs/history.md` / `CHANGELOG.md` entries from `WORKTREE_NOTES.md` when `closes_issues` is empty.)
+      (Step 6i always runs `bin/compose-doc-append-entry`; when `closes_issues` is non-empty, `--skip-history` is added so only `CHANGELOG.md` is written — `docs/history.md` was already committed by Phase 1/2.)
     - **branch:** Confirm PR is created. After the PR is merged (outside this session),
       delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.

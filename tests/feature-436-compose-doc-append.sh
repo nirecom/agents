@@ -367,6 +367,43 @@ else
     fail "F17: heading case (exit=$_f17_exit, before=$_f17_before, after=$_f17_after)"
 fi
 
+echo "--- F18: --skip-history with both sections → changelog-only commit ---"
+_f18_repo="$(setup_test_repo)"
+_f18_notes="$(make_notes "- History F18 (should be skipped)" "- Changelog F18")"
+_f18_before="$(commit_count_since_init "$_f18_repo")"
+run_cli "$_f18_repo" --notes "$_f18_notes" --branch "feat/436" --pr "42" --background "F18 bg" --skip-history
+_f18_exit=$?
+_f18_after="$(commit_count_since_init "$_f18_repo")"
+_f18_subjects="$(git -C "$_f18_repo" log --pretty=%s -2 | tr '\n' '|')"
+_f18_history="$(cat "$_f18_repo/docs/history.md")"
+_f18_changelog="$(cat "$_f18_repo/CHANGELOG.md")"
+if [ "$_f18_exit" -eq 0 ] && \
+   [ "$_f18_after" -eq $((_f18_before + 1)) ] && \
+   echo "$_f18_subjects" | grep -q "docs(changelog): record PR #42" && \
+   ! echo "$_f18_subjects" | grep -q "docs(history): record PR #42" && \
+   ! echo "$_f18_history" | grep -q "History F18" && \
+   echo "$_f18_changelog" | grep -q "Changelog F18"; then
+    pass "F18: --skip-history → only changelog commit, history.md untouched"
+else
+    fail "F18: --skip-history (exit=$_f18_exit, before=$_f18_before, after=$_f18_after, subjects='$_f18_subjects', history_has_f18=$(echo "$_f18_history" | grep -c "History F18"), changelog_has_f18=$(echo "$_f18_changelog" | grep -c "Changelog F18"))"
+fi
+
+echo "--- F19: --skip-history with History Notes only → no commits ---"
+_f19_repo="$(setup_test_repo)"
+_f19_notes="$(make_notes "- History F19 (should be skipped)" "- (none)")"
+_f19_before="$(commit_count_since_init "$_f19_repo")"
+run_cli "$_f19_repo" --notes "$_f19_notes" --branch "feat/436" --pr "42" --skip-history
+_f19_exit=$?
+_f19_after="$(commit_count_since_init "$_f19_repo")"
+_f19_history="$(cat "$_f19_repo/docs/history.md")"
+if [ "$_f19_exit" -eq 0 ] && \
+   [ "$_f19_after" -eq "$_f19_before" ] && \
+   ! echo "$_f19_history" | grep -q "History F19"; then
+    pass "F19: --skip-history + history only → no commits, history.md untouched"
+else
+    fail "F19: --skip-history history-only (exit=$_f19_exit, before=$_f19_before, after=$_f19_after, history_has_f19=$(echo "$_f19_history" | grep -c "History F19"))"
+fi
+
 echo "--- F17b: buildNotesBody template ---"
 _f17b_result="$(run_with_timeout 15 node -e "
     const m = require('$_AGENTS_DIR_NODE/hooks/lib/worktree-notes.js');

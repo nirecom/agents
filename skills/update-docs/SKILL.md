@@ -53,8 +53,6 @@ After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`
 5. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
 6. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
 
-Note: when `closes_issues` is non-empty, `## Changelog Notes` is orphaned (Phase 1/2 consumes only History Notes). Deferred follow-up.
-
 ### Path B — ENFORCE_WORKTREE=off
 
 1. `doc-append docs/history.md --category CATEGORY --subject "..." --commits HASH --background "..." --changes "..."`
