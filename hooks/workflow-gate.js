@@ -33,7 +33,15 @@ function normalizeForWindows(p) {
   return p;
 }
 
-// Evidence-based check: staged files contain tests/ changes
+// Evidence-based check: staged files contain tests/ changes.
+//
+// Symmetric-sibling note (#484): hasStagedDocChanges has a paired
+// hasWorktreeNotesDocEvidence() that recognizes the WORKTREE_NOTES.md
+// ## History Notes / ## Changelog Notes staging path introduced by #436.
+// hasStagedTestChanges intentionally has NO such pair: there is no
+// gitignored / worktree-local staging surface for tests — test changes
+// must always land as staged tests/ files. If a future change adds a
+// worktree-local test staging mechanism, mirror the docs treatment here.
 function hasStagedTestChanges(repoDir) {
   try {
     const out = execSync("git diff --cached --name-only", {
@@ -97,6 +105,50 @@ function hasStagedDocChanges(repoDir) {
   if (hasDocs(repoDir)) return true;
   const externalRepo = resolveExternalDocsRepo(repoDir);
   return externalRepo !== null && hasDocs(externalRepo);
+}
+
+// Evidence-based check: WORKTREE_NOTES.md ## History Notes or ## Changelog Notes
+// contains real bullets (post-#436 staging path under ENFORCE_WORKTREE=on).
+// Mirrors bin/compose-doc-append-entry's extract_section parsing rules:
+//   - "## <heading>" exact match opens the section
+//   - next "## " line closes it
+//   - within section, "- " bullets with content != "(none)" are real evidence
+// Returns false when not in a worktree context, when WORKTREE_NOTES.md is
+// absent (resolved at the worktree top-level, not at any subdir repoDir),
+// or when both sections are empty / contain only "- (none)".
+function hasWorktreeNotesDocEvidence(repoDir) {
+  if (!isWorktreeContext(repoDir)) return false;
+  // resolveRepoDir may return a subdirectory (e.g., `git -C subdir`); the
+  // notes file always lives at the worktree root, so resolve toplevel first.
+  let topLevel;
+  try {
+    topLevel = execSync("git rev-parse --show-toplevel", {
+      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch (e) {
+    return false;
+  }
+  const notesPath = path.join(topLevel, "WORKTREE_NOTES.md");
+  let text;
+  try {
+    text = fs.readFileSync(notesPath, "utf8");
+  } catch (e) {
+    return false;
+  }
+  const HEADINGS = ["## History Notes", "## Changelog Notes"];
+  const lines = text.split(/\r?\n/);
+  for (const heading of HEADINGS) {
+    let inSection = false;
+    for (const line of lines) {
+      if (line === heading) { inSection = true; continue; }
+      if (inSection && line.startsWith("## ")) break;
+      if (inSection && line.startsWith("- ")) {
+        const content = line.slice(2).trim();
+        if (content && content !== "(none)") return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Returns true when the commit is happening inside a linked worktree on a
@@ -467,7 +519,7 @@ if (require.main === module) {
     if (step === "user_verification" && isWip) continue;
     // Evidence-based overrides: staged files are proof of completion
     if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
-    if (step === "docs" && hasStagedDocChanges(repoDir)) continue;
+    if (step === "docs" && (hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir))) continue;
     incomplete.push(step);
   }
 
@@ -482,7 +534,7 @@ if (require.main === module) {
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
-    docs: '/update-docs (then git add docs/)',
+    docs: '/update-docs (then either: git add docs/*.md / *.md, OR — inside a linked worktree — let /update-docs stage bullets into WORKTREE_NOTES.md ## History Notes / ## Changelog Notes per #436)',
     user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to merge boundary) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" (reason: >=3 non-space chars, no \'>\', not a placeholder) — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
   };
 
@@ -507,4 +559,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, findAdditionalDirectories };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, findAdditionalDirectories };
