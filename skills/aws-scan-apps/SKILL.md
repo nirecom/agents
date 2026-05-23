@@ -3,6 +3,7 @@ name: aws-scan-apps
 description: Map application-layer AWS resources (ECS, Lambda, ALB, API Gateway) and write a topology to AWS_STATE_DIR.
 model: sonnet
 effort: medium
+context: fork
 ---
 
 ## Procedure

@@ -2,6 +2,7 @@
 name: migrate-repo
 description: Migrate a repo from docs/history.md + docs/todo.md to GitHub Issues with canary gates.
 user-invocable: true
+context: fork
 ---
 
 Always run --dry-run first.

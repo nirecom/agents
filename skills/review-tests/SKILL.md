@@ -3,6 +3,7 @@ name: review-tests
 description: Review test coverage completeness using an Explore subagent
 model: sonnet
 effort: low
+context: fork
 ---
 
 Review test case completeness against source code.
