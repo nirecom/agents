@@ -58,17 +58,6 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
-6. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
-   workflow-init survey artifacts (`<PLANS_DIR>/<session-id>-survey-code.md` and
-   `<PLANS_DIR>/<session-id>-survey-history.md`):
-   - Both valid → surveys are already complete. Optionally invoke `/deep-research`
-     if external knowledge is required; otherwise emit:
-     `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init>>"`
-   - Either invalid (missing OR stub) → invoke the affected survey(s):
-     - `<session-id>-survey-code.md` invalid → invoke `/survey-code`
-     - `<session-id>-survey-history.md` invalid → invoke `/survey-history`
-   This step is verification only — skill exits exclusively via the Completion section below. Do not invoke `/make-outline-plan` from here.
-
 ## Completion
 
 **Primary confirmation (interview-emerged multi-N only):**
