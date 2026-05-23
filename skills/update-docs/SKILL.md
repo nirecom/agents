@@ -2,6 +2,7 @@
 name: update-docs
 description: Update all project documentation to reflect recent changes
 model: sonnet
+user-invocable: false
 ---
 
 Update all project documentation to reflect recent changes.
