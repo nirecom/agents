@@ -84,7 +84,8 @@ ALL_COMPLETE_JSON() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -105,7 +106,8 @@ ALL_PENDING_JSON() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "pending", "updated_at": null},
+    "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "pending", "updated_at": null},
     "review_security":   {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "pending", "updated_at": null},
@@ -116,7 +118,7 @@ ALL_PENDING_JSON() {
 EOF
 }
 
-# State with research+plan complete; rest pending. Uses NOW_ISO to survive cleanupZombies.
+# State with research+outline+detail complete; rest pending. Uses NOW_ISO to survive cleanupZombies.
 INHERIT_STATE_JSON() {
     local sid="$1" branch="${2:-main}"
     local branch_json
@@ -127,7 +129,8 @@ INHERIT_STATE_JSON() {
   "created_at": "$NOW_ISO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
-    "plan":              {"status": "complete", "updated_at": "$NOW_ISO"},
+    "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
+    "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
@@ -315,7 +318,7 @@ CWD_1D="/users/test/repo-l1d-$$"
 ENC_1D=$(encode_path "$CWD_1D")
 mkdir -p "$HOME_1D/.claude/projects/$ENC_1D"
 SID_1D_SS="l1d-ss-$(printf '%04x%04x' $RANDOM $RANDOM)"   # SessionStart: research=complete only
-SID_1D_PC="l1d-pc-$(printf '%04x%04x' $RANDOM $RANDOM)"   # PostCompact: research+plan=complete
+SID_1D_PC="l1d-pc-$(printf '%04x%04x' $RANDOM $RANDOM)"   # PostCompact: research+outline+detail=complete
 write_state "$SID_1D_SS" "$(INHERIT_STATE_JSON "$SID_1D_SS" "main")"
 write_state "$SID_1D_PC" "$(cat <<EOF
 {
@@ -323,7 +326,8 @@ write_state "$SID_1D_PC" "$(cat <<EOF
   "created_at": "$NOW_ISO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
-    "plan":              {"status": "complete", "updated_at": "$NOW_ISO"},
+    "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
+    "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
@@ -341,11 +345,11 @@ node -e "const fs=require('fs');const old=new Date(Date.now()-60000);fs.utimesSy
 JSONL_1D_NEW="$HOME_1D/.claude/projects/$ENC_1D/new-${SID_1D_PC}.jsonl"
 write_postcompact_line "$JSONL_1D_NEW" "$SID_1D_PC" "$(to_node_path "$WORKFLOW_DIR/${SID_1D_PC}.json")"
 RESULT_1D=$(call_find_latest "$CWD_1D" "main" "$HOME_1D")
-PLAN_1D=$(get_json_step_status "$RESULT_1D" "plan")
+PLAN_1D=$(get_json_step_status "$RESULT_1D" "detail")
 if [ "$PLAN_1D" = "complete" ]; then
-    pass "L1-d. PostCompact (newer mtime) wins over SessionStart (older) → plan=complete"
+    pass "L1-d. PostCompact (newer mtime) wins over SessionStart (older) → detail=complete"
 else
-    fail "L1-d. PostCompact mtime priority — expected plan=complete, got: $PLAN_1D"
+    fail "L1-d. PostCompact mtime priority — expected detail=complete, got: $PLAN_1D"
 fi
 
 # ---------------------------------------------------------------------------
@@ -373,7 +377,8 @@ write_state "$SID_2B" "$(cat <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -395,7 +400,8 @@ write_state "$SID_2C" "$(cat <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -494,7 +500,8 @@ write_state "$SID_2D" "$(cat <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -559,7 +566,8 @@ write_state "$SID_2H" "$(cat <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -591,7 +599,8 @@ write_state "$SID_2I" "$(cat <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -623,7 +632,8 @@ write_state "$SID_2J" "$(cat <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -659,7 +669,8 @@ if [ "$JUNCTION_OK" = "1" ]; then
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -690,7 +701,8 @@ EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -728,8 +740,10 @@ write_state "$SID_3A" "$(ALL_COMPLETE_JSON "$SID_3A")"
 run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_write_tests>>"' "$SID_3A")" >/dev/null
 expect_state_step "L3-a(research). RESET_FROM_write_tests → research=complete" \
     "$SID_3A" "research" "complete"
-expect_state_step "L3-a(plan). RESET_FROM_write_tests → plan=complete" \
-    "$SID_3A" "plan" "complete"
+expect_state_step "L3-a(outline). RESET_FROM_write_tests → outline=complete" \
+    "$SID_3A" "outline" "complete"
+expect_state_step "L3-a(detail). RESET_FROM_write_tests → detail=complete" \
+    "$SID_3A" "detail" "complete"
 expect_state_step "L3-a(write_tests). RESET_FROM_write_tests → write_tests=pending" \
     "$SID_3A" "write_tests" "pending"
 expect_state_step "L3-a(user_verification). RESET_FROM_write_tests → user_verification=pending" \
@@ -843,14 +857,15 @@ mkdir -p "$HOME_5/.claude/projects/$ENC_5"
 SID_5_MAIN="l5-main-$(printf '%04x%04x' $RANDOM $RANDOM)"
 SID_5_FEAT="l5-feat-$(printf '%04x%04x' $RANDOM $RANDOM)"
 
-# main state: research=complete only (plan=pending distinguishes it from feature/x)
+# main state: research=complete only (outline=pending distinguishes it from feature/x)
 write_state "$SID_5_MAIN" "$(cat <<EOF
 {
   "version": 1, "session_id": "$SID_5_MAIN", "git_branch": "main",
   "created_at": "$NOW_ISO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
-    "plan":              {"status": "pending",  "updated_at": null},
+    "outline":           {"status": "pending",  "updated_at": null},
+    "detail":            {"status": "pending",  "updated_at": null},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
@@ -860,14 +875,15 @@ write_state "$SID_5_MAIN" "$(cat <<EOF
 }
 EOF
 )"
-# feature/x state: research+plan=complete
+# feature/x state: research+outline+detail=complete
 write_state "$SID_5_FEAT" "$(cat <<EOF
 {
   "version": 1, "session_id": "$SID_5_FEAT", "git_branch": "feature/x",
   "created_at": "$NOW_ISO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$NOW_ISO"},
-    "plan":              {"status": "complete", "updated_at": "$NOW_ISO"},
+    "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
+    "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
@@ -882,22 +898,22 @@ write_transcript_line "$HOME_5/.claude/projects/$ENC_5/main-${SID_5_MAIN}.jsonl"
 write_transcript_line "$HOME_5/.claude/projects/$ENC_5/feat-${SID_5_FEAT}.jsonl" \
     "$SID_5_FEAT" "$(to_node_path "$WORKFLOW_DIR/${SID_5_FEAT}.json")"
 
-# L5-a: query main → returns main state (plan=pending, not feature/x's plan=complete)
+# L5-a: query main → returns main state (outline=pending, not feature/x's outline=complete)
 RESULT_5A=$(call_find_latest "$CWD_5" "main" "$HOME_5")
-PLAN_5A=$(get_json_step_status "$RESULT_5A" "plan")
+PLAN_5A=$(get_json_step_status "$RESULT_5A" "outline")
 if [ "$PLAN_5A" = "pending" ]; then
-    pass "L5-a. query main → main state (plan=pending, not feature/x plan=complete)"
+    pass "L5-a. query main → main state (outline=pending, not feature/x outline=complete)"
 else
-    fail "L5-a. query main — expected plan=pending (main), got: $PLAN_5A (result: $RESULT_5A)"
+    fail "L5-a. query main — expected outline=pending (main), got: $PLAN_5A (result: $RESULT_5A)"
 fi
 
-# L5-b: query feature/x → returns feature/x state (plan=complete, not main's plan=pending)
+# L5-b: query feature/x → returns feature/x state (outline=complete, not main's outline=pending)
 RESULT_5B=$(call_find_latest "$CWD_5" "feature/x" "$HOME_5")
-PLAN_5B=$(get_json_step_status "$RESULT_5B" "plan")
+PLAN_5B=$(get_json_step_status "$RESULT_5B" "outline")
 if [ "$PLAN_5B" = "complete" ]; then
-    pass "L5-b. query feature/x → feature/x state (plan=complete)"
+    pass "L5-b. query feature/x → feature/x state (outline=complete)"
 else
-    fail "L5-b. query feature/x — expected plan=complete, got: $PLAN_5B (result: $RESULT_5B)"
+    fail "L5-b. query feature/x — expected outline=complete, got: $PLAN_5B (result: $RESULT_5B)"
 fi
 
 # L5-c: detached HEAD (git_branch=null) query → does NOT match main state (branch mismatch)

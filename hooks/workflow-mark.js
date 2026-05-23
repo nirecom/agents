@@ -7,7 +7,7 @@
 //   echo "<<WORKFLOW_MARK_STEP_<step>_<status>>>"   — mark a step
 //   echo "<<WORKFLOW_RESET_FROM_<step>>>"            — reset state from a step
 //   echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"      — record user verification (reason mandatory)
-//   echo "<<WORKFLOW_{RESEARCH,PLAN,WRITE_TESTS}_NOT_NEEDED: <reason>>"
+//   echo "<<WORKFLOW_{RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED: <reason>>"
 //
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>>"  — session-scoped ENFORCE_WORKTREE bypass (reason mandatory)
@@ -36,7 +36,8 @@ const {
   MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, USER_VERIFIED_RE_DQ,
   USER_VERIFIED_LOOKSLIKE_RE,
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
-  PLAN_NOT_NEEDED_RE_DQ, PLAN_NOT_NEEDED_LOOKSLIKE_RE,
+  OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
+  DETAIL_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_LOOKSLIKE_RE,
   WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
   REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
   DOCS_NOT_NEEDED_LOOKSLIKE_RE,
@@ -188,9 +189,6 @@ for (const cmd of sentinelParts) {
   const researchNotNeededMatch = cmd.match(RESEARCH_NOT_NEEDED_RE_DQ);
   const researchNotNeededLooksLike =
     !researchNotNeededMatch && RESEARCH_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  const planNotNeededMatch = cmd.match(PLAN_NOT_NEEDED_RE_DQ);
-  const planNotNeededLooksLike =
-    !planNotNeededMatch && PLAN_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
   const writeTestsNotNeededMatch = cmd.match(WRITE_TESTS_NOT_NEEDED_RE_DQ);
   const writeTestsNotNeededLooksLike =
     !writeTestsNotNeededMatch && WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
@@ -244,40 +242,68 @@ for (const cmd of sentinelParts) {
     continue;
   }
 
-  // --- PLAN_NOT_NEEDED handler ---
-  if (planNotNeededLooksLike) {
+  // --- OUTLINE_NOT_NEEDED handler ---
+  const outlineNotNeededMatch = cmd.match(OUTLINE_NOT_NEEDED_RE_DQ);
+  const outlineNotNeededLooksLike =
+    !outlineNotNeededMatch && OUTLINE_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
+  if (outlineNotNeededLooksLike) {
     messages.push(
-      `workflow-mark: malformed PLAN_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_PLAN_NOT_NEEDED: REASON>>" ` +
-        `(reason must be >=3 non-space chars, no '>')`
-    );
+      `workflow-mark: malformed OUTLINE_NOT_NEEDED — ` +
+      `expected: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: REASON>>" ` +
+      `(reason must be >=3 non-space chars, no '>')`);
     continue;
   }
-  if (planNotNeededMatch) {
-    const v = validateSkipReason(planNotNeededMatch[1]);
+  if (outlineNotNeededMatch) {
+    const v = validateSkipReason(outlineNotNeededMatch[1]);
     if (!v.ok) {
-      messages.push(
-        `workflow-mark: PLAN_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_PLAN_NOT_NEEDED: <better reason>>"`
-      );
+      messages.push(`workflow-mark: OUTLINE_NOT_NEEDED rejected — ${v.msg} ` +
+        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: <better reason>>"`);
       continue;
     }
     if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — plan NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_PLAN_NOT_NEEDED: ${v.reason}>>"`
-      );
+      messages.push(`workflow-mark: could not resolve session_id — outline NOT recorded. ` +
+        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ${v.reason}>>"`);
       continue;
     }
     try {
-      markStep(sessionId, "plan", "skipped", { skip_reason: v.reason });
-      markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("plan");
+      markStep(sessionId, "outline", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("outline");
       if (hint) messages.push(hint);
     } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. plan NOT recorded.`
-      );
+      messages.push(`workflow-mark: failed to write state — ${e.message}. outline NOT recorded.`);
+    }
+    continue;
+  }
+
+  // --- DETAIL_NOT_NEEDED handler ---
+  const detailNotNeededMatch = cmd.match(DETAIL_NOT_NEEDED_RE_DQ);
+  const detailNotNeededLooksLike =
+    !detailNotNeededMatch && DETAIL_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
+  if (detailNotNeededLooksLike) {
+    messages.push(
+      `workflow-mark: malformed DETAIL_NOT_NEEDED — ` +
+      `expected: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: REASON>>" ` +
+      `(reason must be >=3 non-space chars, no '>')`);
+    continue;
+  }
+  if (detailNotNeededMatch) {
+    const v = validateSkipReason(detailNotNeededMatch[1]);
+    if (!v.ok) {
+      messages.push(`workflow-mark: DETAIL_NOT_NEEDED rejected — ${v.msg} ` +
+        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <better reason>>"`);
+      continue;
+    }
+    if (!sessionId) {
+      messages.push(`workflow-mark: could not resolve session_id — detail NOT recorded. ` +
+        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ${v.reason}>>"`);
+      continue;
+    }
+    try {
+      markStep(sessionId, "detail", "skipped", { skip_reason: v.reason });
+      const hint = nextStepHint("detail");
+      if (hint) messages.push(hint);
+    } catch (e) {
+      messages.push(`workflow-mark: failed to write state — ${e.message}. detail NOT recorded.`);
     }
     continue;
   }

@@ -93,7 +93,8 @@ STATE_CLARIFY_COMPLETE() {
   "steps": {
     "clarify_intent":     {"status": "complete", "updated_at": "2026-04-28T10:01:00.000Z"},
     "research":           {"status": "pending",  "updated_at": null},
-    "plan":               {"status": "pending",  "updated_at": null},
+    "outline":            {"status": "pending",  "updated_at": null},
+    "detail":             {"status": "pending",  "updated_at": null},
     "branching_complete": {"status": "pending",  "updated_at": null},
     "write_tests":        {"status": "pending",  "updated_at": null},
     "run_tests":          {"status": "pending",  "updated_at": null},
@@ -115,7 +116,8 @@ ALL_COMPLETE_STATE() {
   "steps": {
     "clarify_intent":     {"status": "complete", "updated_at": "2026-04-28T10:01:00.000Z"},
     "research":           {"status": "complete", "updated_at": "2026-04-28T10:02:00.000Z"},
-    "plan":               {"status": "complete", "updated_at": "2026-04-28T10:03:00.000Z"},
+    "outline":            {"status": "complete", "updated_at": "2026-04-28T10:02:30.000Z"},
+    "detail":             {"status": "complete", "updated_at": "2026-04-28T10:03:00.000Z"},
     "branching_complete": {"status": "complete", "updated_at": "2026-04-28T10:04:00.000Z"},
     "write_tests":        {"status": "complete", "updated_at": "2026-04-28T10:05:00.000Z"},
     "run_tests":          {"status": "complete", "updated_at": "2026-04-28T10:06:00.000Z"},
@@ -254,17 +256,33 @@ WM6_CTX=$(extract_additional_context "$WM6_OUT")
 assert_contains "WM-6. research skipped → hint contains 'make-outline-plan'" \
     "$WM6_CTX" "make-outline-plan"
 
-# Test WM-7: plan skipped → hint contains "write-tests" OR "branching"
-WM7_DIR="$TMPDIR_BASE/wm7-workflow"
-mkdir -p "$WM7_DIR"
-WM7_JSON=$(build_mark_json 'echo "<<WORKFLOW_PLAN_NOT_NEEDED: trivial one-line config change>>"' "wm7-test")
-WM7_OUT=$(echo "$WM7_JSON" | CLAUDE_WORKFLOW_DIR="$WM7_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
-WM7_CTX=$(extract_additional_context "$WM7_OUT")
-if printf '%s' "$WM7_CTX" | grep -qF "BRANCHING_DECIDED" 2>/dev/null || \
-   printf '%s' "$WM7_CTX" | grep -qF "branch.md" 2>/dev/null; then
-    pass "WM-7. plan skipped → hint contains 'BRANCHING_DECIDED' or 'branch.md'"
+# Test WM-7a: outline skipped → hint mentions make-detail-plan OR branching
+WM7A_DIR="$TMPDIR_BASE/wm7a-workflow"
+mkdir -p "$WM7A_DIR"
+WM7A_JSON=$(build_mark_json 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach exists>>"' "wm7a-test")
+WM7A_OUT=$(echo "$WM7A_JSON" | CLAUDE_WORKFLOW_DIR="$WM7A_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
+WM7A_CTX=$(extract_additional_context "$WM7A_OUT")
+if printf '%s' "$WM7A_CTX" | grep -qF "make-detail-plan" 2>/dev/null || \
+   printf '%s' "$WM7A_CTX" | grep -qF "detail" 2>/dev/null || \
+   printf '%s' "$WM7A_CTX" | grep -qF "BRANCHING" 2>/dev/null || \
+   printf '%s' "$WM7A_CTX" | grep -qF "branch.md" 2>/dev/null; then
+    pass "WM-7a. outline skipped → hint contains 'make-detail-plan'/'BRANCHING'/'branch.md'"
 else
-    fail "WM-7. plan skipped → expected 'BRANCHING_DECIDED' or 'branch.md' in hint, got: $WM7_CTX"
+    fail "WM-7a. outline skipped → expected detail/branching hint, got: $WM7A_CTX"
+fi
+
+# Test WM-7b: detail skipped → hint mentions branching
+WM7B_DIR="$TMPDIR_BASE/wm7b-workflow"
+mkdir -p "$WM7B_DIR"
+WM7B_JSON=$(build_mark_json 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial one-line config change>>"' "wm7b-test")
+WM7B_OUT=$(echo "$WM7B_JSON" | CLAUDE_WORKFLOW_DIR="$WM7B_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
+WM7B_CTX=$(extract_additional_context "$WM7B_OUT")
+if printf '%s' "$WM7B_CTX" | grep -qF "BRANCHING_DECIDED" 2>/dev/null || \
+   printf '%s' "$WM7B_CTX" | grep -qF "BRANCHING_COMPLETE" 2>/dev/null || \
+   printf '%s' "$WM7B_CTX" | grep -qF "branch.md" 2>/dev/null; then
+    pass "WM-7b. detail skipped → hint contains 'BRANCHING_COMPLETE/DECIDED' or 'branch.md'"
+else
+    fail "WM-7b. detail skipped → expected 'BRANCHING_COMPLETE/DECIDED' or 'branch.md' in hint, got: $WM7B_CTX"
 fi
 
 # Test WM-8: write_tests skipped → hint contains "review-code-security"
