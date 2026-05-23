@@ -37,7 +37,10 @@ Write or update tests for the current task.
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
-7. Present the final test file content to the user for review.
+7. Present the final test file content to the user for review — gated by **CONFIRM_TESTS gate (post-action review)**:
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_TESTS on && echo OFF || echo ON'`
+   - stdout `OFF`: skip this step; proceed directly to Completion (no user wait).
+   - stdout `ON`: present the test file content.
 
 ## Completion
 
