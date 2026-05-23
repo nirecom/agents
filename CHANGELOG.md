@@ -283,3 +283,7 @@ Changes: Added: `/resume-session` — resume a mid-workflow session by detecting
 ### FEATURE: PR #490 (2026-05-23)
 Background: fix(#486): restore code --folder-uri plan-file open; fix #291 multi-window routing
 Changes: Fixed: plan files (intent/outline/detail.md) now open automatically in the correct VS Code window when `CONFIRM_*=on` — restored after PR #454 had removed the auto-open unconditionally (#486). Multi-window routing fixed via `--folder-uri` workspace targeting; the file now opens in the VS Code window whose workspace matches the originating session (#291).
+
+### FEATURE: PR #491 (2026-05-23)
+Background: fix(#484): workflow-gate recognizes WORKTREE_NOTES.md as docs evidence
+Changes: Fixed: docs gate が ENFORCE_WORKTREE=on 下で /update-docs → WORKTREE_NOTES.md にステージされた bullet を証拠として受理するようになった。installer-only / code-only 修正での workflow blocker (#484) を解消。
