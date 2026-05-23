@@ -3,8 +3,9 @@
 // plan artifact written under ~/.workflow-plans/ (basename *-(intent|outline|detail).md;
 // drafts/ excluded). Always emits regardless of CONFIRM_<STEP> — breadcrumb is the sole
 // path surface for orchestrators. When CONFIRM_<STEP>=on AND VS Code is detected,
-// additionally spawns `code --folder-uri file:///<cwd> -r <file>` to open the artifact
-// in the workspace window matching input.cwd (fixes #291; restored by #486).
+// additionally spawns two sequenced `code` invocations: first `code --folder-uri file:///<cwd>`
+// (raises the correct window), then `code -r <file>` (opens the file) — avoids the
+// VS Code CLI bug where --folder-uri silently discards file-open args (#506).
 //
 // Output protocol: emits { "systemMessage": "..." } only.
 // Sibling PostToolUse hooks emit `additionalContext` — different field, no collision.
@@ -53,7 +54,27 @@ function workspaceFolderUriFrom(cwd) {
   if (!cwd || typeof cwd !== "string") return null;
   if (cwd === "/" || /^[A-Za-z]:[\\/]?$/.test(cwd)) return null;
   const fwd = cwd.replace(/\\/g, "/");
-  return fwd.startsWith("/") ? "file://" + fwd : "file:///" + fwd;
+  // UNC path (\\server\share or //server/share)
+  if (fwd.startsWith("//")) {
+    const rest = fwd.slice(2);
+    const parts = rest.split("/");
+    const server = parts.shift();
+    const encodedTail = parts.map(encodeURIComponent).join("/");
+    return "file://" + server + (encodedTail ? "/" + encodedTail : "");
+  }
+  // Windows drive path (C:/...)
+  const driveMatch = fwd.match(/^([A-Za-z]:)\/(.*)/);
+  if (driveMatch) {
+    const encodedTail = driveMatch[2].split("/").map(encodeURIComponent).join("/");
+    return "file:///" + driveMatch[1] + "/" + encodedTail;
+  }
+  // POSIX absolute path
+  if (fwd.startsWith("/")) {
+    const encodedTail = fwd.slice(1).split("/").map(encodeURIComponent).join("/");
+    return "file:///" + encodedTail;
+  }
+  // Fallback
+  return "file:///" + fwd.split("/").map(encodeURIComponent).join("/");
 }
 
 // Ladder: input.cwd → process.cwd() → null (bare code -r).
@@ -63,25 +84,29 @@ function resolveWorkspaceFolderUri(input) {
   return workspaceFolderUriFrom(process.cwd());
 }
 
-function buildCodeArgs(absPath, folderUri) {
-  return folderUri ? ["--folder-uri", folderUri, "-r", absPath] : ["-r", absPath];
+function spawnCode(args) {
+  if (process.platform === "win32") {
+    return spawn("cmd.exe", ["/d", "/s", "/c", "code", ...args], {
+      stdio: "ignore", detached: true, windowsHide: true,
+    });
+  }
+  return spawn("code", args, { stdio: "ignore", detached: true });
 }
 
 function openInVsCode(absPath, folderUri) {
-  const args = buildCodeArgs(absPath, folderUri);
+  const folderArgs = folderUri ? ["--folder-uri", folderUri] : null;
+  const fileArgs = ["-r", absPath];
   if (process.env.SHOW_PLAN_LINK_NO_SPAWN === "1") {
     if (process.env.SHOW_PLAN_LINK_MARKER_FILE) {
-      fs.writeFileSync(process.env.SHOW_PLAN_LINK_MARKER_FILE, args.join("\n"));
+      const blocks = [];
+      if (folderArgs) blocks.push(folderArgs.join("\n"));
+      blocks.push(fileArgs.join("\n"));
+      fs.writeFileSync(process.env.SHOW_PLAN_LINK_MARKER_FILE, blocks.join("\n\n"));
     }
     return;
   }
-  if (process.platform === "win32") {
-    spawn("cmd.exe", ["/d", "/s", "/c", "code", ...args], {
-      stdio: "ignore", detached: true, windowsHide: true,
-    }).unref();
-  } else {
-    spawn("code", args, { stdio: "ignore", detached: true }).unref();
-  }
+  if (folderArgs) spawnCode(folderArgs).unref();
+  spawnCode(fileArgs).unref();
 }
 
 if (require.main === module) {
