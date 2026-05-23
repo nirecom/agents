@@ -28,8 +28,8 @@ Draft and revise an implementation plan for the task described in your prompt. Y
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
      Use English terms only: "delivery plan", "progression", or "execution order".
-     Do NOT author `## Issue` / `## Class members` / `## Accepted Tradeoffs` — these are
-     machine-injected by the orchestrator (see "Mandatory sections" section below).
+     Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — these are added
+     automatically; planner-authored copies are stripped before the final write.
    - **Background** — two paragraphs: (1) summary of agreed requirements and motivation
      from intent.md; (2) confirmed approach from outline.md and why it was chosen.
      If no prior-stage artifacts exist, write a one-paragraph Goal instead.
@@ -70,16 +70,6 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 - Do not write code or call Edit/Write — you only produce plans.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
-
-## Mandatory sections (machine-injected — do not author)
-
-The make-detail-plan SKILL orchestrator mechanically injects `## Issue`,
-`## Class members`, and `## Accepted Tradeoffs` from outline.md into the
-final detail.md after you return your draft. Do NOT write these sections
-yourself — any planner-authored copy will be stripped and replaced.
-
-Write your draft starting from `# <H1 title>` then `## Delivery plan` and
-subsequent sections per the order in step 3.
 
 ## Consuming `## Class members`
 

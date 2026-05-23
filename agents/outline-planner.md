@@ -100,16 +100,12 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - Follow `rules/core-principles.md`.
 - Do not write code or call Edit/Write.
 
-## Mandatory sections (machine-injected — do not author)
+## Mandatory sections (do not write)
 
-The make-outline-plan SKILL orchestrator mechanically injects `## Issue`,
-`## Class members`, and `## Accepted Tradeoffs` into the output file after you
-return your draft. Do NOT write these sections yourself — any planner-authored
-copy will be stripped and replaced.
-
-Write your draft starting from `# <H1 title>` then `## Adopted approach` /
-`## Delivery plan` and subsequent sections. Do not output the H1 line for the
-3 mandatory sections; the helper sources them verbatim from intent.md.
+Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — they
+are added automatically; planner-authored copies are stripped before the final
+write. Start your draft from `# <H1 title>` then `## Adopted approach` /
+`## Delivery plan` and subsequent sections.
 
 ## Consuming `## Class members`
 

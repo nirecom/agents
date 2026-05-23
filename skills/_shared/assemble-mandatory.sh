@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble a final plan file by mechanically injecting mandatory sections.
+# Assemble a final plan file by injecting mandatory sections from a source file.
 # Usage: assemble-mandatory.sh [--source-kind intent|outline] <source.md> <planner-output.md> <out.md>
 #
 # Algorithm:

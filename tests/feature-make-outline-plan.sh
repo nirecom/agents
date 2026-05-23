@@ -274,11 +274,13 @@ else
     fail "M11: SINGLE_APPROACH_JUSTIFIED or assemble-mandatory.sh missing from SKILL.md"
 fi
 
-# M12a: machine-injected / do not author wording present
-if grep -qE "machine.injected|do not author|機械的" "$SKILL_462" 2>/dev/null; then
-    pass "M12a: 'machine-injected' or 'do not author' wording in make-outline-plan/SKILL.md"
+# M12a: planner-side contract present (do not write mandatory sections; authored copies stripped).
+# Wording moved away from the direct translation "machine-injected"; the contract — that the
+# orchestrator carries these sections and the planner must not write them — must remain.
+if grep -qE "[Dd]o NOT (instruct the planner to )?(author|write)|[Dd]o not (instruct the planner to )?(author|write)|planner.authored copies (will be|are) stripped|helper carries them forward" "$SKILL_462" 2>/dev/null; then
+    pass "M12a: planner-side 'do not write / authored copies stripped' contract present in make-outline-plan/SKILL.md"
 else
-    fail "M12a: 'machine-injected' / 'do not author' wording missing from SKILL.md"
+    fail "M12a: SKILL.md missing the planner-side contract (do not write mandatory sections / authored copies are stripped)"
 fi
 
 # M12b: no verbatim-copy instruction (machine-injection replaces manual copy)
