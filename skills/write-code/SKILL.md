@@ -31,7 +31,10 @@ Edit source code for the current task.
 
 5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
 
-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user.
+6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_CODE on && echo OFF || echo ON'`
+   - `OFF`: skip this step; proceed (no user wait).
+   - `ON`: present the file list and notes.
 
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)
 
