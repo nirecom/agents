@@ -2,6 +2,7 @@
 name: write-code
 description: Edit source code for the current task. Delegates editing and lint/typecheck/self-repair to a subagent.
 model: sonnet
+user-invocable: false
 ---
 
 Edit source code for the current task.

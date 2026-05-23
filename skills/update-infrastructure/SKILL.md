@@ -3,6 +3,7 @@ name: update-infrastructure
 description: Update infrastructure.md to reflect infrastructure changes across all stacks and hosts
 model: sonnet
 effort: low
+context: fork
 ---
 
 Update `infrastructure.md` to reflect infrastructure changes across all stacks and hosts
