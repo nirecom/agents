@@ -10,6 +10,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/state.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/link-project.sh"
 
 REPO_DIR="${1:?usage: create-project.sh <repo_dir> [--dry-run]}"
 DRY_RUN=0
@@ -68,4 +70,14 @@ else
 fi
 
 state_set_project "$project_num" "$node_id" "$field_ids_json"
+
+existing_linked=$(jq_text '.project.repo_linked // false' "$STATE_FILE")
+if [ "$existing_linked" = "true" ]; then
+  echo "Project already linked to ${OWNER}/${REPO_NAME} (repo_linked=true). Skipping link mutation."
+else
+  if link_project_to_repo "$node_id" "$OWNER" "$REPO_NAME"; then
+    state_set_repo_linked true
+  fi
+fi
+
 echo "Project #$project_num created/found. Field IDs saved to state."
