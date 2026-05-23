@@ -527,8 +527,12 @@ for (const cmd of sentinelParts) {
     if (stepName === "docs") {
       messages.push(
         `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Update docs/ or *.md files and stage them ` +
-          `(run /update-docs then git add docs/) — no skip path.`
+          `Run /update-docs, then satisfy either route: ` +
+          `(a) stage docs/ or *.md files (git add docs/ ...); or ` +
+          `(b) inside a linked worktree, ensure WORKTREE_NOTES.md ` +
+          `## History Notes / ## Changelog Notes contain real bullets ` +
+          `(not just "- (none)") — staging path introduced by #436 / #484. ` +
+          `No MARK_STEP skip path.`
       );
       continue;
     }
