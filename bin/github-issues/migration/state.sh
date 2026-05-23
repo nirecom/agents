@@ -27,7 +27,7 @@ state_init() {
     '{schema_version:2,repo_dir:$repo,started_at:$ts,current_step:0,
       history:{total_entries:0,migrated:[],advanced:{canary_1:null,canary_2:null,full:null}},
       todo:{total_entries:0,migrated:[],todo_md_rewritten:false,advanced:{canary_1:null,canary_2:null,full:null}},
-      project:{number:null,node_id:null,field_ids:{}}}' \
+      project:{number:null,node_id:null,field_ids:{},repo_linked:false}}' \
     > "$tmp"
   mv "$tmp" "$f"
 }
@@ -42,7 +42,8 @@ state_load() {
       local tmp; tmp="${STATE_FILE}.tmp"
       jq '.schema_version = 2
           | .history.advanced //= {canary_1:null,canary_2:null,full:null}
-          | .todo.advanced    //= {canary_1:null,canary_2:null,full:null}' \
+          | .todo.advanced    //= {canary_1:null,canary_2:null,full:null}
+          | .project.repo_linked //= false' \
         "$STATE_FILE" > "$tmp"
       mv "$tmp" "$STATE_FILE"
       ;;
@@ -89,8 +90,16 @@ state_set_project() {
   : "${STATE_FILE:?call state_load first}"
   local tmp; tmp="${STATE_FILE}.tmp"
   jq --argjson num "$number" --arg nid "$node_id" --argjson fids "$field_ids_json" \
-    '.project = {number:$num,node_id:$nid,field_ids:$fids}' \
+    '.project = {number:$num,node_id:$nid,field_ids:$fids,repo_linked:(if .project.node_id == $nid then (.project.repo_linked // false) else false end)}' \
     "$STATE_FILE" > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+
+state_set_repo_linked() {
+  local val="${1:?true or false required}"
+  : "${STATE_FILE:?call state_load first}"
+  local tmp; tmp="${STATE_FILE}.tmp"
+  jq --argjson v "$val" '.project.repo_linked = $v' "$STATE_FILE" > "$tmp"
   mv "$tmp" "$STATE_FILE"
 }
 
