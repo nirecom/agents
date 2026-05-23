@@ -37,7 +37,7 @@ build_state_json() {
     node -e "
       const sid = process.argv[1];
       const target = process.argv[2] || '';
-      const steps = ['workflow_init','clarify_intent','research','plan','branching_complete','write_tests','run_tests','review_security','docs','user_verification','cleanup'];
+      const steps = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','run_tests','review_security','docs','user_verification','cleanup'];
       const out = { version: 1, session_id: sid, created_at: '2026-05-23T00:00:00.000Z', steps: {} };
       for (const s of steps) {
         out.steps[s] = { status: (s === target ? 'in_progress' : 'pending'), updated_at: null };
@@ -171,7 +171,8 @@ run_skill_case() {
 }
 
 run_skill_case "T5"  "t5"  "clarify_intent" "clarify-intent"
-run_skill_case "T6"  "t6"  "plan"           "make-detail-plan"
+run_skill_case "T6a" "t6a" "outline"        "make-outline-plan"
+run_skill_case "T6b" "t6b" "detail"         "make-detail-plan"
 run_skill_case "T7"  "t7"  "write_tests"    "write-tests"
 run_skill_case "T8"  "t8"  "run_tests"      "run-tests"
 run_skill_case "T9"  "t9"  "docs"           "update-docs"

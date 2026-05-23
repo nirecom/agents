@@ -102,7 +102,7 @@ build_state_with_override() {
       const sid = process.argv[1];
       const step = process.argv[2];
       const override = JSON.parse(process.argv[3]);
-      const STEPS = ['research','plan','write_tests','run_tests','review_security','docs','user_verification'];
+      const STEPS = ['research','outline','detail','write_tests','run_tests','review_security','docs','user_verification'];
       const steps = {};
       for (const s of STEPS) {
         steps[s] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };
@@ -131,7 +131,7 @@ build_state_with_multi_override() {
     node -e "
       const sid = process.argv[1];
       const n = parseInt(process.argv[2], 10);
-      const STEPS = ['research','plan','write_tests','run_tests','review_security','docs','user_verification'];
+      const STEPS = ['research','outline','detail','write_tests','run_tests','review_security','docs','user_verification'];
       const steps = {};
       for (const s of STEPS) {
         steps[s] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };
@@ -176,9 +176,10 @@ build_mark_json() {
 # State JSON where all steps are complete EXCEPT a given step (pending)
 ALL_COMPLETE_EXCEPT() {
     local except_step="$1" sid="${2:-test-session}"
-    local research_status plan_status write_tests_status run_tests_status review_security_status docs_status user_ver_status
+    local research_status outline_status detail_status write_tests_status run_tests_status review_security_status docs_status user_ver_status
     research_status=$([ "$except_step" = "research" ] && echo "pending" || echo "complete")
-    plan_status=$([ "$except_step" = "plan" ] && echo "pending" || echo "complete")
+    outline_status=$([ "$except_step" = "outline" ] && echo "pending" || echo "complete")
+    detail_status=$([ "$except_step" = "detail" ] && echo "pending" || echo "complete")
     write_tests_status=$([ "$except_step" = "write_tests" ] && echo "pending" || echo "complete")
     run_tests_status=$([ "$except_step" = "run_tests" ] && echo "pending" || echo "complete")
     review_security_status=$([ "$except_step" = "review_security" ] && echo "pending" || echo "complete")
@@ -191,7 +192,8 @@ ALL_COMPLETE_EXCEPT() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "$research_status", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "$plan_status", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "$outline_status", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "$detail_status", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "$write_tests_status", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "$run_tests_status", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "$review_security_status", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -212,7 +214,8 @@ ALL_PENDING_EXCEPT_LATER() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -228,10 +231,10 @@ EOF
 # ===========================================================================
 
 echo ""
-echo "=== WS-AND-H1: RESEARCH_NOT_NEEDED && PLAN_NOT_NEEDED in one Bash call ==="
+echo "=== WS-AND-H1: RESEARCH_NOT_NEEDED && DETAIL_NOT_NEEDED in one Bash call ==="
 
 SID="and-h1-$$"
-# Start where research AND plan are both pending (others complete)
+# Start where research AND detail are both pending (others complete)
 cat > "$WORKFLOW_DIR/${SID}.json" <<H1_EOF
 {
   "version": 1,
@@ -239,7 +242,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<H1_EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -249,7 +253,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<H1_EOF
 }
 H1_EOF
 
-MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: single file change>>" && echo "<<WORKFLOW_PLAN_NOT_NEEDED: trivial typo fix>>"' "$SID")
+MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: single file change>>" && echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial typo fix>>"' "$SID")
 MARK_OUT=$(run_mark "$MARK_JSON")
 
 expect_state_step "WS-AND-H1a. research=skipped after chain" "$SID" "research" "skipped"
@@ -260,21 +264,21 @@ else
     fail "WS-AND-H1b. expected 'single file change', got: $H1_R_REASON"
 fi
 
-expect_state_step "WS-AND-H1c. plan=skipped after chain" "$SID" "plan" "skipped"
-H1_P_REASON=$(read_state_field "$SID" "plan" "skip_reason")
+expect_state_step "WS-AND-H1c. detail=skipped after chain" "$SID" "detail" "skipped"
+H1_P_REASON=$(read_state_field "$SID" "detail" "skip_reason")
 if [ "$H1_P_REASON" = "trivial typo fix" ]; then
-    pass "WS-AND-H1d. plan.skip_reason='trivial typo fix'"
+    pass "WS-AND-H1d. detail.skip_reason='trivial typo fix'"
 else
     fail "WS-AND-H1d. expected 'trivial typo fix', got: $H1_P_REASON"
 fi
 
 echo ""
-echo "=== WS-AND-H2: three-way chain: RESEARCH && PLAN && WRITE_TESTS NOT_NEEDED ==="
+echo "=== WS-AND-H2: three-way chain: RESEARCH && DETAIL && WRITE_TESTS NOT_NEEDED ==="
 
 SID="and-h2-$$"
 write_state "$SID" "$(ALL_PENDING_EXCEPT_LATER "$SID")"
 
-MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: single file change>>" && echo "<<WORKFLOW_PLAN_NOT_NEEDED: trivial typo fix>>" && echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: pure config change>>"' "$SID")
+MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: single file change>>" && echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial typo fix>>" && echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: pure config change>>"' "$SID")
 MARK_OUT=$(run_mark "$MARK_JSON")
 
 expect_state_step "WS-AND-H2a. research=skipped after 3-way chain" "$SID" "research" "skipped"
@@ -285,10 +289,10 @@ else
     fail "WS-AND-H2b. expected 'single file change', got: $H2_R"
 fi
 
-expect_state_step "WS-AND-H2c. plan=skipped after 3-way chain" "$SID" "plan" "skipped"
-H2_P=$(read_state_field "$SID" "plan" "skip_reason")
+expect_state_step "WS-AND-H2c. detail=skipped after 3-way chain" "$SID" "detail" "skipped"
+H2_P=$(read_state_field "$SID" "detail" "skip_reason")
 if [ "$H2_P" = "trivial typo fix" ]; then
-    pass "WS-AND-H2d. plan.skip_reason='trivial typo fix'"
+    pass "WS-AND-H2d. detail.skip_reason='trivial typo fix'"
 else
     fail "WS-AND-H2d. expected 'trivial typo fix', got: $H2_P"
 fi
@@ -331,7 +335,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<H4_EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
@@ -351,7 +356,7 @@ echo ""
 echo "=== WS-AND-E1: one valid, one malformed — valid processed, malformed reported ==="
 
 SID="and-e1-$$"
-# research AND plan both pending
+# research AND detail both pending
 cat > "$WORKFLOW_DIR/${SID}.json" <<E1_EOF
 {
   "version": 1,
@@ -359,7 +364,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<E1_EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -369,16 +375,16 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<E1_EOF
 }
 E1_EOF
 
-MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: valid reason>>" && echo "<<WORKFLOW_PLAN_NOT_NEEDED>>"' "$SID")
+MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: valid reason>>" && echo "<<WORKFLOW_DETAIL_NOT_NEEDED>>"' "$SID")
 MARK_OUT=$(run_mark "$MARK_JSON")
 
 expect_state_step "WS-AND-E1a. research=skipped (valid part processed)" "$SID" "research" "skipped"
-expect_state_step "WS-AND-E1b. plan=pending (malformed part rejected)" "$SID" "plan" "pending"
+expect_state_step "WS-AND-E1b. detail=pending (malformed part rejected)" "$SID" "detail" "pending"
 
-if echo "$MARK_OUT" | grep -qiE "malformed|PLAN_NOT_NEEDED"; then
-    pass "WS-AND-E1c. additionalContext hints at malformed PLAN_NOT_NEEDED"
+if echo "$MARK_OUT" | grep -qiE "malformed|DETAIL_NOT_NEEDED"; then
+    pass "WS-AND-E1c. additionalContext hints at malformed DETAIL_NOT_NEEDED"
 else
-    fail "WS-AND-E1c. expected 'malformed'/'PLAN_NOT_NEEDED' hint, got: $MARK_OUT"
+    fail "WS-AND-E1c. expected 'malformed'/'DETAIL_NOT_NEEDED' hint, got: $MARK_OUT"
 fi
 
 echo ""
