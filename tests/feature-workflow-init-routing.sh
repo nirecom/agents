@@ -341,6 +341,120 @@ assert_contains "$WORKFLOW_INIT_MD" "WORKFLOW_ABORTED_WIP_CONFLICT" \
 
 # ============================================================
 echo ""
+echo "=== Issue #444: workflow-init multi-N ==="
+echo ""
+# Tests W5-W10: pre-implementation assertions — FAIL until source code changes land.
+
+# W5: SKILL.md Step 1 contains both `ISSUES=` and `Move the selected entry to index 0`.
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W5: workflow-init multi-N reorder semantics (file not found)"
+elif grep -qE "ISSUES=" "$WORKFLOW_INIT_MD" && grep -qF "Move the selected entry to index 0" "$WORKFLOW_INIT_MD"; then
+    pass "W5: SKILL.md Step 1 contains ISSUES= and 'Move the selected entry to index 0' (reorder semantics)"
+else
+    fail "W5: SKILL.md Step 1 must contain both 'ISSUES=' and 'Move the selected entry to index 0'"
+fi
+
+# W6: The 2+ branch is followed by AskUserQuestion reference; `pick one` is absent.
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W6a: 2+ branch references AskUserQuestion (file not found)"
+else
+    # Find a line containing `2+` and check whether AskUserQuestion appears within
+    # the next 50 lines after it.
+    PLUS_LN=$(grep -nE "2\+" "$WORKFLOW_INIT_MD" | head -1 | cut -d: -f1)
+    if [ -n "$PLUS_LN" ]; then
+        END_LN=$((PLUS_LN + 50))
+        SLICE=$(awk -v s="$PLUS_LN" -v e="$END_LN" 'NR>=s && NR<=e' "$WORKFLOW_INIT_MD")
+        if printf '%s' "$SLICE" | grep -qF "AskUserQuestion"; then
+            pass "W6a: 2+ branch is followed by AskUserQuestion reference within 50 lines"
+        else
+            fail "W6a: 2+ branch (line $PLUS_LN) not followed by AskUserQuestion within 50 lines"
+        fi
+    else
+        fail "W6a: no '2+' marker found in SKILL.md"
+    fi
+fi
+assert_absent_local() {
+    local file="$1" pattern="$2" desc="$3"
+    if [ ! -f "$file" ]; then fail "$desc (file not found)"; return 1; fi
+    if grep -qF "$pattern" "$file"; then fail "$desc (unexpected literal '$pattern' present)"; else pass "$desc"; fi
+}
+assert_absent_local "$WORKFLOW_INIT_MD" "pick one" \
+    "W6b: 'pick one' (old narrowing behavior) is absent from SKILL.md"
+
+# W7: Path A section contains a multi-line `closes_issues` sample — 2+ consecutive
+# `- ` bullets inside a code fence within 50 lines of "Path A".
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W7: Path A multi-line closes_issues sample (file not found)"
+else
+    HAS_MULTI=$(awk '
+        BEGIN { in_path_a = 0; lines_since_a = 0; in_fence = 0; consec = 0; found = 0 }
+        /Path A/ && !in_path_a { in_path_a = 1; lines_since_a = 0; next }
+        in_path_a {
+            lines_since_a++
+            if (lines_since_a > 50) { in_path_a = 0; in_fence = 0; consec = 0; next }
+            if ($0 ~ /^```/) { in_fence = !in_fence; consec = 0; next }
+            if (in_fence) {
+                if ($0 ~ /^- /) {
+                    consec++
+                    if (consec >= 2) { found = 1; exit }
+                } else {
+                    consec = 0
+                }
+            }
+        }
+        END { print (found ? "YES" : "NO") }
+    ' "$WORKFLOW_INIT_MD")
+    if [ "$HAS_MULTI" = "YES" ]; then
+        pass "W7: Path A section contains a multi-line closes_issues sample (2+ consecutive '- ' bullets in fence)"
+    else
+        fail "W7: Path A section missing multi-line closes_issues sample (need 2+ consecutive '- ' bullets in code fence within 50 lines of 'Path A')"
+    fi
+fi
+
+# W8: SKILL.md Step 1 mentions ISSUES[0], closes_issues[0], and 'becomes closes_issues[0]'.
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W8: index-zero mappings (file not found)"
+elif grep -qE "ISSUES\[0\]" "$WORKFLOW_INIT_MD" \
+  && grep -qE "closes_issues\[0\]" "$WORKFLOW_INIT_MD" \
+  && grep -qF "becomes closes_issues[0]" "$WORKFLOW_INIT_MD"; then
+    pass "W8: SKILL.md mentions ISSUES[0], closes_issues[0], and 'becomes closes_issues[0]'"
+else
+    fail "W8: SKILL.md must contain 'ISSUES[0]', 'closes_issues[0]', and 'becomes closes_issues[0]'"
+fi
+
+# W9: literal 'AskUserQuestion to pick one' must be absent (regression prevention).
+assert_absent_local "$WORKFLOW_INIT_MD" "AskUserQuestion to pick one" \
+    "W9: 'AskUserQuestion to pick one' old narrowing prompt is absent"
+
+# W10: Path A section fail-closed regression prevention.
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W10: Path A fail-closed regression prevention (file not found)"
+else
+    # Extract Path A section (from "### Path A" heading to next "### Path " heading or EOF).
+    PATH_A_SLICE=$(awk '
+        /^### Path A/ { in_a = 1 }
+        in_a {
+            if (/^### Path [BC]/) { exit }
+            print
+        }
+    ' "$WORKFLOW_INIT_MD")
+    if printf '%s' "$PATH_A_SLICE" | grep -qF "ABORT" \
+       && printf '%s' "$PATH_A_SLICE" | grep -qF -- '--add-label "intent:clarified"' \
+       && printf '%s' "$PATH_A_SLICE" | grep -qF "aborted-pathA-multiN-label-failure"; then
+        pass "W10a: Path A section contains ABORT, --add-label \"intent:clarified\", and aborted-pathA-multiN-label-failure"
+    else
+        fail "W10a: Path A section missing one of: ABORT / --add-label \"intent:clarified\" / aborted-pathA-multiN-label-failure"
+    fi
+    # Fail-open pattern `continuing]` (the old `|| echo "[continuing]"`) must be absent from Path A.
+    if printf '%s' "$PATH_A_SLICE" | grep -qF "continuing]"; then
+        fail "W10b: Path A fail-open pattern 'continuing]' unexpectedly present"
+    else
+        pass "W10b: Path A fail-open pattern 'continuing]' is absent"
+    fi
+fi
+
+# ============================================================
+echo ""
 echo "=== Summary ==="
 if [ "$ERRORS" -eq 0 ]; then
     echo "All tests passed."
