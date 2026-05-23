@@ -16,7 +16,8 @@
 // Note: echo "<<WORKFLOW_...>>" is NOT a false-positive — the here-doc anchor fix excludes it.
 // Note: redirects to /dev/null (e.g. 2>/dev/null) are excluded from write — null-sink
 //       discards output and is common in read-only commands like `git status 2>/dev/null`.
-//       The lookahead uses (?=\s|[;|&]|$) not \b, so /dev/null/foo remains a write.
+//       The lookahead uses (?=\s|[;|&)]|$) not \b — `)` accepts 2>/dev/null inside $(...) (#359);
+//       /dev/null/foo remains a write because `/` is not in the terminator set.
 //       Windows NUL is intentionally NOT excluded: this pattern is for POSIX bash commands
 //       only. PowerShell null-sink uses Out-Null/> $null and is handled by pwsh-specific patterns.
 
@@ -26,9 +27,9 @@ const { stripQuotedArgs, stripHeredocBody } = require("./strip-quoted-args");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
-  { name: "posix-redirect", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!&\d)(?!\s*\/dev\/null(?=\s|[;|&]|$))/ },
+  { name: "posix-redirect", kind: "posix-redir", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!&\d)(?!\s*\/dev\/null(?=\s|[;|&)]|$))/ },
   // tee (writes to file while passing through)
-  { name: "tee", kind: "posix", regex: /(?:^|[\s;|&])tee\b/ },
+  { name: "tee", kind: "posix-redir", regex: /(?:^|[\s;|&])tee\b/ },
   // here-doc: <<EOF, <<-EOF, <<'EOF', <<"EOF"
   { name: "here-doc", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)<<-?['"]?\w/ },
   // here-string: <<<
@@ -134,10 +135,16 @@ const QUOTING_ONLY_NAMES = new Set([
 ]);
 
 // Pattern kinds where classify() tests the stripped (quote-removed) command.
-// Only file-op patterns (cp/mv/rm/touch/chmod etc.) — other kinds (posix, git,
-// gh, interpreter) are tested against the original command so that operators
-// and interpreter flags inside quoted args are still detected.
-const STRIP_KINDS = new Set(["file-op"]);
+// - file-op (cp/mv/rm/touch/chmod etc.): write tokens inside quoted args
+//   (e.g. `doc-append --subject "rm tmp"`) must not false-positive.
+// - posix-redir (posix-redirect, tee): redirect chars inside quoted args
+//   (e.g. `grep -nE "pattern > match" file`, #460) and `tee` in quoted prose
+//   (e.g. `doc-append --subject "tee output"`) must not false-positive.
+// Other kinds (posix [here-doc/here-string], git, gh, interpreter, pwsh*) are
+// tested against the original command. here-doc/here-string in particular MUST
+// scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
+// stripHeredocBody contract depend on it (see classify() lines 160-190).
+const STRIP_KINDS = new Set(["file-op", "posix-redir"]);
 
 /**
  * Classify a Bash command string as "read" or "write".
