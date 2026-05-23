@@ -305,9 +305,9 @@ assert_contains "$LABELS_YML" "intent:clarified" \
 echo ""
 echo "--- C13: workflow-init step 3 OPEN branch wip-state hookpoint (#362) ---"
 
-# C13a: SKILL.md step 3 OPEN branch contains `wip-state.sh check <N>`.
-assert_contains "$WORKFLOW_INIT_MD" "wip-state\.sh.*check" \
-    "C13a: workflow-init SKILL.md references wip-state.sh check <N>"
+# C13a: SKILL.md step 3 OPEN branch references wip-state.sh check across all ISSUES (per-N loop).
+assert_contains "$WORKFLOW_INIT_MD" "Aggregate WIP check|wip-state\.sh.*check|for each issue N in \`ISSUES\`" \
+    "C13a: workflow-init Step 3a references wip-state.sh check across all ISSUES (per-N loop)"
 
 # C13b: failure-handling policy — when wip-state check fails (rc != 0), treat as 'none' and proceed.
 assert_contains "$WORKFLOW_INIT_MD" "advisory|proceeding as|wip-state check failed|rc=" \
@@ -322,22 +322,35 @@ assert_contains "$WORKFLOW_INIT_MD" "Continue \(recommended\)|Continue.*recommen
 assert_contains "$WORKFLOW_INIT_MD" "Abort" \
     "C13c3: AskUserQuestion offers an 'Abort' option"
 
-# C13d: resume-clarified gap text — `check == none` + `intent:clarified` ∈ labels
-# triggers wip-state set <N> from workflow-init itself.
-# Look for the conjunction: 'none' AND 'intent:clarified' AND 'wip-state' set.
+# C13c4: AskUserQuestion enumerates the conflicted issue list (CONFLICTED variable).
+assert_contains "$WORKFLOW_INIT_MD" "CONFLICTED|comma-separated" \
+    "C13c4: workflow-init AskUserQuestion enumerates conflicted issue list (CONFLICTED variable)"
+
+# C13d: resume-clarified gap — 'none' + 'intent:clarified' triggers per-N wip-state set.
 if [ ! -f "$WORKFLOW_INIT_MD" ]; then
     fail "C13d: workflow-init resume-clarified branch (file not found)"
 elif grep -q "none" "$WORKFLOW_INIT_MD" \
    && grep -q "intent:clarified" "$WORKFLOW_INIT_MD" \
-   && grep -qE "wip-state.*set|set.*wip-state" "$WORKFLOW_INIT_MD"; then
-    pass "C13d: workflow-init resume-clarified branch — wip-state set fires on (none + intent:clarified)"
+   && grep -qE "for each N in \`ISSUES\`.*wip-state.*set|wip-state.*set.*<N>|ISSUES.*wip-state.*set" "$WORKFLOW_INIT_MD"; then
+    pass "C13d: workflow-init resume-clarified branch — wip-state set loops across all ISSUES"
 else
-    fail "C13d: resume-clarified branch text missing (need none + intent:clarified + wip-state set)"
+    fail "C13d: resume-clarified branch text missing (need none + intent:clarified + per-N set loop)"
 fi
 
 # C13e: abort path emits WORKFLOW_ABORTED_WIP_CONFLICT sentinel.
 assert_contains "$WORKFLOW_INIT_MD" "WORKFLOW_ABORTED_WIP_CONFLICT" \
     "C13e: 'abort' branch emits <<WORKFLOW_ABORTED_WIP_CONFLICT>> sentinel"
+
+# C13f: Aggregate WIP classification (same/none/other) documented across ISSUES.
+if grep -qE "all.*same|all.*none|Any.*other|any.*other|all.*WIP" "$WORKFLOW_INIT_MD"; then
+    pass "C13f: aggregate WIP classification (same/none/other) documented across ISSUES"
+else
+    fail "C13f: aggregate WIP classification not documented (need same/none/other cases)"
+fi
+
+# C13g: Continue branch loops wip-state set across all ISSUES (not just CONFLICTED).
+assert_contains "$WORKFLOW_INIT_MD" "for each N in \`ISSUES\`.*wip-state.*set|ISSUES.*Continue.*set|Continue.*ISSUES.*wip-state" \
+    "C13g: Continue branch loops wip-state set across all ISSUES (not just CONFLICTED)"
 
 # ============================================================
 echo ""
