@@ -311,3 +311,7 @@ Changes: The workflow-internal skills write-tests, write-code, run-tests, and up
 ### FEATURE: PR #507 (2026-05-24)
 Background: fix(workflow): survey artifact write failure & post-check content validation (#497)
 Changes: "Fix: survey agent validation now checks for the `## Verified Claims` section instead of file existence only; empty or stub artifacts trigger survey re-invocation. Survey agents are now explicitly instructed that writing their artifact is required. Closes #497."
+
+### FEATURE: PR #509 (2026-05-24)
+Background: fix(#506): show-plan-link two-step spawn + URI encoding (#492, #291)
+Changes: BUGFIX show-plan-link: --folder-uri regression fix — plan files (intent/outline/detail.md) now open as VS Code tabs again when CONFIRM_*=on. The broken --folder-uri + -r combination is replaced with two sequential code invocations; folder URI encoding is also fixed for paths with spaces, #, %, non-ASCII, or UNC segments.
