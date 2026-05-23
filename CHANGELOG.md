@@ -315,3 +315,7 @@ Changes: "Fix: survey agent validation now checks for the `## Verified Claims` s
 ### FEATURE: PR #509 (2026-05-24)
 Background: fix(#506): show-plan-link two-step spawn + URI encoding (#492, #291)
 Changes: BUGFIX show-plan-link: --folder-uri regression fix — plan files (intent/outline/detail.md) now open as VS Code tabs again when CONFIRM_*=on. The broken --folder-uri + -r combination is replaced with two sequential code invocations; folder URI encoding is also fixed for paths with spaces, #, %, non-ASCII, or UNC segments.
+
+### FEATURE: PR #510 (2026-05-24)
+Background: fix(bash-write-patterns): posix-redir kind for redirect/tee; fix 2>/dev/null inside $(...) (#460, #359)
+Changes: Fix: `grep -nE "pattern > match" file.txt` のように引数内に `>` を含むコマンドが main worktree から誤って block されなくなった (#460)。`$(cmd 2>/dev/null)` など command substitution 内の `2>/dev/null` が正しく read 判定されるようになった (#359)。
