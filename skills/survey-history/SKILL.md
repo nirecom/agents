@@ -90,9 +90,20 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
      verdict: holds | contradicted | indeterminate
      evidence: <commit hash / PR# / history entry, or "no matching history found">
 
+   ## Candidate class members
+   - <member name>: <one-line description> (from: <commit-ref or history entry>)
+
    ## Premise impact assessment
    <one paragraph: describe contradictions found, or state "No premise contradictions detected.">
    ```
+   The `## Candidate class members` section lists sibling members identified
+   from git history and history.md (per `rules/core-principles.md` §1 Elevate
+   Perspective). Each line: member name, one-line description, and the commit
+   or history-entry reference. If no candidates are detected, write a single
+   line: `- (none detected)`. This section is required even in DEGRADED MODE
+   or keyword-only mode (use `(none detected)` when the mode prevents reliable
+   enumeration).
+
    If gh was unavailable, note it at the top of the file under a `## Data gaps` section.
 
 ## Rules

@@ -248,6 +248,33 @@ else
 fi
 
 echo ""
+# ---------------------------------------------------------------------------
+# Issue #462: Class members — disposition schema and interview design
+# ---------------------------------------------------------------------------
+echo "--- Issue #462: Class members ---"
+
+# Reuse LOCAL_SKILL_MD (worktree-relative path) — N10-N13 target unmerged changes.
+# LOCAL_SKILL_MD is already defined earlier in this file.
+
+# N10: ## Class members mandatory section in intent.md schema
+assert_contains "$LOCAL_SKILL_MD" "Class members" \
+    "N10: '## Class members' mandatory section referenced in clarify-intent SKILL.md"
+
+# N11: single multiSelect question pattern (not 2-stage)
+assert_contains "$LOCAL_SKILL_MD" "multiSelect" \
+    "N11: multiSelect question pattern in clarify-intent SKILL.md"
+
+# N12: disposition enum values (fix in scope, track separately) in SKILL.md
+assert_contains "$LOCAL_SKILL_MD" "fix in scope" \
+    "N12a: 'fix in scope' disposition enum value in SKILL.md"
+assert_contains "$LOCAL_SKILL_MD" "track separately" \
+    "N12b: 'track separately' disposition enum value in SKILL.md"
+
+# N13: no cap別枠 wording (class members question is inside the 5-round cap, not extra)
+assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*cap" \
+    "N13: no 'cap別枠' wording — class members question counts within 5-round cap"
+
+echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 

@@ -2,8 +2,9 @@
 
 Cross-cutting principles applied to planning, design review, and code review.
 Loaded into every planner, reviewer, and Codex adversarial review context.
-Read this at /make-outline-plan and /make-detail-plan stages, and whenever
-adding or modifying a member of any class.
+Abstract principles only — specific skill names, file paths, and step-by-step
+procedures must not appear here. Put those in the relevant SKILL.md / agent /
+CLI documentation instead.
 
 ## 1. Elevate Perspective
 

@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# Extract one or more H2 sections from a Markdown file.
+# Usage: extract-mandatory-sections <file> --section <name> [--section <name> ...] [--with-headers]
+# Exit 0 on success (even if all sections absent — outputs nothing per absent section).
+# Exit 2 if file not found or arguments invalid.
+set -uo pipefail
+
+usage() {
+  echo "Usage: extract-mandatory-sections <file> --section <name> [--section <name> ...] [--with-headers]" >&2
+  exit 2
+}
+
+FILE=""
+SECTIONS=()
+WITH_HEADERS=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --section)
+      [[ $# -ge 2 ]] || usage
+      SECTIONS+=("$2")
+      shift 2
+      ;;
+    --with-headers)
+      WITH_HEADERS=1
+      shift
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      if [[ -z "$FILE" ]]; then
+        FILE="$1"
+        shift
+      else
+        usage
+      fi
+      ;;
+  esac
+done
+
+[[ -n "$FILE" ]] || usage
+[[ ${#SECTIONS[@]} -gt 0 ]] || usage
+
+if [[ ! -f "$FILE" ]]; then
+  echo "extract-mandatory-sections: file not found: $FILE" >&2
+  exit 2
+fi
+
+# Build pipe-delimited section name list. We escape '|' inside names to
+# avoid splitting on a literal pipe in a section name (defensive).
+SECTION_PAT=""
+for s in "${SECTIONS[@]}"; do
+  # Replace literal '|' in the name with a placeholder we'll never match.
+  # Section names with '|' are not used in practice; this is purely defensive.
+  safe="${s//|/__PIPE__}"
+  if [[ -z "$SECTION_PAT" ]]; then
+    SECTION_PAT="$safe"
+  else
+    SECTION_PAT="${SECTION_PAT}|${safe}"
+  fi
+done
+
+# awk receives section names as a pipe-delimited string and compares
+# literally (not as regex) against the H2 text after '## '.
+awk -v section_pat="$SECTION_PAT" -v with_headers="$WITH_HEADERS" '
+BEGIN {
+  inside = 0
+  in_fence = 0
+  first_section = 1
+  n = split(section_pat, names, "|")
+}
+
+# Toggle fence state on backtick or tilde fences. Boundary check then uses in_fence.
+/^```/ || /^~~~/ {
+  in_fence = !in_fence
+  # If inside a target section, print the fence line itself; otherwise fall through
+  if (inside) print
+  next
+}
+
+# Section boundary detection: only when NOT inside a code fence
+!in_fence && /^## / {
+  # Extract the text after "## " and strip trailing whitespace
+  hdr = $0
+  sub(/^## /, "", hdr)
+  sub(/[[:space:]]+$/, "", hdr)
+
+  matched = 0
+  for (i = 1; i <= n; i++) {
+    if (hdr == names[i]) {
+      matched = 1
+      break
+    }
+  }
+
+  if (matched) {
+    inside = 1
+    if (with_headers) {
+      if (!first_section) printf "\n"
+      print $0
+      first_section = 0
+    }
+    next
+  } else {
+    inside = 0
+    next
+  }
+}
+
+# Non-matching H1 also ends any section (when not in fence)
+!in_fence && /^# [^#]/ {
+  inside = 0
+  next
+}
+
+# Print body lines when inside a target section
+inside { print }
+' "$FILE"
