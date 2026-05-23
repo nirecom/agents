@@ -2,7 +2,7 @@
 # Tests for new workflow steps: clarify_intent and branching_complete
 # Covers:
 #   - workflow-state.js: migration and VALID_STEPS / SKIPPABLE_STEPS exports
-#   - workflow-mark.js: CLARIFY_INTENT_COMPLETE, BRANCHING_COMPLETE (+ backward compat BRANCHING_DECIDED), PLAN_NOT_NEEDED
+#   - workflow-mark.js: CLARIFY_INTENT_COMPLETE, BRANCHING_COMPLETE (+ backward compat BRANCHING_DECIDED), OUTLINE_NOT_NEEDED, DETAIL_NOT_NEEDED
 #   - workflow-gate.js: gate blocks on new steps, docs-only bypass
 set -euo pipefail
 
@@ -122,7 +122,8 @@ ALL_COMPLETE_JSON() {
   "steps": {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -146,7 +147,8 @@ ALL_COMPLETE_CI_PENDING_JSON() {
   "steps": {
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -169,7 +171,8 @@ ALL_COMPLETE_BD_PENDING_JSON() {
   "steps": {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -197,7 +200,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -226,7 +230,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
@@ -273,7 +278,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "steps": {
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -517,13 +523,15 @@ else
 fi
 
 # ===========================================================================
-# PLAN_NOT_NEEDED also skips research (workflow-mark.js)
+# OUTLINE_NOT_NEEDED / DETAIL_NOT_NEEDED (workflow-mark.js)
+# Issue #485: PLAN_NOT_NEEDED is replaced by granular OUTLINE/DETAIL sentinels;
+# these no longer skip research (research has its own skip sentinel).
 # ===========================================================================
 
 echo ""
-echo "=== PLAN_NOT_NEEDED also skips research ==="
+echo "=== OUTLINE_NOT_NEEDED / DETAIL_NOT_NEEDED ==="
 
-# P1: PLAN_NOT_NEEDED → both plan and research become "skipped"
+# P1: OUTLINE_NOT_NEEDED → outline=skipped, research/detail untouched
 SID="p1-$$"
 cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 {
@@ -533,7 +541,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "steps": {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "pending", "updated_at": null},
+    "detail":            {"status": "pending", "updated_at": null},
     "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -543,12 +552,13 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   }
 }
 EOF
-P1_JSON=$(build_mark_json 'echo "<<WORKFLOW_PLAN_NOT_NEEDED: trivial docs fix only>>"' "$SID")
+P1_JSON=$(build_mark_json 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach exists>>"' "$SID")
 run_mark "$P1_JSON" > /dev/null
-expect_state_step "P1a. PLAN_NOT_NEEDED → plan=skipped" "$SID" "plan" "skipped"
-expect_state_step "P1b. PLAN_NOT_NEEDED → research=skipped" "$SID" "research" "skipped"
+expect_state_step "P1a. OUTLINE_NOT_NEEDED → outline=skipped" "$SID" "outline" "skipped"
+expect_state_step "P1b. OUTLINE_NOT_NEEDED → research stays pending (not auto-skipped)" "$SID" "research" "pending"
+expect_state_step "P1c. OUTLINE_NOT_NEEDED → detail stays pending (independent)" "$SID" "detail" "pending"
 
-# P2: Regression — research is skipped (not just plan) when PLAN_NOT_NEEDED fires
+# P2: DETAIL_NOT_NEEDED → detail=skipped, outline/research untouched
 SID="p2-$$"
 cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 {
@@ -558,7 +568,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "steps": {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "pending", "updated_at": null},
+    "detail":            {"status": "pending", "updated_at": null},
     "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -568,14 +579,11 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   }
 }
 EOF
-P2_JSON=$(build_mark_json 'echo "<<WORKFLOW_PLAN_NOT_NEEDED: single file minor fix>>"' "$SID")
+P2_JSON=$(build_mark_json 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: single file minor fix>>"' "$SID")
 run_mark "$P2_JSON" > /dev/null
-P2_RESEARCH=$(read_state_status "$SID" "research")
-if [ "$P2_RESEARCH" = "skipped" ]; then
-    pass "P2. Regression: PLAN_NOT_NEEDED skips research too (not just plan)"
-else
-    fail "P2. Regression: expected research=skipped after PLAN_NOT_NEEDED, got: $P2_RESEARCH"
-fi
+expect_state_step "P2a. DETAIL_NOT_NEEDED → detail=skipped" "$SID" "detail" "skipped"
+expect_state_step "P2b. DETAIL_NOT_NEEDED → outline stays pending" "$SID" "outline" "pending"
+expect_state_step "P2c. DETAIL_NOT_NEEDED → research stays pending" "$SID" "research" "pending"
 
 # ===========================================================================
 # Gate blocks on new steps (workflow-gate.js)
@@ -595,7 +603,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "steps": {
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -629,7 +638,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "steps": {
     "clarify_intent":    {"status": "complete", "updated_at": "2026-04-11T10:00:30.000Z"},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
@@ -680,7 +690,8 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
   "steps": {
     "clarify_intent":    {"status": "pending", "updated_at": null},
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:15.000Z"},
     "branching_complete":{"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
