@@ -147,6 +147,12 @@ case "$cmd" in
                     json_out='{"data":{"user":{"id":"MDQ6User_mock123"}}}' ;;
                 *organization*login*)
                     json_out='{"data":{"organization":{"id":"MDEyOk9yZ_mock123"}}}' ;;
+                *linkProjectV2ToRepository*)
+                    if [ "${MOCK_LINK_FAILS:-}" = "1" ]; then
+                        echo '{"errors":[{"message":"mock link failure"}]}'
+                        exit 1
+                    fi
+                    json_out='{"data":{"linkProjectV2ToRepository":{"repository":{"id":"R_kgDOmock"}}}}' ;;
                 *)
                     json_out='{"data":{}}' ;;
             esac
@@ -156,7 +162,18 @@ case "$cmd" in
                 echo "$json_out"
             fi
         else
-            echo '{}'
+            base_json='{"node_id":"R_kgDOmock","name":"mockrepo","full_name":"mockowner/mockrepo"}'
+            jq_filter=""
+            prev=""
+            for arg in "$@"; do
+                [ "$prev" = "--jq" ] && jq_filter="$arg"
+                prev="$arg"
+            done
+            if [ -n "$jq_filter" ] && command -v jq >/dev/null 2>&1; then
+                echo "$base_json" | jq -r "$jq_filter"
+            else
+                echo "$base_json"
+            fi
         fi
         exit 0
         ;;
