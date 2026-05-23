@@ -307,3 +307,7 @@ Changes: `/worktree-end` no longer requires a VS Code "Reload Window" or session
 ### FEATURE: PR #505 (2026-05-23)
 Background: skills: stage-1 context:fork + user-invocable:false
 Changes: The workflow-internal skills write-tests, write-code, run-tests, and update-docs are now hidden from the / command menu (user-invocable: false). When CLAUDE_CODE_FORK_SUBAGENT=1 is set, 12 skills run in a forked context (context: fork), reducing main conversation context window pressure.
+
+### FEATURE: PR #507 (2026-05-24)
+Background: fix(workflow): survey artifact write failure & post-check content validation (#497)
+Changes: "Fix: survey agent validation now checks for the `## Verified Claims` section instead of file existence only; empty or stub artifacts trigger survey re-invocation. Survey agents are now explicitly instructed that writing their artifact is required. Closes #497."
