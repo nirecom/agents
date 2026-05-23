@@ -271,3 +271,7 @@ Changes: New per-session sentinels `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>`
 ### FEATURE: clarify-intent: tracking-issue guard prevents completion with empty closes_issues (2026-05-23)
 Background: When /clarify-intent Completion reached with closes_issues empty (Path C), the workflow could emit WORKFLOW_CLARIFY_INTENT_COMPLETE without creating a tracking issue first. Also, the dual /make-outline-plan invocation (Procedure Step 6 + Completion) caused the skill to exit at Step 6, never reaching Completion.
 Changes: A new guard script (check-closes-issues-nonempty.sh, backed by parse-closes-issues.js SSOT) blocks the completion sentinel when closes_issues is empty. First failure auto-invokes /issue-create and re-checks; second failure escalates to AskUserQuestion (3 options: retry, manual recovery, abort). Procedure Step 6 no longer invokes /make-outline-plan — the skill now exits exclusively via Completion.
+
+### FEATURE: PR #483 (2026-05-23)
+Background: fix(install): add launchers for review-loop-cap-menu, review-skill-size, extract-accepted-tradeoffs (#471)
+Changes: Fixed: bare invocation of review-loop-cap-menu, review-skill-size, and extract-accepted-tradeoffs (exit 127) — installers now generate PATH launchers for these tools.
