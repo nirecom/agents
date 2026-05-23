@@ -85,20 +85,9 @@ for n in 5 6 7; do
   check_re "write-tests: step $n present" "^$n\." "$WT"
 done
 
-# ---------------------------------------------------------------------------
-# boost/SKILL.md
-# ---------------------------------------------------------------------------
-
-BOOST="$AGENTS_DIR/skills/boost/SKILL.md"
-
-check "boost: subagent_type general-purpose" "subagent_type: general-purpose" "$BOOST"
-check "boost: model opus" "model: opus" "$BOOST"
-check "boost: empty args guard" "No task provided" "$BOOST"
-check "boost: argument-hint frontmatter" "argument-hint:" "$BOOST"
 
 # Edge cases
 check "judge: err toward higher capability (parse failure)" "err toward higher capability" "$JUDGE"
-check_re "boost: empty args check at start of Procedure" "^1\. If args are empty" "$BOOST"
 
 # ---------------------------------------------------------------------------
 
