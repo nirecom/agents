@@ -6,7 +6,7 @@ model: sonnet
 
 Propose high-level approaches and get user sign-off before detailed planning.
 
-Skip when the entire Plan step is skipped via `<<WORKFLOW_PLAN_NOT_NEEDED: ...>>`.
+Skip this stage via `<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>>` when a single obvious approach exists. To skip both this stage AND detail, emit `WORKFLOW_OUTLINE_NOT_NEEDED` and `WORKFLOW_DETAIL_NOT_NEEDED` in sequence.
 When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign-off loop and proceed directly to `make-detail-plan`.
 
 ## Inputs
@@ -133,12 +133,13 @@ The file (per `rules/language.md`) contains:
   (c) the prose rationale preamble emitted in step 7 before `AskUserQuestion`
   No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
-- `WORKFLOW_MARK_STEP_plan_complete` is NOT emitted here; only `make-detail-plan` emits it.
+- `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state) plus `WORKFLOW_OUTLINE_PLAN_COMPLETE` (status event).
 - **Two `AskUserQuestion` calls per run in ON mode** — step 7 (approach selection, before file write) and step 8 (artifact review via protocol Step 3, after write). OFF mode fires neither.
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
 
 ## Completion
 
-1. `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"`
-2. Invoke `make-detail-plan` via the Skill tool.
+1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+2. `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"` (status event for downstream skills)
+3. Invoke `make-detail-plan` via the Skill tool.
