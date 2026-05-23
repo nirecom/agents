@@ -103,11 +103,11 @@ Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_G
    - **Label all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
      `gh issue edit <N> --add-label "intent:clarified"`.
      On failure for any N: warn `[clarify-intent]`, add `intent:clarified-label-failed: #<N>: <reason>` under Constraints. Continue with the remaining entries (best-effort per-N).
-   - **WIP set for primary only.** Let `PRIMARY=closes_issues[0]`. Run:
-     `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <PRIMARY>`.
-     Exit 1 (Status set failure) → warn `[clarify-intent: wip-state set failed — Projects v2 Status not updated]` and continue.
-     Exit 2 (missing env / session-id) → same warn and point at `wip-state setup` / `CLAUDE_ENV_FILE`.
-     WIP is keyed to the primary only; related issues do not receive a WIP fingerprint (see `rules/github-issues.md` "Session model").
+   - **WIP set for all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
+     `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>`.
+     Exit 1 (Status set failure) for any N → warn `[clarify-intent: wip-state set failed for #<N> — Projects v2 Status not updated]` and continue with the remaining entries (best-effort per-N, mirrors the label loop above).
+     Exit 2 (missing env / session-id) → same warn for that N and point at `wip-state setup` / `CLAUDE_ENV_FILE`; continue with remaining entries.
+     Every issue in `closes_issues` receives its own WIP fingerprint so cross-session conflict detection covers related issues too (see `rules/github-issues.md` "Session model").
 3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: (a) update `closes_issues` from `(empty)` to `- <N>`; (b) insert `## Issue\n#<N>: <title>` immediately after the H1 of intent.md using Read + Edit (title is the `--title` arg from this call — no re-fetch needed). Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above). On failure: warn, leave `closes_issues` as `(empty)` and omit `## Issue`.
 
 Then:
