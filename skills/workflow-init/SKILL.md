@@ -97,10 +97,7 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
      Write output to artifact_path. Do NOT invoke make-outline-plan.
    ```
    Inject all paths as resolved strings (the orchestrator substitutes <PLANS_DIR> for the absolute path from Step 0) — Agent subagents cannot expand `$VAR` references.
-6.5. **Post-check** (separate Bash calls): verify each artifact exists at its absolute path.
-   - `<session-id>-survey-code.md` missing → `echo "<<WORKFLOW_SURVEY_AGENT_FAILED: survey-code>>"`
-   - `<session-id>-survey-history.md` missing → `echo "<<WORKFLOW_SURVEY_AGENT_FAILED: survey-history>>"`
-   - On failure: fall through to step 7 — do NOT abort. `clarify-intent` handles missing artifacts.
+6.5. **Post-check** — apply the validity check from `skills/_shared/survey-artifact-valid.md` to each artifact (`<PLANS_DIR>/<session-id>-survey-code.md` and `<PLANS_DIR>/<session-id>-survey-history.md`). On invalid artifact, emit `<<WORKFLOW_SURVEY_AGENT_FAILED: survey-code>>` or `<<WORKFLOW_SURVEY_AGENT_FAILED: survey-history>>` respectively. Fall through to step 7 on failure — do NOT abort. `clarify-intent` handles missing-or-invalid artifacts.
 7. **Path-specific steps** (after post-check):
 
 ### Path A — intent:clarified
