@@ -7,6 +7,39 @@ GitHub Issues and PRs share the same number space. Always distinguish them in pr
 - **Issues**: `#N` (no prefix)
 - **Pull requests**: `PR #N`
 
+## Session model: N issues per session
+
+A workflow session may track one or more issues. The canonical relation is:
+
+    1 session = N issues (N >= 1) = N history.md entries (one per issue) = 1 PR
+
+The session's `closes_issues` list lives in
+`${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`
+(canonical parser: `hooks/lib/parse-closes-issues.js`).
+
+### Terminology
+
+- **primary** — the first entry of `closes_issues`. Exactly one primary per
+  session. Represents the session in single-issue contexts (WIP fingerprint,
+  Projects v2 card, the `## Issue` anchor in `intent.md`).
+- **related** — every non-primary entry of `closes_issues`. Each related issue
+  is a full first-class member (own `history.md` entry, own `Closes #<N>`
+  line, own close-pr-of marker) but does not represent the session in
+  single-issue contexts.
+
+### Primary confirmation (single-window invariant)
+
+When N first crosses from 1 to >=2 within a session, exactly one
+AskUserQuestion confirms which issue is the primary. The confirmation fires at
+the earliest of:
+- `workflow-init` Step 1 (b) — when 2+ `#N` are present in the initial user
+  prompt; OR
+- `clarify-intent` Completion — when the interview produces 2+ entries in
+  `closes_issues` (Path C / interview-emerged multi-N).
+
+The two triggers are mutually exclusive. Procedure details live in the
+respective SKILL.md files.
+
 ## Active task list
 
 GitHub Issues is the single source of truth for active tasks. `docs/todo.md` is

@@ -48,8 +48,7 @@
 8.5. **Phase 1 issue close** — For each issue N in the session's `closes_issues`
    (parsed from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`),
    run `/issue-close-stage <N>` from the linked worktree. Phase 1 performs the
-   sub-issue gate, posts the pending sentinel, commits the `docs/history.md`
-   entry on the feature branch, and updates the parent body if applicable.
+   sub-issue gate, posts the pending sentinel and promotes it to appended (history.md is written by Phase 2 from the main worktree via ISSUE_CLOSE_SKILL bypass), and updates the parent body if applicable.
    Skip silently when `closes_issues` is empty. Skip entirely when
    `ENFORCE_WORKTREE=off` (the 2-phase split does not apply to direct-main work
    — `/issue-close-finalize` runs the full chain at Step 10b instead).

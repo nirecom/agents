@@ -100,6 +100,8 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 
 **Stdout contract**: Phase 4 emits exactly one line to stdout on success: the issue URL (`https://github.com/<owner>/<repo>/issues/<N>`). All other output goes to stderr. Callers extract the issue number with: `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
+Issues created here may be added to an existing session's `closes_issues` list (see `rules/github-issues.md` "Session model").
+
 ## Label policy
 
 - `type:task` is attached unconditionally by the underlying script.
