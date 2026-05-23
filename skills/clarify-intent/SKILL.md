@@ -26,9 +26,29 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap).
 
+2a. **Aggregate class members (before interview round 1):**
+   - Read `## Candidate class members` from `<PLANS_DIR>/<session-id>-survey-code.md` and `<PLANS_DIR>/<session-id>-survey-history.md` (skip whichever artifact is missing).
+   - Merge both lists, removing duplicates by member name (case-sensitive).
+   - If total unique candidates ≥ 1: include the **Class members question** (see step 3) — counts as 1 of the 5 interview rounds.
+   - If total unique candidates = 0: write `- (none detected)` to `## Class members` in step 4 and skip the question (0 rounds consumed).
+
 3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): optional `## Issue` (see below), Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-accepted-tradeoffs` to suppress re-raised concerns in later codex reviews.
+   **Class members question (1 multiSelect call, when candidates ≥ 1):**
+   - Ask: "Which of these sibling members should be fixed in this scope?"
+   - Options: each candidate member as a separate option. `multiSelect: true`.
+   - When candidates > 4: present the top 3 most relevant + "Other" (collect remaining via free text and merge). Include the names of the unshown candidates in the question body so the user knows which ones default to `track separately` if "Other" is not used.
+   - Selected members → record with `disposition: fix in scope` in intent.md `## Class members`.
+   - Unselected (and Other-free-text non-selections) → record with `disposition: track separately`.
+   - The disposition value MUST be exactly one of the two enum strings `fix in scope` or `track separately` — Claude derives this from the multiSelect result; the user never types a disposition string.
+
+4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): optional `## Issue` (see below), Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+
+   **`## Class members` schema (mandatory section):** appears immediately before `## Accepted Tradeoffs`. Lists sibling class members and their disposition (per `rules/core-principles.md` §1 Elevate Perspective). Format per member:
+   ```
+   - <name>: <description> — disposition: <fix in scope | track separately>
+   ```
+   When no candidates were detected in step 2a: write a single line `- (none detected)` (no disposition field). The disposition enum is exactly two values — `fix in scope` or `track separately`. A missing `## Class members` section or a disposition value outside the enum is a protocol violation.
 
    **`## Issue` section rules** (immediately after H1, before Background/Motivation):
    - **Path B** (issue known via auto-detect): read title from `context.md ## Issue metadata - title:`. Write `## Issue\n#<N>: <title>`.

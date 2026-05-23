@@ -1,0 +1,4 @@
+
+- tradeoff A: first tradeoff
+- tradeoff B: second tradeoff
+
