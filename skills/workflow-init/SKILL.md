@@ -51,32 +51,37 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
      suppresses the duplicate confirmation in `clarify-intent` Completion.
      For Path A (label-clarified), the marker is unnecessary because
      `clarify-intent` does not run.
-     Use the primary `ISSUES[0]` for steps 2–4 (Session ID, gh issue view, WIP/label routing).
+     Use the primary `ISSUES[0]` for steps 2–4 (Session ID, gh issue view, label routing).
 2. **Session ID**: read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `date +%Y%m%d-%H%M%S`.
 3. **Fetch issue**: `gh issue view <N> --json number,title,body,labels,state,createdAt`
    - Fails → `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort.
    - `CLOSED` → ask: reopen / pick different #N / continue as Path C.
    - `OPEN` →
-     (a) `WIP=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check <N> 2>/dev/null)`
-         and capture exit code `WIP_RC=$?`.
-         - `WIP_RC == 0` and `WIP == same` → continue (this session already owns WIP).
-         - `WIP_RC == 0` and `WIP == none` → if `intent:clarified` ∈ labels: call
-           `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` to claim WIP
-           (covers resume of an already-clarified issue, where clarify-intent will not run).
-           Otherwise continue — clarify-intent's Completion section will set WIP itself.
-         - `WIP_RC == 0` and `WIP == other` → `AskUserQuestion`:
+     (a) **Aggregate WIP check across all ISSUES.** For each issue N in `ISSUES` (primary first), call:
+         `WIP_N=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check <N> 2>/dev/null)` and capture `WIP_RC_N=$?`.
+         Collect per-N status into vectors `WIP[]` and `WIP_RC[]`.
+         Classify the aggregate:
+         - **All `WIP_RC == 0` and all `WIP == same`** → continue (this session already owns WIP on every issue).
+         - **All `WIP_RC == 0` and all `WIP == none`** → if `intent:clarified` ∈ labels of the primary: for each N in `ISSUES`, call
+           `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` to claim WIP (best-effort per-N — warn on failure, continue with remaining N).
+           Covers resume of an already-clarified session where clarify-intent will not re-run.
+           Otherwise continue — clarify-intent's Completion section will set WIP on all N itself.
+         - **Mixed `same` / `none` (no `other`)** → for each N where `WIP == none`, call
+           `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (best-effort) to bring related issues up to parity.
+         - **Any `WIP == other`** → let `CONFLICTED=(<list of N where WIP == other>)`. Issue a **single** `AskUserQuestion`:
            ```
-           question: "Issue #<N> may be in progress in another session. Continue?"
+           question: "Issue(s) #<CONFLICTED, comma-separated> may be in progress in another session. Continue?"
            options:
              - label: "Continue (recommended)"
-               description: "Override the WIP fingerprint with this session and proceed."
+               description: "Override the WIP fingerprint on the conflicted issues with this session and proceed."
              - label: "Abort"
                description: "Stop this session to avoid conflicting with the other session."
            ```
-           On "Continue": call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (overrides fingerprint). On "Abort": emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<N>>>"` and stop.
-         - `WIP_RC != 0` or `WIP` empty/unexpected → warn
-           `[workflow-init: wip-state check failed (rc=$WIP_RC, out='$WIP') — proceeding as 'none']`
-           and continue without prompting.
+           On "Continue": for each N in `ISSUES`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (override fingerprint for `other` N; claim for any `none` N; `same` N is idempotent; best-effort per-N).
+           On "Abort": emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<CONFLICTED, comma-separated>>>"` and stop.
+         - **Any `WIP_RC != 0` or `WIP` empty/unexpected for an N** → warn
+           `[workflow-init: wip-state check failed for #<N> (rc=$WIP_RC_N, out='$WIP_N') — proceeding as 'none' for that issue]`
+           and treat that N as `none` in the classification above.
            (WIP detection is advisory; transient gh/auth failures must not block legitimate work.)
      (b) extract `labels[].name` → step 4.
 4. **Route**: `intent:clarified` ∈ labels → Path A; otherwise → Path B.

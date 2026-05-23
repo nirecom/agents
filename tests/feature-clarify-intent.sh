@@ -130,9 +130,9 @@ echo "--- WIP-state (issue #362) ---"
 
 LOCAL_SKILL_MD="$(cd "$(dirname "$0")/.." && pwd)/skills/clarify-intent/SKILL.md"
 
-# W1: Completion section contains `wip-state.sh set <N>` instruction (Path A/B single-N).
-assert_contains "$LOCAL_SKILL_MD" "wip-state\.sh.*set" \
-    "W1: Completion section references wip-state.sh set <N> (single-N closes_issues)"
+# W1: Completion section references wip-state.sh set for all closes_issues (per-N loop).
+assert_contains "$LOCAL_SKILL_MD" "WIP set for all entries|for each issue N in \`closes_issues\`|wip-state\.sh.*set" \
+    "W1: Completion section references wip-state.sh set for all closes_issues (per-N loop)"
 
 # W2: The wip-state.sh set call appears after the `intent:clarified` add-label
 # instruction (i.e. ordering: label first, then WIP set). Check linearly: the
@@ -165,9 +165,13 @@ else
     fi
 fi
 
-# W4: Failure-handling text mentions wip-state-specific failure modes.
-assert_contains "$LOCAL_SKILL_MD" "wip-state.*setup|wip-state set failed" \
-    "W4: Completion section documents wip-state failure handling (setup hint / set-failed warn)"
+# W4: Failure-handling text mentions per-N wip-state failure modes.
+assert_contains "$LOCAL_SKILL_MD" "wip-state set failed for #|wip-state.*setup" \
+    "W4: Completion section documents per-N wip-state failure handling (failed for #<N> / setup hint)"
+
+# W11: Completion WIP loop documents best-effort per-N error policy.
+assert_contains "$LOCAL_SKILL_MD" "best-effort per-N|continue with the remaining entries" \
+    "W11: Completion WIP loop documents best-effort per-N policy"
 
 echo ""
 # ---------------------------------------------------------------------------
