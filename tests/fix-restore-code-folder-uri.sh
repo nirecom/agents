@@ -19,6 +19,12 @@ run_with_timeout() {
   fi
 }
 
+parse_marker() {
+  # Usage: parse_marker <marker_file> <block_num>  → prints lines of block N (1-indexed)
+  local file="$1" block="$2"
+  awk -v b="$block" 'BEGIN{n=1} /^$/{n++;next} n==b{print}' "$file"
+}
+
 NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
 PLANS_DIR="${NODE_TMPDIR}/show-plan-link-spawn-test-$$"
 mkdir -p "$PLANS_DIR"
@@ -45,15 +51,22 @@ run_hook_capture_spawn() {
 
 # T-SPAWN-1
 MARKER="$PLANS_DIR/spawn-marker-T-SPAWN-1"
+DETAIL_ABS="$PLANS_DIR/abc-detail.md"
 run_hook_capture_spawn \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true},\"cwd\":\"$PLANS_DIR\"}" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$DETAIL_ABS\"},\"tool_response\":{\"success\":true},\"cwd\":\"$PLANS_DIR\"}" \
   "$MARKER" \
   TERM_PROGRAM=vscode CONFIRM_DETAIL=on
 if [ -f "$MARKER" ]; then
-  line1=$(sed -n '1p' "$MARKER")
-  line2=$(sed -n '2p' "$MARKER")
-  if [ "$line1" = "--folder-uri" ] && echo "$line2" | grep -q "^file://"; then
-    pass "T-SPAWN-1 VS Code+CONFIRM_DETAIL=on -> --folder-uri present"
+  b1_l1=$(parse_marker "$MARKER" 1 | sed -n '1p')
+  b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
+  b2_l1=$(parse_marker "$MARKER" 2 | sed -n '1p')
+  b2_l2=$(parse_marker "$MARKER" 2 | sed -n '2p')
+  # Normalize backslashes (Windows native abs path) to forward slashes for comparison.
+  b2_l2_norm=$(echo "$b2_l2" | tr '\\' '/')
+  DETAIL_ABS_norm=$(echo "$DETAIL_ABS" | tr '\\' '/')
+  if [ "$b1_l1" = "--folder-uri" ] && echo "$b1_l2" | grep -q "^file://" \
+     && [ "$b2_l1" = "-r" ] && [ "$b2_l2_norm" = "$DETAIL_ABS_norm" ]; then
+    pass "T-SPAWN-1 VS Code+CONFIRM_DETAIL=on -> two-step spawn (folder + file)"
   else
     fail "T-SPAWN-1 unexpected marker content: $(cat "$MARKER")"
   fi
@@ -67,10 +80,15 @@ run_hook_capture_spawn \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-outline.md\"},\"tool_response\":{\"success\":true},\"cwd\":\"$PLANS_DIR\"}" \
   "$MARKER" \
   CLAUDE_CODE_ENTRYPOINT=claude-vscode CONFIRM_OUTLINE=on
-if [ -f "$MARKER" ] && grep -q "^--folder-uri$" "$MARKER"; then
-  pass "T-SPAWN-2 CLAUDE_CODE_ENTRYPOINT=claude-vscode -> --folder-uri present"
+if [ -f "$MARKER" ]; then
+  b1_l1=$(parse_marker "$MARKER" 1 | sed -n '1p')
+  if [ "$b1_l1" = "--folder-uri" ]; then
+    pass "T-SPAWN-2 CLAUDE_CODE_ENTRYPOINT=claude-vscode -> block-1 --folder-uri present"
+  else
+    fail "T-SPAWN-2 block-1 missing --folder-uri: got '$b1_l1'"
+  fi
 else
-  fail "T-SPAWN-2 marker missing or no --folder-uri"
+  fail "T-SPAWN-2 marker missing"
 fi
 
 # T-SPAWN-3
@@ -129,12 +147,13 @@ run_hook_capture_spawn \
   "$MARKER" \
   TERM_PROGRAM=vscode CONFIRM_DETAIL=on
 if [ -f "$MARKER" ]; then
-  line2=$(sed -n '2p' "$MARKER")
+  b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
+  b2_l1=$(parse_marker "$MARKER" 2 | sed -n '1p')
   EXPECTED_URI="file:///tmp/fixture-ws"
-  if [ "$line2" = "$EXPECTED_URI" ]; then
-    pass "T-SPAWN-7 input.cwd -> correct --folder-uri"
+  if [ "$b1_l2" = "$EXPECTED_URI" ] && [ "$b2_l1" = "-r" ]; then
+    pass "T-SPAWN-7 input.cwd -> correct --folder-uri (block-1) + -r (block-2)"
   else
-    fail "T-SPAWN-7 URI mismatch: got '$line2', expected '$EXPECTED_URI'"
+    fail "T-SPAWN-7 mismatch: block1-line2='$b1_l2', block2-line1='$b2_l1', expected URI='$EXPECTED_URI'"
   fi
 else
   fail "T-SPAWN-7 marker not created"
@@ -143,21 +162,39 @@ fi
 # T-SPAWN-8
 MARKER="$PLANS_DIR/spawn-marker-T-SPAWN-8"
 EXPECTED_CWD_URI=$(run_with_timeout node -e "
-  const cwd = process.cwd().replace(/\\\\/g, '/');
-  const prefix = process.platform === 'win32' ? 'file:///' : 'file://';
-  process.stdout.write(prefix + cwd);
+  const path = require('path');
+  const cwd = process.cwd();
+  const fwd = cwd.replace(/\\\\/g, '/');
+  const isWin = process.platform === 'win32';
+  let segments, prefix;
+  if (isWin) {
+    // C:/git/my project -> file:///C:/git/my%20project
+    const m = fwd.match(/^([A-Za-z]:)\/(.*)$/);
+    if (m) {
+      prefix = 'file:///' + m[1] + '/';
+      segments = m[2].split('/').filter(s => s.length > 0).map(encodeURIComponent);
+    } else {
+      prefix = 'file:///';
+      segments = fwd.split('/').filter(s => s.length > 0).map(encodeURIComponent);
+    }
+  } else {
+    prefix = 'file://';
+    segments = fwd.split('/').map((s, i) => i === 0 ? s : encodeURIComponent(s));
+  }
+  process.stdout.write(prefix + segments.join('/'));
 ")
 run_hook_capture_spawn \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
   "$MARKER" \
   TERM_PROGRAM=vscode CONFIRM_DETAIL=on
 if [ -f "$MARKER" ]; then
-  line1=$(sed -n '1p' "$MARKER")
-  line2=$(sed -n '2p' "$MARKER")
-  if [ "$line1" = "--folder-uri" ] && [ "$line2" = "$EXPECTED_CWD_URI" ]; then
-    pass "T-SPAWN-8 no cwd field -> process.cwd() fallback URI"
+  b1_l1=$(parse_marker "$MARKER" 1 | sed -n '1p')
+  b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
+  b2_l1=$(parse_marker "$MARKER" 2 | sed -n '1p')
+  if [ "$b1_l1" = "--folder-uri" ] && [ "$b1_l2" = "$EXPECTED_CWD_URI" ] && [ "$b2_l1" = "-r" ]; then
+    pass "T-SPAWN-8 no cwd field -> process.cwd() fallback URI (encoded)"
   else
-    fail "T-SPAWN-8 URI mismatch: got line1='$line1' line2='$line2', expected '--folder-uri' + '$EXPECTED_CWD_URI'"
+    fail "T-SPAWN-8 mismatch: b1_l1='$b1_l1', b1_l2='$b1_l2', b2_l1='$b2_l1', expected URI='$EXPECTED_CWD_URI'"
   fi
 else
   fail "T-SPAWN-8 marker not created"
@@ -181,13 +218,19 @@ DETAIL_ABS="$PLANS_DIR/abc-detail.md"
     | run_with_timeout node "$HOOK" >/dev/null 2>&1
 )
 if [ -f "$MARKER" ]; then
-  line_count=$(wc -l < "$MARKER" | tr -d ' ')
-  line1=$(sed -n '1p' "$MARKER")
-  line2=$(sed -n '2p' "$MARKER")
-  if [ "$line1" = "-r" ] && [ -n "$line2" ] && [ "$line_count" -le 2 ]; then
-    pass "T-SPAWN-9 empty cwd + root process.cwd -> bare -r (no --folder-uri)"
+  # No blank line => single block; grep blank-line absence
+  if grep -q "^$" "$MARKER"; then
+    echo "SKIP T-SPAWN-9 (cd / did not force root cwd, marker has blank line: $(cat "$MARKER"))"
   else
-    echo "SKIP T-SPAWN-9 (cd / did not force root cwd, got: $(cat "$MARKER"))"
+    b1_l1=$(parse_marker "$MARKER" 1 | sed -n '1p')
+    b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
+    b1_l2_norm=$(echo "$b1_l2" | tr '\\' '/')
+    DETAIL_ABS_norm=$(echo "$DETAIL_ABS" | tr '\\' '/')
+    if [ "$b1_l1" = "-r" ] && [ "$b1_l2_norm" = "$DETAIL_ABS_norm" ]; then
+      pass "T-SPAWN-9 empty cwd + root process.cwd -> bare -r (single block)"
+    else
+      fail "T-SPAWN-9 unexpected single-block content: b1_l1='$b1_l1', b1_l2='$b1_l2'"
+    fi
   fi
 else
   fail "T-SPAWN-9 marker not created"
