@@ -279,3 +279,7 @@ Changes: Fixed: bare invocation of review-loop-cap-menu, review-skill-size, and 
 ### FEATURE: PR #487 (2026-05-23)
 Background: feat(#468): /resume-session skill; remove /boost
 Changes: Added: `/resume-session` — resume a mid-workflow session by detecting the `in_progress` step and dispatching to the matching skill, or surfacing the pending worktree-end cleanup marker.;Removed: `/boost` — superseded by native VS Code + Claude Code model switching.
+
+### FEATURE: PR #490 (2026-05-23)
+Background: fix(#486): restore code --folder-uri plan-file open; fix #291 multi-window routing
+Changes: Fixed: plan files (intent/outline/detail.md) now open automatically in the correct VS Code window when `CONFIRM_*=on` — restored after PR #454 had removed the auto-open unconditionally (#486). Multi-window routing fixed via `--folder-uri` workspace targeting; the file now opens in the VS Code window whose workspace matches the originating session (#291).
