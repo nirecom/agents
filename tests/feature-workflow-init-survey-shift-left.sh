@@ -184,6 +184,66 @@ fi
 assert_file_contains "E3" "SC agent delegates to survey-code/SKILL.md"      "$SC_AGENT" "survey-code/SKILL.md"
 
 # ===========================================================================
+# Group F — Bug B/C/D fixes (issue #497): SSOT shared validity contract
+# ===========================================================================
+echo "--- Group F: shared validity contract + one-line pointer references ---"
+
+SHARED_VALID="$REPO_ROOT/skills/_shared/survey-artifact-valid.md"
+
+# F1-F3: shared contract is the SSOT
+assert_file_exists       "F1" "Shared validity contract exists"                       "$SHARED_VALID"
+assert_file_contains     "F2" "Shared contract defines Verified Claims requirement"   "$SHARED_VALID" "## Verified Claims"
+assert_file_contains     "F3" "Shared contract gives reference Bash check"            "$SHARED_VALID" "artifact_valid"
+
+# F4-F5: Bug B — survey-code SKILL.md Rules section
+assert_file_not_contains "F4" "SC SKILL.md no longer contains absolute Read-only line" \
+    "$SC_SKILL" "Read-only — do not modify any files"
+assert_file_contains     "F5" "SC SKILL.md references shared validity contract" \
+    "$SC_SKILL" "skills/_shared/survey-artifact-valid.md"
+
+# F6-F10: Bug C — workflow-init Step 6.5
+assert_file_contains     "F6" "WI Step 6.5 references shared validity contract" \
+    "$WI_SKILL" "skills/_shared/survey-artifact-valid.md"
+assert_file_not_contains "F7" "WI Step 6.5 no longer uses existence-only wording" \
+    "$WI_SKILL" "verify each artifact exists at its absolute path"
+assert_file_not_contains "F8" "WI Step 6.5 does NOT inline artifact_valid() function body" \
+    "$WI_SKILL" 'grep -qF "## Verified Claims"'
+assert_file_contains     "F9"  "WI retains WORKFLOW_SURVEY_AGENT_FAILED for survey-code" \
+    "$WI_SKILL" "WORKFLOW_SURVEY_AGENT_FAILED: survey-code"
+assert_file_contains     "F10" "WI retains WORKFLOW_SURVEY_AGENT_FAILED for survey-history" \
+    "$WI_SKILL" "WORKFLOW_SURVEY_AGENT_FAILED: survey-history"
+
+# F11-F15: Bug D — clarify-intent
+if [ -f "$CI_SKILL" ]; then
+    count=$(grep -cF "skills/_shared/survey-artifact-valid.md" "$CI_SKILL" || true)
+    if [ "${count:-0}" -ge 2 ]; then
+        pass "F11. CI references shared contract in both Step 6 and Completion 3 (count=$count)"
+    else
+        fail "F11. CI references shared contract in both Step 6 and Completion 3 — found ${count:-0}, expected >=2"
+    fi
+else
+    fail "F11. CI references shared contract in both Step 6 and Completion 3 — file missing: $CI_SKILL"
+fi
+assert_file_not_contains "F12" "CI no longer uses 'Both present -> surveys' existence-only phrase" \
+    "$CI_SKILL" "Both present"
+assert_file_not_contains "F13" "CI Completion 3 no longer says 'Either missing -> invoke the missing survey'" \
+    "$CI_SKILL" "Either missing → invoke the missing survey"
+assert_file_contains     "F14" "CI now expresses validity check (mentions 'valid')" \
+    "$CI_SKILL" "valid"
+assert_file_not_contains "F15" "CI does NOT inline artifact_valid() function body" \
+    "$CI_SKILL" 'grep -qF "## Verified Claims"'
+
+# ===========================================================================
+# Group G — Bug A: agent files state write rationale
+# ===========================================================================
+echo "--- Group G: agent file Write rationale (Bug A) ---"
+
+assert_file_contains "G1" "SC agent declares artifact write REQUIRED"          "$SC_AGENT" "REQUIRED"
+assert_file_contains "G2" "SH agent declares artifact write REQUIRED"          "$SH_AGENT" "REQUIRED"
+assert_file_contains "G3" "SC agent rationale mentions outside git repository" "$SC_AGENT" "outside any git repository"
+assert_file_contains "G4" "SH agent rationale mentions outside git repository" "$SH_AGENT" "outside any git repository"
+
+# ===========================================================================
 # Summary
 # ===========================================================================
 TOTAL=$((PASS_COUNT + ERRORS))
