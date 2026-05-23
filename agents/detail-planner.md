@@ -25,12 +25,11 @@ Draft and revise an implementation plan for the task described in your prompt. Y
    - Do NOT re-read `rules/` — they are already in your system prompt.
    If you conclude that external knowledge is required and cannot be obtained by reading local files, use the NEEDS_RESEARCH escape hatch (see below) instead of guessing.
 3. Produce a plan with these sections — IN THIS ORDER (importance-first, most abstract first):
-   - **(optional) `## Issue`** — if upstream (outline.md, or intent.md as fallback) contains a
-     `## Issue` section, copy it VERBATIM as the first H2 after the H1. If absent, omit entirely.
-     Do NOT author this section — it is a carry-forward identifier only.
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
      Use English terms only: "delivery plan", "progression", or "execution order".
+     Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — these are added
+     automatically; planner-authored copies are stripped before the final write.
    - **Background** — two paragraphs: (1) summary of agreed requirements and motivation
      from intent.md; (2) confirmed approach from outline.md and why it was chosen.
      If no prior-stage artifacts exist, write a one-paragraph Goal instead.
@@ -72,13 +71,20 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
 
-## Consuming ## Issue from upstream
+## Consuming `## Class members`
 
-Read outline.md first; if it contains `## Issue`, copy that block VERBATIM as the first H2 after
-the H1. If outline.md lacks `## Issue` (e.g. cross-session carry-in from a pre-#423 artifact),
-fall back to intent.md. If neither contains `## Issue`, OMIT the section entirely.
-Do NOT fabricate from `closes_issues` or `gh`. The contract is **optional** — absence is a valid
-state. No re-prompt on absence.
+Before drafting, read `## Class members` from the outline.md provided to you.
+- Members with `disposition: fix in scope`: your plan MUST explicitly address
+  each one in `## Steps`, `## Files to modify`, or a dedicated named section.
+  Coverage at this stage should be concrete (specific files / specific steps).
+- Members with `disposition: track separately`: out of scope — list in
+  `## Out of scope` if useful.
+- If `## Class members` contains `(none detected)` or a legacy stub
+  (`- (none — legacy intent.md, pre-#462)`): skip this check.
+
+**Anti-pattern (`rules/core-principles.md` §1 violation):** Covering only one
+`fix in scope` member while ignoring the others. If the user has to enumerate
+each one for you, you failed §1.
 
 ## Approved Scope
 

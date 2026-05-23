@@ -77,9 +77,22 @@ below. Reuse across all subsequent steps — do not re-resolve.
    2. **The planner's current plan** — paste or closely summarize.
    3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
 
-7. Once the reviewer returns `APPROVED`, write the final plan to
-   `<PLANS_DIR>/<session-id>-detail.md` (not draft). Then apply the
-   confirm-plan protocol (`skills/_shared/confirm-plan.md`)
+7. Once the reviewer returns `APPROVED`, assemble the final plan to
+   `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. The helper
+   carries the 3 mandatory sections (`## Issue`, `## Class members`,
+   `## Accepted Tradeoffs`) verbatim from outline.md and uses the planner's
+   draft as the body source.
+   ```bash
+   "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline \
+     "<PLANS_DIR>/<session-id>-outline.md" \
+     "<PLANS_DIR>/drafts/<session-id>-detail-draft.md" \
+     "<PLANS_DIR>/<session-id>-detail.md"
+   ```
+   - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
+   - Helper exit non-zero → re-prompt detail-planner once and re-assemble; second failure → halt with error.
+   - `--source-kind outline` enforces hard-fail when outline.md is missing `## Class members` (post-#462 outline.md must always carry all 3 mandatory sections).
+
+   Then apply the confirm-plan protocol (`skills/_shared/confirm-plan.md`)
    using `CONFIRM_DETAIL` as the flag and `<session-id>-detail.md` as the artifact.
    - **Revise** (skill-specific): ask what to change, send feedback to the planner
      as a new revision request, then loop back to step 5a (re-draft → re-review →

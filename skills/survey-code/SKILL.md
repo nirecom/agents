@@ -56,6 +56,16 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    ```
    If no claims were extracted in Step 0, write the section with the note
    "No verifiable behavioral/factual claims found in intent.md or context.md."
+
+   The file must also include a `## Candidate class members` section:
+   ```
+   ## Candidate class members
+   - <member name>: <one-line role> (<file>:<line>)
+   ```
+   List sibling members of the class being changed (per `rules/core-principles.md`
+   §1 Elevate Perspective). Each line: member name, one-line role description,
+   and the primary file:line reference. If no candidates are detected, write a
+   single line: `- (none detected)`. This section is required.
 6. Present findings for user review before proceeding to plan.
 
 ## Rules

@@ -154,15 +154,24 @@ for ctx_file in "${CONTEXT_FILES[@]:-}"; do
   fi
 done
 
-# Load accepted tradeoffs
+# Load settled design decisions for codex review context.
+# Includes Accepted Tradeoffs AND Class members. What is settled:
+#   - Accepted Tradeoffs: design decisions finalised by the planner+user.
+#   - Class members: disposition only (which members are 'fix in scope' vs 'track separately').
+#     Codex must not re-raise "why wasn't X fixed" for 'track separately' members, but CAN
+#     still raise concerns about HOW a 'fix in scope' member is addressed in the plan.
+# Note: ## Issue is the PR/task identifier (not a settled design decision) —
+# intentionally excluded from the codex context block.
 ACCEPTED_TRADEOFFS_BLOCK=""
 if [[ -n "$ACCEPTED_TRADEOFFS_FILE" && -f "$ACCEPTED_TRADEOFFS_FILE" ]]; then
-  TRADEOFFS_CONTENT=$("$(dirname "$(realpath "$0")")/extract-accepted-tradeoffs" \
-    "$ACCEPTED_TRADEOFFS_FILE" 2>/dev/null || true)
+  TRADEOFFS_CONTENT=$("$(dirname "$(realpath "$0")")/extract-mandatory-sections" \
+    "$ACCEPTED_TRADEOFFS_FILE" \
+    --section "Accepted Tradeoffs" --section "Class members" --with-headers 2>/dev/null || true)
   if [[ -n "$TRADEOFFS_CONTENT" ]]; then
-    ACCEPTED_TRADEOFFS_BLOCK="IMPORTANT — SETTLED DECISIONS (Accepted Tradeoffs):
-The design choices below are finalised by the approved context and MUST be treated as
-out of scope for this review. Do NOT raise concerns about these areas.
+    ACCEPTED_TRADEOFFS_BLOCK="IMPORTANT — SETTLED DECISIONS (Accepted Tradeoffs + Class members):
+The design choices and class-member scope below are finalised by the approved context
+and MUST be treated as out of scope for this review. Do NOT raise concerns about these
+areas (including disposition of class members marked 'track separately').
 
 [ACCEPTED TRADEOFFS START]
 ${TRADEOFFS_CONTENT}

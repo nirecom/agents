@@ -61,7 +61,16 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
   revision-rounds cap is the symmetric pair. Both caps now route through
   `bin/review-loop-cap-menu`. Do NOT propose alternative escalation flows that bypass
   this helper.
-- Outline.md MUST contain a top-level `## Accepted Tradeoffs` section carrying the
-  intent.md tradeoffs verbatim plus any newly-settled outline-stage entries. If absent
-  or missing intent-stage entries, mark the outline `MISSING_ALTERNATIVE` with a HIGH
-  concern noting the missing section.
+- **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` §2):**
+  outline.md MUST contain `## Issue` (only when intent.md had one), `## Class members`,
+  and `## Accepted Tradeoffs`, verbatim from intent.md. If any required section is absent
+  or modified relative to intent.md, return `MISSING_ALTERNATIVE` with a `[HIGH]` concern
+  naming the absent or altered section.
+- **Class members coverage (semantic):**
+  Read `## Class members` in the outline.md being reviewed. For each member with
+  `disposition: fix in scope`, verify that the adopted approach / delivery plan / a
+  named section explicitly addresses it. If any `fix in scope` member is unaddressed,
+  return `MISSING_ALTERNATIVE` with:
+  `[HIGH] Class member <name> has disposition=fix in scope but no section / delivery-plan mention covers it. Either add coverage or change disposition to track separately in intent.md.`
+  Members with `disposition: track separately`, `(none detected)`, or a legacy stub —
+  skip the semantic check.
