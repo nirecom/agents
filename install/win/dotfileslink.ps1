@@ -160,3 +160,21 @@ $ddgCmdContent = "@echo off`r`nwsl bash -c ""draw-diagram-gemini %*""`r`n"
 Write-Launcher "$LocalBin\draw-diagram-gemini.cmd" $ddgCmdContent "draw-diagram-gemini.cmd"
 $ddgShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/draw-diagram-gemini`" `"`$@`"`n"
 Write-Launcher "$LocalBin\draw-diagram-gemini" $ddgShimContent "draw-diagram-gemini (bash shim)"
+
+# --- ~/.local/bin/review-loop-cap-menu launchers (cmd + bash shim) ---
+$rlcmCmdContent = "@echo off`r`nwsl bash -c ""review-loop-cap-menu %*""`r`n"
+Write-Launcher "$LocalBin\review-loop-cap-menu.cmd" $rlcmCmdContent "review-loop-cap-menu.cmd"
+$rlcmShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-loop-cap-menu`" `"`$@`"`n"
+Write-Launcher "$LocalBin\review-loop-cap-menu" $rlcmShimContent "review-loop-cap-menu (bash shim)"
+
+# --- ~/.local/bin/extract-accepted-tradeoffs launchers (cmd + bash shim) ---
+$eatCmdContent = "@echo off`r`nwsl bash -c ""extract-accepted-tradeoffs %*""`r`n"
+Write-Launcher "$LocalBin\extract-accepted-tradeoffs.cmd" $eatCmdContent "extract-accepted-tradeoffs.cmd"
+$eatShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/extract-accepted-tradeoffs`" `"`$@`"`n"
+Write-Launcher "$LocalBin\extract-accepted-tradeoffs" $eatShimContent "extract-accepted-tradeoffs (bash shim)"
+
+# --- ~/.local/bin/review-skill-size launchers (cmd + bash shim) ---
+$rssCmdContent = "@echo off`r`nwsl bash -c ""review-skill-size %*""`r`n"
+Write-Launcher "$LocalBin\review-skill-size.cmd" $rssCmdContent "review-skill-size.cmd"
+$rssShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-skill-size`" `"`$@`"`n"
+Write-Launcher "$LocalBin\review-skill-size" $rssShimContent "review-skill-size (bash shim)"
