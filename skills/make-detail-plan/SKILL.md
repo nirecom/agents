@@ -97,11 +97,11 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - **Revise** (skill-specific): ask what to change, send feedback to the planner
      as a new revision request, then loop back to step 5a (re-draft → re-review →
      re-confirm). Each revision consumes `revision_rounds`.
-   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after the
+   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after the
      one-paragraph summary (per protocol Step 3). DO NOT present any path —
      the `show-plan-link.js` hook's `Plan file written:` line is the sole
      surfaced breadcrumb (per protocol Step 2).
-   - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_plan_complete>>` after confirmation.
+   - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after confirmation.
 
 ## Research Escalation
 
@@ -143,18 +143,19 @@ Skip the entire discussion loop when **both** of the following are true:
 
 In that case, skip `judge-task-complexity` and draft the plan directly in the main conversation and present it for approval.
 
-## Skipping the Plan Step Entirely
+## Skipping This Stage
 
 The Skip Conditions above skip the planner/reviewer discussion loop but still
-produce a plan. To skip the plan step itself (no plan at all), run:
+produce a plan. To skip the detail stage itself (no detail plan), run:
 
-`echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
+`echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>>"`
 
-Use this only when the task is trivial enough that no written plan — not even
-an informal one — is needed (e.g., a typo fix, a one-line config tweak).
+Use this only when the outline already provides file-level clarity (e.g., a
+typo fix, a one-line config tweak, or when the outline stage already enumerated
+the exact file edits).
 Reason must be ≥3 non-space chars, not a placeholder, and contain no '>'.
 
-Skipping research does NOT justify skipping the plan step.
+Skipping research does NOT justify skipping the detail stage.
 
 ## Rules
 
@@ -174,7 +175,7 @@ Skipping research does NOT justify skipping the plan step.
 ## Completion
 
 After completing this skill:
-1. Run: `echo "<<WORKFLOW_MARK_STEP_plan_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+1. Run: `echo "<<WORKFLOW_MARK_STEP_detail_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
 2. Record the branching decision: consult `rules/branch.md` and `rules/worktree.md`, then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`
 3. Invoke `write-tests` via the Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`).
 

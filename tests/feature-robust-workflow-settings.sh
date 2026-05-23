@@ -129,7 +129,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# SR8: bare _NOT_NEEDED absent / reason forms present (4 sentinels)
+# SR8: bare _NOT_NEEDED absent / reason forms present (5 sentinels)
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== settings.json: SR8 — _NOT_NEEDED: bare absent + reason form present ==="
@@ -137,7 +137,7 @@ echo "=== settings.json: SR8 — _NOT_NEEDED: bare absent + reason form present 
 SR8_OUT=$(node -e "
 const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
 const ask=s.permissions&&s.permissions.ask||[];
-const names=['WORKFLOW_CLARIFY_INTENT_NOT_NEEDED','WORKFLOW_PLAN_NOT_NEEDED','WORKFLOW_WRITE_TESTS_NOT_NEEDED','WORKFLOW_REVIEW_SECURITY_NOT_NEEDED'];
+const names=['WORKFLOW_CLARIFY_INTENT_NOT_NEEDED','WORKFLOW_OUTLINE_NOT_NEEDED','WORKFLOW_DETAIL_NOT_NEEDED','WORKFLOW_WRITE_TESTS_NOT_NEEDED','WORKFLOW_REVIEW_SECURITY_NOT_NEEDED'];
 for (const n of names) {
   const bare='Bash(echo \"<<'+n+'>>\")';
   const reason='Bash(echo \"<<'+n+': *>>\")';
@@ -147,7 +147,7 @@ for (const n of names) {
 process.exit(0);
 " -- "$SETTINGS" 2>&1) && SR8_OK=1 || SR8_OK=0
 if [ "$SR8_OK" = "1" ]; then
-    pass "SR8. _NOT_NEEDED sentinels: bare absent + reason form present (all 4)"
+    pass "SR8. _NOT_NEEDED sentinels: bare absent + reason form present (all 5)"
 else
     fail "SR8. _NOT_NEEDED contract violated: $SR8_OUT"
 fi

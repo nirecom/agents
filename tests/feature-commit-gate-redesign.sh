@@ -110,7 +110,7 @@ read_state_field() {
 }
 
 # Build a state JSON.
-# Args: sid branch uv-status [other-status: applies to research/plan/write_tests/review_security/run_tests/docs]
+# Args: sid branch uv-status [other-status: applies to research/outline/detail/write_tests/review_security/run_tests/docs]
 state_json() {
     local sid="$1" branch="$2" uv_status="$3" other="${4:-complete}"
     local branch_json
@@ -122,7 +122,8 @@ state_json() {
   "steps": {
     "clarify_intent":     {"status": "$other", "updated_at": "$NOW_ISO"},
     "research":           {"status": "$other", "updated_at": "$NOW_ISO"},
-    "plan":               {"status": "$other", "updated_at": "$NOW_ISO"},
+    "outline":            {"status": "$other", "updated_at": "$NOW_ISO"},
+    "detail":             {"status": "$other", "updated_at": "$NOW_ISO"},
     "branching_complete": {"status": "$other", "updated_at": "$NOW_ISO"},
     "write_tests":        {"status": "$other", "updated_at": "$NOW_ISO"},
     "review_security":    {"status": "$other", "updated_at": "$NOW_ISO"},
@@ -143,7 +144,7 @@ state_json_custom() {
     local branch_json
     if [ "$branch" = "null" ]; then branch_json="null"; else branch_json="\"$branch\""; fi
     # defaults
-    local clarify_intent="complete" research="complete" plan="complete"
+    local clarify_intent="complete" research="complete" outline="complete" detail="complete"
     local branching_complete="complete" write_tests="complete"
     local review_security="complete" run_tests="complete" docs="complete"
     local user_verification="pending" cleanup="complete"
@@ -151,7 +152,8 @@ state_json_custom() {
         case "$1" in
             clarify_intent) clarify_intent="$2";;
             research) research="$2";;
-            plan) plan="$2";;
+            outline) outline="$2";;
+            detail) detail="$2";;
             branching_complete) branching_complete="$2";;
             write_tests) write_tests="$2";;
             review_security) review_security="$2";;
@@ -169,7 +171,8 @@ state_json_custom() {
   "steps": {
     "clarify_intent":     {"status": "$clarify_intent", "updated_at": "$NOW_ISO"},
     "research":           {"status": "$research", "updated_at": "$NOW_ISO"},
-    "plan":               {"status": "$plan", "updated_at": "$NOW_ISO"},
+    "outline":            {"status": "$outline", "updated_at": "$NOW_ISO"},
+    "detail":             {"status": "$detail", "updated_at": "$NOW_ISO"},
     "branching_complete": {"status": "$branching_complete", "updated_at": "$NOW_ISO"},
     "write_tests":        {"status": "$write_tests", "updated_at": "$NOW_ISO"},
     "review_security":    {"status": "$review_security", "updated_at": "$NOW_ISO"},
@@ -294,7 +297,8 @@ write_state "$SID_7" "$(cat <<EOF
   "created_at": "$NOW_ISO",
   "steps": {
     "research":        {"status": "complete", "updated_at": "$NOW_ISO"},
-    "plan":            {"status": "complete", "updated_at": "$NOW_ISO"},
+    "outline":         {"status": "complete", "updated_at": "$NOW_ISO"},
+    "detail":          {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":     {"status": "complete", "updated_at": "$NOW_ISO"},
     "review_security": {"status": "complete", "updated_at": "$NOW_ISO"},
     "run_tests":       {"status": "complete", "updated_at": "$NOW_ISO"},

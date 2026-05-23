@@ -11,9 +11,11 @@
    - **2a. Research** — Run `/survey-code` and/or `/deep-research`.
      If unnecessary: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"`
    - **2b. `/make-outline-plan`** — Propose 2-3 approach options and get user sign-off.
+     If a single obvious approach exists: `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>"`
    - **2c. `/make-detail-plan`** — Produce file-level plan via planner/reviewer loop.
+     If file-level changes are already settled in outline: `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>"`
    - Skipping Research (2a) does NOT justify skipping the remaining Plan stages.
-   - If Plan entirely unnecessary: `echo "<<WORKFLOW_PLAN_NOT_NEEDED: <reason>>"`
+   - `WORKFLOW_PLAN_NOT_NEEDED` was removed in #485. Emit both per-stage sentinels to reproduce the old bulk-skip.
    Run `/review-plan-security` when the plan involves secrets, third-party services, or external input.
 3. **Branch/Worktree creation** —
    - **`ENFORCE_WORKTREE=on` (default)**: all writes from the main worktree are blocked, regardless of branch. Run `/worktree-start` to create a linked worktree on a feature branch.

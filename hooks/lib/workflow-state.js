@@ -28,7 +28,8 @@ const VALID_STEPS = [
   "workflow_init",
   "clarify_intent",
   "research",
-  "plan",
+  "outline",
+  "detail",
   "branching_complete",
   "write_tests",
   "run_tests",
@@ -37,7 +38,7 @@ const VALID_STEPS = [
   "user_verification",
   "cleanup",
 ];
-const SKIPPABLE_STEPS = ["clarify_intent", "research", "plan", "write_tests", "review_security", "cleanup"];
+const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
@@ -94,6 +95,17 @@ function readState(sessionId) {
       if (!state.steps.branching_complete) {
         state.steps.branching_complete = { status: "complete", updated_at: null };
       }
+      // --- BEGIN temporary: plan → outline+detail migration (added 2026-05-23, #485) ---
+      // Pre-#485 sessions stored a single "plan" step. Split into outline + detail.
+      // Both children inherit status + skip_reason from the parent. Acceptable
+      // over-credit for legacy in-flight sessions — branching_complete re-prompts.
+      if (state.steps.plan) {
+        const src = state.steps.plan;
+        if (!state.steps.outline) state.steps.outline = { ...src };
+        if (!state.steps.detail)  state.steps.detail  = { ...src };
+        delete state.steps.plan;
+      }
+      // --- END temporary: plan → outline+detail migration ---
       if (!state.steps.cleanup) {
         state.steps.cleanup = { status: "pending", updated_at: null };
       }
@@ -276,7 +288,8 @@ const STEP_HINT = {
   workflow_init:      "Invoke `workflow-init` via the Skill tool. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".",
   clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
   research:           "Invoke `survey-code` AND `survey-history` in parallel (premise verification), and/or `deep-research` (external knowledge). Skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>\". Then invoke `make-outline-plan`.",
-  plan:               "Invoke `make-outline-plan` then `make-detail-plan`.",
+  outline:            "Invoke `make-outline-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>\").",
+  detail:             "Invoke `make-detail-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>\").",
   branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
   write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
   run_tests:          "Invoke `run-tests` skill via the Skill tool (or run tests directly via Bash).",
