@@ -287,3 +287,7 @@ Changes: Fixed: plan files (intent/outline/detail.md) now open automatically in 
 ### FEATURE: PR #491 (2026-05-23)
 Background: fix(#484): workflow-gate recognizes WORKTREE_NOTES.md as docs evidence
 Changes: Fixed: docs gate が ENFORCE_WORKTREE=on 下で /update-docs → WORKTREE_NOTES.md にステージされた bullet を証拠として受理するようになった。installer-only / code-only 修正での workflow blocker (#484) を解消。
+
+### FEATURE: PR #496 (2026-05-23)
+Background: fix(#488): create-project.sh calls linkProjectV2ToRepository after board creation
+Changes: Fixed: Projects v2 boards created by `/migrate-repo` are now automatically linked to the target repository — boards appear on the repo `/projects` page immediately after migration. Added `backfill-project-link.sh` to re-link existing boards created before this fix.
