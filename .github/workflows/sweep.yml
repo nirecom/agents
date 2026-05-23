@@ -1,0 +1,20 @@
+name: "Sweep periodic cleanup"
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run sweep-worktrees
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+        run: bash bin/sweep-worktrees.sh --ci-mode --apply --min-age-hours 24

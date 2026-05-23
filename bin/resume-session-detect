@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
 const {
   resolveSessionId,
   readState,
   VALID_STEPS,
   STEP_HINT,
 } = require("../hooks/lib/workflow-state");
-const { getRepoId, MARKER_PREFIXES } = require("../hooks/enforce-worktree.js");
-const { getWorkflowPlansDir } = require("../hooks/lib/workflow-plans-dir");
 
 const STEP_TO_SKILL = Object.freeze({
   workflow_init:  "workflow-init",
@@ -22,26 +18,7 @@ const STEP_TO_SKILL = Object.freeze({
   cleanup:        "worktree-end",
 });
 
-function findWorktreeEndMarker() {
-  const repoId = getRepoId(process.cwd());
-  if (!repoId) return null;
-  const plansDir = getWorkflowPlansDir();
-  const worktreeEndDir = path.join(plansDir, "worktree-end");
-  const prefix = MARKER_PREFIXES.CWD_UNLOCK + repoId + "--";
-  const prefixLower = process.platform === "win32" ? prefix.toLowerCase() : prefix;
-  let entries;
-  try { entries = fs.readdirSync(worktreeEndDir); } catch (e) { return null; }
-  for (const name of entries) {
-    const lower = process.platform === "win32" ? name.toLowerCase() : name;
-    if (lower.startsWith(prefixLower)) return path.join(worktreeEndDir, name);
-  }
-  return null;
-}
-
 function detect() {
-  const wtMarker = findWorktreeEndMarker();
-  if (wtMarker) return { type: "worktree-end-resume", marker_path: wtMarker };
-
   const sessionId = resolveSessionId();
   if (!sessionId) return { type: "none", reason: "session_id_unresolved" };
 
@@ -81,4 +58,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { STEP_TO_SKILL, resolveSessionId, detect, findWorktreeEndMarker };
+module.exports = { STEP_TO_SKILL, resolveSessionId, detect };
