@@ -219,6 +219,27 @@ if require_file "$WIN_LINKER"; then
 fi
 
 # ---------------------------------------------------------------------------
+# 10. Post-action CONFIRM_* gates (#425, #472)
+# ---------------------------------------------------------------------------
+echo "=== 10. Post-action CONFIRM_* gates (#425, #472) ==="
+if require_file "$TESTS_SKILL"; then
+    hit=$(awk '/Present the final test file content/{a=NR} a && NR>=a-8 && NR<=a+8 && /CONFIRM_TESTS/{print NR; exit}' "$TESTS_SKILL")
+    if [ -n "$hit" ]; then
+        pass "write-tests step 7 has CONFIRM_TESTS gate (line $hit)"
+    else
+        fail "write-tests step 7 missing CONFIRM_TESTS gate near 'Present the final test file'"
+    fi
+fi
+if require_file "$WRITE_CODE_SKILL"; then
+    hit=$(awk '/Present the final edited file list/{a=NR} a && NR>=a-8 && NR<=a+8 && /CONFIRM_CODE/{print NR; exit}' "$WRITE_CODE_SKILL")
+    if [ -n "$hit" ]; then
+        pass "write-code step 6 has CONFIRM_CODE gate (line $hit)"
+    else
+        fail "write-code step 6 missing CONFIRM_CODE gate near 'Present the final edited file list'"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 echo
 if [ "$ERRORS" -eq 0 ]; then
     echo "All static checks passed."
