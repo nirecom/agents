@@ -14,45 +14,32 @@ First step of every workflow session. Routes on GH issue context: Path A (`#N` +
 
 ### Step 0 — Resolve <PLANS_DIR>
 
-Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+Canonical: `skills/_shared/resolve-plans-dir.md`. Run once at start:
 
 ```bash
 PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
               || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
 ```
 
-Capture the printed absolute path and substitute it for every <PLANS_DIR>
-placeholder in the remainder of this SKILL.md. Subagent prompts must receive
-the resolved absolute path as a literal string (subagents cannot expand $VAR).
-Reuse across all subsequent steps in this skill invocation — do not re-resolve.
-
-Canonical documentation: skills/_shared/resolve-plans-dir.md.
+Substitute the resolved absolute path for every `<PLANS_DIR>` placeholder below. Subagent prompts must receive literals — they cannot expand `$VAR`.
 
 ### Step 0.5 — Non-GitHub remote gate
 
+Canonical: `skills/_shared/non-github-remote-gate.md`. Inline:
+
 ```bash
-NON_GITHUB=0
 "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
-case $rc in
-  0) ;;                # GitHub — proceed with gh
-  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
-  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
-esac
-if [ "${NON_GITHUB:-0}" = "1" ]; then
-  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping workflow-init issue routing]"
-fi
+NON_GITHUB=$([ "$rc" = "1" ] && echo 1 || echo 0)  # rc=2 → fail-open
+[ "$NON_GITHUB" = "1" ] && echo "[GITHUB_ISSUES disabled: non-GitHub remote, routing as Path C]"
 ```
 
-When `NON_GITHUB=1`: skip steps 1–4 (issue detection, `gh issue view`, and route logic) and proceed directly as **Path C**. Steps 5–7 (context.md write, survey launch, Path C path-specific steps C1–C2) run as normal.
-
-When `NON_GITHUB=0` or exit 2 (unknown, fail-open): continue with steps 1–7 as normal.
+When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route logic), proceed as **Path C**. Steps 5–7 (context.md write, survey launch, C1–C2) run as normal.
 
 1. **Detect `#N`** (regex `#\d+`):
    - **0** → Path C.
    - **1** → step 2 with `ISSUES=(<N>)`.
    - **2+** → set `ISSUES=(<all found numbers, in the order found>)`. All entries become `closes_issues` (no narrowing). `ISSUES[0]` is the primary candidate.
-     (b) **Primary confirmation (single-window invariant):** immediately
+     **Primary confirmation (single-window invariant):** immediately
      `AskUserQuestion`:
      - question: "Which is the primary issue for this session?"
      - options: one branch per found issue, e.g. "#<ISSUES[0]> (first — recommended)" for index 0, "#<ISSUES[1]>" for index 1, etc.
