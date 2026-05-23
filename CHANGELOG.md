@@ -291,3 +291,7 @@ Changes: Fixed: docs gate が ENFORCE_WORKTREE=on 下で /update-docs → WORKTR
 ### FEATURE: PR #496 (2026-05-23)
 Background: fix(#488): create-project.sh calls linkProjectV2ToRepository after board creation
 Changes: Fixed: Projects v2 boards created by `/migrate-repo` are now automatically linked to the target repository — boards appear on the repo `/projects` page immediately after migration. Added `backfill-project-link.sh` to re-link existing boards created before this fix.
+
+### FEATURE: PR #498 (2026-05-23)
+Background: feat(#444): N issues per session — SSOT session model + multi-N routing
+Changes: Workflow sessions now support N issues per session (N >= 1): `/workflow-init` accepts multiple `#N` references, asks which is the primary, and all listed issues are closed in the same PR
