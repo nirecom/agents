@@ -128,6 +128,25 @@ run_report_stderr() {
     run_with_timeout 120 node "$REPORT_JS" "$intent" "$notes" "$sid" 2>&1 >/dev/null
 }
 
+# Run renderer with --env-file; discards stderr.
+# Usage: run_report_with_envfile <intent> <notes> <sid> <envfile>
+# Note: a literal `--` separator is inserted before --env-file so Node's
+# own --env-file option (built-in since Node 20) does NOT intercept it.
+# The script's argv handling must accept the flag from either position.
+run_report_with_envfile() {
+    local intent="$1" notes="$2" sid="$3" envfile="$4"
+    run_with_timeout 120 node "$REPORT_JS" "$intent" "$notes" "$sid" -- --env-file "$envfile" 2>/dev/null
+}
+
+# Run renderer with --env-file; merges stderr into stdout.
+# Usage: run_report_with_envfile_capture_all <intent> <notes> <sid> <envfile>
+run_report_with_envfile_capture_all() {
+    local intent="$1" notes="$2" sid="$3" envfile="$4"
+    run_with_timeout 120 node "$REPORT_JS" "$intent" "$notes" "$sid" -- --env-file "$envfile" 2>&1
+}
+
+SENTINEL='<<WORKFLOW_MARK_STEP_final_report_complete>>'
+
 # ============ P-series: parse-closes-issues.js ============
 
 test_P1_happy_single() {
@@ -813,6 +832,274 @@ test_I6_backup_vars_defined_in_step5() {
     fi
 }
 
+# ============ R15-R18, R17b, I7-I11: --env-file / sentinel / SKILL.md ============
+
+test_R15_sentinel_in_stdout() {
+    require_report_bin "R15_sentinel_in_stdout" || return
+    local intent="$TMPDIR_BASE/r15-intent.md"
+    local notes="$TMPDIR_BASE/r15-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out; out="$(run_report "$intent_node" "$notes_node" "sess-r15")"
+    if echo "$out" | grep -qF "$SENTINEL"; then
+        pass "R15: stdout contains sentinel $SENTINEL"
+    else
+        fail "R15: sentinel missing from stdout
+--- output ---
+$out"
+    fi
+}
+
+test_R16_envfile_values_adopted() {
+    require_report_bin "R16_envfile_values_adopted" || return
+    local intent="$TMPDIR_BASE/r16-intent.md"
+    local notes="$TMPDIR_BASE/r16-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local envfile="$TMPDIR_BASE/r16-env.json"
+    cat > "$envfile" <<'EOF'
+{
+  "PR_NUMBER": "777",
+  "PR_TITLE": "From JSON",
+  "BRANCH": "feature/json",
+  "WORKTREE_PATH": "/tmp/json-wt"
+}
+EOF
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+    local envfile_node; envfile_node="$(node_path "$envfile")"
+
+    local out
+    out="$(run_report_with_envfile "$intent_node" "$notes_node" "sess-r16" "$envfile_node")"
+    if echo "$out" | grep -qF "PR #777" \
+       && echo "$out" | grep -qF "feature/json" \
+       && echo "$out" | grep -qF "/tmp/json-wt" \
+       && echo "$out" | grep -qF "$SENTINEL"; then
+        pass "R16: --env-file values adopted (PR #777, feature/json, /tmp/json-wt) + sentinel"
+    else
+        fail "R16: missing one of PR #777 / feature/json / /tmp/json-wt / sentinel
+--- output ---
+$out"
+    fi
+}
+
+test_R17_envfile_missing_hard_fail() {
+    require_report_bin "R17_envfile_missing_hard_fail" || return
+    local intent="$TMPDIR_BASE/r17-intent.md"
+    local notes="$TMPDIR_BASE/r17-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+    local bogus="/nonexistent/path/env.json"
+
+    local combined
+    combined="$(run_report_with_envfile_capture_all "$intent_node" "$notes_node" "sess-r17" "$bogus")"
+    run_with_timeout 120 node "$REPORT_JS" "$intent_node" "$notes_node" "sess-r17" -- --env-file "$bogus" >/dev/null 2>&1
+    local code=$?
+
+    local ok=1
+    [ "$code" = "0" ] && ok=0
+    echo "$combined" | grep -qF "$SENTINEL" && ok=0
+    if ! echo "$combined" | grep -qF "FATAL"; then ok=0; fi
+    if ! echo "$combined" | grep -qF -- "--env-file"; then ok=0; fi
+
+    if [ "$ok" = "1" ]; then
+        pass "R17: missing --env-file → non-zero exit, no sentinel, FATAL + --env-file in output"
+    else
+        fail "R17: code=$code; output:
+$combined"
+    fi
+}
+
+test_R17b_envfile_relative_hard_fail() {
+    require_report_bin "R17b_envfile_relative_hard_fail" || return
+    local intent="$TMPDIR_BASE/r17b-intent.md"
+    local notes="$TMPDIR_BASE/r17b-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local bad
+    local all_ok=1
+    for bad in "./relative.json" "../traversal.json"; do
+        local combined
+        combined="$(run_report_with_envfile_capture_all "$intent_node" "$notes_node" "sess-r17b" "$bad")"
+        run_with_timeout 120 node "$REPORT_JS" "$intent_node" "$notes_node" "sess-r17b" -- --env-file "$bad" >/dev/null 2>&1
+        local code=$?
+        local has_sent=0
+        echo "$combined" | grep -qF "$SENTINEL" && has_sent=1
+        if [ "$code" = "0" ] && [ "$has_sent" = "1" ]; then
+            all_ok=0
+            echo "  R17b debug: path '$bad' yielded exit 0 AND sentinel — neither failure path triggered"
+        fi
+    done
+
+    if [ "$all_ok" = "1" ]; then
+        pass "R17b: relative/traversal --env-file paths → exit non-zero OR sentinel absent"
+    else
+        fail "R17b: at least one relative/traversal path succeeded with sentinel"
+    fi
+}
+
+test_R18_env_only_backward_compat() {
+    require_report_bin "R18_env_only_backward_compat" || return
+    local intent="$TMPDIR_BASE/r18-intent.md"
+    local notes="$TMPDIR_BASE/r18-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(PR_NUMBER=888 PR_TITLE='Env Only' BRANCH='feature/env-only' \
+           run_report "$intent_node" "$notes_node" "sess-r18")"
+
+    if echo "$out" | grep -qF "PR #888" \
+       && echo "$out" | grep -qF "feature/env-only" \
+       && echo "$out" | grep -qF "$SENTINEL"; then
+        pass "R18: env-only backward compat (PR #888, feature/env-only, sentinel)"
+    else
+        fail "R18: missing expected env-only values or sentinel
+--- output ---
+$out"
+    fi
+}
+
+test_I7_fat_call_env_reset_simulation() {
+    require_report_bin "I7_fat_call_env_reset_simulation" || return
+    # Skip if renderer doesn't yet support --env-file at all.
+    if ! grep -qF -- "--env-file" "$REPORT_JS"; then
+        skip "I7_fat_call_env_reset_simulation (renderer does not yet support --env-file)"
+        return
+    fi
+
+    local intent="$TMPDIR_BASE/i7-intent.md"
+    make_intent_with_closes "$intent" "(empty)"
+    local envfile="$TMPDIR_BASE/i7-env.json"
+    cat > "$envfile" <<'EOF'
+{
+  "PR_NUMBER": "42",
+  "PR_TITLE": "Integ T",
+  "PR_URL": "https://github.com/example/repo/pull/42",
+  "PR_STATE": "MERGED",
+  "BRANCH": "feature/i7",
+  "WORKTREE_PATH": "/tmp/i7-wt",
+  "CREATED_DATE": "2026-01-01",
+  "BACKUP_MANIFEST_PATH": "",
+  "NOTES_BACKUP_PATH": "",
+  "CLAUDE_CODE_RESTART_REQUIRED": "no"
+}
+EOF
+    local intent_node; intent_node="$(node_path "$intent")"
+    local envfile_node; envfile_node="$(node_path "$envfile")"
+
+    # Simulate env reset: unset all relevant vars, then invoke renderer.
+    local out
+    out="$(
+        unset PR_NUMBER PR_TITLE PR_URL PR_STATE BRANCH WORKTREE_PATH \
+              CREATED_DATE BACKUP_MANIFEST_PATH NOTES_BACKUP_PATH \
+              CLAUDE_CODE_RESTART_REQUIRED BRANCH_DELETED
+        run_with_timeout 120 node "$REPORT_JS" "$intent_node" "" "test-sid" -- --env-file "$envfile_node" 2>&1
+    )"
+    (
+        unset PR_NUMBER PR_TITLE PR_URL PR_STATE BRANCH WORKTREE_PATH \
+              CREATED_DATE BACKUP_MANIFEST_PATH NOTES_BACKUP_PATH \
+              CLAUDE_CODE_RESTART_REQUIRED BRANCH_DELETED
+        run_with_timeout 120 node "$REPORT_JS" "$intent_node" "" "test-sid" -- --env-file "$envfile_node" >/dev/null 2>&1
+    )
+    local code=$?
+
+    local ok=1
+    [ "$code" = "0" ] || ok=0
+    echo "$out" | grep -qF "PR #42" || ok=0
+    echo "$out" | grep -qF "feature/i7" || ok=0
+    echo "$out" | grep -qF "/tmp/i7-wt" || ok=0
+    echo "$out" | grep -qF "$SENTINEL" || ok=0
+    if echo "$out" | grep -qF "BRANCH_DELETED: yes"; then ok=0; fi
+
+    if [ "$ok" = "1" ]; then
+        pass "I7: fat-call env reset simulation — values from JSON adopted, sentinel emitted"
+    else
+        fail "I7: code=$code; output:
+$out"
+    fi
+}
+
+# Extract Step N region from SKILL.md (heading line excluded; until next '### ').
+extract_step_region() {
+    local pattern="$1"
+    awk -v pat="$pattern" '$0 ~ pat {f=1; next} /^### /{if(f)exit} f{print}' "$SKILL_MD"
+}
+
+test_I8_skill_md_step7_sentinel() {
+    require_skill_md "I8_skill_md_step7_sentinel" || return
+    local region; region="$(extract_step_region '^### .*[Ss]tep 7')"
+    if [ -z "$region" ]; then
+        skip "I8_skill_md_step7_sentinel (Step 7 region not found in SKILL.md)"
+        return
+    fi
+    if echo "$region" | grep -qF "$SENTINEL"; then
+        pass "I8: SKILL.md Step 7 contains sentinel literal"
+    else
+        fail "I8: SKILL.md Step 7 region missing sentinel
+$region"
+    fi
+}
+
+test_I9_skill_md_step7_envfile() {
+    require_skill_md "I9_skill_md_step7_envfile" || return
+    local region; region="$(extract_step_region '^### .*[Ss]tep 7')"
+    if [ -z "$region" ]; then
+        skip "I9_skill_md_step7_envfile (Step 7 region not found in SKILL.md)"
+        return
+    fi
+    if ! echo "$region" | grep -qF "worktree-final-report"; then
+        skip "I9_skill_md_step7_envfile (no worktree-final-report invocation in Step 7)"
+        return
+    fi
+    if echo "$region" | grep -qF -- "--env-file"; then
+        pass "I9: SKILL.md Step 7 invocation includes --env-file"
+    else
+        fail "I9: SKILL.md Step 7 has renderer call but no --env-file"
+    fi
+}
+
+test_I10_skill_md_step7_no_notes_backup_var() {
+    require_skill_md "I10_skill_md_step7_no_notes_backup_var" || return
+    local region; region="$(extract_step_region '^### .*[Ss]tep 7')"
+    if [ -z "$region" ]; then
+        skip "I10_skill_md_step7_no_notes_backup_var (Step 7 region not found)"
+        return
+    fi
+    if echo "$region" | grep -qE '\$\{?NOTES_BACKUP_PATH\}?'; then
+        fail "I10: SKILL.md Step 7 region uses \$NOTES_BACKUP_PATH (should use \$NOTES_PATH from JSON)"
+    else
+        pass "I10: SKILL.md Step 7 region does not reference \$NOTES_BACKUP_PATH shell var"
+    fi
+}
+
+test_I11_skill_md_step5_5_node_json_write() {
+    require_skill_md "I11_skill_md_step5_5_node_json_write" || return
+    local region; region="$(extract_step_region '^### .*[Ss]tep 5\.5')"
+    if [ -z "$region" ]; then
+        skip "I11_skill_md_step5_5_node_json_write (Step 5.5 region not found)"
+        return
+    fi
+    local has_node=0 has_json=0
+    if echo "$region" | grep -qE 'node (-e|--)'; then has_node=1; fi
+    if echo "$region" | grep -qF "final-report-env.json"; then has_json=1; fi
+    if [ "$has_node" = "1" ] && [ "$has_json" = "1" ]; then
+        pass "I11: SKILL.md Step 5.5 has node invocation + final-report-env.json"
+    else
+        fail "I11: Step 5.5 missing node-e/--(=$has_node) or final-report-env.json(=$has_json)"
+    fi
+}
+
 # ============ Run all ============
 
 test_P1_happy_single
@@ -850,6 +1137,18 @@ test_I3_skill_md_grep_invariant
 test_I4_skill_md_has_step_5_5
 test_I5_no_eval_in_skill_md
 test_I6_backup_vars_defined_in_step5
+
+test_R15_sentinel_in_stdout
+test_R16_envfile_values_adopted
+test_R17_envfile_missing_hard_fail
+test_R17b_envfile_relative_hard_fail
+test_R18_env_only_backward_compat
+
+test_I7_fat_call_env_reset_simulation
+test_I8_skill_md_step7_sentinel
+test_I9_skill_md_step7_envfile
+test_I10_skill_md_step7_no_notes_backup_var
+test_I11_skill_md_step5_5_node_json_write
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
