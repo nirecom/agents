@@ -299,3 +299,7 @@ Changes: Workflow sessions now support N issues per session (N >= 1): `/workflow
 ### FEATURE: PR #500 (2026-05-23)
 Background: feat(#485): granular plan-skip sentinels OUTLINE_NOT_NEEDED / DETAIL_NOT_NEEDED
 Changes: New: `WORKFLOW_OUTLINE_NOT_NEEDED` and `WORKFLOW_DETAIL_NOT_NEEDED` sentinels replace `WORKFLOW_PLAN_NOT_NEEDED` — plan-step skip is now granular per stage. Set `CONFIRM_OUTLINE=off` or `CONFIRM_DETAIL=off` in agents config to auto-approve the respective skip without a permission dialog.
+
+### FEATURE: PR #499 (2026-05-23)
+Background: feat(#296): retire phase-1 deferred-cleanup; add /sweep + /sweep-worktrees
+Changes: `/worktree-end` no longer requires a VS Code "Reload Window" or session restart when Windows CWD lock prevents worktree directory removal. The step now completes normally; the residual directory, its branch, and any `pending-branch-delete-` marker are reclaimed automatically by the new `/sweep-worktrees` skill.;`/sweep` and `/sweep-worktrees` are new user-invocable skills for manual or scheduled cleanup of zombie worktrees and deferred branch deletions. A nightly cron runs automatically via GitHub Actions.;Existing `pending-cwd-unlock-*` markers from pre-upgrade sessions are inert and safe to delete manually from `~/.workflow-plans/worktree-end/`.
