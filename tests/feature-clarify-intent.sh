@@ -275,6 +275,56 @@ assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*c
     "N13: no 'cap別枠' wording — class members question counts within 5-round cap"
 
 echo ""
+# ---------------------------------------------------------------------------
+# Issue #444: N issues per session
+# Tests M1-M6 are pre-implementation assertions — FAIL until source changes land.
+# ---------------------------------------------------------------------------
+echo "--- Issue #444: N issues per session ---"
+
+# M1: LOCAL_SKILL_MD contains `For each issue N` (N-iteration in Completion).
+assert_contains "$LOCAL_SKILL_MD" "For each issue N" \
+    "M1: clarify-intent Completion contains 'For each issue N' (N-iteration)"
+
+# M2: LOCAL_SKILL_MD contains `primary` somewhere in the file.
+assert_contains "$LOCAL_SKILL_MD" "primary" \
+    "M2: clarify-intent Completion section mentions 'primary'"
+
+# M3: Doctrine line 'One issue per session' must be removed.
+assert_absent "$LOCAL_SKILL_MD" "One issue per session" \
+    "M3: 'One issue per session' doctrine line removed"
+
+# M4: Blocker '**Multiple**: abort' must be removed.
+assert_absent "$LOCAL_SKILL_MD" '\*\*Multiple\*\*: abort' \
+    "M4: '**Multiple**: abort' blocker removed"
+
+# M5: SSOT reference to either rules/github-issues.md or 'Session model'.
+assert_contains "$LOCAL_SKILL_MD" "rules/github-issues\.md|Session model" \
+    "M5: SSOT reference to rules/github-issues.md or 'Session model' present"
+
+# M6: Mutex guard proximity check — if 'Which is the primary' appears in
+# LOCAL_SKILL_MD, then within the 30 lines preceding it the literal
+# '<!-- workflow-init: confirmed primary' must appear. If 'Which is the primary'
+# is absent entirely, FAIL.
+if [ ! -f "$LOCAL_SKILL_MD" ]; then
+    fail "M6: mutex guard proximity check (file not found)"
+else
+    PRIMARY_LN=$(grep -nF "Which is the primary" "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
+    if [ -z "$PRIMARY_LN" ]; then
+        fail "M6: 'Which is the primary' phrase missing — must be present as confirmation prompt"
+    else
+        START_LN=$((PRIMARY_LN - 30))
+        [ "$START_LN" -lt 1 ] && START_LN=1
+        END_LN=$((PRIMARY_LN - 1))
+        SLICE=$(awk -v s="$START_LN" -v e="$END_LN" 'NR>=s && NR<=e' "$LOCAL_SKILL_MD")
+        if printf '%s' "$SLICE" | grep -qF "<!-- workflow-init: confirmed primary"; then
+            pass "M6: '<!-- workflow-init: confirmed primary' appears within 30 lines before 'Which is the primary'"
+        else
+            fail "M6: '<!-- workflow-init: confirmed primary' missing within 30 lines before 'Which is the primary' (primary_ln=$PRIMARY_LN)"
+        fi
+    fi
+fi
+
+echo ""
 echo "=== Summary ==="
 echo "PASS: $PASS  FAIL: $FAIL"
 
