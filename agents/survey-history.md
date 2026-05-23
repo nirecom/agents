@@ -36,13 +36,17 @@ Produce a `<session-id>-survey-history.md` artifact with:
 
 ## Constraints
 
-- Read project source files only — do not modify them. Writing the output artifact
-  to the absolute artifact path supplied by the orchestrator (default location
-  resolved by `bin/workflow-plans-dir`) is required and allowed.
+- Read **project source files** only — do not modify them.
+- Writing the output artifact to the absolute path supplied by the orchestrator
+  (or to `<PLANS_DIR>/<session-id>-survey-history.md` when running standalone)
+  is REQUIRED. `<PLANS_DIR>` (default `~/.workflow-plans`, resolved via
+  `bin/workflow-plans-dir`) lives outside any git repository, so the Write tool
+  is permitted there and the "do not modify project files" rule does NOT apply
+  to the artifact path.
 - You MUST NOT emit any `<<WORKFLOW_*>>` sentinels. Sentinel emission (including
   `WORKFLOW_RESEARCH_NOT_NEEDED`) is handled exclusively by the orchestrator
   (the main agent's SKILL procedure), not by this subagent.
   If you output sentinel text, it will be ignored and may cause duplicate state writes.
-- gh CLI failures are non-fatal — log them in the artifact under `## Data gaps`
+- gh CLI failures are non-fatal — log them in the artifact under `## Data gaps`.
 - When invoked as a parallel Agent subagent by workflow-init:
   Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.
