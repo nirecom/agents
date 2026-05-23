@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
-# Extract the body of the '## Accepted Tradeoffs' section from a markdown file.
-# Works against any .md (intent.md, outline.md, or similar).
+# Thin wrapper: extracts the body of '## Accepted Tradeoffs' from a markdown file.
 # Usage: extract-accepted-tradeoffs <file>
-# Exit 0 on success (even if section is absent — outputs nothing).
-# Exit 2 if file not found.
+# Delegates to extract-mandatory-sections (body-only mode for backward compatibility).
 set -uo pipefail
 
-f="${1:-}"
-[[ -n "$f" && -f "$f" ]] || { echo "extract-accepted-tradeoffs: file not found: ${f:-<none>}" >&2; exit 2; }
-
-awk '
-  BEGIN { inside=0 }
-  /^## Accepted Tradeoffs[[:space:]]*$/ { inside=1; next }
-  inside && /^## / { inside=0 }
-  inside { print }
-' "$f"
+# --- BEGIN temporary: extract-accepted-tradeoffs → extract-mandatory-sections migration ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/extract-mandatory-sections" "${1:?extract-accepted-tradeoffs: file argument required}" \
+  --section "Accepted Tradeoffs"
+# --- END temporary: extract-accepted-tradeoffs → extract-mandatory-sections migration ---
