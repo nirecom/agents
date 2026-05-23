@@ -44,12 +44,7 @@ See `docs/security-policy.md` for the full pattern list.
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). After each
   successful step completion, appends a `[workflow]` next-step hint to `additionalContext` via
   `nextStepHint()` (defined in `hooks/lib/workflow-state.js`) to guide Claude toward the next skill
-- `show-plan-link.js` (PostToolUse, matcher: `Write`) — emits `systemMessage` with the absolute
-  path of any final plan artifact written directly under `~/.workflow-plans/` (basename
-  `*-(intent|outline|detail).md`; `drafts/` excluded). Always emits the breadcrumb regardless
-  of `CONFIRM_<STEP>` — it is the sole path surface for orchestrators (#445: VS Code auto-open
-  removed; chat-inline diff via `show-diff.js` is the sanctioned review UX for CONFIRM_*=on).
-  Idempotent on confirm-plan revision re-writes. Fail-open on tool failure or malformed stdin.
+- `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode`) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns `code --folder-uri file:///<cwd> -r <file>` to open the artifact in the VS Code window whose workspace folder matches the originating session's `cwd` (fixes multi-window mis-routing, #291; restored by #486). URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r`. Windows uses `cmd.exe /d /s /c code ...` (CVE-2024-27980 mitigation). Fail-open: spawn errors do not abort the hook.
 - `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
