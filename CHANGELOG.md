@@ -303,3 +303,7 @@ Changes: New: `WORKFLOW_OUTLINE_NOT_NEEDED` and `WORKFLOW_DETAIL_NOT_NEEDED` sen
 ### FEATURE: PR #499 (2026-05-23)
 Background: feat(#296): retire phase-1 deferred-cleanup; add /sweep + /sweep-worktrees
 Changes: `/worktree-end` no longer requires a VS Code "Reload Window" or session restart when Windows CWD lock prevents worktree directory removal. The step now completes normally; the residual directory, its branch, and any `pending-branch-delete-` marker are reclaimed automatically by the new `/sweep-worktrees` skill.;`/sweep` and `/sweep-worktrees` are new user-invocable skills for manual or scheduled cleanup of zombie worktrees and deferred branch deletions. A nightly cron runs automatically via GitHub Actions.;Existing `pending-cwd-unlock-*` markers from pre-upgrade sessions are inert and safe to delete manually from `~/.workflow-plans/worktree-end/`.
+
+### FEATURE: PR #505 (2026-05-23)
+Background: skills: stage-1 context:fork + user-invocable:false
+Changes: The workflow-internal skills write-tests, write-code, run-tests, and update-docs are now hidden from the / command menu (user-invocable: false). When CLAUDE_CODE_FORK_SUBAGENT=1 is set, 12 skills run in a forked context (context: fork), reducing main conversation context window pressure.
