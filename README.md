@@ -182,7 +182,7 @@ skills/            — slash commands (/clarify-intent, /make-outline-plan, /mak
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-cap-menu, review-skill-size, extract-accepted-tradeoffs, and other tools
 bin/lib/           — shared bash libraries (codex-core.sh)
 install/
   win/             — Windows-specific install subscripts
