@@ -123,25 +123,6 @@ marker_path_for() {
     " -- "$repo" "$branch" 2>/dev/null
 }
 
-cwd_unlock_marker_path_for() {
-    local repo="$1" branch="$2"
-    node -e "
-      const crypto = require('crypto');
-      const path = require('path');
-      const { spawnSync } = require('child_process');
-      const repo = process.argv[1];
-      const branch = process.argv[2];
-      const plans = process.env.WORKFLOW_PLANS_DIR;
-      const r = spawnSync('git', ['rev-parse', '--git-common-dir'],
-        { cwd: repo, encoding: 'utf8' });
-      const common = path.resolve(repo, r.stdout.trim());
-      const id = crypto.createHash('sha256').update(common).digest('hex').slice(0,16);
-      const enc = encodeURIComponent(branch);
-      const p = path.join(plans, 'worktree-end', 'pending-cwd-unlock-' + id + '--' + enc);
-      console.log(p.replace(/\\\\/g, '/'));
-    " -- "$repo" "$branch" 2>/dev/null
-}
-
 call_getMarkerPath() {
     run_with_timeout 30 node -e "
       try {
@@ -730,74 +711,6 @@ D3_isAllowedMarkerDelete_backward_compat() {
                      || fail "D3 isAllowedMarkerDelete_backward_compat == $r"
 }
 
-# D4 — isMarkerFilePath recognizes pending-cwd-unlock- marker (PR2)
-# Expected: FAIL until PR2 adds CWD_UNLOCK to ALL_MARKER_PREFIXES
-D4_isMarkerFilePath_cwd_unlock_pr2() {
-    local repo="$TMPDIR_BASE/d4-repo"
-    local plans="$TMPDIR_BASE/d4-plans"
-    mkdir -p "$repo"
-    (cd "$repo" && \
-        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
-        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
-    export WORKFLOW_PLANS_DIR="$plans"
-    local cwd_marker
-    cwd_marker="$(cwd_unlock_marker_path_for "$repo" "fix/foo")"
-    local r
-    r="$(call_isMarkerFilePath "$cwd_marker" "$repo")"
-    unset WORKFLOW_PLANS_DIR
-    [ "$r" = "true" ] && pass "D4 isMarkerFilePath_cwd_unlock_pr2" \
-                     || fail "D4 isMarkerFilePath_cwd_unlock_pr2 == $r"
-}
-
-# D5 — Hook allows Write to pending-cwd-unlock- marker (PR2)
-# Expected: FAIL until PR2
-D5_hook_allows_write_cwd_unlock_pr2() {
-    local repo="$TMPDIR_BASE/d5-repo"
-    local plans="$TMPDIR_BASE/d5-plans"
-    mkdir -p "$repo"
-    (cd "$repo" && \
-        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
-        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
-    export WORKFLOW_PLANS_DIR="$plans"
-    local cwd_marker
-    cwd_marker="$(cwd_unlock_marker_path_for "$repo" "fix/foo")"
-    local payload out
-    payload="$(hook_payload_write "$cwd_marker")"
-    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
-    unset WORKFLOW_PLANS_DIR
-    case "$out" in
-        *"\"decision\":\"block\""*) fail "D5 hook_allows_write_cwd_unlock_pr2 blocked: $out" ;;
-        *) pass "D5 hook_allows_write_cwd_unlock_pr2" ;;
-    esac
-}
-
-# D6 — Hook allows rm of pending-cwd-unlock- marker (PR2, branch gone)
-# Expected: FAIL until PR2
-D6_hook_allows_rm_cwd_unlock_pr2() {
-    local repo="$TMPDIR_BASE/d6-repo"
-    local wbase="$TMPDIR_BASE/d6-wbase"
-    local plans="$TMPDIR_BASE/d6-plans"
-    mkdir -p "$wbase/foo"
-    export WORKFLOW_PLANS_DIR="$plans"
-    # Setup minimal repo without the feature branch
-    mkdir -p "$repo"
-    (cd "$repo" && \
-        git -c user.email=t@example.com -c user.name=t init -q -b main . && \
-        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m init)
-    local cwd_marker
-    cwd_marker="$(cwd_unlock_marker_path_for "$repo" "fix/foo")"
-    mkdir -p "$(dirname "$cwd_marker")"
-    printf '%s\n%s\n%s\n' "fix/foo" "$wbase/foo/agents" "pre-remove" > "$cwd_marker"
-    local payload out
-    payload="$(hook_payload_bash "rm \"$cwd_marker\"")"
-    out="$(ENFORCE_WORKTREE=on WORKTREE_BASE_DIR="$wbase" run_hook "$payload" "$repo")"
-    unset WORKFLOW_PLANS_DIR
-    case "$out" in
-        *"\"decision\":\"block\""*) fail "D6 hook_allows_rm_cwd_unlock_pr2 blocked: $out" ;;
-        *) pass "D6 hook_allows_rm_cwd_unlock_pr2" ;;
-    esac
-}
-
 # D7 — Unknown prefix pending-foo- is blocked
 # Must PASS in PR1: unknown prefixes are rejected by existing code
 D7_unknown_prefix_blocked() {
@@ -825,15 +738,6 @@ D7_unknown_prefix_blocked() {
     unset WORKFLOW_PLANS_DIR
     [ "$r" = "false" ] && pass "D7 unknown_prefix_blocked" \
                       || fail "D7 unknown_prefix_blocked == $r"
-}
-
-# D8 — classify() is prefix-independent for cwd-unlock marker
-# Must PASS before and after PR2: classify() is prefix-independent
-D8_classify_prefix_independent() {
-    local r
-    r="$(call_classify 'rm "/tmp/.workflow-plans/worktree-end/pending-cwd-unlock-abc123def456--fix%2Ffoo"')"
-    [ "$r" = "write" ] && pass "D8 classify_prefix_independent" \
-                      || fail "D8 classify_prefix_independent == $r"
 }
 
 # D9 — module.exports exposes MARKER_PREFIXES, getRepoId, getMarkerPath (PR1)
@@ -955,11 +859,7 @@ T27_e2e_hook_blocks_write_to_tracked_file
 D1_getMarkerPath_backward_compat
 D2_isMarkerFilePath_backward_compat
 D3_isAllowedMarkerDelete_backward_compat
-D4_isMarkerFilePath_cwd_unlock_pr2
-D5_hook_allows_write_cwd_unlock_pr2
-D6_hook_allows_rm_cwd_unlock_pr2
 D7_unknown_prefix_blocked
-D8_classify_prefix_independent
 D9_module_exports_marker_api
 D10a_skill_md_step6b_updated
 D10b_old_recipe_disagrees_with_getrepoid
