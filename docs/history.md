@@ -257,3 +257,7 @@ Changes: `/migrate-repo` produces five generated/modified files during Step 1 an
 ### FEATURE: feat: session-scoped WORKFLOW_ENFORCE_WORKFLOW_OFF/ON sentinel (2026-05-22, 6a802594d2a8f3eb539cbfd9ffc42833e6287748, #453)
 Background: feat: session-scoped WORKFLOW_ENFORCE_WORKFLOW_OFF/ON sentinel
 Changes: 軽微なメンテ（private repo の .env commit、1ファイル変更など）で、10段階 workflow の全センチネルを立てる必要があり、かつ block-dotenv.js / scan-outbound.js 等
+
+### FEATURE: workflow-init: #N 不在時に issue 自動作成が走らないことがある (2026-05-22, 0e800c4c43c3c47a022caa250ab83599dfcb060c, #449)
+Background: `/workflow-init` はユーザー入力に `#N` が含まれない場合、Path C にルーティングされ `/clarify-intent` を起動する。`/clarify-intent` の Completion Step 3 は `closes_issues: (empty)` の場合に `gh issue create` を実行して tracking issue を自動作成する設計になっている。 ## Observed セッション `20260522-193351`（feature/cc-restart-required → PR #447）で、ユーザー入力に `#N` が含まれず Path C にルーティングされたが、`gh issue create` が走らず `<session-id>-intent.md` の `## closes_issues` が `(empty)` のまま workflow が完走、PR #447 が tracking issue なしでマージされた。 ## Expected ユーザー入力に `#N` が含まれないあらゆる workflow 開始で、tracking issue が自動作成され `closes_issues` に反映される。手動介入なしに「全 workflow が必ず issue を持つ」状態を担保する。 ## Related - PR #447 (cc-restart-required, merged) — このギャップが顕在化したセッション - `skills/workflow-init/SKILL.md` Path C - `skills/clarify-intent/SKILL.md` Completion Step 3
+Changes: `/workflow-init` はユーザー入力に `#N` が含まれない場合、Path C にルーティングされ `/clarify-intent` を起動する。`/clarify-intent` の Completion Step 3 は `closes_iss
