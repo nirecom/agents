@@ -107,17 +107,23 @@ fi
        triggers a write classification in enforce-worktree.js and gets blocked.
      - For a minimal PR: `gh pr create --head <branch> --fill`
      - With a custom body: `gh pr create --head <branch> --title "..." --body "..."`
-     - When the PR closes a tracked issue, include `Closes #<N>` in `--body` so
-       GitHub auto-closes the issue on merge. After merge, run
-       `/issue-close-finalize <N>` (or `--from-session`) from the main worktree
-       to promote the sentinel, close the issue, and post resolved-by.
-     - **Append a marker line per closed issue** to `--body` so
+     - When the PR closes one or more tracked issues, emit **one `Closes #<N>` line per entry in `closes_issues`** (primary first, then related in confirmed order) so GitHub auto-closes each issue on merge. After merge, run `/issue-close-finalize --from-session` from the main worktree to promote the sentinels, close the issues, and post resolved-by per N.
+     - **Append one marker line per closed issue** to `--body` so
        `find-pr-by-marker.sh` can resolve the merge commit later. One line per
        issue, hardcoded literal (no variable interpolation in the body string):
        ```
        <!-- issue-close-pr-of: <N> -->
        ```
-       Place the marker(s) at the end of the body, after the `Closes #<N>` line.
+       Place all marker lines at the end of the body, after the `Closes #<N>` lines.
+     - **Example (2 issues, primary #444, related #445):**
+       ```
+       Closes #444
+       Closes #445
+       <!-- issue-close-pr-of: 444 -->
+       <!-- issue-close-pr-of: 445 -->
+       ```
+       Pass as a static newline-delimited string to `--body` (no heredoc).
+     - See `rules/github-issues.md` "Session model".
    Display the PR URL.
 
 7. **Merge prompt:**

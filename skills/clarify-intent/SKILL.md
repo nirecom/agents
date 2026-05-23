@@ -20,7 +20,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 1. Read the user's request; identify the root question that unlocks all downstream decisions.
 
-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (step 1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple/ambiguous → ask in step 3 (counts toward 5-round cap). None → `closes_issues: []`. One issue per session.
+1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (step 1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all (`closes_issues: [N1, N2, ...]`) — primary is confirmed at Completion (see preamble). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
 
 1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed; first AskUserQuestion: "Approve framing / Revise / Start over". Approve or Revise → skip background question. Start over → delete file, proceed normally.
 
@@ -69,6 +69,16 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 ## Completion
 
+**Primary confirmation (interview-emerged multi-N only):**
+If `closes_issues` now has 2+ entries AND the file
+`<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` does NOT contain the marker
+`<!-- workflow-init: confirmed primary = `, then ask the user to confirm
+which is the primary:
+  AskUserQuestion: "Which is the primary issue for this session?"
+  (one branch per closes_issues entry)
+After confirmation, reorder `closes_issues` so the selected issue is first.
+This fires at most once per session (mutex with workflow-init Step 1(b)).
+
 After confirm-plan protocol returns, run the non-GitHub gate:
 
 ```bash
@@ -86,13 +96,17 @@ fi
 
 Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_GITHUB=1`):
 
-1. Read `closes_issues` from intent.md.
-2. **One issue N** (skip when `NON_GITHUB=1`): `gh issue edit <N> --add-label "intent:clarified"`. On failure: warn `[clarify-intent]`, add `intent:clarified-label-failed: <reason>` under Constraints.
-   Then (single-N only): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>`.
-   Exit 1 (Status set failure) → warn `[clarify-intent: wip-state set failed — Projects v2 Status not updated]` and continue.
-   Exit 2 (missing env / session-id) → same warn and point at `wip-state setup` / `CLAUDE_ENV_FILE`.
+1. Read `closes_issues` from intent.md (canonical parser: `hooks/lib/parse-closes-issues.js`).
+2. **Non-empty `closes_issues`** (skip when `NON_GITHUB=1`):
+   - **Label all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
+     `gh issue edit <N> --add-label "intent:clarified"`.
+     On failure for any N: warn `[clarify-intent]`, add `intent:clarified-label-failed: #<N>: <reason>` under Constraints. Continue with the remaining entries (best-effort per-N).
+   - **WIP set for primary only.** Let `PRIMARY=closes_issues[0]`. Run:
+     `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <PRIMARY>`.
+     Exit 1 (Status set failure) → warn `[clarify-intent: wip-state set failed — Projects v2 Status not updated]` and continue.
+     Exit 2 (missing env / session-id) → same warn and point at `wip-state setup` / `CLAUDE_ENV_FILE`.
+     WIP is keyed to the primary only; related issues do not receive a WIP fingerprint (see `rules/github-issues.md` "Session model").
 3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: (a) update `closes_issues` from `(empty)` to `- <N>`; (b) insert `## Issue\n#<N>: <title>` immediately after the H1 of intent.md using Read + Edit (title is the `--title` arg from this call — no re-fetch needed). Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above). On failure: warn, leave `closes_issues` as `(empty)` and omit `## Issue`.
-4. **Multiple**: abort, cite `rules/github-issues.md`.
 
 Then:
 
