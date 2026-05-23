@@ -70,7 +70,10 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 ## Rules
 
-- Read-only — do not modify any files
+- Read **project source files** only — do not modify them. Writing the output
+  artifact to `<PLANS_DIR>/<session-id>-survey-code.md` (Step 5 above) is
+  REQUIRED and allowed — `<PLANS_DIR>` lives outside the git repo. See
+  `skills/_shared/survey-artifact-valid.md` for the artifact validity contract.
 - Use Explore subagents for broad searches when needed
 - Follow `rules/core-principles.md`.
 - Do NOT emit the research-complete sentinel — `make-outline-plan` Step 0 aggregates

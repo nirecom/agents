@@ -58,13 +58,15 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
-6. Check whether workflow-init's survey artifacts exist (both paths are absolute):
-   - Both present → surveys are already complete. Optionally invoke `/deep-research`
+6. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
+   workflow-init survey artifacts (`<PLANS_DIR>/<session-id>-survey-code.md` and
+   `<PLANS_DIR>/<session-id>-survey-history.md`):
+   - Both valid → surveys are already complete. Optionally invoke `/deep-research`
      if external knowledge is required; otherwise emit:
      `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init>>"`
-   - Either missing (workflow-init survey Agent failed) → invoke the missing survey(s):
-     - Missing `<session-id>-survey-code.md` → invoke `/survey-code`
-     - Missing `<session-id>-survey-history.md` → invoke `/survey-history`
+   - Either invalid (missing OR stub) → invoke the affected survey(s):
+     - `<session-id>-survey-code.md` invalid → invoke `/survey-code`
+     - `<session-id>-survey-history.md` invalid → invoke `/survey-history`
    This step is verification only — skill exits exclusively via the Completion section below. Do not invoke `/make-outline-plan` from here.
 
 ## Completion
@@ -163,8 +165,9 @@ Then:
 
 1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
-3. Check whether workflow-init's survey artifacts exist:
-   - Both present → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.
-   - Either missing → invoke the missing survey(s) directly before proceeding.
+3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
+   workflow-init survey artifacts:
+   - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.
+   - Either invalid → invoke the affected survey(s) directly before proceeding.
    Optionally invoke `/deep-research` if external knowledge is required.
    Then invoke `/make-outline-plan`.
