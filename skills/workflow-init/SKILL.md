@@ -14,41 +14,44 @@ First step of every workflow session. Routes on GH issue context: Path A (`#N` +
 
 ### Step 0 — Resolve <PLANS_DIR>
 
-Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
+Canonical: `skills/_shared/resolve-plans-dir.md`. Run once at start:
 
 ```bash
 PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
               || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
 ```
 
-Capture the printed absolute path and substitute it for every <PLANS_DIR>
-placeholder in the remainder of this SKILL.md. Subagent prompts must receive
-the resolved absolute path as a literal string (subagents cannot expand $VAR).
-Reuse across all subsequent steps in this skill invocation — do not re-resolve.
-
-Canonical documentation: skills/_shared/resolve-plans-dir.md.
+Substitute the resolved absolute path for every `<PLANS_DIR>` placeholder below. Subagent prompts must receive literals — they cannot expand `$VAR`.
 
 ### Step 0.5 — Non-GitHub remote gate
 
+Canonical: `skills/_shared/non-github-remote-gate.md`. Inline:
+
 ```bash
-NON_GITHUB=0
 "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
-case $rc in
-  0) ;;                # GitHub — proceed with gh
-  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
-  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
-esac
-if [ "${NON_GITHUB:-0}" = "1" ]; then
-  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping workflow-init issue routing]"
-fi
+NON_GITHUB=$([ "$rc" = "1" ] && echo 1 || echo 0)  # rc=2 → fail-open
+[ "$NON_GITHUB" = "1" ] && echo "[GITHUB_ISSUES disabled: non-GitHub remote, routing as Path C]"
 ```
 
-When `NON_GITHUB=1`: skip steps 1–4 (issue detection, `gh issue view`, and route logic) and proceed directly as **Path C**. Steps 5–7 (context.md write, survey launch, Path C path-specific steps C1–C2) run as normal.
+When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route logic), proceed as **Path C**. Steps 5–7 (context.md write, survey launch, C1–C2) run as normal.
 
-When `NON_GITHUB=0` or exit 2 (unknown, fail-open): continue with steps 1–7 as normal.
-
-1. **Detect `#N`** (regex `#\d+`): 0 → Path C; 1 → step 2; 2+ → `AskUserQuestion` to pick one.
+1. **Detect `#N`** (regex `#\d+`):
+   - **0** → Path C.
+   - **1** → step 2 with `ISSUES=(<N>)`.
+   - **2+** → set `ISSUES=(<all found numbers, in the order found>)`. All entries become `closes_issues` (no narrowing). `ISSUES[0]` is the primary candidate.
+     **Primary confirmation (single-window invariant):** immediately
+     `AskUserQuestion`:
+     - question: "Which is the primary issue for this session?"
+     - options: one branch per found issue, e.g. "#<ISSUES[0]> (first — recommended)" for index 0, "#<ISSUES[1]>" for index 1, etc.
+     Move the selected entry to index 0 in `ISSUES`; it becomes closes_issues[0] (the primary).
+     Write all entries to `closes_issues` (in confirmed order) when the
+     downstream intent.md is created. Append the mutual-exclusion marker
+     `<!-- workflow-init: confirmed primary = <selected-N> -->` at the end of
+     `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (Path B) — this
+     suppresses the duplicate confirmation in `clarify-intent` Completion.
+     For Path A (label-clarified), the marker is unnecessary because
+     `clarify-intent` does not run.
+     Use the primary `ISSUES[0]` for steps 2–4 (Session ID, gh issue view, WIP/label routing).
 2. **Session ID**: read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `date +%Y%m%d-%H%M%S`.
 3. **Fetch issue**: `gh issue view <N> --json number,title,body,labels,state,createdAt`
    - Fails → `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort.
@@ -114,9 +117,24 @@ A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 ## Accepted Tradeoffs
 (none — capture at outline stage)
 ## closes_issues
-- <N>
+- <N>           # primary (closes_issues[0])
+- <M>           # related (closes_issues[1..N-1], one per additional issue)
 ```
-`<title>` from Step 3 gh result; if unavailable use `#<N>: (title unavailable)`. **Never omit `## Issue`** or **`## Accepted Tradeoffs`** — the latter is the `detail-planner.md` Approved Scope gate.
+`<title>` from Step 3 gh result; if unavailable use `#<N>: (title unavailable)`. **Never omit `## Issue`** or **`## Accepted Tradeoffs`** — the latter is the `detail-planner.md` Approved Scope gate. When `ISSUES` has 2+ entries, write all of them as separate `- <N>` lines under `## closes_issues` (primary first).
+A1.5. **Related-issue label assignment (fail-closed).** For each **related** issue (every entry in `ISSUES[1..]`) that does NOT already carry `intent:clarified`:
+
+```bash
+gh issue edit <N> --add-label "intent:clarified"
+```
+
+If ANY call fails (non-zero exit), write an abort marker file:
+
+```
+<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md
+```
+
+containing the list of failed issues and the retry command, then ABORT the workflow (do not proceed to `make-outline-plan`). Re-running `/workflow-init` is safe — `gh issue edit --add-label` is idempotent.
+
 A2. Emit (separate Bash calls):
 ```
 echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"
