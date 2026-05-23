@@ -143,7 +143,7 @@ echo "=== make-outline-plan: preserved instructions ==="
 if require_file "$OUTLINE_SKILL"; then
     for needle in \
         "outline-planner and outline-reviewer are never shown implementation details" \
-        "\`WORKFLOW_MARK_STEP_plan_complete\` is NOT emitted here" \
+        "\`WORKFLOW_MARK_STEP_detail_complete\` is NOT emitted here" \
         "One \`AskUserQuestion\` per run"
     do
         if has_fixed "$needle" "$OUTLINE_SKILL"; then

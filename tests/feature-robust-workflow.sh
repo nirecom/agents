@@ -66,7 +66,8 @@ ALL_COMPLETE_JSON() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -86,7 +87,8 @@ ALL_PENDING_JSON() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending", "updated_at": null},
-    "plan":              {"status": "pending", "updated_at": null},
+    "outline":           {"status": "pending", "updated_at": null},
+    "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "pending", "updated_at": null},
     "review_security":   {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "pending", "updated_at": null},
@@ -203,7 +205,8 @@ write_state "test-session" '{
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "skipped",  "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete",  "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete",  "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete",  "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete",  "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete",  "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete",  "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -213,7 +216,7 @@ write_state "test-session" '{
 }'
 expect_approve_gate "2. research skipped, rest complete → approve" "$REPO" "$COMMIT_JSON"
 
-# Test 3: plan skipped, rest complete → approve
+# Test 3: outline+detail skipped, rest complete → approve
 REPO=$(setup_repo)
 write_state "test-session" '{
   "version": 1,
@@ -221,7 +224,8 @@ write_state "test-session" '{
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete",  "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "skipped",   "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "skipped",   "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "skipped",   "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete",  "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete",  "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete",  "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -229,7 +233,7 @@ write_state "test-session" '{
     "user_verification": {"status": "complete",  "updated_at": "2026-04-11T10:07:00.000Z"}
   }
 }'
-expect_approve_gate "3. plan skipped, rest complete → approve" "$REPO" "$COMMIT_JSON"
+expect_approve_gate "3. outline+detail skipped, rest complete → approve" "$REPO" "$COMMIT_JSON"
 
 # Test 4: git -C /path commit form → correctly intercepted (block when state file missing)
 # Uses a unique session ID so no pre-existing state file exists (session-scoped storage).
@@ -253,7 +257,8 @@ write_state "test-session" '{
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "pending",  "updated_at": null},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -263,7 +268,7 @@ write_state "test-session" '{
 }'
 expect_block_gate_contains "5. research pending → block with 'research' in message" "$REPO" "$COMMIT_JSON" "research"
 
-# Test 6: Multiple steps pending (plan, write_tests) → block, message contains both
+# Test 6: Multiple steps pending (detail, write_tests) → block, message contains both
 REPO=$(setup_repo)
 write_state "test-session" '{
   "version": 1,
@@ -271,7 +276,8 @@ write_state "test-session" '{
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "pending",  "updated_at": null},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "pending",  "updated_at": null},
     "write_tests":       {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -280,10 +286,10 @@ write_state "test-session" '{
   }
 }'
 RESULT=$(run_gate "$REPO" "$COMMIT_JSON")
-if echo "$RESULT" | grep -q '"block"' && echo "$RESULT" | grep -qi "plan" && echo "$RESULT" | grep -qi "write_tests"; then
+if echo "$RESULT" | grep -q '"block"' && echo "$RESULT" | grep -qi "detail" && echo "$RESULT" | grep -qi "write_tests"; then
     pass "6. Multiple pending steps → block, message contains both step names"
 else
-    fail "6. Multiple pending steps → expected block with 'plan' and 'write_tests', got: $RESULT"
+    fail "6. Multiple pending steps → expected block with 'detail' and 'write_tests', got: $RESULT"
 fi
 
 # Test 7: run_tests set to skipped (non-skippable) → block
@@ -294,7 +300,8 @@ write_state "test-session" '{
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "skipped",  "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -312,7 +319,8 @@ write_state "test-session" '{
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
@@ -454,7 +462,8 @@ cat > "$ZOMBIE_FILE" <<EOF
   "created_at": "$EIGHT_DAYS_AGO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
-    "plan":              {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
+    "outline":           {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
+    "detail":            {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
     "write_tests":       {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
     "review_security":   {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
     "run_tests":         {"status": "complete", "updated_at": "$EIGHT_DAYS_AGO"},
@@ -483,7 +492,8 @@ cat > "$RECENT_FILE" <<EOF
   "created_at": "$THREE_DAYS_AGO",
   "steps": {
     "research":          {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
-    "plan":              {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
+    "outline":           {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
+    "detail":            {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
     "write_tests":       {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
     "review_security":   {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
     "run_tests":         {"status": "complete", "updated_at": "$THREE_DAYS_AGO"},
@@ -832,7 +842,8 @@ write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
 R1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests>>"')
 run_mark_hook "$REPO" "$R1_JSON" >/dev/null
 expect_state_step "R1a. RESET_FROM:write_tests → research=complete"        "test-session" "research"        "complete"
-expect_state_step "R1b. RESET_FROM:write_tests → plan=complete"            "test-session" "plan"            "complete"
+expect_state_step "R1b. RESET_FROM:write_tests → outline=complete"         "test-session" "outline"         "complete"
+expect_state_step "R1b2. RESET_FROM:write_tests → detail=complete"         "test-session" "detail"          "complete"
 expect_state_step "R1c. RESET_FROM:write_tests → write_tests=pending"      "test-session" "write_tests"     "pending"
 expect_state_step "R1d. RESET_FROM:write_tests → review_security=pending"  "test-session" "review_security" "pending"
 expect_state_step "R1e. RESET_FROM:write_tests → run_tests=pending"        "test-session" "run_tests"       "pending"
@@ -845,7 +856,8 @@ write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
 R2_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_research>>"')
 run_mark_hook "$REPO" "$R2_JSON" >/dev/null
 expect_state_step "R2a. RESET_FROM:research → research=pending"             "test-session" "research"          "pending"
-expect_state_step "R2b. RESET_FROM:research → plan=pending"                 "test-session" "plan"              "pending"
+expect_state_step "R2b. RESET_FROM:research → outline=pending"              "test-session" "outline"           "pending"
+expect_state_step "R2b2. RESET_FROM:research → detail=pending"              "test-session" "detail"            "pending"
 expect_state_step "R2c. RESET_FROM:research → write_tests=pending"          "test-session" "write_tests"       "pending"
 expect_state_step "R2d. RESET_FROM:research → review_security=pending"      "test-session" "review_security"   "pending"
 expect_state_step "R2e. RESET_FROM:research → run_tests=pending"            "test-session" "run_tests"         "pending"
@@ -858,7 +870,8 @@ write_state "test-session" "$(ALL_PENDING_JSON test-session)"
 R3_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_user_verification>>"')
 run_mark_hook "$REPO" "$R3_JSON" >/dev/null
 expect_state_step "R3a. RESET_FROM:user_verification → research=complete"        "test-session" "research"          "complete"
-expect_state_step "R3b. RESET_FROM:user_verification → plan=complete"            "test-session" "plan"              "complete"
+expect_state_step "R3b. RESET_FROM:user_verification → outline=complete"         "test-session" "outline"           "complete"
+expect_state_step "R3b2. RESET_FROM:user_verification → detail=complete"         "test-session" "detail"            "complete"
 expect_state_step "R3c. RESET_FROM:user_verification → write_tests=complete"     "test-session" "write_tests"       "complete"
 expect_state_step "R3d. RESET_FROM:user_verification → review_security=complete" "test-session" "review_security"   "complete"
 expect_state_step "R3e. RESET_FROM:user_verification → run_tests=complete"       "test-session" "run_tests"         "complete"
@@ -871,7 +884,8 @@ write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
 R4_JSON=$(build_reset_json "echo '<<WORKFLOW_RESET_FROM_write_tests>>'")
 run_mark_hook "$REPO" "$R4_JSON" >/dev/null
 expect_no_state_change "R4a. single-quote RESET_FROM → research unchanged (complete)"    "test-session" "research"    "complete"
-expect_no_state_change "R4b. single-quote RESET_FROM → plan unchanged (complete)"        "test-session" "plan"        "complete"
+expect_no_state_change "R4b. single-quote RESET_FROM → outline unchanged (complete)"     "test-session" "outline"     "complete"
+expect_no_state_change "R4b2. single-quote RESET_FROM → detail unchanged (complete)"     "test-session" "detail"      "complete"
 expect_no_state_change "R4c. single-quote RESET_FROM → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
 expect_no_state_change "R4d. single-quote RESET_FROM → run_tests unchanged (complete)"   "test-session" "run_tests"   "complete"
 

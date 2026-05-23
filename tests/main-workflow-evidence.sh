@@ -85,7 +85,8 @@ ALL_COMPLETE_EXCEPT() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "$([ "$except_step" = "write_tests" ] && echo "pending" || echo "complete")", "updated_at": $([ "$except_step" = "write_tests" ] && echo "null" || echo '"2026-04-11T10:03:00.000Z"')},
     "run_tests":         {"status": "$([ "$except_step" = "run_tests" ] && echo "pending" || echo "complete")", "updated_at": $([ "$except_step" = "run_tests" ] && echo "null" || echo '"2026-04-11T10:04:00.000Z"')},
     "review_security":   {"status": "$([ "$except_step" = "review_security" ] && echo "pending" || echo "complete")", "updated_at": $([ "$except_step" = "review_security" ] && echo "null" || echo '"2026-04-11T10:04:30.000Z"')},
@@ -106,7 +107,8 @@ ALL_COMPLETE_EXCEPT_TWO() {
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
     "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
-    "plan":              {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
+    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
