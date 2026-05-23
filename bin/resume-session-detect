@@ -1,0 +1,84 @@
+#!/usr/bin/env node
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const {
+  resolveSessionId,
+  readState,
+  VALID_STEPS,
+  STEP_HINT,
+} = require("../hooks/lib/workflow-state");
+const { getRepoId, MARKER_PREFIXES } = require("../hooks/enforce-worktree.js");
+const { getWorkflowPlansDir } = require("../hooks/lib/workflow-plans-dir");
+
+const STEP_TO_SKILL = Object.freeze({
+  workflow_init:  "workflow-init",
+  clarify_intent: "clarify-intent",
+  plan:           "make-detail-plan",
+  write_tests:    "write-tests",
+  run_tests:      "run-tests",
+  docs:           "update-docs",
+  cleanup:        "worktree-end",
+});
+
+function findWorktreeEndMarker() {
+  const repoId = getRepoId(process.cwd());
+  if (!repoId) return null;
+  const plansDir = getWorkflowPlansDir();
+  const worktreeEndDir = path.join(plansDir, "worktree-end");
+  const prefix = MARKER_PREFIXES.CWD_UNLOCK + repoId + "--";
+  const prefixLower = process.platform === "win32" ? prefix.toLowerCase() : prefix;
+  let entries;
+  try { entries = fs.readdirSync(worktreeEndDir); } catch (e) { return null; }
+  for (const name of entries) {
+    const lower = process.platform === "win32" ? name.toLowerCase() : name;
+    if (lower.startsWith(prefixLower)) return path.join(worktreeEndDir, name);
+  }
+  return null;
+}
+
+function detect() {
+  const wtMarker = findWorktreeEndMarker();
+  if (wtMarker) return { type: "worktree-end-resume", marker_path: wtMarker };
+
+  const sessionId = resolveSessionId();
+  if (!sessionId) return { type: "none", reason: "session_id_unresolved" };
+
+  const state = readState(sessionId);
+  if (!state || !state.steps) return { type: "none", reason: "no_state" };
+
+  for (const step of VALID_STEPS) {
+    const s = (state.steps[step] || {}).status;
+    if (s === "in_progress") {
+      if (STEP_TO_SKILL[step]) return { type: "skill", step, skill: STEP_TO_SKILL[step] };
+      return { type: "sentinel-wait", step, hint: STEP_HINT[step] || step };
+    }
+  }
+  return { type: "none", reason: "no_in_progress" };
+}
+
+function main() {
+  const args = process.argv.slice(2);
+  for (const a of args) {
+    if (a === "--help" || a === "-h") {
+      process.stdout.write("Usage: resume-session-detect [--help] [--version]\n");
+      process.exit(0);
+    }
+    if (a === "--version") {
+      process.stdout.write("resume-session-detect 1\n");
+      process.exit(0);
+    }
+    process.stderr.write(`Unknown flag: ${a}\n`);
+    process.exit(1);
+  }
+  const result = detect();
+  process.stdout.write(JSON.stringify(result) + "\n");
+  process.exit(0);
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = { STEP_TO_SKILL, resolveSessionId, detect, findWorktreeEndMarker };

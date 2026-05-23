@@ -178,7 +178,7 @@ See [docs/architecture/copilot.md](docs/architecture/copilot.md) for the full de
 CLAUDE.md          — global instructions (Claude Code + Copilot)
 settings.json      — hooks, permissions, model, and effort-level configuration
 rules/             — coding, testing, docs, git, and security conventions
-skills/            — slash commands (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests, …) for Claude Code and Copilot
+skills/            — slash commands (/clarify-intent, /make-outline-plan, /make-detail-plan, /write-tests, /resume-session, …) for Claude Code and Copilot
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
