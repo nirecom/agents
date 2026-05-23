@@ -253,8 +253,8 @@ test_compound_command() {
 }
 
 test_quoted_false_positive_documented() {
-    # Documented limitation: quoted '>' inside echo is still treated as write.
-    assert_classify "quoted '>' (documented FP)" 'echo "a > b"' "write"
+    # Previously a documented false positive (write); fixed by #460 (posix-redir kind + STRIP_KINDS).
+    assert_classify "quoted '>' inside double-quotes (#460 fixed)" 'echo "a > b"' "read"
 }
 
 test_unicode_command() {
@@ -571,6 +571,48 @@ test_heredoc_still_classified_after_strip() {
     assert_classify "cat <<'EOF' (post-strip)" "cat <<'EOF'" "write"
 }
 
+# ============ posix-redir kind: quoted >/>>/tee must not false-positive (#460) ============
+
+test_quoted_arg_no_false_positive_posix_redir() {
+    assert_classify 'grep -nE "pattern > match" file.txt (#460 repro)' \
+        'grep -nE "pattern > match" file.txt' "read"
+    assert_classify 'doc-append --subject "x > y"' \
+        'doc-append --subject "x > y"' "read"
+    assert_classify 'doc-append --subject "echo a >> b"' \
+        'doc-append --subject "echo a >> b"' "read"
+    assert_classify 'gh issue comment quoted > in body' \
+        'gh issue comment 369 --body "use > to redirect"' "read"
+    assert_classify "echo 'a > b' (single-quoted redirect char)" \
+        "echo 'a > b'" "read"
+    assert_classify 'doc-append --subject "tee output"' \
+        'doc-append --subject "tee output"' "read"
+    assert_classify 'echo "tee file"' \
+        'echo "tee file"' "read"
+}
+
+# Regression guard: real unquoted redirects and tee must remain "write" after fix.
+
+test_unquoted_redirect_and_tee_still_write() {
+    assert_classify "echo hi > out.txt" 'echo hi > out.txt' "write"
+    assert_classify "echo hi >> out.txt" 'echo hi >> out.txt' "write"
+    assert_classify "echo hi | tee out.txt" 'echo hi | tee out.txt' "write"
+    assert_classify "tee out.txt" 'tee out.txt' "write"
+    assert_classify "cmd 2>&1 (FD-to-FD, null-sink form not applicable)" 'cmd 2>&1' "read"
+    assert_classify "cmd 2>/dev/null" 'cmd 2>/dev/null' "read"
+    assert_classify "cmd 2>/dev/null | grep x" 'cmd 2>/dev/null | grep x' "read"
+}
+
+# /dev/null inside $(...) command substitution must not be classified as write (#359).
+
+test_devnull_inside_command_substitution() {
+    assert_classify 'echo $(grep x file 2>/dev/null)' \
+        'echo $(grep x file 2>/dev/null)' "read"
+    assert_classify 'echo $(grep x file >/dev/null)' \
+        'echo $(grep x file >/dev/null)' "read"
+    assert_classify 'echo $(echo x > out.txt) (real redirect inside $() stays write)' \
+        'echo $(echo x > out.txt)' "write"
+}
+
 # ============ Run all ============
 
 test_write_cases
@@ -607,6 +649,9 @@ test_quoted_arg_no_false_positive_file_op
 test_interpreter_c_always_write
 test_cosmetic_quote_file_op_documented_fn
 test_heredoc_still_classified_after_strip
+test_quoted_arg_no_false_positive_posix_redir
+test_unquoted_redirect_and_tee_still_write
+test_devnull_inside_command_substitution
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
