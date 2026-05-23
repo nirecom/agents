@@ -3,6 +3,7 @@ name: review-plan-security
 description: Review architecture security across three axes before implementation.
 model: opus
 effort: medium
+context: fork
 ---
 
 Review security implications of the current task across three axes.

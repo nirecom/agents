@@ -4,6 +4,7 @@ description: Save useful research findings to ai-specs research-results for futu
 model: sonnet
 effort: low
 argument-hint: "<topic-slug>"
+context: fork
 ---
 
 Save research findings from the current conversation to a persistent research-results file.
