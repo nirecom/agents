@@ -319,3 +319,7 @@ Changes: BUGFIX show-plan-link: --folder-uri regression fix — plan files (inte
 ### FEATURE: PR #510 (2026-05-24)
 Background: fix(bash-write-patterns): posix-redir kind for redirect/tee; fix 2>/dev/null inside $(...) (#460, #359)
 Changes: Fix: `grep -nE "pattern > match" file.txt` のように引数内に `>` を含むコマンドが main worktree から誤って block されなくなった (#460)。`$(cmd 2>/dev/null)` など command substitution 内の `2>/dev/null` が正しく read 判定されるようになった (#359)。
+
+### FEATURE: PR #511 (2026-05-24)
+Background: feat(workflow): extend WIP fingerprint to all closes_issues (#508)
+Changes: **WIP conflict detection now covers all issues in a session.** When a session tracks multiple issues, each issue receives its own WIP fingerprint. Conflict detection at session start enumerates all conflicting issues in a single prompt, and confirming Continue claims WIP for all issues at once.
