@@ -11,3 +11,5 @@ User-facing release log. Write only changes the user feels:
 
 Do NOT include internal function / module / hook names — those belong in `history.md`.
 Written by `/update-docs` via `doc-append CHANGELOG.md` (no `--commits`).
+
+Under `ENFORCE_WORKTREE=on`, `/update-docs` stages user-facing bullets (public repos only) into `WORKTREE_NOTES.md` `## Changelog Notes`. `bin/compose-doc-append-entry` appends them to `CHANGELOG.md` during `/worktree-end` Step 6i.

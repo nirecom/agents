@@ -98,6 +98,21 @@ if _is_enforce_worktree_on; then
         fi
     fi
 
+    # COMPOSE_DOC_APPEND_SKILL bypass: allow doc-append commits to history.md and CHANGELOG.md from main worktree
+    if [ "${COMPOSE_DOC_APPEND_SKILL:-}" = "1" ] && [ "$_enforce_skip" = "0" ]; then
+        _staged="$(git diff --cached --name-only 2>/dev/null || true)"
+        if [ -n "$_staged" ]; then
+            _compose_ok=1
+            for _f in $_staged; do
+                case "$_f" in
+                    docs/history.md|CHANGELOG.md|docs/history/*) ;;
+                    *) _compose_ok=0; break ;;
+                esac
+            done
+            [ "$_compose_ok" = "1" ] && _enforce_skip=1
+        fi
+    fi
+
     if [ "$_enforce_skip" = "0" ]; then
         # Block commits from main worktree (--git-common-dir == --git-dir)
         _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"

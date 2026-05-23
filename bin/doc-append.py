@@ -101,6 +101,11 @@ def main():
     parser.add_argument("--changes")
     parser.add_argument("--cause")
     parser.add_argument("--fix")
+    parser.add_argument(
+        "--no-auto-rotate",
+        action="store_true",
+        help="Skip automatic rotation after appending",
+    )
     args = parser.parse_args()
 
     # Validate date
@@ -202,26 +207,27 @@ def main():
         f.write(entry_bytes)
 
     # Auto-rotate when file exceeds the warn threshold
-    lines = _count_lines(path)
-    if lines >= WARN_LINES:
-        rotate_script = Path(__file__).parent / "doc-rotate.py"
-        print(
-            f"Note: {path} is now {lines} lines (>= {WARN_LINES}). "
-            "Auto-rotating...",
-            file=sys.stderr,
-        )
-        subprocess.run(
-            [
-                sys.executable,
-                str(rotate_script),
-                str(path),
-                "--threshold-warn",
-                str(WARN_LINES),
-                "--floor",
-                "20",
-            ],
-            check=False,
-        )
+    if not args.no_auto_rotate:
+        lines = _count_lines(path)
+        if lines >= WARN_LINES:
+            rotate_script = Path(__file__).parent / "doc-rotate.py"
+            print(
+                f"Note: {path} is now {lines} lines (>= {WARN_LINES}). "
+                "Auto-rotating...",
+                file=sys.stderr,
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(rotate_script),
+                    str(path),
+                    "--threshold-warn",
+                    str(WARN_LINES),
+                    "--floor",
+                    "20",
+                ],
+                check=False,
+            )
 
 
 if __name__ == "__main__":
