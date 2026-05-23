@@ -34,7 +34,7 @@
    - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
      (always parallel, non-blocking; warnings only, never blocks workflow)
 7. **Docs** —
-   - **`ENFORCE_WORKTREE=on`:** Skip `/update-docs` — docs review is deferred to PR review.
+   - **`ENFORCE_WORKTREE=on`:** Run `/update-docs`. Mandatory — the skill stages bullets into `WORKTREE_NOTES.md` `## History Notes` / `## Changelog Notes` instead of writing `docs/history.md` / `CHANGELOG.md` directly. `bin/compose-doc-append-entry` consumes those sections during `/worktree-end` Step 6i (post-merge, main worktree).
    - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
 8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5.
@@ -60,6 +60,7 @@
    confirm it.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end` (merge + sentinel emit + cleanup). Mandatory; do not skip.
+      (Step 6i composes `docs/history.md` / `CHANGELOG.md` entries from `WORKTREE_NOTES.md` when `closes_issues` is empty.)
     - **branch:** Confirm PR is created. After the PR is merged (outside this session),
       delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.

@@ -1,0 +1,206 @@
+#!/bin/bash
+# bin/compose-doc-append-entry
+# Reads WORKTREE_NOTES.md ## History Notes / ## Changelog Notes sections and
+# appends entries to docs/history.md and CHANGELOG.md in separate commits.
+# Invoked from /worktree-end Step 6i with COMPOSE_DOC_APPEND_SKILL=1 prefix.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --- Argument parsing ---
+NOTES_PATH=""
+BRANCH=""
+PR_NUMBER=""
+MERGE_COMMIT=""
+BACKGROUND=""
+CATEGORY="FEATURE"
+DRY_RUN=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --notes)       NOTES_PATH="$2";    shift 2 ;;
+        --branch)      BRANCH="$2";        shift 2 ;;
+        --pr)          PR_NUMBER="$2";     shift 2 ;;
+        --merge-commit) MERGE_COMMIT="$2"; shift 2 ;;
+        --background)  BACKGROUND="$2";   shift 2 ;;
+        --category)    CATEGORY="$2";     shift 2 ;;
+        --dry-run)     DRY_RUN=1;         shift ;;
+        *) echo "compose-doc-append-entry: unknown argument: $1" >&2; exit 1 ;;
+    esac
+done
+
+# --- Validation ---
+[[ -n "$NOTES_PATH" ]] || { echo "compose-doc-append-entry: --notes is required" >&2; exit 1; }
+[[ -n "$BRANCH" ]] || { echo "compose-doc-append-entry: --branch is required" >&2; exit 1; }
+[[ -n "$PR_NUMBER" ]] || { echo "compose-doc-append-entry: --pr is required" >&2; exit 1; }
+
+# Validate --pr is digits-only
+[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "compose-doc-append-entry: --pr must be digits only (got: $PR_NUMBER)" >&2; exit 1; }
+
+# Validate --branch has no shell metacharacters
+[[ "$BRANCH" =~ ^[A-Za-z0-9._/+-]+$ ]] || { echo "compose-doc-append-entry: --branch contains invalid characters (got: $BRANCH)" >&2; exit 1; }
+
+# Validate --merge-commit if provided (7-40 hex chars or empty)
+if [[ -n "$MERGE_COMMIT" ]]; then
+    [[ "$MERGE_COMMIT" =~ ^[0-9a-f]{7,40}$ ]] || {
+        echo "compose-doc-append-entry: --merge-commit must be 7-40 hex chars (got: $MERGE_COMMIT)" >&2
+        exit 1
+    }
+fi
+
+# --- Bail: notes file missing ---
+if [[ ! -f "$NOTES_PATH" ]]; then
+    exit 0
+fi
+
+# --- Extract section helper ---
+extract_section() {
+    local heading="$1"
+    node -e "
+const fs = require('fs');
+const text = fs.readFileSync(process.argv[1], 'utf8');
+const lines = text.split('\n');
+let inSection = false;
+const bullets = [];
+for (const line of lines) {
+    if (line === '## ' + process.argv[2]) { inSection = true; continue; }
+    if (inSection && line.startsWith('## ')) break;
+    if (inSection && line.startsWith('- ')) {
+        const content = line.slice(2).trim();
+        if (content && content !== '(none)') bullets.push(content);
+    }
+}
+process.stdout.write(bullets.join('\n'));
+" -- "$NOTES_PATH" "$heading"
+}
+
+# --- Background derivation ---
+derive_background() {
+    if [[ -n "$BACKGROUND" ]]; then
+        echo "$BACKGROUND"
+        return
+    fi
+    local gh_title
+    gh_title="$(gh pr view "$PR_NUMBER" --json title --jq .title 2>/dev/null || true)"
+    if [[ -n "$gh_title" ]]; then
+        echo "$gh_title"
+        return
+    fi
+    echo "PR #${PR_NUMBER} merged on $(date +%F)."
+}
+
+# --- Idempotency helpers ---
+ENCODED_BRANCH="${BRANCH//\//%2F}"
+
+history_sentinel_found() {
+    grep -rF "compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER}" \
+        "docs/history.md" "docs/history/" 2>/dev/null | grep -q . && return 0 || return 1
+}
+
+_git_common_abs() {
+    local raw; raw="$(git rev-parse --git-common-dir)"
+    # git returns a relative path for non-linked worktrees; resolve to absolute
+    if [[ "$raw" = /* ]] || [[ "$raw" =~ ^[A-Za-z]: ]]; then
+        echo "$raw"
+    else
+        echo "$(git rev-parse --show-toplevel)/$raw"
+    fi
+}
+
+changelog_marker_found() {
+    local git_common; git_common="$(_git_common_abs)"
+    local marker="${git_common}/compose-doc-append-state/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
+    [[ -f "$marker" ]]
+}
+
+write_changelog_marker() {
+    local git_common; git_common="$(_git_common_abs)"
+    local marker_dir="${git_common}/compose-doc-append-state"
+    mkdir -p "$marker_dir"
+    local marker="${marker_dir}/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
+    printf '%s\n%s\n' "${MERGE_COMMIT:-}" "$(date -u +%FT%TZ)" > "$marker"
+}
+
+# --- Main processing ---
+COMMITS_PRODUCED=0
+BG="$(derive_background)"
+TODAY="$(date +%F)"
+
+# --- Target 1: docs/history.md ---
+HISTORY_BULLETS="$(extract_section "History Notes")"
+if [[ -n "$HISTORY_BULLETS" ]]; then
+    if history_sentinel_found; then
+        echo "compose-doc-append-entry: history idempotency sentinel found for branch=${BRANCH} pr=#${PR_NUMBER}, skipping" >&2
+    else
+        SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
+        CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
+        if [[ -n "$MERGE_COMMIT" ]]; then
+            COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
+        else
+            COMMITS_ARG="#${PR_NUMBER}"
+        fi
+        SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
+
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            echo "[dry-run] uv run doc-append.py docs/history.md --category $CATEGORY --subject \"$SUBJECT\" --date $TODAY --commits \"$COMMITS_ARG\" --background \"$BG\" --changes \"$CHANGES_WITH_SENTINEL\""
+            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/"
+            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git commit -m \"docs(history): record PR #${PR_NUMBER}\""
+        else
+            uv run "$SCRIPT_DIR/doc-append.py" docs/history.md \
+                --category "$CATEGORY" \
+                --subject "$SUBJECT" \
+                --date "$TODAY" \
+                --commits "$COMMITS_ARG" \
+                --background "$BG" \
+                --changes "$CHANGES_WITH_SENTINEL"
+            COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/
+            COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): record PR #${PR_NUMBER}"
+            COMMITS_PRODUCED=$((COMMITS_PRODUCED + 1))
+        fi
+    fi
+fi
+
+# --- Target 2: CHANGELOG.md ---
+CHANGELOG_BULLETS="$(extract_section "Changelog Notes")"
+if [[ -n "$CHANGELOG_BULLETS" ]]; then
+    if [[ ! -f "CHANGELOG.md" ]]; then
+        echo "compose-doc-append-entry: CHANGELOG.md not found, skipping changelog target" >&2
+    elif changelog_marker_found; then
+        echo "compose-doc-append-entry: changelog marker found for branch=${BRANCH} pr=#${PR_NUMBER}, skipping" >&2
+    else
+        CHANGES="$(echo "$CHANGELOG_BULLETS" | tr '\n' ';' | sed 's/;$//')"
+        SUBJ_CHANGELOG="PR #${PR_NUMBER}"
+
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            echo "[dry-run] uv run doc-append.py CHANGELOG.md --category $CATEGORY --subject \"$SUBJ_CHANGELOG\" --date $TODAY --no-auto-rotate --background \"$BG\" --changes \"$CHANGES\""
+            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md"
+            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git commit -m \"docs(changelog): record PR #${PR_NUMBER}\""
+        else
+            uv run "$SCRIPT_DIR/doc-append.py" CHANGELOG.md \
+                --category "$CATEGORY" \
+                --subject "$SUBJ_CHANGELOG" \
+                --date "$TODAY" \
+                --no-auto-rotate \
+                --background "$BG" \
+                --changes "$CHANGES"
+            COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md
+            COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(changelog): record PR #${PR_NUMBER}"
+            write_changelog_marker
+            COMMITS_PRODUCED=$((COMMITS_PRODUCED + 1))
+        fi
+    fi
+fi
+
+# --- Push if commits were produced ---
+if [[ "$DRY_RUN" -eq 0 ]] && [[ "$COMMITS_PRODUCED" -gt 0 ]]; then
+    DEFAULT_BRANCH="$(git remote set-head origin --auto >/dev/null 2>&1 || true; git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')"
+    if [[ -z "$DEFAULT_BRANCH" ]]; then
+        DEFAULT_BRANCH="main"
+    fi
+    if ! COMPOSE_DOC_APPEND_SKILL=1 git push origin "$DEFAULT_BRANCH"; then
+        echo "compose-doc-append-entry: push failed. Recovery: COMPOSE_DOC_APPEND_SKILL=1 git push origin ${DEFAULT_BRANCH}" >&2
+        exit 1
+    fi
+fi
+
+exit 0

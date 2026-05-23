@@ -42,15 +42,22 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 
 ## Completion
 
-After completing this skill:
-1. Append to `docs/history.md` (internal, detailed):
-   `doc-append docs/history.md --category CATEGORY --subject "..." --date YYYY-MM-DD --commits HASH --background "..." --changes "..."`
-2. Append to `CHANGELOG.md` (external, user-facing summary — omit `--commits`):
-   `doc-append CHANGELOG.md --category CATEGORY --subject "..." --date YYYY-MM-DD --background "..." --changes "..."`
-   `--background` = one sentence on context; `--changes` = what changed from a user perspective (no internal refs).
-   For public repos only. Skip if the repo is private.
-3. Stage the updated doc files: `git add docs/ README.md CHANGELOG.md`
-   `README.md` is required for all repos — create it if it does not exist before staging.
-   The commit gate detects staged docs/ or root `*.md` changes as evidence of completion.
-   Docs updates are mandatory for every task — there is no skip path.
-4. Wait for the user to verify the changes, then run `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` and invoke `commit-push` via the Skill tool.
+After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`.
+
+### Path A — ENFORCE_WORKTREE=on (mandatory)
+
+1. Append history bullets to `<worktree>/WORKTREE_NOTES.md` `## History Notes`. Replace `- (none)` on first append.
+2. For public repos: append user-facing bullets to `## Changelog Notes`. Replace `- (none)` on first append.
+3. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` Step 6i.
+4. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
+5. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
+6. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
+
+Note: when `closes_issues` is non-empty, `## Changelog Notes` is orphaned (Phase 1/2 consumes only History Notes). Deferred follow-up.
+
+### Path B — ENFORCE_WORKTREE=off
+
+1. `doc-append docs/history.md --category CATEGORY --subject "..." --commits HASH --background "..." --changes "..."`
+2. For public repos: `doc-append CHANGELOG.md --category CATEGORY --subject "..." --background "..." --changes "..."` (no `--commits`)
+3. `git add docs/ README.md CHANGELOG.md`
+4. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
