@@ -27,7 +27,7 @@ function formatBaseDir(baseDir) {
   return String(baseDir);
 }
 
-function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFiles }) {
+function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFiles } = {}) {
   const lines = [
     "# Worktree Notes",
     `Branch: ${branch}`,
@@ -58,6 +58,9 @@ function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFile
     "- (none)",
     "",
     "## History Notes",
+    "- (none)",
+    "",
+    "## Changelog Notes",
     "- (none)",
   );
 
