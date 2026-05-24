@@ -27,7 +27,8 @@ below. Reuse across all subsequent steps — do not re-resolve.
 2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap).
 
 2a. **Aggregate class members (before interview round 1):**
-   - Read `## Candidate class members` from `<PLANS_DIR>/<session-id>-survey-code.md` and `<PLANS_DIR>/<session-id>-survey-history.md` (skip whichever artifact is missing).
+   - Apply the validity check from `skills/_shared/survey-artifact-valid.md` to each survey artifact before reading; treat invalid artifacts as missing.
+   - Read `## Candidate class members` from `<PLANS_DIR>/<session-id>-survey-code.md` and `<PLANS_DIR>/<session-id>-survey-history.md` (skip whichever artifact is missing or invalid).
    - Merge both lists, removing duplicates by member name (case-sensitive).
    - If total unique candidates ≥ 1: include the **Class members question** (see step 3) — counts as 1 of the 5 interview rounds.
    - If total unique candidates = 0: write `- (none detected)` to `## Class members` in step 4 and skip the question (0 rounds consumed).
