@@ -145,6 +145,18 @@ run_report_with_envfile_capture_all() {
     run_with_timeout 120 node "$REPORT_JS" "$intent" "$notes" "$sid" -- --env-file "$envfile" 2>&1
 }
 
+# Run renderer with a JSON envfile constructed from a string literal.
+# Usage: run_report_with_categories <intent_node> <notes_node> <sid> <json_string>
+# json_string: a JSON object string, e.g.
+#   '{"CC_RESTART_REQUIRED":"required","CC_RESTART_REASON":"CLAUDE.md modified in PR"}'
+run_report_with_categories() {
+    local intent="$1" notes="$2" sid="$3" json="$4"
+    local envfile="$TMPDIR_BASE/${sid}-cat-env.json"
+    printf '%s\n' "$json" > "$envfile"
+    local envfile_node; envfile_node="$(node_path "$envfile")"
+    run_report_with_envfile "$intent" "$notes" "$sid" "$envfile_node"
+}
+
 SENTINEL='<<WORKFLOW_MARK_STEP_final_report_complete>>'
 
 # ============ P-series: parse-closes-issues.js ============
@@ -560,10 +572,10 @@ test_R8_pr_title_injection_safe() {
     fi
 }
 
-# ============ R9-R14: AGENTS_CONFIG_DIR / CLAUDE_CODE_RESTART_REQUIRED ============
+# ============ R9-R14: ### Post-Merge Actions Required (always-on, multi-category) ============
 
-test_R9_cc_restart_section_gated_off() {
-    require_report_bin "R9_cc_restart_section_gated_off" || return
+test_R9_post_merge_section_always_present() {
+    require_report_bin "R9_post_merge_section_always_present" || return
     local intent="$TMPDIR_BASE/r9-intent.md"
     local notes="$TMPDIR_BASE/r9-notes.md"
     make_intent_with_closes "$intent" "- 405"
@@ -572,13 +584,14 @@ test_R9_cc_restart_section_gated_off() {
     local notes_node;  notes_node="$(node_path "$notes")"
 
     local out
-    out="$(unset AGENTS_CONFIG_DIR; CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
+    out="$(unset AGENTS_CONFIG_DIR; PR_NUMBER=1 \
            run_report "$intent_node" "$notes_node" "sess-r9")"
 
-    if echo "$out" | grep -q '^### Claude Code Restart Required$'; then
-        fail "R9: section rendered despite AGENTS_CONFIG_DIR unset"
+    if echo "$out" | grep -q '^### Post-Merge Actions Required$'; then
+        pass "R9: ### Post-Merge Actions Required present even when AGENTS_CONFIG_DIR is unset"
     else
-        pass "R9: AGENTS_CONFIG_DIR unset → restart section omitted"
+        fail "R9: ### Post-Merge Actions Required missing from output
+$out"
     fi
 }
 
@@ -592,15 +605,15 @@ test_R10_cc_restart_yes() {
     local notes_node;  notes_node="$(node_path "$notes")"
 
     local out
-    out="$(AGENTS_CONFIG_DIR=/dummy CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
-           run_report "$intent_node" "$notes_node" "sess-r10")"
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r10" \
+           '{"CC_RESTART_REQUIRED":"required","CC_RESTART_REASON":"CLAUDE.md modified in PR"}')"
 
     local block
-    block="$(echo "$out" | awk '/^### Claude Code Restart Required$/{flag=1;next} /^### /{flag=0} flag')"
-    if echo "$block" | grep -qE '^- yes$'; then
-        pass "R10: AGENTS_CONFIG_DIR set, CLAUDE_CODE_RESTART_REQUIRED=yes → '- yes' rendered"
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qF -- '- Claude Code restart: required (CLAUDE.md modified in PR)'; then
+        pass "R10: CC_RESTART_REQUIRED=required → '- Claude Code restart: required (CLAUDE.md modified in PR)'"
     else
-        fail "R10: expected '- yes' in restart section
+        fail "R10: expected cc_restart required line in Post-Merge block
 $block"
     fi
 }
@@ -615,21 +628,21 @@ test_R11_cc_restart_no() {
     local notes_node;  notes_node="$(node_path "$notes")"
 
     local out
-    out="$(AGENTS_CONFIG_DIR=/dummy CLAUDE_CODE_RESTART_REQUIRED=no PR_NUMBER=1 \
-           run_report "$intent_node" "$notes_node" "sess-r11")"
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r11" \
+           '{"CC_RESTART_REQUIRED":"not_required"}')"
 
     local block
-    block="$(echo "$out" | awk '/^### Claude Code Restart Required$/{flag=1;next} /^### /{flag=0} flag')"
-    if echo "$block" | grep -qE '^- no$'; then
-        pass "R11: AGENTS_CONFIG_DIR set, CLAUDE_CODE_RESTART_REQUIRED=no → '- no' rendered"
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qF -- '- Claude Code restart: not_required'; then
+        pass "R11: CC_RESTART_REQUIRED=not_required → '- Claude Code restart: not_required'"
     else
-        fail "R11: expected '- no' in restart section
+        fail "R11: expected cc_restart not_required line in Post-Merge block
 $block"
     fi
 }
 
-test_R12_cc_restart_empty_agents_dir() {
-    require_report_bin "R12_cc_restart_empty_agents_dir" || return
+test_R12_all_categories_default_not_required() {
+    require_report_bin "R12_all_categories_default_not_required" || return
     local intent="$TMPDIR_BASE/r12-intent.md"
     local notes="$TMPDIR_BASE/r12-notes.md"
     make_intent_with_closes "$intent" "- 405"
@@ -638,18 +651,22 @@ test_R12_cc_restart_empty_agents_dir() {
     local notes_node;  notes_node="$(node_path "$notes")"
 
     local out
-    out="$(AGENTS_CONFIG_DIR="" CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
-           run_report "$intent_node" "$notes_node" "sess-r12")"
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r12" '{}')"
 
-    if echo "$out" | grep -q '^### Claude Code Restart Required$'; then
-        fail "R12: section rendered despite AGENTS_CONFIG_DIR empty"
+    local block
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    local nr_count
+    nr_count="$(echo "$block" | grep -cE 'not_required')"
+    if [ "$nr_count" = "4" ]; then
+        pass "R12: empty envFile → all 4 category lines render as not_required"
     else
-        pass "R12: AGENTS_CONFIG_DIR='' → restart section omitted"
+        fail "R12: expected 4 not_required lines, got $nr_count
+$block"
     fi
 }
 
-test_R13_cc_restart_unset_value() {
-    require_report_bin "R13_cc_restart_unset_value" || return
+test_R13_legacy_alias_yes() {
+    require_report_bin "R13_legacy_alias_yes" || return
     local intent="$TMPDIR_BASE/r13-intent.md"
     local notes="$TMPDIR_BASE/r13-notes.md"
     make_intent_with_closes "$intent" "- 405"
@@ -658,21 +675,21 @@ test_R13_cc_restart_unset_value() {
     local notes_node;  notes_node="$(node_path "$notes")"
 
     local out
-    out="$(unset CLAUDE_CODE_RESTART_REQUIRED; AGENTS_CONFIG_DIR=/dummy PR_NUMBER=1 \
-           run_report "$intent_node" "$notes_node" "sess-r13")"
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r13" \
+           '{"CLAUDE_CODE_RESTART_REQUIRED":"yes"}')"
 
     local block
-    block="$(echo "$out" | awk '/^### Claude Code Restart Required$/{flag=1;next} /^### /{flag=0} flag')"
-    if echo "$block" | grep -qE '^- \(none\)$'; then
-        pass "R13: CLAUDE_CODE_RESTART_REQUIRED unset → '- (none)' rendered (safeEnv fallback)"
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qE '^- Claude Code restart: required'; then
+        pass "R13: legacy CLAUDE_CODE_RESTART_REQUIRED=yes alias → cc_restart renders as required"
     else
-        fail "R13: expected '- (none)' in restart section
+        fail "R13: expected cc_restart line to render as required via legacy alias
 $block"
     fi
 }
 
-test_R14_cc_restart_section_position() {
-    require_report_bin "R14_cc_restart_section_position" || return
+test_R14_post_merge_section_position() {
+    require_report_bin "R14_post_merge_section_position" || return
     local intent="$TMPDIR_BASE/r14-intent.md"
     local notes="$TMPDIR_BASE/r14-notes.md"
     make_intent_with_closes "$intent" "- 405"
@@ -681,19 +698,169 @@ test_R14_cc_restart_section_position() {
     local notes_node;  notes_node="$(node_path "$notes")"
 
     local out
-    out="$(AGENTS_CONFIG_DIR=/dummy CLAUDE_CODE_RESTART_REQUIRED=yes PR_NUMBER=1 \
+    out="$(unset AGENTS_CONFIG_DIR; PR_NUMBER=1 \
            run_report "$intent_node" "$notes_node" "sess-r14")"
 
-    # Get line numbers for the three section headers
-    local backup_line restart_line bugs_line
+    local backup_line post_merge_line bugs_line
     backup_line="$(echo "$out" | grep -n '^### Backup$' | cut -d: -f1)"
-    restart_line="$(echo "$out" | grep -n '^### Claude Code Restart Required$' | cut -d: -f1)"
+    post_merge_line="$(echo "$out" | grep -n '^### Post-Merge Actions Required$' | cut -d: -f1)"
     bugs_line="$(echo "$out" | grep -n '^### Bugs Found$' | cut -d: -f1)"
 
-    if [ -n "$restart_line" ] && [ "$backup_line" -lt "$restart_line" ] && [ "$restart_line" -lt "$bugs_line" ]; then
-        pass "R14: ### Claude Code Restart Required is between ### Backup (line $backup_line) and ### Bugs Found (line $bugs_line)"
+    if [ -n "$post_merge_line" ] && [ -n "$backup_line" ] && [ -n "$bugs_line" ] \
+       && [ "$backup_line" -lt "$post_merge_line" ] && [ "$post_merge_line" -lt "$bugs_line" ]; then
+        pass "R14: ### Post-Merge Actions Required is between ### Backup (line $backup_line) and ### Bugs Found (line $bugs_line)"
     else
-        fail "R14: section position wrong — Backup:$backup_line Restart:$restart_line BugsFound:$bugs_line
+        fail "R14: section position wrong — Backup:$backup_line Post-Merge:$post_merge_line BugsFound:$bugs_line
+$out"
+    fi
+}
+
+# ============ R19-R24: additional Post-Merge category coverage ============
+
+test_R19_post_merge_always_present() {
+    require_report_bin "R19_post_merge_always_present" || return
+    local intent="$TMPDIR_BASE/r19-intent.md"
+    local notes="$TMPDIR_BASE/r19-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(unset AGENTS_CONFIG_DIR; PR_NUMBER=1 \
+           run_report "$intent_node" "$notes_node" "sess-r19")"
+
+    if echo "$out" | grep -q '^### Post-Merge Actions Required$'; then
+        pass "R19: plain run_report (no env) → ### Post-Merge Actions Required present"
+    else
+        fail "R19: section missing
+$out"
+    fi
+}
+
+test_R20_all_four_categories_present() {
+    require_report_bin "R20_all_four_categories_present" || return
+    local intent="$TMPDIR_BASE/r20-intent.md"
+    local notes="$TMPDIR_BASE/r20-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r20" '{}')"
+
+    local block
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    local bullets
+    bullets="$(echo "$block" | grep -cE '^- ')"
+    if [ "$bullets" = "4" ]; then
+        pass "R20: Post-Merge block has exactly 4 '^- ' lines (all four categories rendered)"
+    else
+        fail "R20: expected 4 bullet lines, got $bullets
+$block"
+    fi
+}
+
+test_R21_vscode_reload_required() {
+    require_report_bin "R21_vscode_reload_required" || return
+    local intent="$TMPDIR_BASE/r21-intent.md"
+    local notes="$TMPDIR_BASE/r21-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r21" \
+           '{"VSCODE_RELOAD_REQUIRED":"required","VSCODE_RELOAD_REASON":"keybindings.json modified"}')"
+
+    if echo "$out" | grep -qF -- '- VS Code reload: required (keybindings.json modified)'; then
+        pass "R21: VSCODE_RELOAD_REQUIRED=required + reason → expected line rendered"
+    else
+        fail "R21: expected '- VS Code reload: required (keybindings.json modified)' in output
+$out"
+    fi
+}
+
+test_R22_installer_rerun_required() {
+    require_report_bin "R22_installer_rerun_required" || return
+    local intent="$TMPDIR_BASE/r22-intent.md"
+    local notes="$TMPDIR_BASE/r22-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r22" \
+           '{"INSTALLER_RERUN_REQUIRED":"required","INSTALLER_RERUN_REASON":"install.ps1 modified in PR"}')"
+
+    if echo "$out" | grep -qF -- '- Installer rerun: required (install.ps1 modified in PR)'; then
+        pass "R22: INSTALLER_RERUN_REQUIRED=required + reason → expected line rendered"
+    else
+        fail "R22: expected '- Installer rerun: required (install.ps1 modified in PR)' in output
+$out"
+    fi
+}
+
+test_R23_os_reboot_required() {
+    require_report_bin "R23_os_reboot_required" || return
+    local intent="$TMPDIR_BASE/r23-intent.md"
+    local notes="$TMPDIR_BASE/r23-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r23" \
+           '{"OS_REBOOT_REQUIRED":"required","OS_REBOOT_REASON":"manual env override"}')"
+
+    if echo "$out" | grep -qF -- '- OS reboot: required (manual env override)'; then
+        pass "R23: OS_REBOOT_REQUIRED=required + reason → expected line rendered"
+    else
+        fail "R23: expected '- OS reboot: required (manual env override)' in output
+$out"
+    fi
+}
+
+test_R24_legacy_cc_restart_no() {
+    require_report_bin "R24_legacy_cc_restart_no" || return
+    local intent="$TMPDIR_BASE/r24-intent.md"
+    local notes="$TMPDIR_BASE/r24-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r24" \
+           '{"CLAUDE_CODE_RESTART_REQUIRED":"no"}')"
+
+    local block
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qF -- '- Claude Code restart: not_required'; then
+        pass "R24: legacy CLAUDE_CODE_RESTART_REQUIRED=no → cc_restart renders as not_required"
+    else
+        fail "R24: expected '- Claude Code restart: not_required' in Post-Merge block
+$block"
+    fi
+}
+
+test_I12_detect_restart_failsafe() {
+    local detect_sh="$AGENTS_DIR/skills/worktree-end/lib/detect-restart.sh"
+    if [ ! -f "$detect_sh" ]; then
+        skip "I12_detect_restart_failsafe (detect-restart.sh not found)"
+        return
+    fi
+    local out
+    out="$(run_with_timeout 30 bash -c 'unset AGENTS_CONFIG_DIR; PR_NUMBER="" bash "$1" ""' _ "$detect_sh" 2>/dev/null)"
+    local lines; lines="$(printf '%s\n' "$out" | grep -cE '^(cc_restart|vscode_reload|installer_rerun|os_reboot)=not_required\|$')"
+    if [ "$lines" = "4" ]; then
+        pass "I12: detect-restart.sh fail-safe outputs all 4 categories as not_required|"
+    else
+        fail "I12: expected 4 not_required| lines, got $lines
 $out"
     fi
 }
@@ -1124,12 +1291,21 @@ test_R6_uses_shared_parser
 test_R7_pr_state_passthrough
 test_R8_pr_title_injection_safe
 
-test_R9_cc_restart_section_gated_off
+test_R9_post_merge_section_always_present
 test_R10_cc_restart_yes
 test_R11_cc_restart_no
-test_R12_cc_restart_empty_agents_dir
-test_R13_cc_restart_unset_value
-test_R14_cc_restart_section_position
+test_R12_all_categories_default_not_required
+test_R13_legacy_alias_yes
+test_R14_post_merge_section_position
+
+test_R19_post_merge_always_present
+test_R20_all_four_categories_present
+test_R21_vscode_reload_required
+test_R22_installer_rerun_required
+test_R23_os_reboot_required
+test_R24_legacy_cc_restart_no
+
+test_I12_detect_restart_failsafe
 
 test_I1_step5_5_capture_then_remove
 test_I2_step5_5_no_backup
