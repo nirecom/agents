@@ -3,6 +3,7 @@
 // Single source of truth for ## closes_issues parsing.
 // Code-level consumers (require this module):
 //   - bin/worktree-final-report.js
+//   - bin/parse-closes-issues (CLI wrapper)
 // Prose/prompt references (pointer comments only — no require):
 //   - skills/commit-push, issue-close-stage, issue-close-finalize
 
