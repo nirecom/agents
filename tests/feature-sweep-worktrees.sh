@@ -16,8 +16,14 @@
 # Outputs:
 #   --dry-run    → human-readable list (count + per-candidate line)
 #   --ci-mode    → JSON with keys: scanned, candidates, worktree_removed,
-#                  branch_deleted, marker_cleaned, skipped_eperm,
+#                  branch_deleted, orphan_dirs_removed, skipped_eperm,
 #                  skipped_unmerged, errors
+#
+# Note: `marker_cleaned` was removed in #503 along with the
+# pending-branch-delete- marker mechanism. `orphan_dirs_removed` replaces
+# it: counts directories under <WORKTREE_BASE_DIR>/<task>/<repo> that pass
+# all four gates (not in git worktree list, no .git, old enough, name matches
+# main repo) and were removed by --apply.
 #
 # Source bin/sweep-worktrees.sh does NOT exist yet — all tests are RED
 # until the implementation step lands. Test-first.
@@ -312,7 +318,7 @@ T7_ci_mode_json_shape() {
         process.stdin.on('end', () => {
             try {
                 const d = JSON.parse(b);
-                const required = ['scanned','candidates','worktree_removed','branch_deleted','marker_cleaned','skipped_eperm','skipped_unmerged','errors'];
+                const required = ['scanned','candidates','worktree_removed','branch_deleted','orphan_dirs_removed','orphan_dirs_skipped_has_git','orphan_dirs_skipped_young','orphan_dirs_skipped_registered','orphan_dirs_skipped_failed','orphan_dirs_skipped_has_files','orphan_dirs_skipped_repo_mismatch','skipped_eperm','skipped_unmerged','errors'];
                 const missing = required.filter(k => !(k in d));
                 if (missing.length === 0) console.log('OK');
                 else console.log('MISSING:' + missing.join(','));
@@ -328,6 +334,421 @@ T7_ci_mode_json_shape() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Orphan-dir-sweep helper. The four gates:
+#   1. dir not in `git worktree list --porcelain`
+#   2. no .git entry (file or directory) inside
+#   3. mtime older than --min-age-hours
+#   4. dir name matches the main repo's basename
+# Setup: WORKTREE_BASE_DIR=<base>; orphan dir at <base>/<task>/<repo-name>.
+# ─────────────────────────────────────────────────────────────────────────────
+
+ci_field() {
+    # $1: JSON, $2: key → prints integer value or empty
+    printf '%s' "$1" | node -e "
+        let b='';
+        process.stdin.on('data', c => b += c);
+        process.stdin.on('end', () => {
+            try {
+                const d = JSON.parse(b);
+                if (process.argv[1] in d) console.log(d[process.argv[1]]);
+            } catch (e) { /* swallow */ }
+        });
+    " -- "$2" 2>/dev/null
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T8 — orphan dir satisfying all 4 gates → --apply removes it;
+#      orphan_dirs_removed counter == 1.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T8_orphan_dir_removed_when_all_gates_pass() {
+    local repo="$TMPDIR_BASE/t8-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t8-wbase"
+    local orphan="$wbase/orphan-task/$repo_name"
+    mkdir -p "$orphan"
+    # Gate 4 (contents) accepts: WORKTREE_NOTES.md only — no other files/dirs.
+    # Gate 5 (cross-repo): notes' `Main repo:` line matches current MAIN_ROOT
+    # (forward-slash-normalized form of the source repo path).
+    local repo_fwd
+    repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
+    printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
+    make_stale "$orphan"
+    make_stale "$wbase/orphan-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T8 orphan_dir_removed_when_all_gates_pass: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T8 orphan_dir_removed_when_all_gates_pass: exit=$exit_code, out=$out"
+        return
+    fi
+
+    if [ -d "$orphan" ]; then
+        fail "T8 orphan_dir_removed_when_all_gates_pass: dir still present after --apply"
+        return
+    fi
+    local n
+    n="$(ci_field "$out" orphan_dirs_removed)"
+    if [ "$n" = "1" ]; then
+        pass "T8 orphan_dir_removed_when_all_gates_pass (counter==1)"
+    else
+        fail "T8 orphan_dir_removed_when_all_gates_pass: orphan_dirs_removed=$n, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T9 — orphan dir contains a .git FILE → gate 2 fails → skipped;
+#      directory still exists after --apply; orphan_dirs_removed == 0.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9_orphan_dir_skipped_when_has_git() {
+    local repo="$TMPDIR_BASE/t9-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t9-wbase"
+    local orphan="$wbase/has-git-task/$repo_name"
+    mkdir -p "$orphan"
+    printf 'gitdir: /nonexistent\n' > "$orphan/.git"
+    make_stale "$orphan"
+    make_stale "$wbase/has-git-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T9 orphan_dir_skipped_when_has_git: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T9 orphan_dir_skipped_when_has_git: exit=$exit_code, out=$out"
+        return
+    fi
+    if [ ! -d "$orphan" ]; then
+        fail "T9 orphan_dir_skipped_when_has_git: dir was removed despite .git presence"
+        return
+    fi
+    local n
+    n="$(ci_field "$out" orphan_dirs_removed)"
+    if [ "$n" = "0" ]; then
+        pass "T9 orphan_dir_skipped_when_has_git (counter==0, dir kept)"
+    else
+        fail "T9 orphan_dir_skipped_when_has_git: orphan_dirs_removed=$n, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T8b — orphan dir contains extra files beyond WORKTREE_NOTES.md → Gate 4
+#       fails → SKIPPED; counter orphan_dirs_skipped_has_files == 1.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T8b_orphan_dir_skipped_when_extra_files() {
+    local repo="$TMPDIR_BASE/t8b-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t8b-wbase"
+    local orphan="$wbase/extra-task/$repo_name"
+    mkdir -p "$orphan"
+    local repo_fwd
+    repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
+    printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
+    # Extra file beyond WORKTREE_NOTES.md — Gate 4 must reject.
+    printf 'extra\n' > "$orphan/leftover.txt"
+    make_stale "$orphan"
+    make_stale "$wbase/extra-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T8b orphan_dir_skipped_when_extra_files: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T8b orphan_dir_skipped_when_extra_files: exit=$exit_code, out=$out"
+        return
+    fi
+    if [ ! -d "$orphan" ]; then
+        fail "T8b orphan_dir_skipped_when_extra_files: dir removed despite extra file"
+        return
+    fi
+    local n n2
+    n="$(ci_field "$out" orphan_dirs_removed)"
+    n2="$(ci_field "$out" orphan_dirs_skipped_has_files)"
+    if [ "$n" = "0" ] && [ "$n2" = "1" ]; then
+        pass "T8b orphan_dir_skipped_when_extra_files (removed==0, skipped_has_files==1)"
+    else
+        fail "T8b orphan_dir_skipped_when_extra_files: removed=$n skipped_has_files=$n2, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T8c — orphan dir completely empty (no WORKTREE_NOTES.md, no other files)
+#       → Gate 5 SKIPS (no `Main repo:` ownership proof available);
+#          increments repo_mismatch counter. Empty dirs without notes are
+#          NOT eligible for cleanup — only dirs with a matching `Main repo:`
+#          field qualify.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T8c_orphan_dir_skipped_when_completely_empty() {
+    local repo="$TMPDIR_BASE/t8c-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t8c-wbase"
+    local orphan="$wbase/empty-task/$repo_name"
+    mkdir -p "$orphan"
+    make_stale "$orphan"
+    make_stale "$wbase/empty-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T8c orphan_dir_skipped_when_completely_empty: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T8c orphan_dir_skipped_when_completely_empty: exit=$exit_code, out=$out"
+        return
+    fi
+    if [ ! -d "$orphan" ]; then
+        fail "T8c orphan_dir_skipped_when_completely_empty: dir was removed but should be skipped"
+        return
+    fi
+    local removed mismatch
+    removed="$(ci_field "$out" orphan_dirs_removed)"
+    mismatch="$(ci_field "$out" orphan_dirs_skipped_repo_mismatch)"
+    if [ "$removed" = "0" ] && [ "$mismatch" = "1" ]; then
+        pass "T8c orphan_dir_skipped_when_completely_empty (removed=0, repo_mismatch=1)"
+    else
+        fail "T8c orphan_dir_skipped_when_completely_empty: removed=$removed, repo_mismatch=$mismatch, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T9b (Gate 5) — orphan dir's WORKTREE_NOTES.md has a `Main repo:` line
+#                that does NOT match the current MAIN_ROOT → SKIPPED;
+#                counter orphan_dirs_skipped_repo_mismatch == 1.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9b_orphan_dir_skipped_when_main_repo_mismatch() {
+    local repo="$TMPDIR_BASE/t9b-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t9b-wbase"
+    local orphan="$wbase/mismatch-task/$repo_name"
+    mkdir -p "$orphan"
+    # `Main repo:` points to a different path — Gate 5 must reject.
+    printf '# Worktree Notes\nMain repo: /some/other/main/repo\n' > "$orphan/WORKTREE_NOTES.md"
+    make_stale "$orphan"
+    make_stale "$wbase/mismatch-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T9b orphan_dir_skipped_when_main_repo_mismatch: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T9b orphan_dir_skipped_when_main_repo_mismatch: exit=$exit_code, out=$out"
+        return
+    fi
+    if [ ! -d "$orphan" ]; then
+        fail "T9b orphan_dir_skipped_when_main_repo_mismatch: dir removed despite repo mismatch"
+        return
+    fi
+    local n n2
+    n="$(ci_field "$out" orphan_dirs_removed)"
+    n2="$(ci_field "$out" orphan_dirs_skipped_repo_mismatch)"
+    if [ "$n" = "0" ] && [ "$n2" = "1" ]; then
+        pass "T9b orphan_dir_skipped_when_main_repo_mismatch (removed==0, skipped_repo_mismatch==1)"
+    else
+        fail "T9b orphan_dir_skipped_when_main_repo_mismatch: removed=$n skipped_repo_mismatch=$n2, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T9c (legacy notes) — orphan dir's WORKTREE_NOTES.md has NO `Main repo:`
+#                      line → Gate 5 SKIPS (basename alone is not unique
+#                      ownership proof; legacy notes do NOT fall through to
+#                      basename match). Increments repo_mismatch counter.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9c_orphan_dir_skipped_when_legacy_notes_missing_main_repo() {
+    local repo="$TMPDIR_BASE/t9c-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t9c-wbase"
+    local orphan="$wbase/legacy-task/$repo_name"
+    mkdir -p "$orphan"
+    # Legacy notes — no `Main repo:` line. Even though basename matches,
+    # Gate 5 now requires the `Main repo:` field as ownership proof.
+    printf '# Worktree Notes\nBranch: feature/legacy\n' > "$orphan/WORKTREE_NOTES.md"
+    make_stale "$orphan"
+    make_stale "$wbase/legacy-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T9c orphan_dir_skipped_when_legacy_notes_missing_main_repo: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T9c orphan_dir_skipped_when_legacy_notes_missing_main_repo: exit=$exit_code, out=$out"
+        return
+    fi
+    if [ ! -d "$orphan" ]; then
+        fail "T9c orphan_dir_skipped_when_legacy_notes_missing_main_repo: dir was removed but should be skipped"
+        return
+    fi
+    local removed mismatch
+    removed="$(ci_field "$out" orphan_dirs_removed)"
+    mismatch="$(ci_field "$out" orphan_dirs_skipped_repo_mismatch)"
+    if [ "$removed" = "0" ] && [ "$mismatch" = "1" ]; then
+        pass "T9c orphan_dir_skipped_when_legacy_notes_missing_main_repo (removed=0, repo_mismatch=1)"
+    else
+        fail "T9c orphan_dir_skipped_when_legacy_notes_missing_main_repo: removed=$removed, repo_mismatch=$mismatch, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T10 — orphan dir younger than --min-age-hours → gate 3 fails →
+#       skipped; dir still exists.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T10_orphan_dir_skipped_when_too_young() {
+    local repo="$TMPDIR_BASE/t10-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t10-wbase"
+    local orphan="$wbase/young-task/$repo_name"
+    mkdir -p "$orphan"
+    printf 'fresh\n' > "$orphan/leftover.txt"
+    # Explicitly bump mtime to now (default is "now", but be defensive).
+    touch "$orphan" 2>/dev/null || true
+    touch "$wbase/young-task" 2>/dev/null || true
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T10 orphan_dir_skipped_when_too_young: $SWEEP not found / not executable"
+        return
+    fi
+
+    local out exit_code
+    # --min-age-hours 1 → freshly-created dir must be skipped.
+    out="$(cd "$repo" && SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check --min-age-hours 1 2>/dev/null)"
+    exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        fail "T10 orphan_dir_skipped_when_too_young: exit=$exit_code, out=$out"
+        return
+    fi
+    if [ ! -d "$orphan" ]; then
+        fail "T10 orphan_dir_skipped_when_too_young: dir was removed despite being too young"
+        return
+    fi
+    local n
+    n="$(ci_field "$out" orphan_dirs_removed)"
+    if [ "$n" = "0" ]; then
+        pass "T10 orphan_dir_skipped_when_too_young (counter==0, dir kept)"
+    else
+        fail "T10 orphan_dir_skipped_when_too_young: orphan_dirs_removed=$n, raw=$out"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T11 — registry fetch failure: `git worktree list --porcelain` fails →
+#       scan pass aborts with WARNING on stderr; orphan_dirs_removed == 0.
+#       Simulated by pointing GIT_DIR at a nonexistent path.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T11_registry_fetch_failure_aborts_scan() {
+    local repo="$TMPDIR_BASE/t11-repo"
+    init_repo "$repo"
+    local repo_name
+    repo_name="$(basename "$repo")"
+    local wbase="$TMPDIR_BASE/t11-wbase"
+    local orphan="$wbase/broken-task/$repo_name"
+    mkdir -p "$orphan"
+    printf 'leftover\n' > "$orphan/leftover.txt"
+    make_stale "$orphan"
+    make_stale "$wbase/broken-task"
+
+    if [ ! -x "$SWEEP" ]; then
+        fail "T11 registry_fetch_failure_aborts_scan: $SWEEP not found / not executable"
+        return
+    fi
+
+    # Inject a git wrapper that fails specifically for `worktree list --porcelain`
+    # while passing all other git commands through. This lets the initial
+    # `git rev-parse --show-toplevel` succeed, but the orphan-dir pre-pass guard
+    # fails → SKIP_ORPHAN_DIR_SCAN=1 → WARNING on stderr.
+    local fake_git_dir="$TMPDIR_BASE/t11-fake-git"
+    mkdir -p "$fake_git_dir"
+    local real_git
+    real_git="$(command -v git)"
+    cat > "$fake_git_dir/git" <<EOF
+#!/bin/sh
+args="\$*"
+case "\$args" in
+  *"worktree list"*) exit 1 ;;
+  *) exec "$real_git" "\$@" ;;
+esac
+EOF
+    chmod +x "$fake_git_dir/git"
+
+    local stdout_file="$TMPDIR_BASE/t11.out"
+    local stderr_file="$TMPDIR_BASE/t11.err"
+    (cd "$repo" && PATH="$fake_git_dir:$PATH" SWEEP_SKIP_GH=1 WORKTREE_BASE_DIR="$wbase" \
+        run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check \
+            >"$stdout_file" 2>"$stderr_file") || true
+    local out err
+    out="$(cat "$stdout_file" 2>/dev/null || true)"
+    err="$(cat "$stderr_file" 2>/dev/null || true)"
+
+    # orphan_dirs_removed must be 0 (scan aborted before removal).
+    local n
+    n="$(ci_field "$out" orphan_dirs_removed)"
+    case "$err" in
+        *[Ww][Aa][Rr][Nn]*|*WARNING*)
+            if [ "$n" = "0" ] || [ -z "$n" ]; then
+                pass "T11 registry_fetch_failure_aborts_scan (warned + counter==0)"
+            else
+                fail "T11 registry_fetch_failure_aborts_scan: warned but counter=$n; stdout=$out"
+            fi
+            ;;
+        *)
+            fail "T11 registry_fetch_failure_aborts_scan: missing WARNING on stderr; stderr=$err, stdout=$out"
+            ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -338,6 +759,14 @@ T4_apply_removes_worktree
 T5_eperm_non_fatal
 T6_stale_backup_detected_and_removed
 T7_ci_mode_json_shape
+T8_orphan_dir_removed_when_all_gates_pass
+T8b_orphan_dir_skipped_when_extra_files
+T8c_orphan_dir_skipped_when_completely_empty
+T9_orphan_dir_skipped_when_has_git
+T9b_orphan_dir_skipped_when_main_repo_mismatch
+T9c_orphan_dir_skipped_when_legacy_notes_missing_main_repo
+T10_orphan_dir_skipped_when_too_young
+T11_registry_fetch_failure_aborts_scan
 
 echo ""
 echo "─────────────────────────────────────────"

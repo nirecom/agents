@@ -25,7 +25,13 @@ AGENTS_DIR_NATIVE="$AGENTS_DIR"
 if command -v cygpath >/dev/null 2>&1; then
     AGENTS_DIR_NATIVE=$(cygpath -w "$AGENTS_DIR")
 fi
-REPO_ID=$(AGENTS_DIR_NATIVE="$AGENTS_DIR_NATIVE" node -e 'const p=process.env.AGENTS_DIR_NATIVE.replace(/\\/g,"/");console.log(require(p+"/hooks/enforce-worktree.js").getRepoId(p))' 2>/dev/null)
+# Inline SHA-256 computation of REPO_ID — getRepoId was retired in #503
+# along with the pending-branch-delete marker mechanism. Path is forward-
+# slash-normalised before hashing (matches the prior getRepoId algorithm).
+# TODO(#503): if bin/resume-session-detect internally calls getRepoId from
+# the (now-retired) module export, this REPO_ID may no longer match what the
+# CLI computes. Verify after source-level changes land.
+REPO_ID=$(AGENTS_DIR_NATIVE="$AGENTS_DIR_NATIVE" node -e 'const p=process.env.AGENTS_DIR_NATIVE.replace(/\\/g,"/");console.log(require("crypto").createHash("sha256").update(p).digest("hex"))' 2>/dev/null)
 
 if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
     echo "FATAL: could not compute REPO_ID for $AGENTS_DIR"
