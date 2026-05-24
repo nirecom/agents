@@ -33,7 +33,6 @@
 
 const fs = require("fs");
 const os = require("os");
-const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 const path = require("path");
 
@@ -41,7 +40,6 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 
 const { normalizeCwd } = require("./lib/path-normalize");
 const { resolveSessionId, getWorkflowDir } = require("./lib/workflow-state");
-const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
@@ -360,49 +358,6 @@ function getWorktreeBaseDir() {
   return path.resolve(expanded);
 }
 
-// Resolve <workflow-plans-dir>/worktree-end/ — stores /worktree-end branch-delete
-// markers outside .git/ (Claude Code protected path that always prompts on write).
-// Precedent: PR #256 moved .claude/plans/ → ~/.workflow-plans/ for the same reason.
-function getWorktreeEndDir() {
-  return path.join(getWorkflowPlansDir(), "worktree-end");
-}
-
-const MARKER_PREFIXES = {
-  BRANCH_DELETE: "pending-branch-delete-",
-};
-const ALL_MARKER_PREFIXES = Object.values(MARKER_PREFIXES);
-
-// Stable per-repo id for marker filenames. Computed from the absolute path of
-// the repo's git-common-dir (shared across all linked worktrees of the same repo)
-// so every worktree of repo R produces the same id.
-// Returns null if git-common-dir cannot be resolved (caller must fail-closed).
-function getRepoId(repoRoot) {
-  if (!repoRoot) return null;
-  try {
-    const r = spawnSync("git", ["rev-parse", "--git-common-dir"], {
-      cwd: repoRoot, encoding: "utf8", timeout: 2000,
-    });
-    if (r.status !== 0) return null;
-    const common = path.resolve(repoRoot, (r.stdout || "").trim());
-    return crypto.createHash("sha256").update(common).digest("hex").slice(0, 16);
-  } catch (e) { return null; }
-}
-
-// Compute the marker file path for a given (repoRoot, branch, prefix) triple.
-// Filename: <prefix><repo-id>--<encodeURIComponent(branch)>
-// encodeURIComponent makes any git-legal branch name filesystem-safe
-// (e.g. feature/foo → feature%2Ffoo, zero collision risk).
-// Returns null when repo-id resolution fails — caller MUST fail-closed.
-function getMarkerPath(repoRoot, branch, prefix = MARKER_PREFIXES.BRANCH_DELETE) {
-  if (!branch || typeof branch !== "string") return null;
-  try {
-    const id = getRepoId(repoRoot);
-    if (!id) return null;
-    const fname = prefix + id + "--" + encodeURIComponent(branch);
-    return path.join(getWorktreeEndDir(), fname);
-  } catch (e) { return null; }
-}
-
 // True if cmd is `git [opts] [-C path] branch -d|-D <branch> [...]`.
 // Strict subcommand position: only flag tokens (and their values) may appear
 // between `git` and `branch`, mirroring isAllowedFastForwardMerge.
@@ -441,220 +396,82 @@ function parseBranchDeleteTarget(cmd) {
 }
 
 /**
- * True if cmd is `git branch -d|-D <branch>` AND a marker file produced by
- * /worktree-end authorises this exact deletion.
+ * True if cmd is `git branch -d|-D <branch>` AND the target branch is NOT
+ * currently checked out in any worktree (per `git worktree list --porcelain`).
  *
- * Marker contract (written by /worktree-end before `git worktree remove`):
- *   path:    <workflow-plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>
- *   format:  line 1 = target branch name
- *            line 2 = absolute path of the worktree being removed
- *
- * Both must match: branch name == target, worktree path resolves under
- * WORKTREE_BASE_DIR. This narrows the exemption to /worktree-end-driven
- * cleanups; ad-hoc `git branch -D` from any worktree is still blocked.
+ * Replaces the prior marker-based gate (#503): no marker file, no precondition
+ * from /worktree-end — git's own registry is the source of truth.
+ * Fail-closed: if `git worktree list` errors, the delete is blocked.
  */
-function isAllowedBranchDeleteViaMarker(cmd, repoRoot) {
+function isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot) {
   if (hasShellChaining(cmd)) return false;
   const target = parseBranchDeleteTarget(cmd);
   if (!target) return false;
-  if (!repoRoot) return false;
+  if (!repoRoot) return false; // dispatch handles null repoRoot via early-allow
+  let res;
+  try {
+    res = spawnSync("git", ["-C", repoRoot, "worktree", "list", "--porcelain"], {
+      encoding: "utf8", timeout: 2000,
+    });
+  } catch (e) { return false; }
+  if (!res || res.error || res.status !== 0) return false; // fail-closed
+  const wanted = "branch refs/heads/" + target;
+  const lines = (res.stdout || "").split(/\r?\n/);
+  for (const ln of lines) {
+    if (ln === wanted) return false; // currently checked out in some worktree
+  }
 
-  const markerPath = getMarkerPath(repoRoot, target);
-  if (!markerPath) return false;
-
-  let content;
-  try { content = fs.readFileSync(markerPath, "utf8"); }
-  catch (e) { return false; }
-
-  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length < 2) return false;
-  const markerBranch = lines[0];
-  const markerWorktreePath = lines[1];
-
-  if (markerBranch !== target) return false;
-
-  const baseDir = getWorktreeBaseDir();
-  const norm = (p) => {
-    try {
-      const n = normalizeCwd(p) || p;
-      const r = path.resolve(n);
-      return process.platform === "win32" ? r.toLowerCase() : r;
-    } catch (e) { return null; }
-  };
-  const nBase = norm(baseDir);
-  const nWtree = norm(markerWorktreePath);
-  if (!nBase || !nWtree) return false;
-
-  return nWtree === nBase ||
-         nWtree.startsWith(nBase + path.sep) ||
-         nWtree.startsWith(nBase + "/");
+  // Force-delete bypasses Git's merged-status check, so it must come from an
+  // authorized skill (/worktree-end after PR merge). Authorization is the
+  // inline cmd-string prefix `WORKTREE_END_SKILL=1`, matching the established
+  // ISSUE_CLOSE_SKILL pattern: the hook inspects the raw command text, not
+  // process.env (which Bash inline assignments do not populate in the hook's
+  // process). The allowlist is tight — only the specific shape
+  // `WORKTREE_END_SKILL=1 git -C <path> branch -D <branch>` qualifies.
+  if (hasForceDeleteFlag(cmd)) {
+    return isWorktreeEndSkillForceDelete(cmd);
+  }
+  return true;
 }
 
-function extractRemoveItemPositionals(afterCmd) {
-  const results = [];
+// True if cmd is a branch-delete with any force form: -D, -f combined with -d,
+// or --force. Combined short flags (-df, -Df, -fd) are detected as force.
+// `-d` alone is the only non-force form.
+function hasForceDeleteFlag(cmd) {
+  const m = cmd.match(/\bbranch\b([^|;&]*)/);
+  if (!m) return false;
+  const tokens = [];
   const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
-  let m;
-  let consumeAsTarget = false;
-  while ((m = re.exec(afterCmd)) !== null) {
-    const tok = m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]);
-    if (consumeAsTarget) {
-      const v = tok.replace(/^["']|["']$/g, "").trim();
-      if (v) results.push(v);
-      consumeAsTarget = false;
-      continue;
+  let mm;
+  while ((mm = re.exec(m[1])) !== null) tokens.push(mm[1] || mm[2] || mm[3]);
+  for (const tok of tokens) {
+    if (tok === "--force") return true;
+    if (/^-[a-zA-Z]+$/.test(tok)) {
+      const flags = tok.slice(1);
+      if (flags === "d") continue;
+      if (/[Df]/.test(flags)) return true;
     }
-    if (/^-(?:Path|LiteralPath)$/i.test(tok)) { consumeAsTarget = true; continue; }
-    if (tok.startsWith("-")) continue;
-    tok.split(",").map((s) => s.replace(/^["']|["']$/g, "").trim()).filter(Boolean)
-      .forEach((v) => results.push(v));
-  }
-  return results;
-}
-
-// True if cmd is an isolated delete of a marker file AND the marker's recorded
-// branch no longer exists in repoRoot. Dispatches deletability check by prefix.
-// /worktree-end Step 6g must remove the marker after Step 6f deletes the branch.
-// CWD may have reset to main worktree on Windows after Step 6c (worktree remove),
-// so the delete needs an explicit main-worktree exception.
-// Fail-closed on any unexpected input, multi-target invocation, or non-1 git exit.
-function isAllowedMarkerDelete(cmd, repoRoot, prefixes = ALL_MARKER_PREFIXES) {
-  if (hasShellChaining(cmd)) return false;
-  if (!repoRoot) return false;
-  const isRm = /^\s*rm(?:\s|$)/.test(cmd);
-  const isRemoveItem = /^\s*Remove-Item(?:\s|$)/i.test(cmd);
-  if (!isRm && !isRemoveItem) return false;
-  // Reject recursive flags: POSIX -r/-R/-rf; PowerShell -Recurse and all prefix abbreviations.
-  if (isRm && (/(?:^|\s)-[a-zA-Z]*[rR]/.test(cmd) || /(?:^|\s)--recursive\b/.test(cmd))) return false;
-  if (isRemoveItem && /(?:^|\s)-(?:r|re|rec|recu|recur|recurs|recurse)\b/i.test(cmd)) return false;
-  // Only -LiteralPath is allowed for PowerShell; -Path uses wildcard semantics.
-  if (isRemoveItem && /-Path\b/i.test(cmd) && !/-LiteralPath\b/i.test(cmd)) return false;
-
-  // Extract exactly one positional target.
-  let positionals = [];
-  if (isRemoveItem) {
-    const after = cmd.replace(/^\s*Remove-Item\s*/i, "");
-    positionals = extractRemoveItemPositionals(after);
-  } else {
-    const after = cmd.replace(/^\s*rm\s*/, "");
-    const tokens = [];
-    const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
-    let m;
-    while ((m = re.exec(after)) !== null)
-      tokens.push(m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]));
-    positionals = tokens.filter((t) => !t.startsWith("-"));
-  }
-  if (positionals.length !== 1) return false;
-  const target = positionals[0];
-
-  const norm = (p) => {
-    try {
-      const n = normalizeCwd(p) || p;
-      const r = path.resolve(n);
-      return process.platform === "win32" ? r.toLowerCase() : r;
-    } catch (e) { return null; }
-  };
-  const nTarget = norm(target);
-  if (!nTarget) return false;
-
-  // Validate: target must be under <workflow-plans>/worktree-end/.
-  let wtDir;
-  try { wtDir = norm(getWorktreeEndDir()); } catch (e) { return false; }
-  if (!wtDir) return false;
-  const inDir = nTarget === wtDir ||
-                nTarget.startsWith(wtDir + path.sep) ||
-                nTarget.startsWith(wtDir + "/");
-  if (!inDir) return false;
-
-  // Validate: filename must start with <known-prefix><this-repo-id>--.
-  const id = getRepoId(repoRoot);
-  if (!id) return false;
-  const targetBase = path.basename(target);
-  const targetBaseNorm = process.platform === "win32" ? targetBase.toLowerCase() : targetBase;
-
-  let matchedPrefix = null;
-  for (const px of prefixes) {
-    const expected = process.platform === "win32"
-      ? (px + id + "--").toLowerCase()
-      : (px + id + "--");
-    if (targetBaseNorm.startsWith(expected)) { matchedPrefix = px; break; }
-  }
-  if (!matchedPrefix) return false;
-
-  // Dispatch deletability check by matched prefix.
-  if (matchedPrefix === MARKER_PREFIXES.BRANCH_DELETE) {
-    return isBranchDeleteMarkerDeletable(nTarget, repoRoot);
   }
   return false;
 }
 
-// Extracted from isAllowedMarkerDelete (behavior unchanged from pre-PR1).
-// Allows deletion of a pending-branch-delete- marker when the recorded branch
-// no longer exists. ENOENT → no-op (stale marker cleanup) is also allowed.
-function isBranchDeleteMarkerDeletable(nTarget, repoRoot) {
-  let content;
-  try { content = fs.readFileSync(nTarget, "utf8"); }
-  catch (e) { return e.code === "ENOENT"; }
-  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length < 1) return false;
-  const markerBranch = lines[0];
-
-  // Branch must no longer exist: status 1 = not found (allow).
-  // status 0 = exists (block); status >=2 or null = fatal (fail-closed).
-  try {
-    const r = spawnSync(
-      "git", ["show-ref", "--verify", "--quiet", `refs/heads/${markerBranch}`],
-      { cwd: repoRoot, timeout: 2000 }
-    );
-    if (r.error) return false;
-    if (r.status === null) return false;
-    if (r.status !== 1) return false;
-  } catch (e) { return false; }
-  return true;
-}
-
-/**
- * True if filePath is a valid marker location for repoRoot under one of the
- * given prefixes. Validates: path under <workflow-plans>/worktree-end/, filename
- * starts with <prefix><this-repo-id>--, and has a non-empty branch suffix.
- * Allows Write/Edit tool calls to markers from the main worktree.
- */
-function isMarkerFilePath(filePath, repoRoot, prefixes = ALL_MARKER_PREFIXES) {
-  if (!filePath || !repoRoot) return false;
-
-  const id = getRepoId(repoRoot);
-  if (!id) return false;
-
-  const norm = (p) => {
-    try {
-      const n = normalizeCwd(p) || p;
-      const r = path.resolve(n);
-      return process.platform === "win32" ? r.toLowerCase() : r;
-    } catch (e) { return null; }
-  };
-  const nTarget = norm(filePath);
-  let wtDir;
-  try { wtDir = norm(getWorktreeEndDir()); } catch (e) { return false; }
-  if (!nTarget || !wtDir) return false;
-
-  const inDir = nTarget === wtDir ||
-                nTarget.startsWith(wtDir + path.sep) ||
-                nTarget.startsWith(wtDir + "/");
-  if (!inDir) return false;
-
-  const targetBase = path.basename(filePath);
-  const targetBaseNorm = process.platform === "win32" ? targetBase.toLowerCase() : targetBase;
-
-  let matchedPrefix = null;
-  for (const px of prefixes) {
-    const expected = process.platform === "win32"
-      ? (px + id + "--").toLowerCase()
-      : (px + id + "--");
-    if (targetBaseNorm.startsWith(expected)) { matchedPrefix = expected; break; }
-  }
-  if (!matchedPrefix) return false;
-
-  // Branch portion (after `--`) must be non-empty.
-  return targetBase.length > matchedPrefix.length;
+// True if cmd matches the exact shape /worktree-end Step 6f emits:
+//   WORKTREE_END_SKILL=1 git -C <path> branch -D <type>/<task-name>
+// The -C path and branch may be quoted ("..." or '...') or bare. No shell
+// chaining, no extra options. Branch name MUST match the feature-branch
+// naming convention from rules/branch.md:
+//   <type>/<name>  where type ∈ {feature, fix, refactor, docs, chore}
+//                  and name ∈ [a-zA-Z0-9_-]+
+// This is the sole authorized force-delete shape. Branches like `main`,
+// `master`, `release/v2.0`, or any non-typed branch are rejected even with
+// the inline prefix — defense-in-depth against bypass misuse.
+function isWorktreeEndSkillForceDelete(cmd) {
+  const m = cmd.match(
+    /^WORKTREE_END_SKILL=1[ \t]+git[ \t]+-C[ \t]+(?:"[^"]+"|'[^']+'|\S+)[ \t]+branch[ \t]+-D[ \t]+(?:"([^"]+)"|'([^']+)'|(\S+))[ \t]*$/
+  );
+  if (!m) return false;
+  const branch = m[1] || m[2] || m[3];
+  return /^(?:feature|fix|refactor|docs|chore)\/[a-zA-Z0-9_-]+$/.test(branch);
 }
 
 /**
@@ -1501,22 +1318,25 @@ if (toolName === "Bash") {
   if (classify(cmd) !== "write") done(); // read-only command — allow
   repoRoot = findRepoRootForBash(cmd);
 
-  // git branch -d/-D: gated exclusively by /worktree-end's marker file.
-  // Allowed when the marker matches the target branch and the recorded
-  // worktree path resolves under WORKTREE_BASE_DIR; blocked unconditionally
-  // otherwise (any worktree, including main and linked).
+  // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
+  // Allowed only when the target branch is not currently checked out in any worktree.
   if (isBranchDeleteCommand(cmd)) {
-    if (isAllowedBranchDeleteViaMarker(cmd, repoRoot)) done();
+    if (!repoRoot) done(); // not in a git repo — allow (matches policy below)
+    if (isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot)) done();
     done({
       block: true,
       reason:
-        "ENFORCE_WORKTREE: git branch -d/-D blocked. Reason: no matching /worktree-end marker.\n" +
-        "Branch deletion is only authorised via /worktree-end, which writes\n" +
-        "<workflow-plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>\n" +
-        "with the target branch and the worktree path being removed (must resolve under WORKTREE_BASE_DIR).\n" +
-        "Direct git branch -d/-D from any worktree is prohibited.\n" +
-        "Run: /worktree-end\n" +
-        "Or set ENFORCE_WORKTREE=off in agents config to bypass.",
+        "ENFORCE_WORKTREE: git branch -d/-D blocked — target branch is still " +
+        "checked out in a worktree, force-delete was issued without the " +
+        "`WORKTREE_END_SKILL=1 git -C <path> branch -D <branch>` inline prefix " +
+        "shape required for /worktree-end Step 6f authorization, or " +
+        "`git worktree list` failed.\n" +
+        "- If the worktree is still active: run `/worktree-end` first to remove it, then retry.\n" +
+        "- If the worktree was already removed but the registry is stale: run " +
+        "`git worktree prune`, then retry.\n" +
+        "- If you need to force-delete an unmerged branch: set " +
+        "`ENFORCE_WORKTREE=off` in agents config, run the delete, then restore it.\n" +
+        "- Or run `/sweep-worktrees --apply` to reclaim merged zombie worktrees.",
     });
   }
 
@@ -1662,7 +1482,6 @@ if (mainCheckout) {
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
     if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
-    if (isAllowedMarkerDelete(cmd, repoRoot)) done();
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
@@ -1670,13 +1489,6 @@ if (mainCheckout) {
     if (isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot)) done();
     if (isAllowedHistoryWriteViaComposeDocAppendSkill(cmd)) done();
     if (isAllowedHistoryPushViaComposeDocAppendSkill(cmd, repoRoot)) done();
-  }
-
-  // Allow Write/Edit to the pending-branch-delete marker. /worktree-end writes
-  // this file from the main worktree before authorising git branch -d.
-  if (["Write", "Edit"].includes(toolName)) {
-    const fp = toolInput.file_path || toolInput.path;
-    if (fp && isMarkerFilePath(fp, repoRoot)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
@@ -1709,10 +1521,8 @@ module.exports = {
   isAllowedFastForwardMerge,
   isBranchDeleteCommand,
   parseBranchDeleteTarget,
-  isAllowedBranchDeleteViaMarker,
-  isAllowedMarkerDelete,
+  isAllowedBranchDeleteWhenNotCheckedOut,
   isAllowedReadOnlyConfigCheck,
-  isMarkerFilePath,
   getWorktreeBaseDir,
   isAllowedPushAllExcluded,
   hasGitHooksBypass,
@@ -1728,7 +1538,4 @@ module.exports = {
   parseGitCPath,
   setPayloadDerivedPaths,
   _getPayloadDerivedPaths,
-  MARKER_PREFIXES,
-  getRepoId,
-  getMarkerPath,
 };

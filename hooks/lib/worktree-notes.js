@@ -27,12 +27,14 @@ function formatBaseDir(baseDir) {
   return String(baseDir);
 }
 
-function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFiles } = {}) {
+function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles } = {}) {
+  const normalizedMainRoot = mainRoot ? normalizePath(mainRoot) : "";
   const lines = [
     "# Worktree Notes",
     `Branch: ${branch}`,
     `Created: ${createdDate}`,
     `Path: ${resolvedPath}`,
+    `Main repo: ${normalizedMainRoot}`,
     `WORKTREE_BASE_DIR: ${formatBaseDir(baseDir)}`,
     "",
     "## Gitignored files copied from main",
@@ -67,9 +69,9 @@ function buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFile
   return lines.join("\n") + "\n";
 }
 
-function writeNotes({ worktreePath, branch, createdDate, resolvedPath, baseDir, copiedFiles }) {
+function writeNotes({ worktreePath, branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles }) {
   const notesPath = path.join(worktreePath, "WORKTREE_NOTES.md");
-  const body = buildNotesBody({ branch, createdDate, resolvedPath, baseDir, copiedFiles });
+  const body = buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles });
   fs.writeFileSync(notesPath, body, { encoding: "utf8" });
   return { notesPath, notesWritten: true };
 }
@@ -181,6 +183,9 @@ function run(input) {
   if (baseDir != null && hasNewline(String(baseDir))) {
     throw new Error(`Newline character in baseDir is not allowed`);
   }
+  if (mainRoot && hasNewline(mainRoot)) {
+    throw new Error(`Newline character in mainRoot is not allowed`);
+  }
   if (Array.isArray(copiedFiles)) {
     for (const f of copiedFiles) {
       if (typeof f !== "string") {
@@ -210,6 +215,7 @@ function run(input) {
       branch,
       createdDate,
       resolvedPath: resolvedPath || worktreePath,
+      mainRoot,
       baseDir,
       copiedFiles,
     });
