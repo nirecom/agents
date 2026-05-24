@@ -6,11 +6,32 @@ const path = require("path");
 const { parseClosesIssues } = require("../hooks/lib/parse-closes-issues");
 const notesLib = require("../hooks/lib/worktree-notes-sections");
 
-const [, , intentPath, notesPath, sessionId] = process.argv;
+// --- argv parsing: strip "--" separators, extract --env-file, keep positionals ---
+const rawArgs = process.argv.slice(2).filter((a) => a !== "--");
+let envFilePath = null;
+let envFileExplicit = false;
+const positionals = [];
+{
+  let i = 0;
+  while (i < rawArgs.length) {
+    if (rawArgs[i] === "--env-file" && i + 1 < rawArgs.length) {
+      envFilePath = rawArgs[i + 1];
+      envFileExplicit = true;
+      i += 2;
+    } else {
+      positionals.push(rawArgs[i]);
+      i++;
+    }
+  }
+}
+
+const intentPath = positionals[0];
+const notesPath = positionals[1];
+const sessionId = positionals[2];
 
 if (!intentPath || !sessionId) {
   process.stderr.write(
-    "Usage: worktree-final-report.js <intent.md> <notes.md|''> <session-id>\n"
+    "Usage: worktree-final-report.js <intent.md> <notes.md|''> <session-id> [--env-file <path>]\n"
   );
   process.exit(1);
 }
@@ -28,9 +49,46 @@ if (notesPath && hasTraversal(notesPath)) {
   process.exit(1);
 }
 
+// --- env-file validation + load (must happen before any safeEnv call) ---
+function isAbsolutePath(p) {
+  if (typeof p !== "string" || p.length === 0) return false;
+  if (p.startsWith("/")) return true;
+  // Windows: letter + ':' followed by '/' or '\'
+  if (/^[A-Za-z]:[\\/]/.test(p)) return true;
+  return false;
+}
+
+let envFileValues = {};
+if (envFileExplicit) {
+  if (!isAbsolutePath(envFilePath) || hasTraversal(envFilePath)) {
+    process.stderr.write(
+      "[worktree-final-report] FATAL: --env-file path invalid (must be absolute, no .. segments): " +
+        envFilePath + "\n"
+    );
+    process.exit(1);
+  }
+  try {
+    const raw = fs.readFileSync(envFilePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("env-file JSON must be a plain object");
+    }
+    envFileValues = parsed;
+  } catch (e) {
+    process.stderr.write(
+      "[worktree-final-report] FATAL: --env-file requested but unreadable: " +
+        envFilePath + " (" + e.message + ")\n"
+    );
+    process.exit(1);
+  }
+}
+
 function safeEnv(name) {
-  const v = process.env[name];
-  return v !== undefined && v !== "" ? v : "(none)";
+  const fromFile = envFileValues[name];
+  if (fromFile !== undefined && fromFile !== "") return fromFile;
+  const fromEnv = process.env[name];
+  if (fromEnv !== undefined && fromEnv !== "") return fromEnv;
+  return "(none)";
 }
 
 function extractSection(text, heading) {
@@ -107,3 +165,4 @@ sections.push(
 
 const report = sections.join("\n");
 process.stdout.write(report);
+process.stdout.write("\n<<WORKFLOW_MARK_STEP_final_report_complete>>\n");
