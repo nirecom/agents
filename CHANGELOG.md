@@ -347,3 +347,7 @@ Changes: Plan-pipeline subagents (survey-code, survey-history, detail-planner, o
 ### FEATURE: PR #531 (2026-05-25)
 Background: feat(workflow): flip mid-workflow finding capture to /issue-create primary; add Mid-workflow gate (#521)
 Changes: Mid-workflow bug/task findings can now be filed immediately via `/issue-create` from the linked worktree. The previous WORKTREE_NOTES.md-first design (a leftover from when `gh issue create` was blocked from linked worktrees) has been corrected. `WORKTREE_NOTES.md` remains available as a fallback for non-interactive sessions, non-GitHub remotes, and explicit deferrals. `/issue-create` now surfaces a notice when called mid-workflow, reminding you the new issue will not be added to the current session's `closes_issues`.
+
+### FEATURE: PR #533 (2026-05-25)
+Background: feat(#518): multi-category post-merge actions block in Final Report
+Changes: FEATURE: worktree-end Final Report now shows all post-merge required actions — Claude Code restart, VS Code reload, installer rerun, OS reboot — in a structured always-on block. Previously only Claude Code restart was shown, and the section was silently omitted in some sessions. (#518)
