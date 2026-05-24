@@ -7,21 +7,36 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 /**
- * Resolve the current session ID from CLAUDE_ENV_FILE.
- * CLAUDE_ENV_FILE is set by Claude Code in hook contexts (SessionStart, PreToolUse, etc.)
- * and contains KEY=VALUE lines written by session-start.js.
- * Returns null if CLAUDE_ENV_FILE is not set or CLAUDE_SESSION_ID is not found.
+ * Resolve the current session ID with the following priority chain:
+ *   1. ctx.sessionIdFromInput — non-empty string from hook input.session_id
+ *   2. CLAUDE_ENV_FILE — KEY=VALUE file written by session-start.js
+ *      (set by Claude Code in hook contexts: SessionStart, PreToolUse, etc.)
+ *   3. ctx.transcriptPath basename — fallback derived from input.transcript_path
+ *      (validated against /^[A-Za-z0-9_-]+$/)
+ * Returns null if no source resolves to a usable session ID.
+ *
+ * Backward-compat: zero-argument calls behave identically to the previous
+ * env-file-only implementation.
  */
-function resolveSessionId() {
-  const envFile = process.env.CLAUDE_ENV_FILE;
-  if (!envFile) return null;
-  try {
-    const content = fs.readFileSync(envFile, "utf8");
-    const match = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
-    return match ? match[1].trim() : null;
-  } catch (e) {
-    return null;
+function resolveSessionId(ctx = {}) {
+  if (typeof ctx.sessionIdFromInput === "string" && ctx.sessionIdFromInput.length > 0) {
+    return ctx.sessionIdFromInput;
   }
+  const envFile = process.env.CLAUDE_ENV_FILE;
+  if (envFile) {
+    try {
+      const content = fs.readFileSync(envFile, "utf8");
+      const match = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
+      if (match) return match[1].trim();
+    } catch (e) {
+      // fall through to transcriptPath fallback
+    }
+  }
+  if (typeof ctx.transcriptPath === "string" && ctx.transcriptPath.length > 0) {
+    const base = path.basename(ctx.transcriptPath, ".jsonl");
+    if (/^[A-Za-z0-9_-]+$/.test(base)) return base;
+  }
+  return null;
 }
 
 const VALID_STEPS = [
