@@ -110,7 +110,10 @@ const exitCode =
   toolResponse.exit_code ??
   toolResponse.exitCode ??
   (toolResponse.success === false ? 1 : 0);
-const sessionId = input.session_id || resolveSessionId();
+const sessionId = resolveSessionId({
+  sessionIdFromInput: input.session_id,
+  transcriptPath: input.transcript_path,
+});
 
 // Reset user_verification only after a successful merge-class operation
 // (push to a protected branch / gh pr merge). Feature-branch pushes leave
@@ -181,6 +184,13 @@ if (exitCode !== 0) {
 
 // Accumulate per-part messages; emit them together at end.
 const messages = [];
+// When set, the loop tail flushes messages to stderr and exits with code 2 so
+// the harness surfaces the failure instead of silently swallowing it.
+let fatalError = false;
+function hardFail(msg) {
+  messages.push(msg);
+  fatalError = true;
+}
 
 for (const cmd of sentinelParts) {
   const markMatch = cmd.match(MARKER_RE_DQ) || cmd.match(MARKER_RE_SQ);
@@ -672,13 +682,13 @@ for (const cmd of sentinelParts) {
   }
   if (enforceOffMatch) {
     if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE override NOT applied.`
+      hardFail(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE_OFF sentinel NOT applied.`
       );
       continue;
     }
     if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      messages.push(`workflow-mark: invalid session_id format — override NOT applied.`);
+      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKTREE_OFF sentinel NOT applied.`);
       continue;
     }
     let reasonStored = null;
@@ -708,7 +718,7 @@ for (const cmd of sentinelParts) {
           `Delete the marker file to restore enforcement.`
       );
     } catch (e) {
-      messages.push(
+      hardFail(
         `workflow-mark: failed to write ENFORCE_WORKTREE override marker — ${e.message}. Override NOT applied.`
       );
     }
@@ -729,13 +739,13 @@ for (const cmd of sentinelParts) {
   }
   if (enforceOnMatch) {
     if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE restore NOT applied.`
+      hardFail(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE_ON sentinel NOT applied.`
       );
       continue;
     }
     if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      messages.push(`workflow-mark: invalid session_id format — restore NOT applied.`);
+      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKTREE_ON sentinel NOT applied.`);
       continue;
     }
     const rawOnReason = enforceOnMatch[1];
@@ -759,7 +769,7 @@ for (const cmd of sentinelParts) {
         // Idempotent: silent no-op when marker is already absent.
       }
     } catch (e) {
-      messages.push(
+      hardFail(
         `workflow-mark: failed to clear ENFORCE_WORKTREE override marker — ${e.message}. Restore NOT applied.`
       );
     }
@@ -780,13 +790,13 @@ for (const cmd of sentinelParts) {
   }
   if (workflowOffMatch) {
     if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW override NOT applied.`
+      hardFail(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW_OFF sentinel NOT applied.`
       );
       continue;
     }
     if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      messages.push(`workflow-mark: invalid session_id format — override NOT applied.`);
+      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKFLOW_OFF sentinel NOT applied.`);
       continue;
     }
     let reasonStored = null;
@@ -815,7 +825,7 @@ for (const cmd of sentinelParts) {
           `Restore with: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>"`
       );
     } catch (e) {
-      messages.push(
+      hardFail(
         `workflow-mark: failed to write ENFORCE_WORKFLOW override marker — ${e.message}. Override NOT applied.`
       );
     }
@@ -836,13 +846,13 @@ for (const cmd of sentinelParts) {
   }
   if (workflowOnMatch) {
     if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW restore NOT applied.`
+      hardFail(
+        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW_ON sentinel NOT applied.`
       );
       continue;
     }
     if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      messages.push(`workflow-mark: invalid session_id format — restore NOT applied.`);
+      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKFLOW_ON sentinel NOT applied.`);
       continue;
     }
     const rawWorkflowOnReason = workflowOnMatch[1];
@@ -865,7 +875,7 @@ for (const cmd of sentinelParts) {
         // Idempotent: silent no-op when marker is already absent.
       }
     } catch (e) {
-      messages.push(
+      hardFail(
         `workflow-mark: failed to clear ENFORCE_WORKFLOW override marker — ${e.message}. Restore NOT applied.`
       );
     }
@@ -906,4 +916,8 @@ for (const cmd of sentinelParts) {
   }
 }
 
+if (fatalError) {
+  process.stderr.write(messages.join("\n") + "\n");
+  process.exit(2);
+}
 done(messages.length > 0 ? messages.join("\n") : undefined);
