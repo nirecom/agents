@@ -343,3 +343,7 @@ Changes: `/worktree-end` branch deletion no longer depends on the `pending-branc
 ### FEATURE: PR #523 (2026-05-25)
 Background: fix(subagent): grant Write tool to plan-pipeline agents (#516)
 Changes: Plan-pipeline subagents (survey-code, survey-history, detail-planner, outline-planner) now receive the Write tool in their front-matter grant so artifact output uses Write instead of Bash heredoc (which enforce-worktree.js blocked).
+
+### FEATURE: PR #531 (2026-05-25)
+Background: feat(workflow): flip mid-workflow finding capture to /issue-create primary; add Mid-workflow gate (#521)
+Changes: Mid-workflow bug/task findings can now be filed immediately via `/issue-create` from the linked worktree. The previous WORKTREE_NOTES.md-first design (a leftover from when `gh issue create` was blocked from linked worktrees) has been corrected. `WORKTREE_NOTES.md` remains available as a fallback for non-interactive sessions, non-GitHub remotes, and explicit deferrals. `/issue-create` now surfaces a notice when called mid-workflow, reminding you the new issue will not be added to the current session's `closes_issues`.
