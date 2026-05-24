@@ -135,6 +135,8 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    If Docker containers reference the worktree path, stop them and restart from the main path.
    Never delete gitignored state silently — always present the inventory first.
 
+### Step 5.5
+
 5.5. **Capture for Final Report** (must run before Step 6c — worktree removal):
 
    a. Last-chance findings review: append any outstanding bugs/related/next-task findings to `<worktree>/WORKTREE_NOTES.md`. **This is the capture cutoff** — findings after Step 5.5 will not appear in the Final Report.
@@ -164,26 +166,79 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
      Note: (a.5) must complete before (b) so annotations are reflected in the backup.
      Note: ## History Notes and ## Changelog Notes sections are NOT triage targets.
 
-   b. Capture PR metadata (safe per-field, no shell-interpretation of PR title):
-      ```
-      PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-      PR_URL=$(gh pr view   "$PR_NUMBER" --json url   --jq '.url')
-      PR_STATE=$(gh pr view "$PR_NUMBER" --json state --jq '.state')
-      MERGE_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty')
-      CLAUDE_CODE_RESTART_REQUIRED=$(bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/detect-restart.sh" "$PR_NUMBER")
-      ```
+   **(b–d) fat-call — env collection + JSON persist (one Bash call, must not be split)**
 
-   c. Copy `WORKTREE_NOTES.md` to backup and record the path:
-      ```
-      if [ -f "<worktree>/WORKTREE_NOTES.md" ]; then
-        cp -p "<worktree>/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"
-        NOTES_BACKUP_PATH="$BACKUP_DIR/WORKTREE_NOTES.md"
-      else
-        NOTES_BACKUP_PATH=""
-      fi
-      ```
+   Run as a single Bash tool invocation. `<worktree>`, `<owner>/<repo>`, `<backup-dir>`,
+   `<session-id>` are literal placeholders the model substitutes at execution time.
+   The block MUST execute as one Bash tool invocation; do not split.
 
-   d. Cache `BRANCH` (from `git -C <worktree> rev-parse --abbrev-ref HEAD`), `WORKTREE_PATH` (absolute path of the worktree), and `CREATED_DATE` (from `WORKTREE_NOTES.md` header, or current date).
+   ```bash
+   # Step 1: Re-fetch PR_NUMBER (env reset safe — uses explicit repo and branch anchors)
+   BRANCH_NAME="$(git -C "<worktree>" rev-parse --abbrev-ref HEAD)"
+   PR_NUMBER="$(gh -R "<owner>/<repo>" pr list \
+     --head "$BRANCH_NAME" --state all --limit 1 \
+     --json number --jq '.[0].number')"
+   if [ -z "$PR_NUMBER" ]; then
+     printf "ERROR: PR_NUMBER unresolved in Step 5.5 fat-call\n" >&2
+     exit 1
+   fi
+
+   # Step 2: Fetch PR metadata
+   PR_INFO="$(gh -R "<owner>/<repo>" pr view "$PR_NUMBER" \
+     --json title,url,state --jq '{title:.title,url:.url,state:.state}')"
+   PR_TITLE="$(printf '%s' "$PR_INFO" | node -e "var d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(d).title||''))")"
+   PR_URL="$(printf '%s' "$PR_INFO" | node -e "var d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(d).url||''))")"
+   PR_STATE="$(printf '%s' "$PR_INFO" | node -e "var d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(d).state||''))")"
+   MERGE_SHA="$(gh -R "<owner>/<repo>" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty')"
+   CLAUDE_CODE_RESTART_REQUIRED="$(bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/detect-restart.sh" "$PR_NUMBER")"
+
+   # Step 3: Collect remaining env vars
+   BRANCH="$(git -C "<worktree>" rev-parse --abbrev-ref HEAD)"
+   WORKTREE_PATH="<worktree>"
+   CREATED_DATE="$(date -u +%Y-%m-%d)"
+   BACKUP_MANIFEST_PATH="<backup-dir>/manifest.json"
+
+   # Step 4: Copy WORKTREE_NOTES.md to backup dir and capture path
+   if [ -f "<worktree>/WORKTREE_NOTES.md" ]; then
+     cp -p "<worktree>/WORKTREE_NOTES.md" "<backup-dir>/WORKTREE_NOTES.md" && \
+       NOTES_BACKUP_PATH="<backup-dir>/WORKTREE_NOTES.md" || NOTES_BACKUP_PATH=""
+   else
+     NOTES_BACKUP_PATH=""
+   fi
+
+   # Step 5: Write JSON to plans dir (BRANCH_DELETED intentionally omitted — tracked separately)
+   ENV_FILE="$HOME/.workflow-plans/<session-id>-final-report-env.json"
+   PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \
+   BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" \
+   BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" NOTES_BACKUP_PATH="$NOTES_BACKUP_PATH" \
+   CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" ENV_FILE="$ENV_FILE" \
+   node -e "
+   var fs=require('fs');
+   var data={
+     PR_NUMBER:process.env.PR_NUMBER||'',
+     PR_TITLE:process.env.PR_TITLE||'',
+     PR_URL:process.env.PR_URL||'',
+     PR_STATE:process.env.PR_STATE||'',
+     BRANCH:process.env.BRANCH||'',
+     WORKTREE_PATH:process.env.WORKTREE_PATH||'',
+     CREATED_DATE:process.env.CREATED_DATE||'',
+     BACKUP_MANIFEST_PATH:process.env.BACKUP_MANIFEST_PATH||'',
+     NOTES_BACKUP_PATH:process.env.NOTES_BACKUP_PATH||'',
+     CLAUDE_CODE_RESTART_REQUIRED:process.env.CLAUDE_CODE_RESTART_REQUIRED||''
+   };
+   fs.writeFileSync(process.env.ENV_FILE,JSON.stringify(data,null,2));
+   " 2>&1
+   if [ $? -eq 0 ]; then
+     echo "env JSON written: $ENV_FILE"
+   else
+     echo "ERROR: env JSON write failed — aborting Step 5.5 to prevent loss of Final Report state" >&2
+     exit 1
+   fi
+   ```
+
+   **Note:** `BRANCH_DELETED` is intentionally absent from the JSON output. It renders as `(none)` in the Final Report — this is the correct fail-safe per issue #504 scope decision.
+
+### Step 6
 
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
@@ -261,10 +316,39 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
    j. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
-7. **Final report:** invoke the renderer and display stdout verbatim.
+### Step 7
+
+7. **Final report:** Run these Bash calls in sequence.
+
+   **7a — Read NOTES_BACKUP_PATH from the JSON env file:**
+   ```bash
+   ENV_FILE="$HOME/.workflow-plans/<session-id>-final-report-env.json"
+   NOTES_PATH="$(node -e "var fs=require('fs'); try { var j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(j.NOTES_BACKUP_PATH||''); } catch(e) { process.stdout.write(''); }" "$ENV_FILE")"
    ```
-   PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" BRANCH_DELETED=yes CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" "<PLANS_DIR>/<session-id>-intent.md" "$NOTES_BACKUP_PATH" "<session-id>"
+
+   **7b — Run the Final Report renderer:**
+   ```bash
+   OUTPUT="$(node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" \
+     "$HOME/.workflow-plans/<session-id>-intent.md" \
+     "$NOTES_PATH" \
+     "<session-id>" \
+     --env-file "$ENV_FILE" 2>&1)"
+   EXIT_CODE=$?
    ```
+
+   **7c — Check sentinel and display:**
+   ```bash
+   SENTINEL='<<WORKFLOW_MARK_STEP_final_report_complete>>'
+   if [ $EXIT_CODE -eq 0 ] && echo "$OUTPUT" | grep -qF "$SENTINEL"; then
+     echo "$OUTPUT" | grep -vF "$SENTINEL"
+   else
+     echo "WARNING: Final Report renderer failed or sentinel missing (exit=$EXIT_CODE)" >&2
+     echo "$OUTPUT"
+     echo "Manual fallback: review the Final Report data in $ENV_FILE"
+   fi
+   ```
+
+   Do NOT hand-write a Markdown Final Report as a fallback — if the sentinel is absent, warn and show raw output only.
    Do not call `gh` here — all PR/branch state was captured in Step 5.5.
 
 ## Rules
@@ -286,3 +370,8 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.
+- Step 5.5 (b–d) MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
+- Step 5.5 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
+- Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
+- Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via `node -e`, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
+- Step 7 MUST invoke renderer with `--env-file $HOME/.workflow-plans/<session-id>-final-report-env.json`.
