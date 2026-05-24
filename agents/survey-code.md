@@ -1,7 +1,7 @@
 ---
 name: survey-code
 description: Investigate the codebase to understand existing patterns, constraints, and relevant files. Writes a session-scoped survey-code.md artifact.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Write
 model: sonnet
 ---
 

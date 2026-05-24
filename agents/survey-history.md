@@ -1,7 +1,7 @@
 ---
 name: survey-history
 description: Investigate git history and GitHub issue/PR timeline since the relevant issue opened, to surface changes that may invalidate the issue's premises.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Write
 model: sonnet
 ---
 
