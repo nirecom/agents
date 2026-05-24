@@ -1,6 +1,6 @@
 ---
 name: sweep-worktrees
-description: Reclaims zombie linked worktrees (and their branches/markers) that /worktree-end could not remove due to Windows CWD lock or similar.
+description: Reclaims zombie linked worktrees (and their branches) that /worktree-end could not remove due to Windows CWD lock or similar.
 user-invocable: true
 model: sonnet
 ---
@@ -8,7 +8,8 @@ model: sonnet
 Reclaims zombie linked worktrees left behind when `/worktree-end` could not
 physically remove a worktree (e.g. Windows CWD lock from VS Code's extension
 host). After successful worktree removal, also deletes the corresponding
-branch and any `pending-branch-delete-` marker.
+branch. Also scans `WORKTREE_BASE_DIR` for orphan directories not tracked by
+git's worktree registry.
 
 ## Procedure
 
@@ -35,3 +36,26 @@ Forward the user's flags verbatim. Add no flags of your own.
   merged check, no `branch -D` target).
 - A 4-AND safety check is required before any deletion: registered linked
   worktree AND PR merged AND clean working tree AND mtime > threshold.
+- Orphan-directory scan uses a 5-AND gate: containment under WORKTREE_BASE_DIR
+  AND no .git AND mtime > threshold AND empty-or-notes-only AND ownership proof
+  via `Main repo:` field in `WORKTREE_NOTES.md`. Basename match alone is NOT
+  ownership proof — two unrelated repos can share `agents`/`dotfiles` basenames.
+
+## Migration notes for #503
+
+Pre-#503 state that this skill no longer reclaims (acceptable one-time cleanup
+cost; this skill stays safe by refusing to act on it):
+
+- **Legacy `pending-branch-delete` marker files** at
+  `<git-common-dir>/info/pending-branch-delete` inside each repo's `.git`
+  directory (per-repo, not under `~/.workflow-plans/`). They are inert after
+  #503 — the hook ignores them entirely. Locate and delete per-repo:
+  ```
+  find ~/git -type f -path '*/.git/info/pending-branch-delete' -delete
+  ```
+  Adjust the search root to wherever you keep clones.
+- **Legacy orphan worktree directories** created before WORKTREE_NOTES.md
+  carried a `Main repo:` field. Gate 5 skips them as `repo_mismatch` because
+  ownership cannot be proven. Inspect manually and remove with
+  `git worktree remove` (if still registered) or `rm -rf` (if not registered
+  and contents are confirmed disposable).
