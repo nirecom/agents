@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+'use strict';
+const path = require('path');
+const filePath = process.argv[2];
+if (!filePath) { console.log('[]'); process.exit(0); }
+try {
+  const { parseClosesIssues } = require(
+    path.join(path.dirname(__dirname), 'hooks', 'lib', 'parse-closes-issues.js')
+  );
+  console.log(JSON.stringify(parseClosesIssues(filePath)));
+} catch (e) {
+  process.stderr.write('[parse-closes-issues] ' + e.message + '\n');
+  console.log('[]');
+  process.exit(0); // intentional: gate is never-aborts
+}
