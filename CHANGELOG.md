@@ -339,3 +339,7 @@ Changes: Session-scoped enforcement overrides (`ENFORCE_WORKTREE_OFF`/`ON`, `ENF
 ### FEATURE: PR #520 (2026-05-25)
 Background: refactor(#503): retire pending-branch-delete marker; direct worktree-list check
 Changes: `/worktree-end` branch deletion no longer depends on the `pending-branch-delete` marker file — `enforce-worktree` consults `git worktree list` directly. Force-delete is restricted to feature-branch naming conventions (`feature/`, `fix/`, `refactor/`, `docs/`, `chore/`), so accidental force-delete of `main` / `master` / `release/*` is blocked at the hook layer. `/sweep-worktrees` orphan-directory reclamation now requires a `Main repo:` ownership proof in `WORKTREE_NOTES.md`; legacy worktrees created before this field will be skipped (`repo_mismatch`) and must be cleaned up manually — see the `## Migration notes for #503` section in `skills/sweep-worktrees/SKILL.md`.
+
+### FEATURE: PR #523 (2026-05-25)
+Background: fix(subagent): grant Write tool to plan-pipeline agents (#516)
+Changes: Plan-pipeline subagents (survey-code, survey-history, detail-planner, outline-planner) now receive the Write tool in their front-matter grant so artifact output uses Write instead of Bash heredoc (which enforce-worktree.js blocked).
