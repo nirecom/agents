@@ -25,6 +25,34 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
   `gh auth refresh -s project`.
 - The `type:task` label must exist (run `bin/github-issues/sync-labels.sh` if missing).
 
+## Mid-workflow gate
+
+Runs after Pre-flight, before Phase 1. Detects mid-workflow context to surface
+adjacent-issue awareness to the user. Informational-only — never aborts the skill.
+Phase 1 runs unconditionally regardless of gate outcome.
+
+1. Resolve session intent:
+   ```bash
+   PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+                 || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
+   SESSION_ID="${CLAUDE_SESSION_ID:-}"
+   INTENT_MD="$PLANS_DIR/${SESSION_ID}-intent.md"
+   ```
+   Skip gate silently when `SESSION_ID` is empty or `INTENT_MD` does not exist.
+
+2. Parse `closes_issues` (pass path as script argument — never use `node -e`):
+   ```bash
+   CLOSES=$(node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "$INTENT_MD" 2>/dev/null || echo "[]")
+   ```
+   If `CLOSES` is `[]` or empty: skip gate silently, proceed to Phase 1.
+
+3. When `CLOSES` is non-empty, emit a notice:
+   - **Interactive:** "The new issue will NOT be added to the current session's
+     `closes_issues` (#N, ...). It will require a separate session. Alternatively,
+     write to `<worktree>/WORKTREE_NOTES.md` as a fallback — see `CLAUDE.md`
+     `## Mid-workflow finding capture`." Then proceed to Phase 1 unconditionally.
+   - **Non-interactive:** print the same notice to stderr. Proceed to Phase 1.
+
 ## Procedure
 
 Four phases: **Gather → Survey → Confirm → Dispatch**.
