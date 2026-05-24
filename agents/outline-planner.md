@@ -1,7 +1,7 @@
 ---
 name: outline-planner
 description: Proposes 2-3 mutually-exclusive high-level approaches for a task. Used by the make-outline-plan skill. Inspired by Aider's architect/editor split and GitHub Spec Kit's /specify stage.
-tools: Read, Glob, Grep, Bash, WebFetch
+tools: Read, Glob, Grep, Bash, WebFetch, Write
 model: opus
 ---
 
@@ -99,7 +99,7 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - **Topology-only collapse:** when all proposed approaches share identical technical substance (same building blocks, same algorithms, same API contracts, same SSOTs) and differ only in delivery topology (PR split policy / staging order), you MUST collapse to `SINGLE_APPROACH_JUSTIFIED` with a reason of the form `topology-only — alternatives differ only in PR packaging; recommending <name>` and emit the corresponding `DELIVERY_PLAN:` line. Presenting multiple approaches that differ only in PR packaging is a protocol violation. When in doubt (mixed substance + topology differences), present multiple approaches — do not collapse.
 - If the delivery plan cannot be stated in one line for `SINGLE_APPROACH_JUSTIFIED`, consider whether presenting 2 approaches is more appropriate.
 - Follow `rules/core-principles.md`.
-- Do not write code or call Edit/Write.
+- Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing outline-draft artifacts under <PLANS_DIR> (default ~/.workflow-plans/, resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 
 ## Mandatory sections (do not write)
 

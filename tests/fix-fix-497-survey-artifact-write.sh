@@ -11,6 +11,8 @@ CI_SKILL="$REPO_ROOT/skills/clarify-intent/SKILL.md"
 SC_SKILL="$REPO_ROOT/skills/survey-code/SKILL.md"
 SC_AGENT="$REPO_ROOT/agents/survey-code.md"
 SH_AGENT="$REPO_ROOT/agents/survey-history.md"
+DP_AGENT="$REPO_ROOT/agents/detail-planner.md"
+OP_AGENT="$REPO_ROOT/agents/outline-planner.md"
 ERRORS=0
 PASS_COUNT=0
 
@@ -36,6 +38,21 @@ assert_file_not_contains() {
         fail "${id}. ${desc} — unexpected: '${needle}'"
     else
         pass "${id}. ${desc}"
+    fi
+}
+assert_tools_has_write() {
+    local id="$1" desc="$2" file="$3"
+    [ -f "$file" ] || { fail "${id}. ${desc} — file missing: $file"; return; }
+    local line
+    line=$(grep -m1 '^tools:' "$file" || true)
+    if [ -z "$line" ]; then
+        fail "${id}. ${desc} — no tools: line in front-matter"
+        return
+    fi
+    if printf '%s' "$line" | grep -qF "Write," || printf '%s' "$line" | grep -qF ", Write"; then
+        pass "${id}. ${desc}"
+    else
+        fail "${id}. ${desc} — Write not in tools: front-matter"
     fi
 }
 
@@ -105,6 +122,26 @@ assert_file_contains "BUG-A-1" "SC agent declares write REQUIRED"               
 assert_file_contains "BUG-A-2" "SC agent explains outside-git-repo rationale"   "$SC_AGENT" "outside any git repository"
 assert_file_contains "BUG-A-3" "SH agent declares write REQUIRED"               "$SH_AGENT" "REQUIRED"
 assert_file_contains "BUG-A-4" "SH agent explains outside-git-repo rationale"   "$SH_AGENT" "outside any git repository"
+
+# ===========================================================================
+# Section 5 — Plan-pipeline subagents grant Write tool (issue #516)
+# ===========================================================================
+echo "=== Section 5: Plan-pipeline subagent tools: front-matter (#516) ==="
+
+assert_tools_has_write "TW-1" "survey-code agent grants Write tool"     "$SC_AGENT"
+assert_tools_has_write "TW-2" "survey-history agent grants Write tool"  "$SH_AGENT"
+assert_tools_has_write "TW-3" "detail-planner agent grants Write tool"  "$DP_AGENT"
+assert_tools_has_write "TW-4" "outline-planner agent grants Write tool" "$OP_AGENT"
+
+# ===========================================================================
+# Section 6 — Planner agents document PLANS_DIR Write permission (#516)
+# ===========================================================================
+echo "=== Section 6: Planner agents PLANS_DIR Write rationale (#516) ==="
+
+assert_file_contains     "PW-1" "detail-planner permits Write for PLANS_DIR artifacts"         "$DP_AGENT" "PLANS_DIR"
+assert_file_contains     "PW-2" "outline-planner permits Write for PLANS_DIR artifacts"        "$OP_AGENT" "PLANS_DIR"
+assert_file_not_contains "PW-3" "detail-planner old blanket Edit/Write prohibition removed"    "$DP_AGENT" "Do not write code or call Edit/Write"
+assert_file_not_contains "PW-4" "outline-planner old blanket Edit/Write prohibition removed"   "$OP_AGENT" "Do not write code or call Edit/Write"
 
 # ===========================================================================
 # Results
