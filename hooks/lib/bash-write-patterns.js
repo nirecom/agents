@@ -92,9 +92,10 @@ const WRITE_PATTERNS = [
   // false-positives where branch names contain literal "-d", "-c", etc.
   // (e.g., `git branch agents-env-consolidate` formerly matched `-c`).
   // -d/-D (delete), -m/-M (rename), -c/-C (copy) all mutate refs — write.
-  // Branch deletion is gated by enforce-worktree's marker-file exemption
-  // (isAllowedBranchDeleteViaMarker), which only /worktree-end produces;
-  // direct invocations from any worktree are blocked at the hook level.
+  // Branch deletion is gated by enforce-worktree's direct registry check
+  // (isAllowedBranchDeleteWhenNotCheckedOut), which queries `git worktree list
+  // --porcelain` and allows -d/-D only when the target branch is not currently
+  // checked out in any worktree.
   { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[dDmMcC](?:\s|$)/ },
   { name: "git-checkout-force", kind: "git", regex: /\bgit\b.*\bcheckout\b.*(?:--|\.|\bHEAD\b)/ },
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
