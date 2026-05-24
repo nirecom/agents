@@ -186,6 +186,17 @@ build_mark_payload_no_sid() {
         "$q_cmd" "$rc"
 }
 
+# Build payload with transcript_path but no session_id (transcript fallback test).
+# Args: command-string exit-code transcript-path
+build_mark_payload_with_transcript() {
+    local cmd="$1" rc="$2" tp="$3"
+    local q_cmd q_tp
+    q_cmd="$(json_quote "$cmd")"
+    q_tp="$(json_quote "$tp")"
+    printf '{"tool_name":"Bash","tool_input":{"command":%s},"tool_response":{"exit_code":%s,"stdout":"","stderr":""},"transcript_path":%s}' \
+        "$q_cmd" "$rc" "$q_tp"
+}
+
 # Build a PreToolUse payload for enforce-worktree.js.
 # Args: session-id tool-name file-path
 build_guard_payload_write() {
@@ -295,12 +306,12 @@ test_A4_env_file_fallback() {
     fi
 }
 
-test_A5_no_session_id_no_crash() {
+test_A5_no_session_id_hard_blocks() {
     require_files "A5" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local payload; payload="$(build_mark_payload_no_sid 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A5 no session id>>"' 0)"
     local rc=0
-    # No CLAUDE_ENV_FILE → no session ID resolvable.
+    # No CLAUDE_ENV_FILE → no session ID resolvable. Must hard-block (rc=2).
     MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
@@ -313,11 +324,15 @@ test_A5_no_session_id_no_crash() {
         fail "A5: marker created without session_id (count=$count, out: $MARK_OUT)"
         return
     fi
-    if [ "$rc" -ne 0 ]; then
-        fail "A5: workflow-mark.js crashed with rc=$rc (out: $MARK_OUT)"
+    if [ "$rc" -ne 2 ]; then
+        fail "A5: expected hard-block rc=2 but got rc=$rc (out: $MARK_OUT)"
         return
     fi
-    pass "A5: missing session_id → no marker, no crash"
+    if ! echo "$MARK_OUT" | grep -qiE "session(_id)?|resolve"; then
+        fail "A5: stderr missing 'session'/'resolve' diagnostic (out: $MARK_OUT)"
+        return
+    fi
+    pass "A5: missing session_id → hard-block rc=2, no marker, diagnostic surfaced"
 }
 
 test_A7_idempotent_marker_write() {
@@ -405,16 +420,17 @@ test_A9_on_sentinel_no_marker_idempotent() {
 
 test_A10_on_sentinel_no_session_id() {
     require_files "A10" || return
-    # No session_id, no CLAUDE_ENV_FILE → cannot determine which marker to delete.
-    # Must not crash, must not delete anything outside scope, must surface a warning.
+    # No session_id, no CLAUDE_ENV_FILE → must hard-block (rc=2), preserve any
+    # pre-existing unrelated marker (cross-session isolation), and emit a
+    # diagnostic mentioning session resolution failure.
     local wfdir; wfdir="$(fresh_workflow_dir)"
     write_marker_file "$wfdir" "someone-else"
     local payload
     payload='{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: A10 no session id>>\""}, "tool_response":{"exit_code":0}}'
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
-    if [ "$rc" -ne 0 ]; then
-        fail "A10: hook crashed with no session_id rc=$rc (out: $MARK_OUT)"
+    if [ "$rc" -ne 2 ]; then
+        fail "A10: expected hard-block rc=2 but got rc=$rc (out: $MARK_OUT)"
         return
     fi
     # Other-session marker MUST still exist (no cross-session deletion).
@@ -422,7 +438,11 @@ test_A10_on_sentinel_no_session_id() {
         fail "A10: ON sentinel without session_id deleted unrelated marker (out: $MARK_OUT)"
         return
     fi
-    pass "A10: no session_id → ON sentinel is a no-op, no cross-session deletion"
+    if ! echo "$MARK_OUT" | grep -qiE "session(_id)?|resolve"; then
+        fail "A10: stderr missing 'session'/'resolve' diagnostic (out: $MARK_OUT)"
+        return
+    fi
+    pass "A10: no session_id → ON sentinel hard-blocks rc=2, cross-session isolation preserved"
 }
 
 test_A11_on_sentinel_session_isolation() {
@@ -485,6 +505,63 @@ test_A13_bare_on_malformed() {
         return
     fi
     pass "A13: bare ENFORCE_WORKTREE_ON rejected as malformed — marker preserved"
+}
+
+# ----------------------------------------------------------------------------
+# A14-A15: transcript_path fallback (#461)
+# When session_id is absent from input AND CLAUDE_ENV_FILE is unset,
+# workflow-mark.js must fall back to deriving the session ID from
+# transcript_path (basename without .jsonl). Path must be validated.
+# ----------------------------------------------------------------------------
+
+test_A14_transcript_path_fallback() {
+    require_files "A14" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    # Fixed UUID-like filename so the expected marker name is predictable.
+    # The file does NOT need to exist — only the path basename matters.
+    local sid="a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    local tp="$TMPDIR_BASE/projects/foo/${sid}.jsonl"
+    local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A14 transcript fallback>>"' 0 "$tp")"
+    local rc=0
+    MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
+        env -u CLAUDE_ENV_FILE \
+        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
+        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        node "$MARK_JS" 2>&1)" || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        fail "A14: hook crashed with rc=$rc on transcript fallback (out: $MARK_OUT)"
+        return
+    fi
+    if [ ! -f "$wfdir/$sid.worktree-off" ]; then
+        fail "A14: transcript fallback did not create marker for sid='$sid' (out: $MARK_OUT)"
+        return
+    fi
+    pass "A14: transcript_path fallback → session ID derived → marker created"
+}
+
+test_A15_transcript_path_invalid_chars() {
+    require_files "A15" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    # transcript_path basename contains an invalid char (@) — must be rejected, no marker, hard-block.
+    local tp="$TMPDIR_BASE/abc@def.jsonl"
+    local payload; payload="$(build_mark_payload_with_transcript 'echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: A15 invalid chars>>"' 0 "$tp")"
+    local rc=0
+    MARK_OUT="$(printf '%s' "$payload" | run_with_timeout 30 \
+        env -u CLAUDE_ENV_FILE \
+        "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
+        "CLAUDE_WORKFLOW_DIR=$wfdir" \
+        node "$MARK_JS" 2>&1)" || rc=$?
+    if [ "$rc" -ne 2 ]; then
+        fail "A15: expected hard-block rc=2 but got rc=$rc (out: $MARK_OUT)"
+        return
+    fi
+    local count
+    count="$(ls -1 "$wfdir" 2>/dev/null | grep -c '\.worktree-off$' || true)"
+    if [ "$count" -ne 0 ]; then
+        fail "A15: marker created from invalid transcript_path (count=$count, out: $MARK_OUT)"
+        return
+    fi
+    pass "A15: transcript_path with invalid basename chars rejected — hard-block, no marker"
 }
 
 # ============================================================================
@@ -685,15 +762,16 @@ test_SEC1_path_traversal_rejected() {
     local rc=0
     run_workflow_mark "$payload" "$wfdir" || rc=$?
     after_count="$(count_worktree_off_files "$wfdir")"
-    if [ "$rc" -ne 0 ]; then
-        fail "SEC1: workflow-mark.js crashed with rc=$rc on traversal input (out: $MARK_OUT)"
+    # Hard-block (exit 2) is required for invalid session IDs (#461).
+    if [ "$rc" -ne 2 ]; then
+        fail "SEC1: expected hard-block rc=2 for traversal session ID, got rc=$rc (out: $MARK_OUT)"
         return
     fi
     if [ "$after_count" != "$before_count" ]; then
         fail "SEC1: traversal session ID produced a marker file (count $before_count -> $after_count, out: $MARK_OUT)"
         return
     fi
-    pass "SEC1: ../evil session ID rejected — no marker, no crash"
+    pass "SEC1: ../evil session ID hard-blocked (rc=2) — no marker"
 }
 
 test_SEC2_shell_metachars_rejected() {
@@ -709,8 +787,9 @@ test_SEC2_shell_metachars_rejected() {
         rc=0
         run_workflow_mark "$payload" "$wfdir" || rc=$?
         after_count="$(count_worktree_off_files "$wfdir")"
-        if [ "$rc" -ne 0 ]; then
-            fail "SEC2: crash on session ID '$sid' rc=$rc (out: $MARK_OUT)"
+        # Hard-block (exit 2) is required for invalid session IDs (#461).
+        if [ "$rc" -ne 2 ]; then
+            fail "SEC2: expected hard-block rc=2 for session ID '$sid', got rc=$rc (out: $MARK_OUT)"
             any_failure=1
             continue
         fi
@@ -787,15 +866,16 @@ test_SEC5_on_sentinel_traversal_blocked() {
     local still_there=0
     [ -f "$parent/victim.worktree-off" ] && still_there=1
     rm -f "$parent/victim.worktree-off" 2>/dev/null || true
-    if [ "$rc" -ne 0 ]; then
-        fail "SEC5: workflow-mark.js crashed rc=$rc on traversal input (out: $MARK_OUT)"
+    # Hard-block (exit 2) is required for invalid session IDs (#461).
+    if [ "$rc" -ne 2 ]; then
+        fail "SEC5: expected hard-block rc=2 for traversal session ID, got rc=$rc (out: $MARK_OUT)"
         return
     fi
     if [ "$still_there" -eq 0 ]; then
         fail "SEC5: ON sentinel with traversal session ID deleted planted marker (out: $MARK_OUT)"
         return
     fi
-    pass "SEC5: ON sentinel with ../victim session ID — planted marker preserved"
+    pass "SEC5: ON sentinel with ../victim session ID — hard-blocked (rc=2), planted marker preserved"
 }
 
 # ============================================================================
@@ -808,7 +888,7 @@ run_all() {
     test_A2_marker_with_reason
     test_A3_non_zero_exit_skips
     test_A4_env_file_fallback
-    test_A5_no_session_id_no_crash
+    test_A5_no_session_id_hard_blocks
     test_A6_chained_sentinels_accepted
     test_A7_idempotent_marker_write
     # A8-A11: WORKFLOW_ENFORCE_WORKTREE_ON sentinel
@@ -819,6 +899,9 @@ run_all() {
     # A12-A13: bare-form rejection (#404)
     test_A12_bare_off_malformed
     test_A13_bare_on_malformed
+    # A14-A15: transcript_path fallback (#461)
+    test_A14_transcript_path_fallback
+    test_A15_transcript_path_invalid_chars
     # B: enforce-worktree consumption
     test_B1_marker_allows_write
     test_B1b_marker_allows_edit
