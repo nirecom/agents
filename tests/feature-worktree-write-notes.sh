@@ -163,6 +163,7 @@ test_N1_writeNotes_exact_content() {
             createdDate: '2024-01-15',
             resolvedPath: '/tmp/wt',
             baseDir: 'C:/git/worktrees',
+            mainRoot: '/tmp/main',
             copiedFiles: ['a.env','b/.env.local']
         });
         process.stdout.write(JSON.stringify(r));
@@ -180,6 +181,7 @@ test_N1_writeNotes_exact_content() {
         'Branch: feature/foo' \
         'Created: 2024-01-15' \
         'Path: /tmp/wt' \
+        'Main repo: /tmp/main' \
         'WORKTREE_BASE_DIR: C:/git/worktrees' \
         '' \
         '## Gitignored files copied from main' \
@@ -196,6 +198,9 @@ test_N1_writeNotes_exact_content() {
         '- (none)' \
         '' \
         '## History Notes' \
+        '- (none)' \
+        '' \
+        '## Changelog Notes' \
         '- (none)')"
 
     local actual
@@ -273,6 +278,7 @@ test_I1_writeNotes_idempotent() {
             createdDate: '2024-01-15',
             resolvedPath: '/tmp/wt',
             baseDir: 'C:/git/worktrees',
+            mainRoot: '/tmp/main',
             copiedFiles: ['a.env','b/.env.local']
         };
         lib.writeNotes(args);
@@ -293,6 +299,7 @@ test_I1_writeNotes_idempotent() {
         'Branch: feature/i' \
         'Created: 2024-01-15' \
         'Path: /tmp/wt' \
+        'Main repo: /tmp/main' \
         'WORKTREE_BASE_DIR: C:/git/worktrees' \
         '' \
         '## Gitignored files copied from main' \
@@ -309,6 +316,9 @@ test_I1_writeNotes_idempotent() {
         '- (none)' \
         '' \
         '## History Notes' \
+        '- (none)' \
+        '' \
+        '## Changelog Notes' \
         '- (none)')"
     local actual; actual="$(cat "$notes_file")"
     if [ "$actual" = "$expected" ]; then
@@ -492,6 +502,43 @@ test_N6_run_happy_path() {
         pass "N6: run() happy path → notesWritten=true, excludeAdded=true, errors=[]"
     else
         fail "N6: got notesWritten=$notesWritten excludeAdded=$excludeAdded errors=$errors (out=$out)"
+    fi
+}
+
+# ---- N6b: run() writes Main repo line matching mainRoot (forward-slash normalized) ----
+test_N6b_run_writes_main_repo_line() {
+    require_lib "test_N6b_run_writes_main_repo_line" || return
+    local main; main="$(setup_main_repo "n6b-main")"
+    local wt;   wt="$(setup_worktree_dest "n6b-wt")"
+    local main_node; main_node="$(node_path "$main")"
+
+    lib_eval "
+        lib.run({
+            mainRoot: process.argv[1],
+            worktreePath: process.argv[2],
+            branch: 'feature/n6b',
+            createdDate: '2024-01-15',
+            resolvedPath: process.argv[2],
+            baseDir: null,
+            copiedFiles: [],
+            excludePattern: 'WORKTREE_NOTES.md'
+        });
+    " "$main_node" "$wt" >/dev/null 2>&1
+
+    local notes_file="$TMPDIR_BASE/n6b-wt/WORKTREE_NOTES.md"
+    if [ ! -f "$notes_file" ]; then
+        fail "N6b: notes file not created at $notes_file"
+        return
+    fi
+    # Path normalization uses .replace(/\\/g, "/")
+    local expected_main
+    expected_main="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$main_node" 2>/dev/null)"
+    if grep -q "^Main repo: ${expected_main}$" "$notes_file"; then
+        pass "N6b: run() writes 'Main repo: <forward-slash normalized mainRoot>'"
+    else
+        fail "N6b: expected 'Main repo: ${expected_main}' in $notes_file
+content:
+$(cat "$notes_file")"
     fi
 }
 
@@ -852,6 +899,7 @@ test_I2_appendExclude_already_present
 test_Err1_appendExclude_git_is_file
 test_Err2_appendExclude_no_git_dir
 test_N6_run_happy_path
+test_N6b_run_writes_main_repo_line
 test_I3_run_idempotent
 test_Sec1_run_traversal_in_copiedFiles
 test_Sec2_run_traversal_in_mainRoot
