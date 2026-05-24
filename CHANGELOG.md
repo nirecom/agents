@@ -335,3 +335,7 @@ Changes: fix(worktree-end): Step 7 Final Report now reliably displays after long
 ### FEATURE: PR #522 (2026-05-24)
 Background: fix(workflow-mark): hard-block session-scoped sentinels on null sessionId; add transcript_path fallback
 Changes: Session-scoped enforcement overrides (`ENFORCE_WORKTREE_OFF`/`ON`, `ENFORCE_WORKFLOW_OFF`/`ON`) now report an explicit error (exit 2) instead of silently doing nothing when the session ID cannot be resolved. In VS Code on Windows where `CLAUDE_ENV_FILE` is sometimes empty, the session ID is now derived from `transcript_path` so the override applies correctly.
+
+### FEATURE: PR #520 (2026-05-25)
+Background: refactor(#503): retire pending-branch-delete marker; direct worktree-list check
+Changes: `/worktree-end` branch deletion no longer depends on the `pending-branch-delete` marker file — `enforce-worktree` consults `git worktree list` directly. Force-delete is restricted to feature-branch naming conventions (`feature/`, `fix/`, `refactor/`, `docs/`, `chore/`), so accidental force-delete of `main` / `master` / `release/*` is blocked at the hook layer. `/sweep-worktrees` orphan-directory reclamation now requires a `Main repo:` ownership proof in `WORKTREE_NOTES.md`; legacy worktrees created before this field will be skipped (`repo_mismatch`) and must be cleaned up manually — see the `## Migration notes for #503` section in `skills/sweep-worktrees/SKILL.md`.
