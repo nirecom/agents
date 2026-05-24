@@ -141,7 +141,19 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
    a. Last-chance findings review: append any outstanding bugs/related/next-task findings to `<worktree>/WORKTREE_NOTES.md`. **This is the capture cutoff** — findings after Step 5.5 will not appear in the Final Report.
 
-   (a.5) Issue-create promotion for unconverted WORKTREE_NOTES.md entries (runs before backup):
+   (a.5) **Fallback path** — Issue-create promotion for unconverted WORKTREE_NOTES.md entries
+         (entries written via the fallback path of `CLAUDE.md` `## Mid-workflow finding capture`
+         — i.e. recorded when the primary path `/issue-create` was unavailable or deferred).
+         Runs before backup.
+
+     This step exists as a safety net for fallback-captured findings. The primary path is to
+     invoke `/issue-create` directly from the linked worktree at discovery time (see `CLAUDE.md`
+     `## Mid-workflow finding capture` — primary path). Use this step only for entries
+     accumulated via the fallback path (non-interactive sessions, explicit user deferral, etc.).
+
+     Note: `/issue-create`'s Mid-workflow gate is informational-only (never aborts). Exit-code
+     semantics here remain unchanged: 0 = success, non-zero = actual failure.
+
 
      1. Check remote and list entries:
           bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote" || skip this sub-step silently.
