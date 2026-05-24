@@ -327,3 +327,7 @@ Changes: **WIP conflict detection now covers all issues in a session.** When a s
 ### FEATURE: PR #512 (2026-05-24)
 Background: fix(workflow): suppress unnecessary pauses in planning/writing pipeline
 Changes: category: BUGFIX;category: FEATURE;category: FEATURE
+
+### FEATURE: PR #517 (2026-05-24)
+Background: fix(worktree-end): resolve Step 7 Final Report env loss and silent fallback on Windows (#504)
+Changes: fix(worktree-end): Step 7 Final Report now reliably displays after long Step 5.5→7 env var loss on Windows; sentinel detection prevents silent fallback to hand-written Markdown (#504)
