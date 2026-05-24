@@ -331,3 +331,7 @@ Changes: category: BUGFIX;category: FEATURE;category: FEATURE
 ### FEATURE: PR #517 (2026-05-24)
 Background: fix(worktree-end): resolve Step 7 Final Report env loss and silent fallback on Windows (#504)
 Changes: fix(worktree-end): Step 7 Final Report now reliably displays after long Step 5.5→7 env var loss on Windows; sentinel detection prevents silent fallback to hand-written Markdown (#504)
+
+### FEATURE: PR #522 (2026-05-24)
+Background: fix(workflow-mark): hard-block session-scoped sentinels on null sessionId; add transcript_path fallback
+Changes: Session-scoped enforcement overrides (`ENFORCE_WORKTREE_OFF`/`ON`, `ENFORCE_WORKFLOW_OFF`/`ON`) now report an explicit error (exit 2) instead of silently doing nothing when the session ID cannot be resolved. In VS Code on Windows where `CLAUDE_ENV_FILE` is sometimes empty, the session ID is now derived from `transcript_path` so the override applies correctly.
