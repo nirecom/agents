@@ -190,7 +190,34 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    PR_URL="$(printf '%s' "$PR_INFO" | node -e "var d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(d).url||''))")"
    PR_STATE="$(printf '%s' "$PR_INFO" | node -e "var d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>process.stdout.write(JSON.parse(d).state||''))")"
    MERGE_SHA="$(gh -R "<owner>/<repo>" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty')"
-   CLAUDE_CODE_RESTART_REQUIRED="$(bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/detect-restart.sh" "$PR_NUMBER")"
+   RESTART_OUTPUT="$(bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/detect-restart.sh" "$PR_NUMBER")"
+
+   parse_cat() {
+     printf '%s\n' "$RESTART_OUTPUT" | tr -d '\r' | awk -F= -v k="$1" '$1==k { v=$0; sub(/^[^=]*=/, "", v); split(v, a, "|"); print a[1] }'
+   }
+   parse_reason() {
+     printf '%s\n' "$RESTART_OUTPUT" | tr -d '\r' | awk -F= -v k="$1" '$1==k { v=$0; sub(/^[^=]*=/, "", v); idx=index(v, "|"); print substr(v, idx+1) }'
+   }
+
+   CC_RESTART_REQUIRED="$(parse_cat cc_restart)"
+   CC_RESTART_REASON="$(parse_reason cc_restart)"
+   VSCODE_RELOAD_REQUIRED="$(parse_cat vscode_reload)"
+   VSCODE_RELOAD_REASON="$(parse_reason vscode_reload)"
+   INSTALLER_RERUN_REQUIRED="$(parse_cat installer_rerun)"
+   INSTALLER_RERUN_REASON="$(parse_reason installer_rerun)"
+   # os_reboot: lib always outputs not_required (Option B). Env override is here.
+   OS_REBOOT_REQUIRED="${OS_REBOOT_REQUIRED:-$(parse_cat os_reboot)}"
+   OS_REBOOT_REASON="${OS_REBOOT_REASON:-$(parse_reason os_reboot)}"
+   if [ "$OS_REBOOT_REQUIRED" = "required" ] && [ -z "$OS_REBOOT_REASON" ]; then
+     OS_REBOOT_REASON="manual env override"
+   fi
+
+   # Legacy alias (backward compat)
+   if [ "$CC_RESTART_REQUIRED" = "required" ]; then
+     CLAUDE_CODE_RESTART_REQUIRED="yes"
+   else
+     CLAUDE_CODE_RESTART_REQUIRED="no"
+   fi
 
    # Step 3: Collect remaining env vars
    BRANCH="$(git -C "<worktree>" rev-parse --abbrev-ref HEAD)"
@@ -211,7 +238,12 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \
    BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" \
    BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" NOTES_BACKUP_PATH="$NOTES_BACKUP_PATH" \
-   CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" ENV_FILE="$ENV_FILE" \
+   CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" \
+   CC_RESTART_REQUIRED="$CC_RESTART_REQUIRED" CC_RESTART_REASON="$CC_RESTART_REASON" \
+   VSCODE_RELOAD_REQUIRED="$VSCODE_RELOAD_REQUIRED" VSCODE_RELOAD_REASON="$VSCODE_RELOAD_REASON" \
+   INSTALLER_RERUN_REQUIRED="$INSTALLER_RERUN_REQUIRED" INSTALLER_RERUN_REASON="$INSTALLER_RERUN_REASON" \
+   OS_REBOOT_REQUIRED="$OS_REBOOT_REQUIRED" OS_REBOOT_REASON="$OS_REBOOT_REASON" \
+   ENV_FILE="$ENV_FILE" \
    node -e "
    var fs=require('fs');
    var data={
@@ -224,7 +256,15 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
      CREATED_DATE:process.env.CREATED_DATE||'',
      BACKUP_MANIFEST_PATH:process.env.BACKUP_MANIFEST_PATH||'',
      NOTES_BACKUP_PATH:process.env.NOTES_BACKUP_PATH||'',
-     CLAUDE_CODE_RESTART_REQUIRED:process.env.CLAUDE_CODE_RESTART_REQUIRED||''
+     CLAUDE_CODE_RESTART_REQUIRED:process.env.CLAUDE_CODE_RESTART_REQUIRED||'',
+     CC_RESTART_REQUIRED:process.env.CC_RESTART_REQUIRED||'',
+     CC_RESTART_REASON:process.env.CC_RESTART_REASON||'',
+     VSCODE_RELOAD_REQUIRED:process.env.VSCODE_RELOAD_REQUIRED||'',
+     VSCODE_RELOAD_REASON:process.env.VSCODE_RELOAD_REASON||'',
+     INSTALLER_RERUN_REQUIRED:process.env.INSTALLER_RERUN_REQUIRED||'',
+     INSTALLER_RERUN_REASON:process.env.INSTALLER_RERUN_REASON||'',
+     OS_REBOOT_REQUIRED:process.env.OS_REBOOT_REQUIRED||'',
+     OS_REBOOT_REASON:process.env.OS_REBOOT_REASON||''
    };
    fs.writeFileSync(process.env.ENV_FILE,JSON.stringify(data,null,2));
    " 2>&1
@@ -362,3 +402,4 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 - Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
 - Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via `node -e`, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
 - Step 7 MUST invoke renderer with `--env-file $HOME/.workflow-plans/<session-id>-final-report-env.json`.
+- Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
