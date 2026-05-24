@@ -91,6 +91,20 @@ function safeEnv(name) {
   return "(none)";
 }
 
+// legacyKey is undefined for new categories (no alias); only cc_restart has a legacy alias.
+function categoryValue(newKey, legacyKey) {
+  const v = safeEnv(newKey);
+  if (v !== "(none)") return v;
+  if (legacyKey === undefined) return "not_required";
+  const legacy = safeEnv(legacyKey);
+  if (legacy !== "(none)") {
+    if (legacy === "yes") return "required";
+    if (legacy === "no") return "not_required";
+    return legacy;
+  }
+  return "not_required";
+}
+
 function extractSection(text, heading) {
   return notesLib.extractSection(text, heading);
 }
@@ -140,16 +154,22 @@ const sections = [
   "",
 ];
 
-// Agents-repo-only section: display whether Claude Code restart is needed.
-// Use process.env directly (not safeEnv) for the gate: safeEnv returns "(none)"
-// when unset, which is always truthy and would defeat the gate.
-if (process.env.AGENTS_CONFIG_DIR) {
-  sections.push(
-    "### Claude Code Restart Required",
-    `- ${safeEnv("CLAUDE_CODE_RESTART_REQUIRED")}`,
-    "",
-  );
+// Always-on Post-Merge Actions block (no AGENTS_CONFIG_DIR gate).
+const categories = [
+  { key: "Claude Code restart", value: categoryValue("CC_RESTART_REQUIRED", "CLAUDE_CODE_RESTART_REQUIRED"), reason: safeEnv("CC_RESTART_REASON") },
+  { key: "VS Code reload",      value: categoryValue("VSCODE_RELOAD_REQUIRED"),   reason: safeEnv("VSCODE_RELOAD_REASON") },
+  { key: "Installer rerun",     value: categoryValue("INSTALLER_RERUN_REQUIRED"), reason: safeEnv("INSTALLER_RERUN_REASON") },
+  { key: "OS reboot",           value: categoryValue("OS_REBOOT_REQUIRED"),       reason: safeEnv("OS_REBOOT_REASON") },
+];
+sections.push("### Post-Merge Actions Required");
+for (const c of categories) {
+  if (c.value === "required" && c.reason && c.reason !== "(none)") {
+    sections.push(`- ${c.key}: required (${c.reason})`);
+  } else {
+    sections.push(`- ${c.key}: ${c.value}`);
+  }
 }
+sections.push("");
 
 sections.push(
   "### Bugs Found",
