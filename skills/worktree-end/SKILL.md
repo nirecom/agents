@@ -242,18 +242,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 6. **Cleanup** (only after confirmed merge success and inventory — never before):
    a. Resolve the main repo root from the worktree's `.git` file.
-   b. **Write branch-delete marker** (authorises step f via the `enforce-worktree` hook):
-      - `<repo-id>` = output of (hook path and main-root passed as argv — platform-safe):
-        ```
-        node -e "const {getRepoId}=require(process.argv[1]); const id=getRepoId(process.argv[2]); if(!id){process.stderr.write('getRepoId failed\n');process.exit(1);}console.log(id);" -- "$AGENTS_CONFIG_DIR/hooks/enforce-worktree.js" "<absolute-main-root>"
-        ```
-        If the command exits non-zero, abort — do not proceed with a null repo-id.
-      - `<encoded-branch>` = `encodeURIComponent(<branch>)` (e.g. `feature/foo` → `feature%2Ffoo`).
-      - `<plans>` = `<PLANS_DIR>` (resolved via Step 0 at top of Procedure).
-      - `<marker-path>` = `<plans>/worktree-end/pending-branch-delete-<repo-id>--<encoded-branch>`. Store for step g.
-      - Content (two lines): `<branch>` / `<absolute-worktree-path>` (must resolve under `WORKTREE_BASE_DIR`).
-      - Use the Write tool (atomic; auto-creates `worktree-end/` on first use).
-   b.5. **Switch the session CWD to the main worktree** before step 6c.
+   b. **Switch the session CWD to the main worktree** before step 6c.
       Run as its own Bash call (literal absolute path — no `$VAR` / `~`):
       ```
       cd "<main-worktree-root>"
@@ -264,16 +253,16 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       - Print to stderr:
         ```
         [worktree-end] WARN: git worktree remove failed for <path> (likely Windows CWD lock).
-        The worktree directory, its branch, and any pending-branch-delete- marker will be
-        cleaned up automatically by /sweep-worktrees (nightly cron, or run manually via
-        `/sweep`). No action required. Proceeding to step 6h (fetch/pull); orphan-dir
-        cleanup, branch deletion, and marker removal are deferred to /sweep-worktrees.
+        The worktree directory and its branch will be cleaned up automatically by
+        /sweep-worktrees (nightly cron, or run manually via `/sweep`). No action
+        required. Proceeding to step 6g (fetch/pull); orphan-dir cleanup and branch
+        deletion are deferred to /sweep-worktrees.
         ```
-      - Skip steps 6e (orphan-dir cleanup), 6f (branch -D), and 6g (marker removal).
+      - Skip steps 6e (orphan-dir cleanup) and 6f (branch -D).
         Step 6e is skipped because the worktree dir is occupied; it self-resolves when
-        the next sweep cycle removes the worktree. Steps 6f and 6g are skipped because
-        git's cascade rule prevents `branch -D` while the worktree is registered.
-      - Proceed directly to step 6h (fetch/pull).
+        the next sweep cycle removes the worktree. Step 6f is skipped because git's
+        cascade rule prevents `branch -D` while the worktree is registered.
+      - Proceed directly to step 6g (fetch/pull).
    d. `git -C <main> worktree prune`
    e. **Orphan-dir cleanup** at `<WORKTREE_BASE_DIR>/<task-name>`:
       ```
@@ -282,16 +271,15 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       If it refuses with "not empty" (Windows recreated files after 6c),
       re-run with `--force-if-not-registered` — requires the step 5
       inventory to be complete (issue #322).
-   f. `git -C <main> branch -D <branch>` — `-D` (force) is required because
-      squash-merge produces a new commit not recognised by `-d`'s "fully merged"
-      check; the marker written in step b authorises this exact deletion.
-   g. **Remove the marker** at `<marker-path>` (reuse step b's value verbatim — do **not** recompute)
-      whether step f succeeded or failed (avoid stale markers).
-      - POSIX: `rm "<marker-path>"`
-      - PowerShell: `Remove-Item -LiteralPath "<marker-path>"`
-   h. `git -C <main> fetch --prune origin`
+   f. `WORKTREE_END_SKILL=1 git -C <main> branch -D <branch>` — `-D` (force) is
+      required because squash-merge produces a new commit not recognised by
+      `-d`'s "fully merged" check. The inline `WORKTREE_END_SKILL=1` prefix is
+      the authorization token for `enforce-worktree.js` (skill-only force-delete);
+      the worktree was already removed in step 6c so the branch is no longer
+      checked out anywhere.
+   g. `git -C <main> fetch --prune origin`
       `git -C <main> pull --ff-only`
-   i. Compose doc-append entries (main worktree; only when NOTES_BACKUP_PATH is non-empty).
+   h. Compose doc-append entries (main worktree; only when NOTES_BACKUP_PATH is non-empty).
 
       Parse closes_issues from <PLANS_DIR>/<session-id>-intent.md.
       When closes_issues is non-empty: Phase 1/2 already committed history.md; CHANGELOG.md is not yet written.
@@ -309,12 +297,12 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       `closes_issues` parse: if intent.md is missing or lacks the field,
       treat as empty (fire CLI without --skip-history; CLI bails with exit 0 if notes sections empty).
       CLI is always-safe: exits 0 with no commits when both sections are
-      empty. On non-zero exit: do NOT suppress — let stderr surface. Step 6j
+      empty. On non-zero exit: do NOT suppress — let stderr surface. Step 6i
       and Step 7 still run.
       Push-failure recovery: COMPOSE_DOC_APPEND_SKILL=1 git push origin main.
       Resume/retry: CLI idempotency prevents duplicate entries on re-run.
 
-   j. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
+   i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 
 ### Step 7
 
@@ -355,8 +343,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 - **wait / abort paths: no destructive steps.** Only merge-success path runs cleanup.
 - `git worktree remove --force` is prohibited (see `rules/ops.md` decision path).
-- Branch deletion (`git branch -D`) only in step 6f, gated by the marker from step 6b.
-- Always attempt marker removal (step 6g) — whether or not step 6f succeeded.
+- Branch deletion (`git branch -D`) only in step 6f, allowed via the inline `WORKTREE_END_SKILL=1` env prefix (enforce-worktree gates `-D` on skill authorization; non-force `-d` is allowed for any branch not checked out per `git worktree list --porcelain`).
 - Do not run cleanup if merge step failed or was skipped.
 - Always propose `.worktree-backup/<branch>/` as the default backup destination.
 - Always check stopped containers, not just running ones, for bind mount conflicts.
