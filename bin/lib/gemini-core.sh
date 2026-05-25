@@ -14,7 +14,16 @@ gemini_core_init() {
   START_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   START_EPOCH=$(date +%s)
   BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-  SESSION_ID="${CLAUDE_SESSION_ID:-$(date +%Y%m%d_%H%M%S)}"
+  # shellcheck source=resolve-session-id.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/resolve-session-id.sh"
+  local _jsonl_sid
+  if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+    SESSION_ID="$CLAUDE_SESSION_ID"
+  elif _jsonl_sid=$(resolve_session_id_from_jsonl 2>/dev/null); then
+    SESSION_ID="$_jsonl_sid"
+  else
+    SESSION_ID="$(date +%Y%m%d_%H%M%S)"
+  fi
   SESSION_ID="${SESSION_ID//\//_}"
 }
 

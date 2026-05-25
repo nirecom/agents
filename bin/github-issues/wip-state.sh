@@ -50,6 +50,9 @@ load_env_file() {
 }
 load_env_file
 
+# shellcheck source=../lib/resolve-session-id.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../lib/resolve-session-id.sh"
+
 if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
     echo "Error: AGENTS_CONFIG_DIR not set" >&2
     exit 2
@@ -98,7 +101,8 @@ validate_n() {
 #      in that environment (#440). This convention is already established in
 #      skills/issue-close-finalize/SKILL.md (--from-session uses the same
 #      "file first, env fallback" order).
-#   3. Neither available → original error (rc=2).
+#   3. JSONL scan: mtime-newest ~/.claude/projects/<encoded-cwd>/*.jsonl basename.
+#   4. None available → rc=2.
 resolve_session_id() {
     local sid
     if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -r "${CLAUDE_ENV_FILE}" ]; then
@@ -111,6 +115,15 @@ resolve_session_id() {
     fi
     if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
         sid=$(printf '%s' "${CLAUDE_SESSION_ID:-}" | tr -d '\r"')
+        if [ -n "$sid" ]; then
+            printf '%s' "$sid"
+            return 0
+        fi
+    fi
+    # 3. JSONL scan fallback — VS Code Claude Code does not export CLAUDE_SESSION_ID
+    #    nor reliably propagate CLAUDE_ENV_FILE to Bash subprocesses (#519).
+    if sid=$(resolve_session_id_from_jsonl); then
+        sid=$(printf '%s' "$sid" | tr -d '\r"')
         if [ -n "$sid" ]; then
             printf '%s' "$sid"
             return 0
