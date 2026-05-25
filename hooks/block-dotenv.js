@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const { checkBashCommand: checkCmd } = require("./lib/command-parser");
+const { getBasename } = require("./lib/path-match");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
 function readStdin() {
@@ -86,7 +87,7 @@ function isSafeDotenv(name) {
 function isDotenvPath(filePath) {
   if (!filePath) return false;
   // Normalize to forward slashes and get basename
-  const basename = filePath.replace(/\\/g, "/").split("/").pop();
+  const basename = getBasename(filePath);
   if (!basename) return false;
   // Exact .env
   if (basename === ".env") return true;
@@ -116,14 +117,14 @@ function checkBashCommand(command) {
 
 function isAllowlistPath(filePath) {
   if (!filePath) return false;
-  const basename = filePath.replace(/\\/g, "/").split("/").pop();
+  const basename = getBasename(filePath);
   return basename === ".private-info-allowlist";
 }
 
 // For Glob patterns: detect .env search patterns
 function checkGlobPattern(pattern) {
   if (!pattern) return false;
-  const basename = pattern.replace(/\\/g, "/").split("/").pop();
+  const basename = getBasename(pattern);
   if (!basename) return false;
 
   // Wildcarded .env patterns

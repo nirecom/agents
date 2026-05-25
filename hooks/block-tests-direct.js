@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const { resolveSessionId, readState } = require("./lib/workflow-state");
+const { getPathSegments } = require("./lib/path-match");
 
 const DENY_MESSAGE =
   "write_tests step is still pending. Run /write-tests first — it spawns a subagent that writes tests/ autonomously. " +
@@ -44,7 +45,7 @@ function isUnderTestsDir(filePath) {
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);
-  const parts = filePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  const parts = getPathSegments(filePath);
   // Need at least one directory component + one filename component.
   if (parts.length < 2) return false;
   for (let i = 0; i < parts.length - 1; i++) {
