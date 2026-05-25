@@ -359,3 +359,7 @@ Changes: SECURITY: Credential protection expanded to 18 families (2026-05-25) | 
 ### FEATURE: PR #540 (2026-05-25)
 Background: fix(#529): unify Projects v2 board title to <repo> — Issue Timeline
 Changes: Migration workflow now creates Projects v2 boards with `<repo> — Issue Timeline` title format consistently across all repos (previously new repos received `<repo> migration` title).
+
+### FEATURE: PR #532 (2026-05-25)
+Background: fix(#519): add JSONL transcript scan fallback for session-id resolution
+Changes: BUGFIX: WIP conflict detection (wip-state.sh) no longer silently fails when CLAUDE_SESSION_ID is unavailable in Bash subprocesses (VS Code / Windows). A JSONL transcript scan now reliably resolves the session ID so WIP fingerprinting and conflict alerts work correctly.
