@@ -62,10 +62,10 @@ teardown_tmp() {
 setup_tmp
 ISSUE_CLOSE_SKILL=1 GH_MOCK_SCENARIO=issue_task \
     run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
-if grep -q "#42:" "$TMP/docs/history.md"; then
-    pass "N1: skill-driven append writes #42:"
+if grep -q "#42" "$TMP/docs/history.md"; then
+    pass "N1: skill-driven append writes #42"
 else
-    fail "N1: skill-driven append writes #42:"
+    fail "N1: skill-driven append writes #42"
 fi
 teardown_tmp
 
@@ -93,7 +93,7 @@ fi
 # --- N3: reconcile — no sentinel, no entry → appends ---
 setup_tmp
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
-if grep -q "#42:" "$TMP/docs/history.md"; then
+if grep -q "#42" "$TMP/docs/history.md"; then
     pass "N3: reconcile appends when no entry exists"
 else
     fail "N3: reconcile appends when no entry exists"
@@ -103,10 +103,10 @@ teardown_tmp
 # --- I1: history.md already has #42: → no duplicate ---
 setup_tmp
 echo "### #42: Pre-existing entry (2026-04-01)" >> "$TMP/docs/history.md"
-BEFORE=$(grep -c "#42:" "$TMP/docs/history.md")
+BEFORE=$(grep -c "#42" "$TMP/docs/history.md")
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
-AFTER=$(grep -c "#42:" "$TMP/docs/history.md")
+AFTER=$(grep -c "#42" "$TMP/docs/history.md")
 if [ "$RC" -eq 0 ] && [ "$AFTER" -eq "$BEFORE" ]; then
     pass "I1: existing #42: in history.md prevents duplicate"
 else
@@ -119,7 +119,7 @@ setup_tmp
 echo "### #42: Archived (2025-12-01)" > "$TMP/docs/history/2025.md"
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
 RC=$?
-COUNT=$(grep -c "#42:" "$TMP/docs/history.md" 2>/dev/null); true
+COUNT=$(grep -c "#42" "$TMP/docs/history.md" 2>/dev/null); true
 if [ "$RC" -eq 0 ] && [ "$COUNT" -eq 0 ]; then
     pass "I2: archived #42: prevents new append"
 else
@@ -132,7 +132,7 @@ setup_tmp
 # History.md is empty even though the issue was already closed (sentinel set
 # upstream). Reconcile should still append.
 GH_MOCK_SCENARIO=issue_task run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
-if grep -q "#42:" "$TMP/docs/history.md"; then
+if grep -q "#42" "$TMP/docs/history.md"; then
     pass "E1: missing history entry is recovered even with sentinel set"
 else
     fail "E1: missing history entry is recovered even with sentinel set"

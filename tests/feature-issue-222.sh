@@ -187,48 +187,48 @@ else
 fi
 teardown_tmp
 
-# --- T2: OPEN + pending → resume_e + E,F,G,H,J
+# --- T2: OPEN + pending → resume_e + E,F,G,H,J,K
 setup_tmp
 run_triage open_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "E,F,G,H,J" ]; then
-    pass "T2: OPEN + pending → resume_e (E,F,G,H,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "E,F,G,H,J,K" ]; then
+    pass "T2: OPEN + pending → resume_e (E,F,G,H,J,K)"
 else
     fail "T2: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- T3: OPEN + appended → resume_h + G,H,J
+# --- T3: OPEN + appended → resume_h + G,H,J,K
 setup_tmp
 run_triage open_with_appended
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_h" ] && [ "$T_NEXT_STEPS" = "G,H,J" ]; then
-    pass "T3: OPEN + appended → resume_h (G,H,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_h" ] && [ "$T_NEXT_STEPS" = "G,H,J,K" ]; then
+    pass "T3: OPEN + appended → resume_h (G,H,J,K)"
 else
     fail "T3: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- T4: CLOSED + appended → resume_j + J
+# --- T4: CLOSED + appended → resume_j + E,J,K
 setup_tmp
 run_triage closed_with_appended_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "J" ]; then
-    pass "T4: CLOSED + appended → resume_j (J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "E,J,K" ]; then
+    pass "T4: CLOSED + appended → resume_j (E,J,K)"
 else
     fail "T4: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- T5: CLOSED + no sentinel → auto_close_path + E,G,J
+# --- T5: CLOSED + no sentinel → auto_close_path + E,G,J,K
 # Bug #366: Step B (sub-issue gate) is no longer scheduled by auto_close_path.
 setup_tmp
 run_triage closed_no_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J" ]; then
-    pass "T5: CLOSED + no sentinel → auto_close_path (E,G,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
+    pass "T5: CLOSED + no sentinel → auto_close_path (E,G,J,K)"
 else
     fail "T5: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- T6: CLOSED + pending + history hit → stuck_sentinel_only + J
+# --- T6: CLOSED + pending + history hit → stuck_sentinel_only + J,K
 setup_tmp
 # Seed history.md so the triage finds #42 already documented.
 cat >> "$TMP/docs/history.md" <<'EOF'
@@ -238,19 +238,19 @@ Background: x
 Changes: y
 EOF
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J" ]; then
-    pass "T6: CLOSED + pending + history-has → stuck_sentinel_only (J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
+    pass "T6: CLOSED + pending + history-has → stuck_sentinel_only (J,K)"
 else
     fail "T6: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- T7: CLOSED + pending + history miss → stuck_append_sentinel + E,J
+# --- T7: CLOSED + pending + history miss → stuck_append_sentinel + E,J,K
 setup_tmp
 # history.md intentionally empty.
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_append_sentinel" ] && [ "$T_NEXT_STEPS" = "E,J" ]; then
-    pass "T7: CLOSED + pending + history-missing → stuck_append_sentinel (E,J)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_append_sentinel" ] && [ "$T_NEXT_STEPS" = "E,J,K" ]; then
+    pass "T7: CLOSED + pending + history-missing → stuck_append_sentinel (E,J,K)"
 else
     fail "T7: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
