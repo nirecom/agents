@@ -367,3 +367,7 @@ Changes: BUGFIX: WIP conflict detection (wip-state.sh) no longer silently fails 
 ### FEATURE: PR #547 (2026-05-25)
 Background: feat(#528): add WORKTREE_NOTES.md language enforcement via PostToolUse hook
 Changes: WORKTREE_NOTES.md history/changelog entries are now machine-checked for language compliance on every save; language policy is driven by the docs-lang block in language.md (DOCS_LANG_HISTORY, DOCS_LANG_CHANGELOG_PUBLIC, DOCS_LANG_CHANGELOG_PRIVATE); violations are blocked with a descriptive error; policy defaults to permissive (any) if language.md is absent
+
+### FEATURE: PR #551 (2026-05-25)
+Background: feat(#524): structural enforcement of confirm-plan Step 2 path-emission rule
+Changes: category: FEATURE | subject: feat(#524): confirm-plan path-emission guard via Stop hook (Gap 1) | background: When CONFIRM_<STEP>=on, a new Stop hook (stop-confirm-plan-guard.js) now blocks turns where the orchestrator emits any representation of the ~/.workflow-plans/ path in the assistant message. | changes: Previously prompt-only enforcement — structural hook guard added so violations are blocked at the hook layer before the response is delivered.
