@@ -133,8 +133,26 @@ if (require.main === module) {
   if (!isConfirmOff(filePath) && shouldOpenInVsCode()) {
     try { openInVsCode(absPath, resolveWorkspaceFolderUri(input)); } catch (_) { /* fail-open */ }
   }
+  if (!isConfirmOff(filePath)) {
+    try {
+      const { resolveSessionId } = require("./lib/workflow-state");
+      const sid = resolveSessionId({
+        sessionIdFromInput: input.session_id,
+        transcriptPath: input.transcript_path,
+      });
+      if (sid) {
+        const { writeTurnMarker } = require("./lib/turn-marker");
+        writeTurnMarker(sid, {
+          absPath,
+          suffix: getSuffix(filePath),
+          ts: Date.now(),
+          created_at: new Date().toISOString(),
+        });
+      }
+    } catch (_) { /* fail-open */ }
+  }
   process.stdout.write(JSON.stringify({ systemMessage: `Plan file written: ${absPath}` }));
   process.exit(0);
 }
 
-module.exports = { isFinalPlanArtifact };
+module.exports = { isFinalPlanArtifact, workspaceFolderUriFrom };
