@@ -1030,6 +1030,98 @@ else
 fi
 teardown_mock
 
+# ===========================================================================
+# T-new-9: set <N> with JSONL transcript scan fallback (3rd resolution path).
+# When CLAUDE_ENV_FILE / CLAUDE_SESSION_ID / CLAUDE_PROJECT_DIR are all unset,
+# the helper scans $CLAUDE_TRANSCRIPT_BASE_DIR/<pwd-encoded>/*.jsonl and uses
+# the basename (sans .jsonl) of the mtime-newest entry as the session-id.
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
+unset CLAUDE_ENV_FILE
+unset CLAUDE_SESSION_ID
+unset CLAUDE_PROJECT_DIR
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
+FAKE_CWD="$TMP/fake-cwd"
+mkdir -p "$FAKE_CWD"
+ENCODED_CWD=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD"
+# Create older JSONL first, then newer.
+echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/older-session-id.jsonl"
+touch -t 202001010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/older-session-id.jsonl"
+echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id.jsonl"
+touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id.jsonl"
+EXPECTED_FP=$(printf '%s:%s' "newer-session-id" "42" | sha256sum | cut -c1-8)
+( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
+RC=$?
+if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+    pass "T-new-9: set <N> resolves session-id via JSONL transcript scan (newest by mtime)"
+else
+    fail "T-new-9: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+unset CLAUDE_TRANSCRIPT_BASE_DIR
+[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
+teardown_mock
+
+# ===========================================================================
+# T-new-10: set <N> with no JSONL fixtures (empty transcript base dir) → exit 2.
+# When all 3 resolution paths fail, helper must exit 2 (session-id unresolvable).
+# ===========================================================================
+setup_mock
+SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
+unset CLAUDE_ENV_FILE
+unset CLAUDE_SESSION_ID
+unset CLAUDE_PROJECT_DIR
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-empty"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
+FAKE_CWD="$TMP/fake-cwd-empty"
+mkdir -p "$FAKE_CWD"
+( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
+RC=$?
+if [ "$RC" -eq 2 ]; then
+    pass "T-new-10: set <N> with no JSONL dir → exit 2"
+else
+    fail "T-new-10: expected exit 2, got rc=$RC"
+fi
+unset CLAUDE_TRANSCRIPT_BASE_DIR
+[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
+teardown_mock
+
+# ===========================================================================
+# T-new-11: CLAUDE_PROJECT_DIR encoding wins over pwd encoding.
+# When CLAUDE_PROJECT_DIR is set, its encoded form is the primary candidate
+# for the JSONL scan — pwd-encoded dir is only tried as a fallback.
+# ===========================================================================
+setup_mock
+SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
+unset CLAUDE_ENV_FILE
+unset CLAUDE_SESSION_ID
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts-projdir"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
+# Set a synthetic CC-native path; encode via same algorithm.
+export CLAUDE_PROJECT_DIR="C:/git/test"
+PROJDIR_ENCODED=$(printf '%s' "$CLAUDE_PROJECT_DIR" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+# Only the projdir-encoded dir exists — NO pwd-encoded dir.
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
+echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/win-session-id.jsonl"
+touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/win-session-id.jsonl"
+# Run from a DIFFERENT cwd whose encoding does NOT match.
+FAKE_CWD="$TMP/other-cwd-projdir"
+mkdir -p "$FAKE_CWD"
+EXPECTED_FP=$(printf '%s:%s' "win-session-id" "99" | sha256sum | cut -c1-8)
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 99 >/dev/null 2>&1 )
+RC=$?
+if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+    pass "T-new-11: CLAUDE_PROJECT_DIR encoding wins over pwd encoding"
+else
+    fail "T-new-11: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR
+[ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
+teardown_mock
+
 # ---------------------------------------------------------------------------
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
