@@ -498,6 +498,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-worktree-notes-lang.js\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },
