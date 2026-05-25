@@ -355,3 +355,7 @@ Changes: FEATURE: worktree-end Final Report now shows all post-merge required ac
 ### FEATURE: PR #535 (2026-05-25)
 Background: feat(#254,#252): unified credential hook covering 18 families; shared path-match.js helpers
 Changes: SECURITY: Credential protection expanded to 18 families (2026-05-25) | Background: The credential-blocking hook previously covered only SSH keys. | Changes: New block-credentials.js now blocks access to AWS, Azure, GnuPG, GitHub CLI, Docker, Kubernetes, npm, PyPI, RubyGems, netrc, PostgreSQL, MySQL, curl, Maven, Gradle, and Terraform credentials in addition to SSH. WORKFLOW_OFF sessions remain blocked — credentials are never bypassed. Settings.json deny rules consolidated into the hook.
+
+### FEATURE: PR #540 (2026-05-25)
+Background: fix(#529): unify Projects v2 board title to <repo> — Issue Timeline
+Changes: Migration workflow now creates Projects v2 boards with `<repo> — Issue Timeline` title format consistently across all repos (previously new repos received `<repo> migration` title).
