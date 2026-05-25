@@ -123,6 +123,56 @@ write_changelog_marker() {
     printf '%s\n%s\n' "${MERGE_COMMIT:-}" "$(date -u +%FT%TZ)" > "$marker"
 }
 
+# --- Language lint (WORKTREE_NOTES.md sections) ---
+# Skip if AGENTS_CONFIG_DIR is unset (fail-open: no policy available).
+if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
+    LANG_VIOLATIONS="$(
+        NOTES_PATH="$NOTES_PATH" \
+        AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
+        SKIP_HISTORY="$SKIP_HISTORY" \
+        node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const agentsDir = process.env.AGENTS_CONFIG_DIR;
+            const notesPath = process.env.NOTES_PATH;
+            const skipHistory = process.env.SKIP_HISTORY === "1";
+            let cfgMod, lintMod, privMod;
+            try {
+                cfgMod = require(path.join(agentsDir, "hooks/lib/docs-lang-config.js"));
+                lintMod = require(path.join(agentsDir, "hooks/lib/lint-worktree-notes-lang.js"));
+                privMod = require(path.join(agentsDir, "hooks/lib/is-private-repo.js"));
+            } catch (e) { process.exit(0); }
+            let content;
+            try { content = fs.readFileSync(notesPath, "utf8"); } catch (e) { process.exit(0); }
+            const config = cfgMod.loadDocsLangConfig(path.join(agentsDir, "rules", "language.md"));
+            let priv = false;
+            try { priv = privMod.isPrivateRepo(process.cwd()) === true; } catch (e) {}
+            const violations = lintMod.lintWorktreeNotesLang(content, config, {
+                isPrivateRepo: priv,
+                skipHistory: skipHistory,
+            });
+            if (violations.length > 0) {
+                process.stdout.write(JSON.stringify(violations));
+            }
+        ' 2>/dev/null || true
+    )"
+    if [[ -n "$LANG_VIOLATIONS" ]]; then
+        echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md has non-English entries in enforced sections:" >&2
+        LANG_VIOLATIONS="$LANG_VIOLATIONS" node -e '
+            try {
+                const v = JSON.parse(process.env.LANG_VIOLATIONS);
+                v.forEach((x) => console.error("  [" + x.section + ":" + x.lineNumber + "] " + x.line));
+            } catch (e) {}
+        ' 2>&1 || true
+        if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+            echo "compose-doc-append-entry: language violations detected (dry-run, continuing)" >&2
+        else
+            echo "compose-doc-append-entry: rewrite offending bullets in English before re-running" >&2
+            exit 1
+        fi
+    fi
+fi
+
 # --- Main processing ---
 COMMITS_PRODUCED=0
 BG="$(derive_background)"
