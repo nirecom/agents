@@ -363,3 +363,7 @@ Changes: Migration workflow now creates Projects v2 boards with `<repo> — Issu
 ### FEATURE: PR #532 (2026-05-25)
 Background: fix(#519): add JSONL transcript scan fallback for session-id resolution
 Changes: BUGFIX: WIP conflict detection (wip-state.sh) no longer silently fails when CLAUDE_SESSION_ID is unavailable in Bash subprocesses (VS Code / Windows). A JSONL transcript scan now reliably resolves the session ID so WIP fingerprinting and conflict alerts work correctly.
+
+### FEATURE: PR #547 (2026-05-25)
+Background: feat(#528): add WORKTREE_NOTES.md language enforcement via PostToolUse hook
+Changes: WORKTREE_NOTES.md history/changelog entries are now machine-checked for language compliance on every save; language policy is driven by the docs-lang block in language.md (DOCS_LANG_HISTORY, DOCS_LANG_CHANGELOG_PUBLIC, DOCS_LANG_CHANGELOG_PRIVATE); violations are blocked with a descriptive error; policy defaults to permissive (any) if language.md is absent
