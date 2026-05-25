@@ -1,0 +1,37 @@
+# Language Policy Template
+
+This file is a template. Copy it to `rules/language.md` to activate language enforcement for WORKTREE_NOTES.md.
+
+The hook (`hooks/check-worktree-notes-lang.js`) reads `$AGENTS_CONFIG_DIR/rules/language.md`.
+Copying this `.example` file is not sufficient — `rules/language.md` must exist.
+
+## Conversation
+<!-- Set your conversation language here (English or Japanese) -->
+
+## Planning Artifacts
+<!-- Set your planning artifact language -->
+
+## Commit Messages
+<!-- Commit messages: always English -->
+
+## Code
+<!-- Source code and config file messages/comments: English -->
+
+## Documentation
+
+<!-- Configure language enforcement for WORKTREE_NOTES.md staging sections.
+     IMPORTANT: DOCS_LANG_HISTORY consistency matters — history.md is append-only
+     and hard to retroactively change. Choose your language once and stick with it. -->
+
+````docs-lang
+# DOCS_LANG_HISTORY: language for ## History Notes in WORKTREE_NOTES.md
+# Valid values: english | japanese | any
+# "any" disables enforcement (no CJK check)
+DOCS_LANG_HISTORY=any
+
+# DOCS_LANG_CHANGELOG_PUBLIC: language for ## Changelog Notes in public repos
+DOCS_LANG_CHANGELOG_PUBLIC=any
+
+# DOCS_LANG_CHANGELOG_PRIVATE: language for ## Changelog Notes in private repos
+DOCS_LANG_CHANGELOG_PRIVATE=any
+````
