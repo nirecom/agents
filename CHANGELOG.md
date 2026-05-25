@@ -351,3 +351,7 @@ Changes: Mid-workflow bug/task findings can now be filed immediately via `/issue
 ### FEATURE: PR #533 (2026-05-25)
 Background: feat(#518): multi-category post-merge actions block in Final Report
 Changes: FEATURE: worktree-end Final Report now shows all post-merge required actions — Claude Code restart, VS Code reload, installer rerun, OS reboot — in a structured always-on block. Previously only Claude Code restart was shown, and the section was silently omitted in some sessions. (#518)
+
+### FEATURE: PR #535 (2026-05-25)
+Background: feat(#254,#252): unified credential hook covering 18 families; shared path-match.js helpers
+Changes: SECURITY: Credential protection expanded to 18 families (2026-05-25) | Background: The credential-blocking hook previously covered only SSH keys. | Changes: New block-credentials.js now blocks access to AWS, Azure, GnuPG, GitHub CLI, Docker, Kubernetes, npm, PyPI, RubyGems, netrc, PostgreSQL, MySQL, curl, Maven, Gradle, and Terraform credentials in addition to SSH. WORKFLOW_OFF sessions remain blocked — credentials are never bypassed. Settings.json deny rules consolidated into the hook.
