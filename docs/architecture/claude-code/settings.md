@@ -12,7 +12,7 @@
 |:---|:---|
 | Environment files | `.env`, `.env.*` |
 | Destructive commands | Force push, hard reset, deletion |
-| Credentials | SSH keys, AWS, Docker, kube |
+| Credentials | SSH, GPG, AWS, Azure, gh, git, Docker, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform |
 | Direct dotfile editing | Home directory dotfiles |
 
 See `docs/security-policy.md` for the full pattern list.
@@ -27,6 +27,7 @@ See `docs/security-policy.md` for the full pattern list.
 - `scan-outbound.js` (PreToolUse, matcher: `Bash`) — scans commands for private info patterns
 - `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
+- `block-credentials.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands`) — blocks Read/Edit/Write/Grep/Glob/Bash access to 18 credential-path families (20 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, `/root/.ssh`, and dot-segment forms. `..` traversal resolved by `path.posix.normalize`.
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
