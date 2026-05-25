@@ -98,7 +98,7 @@ case "$cmd" in
         case "$sub" in
             list)
                 if [ "${MOCK_HAS_EXISTING_PROJECT:-}" = "1" ]; then
-                    echo '{"projects":[{"number":99,"title":"mockrepo migration","id":"PVT_kwDOmock"}]}'
+                    echo '{"projects":[{"number":99,"title":"mockrepo — Issue Timeline","id":"PVT_kwDOmock"}]}'
                 else
                     echo '{"projects":[]}'
                 fi
