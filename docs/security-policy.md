@@ -30,7 +30,7 @@ This means:
 - Commands built through variables, aliases, or shell expansion are not reliably caught
 
 **Hook-based protection is context-aware.** Some rules use a PreToolUse hook
-(`hooks/block-ssh-private-key.js`, `hooks/block-dotenv.js`) backed by the shared
+(`hooks/block-credentials.js`, `hooks/block-dotenv.js`) backed by the shared
 `hooks/lib/command-parser.js` engine instead of raw glob matching. These hooks
 tokenize the command, walk argv, and check only tokens at path-bearing positions —
 skipping text-flag values (`--body`, `--title`, `-m`) and `echo`/`printf` positionals.
