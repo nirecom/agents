@@ -33,6 +33,7 @@ state_load "$REPO_DIR"
 
 OWNER=$(cd "$REPO_DIR" && gh repo view --json owner --jq .owner.login)
 REPO_NAME=$(cd "$REPO_DIR" && gh repo view --json name --jq .name)
+PROJECT_TITLE="$REPO_NAME — Issue Timeline"
 
 gh auth status --hostname github.com 2>&1 | grep -q 'project' || {
   echo "ERROR: gh missing 'project' scope. Run: gh auth refresh -s project" >&2
@@ -40,7 +41,7 @@ gh auth status --hostname github.com 2>&1 | grep -q 'project' || {
 }
 
 existing_num=$(gh project list --owner "$OWNER" --format json \
-  | jq_text --arg t "$REPO_NAME migration" '[.projects[] | select(.title==$t) | .number] | .[0] // empty')
+  | jq_text --arg t "$PROJECT_TITLE" '[.projects[] | select(.title==$t) | .number] | .[0] // empty')
 
 if [ -n "$existing_num" ]; then
   echo "Using existing project #$existing_num"
@@ -59,7 +60,7 @@ else
              gh api graphql -f query="{organization(login:\"$OWNER\"){id}}" --jq '.data.organization.id')
   result=$(gh api graphql \
     -f query='mutation($o:ID!,$t:String!){createProjectV2(input:{ownerId:$o,title:$t}){projectV2{id number}}}' \
-    -f o="$owner_id" -f t="$REPO_NAME migration")
+    -f o="$owner_id" -f t="$PROJECT_TITLE")
   project_num=$(echo "$result" | jq_text '.data.createProjectV2.projectV2.number')
   node_id=$(echo "$result" | jq_text '.data.createProjectV2.projectV2.id')
   field_result=$(gh api graphql \
