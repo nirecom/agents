@@ -202,18 +202,6 @@
       "Bash(*wget *| bash*)",
       "Bash(*wget *|sh*)",
       "Bash(*wget *| sh*)",
-      "Read(~/.ssh/**)",
-      "Edit(~/.ssh/**)",
-      "Read(~/.gnupg/**)",
-      "Read(~/.aws/**)",
-      "Read(~/.azure/**)",
-      "Read(~/.config/gh/**)",
-      "Read(~/.git-credentials)",
-      "Read(~/.docker/config.json)",
-      "Read(~/.kube/**)",
-      "Read(~/.npmrc)",
-      "Read(~/.pypirc)",
-      "Read(~/.gem/credentials)",
       "Edit(~/.bashrc)",
       "Edit(~/.zshrc)",
       "Edit(~/.profile)",
@@ -369,7 +357,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-ssh-private-key.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-credentials.js\"",
             "timeout": 5
           }
         ]
