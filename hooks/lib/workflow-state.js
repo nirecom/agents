@@ -18,6 +18,28 @@ const { execSync } = require("child_process");
  * Backward-compat: zero-argument calls behave identically to the previous
  * env-file-only implementation.
  */
+function _listJsonlByMtime(transcriptDir) {
+  try {
+    return fs
+      .readdirSync(transcriptDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => ({
+        name: f,
+        mtime: fs.statSync(path.join(transcriptDir, f)).mtimeMs,
+      }))
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch (e) {
+    return [];
+  }
+}
+
+function findMostRecentSessionIdInDir(transcriptDir) {
+  const files = _listJsonlByMtime(transcriptDir);
+  if (files.length === 0) return null;
+  const base = path.basename(files[0].name, ".jsonl");
+  return /^[A-Za-z0-9_-]+$/.test(base) ? base : null;
+}
+
 function resolveSessionId(ctx = {}) {
   if (typeof ctx.sessionIdFromInput === "string" && ctx.sessionIdFromInput.length > 0) {
     return ctx.sessionIdFromInput;
@@ -35,6 +57,36 @@ function resolveSessionId(ctx = {}) {
   if (typeof ctx.transcriptPath === "string" && ctx.transcriptPath.length > 0) {
     const base = path.basename(ctx.transcriptPath, ".jsonl");
     if (/^[A-Za-z0-9_-]+$/.test(base)) return base;
+  }
+  // 4. JSONL scan — multi-candidate (CLAUDE_PROJECT_DIR → cwd → realpath).
+  // path.resolve normalizes Windows backslashes so encoding matches CC's own
+  // convention (C:\git\agents → c:/git/agents → c--git-agents).
+  try {
+    const transcriptBase =
+      process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
+      path.join(os.homedir(), ".claude", "projects");
+    const rawCandidates = [
+      process.env.CLAUDE_PROJECT_DIR,
+      process.cwd(),
+    ].filter(Boolean);
+    try {
+      const rp = fs.realpathSync(process.cwd());
+      if (rp !== process.cwd()) rawCandidates.push(rp);
+    } catch (e) {
+      // realpath unavailable or fails — skip
+    }
+    for (const raw of rawCandidates) {
+      const encoded = path
+        .resolve(raw)
+        .toLowerCase()
+        .replace(/[^a-zA-Z0-9]/g, "-");
+      const sid = findMostRecentSessionIdInDir(
+        path.join(transcriptBase, encoded),
+      );
+      if (sid) return sid;
+    }
+  } catch (e) {
+    // fall through to null
   }
   return null;
 }
@@ -184,15 +236,7 @@ function findLatestStateForContext(ctx) {
 
   let files;
   try {
-    files = fs
-      .readdirSync(transcriptDir)
-      .filter((f) => f.endsWith(".jsonl"))
-      .map((f) => ({
-        name: f,
-        mtime: fs.statSync(path.join(transcriptDir, f)).mtimeMs,
-      }))
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, 10);
+    files = _listJsonlByMtime(transcriptDir).slice(0, 10);
   } catch (e) {
     return null;
   }
@@ -370,6 +414,8 @@ module.exports = {
   STEP_HINT,
   nextStepHint,
   resolveSessionId,
+  _listJsonlByMtime,
+  findMostRecentSessionIdInDir,
   readState,
   writeState,
   markStep,
