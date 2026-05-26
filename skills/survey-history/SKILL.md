@@ -36,7 +36,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
      (b) `<PLANS_DIR>/<session-id>-context.md` — fallback (pre-clarify-intent calls
          from workflow-init)
    Issue number N:
-   - From intent.md: extract from `## closes_issues` section (existing behavior).
+   - From intent.md: extract from `## Issues` section (canonical parser: `hooks/lib/parse-closes-issues.js`).
    - From context.md: read `issue-number` from `## Session metadata`.
    - If N is `(none)`, absent, or non-integer → proceed in **keyword-only mode** (Step 2.5).
 
