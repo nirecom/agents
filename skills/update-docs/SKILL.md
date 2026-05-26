@@ -28,6 +28,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
    - Progress updates
    - `README.md`: Update when a user-visible feature is added or changed, install/usage steps shift, or an existing bullet no longer accurately reflects real behavior.
 4. **Propose updates**: For each file that needs updating, present:
+   - Before drafting History/Changelog bullets: read the `docs-lang` block in `rules/language.md` and apply the configured language (`DOCS_LANG_HISTORY` for history, `DOCS_LANG_CHANGELOG_PUBLIC`/`DOCS_LANG_CHANGELOG_PRIVATE` for changelog)
    - Which sections need changes and why
    - Specific additions or modifications
 5. **Apply after confirmation**: Edit files only after user approval
@@ -38,6 +39,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 ## Rules
 
 - Follow the structure and content rules defined in `rules/docs-convention.md`
+- Follow language configuration in `rules/language.md` (`docs-lang` block) for History/Changelog entry language
 - Follow the gather → propose → confirm → apply cycle (never write without user confirmation)
 - Compare git log against current docs to identify gaps
 
