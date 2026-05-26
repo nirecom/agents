@@ -98,6 +98,35 @@ if _is_enforce_worktree_on; then
         fi
     fi
 
+    # WORKFLOW_OFF / WORKTREE_OFF session-marker bypass: mirror enforce-worktree.js.
+    # Resolves session id via hooks/lib/workflow-state.js#resolveSessionId() and
+    # checks both .workflow-off and .worktree-off markers via hooks/lib/session-markers.js.
+    # rc=0 → bypass granted; rc=2 → no bypass (sid unresolved OR no marker); any
+    # other rc → unexpected error, surface a warning and fall through to enforcement.
+    if [ "$_enforce_skip" = "0" ]; then
+        _node_rc=0
+        AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
+        node -e '
+          try {
+            const cfg = process.env.AGENTS_CONFIG_DIR;
+            if (!cfg) process.exit(2);
+            const { resolveSessionId } = require(cfg + "/hooks/lib/workflow-state");
+            const { isWorkflowOff, isWorktreeOff } = require(cfg + "/hooks/lib/session-markers");
+            const sid = resolveSessionId();
+            if (!sid) process.exit(2);
+            if (isWorkflowOff(sid) || isWorktreeOff(sid)) process.exit(0);
+            process.exit(2);
+          } catch (_e) {
+            process.exit(3);
+          }
+        ' 2>/dev/null || _node_rc=$?
+        if [ "$_node_rc" = "0" ]; then
+            _enforce_skip=1
+        elif [ "$_node_rc" != "2" ]; then
+            echo "pre-commit: session-marker bypass check failed (rc=$_node_rc); falling back to enforce-worktree gate." >&2
+        fi
+    fi
+
     # COMPOSE_DOC_APPEND_SKILL bypass: allow doc-append commits to history.md and CHANGELOG.md from main worktree
     if [ "${COMPOSE_DOC_APPEND_SKILL:-}" = "1" ] && [ "$_enforce_skip" = "0" ]; then
         _staged="$(git diff --cached --name-only 2>/dev/null || true)"
