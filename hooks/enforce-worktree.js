@@ -1243,15 +1243,10 @@ if (!isEnforceWorktreeOn()) done();
 // Restore by deleting the marker. Fail-closed when sessionId is unresolvable.
 try {
   const sid = (input && input.session_id) || resolveSessionId();
-  if (sid && /^[A-Za-z0-9_-]+$/.test(sid)) {
-    const markerPath = path.join(getWorkflowDir(), `${sid}.worktree-off`);
-    if (fs.existsSync(markerPath)) {
-      process.stderr.write(
-        `enforce-worktree: session override active (marker: ${markerPath}). ` +
-          `Delete the marker to restore enforcement.\n`
-      );
-      done();
-    }
+  const { isWorktreeOff, worktreeOffNoticeText } = require("./lib/session-markers");
+  if (isWorktreeOff(sid)) {
+    process.stderr.write(worktreeOffNoticeText("enforce-worktree", sid) + "\n");
+    done();
   }
 } catch (e) {
   process.stderr.write(
