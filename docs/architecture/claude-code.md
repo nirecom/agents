@@ -5,6 +5,7 @@
 1. [Workflow State Machine](claude-code/workflow.md) — 10-step workflow, state file schema, session ID flow, fail-safe behavior
 2. [Session Sync](claude-code/session-sync.md) — cross-machine session history sync via private GitHub repo
 3. [settings.json Design](claude-code/settings.md) — allow/deny rules, hook inventory
+4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
 
 ## 4. Test Iteration Workflow
 
