@@ -20,6 +20,7 @@ The `<reason>` field is mandatory and non-empty. Bare sentinel form (no `: <reas
 | `workflow-gate.js` | Yes — commit gate (step completion check) bypassed |
 | `enforce-issue-close.js` | Yes — bare `gh issue close` allowed |
 | `enforce-worktree.js` | Yes — main worktree writes allowed |
+| `hooks/pre-commit` | Yes — commits from main worktree allowed |
 | `enforce-system-ops.js` | **No — OS-level safety always enforced** |
 
 ## When to use
