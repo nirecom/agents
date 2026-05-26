@@ -387,3 +387,7 @@ Changes: FEATURE | The `### Post-Merge Actions Required` block is now structural
 ### FEATURE: PR #568 (2026-05-26)
 Background: feat(#548): Projects v2 parity and ## Issues section for multi-N sessions (#568)
 Changes: FEATURE | Multi-N sessions: related issues now reliably receive Projects v2 board cards with Content Date; intent.md now lists all tracked issues by number and title under ## Issues instead of the primary-only ## Issue section.
+
+### FEATURE: PR #565 (2026-05-26)
+Background: fix(#334): eliminate false-positives via shared command-head helper
+Changes: Fixed: hooks no longer block commands where "doc-append" or "gh issue close" appears inside quoted arguments of other commands (e.g. gh issue comment --body "see doc-append for details").
