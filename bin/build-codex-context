@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# bin/build-codex-context
+# Builds a unified Codex review context file by concatenating intent.md and
+# outline.md from a session plans directory. Handles absent/empty inputs,
+# atomic writes, trailing-newline injection, and stale-output cleanup.
+set -euo pipefail
+
+# --- Argument parsing ---
+PLANS_DIR=""
+SID=""
+OUTPUT=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --plans-dir)  PLANS_DIR="$2"; shift 2 ;;
+        --session-id) SID="$2";       shift 2 ;;
+        --output)     OUTPUT="$2";    shift 2 ;;
+        *) echo "build-codex-context: unknown argument: $1" >&2; exit 1 ;;
+    esac
+done
+
+# --- Validation ---
+[[ -n "$PLANS_DIR" ]] || { echo "build-codex-context: --plans-dir is required" >&2; exit 1; }
+[[ -n "$SID" ]]       || { echo "build-codex-context: --session-id is required" >&2; exit 1; }
+[[ -n "$OUTPUT" ]]    || { echo "build-codex-context: --output is required" >&2; exit 1; }
+[[ -d "$PLANS_DIR" ]] || { echo "build-codex-context: --plans-dir does not exist: $PLANS_DIR" >&2; exit 1; }
+
+INTENT="$PLANS_DIR/$SID-intent.md"
+OUTLINE="$PLANS_DIR/$SID-outline.md"
+
+INTENT_PRESENT=0
+OUTLINE_PRESENT=0
+[[ -f "$INTENT" && -s "$INTENT" ]] && INTENT_PRESENT=1
+[[ -f "$OUTLINE" && -s "$OUTLINE" ]] && OUTLINE_PRESENT=1
+
+# --- Case: both absent/empty → delete stale output, exit 0 ---
+if [[ "$INTENT_PRESENT" -eq 0 && "$OUTLINE_PRESENT" -eq 0 ]]; then
+    rm -f "$OUTPUT"
+    exit 0
+fi
+
+# --- Atomic write ---
+OUT_DIR="$(dirname "$OUTPUT")"
+mkdir -p "$OUT_DIR"
+
+TMP="$(mktemp "$OUT_DIR/.build-codex-context.XXXXXX")"
+trap 'rm -f "$TMP"' EXIT
+
+inject_trailing_newline_if_missing() {
+    local file="$1"
+    if [[ "$(tail -c1 "$file" | wc -c)" -gt 0 ]] && [[ "$(tail -c1 "$file" | wc -l)" -eq 0 ]]; then
+        printf '\n' >> "$TMP"
+    fi
+}
+
+if [[ "$INTENT_PRESENT" -eq 1 ]]; then
+    printf '<!-- Source: %s -->\n' "$INTENT" >> "$TMP"
+    printf '## Section 1: Intent (User Requirements)\n' >> "$TMP"
+    cat "$INTENT" >> "$TMP"
+    inject_trailing_newline_if_missing "$INTENT"
+fi
+
+if [[ "$INTENT_PRESENT" -eq 1 && "$OUTLINE_PRESENT" -eq 1 ]]; then
+    printf '\n---\n\n' >> "$TMP"
+fi
+
+if [[ "$OUTLINE_PRESENT" -eq 1 ]]; then
+    printf '<!-- Source: %s -->\n' "$OUTLINE" >> "$TMP"
+    printf '## Section 2: Outline (Design Proposal)\n' >> "$TMP"
+    cat "$OUTLINE" >> "$TMP"
+    inject_trailing_newline_if_missing "$OUTLINE"
+fi
+
+mv "$TMP" "$OUTPUT"
+trap - EXIT
+
+exit 0
