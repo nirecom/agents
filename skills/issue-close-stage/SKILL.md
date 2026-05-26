@@ -11,7 +11,7 @@ Triage routes to the correct subset of steps; each step is idempotent and resuma
 Usage: `/issue-close-stage <N>` or `/issue-close-stage --from-session`
 
 `--from-session` resolves `<N>` from the current session's intent.md the same
-way as `/issue-close-finalize`: parse `## closes_issues` and iterate.
+way as `/issue-close-finalize`: parse `## Issues` and iterate.
 (canonical parser: `hooks/lib/parse-closes-issues.js` — do not reimplement.)
 
 ## Pre-flight

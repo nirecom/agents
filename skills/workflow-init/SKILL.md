@@ -110,32 +110,39 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
 A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 ```
 # Agreed Requirements — <session-id>
-## Issue
-#<N>: <title>
+## Issues
+- #<N>: <title>           # primary (index 0)
+- #<M>: <title>           # related (one line per additional issue)
 ## Background / Motivation
 <sentinel-stripped body; if unstructured prepend "(review framing at outline stage)">
 ## Scope / Constraints
 <derived from body or "(review at outline stage)">
 ## Accepted Tradeoffs
 (none — capture at outline stage)
-## closes_issues
-- <N>           # primary (closes_issues[0])
-- <M>           # related (closes_issues[1..N-1], one per additional issue)
 ```
-`<title>` from Step 3 gh result; if unavailable use `#<N>: (title unavailable)`. **Never omit `## Issue`** or **`## Accepted Tradeoffs`** — the latter is the `detail-planner.md` Approved Scope gate. When `ISSUES` has 2+ entries, write all of them as separate `- <N>` lines under `## closes_issues` (primary first).
-A1.5. **Related-issue label assignment (fail-closed).** For each **related** issue (every entry in `ISSUES[1..]`) that does NOT already carry `intent:clarified`:
+`<title>` for the primary comes from Step 3's `gh issue view` result. For related issues (entries beyond `ISSUES[0]`), fetch the title via `gh issue view <M> --json title --jq .title`. If a title fetch fails, write `- #<M>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — the latter is the `detail-planner.md` Approved Scope gate. The `## Issues` section is the single source of truth for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`); no separate `## closes_issues` section is written.
+A1.5. **Related-issue label assignment + board-card parity.** For each issue in `ISSUES` (primary + related, idempotent):
 
 ```bash
-gh issue edit <N> --add-label "intent:clarified"
+for N in "${ISSUES[@]}"; do
+    # Label related issues with intent:clarified (primary already carries it).
+    if [[ "$N" != "${ISSUES[0]}" ]]; then
+        if ! gh issue edit "$N" --add-label "intent:clarified"; then
+            # Write an abort marker and stop — do NOT proceed to make-outline-plan.
+            # Re-running /workflow-init is safe — gh issue edit --add-label is idempotent.
+            : write "<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md"
+            exit 1
+        fi
+    fi
+    # Ensure every issue (primary + related) has a Projects v2 board card with Content Date.
+    # ensure-board-card.sh is idempotent — no-op when the card is already present.
+    # Covers out-of-band-created primaries and recovers from earlier silent failures.
+    bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" "$N" \
+        || echo "[workflow-init: ensure-board-card.sh failed for #$N (continuing)]"
+done
 ```
 
-If ANY call fails (non-zero exit), write an abort marker file:
-
-```
-<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md
-```
-
-containing the list of failed issues and the retry command, then ABORT the workflow (do not proceed to `make-outline-plan`). Re-running `/workflow-init` is safe — `gh issue edit --add-label` is idempotent.
+Label failure for any related issue is fail-closed (abort marker + abort workflow). Board-card failure is best-effort per-N (warn and continue).
 
 A2. Emit (separate Bash calls):
 ```

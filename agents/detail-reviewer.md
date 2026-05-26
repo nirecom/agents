@@ -28,9 +28,9 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
 - **Citation integrity** — if the plan contains `[research: <tag>]` tags (tag format: `[a-z0-9-]+`), verify each tag resolves to a bullet in the plan's `## Research Findings (from this session)` section. If a claim appears to rely on external knowledge but has no citation, include in `NEEDS_REVISION`: `show research finding for: <claim>`
 - **Core principles** — verify the plan applies `rules/core-principles.md`.
 - **Mandatory carry-forward verify (structural — 3-section orthogonal check per `rules/core-principles.md` §2):**
-  detail.md MUST contain `## Issue` (only when upstream had one), `## Class members`,
-  and `## Accepted Tradeoffs`, verbatim from outline.md. Missing or altered → `NEEDS_REVISION`
-  with a `[HIGH]` concern naming the absent or altered section.
+  detail.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
+  verbatim from outline.md. Missing or altered → `NEEDS_REVISION` with a `[HIGH]` concern
+  naming the absent or altered section.
 - **Class members coverage (semantic):**
   Read `## Class members` in detail.md. For each member with `disposition: fix in scope`,
   verify it appears in `## Steps` or `## Files to modify` (or a named subsection). Any

@@ -107,14 +107,14 @@ fi
 # (d) count assertion — each mandatory section appears exactly once
 # ---------------------------------------------------------------------------
 if [[ -f "$OUT_FILE" ]]; then
-    c_issue=$(grep -c '^## Issue$' "$OUT_FILE" 2>/dev/null || echo 0)
+    c_issue=$(grep -c '^## Issues$' "$OUT_FILE" 2>/dev/null || echo 0)
     c_class=$(grep -c '^## Class members$' "$OUT_FILE" 2>/dev/null || echo 0)
     c_trade=$(grep -c '^## Accepted Tradeoffs$' "$OUT_FILE" 2>/dev/null || echo 0)
 
     if [[ "$c_issue" -eq 1 ]]; then
-        pass "(d) count: '## Issue' appears exactly once"
+        pass "(d) count: '## Issues' appears exactly once"
     else
-        fail "(d) count: '## Issue' expected 1, got $c_issue"
+        fail "(d) count: '## Issues' expected 1, got $c_issue"
     fi
     if [[ "$c_class" -eq 1 ]]; then
         pass "(d) count: '## Class members' appears exactly once"
@@ -135,7 +135,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -f "$OUT_FILE" ]]; then
     ln_h1=$(awk '/^# /{print NR; exit}' "$OUT_FILE")
-    ln_issue=$(awk '/^## Issue$/{print NR; exit}' "$OUT_FILE")
+    ln_issue=$(awk '/^## Issues$/{print NR; exit}' "$OUT_FILE")
     ln_class=$(awk '/^## Class members$/{print NR; exit}' "$OUT_FILE")
     ln_trade=$(awk '/^## Accepted Tradeoffs$/{print NR; exit}' "$OUT_FILE")
     ln_delivery=$(awk '/^## Delivery plan$/{print NR; exit}' "$OUT_FILE")
@@ -151,9 +151,9 @@ if [[ -f "$OUT_FILE" ]]; then
        [[ "$ln_issue" -lt "$ln_class" ]] && \
        [[ "$ln_class" -lt "$ln_trade" ]] && \
        [[ "$ln_trade" -lt "$ln_delivery" ]]; then
-        pass "(e) order: Issue($ln_issue) < Class members($ln_class) < Accepted Tradeoffs($ln_trade) < Delivery plan($ln_delivery)"
+        pass "(e) order: Issues($ln_issue) < Class members($ln_class) < Accepted Tradeoffs($ln_trade) < Delivery plan($ln_delivery)"
     else
-        fail "(e) order: expected Issue<Class<Tradeoffs<Delivery. Got issue=$ln_issue class=$ln_class trade=$ln_trade delivery=$ln_delivery"
+        fail "(e) order: expected Issues<Class<Tradeoffs<Delivery. Got issues=$ln_issue class=$ln_class trade=$ln_trade delivery=$ln_delivery"
     fi
 else
     fail "(e) order: skipped — output file missing"

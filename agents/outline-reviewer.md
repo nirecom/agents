@@ -62,10 +62,10 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
   `bin/review-loop-cap-menu`. Do NOT propose alternative escalation flows that bypass
   this helper.
 - **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` §2):**
-  outline.md MUST contain `## Issue` (only when intent.md had one), `## Class members`,
-  and `## Accepted Tradeoffs`, verbatim from intent.md. If any required section is absent
-  or modified relative to intent.md, return `MISSING_ALTERNATIVE` with a `[HIGH]` concern
-  naming the absent or altered section.
+  outline.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
+  verbatim from intent.md. If any required section is absent or modified relative to
+  intent.md, return `MISSING_ALTERNATIVE` with a `[HIGH]` concern naming the absent or
+  altered section.
 - **Class members coverage (semantic):**
   Read `## Class members` in the outline.md being reviewed. For each member with
   `disposition: fix in scope`, verify that the adopted approach / delivery plan / a
