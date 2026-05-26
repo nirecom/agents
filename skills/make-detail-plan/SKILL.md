@@ -79,7 +79,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 7. Once the reviewer returns `APPROVED`, assemble the final plan to
    `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. The helper
-   carries the 3 mandatory sections (`## Issue`, `## Class members`,
+   carries the 3 mandatory sections (`## Issues`, `## Class members`,
    `## Accepted Tradeoffs`) verbatim from outline.md and uses the planner's
    draft as the body source.
    ```bash
