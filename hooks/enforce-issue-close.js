@@ -8,6 +8,7 @@
 // all bypass this hook. Use /issue-reconcile to recover from those.
 
 const fs = require("fs");
+const { hasCommandHead } = require("./lib/command-head");
 
 function readStdin() {
   const chunks = [];
@@ -52,12 +53,9 @@ if (!parsed || parsed.tool_name !== "Bash") {
 
 const cmd = (parsed.tool_input && parsed.tool_input.command) || "";
 
-// Match `gh issue close` at start-of-command or after a shell separator
-// (whitespace, `;`, `|`, `&`). The `\s+` between `gh`, `issue`, `close`
-// tolerates multiple spaces; `\b` anchors the end of `close`.
-const CLOSE_RE = /(?:^|[\s;|&])gh\s+issue\s+close\b/;
-
-if (!CLOSE_RE.test(cmd)) {
+const isGhIssueClose = (tokens) =>
+  tokens[0] === "gh" && tokens[1] === "issue" && tokens[2] === "close";
+if (!hasCommandHead(cmd, isGhIssueClose)) {
   process.exit(0);
 }
 
