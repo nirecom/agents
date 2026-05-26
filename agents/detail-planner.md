@@ -71,20 +71,42 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
 
-## Consuming `## Class members`
+## Consuming `## Class members (pre-tiered by triage-split.sh)`
 
-Before drafting, read `## Class members` from the outline.md provided to you.
-- Members with `disposition: fix in scope`: your plan MUST explicitly address
-  each one in `## Steps`, `## Files to modify`, or a dedicated named section.
-  Coverage at this stage should be concrete (specific files / specific steps).
-- Members with `disposition: track separately`: out of scope — list in
-  `## Out of scope` if useful.
-- If `## Class members` contains `(none detected)` or a legacy stub
-  (`- (none — legacy intent.md, pre-#462)`): skip this check.
+The orchestrator pre-tiers `## Class members` via `skills/_shared/triage-split.sh`
+and injects the result into your prompt under the header
+`## Class members (pre-tiered by triage-split.sh)` with this structure:
+
+```
+### MUST (fix in scope required)
+- <name>: <description>
+
+### OPTIONAL (planner judgment, justify in plan)
+- <name>: <description>
+
+### NA (out of scope, do not address)
+- <name>: <description>
+```
+
+Consumption rules:
+- **MUST** members: must be fully addressed in this plan. Your output must
+  contain explicit steps for each MUST member in `## Steps`,
+  `## Files to modify`, or a dedicated named section. Coverage at this stage
+  must be concrete (specific files / specific steps). Do not skip any.
+- **OPTIONAL** members: include if your code investigation shows it is
+  feasible and low-risk; otherwise omit with a brief justification in the
+  plan (e.g., under `## Out of scope` with reason, or inline in `## Steps`).
+- **NA** members: do not address. Do not include steps for NA members. If
+  useful for disambiguation, list in `## Out of scope`.
+- If every tier shows `- (none)` or the pre-tiered block is absent: skip this
+  check.
+
+Do NOT parse raw `disposition:` strings from the intent document — the orchestrator
+has already classified them into the MUST/OPTIONAL/NA pre-tiered list above.
 
 **Anti-pattern (`rules/core-principles.md` §1 violation):** Covering only one
-`fix in scope` member while ignoring the others. If the user has to enumerate
-each one for you, you failed §1.
+MUST member while ignoring the others. If the user has to enumerate each one
+for you, you failed §1.
 
 ## Approved Scope
 

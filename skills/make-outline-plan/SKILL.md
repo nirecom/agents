@@ -39,7 +39,23 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
    b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
    c. Extract session-id from the chosen file's name; use it for all subsequent output paths.
 
-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context.
+2. **Pre-tier `## Class members` via triage-split.** Before launching the outline-planner subagent, run:
+   ```bash
+   TRIAGE_BLOCK=$("$AGENTS_CONFIG_DIR/skills/_shared/triage-split.sh" \
+     "<PLANS_DIR>/<session-id>-intent.md")
+   rc=$?
+   if [[ "$rc" -ne 0 ]]; then
+     echo "[orchestrator] triage-split.sh failed (rc=$rc); aborting." >&2
+     echo "Fix the disposition values in intent.md ## Class members and retry." >&2
+     exit "$rc"
+   fi
+   ```
+   Inject `$TRIAGE_BLOCK` into the planner subagent prompt as:
+   ```
+   ## Class members (pre-tiered by triage-split.sh)
+   $TRIAGE_BLOCK
+   ```
+   Then delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md`, the pre-tiered `$TRIAGE_BLOCK` (under the header above), and task context.
 
 3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
@@ -89,6 +105,23 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
    - APPROVED → step 7.
    - MISSING_ALTERNATIVE → loop (revision budget: 1 round). On budget exhaustion before cap-menu fires, tell user which concern is blocking and ask: add missing alternative / approve as-is / change scope.
    - `FAILED — round cap reached` → step 6.
+
+   **Fail-loud invocation pattern for `review-plan-codex`** (mandatory):
+   When the orchestrator invokes `bin/review-plan-codex`, capture the exit code
+   explicitly. The form `if ! cmd; then rc=$?` is incorrect because bash's `$?`
+   trap makes `rc=0` (the status of `!`, not the failed command). The correct pattern is:
+   ```bash
+   review-plan-codex ...
+   rc=$?
+   if [[ "$rc" -ne 0 ]]; then
+     echo "[orchestrator] review-plan-codex aborted (rc=$rc)." >&2
+     echo "Action: fix the disposition values and rerun." >&2
+     exit "$rc"
+   fi
+   ```
+   This applies wherever the loop wrapper (`skills/_shared/codex-review-loop.md`)
+   delegates to `review-plan-codex`. Triage-split failures inside `review-plan-codex`
+   surface here — never swallow them.
 
 6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`

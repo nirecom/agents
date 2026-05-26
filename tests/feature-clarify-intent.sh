@@ -268,11 +268,19 @@ assert_contains "$LOCAL_SKILL_MD" "Class members" \
 assert_contains "$LOCAL_SKILL_MD" "multiSelect" \
     "N11: multiSelect question pattern in clarify-intent SKILL.md"
 
-# N12: disposition enum values (fix in scope, track separately) in SKILL.md
-assert_contains "$LOCAL_SKILL_MD" "fix in scope" \
-    "N12a: 'fix in scope' disposition enum value in SKILL.md"
-assert_contains "$LOCAL_SKILL_MD" "track separately" \
-    "N12b: 'track separately' disposition enum value in SKILL.md"
+# N12: disposition enum values — 3-value enum (issue #558 replaces 2-value legacy)
+assert_contains "$LOCAL_SKILL_MD" '\bMUST\b' \
+    "N12a: 'MUST' disposition enum value in SKILL.md (3-value enum)"
+assert_contains "$LOCAL_SKILL_MD" '\bOPTIONAL\b' \
+    "N12b: 'OPTIONAL' disposition enum value in SKILL.md (3-value enum)"
+
+# N12c: 2-stage multiSelect pattern present (Stage 1 and Stage 2 in SKILL.md)
+assert_contains "$LOCAL_SKILL_MD" "Stage 1|Stage 2" \
+    "N12c: 2-stage multiSelect pattern present (Stage 1 / Stage 2 in SKILL.md)"
+
+# N12d: candidates > 4 truncation rule suppressed for class-members question
+assert_contains "$LOCAL_SKILL_MD" "does NOT apply|no.*truncation.*4|truncation.*does not apply" \
+    "N12d: candidates-truncation-4 rule explicitly suppressed for class members"
 
 # N13: no cap別枠 wording (class members question is inside the 5-round cap, not extra)
 assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*cap" \

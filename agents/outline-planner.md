@@ -108,21 +108,40 @@ are added automatically; planner-authored copies are stripped before the final
 write. Start your draft from `# <H1 title>` then `## Adopted approach` /
 `## Delivery plan` and subsequent sections.
 
-## Consuming `## Class members`
+## Consuming `## Class members (pre-tiered by triage-split.sh)`
 
-Before drafting, read `## Class members` from the intent.md provided to you.
-- Members with `disposition: fix in scope`: your plan MUST explicitly address
-  each one (in the adopted approach narrative, delivery plan, or a dedicated
-  section). Coverage need not be exhaustive at this stage, but every
-  fix-in-scope member must be named or clearly subsumed.
-- Members with `disposition: track separately`: out of scope for this plan —
-  mention in `## Confirmed non-goals` if useful to disambiguate.
-- If `## Class members` contains `(none detected)` or is absent: skip this
-  check.
+The orchestrator pre-tiers `## Class members` via `skills/_shared/triage-split.sh`
+and injects the result into your prompt under the header
+`## Class members (pre-tiered by triage-split.sh)` with this structure:
+
+```
+### MUST (fix in scope required)
+- <name>: <description>
+
+### OPTIONAL (planner judgment, justify in plan)
+- <name>: <description>
+
+### NA (out of scope, do not address)
+- <name>: <description>
+```
+
+Consumption rules:
+- **MUST** members: must be fully addressed in this plan. Your output must
+  contain explicit coverage for each MUST member (in the adopted approach
+  narrative, delivery plan, or a dedicated section). Do not skip any.
+- **OPTIONAL** members: include if your code investigation shows it is
+  feasible and low-risk; otherwise omit with a brief justification in the
+  plan (in the adopted approach or non-goals section).
+- **NA** members: do not address. Do not include steps for NA members. If
+  useful for disambiguation, mention briefly in `## Confirmed non-goals`.
+- If every tier shows `- (none)` or the pre-tiered block is absent: skip this check.
+
+Do NOT parse raw `disposition:` strings from the intent document — the orchestrator
+has already classified them into the MUST/OPTIONAL/NA pre-tiered list above.
 
 **Anti-pattern (`rules/core-principles.md` §1 violation):** Covering only one
-`fix in scope` member while ignoring the others. If the user has to enumerate
-each one for you, you failed §1.
+MUST member while ignoring the others. If the user has to enumerate each one
+for you, you failed §1.
 
 ## Consuming raw codex review output
 

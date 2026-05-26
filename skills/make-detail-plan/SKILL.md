@@ -37,8 +37,24 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
-4. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
-   Pass the full task context **plus** the contents of the intent/approach files above.
+4. **Pre-tier `## Class members` via triage-split.** Before launching the detail-planner subagent, run:
+   ```bash
+   TRIAGE_BLOCK=$("$AGENTS_CONFIG_DIR/skills/_shared/triage-split.sh" \
+     "<PLANS_DIR>/<session-id>-outline.md")
+   rc=$?
+   if [[ "$rc" -ne 0 ]]; then
+     echo "[orchestrator] triage-split.sh failed (rc=$rc); aborting." >&2
+     echo "Fix the disposition values in outline.md ## Class members and retry." >&2
+     exit "$rc"
+   fi
+   ```
+   Inject `$TRIAGE_BLOCK` into the planner subagent prompt as:
+   ```
+   ## Class members (pre-tiered by triage-split.sh)
+   $TRIAGE_BLOCK
+   ```
+   Then delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
+   Pass the full task context **plus** the contents of the intent/approach files above and the pre-tiered `$TRIAGE_BLOCK`.
 
 5. **Codex review loop.** Apply `skills/_shared/codex-review-loop.md` with these parameters:
    - FORMAT: `detail-plan`
@@ -61,6 +77,23 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - APPROVED → proceed to step 7.
    - NEEDS_REVISION → loop continues (each round consumes `revision_rounds`; cap is 2).
    - `FAILED — round cap reached` → proceed to step 6.
+
+   **Fail-loud invocation pattern for `review-plan-codex`** (mandatory):
+   When the orchestrator invokes `bin/review-plan-codex`, capture the exit code
+   explicitly. The form `if ! cmd; then rc=$?` is incorrect because bash's `$?`
+   trap makes `rc=0` (the status of `!`, not the failed command). The correct pattern is:
+   ```bash
+   review-plan-codex ...
+   rc=$?
+   if [[ "$rc" -ne 0 ]]; then
+     echo "[orchestrator] review-plan-codex aborted (rc=$rc)." >&2
+     echo "Action: fix the disposition values and rerun." >&2
+     exit "$rc"
+   fi
+   ```
+   This applies wherever the loop wrapper (`skills/_shared/codex-review-loop.md`)
+   delegates to `review-plan-codex`. Triage-split failures inside `review-plan-codex`
+   surface here — never swallow them.
 
 6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
    - LABEL: `"Detail Plan Review"`

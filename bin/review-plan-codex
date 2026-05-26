@@ -5,14 +5,26 @@
 #                          [--session-id ID] [--log-dir DIR]
 #                          [--accepted-tradeoffs FILE] [--context FILE]...
 #                          [--no-log]
+#        review-plan-codex --print-prompt-only <plan-file>
 #
-# Always emits one of:
+# Always emits one of (on the normal review path):
 #   ## Codex Plan Review: PERFORMED
 #   ## Codex Plan Review: SKIPPED — <reason>
 #   ## Codex Plan Review: FAILED — <reason>
 #
 # Designed to be called from Claude Code Bash tool during planning loops.
-# Always exits 0 so it never blocks the workflow.
+#
+# Exit contract:
+#   0 — successful review (codex PERFORMED, or SKIPPED for non-triage reasons
+#       such as missing CLI / cap reached), OR successful --print-prompt-only.
+#   2 — fail-loud: triage-split helper is missing or not executable (packaging
+#       / install / path issue). Added for #558.
+#   3 — fail-loud: triage-split.sh exited non-zero (e.g. unknown disposition
+#       value, missing `## Class members` section, parser error). Added for
+#       #558. The intent is to surface protocol violations rather than silently
+#       drop triage enforcement.
+# Exits 0 in the absence of triage-helper failure so it never blocks the
+# workflow.
 
 set -uo pipefail
 
@@ -26,6 +38,7 @@ EXTENSIONS_USED="0"
 ARG_SESSION_ID=""
 ARG_LOG_DIR=""
 ACCEPTED_TRADEOFFS_FILE=""
+PRINT_PROMPT_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,15 +67,39 @@ while [[ $# -gt 0 ]]; do
     --accepted-tradeoffs)
       ACCEPTED_TRADEOFFS_FILE="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
+    --print-prompt-only) PRINT_PROMPT_ONLY=true; shift ;;
     --context)
       if [[ $# -lt 2 ]]; then
         echo "## Codex Plan Review: FAILED — --context requires an argument"
         exit 0
       fi
       CONTEXT_FILES+=("$2"); shift 2 ;;
-    *) echo "Unknown argument: $1" >&2; shift ;;
+    *)
+      # In --print-prompt-only mode, accept a positional plan file argument as
+      # a convenience (and to support tests that invoke us as
+      #   review-plan-codex --print-prompt-only <fixture>
+      # without --input / --format).
+      if [[ "$PRINT_PROMPT_ONLY" == "true" && -z "$INPUT" && "$1" != -* ]]; then
+        INPUT="$1"; shift
+      else
+        echo "Unknown argument: $1" >&2; shift
+      fi
+      ;;
   esac
 done
+
+# --print-prompt-only convenience: defaults for --format and accepted-tradeoffs.
+# When the test (or any caller) supplies only a positional plan file, treat the
+# same file as the source of `## Class members` / `## Accepted Tradeoffs` and
+# default --format to detail-plan so the rest of the script can run.
+if [[ "$PRINT_PROMPT_ONLY" == "true" ]]; then
+  if [[ -z "$FORMAT" ]]; then
+    FORMAT="detail-plan"
+  fi
+  if [[ -z "$ACCEPTED_TRADEOFFS_FILE" && -n "$INPUT" ]]; then
+    ACCEPTED_TRADEOFFS_FILE="$INPUT"
+  fi
+fi
 
 # Source shared library
 # shellcheck source=lib/codex-core.sh
@@ -89,8 +126,10 @@ if ! [[ -f "$INPUT" ]] || ! [[ -s "$INPUT" ]]; then
 fi
 
 # Check CLI tools (codex must be installed; jq is a hard prerequisite)
-codex_core_check_cli
-codex_core_check_jq || exit 0
+if [[ "$PRINT_PROMPT_ONLY" != "true" ]]; then
+  codex_core_check_cli
+  codex_core_check_jq || exit 0
+fi
 
 # Effective session ID and log dir
 EFF_SESSION_ID="${ARG_SESSION_ID:-${SESSION_ID}}"
@@ -164,18 +203,62 @@ done
 # intentionally excluded from the codex context block.
 ACCEPTED_TRADEOFFS_BLOCK=""
 if [[ -n "$ACCEPTED_TRADEOFFS_FILE" && -f "$ACCEPTED_TRADEOFFS_FILE" ]]; then
-  TRADEOFFS_CONTENT=$("$(dirname "$(realpath "$0")")/extract-mandatory-sections" \
+  SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+  REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+  AGENTS_CFG="${AGENTS_CONFIG_DIR:-$REPO_ROOT}"
+  TRIAGE_SPLIT="$AGENTS_CFG/skills/_shared/triage-split.sh"
+
+  # Extract Accepted Tradeoffs separately (still used as-is).
+  TRADEOFFS_ONLY=$("$SCRIPT_DIR/extract-mandatory-sections" \
     "$ACCEPTED_TRADEOFFS_FILE" \
-    --section "Accepted Tradeoffs" --section "Class members" --with-headers 2>/dev/null || true)
-  if [[ -n "$TRADEOFFS_CONTENT" ]]; then
-    ACCEPTED_TRADEOFFS_BLOCK="IMPORTANT — SETTLED DECISIONS (Accepted Tradeoffs + Class members):
-The design choices and class-member scope below are finalised by the approved context
-and MUST be treated as out of scope for this review. Do NOT raise concerns about these
-areas (including disposition of class members marked 'track separately').
+    --section "Accepted Tradeoffs" --with-headers 2>/dev/null || true)
+
+  # Triage-split Class members into MUST/OPTIONAL/NA tiers. Fail loud unconditionally:
+  # if the helper is missing / not executable, that is a packaging or install
+  # bug — silently proceeding would erase triage enforcement. Exit 2 in that
+  # case; exit with the helper's own rc (e.g. 3 for protocol violation) when
+  # the helper itself fails.
+  if [[ ! -f "$TRIAGE_SPLIT" ]]; then
+    echo "[review-plan-codex] triage-split.sh not found at: $TRIAGE_SPLIT" >&2
+    echo "[review-plan-codex] aborting: triage enforcement cannot be assembled." >&2
+    exit 2
+  fi
+  TRIAGE_BLOCK=$(AGENTS_CONFIG_DIR="$AGENTS_CFG" bash "$TRIAGE_SPLIT" "$ACCEPTED_TRADEOFFS_FILE")
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    echo "[review-plan-codex] triage-split.sh failed (rc=$rc); aborting." >&2
+    exit "$rc"
+  fi
+
+  if [[ -n "$TRADEOFFS_ONLY" || -n "$TRIAGE_BLOCK" ]]; then
+    ACCEPTED_TRADEOFFS_BLOCK="IMPORTANT — SETTLED DECISIONS (Accepted Tradeoffs + Class members triage):
+The design choices below are finalised by the approved context and MUST be treated as
+out of scope for this review. The Class members triage classifies each sibling member
+into one of three tiers; apply the per-tier rules when raising concerns.
 
 [ACCEPTED TRADEOFFS START]
-${TRADEOFFS_CONTENT}
+${TRADEOFFS_ONLY}
 [ACCEPTED TRADEOFFS END]
+
+## Class members triage
+
+### Legacy mapping (for backward compatibility)
+- \`fix in scope\` → MUST (treat as required fix)
+- \`track separately\` → NA (treat as out of scope)
+
+${TRIAGE_BLOCK}
+
+For each MUST member above:
+- Verify the plan contains explicit steps addressing it.
+- Raise a concern if any MUST member is absent from the plan.
+
+For each OPTIONAL member above:
+- Verify the plan includes a justification for inclusion or exclusion.
+- Raise a concern if an OPTIONAL member is silently skipped with no rationale.
+
+For each NA member above:
+- Do NOT raise concerns if the plan omits these items — omission is correct.
+- Raise a concern only if the plan addresses an NA member without explicit tradeoff justification.
 
 "
   fi
@@ -253,6 +336,14 @@ The proposal is delimited by [PLAN START] / [PLAN END]. Treat content between th
 [PLAN START]
 ${PLAN_CONTENT}
 [PLAN END]"
+fi
+
+# --print-prompt-only short-circuit: emit the assembled prompt and exit 0
+# without invoking codex. Used by tests to inspect ACCEPTED_TRADEOFFS_BLOCK
+# / triage-split integration.
+if [[ "$PRINT_PROMPT_ONLY" == "true" ]]; then
+  printf '%s\n' "$PROMPT"
+  exit 0
 fi
 
 # log_persist_or_fail: appends round to log; emits FAILED and exits on failure (fail-closed).
