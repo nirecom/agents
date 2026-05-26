@@ -379,3 +379,7 @@ Changes: BUGFIX: WORKFLOW_OFF and WORKTREE_OFF session-scoped overrides now also
 ### FEATURE: PR #561 (2026-05-26)
 Background: fix(#277): resolve rebase/merge conflicts on history.md and CHANGELOG.md via merge=union
 Changes: FEATURE | doc-append merge conflicts on history.md / CHANGELOG.md auto-resolved (#277) | Background: Parallel branches appending to docs/history.md or CHANGELOG.md previously required manual conflict resolution on every rebase or merge. | Changes: Two concurrent worktree-end runs now complete cleanly — git rebase and git merge no longer produce UU conflicts on these append-only log files. Date-ascending order is preserved automatically.
+
+### FEATURE: PR #567 (2026-05-26)
+Background: feat(#534): Stop hook — verify Post-Merge Actions Required block in Final Report
+Changes: FEATURE | The `### Post-Merge Actions Required` block is now structurally enforced at worktree-end Final Report completion. A new Stop hook (`stop-final-report-guard.js`) blocks the turn if the block is missing or incomplete, and forces re-emission with the correct content rebuilt from the env-file.
