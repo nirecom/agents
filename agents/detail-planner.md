@@ -28,7 +28,7 @@ Draft and revise an implementation plan for the task described in your prompt. Y
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
      Use English terms only: "delivery plan", "progression", or "execution order".
-     Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — these are added
+     Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — these are added
      automatically; planner-authored copies are stripped before the final write.
    - **Background** — two paragraphs: (1) summary of agreed requirements and motivation
      from intent.md; (2) confirmed approach from outline.md and why it was chosen.
@@ -63,7 +63,7 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 
 ## Rules
 
-- The **Delivery plan** section must appear first among substantive plan sections, immediately after the optional `## Issue` carry-forward header. Do not place Delivery plan after Background or Files to modify.
+- The **Delivery plan** section must appear first among substantive plan sections, immediately after the `## Issues` carry-forward header. Do not place Delivery plan after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
 - Follow `rules/core-principles.md`, `rules/coding.md`, `rules/test.md`, `rules/docs-convention.md`.
