@@ -391,3 +391,7 @@ Changes: FEATURE | Multi-N sessions: related issues now reliably receive Project
 ### FEATURE: PR #565 (2026-05-26)
 Background: fix(#334): eliminate false-positives via shared command-head helper
 Changes: Fixed: hooks no longer block commands where "doc-append" or "gh issue close" appears inside quoted arguments of other commands (e.g. gh issue comment --body "see doc-append for details").
+
+### FEATURE: PR #572 (2026-05-26)
+Background: feat(#553+#470): pass survey artifacts to codex review; extract context builder to bin/
+Changes: FEATURE: Codex review now receives survey-code and survey-history artifacts as context, enabling verification of planner code-research claims. The context builder (bin/build-codex-context) is now a deterministic shell script — the outline section is no longer silently dropped between planning stages.
