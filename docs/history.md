@@ -417,3 +417,7 @@ Changes: Two candidate directions — design decision needed: **A. Make `hooks/p
 ### FEATURE: doc-append: rebase conflicts when both branches append to history.md / CHANGELOG.md (2026-05-26, bdf43cc3d6f963a9b86c79812d9894a8a44f0a4f, #277)
 Background: doc-append: rebase conflicts when both branches append to history.md / CHANGELOG.md
 Changes: When two branches both run `doc-append` on `docs/history.md` or `CHANGELOG.md`, a rebase / merge produces conflicts at the end of the file because both sides append in the same region.
+
+### FEATURE: worktree-end Final Report: Stop hook で定型ブロックの最終 assistant message 検証/注入 (PR2 of #518) (2026-05-26, 4645206ee80d3ec98252dfd2287455e67b586bc5, #534)
+Background: #518 (PR #533) で Final Report の `### Post-Merge Actions Required` ブロックを常時表示する renderer 強化を行った (Approach B PR1)。 `stop-cleanup-reminder.js` と同パターンの Stop hook を追加し、最終 assistant message に定型ブロックが含まれることを検証する。欠落時は block + reason で再描画を促す。
+Changes: - Stop hook 新設: session state (Step 7 完了 + env-file JSON 存在) をトリガーに発火 - env-file JSON から定型 ALL-CATEGORIES ブロックを再構築して reason に載せる - `stop-cleanup-reminder.js` と同じ「状態を読む → reason で block」パターン ## Acceptance criteria - PR1 (#518) を本番で運用して Final Report 漏れがゼロでない場合のみ実装する - 漏れがゼロなら本 issue は close/cancelled ## Related - #518 (PR1: renderer 強化) - `hooks/stop-cleanup-reminder.js` (参考パターン)
