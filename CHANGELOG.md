@@ -383,3 +383,7 @@ Changes: FEATURE | doc-append merge conflicts on history.md / CHANGELOG.md auto-
 ### FEATURE: PR #567 (2026-05-26)
 Background: feat(#534): Stop hook — verify Post-Merge Actions Required block in Final Report
 Changes: FEATURE | The `### Post-Merge Actions Required` block is now structurally enforced at worktree-end Final Report completion. A new Stop hook (`stop-final-report-guard.js`) blocks the turn if the block is missing or incomplete, and forces re-emission with the correct content rebuilt from the env-file.
+
+### FEATURE: PR #568 (2026-05-26)
+Background: feat(#548): Projects v2 parity and ## Issues section for multi-N sessions (#568)
+Changes: FEATURE | Multi-N sessions: related issues now reliably receive Projects v2 board cards with Content Date; intent.md now lists all tracked issues by number and title under ## Issues instead of the primary-only ## Issue section.
