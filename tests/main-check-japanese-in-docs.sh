@@ -3,7 +3,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK="$DOTFILES_DIR/claude-global/hooks/check-japanese-in-docs.js"
+HOOK="$DOTFILES_DIR/hooks/check-japanese-in-docs.js"
 ERRORS=0
 
 # Set CLAUDE_PROJECT_DIR to dotfiles repo so resolveRepoDir is deterministic
@@ -67,8 +67,20 @@ expect_block "full-width characters (ＡＢＣ)" \
 expect_block "English + single Japanese character mixed (testあtest)" \
     '{"tool_name":"Bash","tool_input":{"command":"uv run bin/doc-append.py docs/history.md --category FEATURE --subject testあtest --background ok --changes done"}}'
 
+expect_block "bare doc-append with hiragana" \
+    '{"tool_name":"Bash","tool_input":{"command":"doc-append docs/history.md --category FEATURE --subject テスト --background ok --changes done"}}'
+
+expect_block "env-prefix doc-append with kanji" \
+    '{"tool_name":"Bash","tool_input":{"command":"FOO=bar doc-append docs/history.md --category FEATURE --subject 変更 --background ok --changes done"}}'
+
 echo ""
 echo "=== Normal cases: should approve ==="
+
+expect_approve "doc-append token inside gh issue comment body" \
+    '{"tool_name":"Bash","tool_input":{"command":"gh issue comment 123 --body \"see doc-append for details テスト\""}}'
+
+expect_approve "doc-append token inside single-quoted echo" \
+    '{"tool_name":"Bash","tool_input":{"command":"echo '\''doc-append テスト'\''"}}'
 
 expect_approve "English-only doc-append command" \
     '{"tool_name":"Bash","tool_input":{"command":"uv run bin/doc-append.py docs/history.md --category FEATURE --subject Test --background Background --changes Changes"}}'
