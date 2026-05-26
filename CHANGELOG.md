@@ -371,3 +371,7 @@ Changes: WORKTREE_NOTES.md history/changelog entries are now machine-checked for
 ### FEATURE: PR #551 (2026-05-25)
 Background: feat(#524): structural enforcement of confirm-plan Step 2 path-emission rule
 Changes: category: FEATURE | subject: feat(#524): confirm-plan path-emission guard via Stop hook (Gap 1) | background: When CONFIRM_<STEP>=on, a new Stop hook (stop-confirm-plan-guard.js) now blocks turns where the orchestrator emits any representation of the ~/.workflow-plans/ path in the assistant message. | changes: Previously prompt-only enforcement — structural hook guard added so violations are blocked at the hook layer before the response is delivered.
+
+### FEATURE: PR #560 (2026-05-26)
+Background: fix(#550): honor WORKFLOW_OFF/WORKTREE_OFF session markers in hooks/pre-commit
+Changes: BUGFIX: WORKFLOW_OFF and WORKTREE_OFF session-scoped overrides now also bypass the hooks/pre-commit worktree-isolation gate. Previously the bypass stopped at the PreToolUse layer; git commits from the main worktree were still blocked even during an approved workflow bypass session.
