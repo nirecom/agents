@@ -395,3 +395,7 @@ Changes: Fixed: hooks no longer block commands where "doc-append" or "gh issue c
 ### FEATURE: PR #572 (2026-05-26)
 Background: feat(#553+#470): pass survey artifacts to codex review; extract context builder to bin/
 Changes: FEATURE: Codex review now receives survey-code and survey-history artifacts as context, enabling verification of planner code-research claims. The context builder (bin/build-codex-context) is now a deterministic shell script — the outline section is no longer silently dropped between planning stages.
+
+### FEATURE: PR #575 (2026-05-26)
+Background: fix(#571): update-docs reads docs-lang before proposing entries
+Changes: `/update-docs` now reads the `docs-lang` config in `rules/language.md` before proposing History/Changelog entries, preventing drafts in the wrong language from reaching the user for review.
