@@ -58,3 +58,6 @@ authoritative source and duplication would confuse the display.
 - Detection is strictly on `tool_input.command` matching the
   `<<WORKFLOW_USER_VERIFIED: <reason>>>` form. Sentinel-shaped strings in
   stdout (cat/grep output) do not trigger the hook.
+- In ENFORCE_WORKTREE=on mode (linked worktree): premature emit before a PR exists
+  for the branch is hard-blocked by workflow-gate. The only legitimate emission sites
+  are `/worktree-end` Steps 3b and 4. See issue #577.

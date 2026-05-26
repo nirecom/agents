@@ -39,7 +39,7 @@
    - **`ENFORCE_WORKTREE=on`:** Run `/update-docs`. Mandatory — the skill stages bullets into `WORKTREE_NOTES.md` `## History Notes` / `## Changelog Notes` instead of writing `docs/history.md` / `CHANGELOG.md` directly. `bin/compose-doc-append-entry` consumes those sections during `/worktree-end` Step 6i (post-merge, main worktree).
    - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
 8. **User verification:**
-   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5.
+   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to step 8.5. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step 4 (after the PR is open and merge is imminent). Premature emission from a linked worktree without an open PR is blocked by workflow-gate (see issue #577).
    - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,
      skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit
      `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (the `: <reason>` is mandatory
