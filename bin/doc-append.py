@@ -24,7 +24,6 @@ DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})")
 INCIDENT_RE = re.compile(r"^### (?:INCIDENT: )?#(\d+):", re.MULTILINE)
 ENTRY_RE = re.compile(r"^### ", re.MULTILINE)
 
-TAIL_SIZES = [4096, 16384]
 WARN_LINES = 500
 
 
@@ -39,27 +38,89 @@ def _detect_bom(data: bytes) -> bool:
     return data[:3] == b"\xef\xbb\xbf"
 
 
-def _read_tail(path: Path, size: int) -> bytes:
-    with open(path, "rb") as f:
-        f.seek(0, 2)
-        file_size = f.tell()
-        if file_size == 0:
-            return b""
-        seek_pos = max(0, file_size - size)
-        f.seek(seek_pos)
-        return f.read()
+def _split_entries(data: bytes) -> list[bytes]:
+    """Split file bytes into entry chunks on line-start '### ' boundaries.
+
+    The preamble (content before the first '### ') is returned as the first
+    element when non-empty. Each entry chunk starts with b'### '.
+    """
+    # Match '### ' at start of file or immediately after a newline. Tolerates
+    # a leading UTF-8 BOM so callers may pass raw bytes without pre-stripping.
+    body_start = 3 if data[:3] == b"\xef\xbb\xbf" else 0
+    positions: list[int] = []
+    if data[body_start : body_start + 4] == b"### ":
+        positions.append(body_start)
+    for m in re.finditer(rb"\n### ", data):
+        positions.append(m.start() + 1)
+    if not positions:
+        return [data] if data else []
+    result: list[bytes] = []
+    if positions[0] > 0:
+        result.append(data[: positions[0]])
+    for i, start in enumerate(positions):
+        end = positions[i + 1] if i + 1 < len(positions) else len(data)
+        result.append(data[start:end])
+    return result
 
 
-def _find_last_date_in_tail(tail_text: str) -> Date | None:
-    """Return the date from the last ### header found in tail_text."""
-    matches = list(DATE_RE.finditer(tail_text))
-    if not matches:
-        return None
-    last = matches[-1]
-    try:
-        return Date.fromisoformat(last.group(1))
-    except ValueError:
-        return None
+def _sort_entries(entries: list[bytes], eol: bytes = b"\n") -> list[bytes]:
+    """Stable-sort entry chunks by date (ascending).
+
+    Chunks that lack a parseable date inherit the last-known date found by
+    scanning backward, so they stay near their original position.
+    Preamble chunks (not starting with b'### ') are left in place at index 0.
+    """
+    if not entries:
+        return entries
+
+    start = 0
+    result: list[bytes] = []
+    if entries and not entries[0].startswith(b"### "):
+        result.append(entries[0])
+        start = 1
+
+    sortable = entries[start:]
+    if len(sortable) <= 1:
+        return result + sortable
+
+    # Assign a sort key: date from header, or last-known date (backward search)
+    keys: list[Date | None] = [None] * len(sortable)
+    last_known: Date | None = None
+    for i, chunk in enumerate(sortable):
+        header_line = chunk.split(eol)[0].decode("utf-8", errors="replace")
+        m = DATE_RE.search(header_line)
+        if m:
+            try:
+                keys[i] = Date.fromisoformat(m.group(1))
+                last_known = keys[i]
+            except ValueError:
+                pass
+
+    # Backward pass: fill None keys with the next-known date (keeps them near
+    # their original neighbour)
+    fill: Date | None = None
+    for i in range(len(keys) - 1, -1, -1):
+        if keys[i] is not None:
+            fill = keys[i]
+        elif fill is not None:
+            keys[i] = fill
+
+    # Forward pass: any still-None keys get the last_known date found earlier
+    for i, k in enumerate(keys):
+        if k is None and last_known is not None:
+            keys[i] = last_known
+
+    # Stable sort (Python's sort is stable, so equal-date order preserved)
+    indexed = sorted(enumerate(sortable), key=lambda x: (keys[x[0]] or Date.min,))
+    return result + [chunk for _, chunk in indexed]
+
+
+def _join_entries(entries: list[bytes], eol: bytes) -> bytes:
+    """Join entry chunks with a blank line between each."""
+    sep = eol + eol
+    # Strip trailing eol from each chunk before joining so separators are clean
+    stripped = [e.rstrip(b"\r\n") for e in entries]
+    return sep.join(stripped)
 
 
 def _find_last_incident_in_text(text: str) -> int | None:
@@ -130,6 +191,9 @@ def main():
         print(f"Error: parent directory does not exist: {path.parent}", file=sys.stderr)
         sys.exit(1)
 
+    _needs_rewrite = False
+    sorted_entries: list[bytes] = []
+
     # Handle empty / new file
     if not path.exists() or path.stat().st_size == 0:
         eol = b"\n"
@@ -137,33 +201,34 @@ def main():
         last_date = None
         last_incident = None
     else:
-        # Read tail to check invariants
-        tail_bytes = None
-        tail_text = ""
-        has_entry = False
-        for size in TAIL_SIZES:
-            tail_bytes = _read_tail(path, size)
-            tail_text = tail_bytes.decode("utf-8", errors="replace")
-            if ENTRY_RE.search(tail_text):
-                has_entry = True
-                break
+        raw = path.read_bytes()
+        eol = _detect_line_ending(raw)
+        bom = _detect_bom(raw)
 
-        if not has_entry:
-            # Full-file fallback
-            tail_bytes = path.read_bytes()
-            tail_text = tail_bytes.decode("utf-8", errors="replace")
-            print("Warning: no ### header in tail, using full-file scan", file=sys.stderr)
+        # Parse and sort in memory; actual rewrite deferred until after validation
+        entries = _split_entries(raw[3:] if bom else raw)
+        sorted_entries = _sort_entries(entries, eol)
+        _needs_rewrite = sorted_entries != entries
 
-        eol = _detect_line_ending(path.read_bytes())
-        bom = _detect_bom(path.read_bytes())
-        last_date = _find_last_date_in_tail(tail_text)
+        full_text = (
+            (_join_entries(sorted_entries, eol) + eol + eol).decode("utf-8", errors="replace")
+            if _needs_rewrite
+            else raw.decode("utf-8", errors="replace")
+        )
+
+        # Derive last_date from the last entry after sort
+        dates_found = list(DATE_RE.finditer(full_text))
+        if dates_found:
+            try:
+                last_date = Date.fromisoformat(dates_found[-1].group(1))
+            except ValueError:
+                last_date = None
+        else:
+            last_date = None
 
         # Incident numbering
         if args.category == "INCIDENT":
-            last_incident = _find_last_incident_in_text(tail_text)
-            if last_incident is None and has_entry:
-                full_text = path.read_bytes().decode("utf-8", errors="replace")
-                last_incident = _find_last_incident_in_text(full_text)
+            last_incident = _find_last_incident_in_text(full_text)
             if last_incident is None:
                 print("Warning: no prior incident entries found, starting at #1", file=sys.stderr)
         else:
@@ -176,6 +241,13 @@ def main():
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Apply deferred sort rewrite (validation passed — safe to mutate)
+    if _needs_rewrite:
+        rewritten = _join_entries(sorted_entries, eol) + eol + eol
+        if bom:
+            rewritten = b"\xef\xbb\xbf" + rewritten
+        path.write_bytes(rewritten)
 
     if args.category == "INCIDENT":
         incident_num = (last_incident + 1) if last_incident is not None else 1
