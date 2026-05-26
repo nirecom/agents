@@ -30,27 +30,36 @@ on each invocation and increments it on AUTO_EXTEND.
 Write the planner's output to `DRAFT_FILE` via the Write tool. The Write tool
 auto-creates the `drafts/` directory.
 
-### b. Build review context file (once per skill invocation)
+### b. Build review context file (once per stage invocation; rebuilt at the start of each stage)
 
-Determine which prior-stage files exist; concatenate verbatim into
-`<PLANS_DIR>/drafts/<session-id>-context.md` with the headers below. Skip if
-no prior-stage file exists; reuse across revision rounds (do not regenerate).
+Per-stage freshness rule:
 
-- intent only: Section 1 only (no separator, no Section 2).
-- outline only: Section 2 only (no separator, no Section 1).
-- both: both sections + `---` separator.
+- Compute marker path: `<PLANS_DIR>/drafts/<session-id>-context.<FORMAT>.built`
+  (e.g. `…-context.outline-plan.built`, `…-context.detail-plan.built`).
+- If the marker file exists, skip the build (reuse across this stage's
+  revision rounds).
+- Otherwise: invoke the builder, then `touch` the marker.
 
-```
-<!-- Source: <PLANS_DIR>/<session-id>-intent.md -->
-## Section 1: Intent (User Requirements)
-<verbatim>
+Build command (always overwrites the output file when at least one input
+exists; deletes the output file when neither input exists):
 
----
+    bin/build-codex-context --plans-dir <PLANS_DIR> \
+                            --session-id <session-id> \
+                            --output <PLANS_DIR>/drafts/<session-id>-context.md
 
-<!-- Source: <PLANS_DIR>/<session-id>-outline.md -->
-## Section 2: Outline (Design Proposal)
-<verbatim>
-```
+The script writes Section 1 (intent), Section 2 (outline), or both with a
+`---` separator, depending on which prior-stage files exist and are
+non-empty. If neither exists the script deletes any pre-existing output
+file and exits 0; Step c will then omit the corresponding `--context` flag
+because the file is absent on disk.
+
+Why per-stage and not per-session: the outline stage builds the context
+when only intent.md exists. By the time the detail stage runs,
+outline.md also exists and Section 2 must be added. A session-scoped
+"skip if exists" gate would preserve the intent-only file and silently
+deprive the detail reviewer of Section 2. The marker is FORMAT-scoped so
+each stage gets exactly one rebuild and N reuses across its revision
+rounds.
 
 ### c. Invoke review-plan-codex
 
@@ -62,6 +71,8 @@ review-plan-codex --input <DRAFT_FILE> \
                   --cap <CAP> --max-extensions <MAX_EXTENSIONS> \
                   --extensions-used $EXTENSIONS_USED \
                   --accepted-tradeoffs <ACCEPTED_TRADEOFFS_FILE> \
+                  [--context <PLANS_DIR>/<session-id>-survey-code.md] \
+                  [--context <PLANS_DIR>/<session-id>-survey-history.md] \
                   [--context <PLANS_DIR>/drafts/<session-id>-context.md] \
                   [--context <CONCERNS_LOG>] \
                   --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"
