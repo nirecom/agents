@@ -3,6 +3,7 @@
 
 const fs = require("fs");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
+const { hasCommandHead } = require("./lib/command-head");
 
 function readStdin() {
   const chunks = [];
@@ -24,7 +25,9 @@ const input = JSON.parse(readStdin());
 if (input.tool_name !== "Bash") approve();
 
 const command = input.tool_input?.command || "";
-if (!/\bdoc-append\b/.test(command)) approve();
+const isDocAppend = (tokens) =>
+  tokens[0] === "doc-append" || /(^|\/)doc-append(\.py)?$/.test(tokens[0] || "");
+if (!hasCommandHead(command, isDocAppend)) approve();
 
 // Hiragana, Katakana, Kanji, CJK symbols/punctuation, full-width
 if (!/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(command)) approve();
