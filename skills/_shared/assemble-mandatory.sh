@@ -3,15 +3,24 @@
 # Usage: assemble-mandatory.sh [--source-kind intent|outline] <source.md> <planner-output.md> <out.md>
 #
 # Algorithm:
-# 1. Extract ## Issue, ## Class members, ## Accepted Tradeoffs from source.md (with headers)
+# 1. Detect which issues-section heading the source uses:
+#      - `## Issues` (plural, canonical, new SSOT per #548)
+#      - `## Issue`  (singular, legacy back-compat)
+#    Source-side invariant: EXACTLY ONE form must be present. Both-present is
+#    a hard-fail (authoring bug — `## Issues` is canonical, `## Issue` must be
+#    stripped). Neither-present is a hard-fail (missing mandatory section).
+# 2. Extract the detected section + `## Class members` + `## Accepted Tradeoffs`
+#    from source.md (with headers).
 #    - Legacy soft-fail (--source-kind intent only): if ## Class members absent,
-#      auto-inject legacy stub between Issue and Accepted Tradeoffs.
+#      auto-inject legacy stub between Issues and Accepted Tradeoffs.
 #    - Hard-fail (--source-kind outline): if ## Class members absent, exit 2 with
 #      "contract violation".
-# 2. Extract H1 line from planner output.
-# 3. Strip H1 + mandatory sections from planner body (fence-aware).
-# 4. Assemble: H1 + injected block + remaining body.
-# 5. Verify: count==1 per section / H1, order, verbatim match against source.
+# 3. Normalize: when legacy `## Issue` was detected, rewrite the extracted
+#    heading to `## Issues` so the assembled output is canonical.
+# 4. Extract H1 line from planner output.
+# 5. Strip H1 + mandatory sections from planner body (fence-aware).
+# 6. Assemble: H1 + injected block + remaining body.
+# 7. Verify: count==1 per section / H1, order, verbatim match against source.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,17 +60,53 @@ OUT="${3:?assemble-mandatory: <out.md> required}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-MANDATORY_NAMES="Issue|Class members|Accepted Tradeoffs"
+# strip awk receives both legacy and canonical heading names so planner-side
+# duplicates of either form are removed.
+MANDATORY_NAMES="Issues|Issue|Class members|Accepted Tradeoffs"
 LEGACY_STUB_TEXT="- (none — legacy intent.md, pre-#462)"
 
-# --- Step 1: Extract injected block ---
+# --- Step 1: Detect issues-section form in source. ---
+has_issues_plural=0
+has_issue_singular=0
+if grep -qE '^## Issues[[:space:]]*$' "$SOURCE"; then
+  has_issues_plural=1
+fi
+if grep -qE '^## Issue[[:space:]]*$' "$SOURCE"; then
+  has_issue_singular=1
+fi
+
+if [[ "$has_issues_plural" -eq 1 && "$has_issue_singular" -eq 1 ]]; then
+  echo "assemble-mandatory: source contains both '## Issue' and '## Issues' — canonical form is '## Issues'; remove the legacy heading: $SOURCE" >&2
+  exit 2
+fi
+
+if [[ "$has_issues_plural" -eq 1 ]]; then
+  ISSUES_SECTION_NAME="Issues"
+elif [[ "$has_issue_singular" -eq 1 ]]; then
+  ISSUES_SECTION_NAME="Issue"
+else
+  echo "assemble-mandatory: mandatory section missing: expected '## Issues' (or legacy '## Issue') in $SOURCE" >&2
+  exit 2
+fi
+
+# --- Step 2: Extract injected block ---
 "$EXTRACT" "$SOURCE" \
-  --section Issue --section "Class members" --section "Accepted Tradeoffs" \
+  --section "$ISSUES_SECTION_NAME" --section "Class members" --section "Accepted Tradeoffs" \
   --with-headers > "$TMP/injected_block"
+
+# --- Step 3: Normalize legacy heading to canonical. ---
+if [[ "$ISSUES_SECTION_NAME" == "Issue" ]]; then
+  # Use awk to avoid sed -i portability issues on macOS / BSD.
+  awk '
+    /^## Issue[[:space:]]*$/ { print "## Issues"; next }
+    { print }
+  ' "$TMP/injected_block" > "$TMP/injected_block_norm"
+  mv "$TMP/injected_block_norm" "$TMP/injected_block"
+fi
 
 if ! grep -q "^## Class members$" "$TMP/injected_block"; then
   if [[ "$SOURCE_KIND" == "intent" ]]; then
-    # Soft-fail: inject legacy stub between Issue and Accepted Tradeoffs
+    # Soft-fail: inject legacy stub between Issues and Accepted Tradeoffs
     echo "assemble-mandatory: WARNING: '## Class members' absent from $SOURCE (pre-#462 intent.md). Injecting legacy stub." >&2
 
     awk -v stub="$LEGACY_STUB_TEXT" '
@@ -93,17 +138,17 @@ if ! grep -q "^## Class members$" "$TMP/injected_block"; then
   fi
 fi
 
-# --- Step 2: Extract H1 from planner output ---
+# --- Step 4: Extract H1 from planner output ---
 H1_LINE=$(awk '/^# [^#]/ { print; exit }' "$PLANNER_OUT")
 if [[ -z "$H1_LINE" ]]; then
   echo "assemble-mandatory: contract violation: planner output has no H1 line: $PLANNER_OUT" >&2
   exit 3
 fi
 
-# --- Step 3: Strip H1 + mandatory sections from planner body ---
+# --- Step 5: Strip H1 + mandatory sections from planner body ---
 awk -v names="$MANDATORY_NAMES" -f "$STRIP_AWK" "$PLANNER_OUT" > "$TMP/remaining_body"
 
-# --- Step 4: Assemble ---
+# --- Step 6: Assemble ---
 # Trim trailing blank lines from injected_block so that section bodies do not
 # accumulate extra newlines. We re-add exactly one blank line as separator.
 sed -e :a -e '/^$/{$d;N;ba' -e '}' "$TMP/injected_block" > "$TMP/injected_block_trimmed"
@@ -119,7 +164,7 @@ awk 'NF { found=1 } found { print }' "$TMP/remaining_body" > "$TMP/remaining_bod
   cat "$TMP/remaining_body_trimmed"
 } > "$OUT"
 
-# --- Step 5: Verify ---
+# --- Step 7: Verify ---
 verify_fail() {
   echo "assemble-mandatory: verify FAILED: $1" >&2
   exit 4
@@ -134,17 +179,17 @@ count_section_headers() {
     | grep -c "^## ${section}$" 2>/dev/null || true
 }
 
-# ## Issue is optional: verify count matches source presence.
-# ## Class members and ## Accepted Tradeoffs are always required exactly once.
-issue_in_src=$(count_section_headers "$SOURCE" "Issue")
-[[ -z "$issue_in_src" ]] && issue_in_src=0
+# `## Issues` is mandatory in the OUTPUT (always normalized to plural).
+# Source-side count is 1 (verified in Step 1 — exactly one of singular/plural).
+issues_in_out=$(count_section_headers "$OUT" "Issues")
+[[ -z "$issues_in_out" ]] && issues_in_out=0
+[[ "$issues_in_out" -eq 1 ]] || verify_fail "## Issues appears ${issues_in_out} times outside fences (expected 1)"
+
+# `## Issue` (singular) must NOT appear in the OUTPUT — it is always normalized.
 issue_in_out=$(count_section_headers "$OUT" "Issue")
 [[ -z "$issue_in_out" ]] && issue_in_out=0
-if [[ "$issue_in_src" -gt 0 ]]; then
-  [[ "$issue_in_out" -eq 1 ]] || verify_fail "## Issue appears ${issue_in_out} times outside fences (expected 1)"
-else
-  [[ "$issue_in_out" -eq 0 ]] || verify_fail "## Issue appears in output but was absent from source"
-fi
+[[ "$issue_in_out" -eq 0 ]] || verify_fail "## Issue (singular) appears in output but must be normalized to ## Issues"
+
 for section in "Class members" "Accepted Tradeoffs"; do
   count=$(count_section_headers "$OUT" "$section")
   [[ -z "$count" ]] && count=0
@@ -174,20 +219,25 @@ order_line() {
   ' "$file"
 }
 
-ln_issue=$(order_line "$OUT" "Issue")
+ln_issues=$(order_line "$OUT" "Issues")
 ln_class=$(order_line "$OUT" "Class members")
 ln_tradeoffs=$(order_line "$OUT" "Accepted Tradeoffs")
-[[ -n "$ln_class" && -n "$ln_tradeoffs" ]] \
-  || verify_fail "mandatory section line numbers missing (class=$ln_class tradeoffs=$ln_tradeoffs)"
-# ## Issue is optional; when present it must precede ## Class members.
-if [[ -n "$ln_issue" ]]; then
-  [[ "$ln_issue" -lt "$ln_class" ]] || verify_fail "## Issue must appear before ## Class members"
-fi
+[[ -n "$ln_issues" && -n "$ln_class" && -n "$ln_tradeoffs" ]] \
+  || verify_fail "mandatory section line numbers missing (issues=$ln_issues class=$ln_class tradeoffs=$ln_tradeoffs)"
+[[ "$ln_issues" -lt "$ln_class" ]] || verify_fail "## Issues must appear before ## Class members"
 [[ "$ln_class" -lt "$ln_tradeoffs" ]] || verify_fail "## Class members must appear before ## Accepted Tradeoffs"
 
 # Verbatim match: each section body must equal the source's body (or the
 # injected legacy stub for Class members under intent kind).
-for section in "Issue" "Class members" "Accepted Tradeoffs"; do
+# For the issues section, the source-side name may be `Issue` (legacy) while
+# the output is always `Issues`. Compare bodies using each side's actual name.
+src_issues_body=$("$EXTRACT" "$SOURCE" --section "$ISSUES_SECTION_NAME" 2>/dev/null || true)
+out_issues_body=$("$EXTRACT" "$OUT" --section "Issues" 2>/dev/null || true)
+if [[ "$src_issues_body" != "$out_issues_body" ]]; then
+  verify_fail "## Issues body in output does not match source"
+fi
+
+for section in "Class members" "Accepted Tradeoffs"; do
   src_body=$("$EXTRACT" "$SOURCE" --section "$section" 2>/dev/null || true)
   out_body=$("$EXTRACT" "$OUT" --section "$section" 2>/dev/null || true)
   if [[ "$section" == "Class members" && -z "$src_body" ]]; then

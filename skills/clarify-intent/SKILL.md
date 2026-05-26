@@ -43,7 +43,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - Unselected (and Other-free-text non-selections) → record with `disposition: track separately`.
    - The disposition value MUST be exactly one of the two enum strings `fix in scope` or `track separately` — Claude derives this from the multiSelect result; the user never types a disposition string.
 
-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): optional `## Issue` (see below), Background/Motivation, Scope, Constraints, Interview Log (optional), `## closes_issues` (integer list or `(empty)`), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
 
    **`## Class members` schema (mandatory section):** appears immediately before `## Accepted Tradeoffs`. Lists sibling class members and their disposition (per `rules/core-principles.md` §1 Elevate Perspective). Format per member:
    ```
@@ -51,11 +51,16 @@ below. Reuse across all subsequent steps — do not re-resolve.
    ```
    When no candidates were detected in step 2a: write a single line `- (none detected)` (no disposition field). The disposition enum is exactly two values — `fix in scope` or `track separately`. A missing `## Class members` section or a disposition value outside the enum is a protocol violation.
 
-   **`## Issue` section rules** (immediately after H1, before Background/Motivation):
-   - **Path B** (issue known via auto-detect): read title from `context.md ## Issue metadata - title:`. Write `## Issue\n#<N>: <title>`.
-   - **Path C** (no issue yet — `closes_issues` empty): OMIT. The section is backfilled by Completion Step 3 after `gh issue create` succeeds.
-   - **context.md missing or title line absent**: OMIT. (Step 4 does not call `gh`; the title source is context.md, not a live gh call.)
-   - Multiple issues (forward-compat): list form, one `- #<N>: <title>` per line.
+   **`## Issues` section rules** (immediately after H1, before Background/Motivation — mandatory; this is the single SSOT, no separate `## closes_issues` section is written):
+   - One `- #<N>: <title>` line per issue in `closes_issues`, in confirmed order (primary first).
+   - **Path B** (issue known via auto-detect): read the primary title from `context.md ## Issue metadata - title:`; for any related issues, fetch via `gh issue view <N> --json title --jq .title`. If a fetch fails, write `- #<N>: (title unavailable)`.
+   - **Path C** (no issue yet — empty `closes_issues`): write an EMPTY `## Issues` section as placeholder:
+     ```
+     ## Issues
+     (none — pending issue creation or NON_GITHUB)
+     ```
+     Completion Step 3 backfills `- #<N>: <title>` after a successful `gh issue create`. The empty placeholder satisfies `assemble-mandatory.sh`'s "heading must be present" invariant.
+   - **context.md missing or title line absent**: write `- #<N>: (title unavailable)`.
 
 5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
@@ -98,7 +103,10 @@ Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_G
      Exit 1 (Status set failure) for any N → warn `[clarify-intent: wip-state set failed for #<N> — Projects v2 Status not updated]` and continue with the remaining entries (best-effort per-N, mirrors the label loop above).
      Exit 2 (missing env / session-id) → same warn for that N and point at `wip-state setup` / `CLAUDE_ENV_FILE`; continue with remaining entries.
      Every issue in `closes_issues` receives its own WIP fingerprint so cross-session conflict detection covers related issues too (see `rules/github-issues.md` "Session model").
-3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: (a) update `closes_issues` from `(empty)` to `- <N>`; (b) insert `## Issue\n#<N>: <title>` immediately after the H1 of intent.md using Read + Edit (title is the `--title` arg from this call — no re-fetch needed). Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above). On failure: warn, leave `closes_issues` as `(empty)` and omit `## Issue`.
+   - **Board-card parity for all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
+     `bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" <N>`.
+     Best-effort per-N — warn and continue on non-zero exit. Runs independently of `wip-state.sh set` so session-id-resolution failures cannot strand any issue without a board card. The primitive is idempotent — running it for an issue already on the board with the correct Content Date is a no-op.
+3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: backfill the `## Issues` placeholder body from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` using Read + Edit (title is the `--title` arg from this call — no re-fetch needed). Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` with the freshly created N (same exit-code handling as above), followed by `bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" <N>` (best-effort). On `gh issue create` failure: warn, leave the `## Issues` placeholder body unchanged.
 
 Then:
 
@@ -135,9 +143,10 @@ Then:
    - **`GUARD_RC == 0`** → counter unlinked; proceed to step 1 below (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
    - **`GUARD_RC != 0` AND `GUARD_ATTEMPT == 1`** (first failure) → STOP. Do NOT
      emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`. Invoke `/issue-create` to
-     create a tracking issue. After `/issue-create` succeeds and returns issue N:
-     (a) update `intent.md`'s `## closes_issues` from `(empty)` to `- N` using Read + Edit;
-     (b) insert `## Issue\n#N: <title>` after the H1 if absent (same as Reconcile step 3 Path C).
+     create a tracking issue. After `/issue-create` succeeds and returns issue N,
+     backfill the `## Issues` section body in `intent.md` from
+     `(none — pending issue creation or NON_GITHUB)` to `- #N: <title>` using Read + Edit
+     (same shape as Reconcile step 3 Path C).
      Then re-run **only this guard step (step 0)** — do NOT re-enter the full "Reconcile with
      GitHub" block (doing so would invoke `gh issue create` a second time and create a duplicate
      issue). Counter file holds `1`.
@@ -148,7 +157,7 @@ Then:
 
      Options:
      - **"Retry `/issue-create` once more"** — invoke `/issue-create` again, then re-run this guard (counter stays at 2; next failure re-asks).
-     - **"Manual recovery"** — instruct the user to run `gh issue create` manually and edit `## closes_issues` in `intent.md` directly. When the user confirms completion, re-run the guard (which on success unlinks the counter file).
+     - **"Manual recovery"** — instruct the user to run `gh issue create` manually and edit `## Issues` in `intent.md` directly. When the user confirms completion, re-run the guard (which on success unlinks the counter file).
      - **"Abort workflow"** — `rm -f "$COUNTER_FILE"`, emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent>>"`, and exit the skill.
 
      Note (§2 Orthogonality): no new sentinel is introduced here. Existing workflow sentinels are binary (`*_COMPLETE` = stage finished, `*_NOT_NEEDED` = stage skipped); a `BLOCKED` third axis would break the workflow-sentinel class invariant. Retry-exhaustion is treated as an interactive recovery prompt, not a workflow state transition.
