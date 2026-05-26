@@ -127,29 +127,12 @@ if ! printf '%s' "$URL" | grep -qE '^https://github\.com/.+/issues/[0-9]+$'; the
     exit 1
 fi
 
-FIELD_ID="${ISSUE_CREATE_FIELD_ID:-PVTF_lAHOAMF_jc4BXf9EzhSsYwA}"
-PROJECT_ID="${ISSUE_CREATE_PROJECT_ID:-PVT_kwHOAMF_jc4BXf9E}"
-echo "[issue-create] attaching to Projects v2 (project #$PROJECT_NUM, owner $OWNER): $URL" >&2
-ITEM_ID=""
-if ! ITEM_ID=$(gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$URL" \
-        --format json --jq '.id' 2>&1) \
-    || [ -z "$ITEM_ID" ] || [[ "$ITEM_ID" == *error* ]] || [[ "$ITEM_ID" == *Error* ]]; then
-    echo "warn: failed to attach $URL to project $PROJECT_NUM: ${ITEM_ID:-no output} (continuing)" >&2
-    ITEM_ID=""
-fi
-if [ -n "$ITEM_ID" ]; then
-    REPO_PATH=$(printf '%s' "$URL" | grep -oE 'github\.com/[^/]+/[^/]+' | sed 's|github\.com/||')
-    ISSUE_NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
-    CREATED_DATE=$(gh issue view "$ISSUE_NUM" --repo "$REPO_PATH" \
-        --json createdAt --jq '.createdAt[:10]' 2>/dev/null || true)
-    if [ -n "$CREATED_DATE" ]; then
-        if ! gh project item-edit --id "$ITEM_ID" --field-id "$FIELD_ID" \
-                --project-id "$PROJECT_ID" --date "$CREATED_DATE" >/dev/null 2>&1; then
-            echo "warn: failed to set Content Date for $URL (continuing)" >&2
-        fi
-    else
-        echo "warn: failed to fetch createdAt for #$ISSUE_NUM — Content Date not set" >&2
-    fi
+ISSUE_NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
+# ensure-board-card.sh inherits ISSUE_CREATE_* env vars from this script's
+# environment (priority 1 in its env-var resolution table), preserving the
+# existing contract.
+if ! bash "$(cd "$(dirname "$0")" && pwd)/ensure-board-card.sh" "$ISSUE_NUM"; then
+    echo "warn: ensure-board-card.sh failed for #$ISSUE_NUM (continuing)" >&2
 fi
 
 printf '%s\n' "$URL"

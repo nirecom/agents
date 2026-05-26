@@ -44,7 +44,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
-   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
+   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in Step 4a):
      ```bash
      "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \
@@ -58,7 +58,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
 4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
-   After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issue`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
+   After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
    ```bash
    "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \
      "<PLANS_DIR>/<session-id>-intent.md" \
@@ -115,7 +115,7 @@ The file (per `rules/language.md`) contains:
 
 - **Title** (H1): "Confirmed Approach" + `<session-id>`
 - **Mandatory sections** (assembled by `skills/_shared/assemble-mandatory.sh` from intent.md, not authored by planner):
-  - `## Issue` — present only when intent.md had one
+  - `## Issues` — always present (empty placeholder allowed for Path C)
   - `## Class members`
   - `## Accepted Tradeoffs`
 - **Planner-authored body sections** (drafted by outline-planner):

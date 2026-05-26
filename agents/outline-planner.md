@@ -103,7 +103,7 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 
 ## Mandatory sections (do not write)
 
-Do NOT write `## Issue` / `## Class members` / `## Accepted Tradeoffs` — they
+Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — they
 are added automatically; planner-authored copies are stripped before the final
 write. Start your draft from `# <H1 title>` then `## Adopted approach` /
 `## Delivery plan` and subsequent sections.
