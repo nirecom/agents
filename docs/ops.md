@@ -165,6 +165,22 @@ or out-of-band creation, use `.github/ISSUE_TEMPLATE/incident.yml` (or
 
 The two phases together run the full transaction-safe flow: sub-issue gate → pending sentinel comment → history.md append → parent body update → `gh issue close` → resolved-by + appended sentinel. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
 
+### Backfill Projects v2 board cards (catch-up) — *Migration (catch-up)*
+
+For sessions that pre-date #548 where related issues never received a
+Projects v2 board card / Content Date, backfill them:
+
+```bash
+bash bin/github-issues/migration/backfill-board-cards.sh <N1> <N2> ...
+# or, with a file (one #N per line; blank/# lines skipped):
+bash bin/github-issues/migration/backfill-board-cards.sh --from-file related-issues.txt
+# or, via stdin:
+echo -e "123\n456\n789" | bash bin/github-issues/migration/backfill-board-cards.sh
+```
+
+Safe to re-run — `ensure-board-card.sh` is idempotent (no-op when the card
+and Content Date are already present).
+
 ### Recover from out-of-band closes — *Operations / Migration (catch-up)*
 
 Issues closed via web UI, mobile, or another terminal bypass the hook. For **open** issues that need their close-side state reconciled:

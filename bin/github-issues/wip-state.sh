@@ -53,6 +53,9 @@ load_env_file
 # shellcheck source=../lib/resolve-session-id.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../lib/resolve-session-id.sh"
 
+# shellcheck source=lib/board-card.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/board-card.sh"
+
 if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
     echo "Error: AGENTS_CONFIG_DIR not set" >&2
     exit 2
@@ -146,51 +149,9 @@ compute_fingerprint() {
     printf '%s:%s' "$1" "$2" | sha256sum | cut -c1-8
 }
 
-# Resolve owner/repo from the current working directory (gh uses cwd-based
-# repo resolution for all `gh issue`/`gh repo` calls). Return non-zero on
-# failure so callers can propagate read errors distinctly from empty results.
-resolve_owner_repo() {
-    local out
-    if ! out=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null); then
-        return 1
-    fi
-    out=$(printf '%s' "$out" | tr -d '\r' | head -1)
-    [ -z "$out" ] && return 1
-    printf '%s' "$out"
-}
-
-# Returns the ProjectV2Item id for issue <N> in our project. Distinguishes:
-#   - gh failure → return 1 (caller may exit 1)
-#   - gh success, no membership → return 0 with empty stdout
-resolve_item_id() {
-    local n="$1"
-    local ownerrepo
-    if ! ownerrepo=$(resolve_owner_repo); then
-        return 1
-    fi
-    local owner_part="${ownerrepo%/*}"
-    local name_part="${ownerrepo#*/}"
-    local out
-    if ! out=$(gh api graphql \
-            -F owner="$owner_part" \
-            -F repo="$name_part" \
-            -F number="$n" \
-            --jq ".data.repository.issue.projectItems.nodes[]? | select(.project.id == \"$PROJECT_ID\") | .id" \
-            -f query='
-                query($owner: String!, $repo: String!, $number: Int!) {
-                  repository(owner: $owner, name: $repo) {
-                    issue(number: $number) {
-                      projectItems(first: 50) {
-                        nodes { id project { id } }
-                      }
-                    }
-                  }
-                }' 2>/dev/null); then
-        return 1
-    fi
-    printf '%s' "$out" | head -1
-    return 0
-}
+# resolve_owner_repo and resolve_item_id are sourced from lib/board-card.sh.
+# resolve_item_id reads $PROJECT_ID from caller scope (set near the top of this
+# script). See lib/board-card.sh contract comment.
 
 write_lock_file() {
     local n="$1"
