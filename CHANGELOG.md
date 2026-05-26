@@ -399,3 +399,7 @@ Changes: FEATURE: Codex review now receives survey-code and survey-history artif
 ### FEATURE: PR #575 (2026-05-26)
 Background: fix(#571): update-docs reads docs-lang before proposing entries
 Changes: `/update-docs` now reads the `docs-lang` config in `rules/language.md` before proposing History/Changelog entries, preventing drafts in the wrong language from reaching the user for review.
+
+### FEATURE: PR #584 (2026-05-27)
+Background: fix(#573): add extractRmTargets so Bash rm of non-repo paths is allowed
+Changes: Bash `rm` of non-repo paths (e.g. `~/.claude/projects/*/memory/`) from the main worktree is no longer blocked by `enforce-worktree`. This fixes the asymmetry where the Write tool could create memory files but Bash rm could not delete them without WORKFLOW_OFF escalation.
