@@ -278,6 +278,51 @@ function extractCpMvDestination(cmd) {
 }
 
 /**
+ * Extract POSIX rm targets from a shell command string.
+ *
+ * rm [flags] path... — returns all positional (non-flag) args.
+ * Flags handled: short bundles (-rf, -fr, -i, -v, ...), long flags
+ *   (--recursive, --force, --interactive, --verbose, --one-file-system,
+ *   --no-preserve-root, --preserve-root, --dir, -d), and `--` end-of-flags.
+ *
+ * Relative paths are returned verbatim; the caller (findRepoRoot →
+ * path.resolve) resolves them against process.cwd().
+ *
+ * Quote-detection fail-closed: if the rm args region contains ANY quote
+ *   character (`"` or `'`), returns null. The split(/\s+/) tokenizer is
+ *   not quote-aware, and silently shredding a quoted in-repo path into
+ *   non-resolvable fragments would be a fail-open regression on a
+ *   destructive command. Conservative; quoted rm paths are uncommon in
+ *   hook contexts (Claude Code Bash invocations rarely quote rm targets).
+ *
+ * Returns: string[] on success (may be empty if no positionals), null on
+ *   parse failure (unresolvable token via $VAR / $(...) / backticks, OR
+ *   quote character present in args).
+ */
+function extractRmTargets(cmd) {
+  if (!cmd || typeof cmd !== "string") return null;
+
+  const RE = /(?:^|[\s;|&])rm\b(.*?)(?:$|[;|&](?:[^|&]|$))/s;
+  const m = RE.exec(cmd);
+  if (!m) return null;
+
+  const argsRegion = m[1];
+
+  if (argsRegion.includes('"') || argsRegion.includes("'")) return null;
+
+  const tokens = argsRegion.trim().split(/\s+/).filter(Boolean);
+  const positionals = [];
+  let sawDashDash = false;
+  for (const t of tokens) {
+    if (!sawDashDash && isUnresolvableToken(t)) return null;
+    if (!sawDashDash && t === "--") { sawDashDash = true; continue; }
+    if (!sawDashDash && t.startsWith("-")) continue;
+    positionals.push(t);
+  }
+  return positionals;
+}
+
+/**
  * Get the list of staged files in a git repo as absolute paths.
  *
  * Returns: string[] on success (may be empty), null on failure.
@@ -302,5 +347,6 @@ module.exports = {
   extractTeeTargets,
   extractPwshWriteTargets,
   extractCpMvDestination,
+  extractRmTargets,
   extractStagedFiles,
 };

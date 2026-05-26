@@ -57,7 +57,7 @@ function _getPayloadDerivedPaths() { return _payloadDerivedPaths.slice(); }
 const {
   extractRedirectTargets, extractTeeTargets,
   extractPwshWriteTargets, extractCpMvDestination,
-  extractStagedFiles,
+  extractRmTargets, extractStagedFiles,
 } = require("./lib/bash-write-targets");
 
 function readStdin() {
@@ -1030,6 +1030,11 @@ function collectBashWriteTargets(cmd) {
     const d = extractCpMvDestination(cmd);
     if (d === null) parseFailure = true;
     else targets.push(d);
+  }
+  if (/(?:^|[\s;|&])rm\b/.test(cmd)) {
+    const r = extractRmTargets(cmd);
+    if (r === null) parseFailure = true;
+    else targets.push(...r);
   }
 
   return { targets: targets.length > 0 ? targets : null, parseFailure };
