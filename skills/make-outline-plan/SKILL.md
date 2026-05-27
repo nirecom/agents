@@ -111,7 +111,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
 ## Output Schema (`<session-id>-outline.md`)
 
-The file (per `rules/language.md`) contains:
+The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 - **Title** (H1): "Confirmed Approach" + `<session-id>`
 - **Mandatory sections** (assembled by `skills/_shared/assemble-mandatory.sh` from intent.md, not authored by planner):
