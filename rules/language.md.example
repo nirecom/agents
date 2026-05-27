@@ -7,9 +7,11 @@ Copying this `.example` file is not sufficient — `rules/language.md` must exis
 
 ## Conversation
 <!-- Set your conversation language here (English or Japanese) -->
+<!-- Use CONV_LANG in .env. Note: no hook enforces this — it is a prompt-only knob. -->
 
 ## Planning Artifacts
-<!-- Set your planning artifact language -->
+<!-- Set your planning artifact language for ~/.workflow-plans/ -->
+<!-- Use PLAN_LANG in .env to enforce language. Override path with $WORKFLOW_PLANS_DIR. -->
 
 ## Commit Messages
 <!-- Commit messages: always English -->
