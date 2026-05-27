@@ -486,6 +486,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/workflow-run-tests.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
+            "timeout": 5
           }
         ]
       },
