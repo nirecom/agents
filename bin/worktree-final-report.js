@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { parseClosesIssues } = require("../hooks/lib/parse-closes-issues");
 const notesLib = require("../hooks/lib/worktree-notes-sections");
+const schema = require("../hooks/lib/final-report-schema");
 
 // --- argv parsing: strip "--" separators, extract --env-file, keep positionals ---
 const rawArgs = process.argv.slice(2).filter((a) => a !== "--");
@@ -112,7 +113,7 @@ function extractSection(text, heading) {
 const closedIssues = parseClosesIssues(intentPath);
 const closedIssuesLine =
   closedIssues.length === 0
-    ? "(none)"
+    ? "- (none)"
     : "- " + closedIssues.map((n) => `#${n}`).join(", ");
 
 let notesText = null;
@@ -131,58 +132,31 @@ function getSection(heading) {
   return extractSection(notesText, heading);
 }
 
-const sections = [
-  `## Final Report — ${sessionId}`,
-  "",
-  "### Closed Issues",
-  closedIssuesLine,
-  "",
-  "### Merged PR",
-  `- PR #${safeEnv("PR_NUMBER")}: ${safeEnv("PR_TITLE")}`,
-  `- URL: ${safeEnv("PR_URL")}`,
-  `- State: ${safeEnv("PR_STATE")}`,
-  "",
-  "### Worktree",
-  `- Branch: ${safeEnv("BRANCH")}`,
-  `- Path: ${safeEnv("WORKTREE_PATH")}`,
-  `- Created: ${safeEnv("CREATED_DATE")}`,
-  "- Removed: ✓",
-  "",
-  "### Backup",
-  `- Manifest: ${safeEnv("BACKUP_MANIFEST_PATH")}`,
-  `- Branches deleted: ${safeEnv("BRANCH_DELETED")}`,
-  "",
-];
+function getSectionLines(heading) {
+  const raw = getSection(heading);
+  if (raw === "(none)") return ["- (none)"];
+  return raw.split("\n");
+}
 
 // Always-on Post-Merge Actions block (no AGENTS_CONFIG_DIR gate).
-const categories = [
-  { key: "Claude Code restart", value: categoryValue("CC_RESTART_REQUIRED", "CLAUDE_CODE_RESTART_REQUIRED"), reason: safeEnv("CC_RESTART_REASON") },
-  { key: "VS Code reload",      value: categoryValue("VSCODE_RELOAD_REQUIRED"),   reason: safeEnv("VSCODE_RELOAD_REASON") },
-  { key: "Installer rerun",     value: categoryValue("INSTALLER_RERUN_REQUIRED"), reason: safeEnv("INSTALLER_RERUN_REASON") },
-  { key: "OS reboot",           value: categoryValue("OS_REBOOT_REQUIRED"),       reason: safeEnv("OS_REBOOT_REASON") },
-];
-sections.push("### Post-Merge Actions Required");
-for (const c of categories) {
-  if (c.value === "required" && c.reason && c.reason !== "(none)") {
-    sections.push(`- ${c.key}: required (${c.reason})`);
-  } else {
-    sections.push(`- ${c.key}: ${c.value}`);
-  }
-}
-sections.push("");
+const ctx = {
+  safeEnv,
+  closedIssuesLine,
+  buildPostMergeLines: () => {
+    return schema.CATEGORIES.map((cat) => {
+      const v = categoryValue(cat.newKey, cat.legacyKey);
+      const reasonVal = safeEnv(cat.reasonKey);
+      if (v === "required" && reasonVal !== "(none)") {
+        return `- ${cat.label}: required (${reasonVal})`;
+      }
+      return `- ${cat.label}: ${v}`;
+    });
+  },
+  bugsLines: getSectionLines("BugsFound"),
+  relatedLines: getSectionLines("RelatedTasks"),
+  nextLines: getSectionLines("NextTasks"),
+};
 
-sections.push(
-  "### Bugs Found",
-  getSection("BugsFound"),
-  "",
-  "### Related Tasks",
-  getSection("RelatedTasks"),
-  "",
-  "### Next Tasks",
-  getSection("NextTasks"),
-  "",
-);
-
-const report = sections.join("\n");
-process.stdout.write(report);
+const body = schema.renderCanonicalReport(envFileValues, sessionId, ctx);
+process.stdout.write(body + "\n");
 process.stdout.write("\n<<WORKFLOW_MARK_STEP_final_report_complete>>\n");
