@@ -4,7 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -177,6 +177,82 @@ function isWorktreeContext(repoDir) {
   }
 }
 
+// findGhInPath: locate the gh executable by searching PATH via Node's filesystem API.
+// This is needed on Windows (MSYS2/Git Bash) where PATH may contain Windows-format
+// entries (C:/path) that bash cannot resolve at runtime when PATH is otherwise
+// POSIX-format. Node's fs.existsSync handles Windows paths natively.
+// Also handles the split artifact: "C:/path" split on ":" yields "C" + "/path",
+// so paths starting with "/" on Windows are resolved relative to the current drive.
+function findGhInPath() {
+  const dirs = (process.env.PATH || "").split(/[:;]/).filter(Boolean);
+  for (const dir of dirs) {
+    const candidates = [dir];
+    if (/^\/[a-zA-Z]\//.test(dir)) {
+      // MSYS2 drive path /c/foo → C:\foo
+      candidates.push(dir[1].toUpperCase() + ":\\" + dir.slice(3).replace(/\//g, "\\"));
+    } else if (/^[a-zA-Z]:\//.test(dir)) {
+      // Windows forward-slash C:/foo → C:\foo
+      candidates.push(dir.replace(/\//g, "\\"));
+    } else if (process.platform === "win32" && /^\//.test(dir)) {
+      // Root-relative on Windows (artifact of splitting "C:/foo" on ":"):
+      // path.resolve adds the current drive letter so /Users/... → C:\Users\...
+      try { candidates.push(path.resolve(dir)); } catch (e) {}
+    }
+    for (const d of candidates) {
+      for (const name of ["gh", "gh.exe", "gh.cmd", "gh.bat"]) {
+        try {
+          // path.resolve ensures a fully-qualified absolute path (adds drive letter
+          // on Windows when path.join produces root-relative \path\... form).
+          const candidate = path.resolve(path.join(d, name));
+          if (fs.existsSync(candidate)) return candidate;
+        } catch (e) {}
+      }
+    }
+  }
+  return null;
+}
+
+// toMsys2Path: convert a Windows absolute path (C:\foo or C:/foo) to MSYS2
+// format (/c/foo) so bash on Windows (Git Bash / MSYS2) can locate the file.
+function toMsys2Path(p) {
+  if (/^[a-zA-Z]:[/\\]/.test(p)) {
+    return "/" + p[0].toLowerCase() + "/" + p.slice(3).replace(/\\/g, "/");
+  }
+  return p.replace(/\\/g, "/");
+}
+
+// hasOpenPrForBranch: returns true iff the current branch has an OPEN or MERGED PR.
+// Called with { cwd: repoDir } so gh resolves the correct branch context.
+// Exit-code semantics for `gh pr view`:
+//   exit 0  → PR found; parse stdout for state
+//   exit 1  → no PR for this branch (legitimate "not found")
+//   exit >1 → gh error (auth failure, network, not installed) → fail-open (true)
+// See issue #577.
+function hasOpenPrForBranch(repoDir) {
+  // Resolve gh path via Node fs so Windows-format PATH entries (C:/path) work
+  // even when bash cannot translate them at runtime (mixed POSIX/Windows PATH).
+  // Invoke through bash so both bash scripts (test mocks) and Windows PE
+  // executables run. Pass ghArg as bash $1 (not interpolated into the script
+  // string) to prevent shell injection from paths with special characters.
+  const ghPath = findGhInPath();
+  const ghArg = ghPath ? toMsys2Path(ghPath) : "gh";
+  let r;
+  try {
+    r = spawnSync(
+      "bash", ["-c", '"$1" pr view --json state -q .state', "--", ghArg],
+      { cwd: repoDir, encoding: "utf8", timeout: 8000 }
+    );
+  } catch (e) {
+    return true; // fail-open: spawn error (bash not found, etc.)
+  }
+  if (r && r.status === 0) {
+    const state = (r.stdout || "").trim();
+    return state === "OPEN" || state === "MERGED";
+  }
+  if (r && r.status === 1) return false; // no PR found for this branch
+  return true; // fail-open: gh error (auth failure, network error, not installed)
+}
+
 // isLinkedWorktree — narrower than isWorktreeContext: returns true iff `path`
 // is a valid git directory AND its common-dir differs from its git-dir
 // (i.e., a linked worktree, not the main worktree). Used by resolveRepoDir to
@@ -220,7 +296,13 @@ function findAdditionalDirectories() {
     const settingsPath = fs.existsSync(claudePath) ? claudePath : agentsPath;
     const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
     const dirs = (settings.permissions || settings).additionalDirectories || [];
-    return dirs.map((d) => path.isAbsolute(d) ? d : path.resolve(agentsRoot, d));
+    // Filter out linked worktrees: relative paths like "../agents" resolve to the
+    // linked worktree itself when the hook runs from a worktree, causing
+    // Tier 4 to return the worktree (with staged WIP) instead of the test's temp
+    // repo. Linked worktrees are already handled by Tier 3 (payload-cwd gate).
+    return dirs
+      .map((d) => path.isAbsolute(d) ? d : path.resolve(agentsRoot, d))
+      .filter((d) => !isLinkedWorktree(d));
   } catch (e) {
     return [];
   }
@@ -395,6 +477,7 @@ if (require.main === module) {
     const {
       isSentinel,
       isStrictSentinel,
+      USER_VERIFIED_RE_DQ,
       CHAIN_BOUNDARY_SENTINEL_DQ_RE,
       CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE,
     } = require("./lib/sentinel-patterns");
@@ -437,6 +520,30 @@ if (require.main === module) {
       }
       // else parts.length == 1: not a chain; not a recognized standalone sentinel
       // either (Step 1 would have caught it). Pass through — nothing to gate here.
+    }
+
+    // PREMATURE USER_VERIFIED GUARD: block emission when ENFORCE_WORKTREE=on and
+    // no OPEN/MERGED PR exists for the branch (i.e., before worktree-end Step 4).
+    // Requires toolInput.cwd — without an explicit Bash cwd we cannot reliably
+    // determine the worktree context (resolveRepoDir may return a stale path),
+    // so we skip the guard and fail-open. Real Claude Code always supplies cwd.
+    const rawSentinelCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : null;
+    if (
+      rawSentinelCwd &&
+      isStrictSentinel(command) &&
+      USER_VERIFIED_RE_DQ.test(command) &&
+      process.env.ENFORCE_WORKTREE !== "off" &&
+      isWorktreeContext(normalizeForWindows(rawSentinelCwd)) &&
+      !hasOpenPrForBranch(normalizeForWindows(rawSentinelCwd))
+    ) {
+      block(
+        "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +
+        "Under ENFORCE_WORKTREE=on, emit this sentinel only at /worktree-end Step 4\n" +
+        "(after the PR is open and merge is imminent).\n\n" +
+        "Defer: proceed to /worktree-end which emits the sentinel at the correct point.\n" +
+        "Emergency bypass: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>\"\n" +
+        "See issue #577."
+      );
     }
   }
 
@@ -536,7 +643,7 @@ if (require.main === module) {
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then either: git add docs/*.md / *.md, OR — inside a linked worktree — let /update-docs stage bullets into WORKTREE_NOTES.md ## History Notes / ## Changelog Notes per #436)',
-    user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to merge boundary) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" (reason: >=3 non-space chars, no \'>\', not a placeholder) — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
+    user_verification: 'ENFORCE_WORKTREE=on + linked worktree → SKIP (deferred to /worktree-end Step 4; premature emit without an open PR is hard-blocked by workflow-gate — see issue #577) | ENFORCE_WORKTREE=off or main worktree → emit immediately: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" (reason: >=3 non-space chars, no \'>\', not a placeholder) — set Bash description to "User verification: approve if implementation is complete — approving unlocks the commit gate."  (ask dialog IS the confirmation — do NOT wait for a prior text reply, do NOT use MARK_STEP)',
   };
 
   const lines = [
