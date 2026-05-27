@@ -114,6 +114,35 @@ full_block_text() {
         '- OS reboot: not_required'
 }
 
+# Build the full 8-section canonical report text for a given session ID.
+full_canonical_report_text() {
+    local sid="$1"
+    cat <<EOF
+## Final Report — ${sid}
+### Closed Issues
+- (none)
+### Merged PR
+- PR #(none): (none)
+- URL: (none)
+- State: (none)
+### Worktree
+- Branch: (none)
+### Backup
+- Manifest: (none)
+### Post-Merge Actions Required
+- Claude Code restart: not_required
+- VS Code reload: not_required
+- Installer rerun: not_required
+- OS reboot: not_required
+### Bugs Found
+- (none)
+### Related Tasks
+- (none)
+### Next Tasks
+- (none)
+EOF
+}
+
 # Run the hook with a given stdin JSON, WORKFLOW_PLANS_DIR env override, and
 # optional extra env vars (as "KEY=VALUE" pairs in $3+).
 # Prints stdout; returns the hook exit code via global HOOK_EXIT.
@@ -180,8 +209,8 @@ test_G2_block_present_in_transcript() {
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g2-transcript.jsonl"
-    # Embed the full block in the last assistant message
-    local block_text; block_text="$(full_block_text)"
+    # Embed the full canonical report in the last assistant message
+    local block_text; block_text="$(full_canonical_report_text "$sid")"
     write_transcript_with_assistant "$transcript" "$block_text"
     local transcript_node; transcript_node="$(node_path "$transcript")"
 
@@ -193,9 +222,9 @@ test_G2_block_present_in_transcript() {
     code="$(run_hook_exit "$stdin_json" "$plans_dir")"
 
     if [ "$code" = "0" ]; then
-        pass "G2: env-file present, all 4 block lines in last assistant message → exit 0"
+        pass "G2: env-file present, full canonical report in last assistant message → exit 0"
     else
-        fail "G2: expected exit 0 (block present), got $code"
+        fail "G2: expected exit 0 (full canonical report present), got $code"
     fi
 }
 
@@ -425,6 +454,287 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# G9a: header (## Final Report — <sid>) missing → exit 2 + decision:block
+# ---------------------------------------------------------------------------
+test_G9a_header_missing() {
+    require_hook "G9a_header_missing" || return
+
+    local plans_dir="$TMPDIR_BASE/g9a-plans"
+    mkdir -p "$plans_dir"
+    local sid="g9a-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # All ### headings present + probes, but ## Final Report header is MISSING
+    local text
+    text="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+        '### Closed Issues' \
+        '- (none)' \
+        '### Merged PR' \
+        '### Worktree' \
+        '### Backup' \
+        '### Post-Merge Actions Required' \
+        '- Claude Code restart: not_required' \
+        '- VS Code reload: not_required' \
+        '- Installer rerun: not_required' \
+        '- OS reboot: not_required' \
+        '### Bugs Found' \
+        '### Related Tasks' \
+        '### Next Tasks' \
+        '- (none)')"
+
+    local transcript="$TMPDIR_BASE/g9a-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            process.exit(obj.decision==='block'?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G9a: ## Final Report header missing → exit 2 + decision:block"
+    else
+        fail "G9a: expected exit 2 + decision:block when header missing, got code=$code out=$(printf '%s' "$out" | head -c 200)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G9b: ### Worktree missing (middle section) → exit 2 + decision:block
+# ---------------------------------------------------------------------------
+test_G9b_middle_section_missing() {
+    require_hook "G9b_middle_section_missing" || return
+
+    local plans_dir="$TMPDIR_BASE/g9b-plans"
+    mkdir -p "$plans_dir"
+    local sid="g9b-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # Full canonical report EXCEPT ### Worktree is missing
+    local text
+    text="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+        '## Final Report — g9b-sid' \
+        '### Closed Issues' \
+        '- (none)' \
+        '### Merged PR' \
+        '### Backup' \
+        '### Post-Merge Actions Required' \
+        '- Claude Code restart: not_required' \
+        '- VS Code reload: not_required' \
+        '- Installer rerun: not_required' \
+        '- OS reboot: not_required' \
+        '### Bugs Found' \
+        '### Related Tasks' \
+        '### Next Tasks')"
+
+    local transcript="$TMPDIR_BASE/g9b-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            process.exit(obj.decision==='block'?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G9b: ### Worktree (middle section) missing → exit 2 + decision:block"
+    else
+        fail "G9b: expected exit 2 + decision:block when ### Worktree missing, got code=$code out=$(printf '%s' "$out" | head -c 200)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G9c: ### Next Tasks missing (last section) → exit 2 + decision:block
+# ---------------------------------------------------------------------------
+test_G9c_last_section_missing() {
+    require_hook "G9c_last_section_missing" || return
+
+    local plans_dir="$TMPDIR_BASE/g9c-plans"
+    mkdir -p "$plans_dir"
+    local sid="g9c-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # Full canonical report EXCEPT ### Next Tasks is missing
+    local text
+    text="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+        '## Final Report — g9c-sid' \
+        '### Closed Issues' \
+        '- (none)' \
+        '### Merged PR' \
+        '### Worktree' \
+        '### Backup' \
+        '### Post-Merge Actions Required' \
+        '- Claude Code restart: not_required' \
+        '- VS Code reload: not_required' \
+        '- Installer rerun: not_required' \
+        '- OS reboot: not_required' \
+        '### Bugs Found' \
+        '### Related Tasks')"
+
+    local transcript="$TMPDIR_BASE/g9c-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            process.exit(obj.decision==='block'?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G9c: ### Next Tasks (last section) missing → exit 2 + decision:block"
+    else
+        fail "G9c: expected exit 2 + decision:block when ### Next Tasks missing, got code=$code out=$(printf '%s' "$out" | head -c 200)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G10: full canonical report (all 8 sections + sentinel excluded) → exit 0
+# ---------------------------------------------------------------------------
+test_G10_full_canonical_report_passes() {
+    require_hook "G10_full_canonical_report_passes" || return
+
+    local plans_dir="$TMPDIR_BASE/g10-plans"
+    mkdir -p "$plans_dir"
+    local sid="g10-test-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # Full canonical report text — sentinel line excluded (not in assistant message body)
+    local text; text="$(full_canonical_report_text "$sid")"
+
+    local transcript="$TMPDIR_BASE/g10-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local code
+    code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
+
+    if [ "$code" = "0" ]; then
+        pass "G10: full canonical report (all 8 sections, no sentinel) → exit 0"
+    else
+        fail "G10: expected exit 0 for full canonical report, got $code"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G11: empty assistant message → exit 2, reason includes "verbatim" and "## Final Report —"
+# ---------------------------------------------------------------------------
+test_G11_reason_contains_instruction() {
+    require_hook "G11_reason_contains_instruction" || return
+
+    local plans_dir="$TMPDIR_BASE/g11-plans"
+    mkdir -p "$plans_dir"
+    local sid="g11-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    local transcript="$TMPDIR_BASE/g11-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" ""
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            const hasVerbatim = typeof obj.reason === 'string' && obj.reason.includes('verbatim');
+            const hasHeader = typeof obj.reason === 'string' && obj.reason.includes('## Final Report —');
+            process.exit((obj.decision==='block' && hasVerbatim && hasHeader)?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G11: empty message → exit 2, reason contains 'verbatim' and '## Final Report —'"
+    else
+        fail "G11: expected exit 2 + reason with both 'verbatim' and '## Final Report —', got code=$code out=$(printf '%s' "$out" | head -c 400)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G12: only Post-Merge block present (old passing pattern) → now exit 2
+# ---------------------------------------------------------------------------
+test_G12_only_post_merge_block_no_longer_passes() {
+    require_hook "G12_only_post_merge_block_no_longer_passes" || return
+
+    local plans_dir="$TMPDIR_BASE/g12-plans"
+    mkdir -p "$plans_dir"
+    local sid="g12-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # Only the Post-Merge block — heading + 4 probes — no other section headings
+    # This was the "passing" fixture under old PR #567 hook behavior
+    local text
+    text="$(full_block_text)"
+
+    local transcript="$TMPDIR_BASE/g12-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ]; then
+        pass "G12: Post-Merge block only (no other headings) → exit 2 (regression guard for #534)"
+    else
+        fail "G12: expected exit 2 when only Post-Merge block present (missing 7 other sections), got $code"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # I1: settings.json Stop hooks array contains stop-final-report-guard.js
 # Note: this test does not require the hook file itself, but skips when the
 # hook file is absent (the settings.json entry is added alongside the impl).
@@ -476,6 +786,12 @@ test_G6_envfile_malformed_json
 test_G7_partial_block
 test_G8_legacy_key_yes
 test_I1_settings_json_stop_hook
+test_G9a_header_missing
+test_G9b_middle_section_missing
+test_G9c_last_section_missing
+test_G10_full_canonical_report_passes
+test_G11_reason_contains_instruction
+test_G12_only_post_merge_block_no_longer_passes
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
