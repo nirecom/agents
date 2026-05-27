@@ -159,29 +159,44 @@ fi
 # Cleanup any leftover marker (acceptable per spec — both behaviors allowed).
 rm -f "$WORKFLOW_DIR/${SID_T2}".confirm-plan-turn-*.json 2>/dev/null || true
 
-# ── T3: noop — CONFIRM_DETAIL=off ────────────────────────────────────────
-echo "=== T3: noop, CONFIRM_DETAIL=off ==="
+# ── T3: block — CONFIRM_DETAIL=off + transcript with PLANS_DIR path ──────
+# After #563: guard is always-on; CONFIRM_DETAIL=off no longer suppresses block.
+echo "=== T3: block, CONFIRM_DETAIL=off + dirty transcript ==="
 SID_T3="sid-t3-$$"
 write_marker "$SID_T3" detail >/dev/null
 TRANSCRIPT_T3="$TRANSCRIPT_DIR/${SID_T3}.jsonl"
-write_transcript "$TRANSCRIPT_T3" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"$PLANS_DIR/abc-detail.md\"}]}}"
+write_transcript "$TRANSCRIPT_T3" "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"see $PLANS_DIR/abc-detail.md for details\"}]}}"
 STOP_STDOUT=$(
   export CONFIRM_DETAIL=off
   echo "{\"session_id\":\"$SID_T3\",\"transcript_path\":\"$TRANSCRIPT_T3\"}" | \
     run_with_timeout node "$STOP_HOOK" 2>/dev/null
 )
 STOP_RC=$?
-REMAINING_T3=$(count_markers "$SID_T3")
-if [ "$STOP_RC" -eq 0 ] && [ "$REMAINING_T3" -eq 0 ]; then
-  pass "T3 CONFIRM_DETAIL=off — exit 0, marker deleted"
-elif [ "$STOP_RC" -eq 0 ]; then
-  # Marker deletion under confirm-off is a strong-ideal; treat presence as soft-fail
-  # but still record. Spec: "exit 0, marker deleted" — strict check.
-  fail "T3 CONFIRM_DETAIL=off — exit 0 ok but marker not deleted (remaining=$REMAINING_T3)"
+if [ "$STOP_RC" -eq 2 ] && echo "$STOP_STDOUT" | grep -q '"decision":"block"'; then
+  pass "T3 CONFIRM_DETAIL=off + dirty transcript — STILL blocks (exit 2, decision=block)"
 else
-  fail "T3 CONFIRM_DETAIL=off — expected exit 0, got rc=$STOP_RC stdout='$STOP_STDOUT'"
+  fail "T3 CONFIRM_DETAIL=off + dirty transcript — expected block, got rc=$STOP_RC stdout='$STOP_STDOUT'"
 fi
 rm -f "$WORKFLOW_DIR/${SID_T3}".confirm-plan-turn-*.json 2>/dev/null || true
+
+# ── T3b: noop — CONFIRM_DETAIL=off + clean transcript ────────────────────
+echo "=== T3b: noop, CONFIRM_DETAIL=off + clean transcript ==="
+SID_T3B="sid-t3b-$$"
+write_marker "$SID_T3B" detail >/dev/null
+TRANSCRIPT_T3B="$TRANSCRIPT_DIR/${SID_T3B}.jsonl"
+write_transcript "$TRANSCRIPT_T3B" '{"type":"assistant","message":{"content":[{"type":"text","text":"all clean, nothing to see"}]}}'
+STOP_STDOUT=$(
+  export CONFIRM_DETAIL=off
+  echo "{\"session_id\":\"$SID_T3B\",\"transcript_path\":\"$TRANSCRIPT_T3B\"}" | \
+    run_with_timeout node "$STOP_HOOK" 2>/dev/null
+)
+STOP_RC=$?
+if [ "$STOP_RC" -eq 0 ] && [ -z "$STOP_STDOUT" ]; then
+  pass "T3b CONFIRM_DETAIL=off + clean transcript — exit 0 (no false positive)"
+else
+  fail "T3b CONFIRM_DETAIL=off + clean transcript — rc=$STOP_RC stdout='$STOP_STDOUT'"
+fi
+rm -f "$WORKFLOW_DIR/${SID_T3B}".confirm-plan-turn-*.json 2>/dev/null || true
 
 # ── T4: noop — transcript has no PLANS_DIR path ──────────────────────────
 echo "=== T4: noop, transcript clean ==="
@@ -323,8 +338,8 @@ else
 fi
 rm -f "$WORKFLOW_DIR/${SID_T11}".confirm-plan-turn-*.json 2>/dev/null || true
 
-# ── T12: no marker when CONFIRM_DETAIL=off ──────────────────────────────
-echo "=== T12: no marker on CONFIRM_DETAIL=off ==="
+# ── T12: marker written even when CONFIRM_DETAIL=off (always-on after #563) ─
+echo "=== T12: marker written on CONFIRM_DETAIL=off (always-on after #563) ==="
 SID_T12="sid-t12-$$"
 rm -f "$WORKFLOW_DIR/${SID_T12}".confirm-plan-turn-*.json 2>/dev/null || true
 (
@@ -335,10 +350,10 @@ rm -f "$WORKFLOW_DIR/${SID_T12}".confirm-plan-turn-*.json 2>/dev/null || true
     | run_with_timeout node "$SHOW_HOOK" >/dev/null 2>&1
 )
 COUNT_T12=$(count_markers "$SID_T12")
-if [ "$COUNT_T12" -eq 0 ]; then
-  pass "T12 CONFIRM_DETAIL=off — no marker written"
+if [ "$COUNT_T12" -ge 1 ]; then
+  pass "T12 CONFIRM_DETAIL=off — marker IS written (always-on after #563)"
 else
-  fail "T12 CONFIRM_DETAIL=off — unexpected marker(s) (count=$COUNT_T12)"
+  fail "T12 CONFIRM_DETAIL=off — marker missing, count=$COUNT_T12 (expected always-on)"
 fi
 rm -f "$WORKFLOW_DIR/${SID_T12}".confirm-plan-turn-*.json 2>/dev/null || true
 
