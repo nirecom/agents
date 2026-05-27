@@ -68,9 +68,16 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
   altered section.
 - **Class members coverage (semantic):**
   Read `## Class members` in the outline.md being reviewed. For each member with
-  `disposition: fix in scope`, verify that the adopted approach / delivery plan / a
-  named section explicitly addresses it. If any `fix in scope` member is unaddressed,
-  return `MISSING_ALTERNATIVE` with:
-  `[HIGH] Class member <name> has disposition=fix in scope but no section / delivery-plan mention covers it. Either add coverage or change disposition to track separately in intent.md.`
-  Members with `disposition: track separately`, `(none detected)`, or a legacy stub —
-  skip the semantic check.
+  `triage: MUST`, verify that the adopted approach / delivery plan / a named
+  section explicitly addresses it. For each member with `triage: OPTIONAL`,
+  verify that the plan either addresses it OR explicitly defers it under
+  `## Confirmed non-goals` (either is acceptable). If any MUST member is
+  unaddressed, return `MISSING_ALTERNATIVE` with:
+  `[HIGH] Class member <name> has triage=MUST but no section / delivery-plan mention covers it.`
+  A `triage: OPTIONAL` member that is neither addressed nor explicitly deferred →
+  `MISSING_ALTERNATIVE` with severity `[MED]`.
+  Members with `triage: NA`, `(none detected)`, or absent — skip.
+
+  **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
+  Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
+  as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
