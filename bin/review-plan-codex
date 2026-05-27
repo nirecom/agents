@@ -157,11 +157,12 @@ done
 # Load settled design decisions for codex review context.
 # Includes Accepted Tradeoffs AND Class members. What is settled:
 #   - Accepted Tradeoffs: design decisions finalised by the planner+user.
-#   - Class members: disposition only (which members are 'fix in scope' vs 'track separately').
-#     Codex must not re-raise "why wasn't X fixed" for 'track separately' members, but CAN
-#     still raise concerns about HOW a 'fix in scope' member is addressed in the plan.
-# Note: ## Issue is the PR/task identifier (not a settled design decision) —
-# intentionally excluded from the codex context block.
+#   - Class members: triage only (which members are MUST / OPTIONAL / NA).
+#     Codex must not re-raise "why wasn't X fixed" for NA members, and must not
+#     demand that OPTIONAL members be elevated to MUST. Codex CAN still raise
+#     concerns about HOW a MUST or addressed-OPTIONAL member is implemented.
+#     Legacy disposition: 'fix in scope' = MUST, 'track separately' = NA.
+#     (Full mapping: see agents/lib/triage-legacy-compat.md.)
 ACCEPTED_TRADEOFFS_BLOCK=""
 if [[ -n "$ACCEPTED_TRADEOFFS_FILE" && -f "$ACCEPTED_TRADEOFFS_FILE" ]]; then
   TRADEOFFS_CONTENT=$("$(dirname "$(realpath "$0")")/extract-mandatory-sections" \
@@ -171,7 +172,11 @@ if [[ -n "$ACCEPTED_TRADEOFFS_FILE" && -f "$ACCEPTED_TRADEOFFS_FILE" ]]; then
     ACCEPTED_TRADEOFFS_BLOCK="IMPORTANT — SETTLED DECISIONS (Accepted Tradeoffs + Class members):
 The design choices and class-member scope below are finalised by the approved context
 and MUST be treated as out of scope for this review. Do NOT raise concerns about these
-areas (including disposition of class members marked 'track separately').
+areas (including triage of class members marked 'NA' or 'OPTIONAL'). Triage
+semantics: NA = do not raise why this wasn't fixed; OPTIONAL = do not demand
+elevation to MUST; MUST = coverage required (HOW it is covered is still fair
+game). Backward compatibility: legacy disposition 'fix in scope' = MUST,
+'track separately' = NA. (Full mapping: see agents/lib/triage-legacy-compat.md.)
 
 [ACCEPTED TRADEOFFS START]
 ${TRADEOFFS_CONTENT}
