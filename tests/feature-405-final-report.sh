@@ -102,6 +102,16 @@ require_report_bin() {
     return 0
 }
 
+SCHEMA_JS="${_AGENTS_DIR_NODE}/hooks/lib/final-report-schema.js"
+
+require_schema() {
+    if [ ! -f "$SCHEMA_JS" ]; then
+        skip "$1 (hooks/lib/final-report-schema.js not implemented yet)"
+        return 1
+    fi
+    return 0
+}
+
 require_skill_md() {
     if [ ! -f "$SKILL_MD" ]; then
         skip "$1 (skills/worktree-end/SKILL.md missing)"
@@ -1267,6 +1277,260 @@ test_I11_skill_md_step5_5_node_json_write() {
     fi
 }
 
+# ============ R_parity: schema ↔ renderer parity (Phase B TDD) ============
+
+test_R_parity_1_renderer_emits_all_schema_headings() {
+    require_report_bin "R_parity_1_renderer_emits_all_schema_headings" || return
+    require_schema "R_parity_1_renderer_emits_all_schema_headings" || return
+
+    local sid="parity-test-sid"
+    local intent="$TMPDIR_BASE/rp1-intent.md"
+    local notes="$TMPDIR_BASE/rp1-notes.md"
+    local envfile="$TMPDIR_BASE/rp1-env.json"
+    make_intent_with_closes "$intent" "(empty)"
+    make_notes_full "$notes"
+    cat > "$envfile" <<'ENVEOF'
+{
+  "CC_RESTART_REQUIRED": "not_required",
+  "CC_RESTART_REASON": "",
+  "VSCODE_RELOAD_REQUIRED": "not_required",
+  "VSCODE_RELOAD_REASON": "",
+  "INSTALLER_RERUN_REQUIRED": "not_required",
+  "INSTALLER_RERUN_REASON": "",
+  "OS_REBOOT_REQUIRED": "not_required",
+  "OS_REBOOT_REASON": ""
+}
+ENVEOF
+
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+    local envfile_node; envfile_node="$(node_path "$envfile")"
+    local schema_node; schema_node="$SCHEMA_JS"
+
+    local renderer_out
+    renderer_out="$(run_report_with_envfile "$intent_node" "$notes_node" "$sid" "$envfile_node")"
+
+    # Get headings from schema
+    local headings_json
+    headings_json="$(node -e "
+        const s = require('$schema_node');
+        process.stdout.write(JSON.stringify(s.getSectionHeadings('$sid')));
+    " 2>/dev/null)"
+
+    if [ -z "$headings_json" ] || [ "$headings_json" = "null" ]; then
+        fail "R_parity_1: could not get headings from schema"
+        return
+    fi
+
+    # Check each heading is present in renderer stdout
+    local result
+    result="$(printf '%s' "$renderer_out" | node -e "
+        let out='';process.stdin.on('data',c=>out+=c);process.stdin.on('end',()=>{
+          const headings = $headings_json;
+          const missing = headings.filter(h => !out.includes(h));
+          if (missing.length === 0) {
+            process.stdout.write('PASS');
+          } else {
+            process.stdout.write('FAIL:' + JSON.stringify(missing));
+          }
+        });" 2>/dev/null)"
+
+    if [ "$result" = "PASS" ]; then
+        pass "R_parity_1: renderer stdout contains all schema headings"
+    else
+        fail "R_parity_1: renderer stdout missing headings: $result"
+    fi
+}
+
+test_R_parity_2_schema_order_matches_render_order() {
+    require_report_bin "R_parity_2_schema_order_matches_render_order" || return
+    require_schema "R_parity_2_schema_order_matches_render_order" || return
+
+    local sid="parity-test-sid"
+    local intent="$TMPDIR_BASE/rp2-intent.md"
+    local notes="$TMPDIR_BASE/rp2-notes.md"
+    local envfile="$TMPDIR_BASE/rp2-env.json"
+    make_intent_with_closes "$intent" "(empty)"
+    make_notes_full "$notes"
+    cat > "$envfile" <<'ENVEOF'
+{
+  "CC_RESTART_REQUIRED": "not_required",
+  "VSCODE_RELOAD_REQUIRED": "not_required",
+  "INSTALLER_RERUN_REQUIRED": "not_required",
+  "OS_REBOOT_REQUIRED": "not_required"
+}
+ENVEOF
+
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+    local envfile_node; envfile_node="$(node_path "$envfile")"
+    local schema_node; schema_node="$SCHEMA_JS"
+
+    local renderer_out
+    renderer_out="$(run_report_with_envfile "$intent_node" "$notes_node" "$sid" "$envfile_node")"
+
+    local headings_json
+    headings_json="$(node -e "
+        const s = require('$schema_node');
+        process.stdout.write(JSON.stringify(s.getSectionHeadings('$sid')));
+    " 2>/dev/null)"
+
+    # Check that headings appear in order
+    local result
+    result="$(printf '%s' "$renderer_out" | node -e "
+        let out='';process.stdin.on('data',c=>out+=c);process.stdin.on('end',()=>{
+          const headings = $headings_json;
+          let lastIdx = -1;
+          const outOfOrder = [];
+          for (const h of headings) {
+            const idx = out.indexOf(h);
+            if (idx === -1) { outOfOrder.push('missing:' + h); continue; }
+            if (idx <= lastIdx) { outOfOrder.push('order:' + h + '@' + idx + '<=' + lastIdx); }
+            lastIdx = idx;
+          }
+          if (outOfOrder.length === 0) {
+            process.stdout.write('PASS');
+          } else {
+            process.stdout.write('FAIL:' + JSON.stringify(outOfOrder));
+          }
+        });" 2>/dev/null)"
+
+    if [ "$result" = "PASS" ]; then
+        pass "R_parity_2: renderer heading order matches schema array order"
+    else
+        fail "R_parity_2: heading order mismatch: $result"
+    fi
+}
+
+test_R_parity_3_byte_exact_canonical_form() {
+    require_report_bin "R_parity_3_byte_exact_canonical_form" || return
+    require_schema "R_parity_3_byte_exact_canonical_form" || return
+
+    local sid="parity-test-sid"
+    local intent="$TMPDIR_BASE/rp3-intent.md"
+    local notes="$TMPDIR_BASE/rp3-notes.md"
+    local envfile="$TMPDIR_BASE/rp3-env.json"
+    make_intent_with_closes "$intent" "(empty)"
+    # Minimal notes: all sections present but all (none)
+    cat > "$notes" <<'NOTESEOF'
+# Worktree Notes
+Branch: feature/parity-test
+
+## Gitignored files copied from main
+- (none)
+
+## BugsFound
+- (none)
+
+## RelatedTasks
+- (none)
+
+## NextTasks
+- (none)
+NOTESEOF
+    cat > "$envfile" <<'ENVEOF'
+{
+  "PR_NUMBER": "(none)",
+  "PR_TITLE": "(none)",
+  "PR_URL": "(none)",
+  "PR_STATE": "(none)",
+  "BRANCH": "(none)",
+  "WORKTREE_PATH": "(none)",
+  "CREATED_DATE": "(none)",
+  "BACKUP_MANIFEST_PATH": "(none)",
+  "CC_RESTART_REQUIRED": "not_required",
+  "CC_RESTART_REASON": "",
+  "VSCODE_RELOAD_REQUIRED": "not_required",
+  "VSCODE_RELOAD_REASON": "",
+  "INSTALLER_RERUN_REQUIRED": "not_required",
+  "INSTALLER_RERUN_REASON": "",
+  "OS_REBOOT_REQUIRED": "not_required",
+  "OS_REBOOT_REASON": ""
+}
+ENVEOF
+
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+    local envfile_node; envfile_node="$(node_path "$envfile")"
+    local schema_node; schema_node="$SCHEMA_JS"
+    local SENTINEL_VAL='<<WORKFLOW_MARK_STEP_final_report_complete>>'
+
+    # Get renderer stdout, strip sentinel line, strip trailing newline
+    local renderer_out
+    renderer_out="$(run_report_with_envfile "$intent_node" "$notes_node" "$sid" "$envfile_node")"
+    local renderer_body
+    renderer_body="$(printf '%s' "$renderer_out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          // strip sentinel line and trailing newline
+          const lines = s.split('\n');
+          const filtered = lines.filter(l => !l.includes('$SENTINEL_VAL'));
+          // remove trailing empty lines
+          while (filtered.length > 0 && filtered[filtered.length-1] === '') filtered.pop();
+          process.stdout.write(filtered.join('\n'));
+        });" 2>/dev/null)"
+
+    # Get renderCanonicalReport output from schema
+    # We need to construct a ctx that matches the "(none)" env-file values
+    local envfile_contents
+    envfile_contents="$(cat "$envfile")"
+    local schema_body
+    schema_body="$(node -e "
+        const schema = require('$schema_node');
+        const envBag = $envfile_contents;
+        function safeEnv(key) {
+          const v = envBag[key];
+          return (v === undefined || v === null || v === '') ? '(none)' : v;
+        }
+        function categoryValue(newKey, legacyKey, legacyYes) {
+          const v = safeEnv(newKey);
+          if (v !== '(none)') return v === 'required' ? 'required' : v;
+          const lv = safeEnv(legacyKey);
+          if (lv === legacyYes) return 'required';
+          return 'not_required';
+        }
+        const ctx = {
+          safeEnv,
+          closedIssuesLine: '- (none)',
+          buildPostMergeLines: () => {
+            const cats = schema.CATEGORIES || [
+              { label: 'Claude Code restart', newKey: 'CC_RESTART_REQUIRED', reasonKey: 'CC_RESTART_REASON', legacyKey: 'CLAUDE_CODE_RESTART_REQUIRED', legacyYes: 'yes' },
+              { label: 'VS Code reload', newKey: 'VSCODE_RELOAD_REQUIRED', reasonKey: 'VSCODE_RELOAD_REASON', legacyKey: null, legacyYes: null },
+              { label: 'Installer rerun', newKey: 'INSTALLER_RERUN_REQUIRED', reasonKey: 'INSTALLER_RERUN_REASON', legacyKey: null, legacyYes: null },
+              { label: 'OS reboot', newKey: 'OS_REBOOT_REQUIRED', reasonKey: 'OS_REBOOT_REASON', legacyKey: null, legacyYes: null },
+            ];
+            return cats.map(cat => {
+              const status = categoryValue(cat.newKey, cat.legacyKey, cat.legacyYes);
+              const reason = cat.reasonKey ? safeEnv(cat.reasonKey) : '(none)';
+              const suffix = (reason !== '(none)' && reason !== '') ? ' (' + reason + ')' : '';
+              return '- ' + cat.label + ': ' + status + suffix;
+            });
+          },
+          bugsLines: ['- (none)'],
+          relatedLines: ['- (none)'],
+          nextLines: ['- (none)'],
+          worktreeLines: ['- Branch: (none)'],
+          backupLines: ['- Manifest: (none)'],
+        };
+        const body = schema.renderCanonicalReport(envBag, '$sid', ctx);
+        process.stdout.write(body);
+    " 2>/dev/null)"
+
+    if [ -z "$schema_body" ]; then
+        fail "R_parity_3: schema.renderCanonicalReport returned empty output (schema may not be implemented yet)"
+        return
+    fi
+
+    if [ "$renderer_body" = "$schema_body" ]; then
+        pass "R_parity_3: renderer body (sentinel stripped) == schema.renderCanonicalReport (byte-exact)"
+    else
+        fail "R_parity_3: byte mismatch between renderer and schema
+--- renderer body (first 500 chars) ---
+$(printf '%s' "$renderer_body" | head -c 500)
+--- schema body (first 500 chars) ---
+$(printf '%s' "$schema_body" | head -c 500)"
+    fi
+}
+
 # ============ Run all ============
 
 test_P1_happy_single
@@ -1325,6 +1589,9 @@ test_I8_skill_md_step7_sentinel
 test_I9_skill_md_step7_envfile
 test_I10_skill_md_step7_no_notes_backup_var
 test_I11_skill_md_step5_5_node_json_write
+test_R_parity_1_renderer_emits_all_schema_headings
+test_R_parity_2_schema_order_matches_render_order
+test_R_parity_3_byte_exact_canonical_form
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
