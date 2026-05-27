@@ -92,17 +92,20 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
    ## Candidate class members
    - <member name>: <one-line description> (from: <commit-ref or history entry>)
+     proposed triage: <MUST | OPTIONAL | NA> — <one-line rationale>
 
    ## Premise impact assessment
    <one paragraph: describe contradictions found, or state "No premise contradictions detected.">
    ```
    The `## Candidate class members` section lists sibling members identified
    from git history and history.md (per `rules/core-principles.md` §1 Elevate
-   Perspective). Each line: member name, one-line description, and the commit
-   or history-entry reference. If no candidates are detected, write a single
-   line: `- (none detected)`. This section is required even in DEGRADED MODE
-   or keyword-only mode (use `(none detected)` when the mode prevents reliable
-   enumeration).
+   Perspective). Each member is two lines: (a) name + description + commit/history-entry reference;
+   (b) `proposed triage:` value and 1-line rationale grounded in historical evidence.
+   Triage values: `proposed triage: MUST` (symmetric change required for class
+   consistency), `proposed triage: OPTIONAL` (related but independently fixable),
+   `proposed triage: NA` (orthogonal sibling, no fix needed). When uncertain,
+   propose `OPTIONAL`. If no candidates are detected, write `- (none detected)`.
+   This section is required even in DEGRADED MODE or keyword-only mode.
 
    If gh was unavailable, note it at the top of the file under a `## Data gaps` section.
 
