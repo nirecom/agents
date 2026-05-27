@@ -453,3 +453,7 @@ Changes: When developing with the agents repo workflow, two cases arise where Cl
 ### FEATURE: worktree-end Final Report: Stop hook で定型ブロックの最終 assistant message 検証/注入 (PR2 of #518) (2026-05-27, 32eb4180e309dc725bdc06d0487fda4889ce9cfa, #534)
 Background: #518 (PR #533) で Final Report の `### Post-Merge Actions Required` ブロックを常時表示する renderer 強化を行った (Approach B PR1)。 `stop-cleanup-reminder.js` と同パターンの Stop hook を追加し、最終 assistant message に定型ブロックが含まれることを検証する。欠落時は block + reason で再描画を促す。
 Changes: - Stop hook 新設: session state (Step 7 完了 + env-file JSON 存在) をトリガーに発火 - env-file JSON から定型 ALL-CATEGORIES ブロックを再構築して reason に載せる - `stop-cleanup-reminder.js` と同じ「状態を読む → reason で block」パターン ## Acceptance criteria - PR1 (#518) を本番で運用して Final Report 漏れがゼロでない場合のみ実装する - 漏れがゼロなら本 issue は close/cancelled ## Related - #518 (PR1: renderer 強化) - `hooks/stop-cleanup-reminder.js` (参考パターン)
+
+### FEATURE: commit gate の「commit 前ステップが commit 後の状態に依存する」設計矛盾 (2026-05-27, d4d81558f533303422b51825ab2f345389426c80, #225)
+Background: commit gate の「commit 前ステップが commit 後の状態に依存する」設計矛盾
+Changes: **根本原因**: workflow-gate は commit 前に全ステップ（review → user_verification）の完了を要求する。しかし一部のステップは commit 後の状態に依存するためã
