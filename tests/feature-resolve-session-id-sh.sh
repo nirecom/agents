@@ -36,7 +36,7 @@ run_with_timeout() {
 if [ ! -f "$HELPER" ]; then
     echo "FAIL: bin/lib/resolve-session-id.sh not found (implementation missing — tests are RED)"
     echo ""
-    echo "Results: 0 passed, 7 failed"
+    echo "Results: 0 passed, 14 failed"
     exit 1
 fi
 
@@ -205,6 +205,123 @@ else
     else
         fail "B-7: out='$OUT' expected='gemini-jsonl-sid'"
     fi
+fi
+teardown
+
+# ===========================================================================
+# B-8: encode_path_for_claude_projects backslash form (regression guard, GREEN pre-fix).
+# 'C:\git\agents' → C(alnum), :(dash), \(dash), git, \(dash), agents → 'c--git-agents'.
+# ===========================================================================
+setup
+OUT=$(bash -c "source '$HELPER' && encode_path_for_claude_projects 'C:\\git\\agents'" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "c--git-agents" ]; then
+    pass "B-8: encode_path_for_claude_projects backslash form -> c--git-agents"
+else
+    fail "B-8: rc=$RC out='$OUT' expected='c--git-agents'"
+fi
+teardown
+
+# ===========================================================================
+# B-9: encode_path_for_claude_projects canonical Windows form (regression guard, GREEN pre-fix).
+# 'C:/git/agents' → C, :, /, git, /, agents → 'c--git-agents'.
+# ===========================================================================
+setup
+OUT=$(bash -c "source '$HELPER' && encode_path_for_claude_projects 'C:/git/agents'" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "c--git-agents" ]; then
+    pass "B-9: encode_path_for_claude_projects C:/git/agents -> c--git-agents"
+else
+    fail "B-9: rc=$RC out='$OUT' expected='c--git-agents'"
+fi
+teardown
+
+# ===========================================================================
+# B-10: encode_path_for_claude_projects Git Bash POSIX form (actual regression, RED pre-fix).
+# '/c/git/agents' must normalize to 'c--git-agents' to match Windows-form encoding.
+# ===========================================================================
+setup
+OUT=$(bash -c "source '$HELPER' && encode_path_for_claude_projects '/c/git/agents'" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "c--git-agents" ]; then
+    pass "B-10: encode_path_for_claude_projects /c/git/agents -> c--git-agents"
+else
+    fail "B-10: rc=$RC out='$OUT' expected='c--git-agents' (RED pre-fix: /c/git/agents encodes to -c-git-agents without normalization)"
+fi
+teardown
+
+# ===========================================================================
+# B-11: encode_path_for_claude_projects trailing slash (RED pre-fix).
+# 'c:/git/agents/' trailing slash must be stripped before encoding.
+# ===========================================================================
+setup
+OUT=$(bash -c "source '$HELPER' && encode_path_for_claude_projects 'c:/git/agents/'" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "c--git-agents" ]; then
+    pass "B-11: encode_path_for_claude_projects c:/git/agents/ -> c--git-agents (trailing slash stripped)"
+else
+    fail "B-11: rc=$RC out='$OUT' expected='c--git-agents' (RED pre-fix: trailing slash produces c--git-agents-)"
+fi
+teardown
+
+# ===========================================================================
+# B-12: encode_path_for_claude_projects POSIX non-Windows path (regression guard, GREEN pre-fix).
+# '/home/user/repo' → '-home-user-repo'. Leading dash expected; the Windows
+# single-letter drive normalization must NOT fire on a multi-letter first segment.
+# ===========================================================================
+setup
+OUT=$(bash -c "source '$HELPER' && encode_path_for_claude_projects '/home/user/repo'" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "-home-user-repo" ]; then
+    pass "B-12: encode_path_for_claude_projects /home/user/repo -> -home-user-repo (Windows normalization must NOT fire)"
+else
+    fail "B-12: rc=$RC out='$OUT' expected='-home-user-repo'"
+fi
+teardown
+
+# ===========================================================================
+# B-13: resolver-level integration test — RED pre-fix.
+# CLAUDE_PROJECT_DIR is set to Git Bash POSIX form '/c/git/agents'; the encoder
+# must normalize it to 'c--git-agents' to find the transcript directory.
+# Also verifies newest-file-wins selection.
+# ===========================================================================
+setup
+PROJDIR_ENCODED="c--git-agents"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
+echo '{}' > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/sess-b13-old.jsonl"
+touch -t 202401010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/sess-b13-old.jsonl"
+echo '{}' > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/sess-519-test.jsonl"
+touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/sess-519-test.jsonl"
+OUT=$(bash -c "
+    export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
+    export CLAUDE_PROJECT_DIR='/c/git/agents'
+    source '$HELPER'
+    resolve_session_id_from_jsonl
+" 2>/dev/null)
+RC=$?
+if [ "$RC" -eq 0 ] && [ "$OUT" = "sess-519-test" ]; then
+    pass "B-13: resolve_session_id_from_jsonl with CLAUDE_PROJECT_DIR=/c/git/agents (POSIX) resolves to newest transcript"
+else
+    fail "B-13: rc=$RC out='$OUT' expected='sess-519-test' (RED pre-fix: /c/git/agents encodes to wrong dir name)"
+fi
+teardown
+
+# ===========================================================================
+# B-14: root-path no-crash guard.
+# Root paths (/, C:/) are not valid project roots; their encoding is intentionally
+# undefined. This test guards against crashes/hangs and empty stdout only.
+# ===========================================================================
+setup
+RC14a=0
+OUT14a=$(bash -c "source '$HELPER' && encode_path_for_claude_projects '/'" 2>/dev/null) || RC14a=$?
+RC14b=0
+OUT14b=$(bash -c "source '$HELPER' && encode_path_for_claude_projects 'C:/'" 2>/dev/null) || RC14b=$?
+if [ "$RC14a" -eq 0 ] && [ -z "$OUT14a" ]; then
+    fail "B-14: encode_path_for_claude_projects '/' produced empty output (must not produce empty)"
+elif [ "$RC14b" -eq 0 ] && [ -z "$OUT14b" ]; then
+    fail "B-14: encode_path_for_claude_projects 'C:/' produced empty output (must not produce empty)"
+else
+    pass "B-14: root-path inputs (/, C:/) do not crash or produce empty output (encoding undefined — crash/hang guard only)"
 fi
 teardown
 
