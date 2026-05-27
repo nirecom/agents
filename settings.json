@@ -471,6 +471,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-ask-lang.js\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -515,6 +525,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-worktree-notes-lang.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-plan-lang.js\"",
             "timeout": 10
           }
         ]
