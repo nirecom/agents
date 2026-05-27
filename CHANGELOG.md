@@ -427,3 +427,7 @@ Changes: WIP signaling restored on Windows Git Bash environments where `/c/...` 
 ### FEATURE: PR #593 (2026-05-27)
 Background: feat(#581): per-context language configuration (PLAN_LANG, ASK_LANG, CONV_LANG)
 Changes: doc-append CHANGELOG.md --category FEATURE --subject "Per-context language configuration (.env keys: PLAN_LANG, ASK_LANG, CONV_LANG)" --background "Language of AskUserQuestion prompts and planning artifacts (intent/outline/detail.md) could not be configured independently." --changes "New .env keys: PLAN_LANG (planning artifacts), ASK_LANG (AskUserQuestion), CONV_LANG (main conversation guidance). Existing DOCS_LANG_HISTORY / DOCS_LANG_CHANGELOG_PUBLIC / DOCS_LANG_CHANGELOG_PRIVATE now also readable from .env (fenced-block in rules/language.md still works as fallback). Valid values for all keys: english | japanese | any."
+
+### FEATURE: PR #597 (2026-05-27)
+Background: fix(#574/#563): extend show-plan-link to Bash tool; fix confirm-plan guard off-mode bypass
+Changes: Plan artifact link now appears in VS Code when `assemble-mandatory.sh` is called via the Bash tool (standard SKILL.md flow) — previously the breadcrumb only fired on Write-tool plan writes. (#574);Path-emission guard now enforces correctly in `CONFIRM_<STEP>=off` sessions — the guard was silently bypassed when confirmation was turned off. (#563)
