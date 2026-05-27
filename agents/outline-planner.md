@@ -111,18 +111,19 @@ write. Start your draft from `# <H1 title>` then `## Adopted approach` /
 ## Consuming `## Class members`
 
 Before drafting, read `## Class members` from the intent.md provided to you.
-- Members with `disposition: fix in scope`: your plan MUST explicitly address
-  each one (in the adopted approach narrative, delivery plan, or a dedicated
-  section). Coverage need not be exhaustive at this stage, but every
-  fix-in-scope member must be named or clearly subsumed.
-- Members with `disposition: track separately`: out of scope for this plan —
-  mention in `## Confirmed non-goals` if useful to disambiguate.
-- If `## Class members` contains `(none detected)` or is absent: skip this
-  check.
+- Members with `triage: MUST`: your plan MUST explicitly address each one (in the
+  adopted approach narrative, delivery plan, or a dedicated section). Coverage
+  need not be exhaustive at this stage, but every MUST member must be named or
+  clearly subsumed.
+- Members with `triage: OPTIONAL`: address if low-cost; otherwise explicitly
+  defer in `## Confirmed non-goals` with a 1-line reason.
+- Members with `triage: NA`: out of scope for this plan — mention in
+  `## Confirmed non-goals` if useful to disambiguate.
+- If `## Class members` contains `(none detected)` or is absent: skip this check.
 
-**Anti-pattern (`rules/core-principles.md` §1 violation):** Covering only one
-`fix in scope` member while ignoring the others. If the user has to enumerate
-each one for you, you failed §1.
+**Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
+Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
+as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
 ## Consuming raw codex review output
 
