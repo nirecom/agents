@@ -11,7 +11,19 @@
 encode_path_for_claude_projects() {
     local p="${1:-}"
     [ -z "$p" ] && return 1
-    printf '%s' "$p" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g'
+    # Normalize backslashes to forward slashes (Windows native paths).
+    p=$(printf '%s' "$p" | LC_ALL=C tr '\\' '/')
+    # Normalize Git Bash POSIX drive (/c/... → c:/...). Single ASCII letter only.
+    p=$(printf '%s' "$p" | LC_ALL=C sed 's#^/\([a-zA-Z]\)/#\1:/#')
+    # Strip trailing slashes, but only when at least one non-slash char remains.
+    local stripped
+    stripped=$(printf '%s' "$p" | LC_ALL=C sed 's#/*$##')
+    if [ -n "$stripped" ]; then
+        p="$stripped"
+    fi
+    # Lowercase + non-alnum → single dash (UNCHANGED — matches Claude Code's encoding).
+    printf '%s' "$p" | LC_ALL=C tr '[:upper:]' '[:lower:]' \
+        | LC_ALL=C sed 's/[^a-z0-9]/-/g'
 }
 
 _scan_one_transcript_dir() {
