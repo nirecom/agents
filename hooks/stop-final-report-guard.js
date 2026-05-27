@@ -16,6 +16,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const schema = require("./lib/final-report-schema");
 
 function readStdin() {
   const chunks = [];
@@ -30,55 +31,12 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-const CATEGORIES = [
-  { key: "Claude Code restart", req: "CC_RESTART_REQUIRED", legacy: "CLAUDE_CODE_RESTART_REQUIRED", reason: "CC_RESTART_REASON" },
-  { key: "VS Code reload",      req: "VSCODE_RELOAD_REQUIRED",   reason: "VSCODE_RELOAD_REASON" },
-  { key: "Installer rerun",     req: "INSTALLER_RERUN_REQUIRED", reason: "INSTALLER_RERUN_REASON" },
-  { key: "OS reboot",           req: "OS_REBOOT_REQUIRED",       reason: "OS_REBOOT_REASON" },
-];
-
-// safeEnv mirrors bin/worktree-final-report.js safeEnv():
-// returns the env-file value if present and non-empty, else "(none)".
-// (Empty string is treated as missing, identical to the renderer.)
-function safeEnv(env, key) {
-  const v = env[key];
-  if (v === undefined || v === null || v === "") return "(none)";
-  return String(v);
-}
-
-// categoryValue mirrors bin/worktree-final-report.js categoryValue() exactly:
-// - If primary key resolves to non-"(none)" → return its raw string verbatim.
-// - Else if legacy alias resolves to non-"(none)":
-//     - "yes" → "required"
-//     - "no"  → "not_required"
-//     - anything else → return raw verbatim.
-// - Else default to "not_required".
-function categoryValue(env, primary, legacy) {
-  const v = safeEnv(env, primary);
-  if (v !== "(none)") return v;
-  if (legacy === undefined) return "not_required";
-  const legacyVal = safeEnv(env, legacy);
-  if (legacyVal !== "(none)") {
-    if (legacyVal === "yes") return "required";
-    if (legacyVal === "no") return "not_required";
-    return legacyVal;
-  }
-  return "not_required";
-}
-
-function rebuildBlock(env) {
-  const lines = ["### Post-Merge Actions Required"];
-  for (const c of CATEGORIES) {
-    const value = categoryValue(env, c.req, c.legacy);
-    const reasonVal = safeEnv(env, c.reason);
-    if (value === "required" && reasonVal !== "(none)") {
-      lines.push(`- ${c.key}: required (${reasonVal})`);
-    } else {
-      lines.push(`- ${c.key}: ${value}`);
-    }
-  }
-  return lines.join("\n");
-}
+const REASON_INSTRUCTION_TEMPLATE =
+  "[final-report] The Final Report (## Final Report — <sid>) is missing sections or is " +
+  "incomplete in the last assistant message. Copy the renderer output verbatim — do not " +
+  "reformat, summarize, or reorder any heading. Run the renderer via the Bash tool and " +
+  "paste its stdout (excluding the sentinel line) directly into your response. " +
+  "(Hook: stop-final-report-guard.js)";
 
 function lastAssistantText(transcriptPath) {
   let raw;
@@ -112,16 +70,11 @@ function lastAssistantText(transcriptPath) {
   return null;
 }
 
-function blockIsComplete(text) {
+function blockIsComplete(text, sessionId) {
   if (!text) return false;
-  if (!text.includes("### Post-Merge Actions Required")) return false;
-  const probes = [
-    "- Claude Code restart:",
-    "- VS Code reload:",
-    "- Installer rerun:",
-    "- OS reboot:",
-  ];
-  return probes.every((p) => text.includes(p));
+  const headings = schema.getSectionHeadings(sessionId);
+  if (!headings.every((h) => text.includes(h))) return false;
+  return schema.getProbes().every((p) => text.includes(p));
 }
 
 if (require.main === module) {
@@ -141,7 +94,7 @@ if (require.main === module) {
     sessionIdFromInput: input.session_id,
     transcriptPath: input.transcript_path,
   });
-  if (!sid) process.exit(0);
+  if (!sid || !/^[A-Za-z0-9_-]+$/.test(sid)) process.exit(0);
 
   const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
   let plansDir;
@@ -174,16 +127,40 @@ if (require.main === module) {
   const text = lastAssistantText(input.transcript_path);
   if (text === null) process.exit(0);
 
-  if (blockIsComplete(text)) process.exit(0);
+  if (blockIsComplete(text, sid)) process.exit(0);
 
-  const rebuilt = rebuildBlock(env);
+  // Render the canonical Post-Merge Actions block from env for the reason.
+  function safeEnvVal(key) {
+    const v = env[key];
+    if (v === undefined || v === null || v === "") return "(none)";
+    return String(v).replace(/[\r\n]/g, " ").slice(0, 200);
+  }
+  function catValue(cat) {
+    const v = safeEnvVal(cat.newKey);
+    if (v !== "(none)") return v;
+    if (!cat.legacyKey) return "not_required";
+    const legacy = safeEnvVal(cat.legacyKey);
+    if (legacy !== "(none)") {
+      if (legacy === cat.legacyYes) return "required";
+      if (legacy === "no") return "not_required";
+      return legacy;
+    }
+    return "not_required";
+  }
+  const postMergeLines = ["### Post-Merge Actions Required"];
+  for (const cat of schema.CATEGORIES) {
+    const v = catValue(cat);
+    const reasonVal = safeEnvVal(cat.reasonKey);
+    if (v === "required" && reasonVal !== "(none)") {
+      postMergeLines.push(`- ${cat.label}: required (${reasonVal})`);
+    } else {
+      postMergeLines.push(`- ${cat.label}: ${v}`);
+    }
+  }
   const reason =
-    "[final-report] The `### Post-Merge Actions Required` block is missing " +
-    "or incomplete in the final assistant message. Re-emit the response and " +
-    "include this block verbatim:\n\n" +
-    rebuilt +
-    "\n\n(Hook: stop-final-report-guard.js)";
-
+    REASON_INSTRUCTION_TEMPLATE.replace("<sid>", sid) +
+    "\n\n" +
+    postMergeLines.join("\n");
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   process.exit(2);
 }

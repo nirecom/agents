@@ -390,6 +390,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
    Do NOT hand-write a Markdown Final Report as a fallback — if the sentinel is absent, warn and show raw output only.
    Do not call `gh` here — all PR/branch state was captured in Step 5.5.
+   Output must follow the Verbatim Output Requirements in the Rules section (violations are blocked by the Stop hook).
 
 ## Rules
 
@@ -415,3 +416,6 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 - Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via `node -e`, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
 - Step 7 MUST invoke renderer with `--env-file $HOME/.workflow-plans/<session-id>-final-report-env.json`.
 - Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
+- Final Report verbatim output: paste renderer stdout (sentinel line excluded) character-for-character into the assistant message — no formatting changes.
+- Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
+- Do not reformat Final Report section content into prose (e.g., writing `Closed Issues: #N` instead of the `### Closed Issues` heading followed by `- #N`).
