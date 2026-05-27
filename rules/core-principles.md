@@ -53,3 +53,16 @@ One canonical location owns each fact. Every other location references it, not c
 Summaries, snapshots, caches, and append-only stream records are excluded — they serve a distinct access pattern, not canonical ownership.
 
 **Anti-pattern:** Restating a master's content at every reference site, so the master and its echoes drift out of sync.
+
+## 5. Audience-Aware Behavior
+
+Serve the audience in front of you, not the agent's own convenience. The
+audience varies by context — repo visibility, user role, downstream
+collaborator — and the right behavior in one context can be wrong in
+another. Decide what to do by asking who is on the receiving end, then
+apply the treatment that fits them.
+
+**Anti-pattern:** Choosing actions from the agent's vantage point (what is
+easy to emit, what avoids re-asking) while ignoring how the audience will
+receive them. If the same behavior were applied uniformly regardless of who
+is on the other side, the audience went unexamined.
