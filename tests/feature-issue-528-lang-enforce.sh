@@ -619,6 +619,347 @@ else
     fail "T24: settings.json does NOT register check-worktree-notes-lang.js"
 fi
 
+# ============================================================================
+# Group 6 — detect-cjk.js hasCJK SSOT
+# ============================================================================
+
+echo ""
+echo "=== Group 6: detect-cjk.js — hasCJK SSOT ==="
+
+DETECT_CJK_LIB="$AGENTS_DIR/hooks/lib/detect-cjk.js"
+if [ "$(src_present "$DETECT_CJK_LIB")" != "ok" ]; then
+    echo "SKIP G6: hooks/lib/detect-cjk.js not yet implemented (RED phase)"
+else
+    _g6_out="$(node -e "
+      const { hasCJK } = require('$_AGENTS_DIR_NODE/hooks/lib/detect-cjk');
+      if (!hasCJK('日本語テスト')) { process.stderr.write('T26 fail\n'); process.exit(1); }
+      if (hasCJK('안녕하세요 World')) { process.stderr.write('T26b fail\n'); process.exit(1); }
+      if (hasCJK('plain english')) { process.stderr.write('T26c fail\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T26/T26b/T26c: hasCJK Japanese=true, Hangul=false, ASCII=false"
+    else
+        fail "T26/T26b/T26c: $_g6_out"
+    fi
+fi
+
+# ============================================================================
+# Group 7 — docs-lang-config.js shim regression
+# ============================================================================
+
+echo ""
+echo "=== Group 7: docs-lang-config.js shim regression ==="
+
+LANG_CONFIG_LIB="$AGENTS_DIR/hooks/lib/lang-config.js"
+DOCS_LANG_SHIM="$AGENTS_DIR/hooks/lib/docs-lang-config.js"
+if [ "$(src_present "$LANG_CONFIG_LIB")" != "ok" ] || [ "$(src_present "$DOCS_LANG_SHIM")" != "ok" ]; then
+    echo "SKIP G7: hooks/lib/lang-config.js or hooks/lib/docs-lang-config.js not yet implemented (RED phase)"
+else
+    # T27a: relative require
+    _t27a_out="$(node -e "
+      const mod = require('$_AGENTS_DIR_NODE/hooks/lib/docs-lang-config');
+      const assert = require('assert');
+      assert.strictEqual(typeof mod.loadDocsLangConfig, 'function');
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T27a: docs-lang-config shim exposes loadDocsLangConfig (relative require)"
+    else
+        fail "T27a: $_t27a_out"
+    fi
+
+    # T27b: absolute-path require
+    _t27b_out="$(node -e "
+      const path = require('path');
+      const absPath = path.join('$_AGENTS_DIR_NODE', 'hooks/lib/docs-lang-config.js');
+      const mod = require(absPath);
+      const assert = require('assert');
+      assert.strictEqual(typeof mod.loadDocsLangConfig, 'function');
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T27b: docs-lang-config shim exposes loadDocsLangConfig (absolute require)"
+    else
+        fail "T27b: $_t27b_out"
+    fi
+fi
+
+# ============================================================================
+# Group 8 — loadLangConfig independent .env key routing
+# ============================================================================
+
+echo ""
+echo "=== Group 8: loadLangConfig — independent .env key routing ==="
+
+if [ "$(src_present "$LANG_CONFIG_LIB")" != "ok" ]; then
+    echo "SKIP G8: hooks/lib/lang-config.js not yet implemented (RED phase)"
+else
+    # T28: PLAN_LANG from .env
+    _t28_tmp=$(mktemp -d); TEST_TMPS+=("$_t28_tmp")
+    printf 'PLAN_LANG=english\n' > "$_t28_tmp/.env"
+    _t28_dir="$(cygpath -m "$_t28_tmp" 2>/dev/null || echo "$_t28_tmp")"
+    _t28_result="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t28_dir" node -e "
+      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+      const v = loadLangConfig('plan', undefined);
+      if (v !== 'english') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T28: PLAN_LANG=english from .env"
+    else
+        fail "T28: $_t28_result"
+    fi
+
+    # T29: ASK_LANG from .env
+    _t29_tmp=$(mktemp -d); TEST_TMPS+=("$_t29_tmp")
+    printf 'ASK_LANG=japanese\n' > "$_t29_tmp/.env"
+    _t29_dir="$(cygpath -m "$_t29_tmp" 2>/dev/null || echo "$_t29_tmp")"
+    _t29_result="$(env -u ASK_LANG AGENTS_CONFIG_DIR="$_t29_dir" node -e "
+      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+      const v = loadLangConfig('ask', undefined);
+      if (v !== 'japanese') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T29: ASK_LANG=japanese from .env"
+    else
+        fail "T29: $_t29_result"
+    fi
+
+    # T30a: history surface — docs-lang fenced block fallback
+    _t30_tmp=$(mktemp -d); TEST_TMPS+=("$_t30_tmp")
+    _t30_lang="$(make_lang_file japanese english any)"
+    printf '' > "$_t30_tmp/.env"
+    _t30_dir="$(cygpath -m "$_t30_tmp" 2>/dev/null || echo "$_t30_tmp")"
+    _t30_lang_node="$(cygpath -m "$_t30_lang" 2>/dev/null || echo "$_t30_lang")"
+    _t30a_result="$(env -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
+      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+      const v = loadLangConfig('history', '$_t30_lang_node');
+      if (v !== 'japanese') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T30a: history surface falls back to fenced block (japanese)"
+    else
+        fail "T30a: $_t30a_result"
+    fi
+
+    # T30b: .env DOCS_LANG_HISTORY wins over fenced block
+    printf 'DOCS_LANG_HISTORY=english\n' > "$_t30_tmp/.env"
+    _t30b_result="$(env -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
+      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+      const v = loadLangConfig('history', '$_t30_lang_node');
+      if (v !== 'english') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then
+        pass "T30b: .env DOCS_LANG_HISTORY=english wins over fenced block"
+    else
+        fail "T30b: $_t30b_result"
+    fi
+fi
+
+# ============================================================================
+# Group 9 — lint-plan-lang.js unit tests
+# ============================================================================
+
+echo ""
+echo "=== Group 9: lint-plan-lang.js unit tests ==="
+
+LINT_PLAN_LIB="$AGENTS_DIR/hooks/lib/lint-plan-lang.js"
+if [ "$(src_present "$LINT_PLAN_LIB")" != "ok" ]; then
+    echo "SKIP G9: hooks/lib/lint-plan-lang.js not yet implemented (RED phase)"
+else
+    # T31: blank line → 0 violations
+    _t31_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('', 'english');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T31: blank line → 0 violations"; else fail "T31: $_t31_out"; fi
+
+    # T32: heading exempt
+    _t32_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('# Heading', 'english');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T32: heading exempt → 0 violations"; else fail "T32: $_t32_out"; fi
+
+    # T33: CJK + english → 1
+    _t33_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('日本語テスト', 'english');
+      if (v.length !== 1) { process.stderr.write('expected 1, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T33: CJK + english policy → 1 violation"; else fail "T33: $_t33_out"; fi
+
+    # T34: CJK + any → 0
+    _t34_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('日本語テスト', 'any');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T34: CJK + any policy → 0 violations"; else fail "T34: $_t34_out"; fi
+
+    # T35: 3 words + japanese → 0 (under threshold)
+    _t35_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('Use the API', 'japanese');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T35: 3-word ASCII + japanese → 0 (under threshold)"; else fail "T35: $_t35_out"; fi
+
+    # T36: 5 words + japanese → 1
+    _t36_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('Use the new PR API', 'japanese');
+      if (v.length !== 1) { process.stderr.write('expected 1, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T36: 5-word ASCII + japanese → 1 violation"; else fail "T36: $_t36_out"; fi
+
+    # T37: fenced CJK stripped
+    _t37_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const content = '\`\`\`\n日本語テスト\n\`\`\`';
+      const v = lintPlanLang(content, 'english');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T37: CJK inside fenced block → stripped, 0 violations"; else fail "T37: $_t37_out"; fi
+
+    # T38: inline backtick CJK stripped
+    _t38_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('use \`日本語\` here', 'english');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T38: CJK inside inline backtick → stripped, 0 violations"; else fail "T38: $_t38_out"; fi
+fi
+
+# ============================================================================
+# Group 10 — check-plan-lang.js hook integration
+# ============================================================================
+
+echo ""
+echo "=== Group 10: check-plan-lang.js integration ==="
+
+CHECK_PLAN_HOOK="$AGENTS_DIR/hooks/check-plan-lang.js"
+if [ "$(src_present "$CHECK_PLAN_HOOK")" != "ok" ]; then
+    echo "SKIP G10: hooks/check-plan-lang.js not yet implemented (RED phase)"
+else
+    _g10_plans_tmp=$(mktemp -d); TEST_TMPS+=("$_g10_plans_tmp")
+    _g10_agents_tmp=$(mktemp -d); TEST_TMPS+=("$_g10_agents_tmp")
+    printf 'PLAN_LANG=english\n' > "$_g10_agents_tmp/.env"
+
+    _g10_plans_dir="$(cygpath -m "$_g10_plans_tmp" 2>/dev/null || echo "$_g10_plans_tmp")"
+    _g10_agents_dir="$(cygpath -m "$_g10_agents_tmp" 2>/dev/null || echo "$_g10_agents_tmp")"
+
+    run_plan_hook() {
+        local json="$1"
+        (export WORKFLOW_PLANS_DIR="$_g10_plans_dir"
+         export AGENTS_CONFIG_DIR="$_g10_agents_dir"
+         echo "$json" | run_with_timeout 10 node "$AGENTS_DIR/hooks/check-plan-lang.js" 2>/dev/null)
+    }
+
+    # T39: CJK content in intent.md → block
+    _t39_file="$_g10_plans_dir/20260526-223459-intent.md"
+    _t39_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t39_file\",\"content\":\"## Planning\n日本語テスト\"},\"tool_response\":{}}"
+    _t39_out="$(run_plan_hook "$_t39_json")"
+    if echo "$_t39_out" | grep -q '"block"'; then
+        pass "T39: CJK in intent.md with PLAN_LANG=english → block"
+    else
+        fail "T39: expected block, got: $_t39_out"
+    fi
+
+    # T40: drafts/ file → approved
+    mkdir -p "$_g10_plans_tmp/drafts"
+    _t40_file="$_g10_plans_dir/drafts/20260526-223459-detail-draft.md"
+    _t40_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t40_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
+    _t40_out="$(run_plan_hook "$_t40_json")"
+    if ! echo "$_t40_out" | grep -q '"block"'; then
+        pass "T40: drafts/...-detail-draft.md → approve (excluded)"
+    else
+        fail "T40: expected approve for draft, got: $_t40_out"
+    fi
+
+    # T41: file outside PLANS_DIR → approved
+    _t41_tmp=$(mktemp); TEST_TMPS+=("$_t41_tmp")
+    _t41_file="$(cygpath -m "$_t41_tmp" 2>/dev/null || echo "$_t41_tmp")"
+    _t41_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t41_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
+    _t41_out="$(run_plan_hook "$_t41_json")"
+    if ! echo "$_t41_out" | grep -q '"block"'; then
+        pass "T41: file outside PLANS_DIR → approve"
+    else
+        fail "T41: expected approve for outside-PLANS_DIR, got: $_t41_out"
+    fi
+
+    # T42: wrong basename in PLANS_DIR → approved
+    _t42_file="$_g10_plans_dir/notes.md"
+    _t42_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t42_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
+    _t42_out="$(run_plan_hook "$_t42_json")"
+    if ! echo "$_t42_out" | grep -q '"block"'; then
+        pass "T42: non-artifact basename in PLANS_DIR → approve"
+    else
+        fail "T42: expected approve for non-artifact name, got: $_t42_out"
+    fi
+
+    # T43: editFiles tool → blocked
+    _t43_file="$_g10_plans_dir/20260526-223459-outline.md"
+    _t43_json="{\"tool_name\":\"editFiles\",\"tool_input\":{\"file_path\":\"$_t43_file\",\"content\":\"日本語テスト\"},\"tool_response\":{}}"
+    _t43_out="$(run_plan_hook "$_t43_json")"
+    if echo "$_t43_out" | grep -q '"block"'; then
+        pass "T43: editFiles tool + CJK content → block"
+    else
+        fail "T43: expected block for editFiles, got: $_t43_out"
+    fi
+fi
+
+# ============================================================================
+# Group 11 — check-ask-lang.js integration
+# ============================================================================
+
+echo ""
+echo "=== Group 11: check-ask-lang.js integration ==="
+
+CHECK_ASK_HOOK="$AGENTS_DIR/hooks/check-ask-lang.js"
+if [ "$(src_present "$CHECK_ASK_HOOK")" != "ok" ]; then
+    echo "SKIP G11: hooks/check-ask-lang.js not yet implemented (RED phase)"
+else
+    _g11_agents_tmp=$(mktemp -d); TEST_TMPS+=("$_g11_agents_tmp")
+    printf 'ASK_LANG=english\n' > "$_g11_agents_tmp/.env"
+    _g11_agents_dir="$(cygpath -m "$_g11_agents_tmp" 2>/dev/null || echo "$_g11_agents_tmp")"
+
+    run_ask_hook() {
+        local json="$1"
+        (export AGENTS_CONFIG_DIR="$_g11_agents_dir"
+         echo "$json" | run_with_timeout 10 node "$AGENTS_DIR/hooks/check-ask-lang.js" 2>/dev/null)
+    }
+
+    # T44: CJK in question → approve + additionalContext
+    _t44_json="{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"question\":\"日本語のテスト\",\"type\":\"select\",\"choices\":[]},\"tool_response\":{}}"
+    _t44_out="$(run_ask_hook "$_t44_json")"
+    _t44_ok=1
+    echo "$_t44_out" | grep -q '"approve"' || _t44_ok=0
+    echo "$_t44_out" | grep -q 'additionalContext' || _t44_ok=0
+    if [ "$_t44_ok" -eq 1 ]; then
+        pass "T44: CJK in question → approve + additionalContext"
+    else
+        fail "T44: expected approve+additionalContext, got: $_t44_out"
+    fi
+
+    # T45: CJK in choices → additionalContext
+    _t45_json="{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"question\":\"Please choose\",\"type\":\"select\",\"choices\":[\"日本語の選択肢\",\"OK\"]},\"tool_response\":{}}"
+    _t45_out="$(run_ask_hook "$_t45_json")"
+    if echo "$_t45_out" | grep -q 'additionalContext'; then
+        pass "T45: CJK in choices → additionalContext present"
+    else
+        fail "T45: expected additionalContext for CJK choices, got: $_t45_out"
+    fi
+
+    # T46: malformed input → approve
+    _t46_json="{\"tool_name\":\"AskUserQuestion\",\"tool_response\":{}}"
+    _t46_out="$(run_ask_hook "$_t46_json")"
+    if echo "$_t46_out" | grep -q '"approve"'; then
+        pass "T46: malformed input → approve (fail-open)"
+    else
+        fail "T46: expected approve for malformed input, got: $_t46_out"
+    fi
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
