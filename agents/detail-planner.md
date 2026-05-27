@@ -27,7 +27,7 @@ Draft and revise an implementation plan for the task described in your prompt. Y
 3. Produce a plan with these sections — IN THIS ORDER (importance-first, most abstract first):
    - **Delivery plan** — triage rationale, execution order, and split policy. Carry forward from
      outline.md's Delivery plan section when present. If absent or "(not provided)", draft one fresh.
-     Use English terms only: "delivery plan", "progression", or "execution order".
+     Section heading literals follow PLAN_LANG (set in $AGENTS_CONFIG_DIR/.env). When PLAN_LANG=english or unset, prefer "Delivery plan" / "Background" / "Files to modify" verbatim so the assemble-mandatory.sh stripper recognizes them.
      Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — these are added
      automatically; planner-authored copies are stripped before the final write.
    - **Background** — two paragraphs: (1) summary of agreed requirements and motivation

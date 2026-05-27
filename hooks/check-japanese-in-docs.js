@@ -4,6 +4,7 @@
 const fs = require("fs");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
 const { hasCommandHead } = require("./lib/command-head");
+const { hasCJK } = require("./lib/detect-cjk");
 
 function readStdin() {
   const chunks = [];
@@ -30,7 +31,7 @@ const isDocAppend = (tokens) =>
 if (!hasCommandHead(command, isDocAppend)) approve();
 
 // Hiragana, Katakana, Kanji, CJK symbols/punctuation, full-width
-if (!/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(command)) approve();
+if (!hasCJK(command)) approve();
 
 const repoDir = resolveRepoDir(command);
 if (isPrivateRepo(repoDir)) approve();
