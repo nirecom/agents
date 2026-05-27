@@ -419,3 +419,7 @@ Changes: category: FEATURE | subject: PR #587 | background: workflow-gate hard-b
 ### FEATURE: PR #592 (2026-05-27)
 Background: feat(#556/#555/#557/#582): replace class-members disposition with triage MUST/OPTIONAL/NA
 Changes: `/clarify-intent` class members step now shows Claude's proposed triage for each sibling member (MUST / OPTIONAL / NA with rationale) as a text block, then asks "Accept as-is or Modify?" — replacing the previous multiSelect list.
+
+### FEATURE: PR #591 (2026-05-27)
+Background: fix(#519): normalize Git Bash POSIX paths in encode_path_for_claude_projects
+Changes: WIP signaling restored on Windows Git Bash environments where `/c/...` POSIX paths previously broke session-id resolution, causing silent failure in `wip-state.sh` even after the #440 fix.
