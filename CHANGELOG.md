@@ -423,3 +423,7 @@ Changes: `/clarify-intent` class members step now shows Claude's proposed triage
 ### FEATURE: PR #591 (2026-05-27)
 Background: fix(#519): normalize Git Bash POSIX paths in encode_path_for_claude_projects
 Changes: WIP signaling restored on Windows Git Bash environments where `/c/...` POSIX paths previously broke session-id resolution, causing silent failure in `wip-state.sh` even after the #440 fix.
+
+### FEATURE: PR #593 (2026-05-27)
+Background: feat(#581): per-context language configuration (PLAN_LANG, ASK_LANG, CONV_LANG)
+Changes: doc-append CHANGELOG.md --category FEATURE --subject "Per-context language configuration (.env keys: PLAN_LANG, ASK_LANG, CONV_LANG)" --background "Language of AskUserQuestion prompts and planning artifacts (intent/outline/detail.md) could not be configured independently." --changes "New .env keys: PLAN_LANG (planning artifacts), ASK_LANG (AskUserQuestion), CONV_LANG (main conversation guidance). Existing DOCS_LANG_HISTORY / DOCS_LANG_CHANGELOG_PUBLIC / DOCS_LANG_CHANGELOG_PRIVATE now also readable from .env (fenced-block in rules/language.md still works as fallback). Valid values for all keys: english | japanese | any."
