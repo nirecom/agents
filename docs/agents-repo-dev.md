@@ -18,9 +18,8 @@ to `~/.claude/projects/.../memory/`.
 - **GitHub Issues** — actionable work items in the agents repo. Tracked,
   prioritized, closed by a PR, recorded in `history.md`.
 
-Behavioral defects in this repo are work items. Saving them to memory leaves
-them untracked and the fix deferred indefinitely; the next session inherits
-the bug plus a stale memory note about it.
+Behavioral defects are work items. Memory has no closure — each session inherits
+the bug and a stale note about it.
 
 **Decision rule.** Is the report about repo code behavior (skill / hook /
 rule / bin)? → `/issue-create`. Is it about how Claude should converse or
