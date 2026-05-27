@@ -3,9 +3,7 @@
 // Detect CJK characters in enforced sections of WORKTREE_NOTES.md.
 // Returns an array of {section, line, lineNumber} violation objects.
 
-// Hiragana, Katakana, CJK Unified Ideographs, CJK Compatibility Ideographs,
-// CJK Symbols/Punctuation, full-width forms.
-const CJK_RE = /[　-鿿豈-﫿＀-￯]/u;
+const { hasCJK } = require("./detect-cjk");
 
 const SECTION_HISTORY = "History Notes";
 const SECTION_CHANGELOG = "Changelog Notes";
@@ -62,7 +60,7 @@ function lintWorktreeNotesLang(content, config, options) {
   for (const b of bullets) {
     const policy = enforcementFor(b.section, config, isPrivateRepo);
     if (policy !== "english") continue;
-    if (CJK_RE.test(b.line)) {
+    if (hasCJK(b.line)) {
       violations.push({
         section: b.section,
         line: b.line,
