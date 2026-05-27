@@ -7,6 +7,10 @@
 // (raises the correct window), then `code -r <file>` (opens the file) — avoids the
 // VS Code CLI bug where --folder-uri silently discards file-open args (#506).
 //
+// Triggers on Write (direct file write) and on Bash invocations of
+// skills/_shared/assemble-mandatory.sh — the latter is how SKILL.md authors
+// assemble the final plan artifact from a draft + planner output.
+//
 // Output protocol: emits { "systemMessage": "..." } only.
 // Sibling PostToolUse hooks emit `additionalContext` — different field, no collision.
 "use strict";
@@ -16,6 +20,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { normalizeSlashes } = require("./lib/path-match");
 const { getSuffix, isConfirmOff } = require("./lib/plan-confirm-flag");
+const { extractAssembleDest } = require("./lib/assemble-cmd-parse");
 
 function readStdin() {
   const chunks = [];
@@ -109,20 +114,10 @@ function openInVsCode(absPath, folderUri) {
   spawnCode(fileArgs).unref();
 }
 
-if (require.main === module) {
-  let input = {};
-  try { input = JSON.parse(readStdin()); } catch { noopExit(); }
-
-  if (input.tool_name !== "Write") noopExit();
-
-  // Defensive tool_response check (mirrors workflow-run-tests.js pattern).
-  const resp = input.tool_response || {};
-  const exitCode = resp.exit_code ?? resp.exitCode ?? (resp.success === false ? 1 : 0);
-  if (exitCode !== 0) noopExit();
-
-  const filePath = (input.tool_input && input.tool_input.file_path) || "";
-  if (!isFinalPlanArtifact(filePath)) noopExit();
-
+// Core emit: write the systemMessage breadcrumb, drop the turn marker
+// (always — required by #563 so the Stop guard sees it regardless of
+// CONFIRM_<STEP>), and optionally open VS Code (still gated by CONFIRM_<STEP>).
+function emitForArtifact(filePath, input) {
   // Windows: native backslash absolute path (Explorer/cmd.exe compatible).
   // POSIX:   forward-slash (normalizeSlashes is a no-op on already-forward-slash strings).
   const resolved = path.resolve(filePath);
@@ -133,26 +128,48 @@ if (require.main === module) {
   if (!isConfirmOff(filePath) && shouldOpenInVsCode()) {
     try { openInVsCode(absPath, resolveWorkspaceFolderUri(input)); } catch (_) { /* fail-open */ }
   }
-  if (!isConfirmOff(filePath)) {
-    try {
-      const { resolveSessionId } = require("./lib/workflow-state");
-      const sid = resolveSessionId({
-        sessionIdFromInput: input.session_id,
-        transcriptPath: input.transcript_path,
+  // Marker write is always-on (#563): the Stop guard's scan is
+  // CONFIRM_<STEP>-independent — marker presence alone activates it.
+  try {
+    const { resolveSessionId } = require("./lib/workflow-state");
+    const sid = resolveSessionId({
+      sessionIdFromInput: input.session_id,
+      transcriptPath: input.transcript_path,
+    });
+    if (sid) {
+      const { writeTurnMarker } = require("./lib/turn-marker");
+      writeTurnMarker(sid, {
+        absPath,
+        suffix: getSuffix(filePath),
+        ts: Date.now(),
+        created_at: new Date().toISOString(),
       });
-      if (sid) {
-        const { writeTurnMarker } = require("./lib/turn-marker");
-        writeTurnMarker(sid, {
-          absPath,
-          suffix: getSuffix(filePath),
-          ts: Date.now(),
-          created_at: new Date().toISOString(),
-        });
-      }
-    } catch (_) { /* fail-open */ }
-  }
+    }
+  } catch (_) { /* fail-open */ }
   process.stdout.write(JSON.stringify({ systemMessage: `Plan file written: ${absPath}` }));
   process.exit(0);
 }
 
-module.exports = { isFinalPlanArtifact, workspaceFolderUriFrom };
+if (require.main === module) {
+  let input = {};
+  try { input = JSON.parse(readStdin()); } catch { noopExit(); }
+
+  const resp = input.tool_response || {};
+  const exitCode = resp.exit_code ?? resp.exitCode ?? (resp.success === false ? 1 : 0);
+  if (exitCode !== 0) noopExit();
+
+  let filePath = "";
+  if (input.tool_name === "Write") {
+    filePath = (input.tool_input && input.tool_input.file_path) || "";
+  } else if (input.tool_name === "Bash") {
+    const cmd = (input.tool_input && input.tool_input.command) || "";
+    filePath = extractAssembleDest(cmd) || "";
+  } else {
+    noopExit();
+  }
+
+  if (!isFinalPlanArtifact(filePath)) noopExit();
+  emitForArtifact(filePath, input);
+}
+
+module.exports = { isFinalPlanArtifact, workspaceFolderUriFrom, emitForArtifact };
