@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Stop hook: structurally enforce the confirm-plan Step 2 protocol.
 //
-// When show-plan-link.js emits a breadcrumb during a turn (CONFIRM_<STEP>=on),
-// it drops a per-turn marker. On Stop, this hook reads+deletes those markers,
-// then scans the last assistant message for any forbidden representation of
-// the WORKFLOW_PLANS_DIR path (native, forward-slash, tilde, or file:/// URI).
-// If found, the turn is blocked (decision:block + exit 2) so the orchestrator
-// must re-issue the response without the path.
+// When show-plan-link.js emits a breadcrumb during a turn (regardless of
+// CONFIRM_<STEP>), it drops a per-turn marker. On Stop, this hook
+// reads+deletes those markers, then scans the last assistant message for any
+// forbidden representation of the WORKFLOW_PLANS_DIR path (native,
+// forward-slash, tilde, or file:/// URI). If found, the turn is blocked
+// (decision:block + exit 2) so the orchestrator must re-issue the response
+// without the path.
 //
 // Fail-open everywhere: missing markers, missing transcript, parse errors —
 // all silently pass through. The guard activates only when (a) a marker
@@ -48,22 +49,11 @@ if (require.main === module) {
   if (!sid) process.exit(0);
 
   const { readAndDeleteTurnMarkers } = require("./lib/turn-marker");
-  const allMarkers = readAndDeleteTurnMarkers(sid);
-  if (allMarkers.length === 0) process.exit(0);
-
-  // Filter out markers whose CONFIRM_<SUFFIX> flag has since been turned off —
-  // the guard is "active only when CONFIRM_<STEP>=on" per confirm-plan.md.
-  // Markers without a recognizable suffix are kept (conservative).
-  const { getConfirmFlagName } = require("./lib/plan-confirm-flag");
-  const OFF_LITERALS = new Set(["off", "0", "false", "no", "disabled"]);
-  const markers = allMarkers.filter((m) => {
-    const flag = m && typeof m.suffix === "string" ? getConfirmFlagName(m.suffix) : null;
-    if (!flag) return true;
-    const raw = process.env[flag];
-    if (raw == null) return true;
-    return !OFF_LITERALS.has(String(raw).toLowerCase());
-  });
+  const markers = readAndDeleteTurnMarkers(sid);
   if (markers.length === 0) process.exit(0);
+  // #563: path-emission scan is CONFIRM_<STEP>-independent. Marker presence
+  // alone (written by show-plan-link.js whenever a final plan artifact is
+  // produced) is sufficient to activate the scan.
 
   // Read transcript and scan backward for the most recent assistant message.
   let lastAssistantText = "";
