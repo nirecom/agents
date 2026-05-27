@@ -411,3 +411,7 @@ Changes: FEATURE | Final Report: the Stop hook now validates all 8 sections (not
 ### FEATURE: PR #585 (2026-05-27)
 Background: feat(#576): add §5 Audience-Aware Behavior to core-principles; add docs/agents-repo-dev.md
 Changes: Core principles §5 "Audience-Aware Behavior": agents now decide actions by asking who the receiver is — the user, the repo audience (all GitHub users in public repos), or a downstream collaborator — rather than defaulting to what is easiest to emit.
+
+### FEATURE: PR #587 (2026-05-27)
+Background: fix(#577): block premature WORKFLOW_USER_VERIFIED emit under ENFORCE_WORKTREE=on
+Changes: category: FEATURE | subject: PR #587 | background: workflow-gate hard-blocks premature <<WORKFLOW_USER_VERIFIED: reason>> emission | changes: From linked worktrees without an open PR, the sentinel is now blocked. Emit it only at /worktree-end Step 4 (after the PR is open and merge is imminent). Emergency bypass: echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>".
