@@ -407,3 +407,7 @@ Changes: Bash `rm` of non-repo paths (e.g. `~/.claude/projects/*/memory/`) from 
 ### FEATURE: PR #586 (2026-05-27)
 Background: feat(#534): schema SSOT + full-section Final Report hook validation
 Changes: FEATURE | Final Report: the Stop hook now validates all 8 sections (not just Post-Merge Actions), blocking any turn where a heading is missing from the last assistant message. Renderer is backed by a shared schema SSOT (hooks/lib/final-report-schema.js); SKILL.md now contains explicit verbatim output requirements.
+
+### FEATURE: PR #585 (2026-05-27)
+Background: feat(#576): add §5 Audience-Aware Behavior to core-principles; add docs/agents-repo-dev.md
+Changes: Core principles §5 "Audience-Aware Behavior": agents now decide actions by asking who the receiver is — the user, the repo audience (all GitHub users in public repos), or a downstream collaborator — rather than defaulting to what is easiest to emit.
