@@ -431,3 +431,7 @@ Changes: doc-append CHANGELOG.md --category FEATURE --subject "Per-context langu
 ### FEATURE: PR #597 (2026-05-27)
 Background: fix(#574/#563): extend show-plan-link to Bash tool; fix confirm-plan guard off-mode bypass
 Changes: Plan artifact link now appears in VS Code when `assemble-mandatory.sh` is called via the Bash tool (standard SKILL.md flow) — previously the breadcrumb only fired on Write-tool plan writes. (#574);Path-emission guard now enforces correctly in `CONFIRM_<STEP>=off` sessions — the guard was silently bypassed when confirmation was turned off. (#563)
+
+### FEATURE: PR #605 (2026-05-27)
+Background: feat(#598): add CONFIRM_DOCS flag to /update-docs to skip proposal confirmation
+Changes: "`CONFIRM_DOCS` flag added to `/update-docs`: set `CONFIRM_DOCS=off` in `.env` to skip the approval prompt and apply docs entries automatically. Proposed content is always shown in the conversation."
