@@ -403,3 +403,7 @@ Changes: `/update-docs` now reads the `docs-lang` config in `rules/language.md` 
 ### FEATURE: PR #584 (2026-05-27)
 Background: fix(#573): add extractRmTargets so Bash rm of non-repo paths is allowed
 Changes: Bash `rm` of non-repo paths (e.g. `~/.claude/projects/*/memory/`) from the main worktree is no longer blocked by `enforce-worktree`. This fixes the asymmetry where the Write tool could create memory files but Bash rm could not delete them without WORKFLOW_OFF escalation.
+
+### FEATURE: PR #586 (2026-05-27)
+Background: feat(#534): schema SSOT + full-section Final Report hook validation
+Changes: FEATURE | Final Report: the Stop hook now validates all 8 sections (not just Post-Merge Actions), blocking any turn where a heading is missing from the last assistant message. Renderer is backed by a shared schema SSOT (hooks/lib/final-report-schema.js); SKILL.md now contains explicit verbatim output requirements.
