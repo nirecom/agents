@@ -31,7 +31,10 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
    - Before drafting History/Changelog bullets: read the `docs-lang` block in `rules/language.md` and apply the configured language (`DOCS_LANG_HISTORY` for history, `DOCS_LANG_CHANGELOG_PUBLIC`/`DOCS_LANG_CHANGELOG_PRIVATE` for changelog)
    - Which sections need changes and why
    - Specific additions or modifications
-5. **Apply after confirmation**: Edit files only after user approval
+5. **CONFIRM_DOCS gate** — check via Bash:
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_DOCS on && echo OFF || echo ON'`
+   - `ON`: present the step-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
+   - `OFF`: apply the edits and continue to step 6 without waiting.
 6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
    - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 7. **Commit separately**: If docs are in a separate repo, commit each repo independently
@@ -40,7 +43,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 
 - Follow the structure and content rules defined in `rules/docs-convention.md`
 - Follow language configuration in `rules/language.md` (`docs-lang` block) for History/Changelog entry language
-- Follow the gather → propose → confirm → apply cycle (never write without user confirmation)
+- Follow the gather → propose → confirm → apply cycle; the confirmation step is gated by `CONFIRM_DOCS` — when `off`, the proposal is shown but no AskUserQuestion is raised
 - Compare git log against current docs to identify gaps
 
 ## Completion
