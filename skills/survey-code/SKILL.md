@@ -61,10 +61,16 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    ```
    ## Candidate class members
    - <member name>: <one-line role> (<file>:<line>)
+     proposed triage: <MUST | OPTIONAL | NA> — <one-line rationale>
    ```
    List sibling members of the class being changed (per `rules/core-principles.md`
-   §1 Elevate Perspective). Each line: member name, one-line role description,
-   and the primary file:line reference. If no candidates are detected, write a
+   §1 Elevate Perspective). Each member is two lines: (a) name + role + primary
+   file:line reference; (b) `proposed triage:` value and 1-line rationale grounded
+   in the survey evidence. Triage values:
+   - `proposed triage: MUST` — symmetric to the user-requested change; failing to fix it leaves the class inconsistent.
+   - `proposed triage: OPTIONAL` — related but independently fixable; user choice whether to bundle.
+   - `proposed triage: NA` — sibling exists but genuinely orthogonal; no fix needed for this task.
+   When uncertain, propose `OPTIONAL`. If no candidates are detected, write a
    single line: `- (none detected)`. This section is required.
 6. Present findings for user review before proceeding to plan.
 
