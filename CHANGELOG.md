@@ -415,3 +415,7 @@ Changes: Core principles §5 "Audience-Aware Behavior": agents now decide action
 ### FEATURE: PR #587 (2026-05-27)
 Background: fix(#577): block premature WORKFLOW_USER_VERIFIED emit under ENFORCE_WORKTREE=on
 Changes: category: FEATURE | subject: PR #587 | background: workflow-gate hard-blocks premature <<WORKFLOW_USER_VERIFIED: reason>> emission | changes: From linked worktrees without an open PR, the sentinel is now blocked. Emit it only at /worktree-end Step 4 (after the PR is open and merge is imminent). Emergency bypass: echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>".
+
+### FEATURE: PR #592 (2026-05-27)
+Background: feat(#556/#555/#557/#582): replace class-members disposition with triage MUST/OPTIONAL/NA
+Changes: `/clarify-intent` class members step now shows Claude's proposed triage for each sibling member (MUST / OPTIONAL / NA with rationale) as a text block, then asks "Accept as-is or Modify?" — replacing the previous multiSelect list.
