@@ -134,3 +134,7 @@ Fallback sections (edit `WORKTREE_NOTES.md` directly; gitignored; not subject to
 - `## BugsFound` — defects observed during the workflow
 - `## RelatedTasks` — adjacent work to address in a separate session
 - `## NextTasks` — follow-ups specific to the current change
+
+## agents Repository Development
+
+When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
