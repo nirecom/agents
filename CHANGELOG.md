@@ -435,3 +435,7 @@ Changes: Plan artifact link now appears in VS Code when `assemble-mandatory.sh` 
 ### FEATURE: PR #605 (2026-05-27)
 Background: feat(#598): add CONFIRM_DOCS flag to /update-docs to skip proposal confirmation
 Changes: "`CONFIRM_DOCS` flag added to `/update-docs`: set `CONFIRM_DOCS=off` in `.env` to skip the approval prompt and apply docs entries automatically. Proposed content is always shown in the conversation."
+
+### FEATURE: PR #609 (2026-05-27)
+Background: feat(#602): PR1 — fix refactor-prompts Windows bug, add review-skill-size --all, worktree-start non-interactive mode
+Changes: `/refactor-prompts` now works on Windows: scan output captured in-memory instead of writing to `/tmp/rp-scan.json`;`review-skill-size --all` scans all SKILL.md files regardless of diff (bare invocation unchanged);`worktree-start` supports non-interactive mode via `--task-name`/`--branch-type` args (skips confirmation dialog; idempotent for repeated calls)
