@@ -15,7 +15,14 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
    If it does not fit, report why and stop — set `ENFORCE_WORKTREE=off` in agents config
    and work on main directly instead.
 
-2. Estimate the task name from the user's message. Task names must match `[a-zA-Z0-9_-]+`
+2. **Non-interactive mode** (skip the interactive flow when both flags are provided):
+   If `--task-name <name>` and `--branch-type <type>` are both supplied as arguments:
+   - Validate `<name>` matches `[a-zA-Z0-9_-]+`; if invalid, abort with error.
+   - Validate `<type>` is one of `feature` / `fix` / `refactor` / `docs` / `chore`; if invalid, abort with error.
+   - Adopt the provided values and skip `AskUserQuestion`.
+   - **Idempotency check**: run `git worktree list --porcelain`. If a worktree already exists at `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`, print that path to stdout and exit 0 (reuse — do not run `git worktree add`).
+
+   Otherwise (interactive): estimate the task name from the user's message. Task names must match `[a-zA-Z0-9_-]+`
    (no slashes, dots, spaces, or shell metacharacters).
    Estimate the branch type: `feature` / `fix` / `refactor` / `docs` / `chore`.
    Ask the user to confirm both (or suggest corrections) with `AskUserQuestion`.
@@ -92,6 +99,7 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
      `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
    - stdout `OFF`: auto-continue without `AskUserQuestion`.
    - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
+   - In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF regardless of config — `AskUserQuestion` cannot be called in subagent contexts.
 
 10. Generate `WORKTREE_NOTES.md` + register in `.git/info/exclude`. Pass Step 9 (b) stdout
     via `COPIED_JSON` env var (the script reads `.copied` from it).
