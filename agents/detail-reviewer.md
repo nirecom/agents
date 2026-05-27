@@ -32,12 +32,19 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   verbatim from outline.md. Missing or altered → `NEEDS_REVISION` with a `[HIGH]` concern
   naming the absent or altered section.
 - **Class members coverage (semantic):**
-  Read `## Class members` in detail.md. For each member with `disposition: fix in scope`,
-  verify it appears in `## Steps` or `## Files to modify` (or a named subsection). Any
-  unaddressed `fix in scope` member → `NEEDS_REVISION` with:
-  `[HIGH] Class member <name> has disposition=fix in scope but no Step / file mention covers it. Either add coverage or change disposition to track separately in intent.md/outline.md.`
-  Skip when `## Class members` contains `(none detected)` or a legacy stub
-  (`- (none — legacy intent.md, pre-#462)`).
+  Read `## Class members` in detail.md. For each member with `triage: MUST`,
+  verify it appears in `## Steps` or `## Files to modify` (or a named subsection).
+  For each member with `triage: OPTIONAL`, verify it is either addressed or
+  explicitly listed in `## Out of scope`. Any unaddressed MUST member →
+  `NEEDS_REVISION` with:
+  `[HIGH] Class member <name> has triage=MUST but no Step / file mention covers it.`
+  A `triage: OPTIONAL` member that is neither addressed nor explicitly in
+  `## Out of scope` → `NEEDS_REVISION` with severity `[MED]`.
+  Skip when `## Class members` contains `(none detected)` or is absent.
+
+  **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
+  Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
+  as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
 ## Procedure
 

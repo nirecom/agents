@@ -74,17 +74,21 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 ## Consuming `## Class members`
 
 Before drafting, read `## Class members` from the outline.md provided to you.
-- Members with `disposition: fix in scope`: your plan MUST explicitly address
-  each one in `## Steps`, `## Files to modify`, or a dedicated named section.
-  Coverage at this stage should be concrete (specific files / specific steps).
-- Members with `disposition: track separately`: out of scope — list in
-  `## Out of scope` if useful.
-- If `## Class members` contains `(none detected)` or a legacy stub
-  (`- (none — legacy intent.md, pre-#462)`): skip this check.
+- Members with `triage: MUST`: your plan MUST explicitly address each one in
+  `## Steps`, `## Files to modify`, or a dedicated named section. Coverage at
+  this stage should be concrete (specific files / specific steps).
+- Members with `triage: OPTIONAL`: address concretely if the outline adopted
+  them; otherwise list in `## Out of scope` with a 1-line reason.
+- Members with `triage: NA`: out of scope — list in `## Out of scope` if useful.
+- If `## Class members` contains `(none detected)`: skip this check.
 
 **Anti-pattern (`rules/core-principles.md` §1 violation):** Covering only one
-`fix in scope` member while ignoring the others. If the user has to enumerate
-each one for you, you failed §1.
+MUST member while ignoring the others. If the user has to enumerate each one
+for you, you failed §1.
+
+**Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
+Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
+as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
 ## Approved Scope
 

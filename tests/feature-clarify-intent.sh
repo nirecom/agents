@@ -259,24 +259,47 @@ echo "--- Issue #462: Class members ---"
 
 # Reuse LOCAL_SKILL_MD (worktree-relative path) — N10-N13 target unmerged changes.
 # LOCAL_SKILL_MD is already defined earlier in this file.
+LOCAL_REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # N10: ## Class members mandatory section in intent.md schema
 assert_contains "$LOCAL_SKILL_MD" "Class members" \
     "N10: '## Class members' mandatory section referenced in clarify-intent SKILL.md"
 
-# N11: single multiSelect question pattern (not 2-stage)
-assert_contains "$LOCAL_SKILL_MD" "multiSelect" \
-    "N11: multiSelect question pattern in clarify-intent SKILL.md"
+# N11: multiSelect removed; Accept/Modify 2-choice lib pointer present
+assert_absent "$LOCAL_SKILL_MD" "multiSelect: true" \
+    "N11a: multiSelect:true removed (Class members no longer uses multiSelect UI)"
+assert_contains "$LOCAL_SKILL_MD" "class-members-proposal.md" \
+    "N11b: SKILL.md references class-members-proposal.md lib file"
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/lib/class-members-proposal.md" "Accept proposal as-is" \
+    "N11b-lib: class-members-proposal.md contains Accept/Modify 2-choice step"
 
-# N12: disposition enum values (fix in scope, track separately) in SKILL.md
-assert_contains "$LOCAL_SKILL_MD" "fix in scope" \
-    "N12a: 'fix in scope' disposition enum value in SKILL.md"
-assert_contains "$LOCAL_SKILL_MD" "track separately" \
-    "N12b: 'track separately' disposition enum value in SKILL.md"
+# N12: triage enum values (MUST, OPTIONAL, NA) replace disposition enum
+assert_contains "$LOCAL_SKILL_MD" "triage: MUST" "N12a: triage: MUST literal present in schema enum"
+assert_contains "$LOCAL_SKILL_MD" "triage: OPTIONAL" "N12b: triage: OPTIONAL literal present in schema enum"
+assert_contains "$LOCAL_SKILL_MD" 'triage: <MUST | OPTIONAL | NA>' "N12c: schema line shows full enum"
+assert_contains "$LOCAL_SKILL_MD" "triage: NA" "N12d: triage: NA literal present in schema enum"
 
 # N13: no cap別枠 wording (class members question is inside the 5-round cap, not extra)
 assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*cap" \
     "N13: no 'cap別枠' wording — class members question counts within 5-round cap"
+
+# N14–N16: triage schema additions (#555/#556/#557/#582)
+# LOCAL_REPO_ROOT defined above (before N10).
+
+# N14: Phase A/B/C procedure in lib file contains Accept/Modify step
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/lib/class-members-proposal.md" \
+    "Accept proposal as-is" \
+    "N14: class-members-proposal.md contains the Accept/Modify 2-choice step"
+
+# N15: aggregation procedure in lib file
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/lib/aggregate-class-members.md" \
+    "Deduplicate by" \
+    "N15: aggregate-class-members.md contains dedup step"
+
+# N16: shared triage compat reference exists (SSOT for legacy disposition mapping)
+assert_contains "$LOCAL_REPO_ROOT/agents/lib/triage-legacy-compat.md" \
+    "fix in scope" \
+    "N16: triage-legacy-compat.md documents legacy disposition mapping"
 
 echo ""
 # ---------------------------------------------------------------------------
