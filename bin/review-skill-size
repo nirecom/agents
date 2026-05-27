@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Skill file size / quality review.
-# Usage: review-skill-size [--base <ref>]
+# Usage: review-skill-size [--base <ref>] [--all]
 #
 # Always emits one of:
 #   ## Skill Size Review: PERFORMED
+#   ## Skill Size Review: PERFORMED (all-scan mode)
 #   ## Skill Size Review: SKIPPED — <reason>
 #
 # Always exits 0 — never blocks the workflow.
@@ -11,16 +12,61 @@
 set -uo pipefail
 
 BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --all) ALL_SCAN=1; shift ;;
     --base)
       if [[ $# -lt 2 ]]; then
         echo "## Skill Size Review: SKIPPED (--base requires an argument)"; exit 0
       fi
-      BASE_REF="$2"; shift 2 ;;
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; shift ;;
   esac
 done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Skill Size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+report_targets() {
+  local targets="$1"
+  echo ""
+  echo "[Line counts]"
+  while IFS= read -r file; do
+    [[ -f "$file" ]] || continue
+    local lines
+    lines=$(wc -l < "$file" | tr -d ' ')
+    if (( lines > 100 )); then
+      echo "WARN: $file — $lines lines (exceeds 100-line safety net)"
+    else
+      echo "INFO: $file — $lines lines"
+    fi
+  done <<< "$targets"
+  echo ""
+
+  cat <<'EOF'
+### Manual review checklist — apply to every SKILL.md (regardless of line count)
+
+Criteria SSOT: rules/prompt-criteria.md (§1 Form — directives, one-line, multi-step → CLI).
+
+This is advisory output — no action is blocked.
+EOF
+}
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  TARGETS=$(find skills/ -name SKILL.md -not -path '*/_archived/*' 2>/dev/null | sort || true)
+  if [[ -z "$TARGETS" ]]; then
+    echo "## Skill Size Review: SKIPPED — no SKILL.md files found"; exit 0
+  fi
+  echo "## Skill Size Review: PERFORMED (all-scan mode)"
+  echo ""
+  COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+  echo "All SKILL.md files scanned: $COUNT"
+  report_targets "$TARGETS"
+  exit 0
+fi
 
 BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
   echo "## Skill Size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
@@ -42,26 +88,6 @@ echo "## Skill Size Review: PERFORMED"
 echo ""
 COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
 echo "Changed SKILL.md files: $COUNT"
-echo ""
-
-echo "[Line counts]"
-while IFS= read -r file; do
-  [[ -f "$file" ]] || continue
-  lines=$(wc -l < "$file" | tr -d ' ')
-  if (( lines > 100 )); then
-    echo "WARN: $file — $lines lines (exceeds 100-line safety net)"
-  else
-    echo "INFO: $file — $lines lines"
-  fi
-done <<< "$TARGETS"
-echo ""
-
-cat <<'EOF'
-### Manual review checklist — apply to every changed SKILL.md (regardless of line count)
-
-Criteria SSOT: rules/prompt-criteria.md (§1 Form — directives, one-line, multi-step → CLI).
-
-This is advisory output — no action is blocked.
-EOF
+report_targets "$TARGETS"
 
 exit 0
