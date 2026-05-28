@@ -94,21 +94,22 @@ get_repo_slug() {
 }
 
 # Always called with the CHILD issue number — never the parent.
-# Returns the child's GraphQL node id (required by the sub-issues REST API).
-get_child_node_id() {
+# Returns the child's integer databaseId (required by the sub-issues REST API
+# as of 2025-Q4; the older GraphQL node id form returns HTTP 422).
+get_child_database_id() {
     local issue_number="$1"
-    gh issue view "$issue_number" --json id --jq .id | tr -d '\r'
+    gh issue view "$issue_number" --json databaseId --jq .databaseId | tr -d '\r'
 }
 
-# $1 = parent issue number (URL path), $2 = child GraphQL node id (body).
+# $1 = parent issue number (URL path), $2 = child integer databaseId (body).
 attach_subissue() {
     local parent_number="$1"
-    local child_node_id="$2"
+    local child_database_id="$2"
     local slug
     slug="$(get_repo_slug)"
     gh api -X POST \
         "repos/${slug}/issues/${parent_number}/sub_issues" \
-        -f "sub_issue_id=${child_node_id}" >/dev/null
+        -F "sub_issue_id=${child_database_id}" >/dev/null
 }
 
 create_via_issue_create() {
@@ -191,12 +192,12 @@ case "$VERDICT" in
         [ -n "$PARENT" ] || { echo "Error: --parent required for --verdict sub-of" >&2; exit 2; }
         url="$(create_via_issue_create "${PASSTHROUGH[@]}")"
         child_number="$(extract_issue_number "$url")"
-        child_node_id="$(get_child_node_id "$child_number")"
+        child_database_id="$(get_child_database_id "$child_number")"
         # Disable set -e for the attach step so we can surface the parent URL on failure.
-        if ! attach_subissue "$PARENT" "$child_node_id"; then
+        if ! attach_subissue "$PARENT" "$child_database_id"; then
             echo "Error: failed to attach #${child_number} as sub-issue of #${PARENT}" >&2
             echo "The issue was created: ${url}" >&2
-            echo "Retry: gh api -X POST repos/<slug>/issues/${PARENT}/sub_issues -f sub_issue_id=${child_node_id}" >&2
+            echo "Retry: gh api -X POST repos/<slug>/issues/${PARENT}/sub_issues -F sub_issue_id=${child_database_id}" >&2
             exit 1
         fi
         slug="$(get_repo_slug)"
@@ -214,13 +215,13 @@ case "$VERDICT" in
         failed=()
         for child in "${CHILD_LIST[@]}"; do
             child="${child// /}"   # trim spaces
-            child_node_id=""
-            # Use if ! to handle get_child_node_id failure without set -e exit.
-            if ! child_node_id="$(get_child_node_id "$child")"; then
+            child_database_id=""
+            # Use if ! to handle get_child_database_id failure without set -e exit.
+            if ! child_database_id="$(get_child_database_id "$child")"; then
                 failed+=("$child")
                 continue
             fi
-            if ! attach_subissue "$new_parent_number" "$child_node_id"; then
+            if ! attach_subissue "$new_parent_number" "$child_database_id"; then
                 failed+=("$child")
             fi
         done
@@ -228,8 +229,8 @@ case "$VERDICT" in
             echo "Error: failed to attach children to ${url}: ${failed[*]}" >&2
             echo "Parent issue is created. Retry the failed children manually:" >&2
             for f in "${failed[@]}"; do
-                echo "  gh issue view ${f} --json id --jq .id  # get node id" >&2
-                echo "  gh api -X POST repos/<slug>/issues/${new_parent_number}/sub_issues -f sub_issue_id=<node_id>" >&2
+                echo "  gh issue view ${f} --json databaseId --jq .databaseId  # get integer id" >&2
+                echo "  gh api -X POST repos/<slug>/issues/${new_parent_number}/sub_issues -F sub_issue_id=<integer>" >&2
             done
             exit 1
         fi
