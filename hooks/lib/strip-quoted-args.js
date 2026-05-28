@@ -42,4 +42,21 @@ function stripHeredocBody(str) {
   }
 }
 
-module.exports = { stripQuotedArgs, stripHeredocBody };
+// Strip values of inline --body / --title arguments (and short forms -b/-t)
+// to neutralize write-pattern false positives in Group A gh commands and
+// known-path dispatcher scripts. Both space-separated (--body "...") and
+// equals-sign (--body="...") forms are stripped. --body-file is INTENTIONALLY
+// EXCLUDED — it is a file path, not body text; stripping it would hide
+// suspicious paths from the classifier.
+function stripInlineBodyArg(str) {
+  if (!str || typeof str !== "string") return str;
+  try {
+    return str
+      .replace(/(--(?:body|title)|-[bt])(?:\s+|=)"(?:[^"\\]|\\.)*"/g, '$1 ""')
+      .replace(/(--(?:body|title)|-[bt])(?:\s+|=)'[^']*'/g, "$1 ''");
+  } catch (e) {
+    return str;
+  }
+}
+
+module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg };
