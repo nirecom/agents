@@ -104,6 +104,12 @@ case "$ARGS" in
     NUM=$(echo "$ARGS" | awk '{print $3}')
     echo "I_kwDOmock${NUM}"
     exit 0 ;;
+  issue\ view\ *--json\ databaseId*)
+    # Fix #432: dispatch now fetches databaseId (integer) instead of GraphQL node id.
+    # Mock returns a deterministic integer derived from the issue number.
+    NUM=$(echo "$ARGS" | awk '{print $3}')
+    echo "${NUM}000"
+    exit 0 ;;
   issue\ view\ *--json\ state*)
     NUM=$(echo "$ARGS" | awk '{print $3}')
     eval "STATE=\${GH_MOCK_ISSUE_STATE_${NUM}:-OPEN}"
@@ -646,14 +652,17 @@ else
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     ATTACH_201_COUNT=$(grep -c "repos/nirecom/agents/issues/201/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null || echo 0)
+    # Fix #432: make-parent also uses databaseId (integer) via -F, not GraphQL
+    # node id via -f. Mock returns "${NUM}000" for --json databaseId, so child
+    # 42 → 42000 and child 43 → 43000.
     if [ "$RC" -eq 0 ] \
-       && grep -q "issue view 42 --json id" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "issue view 43 --json id" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "sub_issue_id=I_kwDOmock42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "sub_issue_id=I_kwDOmock43" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue view 42 --json databaseId" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue view 43 --json databaseId" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q -- "-F sub_issue_id=42000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q -- "-F sub_issue_id=43000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && [ "$ATTACH_201_COUNT" -ge 2 ] \
        && [ "$LAST_LINE" = "https://github.com/nirecom/agents/issues/201" ]; then
-        pass "DV5: verdict=make-parent --children 42,43 → both children attached under new parent 201"
+        pass "DV5: verdict=make-parent --children 42,43 → both children attached under new parent 201 with -F sub_issue_id=<integer>"
     else
         fail "DV5: verdict=make-parent behavior incorrect (rc=$RC stdout='$LAST_LINE' attach_201_count=$ATTACH_201_COUNT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
@@ -691,7 +700,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# DV8: Sub-issue API call shape — `api -X POST` + sub_issues path + -f sub_issue_id=
+# DV8: Sub-issue API call shape — `api -X POST` + sub_issues path + -F sub_issue_id=<integer>
+# Fix #432: sub_issue_id must be passed via -F (numeric) using the child's
+# databaseId integer, not -f (string) with the GraphQL node id.
 # ---------------------------------------------------------------------------
 if [ ! -x "$DISPATCH" ]; then
     fail "DV8: dispatch script missing — RED until implementation"
@@ -703,8 +714,9 @@ else
     if [ "$RC" -eq 0 ] \
        && grep -q "api .*-X POST" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "repos/nirecom/agents/issues/100/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q -- "-f sub_issue_id=" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
-        pass "DV8: sub-issue API call has correct shape (api -X POST, sub_issues path, -f sub_issue_id=)"
+       && grep -q "issue view 200 --json databaseId" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -qE -- "-F sub_issue_id=[0-9]+" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+        pass "DV8: sub-issue API call has correct shape (api -X POST, sub_issues path, -F sub_issue_id=<integer>)"
     else
         fail "DV8: sub-issue API call shape incorrect (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi

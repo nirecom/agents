@@ -141,7 +141,7 @@ Issues created here may be added to an existing session's `closes_issues` list (
 
 - **Projects v2**: defaults `PROJECT_NUM=1`, owner `nirecom`. Override via `ISSUE_CREATE_PROJECT_NUM` / `ISSUE_CREATE_OWNER`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
 - **Content Date field**: after attach, the script sets "Content Date" to the issue's creation date (`YYYY-MM-DD`). Defaults: `ISSUE_CREATE_FIELD_ID=PVTF_lAHOAMF_jc4BXf9EzhSsYwA`, `ISSUE_CREATE_PROJECT_ID=PVT_kwHOAMF_jc4BXf9E`. Failure is non-fatal.
-- **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's GraphQL node id (`gh issue view <child> --json id`).
+- **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (`gh issue view <child> --json databaseId --jq .databaseId`), passed via `-F` (integer type).
 - **make-parent partial failure**: if a child attach fails mid-loop, the parent is created but `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
 - **Schema enforcement (#443)**: `bin/github-issues/issue-create.sh` exits 3 when `Background` or `Changes` is missing. `ISSUE_CREATE_SKIP_SCHEMA=1` is an emergency escape hatch only — the sanctioned path is to add the missing fields. Incident issues (`type:incident`) bypass this skill entirely per Scope.
