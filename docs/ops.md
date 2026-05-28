@@ -196,11 +196,10 @@ Run this weekly or whenever you close issues outside Claude Code. For **already-
 Create via `gh api` (the `gh` CLI does not support sub-issues yet):
 
 ```bash
-# Get parent database id (not issue number)
-PARENT_ID=$(gh issue view <PARENT_N> --json id --jq .id)
-CHILD_ID=$(gh issue view <CHILD_N> --json id --jq .id)
-gh api repos/{owner}/{repo}/issues/<PARENT_N>/sub_issues \
-  -f sub_issue_id="$CHILD_ID"
+# Get child databaseId (integer — not GraphQL node id)
+CHILD_ID=$(gh issue view <CHILD_N> --json databaseId --jq .databaseId)
+gh api -X POST repos/{owner}/{repo}/issues/<PARENT_N>/sub_issues \
+  -F sub_issue_id="$CHILD_ID"
 ```
 
 The parent cannot be closed while any child is `open` (`/issue-close-stage` and `/issue-close-finalize` enforce this automatically).

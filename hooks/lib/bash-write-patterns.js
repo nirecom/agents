@@ -23,7 +23,7 @@
 
 "use strict";
 
-const { stripQuotedArgs, stripHeredocBody } = require("./strip-quoted-args");
+const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg } = require("./strip-quoted-args");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
@@ -129,6 +129,30 @@ const WRITE_PATTERNS = [
 // trigger is heredoc/here-string (multi-line body argument), override read.
 const GH_GROUP_A_REGEX = /\bgh\b\s+(?:pr\s+(?:create|edit|close|comment|review)|issue\s+(?:create|edit|close|comment)|repo\s+(?:create|edit|rename|archive))\b/;
 
+// Known dispatcher scripts whose inline --body/--title args are safe to strip.
+// SECURITY: matched by full known-path suffix (not basename alone) so that
+// a script merely named issue-create-dispatch.sh at an arbitrary path cannot
+// gain Group A override behavior.
+const KNOWN_DISPATCH_SUFFIXES = [
+  "bin/github-issues/issue-create-dispatch.sh",
+  "bin/github-issues/issue-create.sh",
+];
+
+// Returns true when cmd invokes a known dispatcher via bash/sh/zsh/dash.
+// Quotes around the path are tolerated. Backslashes are normalised to forward
+// slashes before the suffix check (Windows path support).
+// Paths inside world-writable temp directories are rejected to reduce the risk
+// of an attacker crafting a script whose path ends in a known suffix.
+// (This is a UX guard, not a security boundary — see file header.)
+function isKnownDispatchInvocation(cmd) {
+  const m = cmd.match(/\b(?:bash|sh|zsh|dash)\b\s+["']?([^"'\s]+)["']?/);
+  if (!m) return false;
+  const path = m[1].replace(/\\/g, "/");
+  if (/^\/(?:tmp|var\/tmp|dev\/shm)\//i.test(path)) return false;
+  if (/^[A-Za-z]:\/(?:Users\/[^/]+\/AppData\/Local\/Temp|Windows\/Temp|Temp)\//i.test(path)) return false;
+  return KNOWN_DISPATCH_SUFFIXES.some((suf) => path.endsWith(suf));
+}
+
 // WRITE_PATTERNS names that are merely quoting/heredoc shapes — they signal a
 // multi-line string argument, not file I/O.
 const QUOTING_ONLY_NAMES = new Set([
@@ -179,22 +203,20 @@ function classify(cmd) {
       }
       return "write";
     }
-    // #371 fix: for Group A commands, strip heredoc body and re-scan.
-    // If the only remaining matches after stripping are quoting-only, return "read".
-    if (GH_GROUP_A_REGEX.test(cmd)) {
-      const bodyStripped = stripHeredocBody(cmd);
+    // #371 + #596 fix: for Group A gh commands or known dispatcher invocations,
+    // strip heredoc bodies AND inline --body/--title argument values, then
+    // re-scan. If no write pattern remains, or only quoting-only patterns
+    // remain, the command is "read".
+    if (GH_GROUP_A_REGEX.test(cmd) || isKnownDispatchInvocation(cmd)) {
+      const bodyStripped = stripInlineBodyArg(stripHeredocBody(cmd));
       const reStripped = stripQuotedArgs(bodyStripped);
       const reMatched = [];
       for (const p of WRITE_PATTERNS) {
         const scanned = STRIP_KINDS.has(p.kind) ? reStripped : bodyStripped;
         if (p.regex.test(scanned)) reMatched.push(p.name);
       }
-      if (
-        reMatched.length > 0 &&
-        reMatched.every((n) => QUOTING_ONLY_NAMES.has(n))
-      ) {
-        return "read";
-      }
+      if (reMatched.length === 0) return "read";
+      if (reMatched.every((n) => QUOTING_ONLY_NAMES.has(n))) return "read";
     }
     // Re-classify bash -c / pwsh -Command when only interpreter-c matches
     // and the inner body is read-only.
