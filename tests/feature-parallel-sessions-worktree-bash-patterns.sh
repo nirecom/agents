@@ -500,6 +500,53 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     assert_classify "gh pr create unquoted heredoc body with backticks is write" "$cmd15" "write"
 }
 
+# ============ Group A inline-body stripping (#596) ============
+# Fix #596: classify() must strip inline --body "..." / --title "..." values from
+# Group A commands (gh pr/issue/repo create/edit/...) AND from known dispatch
+# invocations (e.g. bash .../bin/github-issues/issue-create-dispatch.sh) before
+# re-scanning for git/file-op write patterns.
+
+test_gh_group_a_inline_body_stripping() {
+    # Normal: write-pattern tokens inside inline --body must not cause write
+    assert_classify "gh issue create --body containing 'git commit'" \
+        'gh issue create --body "git commit"' "read"
+    assert_classify "gh issue create --body containing 'git push origin main'" \
+        'gh issue create --body "git push origin main"' "read"
+    assert_classify "gh issue create --body containing ISSUE_CLOSE_SKILL prefix" \
+        'gh issue create --body "ISSUE_CLOSE_SKILL=1 git commit -m fix"' "read"
+
+    # Known dispatch script: absolute POSIX path
+    assert_classify "bash <abs path>/issue-create-dispatch.sh ... --body 'git commit'" \
+        'bash "/absolute/path/bin/github-issues/issue-create-dispatch.sh" --verdict none -- --title "T" --body "git commit"' "read"
+
+    # Known dispatch script: Windows absolute path form
+    assert_classify "bash <C:/...>/issue-create-dispatch.sh ... --body 'git commit'" \
+        'bash "C:/git/agents/bin/github-issues/issue-create-dispatch.sh" --verdict none -- --body "git commit"' "read"
+
+    # Edge: empty body
+    assert_classify "gh issue create --body ''" \
+        'gh issue create --body ""' "read"
+
+    # Edge: body contains only safe text
+    assert_classify "gh issue create --body 'normal body text'" \
+        'gh issue create --body "normal body text"' "read"
+
+    # Edge: --body-file (path arg, not body value) — must NOT be stripped, but
+    # since the path itself contains no write pattern, still classifies as read.
+    assert_classify "gh issue create --body-file /path/to/file.md" \
+        'gh issue create --body-file /path/to/file.md' "read"
+
+    # Security: real git commit (no Group A prefix) must remain write
+    assert_classify "real 'git commit -m' must remain write" \
+        'git commit -m "message"' "write"
+
+    # Security: unknown bash script invocation must NOT get inline-body stripping
+    assert_classify "bash /tmp/issue-create-dispatch.sh (unknown path) is write" \
+        'bash /tmp/issue-create-dispatch.sh --body "git commit"' "write"
+    assert_classify "bash ./fake-issue-create.sh (unknown path) is write" \
+        'bash ./fake-issue-create.sh --body "git commit"' "write"
+}
+
 test_git_update_ref_write() {
     assert_classify "git update-ref create" \
         'git update-ref refs/heads/feat HEAD' "write"
@@ -643,6 +690,7 @@ test_git_branch_delete_writes
 test_gh_group_a_with_heredoc_classified_read
 test_gh_group_a_with_redirect_still_write
 test_gh_group_a_heredoc_body_with_write_pattern_is_read
+test_gh_group_a_inline_body_stripping
 test_git_update_ref_write
 test_git_commit_subcommand_position
 test_quoted_arg_no_false_positive_file_op
