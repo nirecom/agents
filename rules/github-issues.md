@@ -126,9 +126,12 @@ Use GitHub Sub-issues for phase/parallel breakdowns. The official `gh` CLI does
 not yet support sub-issues (cli/cli#10298), so the skill uses `gh api` directly.
 
 Key fact: `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` expects the
-child's **GraphQL node id** in `sub_issue_id`, not the issue number. Use
-`gh issue view <N> --json id --jq .id` to fetch it (`.id` returns the node id,
-e.g. `I_kwDO...`). The path parameter `{N}` is the parent's issue number (integer).
+child's **integer databaseId** in `sub_issue_id`, not the issue number and
+not the GraphQL node id. Use
+`gh issue view <N> --json databaseId --jq .databaseId` to fetch it (an integer
+such as `2851234567`). The path parameter `{N}` is the parent's issue number
+(integer). Pass it via `gh api -F` (typed integer), not `-f` (string) — the
+API returns HTTP 422 for string values.
 
 The close path's Step B gates the parent: if any child issue is in state `open`,
 closing the parent is blocked. Cancelled/migrated children must already be closed
