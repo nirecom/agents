@@ -61,7 +61,7 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
   revision-rounds cap is the symmetric pair. Both caps now route through
   `bin/review-loop-cap-menu`. Do NOT propose alternative escalation flows that bypass
   this helper.
-- **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` §2):**
+- **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` §3):**
   outline.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
   verbatim from intent.md. If any required section is absent or modified relative to
   intent.md, return `MISSING_ALTERNATIVE` with a `[HIGH]` concern naming the absent or
