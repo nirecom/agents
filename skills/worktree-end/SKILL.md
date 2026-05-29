@@ -34,9 +34,9 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
 3a. **Web-merge wait:** display `PR #<N>: merge via GitHub UI, then reply here.` + URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → 3b; else re-display and stop. `$PR_NUMBER` is session-local.
 
-3b. **Post-web-merge sync:** `git fetch --prune origin`, emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"User confirmed PR #<N> merged via web UI"`) → step 5. Skip step 4.
+3b. **Post-web-merge sync:** `git fetch --prune origin`, then emit the user-verified sentinel **directly** with no preceding narrative (hook surfaces context — see `skills/_shared/user-verified.md`; description: `"User confirmed PR #<N> merged via web UI"`) → step 5. Skip step 4.
 
-4. **Local merge:** emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. On failure: surface error and stop — do NOT force-merge or bypass checks.
+4. **Local merge:** emit the user-verified sentinel **directly** with no preceding narrative — do not restate the PR URL or describe the approval in chat first. The hook (`hooks/show-user-verified-context.js`) surfaces the PR URL and the approval instruction above the permission dialog. Use `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. On failure: surface error and stop — do NOT force-merge or bypass checks.
 
 5. **Gitignored state inventory** (before removing the worktree):
    Run all three commands (NUL-delimited, handles spaces and non-ASCII paths):
