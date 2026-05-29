@@ -455,3 +455,7 @@ Changes: **FEATURE: Arbitrary language codes accepted; DOCS_LANG_HISTORY split i
 ### FEATURE: PR #628 (2026-05-29)
 Background: refactor(#619): remove docs-lang fenced-block fallback; consolidate DOCS_LANG_* in .env
 Changes: `DOCS_LANG_*` policy is now read exclusively from `.env`; the `docs-lang` fenced block in `rules/language.md` is no longer consulted. The error footer in `check-worktree-notes-lang` now references `.env (DOCS_LANG_HISTORY_*, DOCS_LANG_CHANGELOG_*)` as the policy source.
+
+### FEATURE: PR #627 (2026-05-29)
+Background: feat(#603): replace prompt-based codex-review-loop enforcement with exit-code-driven wrapper
+Changes: "Codex review loop is now enforced by `bin/run-codex-review-loop` — orchestrators can no longer skip or misparse the verdict. Exit codes (0=approved, 1=revision needed, 2=cap, 3=fallback, 4=broken infrastructure) replace the previous prose-based verdict instructions. (#603)"
