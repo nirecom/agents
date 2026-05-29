@@ -130,6 +130,21 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
 
 Issues created here may be added to an existing session's `closes_issues` list (see `rules/github-issues.md` "Session model").
 
+### Phase 5 — Record to WORKTREE_NOTES.md (primary-path capture)
+
+Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling).
+After Phase 4 emits the issue URL, extract the issue number and invoke the helper:
+
+    N=$(echo "$URL" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$')
+    node "$AGENTS_CONFIG_DIR/bin/worktree-notes-append.js" \
+        --notes-path "$(git rev-parse --show-toplevel)/WORKTREE_NOTES.md" \
+        --issue-number "$N" --title "<Phase 1 title>" \
+        --label type:task --skip-if-main
+
+Failure is non-fatal — log a stderr warning and continue. The helper handles
+main-worktree skip, label-driven section routing, idempotent re-runs, and
+atomic write internally.
+
 ## Label policy
 
 - `type:task` is attached unconditionally by the underlying script.
