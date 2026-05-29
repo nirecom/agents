@@ -1,11 +1,10 @@
 # Codex Review Loop — Shared Protocol
 
-Used by `make-outline-plan` Step 5 and `make-detail-plan` Step 5. Wraps draft
-persistence, context build, codex invocation, verdict parsing, raw-output
-persistence, and the symmetric round-log + planner-response trailer.
+Used by `make-outline-plan` Step 5 and `make-detail-plan` Step 5. The mechanical
+parts (context build → codex invocation → verdict parse) are enforced by the
+`bin/run-codex-review-loop` wrapper.
 
-`EXTENSIONS_USED` is owned by the caller; the caller passes the current value
-on each invocation and increments it on AUTO_EXTEND.
+`EXTENSIONS_USED` is owned by the caller.
 
 ## Parameters (caller supplies)
 
@@ -21,90 +20,77 @@ on each invocation and increments it on AUTO_EXTEND.
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
 | ACCEPTED_TRADEOFFS_FILE | `<PLANS_DIR>/<session-id>-intent.md` | `<PLANS_DIR>/<session-id>-outline.md` |
-| NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE` | `NEEDS_REVISION` |
+| NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE:` | `NEEDS_REVISION` |
 
-## Protocol (per review round)
+## Per-round protocol
 
 ### a. Write draft
 
-Write the planner's output to `DRAFT_FILE` via the Write tool. The Write tool
-auto-creates the `drafts/` directory.
+Write the planner's output to `DRAFT_FILE` via the Write tool.
 
-### b. Build review context file (once per stage invocation; rebuilt at the start of each stage)
-
-Per-stage freshness rule:
-
-- Compute marker path: `<PLANS_DIR>/drafts/<session-id>-context.<FORMAT>.built`
-  (e.g. `…-context.outline-plan.built`, `…-context.detail-plan.built`).
-- If the marker file exists, skip the build (reuse across this stage's
-  revision rounds).
-- Otherwise: invoke the builder, then `touch` the marker.
-
-Build command (always overwrites the output file when at least one input
-exists; deletes the output file when neither input exists):
-
-    bin/build-codex-context --plans-dir <PLANS_DIR> \
-                            --session-id <session-id> \
-                            --output <PLANS_DIR>/drafts/<session-id>-context.md
-
-The script writes Section 1 (intent), Section 2 (outline), or both with a
-`---` separator, depending on which prior-stage files exist and are
-non-empty. If neither exists the script deletes any pre-existing output
-file and exits 0; Step c will then omit the corresponding `--context` flag
-because the file is absent on disk.
-
-Why per-stage and not per-session: the outline stage builds the context
-when only intent.md exists. By the time the detail stage runs,
-outline.md also exists and Section 2 must be added. A session-scoped
-"skip if exists" gate would preserve the intent-only file and silently
-deprive the detail reviewer of Section 2. The marker is FORMAT-scoped so
-each stage gets exactly one rebuild and N reuses across its revision
-rounds.
-
-### c. Invoke review-plan-codex
+### b/c/d. Invoke wrapper (single Bash call)
 
 ```
-review-plan-codex --input <DRAFT_FILE> \
-                  --format <FORMAT> \
-                  --session-id <session-id> \
-                  --log-dir <PLANS_DIR>/drafts \
-                  --cap <CAP> --max-extensions <MAX_EXTENSIONS> \
-                  --extensions-used $EXTENSIONS_USED \
-                  --accepted-tradeoffs <ACCEPTED_TRADEOFFS_FILE> \
-                  [--context <PLANS_DIR>/<session-id>-survey-code.md] \
-                  [--context <PLANS_DIR>/<session-id>-survey-history.md] \
-                  [--context <PLANS_DIR>/drafts/<session-id>-context.md] \
-                  [--context <CONCERNS_LOG>] \
-                  --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"
+"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" \
+  --format <FORMAT> \
+  --session-id <session-id> \
+  --plans-dir <PLANS_DIR> \
+  --draft-file <DRAFT_FILE> \
+  --cap <CAP> \
+  --max-extensions <MAX_EXTENSIONS> \
+  --extensions-used $EXTENSIONS_USED \
+  --accepted-tradeoffs <ACCEPTED_TRADEOFFS_FILE> \
+  [--context <PLANS_DIR>/<session-id>-survey-code.md] \
+  [--context <PLANS_DIR>/<session-id>-survey-history.md] \
+  [--context <CONCERNS_LOG>] \
+  > "$TMP_STDOUT"
+RV=$?
+cat "$TMP_STDOUT"
 ```
 
-Omit `--context` args that point to files not yet created.
+> Pipeline note: if piping for tee'ing, capture `${PIPESTATUS[0]}` instead of `$?`.
 
-### d. Parse verdict (first line of stdout)
+The wrapper internally:
+1. Builds (per-stage, marker-gated at `<PLANS_DIR>/drafts/<session-id>-context.<FORMAT>.built`)
+   the unified context at `<PLANS_DIR>/drafts/<session-id>-context.md` via
+   `bin/build-codex-context`. Section headers: `## Section 1: Intent (User Requirements)`
+   and `## Section 2: Outline (Design Proposal)`, prefixed by
+   `<!-- Source: <PLANS_DIR>/<session-id>-intent.md -->` and
+   `<!-- Source: <PLANS_DIR>/<session-id>-outline.md -->`.
+   - If only the intent file exists, only Section 1 is written.
+   - If only the outline file exists, only Section 2 is written.
+   - If neither exists, the output file is deleted and no `--context <context.md>` is passed downstream.
+2. Pre-flights `AGENTS_CONFIG_DIR` AND `$AGENTS_CONFIG_DIR/rules/core-principles.md`
+   (both mandatory — missing either → exit 4).
+3. Calls `review-plan-codex` with the assembled flags, always passing
+   `--context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` plus the unified
+   context.md (when non-empty) plus each caller-supplied `--context` whose target
+   exists and is non-empty.
+4. Parses status header + verdict.
 
-- `## Codex Plan Review: PERFORMED` → extract content between
-  `<!-- begin-codex-output -->` and `<!-- end-codex-output -->`. The first
-  non-blank line is the verdict token:
-  - `APPROVED` (bare or `APPROVED <justification>`) → caller proceeds to the write/confirm phase.
-  - `NON_APPROVED_VERDICT` (`NEEDS_REVISION` for detail, `MISSING_ALTERNATIVE: …` for outline) →
-    extract numbered concerns; proceed to d.1 then e.
-  - `FAILED — round cap reached` → caller invokes cap-menu-dispatch
-    (`skills/_shared/cap-menu-dispatch.md`).
-  - Anything else → **format malformed**: append
-    `<ISO-timestamp> round=<N> codex output malformed (could not parse verdict)`
-    to `DEBUG_LOG` via Bash `printf '%s\n' "..." >> <path>`; silently launch
-    `REVIEWER_AGENT` subagent. Do NOT emit to chat.
-- `SKIPPED` / `FAILED — <other>` → **codex unavailable**: append
-  `<ISO-timestamp> round=<N> codex unavailable (<reason>)` to `DEBUG_LOG`;
-  silently launch `REVIEWER_AGENT` subagent. Do NOT emit to chat.
+## Exit code → orchestrator action (SSOT) {#exit-code--orchestrator-action-ssot}
 
-### d.1. Raw-codex persistence (on non-APPROVED verdict)
+| Exit | Meaning | Orchestrator action |
+|---|---|---|
+| 0 | APPROVED | Return to caller for the write/confirm phase. |
+| 1 | NON_APPROVED_VERDICT | Capture stdout to `RAW_FILE` (step d.1) → append round log + planner trailer to `CONCERNS_LOG` (step e) → re-invoke `PLANNER_AGENT`. |
+| 2 | `FAILED — round cap reached` | Invoke cap-menu-dispatch (`skills/_shared/cap-menu-dispatch.md`). |
+| 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent**. Do NOT emit to chat. |
+| 4 | **Wrapper / config / parser failure** (unset `AGENTS_CONFIG_DIR`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc.) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. |
 
-Extract the content between `<!-- begin-codex-output -->` and
-`<!-- end-codex-output -->` and write it to `RAW_FILE` (substitute the current
-round number `<N>` = count of prior round-log entries + 1). Pass this path as
-a literal string in the next `PLANNER_AGENT` invocation so the planner reads
-the raw codex output directly via Read tool.
+**Critical distinction:** exit 3 and exit 4 look superficially similar (neither produced a usable
+verdict) but require opposite responses. Exit 3 is "codex was given a fair chance and could not
+perform" → graceful degradation to the local reviewer is correct. Exit 4 is "the wrapper / config
+/ parser is broken" → the local reviewer fallback would let the broken pipeline keep running
+silently. Fix the underlying problem (set the env var, install the missing binary, restore
+`core-principles.md`, etc.) and re-run.
+
+SKILL.md callers MUST NOT reproduce this table — they reference it by link.
+
+### d.1. Raw-codex persistence (on exit 1)
+
+Extract content between `<!-- begin-codex-output -->` and `<!-- end-codex-output -->` from
+the captured wrapper stdout and write to `RAW_FILE` (`<N>` = prior round-log count + 1).
 
 ### e. Symmetric round log + planner-response trailer
 
@@ -120,15 +106,17 @@ Planner's intended response (next round):
 <extracted verbatim from PLANNER_AGENT's ROUND_RESPONSE trailer>
 ```
 
-Extract the planner trailer per `agents/<PLANNER_AGENT>.md` contract
-(`<!-- begin-planner-response -->` block). Codex receives this log via
-`--context <CONCERNS_LOG>` on the next round (re-running step c).
-
 ## Outcomes
 
-- APPROVED → return to caller for the write/confirm phase.
-- non-APPROVED verdict → caller increments its revision-round counter and
-  re-invokes `PLANNER_AGENT` with `RAW_FILE` + `CONCERNS_LOG`.
-- `FAILED — round cap reached` → caller invokes cap-menu-dispatch.
-- codex unavailable / format malformed → caller silently falls back to
-  `REVIEWER_AGENT` subagent.
+- exit 0 → return to caller for the write/confirm phase.
+- exit 1 → caller increments revision-round counter; re-invokes `PLANNER_AGENT`.
+- exit 2 → caller invokes cap-menu-dispatch.
+- exit 3 → caller silently falls back to `REVIEWER_AGENT` subagent.
+- **exit 4 → caller HALTS with blocking error; no fallback.**
+
+## Rationale: why a wrapper and not prose
+
+The previous version of this protocol relied on prose ordering instructions. An orchestrator
+that skipped step c (invoking `REVIEWER_AGENT` directly without ever calling `review-plan-codex`)
+was not detected. The wrapper makes the codex path the only sanctioned mechanical entry point;
+a `REVIEWER_AGENT` invocation is justified ONLY by exit 3, and exit 4 specifically forbids it.
