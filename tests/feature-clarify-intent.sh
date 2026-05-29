@@ -270,7 +270,7 @@ assert_absent "$LOCAL_SKILL_MD" "multiSelect: true" \
     "N11a: multiSelect:true removed (Class members no longer uses multiSelect UI)"
 assert_contains "$LOCAL_SKILL_MD" "class-members-proposal.md" \
     "N11b: SKILL.md references class-members-proposal.md lib file"
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/lib/class-members-proposal.md" "Accept proposal as-is" \
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" "Accept proposal as-is" \
     "N11b-lib: class-members-proposal.md contains Accept/Modify 2-choice step"
 
 # N12: triage enum values (MUST, OPTIONAL, NA) replace disposition enum
@@ -287,12 +287,12 @@ assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*c
 # LOCAL_REPO_ROOT defined above (before N10).
 
 # N14: Phase A/B/C procedure in lib file contains Accept/Modify step
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/lib/class-members-proposal.md" \
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \
     "Accept proposal as-is" \
     "N14: class-members-proposal.md contains the Accept/Modify 2-choice step"
 
 # N15: aggregation procedure in lib file
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/lib/aggregate-class-members.md" \
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/aggregate-class-members.md" \
     "Deduplicate by" \
     "N15: aggregate-class-members.md contains dedup step"
 
