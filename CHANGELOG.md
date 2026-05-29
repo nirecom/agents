@@ -451,3 +451,7 @@ Changes: core-principles.md now has 6 sections: §1 SSOT → §2 Elevate Perspec
 ### FEATURE: PR #618 (2026-05-29)
 Background: feat(#594): support arbitrary language codes; split DOCS_LANG_HISTORY into PUBLIC/PRIVATE
 Changes: **FEATURE: Arbitrary language codes accepted; DOCS_LANG_HISTORY split into PUBLIC/PRIVATE (#594)**
+
+### FEATURE: PR #628 (2026-05-29)
+Background: refactor(#619): remove docs-lang fenced-block fallback; consolidate DOCS_LANG_* in .env
+Changes: `DOCS_LANG_*` policy is now read exclusively from `.env`; the `docs-lang` fenced block in `rules/language.md` is no longer consulted. The error footer in `check-worktree-notes-lang` now references `.env (DOCS_LANG_HISTORY_*, DOCS_LANG_CHANGELOG_*)` as the policy source.
