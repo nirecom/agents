@@ -36,10 +36,13 @@ Forward the user's flags verbatim. Add no flags of your own.
   merged check, no `branch -D` target).
 - A 4-AND safety check is required before any deletion: registered linked
   worktree AND PR merged AND clean working tree AND mtime > threshold.
-- Orphan-directory scan uses a 5-AND gate: containment under WORKTREE_BASE_DIR
-  AND no .git AND mtime > threshold AND empty-or-notes-only AND ownership proof
-  via `Main repo:` field in `WORKTREE_NOTES.md`. Basename match alone is NOT
-  ownership proof — two unrelated repos can share `agents`/`dotfiles` basenames.
+- Orphan-directory scan uses a 4-AND gate: containment under WORKTREE_BASE_DIR
+  AND no .git AND mtime > threshold AND ownership proof via `Main repo:` field
+  in `WORKTREE_NOTES.md`. Basename match alone is NOT ownership proof — two
+  unrelated repos can share `agents`/`dotfiles` basenames. The former
+  "empty-or-notes-only" gate was removed: a partial `git worktree remove` can
+  leave a full checkout without a .git file, which is safe to delete when
+  ownership is proven.
 
 ## Migration notes for #503
 
