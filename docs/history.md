@@ -128,4 +128,8 @@ Changes: detail plan: `~/.claude/plans/20260510-todo-to-github-issues-detail.md`
 
 ### FEATURE: PR3: issue-close-finalize/SKILL.md 短縮 + bin/ 抽出 + eval 除去 (2026-05-29, 1c1e83d78dff34e39e3a6fee459c9d7307af15ad, #612)
 Background: issue-close-finalize/SKILL.md は約 220 行でインライン bash が多い。eval 呼び出しも含む。 親 issue: #610
-Changes: - bin/issue-close-finalize/ 作成: pre-flight.sh, step-e.sh, step-g5-loop.sh - SKILL.md を ≤130 行に短縮 - eval 呼び出しをすべて除去 - tests/feature-issue-close-finalize-no-eval.sh 追加
+Changes: - bin/issue-close-finalize/ 作成: pre-flight.sh, step-e.sh, step-g5-loop.sh - SKILL.md を ≤130 行に短縮 - eval 呼び出しをすべて除去 - tests/feature-issue-close-finalize-no-eval.sh 追加
+
+### FEATURE: codex-review-loop: prompt 頼みを排除し hook/helper で review-plan-codex 呼び出しを強制 (2026-05-29, 64bb3be3f0934b48477fcae6b2aa34f3ced4f006, #603)
+Background: `codex-review-loop.md` のプロトコルは「まず `review-plan-codex` を呼び、SKIPPED/FAILED 時のみ `detail-reviewer` / `outline-reviewer` にフォールバック」を要求しているが、この呼び出し順はプロンプト指示のみで強制されており、Claude orchestrator が誤った手順を踏んでも検出・ブロックする仕組みがない。 具体的な事故例 (#602 実装セッション): `make-detail-plan` の codex-review-loop ステップで `review-plan-codex` を呼ばずに `detail-reviewer` subagent を2ラウンド直接起動してしまった。`review-plan-codex` は intent + outline の context を受け取り assembler の挙動を考慮した判定ができるが、subagent はその context なしに動作するため「mandatory sections 欠如」を HIGH として誤報し続け、ラウンドキャップを無駄に消費した。
+Changes: `bin/run-codex-review-loop` (または `bin/codex-review-loop`) ヘルパースクリプトを導入し、make-detail-plan / make-outline-plan の codex-review-loop ステップをスクリプト呼び出しに変える。スクリプトが以下を一括担う: 1. context ファイルの構築 (`build-codex-context`) 2. `review-plan-codex` の呼び出しと stdout パース 3. SKIPPED/FAILED 判定 → `REVIEWER_AGENT` subagent への自動フォールバック 4. 結果 (APPROVED / NON_APPROVED_VERDICT / cap) の exit code での通知 orchestrator SKILL.md は 1 行のスクリプト呼び出し (`review-loop-run`) のみを記述し、内部フローを prompt 指示で記述しない。 Related to #578 (codex-review-loop SSOT) Related to #578
