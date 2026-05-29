@@ -447,3 +447,7 @@ Changes: Fixed `/issue-create` being blocked from the main worktree when issue b
 ### FEATURE: PR #616 (2026-05-29)
 Background: feat(#606,#607): add §4 Scenario Sweep to core-principles + sibling-sweep to review tools
 Changes: core-principles.md now has 6 sections: §1 SSOT → §2 Elevate Perspective → §3 Orthogonality → §4 Scenario Sweep (new) → §5 Audience-Aware Behavior → §6 Name Reflects Substance. The new §4 Scenario Sweep extends fixes to future class members, not just current siblings.;Review tools (review-code-codex, review-plan-security, review-code-security, review-plan-codex) now include a sibling-sweep step: each reviewer enumerates class members in the diff/plan and flags them MUST / OPTIONAL / NA for the same treatment.
+
+### FEATURE: PR #618 (2026-05-29)
+Background: feat(#594): support arbitrary language codes; split DOCS_LANG_HISTORY into PUBLIC/PRIVATE
+Changes: **FEATURE: Arbitrary language codes accepted; DOCS_LANG_HISTORY split into PUBLIC/PRIVATE (#594)**
