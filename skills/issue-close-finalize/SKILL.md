@@ -23,6 +23,10 @@ All `gh issue close` / `gh issue comment` need `ISSUE_CLOSE_SKILL=1`.
 
 ## Delegation — initial pass
 
+<!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
+Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
+Then when `*,J,*` in NEXT_STEPS: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`).
+
 Resolve `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` and
 `STATE_FILE="$PLANS_DIR/<session-id>-finalize-state-<N>.json"`.
 
@@ -69,8 +73,9 @@ Worker returns `status=awaiting_recursion`. Main runs `/issue-close-finalize $PR
 After recursion: write `state.g5_history[-1].recursion_completed = true` to STATE_FILE.
 Delegate `phase=loop_step, g5_decision=recurse_done` → continue loop.
 
-## Finalize terminal
+## Finalize terminal (Steps H, J, K, L)
 
+<!-- ## Step L: write outcome JSON (always; final step before End report) — executed by worker -->
 Delegate Steps H, J, K, L to `issue-close-finalize-worker`:
 ```
 Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({

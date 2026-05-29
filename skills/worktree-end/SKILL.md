@@ -52,13 +52,20 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    Worker returns one-line summary. Present to user via `AskUserQuestion`: "Back up (copy to .worktree-backup/), discard, or abort?"
 
    **Pass 2 — execute** (only when user chose "back up"):
+   Set:
+   ```
+   BACKUP_DIR="<main_root>/.worktree-backup/<branch>/"
+   ```
    ```
    Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({
      mode: "execute", worktree_path: WORKTREE_PATH, branch: BRANCH,
      backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
    }) })
    ```
-   Worker returns `artifact_path` (manifest.json). Set `BACKUP_MANIFEST_PATH=artifact_path`.
+   Worker returns `artifact_path` (manifest.json). Set:
+   ```
+   BACKUP_MANIFEST_PATH="<artifact_path from worker>"
+   ```
 
    If user chose "discard" and no files were copied, set `BACKUP_MANIFEST_PATH=(none)`.
    If Docker containers reference the worktree path, stop them and restart from the main path.
