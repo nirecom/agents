@@ -86,7 +86,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    # Single Bash call — atomicity contract enforced inside capture-env.sh. Do not split.
    # Output: $PLANS_DIR/<session-id>-final-report-env.json
    export PLANS_DIR
-   bash "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/capture-env.sh" \
+   bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/capture-env.sh" \
      "<worktree>" "<owner>/<repo>" "<backup-dir>" "<session-id>"
    ```
 
@@ -125,7 +125,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    **7a — Read NOTES_BACKUP_PATH from the JSON env file:**
    ```bash
    ENV_FILE="$PLANS_DIR/<session-id>-final-report-env.json"
-   NOTES_PATH="$(node "$AGENTS_CONFIG_DIR/skills/worktree-end/lib/read-notes-path.js" "$ENV_FILE")"
+   NOTES_PATH="$(node "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/read-notes-path.js" "$ENV_FILE")"
    ```
 
    **7b — Run the Final Report renderer:**
@@ -170,7 +170,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.
-- Step 5.5 invariants: see `skills/worktree-end/lib/capture-env.sh` header (atomicity / BRANCH_DELETED omission / four restart categories).
+- Step 5.5 invariants: see `skills/worktree-end/scripts/capture-env.sh` header (atomicity / BRANCH_DELETED omission / four restart categories).
 - Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
 - Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via the read-notes-path.js helper, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
 - Step 7 MUST invoke renderer with `--env-file $PLANS_DIR/<session-id>-final-report-env.json`.
