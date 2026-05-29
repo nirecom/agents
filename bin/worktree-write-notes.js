@@ -3,11 +3,12 @@
 //
 // Usage:
 //   COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js \
-//     <mainRoot> <worktreePath> <branch> [<baseDir>]
+//     <mainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]
 //
 // COPIED_JSON: full stdout JSON from worktree-copy-include.js (we read .copied).
 //              Empty / unset → treated as []. Invalid JSON → exit 1.
 // baseDir argv[5]: optional. Empty string or missing → process.env.WORKTREE_BASE_DIR || null.
+// sessionId argv[6]: optional. Empty string or missing → null (Session-ID line omitted from notes).
 
 "use strict";
 
@@ -23,10 +24,10 @@ function normalizePath(p) {
   return String(p).replace(/\\/g, "/");
 }
 
-const [, , mainRootRaw, worktreePathRaw, branch, baseDirRaw] = process.argv;
+const [, , mainRootRaw, worktreePathRaw, branch, baseDirRaw, sessionIdRaw] = process.argv;
 
 if (!mainRootRaw || !worktreePathRaw || !branch) {
-  die("Usage: worktree-write-notes.js <mainRoot> <worktreePath> <branch> [<baseDir>]");
+  die("Usage: worktree-write-notes.js <mainRoot> <worktreePath> <branch> [<baseDir>] [<sessionId>]");
 }
 
 const copiedRaw = process.env.COPIED_JSON || "";
@@ -51,6 +52,7 @@ const baseDir =
   baseDirRaw && baseDirRaw.length > 0
     ? baseDirRaw
     : process.env.WORKTREE_BASE_DIR || null;
+const sessionId = sessionIdRaw && sessionIdRaw.length > 0 ? sessionIdRaw : null;
 
 let result;
 try {
@@ -63,6 +65,7 @@ try {
     baseDir,
     copiedFiles,
     excludePattern: "WORKTREE_NOTES.md",
+    sessionId,
   });
 } catch (e) {
   die(`Unexpected error: ${e.message}`);
