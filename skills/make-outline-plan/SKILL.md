@@ -72,23 +72,41 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
    `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
-5. **Codex review loop.** Apply `skills/_shared/codex-review-loop.md` with these parameters:
-   - FORMAT: `outline-plan`
-   - DRAFT_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`
+5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
+   (parameter values for the outline stage: FORMAT=outline-plan, CAP=1,
+   MAX_EXTENSIONS=1, PLANNER_AGENT=outline-planner,
+   REVIEWER_AGENT=outline-reviewer,
+   ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-intent.md,
+   NON_APPROVED_VERDICT=MISSING_ALTERNATIVE).
+
+   For each review round, invoke the wrapper (Bash tool):
+
+   ```
+   "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" \
+     --format outline-plan \
+     --session-id <session-id> \
+     --plans-dir <PLANS_DIR> \
+     --draft-file <PLANS_DIR>/drafts/<session-id>-outline-draft.md \
+     --cap 1 --max-extensions 1 --extensions-used $EXTENSIONS_USED \
+     --accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md \
+     [--context <PLANS_DIR>/<session-id>-survey-code.md] \
+     [--context <PLANS_DIR>/<session-id>-survey-history.md] \
+     [--context <PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md] \
+     > "$TMP_STDOUT"
+   RV=$?
+   cat "$TMP_STDOUT"
+   ```
+
+   Outline-stage caller paths:
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
    - CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md`
    - DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-outline-debug.log`
-   - CAP: 1
-   - MAX_EXTENSIONS: 1
-   - PLANNER_AGENT: `outline-planner`
-   - REVIEWER_AGENT: `outline-reviewer`
-   - ACCEPTED_TRADEOFFS_FILE: `<PLANS_DIR>/<session-id>-intent.md`
-   - NON_APPROVED_VERDICT: `MISSING_ALTERNATIVE`
 
-   Outcomes:
-   - APPROVED → step 7.
-   - MISSING_ALTERNATIVE → loop (revision budget: 1 round). On budget exhaustion before cap-menu fires, tell user which concern is blocking and ask: add missing alternative / approve as-is / change scope.
-   - `FAILED — round cap reached` → step 6.
+   Exit code → action mapping: see the SSOT table in
+   `skills/_shared/codex-review-loop.md` (#exit-code--orchestrator-action-ssot).
+
+   **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
+   stderr to the user. Only exit 3 falls back silently.
 
 6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`
