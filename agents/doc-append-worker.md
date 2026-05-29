@@ -42,7 +42,7 @@ For `compose` mode, also:
 
 ## Rules
 
-- Never emit `WORKFLOW_` sentinels.
+- Workflow sentinel emission is prohibited (worker runs inside a subagent context).
 - Never call AskUserQuestion.
 - Never write to any file directly — only via `doc-append` CLI or `compose-doc-append-entry`.
 - `eval` is prohibited.
