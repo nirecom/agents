@@ -39,25 +39,27 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 4. **Local merge:** emit the user-verified sentinel **directly** with no preceding narrative — do not restate the PR URL or describe the approval in chat first. The hook (`hooks/show-user-verified-context.js`) surfaces the PR URL and the approval instruction above the permission dialog. Use `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. On failure: surface error and stop — do NOT force-merge or bypass checks.
 
 5. **Gitignored state inventory** (before removing the worktree):
-   Run all three commands (NUL-delimited, handles spaces and non-ASCII paths):
-   ```
-   git -C <worktree> ls-files --others --ignored --exclude-standard -z
-   git -C <worktree> ls-files --others --exclude-standard -z
-   git -C <worktree> status --porcelain=v1 -z
-   ```
-   Also read `WORKTREE_NOTES.md` if it exists.
 
-   Generate backup manifest (path/size/mtime/sha256; never secret values).
-   Detect Docker bind-mount impact via `docker ps -a --format json` (normalize WSL/Windows/MSYS path forms; report stopped containers).
+   Default backup destination: `<main_root>/.worktree-backup/<branch>/` (gitignored via `.git/info/exclude`).
 
-   **DRY RUN summary:** deletion paths / untracked+ignored counts / preservation candidates / Docker impact / proposed backup destination / commands to execute.
+   **Pass 1 — dry run**: delegate inventory to `worktree-backup-worker`:
+   ```
+   Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({
+     mode: "dry_run", worktree_path: WORKTREE_PATH, branch: BRANCH,
+     backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
+   }) })
+   ```
+   Worker returns one-line summary. Present to user via `AskUserQuestion`: "Back up (copy to .worktree-backup/), discard, or abort?"
 
-   Default backup destination: `<main_root>/.worktree-backup/<branch>/` (gitignored via `.git/info/exclude`). After user approval, copy targets and set:
+   **Pass 2 — execute** (only when user chose "back up"):
    ```
-   BACKUP_DIR="<resolved destination>"
-   mkdir -p "$BACKUP_DIR"
-   BACKUP_MANIFEST_PATH="$BACKUP_DIR/manifest.json"
+   Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({
+     mode: "execute", worktree_path: WORKTREE_PATH, branch: BRANCH,
+     backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
+   }) })
    ```
+   Worker returns `artifact_path` (manifest.json). Set `BACKUP_MANIFEST_PATH=artifact_path`.
+
    If user chose "discard" and no files were copied, set `BACKUP_MANIFEST_PATH=(none)`.
    If Docker containers reference the worktree path, stop them and restart from the main path.
 
