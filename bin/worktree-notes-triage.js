@@ -78,6 +78,10 @@ function cmdList(rawPath) {
   for (const section of SECTIONS) {
     const entries = parseSectionEntries(text, section);
     for (const entry of entries) {
+      // Filter out already-promoted entries — they are no longer triage
+      // candidates. The marker is appended by `annotate` (worktree-end Step
+      // 5.5) or pre-applied by `bin/worktree-notes-append.js` (issue #622).
+      if (entry.hasMarker) continue;
       out.push({
         section,
         raw: entry.raw,
