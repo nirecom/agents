@@ -29,7 +29,7 @@ process.stdin.on("end", () => {
 
   if (!ARTIFACT_RE.test(path.basename(resolved))) { approve(); return; }
 
-  const policy = loadLangConfig("plan", undefined);
+  const policy = loadLangConfig("plan");
   const tier = classifyPolicy(policy);
   if (tier === "noop") { approve(); return; }
 
