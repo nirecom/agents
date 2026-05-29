@@ -4,12 +4,16 @@
 // Returns an array of {section, line, lineNumber} violation objects.
 
 const { hasCJK } = require("./detect-cjk");
+const { classifyPolicy } = require("./lang-config");
+const { ENGLISH_RUN_RE } = require("./lint-plan-lang");
 
 const SECTION_HISTORY = "History Notes";
 const SECTION_CHANGELOG = "Changelog Notes";
 
 function enforcementFor(section, config, isPrivateRepo) {
-  if (section === SECTION_HISTORY) return config.history;
+  if (section === SECTION_HISTORY) {
+    return isPrivateRepo ? config.historyPrivate : config.historyPublic;
+  }
   if (section === SECTION_CHANGELOG) {
     return isPrivateRepo ? config.changelogPrivate : config.changelogPublic;
   }
@@ -59,16 +63,15 @@ function lintWorktreeNotesLang(content, config, options) {
   const violations = [];
   for (const b of bullets) {
     const policy = enforcementFor(b.section, config, isPrivateRepo);
-    if (policy !== "english") continue;
-    if (hasCJK(b.line)) {
-      violations.push({
-        section: b.section,
-        line: b.line,
-        lineNumber: b.lineNumber,
-      });
+    const tier = classifyPolicy(policy);
+    if (tier !== "strict") continue;
+    if (policy === "english" && hasCJK(b.line)) {
+      violations.push({ section: b.section, line: b.line, lineNumber: b.lineNumber, policy });
+    } else if (policy === "japanese" && !hasCJK(b.line) && ENGLISH_RUN_RE.test(b.line)) {
+      violations.push({ section: b.section, line: b.line, lineNumber: b.lineNumber, policy });
     }
   }
   return violations;
 }
 
-module.exports = { lintWorktreeNotesLang };
+module.exports = { lintWorktreeNotesLang, enforcementFor };
