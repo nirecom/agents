@@ -65,6 +65,9 @@ done
 # ─── Required environment ───────────────────────────────────────────────────
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+if [[ -z "${WORKTREE_BASE_DIR:-}" ]]; then
+  WORKTREE_BASE_DIR="$(cd "$AGENTS_CONFIG_DIR" && get-config-var WORKTREE_BASE_DIR 2>/dev/null || echo "")"
+fi
 WORKTREE_BASE_DIR="${WORKTREE_BASE_DIR:-$HOME/git/worktrees}"
 
 # Sanity check: git in path
@@ -312,18 +315,19 @@ if [[ "$SKIP_ORPHAN_DIR_SCAN" != "1" && -d "$WORKTREE_BASE_DIR" ]]; then
       orphan_dirs_skipped_young=$((orphan_dirs_skipped_young + 1))
       continue
     fi
-    # Gate (4): contents must be empty or only WORKTREE_NOTES.md.
-    extra="$(find "$cand_dir" -mindepth 1 -maxdepth 1 -not -name 'WORKTREE_NOTES.md' -print -quit 2>/dev/null)"
-    if [[ -n "$extra" ]]; then
-      orphan_dirs_skipped_has_files=$((orphan_dirs_skipped_has_files + 1))
-      continue
-    fi
     # Gate (5): cross-repo ownership proof. Requires WORKTREE_NOTES.md with a
     # `Main repo:` line matching the current MAIN_ROOT (forward-slash form).
     # Basename match alone is not unique ownership (two unrelated repos can
     # share `agents`/`dotfiles` basenames under different parent paths), so
     # legacy notes lacking the field and missing notes files are SKIPPED —
     # never fall through to basename match.
+    #
+    # Gate (4) "empty-or-notes-only" was intentionally removed: a partial
+    # `git worktree remove` (removes .git + registry entry but fails on the
+    # filesystem due to e.g. MAX_PATH) leaves a full checkout with no .git.
+    # That directory has proven ownership via Gate (5) and is safe to delete
+    # via cleanup-orphan-dir.js --force-if-not-registered. Directories without
+    # a valid WORKTREE_NOTES.md are rejected by Gate (5) regardless of content.
     notes_file="$cand_dir/WORKTREE_NOTES.md"
     if [[ ! -f "$notes_file" ]]; then
       orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
