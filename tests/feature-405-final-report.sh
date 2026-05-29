@@ -945,11 +945,11 @@ $out"
 test_I3_skill_md_grep_invariant() {
     require_skill_md "I3_skill_md_grep_invariant" || return
     local count
-    count="$(grep -c '^7\. \*\*Final report' "$SKILL_MD" 2>/dev/null || echo 0)"
-    if [ "$count" = "1" ]; then
-        pass "I3: SKILL.md has exactly one '7. **Final report' heading"
+    count="$(grep '^7\. \*\*Final report' "$SKILL_MD" 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$count" = "0" ]; then
+        pass "I3: SKILL.md Step 7 Final report heading correctly absent (moved to /session-close)"
     else
-        fail "I3: expected 1 occurrence of '7. **Final report', got $count"
+        fail "I3: expected 0 occurrences of '7. **Final report' (Step 7 removed in #608), got $count"
     fi
 }
 
@@ -1267,13 +1267,13 @@ test_I11_skill_md_step5_5_node_json_write() {
         skip "I11_skill_md_step5_5_node_json_write (Step 5.5 region not found)"
         return
     fi
-    local has_node=0 has_json=0
-    if echo "$region" | grep -qE 'node (-e|--)'; then has_node=1; fi
+    local has_capture=0 has_json=0
+    if echo "$region" | grep -qF "capture-env.sh"; then has_capture=1; fi
     if echo "$region" | grep -qF "final-report-env.json"; then has_json=1; fi
-    if [ "$has_node" = "1" ] && [ "$has_json" = "1" ]; then
-        pass "I11: SKILL.md Step 5.5 has node invocation + final-report-env.json"
+    if [ "$has_capture" = "1" ] && [ "$has_json" = "1" ]; then
+        pass "I11: SKILL.md Step 5.5 invokes capture-env.sh and references final-report-env.json"
     else
-        fail "I11: Step 5.5 missing node-e/--(=$has_node) or final-report-env.json(=$has_json)"
+        fail "I11: Step 5.5 missing capture-env.sh(=$has_capture) or final-report-env.json(=$has_json)"
     fi
 }
 
@@ -1491,6 +1491,7 @@ ENVEOF
         const ctx = {
           safeEnv,
           closedIssuesLine: '- (none)',
+          closedIssueOutcomeLines: ['- (none)'],
           buildPostMergeLines: () => {
             const cats = schema.CATEGORIES || [
               { label: 'Claude Code restart', newKey: 'CC_RESTART_REQUIRED', reasonKey: 'CC_RESTART_REASON', legacyKey: 'CLAUDE_CODE_RESTART_REQUIRED', legacyYes: 'yes' },

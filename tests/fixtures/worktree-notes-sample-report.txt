@@ -1,7 +1,7 @@
 ## Final Report — test-session-123
 
 ### Closed Issues
-(none)
+- (none)
 
 ### Merged PR
 - PR #(none): (none)
@@ -18,6 +18,15 @@
 - Manifest: (none)
 - Branches deleted: (none)
 
+### Closed Issue Outcomes
+- (none)
+
+### Post-Merge Actions Required
+- Claude Code restart: not_required
+- VS Code reload: not_required
+- Installer rerun: not_required
+- OS reboot: not_required
+
 ### Bugs Found
 - extractSection drops empty lines between bullets
 
@@ -26,3 +35,5 @@
 
 ### Next Tasks
 - Add integration test for non-interactive mode
+
+<<WORKFLOW_MARK_STEP_final_report_complete>>
