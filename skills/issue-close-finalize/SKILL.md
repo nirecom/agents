@@ -100,8 +100,35 @@ Idempotent. Merge SHA from Step A.5 mandatory on the normal path.
 Projects v2 Status=Done, clears session-fingerprint, deletes
 `$PLANS_DIR/wip-lock-<N>.md`. Idempotent; warn-and-continue.
 
+## Step L: write outcome JSON (always; final step before End report)
+
+Always runs (every NEXT_STEPS path). Writes
+`<PLANS_DIR>/<session-id>-issue-close-outcome.json` for `/session-close` to
+render the Closed Issue Outcomes section.
+
+Derive field values from observed step output, then substitute as literals:
+
+| Field | Values |
+|---|---|
+| `historyEntry` | `appended` \| `skipped-already-present` \| `failed` \| `skipped` (E not in NEXT_STEPS) |
+| `issueClosed` | `closed` \| `already-closed` \| `failed` \| `skipped` (H not in NEXT_STEPS) |
+| `sentinelsPosted` | `posted` \| `already-present` \| `failed` \| `skipped` (J not in NEXT_STEPS) |
+| `wipCleared` | `cleared` \| `failed` \| `skipped` (K not in NEXT_STEPS) |
+| `state` | `succeeded` \| `failed` \| `partial-failure` \| `skipped-noop` \| `skipped-already-closed` |
+
+`state` derivation: `already_closed_with_sentinel` → `skipped-already-closed`; all fields `skipped` → `skipped-noop`; `issueClosed==failed` with no closed/already-closed → `failed`; `issueClosed` closed but any field failed → `partial-failure`; otherwise → `succeeded`. (`skipped-non-github` is written by `/session-close`, never here.)
+
+```bash
+node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
+  "<N>" "<state>" "<historyEntry>" "<issueClosed>" "<sentinelsPosted>" "<wipCleared>"
+```
+
+Fail-soft: surface any stderr as `[issue-close-finalize] WARN: outcome JSON write failed`;
+never block the close flow.
+
 ## End
-Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>} (merge ${MERGE_COMMIT:-<not resolved>}); Step E outcome from `$STEP_E_STATUS`.
+
+Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>} (merge ${MERGE_COMMIT:-<not resolved>}); Step E outcome from `$STEP_E_STATUS`; Step L: `outcome JSON written` | `write failed (warned)`.
 
 ## Safety notes
 - Step E runs from main worktree. `enforce-worktree.js` permits
