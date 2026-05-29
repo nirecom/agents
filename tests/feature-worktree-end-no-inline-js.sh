@@ -2,7 +2,7 @@
 # tests/feature-worktree-end-no-inline-js.sh
 #
 # Verifies the worktree-end SKILL.md shrink (#611):
-#   - All inline `node -e` invocations are extracted to skills/worktree-end/lib/*.
+#   - All inline `node -e` invocations are extracted to skills/worktree-end/scripts/*.
 #   - SKILL.md is <= 200 lines.
 #   - New helper scripts behave per contract (extract-pr-fields, read-notes-path,
 #     write-env-json, capture-env).
@@ -31,13 +31,13 @@ else
 fi
 
 SKILL_MD="$AGENTS_CONFIG_DIR/skills/worktree-end/SKILL.md"
-LIB_DIR="$AGENTS_CONFIG_DIR/skills/worktree-end/lib"
-LIB_DIR_NODE="$AGENTS_CONFIG_DIR_NODE/skills/worktree-end/lib"
+SCRIPTS_DIR="$AGENTS_CONFIG_DIR/skills/worktree-end/scripts"
+SCRIPTS_DIR_NODE="$AGENTS_CONFIG_DIR_NODE/skills/worktree-end/scripts"
 
-CAPTURE_ENV="$LIB_DIR/capture-env.sh"
-WRITE_ENV_JSON="$LIB_DIR_NODE/write-env-json.js"
-EXTRACT_PR_FIELDS="$LIB_DIR_NODE/extract-pr-fields.js"
-READ_NOTES_PATH="$LIB_DIR_NODE/read-notes-path.js"
+CAPTURE_ENV="$SCRIPTS_DIR/capture-env.sh"
+WRITE_ENV_JSON="$SCRIPTS_DIR_NODE/write-env-json.js"
+EXTRACT_PR_FIELDS="$SCRIPTS_DIR_NODE/extract-pr-fields.js"
+READ_NOTES_PATH="$SCRIPTS_DIR_NODE/read-notes-path.js"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -89,8 +89,8 @@ test_skill_md_line_count() {
 test_lib_scripts_present() {
     local missing=0
     for f in capture-env.sh write-env-json.js extract-pr-fields.js read-notes-path.js; do
-        if [ ! -f "$LIB_DIR/$f" ]; then
-            fail "T3: missing $LIB_DIR/$f"
+        if [ ! -f "$SCRIPTS_DIR/$f" ]; then
+            fail "T3: missing $SCRIPTS_DIR/$f"
             missing=1
         fi
     done
