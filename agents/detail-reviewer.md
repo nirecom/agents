@@ -27,7 +27,7 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   Flag the plan when it adds prose explanations, multi-line directives, or inlined procedural logic.
 - **Citation integrity** — if the plan contains `[research: <tag>]` tags (tag format: `[a-z0-9-]+`), verify each tag resolves to a bullet in the plan's `## Research Findings (from this session)` section. If a claim appears to rely on external knowledge but has no citation, include in `NEEDS_REVISION`: `show research finding for: <claim>`
 - **Core principles** — verify the plan applies `rules/core-principles.md`.
-- **Mandatory carry-forward verify (structural — 3-section orthogonal check per `rules/core-principles.md` §2):**
+- **Mandatory carry-forward verify (structural — 3-section orthogonal check per `rules/core-principles.md` §3):**
   detail.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
   verbatim from outline.md. Missing or altered → `NEEDS_REVISION` with a `[HIGH]` concern
   naming the absent or altered section.
