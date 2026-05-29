@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Tests for issue #612 (PR3): issue-close-finalize SKILL.md shortening +
-# lib/ -> scripts/ migration. TDD: these tests should fail before the
-# implementation is complete and pass after.
+# Tests for issue-close-finalize SKILL.md invariants:
+#   - #612 (PR3): SKILL.md shortening + lib/ -> scripts/ migration
+#   - #636: tmpfile/mktemp pattern blocked from main worktree under
+#     ENFORCE_WORKTREE=on; SKILL.md must use `eval "$(bash ...)"` instead.
 set -euo pipefail
 
 run_with_timeout() {
@@ -31,26 +32,17 @@ assert() {
     fi
 }
 
-# ---------------- Group 1: eval removal ----------------
+# ---------------- Group 1: tmpfile/mktemp absence (main-worktree compat, #636) ----------------
+# issue-close-finalize runs from the main worktree under ENFORCE_WORKTREE=on,
+# where mktemp + `> redirect` are blocked writes. SKILL.md must use the
+# `eval "$(bash ...)"` pattern instead of tmpfile+dot-source.
 
-test_t1_no_eval_in_skill_md() {
+test_t1_no_tmpfile_in_skill_md() {
     local FAILED=0
-    grep -qF 'eval' skills/issue-close-finalize/SKILL.md && FAILED=1 || true
-    return $FAILED
-}
-
-test_t2_no_eval_in_scripts() {
-    local FAILED=0
-    local dir="skills/issue-close-finalize/scripts"
-    if [ ! -d "$dir" ]; then
-        return 1
+    if grep -qE 'tmpfile|mktemp' skills/issue-close-finalize/SKILL.md; then
+        echo "  tmpfile/mktemp pattern found in SKILL.md (blocked from main worktree, see #636)"
+        FAILED=1
     fi
-    while IFS= read -r -d '' f; do
-        if grep -qwF 'eval' "$f"; then
-            echo "  eval found in: $f"
-            FAILED=1
-        fi
-    done < <(find "$dir" -type f -name '*.sh' -print0)
     return $FAILED
 }
 
@@ -155,7 +147,7 @@ test_m5_no_lingering_lib_references() {
     local matches
     matches=$(grep -rl 'skills/worktree-end/lib\|skills/clarify-intent/lib' skills/ 2>/dev/null \
         | grep -v 'history' \
-        | grep -v 'feature-issue-close-finalize-no-eval' \
+        | grep -v 'feature-issue-close-finalize-no-tmpfile' \
         || true)
     if [ -z "$matches" ]; then
         return 0
@@ -175,8 +167,7 @@ run() {
     assert "$name" "$rc"
 }
 
-run "T1: no eval in SKILL.md"                       test_t1_no_eval_in_skill_md
-run "T2: no eval in scripts/*.sh"                   test_t2_no_eval_in_scripts
+run "T1: no tmpfile/mktemp in SKILL.md (#636)"      test_t1_no_tmpfile_in_skill_md
 run "T3: SKILL.md <= 130 lines"                     test_t3_skill_md_line_count
 run "T4: scripts/pre-flight.sh exists+exec"         test_t4_pre_flight_exists_executable
 run "T5: scripts/step-e.sh exists+exec"             test_t5_step_e_exists_executable
