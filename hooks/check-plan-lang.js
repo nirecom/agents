@@ -2,7 +2,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { loadLangConfig } = require("./lib/lang-config");
+const { loadLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { lintPlanLang } = require("./lib/lint-plan-lang");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
@@ -30,12 +30,15 @@ process.stdin.on("end", () => {
   if (!ARTIFACT_RE.test(path.basename(resolved))) { approve(); return; }
 
   const policy = loadLangConfig("plan", undefined);
-  if (policy === "any") { approve(); return; }
+  const tier = classifyPolicy(policy);
+  if (tier === "noop") { approve(); return; }
 
   const rawContent = (payload.tool_input.content !== undefined)
     ? payload.tool_input.content
     : safeRead(resolved);
   if (typeof rawContent !== "string") { approve(); return; }
+
+  if (tier === "hint") { hint(policy); return; }
 
   const violations = lintPlanLang(rawContent, policy);
   if (violations.length === 0) { approve(); return; }
@@ -50,6 +53,18 @@ function safeRead(p) {
 function approve() {
   process.stdout.write(JSON.stringify({ decision: "approve" }) + "\n");
   process.exit(0);
+}
+
+function hint(policy) {
+  process.stdout.write(JSON.stringify({
+    decision: "approve",
+    hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext:
+        `PLAN_LANG=${policy}: write planning artifact content in ${policy}. ` +
+        `Hint only — this call is approved regardless of content language.`,
+    },
+  }));
 }
 
 function block(violations, policy) {

@@ -22,17 +22,22 @@ Copying this `.example` file is not sufficient — `rules/language.md` must exis
 ## Documentation
 
 <!-- Configure language enforcement for WORKTREE_NOTES.md staging sections.
-     IMPORTANT: DOCS_LANG_HISTORY consistency matters — history.md is append-only
+     IMPORTANT: DOCS_LANG_HISTORY_PUBLIC / _PRIVATE consistency matters — history.md is append-only
      and hard to retroactively change. Choose your language once and stick with it. -->
 
 ````docs-lang
-# DOCS_LANG_HISTORY: language for ## History Notes in WORKTREE_NOTES.md
-# Valid values: english | japanese | any
-# "any" disables enforcement (no CJK check)
-DOCS_LANG_HISTORY=any
+# DOCS_LANG_HISTORY_PUBLIC: language for ## History Notes in WORKTREE_NOTES.md (public repos)
+# Valid values:
+#   english | japanese   — strict enforcement (CJK / English-run heuristic, blocks on mismatch)
+#   any                  — disables enforcement
+#   <other>              — advisory hint only (e.g. french, de-DE, zh-CN)
+DOCS_LANG_HISTORY_PUBLIC=english
+
+# DOCS_LANG_HISTORY_PRIVATE: language for ## History Notes (private repos)
+DOCS_LANG_HISTORY_PRIVATE=any
 
 # DOCS_LANG_CHANGELOG_PUBLIC: language for ## Changelog Notes in public repos
-DOCS_LANG_CHANGELOG_PUBLIC=any
+DOCS_LANG_CHANGELOG_PUBLIC=english
 
 # DOCS_LANG_CHANGELOG_PRIVATE: language for ## Changelog Notes in private repos
 DOCS_LANG_CHANGELOG_PRIVATE=any

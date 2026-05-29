@@ -1,5 +1,6 @@
 "use strict";
 const { hasCJK } = require("./detect-cjk");
+const { classifyPolicy } = require("./lang-config");
 const ENGLISH_RUN_RE = /(?:\b[A-Za-z]{2,}\b[^\S\n]+){3,}\b[A-Za-z]{2,}\b/;
 
 function stripCodeFences(text) {
@@ -9,7 +10,8 @@ function stripCodeFences(text) {
 }
 
 function lintPlanLang(content, policy) {
-  if (!content || policy === "any") return [];
+  const tier = classifyPolicy(policy);
+  if (tier !== "strict" || !content) return [];
   const stripped = stripCodeFences(content);
   const violations = [];
   stripped.split(/\r?\n/).forEach((line, idx) => {
@@ -24,4 +26,4 @@ function lintPlanLang(content, policy) {
   return violations;
 }
 
-module.exports = { lintPlanLang, stripCodeFences };
+module.exports = { lintPlanLang, stripCodeFences, ENGLISH_RUN_RE };
