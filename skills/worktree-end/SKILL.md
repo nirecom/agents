@@ -110,13 +110,10 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    g. `git -C <main> fetch --prune origin`
       `git -C <main> pull --ff-only`
    h. **Compose doc-append** (main worktree; only when NOTES_BACKUP_PATH is non-empty).
-      Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → add `--skip-history` (history.md already committed by Phase 1/2). Empty / missing → run without it (CLI bails exit 0 if notes sections empty).
-      ```
-      COMPOSE_DOC_APPEND_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/compose-doc-append-entry" \
-        --notes "$NOTES_BACKUP_PATH" --branch "$BRANCH" --pr "$PR_NUMBER" \
-        --merge-commit "$MERGE_SHA" --background "$PR_TITLE" [--skip-history]
-      ```
-      CLI is always-safe; non-zero exit → let stderr surface; Step 6i still runs. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
+      Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → set `skip_history: true` (history.md already committed by Phase 1/2). Empty / missing → `skip_history: false` (CLI bails exit 0 if notes sections empty).
+      Delegate to doc-append-worker:
+      `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "compose", notes_path: NOTES_BACKUP_PATH, branch: BRANCH, pr_number: PR_NUMBER, merge_commit: MERGE_SHA, pr_title: PR_TITLE, skip_history: SKIP_HISTORY, cwd: MAIN_ROOT, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
+      On `failed` status: surface `artifact_path` to the user; Step 6i still runs. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 ## Rules
 
