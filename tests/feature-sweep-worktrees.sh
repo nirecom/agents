@@ -449,11 +449,13 @@ T9_orphan_dir_skipped_when_has_git() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T8b — orphan dir contains extra files beyond WORKTREE_NOTES.md → Gate 4
-#       fails → SKIPPED; counter orphan_dirs_skipped_has_files == 1.
+# T8b — orphan dir with extra files + valid WORKTREE_NOTES.md (Main repo: match)
+#       → Gate 4 removed; Gate 5 ownership proof is sufficient → REMOVED.
+#       Full checkouts left by partial `git worktree remove` (no .git, all repo
+#       files) are safe to delete when ownership is proven via WORKTREE_NOTES.md.
 # ─────────────────────────────────────────────────────────────────────────────
 
-T8b_orphan_dir_skipped_when_extra_files() {
+T8b_orphan_dir_removed_when_extra_files_but_ownership_proven() {
     local repo="$TMPDIR_BASE/t8b-repo"
     init_repo "$repo"
     local repo_name
@@ -464,13 +466,13 @@ T8b_orphan_dir_skipped_when_extra_files() {
     local repo_fwd
     repo_fwd="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$repo" 2>/dev/null)"
     printf '# Worktree Notes\nMain repo: %s\n' "$repo_fwd" > "$orphan/WORKTREE_NOTES.md"
-    # Extra file beyond WORKTREE_NOTES.md — Gate 4 must reject.
+    # Extra file simulating full checkout left by partial git worktree remove.
     printf 'extra\n' > "$orphan/leftover.txt"
     make_stale "$orphan"
     make_stale "$wbase/extra-task"
 
     if [ ! -x "$SWEEP" ]; then
-        fail "T8b orphan_dir_skipped_when_extra_files: $SWEEP not found / not executable"
+        fail "T8b orphan_dir_removed_when_extra_files_but_ownership_proven: $SWEEP not found / not executable"
         return
     fi
 
@@ -479,20 +481,15 @@ T8b_orphan_dir_skipped_when_extra_files() {
         run_with_timeout bash "$SWEEP" --apply --ci-mode --skip-gh-check 2>/dev/null)"
     exit_code=$?
     if [ "$exit_code" -ne 0 ]; then
-        fail "T8b orphan_dir_skipped_when_extra_files: exit=$exit_code, out=$out"
+        fail "T8b orphan_dir_removed_when_extra_files_but_ownership_proven: exit=$exit_code, out=$out"
         return
     fi
-    if [ ! -d "$orphan" ]; then
-        fail "T8b orphan_dir_skipped_when_extra_files: dir removed despite extra file"
-        return
-    fi
-    local n n2
+    local n
     n="$(ci_field "$out" orphan_dirs_removed)"
-    n2="$(ci_field "$out" orphan_dirs_skipped_has_files)"
-    if [ "$n" = "0" ] && [ "$n2" = "1" ]; then
-        pass "T8b orphan_dir_skipped_when_extra_files (removed==0, skipped_has_files==1)"
+    if [ "$n" = "1" ] && [ ! -d "$orphan" ]; then
+        pass "T8b orphan_dir_removed_when_extra_files_but_ownership_proven (removed==1, dir gone)"
     else
-        fail "T8b orphan_dir_skipped_when_extra_files: removed=$n skipped_has_files=$n2, raw=$out"
+        fail "T8b orphan_dir_removed_when_extra_files_but_ownership_proven: removed=$n dir_exists=$([[ -d "$orphan" ]] && echo yes || echo no), raw=$out"
     fi
 }
 
@@ -760,7 +757,7 @@ T5_eperm_non_fatal
 T6_stale_backup_detected_and_removed
 T7_ci_mode_json_shape
 T8_orphan_dir_removed_when_all_gates_pass
-T8b_orphan_dir_skipped_when_extra_files
+T8b_orphan_dir_removed_when_extra_files_but_ownership_proven
 T8c_orphan_dir_skipped_when_completely_empty
 T9_orphan_dir_skipped_when_has_git
 T9b_orphan_dir_skipped_when_main_repo_mismatch
