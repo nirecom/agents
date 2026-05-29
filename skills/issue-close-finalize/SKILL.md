@@ -16,18 +16,14 @@ The merge commit is resolved from the PR in Step A.5, not from a flag.
 
 ## Pre-flight
 ```bash
-tmpfile=$(mktemp)
-bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh" > "$tmpfile" || { rm -f "$tmpfile"; exit 0; }
-. "$tmpfile"; rm -f "$tmpfile"
+eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")" || exit 0
 ```
 Sets `OWNER_REPO`. Non-GitHub remotes exit 0. `AGENTS_CONFIG_DIR` required.
 All `gh issue close` / `gh issue comment` need `ISSUE_CLOSE_SKILL=1`.
 
 ## Step A: triage
 ```bash
-tmpfile=$(mktemp)
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-finalize-triage.sh" "$N" > "$tmpfile"
-. "$tmpfile"; rm -f "$tmpfile"
+eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-finalize-triage.sh" "$N")"
 # Sets STATE, SENTINEL, ACTION, NEXT_STEPS.
 ```
 Execute the steps in `NEXT_STEPS` in order; skip the rest. Triage is the single
@@ -37,9 +33,7 @@ source of truth for routing. `ACTION=auto_close_path` runs `E,G,J` (B omitted).
 <!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
 ```bash
 if [[ ",$NEXT_STEPS," == *,J,* ]]; then
-    tmpfile=$(mktemp)
-    bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N" > "$tmpfile"
-    . "$tmpfile"; rm -f "$tmpfile"
+    eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N")"
 fi
 ```
 Sets `PR_NUMBER`, `MERGE_COMMIT`. Marker-first then `closedByPullRequestsReferences`
@@ -55,9 +49,7 @@ Non-zero → BLOCK; surface stderr and stop. `auto_close_path` skips. (#366)
 Runs from the main worktree. `step-e.sh` applies `ISSUE_CLOSE_SKILL=1` on git
 calls (AND bypass in `enforce-worktree.js`).
 ```bash
-tmpfile=$(mktemp)
-bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-e.sh" "$N" "${MERGE_COMMIT:-}" > "$tmpfile"
-. "$tmpfile"; rm -f "$tmpfile"
+eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-e.sh" "$N" "${MERGE_COMMIT:-}")"
 # Sets STEP_E_STATUS=appended|noop|failed-E<n>
 ```
 On `failed-E<n>`: stderr already surfaced. Continue to G/H/J/K (mandatory).
@@ -75,9 +67,7 @@ PROPOSAL_ACCEPTED=0; PROPOSAL_DECLINED=0; PROPOSAL_SKIPPED=0
 ```
 **G.5-1** — Pre-check:
 ```bash
-tmpfile=$(mktemp)
-bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-g5-loop.sh" prepare "$N" > "$tmpfile"
-. "$tmpfile"; rm -f "$tmpfile"
+eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-g5-loop.sh" prepare "$N")"
 # Sets PROPOSAL_STATUS (ok|skipped) and PROPOSAL_PARENT when ok.
 ```
 `PROPOSAL_STATUS=skipped` → `PROPOSAL_SKIPPED++`; stop.
@@ -90,9 +80,7 @@ stop. On yes → AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Decline
 
 **G.5-3** — On user yes:
 ```bash
-tmpfile=$(mktemp)
-bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-g5-loop.sh" execute "$PROPOSAL_PARENT" accept > "$tmpfile"
-. "$tmpfile"; rm -f "$tmpfile"
+eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-g5-loop.sh" execute "$PROPOSAL_PARENT" accept)"
 ```
 Then run `/issue-close-finalize $PROPOSAL_PARENT` (triage reads CLOSED →
 `auto_close_path`). `PROPOSAL_ACCEPTED++`; set `N=$NEXT_N`; loop to G.5-1.
