@@ -130,7 +130,7 @@ if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
         NOTES_PATH="$NOTES_PATH" \
         AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
         SKIP_HISTORY="$SKIP_HISTORY" \
-        node -e '
+        env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE node -e '
             const fs = require("fs");
             const path = require("path");
             const agentsDir = process.env.AGENTS_CONFIG_DIR;
@@ -138,13 +138,13 @@ if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
             const skipHistory = process.env.SKIP_HISTORY === "1";
             let cfgMod, lintMod, privMod;
             try {
-                cfgMod = require(path.join(agentsDir, "hooks/lib/docs-lang-config.js"));
+                cfgMod = require(path.join(agentsDir, "hooks/lib/lang-config.js"));
                 lintMod = require(path.join(agentsDir, "hooks/lib/lint-worktree-notes-lang.js"));
                 privMod = require(path.join(agentsDir, "hooks/lib/is-private-repo.js"));
             } catch (e) { process.exit(0); }
             let content;
             try { content = fs.readFileSync(notesPath, "utf8"); } catch (e) { process.exit(0); }
-            const config = cfgMod.loadDocsLangConfig(path.join(agentsDir, "rules", "language.md"));
+            const config = cfgMod.loadDocsLangConfig();
             let priv = false;
             try { priv = privMod.isPrivateRepo(process.cwd()) === true; } catch (e) {}
             const violations = lintMod.lintWorktreeNotesLang(content, config, {

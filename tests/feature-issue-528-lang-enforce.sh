@@ -2,19 +2,24 @@
 # tests/feature-issue-528-lang-enforce.sh
 #
 # Test suite for issue #528 — WORKTREE_NOTES.md language enforcement.
+# Updated for issue #619: fenced-block parser removed; .env-only configuration.
 #
 # Source files under test (TDD — may not exist yet at run time):
-#   - hooks/lib/docs-lang-config.js         (parses docs-lang fenced block)
+#   - hooks/lib/lang-config.js              (.env-only loader)
 #   - hooks/lib/lint-worktree-notes-lang.js (CJK linter)
 #   - hooks/check-worktree-notes-lang.js    (PostToolUse hook)
 #   - bin/compose-doc-append-entry          (MODIFIED to run language lint)
 #
 # Groups:
-#   G1 (T1-T7)   docs-lang-config.js parser unit tests
-#   G2 (T8-T15)  lint-worktree-notes-lang.js unit tests
-#   G3 (T16-T19) check-worktree-notes-lang.js hook integration
-#   G4 (T20-T23) compose-doc-append-entry integration
-#   G5 (T24)     settings.json static check
+#   G1' (T_new_1-4) lang-config.js loadDocsLangConfig() .env-only unit tests
+#   G2 (T8-T15)     lint-worktree-notes-lang.js unit tests
+#   G3 (T16-T19)    check-worktree-notes-lang.js hook integration
+#   G4 (T20-T23)    compose-doc-append-entry integration
+#   G5 (T24)        settings.json static check
+#   G6 (T26)        detect-cjk.js hasCJK SSOT
+#   G7              REMOVED (docs-lang-config.js shim deleted in #619)
+#   G8 (T28-T30b)   loadLangConfig independent .env routing
+#   G9-G12          plan/ask lang hooks + arbitrary-language hint tier
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,7 +29,7 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 
-CONFIG_LIB="$AGENTS_DIR/hooks/lib/docs-lang-config.js"
+CONFIG_LIB="$AGENTS_DIR/hooks/lib/lang-config.js"
 LINT_LIB="$AGENTS_DIR/hooks/lib/lint-worktree-notes-lang.js"
 HOOK="$AGENTS_DIR/hooks/check-worktree-notes-lang.js"
 CLI="$AGENTS_DIR/bin/compose-doc-append-entry"
@@ -61,64 +66,22 @@ run_with_timeout() {
     fi
 }
 
-# Make a temp language.md with a docs-lang fenced block.
-# Args: $1=historyPublic, $2=historyPrivate, $3=changelogPublic, $4=changelogPrivate
-make_lang_file() {
-    local tmp; tmp=$(mktemp -d)
-    TEST_TMPS+=("$tmp")
-    local f="$tmp/language.md"
-    cat > "$f" <<EOF
-# Language Policy
-
-Some prose here.
-
-\`\`\`docs-lang
-DOCS_LANG_HISTORY_PUBLIC=$1
-DOCS_LANG_HISTORY_PRIVATE=$2
-DOCS_LANG_CHANGELOG_PUBLIC=$3
-DOCS_LANG_CHANGELOG_PRIVATE=$4
-\`\`\`
-
-More prose.
-EOF
-    echo "$f"
-}
-
-# Make a temp language.md with no docs-lang block.
-make_lang_file_no_block() {
-    local tmp; tmp=$(mktemp -d)
-    TEST_TMPS+=("$tmp")
-    local f="$tmp/language.md"
-    cat > "$f" <<EOF
-# Language Policy
-
-No docs-lang block here.
-EOF
-    echo "$f"
-}
-
-# Make a temp language.md with arbitrary body (caller supplies via stdin).
-make_lang_file_raw() {
-    local tmp; tmp=$(mktemp -d)
-    TEST_TMPS+=("$tmp")
-    local f="$tmp/language.md"
-    cat > "$f"
-    echo "$f"
-}
-
 # Echo "ok" or "missing" for a source file (helps mark RED-phase skips).
 src_present() {
     if [ -f "$1" ]; then echo "ok"; else echo "missing"; fi
 }
 
-# Run a node one-liner that loads docs-lang-config and prints JSON.
-# Args: $1=language.md path (or "MISSING" for nonexistent)
-load_config_json() {
-    local langpath="$1"
-    if command -v cygpath >/dev/null 2>&1 && [ "$langpath" != "MISSING" ]; then
-        langpath="$(cygpath -m "$langpath")"
+# Write a .env file in a fresh temp AGENTS_CONFIG_DIR and load the docs-lang
+# config via the zero-arg loadDocsLangConfig() (post-#619 .env-only API).
+# Args: $1=.env body (as written verbatim; may be empty for default)
+#       $2 (optional)="no_env" to omit creating .env at all (missing-file case)
+# Prints config JSON to stdout.
+load_config_json_env() {
+    local env_body="$1" mode="${2:-write}"
+    local _iso; _iso=$(mktemp -d); TEST_TMPS+=("$_iso")
+    if [ "$mode" != "no_env" ]; then
+        printf '%s' "$env_body" > "$_iso/.env"
     fi
-    local _iso; _iso=$(mktemp -d); TEST_TMPS+=("$_iso"); touch "$_iso/.env"
     local _iso_node; _iso_node="$(cygpath -m "$_iso" 2>/dev/null || echo "$_iso")"
     run_with_timeout 15 env \
         -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE \
@@ -126,7 +89,7 @@ load_config_json() {
         AGENTS_CONFIG_DIR="$_iso_node" \
         node -e "
         const m = require('$CONFIG_LIB_NODE');
-        const cfg = m.loadDocsLangConfig('$langpath');
+        const cfg = m.loadDocsLangConfig();
         process.stdout.write(JSON.stringify(cfg));
     " 2>/dev/null
 }
@@ -170,7 +133,14 @@ lint_json() {
 # Args: $1=json, $2=optional AGENTS_CONFIG_DIR override
 run_hook() {
     local json="$1" agents_dir="${2:-$AGENTS_CONFIG_DIR}"
-    echo "$json" | AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout 15 node "$HOOK" 2>/dev/null
+    # Prevent shell DOCS_LANG_* leakage (#619 .env-only). Use a subshell with
+    # unset so run_with_timeout (a bash function) remains in scope.
+    (
+        unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
+        unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
+        export AGENTS_CONFIG_DIR="$agents_dir"
+        echo "$json" | run_with_timeout 15 node "$HOOK" 2>/dev/null
+    )
 }
 
 # Write a file and return its path; ensures parent dir.
@@ -184,90 +154,58 @@ write_tmp_file() {
 }
 
 # ============================================================================
-# Group 1 — docs-lang-config.js parser unit tests
+# Group 1' — lang-config.js loadDocsLangConfig() .env-only loader (post-#619)
 # ============================================================================
+# Replaces the old fenced-block parser tests. After #619, loadDocsLangConfig()
+# is zero-arg and reads ONLY from $AGENTS_CONFIG_DIR/.env via loadDefaultEnv().
 
-echo "=== Group 1: docs-lang-config.js parser ==="
+echo "=== Group 1': lang-config.js loadDocsLangConfig() .env-only ==="
 
 if [ "$(src_present "$CONFIG_LIB")" != "ok" ]; then
-    echo "SKIP G1: hooks/lib/docs-lang-config.js not yet implemented (RED phase)"
+    echo "SKIP G1': hooks/lib/lang-config.js not yet implemented (RED phase)"
 else
-    # T1: valid block with all keys
-    _t1_lang="$(make_lang_file english english english any)"
-    _t1_json="$(load_config_json "$_t1_lang")"
-    if echo "$_t1_json" | grep -q '"historyPublic":"english"' && \
-       echo "$_t1_json" | grep -q '"historyPrivate":"english"' && \
-       echo "$_t1_json" | grep -q '"changelogPublic":"english"' && \
-       echo "$_t1_json" | grep -q '"changelogPrivate":"any"'; then
-        pass "T1: valid docs-lang block parsed → {historyPublic:english, historyPrivate:english, changelogPublic:english, changelogPrivate:any}"
+    # T_new_1: all four DOCS_LANG_ keys in .env → loaded correctly
+    _tnew1_env=$'DOCS_LANG_HISTORY_PUBLIC=english\nDOCS_LANG_HISTORY_PRIVATE=english\nDOCS_LANG_CHANGELOG_PUBLIC=english\nDOCS_LANG_CHANGELOG_PRIVATE=any\n'
+    _tnew1_json="$(load_config_json_env "$_tnew1_env")"
+    if echo "$_tnew1_json" | grep -q '"historyPublic":"english"' && \
+       echo "$_tnew1_json" | grep -q '"historyPrivate":"english"' && \
+       echo "$_tnew1_json" | grep -q '"changelogPublic":"english"' && \
+       echo "$_tnew1_json" | grep -q '"changelogPrivate":"any"'; then
+        pass "T_new_1: all four DOCS_LANG_ keys in .env → loaded correctly"
     else
-        fail "T1: valid block parse, got: $_t1_json"
+        fail "T_new_1: expected all four keys from .env, got: $_tnew1_json"
     fi
 
-    # T2: DOCS_LANG_HISTORY_PUBLIC=japanese
-    _t2_lang="$(make_lang_file japanese japanese any any)"
-    _t2_json="$(load_config_json "$_t2_lang")"
-    if echo "$_t2_json" | grep -q '"historyPublic":"japanese"'; then
-        pass "T2: DOCS_LANG_HISTORY_PUBLIC=japanese → {historyPublic:japanese}"
+    # T_new_2: partial .env (only DOCS_LANG_HISTORY_PUBLIC set) → others default to 'any'
+    _tnew2_env=$'DOCS_LANG_HISTORY_PUBLIC=english\n'
+    _tnew2_json="$(load_config_json_env "$_tnew2_env")"
+    if echo "$_tnew2_json" | grep -q '"historyPublic":"english"' && \
+       echo "$_tnew2_json" | grep -q '"historyPrivate":"any"' && \
+       echo "$_tnew2_json" | grep -q '"changelogPublic":"any"' && \
+       echo "$_tnew2_json" | grep -q '"changelogPrivate":"any"'; then
+        pass "T_new_2: partial .env → set key honored, others default to 'any'"
     else
-        fail "T2: japanese parse, got: $_t2_json"
+        fail "T_new_2: expected partial load with defaults, got: $_tnew2_json"
     fi
 
-    # T3: DOCS_LANG_HISTORY_PUBLIC=any
-    _t3_lang="$(make_lang_file any any any any)"
-    _t3_json="$(load_config_json "$_t3_lang")"
-    if echo "$_t3_json" | grep -q '"historyPublic":"any"'; then
-        pass "T3: DOCS_LANG_HISTORY_PUBLIC=any → {historyPublic:any}"
+    # T_new_3: missing .env → all 'any' (fail-open)
+    _tnew3_json="$(load_config_json_env "" "no_env")"
+    if echo "$_tnew3_json" | grep -q '"historyPublic":"any"' && \
+       echo "$_tnew3_json" | grep -q '"historyPrivate":"any"' && \
+       echo "$_tnew3_json" | grep -q '"changelogPublic":"any"' && \
+       echo "$_tnew3_json" | grep -q '"changelogPrivate":"any"'; then
+        pass "T_new_3: missing .env → all 'any' (fail-open)"
     else
-        fail "T3: any parse, got: $_t3_json"
+        fail "T_new_3: expected all 'any' for missing .env, got: $_tnew3_json"
     fi
 
-    # T4: file missing → all "any" (fail-open)
-    _t4_json="$(load_config_json "/nonexistent/language.md")"
-    if echo "$_t4_json" | grep -q '"historyPublic":"any"' && \
-       echo "$_t4_json" | grep -q '"changelogPublic":"any"' && \
-       echo "$_t4_json" | grep -q '"changelogPrivate":"any"'; then
-        pass "T4: file missing → all any (fail-open)"
+    # T_new_4: .env with empty value → treated as empty/default ('any')
+    _tnew4_env=$'DOCS_LANG_HISTORY_PUBLIC=\n'
+    _tnew4_json="$(load_config_json_env "$_tnew4_env")"
+    if echo "$_tnew4_json" | grep -q '"historyPublic":"any"'; then
+        pass "T_new_4: empty value in .env → default ('any')"
     else
-        fail "T4: missing-file fail-open, got: $_t4_json"
-    fi
-
-    # T5: file exists but no docs-lang block → all "any"
-    _t5_lang="$(make_lang_file_no_block)"
-    _t5_json="$(load_config_json "$_t5_lang")"
-    if echo "$_t5_json" | grep -q '"historyPublic":"any"' && \
-       echo "$_t5_json" | grep -q '"changelogPublic":"any"' && \
-       echo "$_t5_json" | grep -q '"changelogPrivate":"any"'; then
-        pass "T5: file w/o docs-lang block → all any"
-    else
-        fail "T5: no-block fail-open, got: $_t5_json"
-    fi
-
-    # T6: arbitrary value (french) is preserved verbatim (hint tier, not coerced to any)
-    _t6_lang="$(make_lang_file french french any any)"
-    _t6_json="$(load_config_json "$_t6_lang")"
-    if echo "$_t6_json" | grep -q '"historyPublic":"french"'; then
-        pass "T6: arbitrary value (french) → historyPublic preserved verbatim (hint tier)"
-    else
-        fail "T6: expected historyPublic:french, got: $_t6_json"
-    fi
-
-    # T7: only DOCS_LANG_HISTORY_PUBLIC present, others missing → missing keys are "any"
-    _t7_lang="$(make_lang_file_raw <<'EOF'
-# Language Policy
-```docs-lang
-DOCS_LANG_HISTORY_PUBLIC=english
-```
-EOF
-)"
-    _t7_json="$(load_config_json "$_t7_lang")"
-    if echo "$_t7_json" | grep -q '"historyPublic":"english"' && \
-       echo "$_t7_json" | grep -q '"historyPrivate":"any"' && \
-       echo "$_t7_json" | grep -q '"changelogPublic":"any"' && \
-       echo "$_t7_json" | grep -q '"changelogPrivate":"any"'; then
-        pass "T7: only DOCS_LANG_HISTORY_PUBLIC present → others default to any"
-    else
-        fail "T7: partial-keys default, got: $_t7_json"
+        fail "T_new_4: expected 'any' for empty value, got: $_tnew4_json"
     fi
 fi
 
@@ -406,16 +344,15 @@ echo "=== Group 3: check-worktree-notes-lang.js PostToolUse hook ==="
 if [ "$(src_present "$HOOK")" != "ok" ]; then
     echo "SKIP G3: hooks/check-worktree-notes-lang.js not yet implemented (RED phase)"
 else
-    # Build a test AGENTS_CONFIG_DIR with new key format so the hook gets english enforcement.
+    # Build a test AGENTS_CONFIG_DIR with .env-based config (post-#619 .env-only).
     _g3_agents_tmp="$(mktemp -d)"; TEST_TMPS+=("$_g3_agents_tmp")
-    mkdir -p "$_g3_agents_tmp/hooks/lib" "$_g3_agents_tmp/rules"
+    mkdir -p "$_g3_agents_tmp/hooks/lib"
     cp "$AGENTS_DIR"/hooks/lib/*.js "$_g3_agents_tmp/hooks/lib/"
-    printf '%s\n' '```docs-lang' \
+    printf '%s\n' \
         'DOCS_LANG_HISTORY_PUBLIC=english' \
         'DOCS_LANG_HISTORY_PRIVATE=english' \
         'DOCS_LANG_CHANGELOG_PUBLIC=english' \
-        'DOCS_LANG_CHANGELOG_PRIVATE=any' \
-        '```' > "$_g3_agents_tmp/rules/language.md"
+        'DOCS_LANG_CHANGELOG_PRIVATE=any' > "$_g3_agents_tmp/.env"
     _g3_agents_dir="$(cygpath -m "$_g3_agents_tmp" 2>/dev/null || echo "$_g3_agents_tmp")"
 
     # Build a real WORKTREE_NOTES.md on disk; the hook should re-read it.
@@ -551,20 +488,20 @@ EOF
     }
 
     # Build a self-contained AGENTS_CONFIG_DIR for G4 so the language lint can
-    # find its libs and a rules/language.md with enforcement enabled — without
-    # depending on the user's real dotfiles-private language.md being present.
+    # find its libs and a .env with enforcement enabled — without depending on
+    # the user's real dotfiles-private .env being present.
+    # Post-#619: configuration lives in .env (DOCS_LANG_*), not rules/language.md.
     setup_g4_agents_dir() {
         local tmp; tmp=$(mktemp -d)
         TEST_TMPS+=("$tmp")
-        mkdir -p "$tmp/hooks/lib" "$tmp/rules"
+        mkdir -p "$tmp/hooks/lib"
         # Copy all lib files — is-private-repo.js has transitive deps (parse-git-args, etc.)
         cp "$AGENTS_DIR"/hooks/lib/*.js "$tmp/hooks/lib/"
-        printf '%s\n' '```docs-lang' \
+        printf '%s\n' \
             'DOCS_LANG_HISTORY_PUBLIC=english' \
             'DOCS_LANG_HISTORY_PRIVATE=english' \
             'DOCS_LANG_CHANGELOG_PUBLIC=english' \
-            'DOCS_LANG_CHANGELOG_PRIVATE=any' \
-            '```' > "$tmp/rules/language.md"
+            'DOCS_LANG_CHANGELOG_PRIVATE=any' > "$tmp/.env"
         if command -v cygpath >/dev/null 2>&1; then
             cygpath -m "$tmp"
         else
@@ -579,6 +516,11 @@ EOF
             cd "$repo"
             export COMPOSE_DOC_APPEND_SKILL=1
             export AGENTS_CONFIG_DIR="$_g4_agents_dir"
+            # Unset DOCS_LANG_* in subshell env to prevent shell leakage (#619 .env-only).
+            # Must unset via shell builtin (not `env -u`) so run_with_timeout (a bash
+            # function) is still in scope.
+            unset DOCS_LANG_HISTORY_PUBLIC DOCS_LANG_HISTORY_PRIVATE
+            unset DOCS_LANG_CHANGELOG_PUBLIC DOCS_LANG_CHANGELOG_PRIVATE
             run_with_timeout 30 bash "$CLI" "$@"
         )
     }
@@ -667,43 +609,12 @@ else
 fi
 
 # ============================================================================
-# Group 7 — docs-lang-config.js shim regression
+# Group 7 — REMOVED (docs-lang-config.js shim deleted in #619)
 # ============================================================================
-
-echo ""
-echo "=== Group 7: docs-lang-config.js shim regression ==="
+# G7 previously tested the docs-lang-config.js compatibility shim. After #619
+# the shim is deleted; all callers import hooks/lib/lang-config.js directly.
 
 LANG_CONFIG_LIB="$AGENTS_DIR/hooks/lib/lang-config.js"
-DOCS_LANG_SHIM="$AGENTS_DIR/hooks/lib/docs-lang-config.js"
-if [ "$(src_present "$LANG_CONFIG_LIB")" != "ok" ] || [ "$(src_present "$DOCS_LANG_SHIM")" != "ok" ]; then
-    echo "SKIP G7: hooks/lib/lang-config.js or hooks/lib/docs-lang-config.js not yet implemented (RED phase)"
-else
-    # T27a: relative require
-    _t27a_out="$(node -e "
-      const mod = require('$_AGENTS_DIR_NODE/hooks/lib/docs-lang-config');
-      const assert = require('assert');
-      assert.strictEqual(typeof mod.loadDocsLangConfig, 'function');
-    " 2>&1)"
-    if [ $? -eq 0 ]; then
-        pass "T27a: docs-lang-config shim exposes loadDocsLangConfig (relative require)"
-    else
-        fail "T27a: $_t27a_out"
-    fi
-
-    # T27b: absolute-path require
-    _t27b_out="$(node -e "
-      const path = require('path');
-      const absPath = path.join('$_AGENTS_DIR_NODE', 'hooks/lib/docs-lang-config.js');
-      const mod = require(absPath);
-      const assert = require('assert');
-      assert.strictEqual(typeof mod.loadDocsLangConfig, 'function');
-    " 2>&1)"
-    if [ $? -eq 0 ]; then
-        pass "T27b: docs-lang-config shim exposes loadDocsLangConfig (absolute require)"
-    else
-        fail "T27b: $_t27b_out"
-    fi
-fi
 
 # ============================================================================
 # Group 8 — loadLangConfig independent .env key routing
@@ -721,7 +632,7 @@ else
     _t28_dir="$(cygpath -m "$_t28_tmp" 2>/dev/null || echo "$_t28_tmp")"
     _t28_result="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t28_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('plan', undefined);
+      const v = loadLangConfig('plan');
       if (v !== 'english') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then
@@ -736,7 +647,7 @@ else
     _t29_dir="$(cygpath -m "$_t29_tmp" 2>/dev/null || echo "$_t29_tmp")"
     _t29_result="$(env -u ASK_LANG AGENTS_CONFIG_DIR="$_t29_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('ask', undefined);
+      const v = loadLangConfig('ask');
       if (v !== 'japanese') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then
@@ -745,32 +656,21 @@ else
         fail "T29: $_t29_result"
     fi
 
-    # T30a: history surface — docs-lang fenced block fallback
-    _t30_tmp=$(mktemp -d); TEST_TMPS+=("$_t30_tmp")
-    _t30_lang="$(make_lang_file japanese any english any)"
-    printf '' > "$_t30_tmp/.env"
-    _t30_dir="$(cygpath -m "$_t30_tmp" 2>/dev/null || echo "$_t30_tmp")"
-    _t30_lang_node="$(cygpath -m "$_t30_lang" 2>/dev/null || echo "$_t30_lang")"
-    _t30a_result="$(env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
-      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('history', '$_t30_lang_node', { isPrivateRepo: false });
-      if (v !== 'japanese') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
-    " 2>&1)"
-    if [ $? -eq 0 ]; then
-        pass "T30a: historyPublic falls back to fenced block (japanese)"
-    else
-        fail "T30a: $_t30a_result"
-    fi
+    # T30a REMOVED (#619): fenced-block fallback no longer exists.
+    # loadLangConfig('history', ...) now reads ONLY from .env via loadDocsLangConfig().
 
-    # T30b: .env DOCS_LANG_HISTORY_PUBLIC wins over fenced block
-    printf 'DOCS_LANG_HISTORY_PUBLIC=english\n' > "$_t30_tmp/.env"
-    _t30b_result="$(env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
+    # T30b: .env DOCS_LANG_HISTORY_PUBLIC drives historyPublic (post-#619 .env-only)
+    # Setup hoisted from old T30a body (now self-contained).
+    _t30b_tmp=$(mktemp -d); TEST_TMPS+=("$_t30b_tmp")
+    _t30b_dir="$(cygpath -m "$_t30b_tmp" 2>/dev/null || echo "$_t30b_tmp")"
+    printf 'DOCS_LANG_HISTORY_PUBLIC=english\n' > "$_t30b_tmp/.env"
+    _t30b_result="$(env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE AGENTS_CONFIG_DIR="$_t30b_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('history', '$_t30_lang_node', { isPrivateRepo: false });
+      const v = loadLangConfig('history', { isPrivateRepo: false });
       if (v !== 'english') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then
-        pass "T30b: DOCS_LANG_HISTORY_PUBLIC=english wins over fenced block"
+        pass "T30b: DOCS_LANG_HISTORY_PUBLIC=english in .env → history surface returns 'english'"
     else
         fail "T30b: $_t30b_result"
     fi
@@ -999,7 +899,7 @@ else
     _t47_dir="$(cygpath -m "$_t47_tmp" 2>/dev/null || echo "$_t47_tmp")"
     _t47_out="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t47_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('plan', undefined);
+      const v = loadLangConfig('plan');
       if (v !== 'french') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then pass "T47: PLAN_LANG=french preserved verbatim"; else fail "T47: $_t47_out"; fi
@@ -1008,7 +908,7 @@ else
     printf 'PLAN_LANG=\n' > "$_t47_tmp/.env"
     _t48_out="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t47_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('plan', undefined);
+      const v = loadLangConfig('plan');
       if (v !== 'any') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then pass "T48: empty PLAN_LANG → 'any' (fail-open)"; else fail "T48: $_t48_out"; fi
@@ -1098,20 +998,8 @@ EOF
         fail "T52b: expected 0, got: $_t52b_count"
     fi
 
-    # T53: legacy DOCS_LANG_HISTORY (without _PUBLIC/_PRIVATE suffix) is ignored after #594
-    _t53_lang="$(make_lang_file_raw <<'EOF'
-```docs-lang
-DOCS_LANG_HISTORY=english
-```
-EOF
-)"
-    _t53_json="$(load_config_json "$_t53_lang")"
-    if echo "$_t53_json" | grep -q '"historyPublic":"any"' && \
-       echo "$_t53_json" | grep -q '"historyPrivate":"any"'; then
-        pass "T53: legacy DOCS_LANG_HISTORY ignored (no backward compat)"
-    else
-        fail "T53: legacy key should not affect config, got: $_t53_json"
-    fi
+    # T53 REMOVED (#619): legacy DOCS_LANG_HISTORY ignore-test is moot — the
+    # fenced-block parser itself is gone, so legacy keys cannot reach the config.
 fi
 
 echo ""
