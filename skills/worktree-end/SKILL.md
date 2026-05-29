@@ -107,7 +107,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       ```
       If it refuses with "not empty", re-run with `--force-if-not-registered` (requires step 5 inventory complete — issue #322).
    f. `WORKTREE_END_SKILL=1 git -C <main> branch -D <branch>` — `-D` required because squash-merge produces a new commit not recognised by `-d`'s fully-merged check. The inline `WORKTREE_END_SKILL=1` is the authorization token for `enforce-worktree.js`.
-   g. `git -C <main> fetch --prune origin` then `git -C <main> pull --ff-only`
+   g. `git -C <main> fetch --prune origin`
+      `git -C <main> pull --ff-only`
    h. **Compose doc-append** (main worktree; only when NOTES_BACKUP_PATH is non-empty).
       Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → add `--skip-history` (history.md already committed by Phase 1/2). Empty / missing → run without it (CLI bails exit 0 if notes sections empty).
       ```
@@ -115,45 +116,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
         --notes "$NOTES_BACKUP_PATH" --branch "$BRANCH" --pr "$PR_NUMBER" \
         --merge-commit "$MERGE_SHA" --background "$PR_TITLE" [--skip-history]
       ```
-      CLI is always-safe; non-zero exit → let stderr surface; Step 6i and Step 7 still run. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
+      CLI is always-safe; non-zero exit → let stderr surface; Step 6i still runs. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
-
-### Step 7
-
-7. **Final report:** Run these Bash calls in sequence.
-
-   **7a — Read NOTES_BACKUP_PATH from the JSON env file:**
-   ```bash
-   ENV_FILE="$PLANS_DIR/<session-id>-final-report-env.json"
-   NOTES_PATH="$(node "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/read-notes-path.js" "$ENV_FILE")"
-   ```
-
-   **7b — Run the Final Report renderer:**
-   ```bash
-   OUTPUT="$(node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" \
-     "$PLANS_DIR/<session-id>-intent.md" \
-     "$NOTES_PATH" \
-     "<session-id>" \
-     --env-file "$ENV_FILE" 2>&1)"
-   EXIT_CODE=$?
-   ```
-
-   **7c — Check sentinel and display:**
-   ```bash
-   SENTINEL='<<WORKFLOW_MARK_STEP_final_report_complete>>'
-   if [ $EXIT_CODE -eq 0 ] && echo "$OUTPUT" | grep -qF "$SENTINEL"; then
-     echo "$OUTPUT" | grep -vF "$SENTINEL"
-   else
-     echo "WARNING: Final Report renderer failed or sentinel missing (exit=$EXIT_CODE)" >&2
-     echo "$OUTPUT"
-     echo "Manual fallback: review the Final Report data in $ENV_FILE"
-   fi
-   ```
-
-   Do NOT hand-write a Markdown Final Report as a fallback — if the sentinel is absent, warn and show raw output only.
-   Do not call `gh` here — all PR/branch state was captured in Step 5.5.
-   Output must follow the Verbatim Output Requirements in the Rules section (violations are blocked by the Stop hook).
-
 ## Rules
 
 - **wait / abort paths: no destructive steps.** Only merge-success path runs cleanup.
@@ -170,6 +134,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.
+<<<<<<< HEAD
 - Step 5.5 invariants: see `skills/worktree-end/scripts/capture-env.sh` header (atomicity / BRANCH_DELETED omission / four restart categories).
 - Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
 - Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via the read-notes-path.js helper, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
@@ -177,3 +142,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Final Report verbatim output: paste renderer stdout (sentinel line excluded) character-for-character into the assistant message — no formatting changes.
 - Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
 - Do not reformat Final Report section content into prose (e.g., writing `Closed Issues: #N` instead of the `### Closed Issues` heading followed by `- #N`).
+=======
+- Step 5.5 (b–d) MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
+- Step 5.5 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
+- Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
+>>>>>>> a7c1092 (feat(#608): add /session-close skill — Final Report after issue-close-finalize)
