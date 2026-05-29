@@ -62,7 +62,7 @@ run_with_timeout() {
 }
 
 # Make a temp language.md with a docs-lang fenced block.
-# Args: $1=history, $2=changelogPublic, $3=changelogPrivate
+# Args: $1=historyPublic, $2=historyPrivate, $3=changelogPublic, $4=changelogPrivate
 make_lang_file() {
     local tmp; tmp=$(mktemp -d)
     TEST_TMPS+=("$tmp")
@@ -73,9 +73,10 @@ make_lang_file() {
 Some prose here.
 
 \`\`\`docs-lang
-DOCS_LANG_HISTORY=$1
-DOCS_LANG_CHANGELOG_PUBLIC=$2
-DOCS_LANG_CHANGELOG_PRIVATE=$3
+DOCS_LANG_HISTORY_PUBLIC=$1
+DOCS_LANG_HISTORY_PRIVATE=$2
+DOCS_LANG_CHANGELOG_PUBLIC=$3
+DOCS_LANG_CHANGELOG_PRIVATE=$4
 \`\`\`
 
 More prose.
@@ -117,7 +118,13 @@ load_config_json() {
     if command -v cygpath >/dev/null 2>&1 && [ "$langpath" != "MISSING" ]; then
         langpath="$(cygpath -m "$langpath")"
     fi
-    run_with_timeout 15 node -e "
+    local _iso; _iso=$(mktemp -d); TEST_TMPS+=("$_iso"); touch "$_iso/.env"
+    local _iso_node; _iso_node="$(cygpath -m "$_iso" 2>/dev/null || echo "$_iso")"
+    run_with_timeout 15 env \
+        -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE \
+        -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE \
+        AGENTS_CONFIG_DIR="$_iso_node" \
+        node -e "
         const m = require('$CONFIG_LIB_NODE');
         const cfg = m.loadDocsLangConfig('$langpath');
         process.stdout.write(JSON.stringify(cfg));
@@ -160,9 +167,10 @@ lint_json() {
 }
 
 # Run the hook with a JSON input; print stdout.
+# Args: $1=json, $2=optional AGENTS_CONFIG_DIR override
 run_hook() {
-    local json="$1"
-    echo "$json" | run_with_timeout 15 node "$HOOK" 2>/dev/null
+    local json="$1" agents_dir="${2:-$AGENTS_CONFIG_DIR}"
+    echo "$json" | AGENTS_CONFIG_DIR="$agents_dir" run_with_timeout 15 node "$HOOK" 2>/dev/null
 }
 
 # Write a file and return its path; ensures parent dir.
@@ -185,37 +193,38 @@ if [ "$(src_present "$CONFIG_LIB")" != "ok" ]; then
     echo "SKIP G1: hooks/lib/docs-lang-config.js not yet implemented (RED phase)"
 else
     # T1: valid block with all keys
-    _t1_lang="$(make_lang_file english english any)"
+    _t1_lang="$(make_lang_file english english english any)"
     _t1_json="$(load_config_json "$_t1_lang")"
-    if echo "$_t1_json" | grep -q '"history":"english"' && \
+    if echo "$_t1_json" | grep -q '"historyPublic":"english"' && \
+       echo "$_t1_json" | grep -q '"historyPrivate":"english"' && \
        echo "$_t1_json" | grep -q '"changelogPublic":"english"' && \
        echo "$_t1_json" | grep -q '"changelogPrivate":"any"'; then
-        pass "T1: valid docs-lang block parsed → {history:english, changelogPublic:english, changelogPrivate:any}"
+        pass "T1: valid docs-lang block parsed → {historyPublic:english, historyPrivate:english, changelogPublic:english, changelogPrivate:any}"
     else
         fail "T1: valid block parse, got: $_t1_json"
     fi
 
-    # T2: DOCS_LANG_HISTORY=japanese
-    _t2_lang="$(make_lang_file japanese any any)"
+    # T2: DOCS_LANG_HISTORY_PUBLIC=japanese
+    _t2_lang="$(make_lang_file japanese japanese any any)"
     _t2_json="$(load_config_json "$_t2_lang")"
-    if echo "$_t2_json" | grep -q '"history":"japanese"'; then
-        pass "T2: DOCS_LANG_HISTORY=japanese → {history:japanese}"
+    if echo "$_t2_json" | grep -q '"historyPublic":"japanese"'; then
+        pass "T2: DOCS_LANG_HISTORY_PUBLIC=japanese → {historyPublic:japanese}"
     else
         fail "T2: japanese parse, got: $_t2_json"
     fi
 
-    # T3: DOCS_LANG_HISTORY=any
-    _t3_lang="$(make_lang_file any any any)"
+    # T3: DOCS_LANG_HISTORY_PUBLIC=any
+    _t3_lang="$(make_lang_file any any any any)"
     _t3_json="$(load_config_json "$_t3_lang")"
-    if echo "$_t3_json" | grep -q '"history":"any"'; then
-        pass "T3: DOCS_LANG_HISTORY=any → {history:any}"
+    if echo "$_t3_json" | grep -q '"historyPublic":"any"'; then
+        pass "T3: DOCS_LANG_HISTORY_PUBLIC=any → {historyPublic:any}"
     else
         fail "T3: any parse, got: $_t3_json"
     fi
 
     # T4: file missing → all "any" (fail-open)
     _t4_json="$(load_config_json "/nonexistent/language.md")"
-    if echo "$_t4_json" | grep -q '"history":"any"' && \
+    if echo "$_t4_json" | grep -q '"historyPublic":"any"' && \
        echo "$_t4_json" | grep -q '"changelogPublic":"any"' && \
        echo "$_t4_json" | grep -q '"changelogPrivate":"any"'; then
         pass "T4: file missing → all any (fail-open)"
@@ -226,7 +235,7 @@ else
     # T5: file exists but no docs-lang block → all "any"
     _t5_lang="$(make_lang_file_no_block)"
     _t5_json="$(load_config_json "$_t5_lang")"
-    if echo "$_t5_json" | grep -q '"history":"any"' && \
+    if echo "$_t5_json" | grep -q '"historyPublic":"any"' && \
        echo "$_t5_json" | grep -q '"changelogPublic":"any"' && \
        echo "$_t5_json" | grep -q '"changelogPrivate":"any"'; then
         pass "T5: file w/o docs-lang block → all any"
@@ -234,28 +243,29 @@ else
         fail "T5: no-block fail-open, got: $_t5_json"
     fi
 
-    # T6: unknown value → that key defaults to "any"
-    _t6_lang="$(make_lang_file french any any)"
+    # T6: arbitrary value (french) is preserved verbatim (hint tier, not coerced to any)
+    _t6_lang="$(make_lang_file french french any any)"
     _t6_json="$(load_config_json "$_t6_lang")"
-    if echo "$_t6_json" | grep -q '"history":"any"'; then
-        pass "T6: unknown value (french) → history:any"
+    if echo "$_t6_json" | grep -q '"historyPublic":"french"'; then
+        pass "T6: arbitrary value (french) → historyPublic preserved verbatim (hint tier)"
     else
-        fail "T6: unknown-value defaults to any, got: $_t6_json"
+        fail "T6: expected historyPublic:french, got: $_t6_json"
     fi
 
-    # T7: only DOCS_LANG_HISTORY present, others missing → missing keys are "any"
+    # T7: only DOCS_LANG_HISTORY_PUBLIC present, others missing → missing keys are "any"
     _t7_lang="$(make_lang_file_raw <<'EOF'
 # Language Policy
 ```docs-lang
-DOCS_LANG_HISTORY=english
+DOCS_LANG_HISTORY_PUBLIC=english
 ```
 EOF
 )"
     _t7_json="$(load_config_json "$_t7_lang")"
-    if echo "$_t7_json" | grep -q '"history":"english"' && \
+    if echo "$_t7_json" | grep -q '"historyPublic":"english"' && \
+       echo "$_t7_json" | grep -q '"historyPrivate":"any"' && \
        echo "$_t7_json" | grep -q '"changelogPublic":"any"' && \
        echo "$_t7_json" | grep -q '"changelogPrivate":"any"'; then
-        pass "T7: only DOCS_LANG_HISTORY present → others default to any"
+        pass "T7: only DOCS_LANG_HISTORY_PUBLIC present → others default to any"
     else
         fail "T7: partial-keys default, got: $_t7_json"
     fi
@@ -271,8 +281,8 @@ echo "=== Group 2: lint-worktree-notes-lang.js ==="
 if [ "$(src_present "$LINT_LIB")" != "ok" ]; then
     echo "SKIP G2: hooks/lib/lint-worktree-notes-lang.js not yet implemented (RED phase)"
 else
-    CFG_HIST_EN='{"history":"english","changelogPublic":"english","changelogPrivate":"any"}'
-    CFG_HIST_JA='{"history":"japanese","changelogPublic":"english","changelogPrivate":"any"}'
+    CFG_HIST_EN='{"historyPublic":"english","historyPrivate":"english","changelogPublic":"english","changelogPrivate":"any"}'
+    CFG_HIST_JA='{"historyPublic":"japanese","historyPrivate":"japanese","changelogPublic":"english","changelogPrivate":"any"}'
 
     # T8: no CJK in History Notes (english config) → empty violations
     _t8_file="$(write_tmp_file WORKTREE_NOTES.md <<'EOF'
@@ -325,7 +335,7 @@ EOF
 EOF
 )"
     # Use public-context options (caller passes which changelog config applies)
-    _t11_cfg='{"history":"english","changelogPublic":"english","changelogPrivate":"any"}'
+    _t11_cfg='{"historyPublic":"english","historyPrivate":"english","changelogPublic":"english","changelogPrivate":"any"}'
     _t11_count="$(lint_count "$_t11_file" "$_t11_cfg" '{"isPrivateRepo":false}')"
     if [ -n "$_t11_count" ] && [ "$_t11_count" -ge 1 ]; then
         pass "T11: Japanese in Changelog (changelogPublic=english, public) → violation"
@@ -396,6 +406,18 @@ echo "=== Group 3: check-worktree-notes-lang.js PostToolUse hook ==="
 if [ "$(src_present "$HOOK")" != "ok" ]; then
     echo "SKIP G3: hooks/check-worktree-notes-lang.js not yet implemented (RED phase)"
 else
+    # Build a test AGENTS_CONFIG_DIR with new key format so the hook gets english enforcement.
+    _g3_agents_tmp="$(mktemp -d)"; TEST_TMPS+=("$_g3_agents_tmp")
+    mkdir -p "$_g3_agents_tmp/hooks/lib" "$_g3_agents_tmp/rules"
+    cp "$AGENTS_DIR"/hooks/lib/*.js "$_g3_agents_tmp/hooks/lib/"
+    printf '%s\n' '```docs-lang' \
+        'DOCS_LANG_HISTORY_PUBLIC=english' \
+        'DOCS_LANG_HISTORY_PRIVATE=english' \
+        'DOCS_LANG_CHANGELOG_PUBLIC=english' \
+        'DOCS_LANG_CHANGELOG_PRIVATE=any' \
+        '```' > "$_g3_agents_tmp/rules/language.md"
+    _g3_agents_dir="$(cygpath -m "$_g3_agents_tmp" 2>/dev/null || echo "$_g3_agents_tmp")"
+
     # Build a real WORKTREE_NOTES.md on disk; the hook should re-read it.
     _g3_tmp="$(mktemp -d)"
     TEST_TMPS+=("$_g3_tmp")
@@ -438,7 +460,7 @@ EOF
 
     # T16: Write to WORKTREE_NOTES.md w/ Japanese in History → block
     _t16_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_g3_ja_p\"},\"tool_response\":{}}"
-    _t16_out="$(run_hook "$_t16_json")"
+    _t16_out="$(run_hook "$_t16_json" "$_g3_agents_dir")"
     if echo "$_t16_out" | grep -q '"block"'; then
         pass "T16: Write WORKTREE_NOTES.md w/ Japanese History → block"
     else
@@ -447,7 +469,7 @@ EOF
 
     # T17: Write to WORKTREE_NOTES.md English-only → no block
     _t17_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_g3_en_named_p\"},\"tool_response\":{}}"
-    _t17_out="$(run_hook "$_t17_json")"
+    _t17_out="$(run_hook "$_t17_json" "$_g3_agents_dir")"
     if ! echo "$_t17_out" | grep -q '"block"'; then
         pass "T17: Write WORKTREE_NOTES.md English only → no block"
     else
@@ -456,7 +478,7 @@ EOF
 
     # T18: Write to README.md (different basename) → no block (not targeted)
     _t18_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_g3_readme_p\"},\"tool_response\":{}}"
-    _t18_out="$(run_hook "$_t18_json")"
+    _t18_out="$(run_hook "$_t18_json" "$_g3_agents_dir")"
     if ! echo "$_t18_out" | grep -q '"block"'; then
         pass "T18: Write README.md (not WORKTREE_NOTES.md) → no block"
     else
@@ -465,7 +487,7 @@ EOF
 
     # T19: Edit tool event w/ WORKTREE_NOTES.md → block (same as Write on CJK)
     _t19_json="{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$_g3_ja_p\"},\"tool_response\":{}}"
-    _t19_out="$(run_hook "$_t19_json")"
+    _t19_out="$(run_hook "$_t19_json" "$_g3_agents_dir")"
     if echo "$_t19_out" | grep -q '"block"'; then
         pass "T19: Edit WORKTREE_NOTES.md w/ Japanese → block"
     else
@@ -538,7 +560,8 @@ EOF
         # Copy all lib files — is-private-repo.js has transitive deps (parse-git-args, etc.)
         cp "$AGENTS_DIR"/hooks/lib/*.js "$tmp/hooks/lib/"
         printf '%s\n' '```docs-lang' \
-            'DOCS_LANG_HISTORY=english' \
+            'DOCS_LANG_HISTORY_PUBLIC=english' \
+            'DOCS_LANG_HISTORY_PRIVATE=english' \
             'DOCS_LANG_CHANGELOG_PUBLIC=english' \
             'DOCS_LANG_CHANGELOG_PRIVATE=any' \
             '```' > "$tmp/rules/language.md"
@@ -724,30 +747,30 @@ else
 
     # T30a: history surface — docs-lang fenced block fallback
     _t30_tmp=$(mktemp -d); TEST_TMPS+=("$_t30_tmp")
-    _t30_lang="$(make_lang_file japanese english any)"
+    _t30_lang="$(make_lang_file japanese any english any)"
     printf '' > "$_t30_tmp/.env"
     _t30_dir="$(cygpath -m "$_t30_tmp" 2>/dev/null || echo "$_t30_tmp")"
     _t30_lang_node="$(cygpath -m "$_t30_lang" 2>/dev/null || echo "$_t30_lang")"
-    _t30a_result="$(env -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
+    _t30a_result="$(env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('history', '$_t30_lang_node');
+      const v = loadLangConfig('history', '$_t30_lang_node', { isPrivateRepo: false });
       if (v !== 'japanese') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then
-        pass "T30a: history surface falls back to fenced block (japanese)"
+        pass "T30a: historyPublic falls back to fenced block (japanese)"
     else
         fail "T30a: $_t30a_result"
     fi
 
-    # T30b: .env DOCS_LANG_HISTORY wins over fenced block
-    printf 'DOCS_LANG_HISTORY=english\n' > "$_t30_tmp/.env"
-    _t30b_result="$(env -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
+    # T30b: .env DOCS_LANG_HISTORY_PUBLIC wins over fenced block
+    printf 'DOCS_LANG_HISTORY_PUBLIC=english\n' > "$_t30_tmp/.env"
+    _t30b_result="$(env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_HISTORY AGENTS_CONFIG_DIR="$_t30_dir" node -e "
       const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('history', '$_t30_lang_node');
+      const v = loadLangConfig('history', '$_t30_lang_node', { isPrivateRepo: false });
       if (v !== 'english') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then
-        pass "T30b: .env DOCS_LANG_HISTORY=english wins over fenced block"
+        pass "T30b: DOCS_LANG_HISTORY_PUBLIC=english wins over fenced block"
     else
         fail "T30b: $_t30b_result"
     fi
@@ -957,6 +980,137 @@ else
         pass "T46: malformed input → approve (fail-open)"
     else
         fail "T46: expected approve for malformed input, got: $_t46_out"
+    fi
+fi
+
+# ============================================================================
+# Group 12 — arbitrary-language hint tier
+# ============================================================================
+
+echo ""
+echo "=== Group 12: arbitrary-language hint tier ==="
+
+if [ "$(src_present "$LANG_CONFIG_LIB")" != "ok" ] || [ "$(src_present "$CHECK_PLAN_HOOK")" != "ok" ] || [ "$(src_present "$CHECK_ASK_HOOK")" != "ok" ]; then
+    echo "SKIP G12: lang-config / check-plan / check-ask not yet implemented"
+else
+    # T47: PLAN_LANG=french preserved verbatim by loadLangConfig
+    _t47_tmp=$(mktemp -d); TEST_TMPS+=("$_t47_tmp")
+    printf 'PLAN_LANG=french\n' > "$_t47_tmp/.env"
+    _t47_dir="$(cygpath -m "$_t47_tmp" 2>/dev/null || echo "$_t47_tmp")"
+    _t47_out="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t47_dir" node -e "
+      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+      const v = loadLangConfig('plan', undefined);
+      if (v !== 'french') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T47: PLAN_LANG=french preserved verbatim"; else fail "T47: $_t47_out"; fi
+
+    # T48: empty PLAN_LANG → 'any' (fail-open)
+    printf 'PLAN_LANG=\n' > "$_t47_tmp/.env"
+    _t48_out="$(env -u PLAN_LANG AGENTS_CONFIG_DIR="$_t47_dir" node -e "
+      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
+      const v = loadLangConfig('plan', undefined);
+      if (v !== 'any') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T48: empty PLAN_LANG → 'any' (fail-open)"; else fail "T48: $_t48_out"; fi
+
+    # T49: lintPlanLang hint-tier vs strict-tier symmetry
+    _t49_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const content = 'plain english long sentence here please';
+      const hintViolations = lintPlanLang(content, 'french');
+      const strictViolations = lintPlanLang(content, 'japanese');
+      if (hintViolations.length !== 0) {
+        process.stderr.write('hint-tier produced violations: ' + JSON.stringify(hintViolations) + '\n');
+        process.exit(1);
+      }
+      if (strictViolations.length === 0) {
+        process.stderr.write('strict-tier should have flagged English-run content\n');
+        process.exit(2);
+      }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T49: hint-tier (french) → 0 violations; same content under 'japanese' → violation (classifier gates)"; else fail "T49: $_t49_out"; fi
+
+    # T50: check-plan-lang.js PLAN_LANG=french → approve + additionalContext
+    _t50_plans_tmp=$(mktemp -d); TEST_TMPS+=("$_t50_plans_tmp")
+    _t50_agents_tmp=$(mktemp -d); TEST_TMPS+=("$_t50_agents_tmp")
+    printf 'PLAN_LANG=french\n' > "$_t50_agents_tmp/.env"
+    _t50_plans_dir="$(cygpath -m "$_t50_plans_tmp" 2>/dev/null || echo "$_t50_plans_tmp")"
+    _t50_agents_dir="$(cygpath -m "$_t50_agents_tmp" 2>/dev/null || echo "$_t50_agents_tmp")"
+    _t50_file="$_t50_plans_dir/20260526-223459-intent.md"
+    _t50_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t50_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
+    _t50_out="$(export WORKFLOW_PLANS_DIR="$_t50_plans_dir"; export AGENTS_CONFIG_DIR="$_t50_agents_dir"; echo "$_t50_json" | run_with_timeout 10 node "$CHECK_PLAN_HOOK" 2>/dev/null)"
+    _t50_ok=1
+    echo "$_t50_out" | grep -q '"approve"' || _t50_ok=0
+    echo "$_t50_out" | grep -q 'PLAN_LANG=french' || _t50_ok=0
+    echo "$_t50_out" | grep -q 'additionalContext' || _t50_ok=0
+    if [ "$_t50_ok" -eq 1 ]; then
+        pass "T50: PLAN_LANG=french + CJK content → approve + additionalContext (hint)"
+    else
+        fail "T50: expected approve+hint, got: $_t50_out"
+    fi
+
+    # T51: check-ask-lang.js ASK_LANG=french → approve + additionalContext
+    _t51_agents_tmp=$(mktemp -d); TEST_TMPS+=("$_t51_agents_tmp")
+    printf 'ASK_LANG=french\n' > "$_t51_agents_tmp/.env"
+    _t51_agents_dir="$(cygpath -m "$_t51_agents_tmp" 2>/dev/null || echo "$_t51_agents_tmp")"
+    _t51_json="{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"question\":\"plain english\",\"type\":\"select\",\"choices\":[]},\"tool_response\":{}}"
+    _t51_out="$(export AGENTS_CONFIG_DIR="$_t51_agents_dir"; echo "$_t51_json" | run_with_timeout 10 node "$CHECK_ASK_HOOK" 2>/dev/null)"
+    _t51_ok=1
+    echo "$_t51_out" | grep -q '"approve"' || _t51_ok=0
+    echo "$_t51_out" | grep -q 'ASK_LANG=french' || _t51_ok=0
+    if [ "$_t51_ok" -eq 1 ]; then
+        pass "T51: ASK_LANG=french → approve + advisory additionalContext"
+    else
+        fail "T51: expected approve+hint, got: $_t51_out"
+    fi
+
+    # T52a: lintWorktreeNotesLang historyPublic=french + CJK → 0 violations (hint tier)
+    _t52a_file="$(write_tmp_file WORKTREE_NOTES.md <<'EOF'
+## History Notes
+- 日本語のバグ修正
+
+## Changelog Notes
+- (none)
+EOF
+)"
+    _t52a_cfg='{"historyPublic":"french","historyPrivate":"french","changelogPublic":"any","changelogPrivate":"any"}'
+    _t52a_count="$(lint_count "$_t52a_file" "$_t52a_cfg" '{"isPrivateRepo":false}')"
+    if [ "$_t52a_count" = "0" ]; then
+        pass "T52a: historyPublic=french + CJK History bullet → 0 violations (hint tier)"
+    else
+        fail "T52a: expected 0, got: $_t52a_count"
+    fi
+
+    # T52b: changelogPublic=french + CJK Changelog bullet → 0 violations (hint tier symmetry)
+    _t52b_file="$(write_tmp_file WORKTREE_NOTES.md <<'EOF'
+## History Notes
+- (none)
+
+## Changelog Notes
+- 日本語の変更点
+EOF
+)"
+    _t52b_cfg='{"historyPublic":"any","historyPrivate":"any","changelogPublic":"french","changelogPrivate":"french"}'
+    _t52b_count="$(lint_count "$_t52b_file" "$_t52b_cfg" '{"isPrivateRepo":false}')"
+    if [ "$_t52b_count" = "0" ]; then
+        pass "T52b: changelogPublic=french + CJK Changelog bullet → 0 violations (hint tier symmetry)"
+    else
+        fail "T52b: expected 0, got: $_t52b_count"
+    fi
+
+    # T53: legacy DOCS_LANG_HISTORY (without _PUBLIC/_PRIVATE suffix) is ignored after #594
+    _t53_lang="$(make_lang_file_raw <<'EOF'
+```docs-lang
+DOCS_LANG_HISTORY=english
+```
+EOF
+)"
+    _t53_json="$(load_config_json "$_t53_lang")"
+    if echo "$_t53_json" | grep -q '"historyPublic":"any"' && \
+       echo "$_t53_json" | grep -q '"historyPrivate":"any"'; then
+        pass "T53: legacy DOCS_LANG_HISTORY ignored (no backward compat)"
+    else
+        fail "T53: legacy key should not affect config, got: $_t53_json"
     fi
 fi
 
