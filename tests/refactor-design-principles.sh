@@ -266,10 +266,10 @@ test_B2_elevate_perspective_header() {
         fail "B2: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 1. Elevate Perspective" "$f"; then
-        pass "B2: '## 1. Elevate Perspective' header present"
+    if grep -qF "## 2. Elevate Perspective" "$f"; then
+        pass "B2: '## 2. Elevate Perspective' header present"
     else
-        fail "B2: '## 1. Elevate Perspective' header NOT found in rules/core-principles.md"
+        fail "B2: '## 2. Elevate Perspective' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -279,10 +279,10 @@ test_B3_orthogonality_header() {
         fail "B3: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 2. Orthogonality" "$f"; then
-        pass "B3: '## 2. Orthogonality' header present"
+    if grep -qF "## 3. Orthogonality" "$f"; then
+        pass "B3: '## 3. Orthogonality' header present"
     else
-        fail "B3: '## 2. Orthogonality' header NOT found in rules/core-principles.md"
+        fail "B3: '## 3. Orthogonality' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -292,10 +292,10 @@ test_B4_name_reflects_substance_header() {
         fail "B4: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 3. Name Reflects Substance" "$f"; then
-        pass "B4: '## 3. Name Reflects Substance' header present"
+    if grep -qF "## 6. Name Reflects Substance" "$f"; then
+        pass "B4: '## 6. Name Reflects Substance' header present"
     else
-        fail "B4: '## 3. Name Reflects Substance' header NOT found in rules/core-principles.md"
+        fail "B4: '## 6. Name Reflects Substance' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -353,10 +353,10 @@ test_B9_ssot_section_header() {
         fail "B9: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 4. Single Source of Truth" "$f"; then
-        pass "B9: '## 4. Single Source of Truth' header present"
+    if grep -qF "## 1. Single Source of Truth" "$f"; then
+        pass "B9: '## 1. Single Source of Truth' header present"
     else
-        fail "B9: '## 4. Single Source of Truth' header NOT found"
+        fail "B9: '## 1. Single Source of Truth' header NOT found"
     fi
 }
 
@@ -367,9 +367,9 @@ test_B10_elevate_perspective_per_class_wording() {
         return
     fi
     if grep -qF "merged, replaced, or restructured" "$f"; then
-        pass "B10: §1 contains class-level alternative wording"
+        pass "B10: §2 contains class-level alternative wording"
     else
-        fail "B10: §1 does NOT contain class-level alternative wording"
+        fail "B10: §2 does NOT contain class-level alternative wording"
     fi
 }
 
