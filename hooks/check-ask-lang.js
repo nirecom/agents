@@ -3,7 +3,7 @@ const { loadLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { hasCJK } = require("./lib/detect-cjk");
 const { ENGLISH_RUN_RE } = require("./lib/lint-plan-lang");
 
-const policy = loadLangConfig("ask", undefined);
+const policy = loadLangConfig("ask");
 const tier = classifyPolicy(policy);
 
 let raw = "";
