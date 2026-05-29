@@ -74,7 +74,17 @@ function blockIsComplete(text, sessionId) {
   if (!text) return false;
   const headings = schema.getSectionHeadings(sessionId);
   if (!headings.every((h) => text.includes(h))) return false;
-  return schema.getProbes().every((p) => text.includes(p));
+  if (!schema.getProbes().every((p) => text.includes(p))) return false;
+  const outcomeSection = schema.SECTIONS.find((s) => s.id === "closed_issue_outcomes");
+  if (!outcomeSection) return false;
+  const outcomeHeading = outcomeSection.heading();
+  const idx = text.indexOf(outcomeHeading);
+  if (idx === -1) return false;
+  const after = text.slice(idx + outcomeHeading.length);
+  const nextHeadingIdx = after.search(/\n###? /);
+  const sectionContent = nextHeadingIdx === -1 ? after : after.slice(0, nextHeadingIdx);
+  if (!/^\s*- /m.test(sectionContent)) return false;
+  return true;
 }
 
 if (require.main === module) {
