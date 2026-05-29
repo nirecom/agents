@@ -9,11 +9,17 @@ Investigate external information related to the given task.
 
 ## Procedure
 
-1. Formulate search queries covering the topic from multiple angles.
-2. Search the web and fetch relevant pages.
-3. Cross-validate findings across multiple sources.
-4. Summarize: key findings, source credibility, and recommendations with source URLs.
-5. Present findings for user review.
+1-3. **Delegate investigation to investigator** (`mode=web`):
+   ```
+   Agent({ subagent_type: "investigator", prompt: JSON.stringify({
+     mode: "web", topic: TOPIC, context: CONTEXT,
+     artifact_dir: PLANS_DIR
+   }) })
+   ```
+   On `failed` status: surface summary to user and stop.
+
+4. Read the report from `artifact_path` (one read, at the end).
+5. **Present findings** — output format: `## Deep Research: PERFORMED|FAILED` (1 line) + artifact_path pointer (1 line) + ≤200 char summary. Do not re-emit the full report text in assistant output.
 
 ## Rules
 

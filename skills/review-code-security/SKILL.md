@@ -20,9 +20,15 @@ Use when the implementation touches external input, secrets handling, or third-p
 
 ## Procedure
 
-1. Receive the scan target (file path, diff, or description).
-2. Apply each axis's patterns sequentially.
-3. Report findings grouped by axis. If nothing found, report "No issues found."
+1-3. **Delegate scan to investigator** (`mode=security_scan`):
+   ```
+   Agent({ subagent_type: "investigator", prompt: JSON.stringify({
+     mode: "security_scan", topic: "security review", context: SCAN_TARGET,
+     artifact_dir: PLANS_DIR
+   }) })
+   ```
+   On `failed` status: surface summary + artifact_path to user.
+   Output: `## Security Review: PERFORMED|FAILED` (1 line) + artifact_path pointer. Read report only on failure or explicit user request.
 
 ## Patterns by Axis
 
