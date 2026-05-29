@@ -471,3 +471,6 @@ Changes: PR approval flow: the model now emits the `WORKFLOW_USER_VERIFIED` sent
 ### FEATURE: PR #625 (2026-05-30)
 Background: feat(#608): add /session-close skill — Final Report after issue-close-finalize
 Changes: Final Report now includes a "Closed Issue Outcomes" section showing per-issue close results (history.md append, issue close, sentinel posting, WIP clear). Final Reports now emit symmetrically on both `ENFORCE_WORKTREE=on` (worktree) and `off` (branch/main) paths via the new `/session-close` skill.
+### FEATURE: PR #640 (2026-05-29)
+Background: fix(#636): revert issue-close-finalize/SKILL.md to eval pattern
+Changes: fix: issue-close-finalize reverted to eval pattern — the tmpfile approach introduced by PR #632 was incompatible with ENFORCE_WORKTREE=on (mktemp blocked from main worktree)
