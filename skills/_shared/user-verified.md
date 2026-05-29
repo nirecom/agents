@@ -14,7 +14,7 @@ because the user is approving the merge of a specific PR, not an abstract diff.
 
 ## Protocol
 
-**Step 1 — Emit the sentinel** (its own Bash call):
+**Emit the sentinel directly** as its own Bash call — no narrative prelude, no PR URL restated in chat:
 
     echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"
 
@@ -22,15 +22,15 @@ The `: <reason>` is mandatory — describe what the user is approving
 (e.g. `"PR #314 — approving merge to main"`). Set the Bash `description` to the
 same sentence so the permission dialog shows it.
 
-**Step 2 — Context surfaces automatically**
-
-`hooks/show-user-verified-context.js` fires before the dialog and emits:
+`hooks/show-user-verified-context.js` fires before the dialog (SSOT) and surfaces:
 - Staged files (`git diff --cached --name-only`), or `(none)`
 - `Open PR: <url>` when available
+- The approval instruction line shown above the Allow / Deny buttons
 
-Do not pre-print this context — the hook is authoritative.
+Do not pre-print this context, the PR URL, or the approval instruction in chat —
+the hook is the single source of truth for the dialog's surrounding text.
 
-**Step 3 — User answers the dialog**
+**User answers the dialog**
 
 - **Allow** → proceed to the next step (`/commit-push`, `gh pr merge`, etc.)
 - **Deny** → stop. Do not retry.
