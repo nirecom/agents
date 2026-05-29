@@ -945,11 +945,11 @@ $out"
 test_I3_skill_md_grep_invariant() {
     require_skill_md "I3_skill_md_grep_invariant" || return
     local count
-    count="$(grep -c '^7\. \*\*Final report' "$SKILL_MD" 2>/dev/null || echo 0)"
-    if [ "$count" = "1" ]; then
-        pass "I3: SKILL.md has exactly one '7. **Final report' heading"
+    count="$(grep '^7\. \*\*Final report' "$SKILL_MD" 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$count" = "0" ]; then
+        pass "I3: SKILL.md Step 7 Final report heading correctly absent (moved to /session-close)"
     else
-        fail "I3: expected 1 occurrence of '7. **Final report', got $count"
+        fail "I3: expected 0 occurrences of '7. **Final report' (Step 7 removed in #608), got $count"
     fi
 }
 
@@ -1491,6 +1491,7 @@ ENVEOF
         const ctx = {
           safeEnv,
           closedIssuesLine: '- (none)',
+          closedIssueOutcomeLines: ['- (none)'],
           buildPostMergeLines: () => {
             const cats = schema.CATEGORIES || [
               { label: 'Claude Code restart', newKey: 'CC_RESTART_REQUIRED', reasonKey: 'CC_RESTART_REASON', legacyKey: 'CLAUDE_CODE_RESTART_REQUIRED', legacyYes: 'yes' },

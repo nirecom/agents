@@ -100,8 +100,121 @@ Idempotent. Merge SHA from Step A.5 mandatory on the normal path.
 Projects v2 Status=Done, clears session-fingerprint, deletes
 `$PLANS_DIR/wip-lock-<N>.md`. Idempotent; warn-and-continue.
 
+## Step L: write outcome JSON (always; final step before End report)
+
+Always runs (every NEXT_STEPS path, including `auto_close_path` and `phase1_done`).
+Writes `<PLANS_DIR>/<session-id>-issue-close-outcome.json`. `/session-close`
+consumes this file to render the Closed Issue Outcomes section of the Final Report.
+
+Path resolution and outcome file shape:
+- `PLANS_DIR` — resolved via `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"`.
+- `<session-id>` — read from `$CLAUDE_ENV_FILE` (`CLAUDE_SESSION_ID`) with the
+  same fallback chain used by `--from-session`. If unresolvable, emit a
+  stderr warning `[issue-close-finalize] WARN: session id unresolved — outcome JSON not written`
+  and skip Step L (do not block the End report).
+- Shape: JSON object `{ "issues": [<entry>, ...] }`. Read-modify-write so a
+  missing file on first call is treated as empty.
+
+### Execution model (LLM-derived field values; no cross-call shell vars)
+
+Each step in this skill body is a separate Bash tool invocation. Shell variables
+do not persist between calls. Therefore the `historyEntry` / `issueClosed` /
+`sentinelsPosted` / `wipCleared` / `state` field values are **derived by the
+LLM** from the observed output of earlier steps, then substituted as literal
+strings into the Step L write command at execution time. This is the same
+substitution pattern already used throughout the skill body.
+
+**`historyEntry` derivation** (applied by the LLM executing this skill):
+- Step E not in NEXT_STEPS → `"skipped"`
+- Step E ran, grep-skip fired (no-op, E.check=0) → `"skipped-already-present"`
+- Step E ran, commit succeeded → `"appended"`
+- Step E fail-soft fired ("Step E.<n> failed") → `"failed"`
+
+**`issueClosed` derivation**:
+- Step H not in NEXT_STEPS → `"skipped"`
+- Step H ran, issue was already closed (gh reported already-closed) → `"already-closed"`
+- Step H succeeded (`gh issue close` returned 0 on an open issue) → `"closed"`
+- Step H failed (non-zero exit) → `"failed"`
+
+**`sentinelsPosted` derivation**:
+- Step J not in NEXT_STEPS → `"skipped"`
+- Step J ran, existing sentinel detected (idempotent skip) → `"already-present"`
+- Step J succeeded → `"posted"`
+- Step J failed → `"failed"`
+
+**`wipCleared` derivation**:
+- Step K not in NEXT_STEPS → `"skipped"`
+- Step K succeeded → `"cleared"`
+- Step K failed (warn-and-continue) → `"failed"`
+
+**`state` derivation** (composed from the four field values + triage ACTION):
+- triage ACTION = `already_closed_with_sentinel` → `"skipped-already-closed"`
+- all four fields are `"skipped"` (no NEXT_STEPS steps ran, not the above) → `"skipped-noop"`
+- `issueClosed == "failed"` AND no field is `"closed"`/`"already-closed"` → `"failed"`
+- any field is `"failed"` but `issueClosed` is `"closed"` or `"already-closed"` → `"partial-failure"`
+- otherwise → `"succeeded"`
+
+`"skipped-non-github"` is **not** reachable in this skill — that state is written
+exclusively by `/session-close` Step 3 before `/issue-close-finalize` is invoked.
+
+### State and per-field enum
+
+State enum (one of):
+- `succeeded` — all canonical NEXT_STEPS completed without warning
+- `failed` — canonical close did not run (`issueClosed != closed/already-closed`)
+- `partial-failure` — issue was closed (or already closed) but at least one
+  of E/J/K failed
+- `skipped-noop` — triage returned `phase1_done` or equivalent no-op
+- `skipped-non-github` — written by `/session-close` Step 3 (never by this skill)
+- `skipped-already-closed` — triage detected already-CLOSED with sentinels present
+
+Per-field enum:
+- `historyEntry`: `appended` | `skipped-already-present` | `failed` | `skipped`
+- `issueClosed`: `closed` | `already-closed` | `failed` | `skipped`
+- `sentinelsPosted`: `posted` | `already-present` | `failed` | `skipped`
+- `wipCleared`: `cleared` | `failed` | `skipped`
+
+### Write step (single self-contained Bash call)
+
+`PLANS_DIR`, `SESSION_ID`, and `OUTCOME_FILE` are computed fresh at the top of
+this single bash block — they are not carried in from prior calls. `<N>`,
+`<state>`, `<historyEntry>`, `<issueClosed>`, `<sentinelsPosted>`,
+`<wipCleared>` are placeholders the LLM substitutes with the values derived
+above immediately before execution.
+
+```bash
+PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
+              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")"
+SESSION_ID="$(node -e "var fs=require('fs'); try { var e=JSON.parse(fs.readFileSync(process.env.CLAUDE_ENV_FILE||'','utf8')); process.stdout.write(e.CLAUDE_SESSION_ID||''); } catch(_){}" 2>/dev/null)"
+OUTCOME_FILE="$PLANS_DIR/${SESSION_ID}-issue-close-outcome.json"
+ISSUE_NUMBER="<N>" STATE="<state>" HIST="<historyEntry>" CLOSED="<issueClosed>" \
+SENTS="<sentinelsPosted>" WIP="<wipCleared>" OUTCOME_FILE="$OUTCOME_FILE" \
+node -e "
+var fs=require('fs');
+var p=process.env.OUTCOME_FILE;
+var bag={issues:[]};
+try { bag=JSON.parse(fs.readFileSync(p,'utf8')); if(!bag||!Array.isArray(bag.issues)) bag={issues:[]}; } catch(_){}
+var entry={
+  issueNumber: parseInt(process.env.ISSUE_NUMBER,10),
+  state: process.env.STATE,
+  historyEntry: process.env.HIST,
+  issueClosed: process.env.CLOSED,
+  sentinelsPosted: process.env.SENTS,
+  wipCleared: process.env.WIP
+};
+bag.issues = bag.issues.filter(function(e){ return e && e.issueNumber !== entry.issueNumber; });
+bag.issues.push(entry);
+fs.writeFileSync(p, JSON.stringify(bag,null,2));
+" 2>&1 || true
+```
+
+Fail-soft: if Step L write itself fails, surface stderr `[issue-close-finalize]
+WARN: outcome JSON write failed` and continue to End. Never block the close
+flow on this step.
+
 ## End
-Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>} (merge ${MERGE_COMMIT:-<not resolved>}); Step E outcome from `$STEP_E_STATUS`.
+
+Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>} (merge ${MERGE_COMMIT:-<not resolved>}); Step E outcome from `$STEP_E_STATUS`; Step L: `outcome JSON written` | `write failed (warned)`.
 
 ## Safety notes
 - Step E runs from main worktree. `enforce-worktree.js` permits
