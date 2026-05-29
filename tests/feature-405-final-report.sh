@@ -1267,13 +1267,13 @@ test_I11_skill_md_step5_5_node_json_write() {
         skip "I11_skill_md_step5_5_node_json_write (Step 5.5 region not found)"
         return
     fi
-    local has_node=0 has_json=0
-    if echo "$region" | grep -qE 'node (-e|--)'; then has_node=1; fi
+    local has_capture=0 has_json=0
+    if echo "$region" | grep -qF "capture-env.sh"; then has_capture=1; fi
     if echo "$region" | grep -qF "final-report-env.json"; then has_json=1; fi
-    if [ "$has_node" = "1" ] && [ "$has_json" = "1" ]; then
-        pass "I11: SKILL.md Step 5.5 has node invocation + final-report-env.json"
+    if [ "$has_capture" = "1" ] && [ "$has_json" = "1" ]; then
+        pass "I11: SKILL.md Step 5.5 invokes capture-env.sh and references final-report-env.json"
     else
-        fail "I11: Step 5.5 missing node-e/--(=$has_node) or final-report-env.json(=$has_json)"
+        fail "I11: Step 5.5 missing capture-env.sh(=$has_capture) or final-report-env.json(=$has_json)"
     fi
 }
 

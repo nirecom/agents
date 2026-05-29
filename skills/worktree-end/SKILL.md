@@ -107,7 +107,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       ```
       If it refuses with "not empty", re-run with `--force-if-not-registered` (requires step 5 inventory complete — issue #322).
    f. `WORKTREE_END_SKILL=1 git -C <main> branch -D <branch>` — `-D` required because squash-merge produces a new commit not recognised by `-d`'s fully-merged check. The inline `WORKTREE_END_SKILL=1` is the authorization token for `enforce-worktree.js`.
-   g. `git -C <main> fetch --prune origin` then `git -C <main> pull --ff-only`
+   g. `git -C <main> fetch --prune origin`
+      `git -C <main> pull --ff-only`
    h. **Compose doc-append** (main worktree; only when NOTES_BACKUP_PATH is non-empty).
       Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → add `--skip-history` (history.md already committed by Phase 1/2). Empty / missing → run without it (CLI bails exit 0 if notes sections empty).
       ```
