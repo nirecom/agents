@@ -40,27 +40,41 @@ below. Reuse across all subsequent steps — do not re-resolve.
 4. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
    Pass the full task context **plus** the contents of the intent/approach files above.
 
-5. **Codex review loop.** Apply `skills/_shared/codex-review-loop.md` with these parameters:
-   - FORMAT: `detail-plan`
-   - DRAFT_FILE: `<PLANS_DIR>/drafts/<session-id>-detail-draft.md`
+5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
+   (parameter values for the detail stage: FORMAT=detail-plan, CAP=2,
+   MAX_EXTENSIONS=2, PLANNER_AGENT=detail-planner,
+   REVIEWER_AGENT=detail-reviewer,
+   ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-outline.md,
+   NON_APPROVED_VERDICT=NEEDS_REVISION).
+
+   For each review round, invoke the wrapper (Bash tool):
+
+   ```
+   "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" \
+     --format detail-plan \
+     --session-id <session-id> \
+     --plans-dir <PLANS_DIR> \
+     --draft-file <PLANS_DIR>/drafts/<session-id>-detail-draft.md \
+     --cap 2 --max-extensions 2 --extensions-used $EXTENSIONS_USED \
+     --accepted-tradeoffs <PLANS_DIR>/<session-id>-outline.md \
+     [--context <PLANS_DIR>/<session-id>-survey-code.md] \
+     [--context <PLANS_DIR>/<session-id>-survey-history.md] \
+     [--context <PLANS_DIR>/drafts/<session-id>-concerns-log.md] \
+     > "$TMP_STDOUT"
+   RV=$?
+   cat "$TMP_STDOUT"
+   ```
+
+   Detail-stage caller paths:
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
    - CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-concerns-log.md`
    - DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-detail-debug.log`
-   - CAP: 2
-   - MAX_EXTENSIONS: 2
-   - PLANNER_AGENT: `detail-planner`
-   - REVIEWER_AGENT: `detail-reviewer`
-   - ACCEPTED_TRADEOFFS_FILE: `<PLANS_DIR>/<session-id>-outline.md` (SSOT carrying intent-stage + outline-stage tradeoffs after `make-outline-plan` Step 4a)
-   - NON_APPROVED_VERDICT: `NEEDS_REVISION`
 
-   Detail-specific addenda:
-   - The `EXTENSIONS_USED` counter is initialized to 0 at loop start.
-   - Re-invoke `detail-planner` for revision rounds using the same model from step 3.
+   Exit code → action mapping: see the SSOT table in
+   `skills/_shared/codex-review-loop.md` (#exit-code--orchestrator-action-ssot).
 
-   Outcomes:
-   - APPROVED → proceed to step 7.
-   - NEEDS_REVISION → loop continues (each round consumes `revision_rounds`; cap is 2).
-   - `FAILED — round cap reached` → proceed to step 6.
+   **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt the skill and
+   surface the wrapper's stderr to the user. Only exit 3 falls back silently.
 
 6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
    - LABEL: `"Detail Plan Review"`
