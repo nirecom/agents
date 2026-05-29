@@ -26,11 +26,11 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap).
 
-2a. Aggregate candidate class members per `lib/aggregate-class-members.md`.
+2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
 3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
-   **Class members proposal (when candidates ≥ 1):** run `lib/class-members-proposal.md`.
+   **Class members proposal (when candidates ≥ 1):** run `reference/class-members-proposal.md`.
 
 4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
 
@@ -45,7 +45,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - `triage: NA` — sibling exists but orthogonal; out of scope for this task.
 
    When no candidates were detected: write `- (none detected)` (no triage field).
-   Per lib/class-members-proposal.md Phase C, the Modify parse always records a
+   Per reference/class-members-proposal.md Phase C, the Modify parse always records a
    valid enum value — ambiguous input uses the proposed default.
 
    **`## Issues` section rules** (immediately after H1, before Background/Motivation — mandatory; this is the single SSOT, no separate `## closes_issues` section is written):
