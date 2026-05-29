@@ -467,3 +467,7 @@ Changes: `/issue-create` now automatically appends the created (or re-opened) is
 ### FEATURE: PR #643 (2026-05-30)
 Background: feat(#635): hook approval phrase + direct sentinel emit for PR approval flow
 Changes: PR approval flow: the model now emits the `WORKFLOW_USER_VERIFIED` sentinel directly after creating the PR — no more intermediate text reply needed. The permission dialog now shows the PR URL and "Click Allow to approve; click Deny to stop" above the Allow / Deny buttons.
+
+### FEATURE: PR #625 (2026-05-30)
+Background: feat(#608): add /session-close skill — Final Report after issue-close-finalize
+Changes: Final Report now includes a "Closed Issue Outcomes" section showing per-issue close results (history.md append, issue close, sentinel posting, WIP clear). Final Reports now emit symmetrically on both `ENFORCE_WORKTREE=on` (worktree) and `off` (branch/main) paths via the new `/session-close` skill.
