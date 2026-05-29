@@ -7,14 +7,15 @@
 const fs = require("fs");
 const { loadDefaultEnv } = require("./load-env");
 
-const VALID_VALUES = new Set(["english", "japanese", "any"]);
 const KEY_MAP = {
-  DOCS_LANG_HISTORY: "history",
+  DOCS_LANG_HISTORY_PUBLIC: "historyPublic",
+  DOCS_LANG_HISTORY_PRIVATE: "historyPrivate",
   DOCS_LANG_CHANGELOG_PUBLIC: "changelogPublic",
   DOCS_LANG_CHANGELOG_PRIVATE: "changelogPrivate",
 };
 const DEFAULT_CONFIG = Object.freeze({
-  history: "any",
+  historyPublic: "any",
+  historyPrivate: "any",
   changelogPublic: "any",
   changelogPrivate: "any",
 });
@@ -65,11 +66,7 @@ function parseDocsLangBody(body) {
     const value = line.slice(eqIdx + 1).trim();
     const configKey = KEY_MAP[key];
     if (!configKey) continue;
-    if (VALID_VALUES.has(value)) {
-      config[configKey] = value;
-    } else {
-      config[configKey] = "any";
-    }
+    config[configKey] = normalizeValue(value);
   }
   return config;
 }
@@ -97,7 +94,7 @@ function loadDocsLangConfig(langFilePath) {
   for (const envKey of Object.keys(KEY_MAP)) {
     const v = process.env[envKey];
     if (typeof v === "string" && v.length > 0) {
-      config[KEY_MAP[envKey]] = VALID_VALUES.has(v) ? v : "any";
+      config[KEY_MAP[envKey]] = normalizeValue(v);
     }
   }
   return config;
@@ -105,17 +102,30 @@ function loadDocsLangConfig(langFilePath) {
 
 function normalizeValue(v) {
   if (typeof v !== "string") return "any";
-  return VALID_VALUES.has(v) ? v : "any";
+  const trimmed = v.trim().toLowerCase();
+  if (trimmed.length === 0) return "any";
+  if (/[\x00-\x1f]/.test(trimmed)) return "any";
+  return trimmed;
 }
 
-function loadLangConfig(surface, langFilePath) {
+const STRICT_POLICIES = new Set(["english", "japanese"]);
+
+function classifyPolicy(policy) {
+  if (!policy || policy === "any") return "noop";
+  if (STRICT_POLICIES.has(policy)) return "strict";
+  return "hint";
+}
+
+function loadLangConfig(surface, langFilePath, options) {
   loadDefaultEnv();
   if (surface === "plan") return normalizeValue(process.env.PLAN_LANG);
   if (surface === "ask") return normalizeValue(process.env.ASK_LANG);
   if (surface === "history") {
-    return loadDocsLangConfig(langFilePath).history;
+    const cfg = loadDocsLangConfig(langFilePath);
+    const isPriv = options && options.isPrivateRepo === true;
+    return isPriv ? cfg.historyPrivate : cfg.historyPublic;
   }
   return "any";
 }
 
-module.exports = { loadDocsLangConfig, loadLangConfig };
+module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES };

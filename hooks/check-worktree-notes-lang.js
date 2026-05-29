@@ -8,6 +8,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { classifyPolicy } = require("./lib/lang-config");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
 const TARGET_BASENAME = "WORKTREE_NOTES.md";
@@ -29,6 +30,35 @@ function approve() {
   done({ decision: "approve" });
 }
 
+function hint(hints) {
+  done({
+    decision: "approve",
+    hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext: hints.join("\n"),
+    },
+  });
+}
+
+function buildHints(config, isPriv) {
+  const hints = [];
+  const histPolicy = isPriv ? config.historyPrivate : config.historyPublic;
+  const clPolicy = isPriv ? config.changelogPrivate : config.changelogPublic;
+  if (classifyPolicy(histPolicy) === "hint") {
+    hints.push(
+      `DOCS_LANG_HISTORY_${isPriv ? "PRIVATE" : "PUBLIC"}=${histPolicy}: ` +
+      `write ## History Notes in ${histPolicy}. Hint only — approved regardless of content language.`
+    );
+  }
+  if (classifyPolicy(clPolicy) === "hint") {
+    hints.push(
+      `DOCS_LANG_CHANGELOG_${isPriv ? "PRIVATE" : "PUBLIC"}=${clPolicy}: ` +
+      `write ## Changelog Notes in ${clPolicy}. Hint only — approved regardless of content language.`
+    );
+  }
+  return hints;
+}
+
 function extractFilePath(toolInput) {
   if (!toolInput || typeof toolInput !== "object") return "";
   return toolInput.file_path || toolInput.path || "";
@@ -44,12 +74,12 @@ function safeIsPrivateRepo(cwd) {
 }
 
 function formatMessage(violations) {
-  const header = "WORKTREE_NOTES.md language check failed — non-English content in english-enforced section(s):";
+  const header = "WORKTREE_NOTES.md language check failed — content does not match the configured language policy:";
   const body = violations
-    .map((v) => `  [${v.section}:${v.lineNumber}] ${v.line}`)
+    .map((v) => `  [${v.section}:${v.lineNumber}] (expected ${v.policy}) ${v.line}`)
     .join("\n");
   const footer =
-    "Rewrite the offending bullets in English before saving.\n" +
+    "Rewrite the offending bullets to match the policy before saving.\n" +
     "Policy comes from $AGENTS_CONFIG_DIR/rules/language.md (docs-lang block).";
   return `${header}\n${body}\n${footer}`;
 }
@@ -97,7 +127,11 @@ try {
   approve();
 }
 
-if (!Array.isArray(violations) || violations.length === 0) approve();
+if (!Array.isArray(violations) || violations.length === 0) {
+  const hints = buildHints(config, isPriv);
+  if (hints.length > 0) hint(hints);
+  approve();
+}
 
 const message = formatMessage(violations);
 done({

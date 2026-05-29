@@ -157,17 +157,17 @@ if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
         ' 2>/dev/null || true
     )"
     if [[ -n "$LANG_VIOLATIONS" ]]; then
-        echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md has non-English entries in enforced sections:" >&2
+        echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md content does not match the configured language policy:" >&2
         LANG_VIOLATIONS="$LANG_VIOLATIONS" node -e '
             try {
                 const v = JSON.parse(process.env.LANG_VIOLATIONS);
-                v.forEach((x) => console.error("  [" + x.section + ":" + x.lineNumber + "] " + x.line));
+                v.forEach((x) => console.error("  [" + x.section + ":" + x.lineNumber + "] (expected " + (x.policy || "?") + ") " + x.line));
             } catch (e) {}
         ' 2>&1 || true
         if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
             echo "compose-doc-append-entry: language violations detected (dry-run, continuing)" >&2
         else
-            echo "compose-doc-append-entry: rewrite offending bullets in English before re-running" >&2
+            echo "compose-doc-append-entry: rewrite offending bullets to match the policy before re-running" >&2
             exit 1
         fi
     fi
