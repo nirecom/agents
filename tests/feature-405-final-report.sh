@@ -859,7 +859,7 @@ $block"
 }
 
 test_I12_detect_restart_failsafe() {
-    local detect_sh="$AGENTS_DIR/skills/worktree-end/lib/detect-restart.sh"
+    local detect_sh="$AGENTS_DIR/skills/worktree-end/scripts/detect-restart.sh"
     if [ ! -f "$detect_sh" ]; then
         skip "I12_detect_restart_failsafe (detect-restart.sh not found)"
         return
