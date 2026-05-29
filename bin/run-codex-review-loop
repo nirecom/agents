@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# bin/run-codex-review-loop
+# Wrapper that enforces step b (context build) + step c (review-plan-codex)
+# + step d (verdict parse) of skills/_shared/codex-review-loop.md.
+#
+# Exit codes (see skills/_shared/codex-review-loop.md for SSOT table):
+#   0 — APPROVED
+#   1 — NON_APPROVED_VERDICT (NEEDS_REVISION / MISSING_ALTERNATIVE:)
+#   2 — FAILED — round cap reached
+#   3 — codex CLI unusable (SKIPPED / FAILED-other / verdict malformed)
+#       -> caller silently falls back to REVIEWER_AGENT subagent
+#   4 — wrapper / config / parser failure (unset AGENTS_CONFIG_DIR,
+#       missing core-principles.md, missing arg, missing option value,
+#       missing binaries, unrecognized status header, etc.)
+#       -> caller MUST halt with blocking error; do NOT fall back.
+set -uo pipefail
+
+die() {
+  echo "run-codex-review-loop: script error: $1" >&2
+  exit 4
+}
+
+require_value() {
+  local flag="$1"
+  local val="${2-__MISSING__}"
+  [[ "$val" != "__MISSING__" && -n "$val" ]] || die "$flag requires a value"
+  [[ "$val" != --* ]] || die "$flag requires a value (got flag-like token: $val)"
+}
+
+# --- Pre-flight: AGENTS_CONFIG_DIR and core-principles.md ---
+[[ -n "${AGENTS_CONFIG_DIR:-}" ]] || die "AGENTS_CONFIG_DIR is not set"
+[[ -d "$AGENTS_CONFIG_DIR" ]]      || die "AGENTS_CONFIG_DIR does not exist: $AGENTS_CONFIG_DIR"
+CORE_PRINCIPLES="$AGENTS_CONFIG_DIR/rules/core-principles.md"
+[[ -f "$CORE_PRINCIPLES" ]] || die "required context missing: $CORE_PRINCIPLES"
+
+FORMAT=""
+SID=""
+PLANS_DIR=""
+DRAFT=""
+CAP=""
+MAX_EXT=""
+EXT_USED="0"
+TRADEOFFS=""
+EXTRA_CTX=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --format)
+      require_value "--format" "${2:-}"
+      FORMAT="$2"; shift 2 ;;
+    --session-id)
+      require_value "--session-id" "${2:-}"
+      SID="$2"; shift 2 ;;
+    --plans-dir)
+      require_value "--plans-dir" "${2:-}"
+      PLANS_DIR="$2"; shift 2 ;;
+    --draft-file)
+      require_value "--draft-file" "${2:-}"
+      DRAFT="$2"; shift 2 ;;
+    --cap)
+      require_value "--cap" "${2:-}"
+      CAP="$2"; shift 2 ;;
+    --max-extensions)
+      require_value "--max-extensions" "${2:-}"
+      MAX_EXT="$2"; shift 2 ;;
+    --extensions-used)
+      require_value "--extensions-used" "${2:-}"
+      EXT_USED="$2"; shift 2 ;;
+    --accepted-tradeoffs)
+      require_value "--accepted-tradeoffs" "${2:-}"
+      TRADEOFFS="$2"; shift 2 ;;
+    --context)
+      require_value "--context" "${2:-}"
+      EXTRA_CTX+=("$2"); shift 2 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+
+[[ -n "$FORMAT" ]]    || die "--format is required"
+[[ -n "$SID" ]]       || die "--session-id is required"
+[[ -n "$PLANS_DIR" ]] || die "--plans-dir is required"
+[[ -n "$DRAFT" ]]     || die "--draft-file is required"
+[[ -n "$CAP" ]]       || die "--cap is required"
+[[ -n "$MAX_EXT" ]]   || die "--max-extensions is required"
+[[ -n "$TRADEOFFS" ]] || die "--accepted-tradeoffs is required"
+
+case "$FORMAT" in
+  detail-plan|outline-plan) ;;
+  *) die "--format must be detail-plan or outline-plan" ;;
+esac
+
+[[ -f "$DRAFT" ]]     || die "draft file does not exist: $DRAFT"
+[[ -d "$PLANS_DIR" ]] || die "plans dir does not exist: $PLANS_DIR"
+
+BUILDER="$AGENTS_CONFIG_DIR/bin/build-codex-context"
+REVIEWER="$AGENTS_CONFIG_DIR/bin/review-plan-codex"
+[[ -f "$BUILDER" ]]  || die "build-codex-context not found: $BUILDER"
+[[ -f "$REVIEWER" ]] || die "review-plan-codex not found: $REVIEWER"
+
+DRAFTS_DIR="$PLANS_DIR/drafts"
+mkdir -p "$DRAFTS_DIR" || die "cannot create drafts dir: $DRAFTS_DIR"
+
+CONTEXT_OUT="$DRAFTS_DIR/$SID-context.md"
+MARKER="$DRAFTS_DIR/$SID-context.$FORMAT.built"
+
+if [[ ! -f "$MARKER" ]]; then
+  if ! bash "$BUILDER" --plans-dir "$PLANS_DIR" --session-id "$SID" --output "$CONTEXT_OUT"; then
+    die "build-codex-context failed"
+  fi
+  : > "$MARKER" || die "cannot create marker: $MARKER"
+fi
+
+ARGS=(
+  --input "$DRAFT"
+  --format "$FORMAT"
+  --session-id "$SID"
+  --log-dir "$DRAFTS_DIR"
+  --cap "$CAP"
+  --max-extensions "$MAX_EXT"
+  --extensions-used "$EXT_USED"
+  --accepted-tradeoffs "$TRADEOFFS"
+)
+
+if [[ -f "$CONTEXT_OUT" && -s "$CONTEXT_OUT" ]]; then
+  ARGS+=(--context "$CONTEXT_OUT")
+fi
+
+for ctx in "${EXTRA_CTX[@]+"${EXTRA_CTX[@]}"}"; do
+  [[ -z "$ctx" ]] && continue
+  if [[ -f "$ctx" && -s "$ctx" ]]; then
+    ARGS+=(--context "$ctx")
+  fi
+done
+
+ARGS+=(--context "$CORE_PRINCIPLES")
+
+TMP_OUT=$(mktemp) || die "mktemp failed"
+trap 'rm -f "$TMP_OUT"' EXIT
+
+bash "$REVIEWER" "${ARGS[@]}" > "$TMP_OUT"
+RV=$?
+cat "$TMP_OUT"
+
+if [[ $RV -ne 0 ]]; then
+  echo "run-codex-review-loop: codex unavailable (review-plan-codex exited $RV)" >&2
+  exit 3
+fi
+
+HEADER=$(awk 'NF{print; exit}' "$TMP_OUT" | tr -d '\r')
+
+case "$HEADER" in
+  "## Codex Plan Review: PERFORMED")
+    : ;;
+  "## Codex Plan Review: FAILED — round cap reached"*)
+    echo "run-codex-review-loop: round cap reached" >&2
+    exit 2 ;;
+  "## Codex Plan Review: SKIPPED"*)
+    echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER)" >&2
+    exit 3 ;;
+  "## Codex Plan Review: FAILED"*)
+    echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER)" >&2
+    exit 3 ;;
+  *)
+    die "unrecognized status header: $HEADER" ;;
+esac
+
+VERDICT=$(awk '
+  /<!-- begin-codex-output/ { inblock=1; next }
+  /<!-- end-codex-output -->/ { inblock=0; next }
+  inblock && NF { print; exit }
+' "$TMP_OUT" | tr -d '\r')
+
+if [[ -z "$VERDICT" ]]; then
+  echo "run-codex-review-loop: codex unavailable or verdict malformed (empty verdict block)" >&2
+  exit 3
+fi
+
+if [[ "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]]; then
+  exit 0
+fi
+
+case "$FORMAT" in
+  detail-plan)
+    if [[ "$VERDICT" == "NEEDS_REVISION" ]]; then
+      exit 1
+    fi ;;
+  outline-plan)
+    if [[ "$VERDICT" =~ ^MISSING_ALTERNATIVE: ]]; then
+      exit 1
+    fi ;;
+esac
+
+echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
+exit 3
