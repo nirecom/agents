@@ -463,3 +463,7 @@ Changes: "Codex review loop is now enforced by `bin/run-codex-review-loop` — o
 ### FEATURE: PR #631 (2026-05-29)
 Background: feat(#622): record issue-create primary-path findings to WORKTREE_NOTES.md
 Changes: `/issue-create` now automatically appends the created (or re-opened) issue to `WORKTREE_NOTES.md` `## RelatedTasks`. The entry carries the `<!-- promoted: #N -->` marker so it appears in the Final Report without a manual triage step. All dispatch outcomes are covered (new, reopen, sub-of, make-parent, sibling). Skipped silently when running from the main worktree.;`worktree-notes-triage list` now filters out already-promoted entries, matching its documented contract. Pre-marked entries written by `worktree-notes-append.js` are never re-promoted by Step 5.5(a.5).
+
+### FEATURE: PR #643 (2026-05-30)
+Background: feat(#635): hook approval phrase + direct sentinel emit for PR approval flow
+Changes: PR approval flow: the model now emits the `WORKFLOW_USER_VERIFIED` sentinel directly after creating the PR — no more intermediate text reply needed. The permission dialog now shows the PR URL and "Click Allow to approve; click Deny to stop" above the Allow / Deny buttons.
