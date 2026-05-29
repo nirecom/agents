@@ -51,6 +51,12 @@ const SECTIONS = [
     probes: [],
   },
   {
+    id: "closed_issue_outcomes",
+    heading: () => "### Closed Issue Outcomes",
+    renderLines: (envBag, sid, ctx) => ctx.closedIssueOutcomeLines,
+    probes: ["- "],
+  },
+  {
     id: "post_merge",
     heading: () => "### Post-Merge Actions Required",
     renderLines: (envBag, sid, ctx) => ctx.buildPostMergeLines(),
@@ -86,8 +92,13 @@ function getSectionHeadings(sessionId) {
 }
 
 function getProbes() {
-  const pm = SECTIONS.find((s) => s.id === "post_merge");
-  return pm ? pm.probes : [];
+  const out = [];
+  for (const s of SECTIONS) {
+    if (Array.isArray(s.probes) && s.probes.length > 0) {
+      out.push(...s.probes);
+    }
+  }
+  return out;
 }
 
 function renderCanonicalReport(envBag, sessionId, ctx) {

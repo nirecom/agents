@@ -114,7 +114,7 @@ full_block_text() {
         '- OS reboot: not_required'
 }
 
-# Build the full 8-section canonical report text for a given session ID.
+# Build the full 9-section canonical report text for a given session ID.
 full_canonical_report_text() {
     local sid="$1"
     cat <<EOF
@@ -129,6 +129,8 @@ full_canonical_report_text() {
 - Branch: (none)
 ### Backup
 - Manifest: (none)
+### Closed Issue Outcomes
+- (none)
 ### Post-Merge Actions Required
 - Claude Code restart: not_required
 - VS Code reload: not_required
@@ -735,6 +737,121 @@ test_G12_only_post_merge_block_no_longer_passes() {
 }
 
 # ---------------------------------------------------------------------------
+# G9d: ### Closed Issue Outcomes heading entirely missing → exit 2 + decision:block
+# ---------------------------------------------------------------------------
+test_G9d_closed_issue_outcomes_section_missing() {
+    require_hook "G9d_closed_issue_outcomes_section_missing" || return
+
+    local plans_dir="$TMPDIR_BASE/g9d-plans"
+    mkdir -p "$plans_dir"
+    local sid="g9d-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # Full canonical report EXCEPT ### Closed Issue Outcomes heading is missing
+    local text
+    text="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+        "## Final Report — ${sid}" \
+        '### Closed Issues' \
+        '- (none)' \
+        '### Merged PR' \
+        '### Worktree' \
+        '### Backup' \
+        '### Post-Merge Actions Required' \
+        '- Claude Code restart: not_required' \
+        '- VS Code reload: not_required' \
+        '- Installer rerun: not_required' \
+        '- OS reboot: not_required' \
+        '### Bugs Found' \
+        '### Related Tasks' \
+        '### Next Tasks')"
+
+    local transcript="$TMPDIR_BASE/g9d-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            process.exit(obj.decision==='block'?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G9d: ### Closed Issue Outcomes heading missing → exit 2 + decision:block"
+    else
+        fail "G9d: expected exit 2 + decision:block when section heading missing, got code=$code out=$(printf '%s' "$out" | head -c 200)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G9e: ### Closed Issue Outcomes heading present, but no bullet content → exit 2
+# ---------------------------------------------------------------------------
+test_G9e_closed_issue_outcomes_content_missing() {
+    require_hook "G9e_closed_issue_outcomes_content_missing" || return
+
+    local plans_dir="$TMPDIR_BASE/g9e-plans"
+    mkdir -p "$plans_dir"
+    local sid="g9e-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+
+    # Full canonical report EXCEPT ### Closed Issue Outcomes has no bullet line
+    local text
+    text="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+        "## Final Report — ${sid}" \
+        '### Closed Issues' \
+        '- (none)' \
+        '### Merged PR' \
+        '### Worktree' \
+        '### Backup' \
+        '### Closed Issue Outcomes' \
+        '### Post-Merge Actions Required' \
+        '- Claude Code restart: not_required' \
+        '- VS Code reload: not_required' \
+        '- Installer rerun: not_required' \
+        '- OS reboot: not_required' \
+        '### Bugs Found' \
+        '### Related Tasks' \
+        '### Next Tasks')"
+
+    local transcript="$TMPDIR_BASE/g9e-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "$text"
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            process.exit(obj.decision==='block'?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G9e: ### Closed Issue Outcomes heading present but no bullet → exit 2 + decision:block"
+    else
+        fail "G9e: expected exit 2 + decision:block when section content missing, got code=$code out=$(printf '%s' "$out" | head -c 200)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # I1: settings.json Stop hooks array contains stop-final-report-guard.js
 # Note: this test does not require the hook file itself, but skips when the
 # hook file is absent (the settings.json entry is added alongside the impl).
@@ -792,6 +909,8 @@ test_G9c_last_section_missing
 test_G10_full_canonical_report_passes
 test_G11_reason_contains_instruction
 test_G12_only_post_merge_block_no_longer_passes
+test_G9d_closed_issue_outcomes_section_missing
+test_G9e_closed_issue_outcomes_content_missing
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

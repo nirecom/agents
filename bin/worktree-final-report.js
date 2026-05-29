@@ -11,6 +11,8 @@ const schema = require("../hooks/lib/final-report-schema");
 const rawArgs = process.argv.slice(2).filter((a) => a !== "--");
 let envFilePath = null;
 let envFileExplicit = false;
+let outcomeFilePath = null;
+let outcomeFileExplicit = false;
 const positionals = [];
 {
   let i = 0;
@@ -18,6 +20,10 @@ const positionals = [];
     if (rawArgs[i] === "--env-file" && i + 1 < rawArgs.length) {
       envFilePath = rawArgs[i + 1];
       envFileExplicit = true;
+      i += 2;
+    } else if (rawArgs[i] === "--outcome-file" && i + 1 < rawArgs.length) {
+      outcomeFilePath = rawArgs[i + 1];
+      outcomeFileExplicit = true;
       i += 2;
     } else {
       positionals.push(rawArgs[i]);
@@ -32,7 +38,7 @@ const sessionId = positionals[2];
 
 if (!intentPath || !sessionId) {
   process.stderr.write(
-    "Usage: worktree-final-report.js <intent.md> <notes.md|''> <session-id> [--env-file <path>]\n"
+    "Usage: worktree-final-report.js <intent.md> <notes.md|''> <session-id> [--env-file <path>] [--outcome-file <path>]\n"
   );
   process.exit(1);
 }
@@ -81,6 +87,36 @@ if (envFileExplicit) {
         envFilePath + " (" + e.message + ")\n"
     );
     process.exit(1);
+  }
+}
+
+// --- outcome-file: fail-soft load (renderer must remain robust either way) ---
+let outcomeData = null;
+if (outcomeFileExplicit) {
+  if (!isAbsolutePath(outcomeFilePath) || hasTraversal(outcomeFilePath)) {
+    process.stderr.write(
+      "[worktree-final-report] WARN: --outcome-file path invalid (must be absolute, no .. segments): " +
+        outcomeFilePath + "\n"
+    );
+  } else {
+    try {
+      const raw = fs.readFileSync(outcomeFilePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+          Array.isArray(parsed.issues)) {
+        outcomeData = parsed;
+      } else {
+        process.stderr.write(
+          "[worktree-final-report] WARN: --outcome-file JSON malformed (missing issues array): " +
+            outcomeFilePath + "\n"
+        );
+      }
+    } catch (e) {
+      process.stderr.write(
+        "[worktree-final-report] WARN: --outcome-file unreadable: " +
+          outcomeFilePath + " (" + e.message + ")\n"
+      );
+    }
   }
 }
 
@@ -138,10 +174,37 @@ function getSectionLines(heading) {
   return raw.split("\n");
 }
 
+// Compute Closed Issue Outcomes bullets — 3 cases:
+//  - closes_issues empty → ["- (none)"]
+//  - closes_issues non-empty but outcome file missing/empty → ["- (outcome data not found — investigate)"]
+//  - outcome file present → one bullet per closes_issues entry, joined from outcome.issues
+function findOutcome(n) {
+  if (!outcomeData || !Array.isArray(outcomeData.issues)) return null;
+  for (const e of outcomeData.issues) {
+    if (e && e.issueNumber === n) return e;
+  }
+  return null;
+}
+let closedIssueOutcomeLines;
+if (closedIssues.length === 0) {
+  closedIssueOutcomeLines = ["- (none)"];
+} else if (!outcomeData) {
+  closedIssueOutcomeLines = ["- (outcome data not found — investigate)"];
+} else {
+  closedIssueOutcomeLines = closedIssues.map((n) => {
+    const e = findOutcome(n);
+    if (!e) {
+      return `- #${n}: (no outcome entry — investigate)`;
+    }
+    return `- #${n}: ${e.state} (history: ${e.historyEntry}, closed: ${e.issueClosed}, sentinels: ${e.sentinelsPosted}, wip: ${e.wipCleared})`;
+  });
+}
+
 // Always-on Post-Merge Actions block (no AGENTS_CONFIG_DIR gate).
 const ctx = {
   safeEnv,
   closedIssuesLine,
+  closedIssueOutcomeLines,
   buildPostMergeLines: () => {
     return schema.CATEGORIES.map((cat) => {
       const v = categoryValue(cat.newKey, cat.legacyKey);
