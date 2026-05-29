@@ -57,8 +57,11 @@
 9. **Commit** — Run `/commit-push`. Pre-flights Phase 1 completion per
    `closes_issues` (aborts if missing) and appends `<!-- issue-close-pr-of: <N> -->`
    markers to the PR body so `find-pr-by-marker.sh` can resolve the merge SHA in
-   Phase 2. After the PR is created, display the PR URL in chat so the user can
-   confirm it.
+   Phase 2. After the PR is created, do not narrate the PR URL in chat — the
+   `<<WORKFLOW_USER_VERIFIED>>` sentinel (emitted from `/worktree-end` Step 4 or,
+   in `ENFORCE_WORKTREE=off`, Step 8) triggers `show-user-verified-context.js`,
+   which surfaces the PR URL and approval instruction above the permission dialog.
+   See `skills/_shared/user-verified.md`.
 10. **Cleanup** — Based on the step 3 decision:
     - **worktree:** Run `/worktree-end`. Normal path: merge → sentinel emit → worktree removal. If removal fails (e.g. Windows CWD lock), treat the step as complete and proceed to Step 10b — the residual worktree is reclaimed by the next `/sweep-worktrees` run.
       (Step 6i always runs `bin/compose-doc-append-entry`; when `closes_issues` is non-empty, `--skip-history` is added so only `CHANGELOG.md` is written — `docs/history.md` was already committed by Phase 1/2.)
