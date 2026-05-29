@@ -16,6 +16,7 @@ Use when the implementation touches external input, secrets handling, or third-p
 - Report each finding with: file/location, pattern category, and recommended fix.
 - Note context for potential false positives (test fixtures, comments, examples).
 - For commit-time auto-scanning of hard secrets (AWS/LLM API keys, PEM keys, GitHub/Slack tokens, `.env` commits), see `docs/scan-outbound.md` — those are covered automatically.
+- Sibling sweep: enumerate functions, logic, or patterns the change touches that belong to a class; flag siblings as MUST / OPTIONAL / NA for same treatment.
 
 ## Procedure
 

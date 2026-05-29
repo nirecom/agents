@@ -9,7 +9,7 @@
 #         run /issue-create first.
 #
 # SSOT: closes_issues parsing delegates to hooks/lib/parse-closes-issues.js.
-#       Do not reimplement — see core-principles.md §4.
+#       Do not reimplement — see core-principles.md §1.
 
 set -uo pipefail
 

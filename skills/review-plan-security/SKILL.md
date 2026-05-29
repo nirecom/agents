@@ -14,6 +14,7 @@ Review security implications of the current task across three axes.
 - Evaluate all three axes — do not skip axes that seem irrelevant (report N/A instead).
 - Reference specific OWASP/CWE identifiers when reporting risks.
 - This checklist is for architecture/planning review — code-level pattern scanning is covered by `/review-code-security`.
+- Sibling sweep: enumerate functions, logic, or patterns the change touches that belong to a class; flag siblings as MUST / OPTIONAL / NA for same treatment.
 
 ## Procedure
 

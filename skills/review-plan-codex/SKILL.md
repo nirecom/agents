@@ -5,6 +5,10 @@ description: Adversarial plan review via OpenAI Codex CLI. Reviews plans and app
 
 Adversarial plan review via OpenAI Codex CLI.
 
+## Rules
+
+- Sibling sweep: enumerate class members touched by the plan; flag siblings as MUST / OPTIONAL / NA for same treatment.
+
 ## Usage
 
 Run at each planner/reviewer loop round to review the planner's draft before using
