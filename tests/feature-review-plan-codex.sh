@@ -705,29 +705,47 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 27. make-detail-plan SKILL.md contains required context sections
+# 27. make-detail-plan SKILL.md invokes run-codex-review-loop; shim has context strings
 # ---------------------------------------------------------------------------
 DETAIL_SKILL="$AGENTS_ROOT/skills/make-detail-plan/SKILL.md"
+SHARED_LOOP="$AGENTS_ROOT/skills/_shared/codex-review-loop.md"
 ERRS27=0
 
-check_detail() {
+check_shared() {
   local pattern="$1"
-  if ! grep -qF -- "$pattern" "$DETAIL_SKILL"; then
-    fail "make-detail-plan SKILL.md missing: $pattern"
+  if ! grep -qF -- "$pattern" "$SHARED_LOOP"; then
+    fail "codex-review-loop.md missing: $pattern"
     ERRS27=$((ERRS27 + 1))
   fi
 }
 
-check_detail "## Section 1: Intent (User Requirements)"
-check_detail "## Section 2: Outline (Design Proposal)"
-check_detail "If only the intent file exists"
-check_detail "If only the outline file exists"
-check_detail "If neither exists"
-check_detail 'Source: ~/.workflow-plans/<session-id>-intent.md'
-check_detail 'Source: ~/.workflow-plans/<session-id>-outline.md'
+check_shared "## Section 1: Intent (User Requirements)"
+check_shared "## Section 2: Outline (Design Proposal)"
+check_shared "If only the intent file exists"
+check_shared "If only the outline file exists"
+check_shared "If neither exists"
+check_shared 'Source: <PLANS_DIR>/<session-id>-intent.md'
+check_shared 'Source: <PLANS_DIR>/<session-id>-outline.md'
+check_shared "HALT with blocking error"
+check_shared "Do **NOT** fall back"
+
+if ! grep -qF 'run-codex-review-loop' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: must invoke bin/run-codex-review-loop"
+  ERRS27=$((ERRS27 + 1))
+fi
+
+if ! grep -qF 'Exit 4 must NOT trigger' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: must state exit 4 no-fallback rule"
+  ERRS27=$((ERRS27 + 1))
+fi
+
+if grep -qF '| Exit | Meaning |' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: must not duplicate exit-code mapping table"
+  ERRS27=$((ERRS27 + 1))
+fi
 
 if [[ $ERRS27 -eq 0 ]]; then
-  pass "make-detail-plan SKILL.md: all required context section strings present"
+  pass "make-detail-plan SKILL.md + shared loop: context wiring, wrapper invoked, exit-4 rule, no duplication"
 fi
 
 # ---------------------------------------------------------------------------
@@ -769,25 +787,32 @@ if [[ $ERRS28 -eq 0 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 29. make-outline-plan SKILL.md contains required context wiring strings
+# 29. make-outline-plan SKILL.md invokes run-codex-review-loop; exit-4 rule present
 # ---------------------------------------------------------------------------
 ERRS29=0
 
-check_outline() {
-  local pattern="$1"
-  if ! grep -qF -- "$pattern" "$OUTLINE_SKILL"; then
-    fail "make-outline-plan SKILL.md missing: $pattern"
-    ERRS29=$((ERRS29 + 1))
-  fi
-}
+if ! grep -qF 'run-codex-review-loop' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: must invoke bin/run-codex-review-loop"
+  ERRS29=$((ERRS29 + 1))
+fi
 
-check_outline '--context ~/.workflow-plans/drafts/<session-id>-context.md'
-check_outline 'Source: ~/.workflow-plans/<session-id>-intent.md'
-check_outline '~/.workflow-plans/drafts/<session-id>-context.md'
-check_outline '## Section 1: Intent (User Requirements)'
+if ! grep -qF 'Exit 4 must NOT trigger' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: must state exit 4 no-fallback rule"
+  ERRS29=$((ERRS29 + 1))
+fi
+
+if grep -qF '| Exit | Meaning |' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: must not duplicate exit-code mapping table"
+  ERRS29=$((ERRS29 + 1))
+fi
+
+if ! grep -qF '<PLANS_DIR>/drafts/<session-id>-context.md' "$SHARED_LOOP"; then
+  fail "shared loop: missing <session-id>-context.md reference"
+  ERRS29=$((ERRS29 + 1))
+fi
 
 if [[ $ERRS29 -eq 0 ]]; then
-  pass "make-outline-plan SKILL.md: all required context wiring strings present"
+  pass "make-outline-plan + shared loop: wrapper invoked, exit-4 rule, no duplication, context ref"
 fi
 
 # ---------------------------------------------------------------------------
