@@ -124,4 +124,8 @@ Changes: - After a primary-path `/issue-create` completes, record the created is
 
 ### FEATURE: Group: GitHub Issues 移行 — フェーズ状況 (2026-05-29, 9e6f5edecc3dc3214cc9cb3a1dd48208fc7b02ba, #222)
 Background: Group: GitHub Issues 移行 — フェーズ状況
-Changes: detail plan: `~/.claude/plans/20260510-todo-to-github-issues-detail.md`
+Changes: detail plan: `~/.claude/plans/20260510-todo-to-github-issues-detail.md`
+
+### FEATURE: PR3: issue-close-finalize/SKILL.md 短縮 + bin/ 抽出 + eval 除去 (2026-05-29, 1c1e83d78dff34e39e3a6fee459c9d7307af15ad, #612)
+Background: issue-close-finalize/SKILL.md は約 220 行でインライン bash が多い。eval 呼び出しも含む。 親 issue: #610
+Changes: - bin/issue-close-finalize/ 作成: pre-flight.sh, step-e.sh, step-g5-loop.sh - SKILL.md を ≤130 行に短縮 - eval 呼び出しをすべて除去 - tests/feature-issue-close-finalize-no-eval.sh 追加
