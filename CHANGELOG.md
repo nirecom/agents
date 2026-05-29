@@ -459,3 +459,7 @@ Changes: `DOCS_LANG_*` policy is now read exclusively from `.env`; the `docs-lan
 ### FEATURE: PR #627 (2026-05-29)
 Background: feat(#603): replace prompt-based codex-review-loop enforcement with exit-code-driven wrapper
 Changes: "Codex review loop is now enforced by `bin/run-codex-review-loop` — orchestrators can no longer skip or misparse the verdict. Exit codes (0=approved, 1=revision needed, 2=cap, 3=fallback, 4=broken infrastructure) replace the previous prose-based verdict instructions. (#603)"
+
+### FEATURE: PR #631 (2026-05-29)
+Background: feat(#622): record issue-create primary-path findings to WORKTREE_NOTES.md
+Changes: `/issue-create` now automatically appends the created (or re-opened) issue to `WORKTREE_NOTES.md` `## RelatedTasks`. The entry carries the `<!-- promoted: #N -->` marker so it appears in the Final Report without a manual triage step. All dispatch outcomes are covered (new, reopen, sub-of, make-parent, sibling). Skipped silently when running from the main worktree.;`worktree-notes-triage list` now filters out already-promoted entries, matching its documented contract. Pre-marked entries written by `worktree-notes-append.js` are never re-promoted by Step 5.5(a.5).
