@@ -136,6 +136,7 @@ ${CONTEXT_SECTION}You are doing an adversarial code review. Challenge design dec
 - Failure modes, rollback paths, and data loss risks
 - Concurrency, auth boundaries, and reliability issues
 - Whether the implementation matches stated intent
+- Sibling sweep: list functions, logic, or patterns the diff touches that belong to a class; flag siblings that may need the same treatment (MUST / OPTIONAL / NA)
 
 This is read-only review. Do not propose fixes — only raise concerns with enough detail for the author to act.
 
