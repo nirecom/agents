@@ -837,6 +837,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# F-622-1: SKILL.md mentions worktree-notes-append.js in Phase 5
+# ---------------------------------------------------------------------------
+if [ ! -f "$SKILL_MD" ]; then
+    fail "F-622-1: SKILL.md missing"
+elif grep -q "worktree-notes-append.js" "$SKILL_MD"; then
+    pass "F-622-1: SKILL.md mentions worktree-notes-append.js"
+else
+    fail "F-622-1: SKILL.md does not mention worktree-notes-append.js — RED until Phase 5 is added"
+fi
+
+# ---------------------------------------------------------------------------
+# F-622-2: SKILL.md Phase 5 contains non-fatal behavior note
+# ---------------------------------------------------------------------------
+if [ ! -f "$SKILL_MD" ]; then
+    fail "F-622-2: SKILL.md missing"
+elif grep -qiE "non.fatal|non fatal|nonfatal" "$SKILL_MD"; then
+    pass "F-622-2: SKILL.md Phase 5 contains non-fatal directive"
+else
+    fail "F-622-2: SKILL.md missing non-fatal directive — RED until Phase 5 is added"
+fi
+
+# ---------------------------------------------------------------------------
+# F-622-3: SKILL.md Phase 5 mentions --skip-if-main flag
+# ---------------------------------------------------------------------------
+if [ ! -f "$SKILL_MD" ]; then
+    fail "F-622-3: SKILL.md missing"
+elif grep -q -- "--skip-if-main" "$SKILL_MD"; then
+    pass "F-622-3: SKILL.md Phase 5 mentions --skip-if-main"
+else
+    fail "F-622-3: SKILL.md does not mention --skip-if-main — RED until Phase 5 is added"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

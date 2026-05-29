@@ -193,7 +193,7 @@ test_F2_triage_list_all_none() {
     fi
 }
 
-# ---- F3: triage annotate writes marker; list shows hasMarker=true on that entry ----
+# ---- F3: triage annotate writes marker; entry removed from list (promoted → filtered) ----
 test_F3_triage_annotate_then_list() {
     require_bin "F3: triage annotate → list" || return
 
@@ -230,29 +230,31 @@ test_F3_triage_annotate_then_list() {
         return
     fi
 
-    # Re-list. The annotated entry should now have hasMarker=true.
+    # Re-list. list returns only unpromoted entries, so the annotated entry must
+    # be absent (filtered as a promoted entry — hasMarker=true entries are triage
+    # candidates no more; see triage.js cmdList filter and test A5).
     local list_after
     list_after="$(run_with_timeout 30 node "$TRIAGE_BIN" list "$notes" 2>/dev/null)"
-    local hm
-    hm="$(node -e "
+    local found
+    found="$(node -e "
         try {
             const j = JSON.parse(process.argv[1]);
             const target = parseInt(process.argv[2], 10);
             const e = j.find(x => x.lineNumber === target);
-            process.stdout.write(e ? String(e.hasMarker) : 'NOT_FOUND');
+            process.stdout.write(e ? 'FOUND' : 'NOT_FOUND');
         } catch (e) { process.stdout.write('ERR'); }
     " -- "$list_after" "$target_line" 2>/dev/null)"
 
-    if [ "$hm" = "true" ]; then
-        pass "F3: triage annotate writes marker, list reflects hasMarker=true"
+    if [ "$found" = "NOT_FOUND" ]; then
+        pass "F3: triage annotate writes marker; promoted entry absent from list"
     else
-        fail "F3: post-annotate hasMarker=$hm (list=$list_after)"
+        fail "F3: post-annotate entry still in list (got: $found list=$list_after)"
     fi
 }
 
-# ---- F4: list after annotation still includes hasMarker=true entries ----
-test_F4_list_includes_marked() {
-    require_bin "F4: list includes marked entries" || return
+# ---- F4: list after annotation is shorter by 1 (promoted entry filtered out) ----
+test_F4_list_excludes_marked() {
+    require_bin "F4: list excludes marked entries" || return
 
     local notes; notes="$(make_notes_copy "f4")"
 
@@ -279,18 +281,13 @@ test_F4_list_includes_marked() {
         try { const j = JSON.parse(process.argv[1]); process.stdout.write(String(j.length)); }
         catch (e) { process.stdout.write('ERR'); }
     " -- "$list_after" 2>/dev/null)"
-    local has_true
-    has_true="$(node -e "
-        try {
-            const j = JSON.parse(process.argv[1]);
-            process.stdout.write(String(j.some(e => e.hasMarker === true)));
-        } catch (e) { process.stdout.write('ERR'); }
-    " -- "$list_after" 2>/dev/null)"
+    # list returns only unpromoted entries; annotated entry must be gone (count drops by 1).
+    local expected_after=$((len_before - 1))
 
-    if [ "$len_before" = "$len_after" ] && [ "$has_true" = "true" ]; then
-        pass "F4: list after annotation still includes the marked entry (count preserved, has hasMarker=true)"
+    if [ "$len_after" = "$expected_after" ]; then
+        pass "F4: list after annotation is shorter by 1 (promoted entry filtered)"
     else
-        fail "F4: len_before=$len_before len_after=$len_after has_true=$has_true"
+        fail "F4: len_before=$len_before len_after=$len_after expected=$expected_after"
     fi
 }
 
@@ -355,7 +352,7 @@ test_R1_golden_report
 test_F1_triage_list_basic
 test_F2_triage_list_all_none
 test_F3_triage_annotate_then_list
-test_F4_list_includes_marked
+test_F4_list_excludes_marked
 test_F5_triage_annotate_invalid_line
 test_F6_path_traversal_rejected
 test_F7_wrong_basename_rejected
