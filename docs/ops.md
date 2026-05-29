@@ -6,7 +6,7 @@ Day-to-day operational procedures for the agents repo.
 
 Task management using GitHub Issues as the single source of truth. Full rules in [`rules/github-issues.md`](../rules/github-issues.md).
 
-For one-time migration from `docs/history.md` + `docs/todo.md` to GitHub Issues, see [`ops/migration-from-todo-to-github-issues.md`](ops/migration-from-todo-to-github-issues.md).
+For one-time migration from `docs/history.md` + `docs/todo.md` to GitHub Issues, see [`ops/migration-from-todo.md`](ops/migration-from-todo.md).
 
 ### New task — *Operations*
 
