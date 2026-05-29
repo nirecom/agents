@@ -63,18 +63,18 @@
    which surfaces the PR URL and approval instruction above the permission dialog.
    See `skills/_shared/user-verified.md`.
 10. **Cleanup** — Based on the step 3 decision:
-    - **worktree:** Run `/worktree-end`. Normal path: merge → sentinel emit → worktree removal. If removal fails (e.g. Windows CWD lock), treat the step as complete and proceed to Step 10b — the residual worktree is reclaimed by the next `/sweep-worktrees` run.
+    - **worktree:** Run `/worktree-end`. Normal path: merge → sentinel emit → worktree removal. `/worktree-end` no longer emits the Final Report — that responsibility moved to `/session-close` (Step 10b). If removal fails (e.g. Windows CWD lock), treat the step as complete and proceed to Step 10b — the residual worktree is reclaimed by the next `/sweep-worktrees` run.
       (Step 6i always runs `bin/compose-doc-append-entry`; when `closes_issues` is non-empty, `--skip-history` is added so only `CHANGELOG.md` is written — `docs/history.md` was already committed by Phase 1/2.)
     - **branch:** Confirm PR is created. After the PR is merged (outside this session),
       delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.
 
-10b. **Phase 2 issue close** — After the PR is merged, run
-    `/issue-close-finalize --from-session` from the main worktree (reads
-    `closes_issues` from the session intent.md and routes to the correct close
-    path; skips if empty). Phase 2 is API-only on the normal path: promote the
-    sentinel, close the issue, and post the resolved-by + appended sentinels.
-    Safe from the main worktree under `ENFORCE_WORKTREE=on`.
+10b. **Session close** — Run `/session-close` from the main worktree.
+    `/session-close` handles Phase 2 issue close (via `/issue-close-finalize`)
+    plus Final Report emit for both `ENFORCE_WORKTREE=on` (consumes the env
+    JSON written by `/worktree-end` Step 5.5) and `off` (builds a minimal env
+    JSON from PR data). Safe when `closes_issues` is empty — outcome renders as
+    `- (none)` and the Final Report still emits.
 
 ## Plan Mode Incompatibility
 

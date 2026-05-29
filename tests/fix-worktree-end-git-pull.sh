@@ -70,21 +70,22 @@ test_pull_after_fetch() {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 3 — Normal — section
-# The pull --ff-only line must fall between the Step 6 header and Step 7 header.
+# The pull --ff-only line must fall within Step 6 (before ## Rules, since Step 7
+# no longer exists after #608).
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_pull_in_step6_section() {
-    local step6_line step7_line pull_line
+    local step6_line rules_line pull_line
     step6_line="$(grep -n '^6\.\s\+\*\*Cleanup\*\*' "$TARGET_FILE" | head -1 | cut -d: -f1)"
-    step7_line="$(grep -n '^7\.\s\+\*\*Final report' "$TARGET_FILE" | head -1 | cut -d: -f1)"
+    rules_line="$(grep -n '^## Rules' "$TARGET_FILE" | head -1 | cut -d: -f1)"
     pull_line="$(grep -n 'git -C <main> pull --ff-only' "$TARGET_FILE" | head -1 | cut -d: -f1)"
 
     if [ -z "$step6_line" ]; then
         fail "section: Step 6 header not found"
         return
     fi
-    if [ -z "$step7_line" ]; then
-        fail "section: Step 7 header not found"
+    if [ -z "$rules_line" ]; then
+        fail "section: ## Rules header not found"
         return
     fi
     if [ -z "$pull_line" ]; then
@@ -92,10 +93,10 @@ test_pull_in_step6_section() {
         return
     fi
 
-    if [ "$pull_line" -gt "$step6_line" ] && [ "$pull_line" -lt "$step7_line" ]; then
-        pass "section: pull --ff-only (line $pull_line) falls within Step 6 (line $step6_line)..Step 7 (line $step7_line)"
+    if [ "$pull_line" -gt "$step6_line" ] && [ "$pull_line" -lt "$rules_line" ]; then
+        pass "section: pull --ff-only (line $pull_line) falls within Step 6 (line $step6_line)..## Rules (line $rules_line)"
     else
-        fail "section: pull --ff-only (line $pull_line) is NOT between Step 6 (line $step6_line) and Step 7 (line $step7_line)"
+        fail "section: pull --ff-only (line $pull_line) is NOT between Step 6 (line $step6_line) and ## Rules (line $rules_line)"
     fi
 }
 
