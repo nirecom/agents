@@ -80,7 +80,7 @@ function formatMessage(violations) {
     .join("\n");
   const footer =
     "Rewrite the offending bullets to match the policy before saving.\n" +
-    "Policy comes from $AGENTS_CONFIG_DIR/rules/language.md (docs-lang block).";
+    "Policy comes from $AGENTS_CONFIG_DIR/.env (DOCS_LANG_HISTORY_*, DOCS_LANG_CHANGELOG_*).";
   return `${header}\n${body}\n${footer}`;
 }
 
@@ -104,15 +104,12 @@ try {
   approve();
 }
 
-const agentsDir = process.env.AGENTS_CONFIG_DIR || "";
-const langFile = agentsDir ? path.join(agentsDir, "rules", "language.md") : "";
-
 let config;
 let lintFn;
 try {
-  const { loadDocsLangConfig } = require("./lib/docs-lang-config");
+  const { loadDocsLangConfig } = require("./lib/lang-config");
   const { lintWorktreeNotesLang } = require("./lib/lint-worktree-notes-lang");
-  config = loadDocsLangConfig(langFile);
+  config = loadDocsLangConfig();
   lintFn = lintWorktreeNotesLang;
 } catch (e) {
   approve();
