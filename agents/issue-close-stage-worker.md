@@ -45,8 +45,9 @@ Non-zero → exit with `status: blocked_sub_issue`, `summary: "sub-issue gate bl
 COMMENT_URL=$(ISSUE_CLOSE_SKILL=1 gh issue comment "$issue_number" \
     --body "<!-- issue-close-sentinel: pending -->" 2>/dev/null | tail -n 1)
 COMMENT_ID=$(printf '%s' "$COMMENT_URL" | grep -oE '[0-9]+$')
-[ -z "$COMMENT_ID" ] && exit 1
 ```
+
+If `COMMENT_ID` is empty: emit `status: error`, `summary: "Step D: failed to extract comment ID"`, `artifact_path: "<log path or (none)>"` and stop.
 
 The sentinel body is the hardcoded literal above — never interpolate variables or add metadata.
 
@@ -57,6 +58,8 @@ ISSUE_CLOSE_SKILL=1 gh api -X PATCH \
     "repos/$owner_repo/issues/comments/$COMMENT_ID" \
     -f body="<!-- issue-close-sentinel: appended -->"
 ```
+
+Non-zero exit: emit `status: error`, `summary: "Step F: PATCH failed (comment $COMMENT_ID)"`, `artifact_path: "<log path or (none)>"` and stop.
 
 When resuming from triage `ACTION=resume_g`, re-fetch `COMMENT_ID` first:
 
@@ -72,6 +75,7 @@ COMMENT_ID=$(gh issue view "$issue_number" --json comments \
 bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"
 ```
 
+Non-zero exit: log warning but continue — parent body update failure is non-fatal.
 No-op when the issue has no parent.
 
 ### Log
@@ -93,7 +97,7 @@ Respond with exactly three lines:
 ```
 status: phase1_done|blocked_sub_issue|error
 summary: "<one-line description ≤80 chars>"
-artifact_path: "<absolute log path or null>"
+artifact_path: "<absolute log path, or (none) if no log written>"
 ```
 
 No other output.

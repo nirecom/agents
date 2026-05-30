@@ -18,11 +18,12 @@ Receive a JSON object with:
 
 Apply the three security axes (Information Leakage / Third-Party Access / External Access) to the provided context.
 
-1. Receive `context` (file path, diff, or description of code).
+1. Receive `context` (file path, diff, or description of code). If `context` is a file path and the file does not exist or is unreadable: emit `status: failed`, `summary: "context path unreadable: <path>"`, `artifact_path: (none)` and stop.
 2. Apply each axis pattern set sequentially. For each finding: record file/location, pattern category, and recommended fix.
 3. Note context for potential false positives (test fixtures, comments, examples).
 4. Perform sibling sweep: enumerate functions or patterns belonging to the same class; flag untreated siblings as MUST / OPTIONAL / NA.
 5. Write report to `$artifact_dir/<timestamp>-security-scanner.md`.
+   - Write failure → emit `status: failed`, `summary: "report write failed"`, `artifact_path: (none)` and stop.
 
 ## Rules
 
@@ -40,7 +41,7 @@ Respond with exactly three lines:
 ```
 status: complete|partial|failed
 summary: "<N findings, K high-risk>"
-artifact_path: "<absolute report path>"
+artifact_path: "<absolute report path, or (none) on failure>"
 ```
 
 No other output.

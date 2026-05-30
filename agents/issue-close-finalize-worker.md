@@ -74,15 +74,15 @@ Accept only `schema_version: 3`. Reject other versions.
 
 Run all commands from `main_worktree_path` with `ISSUE_CLOSE_SKILL=1` where needed.
 
-1. Pre-flight: `eval "$(bash "$finalize_scripts_dir/pre-flight.sh")"` — sets `OWNER_REPO`.
-2. Step A (triage): run the finalize triage script from `$agents_config_dir/bin/github-issues/` for `$issue_number` — sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`. (Script: `finalize-triage.sh` in that dir.)
-3. Step A.5 (PR/SHA resolution when J in NEXT_STEPS): `eval "$(bash "$agents_config_dir/bin/github-issues/find-pr-by-marker.sh" "$issue_number")"` — sets `PR_NUMBER`, `MERGE_COMMIT`.
-4. Step B (sub-issue gate when B in NEXT_STEPS): `bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"` — non-zero → blocked.
-5. Step E (doc-append + commit when E in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-e.sh" "$issue_number" "${MERGE_COMMIT:-}")"` — sets `STEP_E_STATUS`.
-6. Step G (parent body update when G in NEXT_STEPS): `bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"`.
-7. Step G.5-1 (prepare proposal when G in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$issue_number")"` — sets `PROPOSAL_STATUS`, `PROPOSAL_PARENT`.
-8. Write initial state file (atomic: `.tmp` → `mv`). Set `phase=init_done`.
-9. Write stdout+stderr to `$artifact_dir/<timestamp>-issue-close-finalize-worker-<N>.log`.
+1. Pre-flight: `eval "$(bash "$finalize_scripts_dir/pre-flight.sh")"` — sets `OWNER_REPO`. Non-zero → emit `status: failed`, `summary: "pre-flight failed"` and stop.
+2. Step A (triage): run the finalize triage script from `$agents_config_dir/bin/github-issues/` for `$issue_number` — sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`. (Script: `finalize-triage.sh` in that dir.) Non-zero → emit `status: failed`, `summary: "triage failed for #N"` and stop.
+3. Step A.5 (PR/SHA resolution when J in NEXT_STEPS): `eval "$(bash "$agents_config_dir/bin/github-issues/find-pr-by-marker.sh" "$issue_number")"` — sets `PR_NUMBER`, `MERGE_COMMIT`. Non-zero → emit `status: failed`, `summary: "PR marker lookup failed for #N"` and stop.
+4. Step B (sub-issue gate when B in NEXT_STEPS): `bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"` — non-zero → emit `status: failed`, `summary: "sub-issue gate blocked #N"` and stop.
+5. Step E (doc-append + commit when E in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-e.sh" "$issue_number" "${MERGE_COMMIT:-}")"` — sets `STEP_E_STATUS`. Non-zero exit from step-e.sh sets `STEP_E_STATUS=failed-*`; continue (caller surfaces status).
+6. Step G (parent body update when G in NEXT_STEPS): `bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"`. Non-zero → log warning; continue (non-fatal).
+7. Step G.5-1 (prepare proposal when G in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$issue_number")"` — sets `PROPOSAL_STATUS`, `PROPOSAL_PARENT`. Non-zero → emit `status: failed`, `summary: "G.5-1 prepare failed for #N"` and stop.
+8. Write initial state file (atomic: `.tmp` → `mv`). If mv fails: emit `status: failed`, `summary: "state file write failed"` and stop. Set `phase=init_done`.
+9. Write stdout+stderr to `$artifact_dir/<timestamp>-issue-close-finalize-worker-<N>.log`. If log write fails: use `artifact_path: (none)` in output.
 
 ### phase=loop_step
 
@@ -106,16 +106,16 @@ Read state file. Validate `schema_version: 3`.
 
 ### phase=finalize_terminal
 
-Read state file. Validate `schema_version: 3`.
+Read state file. If missing or invalid schema_version: emit `status: failed`, `summary: "state file missing or schema mismatch"` and stop. Validate `schema_version: 3`.
 
 Run Steps H, J, K, L for `current_issue_number`:
 
-- Step H: `ISSUE_CLOSE_SKILL=1 gh issue close "$current_issue_number" --reason completed`
-- Step J: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state)
-- Step K: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`
-- Step L: `node "$agents_config_dir/bin/issue-close-write-outcome.js" "$current_issue_number" ...`
+- Step H: `ISSUE_CLOSE_SKILL=1 gh issue close "$current_issue_number" --reason completed`. Non-zero → emit `status: failed`, `summary: "Step H: gh issue close failed for #N"` and stop.
+- Step J: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state). Non-zero → log warning; continue (non-fatal).
+- Step K: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`. Non-zero → log warning; continue (non-fatal).
+- Step L: `node "$agents_config_dir/bin/issue-close-write-outcome.js" "$current_issue_number" ...`. Non-zero → log warning; continue (non-fatal).
 
-Set `phase=terminal`. Write state (atomic).
+Set `phase=terminal`. Write state (atomic). If atomic write fails: emit `status: failed`, `summary: "terminal state write failed"` and stop.
 
 ## Rules
 
@@ -135,7 +135,7 @@ Respond with exactly three lines:
 ```
 status: init_done|awaiting_recursion|terminal|complete|failed
 summary: "<one-line description ≤80 chars>"
-artifact_path: "<absolute state_file_path or log path>"
+artifact_path: "<absolute state_file_path or log path, or (none) if neither written>"
 ```
 
 No other output.

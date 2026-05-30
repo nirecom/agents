@@ -49,7 +49,8 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
      backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
    }) })
    ```
-   Worker returns one-line summary. Present to user via `AskUserQuestion`: "Back up (copy to .worktree-backup/), discard, or abort?"
+   On `status: failed`: surface summary + artifact_path to user and stop — do not proceed to cleanup.
+   Otherwise: present summary to user via `AskUserQuestion`: "Back up (copy to .worktree-backup/), discard, or abort?"
 
    **Pass 2 — execute** (only when user chose "back up"):
    Set:
@@ -62,7 +63,9 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
      backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
    }) })
    ```
-   Worker returns `artifact_path` (manifest.json). Set:
+   On `status: failed`: surface summary + artifact_path to user and stop — do not proceed to cleanup.
+   On `status: partial`: warn user ("some files failed to copy — see artifact_path"); proceed with cleanup.
+   On `status: copied`: worker returns `artifact_path` (manifest.json). Set:
    ```
    BACKUP_MANIFEST_PATH="<artifact_path from worker>"
    ```

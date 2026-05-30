@@ -38,7 +38,10 @@ For `compose` mode, also:
    - `history`: `doc-append docs/history.md --category $category --subject "..." --commits $commits --background "..." --changes "..."`
    - `changelog`: `doc-append CHANGELOG.md --category $category --subject "..." --background "..." --changes "..."`
    - `compose`: `COMPOSE_DOC_APPEND_SKILL=1 bash "$agents_config_dir/bin/compose-doc-append-entry" --notes "$notes_path" --branch "$branch" --pr "$pr_number" --merge-commit "$merge_commit" --background "$pr_title" [--skip-history]`
+   - CLI exit code 0 and output containing "already exists" or "noop" → `status: noop`.
+   - CLI exit code non-zero → capture stderr; emit `status: failed`, `summary: "<stderr excerpt ≤60 chars>"`, `artifact_path: "<log path if written, else (none)>"` and stop.
 3. Write combined stdout+stderr to `$artifact_dir/<timestamp>-doc-append-worker.log`. Use timestamp `date +%Y%m%d-%H%M%S`.
+   - If log write fails: use `artifact_path: (none)` in the output.
 
 ## Rules
 
