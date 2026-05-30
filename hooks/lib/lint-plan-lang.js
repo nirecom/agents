@@ -17,9 +17,10 @@ function lintPlanLang(content, policy) {
   stripped.split(/\r?\n/).forEach((line, idx) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) return;
+    const lineToCheck = trimmed.replace(/^(-\s*)#\d+:.*$/, "$1");
     if (policy === "english" && hasCJK(line)) {
       violations.push({ lineNumber: idx + 1, line: trimmed, reason: "CJK in english-policy file" });
-    } else if (policy === "japanese" && !hasCJK(line) && ENGLISH_RUN_RE.test(trimmed)) {
+    } else if (policy === "japanese" && !hasCJK(lineToCheck) && ENGLISH_RUN_RE.test(lineToCheck)) {
       violations.push({ lineNumber: idx + 1, line: trimmed, reason: "English-only run in japanese-policy file" });
     }
   });
