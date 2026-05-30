@@ -757,6 +757,30 @@ else
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then pass "T38: CJK inside inline backtick → stripped, 0 violations"; else fail "T38: $_t38_out"; fi
+
+    # T54: issue title prefix stripped → 0 violations (japanese policy, 4-word title)
+    _t54_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('- #629: check-plan-lang issue title excluded', 'japanese');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T54: issue ref line - #N: title → 0 violations (japanese)"; else fail "T54: $_t54_out"; fi
+
+    # T55: issue title prefix stripped → 0 violations (japanese policy, 7-word title)
+    _t55_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('- #100: auto-resolve Projects v2 config from git remote', 'japanese');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T55: issue ref line - #N: long title → 0 violations (japanese)"; else fail "T55: $_t55_out"; fi
+
+    # T56: issue ref with no title → 0 violations (japanese policy, edge case)
+    _t56_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const v = lintPlanLang('- #629:', 'japanese');
+      if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T56: issue ref line - #N: (empty title) → 0 violations (japanese)"; else fail "T56: $_t56_out"; fi
 fi
 
 # ============================================================================
