@@ -9,10 +9,10 @@ Investigate external information related to the given task.
 
 ## Procedure
 
-1-3. **Delegate investigation to investigator** (`mode=web`):
+1-3. **Delegate to web-researcher**:
    ```
-   Agent({ subagent_type: "investigator", prompt: JSON.stringify({
-     mode: "web", topic: TOPIC, context: CONTEXT,
+   Agent({ subagent_type: "web-researcher", prompt: JSON.stringify({
+     topic: TOPIC, context: CONTEXT,
      artifact_dir: PLANS_DIR
    }) })
    ```
