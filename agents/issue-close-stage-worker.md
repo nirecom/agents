@@ -23,7 +23,7 @@ Run all commands from `worktree_path`. Prefix `gh issue comment` and `gh api` PA
 ### Step A: triage
 
 ```bash
-eval "$(bash "$agents_config_dir/bin/github-issues/issue-close-stage-triage.sh" $issue_number)"
+eval "$(bash "$agents_config_dir/bin/github-issues/issue-close-stage-triage.sh" "$issue_number")"
 ```
 
 Sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
