@@ -82,10 +82,10 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
       node -e "process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],includeFile:null}))" -- "<mainRoot>" "<step-3-path>" | node bin/worktree-copy-include.js
       ```
       Files listed in `.worktreeinclude` that are also gitignored will be copied.
-      Files listed in `.worktreecopyexclude` are always denied, regardless of `.worktreeinclude`.
+      Files listed in `.worktree-copyignore` are always denied, regardless of `.worktreeinclude`.
 
    c. Display the `"copied"` list to the user.
-   d. If `"denied"` is non-empty, report: "Skipped by .worktreecopyexclude: <files>".
+   d. If `"denied"` is non-empty, report: "Skipped by .worktree-copyignore: <files>".
    e. If `"errors"` is non-empty, report them to the user.
       **Symlink note:** "Symlink source rejected: .env" is expected when `.env` is a
       symlink (common in dotfiles setups). It does NOT require manual action if
