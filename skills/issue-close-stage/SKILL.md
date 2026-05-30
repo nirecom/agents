@@ -38,65 +38,27 @@ fi
 - All `gh issue comment` invocations need `ISSUE_CLOSE_SKILL=1` to bypass the
   `enforce-issue-close.js` hook.
 
-## Step A: triage
+## Delegation
 
-```bash
-eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-stage-triage.sh" <N>)"
-# Sets STATE, SENTINEL, ACTION, NEXT_STEPS.
+Resolve `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` for `artifact_dir`.
+
+Delegate Steps A, B, D, F, G to `issue-close-stage-worker`:
+
+```
+Agent({
+  subagent_type: "issue-close-stage-worker",
+  prompt: JSON.stringify({
+    issue_number: N,
+    worktree_path: CWD,
+    owner_repo: OWNER_REPO,
+    agents_config_dir: AGENTS_CONFIG_DIR,
+    artifact_dir: PLANS_DIR
+  })
+})
 ```
 
-If `ACTION=phase1_done`, exit 0 silently (sentinel + history already present).
-If `ACTION` is an error variant, surface stderr and exit 1.
-Otherwise execute the steps in `NEXT_STEPS` (comma-separated, in order).
-
-## Step B: sub-issue gate
-
-```bash
-bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" <owner/repo> <N>
-```
-
-Non-zero → BLOCK; do not post the pending sentinel and stop.
-
-## Step D: post `pending` sentinel (capture comment ID for Step F)
-
-```bash
-COMMENT_URL=$(ISSUE_CLOSE_SKILL=1 gh issue comment <N> \
-    --body "<!-- issue-close-sentinel: pending -->" 2>/dev/null | tail -n 1)
-COMMENT_ID=$(printf '%s' "$COMMENT_URL" | grep -oE '[0-9]+$')
-[ -z "$COMMENT_ID" ] && { echo "Error: failed to extract comment ID from gh output" >&2; exit 1; }
-```
-
-**CRITICAL**: the body MUST be the hardcoded literal shown above.
-No variable interpolation. No metadata fields added. This keeps the sentinel
-safe to post on public repos.
-
-`gh issue comment` prints the comment URL on stdout (last line). The trailing
-numeric segment in the URL is the REST API comment ID needed by Step F's PATCH
-call.
-
-## Step F: promote sentinel to `appended`
-
-```bash
-gh api -X PATCH \
-    "repos/<owner/repo>/issues/comments/$COMMENT_ID" \
-    -f body="<!-- issue-close-sentinel: appended -->"
-```
-
-When resuming from triage `ACTION=resume_g`, re-fetch `COMMENT_ID` first:
-
-```bash
-COMMENT_ID=$(gh issue view <N> --json comments \
-    --jq '[.comments[] | select(.body | test("^<!-- issue-close-sentinel:"))] | first | .url' \
-    | grep -oE '[0-9]+$')
-```
-
-## Step G: parent body update (sub-issue only)
-
-```bash
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-body-update.sh" <owner/repo> <N>
-```
-
-No-op when the issue has no parent.
+On `blocked_sub_issue` status: surface summary to user and stop.
+On `error` status: surface summary + artifact_path to user and stop.
 
 ## End
 

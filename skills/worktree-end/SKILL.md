@@ -39,25 +39,37 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 4. **Local merge:** emit the user-verified sentinel **directly** with no preceding narrative — do not restate the PR URL or describe the approval in chat first. The hook (`hooks/show-user-verified-context.js`) surfaces the PR URL and the approval instruction above the permission dialog. Use `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. On failure: surface error and stop — do NOT force-merge or bypass checks.
 
 5. **Gitignored state inventory** (before removing the worktree):
-   Run all three commands (NUL-delimited, handles spaces and non-ASCII paths):
-   ```
-   git -C <worktree> ls-files --others --ignored --exclude-standard -z
-   git -C <worktree> ls-files --others --exclude-standard -z
-   git -C <worktree> status --porcelain=v1 -z
-   ```
-   Also read `WORKTREE_NOTES.md` if it exists.
 
-   Generate backup manifest (path/size/mtime/sha256; never secret values).
-   Detect Docker bind-mount impact via `docker ps -a --format json` (normalize WSL/Windows/MSYS path forms; report stopped containers).
+   Default backup destination: `<main_root>/.worktree-backup/<branch>/` (gitignored via `.git/info/exclude`).
 
-   **DRY RUN summary:** deletion paths / untracked+ignored counts / preservation candidates / Docker impact / proposed backup destination / commands to execute.
+   **Pass 1 — dry run**: delegate inventory to `worktree-backup-worker`:
+   ```
+   Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({
+     mode: "dry_run", worktree_path: WORKTREE_PATH, branch: BRANCH,
+     backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
+   }) })
+   ```
+   On `status: failed`: surface summary + artifact_path to user and stop — do not proceed to cleanup.
+   Otherwise: present summary to user via `AskUserQuestion`: "Back up (copy to .worktree-backup/), discard, or abort?"
 
-   Default backup destination: `<main_root>/.worktree-backup/<branch>/` (gitignored via `.git/info/exclude`). After user approval, copy targets and set:
+   **Pass 2 — execute** (only when user chose "back up"):
+   Set:
    ```
-   BACKUP_DIR="<resolved destination>"
-   mkdir -p "$BACKUP_DIR"
-   BACKUP_MANIFEST_PATH="$BACKUP_DIR/manifest.json"
+   BACKUP_DIR="<main_root>/.worktree-backup/<branch>/"
    ```
+   ```
+   Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({
+     mode: "execute", worktree_path: WORKTREE_PATH, branch: BRANCH,
+     backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR
+   }) })
+   ```
+   On `status: failed`: surface summary + artifact_path to user and stop — do not proceed to cleanup.
+   On `status: partial`: warn user ("some files failed to copy — see artifact_path"); proceed with cleanup.
+   On `status: copied`: worker returns `artifact_path` (manifest.json). Set:
+   ```
+   BACKUP_MANIFEST_PATH="<artifact_path from worker>"
+   ```
+
    If user chose "discard" and no files were copied, set `BACKUP_MANIFEST_PATH=(none)`.
    If Docker containers reference the worktree path, stop them and restart from the main path.
 
@@ -119,13 +131,10 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    g. `git -C <main> fetch --prune origin`
       `git -C <main> pull --ff-only`
    h. **Compose doc-append** (main worktree; only when NOTES_BACKUP_PATH is non-empty).
-      Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → add `--skip-history` (history.md already committed by Phase 1/2). Empty / missing → run without it (CLI bails exit 0 if notes sections empty).
-      ```
-      COMPOSE_DOC_APPEND_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/compose-doc-append-entry" \
-        --notes "$NOTES_BACKUP_PATH" --branch "$BRANCH" --pr "$PR_NUMBER" \
-        --merge-commit "$MERGE_SHA" --background "$PR_TITLE" [--skip-history]
-      ```
-      CLI is always-safe; non-zero exit → let stderr surface; Step 6i still runs. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
+      Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → set `skip_history: true` (history.md already committed by Phase 1/2). Empty / missing → `skip_history: false` (CLI bails exit 0 if notes sections empty).
+      Delegate to doc-append-worker:
+      `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "compose", notes_path: NOTES_BACKUP_PATH, branch: BRANCH, pr_number: PR_NUMBER, merge_commit: MERGE_SHA, pr_title: PR_TITLE, skip_history: SKIP_HISTORY, cwd: MAIN_ROOT, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
+      On `failed` status: surface `artifact_path` to the user; Step 6i still runs. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 ## Rules
 
@@ -144,13 +153,13 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.
 - Step 5.5 invariants: see `skills/worktree-end/scripts/capture-env.sh` header (atomicity / BRANCH_DELETED omission / four restart categories).
+- Step 5.5 (b–d) MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
+- Step 5.5 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
+- Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
 - Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
 - Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via the read-notes-path.js helper, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
 - Step 7 MUST invoke renderer with `--env-file $PLANS_DIR/<session-id>-final-report-env.json`.
 - Final Report verbatim output: paste renderer stdout (sentinel line excluded) character-for-character into the assistant message — no formatting changes.
 - Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
 - Do not reformat Final Report section content into prose (e.g., writing `Closed Issues: #N` instead of the `### Closed Issues` heading followed by `- #N`).
-- Step 5.5 (b–d) MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
-- Step 5.5 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
-- Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
 - JSONL transcript mtime scan (`bin/lib/resolve-session-id.sh`) must NOT be used in the worktree-end session-id resolution path — it picks the most-recently-touched session which may differ from the session that created the worktree (#642).

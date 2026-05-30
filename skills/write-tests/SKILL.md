@@ -34,6 +34,10 @@ Write or update tests for the current task.
    c. Fix failures and re-run until green.
    d. Review test coverage against `skills/_shared/test-design.md` categories — fix gaps.
    e. Re-run tests until green.
+   The subagent prompt MUST include these structured fields so verbose output stays in the subagent context:
+   - `task_complexity_signals`: list of triggered signal IDs from step 5 (or "none")
+   - `source_files`: list of source file paths from step 2
+   - `planned_cases`: list of planned test cases from step 4
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 

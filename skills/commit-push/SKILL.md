@@ -53,78 +53,25 @@ condition: sentinel, history entry, or both). Resolve by invoking
 ## Procedure
 
 1. Stage changes with `git add`
-2. Run `git diff --cached --stat` to show what will be committed
-3. Create the commit with the drafted message
-4. Push to the current branch:
-   - If no upstream is set: `git push -u origin <branch>`
-   - Otherwise: `git push`
 
-Each git command (add, commit, push) must be a **separate Bash call** per `rules/git.md`.
-
-`settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
-
-### Push retry on non-fast-forward
-
-If `git push` fails with "non-fast-forward" or "fetch first", retry up to 3 times.
-Each command is a **separate Bash call** (rules/git.md — do NOT chain with `&&`):
-
-1. `git fetch origin <branch>`
-2. `git pull --rebase --autostash origin <branch>`
-   — Stop if rebase reports conflicts; surface to user.
-3. `git push origin <branch>`
-
-Sleep between attempts: 2s before attempt 2, 5s before attempt 3.
-After 3 failures, report to user — do NOT force-push, do NOT use `--no-verify`.
-
-### PR step (after push)
-
-```bash
-NON_GITHUB=0
-"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
-case $rc in
-  0) ;;                # GitHub — proceed with gh
-  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
-  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
-esac
-if [ "${NON_GITHUB:-0}" = "1" ]; then
-  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping gh pr create]"
-  # Phase 2: alternative-platform MR creation will be added here.
-  exit 0
-fi
-```
-
-5. **Skip if `ENFORCE_WORKTREE=off`** — direct-main work does not use PRs.
-
-6. **PR resolution (idempotent):**
+2-6. **Delegate commit/push/PR to commit-push-worker**:
+   Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
    ```
-   gh pr view --json state,url
+   Agent({ subagent_type: "commit-push-worker", prompt: JSON.stringify({
+     commit_message: COMMIT_MESSAGE,
+     branch: BRANCH,
+     closes_issues: CLOSES_ISSUES,
+     pr_body_template: PR_BODY,
+     wip_mode: WIP_MODE,
+     enforce_worktree: ENFORCE_WORKTREE,
+     agents_config_dir: AGENTS_CONFIG_DIR,
+     artifact_dir: PLANS_DIR
+   }) })
    ```
-   - `state == OPEN` → reuse the existing PR URL (do NOT create a duplicate).
-   - No PR or closed → create with `gh pr create`:
-     - Always specify `--head <branch>` explicitly — when the Bash tool CWD is the main
-       worktree, `gh` would otherwise default to `main` as the head branch and fail.
-     - Use `--body "single-line string"` (no heredoc). Heredoc (`$(cat <<'EOF' ... EOF)`)
-       triggers a write classification in enforce-worktree.js and gets blocked.
-     - For a minimal PR: `gh pr create --head <branch> --fill`
-     - With a custom body: `gh pr create --head <branch> --title "..." --body "..."`
-     - When the PR closes one or more tracked issues, emit **one `Closes #<N>` line per entry in `closes_issues`** (primary first, then related in confirmed order) so GitHub auto-closes each issue on merge. After merge, run `/issue-close-finalize --from-session` from the main worktree to promote the sentinels, close the issues, and post resolved-by per N.
-     - **Append one marker line per closed issue** to `--body` so
-       `find-pr-by-marker.sh` can resolve the merge commit later. One line per
-       issue, hardcoded literal (no variable interpolation in the body string):
-       ```
-       <!-- issue-close-pr-of: <N> -->
-       ```
-       Place all marker lines at the end of the body, after the `Closes #<N>` lines.
-     - **Example (2 issues, primary #444, related #445):**
-       ```
-       Closes #444
-       Closes #445
-       <!-- issue-close-pr-of: 444 -->
-       <!-- issue-close-pr-of: 445 -->
-       ```
-       Pass as a static newline-delimited string to `--body` (no heredoc).
-     - See `rules/github-issues.md` "Session model".
-   Display the PR URL.
+   On `push_failed` or `conflict`: surface summary + artifact_path to user and stop.
+   On `pr_created` or `pr_reused`: extract PR URL from summary for step 7.
+
+   `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
 7. **Merge prompt:**
 
