@@ -152,11 +152,8 @@ is_pr_merged() {
     return 1
   fi
   local out
-  if ! out="$(gh pr list --state merged --search "head:${branch}" \
-      --json headRefName,number --limit 5 \
-      --jq --arg branch "$branch" \
-      'map(select(.headRefName==$branch)) | length > 0' \
-      2>/dev/null)"; then
+  if ! out="$(gh pr list -H "$branch" --state merged \
+      --json number --jq 'length > 0' 2>/dev/null)"; then
     printf 'WARN: gh pr list failed for branch %s; skipping\n' "$branch" >&2
     return 1
   fi
