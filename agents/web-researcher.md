@@ -2,7 +2,7 @@
 name: web-researcher
 description: Research an external topic via WebSearch and WebFetch. Read-only. Used by deep-research.
 tools: Read, Bash, WebSearch, WebFetch
-model: opus
+model: sonnet
 ---
 
 Research and summarize external information. Never modify any project files.
