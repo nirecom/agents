@@ -488,3 +488,7 @@ Changes: fix: worktree-end no longer picks the wrong session-id after VS Code re
 ### FEATURE: PR #651 (2026-05-30)
 Background: fix(#595): add E2E bypass integration tests and fix git-add WRITE classification
 Changes: Fixed: `ISSUE_CLOSE_SKILL=1 git add docs/history.md` and `COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md` now correctly reach the bypass predicate; previously `git add` was classified as read-only in `bash-write-patterns.js`, causing the bypass check to be skipped
+
+### FEATURE: PR #655 (2026-05-30)
+Background: fix(#650): replace broken gh pr list --jq --arg with -H in is_pr_merged
+Changes: category=BUGFIX subject="fix(#650): sweep-worktrees now correctly detects merged PRs" changes="Fixed a bug where /sweep-worktrees skipped every zombie worktree because the gh pr list call used an unsupported --jq --arg flag form. Worktrees with merged PRs are now detected and reclaimed as expected."
