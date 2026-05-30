@@ -42,7 +42,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    (parameter values for the detail stage: FORMAT=detail-plan, CAP=2,
-   MAX_EXTENSIONS=2, PLANNER_AGENT=detail-planner,
+   MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner,
    REVIEWER_AGENT=detail-reviewer,
    ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-outline.md,
    NON_APPROVED_VERDICT=NEEDS_REVISION).
@@ -63,10 +63,12 @@ below. Reuse across all subsequent steps — do not re-resolve.
    **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt the skill and
    surface the wrapper's stderr to the user. Only exit 3 falls back silently.
 
+   The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/drafts/<session-id>-detail-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
+
 6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
    - LABEL: `"Detail Plan Review"`
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
-   - MAX_EXTENSIONS: 2
+   - MAX_EXTENSIONS: 1
 
    Detail-specific dispatch override: `rc==0`, user picks `adjust` → escalate
    to the user with loop status / current plan / blocking concerns. All other

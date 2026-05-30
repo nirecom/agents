@@ -50,6 +50,11 @@ EOF
 
     cp "$WRAPPER_SRC" "$agents_dir/bin/run-codex-review-loop"
     chmod +x "$agents_dir/bin/run-codex-review-loop"
+
+    if [[ -f "$AGENTS_WORKTREE/bin/review-loop-verdict" ]]; then
+      cp "$AGENTS_WORKTREE/bin/review-loop-verdict" "$agents_dir/bin/review-loop-verdict"
+      chmod +x "$agents_dir/bin/review-loop-verdict"
+    fi
     echo "$agents_dir"
 }
 
@@ -128,7 +133,8 @@ invoke() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Round 2, HIGH persists → CONTINUE
+# 3. Round 2, HIGH persists → ESCALATE (per spec verdict matrix:
+#    round>=2 with HIGH > 0 → ESCALATE, regardless of CAP)
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -142,10 +148,10 @@ C1. [HIGH] still big"
   invoke "$MOCK" --format detail-plan --session-id i3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 1 ]]; then
-    pass "3: round 2 HIGH persists → CONTINUE (exit 1)"
+  if [[ $rc -eq 2 ]]; then
+    pass "3: round 2 HIGH persists → ESCALATE (exit 2)"
   else
-    fail "3: round 2 HIGH persists → expected exit 1, got $rc"
+    fail "3: round 2 HIGH persists → expected exit 2, got $rc"
   fi
 }
 
@@ -299,7 +305,8 @@ C1. [HIGH] foo"
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
   LEDGER="$TMP/ledger.txt"
-  make_review_codex_mock "$MOCK" "MISSING_ALTERNATIVE: 1. [HIGH] need async option"
+  make_review_codex_mock "$MOCK" "MISSING_ALTERNATIVE:
+1. [HIGH] need async option"
   invoke "$MOCK" --format outline-plan --session-id i10 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || true

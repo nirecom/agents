@@ -57,8 +57,8 @@ run_verdict "CONTINUE" 1 "3: round=1 high=1 medium=0 low=0 → CONTINUE" 1 1 0 0
 run_verdict "CONTINUE" 1 "4: round=1 high=1 medium=1 low=1 → CONTINUE" 1 1 1 1
 run_verdict "APPROVED" 0 "5: round=2 high=0 medium=0 low=1 → APPROVED" 2 0 0 1
 run_verdict "APPROVED" 0 "6: round=2 high=0 medium=1 low=0 → APPROVED" 2 0 1 0
-run_verdict "CONTINUE" 1 "7: round=2 high=1 medium=0 low=0 → CONTINUE" 2 1 0 0
-run_verdict "CONTINUE" 1 "8: round=2 high=1 medium=1 low=1 → CONTINUE" 2 1 1 1
+run_verdict "ESCALATE" 2 "7: round=2 high=1 medium=0 low=0 → ESCALATE" 2 1 0 0
+run_verdict "ESCALATE" 2 "8: round=2 high=1 medium=1 low=1 → ESCALATE" 2 1 1 1
 run_verdict "APPROVED" 0 "9: round=3 high=0 medium=0 low=0 → APPROVED" 3 0 0 0
 run_verdict "ESCALATE" 2 "10: round=3 high=1 medium=0 low=0 → ESCALATE" 3 1 0 0
 run_verdict "APPROVED" 0 "11: round=3 high=0 medium=1 low=0 → APPROVED" 3 0 1 0

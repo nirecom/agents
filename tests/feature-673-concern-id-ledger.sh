@@ -56,6 +56,11 @@ EOF
 
     cp "$WRAPPER_SRC" "$agents_dir/bin/run-codex-review-loop"
     chmod +x "$agents_dir/bin/run-codex-review-loop"
+
+    if [[ -f "$AGENTS_WORKTREE/bin/review-loop-verdict" ]]; then
+      cp "$AGENTS_WORKTREE/bin/review-loop-verdict" "$agents_dir/bin/review-loop-verdict"
+      chmod +x "$agents_dir/bin/review-loop-verdict"
+    fi
     echo "$agents_dir"
 }
 
@@ -381,7 +386,8 @@ C52. [LOW] new3"
   MOCK=$(setup_mock_env "$TMP")
   PLANS=$(setup_plans_dir "$TMP")
   LEDGER="$TMP/outline-ledger.txt"
-  make_review_codex_mock "$MOCK" "MISSING_ALTERNATIVE: 1. [HIGH] need async approach"
+  make_review_codex_mock "$MOCK" "MISSING_ALTERNATIVE:
+1. [HIGH] need async approach"
   invoke "$MOCK" --format outline-plan --session-id sid13 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" >/dev/null 2>&1 || true
