@@ -96,10 +96,19 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
    ```bash
    # Single Bash call — atomicity contract enforced inside capture-env.sh. Do not split.
-   # Output: $PLANS_DIR/<session-id>-final-report-env.json
+   # session-id resolution priority (SKILL.md layer):
+   #   WORKTREE_NOTES.md > $CLAUDE_SESSION_ID env var > empty (→ capture-env.sh fallback retries).
+   # JSONL transcript mtime scan (resolve-session-id.sh) is FORBIDDEN here — it returns
+   # wrong session after VS Code restart / context compaction (#642).
+   # Note: $CLAUDE_SESSION_ID is NOT propagated to Bash subprocesses in many cases due to
+   # Anthropic bug #27987. This tier is best-effort for non-Claude-Code invocations only.
    export PLANS_DIR
+   SID="$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' \
+     '<worktree>/WORKTREE_NOTES.md' 2>/dev/null || true)"
+   : "${SID:=${CLAUDE_SESSION_ID:-}}"
    bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/capture-env.sh" \
-     "<worktree>" "<owner>/<repo>" "<backup-dir>" "<session-id>"
+     "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"
+   # Output: $PLANS_DIR/$SID-final-report-env.json
    ```
 
 ### Step 6
@@ -153,3 +162,4 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Final Report verbatim output: paste renderer stdout (sentinel line excluded) character-for-character into the assistant message — no formatting changes.
 - Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
 - Do not reformat Final Report section content into prose (e.g., writing `Closed Issues: #N` instead of the `### Closed Issues` heading followed by `- #N`).
+- JSONL transcript mtime scan (`bin/lib/resolve-session-id.sh`) must NOT be used in the worktree-end session-id resolution path — it picks the most-recently-touched session which may differ from the session that created the worktree (#642).

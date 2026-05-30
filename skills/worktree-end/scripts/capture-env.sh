@@ -9,7 +9,20 @@ set -euo pipefail
 WORKTREE="${1:?worktree path required}"
 REPO="${2:?owner/repo required}"
 BACKUP_DIR="${3:?backup-dir required}"
-SESSION_ID="${4:?session-id required}"
+SESSION_ID="${4:-}"
+
+# Resolution priority (capture-env.sh layer):
+#   arg4 > WORKTREE_NOTES.md 'Session-ID:' header > error (#642).
+# arg4 (session-id) is optional since #642; empty → fallback to WORKTREE_NOTES.md header.
+if [[ -z "$SESSION_ID" ]]; then
+  SESSION_ID="$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' \
+    "$WORKTREE/WORKTREE_NOTES.md" 2>/dev/null || true)"
+fi
+
+if [[ -z "$SESSION_ID" ]]; then
+  printf "ERROR: session-id unresolved — pass as arg4 or write 'Session-ID:' header in WORKTREE_NOTES.md\n" >&2
+  exit 1
+fi
 [[ "$SESSION_ID" =~ ^[a-zA-Z0-9_-]+$ ]] || { printf "ERROR: invalid SESSION_ID '%s'\n" "$SESSION_ID" >&2; exit 1; }
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
