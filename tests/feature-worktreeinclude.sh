@@ -271,7 +271,7 @@ test_N5_denylist_blocks_copy() {
 .env.local
 .env.production
 EOF
-    echo ".env.production" > "$main/.worktreecopyexclude"
+    echo ".env.production" > "$main/.worktree-copyignore"
     echo "ok=1" > "$main/.env.local"
     echo "PROD_SECRET=danger" > "$main/.env.production"
 
@@ -293,7 +293,7 @@ test_N6_worktree_backup_guard_excluded() {
     local main; main="$(setup_main_repo "n6-main")"
     local wt;   wt="$(setup_worktree_dest "n6-wt")"
     echo ".private-info-allowlist" > "$main/.worktreeinclude"
-    # No .worktreecopyexclude — tests the hardcoded guard alone.
+    # No .worktree-copyignore — tests the hardcoded guard alone.
 
     # Add .worktree-backup to fixture's .gitignore (post initial-commit) so
     # nested paths under it are gitignored too.
@@ -337,9 +337,9 @@ test_N6b_worktree_backup_denylist_excluded() {
     local wt;   wt="$(setup_worktree_dest "n6b-wt")"
     echo ".private-info-allowlist" > "$main/.worktreeinclude"
 
-    # Copy production .worktreecopyexclude — test passes only after step 2 adds
+    # Copy production .worktree-copyignore — test passes only after step 2 adds
     # .worktree-backup/ to that file.
-    cp "${AGENTS_DIR}/.worktreecopyexclude" "$main/.worktreecopyexclude"
+    cp "${AGENTS_DIR}/.worktree-copyignore" "$main/.worktree-copyignore"
 
     # outer/ prefix ensures hardcoded guard does NOT fire (startsWith check).
     mkdir -p "$main/outer/.worktree-backup/inner"
@@ -373,7 +373,7 @@ test_N6b_worktree_backup_denylist_excluded() {
     fi
 
     if [ "$nested_blocked" = "1" ] && [ "$nested_denied" = "1" ] && [ "$toplevel_copied" = "1" ]; then
-        pass "N6b: outer/.worktree-backup/inner path blocked by .worktreecopyexclude denylist (guard not reached)"
+        pass "N6b: outer/.worktree-backup/inner path blocked by .worktree-copyignore denylist (guard not reached)"
     else
         fail "N6b: nested_blocked=$nested_blocked nested_denied=$nested_denied toplevel_copied=$toplevel_copied — out: $out"
     fi
@@ -571,7 +571,7 @@ test_Sec2_denylist_wins_over_includelist() {
     local main; main="$(setup_main_repo "sec2-main")"
     local wt;   wt="$(setup_worktree_dest "sec2-wt")"
     echo ".env.production" > "$main/.worktreeinclude"
-    echo ".env.production" > "$main/.worktreecopyexclude"
+    echo ".env.production" > "$main/.worktree-copyignore"
     echo "BIG_SECRET=danger" > "$main/.env.production"
 
     local payload; payload="$(make_payload "$main" "$wt")"
