@@ -484,3 +484,7 @@ Changes: fix: worktree-end no longer picks the wrong session-id after VS Code re
 ### FEATURE: PR #648 (2026-05-30)
 Background: fix(#642): harden worktree-end session-id capture with dual-defense WORKTREE_NOTES.md fallback
 Changes: fix: worktree-end no longer picks the wrong session-id after VS Code restart or context compaction — the creating session's id is now persisted durably in WORKTREE_NOTES.md and recovered automatically by both the skill orchestration layer and capture-env.sh itself (#642)
+
+### FEATURE: PR #651 (2026-05-30)
+Background: fix(#595): add E2E bypass integration tests and fix git-add WRITE classification
+Changes: Fixed: `ISSUE_CLOSE_SKILL=1 git add docs/history.md` and `COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md` now correctly reach the bypass predicate; previously `git add` was classified as read-only in `bash-write-patterns.js`, causing the bypass check to be skipped
