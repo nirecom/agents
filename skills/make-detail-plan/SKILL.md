@@ -47,23 +47,10 @@ below. Reuse across all subsequent steps — do not re-resolve.
    ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-outline.md,
    NON_APPROVED_VERDICT=NEEDS_REVISION).
 
-   For each review round, invoke the wrapper (Bash tool):
-
-   ```
-   "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" \
-     --format detail-plan \
-     --session-id <session-id> \
-     --plans-dir <PLANS_DIR> \
-     --draft-file <PLANS_DIR>/drafts/<session-id>-detail-draft.md \
-     --cap 2 --max-extensions 2 --extensions-used $EXTENSIONS_USED \
-     --accepted-tradeoffs <PLANS_DIR>/<session-id>-outline.md \
-     [--context <PLANS_DIR>/<session-id>-survey-code.md] \
-     [--context <PLANS_DIR>/<session-id>-survey-history.md] \
-     [--context <PLANS_DIR>/drafts/<session-id>-concerns-log.md] \
-     > "$TMP_STDOUT"
-   RV=$?
-   cat "$TMP_STDOUT"
-   ```
+   For each review round, invoke `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/run-codex-review-loop.sh"`
+   (Bash tool) with env vars exported: `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required);
+   `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` (optional — passed as
+   `--context` when the file exists and is non-empty). Exit codes pass through unchanged.
 
    Detail-stage caller paths:
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
@@ -96,12 +83,8 @@ below. Reuse across all subsequent steps — do not re-resolve.
    carries the 3 mandatory sections (`## Issues`, `## Class members`,
    `## Accepted Tradeoffs`) verbatim from outline.md and uses the planner's
    draft as the body source.
-   ```bash
-   "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline \
-     "<PLANS_DIR>/<session-id>-outline.md" \
-     "<PLANS_DIR>/drafts/<session-id>-detail-draft.md" \
-     "<PLANS_DIR>/<session-id>-detail.md"
-   ```
+   Run `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/assemble-mandatory.sh"` (Bash tool) with env vars:
+   `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required).
    - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
    - Helper exit non-zero → re-prompt detail-planner once and re-assemble; second failure → halt with error.
    - `--source-kind outline` enforces hard-fail when outline.md is missing `## Class members` (post-#462 outline.md must always carry all 3 mandatory sections).

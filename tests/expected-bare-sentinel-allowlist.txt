@@ -26,4 +26,4 @@ docs/history.md
 docs/history/2026.md
 docs/history/index.md
 CHANGELOG.md
-rules/prompt-criteria.md
+rules/prompt.md
