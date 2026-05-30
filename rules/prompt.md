@@ -22,6 +22,19 @@ Each directive occupies exactly one line. Do not run two rules into a single sen
 If a procedure has more than 3 steps, move it to `bin/<tool>` or `skills/<name>/lib/`.
 SKILL.md calls the CLI; it does not inline the steps.
 
+### 1.4 No inline code blocks in prompt files
+
+Code blocks (3+ contiguous lines fenced with ```) are PROHIBITED in `rules/*.md`,
+`skills/*/SKILL.md`, and `agents/*.md` for NEW additions and edits.
+
+When a procedure needs an executable snippet of 3 lines or more:
+1. Move the snippet into `skills/<skill-name>/scripts/<verb>.sh`
+2. Replace the prompt-file content with a one-line reference
+
+Existing violations in files not touched by the current change are out of scope — apply this rule at the point of addition or edit, not retroactively to the whole file.
+
+> Note: examples in this section illustrate the rule itself and are not subject to it.
+
 ## 2. Examples discipline
 
 ### 2.1 No redundant hook examples
