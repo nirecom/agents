@@ -41,7 +41,7 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
 
 ## Rules
 
-- Follow the structure and content rules defined in `rules/docs-convention.md`
+- Follow the structure and content rules defined in `rules/docs.md`
 - Follow language configuration in `rules/language.md` (`docs-lang` block) for History/Changelog entry language
 - Follow the gather → propose → confirm → apply cycle; the confirmation step is gated by `CONFIRM_DOCS` — when `off`, the proposal is shown but no AskUserQuestion is raised
 - Compare git log against current docs to identify gaps
