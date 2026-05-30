@@ -57,11 +57,16 @@ After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`
 3. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` Step 6i.
 4. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
 5. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
-6. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
+6. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate.
+7. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
 
 ### Path B — ENFORCE_WORKTREE=off
 
-1. `doc-append docs/history.md --category CATEGORY --subject "..." --commits HASH --background "..." --changes "..."`
-2. For public repos: `doc-append CHANGELOG.md --category CATEGORY --subject "..." --background "..." --changes "..."` (no `--commits`)
+1. Delegate history entry to doc-append-worker:
+   `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "history", category: CATEGORY, subject: "...", commits: "HASH", background: "...", changes: "...", cwd: CWD, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
+2. For public repos — delegate changelog entry to doc-append-worker:
+   `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "changelog", category: CATEGORY, subject: "...", background: "...", changes: "...", cwd: CWD, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
+   On `failed` status: surface `artifact_path` to the user and stop.
 3. `git add docs/ README.md CHANGELOG.md`
-4. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
+4. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate.
+5. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
