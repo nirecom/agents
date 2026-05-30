@@ -94,4 +94,8 @@ Changes: Fixed false PLAN_LANG=japanese violations on `## Issues` section lines 
 
 ### FEATURE: PR #666 (2026-05-30)
 Background: feat(#661): add symptom-level token fallback for Phase 2 keyword search
-Changes: Fix: `/issue-create` no longer misses related issues when title vocabulary doesn't overlap — Phase 2 Survey now falls back to symptom-level terms from the issue Background/Changes on first zero result, before exhausting the identifier-based retry loop. `survey-history` receives the same fix for keyword-only degraded mode.
+Changes: Fix: `/issue-create` no longer misses related issues when title vocabulary doesn't overlap — Phase 2 Survey now falls back to symptom-level terms from the issue Background/Changes on first zero result, before exhausting the identifier-based retry loop. `survey-history` receives the same fix for keyword-only degraded mode.
+
+### FEATURE: PR #664 (2026-05-30)
+Background: fix(#637): prevent .worktree-backup/ recursive copy on worktree-start
+Changes: `worktree-start` no longer copies `.worktree-backup/` directories into linked worktrees. This fixes recursive nesting that caused `git worktree remove` to fail with "Filename too long" on Windows after several worktree-start cycles. A `core.longpaths true` advisory has been added to the Windows install section of README.md for users with existing deep nests.
