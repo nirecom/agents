@@ -66,7 +66,7 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 - The **Delivery plan** section must appear first among substantive plan sections, immediately after the `## Issues` carry-forward header. Do not place Delivery plan after Background or Files to modify.
 - When outline.md contains a Delivery plan, your Delivery plan must be consistent with it (you may expand; do not contradict).
 - Read before planning. Do not invent file paths or APIs.
-- Follow `rules/core-principles.md`, `rules/coding.md`, `rules/test.md`, `rules/docs-convention.md`.
+- Follow `rules/core-principles.md`, `rules/coding.md`, `rules/test.md`, `rules/docs.md`.
 - Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing plan-draft artifacts under <PLANS_DIR> (default ~/.workflow-plans/, resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
