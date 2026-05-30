@@ -84,3 +84,6 @@ Changes: SKILL.md inline code blocks extracted to skills/<name>/scripts/ — orc
 rules/ naming unified: docs-convention/ → docs/, test-rules/ → test/, prompt-criteria.md → prompt.md; all cross-references updated.
 New rule §1.4 in rules/prompt.md: going-forward, 3+-line fenced code blocks in SKILL.md/rules/agents files must be extracted to skills/<name>/scripts/.
 
+### FEATURE: feat(#641): auto-resolve Projects v2 config from git remote (2026-05-30, 5f23d51)
+Background: Hardcoded PROJECT_ID/PROJECT_NUM defaults in issue-create.sh, ensure-board-card.sh, wip-state.sh prevented multi-repo setups (agents=#1, dotfiles-private=#2) from working without per-repo .env config.
+Changes: Projects v2 auto-resolution: issue/PR creation now auto-attaches to the correct board based on the repo's linked project — no per-repo .env needed. Removed EBC_* env vars and hardcoded project-ID defaults; multi-repo setups now work out of the box. (PR #657)
