@@ -80,7 +80,9 @@ Delegate Steps H, J, K, L to `issue-close-finalize-worker`:
 ```
 Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
   phase: "finalize_terminal", state_file_path: STATE_FILE,
-  agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR
+  agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR,
+  session_id: SESSION_ID,
+  outcome_file_path: PLANS_DIR + "/" + SESSION_ID + "-issue-close-outcome.json"
 }) })
 ```
 
