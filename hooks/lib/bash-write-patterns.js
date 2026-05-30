@@ -101,6 +101,7 @@ const WRITE_PATTERNS = [
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
   { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\b.*\b(?:push|pop|drop|clear|apply)\b/ },
   { name: "git-worktree-write", kind: "git", regex: /\bgit\b.*\bworktree\b.*\b(?:add|remove|prune)\b/ },
+  { name: "git-add-history", kind: "git", regex: /\bgit\s+add\b(?:.*\bdocs\/history\b|.*\bCHANGELOG\.md\b)/ },
   // git update-ref: directly rewrites a ref — write op (classifier gap fix).
   { name: "git-update-ref", kind: "git", regex: /\bgit\b.*\bupdate-ref\b/ },
   // gh mutating subcommands.
