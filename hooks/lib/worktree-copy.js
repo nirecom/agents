@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Core copy logic for .worktreeinclude file-transfer on worktree-start.
 // Enumerates gitignored files in mainRoot, filters via .worktreeinclude,
-// checks denylist in .worktreecopyexclude, and copies matched files.
+// checks denylist in .worktree-copyignore, and copies matched files.
 
 "use strict";
 
@@ -46,13 +46,13 @@ function copyInclude({ mainRoot, worktreePath, includeFile }) {
     return result;
   }
 
-  // Read .worktreecopyexclude (denylist) — absence is fine.
+  // Read .worktree-copyignore (denylist) — absence is fine.
   // Negation patterns (!foo) are stripped: the denylist must never allow opt-out.
-  const denyFilePath = path.join(mainDir, ".worktreecopyexclude");
+  const denyFilePath = path.join(mainDir, ".worktree-copyignore");
   const rawDenyPatterns = readPatternFile(denyFilePath) || [];
   const denyPatterns = rawDenyPatterns.filter((p) => {
     if (p.startsWith("!")) {
-      process.stderr.write(`WARN: negation pattern '${p}' in .worktreecopyexclude ignored — denylist entries are absolute\n`);
+      process.stderr.write(`WARN: negation pattern '${p}' in .worktree-copyignore ignored — denylist entries are absolute\n`);
       return false;
     }
     return true;
@@ -94,6 +94,19 @@ function copyInclude({ mainRoot, worktreePath, includeFile }) {
 
   // Process each gitignored file
   for (const relPath of gitignored) {
+    // Hardcoded recursion guard (issue #637): never copy anything whose
+    // relPath starts with .worktree-backup/. Defense-in-depth on top of the
+    // .worktreecopyexclude denylist — the denylist catches nested forms
+    // (outer/.worktree-backup/...) via gitignore semantics; this guard
+    // unconditionally catches the root-anchored form even if the denylist
+    // entry is removed or typo'd.
+    const normalizedRel = relPath.replace(/\\/g, "/");
+    if (normalizedRel === ".worktree-backup" ||
+        normalizedRel.startsWith(".worktree-backup/")) {
+      result.denied.push(relPath);
+      continue;
+    }
+
     if (!includeMatcher.ignores(relPath)) {
       result.skipped.push(relPath);
       continue;
