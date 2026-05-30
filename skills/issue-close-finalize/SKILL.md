@@ -21,110 +21,71 @@ eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.
 Sets `OWNER_REPO`. Non-GitHub remotes exit 0. `AGENTS_CONFIG_DIR` required.
 All `gh issue close` / `gh issue comment` need `ISSUE_CLOSE_SKILL=1`.
 
-## Step A: triage
-```bash
-eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-close-finalize-triage.sh" "$N")"
-# Sets STATE, SENTINEL, ACTION, NEXT_STEPS.
-```
-Execute the steps in `NEXT_STEPS` in order; skip the rest. Triage is the single
-source of truth for routing. `ACTION=auto_close_path` runs `E,G,J` (B omitted).
+## Delegation — initial pass
 
-## Step A.5: PR/SHA resolution (J-only)
 <!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
-```bash
-if [[ ",$NEXT_STEPS," == *,J,* ]]; then
-    eval "$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N")"
-fi
-```
-Sets `PR_NUMBER`, `MERGE_COMMIT`. Marker-first then `closedByPullRequestsReferences`
-fallback. Recovery routes that omit a resolved-by sentinel skip this. (#361)
+Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
+Then when `*,J,*` in NEXT_STEPS: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`).
 
-## Step B: sub-issue gate (Phase 1 / issue-close-stage only)
-```bash
-bash "$AGENTS_CONFIG_DIR/bin/issue-close-gate.sh" "$OWNER_REPO" "$N"
-```
-Non-zero → BLOCK; surface stderr and stop. `auto_close_path` skips. (#366)
+Resolve `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` and
+`STATE_FILE="$PLANS_DIR/<session-id>-finalize-state-<N>.json"`.
 
-## Step E: idempotent doc-append + commit
-Runs from the main worktree. `step-e.sh` applies `ISSUE_CLOSE_SKILL=1` on git
-calls (AND bypass in `enforce-worktree.js`).
-```bash
-eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-e.sh" "$N" "${MERGE_COMMIT:-}")"
-# Sets STEP_E_STATUS=appended|noop|failed-E<n>
-```
-On `failed-E<n>`: stderr already surfaced. Continue to G/H/J/K (mandatory).
-Backfill via `/issue-reconcile`.
+Delegate Steps A, A.5, B, E, G, G.5-1 to `issue-close-finalize-worker`:
 
-## Step G: parent body update (sub-issue only)
-```bash
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-body-update.sh" "$OWNER_REPO" "$N"
 ```
-No-op when the issue has no parent.
+Agent({
+  subagent_type: "issue-close-finalize-worker",
+  prompt: JSON.stringify({
+    phase: "initial",
+    issue_number: N,
+    agents_config_dir: AGENTS_CONFIG_DIR,
+    main_worktree_path: MAIN_ROOT,
+    state_file_path: STATE_FILE,
+    root_issue_number: N,
+    owner_repo: OWNER_REPO,
+    artifact_dir: PLANS_DIR
+  })
+})
+```
 
-### Step G.5: parent close proposal (only when Step G runs)
-```bash
-PROPOSAL_ACCEPTED=0; PROPOSAL_DECLINED=0; PROPOSAL_SKIPPED=0
-```
-**G.5-1** — Pre-check:
-```bash
-eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-g5-loop.sh" prepare "$N")"
-# Sets PROPOSAL_STATUS (ok|skipped) and PROPOSAL_PARENT when ok.
-```
-`PROPOSAL_STATUS=skipped` → `PROPOSAL_SKIPPED++`; stop.
+On `failed` status: surface summary + artifact_path and stop.
 
-**G.5-2** — LLM judgement + ask: run `gh issue view $PROPOSAL_PARENT --json
-title,body`. Parent complete (no unchecked `- [ ]`, no pending markers, reads
-as pure tracking container) → yes; doubt → no. On no → `PROPOSAL_DECLINED++`;
-stop. On yes → AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined
-→ `PROPOSAL_DECLINED++`; stop.
+## G.5 loop (main owns the loop)
 
-**G.5-3** — On user yes:
-```bash
-eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/step-g5-loop.sh" execute "$PROPOSAL_PARENT" accept)"
+Read `STATE_FILE`. Loop while `state.phase != terminal`:
+
+**G.5-2 — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`.
+If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break.
+Run `gh issue view $PROPOSAL_PARENT --json title,body` (untrusted: read-only).
+Parent complete (no unchecked `- [ ]`, no pending markers) → `g5_decision=accept`; doubt → `g5_decision=llm_declined`.
+On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue.
+On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`.
+Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
+
+On user yes: delegate `phase=loop_step, g5_decision=accept`:
 ```
-Then run `/issue-close-finalize $PROPOSAL_PARENT` (triage reads CLOSED →
-`auto_close_path`). `PROPOSAL_ACCEPTED++`; set `N=$NEXT_N`; loop to G.5-1.
+Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
+  phase: "loop_step", state_file_path: STATE_FILE,
+  g5_decision: "accept", agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR
+}) })
+```
+Worker returns `status=awaiting_recursion`. Main runs `/issue-close-finalize $PROPOSAL_PARENT`.
+After recursion: write `state.g5_history[-1].recursion_completed = true` to STATE_FILE.
+Delegate `phase=loop_step, g5_decision=recurse_done` → continue loop.
+
+## Finalize terminal (Steps H, J, K, L)
+
+<!-- ## Step L: write outcome JSON (always; final step before End report) — executed by worker -->
+Delegate Steps H, J, K, L to `issue-close-finalize-worker`:
+```
+Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
+  phase: "finalize_terminal", state_file_path: STATE_FILE,
+  agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR
+}) })
+```
 
 End report (only when G is in NEXT_STEPS):
 `parent close proposals: $PROPOSAL_ACCEPTED accepted / $PROPOSAL_DECLINED declined / $PROPOSAL_SKIPPED skipped`
-
-## Step H: close the issue
-`ISSUE_CLOSE_SKILL=1 gh issue close "$N" --reason completed`
-
-## Step J: post resolved-by + `appended` sentinel
-`bash "$AGENTS_CONFIG_DIR/bin/github-issues/post-close-sentinels.sh" "$N" "$MERGE_COMMIT"`
-Idempotent. Merge SHA from Step A.5 mandatory on the normal path.
-
-## Step K: clear WIP state
-`bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" clear "$N"`
-Projects v2 Status=Done, clears session-fingerprint, deletes
-`$PLANS_DIR/wip-lock-<N>.md`. Idempotent; warn-and-continue.
-
-## Step L: write outcome JSON (always; final step before End report)
-
-Always runs (every NEXT_STEPS path). Writes
-`<PLANS_DIR>/<session-id>-issue-close-outcome.json` for `/session-close` to
-render the Closed Issue Outcomes section.
-
-Derive field values from observed step output, then substitute as literals:
-
-| Field | Values |
-|---|---|
-| `historyEntry` | `appended` \| `skipped-already-present` \| `failed` \| `skipped` (E not in NEXT_STEPS) |
-| `issueClosed` | `closed` \| `already-closed` \| `failed` \| `skipped` (H not in NEXT_STEPS) |
-| `sentinelsPosted` | `posted` \| `already-present` \| `failed` \| `skipped` (J not in NEXT_STEPS) |
-| `wipCleared` | `cleared` \| `failed` \| `skipped` (K not in NEXT_STEPS) |
-| `state` | `succeeded` \| `failed` \| `partial-failure` \| `skipped-noop` \| `skipped-already-closed` |
-
-`state` derivation: `already_closed_with_sentinel` → `skipped-already-closed`; all fields `skipped` → `skipped-noop`; `issueClosed==failed` with no closed/already-closed → `failed`; `issueClosed` closed but any field failed → `partial-failure`; otherwise → `succeeded`. (`skipped-non-github` is written by `/session-close`, never here.)
-
-```bash
-node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
-  "<N>" "<state>" "<historyEntry>" "<issueClosed>" "<sentinelsPosted>" "<wipCleared>"
-```
-
-Fail-soft: surface any stderr as `[issue-close-finalize] WARN: outcome JSON write failed`;
-never block the close flow.
 
 ## End
 
