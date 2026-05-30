@@ -15,11 +15,11 @@
 #   G2 (T8-T15)     lint-worktree-notes-lang.js unit tests
 #   G3 (T16-T19)    check-worktree-notes-lang.js hook integration
 #   G4 (T20-T23)    compose-doc-append-entry integration
-#   G5 (T24)        settings.json static check
+#   G5 (T24, T24r1-3) settings.json static check + removal regression (#645)
 #   G6 (T26)        detect-cjk.js hasCJK SSOT
 #   G7              REMOVED (docs-lang-config.js shim deleted in #619)
-#   G8 (T28-T30b)   loadLangConfig independent .env routing
-#   G9-G12          plan/ask lang hooks + arbitrary-language hint tier
+#   G8 (T28, T30b)  loadLangConfig independent .env routing
+#   G9-G12          plan lang hooks + arbitrary-language hint tier
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -584,6 +584,27 @@ else
     fail "T24: settings.json does NOT register check-worktree-notes-lang.js"
 fi
 
+# T24r1: settings.json does NOT register check-ask-lang.js (removed in #645)
+if [ -f "$SETTINGS_JSON" ] && ! grep -q "check-ask-lang" "$SETTINGS_JSON"; then
+    pass "T24r1: settings.json does not register check-ask-lang.js (removal regression)"
+else
+    fail "T24r1: settings.json still references check-ask-lang — removal regression"
+fi
+
+# T24r2: hooks/lib/lang-config.js does NOT contain ASK_LANG reference (removed in #645)
+if ! grep -q "ASK_LANG" "$AGENTS_DIR/hooks/lib/lang-config.js"; then
+    pass "T24r2: lang-config.js has no ASK_LANG reference (removal regression)"
+else
+    fail "T24r2: lang-config.js still references ASK_LANG — removal regression"
+fi
+
+# T24r3: hooks/check-ask-lang.js does NOT exist (removed in #645)
+if [ ! -f "$AGENTS_DIR/hooks/check-ask-lang.js" ]; then
+    pass "T24r3: hooks/check-ask-lang.js is absent (removal regression)"
+else
+    fail "T24r3: hooks/check-ask-lang.js still exists — removal regression"
+fi
+
 # ============================================================================
 # Group 6 — detect-cjk.js hasCJK SSOT
 # ============================================================================
@@ -639,21 +660,6 @@ else
         pass "T28: PLAN_LANG=english from .env"
     else
         fail "T28: $_t28_result"
-    fi
-
-    # T29: ASK_LANG from .env
-    _t29_tmp=$(mktemp -d); TEST_TMPS+=("$_t29_tmp")
-    printf 'ASK_LANG=japanese\n' > "$_t29_tmp/.env"
-    _t29_dir="$(cygpath -m "$_t29_tmp" 2>/dev/null || echo "$_t29_tmp")"
-    _t29_result="$(env -u ASK_LANG AGENTS_CONFIG_DIR="$_t29_dir" node -e "
-      const { loadLangConfig } = require('$_AGENTS_DIR_NODE/hooks/lib/lang-config');
-      const v = loadLangConfig('ask');
-      if (v !== 'japanese') { process.stderr.write('got: ' + v + '\n'); process.exit(1); }
-    " 2>&1)"
-    if [ $? -eq 0 ]; then
-        pass "T29: ASK_LANG=japanese from .env"
-    else
-        fail "T29: $_t29_result"
     fi
 
     # T30a REMOVED (#619): fenced-block fallback no longer exists.
@@ -832,66 +838,14 @@ else
 fi
 
 # ============================================================================
-# Group 11 — check-ask-lang.js integration
-# ============================================================================
-
-echo ""
-echo "=== Group 11: check-ask-lang.js integration ==="
-
-CHECK_ASK_HOOK="$AGENTS_DIR/hooks/check-ask-lang.js"
-if [ "$(src_present "$CHECK_ASK_HOOK")" != "ok" ]; then
-    echo "SKIP G11: hooks/check-ask-lang.js not yet implemented (RED phase)"
-else
-    _g11_agents_tmp=$(mktemp -d); TEST_TMPS+=("$_g11_agents_tmp")
-    printf 'ASK_LANG=english\n' > "$_g11_agents_tmp/.env"
-    _g11_agents_dir="$(cygpath -m "$_g11_agents_tmp" 2>/dev/null || echo "$_g11_agents_tmp")"
-
-    run_ask_hook() {
-        local json="$1"
-        (export AGENTS_CONFIG_DIR="$_g11_agents_dir"
-         echo "$json" | run_with_timeout 10 node "$AGENTS_DIR/hooks/check-ask-lang.js" 2>/dev/null)
-    }
-
-    # T44: CJK in question → approve + additionalContext
-    _t44_json="{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"question\":\"日本語のテスト\",\"type\":\"select\",\"choices\":[]},\"tool_response\":{}}"
-    _t44_out="$(run_ask_hook "$_t44_json")"
-    _t44_ok=1
-    echo "$_t44_out" | grep -q '"approve"' || _t44_ok=0
-    echo "$_t44_out" | grep -q 'additionalContext' || _t44_ok=0
-    if [ "$_t44_ok" -eq 1 ]; then
-        pass "T44: CJK in question → approve + additionalContext"
-    else
-        fail "T44: expected approve+additionalContext, got: $_t44_out"
-    fi
-
-    # T45: CJK in choices → additionalContext
-    _t45_json="{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"question\":\"Please choose\",\"type\":\"select\",\"choices\":[\"日本語の選択肢\",\"OK\"]},\"tool_response\":{}}"
-    _t45_out="$(run_ask_hook "$_t45_json")"
-    if echo "$_t45_out" | grep -q 'additionalContext'; then
-        pass "T45: CJK in choices → additionalContext present"
-    else
-        fail "T45: expected additionalContext for CJK choices, got: $_t45_out"
-    fi
-
-    # T46: malformed input → approve
-    _t46_json="{\"tool_name\":\"AskUserQuestion\",\"tool_response\":{}}"
-    _t46_out="$(run_ask_hook "$_t46_json")"
-    if echo "$_t46_out" | grep -q '"approve"'; then
-        pass "T46: malformed input → approve (fail-open)"
-    else
-        fail "T46: expected approve for malformed input, got: $_t46_out"
-    fi
-fi
-
-# ============================================================================
 # Group 12 — arbitrary-language hint tier
 # ============================================================================
 
 echo ""
 echo "=== Group 12: arbitrary-language hint tier ==="
 
-if [ "$(src_present "$LANG_CONFIG_LIB")" != "ok" ] || [ "$(src_present "$CHECK_PLAN_HOOK")" != "ok" ] || [ "$(src_present "$CHECK_ASK_HOOK")" != "ok" ]; then
-    echo "SKIP G12: lang-config / check-plan / check-ask not yet implemented"
+if [ "$(src_present "$LANG_CONFIG_LIB")" != "ok" ] || [ "$(src_present "$CHECK_PLAN_HOOK")" != "ok" ]; then
+    echo "SKIP G12: lang-config / check-plan not yet implemented"
 else
     # T47: PLAN_LANG=french preserved verbatim by loadLangConfig
     _t47_tmp=$(mktemp -d); TEST_TMPS+=("$_t47_tmp")
@@ -947,21 +901,6 @@ else
         pass "T50: PLAN_LANG=french + CJK content → approve + additionalContext (hint)"
     else
         fail "T50: expected approve+hint, got: $_t50_out"
-    fi
-
-    # T51: check-ask-lang.js ASK_LANG=french → approve + additionalContext
-    _t51_agents_tmp=$(mktemp -d); TEST_TMPS+=("$_t51_agents_tmp")
-    printf 'ASK_LANG=french\n' > "$_t51_agents_tmp/.env"
-    _t51_agents_dir="$(cygpath -m "$_t51_agents_tmp" 2>/dev/null || echo "$_t51_agents_tmp")"
-    _t51_json="{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"question\":\"plain english\",\"type\":\"select\",\"choices\":[]},\"tool_response\":{}}"
-    _t51_out="$(export AGENTS_CONFIG_DIR="$_t51_agents_dir"; echo "$_t51_json" | run_with_timeout 10 node "$CHECK_ASK_HOOK" 2>/dev/null)"
-    _t51_ok=1
-    echo "$_t51_out" | grep -q '"approve"' || _t51_ok=0
-    echo "$_t51_out" | grep -q 'ASK_LANG=french' || _t51_ok=0
-    if [ "$_t51_ok" -eq 1 ]; then
-        pass "T51: ASK_LANG=french → approve + advisory additionalContext"
-    else
-        fail "T51: expected approve+hint, got: $_t51_out"
     fi
 
     # T52a: lintWorktreeNotesLang historyPublic=french + CJK → 0 violations (hint tier)
