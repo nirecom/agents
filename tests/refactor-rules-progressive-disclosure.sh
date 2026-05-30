@@ -134,7 +134,7 @@ if [ "$RENAME_DONE" = "false" ]; then
 else
 
 GLOBS_FILES=(
-    "rules/docs/history-rules.md"
+    "rules/docs/history.md"
     "rules/docs/todo.md"
     "rules/docs/changelog.md"
     "rules/docs/architecture.md"
@@ -252,7 +252,7 @@ if [ "$RENAME_DONE" = "true" ]; then
         "$REPO_ROOT/rules/docs.md.bak" \
         "rules/docs.md headings" \
         "$REPO_ROOT/rules/docs.md" \
-        "$REPO_ROOT/rules/docs/history-rules.md" \
+        "$REPO_ROOT/rules/docs/history.md" \
         "$REPO_ROOT/rules/docs/todo.md" \
         "$REPO_ROOT/rules/docs/changelog.md" \
         "$REPO_ROOT/rules/docs/architecture.md" \
@@ -422,7 +422,7 @@ if [ "$RENAME_DONE" = "true" ]; then
         "$REPO_ROOT/rules/docs.md.bak" \
         "rules/docs.md char-count" \
         "$REPO_ROOT/rules/docs.md" \
-        "$REPO_ROOT/rules/docs/history-rules.md" \
+        "$REPO_ROOT/rules/docs/history.md" \
         "$REPO_ROOT/rules/docs/todo.md" \
         "$REPO_ROOT/rules/docs/changelog.md" \
         "$REPO_ROOT/rules/docs/architecture.md" \
