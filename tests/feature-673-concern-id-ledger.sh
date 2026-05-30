@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # L1 unit tests for concern-ID ledger logic embedded in bin/run-codex-review-loop (issue #673)
 # Tests --round / --ledger semantics, ID assignment, and persistence across rounds.
-# NOTE: --round / --ledger flags do not exist yet on run-codex-review-loop — tests will FAIL
-# until implemented.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,8 +26,8 @@ fi
 # Probe whether the wrapper supports the new --round / --ledger flags.
 # If not, skip the entire suite (the source has not been modified yet).
 if ! grep -q -- "--round" "$WRAPPER_SRC" || ! grep -q -- "--ledger" "$WRAPPER_SRC"; then
-    echo "SKIP: $WRAPPER_SRC does not yet support --round / --ledger (pre-implementation)"
-    exit 0
+    echo "FAIL: $WRAPPER_SRC does not support --round / --ledger (implementation missing)"
+    exit 1
 fi
 
 # ---------------------------------------------------------------------------
@@ -149,8 +147,8 @@ C2. [MEDIUM] beta concern"
   LEDGER="$TMP/ledger.txt"
   printf 'C1|HIGH|original alpha\nC2|MEDIUM|original beta\n' > "$LEDGER"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1. [HIGH] still alpha
-C99. [HIGH] new injected"
+C1: unresolved — still alpha
+C99: unresolved — new injected"
   STDERR_OUT=$(invoke "$MOCK" --format detail-plan --session-id sid3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || true
@@ -202,8 +200,8 @@ C99. [HIGH] new injected"
   LEDGER="$TMP/ledger.txt"
   printf 'C1|HIGH|original alpha\n' > "$LEDGER"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C50. [HIGH] not in ledger
-C51. [MEDIUM] also new"
+C50: unresolved — not in ledger
+C51: unresolved — also new"
   rc=0
   invoke "$MOCK" --format detail-plan --session-id sid5 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
@@ -341,9 +339,9 @@ C1. [HIGH] alpha"
   LEDGER="$TMP/ledger.txt"
   printf 'C1|HIGH|original\n' > "$LEDGER"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C50. [HIGH] new1
-C51. [MEDIUM] new2
-C52. [LOW] new3"
+C50: unresolved — new1
+C51: unresolved — new2
+C52: unresolved — new3"
   STDERR_OUT=$(invoke "$MOCK" --format detail-plan --session-id sid11 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" 2>&1 >/dev/null) || true

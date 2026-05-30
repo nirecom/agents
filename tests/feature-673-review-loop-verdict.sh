@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # L1 unit tests for bin/review-loop-verdict (issue #673)
 # Verdict matrix + argument validation.
-# NOTE: bin/review-loop-verdict does not exist yet — tests will FAIL until implemented.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,8 +19,8 @@ run_with_timeout() {
 }
 
 if [[ ! -x "$SCRIPT" && ! -f "$SCRIPT" ]]; then
-    echo "SKIP: $SCRIPT does not exist yet (pre-implementation)"
-    exit 0
+    echo "FAIL: $SCRIPT not found"
+    exit 1
 fi
 
 # Run the script and capture stdout + exit code

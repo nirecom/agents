@@ -2,7 +2,6 @@
 # L1 unit tests for ROUND_NUMBER counter management in
 # skills/make-detail-plan/scripts/run-codex-review-loop.sh (and outline-plan variant).
 # Counter is per-stage: <PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt
-# NOTE: Counter logic not yet implemented in wrappers — tests will FAIL until added.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,8 +28,8 @@ fi
 # Probe whether the wrapper manages the ROUND_NUMBER counter.
 # If not, skip the entire suite (the source has not been modified yet).
 if ! grep -q -- "round-number\|--round " "$DETAIL_WRAPPER"; then
-    echo "SKIP: $DETAIL_WRAPPER does not yet manage ROUND_NUMBER counter (pre-implementation)"
-    exit 0
+    echo "FAIL: $DETAIL_WRAPPER does not manage ROUND_NUMBER counter (implementation missing)"
+    exit 1
 fi
 
 # Helper: make a stub run-codex-review-loop binary in AGENTS_CONFIG_DIR/bin that

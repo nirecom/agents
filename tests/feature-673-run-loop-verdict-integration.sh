@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # L2 integration tests for bin/run-codex-review-loop end-to-end behavior
 # with concern-ID ledger + verdict resolution (issue #673).
-# NOTE: --round / --ledger flags not yet implemented — tests will FAIL until added.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,8 +25,8 @@ fi
 
 # Probe whether the wrapper supports the new --round / --ledger flags.
 if ! grep -q -- "--round" "$WRAPPER_SRC" || ! grep -q -- "--ledger" "$WRAPPER_SRC"; then
-    echo "SKIP: $WRAPPER_SRC does not yet support --round / --ledger (pre-implementation)"
-    exit 0
+    echo "FAIL: $WRAPPER_SRC does not support --round / --ledger (implementation missing)"
+    exit 1
 fi
 
 setup_mock_env() {
@@ -143,7 +142,7 @@ invoke() {
   LEDGER="$TMP/ledger.txt"
   printf 'C1|HIGH|big issue\n' > "$LEDGER"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1. [HIGH] still big"
+C1: unresolved — still big"
   rc=0
   invoke "$MOCK" --format detail-plan --session-id i3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
@@ -165,7 +164,7 @@ C1. [HIGH] still big"
   LEDGER="$TMP/ledger.txt"
   printf 'C1|HIGH|big issue\n' > "$LEDGER"
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1. [HIGH] still big"
+C1: unresolved — still big"
   rc=0
   invoke "$MOCK" --format detail-plan --session-id i4 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
@@ -188,7 +187,7 @@ C1. [HIGH] still big"
   printf 'C1|HIGH|big issue\n' > "$LEDGER"
   # Codex returns only a new (not in ledger) concern — after stripping, nothing remains
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C99. [HIGH] injected new"
+C99: unresolved — injected new"
   rc=0
   STDERR_OUT=$(invoke "$MOCK" --format detail-plan --session-id i5 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
@@ -224,7 +223,7 @@ C99. [HIGH] injected new"
 
   # Round 2: same MEDIUM concern persists → APPROVED (MEDIUM-only round>=2)
   make_review_codex_mock "$MOCK" "NEEDS_REVISION
-C1. [MEDIUM] medium one still"
+C1: unresolved — medium one still"
   rc=0
   invoke "$MOCK" --format detail-plan --session-id i6 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
