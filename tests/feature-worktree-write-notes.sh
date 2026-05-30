@@ -98,19 +98,19 @@ json_field() {
 # Run the bin script with argv + COPIED_JSON env. Stdout only.
 # Usage: run_bin mainRoot worktreePath branch [baseDir] [copiedJSON]
 run_bin() {
-    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}"
-    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" 2>/dev/null
+    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}" sid="${6:-}"
+    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" "$sid" 2>/dev/null
 }
 
 run_bin_stderr() {
-    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}"
-    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" 2>&1 >/dev/null
+    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}" sid="${6:-}"
+    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" "$sid" 2>&1 >/dev/null
 }
 
 run_bin_exitcode() {
-    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}"
-    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" >/dev/null 2>&1
-    echo "$?"
+    local main="$1" wt="$2" branch="$3" baseDir="${4:-}" copied="${5:-}" sid="${6:-}"
+    COPIED_JSON="$copied" run_with_timeout 120 node "$BIN_JS" "$main" "$wt" "$branch" "$baseDir" "$sid" >/dev/null 2>&1
+    printf "%d\n" $?
 }
 
 # Make a fresh main-style git repo (with `.git` dir).
@@ -164,6 +164,7 @@ test_N1_writeNotes_exact_content() {
             resolvedPath: '/tmp/wt',
             baseDir: 'C:/git/worktrees',
             mainRoot: '/tmp/main',
+            sessionId: 'sess-abc-123',
             copiedFiles: ['a.env','b/.env.local']
         });
         process.stdout.write(JSON.stringify(r));
@@ -183,6 +184,7 @@ test_N1_writeNotes_exact_content() {
         'Path: /tmp/wt' \
         'Main repo: /tmp/main' \
         'WORKTREE_BASE_DIR: C:/git/worktrees' \
+        'Session-ID: sess-abc-123' \
         '' \
         '## Gitignored files copied from main' \
         '- a.env' \
@@ -279,6 +281,7 @@ test_I1_writeNotes_idempotent() {
             resolvedPath: '/tmp/wt',
             baseDir: 'C:/git/worktrees',
             mainRoot: '/tmp/main',
+            sessionId: 'sess-abc-123',
             copiedFiles: ['a.env','b/.env.local']
         };
         lib.writeNotes(args);
@@ -301,6 +304,7 @@ test_I1_writeNotes_idempotent() {
         'Path: /tmp/wt' \
         'Main repo: /tmp/main' \
         'WORKTREE_BASE_DIR: C:/git/worktrees' \
+        'Session-ID: sess-abc-123' \
         '' \
         '## Gitignored files copied from main' \
         '- a.env' \
@@ -520,6 +524,7 @@ test_N6b_run_writes_main_repo_line() {
             createdDate: '2024-01-15',
             resolvedPath: process.argv[2],
             baseDir: null,
+            sessionId: 'sess-abc-123',
             copiedFiles: [],
             excludePattern: 'WORKTREE_NOTES.md'
         });
@@ -533,8 +538,9 @@ test_N6b_run_writes_main_repo_line() {
     # Path normalization uses .replace(/\\/g, "/")
     local expected_main
     expected_main="$(node -e "console.log(process.argv[1].replace(/\\\\/g,'/'))" -- "$main_node" 2>/dev/null)"
-    if grep -q "^Main repo: ${expected_main}$" "$notes_file"; then
-        pass "N6b: run() writes 'Main repo: <forward-slash normalized mainRoot>'"
+    if grep -q "^Main repo: ${expected_main}$" "$notes_file" \
+       && grep -q "^Session-ID: sess-abc-123$" "$notes_file"; then
+        pass "N6b: run() writes 'Main repo: <forward-slash normalized mainRoot>' and 'Session-ID: sess-abc-123'"
     else
         fail "N6b: expected 'Main repo: ${expected_main}' in $notes_file
 content:
@@ -887,6 +893,89 @@ test_CMD3_skill_template_windows_path() {
     fi
 }
 
+# ---- SID1: buildNotesBody includes Session-ID header when provided ----
+test_SID1_writeNotes_session_id_header() {
+    require_lib "test_SID1_writeNotes_session_id_header" || return
+    local wt; wt="$(setup_worktree_dest "sid1-wt")"
+
+    lib_eval "
+        lib.writeNotes({
+            worktreePath: process.argv[1],
+            branch: 'feature/sid1',
+            createdDate: '2024-01-15',
+            resolvedPath: '/tmp/wt',
+            baseDir: null,
+            sessionId: 'abc-123',
+            copiedFiles: []
+        });
+    " "$wt" >/dev/null 2>&1
+
+    local notes_file="$TMPDIR_BASE/sid1-wt/WORKTREE_NOTES.md"
+    if grep -q "^Session-ID: abc-123$" "$notes_file" 2>/dev/null; then
+        pass "SID1: writeNotes includes 'Session-ID: abc-123' when sessionId provided"
+    else
+        fail "SID1: missing 'Session-ID: abc-123' in $notes_file (content: $(cat "$notes_file" 2>/dev/null))"
+    fi
+}
+
+# ---- SID2: buildNotesBody omits Session-ID header when sessionId not provided ----
+test_SID2_writeNotes_omitted_session_id() {
+    require_lib "test_SID2_writeNotes_omitted_session_id" || return
+    local wt; wt="$(setup_worktree_dest "sid2-wt")"
+
+    lib_eval "
+        lib.writeNotes({
+            worktreePath: process.argv[1],
+            branch: 'feature/sid2',
+            createdDate: '2024-01-15',
+            resolvedPath: '/tmp/wt',
+            baseDir: null,
+            copiedFiles: []
+        });
+    " "$wt" >/dev/null 2>&1
+
+    local notes_file="$TMPDIR_BASE/sid2-wt/WORKTREE_NOTES.md"
+    if ! grep -q "^Session-ID:" "$notes_file" 2>/dev/null; then
+        pass "SID2: writeNotes omits 'Session-ID:' line when sessionId not provided"
+    else
+        fail "SID2: unexpected 'Session-ID:' line found in $notes_file"
+    fi
+}
+
+# ---- SID3: CLI passes session-id through to WORKTREE_NOTES.md ----
+test_SID3_cli_session_id_passthrough() {
+    require_bin "test_SID3_cli_session_id_passthrough" || return
+    local main; main="$(setup_main_repo "sid3-main")"
+    local wt;   wt="$(setup_worktree_dest "sid3-wt")"
+    local main_node; main_node="$(node_path "$main")"
+
+    run_bin "$main_node" "$wt" "feature/sid3" "" '{"copied":[]}' "abc-123" >/dev/null 2>&1
+
+    local notes_file="$TMPDIR_BASE/sid3-wt/WORKTREE_NOTES.md"
+    if grep -q "^Session-ID: abc-123$" "$notes_file" 2>/dev/null; then
+        pass "SID3: CLI session-id arg passes through to WORKTREE_NOTES.md"
+    else
+        fail "SID3: 'Session-ID: abc-123' not found in $notes_file (content: $(cat "$notes_file" 2>/dev/null))"
+    fi
+}
+
+# ---- SID4: CLI rejects invalid session-id ----
+test_SID4_cli_session_id_validation() {
+    require_bin "test_SID4_cli_session_id_validation" || return
+    local main; main="$(setup_main_repo "sid4-main")"
+    local wt;   wt="$(setup_worktree_dest "sid4-wt")"
+    local main_node; main_node="$(node_path "$main")"
+
+    local code; code="$(run_bin_exitcode "$main_node" "$wt" "feature/sid4" "" '{"copied":[]}' "bad/path")"
+    local errmsg; errmsg="$(run_bin_stderr "$main_node" "$wt" "feature/sid4" "" '{"copied":[]}' "bad/path")"
+
+    if [ "$code" = "1" ] && echo "$errmsg" | grep -qi "invalid\|sessionId\|session"; then
+        pass "SID4: CLI exits 1 and prints error for invalid session-id 'bad/path'"
+    else
+        fail "SID4: expected exit 1 + error msg, got code=$code stderr='$errmsg'"
+    fi
+}
+
 # ============ Run all ============
 
 test_N1_writeNotes_exact_content
@@ -913,6 +1002,10 @@ test_N9_env_set_uses_value
 test_CMD1_skill_template_basic
 test_CMD2_skill_template_filename_with_spaces
 test_CMD3_skill_template_windows_path
+test_SID1_writeNotes_session_id_header
+test_SID2_writeNotes_omitted_session_id
+test_SID3_cli_session_id_passthrough
+test_SID4_cli_session_id_validation
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
