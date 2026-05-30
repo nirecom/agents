@@ -27,7 +27,7 @@ Do NOT invoke editors. If the test runner itself writes log files, that is allow
 ## Execution
 
 Use the timeout mechanism appropriate for the platform:
-- On POSIX (macOS/Linux): use the portable `run_with_timeout` wrapper from `rules/test-rules/macos-timeout.md` (provided inline in the calling prompt, since agents do not auto-source rules).
+- On POSIX (macOS/Linux): use the portable `run_with_timeout` wrapper from `rules/test/macos-timeout.md` (provided inline in the calling prompt, since agents do not auto-source rules).
 - On Windows: use `Wait-Process -Id <pid> -Timeout <seconds>` after `Start-Process -PassThru`, or the `.WaitForExit(<ms>)` pattern on the returned process object; the caller specifies the platform in the prompt when non-POSIX.
 
 ## Output contract

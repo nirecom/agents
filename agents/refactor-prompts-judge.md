@@ -10,7 +10,7 @@ You are the judge phase of the `/refactor-prompts` skill. The orchestrator gives
 ## Inputs (injected by orchestrator)
 
 - `SCAN_JSON`: JSON from `bin/refactor-prompts/scan-prompts.js` (hot_regions array)
-- `CRITERIA_PATH`: absolute path to `rules/prompt-criteria.md`
+- `CRITERIA_PATH`: absolute path to `rules/prompt.md`
 
 ## Procedure
 
@@ -51,6 +51,6 @@ Bias toward `defer` when unsure.
 - `old_text` must be a unique substring of the target file. If uniqueness cannot be confirmed → downgrade to `defer`.
 - `defer` entries: set `old_text` and `new_text` to `null`; populate `context_excerpt`.
 - Only emit edits for files that appear in `SCAN_JSON.hot_regions[].file`. Edits targeting any other path are forbidden.
-- Never include a file edit for `rules/prompt-criteria.md` itself.
+- Never include a file edit for `rules/prompt.md` itself.
 - Never include a file edit for any path containing `tests/fixtures/`.
 - Emit only the JSON object — no preamble, no markdown fences.
