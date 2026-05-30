@@ -154,8 +154,8 @@ atomic write internally.
 
 ## Behavioral notes
 
-- **Projects v2**: defaults `PROJECT_NUM=1`, owner `nirecom`. Override via `ISSUE_CREATE_PROJECT_NUM` / `ISSUE_CREATE_OWNER`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
-- **Content Date field**: after attach, the script sets "Content Date" to the issue's creation date (`YYYY-MM-DD`). Defaults: `ISSUE_CREATE_FIELD_ID=PVTF_lAHOAMF_jc4BXf9EzhSsYwA`, `ISSUE_CREATE_PROJECT_ID=PVT_kwHOAMF_jc4BXf9E`. Failure is non-fatal.
+- **Projects v2**: the linked Projects v2 (owner, number, node id) is auto-resolved from the git remote via `bin/github-issues/lib/resolve-project.sh` (#641). No hardcoded defaults — repos without a linked Projects v2 skip the attach step with a warning. Result is cached per `owner/repo` at `${WORKFLOW_PLANS_DIR}/cache/project-resolve.tsv`. Attach failure is non-fatal — warnings on stderr; re-run `gh project item-add` manually to recover.
+- **Content Date field**: when the resolved project has a field named "Content Date" of type `DATE`, the script sets it to the issue's creation date (`YYYY-MM-DD`). The field id is discovered alongside the project node — no env var override needed. Projects without a Content Date field skip the step silently.
 - **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (`gh issue view <child> --json databaseId --jq .databaseId`), passed via `-F` (integer type).
 - **make-parent partial failure**: if a child attach fails mid-loop, the parent is created but `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
