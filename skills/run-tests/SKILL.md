@@ -22,6 +22,7 @@ Run the project test suite via the test-runner subagent and emit the workflow se
      prompt: "Run the project test suite.\nTest command: <command or 'auto-detect'>\nWorking directory: <cwd>\nTimeout: 120s\nReturn the structured YAML summary per your output contract."
    })
    ```
+   # main context savings: test verbose output (stdout, stderr, test logs) stays in test-runner subagent context
    Model: default `sonnet`. Escalate to `opus` only when the test surface is unusually large
    or failure-summary parsing demands architectural reasoning.
 
