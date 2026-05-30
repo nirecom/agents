@@ -49,7 +49,7 @@ report_targets() {
   cat <<'EOF'
 ### Manual review checklist — apply to every SKILL.md (regardless of line count)
 
-Criteria SSOT: rules/prompt-criteria.md (§1 Form — directives, one-line, multi-step → CLI).
+Criteria SSOT: rules/prompt.md (§1 Form — directives, one-line, multi-step → CLI).
 
 This is advisory output — no action is blocked.
 EOF

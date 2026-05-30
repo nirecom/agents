@@ -30,25 +30,15 @@ Write the planner's output to `DRAFT_FILE` via the Write tool.
 
 ### b/c/d. Invoke wrapper (single Bash call)
 
-```
-"$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" \
-  --format <FORMAT> \
-  --session-id <session-id> \
-  --plans-dir <PLANS_DIR> \
-  --draft-file <DRAFT_FILE> \
-  --cap <CAP> \
-  --max-extensions <MAX_EXTENSIONS> \
-  --extensions-used $EXTENSIONS_USED \
-  --accepted-tradeoffs <ACCEPTED_TRADEOFFS_FILE> \
-  [--context <PLANS_DIR>/<session-id>-survey-code.md] \
-  [--context <PLANS_DIR>/<session-id>-survey-history.md] \
-  [--context <CONCERNS_LOG>] \
-  > "$TMP_STDOUT"
-RV=$?
-cat "$TMP_STDOUT"
-```
+Each caller skill invokes its own per-skill extraction script (Bash tool):
+- `skills/make-detail-plan/scripts/run-codex-review-loop.sh` (detail stage)
+- `skills/make-outline-plan/scripts/run-codex-review-loop.sh` (outline stage)
 
-> Pipeline note: if piping for tee'ing, capture `${PIPESTATUS[0]}` instead of `$?`.
+Each script reads from the environment:
+- Required: `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`
+- Optional: `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` — each passed as `--context` when the file exists and is non-empty.
+
+Exit codes pass through to the caller unchanged.
 
 The wrapper internally:
 1. Builds (per-stage, marker-gated at `<PLANS_DIR>/drafts/<session-id>-context.<FORMAT>.built`)

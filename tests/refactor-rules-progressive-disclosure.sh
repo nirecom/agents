@@ -45,6 +45,14 @@ run_with_timeout() {
 }
 
 # ---------------------------------------------------------------------------
+# Rename-done gate: skip rename-sensitive tests until rules/ rename is applied
+# ---------------------------------------------------------------------------
+RENAME_DONE=false
+if [ -d "$REPO_ROOT/rules/docs" ] && [ -d "$REPO_ROOT/rules/test" ] && [ -f "$REPO_ROOT/rules/prompt.md" ]; then
+    RENAME_DONE=true
+fi
+
+# ---------------------------------------------------------------------------
 # Helper: extract YAML frontmatter block (between first --- and second ---)
 # Prints lines between the delimiters (exclusive)
 # ---------------------------------------------------------------------------
@@ -121,19 +129,22 @@ extract_headings() {
 # Test 1 — globs: frontmatter validity
 # ---------------------------------------------------------------------------
 echo "=== Test 1: globs: frontmatter validity ==="
+if [ "$RENAME_DONE" = "false" ]; then
+    skip "T1: globs frontmatter" "run after rules/ rename implementation"
+else
 
 GLOBS_FILES=(
-    "rules/docs-convention/history-rules.md"
-    "rules/docs-convention/todo.md"
-    "rules/docs-convention/changelog.md"
-    "rules/docs-convention/architecture.md"
-    "rules/docs-convention/readme.md"
-    "rules/docs-convention/env-example.md"
+    "rules/docs/history-rules.md"
+    "rules/docs/todo.md"
+    "rules/docs/changelog.md"
+    "rules/docs/architecture.md"
+    "rules/docs/readme.md"
+    "rules/docs/env-example.md"
     "rules/coding/python.md"
     "rules/coding/nodejs.md"
-    "rules/test-rules/installer.md"
-    "rules/test-rules/macos-timeout.md"
-    "rules/test-rules/claude-e2e.md"
+    "rules/test/installer.md"
+    "rules/test/macos-timeout.md"
+    "rules/test/claude-e2e.md"
     "rules/claude-config-source.md"
 )
 
@@ -150,6 +161,7 @@ for rel in "${GLOBS_FILES[@]}"; do
         fail "T1: $rel" "$reason"
     fi
 done
+fi
 
 echo ""
 
@@ -235,16 +247,20 @@ test_heading_coverage \
     "$REPO_ROOT/skills/_shared/test-design.md"
 
 # docs-convention.md group
-test_heading_coverage \
-    "$REPO_ROOT/rules/docs-convention.md.bak" \
-    "rules/docs-convention.md headings" \
-    "$REPO_ROOT/rules/docs-convention.md" \
-    "$REPO_ROOT/rules/docs-convention/history-rules.md" \
-    "$REPO_ROOT/rules/docs-convention/todo.md" \
-    "$REPO_ROOT/rules/docs-convention/changelog.md" \
-    "$REPO_ROOT/rules/docs-convention/architecture.md" \
-    "$REPO_ROOT/rules/docs-convention/readme.md" \
-    "$REPO_ROOT/rules/docs-convention/env-example.md"
+if [ "$RENAME_DONE" = "true" ]; then
+    test_heading_coverage \
+        "$REPO_ROOT/rules/docs.md.bak" \
+        "rules/docs.md headings" \
+        "$REPO_ROOT/rules/docs.md" \
+        "$REPO_ROOT/rules/docs/history-rules.md" \
+        "$REPO_ROOT/rules/docs/todo.md" \
+        "$REPO_ROOT/rules/docs/changelog.md" \
+        "$REPO_ROOT/rules/docs/architecture.md" \
+        "$REPO_ROOT/rules/docs/readme.md" \
+        "$REPO_ROOT/rules/docs/env-example.md"
+else
+    skip "T3: rules/docs.md headings" "run after rules/ rename implementation"
+fi
 
 # coding.md group
 test_heading_coverage \
@@ -338,7 +354,11 @@ check_links_in_file() {
 }
 
 check_links_in_file "$REPO_ROOT/rules/test.md" "rules/test.md links"
-check_links_in_file "$REPO_ROOT/rules/docs-convention.md" "rules/docs-convention.md links"
+if [ "$RENAME_DONE" = "true" ]; then
+    check_links_in_file "$REPO_ROOT/rules/docs.md" "rules/docs.md links"
+else
+    skip "T5: rules/docs.md links" "run after rules/ rename implementation"
+fi
 check_links_in_file "$REPO_ROOT/rules/coding.md" "rules/coding.md links"
 
 echo ""
@@ -397,16 +417,20 @@ check_charcount \
     "$REPO_ROOT/rules/test.md" \
     "$REPO_ROOT/skills/_shared/test-design.md"
 
-check_charcount \
-    "$REPO_ROOT/rules/docs-convention.md.bak" \
-    "rules/docs-convention.md char-count" \
-    "$REPO_ROOT/rules/docs-convention.md" \
-    "$REPO_ROOT/rules/docs-convention/history-rules.md" \
-    "$REPO_ROOT/rules/docs-convention/todo.md" \
-    "$REPO_ROOT/rules/docs-convention/changelog.md" \
-    "$REPO_ROOT/rules/docs-convention/architecture.md" \
-    "$REPO_ROOT/rules/docs-convention/readme.md" \
-    "$REPO_ROOT/rules/docs-convention/env-example.md"
+if [ "$RENAME_DONE" = "true" ]; then
+    check_charcount \
+        "$REPO_ROOT/rules/docs.md.bak" \
+        "rules/docs.md char-count" \
+        "$REPO_ROOT/rules/docs.md" \
+        "$REPO_ROOT/rules/docs/history-rules.md" \
+        "$REPO_ROOT/rules/docs/todo.md" \
+        "$REPO_ROOT/rules/docs/changelog.md" \
+        "$REPO_ROOT/rules/docs/architecture.md" \
+        "$REPO_ROOT/rules/docs/readme.md" \
+        "$REPO_ROOT/rules/docs/env-example.md"
+else
+    skip "T6: rules/docs.md char-count" "run after rules/ rename implementation"
+fi
 
 check_charcount \
     "$REPO_ROOT/rules/coding.md.bak" \

@@ -24,7 +24,7 @@ TARGET_FILES=(
   "skills/make-outline-plan/SKILL.md"
   "skills/make-detail-plan/SKILL.md"
   "skills/clarify-intent/SKILL.md"
-  "rules/docs-convention.md"
+  "rules/docs.md"
 )
 MISSING=0
 for f in "${TARGET_FILES[@]}"; do

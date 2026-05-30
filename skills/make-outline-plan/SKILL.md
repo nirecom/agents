@@ -46,12 +46,8 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
    - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in Step 4a):
-     ```bash
-     "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \
-       "<PLANS_DIR>/<session-id>-intent.md" \
-       "<PLANS_DIR>/drafts/<session-id>-outline-draft.md" \
-       "<PLANS_DIR>/<session-id>-outline.md"
-     ```
+     Run `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/assemble-mandatory.sh"` (Bash tool) with env vars:
+     `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to Step 2.
    - Emit `WORKFLOW_OUTLINE_PLAN_COMPLETE` (Completion) and stop.
 
@@ -59,12 +55,8 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
 4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
    After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
-   ```bash
-   "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \
-     "<PLANS_DIR>/<session-id>-intent.md" \
-     "<PLANS_DIR>/drafts/<session-id>-outline-draft.md" \
-     "<PLANS_DIR>/<session-id>-outline.md"
-   ```
+   Run `skills/make-outline-plan/scripts/assemble-mandatory.sh` (Bash tool) with env vars:
+   `SESSION_ID`, `PLANS_DIR`, `AGENTS_CONFIG_DIR` (required).
    - The helper extracts the 3 sections from intent.md with headers, strips any planner-authored copies plus the planner's H1 from the draft, and writes the assembled outline.md.
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
    - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
@@ -79,23 +71,10 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
    ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-intent.md,
    NON_APPROVED_VERDICT=MISSING_ALTERNATIVE).
 
-   For each review round, invoke the wrapper (Bash tool):
-
-   ```
-   "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" \
-     --format outline-plan \
-     --session-id <session-id> \
-     --plans-dir <PLANS_DIR> \
-     --draft-file <PLANS_DIR>/drafts/<session-id>-outline-draft.md \
-     --cap 1 --max-extensions 1 --extensions-used $EXTENSIONS_USED \
-     --accepted-tradeoffs <PLANS_DIR>/<session-id>-intent.md \
-     [--context <PLANS_DIR>/<session-id>-survey-code.md] \
-     [--context <PLANS_DIR>/<session-id>-survey-history.md] \
-     [--context <PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md] \
-     > "$TMP_STDOUT"
-   RV=$?
-   cat "$TMP_STDOUT"
-   ```
+   For each review round, invoke `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/run-codex-review-loop.sh"`
+   (Bash tool) with env vars exported: `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required);
+   `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` (optional — passed as
+   `--context` when the file exists and is non-empty). Exit codes pass through unchanged.
 
    Outline-stage caller paths:
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
