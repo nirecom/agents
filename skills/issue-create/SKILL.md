@@ -88,7 +88,8 @@ Dedupe layer for the underlying `bin/github-issues/issue-create.sh`. Skip on non
 gh issue list --state all --limit 30 --search "<kw1> <kw2> <kw3>"
 ```
 
-Zero results → drop most specific keyword, retry up to 3 times. Still zero → verdict `none`, jump to Phase 4.
+Zero results on first identifier search → extract 3–5 symptom-level tokens from the new issue's Background/Changes text (behaviors, affected outputs/artifacts, feature area — terms that describe function or output, including artifact names like `CLAUDE.md` or `Final Report` when they represent the affected feature) → run one additional search with those tokens.
+Zero results from symptom search → drop most specific identifier keyword, retry up to 3 times. Still zero after all retries → verdict `none`, jump to Phase 4.
 
 **Candidate inspection** (up to ~10): `gh issue view <N> --json number,title,body,state,labels`.
 
