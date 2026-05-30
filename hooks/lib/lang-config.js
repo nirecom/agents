@@ -1,7 +1,7 @@
 "use strict";
 
 // Per-context language config. Routes language policy queries to .env keys
-// (PLAN_LANG, ASK_LANG, DOCS_LANG_*) in $AGENTS_CONFIG_DIR/.env.
+// (PLAN_LANG, DOCS_LANG_*) in $AGENTS_CONFIG_DIR/.env.
 // Fail-open on parse/IO errors: returns "any".
 
 const { loadDefaultEnv } = require("./load-env");
@@ -54,7 +54,6 @@ function classifyPolicy(policy) {
 function loadLangConfig(surface, options) {
   loadDefaultEnv();
   if (surface === "plan") return normalizeValue(process.env.PLAN_LANG);
-  if (surface === "ask") return normalizeValue(process.env.ASK_LANG);
   if (surface === "history") {
     const cfg = loadDocsLangConfig();
     const isPriv = options && options.isPrivateRepo === true;
