@@ -20,7 +20,7 @@ Standard docs live under `docs/` within each repository, except `README.md`.
 
 ## Content Rules
 
-**Append-only**: Do NOT use Edit tool for `history.md` or `CHANGELOG.md` — use `doc-append` CLI instead. See [docs/history-rules.md](docs/history-rules.md) for tool reference and rotation thresholds.
+**Append-only**: Do NOT use Edit tool for `history.md` or `CHANGELOG.md` — use `doc-append` CLI instead. See [docs/history.md](docs/history.md) for tool reference and rotation thresholds.
 
 - `overview.md`: Project vision and overall shape. Most abstract document in its directory. Does not duplicate `architecture.md` design decisions.
 - `infrastructure.md`: When adding or moving a service, update `infrastructure.md` first — downstream docs reference it. Use `/update-infrastructure` skill to keep it aligned.
@@ -55,7 +55,7 @@ Session planning artifacts (`<session-id>-intent.md`, `-outline.md`, `-detail.md
 
 Loaded automatically when editing the relevant file type; also readable on demand:
 
-- [docs/history-rules.md](docs/history-rules.md) — history.md format, append-only tools, and rotation thresholds
+- [docs/history.md](docs/history.md) — history.md format, append-only tools, and rotation thresholds
 - [docs/todo.md](docs/todo.md) — todo.md structure and user verification flow
 - [docs/changelog.md](docs/changelog.md) — CHANGELOG.md user-facing scope rules
 - [docs/architecture.md](docs/architecture.md) — architecture.md What/Why scope and 300-line split rule
