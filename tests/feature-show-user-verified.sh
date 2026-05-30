@@ -117,7 +117,7 @@ exit 0
 SHIM
   chmod +x "$GH_BIN_DIR/gh"
   U5_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
-  U5_RESULT=$(PATH="$GH_BIN_DIR:$PATH" run_hook "$U5_JSON")
+  U5_RESULT=$(SHOW_USER_VERIFIED_NO_BROWSER=1 PATH="$GH_BIN_DIR:$PATH" run_hook "$U5_JSON")
   U5_MSG=$(echo "$U5_RESULT" | extract_msg)
   if echo "$U5_MSG" | grep -q "Open PR: https://github.com/nirecom/agents/pull/314"; then
     pass "U5 open PR → Open PR: url in systemMessage"
@@ -180,8 +180,8 @@ fi
 # ── U9: Idempotency — two runs produce identical output ────────────────────
 echo "=== U9: idempotency ==="
 U9_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
-U9_R1=$(run_hook "$U9_JSON")
-U9_R2=$(run_hook "$U9_JSON")
+U9_R1=$(SHOW_USER_VERIFIED_NO_BROWSER=1 run_hook "$U9_JSON")
+U9_R2=$(SHOW_USER_VERIFIED_NO_BROWSER=1 run_hook "$U9_JSON")
 if [ "$U9_R1" = "$U9_R2" ] && [ -n "$U9_R1" ]; then
   pass "U9 idempotency — two runs produce identical systemMessages"
 else
@@ -198,8 +198,8 @@ else
   fail "U10 — expected empty, got: $U10_RESULT"
 fi
 
-# ── U11: cwd resolution — CLAUDE_PROJECT_DIR fallback ──────────────────────
-echo "=== U11: CLAUDE_PROJECT_DIR fallback when cwd absent ==="
+# ── U11: cwd resolution — CLAUDE_PROJECT_DIR is IGNORED (not used as fallback) ──
+echo "=== U11: CLAUDE_PROJECT_DIR is IGNORED when tool_input.cwd is absent ==="
 OTHER_REPO="$WORK_DIR/other-repo"
 mkdir -p "$OTHER_REPO"
 git -C "$OTHER_REPO" init -q
@@ -207,14 +207,14 @@ git -C "$OTHER_REPO" config user.email "test@example.com"
 git -C "$OTHER_REPO" config user.name "Test"
 echo "bar" > "$OTHER_REPO/bar.txt"
 git -C "$OTHER_REPO" add bar.txt
-# No cwd field in the JSON input
+# No cwd field in the JSON input — CLAUDE_PROJECT_DIR must NOT be used as fallback
 U11_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\"}}"
-U11_RESULT=$(CLAUDE_PROJECT_DIR="$OTHER_REPO" run_hook "$U11_JSON")
+U11_RESULT=$(SHOW_USER_VERIFIED_NO_BROWSER=1 CLAUDE_PROJECT_DIR="$OTHER_REPO" run_hook "$U11_JSON")
 U11_MSG=$(echo "$U11_RESULT" | extract_msg)
-if echo "$U11_MSG" | grep -q "bar.txt" && ! echo "$U11_MSG" | grep -q "foo.txt"; then
-  pass "U11 CLAUDE_PROJECT_DIR fallback — correct repo used (bar.txt from other-repo)"
+if ! echo "$U11_MSG" | grep -q "bar.txt"; then
+  pass "U11 CLAUDE_PROJECT_DIR removed from fallback — bar.txt from other-repo NOT shown"
 else
-  fail "U11 — expected bar.txt from other-repo, got: $U11_MSG"
+  fail "U11 — bar.txt appeared; CLAUDE_PROJECT_DIR was incorrectly used as fallback: $U11_MSG"
 fi
 
 # ── U12: PreToolUse payload (no tool_response) → systemMessage produced ─────
@@ -226,6 +226,131 @@ if echo "$U12_MSG" | grep -q "User verification context:" && echo "$U12_MSG" | g
   pass "U12 PreToolUse payload (no tool_response) → systemMessage with staged file"
 else
   fail "U12 — expected User verification context: with foo.txt, got: $U12_MSG"
+fi
+
+# ── U13: cwd regression — tool_input.cwd wins over CLAUDE_PROJECT_DIR ───────
+echo "=== U13: tool_input.cwd present + CLAUDE_PROJECT_DIR set → tool_input.cwd wins ==="
+IS_WINDOWS_U13=0
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U13=1 ;;
+esac
+[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U13=1
+if [ "$IS_WINDOWS_U13" = "1" ]; then
+  pass "U13 cwd regression — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
+else
+  GH_U13_DIR="$WORK_DIR/gh-u13"
+  mkdir -p "$GH_U13_DIR"
+  cat > "$GH_U13_DIR/gh" << 'SHIM'
+#!/usr/bin/env bash
+echo "https://github.com/nirecom/agents/pull/314"
+exit 0
+SHIM
+  chmod +x "$GH_U13_DIR/gh"
+  # GIT_REPO has foo.txt staged; OTHER_REPO has bar.txt staged
+  # With tool_input.cwd=GIT_REPO and CLAUDE_PROJECT_DIR=OTHER_REPO:
+  # - staged files should show foo.txt (from tool_input.cwd, not CLAUDE_PROJECT_DIR)
+  U13_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+  U13_RESULT=$(SHOW_USER_VERIFIED_NO_BROWSER=1 CLAUDE_PROJECT_DIR="$OTHER_REPO" PATH="$GH_U13_DIR:$PATH" run_hook "$U13_JSON")
+  U13_MSG=$(echo "$U13_RESULT" | extract_msg)
+  if echo "$U13_MSG" | grep -q "foo.txt" && ! echo "$U13_MSG" | grep -q "bar.txt"; then
+    pass "U13 tool_input.cwd wins — foo.txt from GIT_REPO shown, bar.txt from CLAUDE_PROJECT_DIR not shown"
+  else
+    fail "U13 — unexpected staged files output: $U13_MSG"
+  fi
+fi
+
+# ── U14: browser spawn marker via SHOW_USER_VERIFIED_NO_SPAWN=1 ───────────
+echo "=== U14: browser spawn marker → marker file written with PR URL ==="
+IS_WINDOWS_U14=0
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U14=1 ;;
+esac
+[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U14=1
+if [ "$IS_WINDOWS_U14" = "1" ]; then
+  pass "U14 browser spawn marker — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
+else
+  MARKER_FILE_U14="$WORK_DIR/u14-marker.json"
+  GH_U14_DIR="$WORK_DIR/gh-u14"
+  mkdir -p "$GH_U14_DIR"
+  cat > "$GH_U14_DIR/gh" << 'SHIM'
+#!/usr/bin/env bash
+echo "https://github.com/nirecom/agents/pull/314"
+exit 0
+SHIM
+  chmod +x "$GH_U14_DIR/gh"
+  U14_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+  SHOW_USER_VERIFIED_NO_SPAWN=1 \
+  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U14" \
+  PATH="$GH_U14_DIR:$PATH" run_hook "$U14_JSON" > /dev/null
+  if [ -f "$MARKER_FILE_U14" ] && node -e "
+    const d = JSON.parse(require('fs').readFileSync('$MARKER_FILE_U14', 'utf8'));
+    process.exit(d.args && d.args.includes('https://github.com/nirecom/agents/pull/314') ? 0 : 1);
+  " 2>/dev/null; then
+    pass "U14 browser spawn marker — marker written with PR URL"
+  else
+    fail "U14 — marker file missing or URL absent: $(cat "$MARKER_FILE_U14" 2>/dev/null || echo 'not found')"
+  fi
+fi
+
+# ── U15: browser opt-out via SHOW_USER_VERIFIED_NO_BROWSER=1 ─────────────
+echo "=== U15: browser opt-out → marker file NOT written ==="
+IS_WINDOWS_U15=0
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U15=1 ;;
+esac
+[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U15=1
+if [ "$IS_WINDOWS_U15" = "1" ]; then
+  pass "U15 browser opt-out — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
+else
+  MARKER_FILE_U15="$WORK_DIR/u15-marker.json"
+  GH_U15_DIR="$WORK_DIR/gh-u15"
+  mkdir -p "$GH_U15_DIR"
+  cat > "$GH_U15_DIR/gh" << 'SHIM'
+#!/usr/bin/env bash
+echo "https://github.com/nirecom/agents/pull/314"
+exit 0
+SHIM
+  chmod +x "$GH_U15_DIR/gh"
+  U15_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+  SHOW_USER_VERIFIED_NO_BROWSER=1 \
+  SHOW_USER_VERIFIED_NO_SPAWN=1 \
+  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U15" \
+  PATH="$GH_U15_DIR:$PATH" run_hook "$U15_JSON" > /dev/null
+  if [ ! -f "$MARKER_FILE_U15" ]; then
+    pass "U15 browser opt-out — marker file not written when SHOW_USER_VERIFIED_NO_BROWSER=1"
+  else
+    fail "U15 — marker was written despite SHOW_USER_VERIFIED_NO_BROWSER=1: $(cat "$MARKER_FILE_U15")"
+  fi
+fi
+
+# ── U16: security — non-http/https URL rejected by openInBrowser ──────────
+echo "=== U16: non-http URL rejected — no browser spawn ==="
+IS_WINDOWS_U16=0
+case "$(uname -s 2>/dev/null || echo unknown)" in
+  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U16=1 ;;
+esac
+[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U16=1
+if [ "$IS_WINDOWS_U16" = "1" ]; then
+  pass "U16 non-http URL rejected — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
+else
+  MARKER_FILE_U16="$WORK_DIR/u16-marker.json"
+  GH_U16_DIR="$WORK_DIR/gh-u16"
+  mkdir -p "$GH_U16_DIR"
+  cat > "$GH_U16_DIR/gh" << 'SHIM'
+#!/usr/bin/env bash
+echo "javascript:alert(1)"
+exit 0
+SHIM
+  chmod +x "$GH_U16_DIR/gh"
+  U16_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+  SHOW_USER_VERIFIED_NO_SPAWN=1 \
+  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U16" \
+  PATH="$GH_U16_DIR:$PATH" run_hook "$U16_JSON" > /dev/null
+  if [ ! -f "$MARKER_FILE_U16" ]; then
+    pass "U16 non-http URL rejected — browser spawn not attempted"
+  else
+    fail "U16 — non-http URL was passed to browser spawn: $(cat "$MARKER_FILE_U16")"
+  fi
 fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
