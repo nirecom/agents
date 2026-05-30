@@ -61,9 +61,25 @@ if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
     exit 2
 fi
 
-PROJECT_ID="${ISSUE_CREATE_PROJECT_ID:-PVT_kwHOAMF_jc4BXf9E}"
-OWNER="${ISSUE_CREATE_OWNER:-nirecom}"
-PROJECT_NUM="${ISSUE_CREATE_PROJECT_NUM:-1}"
+# Projects v2 config: auto-resolved from git remote (#641).
+# shellcheck source=lib/resolve-project.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/resolve-project.sh"
+PROJECT_ID=""
+OWNER=""
+PROJECT_NUM=""
+
+# ensure_resolved
+#   Populate PROJECT_ID/OWNER/PROJECT_NUM via resolver. Returns 0 on success, 1 on failure.
+#   Caller decides fatality.
+ensure_resolved() {
+    if resolve_project_for_repo; then
+        PROJECT_ID="$RESOLVED_PROJECT_ID"
+        OWNER="$RESOLVED_OWNER"
+        PROJECT_NUM="$RESOLVED_PROJECT_NUM"
+        return 0
+    fi
+    return 1
+}
 
 # Per-verb preflight: only required env vars actually consumed by the verb.
 preflight_field_ids() {
@@ -187,6 +203,12 @@ cmd_set() {
     validate_n "$n"
     preflight_field_ids
 
+    if ! ensure_resolved; then
+        echo "Error: cannot resolve Projects v2 config for this repo (no linked project, or 'gh repo view' failed)" >&2
+        echo "Hint: link a Projects v2 to this repo at github.com (Settings → Projects)" >&2
+        exit 1
+    fi
+
     local sid
     if ! sid=$(resolve_session_id); then
         exit 2
@@ -258,6 +280,12 @@ cmd_check() {
     local n="$1"
     validate_n "$n"
     preflight_field_ids
+
+    # check is non-fatal: a missing project resolves to "none" (no signal).
+    if ! ensure_resolved; then
+        echo none
+        exit 0
+    fi
 
     local sid
     if ! sid=$(resolve_session_id); then
@@ -338,6 +366,13 @@ cmd_clear() {
     validate_n "$n"
     preflight_field_ids
 
+    # clear is non-fatal: when no project is linked, still try to remove the
+    # local lock file and exit 0 (the canonical close already happened upstream).
+    if ! ensure_resolved; then
+        delete_lock_file "$n"
+        exit 0
+    fi
+
     local item_id
     if ! item_id=$(resolve_item_id "$n"); then
         item_id=""
@@ -386,6 +421,14 @@ cmd_clear() {
 cmd_setup() {
     if ! gh auth status 2>&1 | grep -q "'project'"; then
         echo "Error: gh token lacks 'project' scope — run: gh auth refresh -s project" >&2
+        exit 1
+    fi
+
+    # setup is a configuration step — fail loudly when no Projects v2 is linked
+    # so the user can correct the situation before any IDs are appended to .env.
+    if ! ensure_resolved; then
+        echo "Error: cannot resolve Projects v2 config for this repo — no linked Projects v2 found via 'gh repo view'" >&2
+        echo "Hint: link a Projects v2 to the repo first (Settings → Projects), or set ISSUE_CREATE_PROJECT_ID/OWNER/PROJECT_NUM manually" >&2
         exit 1
     fi
 
