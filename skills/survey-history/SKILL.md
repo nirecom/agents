@@ -47,6 +47,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
     - Use `--since='1 year ago'` for git log scope (avoids unbounded history scan).
     - Source keywords from context.md `## Keywords` section if present;
       otherwise extract from `## User initial prompt` inline (≥4 chars, stop-words excluded).
+      When initial keyword search returns zero results, extract 3–5 symptom-level tokens from `## User initial prompt` or issue body text (behaviors, affected outputs/artifacts, feature area — including artifact/file names that represent the affected feature) and retry once.
     - Run Step 3a and 3b only (git log + history docs); skip Step 3c (gh pr list).
     - All claims produced in this mode get `verdict: indeterminate`
       (never `holds` or `contradicted` — insufficient evidence without issue context).
