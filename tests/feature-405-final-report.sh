@@ -628,6 +628,29 @@ $block"
     fi
 }
 
+test_R10b_cc_restart_rules_reason() {
+    require_report_bin "R10b_cc_restart_rules_reason" || return
+    local intent="$TMPDIR_BASE/r10b-intent.md"
+    local notes="$TMPDIR_BASE/r10b-notes.md"
+    make_intent_with_closes "$intent" "- 405"
+    make_notes_full "$notes"
+    local intent_node; intent_node="$(node_path "$intent")"
+    local notes_node;  notes_node="$(node_path "$notes")"
+
+    local out
+    out="$(run_report_with_categories "$intent_node" "$notes_node" "sess-r10b" \
+           '{"CC_RESTART_REQUIRED":"required","CC_RESTART_REASON":"rules/ modified in PR (cascaded into CLAUDE.md)"}')"
+
+    local block
+    block="$(echo "$out" | awk '/^### Post-Merge Actions Required$/{flag=1;next} /^### /{flag=0} flag')"
+    if echo "$block" | grep -qF -- '- Claude Code restart: required (rules/ modified in PR (cascaded into CLAUDE.md))'; then
+        pass "R10b: rules/ reason → '- Claude Code restart: required (rules/ modified in PR (cascaded into CLAUDE.md))'"
+    else
+        fail "R10b: expected rules/ reason line in Post-Merge block
+$block"
+    fi
+}
+
 test_R11_cc_restart_no() {
     require_report_bin "R11_cc_restart_no" || return
     local intent="$TMPDIR_BASE/r11-intent.md"
@@ -871,6 +894,67 @@ test_I12_detect_restart_failsafe() {
         pass "I12: detect-restart.sh fail-safe outputs all 4 categories as not_required|"
     else
         fail "I12: expected 4 not_required| lines, got $lines
+$out"
+    fi
+}
+
+_make_mock_gh() {
+    # Create a mock gh script in $1 directory that outputs $2 (one path per line).
+    # Returns the POSIX-form path suitable for PATH prepend (handles Windows drive-letter paths).
+    local mock_dir="$1" body="$2"
+    mkdir -p "$mock_dir"
+    printf '#!/bin/bash\n%s\n' "$body" > "$mock_dir/gh"
+    chmod +x "$mock_dir/gh"
+    # Return POSIX path for PATH prepend via stdout
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -u "$mock_dir"
+    else
+        printf '%s' "$mock_dir"
+    fi
+}
+
+test_I13_detect_restart_rules_reason() {
+    local detect_sh="$AGENTS_DIR/skills/worktree-end/scripts/detect-restart.sh"
+    if [ ! -f "$detect_sh" ]; then
+        skip "I13_detect_restart_rules_reason (detect-restart.sh not found)"
+        return
+    fi
+    # Mock gh: returns a rules/ file path — simulates a PR that only modified rules/
+    local mock_dir="$TMPDIR_BASE/mock-gh-i13"
+    local mock_posix; mock_posix="$(_make_mock_gh "$mock_dir" 'echo "rules/workflow-off.md"')"
+
+    local out
+    out="$(run_with_timeout 30 \
+           env PATH="$mock_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+           bash "$detect_sh" "999" 2>/dev/null)"
+
+    if printf '%s\n' "$out" | grep -qF 'cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)'; then
+        pass "I13: detect-restart.sh rules/ file → cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)"
+    else
+        fail "I13: expected 'cc_restart=required|rules/ modified in PR (cascaded into CLAUDE.md)', got:
+$out"
+    fi
+}
+
+test_I13b_detect_restart_rules_and_claude_priority() {
+    local detect_sh="$AGENTS_DIR/skills/worktree-end/scripts/detect-restart.sh"
+    if [ ! -f "$detect_sh" ]; then
+        skip "I13b_detect_restart_rules_and_claude_priority (detect-restart.sh not found)"
+        return
+    fi
+    # Mock gh: returns both CLAUDE.md and a rules/ file — CLAUDE.md arm takes priority
+    local mock_dir="$TMPDIR_BASE/mock-gh-i13b"
+    local mock_posix; mock_posix="$(_make_mock_gh "$mock_dir" 'printf "CLAUDE.md\nrules/workflow-off.md\n"')"
+
+    local out
+    out="$(run_with_timeout 30 \
+           env PATH="$mock_posix:$PATH" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+           bash "$detect_sh" "999" 2>/dev/null)"
+
+    if printf '%s\n' "$out" | grep -qF 'cc_restart=required|CLAUDE.md modified in PR'; then
+        pass "I13b: CLAUDE.md + rules/ → CLAUDE.md arm takes priority"
+    else
+        fail "I13b: expected 'cc_restart=required|CLAUDE.md modified in PR', got:
 $out"
     fi
 }
@@ -1558,6 +1642,7 @@ test_R8_pr_title_injection_safe
 
 test_R9_post_merge_section_always_present
 test_R10_cc_restart_yes
+test_R10b_cc_restart_rules_reason
 test_R11_cc_restart_no
 test_R12_all_categories_default_not_required
 test_R13_legacy_alias_yes
@@ -1571,6 +1656,8 @@ test_R23_os_reboot_required
 test_R24_legacy_cc_restart_no
 
 test_I12_detect_restart_failsafe
+test_I13_detect_restart_rules_reason
+test_I13b_detect_restart_rules_and_claude_priority
 
 test_I1_step5_5_capture_then_remove
 test_I2_step5_5_no_backup
