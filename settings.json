@@ -471,16 +471,6 @@
             "timeout": 5
           }
         ]
-      },
-      {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-ask-lang.js\"",
-            "timeout": 5
-          }
-        ]
       }
     ],
     "PostToolUse": [
