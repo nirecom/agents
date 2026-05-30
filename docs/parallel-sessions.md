@@ -101,6 +101,8 @@ new linked worktree. Two files in the repo root control what is copied:
 .env.staging
 *.pem / *.p12
 *deploy*key* / *credential*.json / *service-account*.json
+.worktree-backup/
+.worktree-backup
 ```
 
 The copy is **blackbox** — Claude never reads file contents, only paths. The mechanism (`bin/worktree-copy-include.js`) returns a JSON report: `{ copied[], skipped[], denied[], errors[] }`.

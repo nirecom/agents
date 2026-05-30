@@ -288,6 +288,97 @@ EOF
     fi
 }
 
+test_N6_worktree_backup_guard_excluded() {
+    require_bin "test_N6_worktree_backup_guard_excluded" || return
+    local main; main="$(setup_main_repo "n6-main")"
+    local wt;   wt="$(setup_worktree_dest "n6-wt")"
+    echo ".private-info-allowlist" > "$main/.worktreeinclude"
+    # No .worktreecopyexclude — tests the hardcoded guard alone.
+
+    # Add .worktree-backup to fixture's .gitignore (post initial-commit) so
+    # nested paths under it are gitignored too.
+    echo ".worktree-backup" >> "$main/.gitignore"
+
+    # File under .worktree-backup/ — should be blocked by hardcoded guard.
+    mkdir -p "$main/.worktree-backup/some-task"
+    echo "leak=1" > "$main/.worktree-backup/some-task/.private-info-allowlist"
+
+    # Top-level .private-info-allowlist — should still be copied.
+    echo "pat1" > "$main/.private-info-allowlist"
+
+    local payload; payload="$(make_payload "$main" "$wt")"
+    local out; out="$(run_bin "$payload")"
+    local copied; copied="$(json_field "$out" "copied")"
+
+    local nested_blocked=1
+    if json_array_contains "$copied" ".worktree-backup/some-task/.private-info-allowlist"; then
+        nested_blocked=0
+    fi
+    if [ -f "$wt/.worktree-backup/some-task/.private-info-allowlist" ]; then
+        nested_blocked=0
+    fi
+
+    local toplevel_copied=0
+    if json_array_contains "$copied" ".private-info-allowlist" && \
+       [ -f "$wt/.private-info-allowlist" ]; then
+        toplevel_copied=1
+    fi
+
+    if [ "$nested_blocked" = "1" ] && [ "$toplevel_copied" = "1" ]; then
+        pass "N6: .worktree-backup/ path excluded by hardcoded guard, top-level .private-info-allowlist still copied"
+    else
+        fail "N6: nested_blocked=$nested_blocked toplevel_copied=$toplevel_copied — out: $out"
+    fi
+}
+
+test_N6b_worktree_backup_denylist_excluded() {
+    require_bin "test_N6b_worktree_backup_denylist_excluded" || return
+    local main; main="$(setup_main_repo "n6b-main")"
+    local wt;   wt="$(setup_worktree_dest "n6b-wt")"
+    echo ".private-info-allowlist" > "$main/.worktreeinclude"
+
+    # Copy production .worktreecopyexclude — test passes only after step 2 adds
+    # .worktree-backup/ to that file.
+    cp "${AGENTS_DIR}/.worktreecopyexclude" "$main/.worktreecopyexclude"
+
+    # outer/ prefix ensures hardcoded guard does NOT fire (startsWith check).
+    mkdir -p "$main/outer/.worktree-backup/inner"
+    echo "leak=1" > "$main/outer/.worktree-backup/inner/.private-info-allowlist"
+
+    # Top-level .private-info-allowlist — denylist does NOT block it directly.
+    echo "pat1" > "$main/.private-info-allowlist"
+
+    local payload; payload="$(make_payload "$main" "$wt")"
+    local out; out="$(run_bin "$payload")"
+    local copied; copied="$(json_field "$out" "copied")"
+    local denied; denied="$(json_field "$out" "denied")"
+
+    local nested_blocked=1
+    if json_array_contains "$copied" "outer/.worktree-backup/inner/.private-info-allowlist"; then
+        nested_blocked=0
+    fi
+    if [ -f "$wt/outer/.worktree-backup/inner/.private-info-allowlist" ]; then
+        nested_blocked=0
+    fi
+
+    local nested_denied=0
+    if json_array_contains "$denied" "outer/.worktree-backup/inner/.private-info-allowlist"; then
+        nested_denied=1
+    fi
+
+    local toplevel_copied=0
+    if json_array_contains "$copied" ".private-info-allowlist" && \
+       [ -f "$wt/.private-info-allowlist" ]; then
+        toplevel_copied=1
+    fi
+
+    if [ "$nested_blocked" = "1" ] && [ "$nested_denied" = "1" ] && [ "$toplevel_copied" = "1" ]; then
+        pass "N6b: outer/.worktree-backup/inner path blocked by .worktreecopyexclude denylist (guard not reached)"
+    else
+        fail "N6b: nested_blocked=$nested_blocked nested_denied=$nested_denied toplevel_copied=$toplevel_copied — out: $out"
+    fi
+}
+
 test_E1_no_include_file() {
     require_bin "test_E1_no_include_file" || return
     local main; main="$(setup_main_repo "e1-main")"
@@ -566,6 +657,8 @@ test_N2_env_example_skipped
 test_N3_private_info_allowlist_copied
 test_N4_stdout_json_shape
 test_N5_denylist_blocks_copy
+test_N6_worktree_backup_guard_excluded
+test_N6b_worktree_backup_denylist_excluded
 test_E1_no_include_file
 test_E2_empty_include_file
 test_E3_comment_and_blank_lines_ignored

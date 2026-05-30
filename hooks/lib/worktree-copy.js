@@ -94,6 +94,19 @@ function copyInclude({ mainRoot, worktreePath, includeFile }) {
 
   // Process each gitignored file
   for (const relPath of gitignored) {
+    // Hardcoded recursion guard (issue #637): never copy anything whose
+    // relPath starts with .worktree-backup/. Defense-in-depth on top of the
+    // .worktreecopyexclude denylist — the denylist catches nested forms
+    // (outer/.worktree-backup/...) via gitignore semantics; this guard
+    // unconditionally catches the root-anchored form even if the denylist
+    // entry is removed or typo'd.
+    const normalizedRel = relPath.replace(/\\/g, "/");
+    if (normalizedRel === ".worktree-backup" ||
+        normalizedRel.startsWith(".worktree-backup/")) {
+      result.denied.push(relPath);
+      continue;
+    }
+
     if (!includeMatcher.ignores(relPath)) {
       result.skipped.push(relPath);
       continue;
