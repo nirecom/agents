@@ -1,0 +1,22 @@
+# Custom denylist: files that must NEVER be copied to any linked worktree.
+# This file is a project-local extension to .worktreeinclude semantics —
+# not part of the Anthropic official spec. Entries here override .worktreeinclude
+# regardless of any negation (!pattern) in that file.
+# Syntax: same gitignore semantics as .worktreeinclude.
+.env.production
+.env.staging
+*.pem
+*.p12
+*deploy*key*
+*credential*.json
+*service-account*.json
+# Recursion guard: .worktree-backup/ is gitignored and would otherwise be enumerated
+# by `git ls-files --others --ignored`, causing nested re-copy on each worktree-start
+# (issue #637). Both forms are listed for gitignore semantics: trailing-slash matches
+# directories only, bareword matches both. Negation is not possible (see header).
+# Note: gitignore semantics match these entries at ANY directory depth, including
+# nested forms like outer/.worktree-backup/inner/.private-info-allowlist. This
+# layer catches what the hardcoded loop guard in worktree-copy.js intentionally
+# does not — the guard is anchored at the relPath root; this denylist is not.
+.worktree-backup/
+.worktree-backup

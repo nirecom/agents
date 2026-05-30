@@ -275,6 +275,12 @@ Then add to your PowerShell profile:
 . "$HOME\.agents_profile.ps1"
 ```
 
+> On Windows, enable long-path support before first use to avoid `Filename too long`
+> errors on deep worktree paths:
+> ```powershell
+> git config --global core.longpaths true
+> ```
+
 ## Configuration
 
 Key environment variables set by `dotfileslink`:
