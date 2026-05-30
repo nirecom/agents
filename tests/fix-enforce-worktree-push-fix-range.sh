@@ -10,10 +10,9 @@
 #
 # Range scan uses `git log --name-only --pretty=format: <upstream>..HEAD`.
 #
-# TDD note: Fix 1 is not yet implemented in the hook source. Tests whose
-# expected decision is ALLOW will currently FAIL RED. Tests whose expected
-# decision is BLOCK should already pass — those exercise the existing
-# fail-closed paths in the hook.
+# Fix 1 was implemented in PR #304. ALLOW cases are expected to pass (GREEN).
+# Cross-repo push variants (`git -C <path> push`) are added below to verify
+# the same function for cross-repo callers (issue #653).
 
 set -u
 
@@ -125,8 +124,59 @@ run_bash_guard() {
     fi
 }
 
+# Run guard with stderr captured to a trace file.
+# Args: tracefile cmd cwd [env-VAR=val ...]
+run_bash_guard_with_trace() {
+    local tracefile="$1"; shift
+    local cmd="$1"; shift
+    local cwd="$1"; shift
+    local payload
+    payload="$(node -e "
+      const j = { session_id:'test', tool_name:'Bash', tool_input:{ command: process.argv[1] } };
+      console.log(JSON.stringify(j));
+    " -- "$cmd" 2>/dev/null)"
+    if [ -n "$cwd" ]; then
+        (cd "$cwd" && echo "$payload" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>"$tracefile")
+    else
+        echo "$payload" | run_with_timeout 30 env "$@" node "$GUARD_JS" 2>"$tracefile"
+    fi
+}
+
+# Assert that the trace file contains a decision-point log for the given
+# function id and result. Used only when ENFORCE_WORKTREE_DEBUG=1.
+# Args: tracefile decision-id result label
+require_decision_point() {
+    local tracefile="$1"
+    local decision_id="$2"
+    local result="$3"
+    local label="$4"
+    if [ ! -f "$tracefile" ]; then
+        fail "$label (trace file missing: $tracefile)"
+        return 1
+    fi
+    if grep -q "\[ewt-debug\] decision=${decision_id} result=${result}" "$tracefile"; then
+        return 0
+    else
+        fail "$label (missing [ewt-debug] decision=${decision_id} result=${result} in trace)"
+        return 1
+    fi
+}
+
+# Create a pair of repos for cross-repo push tests.
+#   A = cwd side (agents role): $TMPDIR_BASE/<name>-A
+#   B = push target (ai-specs role): $TMPDIR_BASE/<name>-B
+# B is configured with upstream tracking on origin/main.
+# Echoes B's norm_path. A's path is "$TMPDIR_BASE/<name>-A" (norm_path-converted).
+setup_cross_repo_pair() {
+    local name="$1"
+    setup_main_checkout_with_remote "${name}-A" >/dev/null
+    local b_path; b_path="$(setup_main_checkout_with_remote "${name}-B")"
+    # setup_main_checkout_with_remote already pushed initial and set upstream.
+    echo "$b_path"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
-# ALLOW cases (expected RED until Fix 1 is implemented)
+# ALLOW cases (Fix 1 implemented in PR #304; all GREEN)
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_push_no_outgoing_commits_allows() {
@@ -386,11 +436,111 @@ test_push_no_upstream_blocks() {
     fi
 }
 
+# ─── cross-repo push tests (issue #653) ───
+#
+# Scenario: CWD is repo A; the command is `git -C <B> push ...`. The hook must
+# evaluate B's outgoing range against ENFORCE_WORKTREE_EXCLUDE, the same way it
+# does for same-repo pushes.
+#
+# IMPORTANT: All cross-repo tests set ENFORCE_WORKTREE_EXTRA_REPOS=<B-path>.
+# Without that, B is outside sessionRoots and the hook early-allows at the
+# `git -C` scope check — BLOCK tests would then pass for the wrong reason.
+
+# ALLOW cross-repo bare `git -C <B> push`.
+test_cross_repo_push_docs_only_bare_allows() {
+    require_guard "test_cross_repo_push_docs_only_bare_allows" || return
+    local b; b="$(setup_cross_repo_pair "xr-bare")"
+    local a="$(norm_path "$TMPDIR_BASE/xr-bare-A")"
+    echo "a" > "$b/docs/a.md"
+    git -C "$b" add docs/a.md
+    git -C "$b" commit -q -m "doc a"
+    local trace="$TMPDIR_BASE/xr-bare.trace"
+    local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push" "$a" \
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
+        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+    if guard_decision "$out"; then
+        pass "Fix 1 (cross-repo): 'git -C <B> push' docs-only allows"
+    else
+        fail "Fix 1 (cross-repo): 'git -C <B> push' docs-only should allow ($out)"
+    fi
+}
+
+# ALLOW cross-repo `git -C <B> push origin main`.
+test_cross_repo_push_docs_only_explicit_allows() {
+    require_guard "test_cross_repo_push_docs_only_explicit_allows" || return
+    local b; b="$(setup_cross_repo_pair "xr-explicit")"
+    local a="$(norm_path "$TMPDIR_BASE/xr-explicit-A")"
+    echo "a" > "$b/docs/a.md"
+    git -C "$b" add docs/a.md
+    git -C "$b" commit -q -m "doc a"
+    local trace="$TMPDIR_BASE/xr-explicit.trace"
+    local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push origin main" "$a" \
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
+        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+    if guard_decision "$out"; then
+        pass "Fix 1 (cross-repo): 'git -C <B> push origin main' docs-only allows"
+    else
+        fail "Fix 1 (cross-repo): 'git -C <B> push origin main' docs-only should allow ($out)"
+    fi
+}
+
+# BLOCK cross-repo mixed (docs + src) commits.
+test_cross_repo_push_mixed_blocks() {
+    require_guard "test_cross_repo_push_mixed_blocks" || return
+    local b; b="$(setup_cross_repo_pair "xr-mixed")"
+    local a="$(norm_path "$TMPDIR_BASE/xr-mixed-A")"
+    echo "a" > "$b/docs/a.md"
+    git -C "$b" add docs/a.md
+    git -C "$b" commit -q -m "doc a"
+    echo "code" > "$b/src/main.js"
+    git -C "$b" add src/main.js
+    git -C "$b" commit -q -m "src code"
+    local trace="$TMPDIR_BASE/xr-mixed.trace"
+    local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push" "$a" \
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
+        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+    if guard_decision "$out"; then
+        fail "Fix 1 (cross-repo): mixed docs+src commits should block ($out)"
+    else
+        pass "Fix 1 (cross-repo): mixed docs+src commits blocks"
+    fi
+}
+
+# BLOCK cross-repo with no upstream configured on B's branch.
+test_cross_repo_push_no_upstream_blocks() {
+    require_guard "test_cross_repo_push_no_upstream_blocks" || return
+    # A is normal; B has NO upstream configured.
+    setup_main_checkout_with_remote "xr-noup-A" >/dev/null
+    local a="$(norm_path "$TMPDIR_BASE/xr-noup-A")"
+    local remote_path; remote_path="$(setup_remote "xr-noup-B")"
+    local b="$TMPDIR_BASE/xr-noup-B"
+    mkdir -p "$b"
+    git -C "$b" init -q -b main
+    git -C "$b" config user.email "test@example.com"
+    git -C "$b" config user.name "Test"
+    git -C "$b" config core.hooksPath /dev/null
+    git -C "$b" remote add origin "$remote_path"
+    mkdir -p "$b/docs"
+    echo "a" > "$b/docs/a.md"
+    git -C "$b" add docs/a.md
+    git -C "$b" commit -q -m "doc a"
+    b="$(norm_path "$b")"
+    local trace="$TMPDIR_BASE/xr-noup.trace"
+    local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push" "$a" \
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
+        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+    if guard_decision "$out"; then
+        fail "Fix 1 (cross-repo): no-upstream push should block ($out)"
+    else
+        pass "Fix 1 (cross-repo): no-upstream push blocks (fail-closed)"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Run all
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ALLOW cases (RED until Fix 1 implemented)
+# ALLOW cases (Fix 1 implemented in PR #304; all GREEN)
 test_push_no_outgoing_commits_allows
 test_push_all_commits_excluded_allows
 test_push_explicit_branch_allows
@@ -407,6 +557,12 @@ test_push_force_marker_blocks
 test_push_multiple_refspecs_blocks
 test_push_u_origin_ambiguous_blocks
 test_push_no_upstream_blocks
+
+# Cross-repo push cases (issue #653)
+test_cross_repo_push_docs_only_bare_allows
+test_cross_repo_push_docs_only_explicit_allows
+test_cross_repo_push_mixed_blocks
+test_cross_repo_push_no_upstream_blocks
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
