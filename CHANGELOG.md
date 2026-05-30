@@ -480,3 +480,7 @@ Changes: Final Report now includes a "Closed Issue Outcomes" section showing per
 ### FEATURE: PR #648 (2026-05-30)
 Background: fix(#642): harden worktree-end session-id capture with dual-defense WORKTREE_NOTES.md fallback
 Changes: fix: worktree-end no longer picks the wrong session-id after VS Code restart or context compaction — the creating session's id is now persisted durably in WORKTREE_NOTES.md and recovered automatically by both the skill orchestration layer and capture-env.sh itself (#642)
+
+### FEATURE: PR #648 (2026-05-30)
+Background: fix(#642): harden worktree-end session-id capture with dual-defense WORKTREE_NOTES.md fallback
+Changes: fix: worktree-end no longer picks the wrong session-id after VS Code restart or context compaction — the creating session's id is now persisted durably in WORKTREE_NOTES.md and recovered automatically by both the skill orchestration layer and capture-env.sh itself (#642)
