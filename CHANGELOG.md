@@ -90,4 +90,8 @@ Changes: Projects v2 auto-resolution: issue/PR creation now auto-attaches to the
 
 ### FEATURE: PR #663 (2026-05-30)
 Background: fix(#629): exclude issue title reference lines from PLAN_LANG check
-Changes: Fixed false PLAN_LANG=japanese violations on `## Issues` section lines that reference GitHub issues with English titles (e.g., `- #629: some english title`). The `- #N:` title portion is now excluded from the English word-run check.
+Changes: Fixed false PLAN_LANG=japanese violations on `## Issues` section lines that reference GitHub issues with English titles (e.g., `- #629: some english title`). The `- #N:` title portion is now excluded from the English word-run check.
+
+### FEATURE: PR #666 (2026-05-30)
+Background: feat(#661): add symptom-level token fallback for Phase 2 keyword search
+Changes: Fix: `/issue-create` no longer misses related issues when title vocabulary doesn't overlap — Phase 2 Survey now falls back to symptom-level terms from the issue Background/Changes on first zero result, before exhausting the identifier-based retry loop. `survey-history` receives the same fix for keyword-only degraded mode.
