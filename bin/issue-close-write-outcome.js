@@ -109,6 +109,42 @@ if (args[0] === "--fallback") {
   process.exit(0);
 }
 
+// --session-id <id> --out-file <path> <N> <state> <historyEntry> <issueClosed> <sentinelsPosted> <wipCleared>
+if (args[0] === "--session-id") {
+  const sessionId = args[1];
+  const outFile = args[3];
+  if (!sessionId || args[2] !== "--out-file" || !outFile) {
+    process.stderr.write(
+      "Usage: issue-close-write-outcome.js --session-id <id> --out-file <path> <N> <state> <historyEntry> <issueClosed> <sentinelsPosted> <wipCleared>\n"
+    );
+    process.exit(1);
+  }
+  const remaining = args.slice(4);
+  const [issueArg2, state2, historyEntry2, issueClosed2, sentinelsPosted2, wipCleared2] = remaining;
+  if (!issueArg2 || !state2 || !historyEntry2 || !issueClosed2 || !sentinelsPosted2 || !wipCleared2) {
+    process.stderr.write(
+      "Usage: issue-close-write-outcome.js --session-id <id> --out-file <path> <N> <state> <historyEntry> <issueClosed> <sentinelsPosted> <wipCleared>\n"
+    );
+    process.exit(1);
+  }
+  const issueNumber2 = parseInt(issueArg2, 10);
+  if (isNaN(issueNumber2)) {
+    process.stderr.write("issue-close-write-outcome: <N> must be an integer\n");
+    process.exit(1);
+  }
+  const bag2 = readBag(outFile);
+  upsertEntry(bag2, {
+    issueNumber: issueNumber2,
+    state: state2,
+    historyEntry: historyEntry2,
+    issueClosed: issueClosed2,
+    sentinelsPosted: sentinelsPosted2,
+    wipCleared: wipCleared2,
+  });
+  fs.writeFileSync(outFile, JSON.stringify(bag2, null, 2));
+  process.exit(0);
+}
+
 // Normal mode: <N> <state> <historyEntry> <issueClosed> <sentinelsPosted> <wipCleared>
 const [issueArg, state, historyEntry, issueClosed, sentinelsPosted, wipCleared] = args;
 if (!issueArg || !state || !historyEntry || !issueClosed || !sentinelsPosted || !wipCleared) {
@@ -126,7 +162,7 @@ if (isNaN(issueNumber)) {
 const plansDir = resolvePlansDir();
 const sessionId = resolveSessionId();
 if (!sessionId) {
-  process.stderr.write("[issue-close-finalize] WARN: session id unresolved — outcome JSON not written\n");
+  process.stderr.write("[issue-close-write-outcome] WARN: session id unresolved — outcome JSON not written\n");
   process.exit(0);
 }
 
