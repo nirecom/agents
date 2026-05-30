@@ -98,4 +98,8 @@ Changes: Fix: `/issue-create` no longer misses related issues when title vocabul
 
 ### FEATURE: PR #664 (2026-05-30)
 Background: fix(#637): prevent .worktree-backup/ recursive copy on worktree-start
-Changes: `worktree-start` no longer copies `.worktree-backup/` directories into linked worktrees. This fixes recursive nesting that caused `git worktree remove` to fail with "Filename too long" on Windows after several worktree-start cycles. A `core.longpaths true` advisory has been added to the Windows install section of README.md for users with existing deep nests.
+Changes: `worktree-start` no longer copies `.worktree-backup/` directories into linked worktrees. This fixes recursive nesting that caused `git worktree remove` to fail with "Filename too long" on Windows after several worktree-start cycles. A `core.longpaths true` advisory has been added to the Windows install section of README.md for users with existing deep nests.
+
+### FEATURE: PR #669 (2026-05-30)
+Background: fix(#562): detect-restart.sh cc_restart reason now distinguishes rules/ from CLAUDE.md
+Changes: Fixed: Final Report now shows "rules/ modified in PR (cascaded into CLAUDE.md)" instead of "CLAUDE.md modified in PR" when a PR only modifies files under rules/.
