@@ -106,14 +106,16 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
 
     POSIX:
     ```
-    COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>"
+    COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>" "" "<session-id>"
     ```
+    Claude Code が現セッションの session-id を持つ場合はそれを使用。不明な場合は空文字でも可（既存挙動）。
 
     PowerShell:
     ```
     $env:COPIED_JSON = '<step-9-stdout>'
-    node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>"
+    node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>" "" "<session-id>"
     ```
+    Claude Code が現セッションの session-id を持つ場合はそれを使用。不明な場合は空文字でも可（既存挙動）。
 
     `<mainRoot>`: main repository root from Step 9 (a) — never a linked worktree path.
     Exit 0 with `notesWritten:true` = success. Exit 1 = investigate stderr and re-run.
