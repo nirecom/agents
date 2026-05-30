@@ -27,7 +27,7 @@ function formatBaseDir(baseDir) {
   return String(baseDir);
 }
 
-function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles } = {}) {
+function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId } = {}) {
   const normalizedMainRoot = mainRoot ? normalizePath(mainRoot) : "";
   const lines = [
     "# Worktree Notes",
@@ -36,9 +36,14 @@ function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, 
     `Path: ${resolvedPath}`,
     `Main repo: ${normalizedMainRoot}`,
     `WORKTREE_BASE_DIR: ${formatBaseDir(baseDir)}`,
+  ];
+  if (sessionId) {
+    lines.push(`Session-ID: ${sessionId}`);
+  }
+  lines.push(
     "",
     "## Gitignored files copied from main",
-  ];
+  );
 
   if (!Array.isArray(copiedFiles) || copiedFiles.length === 0) {
     lines.push("- (none)");
@@ -69,9 +74,9 @@ function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, 
   return lines.join("\n") + "\n";
 }
 
-function writeNotes({ worktreePath, branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles }) {
+function writeNotes({ worktreePath, branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId }) {
   const notesPath = path.join(worktreePath, "WORKTREE_NOTES.md");
-  const body = buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles });
+  const body = buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId });
   fs.writeFileSync(notesPath, body, { encoding: "utf8" });
   return { notesPath, notesWritten: true };
 }
@@ -154,6 +159,7 @@ function run(input) {
     baseDir,
     copiedFiles,
     excludePattern,
+    sessionId,
   } = input;
 
   if (hasTraversal(mainRoot)) {
@@ -185,6 +191,17 @@ function run(input) {
   }
   if (mainRoot && hasNewline(mainRoot)) {
     throw new Error(`Newline character in mainRoot is not allowed`);
+  }
+  if (sessionId != null && sessionId !== "") {
+    if (typeof sessionId !== "string") {
+      throw new Error(`sessionId must be a string`);
+    }
+    if (hasNewline(sessionId)) {
+      throw new Error(`Newline character in sessionId is not allowed`);
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) {
+      throw new Error(`sessionId must match [a-zA-Z0-9_-]+`);
+    }
   }
   if (Array.isArray(copiedFiles)) {
     for (const f of copiedFiles) {
@@ -218,6 +235,7 @@ function run(input) {
       mainRoot,
       baseDir,
       copiedFiles,
+      sessionId,
     });
     result.notesPath = w.notesPath;
     result.notesWritten = true;
