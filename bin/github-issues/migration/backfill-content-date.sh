@@ -45,11 +45,10 @@ while IFS= read -r n; do
     exit 1
   fi
 
-  date=$(echo "$body" | head -n1 | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}' | head -n1)
+  date=$(echo "$body" | head -n1 | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}' | head -n1 || true)
   if [[ -z "$date" ]]; then
-    echo "FAILED #$n: no YYYY-MM-DD in first body line"
-    echo "  first line: $(echo "$body" | head -n1)"
-    exit 1
+    echo "SKIP #$n: no YYYY-MM-DD in first body line (dateless entry)"
+    continue
   fi
 
   item_id=$(gh project item-add "$MIGRATE_PROJECT_NUM" --owner "$OWNER" \
