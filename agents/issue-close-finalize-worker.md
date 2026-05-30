@@ -33,6 +33,8 @@ Receive a JSON object with `phase` determining the pass type:
 - `agents_config_dir`: resolved path
 - `finalize_scripts_dir`: resolved absolute path to the finalize skill's `scripts/` directory
 - `artifact_dir`: directory to write log to
+- `session_id`: session ID string (resolves env-var propagation gap for Step L)
+- `outcome_file_path`: absolute path to write outcome JSON (resolves env-var propagation gap for Step L)
 
 ## State file schema
 
@@ -113,7 +115,8 @@ Run Steps H, J, K, L for `current_issue_number`:
 - Step H: `ISSUE_CLOSE_SKILL=1 gh issue close "$current_issue_number" --reason completed`. Non-zero → emit `status: failed`, `summary: "Step H: gh issue close failed for #N"` and stop.
 - Step J: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state). Non-zero → log warning; continue (non-fatal).
 - Step K: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`. Non-zero → log warning; continue (non-fatal).
-- Step L: `node "$agents_config_dir/bin/issue-close-write-outcome.js" "$current_issue_number" ...`. Non-zero → log warning; continue (non-fatal).
+- Step L: `node "$agents_config_dir/bin/issue-close-write-outcome.js" --session-id "$session_id" --out-file "$outcome_file_path" "$current_issue_number" "succeeded" "$step_e_status" "succeeded" "$j_status" "$k_status"`. Non-zero → log warning; continue (non-fatal).
+  (`state`="succeeded" — reached Step L; `historyEntry`=`$step_e_status` from state file `step_e_status` field; `issueClosed`="succeeded" — Step H; `sentinelsPosted`=`$j_status`; `wipCleared`=`$k_status`)
 
 Set `phase=terminal`. Write state (atomic). If atomic write fails: emit `status: failed`, `summary: "terminal state write failed"` and stop.
 
