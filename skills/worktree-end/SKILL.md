@@ -84,10 +84,19 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 
    ```bash
    # Single Bash call — atomicity contract enforced inside capture-env.sh. Do not split.
-   # Output: $PLANS_DIR/<session-id>-final-report-env.json
+   # session-id resolution priority (SKILL.md layer):
+   #   WORKTREE_NOTES.md > $CLAUDE_SESSION_ID env var > empty (→ capture-env.sh fallback retries).
+   # JSONL transcript mtime scan (resolve-session-id.sh) is FORBIDDEN here — it returns
+   # wrong session after VS Code restart / context compaction (#642).
+   # Note: $CLAUDE_SESSION_ID is NOT propagated to Bash subprocesses in many cases due to
+   # Anthropic bug #27987. This tier is best-effort for non-Claude-Code invocations only.
    export PLANS_DIR
+   SID="$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' \
+     '<worktree>/WORKTREE_NOTES.md' 2>/dev/null || true)"
+   : "${SID:=${CLAUDE_SESSION_ID:-}}"
    bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/capture-env.sh" \
-     "<worktree>" "<owner>/<repo>" "<backup-dir>" "<session-id>"
+     "<worktree>" "<owner>/<repo>" "<backup-dir>" "$SID"
+   # Output: $PLANS_DIR/$SID-final-report-env.json
    ```
 
 ### Step 6
@@ -134,7 +143,6 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in step 3 (worktree mode only).
 - `$PR_NUMBER` captured in step 2; used explicitly in step 3a. Session-local only.
 - This skill does NOT modify `workflow-gate.js`.
-<<<<<<< HEAD
 - Step 5.5 invariants: see `skills/worktree-end/scripts/capture-env.sh` header (atomicity / BRANCH_DELETED omission / four restart categories).
 - Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
 - Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via the read-notes-path.js helper, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
@@ -142,8 +150,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Final Report verbatim output: paste renderer stdout (sentinel line excluded) character-for-character into the assistant message — no formatting changes.
 - Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
 - Do not reformat Final Report section content into prose (e.g., writing `Closed Issues: #N` instead of the `### Closed Issues` heading followed by `- #N`).
-=======
 - Step 5.5 (b–d) MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
 - Step 5.5 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
 - Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
->>>>>>> a7c1092 (feat(#608): add /session-close skill — Final Report after issue-close-finalize)
+- JSONL transcript mtime scan (`bin/lib/resolve-session-id.sh`) must NOT be used in the worktree-end session-id resolution path — it picks the most-recently-touched session which may differ from the session that created the worktree (#642).
