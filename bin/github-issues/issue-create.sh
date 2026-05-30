@@ -13,9 +13,6 @@
 # -e is safe here: all gh invocations use `if !` blocks, which are exempt from errexit.
 set -euo pipefail
 
-OWNER="${ISSUE_CREATE_OWNER:-nirecom}"
-PROJECT_NUM="${ISSUE_CREATE_PROJECT_NUM:-1}"
-
 TITLE=""
 BODY=""
 BODY_FILE=""
@@ -112,6 +109,17 @@ done
 [ -n "$ASSIGNEE" ]  && GH_ARGS+=(--assignee  "$ASSIGNEE")
 [ -n "$MILESTONE" ] && GH_ARGS+=(--milestone "$MILESTONE")
 
+# Auto-resolve Projects v2 config from git remote (#641). Lazy: runs only after
+# schema validation passes so --help / arg-error paths skip the network call.
+# Resolver failure is non-fatal — issue creation proceeds, Projects v2 attach is
+# skipped with a warning when the resolver returns 1.
+# shellcheck source=lib/resolve-project.sh
+. "$(cd "$(dirname "$0")" && pwd)/lib/resolve-project.sh"
+RESOLVER_OK=0
+if resolve_project_for_repo; then
+    RESOLVER_OK=1
+fi
+
 echo "[issue-create] gh issue create --title '$TITLE' [body omitted]" >&2
 if ! URL=$(gh "${GH_ARGS[@]}"); then
     echo "Error: gh issue create failed" >&2; exit 1
@@ -128,11 +136,20 @@ if ! printf '%s' "$URL" | grep -qE '^https://github\.com/.+/issues/[0-9]+$'; the
 fi
 
 ISSUE_NUM=$(printf '%s' "$URL" | grep -oE '[0-9]+$')
-# ensure-board-card.sh inherits ISSUE_CREATE_* env vars from this script's
-# environment (priority 1 in its env-var resolution table), preserving the
-# existing contract.
-if ! bash "$(cd "$(dirname "$0")" && pwd)/ensure-board-card.sh" "$ISSUE_NUM"; then
-    echo "warn: ensure-board-card.sh failed for #$ISSUE_NUM (continuing)" >&2
+# Pass resolved Projects v2 config to ensure-board-card.sh via the
+# _ISSUE_CREATE_INTERNAL_* env vars (resolver short-circuit). Skip the call
+# entirely when the resolver failed — no defaults exist any more, so
+# attempting attach without resolved IDs would just error.
+if [ "$RESOLVER_OK" -eq 1 ]; then
+    if ! _ISSUE_CREATE_INTERNAL_OWNER="$RESOLVED_OWNER" \
+         _ISSUE_CREATE_INTERNAL_PROJECT_NUM="$RESOLVED_PROJECT_NUM" \
+         _ISSUE_CREATE_INTERNAL_PROJECT_ID="$RESOLVED_PROJECT_ID" \
+         _ISSUE_CREATE_INTERNAL_FIELD_ID="$RESOLVED_CONTENT_DATE_FIELD_ID" \
+         bash "$(cd "$(dirname "$0")" && pwd)/ensure-board-card.sh" "$ISSUE_NUM"; then
+        echo "warn: ensure-board-card.sh failed for #$ISSUE_NUM (continuing)" >&2
+    fi
+else
+    echo "warn: Projects v2 auto-resolve failed — skipping board-card attach for #$ISSUE_NUM" >&2
 fi
 
 printf '%s\n' "$URL"

@@ -9,6 +9,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/board-card.sh
 . "$SCRIPT_DIR/lib/board-card.sh"
+# shellcheck source=lib/resolve-project.sh
+. "$SCRIPT_DIR/lib/resolve-project.sh"
 
 usage() {
     cat >&2 <<'EOF'
@@ -35,14 +37,19 @@ else
     exit 0
 fi
 
-# Env var resolution per priority table:
-#   1. ISSUE_CREATE_* (inherited from issue-create.sh call chain)
-#   2. EBC_* (standalone caller-native knobs)
-#   3. Hardcoded defaults matching issue-create.sh
-PROJECT_NUM="${ISSUE_CREATE_PROJECT_NUM:-${EBC_PROJECT_NUM:-1}}"
-OWNER="${ISSUE_CREATE_OWNER:-${EBC_OWNER:-nirecom}}"
-PROJECT_ID="${ISSUE_CREATE_PROJECT_ID:-${EBC_PROJECT_ID:-PVT_kwHOAMF_jc4BXf9E}}"
-FIELD_ID="${ISSUE_CREATE_FIELD_ID:-${EBC_FIELD_ID:-PVTF_lAHOAMF_jc4BXf9EzhSsYwA}}"
+# Auto-resolve Projects v2 config from the git remote (#641). Internal env
+# vars from the issue-create.sh call chain short-circuit GraphQL via the
+# resolver's _ISSUE_CREATE_INTERNAL_* check. Resolver failure is non-fatal —
+# warn and exit 0 (the caller's downstream work continues without a board
+# card).
+if ! resolve_project_for_repo; then
+    echo "warn: ensure-board-card: Projects v2 auto-resolve failed for #$N — skipping (exit 0)" >&2
+    exit 0
+fi
+OWNER="$RESOLVED_OWNER"
+PROJECT_NUM="$RESOLVED_PROJECT_NUM"
+PROJECT_ID="$RESOLVED_PROJECT_ID"
+FIELD_ID="$RESOLVED_CONTENT_DATE_FIELD_ID"
 
 # resolve_item_id reads $PROJECT_ID from caller scope — set above before use.
 
@@ -81,22 +88,26 @@ if [[ -z "$item_id" ]]; then
     fi
 fi
 
-# 4. Fetch createdAt for Content Date.
-if ! CREATED_DATE=$(gh issue view "$N" --json createdAt --jq '.createdAt[:10]' 2>/dev/null); then
-    echo "warn: ensure-board-card: gh issue view createdAt failed for #$N — Content Date not set (exit 0)" >&2
-    exit 0
-fi
-CREATED_DATE=$(printf '%s' "$CREATED_DATE" | tr -d '\r' | head -1)
-if [[ -z "$CREATED_DATE" ]]; then
-    echo "warn: ensure-board-card: empty createdAt for #$N — Content Date not set (exit 0)" >&2
-    exit 0
-fi
+# 4. Content Date — only attempt when the resolver found a Content Date field
+#    in this project. Some projects intentionally lack the field; that is not
+#    an error.
+if [[ -n "$FIELD_ID" ]]; then
+    if ! CREATED_DATE=$(gh issue view "$N" --json createdAt --jq '.createdAt[:10]' 2>/dev/null); then
+        echo "warn: ensure-board-card: gh issue view createdAt failed for #$N — Content Date not set (exit 0)" >&2
+        exit 0
+    fi
+    CREATED_DATE=$(printf '%s' "$CREATED_DATE" | tr -d '\r' | head -1)
+    if [[ -z "$CREATED_DATE" ]]; then
+        echo "warn: ensure-board-card: empty createdAt for #$N — Content Date not set (exit 0)" >&2
+        exit 0
+    fi
 
-# 5. Set Content Date.
-if ! gh project item-edit --id "$item_id" --field-id "$FIELD_ID" \
-        --project-id "$PROJECT_ID" --date "$CREATED_DATE" >/dev/null 2>&1; then
-    echo "warn: ensure-board-card: Content Date set failed for #$N (exit 0)" >&2
-    exit 0
+    # 5. Set Content Date.
+    if ! gh project item-edit --id "$item_id" --field-id "$FIELD_ID" \
+            --project-id "$PROJECT_ID" --date "$CREATED_DATE" >/dev/null 2>&1; then
+        echo "warn: ensure-board-card: Content Date set failed for #$N (exit 0)" >&2
+        exit 0
+    fi
 fi
 
 exit 0
