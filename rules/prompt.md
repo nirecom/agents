@@ -59,7 +59,7 @@ Rules and SKILL.md files **must not** re-enumerate the same literals as illustra
 At most 2 examples per concept. More examples belong in the hook source (machine-checked)
 or in a `bin/` script (executable and testable).
 
-## 3. SSOT (specialization of `core-principles.md` §1 for prompt content)
+## 3. SSOT (specialization of `core-principles.md` §2 for prompt content)
 
 ### 3.1 Reference the master — never copy
 

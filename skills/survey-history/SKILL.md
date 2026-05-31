@@ -99,7 +99,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    <one paragraph: describe contradictions found, or state "No premise contradictions detected.">
    ```
    The `## Candidate class members` section lists sibling members identified
-   from git history and history.md (per `rules/core-principles.md` §2 Elevate
+   from git history and history.md (per `rules/core-principles.md` §3 Elevate
    Perspective). Each member is two lines: (a) name + description + commit/history-entry reference;
    (b) `proposed triage:` value and 1-line rationale grounded in historical evidence.
    Triage values: `proposed triage: MUST` (symmetric change required for class

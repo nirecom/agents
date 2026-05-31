@@ -1,5 +1,7 @@
 # Global Claude Code Instructions
 
+All work follows [`rules/core-principles.md`](rules/core-principles.md).
+
 ## Workflow
 
 1. **Workflow init** — **Before anything else:** Run `/workflow-init` (routes by GH issue context; see `skills/workflow-init/SKILL.md`).
@@ -76,68 +78,11 @@
     JSON from PR data). Safe when `closes_issues` is empty — outcome renders as
     `- (none)` and the Final Report still emits.
 
-## Plan Mode Incompatibility
+## Notes
 
-`--permission-mode plan` is incompatible with this workflow — Skill tool invocations
-are restricted in that mode. Always use default mode for implementation tasks.
-
-## Docs-only Short-circuit
-
-If every staged file matches the human-facing docs allowlist — any `.md` under `docs/`,
-or one of the root-level files `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
-`LICENSE.md` — steps 1–6 are auto-bypassed. Only `user_verification` is required before
-committing. Root `CLAUDE.md`, `SKILL.md`, and subdirectory `README.md` are behavior/prompt
-code and do NOT qualify.
-
-## Workflow Session Override (WORKFLOW_OFF)
-
-For trivial edits where full workflow overhead is disproportionate, emit the session-scoped bypass sentinel:
-
-    echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>"
-
-This requires user approval (ask gate). When active, steps 1–9 and all workflow hooks are suspended for the current session (except `enforce-system-ops.js` — OS safety is always enforced). See `rules/workflow-off.md` for the full bypass matrix and restore procedure.
-
-To restore enforcement within the same session:
-
-    echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>"
-
-Enforcement also restores automatically in the next session.
-
-## Workflow State Recovery
-
-The main conversation can reset workflow state only when it has enough holistic context
-to judge that a reset is genuinely warranted. Skills and subagents must not reset.
-
-```
-echo "<<WORKFLOW_RESET_FROM_<step>>>"
-```
-
-## Mid-workflow finding capture
-
-When you discover a bug unrelated to the current task, a related follow-up, or a
-next-task candidate while running the workflow:
-
-**Primary path — invoke `/issue-create` immediately** from the linked worktree.
-Mid-workflow issues are NOT added to the current session's `closes_issues` (1 session = 1
-issue). Address them in a separate session via `/workflow-init <N>`.
-The `/issue-create` Mid-workflow gate surfaces this notice before Phase 1.
-
-**Fallback path** — use `<worktree>/WORKTREE_NOTES.md` only when:
-- Non-interactive session (`claude -p`, subagent, `/loop`), OR
-- Non-GitHub remote (`bin/is-github-dotcom-remote` returns non-zero), OR
-- User explicitly defers.
-
-Fallback recovery: `/worktree-end` Step 5.5(a.5) promotes unconverted
-`WORKTREE_NOTES.md` entries to issues. **Cutoff: Step 5** — findings after that
-go directly to `/issue-create`.
-
-Fallback sections (edit `WORKTREE_NOTES.md` directly; gitignored; not subject to
-`enforce-worktree`). Replace `- (none)` on first append:
-
-- `## BugsFound` — defects observed during the workflow
-- `## RelatedTasks` — adjacent work to address in a separate session
-- `## NextTasks` — follow-ups specific to the current change
-
-## agents Repository Development
-
-When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
+- Do not use `--permission-mode plan`. Always use default mode for implementation tasks.
+- Workflow state reset is main-conversation only — emit `<<WORKFLOW_RESET_FROM_<step>>>` only when holistic context justifies it.
+- For docs-only commits that shortcut the workflow, see `rules/docs-only-short-circuit.md`.
+- For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
+- For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
+- When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
