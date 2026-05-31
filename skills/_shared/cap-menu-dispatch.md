@@ -13,7 +13,7 @@ extension and re-enters the review loop.
 |---|---|---|
 | LABEL | `"Outline Plan Review"` | `"Detail Plan Review"` |
 | RAW_FILE | `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md` | `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md` |
-| MAX_EXTENSIONS | 1 | 2 |
+| MAX_EXTENSIONS | 1 | 1 |
 
 ## Protocol
 
