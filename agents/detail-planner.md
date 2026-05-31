@@ -13,6 +13,13 @@ Draft and revise an implementation plan for the task described in your prompt. Y
 
 ## Procedure
 
+0. **Adaptive skip evaluation.** Before drafting, evaluate all three conditions against the outline.md content provided.
+   - Condition 1: The Adopted approach section explicitly lists concrete file paths and their specific change content.
+   - Condition 2: Every `## Class members` entry with `triage: MUST` has a concrete file mention in the outline body.
+   - Condition 3: No design decision remains open — no new abstraction, no responsibility reassignment, no unresolved API choice.
+   If ALL three conditions are met, emit the literal string `<<DETAIL_SKIPPABLE_BY_PLANNER: outline already provides file-level clarity>>` as the very first line of your draft — before the Delivery plan, before any section heading, before any other content. Then continue drafting the full plan normally.
+   If ANY condition is not met, do not emit the sentinel. Draft the full plan via the normal procedure.
+
 1. Read the prior-stage artifacts provided in your prompt context:
    - `<session-id>-intent.md` content — agreed requirements, scope, non-goals from `clarify-intent`
    - `<session-id>-outline.md` content — confirmed approach from `make-outline-plan`
