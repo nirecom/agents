@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/enforce-issue-close.js, skills/issue-close-finalize/SKILL.md.
-# Tags: issue-migration-enforce-hook
+# Tags: issue-close, enforce, hook, finalize, workflow
 # Tests for hooks/enforce-issue-close.js — PreToolUse hook that blocks bare
 # `gh issue close` invocations unless the /issue-close skill set
 # ISSUE_CLOSE_SKILL=1 in the environment.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-296-hook-cwd-drift-cleanup.sh
 # Tests: hooks/cleanup-orphan-dir.js
-# Tags: 296, hook-cwd-drift-cleanup
+# Tags: worktree, hook, bin, git, tests
 #
 # Tests for hooks/cleanup-orphan-dir.js with the new `--force-if-not-registered`
 # flag (issue #296). The flag widens the cleanup behaviour for orphan-dir

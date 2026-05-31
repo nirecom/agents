@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-worktree-end-no-inline-js.sh
 # Tests: skills/worktree-end/SKILL.md, skills/worktree-end/scripts, skills/worktree-end/scripts/
-# Tags: worktree-end-no-inline-js
+# Tags: worktree, end, cleanup, skill, bin
 #
 # Verifies the worktree-end SKILL.md shrink (#611):
 #   - All inline `node -e` invocations are extracted to skills/worktree-end/scripts/*.

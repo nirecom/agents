@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/check-docs-updated.js, hooks/check-tests-updated.js, hooks/lib/is-private-repo.js, hooks/scan-outbound.js
-# Tags: private-repo-detection
+# Tags: scan, filter, outbound, hook, tests
 # Test suite for private repo dynamic detection (is-private-repo.js + hook integration)
 set -euo pipefail
 

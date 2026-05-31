@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/judge-task-complexity.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md
-# Tags: task-complexity-routing
+# Tags: detail, planning, skill, bin, env
 # Structural tests for judge-task-complexity routing implementation.
 # Grep-only — no LLM calls.
 

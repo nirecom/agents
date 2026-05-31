@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/unit-worktree-notes-append.sh
 # Tests: bin/worktree-notes-append.js, bin/worktree-notes-triage.js
-# Tags: worktree-notes-append
+# Tags: worktree, workflow, bin, tests
 #
 # Unit tests for bin/worktree-notes-append.js (issue #622).
 #

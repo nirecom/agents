@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/migration/state.sh
-# Tags: issue-migration-state-advanced
+# Tags: history, docs, github, issues, bin
 # Tests for state.sh schema v2 + advanced helpers (issue #415).
 #
 # RED: this suite fails until state.sh is upgraded to:

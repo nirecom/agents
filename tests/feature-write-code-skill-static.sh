@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/_shared/judge-task-complexity.md, skills/write-code/SKILL.md
-# Tags: write-code-skill-static
+# Tags: skill, bin, env, config, tests
 # Static grep-based checks for the /write-code skill implementation.
 #
 # Verifies that skills/write-code/SKILL.md exists with correct content,

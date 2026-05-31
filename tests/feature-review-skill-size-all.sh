@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-skill-size, skills/_archived/., skills/_archived/old, skills/_archived/old/SKILL.md, skills/big, skills/big/SKILL.md, skills/small, skills/small/SKILL.md
-# Tags: review-skill-size-all
+# Tags: skill, bin, tests
 # Tests for issue #602 PR1 — bin/review-skill-size --all mode.
 #
 # TC1: --all scans ALL existing skills/*/SKILL.md (not the diff); a 150-line

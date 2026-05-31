@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/assemble-cmd-parse.js, hooks/show-plan-link.js, hooks/show-plan-link.js., skills/_shared/assemble-mandatory.sh
-# Tags: show-plan-link
+# Tags: plan, vscode, hook, workflow, plans
 # Tests for isFinalPlanArtifact detection and systemMessage output in hooks/show-plan-link.js.
 #
 # Uses WORKFLOW_PLANS_DIR to control the resolved plans directory so tests work

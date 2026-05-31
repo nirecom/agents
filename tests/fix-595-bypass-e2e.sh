@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-595-bypass-e2e.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree.js.
-# Tags: 595, bypass-e2e
+# Tags: worktree, enforce, hook, history, docs
 #
 # E2E integration tests for the ENV=1-prefixed bypass predicates in
 # hooks/enforce-worktree.js.

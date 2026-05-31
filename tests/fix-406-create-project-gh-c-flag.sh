@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/gh, bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
-# Tags: 406, create-project-gh-c-flag
+# Tags: github, issues, bin, git, tests
 # Tests for fix #406 — create-project.sh must NOT use `gh -C` (git flag, not gh flag).
 # Fixed form: (cd "$REPO_DIR" && gh repo view ...) instead of gh -C "$REPO_DIR" repo view ...
 #

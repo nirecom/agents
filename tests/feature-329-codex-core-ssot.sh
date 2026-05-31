@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/lib/codex-core.sh
-# Tags: 329, codex-core-ssot
+# Tags: bin, env, config, codex, tests
 # Tests for new SSOT helpers added to bin/lib/codex-core.sh (issue #329).
 #
 # Covered functions:

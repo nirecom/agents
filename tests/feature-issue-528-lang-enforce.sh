@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-issue-528-lang-enforce.sh
 # Tests: bin/compose-doc-append-entry, hooks/check-ask-lang.js, hooks/check-plan-lang.js, hooks/check-worktree-notes-lang.js, hooks/lib, hooks/lib/, hooks/lib/detect-cjk, hooks/lib/detect-cjk.js, hooks/lib/lang-config, hooks/lib/lang-config.js, hooks/lib/lint-plan-lang, hooks/lib/lint-plan-lang.js, hooks/lib/lint-worktree-notes-lang.js
-# Tags: issue, 528, lang-enforce
+# Tags: worktree, docs, append, history, compose
 #
 # Test suite for issue #528 — WORKTREE_NOTES.md language enforcement.
 # Updated for issue #619: fenced-block parser removed; .env-only configuration.

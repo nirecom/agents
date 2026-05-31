@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-405-final-report.sh
 # Tests: hooks/lib/parse-closes-issues.js, hooks/lib/worktree-notes.js, bin/worktree-final-report.js, skills/worktree-end/SKILL.md
-# Tags: 405, final-report, worktree-end, parse-closes-issues
+# Tags: worktree, end, cleanup, parse, closes-issues
 #
 # Issue #405 — Final Report feature.
 #

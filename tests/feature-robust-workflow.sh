@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/is-private-repo.js, hooks/lib/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
-# Tags: robust-workflow
+# Tags: workflow, gate, hook, bin, git
 # Test suite for workflow state machine:
 #   claude-global/hooks/workflow-gate.js   (PreToolUse commit gate)
 #   claude-global/hooks/session-start.js   (SessionStart hook)

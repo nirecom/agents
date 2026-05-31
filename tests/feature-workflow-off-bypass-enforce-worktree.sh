@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-enforce-worktree.sh
 # Tests: hooks/enforce-worktree.js
-# Tags: workflow-off-bypass-enforce-worktree
+# Tags: worktree, enforce, hook, workflow, bin
 #
 # PR2: hooks/enforce-worktree.js must early-return (approve) when
 # <workflowDir>/<sid>.workflow-off marker exists for the calling session.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-push-fix-range.sh
 # Tests: hooks/enforce-worktree.js
-# Tags: enforce-worktree-push-fix-range
+# Tags: worktree, enforce, hook, bin, git
 #
 # Integration tests for hooks/enforce-worktree.js — Fix 1:
 # isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns)

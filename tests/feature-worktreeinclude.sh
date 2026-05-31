@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-worktreeinclude.sh
 # Tests: bin/worktree-copy-include.js, hooks/lib/worktree-copy.js, hooks/lib/worktree-include-match.js
-# Tags: worktreeinclude
+# Tags: worktree, hook, bin, tests
 #
 # B-Hybrid Phase 1: .worktreeinclude file-copy feature
 #

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh
-# Tags: private-blocklist-external
+# Tags: scan, filter, outbound, hook, bin
 # Test suite for external blocklist loading from dotfiles-private
 # Tests that scan-outbound.sh loads .private-info-blocklist from sibling dotfiles-private repo
 set -euo pipefail

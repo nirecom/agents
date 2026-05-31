@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/enforce-issue-close.js
-# Tags: 334, enforce-issue-close-head
+# Tags: issue-close, enforce, hook, workflow, bin
 # Integration tests for issue #334 — enforce-issue-close.js head detection.
 #
 # After migrating enforce-issue-close.js to hasCommandHead(), the hook must:

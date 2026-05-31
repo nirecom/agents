@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: agents/outline-planner.md, agents/outline-reviewer.md, skills/_shared/codex-review-loop.md, skills/make-outline-plan/SKILL.md
-# Tags: make-outline-plan
+# Tags: outline, planning, sentinel, workflow, skill
 # Contract tests for make-outline-plan skill (Stage 2: outline-planner + outline-reviewer)
 # Target files (expected to FAIL until implementation is complete):
 #   $HOME/.claude/skills/make-outline-plan/SKILL.md

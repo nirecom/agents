@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/issues/42, bin/gh, bin/github-issues/wip-state.sh, bin/workflow-plans-dir
-# Tags: wip-state
+# Tags: issue-create, github, workflow, issues, plans
 # Tests for bin/github-issues/wip-state.sh — Issue #362 WIP signaling helper.
 #
 # Helper has four verbs: set, check, clear, setup.

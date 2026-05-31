@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/issue-close-finalize/SKILL.md
-# Tags: 361, finalize-pr-resolution-order
+# Tags: issue-close, finalize, workflow, pr, marker
 # Static contract test for #361 ordering fix.
 # This is a static contract test, not a runtime behavioral test.
 # No skill-level execution harness exists for SKILL.md prose.

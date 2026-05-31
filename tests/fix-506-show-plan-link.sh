@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-plan-link.js
-# Tags: 506, show-plan-link
+# Tags: plan, vscode, hook, bin, env
 # Tests for URI encoding fix in workspaceFolderUriFrom() (issue #492).
 # Branch: fix/506-show-plan-link
 # The helper operates on string content only (not process.platform), so all

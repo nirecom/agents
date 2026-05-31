@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-worktree-end-step55-promotion.sh
 # Tests: bin/worktree-notes-triage.js, bin/worktree-final-report.js
-# Tags: worktree-end, step55, promotion, worktree-notes-triage
+# Tags: worktree, end, cleanup, hook, bin
 #
 # Worktree-end Step 5.5 promotion feature.
 #

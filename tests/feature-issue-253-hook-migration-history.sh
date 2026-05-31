@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/block-history-direct.js
-# Tags: issue, 253, hook-migration-history
+# Tags: history, docs, changelog, hook, bin
 # Integration tests for hooks/block-history-direct.js PreToolUse hook.
 # Blocks direct Write/Edit/MultiEdit/editFiles on docs/history.md and CHANGELOG.md.
 set -euo pipefail

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/issue-to-history.sh
-# Tags: issue-migration-issue-close
+# Tags: issue-close, workflow, history, docs, github
 # Tests for bin/github-issues/issue-to-history.sh — issue-close path that converts a closed
 # GitHub issue into a docs/history.md entry.
 #

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/pre-commit
-# Tags: effort-level-unstage
+# Tags: git, pre-commit, hook, settings, config
 # Tests for pre-commit hook: auto-unstage effortLevel-only changes in settings.json
 set -euo pipefail
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh, hooks/pre-commit
-# Tags: blocklist-warn-mode-pre-commit
+# Tags: scan, filter, outbound, hook, git
 # Test suite for hooks/pre-commit warn-mode behavior.
 #
 # Tests target POST-implementation behavior:

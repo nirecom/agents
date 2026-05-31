@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/run-all.sh — Run all (or specified) test scripts, with exit 77 → skip support.
 # Tests: tests/run-all.sh
-# Tags: run-all, test-runner
+# Tags: bin, env, config, tests
 #
 # Usage:
 #   tests/run-all.sh [--all | <glob-or-file> ...]

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-689-run-all-all-flag.sh
 # Tests: tests/run-all.sh
-# Tags: test-selection, run-all, issue-689
+# Tags: bin, tests
 #
 # Issue #689 — tests/run-all.sh learns a `--all` flag that runs the full
 # tests/*.sh suite, while a default invocation excludes tests/_archive/.

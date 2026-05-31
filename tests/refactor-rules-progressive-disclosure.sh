@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/refactor-rules-progressive-disclosure.sh
 # Tests: agents/memory, skills/_shared/test-design.md
-# Tags: rules-progressive-disclosure
+# Tags: frontmatter, tests, skill, agent, bin
 #
 # Tests for refactor/rules-progressive-disclosure:
 #   - globs: frontmatter validity in new sub-files

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/scan-outbound.sh
-# Tags: hidden-char-scan
+# Tags: scan, filter, outbound, hook, bin
 # Test suite for Trojan Source / hidden-char detection in scan-outbound.sh
 # Zero-width chars (U+200B/C/D, U+FEFF) → [zero-width]
 # Bidi override chars (U+202D/E, U+2066-2069) → [bidi-override]

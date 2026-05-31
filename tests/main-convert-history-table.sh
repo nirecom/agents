@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/convert-history-table.py
-# Tags: convert-history-table
+# Tags: history, docs, bin, env, config
 # Tests for bin/convert-history-table.py generic column handling
 set -uo pipefail
 

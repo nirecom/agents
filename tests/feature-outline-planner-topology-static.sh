@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/outline-planner.md
-# Tags: outline-planner-topology-static
+# Tags: outline, planning, agent, bin, tests
 # Static grep-based checks for outline-planner topology-collapse rule (#420).
 #
 # Verifies that agents/outline-planner.md contains the new rule instructing

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-run-tests.js
-# Tags: workflow-run-tests
+# Tags: workflow, tests, runner, hook, bin
 # TDD tests for claude-global/hooks/workflow-run-tests.js
 # This hook is a PostToolUse handler that auto-marks run_tests based on Bash command + exit code.
 # NOTE: workflow-run-tests.js does NOT exist yet. All tests are expected to FAIL (TDD).

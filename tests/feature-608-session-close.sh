@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-608-session-close.sh
 # Tests: bin/worktree-final-report.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md
-# Tags: 608, session-close, final-report, issue-close
+# Tags: issue-close, finalize, workflow, worktree, end
 #
 # Issue #608 — /session-close orchestration skill + closed_issue_outcomes section.
 #

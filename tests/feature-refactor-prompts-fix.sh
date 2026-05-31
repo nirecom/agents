@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/refactor-prompts/SKILL.md
-# Tags: refactor-prompts-fix
+# Tags: worktree, start, prompts, refactor, skill
 # Tests for issue #602 PR1 — skills/refactor-prompts/SKILL.md content fixes.
 #
 # Asserts static SKILL.md content:

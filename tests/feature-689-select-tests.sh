@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-689-select-tests.sh
 # Tests: bin/select-tests.sh
-# Tags: test-selection, pr-scoped, issue-689
+# Tags: test-selection, tests, bin, git, pr
 #
 # Issue #689 — PR-scoped test selection.
 # bin/select-tests.sh reads a git diff (between merge-base and HEAD) and

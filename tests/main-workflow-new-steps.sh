@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js
-# Tags: workflow-new-steps
+# Tags: workflow, gate, hook, intent, planning
 # Tests for new workflow steps: clarify_intent and branching_complete
 # Covers:
 #   - workflow-state.js: migration and VALID_STEPS / SKIPPABLE_STEPS exports

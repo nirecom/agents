@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-bash-rm-target-extraction.sh
 # Tests: hooks/enforce-worktree.js
-# Tags: bash-rm-target-extraction
+# Tags: worktree, enforce, hook, bin, tests
 #
 # Tests for hooks/enforce-worktree.js extractRmTargets path: when CWD is the
 # main worktree and ENFORCE_WORKTREE=on, `rm` targets outside the repo's

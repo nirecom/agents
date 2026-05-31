@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: agents/detail-planner.md, agents/outline-planner.md, skills/clarify-intent/SKILL.md, skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md
-# Tags: delivery-plan-visibility
+# Tags: clarify-intent, planning, outline, detail, intent
 set -uo pipefail
 
 REPO=$(git rev-parse --show-toplevel)

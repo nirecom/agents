@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/.env, bin/scan-outbound.sh, hooks/pre-commit
-# Tags: pre-commit-dotenv-order
+# Tags: scan, filter, outbound, hook, git
 # Test suite for hooks/pre-commit — dotenv-vs-private-repo order fix.
 #
 # Currently the dotenv-add check runs BEFORE the private-repo check, so even

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/workflow-state.js
-# Tags: resolve-session-id-js
+# Tags: workflow, hook, bin, windows, tests
 # Tests for resolveSessionId() in hooks/lib/workflow-state.js — Issue #519.
 #
 # After the fix, the priority chain becomes:

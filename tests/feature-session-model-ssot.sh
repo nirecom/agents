@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/clarify-intent/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/issue-close-stage/SKILL.md, skills/issue-create/SKILL.md, skills/workflow-init/SKILL.md
-# Tags: session-model-ssot
+# Tags: issue-close, stage, workflow, finalize, issue-create
 # Pre-implementation tests for issue #444 — N-issues-per-session SSOT.
 # Tests S1-S8 are pre-implementation assertions — FAIL until source changes land.
 set -euo pipefail

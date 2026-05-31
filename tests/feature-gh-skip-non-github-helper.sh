@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/is-github-dotcom-remote, bin/is-github-dotcom-remote.
-# Tags: gh-skip-non-github-helper
+# Tags: bin, windows, tests
 # Integration tests for bin/is-github-dotcom-remote.
 # Pre-implementation: all tests expected to FAIL until bin/is-github-dotcom-remote lands.
 set -u

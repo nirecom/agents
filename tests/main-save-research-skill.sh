@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/save-research/SKILL.md
-# Tags: save-research-skill
+# Tags: frontmatter, tests, research, skill, bin
 # Structural tests for claude-global/skills/save-research/SKILL.md
 set -euo pipefail
 

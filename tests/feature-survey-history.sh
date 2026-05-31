@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: agents/survey-history.md, agents/survey-history.md., skills/survey-history/SKILL.md
-# Tags: survey-history
+# Tags: survey, history, docs, skill, agent
 # Test suite for survey-history feature (Issue #262).
 # Static doc checks against skills/survey-history/SKILL.md and agents/survey-history.md.
 # Tests will FAIL until the source files are created — that is expected.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/issue-create/SKILL.md, skills/survey-history/SKILL.md
-# Tags: 661, survey-symptom-fallback
+# Tags: issue-create, github, survey, history, docs
 # Tests for issue #661: symptom-based fallback in issue-create Phase 2 and survey-history.
 #
 # Covers:

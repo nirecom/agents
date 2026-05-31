@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-workflow-gate.sh
 # Tests: hooks/workflow-gate.js
-# Tags: workflow-off-bypass-workflow-gate
+# Tags: workflow, gate, hook, bin, git
 #
 # PR2: hooks/workflow-gate.js must early-return (approve) when
 # <workflowDir>/<sid>.workflow-off marker exists for the calling session.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/install/linux/dotfileslink.sh, agents/install/win/dotfileslink.ps1, agents/profile-snippet.ps1, agents/profile-snippet.sh, bin/scan-outbound, bin/scan-outbound.sh, bin/session-sync, bin/session-sync.sh, bin/split-history.py, hooks/commit-msg, hooks/pre-commit
-# Tags: agents-repo-split
+# Tags: scan, filter, outbound, hook, git
 # Smoke tests for agents repo split (steps 2, 8, 16).
 # Verifies: settings.json hook path uses $AGENTS_CONFIG_DIR/hooks/,
 #           dotfiles → agents compat blocks removed,

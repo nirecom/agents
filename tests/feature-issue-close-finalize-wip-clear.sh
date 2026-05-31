@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/github-issues/wip-state.sh, skills/issue-close-finalize/SKILL.md, skills/issue-close-finalize/SKILL.md.
-# Tags: issue-close-finalize-wip-clear
+# Tags: issue-close, finalize, workflow, github, issues
 # Static-text contract tests for issue #362 Step K in
 # skills/issue-close-finalize/SKILL.md.
 #

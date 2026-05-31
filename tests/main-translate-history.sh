@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/translate-history.py
-# Tags: translate-history
+# Tags: history, docs, bin, env, config
 # Tests for bin/translate-history.py
 # Naming: main direct work → tests/main-<name>.sh
 set -euo pipefail

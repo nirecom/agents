@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-plan-link.js, hooks/show-plan-link.js.
-# Tags: restore-code-folder-uri
+# Tags: plan, vscode, hook, bin, macos
 # Tests for new VS Code spawn behavior of hooks/show-plan-link.js.
 # Written first (TDD); spawn-related assertions fail until the source is implemented.
 set -uo pipefail

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/review-loop-cap-menu
-# Tags: 329, review-loop-cap-menu
+# Tags: bin, env, config, loop, tests
 # Tests for bin/review-loop-cap-menu (issue #329).
 # Verifies JSON output schema, options invariants, auto-extend exit 42,
 # and arg-validation exit 2.

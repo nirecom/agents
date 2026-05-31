@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/session-start.js, hooks/workflow-mark.js
-# Tags: workflow-transition-hint
+# Tags: workflow, hook, bin, tests
 # Test suite for workflow transition hint feature:
 #   hooks/session-start.js   (buildWorkflowStatus + NEXT ACTION hint)
 #   hooks/workflow-mark.js   (nextStepHint after markStep)

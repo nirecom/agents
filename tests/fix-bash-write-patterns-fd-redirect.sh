@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-bash-write-patterns-fd-redirect.sh
 # Tests: hooks/lib/bash-write-patterns.js
-# Tags: bash-write-patterns-fd-redirect
+# Tags: hook, bin, git, tests
 # Tests for FD-to-FD redirect false positive fix (#243)
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

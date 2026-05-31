@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/scan-outbound.sh, bin/scan-outbound.sh., hooks/lib, hooks/lib/bash-write-patterns.js, hooks/lib/forge-write-extract.js, hooks/lib/is-private-repo.js, hooks/lib/parse-git-args.js, hooks/scan-outbound.js, hooks/scan-outbound.js.
-# Tags: forge-write-scan-pretooluse
+# Tags: scan, filter, outbound, hook, intent
 # Integration tests for the forge-write-scan extension to hooks/scan-outbound.js.
 #
 # Post-implementation contract under test:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
-# Tags: 673, concern-id-ledger
+# Tags: worktree, codex, review, bin, env
 # L1 unit tests for concern-ID ledger logic embedded in bin/run-codex-review-loop (issue #673)
 # Tests --round / --ledger semantics, ID assignment, and persistence across rounds.
 set -uo pipefail

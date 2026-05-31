@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js
-# Tags: workflow-evidence
+# Tags: workflow, gate, hook, bin, git
 # Tests for evidence-based write_tests/docs enforcement
 # in workflow-gate.js (PreToolUse) and workflow-mark.js (PostToolUse)
 set -euo pipefail

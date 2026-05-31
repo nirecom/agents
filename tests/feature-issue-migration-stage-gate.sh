@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues, bin/github-issues/backfill-commit-comments.sh, bin/github-issues/bootstrap-labels.sh, bin/github-issues/migration/orchestrate.sh, bin/github-issues/migration/state.sh, bin/github-issues/sync-labels.sh
-# Tags: issue-migration-stage-gate
+# Tags: backfill, comments, github, issues, labels
 # Tests for orchestrate.sh --stage flag (issue #415).
 #
 # RED: this suite fails until orchestrate.sh introduces a required --stage

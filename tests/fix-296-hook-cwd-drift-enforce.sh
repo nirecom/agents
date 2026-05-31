@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-296-hook-cwd-drift-enforce.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree.js.
-# Tags: 296, hook-cwd-drift-enforce
+# Tags: worktree, enforce, hook, bin, git
 #
 # Integration tests for hooks/enforce-worktree.js cwd-drift fix (issue #296).
 #

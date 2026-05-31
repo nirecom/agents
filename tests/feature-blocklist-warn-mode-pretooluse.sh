@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/.private-info-allowlist, agents/.private-info-blocklist, agents/bin/scan-outbound.sh, agents/hooks/lib/is-private-repo.js, agents/hooks/lib/parse-git-args.js, agents/hooks/scan-outbound.js, bin/scan-outbound.sh, bin/scan-outbound.sh.bak, hooks/lib, hooks/lib/forge-write-extract.js, hooks/lib/is-private-repo.js, hooks/lib/parse-git-args.js, hooks/scan-outbound.js
-# Tags: blocklist-warn-mode-pretooluse
+# Tags: scan, filter, outbound, hook, agent
 # Test suite for hooks/scan-outbound.js (PreToolUse hook) warn-mode behavior.
 #
 # Tests target POST-implementation behavior:

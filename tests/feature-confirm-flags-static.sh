@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md, skills/update-docs/SKILL.md, skills/worktree-start/SKILL.md, skills/write-code/SKILL.md, skills/write-tests/SKILL.md
-# Tags: confirm-flags-static
+# Tags: worktree, start, outline, planning, detail
 # Static grep-based checks for the confirm-flags feature wiring.
 #
 # Verifies that the 4 gated skills reference the helper script, the matching

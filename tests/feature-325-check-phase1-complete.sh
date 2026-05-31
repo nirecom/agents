@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/check-phase1-complete.sh, bin/github-issues/issue-close-triage-lib.sh
-# Tags: 325, check-phase1-complete
+# Tags: issue-close, triage, workflow, phase1, gate
 # Tests for issue #325 — bin/github-issues/check-phase1-complete.sh
 #
 # Verifies that Phase 1 (sentinel posted) is complete before /commit-push

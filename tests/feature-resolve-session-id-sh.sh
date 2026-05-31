@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/lib/codex-core.sh, bin/lib/gemini-core.sh, bin/lib/resolve-session-id.sh
-# Tags: resolve-session-id-sh
+# Tags: bin, codex, tests
 # Tests for bin/lib/resolve-session-id.sh — Issue #519 JSONL transcript scan fallback.
 #
 # Helper provides three functions:

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: skills/commit-push/SKILL.md
-# Tags: commit-push-workflow-gate
+# Tags: workflow, gate, hook, commit, pr
 # Regression test: commit-push skill must not have a model: directive that would
 # cause it to spawn a subagent with a fresh session ID, bypassing workflow-gate.
 #
