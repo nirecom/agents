@@ -18,12 +18,14 @@ fall back to the Claude reviewer and emit a visible fallback message.
 ## Invocation
 
 ```bash
-review-plan-codex --input <path-to-plan-file> --format {detail-plan|outline-plan} [--no-log]
+review-plan-codex --input <path-to-plan-file> --format {detail-plan|outline-plan} [--round N] [--ledger <path>] [--no-log]
 ```
 
 - `--input <file>` — path to the plan or approach file to review (required)
 - `--format detail-plan` — instructs codex to output `APPROVED` / `NEEDS_REVISION` verdict
 - `--format outline-plan` — instructs codex to output `APPROVED` / `MISSING_ALTERNATIVE` verdict
+- `--round N` — review round number (default 1). When ≥ 2, switches to Round-2+ prompt and requires `--ledger`.
+- `--ledger <path>` — path to the concern-ID ledger from Round 1 (required when `--round >= 2`). Ledger format: pipe-delimited `C<N>|<SEVERITY>|<full concern text>`.
 - `--no-log` — skip JSONL logging (useful in tests)
 
 ## Output contract
@@ -49,7 +51,7 @@ Always exits 0 — never blocks the calling workflow.
 
 ## Verdict formats
 
-### `--format detail-plan`
+### `--format detail-plan` Round 1 (`--round 1`, default)
 
 ```
 APPROVED
@@ -60,12 +62,31 @@ or
 
 ```
 NEEDS_REVISION
-1. <concern: what is wrong + why it matters>
-2. <concern>
-...
+C1. [HIGH] <concern: what is wrong + why it matters>
+C2. [MEDIUM] <concern>
+C3. [LOW] <concern>
 ```
 
-### `--format outline-plan`
+Each concern line must start with `C<N>. [HIGH|MEDIUM|LOW] ` — the orchestrator assigns stable IDs and validates severity tags.
+
+### `--format detail-plan` Round 2+ (`--round 2`, `--ledger <path>`)
+
+```
+APPROVED
+<one-line justification>
+```
+
+or
+
+```
+NEEDS_REVISION
+C1: resolved
+C2: unresolved — <one-line reason>
+```
+
+Round 2+ references existing concern IDs only. New `Cn` not present in the ledger are mechanically discarded by the orchestrator.
+
+### `--format outline-plan` Round 1 (`--round 1`, default)
 
 ```
 APPROVED <one-line justification>
@@ -74,7 +95,23 @@ APPROVED <one-line justification>
 or
 
 ```
-MISSING_ALTERNATIVE: <one-line description of the approach that was not considered>
+MISSING_ALTERNATIVE:
+C1. [HIGH] <missing approach that should be considered>
+C2. [MEDIUM] <additional missing alternative>
+```
+
+### `--format outline-plan` Round 2+ (`--round 2`, `--ledger <path>`)
+
+```
+APPROVED <one-line justification>
+```
+
+or
+
+```
+MISSING_ALTERNATIVE:
+C1: resolved
+C2: unresolved — <one-line reason>
 ```
 
 ## Orchestrator fallback logic

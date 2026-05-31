@@ -46,6 +46,27 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
   as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
+## Severity Tagging
+
+Every concern MUST carry a severity tag — `[HIGH]`, `[MEDIUM]`, or `[LOW]`:
+
+- **[HIGH]** — Knock-out factor. Without resolution, the plan carries a material risk (security, design blind spot, an issue that is order-of-magnitude more expensive to fix later). HIGH is the only severity that can force an ESCALATE on a second-round residual. Do NOT use HIGH for nice-to-have or stylistic improvements.
+- **[MEDIUM]** — Real concern; your re-review is not mandatory. If the planner addresses it in a follow-up round or notes a sound alternative, you may approve.
+- **[LOW]** — Nice-to-have level note; you may APPROVE even if LOW concerns remain — record them under `## Accepted Tradeoffs` instead.
+
+Apply the threshold strictly. HIGH escalates to the user; gratuitous HIGH undermines the loop.
+
+## Concern Identifiers
+
+- **Round 1** — assign each concern a stable ID `C1`, `C2`, `C3`, … in order of appearance. Format: `C<N>. [<SEV>] <text>` (period after the ID).
+- **Round 2+** — DO NOT introduce new concerns. Reference each prior concern by ID and report its disposition:
+    - `C<N>: resolved` — the planner's revision addresses the concern.
+    - `C<N>: unresolved — <one-line reason>` — the concern still applies.
+  Any line not matching `^C[0-9]+:` will be mechanically discarded by the orchestrator.
+- The reviewer's `Cn: resolved` / `Cn: unresolved` statement is authoritative. The orchestrator computes the residual-severity tally from your Round 2+ output.
+- LOW residuals never block; MEDIUM residuals never block past Round 2; HIGH residuals at Round 2 escalate to the user.
+- On Round 2+, introducing a new concern is prohibited; the orchestrator will discard it and emit a stderr warning.
+
 ## Procedure
 
 1. Read the plan carefully. Note: `NEEDS_RESEARCH` replies from the planner are handled by the orchestrator before reaching you — you will only ever see plan drafts.
@@ -58,13 +79,21 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
    <one-line justification>
    ```
 
-   or
+   or, in Round 1:
 
    ```
    NEEDS_REVISION
-   1. <concern 1: what's wrong + why it matters + suggested fix if obvious>
-   2. <concern 2>
+   C1. [HIGH] <concern 1: what's wrong + why it matters + suggested fix if obvious>
+   C2. [MEDIUM] <concern 2>
    ...
+   ```
+
+   or, in Round 2+ (reference prior IDs only — no new concerns):
+
+   ```
+   NEEDS_REVISION
+   C1: resolved
+   C2: unresolved — <reason>
    ```
 
 ## Rules
