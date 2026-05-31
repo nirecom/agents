@@ -102,4 +102,12 @@ Changes: `worktree-start` no longer copies `.worktree-backup/` directories into 
 
 ### FEATURE: PR #669 (2026-05-30)
 Background: fix(#562): detect-restart.sh cc_restart reason now distinguishes rules/ from CLAUDE.md
-Changes: Fixed: Final Report now shows "rules/ modified in PR (cascaded into CLAUDE.md)" instead of "CLAUDE.md modified in PR" when a PR only modifies files under rules/.
+Changes: Fixed: Final Report now shows "rules/ modified in PR (cascaded into CLAUDE.md)" instead of "CLAUDE.md modified in PR" when a PR only modifies files under rules/.
+
+### BUGFIX: PR #678 — fix/fix-665 (2026-05-31)
+Background: fix(hooks): surface PR URL above WORKFLOW_USER_VERIFIED dialog (#665)
+Changes: Fixed: PR URL now opens in a browser automatically when the WORKFLOW_USER_VERIFIED permission dialog fires — previously the URL was silently dropped when tool_input.cwd was absent. Set SHOW_USER_VERIFIED_NO_BROWSER=1 to opt out.
+
+### FEATURE: PR #684 (2026-05-31)
+Background: feat(planner-reviewer): severity-based auto-termination + concern-ID ledger + adaptive detail-plan skip (#673)
+Changes: subject="Planner-reviewer loop now terminates automatically based on concern severity" changes="The codex review loop now classifies reviewer concerns by severity (HIGH/MEDIUM/LOW) and applies a verdict matrix: LOW-only issues are immediately approved; MEDIUM concerns are accepted on round 2+; HIGH concerns escalate after round 2. Review rounds are now tracked per session, and a concern-ID ledger prevents review sessions from injecting new concerns in round 2+. MAX_EXTENSIONS unified to 1 for all plan stages.";subject="Detail planning stage now skips the full review loop when the outline already specifies file-level changes" changes="When the outline stage has already enumerated concrete file paths and change content, and all required class members have file mentions, the detail-planning stage now runs only a single review round instead of the full loop. This reduces unnecessary review rounds for straightforward tasks."
