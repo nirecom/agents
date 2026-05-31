@@ -77,13 +77,15 @@ setup_main_checkout() {
 # Returns "allow" or "block".
 run_with_value() {
     local value="$1" repo="$2"
-    local payload
+    local payload posix_repo
     payload="$(printf '{"session_id":"t","tool_name":"Bash","tool_input":{"command":"echo x > %s/foo"}}' "$repo")"
+    posix_repo="$repo"
+    command -v cygpath >/dev/null 2>&1 && posix_repo="$(cygpath -u "$repo")"
     local out
     if [ "$value" = "__UNSET__" ]; then
-        out="$(echo "$payload" | run_with_timeout 30 env -u ENFORCE_WORKTREE "AGENTS_CONFIG_DIR=$repo" node "$GUARD_JS" 2>/dev/null)"
+        out="$(cd "$posix_repo" && echo "$payload" | run_with_timeout 30 env -u ENFORCE_WORKTREE "AGENTS_CONFIG_DIR=$repo" node "$GUARD_JS" 2>/dev/null)"
     else
-        out="$(echo "$payload" | run_with_timeout 30 env "ENFORCE_WORKTREE=$value" "AGENTS_CONFIG_DIR=$repo" node "$GUARD_JS" 2>/dev/null)"
+        out="$(cd "$posix_repo" && echo "$payload" | run_with_timeout 30 env "ENFORCE_WORKTREE=$value" "AGENTS_CONFIG_DIR=$repo" node "$GUARD_JS" 2>/dev/null)"
     fi
     if guard_decision "$out"; then
         echo "allow"
