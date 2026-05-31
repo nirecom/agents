@@ -1,5 +1,7 @@
 # Global Claude Code Instructions
 
+All work follows [`rules/core-principles.md`](rules/core-principles.md).
+
 ## Workflow
 
 1. **Workflow init** — **Before anything else:** Run `/workflow-init` (routes by GH issue context; see `skills/workflow-init/SKILL.md`).
@@ -76,21 +78,11 @@
     JSON from PR data). Safe when `closes_issues` is empty — outcome renders as
     `- (none)` and the Final Report still emits.
 
-## Plan Mode Incompatibility
+## Notes
 
-`--permission-mode plan` is incompatible with this workflow — Skill tool invocations
-are restricted in that mode. Always use default mode for implementation tasks.
-
-ドキュメント編集のみのコミットでワークフローを短縮したい場合は `rules/docs-only-short-circuit.md` を見よ。
-
-軽微な編集でワークフロー強制を一時停止したい場合は `rules/workflow-off.md` を見よ。
-
-## Workflow State Recovery
-
-Main conversation only — never from skills/subagents. Reset by emitting `<<WORKFLOW_RESET_FROM_<step>>>`; only when holistic context justifies it.
-
-ワークフロー中に別件のバグ・後続作業・next-task を発見した場合は `rules/mid-workflow-findings.md` を見よ。
-
-## agents Repository Development
-
-When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
+- Do not use `--permission-mode plan`. Always use default mode for implementation tasks.
+- Workflow state reset is main-conversation only — emit `<<WORKFLOW_RESET_FROM_<step>>>` only when holistic context justifies it.
+- For docs-only commits that shortcut the workflow, see `rules/docs-only-short-circuit.md`.
+- For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
+- For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
+- When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
