@@ -329,9 +329,14 @@ else
         fail "N23b. profile-snippet.ps1 does not set AGENTS_CONFIG_DIR"
         _n23_ok=0
     fi
-    # Must reference CLAUDE.md and settings.json (repair logic)
-    if ! grep -q 'CLAUDE\.md' "$SNIPPET_PS1" || ! grep -q 'settings\.json' "$SNIPPET_PS1"; then
-        fail "N23c. profile-snippet.ps1 missing CLAUDE.md/settings.json repair logic"
+    # Must reference CLAUDE.md (repair logic)
+    if ! grep -q 'CLAUDE\.md' "$SNIPPET_PS1"; then
+        fail "N23c. profile-snippet.ps1 missing CLAUDE.md repair logic"
+        _n23_ok=0
+    fi
+    # Must NOT reference settings.json in watchlist (#685)
+    if grep -qE '\$HOME[/\\]\.claude[/\\]settings\.json' "$SNIPPET_PS1"; then
+        fail "N23d. profile-snippet.ps1 must not watch settings.json"
         _n23_ok=0
     fi
     if [ "$_n23_ok" -eq 1 ]; then
@@ -377,13 +382,145 @@ else
         fail "N25b. profile-snippet.sh does not export AGENTS_CONFIG_DIR"
         _n25_ok=0
     fi
-    # Must reference CLAUDE.md and settings.json (repair logic)
-    if ! grep -q 'CLAUDE\.md' "$SNIPPET_SH" || ! grep -q 'settings\.json' "$SNIPPET_SH"; then
-        fail "N25c. profile-snippet.sh missing CLAUDE.md/settings.json repair logic"
+    # Must reference CLAUDE.md (repair logic)
+    if ! grep -q 'CLAUDE\.md' "$SNIPPET_SH"; then
+        fail "N25c. profile-snippet.sh missing CLAUDE.md repair logic"
+        _n25_ok=0
+    fi
+    # Must NOT reference settings.json in watchlist (#685)
+    if grep -qE '\$HOME/\.claude/settings\.json' "$SNIPPET_SH"; then
+        fail "N25d. profile-snippet.sh must not watch settings.json"
         _n25_ok=0
     fi
     if [ "$_n25_ok" -eq 1 ]; then
-        pass "N25. profile-snippet.sh exists with BASH_SOURCE, export AGENTS_CONFIG_DIR, and repair logic"
+        pass "N25. profile-snippet.sh exists with BASH_SOURCE, AGENTS_CONFIG_DIR export, CLAUDE.md repair, and no settings.json watch"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N29: profile-snippet.sh watchlist contains only CLAUDE.md (not settings.json)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N29: profile-snippet.sh — watchlist has CLAUDE.md only, not settings.json ==="
+
+if [ ! -f "$SNIPPET_SH" ]; then
+    skip "N29. profile-snippet.sh not found"
+else
+    _n29_line="$(grep -nE '^for[[:space:]]+_f[[:space:]]+in' "$SNIPPET_SH" | head -1)"
+    if [ -z "$_n29_line" ]; then
+        fail "N29. profile-snippet.sh has no 'for _f in' watchlist line"
+    else
+        if ! echo "$_n29_line" | grep -q 'CLAUDE\.md'; then
+            fail "N29a. watchlist line does not contain CLAUDE.md"
+        elif echo "$_n29_line" | grep -q 'settings\.json'; then
+            fail "N29b. watchlist line still contains settings.json (should have been removed)"
+        else
+            pass "N29. profile-snippet.sh watchlist contains CLAUDE.md and not settings.json"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N30: dotfileslink.sh has MSYS=winsymlinks:nativestrict export
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N30: dotfileslink.sh — exports MSYS=winsymlinks:nativestrict ==="
+
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    skip "N30. dotfileslink.sh not found"
+elif grep -qE 'export[[:space:]]+MSYS=winsymlinks:nativestrict' "$DOTFILESLINK_SH"; then
+    pass "N30. dotfileslink.sh exports MSYS=winsymlinks:nativestrict"
+else
+    fail "N30. dotfileslink.sh missing: export MSYS=winsymlinks:nativestrict"
+fi
+
+# ---------------------------------------------------------------------------
+# N31: dotfileslink.sh has _dl_is_windows variable assignment
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N31: dotfileslink.sh — has _dl_is_windows platform detection variable ==="
+
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    skip "N31. dotfileslink.sh not found"
+elif grep -qE '_dl_is_windows[[:space:]]*=' "$DOTFILESLINK_SH"; then
+    pass "N31. dotfileslink.sh has _dl_is_windows assignment"
+else
+    fail "N31. dotfileslink.sh missing _dl_is_windows platform detection variable"
+fi
+
+# ---------------------------------------------------------------------------
+# N32: dotfileslink.sh has no bare ln -snf to ~/.claude/ (replaced by _link_one)
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N32: dotfileslink.sh — no bare ln -snf for ~/.claude/ directories ==="
+
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    skip "N32. dotfileslink.sh not found"
+elif grep -qE 'ln -snf[[:space:]].*~/\.claude/' "$DOTFILESLINK_SH"; then
+    fail "N32. dotfileslink.sh still has bare ln -snf to ~/.claude/ (should use _link_one)"
+else
+    pass "N32. dotfileslink.sh has no bare ln -snf to ~/.claude/"
+fi
+
+# ---------------------------------------------------------------------------
+# N33: dotfileslink.sh has _link_one() function definition
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N33: dotfileslink.sh — has _link_one() function definition ==="
+
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    skip "N33. dotfileslink.sh not found"
+elif grep -qE '^_link_one\(\)' "$DOTFILESLINK_SH"; then
+    pass "N33. dotfileslink.sh has _link_one() function"
+else
+    fail "N33. dotfileslink.sh missing _link_one() function definition"
+fi
+
+# ---------------------------------------------------------------------------
+# N34: dotfileslink.sh backs up fake-file CLAUDE.md and replaces with symlink
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N34: dotfileslink.sh — fake-file CLAUDE.md is backed up and replaced with symlink ==="
+
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    skip "N34. dotfileslink.sh not found"
+elif ! command -v node >/dev/null 2>&1; then
+    skip "N34. node not available (needed by dotfileslink.sh)"
+else
+    _n34_td="$(mktemp -d)"
+    _n34_ok=1
+    mkdir -p "$_n34_td/home/.claude"
+    printf 'fake content\n' > "$_n34_td/home/.claude/CLAUDE.md"
+    HOME="$_n34_td/home" bash "$DOTFILESLINK_SH" >/dev/null 2>&1 || true
+    if [ ! -f "$_n34_td/home/.claude/CLAUDE.md.bak" ]; then
+        fail "N34a. dotfileslink.sh did not create CLAUDE.md.bak for fake-file"
+        _n34_ok=0
+    fi
+    if [ ! -L "$_n34_td/home/.claude/CLAUDE.md" ]; then
+        fail "N34b. dotfileslink.sh did not replace fake-file CLAUDE.md with a symlink"
+        _n34_ok=0
+    fi
+    rm -rf "$_n34_td"
+    if [ "$_n34_ok" -eq 1 ]; then
+        pass "N34. dotfileslink.sh backed up fake CLAUDE.md and created symlink"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# N35: MSYS export is inside the _dl_is_windows=1 conditional block
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== N35: dotfileslink.sh — MSYS export is inside _dl_is_windows=1 block ==="
+
+if [ ! -f "$DOTFILESLINK_SH" ]; then
+    skip "N35. dotfileslink.sh not found"
+else
+    # Extract the content between 'if [ "$_dl_is_windows" = "1" ]' and its closing 'fi'
+    _n35_block="$(awk '/if \[ "\$_dl_is_windows" = "1" \]/{found=1} found{print} found && /^fi$/{exit}' "$DOTFILESLINK_SH")"
+    if echo "$_n35_block" | grep -q 'export MSYS=winsymlinks:nativestrict'; then
+        pass "N35. MSYS export is inside _dl_is_windows=1 conditional block"
+    else
+        fail "N35. MSYS export is NOT inside _dl_is_windows=1 conditional block (or block not found)"
     fi
 fi
 
