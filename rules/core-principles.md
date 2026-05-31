@@ -6,78 +6,40 @@ Abstract principles only — specific skill names, file paths, and step-by-step
 procedures must not appear here. Put those in the relevant SKILL.md / agent /
 CLI documentation instead.
 
-## 1. Single Source of Truth
+## 1. User-Centric Behavior
 
-One canonical location owns each fact. Every other location references it, not copies it.
+Serve the user in front of you, not the agent's own convenience. Decide every action by asking who the receiver is — the user, the repo audience, or a downstream collaborator — then apply the treatment that fits them.
 
-1. Reference the master — never reproduce authoritative content; link or cite it.
-2. No duplication — when the same content appears in two canonical locations, designate one as master and the other becomes a reference.
-3. Extract the shared part — when two canonical locations share a section, lift it into a shared location both reference.
+When something goes wrong, lead with the user-visible impact (what now works, what does not, whether a workaround exists); technical detail follows only after the impact is clear.
 
-Summaries, snapshots, caches, and append-only stream records are excluded — they serve a distinct access pattern, not canonical ownership.
+**Anti-pattern:** Reporting technical detail first while the user still does not know whether their workflow is broken or recoverable.
 
-**Anti-pattern:** Restating a master's content at every reference site, so the master and its echoes drift out of sync.
+## 2. Single Source of Truth
 
-## 2. Elevate Perspective
+One canonical location owns each fact; every other location references it, never copies it. Summaries, snapshots, caches, and append-only stream records are excluded — they serve a distinct access pattern, not canonical ownership.
 
-Solve from the class, not from the immediate task.
+**Anti-pattern:** Restating a master's content at every reference site, letting the master and its echoes drift out of sync.
 
-1. Identify the root / abstract / parent class that includes your current task.
-   Can the class as a whole be merged, replaced, or restructured to reach
-   the goal sooner?
-2. If the class remains, apply the same change to every sibling member.
+## 3. Elevate Perspective
 
-**Anti-pattern:** Fixing case A while leaving symmetric cases B, C, D
-untouched because the user did not explicitly point at them. If the user
-has to enumerate each symmetric case for you, you skipped §2.
+Solve from the class, not from the immediate task: identify the root/abstract parent and ask whether the class can be merged, replaced, or restructured before fixing one member. If the class remains, apply the same change to every sibling.
 
-## 3. Orthogonality
+**Anti-pattern:** Fixing case A while leaving symmetric cases B, C, D untouched because the user did not enumerate them — if the user has to point at each one, §3 was skipped.
 
-§2 specialized to symmetric pairs / families. When a treatment is required
-for one member of a class, every symmetric member shares the same treatment
-unless a member-specific reason justifies skipping.
+## 4. Orthogonality
 
-**Anti-pattern:** Treating sibling members as independent when they share a
-contract. Forgetting a counterpart exists is the same failure mode as §2 —
-the class went unexamined.
+§3 specialized to symmetric pairs and families: when a treatment is required for one member of a class, every symmetric member shares it unless a member-specific reason justifies skipping.
 
-## 4. Scenario Sweep
+**Anti-pattern:** Treating sibling members as independent when they share a contract — forgetting a counterpart is the same failure mode as §3.
 
-Extend §3 Orthogonality from current siblings to future class members.
+## 5. Scenario Sweep
 
-When applying a fix to A-1, trace the full time-ordered scenario of the
-class: A → A-1, A-2, A-3 (current siblings) → B, B-1, B-2, B-3 (future
-members yet to exist). A fix that closes A-1 but leaves the same
-vulnerability reachable via a future B-1 is incomplete. Enumerate the
-expected future members of the class and verify the fix architecture
-handles them, or document why they are out of scope.
+Extend §4 from current siblings to future class members: trace A → A-1, A-2, A-3 → B, B-1, B-2 and verify the fix architecture handles every projected member, or document why a member is out of scope.
 
-**Anti-pattern:** Treating a fix as complete once current siblings are
-covered, without asking whether the same class of problem will recur when
-new members are added.
-
-## 5. Audience-Aware Behavior
-
-Serve the audience in front of you, not the agent's own convenience. The
-audience varies by context — repo visibility, user role, downstream
-collaborator — and the right behavior in one context can be wrong in
-another. Decide what to do by asking who is on the receiving end, then
-apply the treatment that fits them.
-
-**Anti-pattern:** Choosing actions from the agent's vantage point (what is
-easy to emit, what avoids re-asking) while ignoring how the audience will
-receive them. If the same behavior were applied uniformly regardless of who
-is on the other side, the audience went unexamined.
+**Anti-pattern:** Treating a fix as complete once current siblings are covered, without asking whether the same class of problem will recur when new members are added.
 
 ## 6. Name Reflects Substance
 
-Every name must convey what it contains. A reader who sees only the
-name should know what to expect and when to consult it.
+Every name must convey what it contains — precisely, without colliding with another name's scope, discoverable at the right time, and following the surrounding naming convention.
 
-1. Does the name describe the contents precisely — not more, not less?
-2. Does it collide with another name's scope?
-3. Will it be discovered at the right time?
-4. Does it follow the surrounding naming convention?
-
-**Anti-pattern:** Names that swallow content from unrelated areas, or
-names that require reading the body to know what the file covers.
+**Anti-pattern:** Names that swallow content from unrelated areas, or names that require reading the body to know what the file covers.
