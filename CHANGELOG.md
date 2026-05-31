@@ -7,4 +7,8 @@ Changes: enforce-worktree redesigned to positive-allow: linked worktrees can wri
 
 ### FEATURE: PR #698 (2026-05-31)
 Background: fix(#685): stop symlink-repair loop firing on every shell start
-Changes: category: BUGFIX
+Changes: category: BUGFIX
+
+### FEATURE: PR #699 (2026-05-31)
+Background: refactor(#253): migrate path-based deny rules to PreToolUse hooks
+Changes: History and changelog files are now protected by a PreToolUse hook (`block-history-direct.js`) that works across all Claude Code clients; direct edits are blocked while `doc-append` remains the authorised write path;Shell config files (`~/.bashrc`, `~/.zshrc`, `~/.profile` etc.) are now protected by a PreToolUse hook (`block-shell-config.js`) covering both direct tool writes and Bash redirects;Removed 41 redundant `settings.json` deny rules that were already handled by PreToolUse hooks, eliminating duplicate permission definitions;Default model changed from `claude-opus-4-7` to `claude-sonnet-4-6`
