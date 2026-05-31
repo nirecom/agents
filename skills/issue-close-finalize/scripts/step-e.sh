@@ -49,7 +49,7 @@ if ! RESP=$(gh api "repos/$OWNER/$REPO/contents/docs/history.md?ref=$DEF" 2>/dev
     exit 0
 fi
 ORIG_SHA=$(printf '%s' "$RESP" | jq -r '.sha // empty')
-printf '%s' "$RESP" | jq -r '.content' | tr -d '\n' | base64 -d > "$STAGING_FILE"
+printf '%s' "$RESP" | jq -r '.content' | tr -d '\r\n' | base64 -d > "$STAGING_FILE"
 ORIG_HASH=$(sha256sum "$STAGING_FILE" | awk '{print $1}')
 
 # --- E.1a: append entry via issue-to-history.sh -------------------------
