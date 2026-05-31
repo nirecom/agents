@@ -40,6 +40,13 @@ below. Reuse across all subsequent steps — do not re-resolve.
 4. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
    Pass the full task context **plus** the contents of the intent/approach files above.
 
+4a. **Sentinel detection (adaptive skip).**
+   If the planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`:
+   - Invoke the codex review loop (step 5) with `MAX_EXTENSIONS=0` — one review round, no extensions.
+   - On APPROVED: proceed directly to step 7 (assemble-mandatory).
+   - On HIGH or MEDIUM residual after that single round: ESCALATE to the user with the unresolved concerns and the current plan draft.
+   If the sentinel is absent: proceed to step 5 unchanged.
+
 5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    (parameter values for the detail stage: FORMAT=detail-plan, CAP=2,
    MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner,
