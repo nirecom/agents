@@ -187,7 +187,7 @@ fetch_to_staging() {
     local local_path="$2"
     local resp
     if resp=$(gh api "repos/$OWNER/$REPO/contents/$remote_path?ref=$DEF" 2>/dev/null); then
-        printf '%s' "$resp" | jq -r '.content' | tr -d '\n' | base64 -d > "$local_path"
+        printf '%s' "$resp" | jq -r '.content' | tr -d '\r\n' | base64 -d > "$local_path"
         return 0
     fi
     # File does not exist on remote — leave local file empty (caller decides).

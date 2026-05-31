@@ -69,7 +69,7 @@ STAGE="$STAGING_DIR/reconcile-${NUM}-history.md"
 OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')
 DEF=$(gh api "repos/$OWNER_REPO" --jq '.default_branch')
 gh api "repos/$OWNER_REPO/contents/docs/history.md?ref=$DEF" \
-    | jq -r '.content' | tr -d '\n' | base64 -d > "$STAGE"
+    | jq -r '.content' | tr -d '\r\n' | base64 -d > "$STAGE"
 bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM" --target "$STAGE"
 bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
     --owner "${OWNER_REPO%%/*}" --repo "${OWNER_REPO#*/}" \
