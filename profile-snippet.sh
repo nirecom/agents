@@ -10,7 +10,7 @@ export AGENTS_CONFIG_DIR="$_agents_root"
 export AGENTS_DIR="$_agents_root"
 
 _agent_broken=0
-for _f in "$HOME/.claude/CLAUDE.md" "$HOME/.claude/settings.json"; do
+for _f in "$HOME/.claude/CLAUDE.md"; do
     if [ -e "$_f" ] && [ ! -L "$_f" ]; then _agent_broken=1; break; fi
 done
 if [ "$_agent_broken" = "1" ]; then
