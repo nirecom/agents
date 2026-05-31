@@ -1,8 +1,11 @@
 #!/bin/bash
 # bin/compose-doc-append-entry
 # Reads WORKTREE_NOTES.md ## History Notes / ## Changelog Notes sections and
-# appends entries to docs/history.md and CHANGELOG.md in separate commits.
-# Invoked from /worktree-end Step 6i with COMPOSE_DOC_APPEND_SKILL=1 prefix.
+# updates docs/history.md and CHANGELOG.md on the default branch via the
+# GitHub REST API. Atomic when both files change (Git Data API); otherwise
+# uses the Contents API for single-file writes.
+#
+# Replaces the prior COMPOSE_DOC_APPEND_SKILL=1 env-var bypass (removed in #672).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,6 +19,8 @@ BACKGROUND=""
 CATEGORY="FEATURE"
 DRY_RUN=0
 SKIP_HISTORY=0
+TARGET_HISTORY=""
+TARGET_CHANGELOG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -27,6 +32,8 @@ while [[ $# -gt 0 ]]; do
         --category)    CATEGORY="$2";     shift 2 ;;
         --dry-run)     DRY_RUN=1;         shift ;;
         --skip-history) SKIP_HISTORY=1;   shift ;;
+        --target-history)   TARGET_HISTORY="$2";   shift 2 ;;
+        --target-changelog) TARGET_CHANGELOG="$2"; shift 2 ;;
         *) echo "compose-doc-append-entry: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
@@ -54,6 +61,14 @@ fi
 if [[ ! -f "$NOTES_PATH" ]]; then
     exit 0
 fi
+
+# --- Staging directory ---
+if [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
+    echo "compose-doc-append-entry: AGENTS_CONFIG_DIR is required" >&2
+    exit 1
+fi
+STAGING_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")
+mkdir -p "$STAGING_DIR" "$STAGING_DIR/markers"
 
 # --- Extract section helper ---
 extract_section() {
@@ -91,170 +106,276 @@ derive_background() {
     echo "PR #${PR_NUMBER} merged on $(date +%F)."
 }
 
-# --- Idempotency helpers ---
+# --- Idempotency: per-branch+pr marker files in staging dir ---
 ENCODED_BRANCH="${BRANCH//\//%2F}"
+MARKER_HISTORY="$STAGING_DIR/markers/${ENCODED_BRANCH}-pr${PR_NUMBER}-history"
+MARKER_CHANGELOG="$STAGING_DIR/markers/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
 
 history_sentinel_found() {
-    grep -rF "compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER}" \
-        "docs/history.md" "docs/history/" 2>/dev/null | grep -q . && return 0 || return 1
+    [[ -f "$MARKER_HISTORY" ]]
 }
-
-_git_common_abs() {
-    local raw; raw="$(git rev-parse --git-common-dir)"
-    # git returns a relative path for non-linked worktrees; resolve to absolute
-    if [[ "$raw" = /* ]] || [[ "$raw" =~ ^[A-Za-z]: ]]; then
-        echo "$raw"
-    else
-        echo "$(git rev-parse --show-toplevel)/$raw"
-    fi
+write_history_marker() {
+    printf '%s\n%s\n' "${MERGE_COMMIT:-}" "$(date -u +%FT%TZ)" > "$MARKER_HISTORY"
 }
 
 changelog_marker_found() {
-    local git_common; git_common="$(_git_common_abs)"
-    local marker="${git_common}/compose-doc-append-state/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
-    [[ -f "$marker" ]]
+    [[ -f "$MARKER_CHANGELOG" ]]
 }
-
 write_changelog_marker() {
-    local git_common; git_common="$(_git_common_abs)"
-    local marker_dir="${git_common}/compose-doc-append-state"
-    mkdir -p "$marker_dir"
-    local marker="${marker_dir}/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
-    printf '%s\n%s\n' "${MERGE_COMMIT:-}" "$(date -u +%FT%TZ)" > "$marker"
+    printf '%s\n%s\n' "${MERGE_COMMIT:-}" "$(date -u +%FT%TZ)" > "$MARKER_CHANGELOG"
 }
 
 # --- Language lint (WORKTREE_NOTES.md sections) ---
-# Skip if AGENTS_CONFIG_DIR is unset (fail-open: no policy available).
-if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
-    LANG_VIOLATIONS="$(
-        NOTES_PATH="$NOTES_PATH" \
-        AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
-        SKIP_HISTORY="$SKIP_HISTORY" \
-        env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE node -e '
-            const fs = require("fs");
-            const path = require("path");
-            const agentsDir = process.env.AGENTS_CONFIG_DIR;
-            const notesPath = process.env.NOTES_PATH;
-            const skipHistory = process.env.SKIP_HISTORY === "1";
-            let cfgMod, lintMod, privMod;
-            try {
-                cfgMod = require(path.join(agentsDir, "hooks/lib/lang-config.js"));
-                lintMod = require(path.join(agentsDir, "hooks/lib/lint-worktree-notes-lang.js"));
-                privMod = require(path.join(agentsDir, "hooks/lib/is-private-repo.js"));
-            } catch (e) { process.exit(0); }
-            let content;
-            try { content = fs.readFileSync(notesPath, "utf8"); } catch (e) { process.exit(0); }
-            const config = cfgMod.loadDocsLangConfig();
-            let priv = false;
-            try { priv = privMod.isPrivateRepo(process.cwd()) === true; } catch (e) {}
-            const violations = lintMod.lintWorktreeNotesLang(content, config, {
-                isPrivateRepo: priv,
-                skipHistory: skipHistory,
-            });
-            if (violations.length > 0) {
-                process.stdout.write(JSON.stringify(violations));
-            }
-        ' 2>/dev/null || true
-    )"
-    if [[ -n "$LANG_VIOLATIONS" ]]; then
-        echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md content does not match the configured language policy:" >&2
-        LANG_VIOLATIONS="$LANG_VIOLATIONS" node -e '
-            try {
-                const v = JSON.parse(process.env.LANG_VIOLATIONS);
-                v.forEach((x) => console.error("  [" + x.section + ":" + x.lineNumber + "] (expected " + (x.policy || "?") + ") " + x.line));
-            } catch (e) {}
-        ' 2>&1 || true
-        if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
-            echo "compose-doc-append-entry: language violations detected (dry-run, continuing)" >&2
-        else
-            echo "compose-doc-append-entry: rewrite offending bullets to match the policy before re-running" >&2
+LANG_VIOLATIONS="$(
+    NOTES_PATH="$NOTES_PATH" \
+    AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
+    SKIP_HISTORY="$SKIP_HISTORY" \
+    env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE node -e '
+        const fs = require("fs");
+        const path = require("path");
+        const agentsDir = process.env.AGENTS_CONFIG_DIR;
+        const notesPath = process.env.NOTES_PATH;
+        const skipHistory = process.env.SKIP_HISTORY === "1";
+        let cfgMod, lintMod, privMod;
+        try {
+            cfgMod = require(path.join(agentsDir, "hooks/lib/lang-config.js"));
+            lintMod = require(path.join(agentsDir, "hooks/lib/lint-worktree-notes-lang.js"));
+            privMod = require(path.join(agentsDir, "hooks/lib/is-private-repo.js"));
+        } catch (e) { process.exit(0); }
+        let content;
+        try { content = fs.readFileSync(notesPath, "utf8"); } catch (e) { process.exit(0); }
+        const config = cfgMod.loadDocsLangConfig();
+        let priv = false;
+        try { priv = privMod.isPrivateRepo(process.cwd()) === true; } catch (e) {}
+        const violations = lintMod.lintWorktreeNotesLang(content, config, {
+            isPrivateRepo: priv,
+            skipHistory: skipHistory,
+        });
+        if (violations.length > 0) {
+            process.stdout.write(JSON.stringify(violations));
+        }
+    ' 2>/dev/null || true
+)"
+if [[ -n "$LANG_VIOLATIONS" ]]; then
+    echo "compose-doc-append-entry: language lint failed — WORKTREE_NOTES.md content does not match the configured language policy:" >&2
+    LANG_VIOLATIONS="$LANG_VIOLATIONS" node -e '
+        try {
+            const v = JSON.parse(process.env.LANG_VIOLATIONS);
+            v.forEach((x) => console.error("  [" + x.section + ":" + x.lineNumber + "] (expected " + (x.policy || "?") + ") " + x.line));
+        } catch (e) {}
+    ' 2>&1 || true
+    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+        echo "compose-doc-append-entry: language violations detected (dry-run, continuing)" >&2
+    else
+        echo "compose-doc-append-entry: rewrite offending bullets to match the policy before re-running" >&2
+        exit 1
+    fi
+fi
+
+# --- Resolve owner/repo/default branch ---
+if ! OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null); then
+    echo "compose-doc-append-entry: failed to resolve owner/repo via gh" >&2
+    exit 1
+fi
+OWNER="${OWNER_REPO%%/*}"
+REPO="${OWNER_REPO#*/}"
+DEF=$(gh api "repos/$OWNER/$REPO" --jq '.default_branch' 2>/dev/null || echo "main")
+
+# --- Fetch a file from GitHub into a local staging path ---
+fetch_to_staging() {
+    local remote_path="$1"
+    local local_path="$2"
+    local resp
+    if resp=$(gh api "repos/$OWNER/$REPO/contents/$remote_path?ref=$DEF" 2>/dev/null); then
+        printf '%s' "$resp" | jq -r '.content' | tr -d '\n' | base64 -d > "$local_path"
+        return 0
+    fi
+    # File does not exist on remote — leave local file empty (caller decides).
+    : > "$local_path"
+    return 1
+}
+
+# --- Main processing ---
+BG="$(derive_background)"
+TODAY="$(date +%F)"
+
+HISTORY_BULLETS="$(extract_section "History Notes")"
+CHANGELOG_BULLETS="$(extract_section "Changelog Notes")"
+
+# Decide which targets are in play.
+WANT_HISTORY=0
+WANT_CHANGELOG=0
+if [[ "$SKIP_HISTORY" -eq 0 ]] && [[ -n "$HISTORY_BULLETS" ]] && ! history_sentinel_found; then
+    WANT_HISTORY=1
+fi
+if [[ -n "$CHANGELOG_BULLETS" ]] && ! changelog_marker_found; then
+    WANT_CHANGELOG=1
+fi
+
+# Resolve staging paths (caller-overridable for tests).
+SESSION_ID="${CLAUDE_SESSION_ID:-$(date +%s)-$$}"
+HISTORY_STAGING="${TARGET_HISTORY:-$STAGING_DIR/${SESSION_ID}-pr${PR_NUMBER}-history-staging.md}"
+CHANGELOG_STAGING="${TARGET_CHANGELOG:-$STAGING_DIR/${SESSION_ID}-pr${PR_NUMBER}-changelog-staging.md}"
+
+# --- Build the staged content for each target ---
+if [[ "$WANT_HISTORY" -eq 1 ]]; then
+    if ! fetch_to_staging "docs/history.md" "$HISTORY_STAGING"; then
+        echo "compose-doc-append-entry: docs/history.md missing on remote; aborting history append" >&2
+        exit 1
+    fi
+    SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
+    CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
+    if [[ -n "$MERGE_COMMIT" ]]; then
+        COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
+    else
+        COMMITS_ARG="#${PR_NUMBER}"
+    fi
+    SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "[dry-run] uv run doc-append.py $HISTORY_STAGING --category $CATEGORY --subject \"$SUBJECT\" --date $TODAY --commits \"$COMMITS_ARG\" --background \"$BG\" --changes \"$CHANGES_WITH_SENTINEL\""
+    else
+        if ! uv run "$SCRIPT_DIR/doc-append.py" "$HISTORY_STAGING" \
+                --category "$CATEGORY" \
+                --subject "$SUBJECT" \
+                --date "$TODAY" \
+                --commits "$COMMITS_ARG" \
+                --background "$BG" \
+                --changes "$CHANGES_WITH_SENTINEL"; then
+            echo "compose-doc-append-entry: doc-append.py failed for history staging" >&2
+            exit 1
+        fi
+        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
+                --path "docs/history.md" \
+                --file "$HISTORY_STAGING" \
+                --commit-subject "docs(history): record PR #${PR_NUMBER}"; then
+            echo "compose-doc-append-entry: history validation failed" >&2
             exit 1
         fi
     fi
 fi
 
-# --- Main processing ---
-COMMITS_PRODUCED=0
-BG="$(derive_background)"
-TODAY="$(date +%F)"
-
-# --- Target 1: docs/history.md ---
-if [[ "$SKIP_HISTORY" -eq 0 ]]; then
-    HISTORY_BULLETS="$(extract_section "History Notes")"
-    if [[ -n "$HISTORY_BULLETS" ]]; then
-        if history_sentinel_found; then
-            echo "compose-doc-append-entry: history idempotency sentinel found for branch=${BRANCH} pr=#${PR_NUMBER}, skipping" >&2
-        else
-            SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
-            CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
-            if [[ -n "$MERGE_COMMIT" ]]; then
-                COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
-            else
-                COMMITS_ARG="#${PR_NUMBER}"
-            fi
-            SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
-
-            if [[ "$DRY_RUN" -eq 1 ]]; then
-                echo "[dry-run] uv run doc-append.py docs/history.md --category $CATEGORY --subject \"$SUBJECT\" --date $TODAY --commits \"$COMMITS_ARG\" --background \"$BG\" --changes \"$CHANGES_WITH_SENTINEL\""
-                echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/"
-                echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git commit -m \"docs(history): record PR #${PR_NUMBER}\""
-            else
-                uv run "$SCRIPT_DIR/doc-append.py" docs/history.md \
-                    --category "$CATEGORY" \
-                    --subject "$SUBJECT" \
-                    --date "$TODAY" \
-                    --commits "$COMMITS_ARG" \
-                    --background "$BG" \
-                    --changes "$CHANGES_WITH_SENTINEL"
-                COMPOSE_DOC_APPEND_SKILL=1 git add docs/history.md docs/history/
-                COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(history): record PR #${PR_NUMBER}"
-                COMMITS_PRODUCED=$((COMMITS_PRODUCED + 1))
-            fi
-        fi
-    fi
-fi
-
-# --- Target 2: CHANGELOG.md ---
-CHANGELOG_BULLETS="$(extract_section "Changelog Notes")"
-if [[ -n "$CHANGELOG_BULLETS" ]]; then
-    if [[ ! -f "CHANGELOG.md" ]]; then
-        echo "compose-doc-append-entry: CHANGELOG.md not found, skipping changelog target" >&2
-    elif changelog_marker_found; then
-        echo "compose-doc-append-entry: changelog marker found for branch=${BRANCH} pr=#${PR_NUMBER}, skipping" >&2
+if [[ "$WANT_CHANGELOG" -eq 1 ]]; then
+    if ! fetch_to_staging "CHANGELOG.md" "$CHANGELOG_STAGING"; then
+        echo "compose-doc-append-entry: CHANGELOG.md not present on remote, skipping changelog target" >&2
+        WANT_CHANGELOG=0
     else
         CHANGES="$(echo "$CHANGELOG_BULLETS" | tr '\n' ';' | sed 's/;$//')"
         SUBJ_CHANGELOG="PR #${PR_NUMBER}"
 
         if [[ "$DRY_RUN" -eq 1 ]]; then
-            echo "[dry-run] uv run doc-append.py CHANGELOG.md --category $CATEGORY --subject \"$SUBJ_CHANGELOG\" --date $TODAY --no-auto-rotate --background \"$BG\" --changes \"$CHANGES\""
-            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md"
-            echo "[dry-run] COMPOSE_DOC_APPEND_SKILL=1 git commit -m \"docs(changelog): record PR #${PR_NUMBER}\""
+            echo "[dry-run] uv run doc-append.py $CHANGELOG_STAGING --category $CATEGORY --subject \"$SUBJ_CHANGELOG\" --date $TODAY --no-auto-rotate --background \"$BG\" --changes \"$CHANGES\""
         else
-            uv run "$SCRIPT_DIR/doc-append.py" CHANGELOG.md \
-                --category "$CATEGORY" \
-                --subject "$SUBJ_CHANGELOG" \
-                --date "$TODAY" \
-                --no-auto-rotate \
-                --background "$BG" \
-                --changes "$CHANGES"
-            COMPOSE_DOC_APPEND_SKILL=1 git add CHANGELOG.md
-            COMPOSE_DOC_APPEND_SKILL=1 git commit -m "docs(changelog): record PR #${PR_NUMBER}"
-            write_changelog_marker
-            COMMITS_PRODUCED=$((COMMITS_PRODUCED + 1))
+            if ! uv run "$SCRIPT_DIR/doc-append.py" "$CHANGELOG_STAGING" \
+                    --category "$CATEGORY" \
+                    --subject "$SUBJ_CHANGELOG" \
+                    --date "$TODAY" \
+                    --no-auto-rotate \
+                    --background "$BG" \
+                    --changes "$CHANGES"; then
+                echo "compose-doc-append-entry: doc-append.py failed for changelog staging" >&2
+                exit 1
+            fi
+            if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
+                    --path "CHANGELOG.md" \
+                    --file "$CHANGELOG_STAGING" \
+                    --commit-subject "docs(changelog): record PR #${PR_NUMBER}"; then
+                echo "compose-doc-append-entry: changelog validation failed" >&2
+                exit 1
+            fi
         fi
     fi
 fi
 
-# --- Push if commits were produced ---
-if [[ "$DRY_RUN" -eq 0 ]] && [[ "$COMMITS_PRODUCED" -gt 0 ]]; then
-    DEFAULT_BRANCH="$(git remote set-head origin --auto >/dev/null 2>&1 || true; git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')"
-    if [[ -z "$DEFAULT_BRANCH" ]]; then
-        DEFAULT_BRANCH="main"
-    fi
-    if ! COMPOSE_DOC_APPEND_SKILL=1 git push origin "$DEFAULT_BRANCH"; then
-        echo "compose-doc-append-entry: push failed. Recovery: COMPOSE_DOC_APPEND_SKILL=1 git push origin ${DEFAULT_BRANCH}" >&2
-        exit 1
+# --- Write back to GitHub ---
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    [[ "$WANT_HISTORY" -eq 1 ]] && echo "[dry-run] github-contents-write.sh docs/history.md (or git-data atomic when rotated)"
+    [[ "$WANT_CHANGELOG" -eq 1 ]] && echo "[dry-run] github-contents-write.sh CHANGELOG.md"
+    exit 0
+fi
+
+# Determine if history requires rotation.
+HISTORY_ROTATED=0
+ROTATE_DIR=""
+HISTORY_FILES_ARGS=()
+if [[ "$WANT_HISTORY" -eq 1 ]]; then
+    H_LINES=$(wc -l < "$HISTORY_STAGING")
+    if (( H_LINES >= 500 )); then
+        if ! uv run "$AGENTS_CONFIG_DIR/bin/doc-rotate.py" "$HISTORY_STAGING" --threshold-warn 500 >&2; then
+            echo "compose-doc-append-entry: doc-rotate.py failed" >&2
+            exit 1
+        fi
+        ROTATE_DIR="$(dirname "$HISTORY_STAGING")/history"
+        HISTORY_ROTATED=1
+        HISTORY_FILES_ARGS=(--file "docs/history.md=$HISTORY_STAGING")
+        if [[ -d "$ROTATE_DIR" ]]; then
+            for archive in "$ROTATE_DIR"/*.md; do
+                [[ -f "$archive" ]] || continue
+                BASENAME=$(basename "$archive")
+                HISTORY_FILES_ARGS+=(--file "docs/history/$BASENAME=$archive")
+            done
+        fi
     fi
 fi
+
+# Decide write strategy:
+#   - both targets, or history rotated → single atomic Git Data API commit
+#   - one target only, no rotation     → Contents API single PUT
+if [[ "$WANT_HISTORY" -eq 1 ]] && [[ "$WANT_CHANGELOG" -eq 1 ]]; then
+    # Atomic multi-file commit.
+    FILES_ARGS=()
+    if [[ "$HISTORY_ROTATED" -eq 1 ]]; then
+        FILES_ARGS=("${HISTORY_FILES_ARGS[@]}")
+    else
+        FILES_ARGS=(--file "docs/history.md=$HISTORY_STAGING")
+    fi
+    FILES_ARGS+=(--file "CHANGELOG.md=$CHANGELOG_STAGING")
+    if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-git-data-write.sh" \
+            --owner "$OWNER" --repo "$REPO" --branch "$DEF" \
+            --message "docs: record PR #${PR_NUMBER} (history + changelog)" \
+            "${FILES_ARGS[@]}"; then
+        echo "compose-doc-append-entry: atomic multi-file write failed" >&2
+        exit 1
+    fi
+    write_history_marker
+    write_changelog_marker
+elif [[ "$WANT_HISTORY" -eq 1 ]]; then
+    if [[ "$HISTORY_ROTATED" -eq 1 ]]; then
+        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-git-data-write.sh" \
+                --owner "$OWNER" --repo "$REPO" --branch "$DEF" \
+                --message "docs(history): record PR #${PR_NUMBER}" \
+                "${HISTORY_FILES_ARGS[@]}"; then
+            echo "compose-doc-append-entry: history rotation write failed" >&2
+            exit 1
+        fi
+    else
+        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
+                --owner "$OWNER" --repo "$REPO" \
+                --path "docs/history.md" \
+                --file "$HISTORY_STAGING" \
+                --message "docs(history): record PR #${PR_NUMBER}" \
+                --branch "$DEF"; then
+            echo "compose-doc-append-entry: history single-file write failed" >&2
+            exit 1
+        fi
+    fi
+    write_history_marker
+elif [[ "$WANT_CHANGELOG" -eq 1 ]]; then
+    if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
+            --owner "$OWNER" --repo "$REPO" \
+            --path "CHANGELOG.md" \
+            --file "$CHANGELOG_STAGING" \
+            --message "docs(changelog): record PR #${PR_NUMBER}" \
+            --branch "$DEF"; then
+        echo "compose-doc-append-entry: changelog single-file write failed" >&2
+        exit 1
+    fi
+    write_changelog_marker
+fi
+
+# --- Cleanup staging files ---
+[[ -f "$HISTORY_STAGING" ]] && rm -f "$HISTORY_STAGING"
+[[ -f "$CHANGELOG_STAGING" ]] && rm -f "$CHANGELOG_STAGING"
+[[ -n "$ROTATE_DIR" ]] && [[ -d "$ROTATE_DIR" ]] && rm -rf "$ROTATE_DIR"
 
 exit 0

@@ -24,6 +24,18 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
 - `gh` must have the `project` scope for Projects v2 attach. Add with
   `gh auth refresh -s project`.
 - The `type:task` label must exist (run `bin/github-issues/sync-labels.sh` if missing).
+- `/issue-create` MUST be invoked from a linked worktree (not the main worktree).
+  When `ENFORCE_WORKTREE=on` (default) and the current checkout is the main worktree
+  (per `git rev-parse --git-common-dir == --git-dir`), abort with the instruction
+  "Run `/worktree-start <task-name>` first, then re-run `/issue-create`."
+
+## Step 0 — Main-worktree pre-flight
+
+Run before the Mid-workflow gate (and any other phase):
+
+1. Skip when `ENFORCE_WORKTREE=off` (or unset and the workflow has opted-out via session marker).
+2. Detect main-worktree invocation: `git rev-parse --git-common-dir` == `git rev-parse --git-dir`.
+3. On match, print the abort message above and stop — the user must switch to a linked worktree.
 
 ## Mid-workflow gate
 

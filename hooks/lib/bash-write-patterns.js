@@ -118,6 +118,15 @@ const WRITE_PATTERNS = [
   // gh api: cover all flag forms — `-X DELETE`, `-XDELETE`, `-X=DELETE`,
   // `--method DELETE`, `--method=DELETE`.
   { name: "gh-api-mutate", kind: "gh", regex: /\bgh\b.*\bapi\b.*(?:-X[\s=]*|--method[\s=]+)(?:POST|PUT|PATCH|DELETE)\b/i },
+  // gh issue create: sanctioned path is `/issue-create` (see skills/issue-create).
+  // Classified as write so the enforce-worktree session-scope guard applies.
+  { name: "gh-issue-create", kind: "gh", regex: /\bgh\s+issue\s+create\b/ },
+  // gh api PUT to repos/<o>/<r>/contents/... — Contents API single-file write.
+  // (Sanctioned wrapper: bin/lib/github-contents-write.sh.)
+  { name: "gh-api-contents-put", kind: "gh", regex: /\bgh\s+api\s+(?:-X\s+)?PUT\s+repos\/[^\/\s]+\/[^\/\s]+\/contents\// },
+  // gh api POST/PATCH to repos/<o>/<r>/git/{blobs,trees,commits,refs} — Git Data API.
+  // (Sanctioned wrapper: bin/lib/github-git-data-write.sh.)
+  { name: "gh-api-git-data-write", kind: "gh", regex: /\bgh\s+api\s+(?:-X\s+)?(?:POST|PATCH)\s+repos\/[^\/\s]+\/[^\/\s]+\/git\/(?:blobs|trees|commits|refs)/ },
   // Interpreter -c / -Command: shell/interpreter invocations with inline body.
   // Tested against ORIGINAL cmd (not stripped) — the inline body is irrelevant;
   // the interpreter call itself is always a potential write.
