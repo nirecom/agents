@@ -87,16 +87,19 @@ See `docs/security-policy.md` for the full pattern list.
   case-insensitive on Windows. Implementation: `hooks/lib/glob-match.js`.
   Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;<redacted>\my-specs-repo\**\todo.md`
   **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
-  - **Group A (always-allow / classified "read")**: `gh pr create/edit/close/comment/review`,
-    `gh issue create/edit/close/comment`, `gh repo create/edit/rename/archive` — coordination
-    and metadata-only; the guard never fires on these.
-  - **Group B (classified "write", session-scope check)**: `gh pr merge`, `gh issue delete`,
+  - **Classified "write" (session-scope check applies)**: `gh pr merge`, `gh issue create/delete`,
     `gh repo delete`, `gh release create/edit/delete/upload`, `gh api` with
     POST/PUT/PATCH/DELETE in any flag form (`-X`, `-XVERB`, `-X=VERB`, `--method`,
-    `--method=`). Group B commands additionally verify that the detected repo root is
-    in the session scope (CWD repo + `ENFORCE_WORKTREE_EXTRA_REPOS`).
+    `--method=`), GitHub Contents API PUT (`repos/.../contents/...`), Git Data API
+    POST/PATCH (`repos/.../git/{blobs,trees,commits,refs}`). Write commands verify that
+    the detected repo root is in-scope (CWD repo + `ENFORCE_WORKTREE_EXTRA_REPOS`).
+    `gh issue create` is sanctioned only via the `/issue-create` skill — bare invocation
+    from the main worktree is blocked (#672).
+  - **Classified "read" (guard never fires)**: `gh pr create/edit/close/comment/review`,
+    `gh issue edit/close/comment`, `gh repo create/edit/rename/archive` — metadata-only,
+    never changes tracked repo content.
   `ENFORCE_WORKTREE_EXTRA_REPOS`: semicolon-separated list of additional repo roots
-  or parent directories treated as in-scope for Group B gh writes. If an entry
+  or parent directories treated as in-scope for gh write scope checks. If an entry
   is not itself a git repo, its immediate subdirectories are scanned (depth 1)
   and any git repos found are added. The CWD repo is always included.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:

@@ -134,7 +134,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md`. Non-empty → set `skip_history: true` (history.md already committed by Phase 1/2). Empty / missing → `skip_history: false` (CLI bails exit 0 if notes sections empty).
       Delegate to doc-append-worker:
       `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "compose", notes_path: NOTES_BACKUP_PATH, branch: BRANCH, pr_number: PR_NUMBER, merge_commit: MERGE_SHA, pr_title: PR_TITLE, skip_history: SKIP_HISTORY, cwd: MAIN_ROOT, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
-      On `failed` status: surface `artifact_path` to the user; Step 6i still runs. Push-failure recovery: `COMPOSE_DOC_APPEND_SKILL=1 git push origin main`. CLI idempotency prevents duplicates on retry.
+      On `failed` status: surface `artifact_path` to the user; Step 6i still runs. Recovery: `bash "$AGENTS_CONFIG_DIR/bin/compose-doc-append-entry" --notes <path> --branch <b> --pr <N> ...` — the CLI now writes via the GitHub Contents/Git Data API (#672), so no local `git push` is required. CLI idempotency (per-PR markers in `~/.workflow-plans/markers/`) prevents duplicates on retry.
    i. Verify cleanup: `git -C <main> worktree list` — confirm no stale entries.
 ## Rules
 

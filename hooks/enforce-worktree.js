@@ -7,6 +7,18 @@
 //     2. Running on a protected branch even inside a linked worktree.
 //   Allows writes only from a linked worktree on a non-protected branch.
 //
+// Approval axes: (a) main vs linked worktree (only axis). docs(history|changelog) writes
+// are done via GitHub REST API (Contents API: bin/lib/github-contents-write.sh,
+// Git Data API: bin/lib/github-git-data-write.sh) and bypass local file/git writes.
+// env-var bypass functions (ISSUE_CLOSE_SKILL / COMPOSE_DOC_APPEND_SKILL) were removed in #672.
+//
+// Change ④: line ~1467 (!repoRoot) handling differs by tool:
+//   - Bash with findRepoRootForBash(cmd)==null → fail-closed (deny). Bash writes from
+//     non-git CWD are anomalous when sequencing/parseFailure prevents target extraction.
+//   - Edit/Write/MultiEdit with findRepoRoot(filePath)==null → fail-open (allow).
+//     Staging dir writes target $HOME/.workflow-plans/ (non-git path) and must remain
+//     allowed. The check happens earlier at line ~1462 (isInSessionScope guard).
+//
 // Main worktree detection:
 //   git rev-parse --git-common-dir == git rev-parse --git-dir
 //   (Linked worktrees have --git-common-dir pointing to the shared .git while --git-dir
@@ -647,214 +659,6 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   } catch (e) { return false; }
 }
 
-// Allows history.md writes from the main worktree when /issue-close-finalize sets
-// ISSUE_CLOSE_SKILL=1 as an inline env prefix.  AND of 3 conditions:
-//   1. Command string starts with ISSUE_CLOSE_SKILL=1 (inline prefix — not process.env)
-//   2. Paths are confined to docs/history.md and docs/history/
-//   3. Shape is git-add or git-commit with docs(history): subject
-function isAllowedHistoryWriteViaIssueCloseSkill(cmd) {
-  if (!cmd || typeof cmd !== "string") return false;
-  if (hasShellChaining(cmd)) return false;
-  // Axis 1: inline env prefix
-  if (!/^ISSUE_CLOSE_SKILL=1[ \t]+/.test(cmd)) return false;
-  // Axis 2+3: git add (history paths only)
-  if (/^ISSUE_CLOSE_SKILL=1[ \t]+git[ \t]+add[ \t]+docs\/history\.md[ \t]+docs\/history\/[ \t]*$/.test(cmd)) return true;
-  // Axis 2+3: git commit with docs(history): subject
-  if (/^ISSUE_CLOSE_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(history\):[^"']*["'][ \t]*$/.test(cmd)) return true;
-  return false;
-}
-
-// Allows history.md / CHANGELOG.md writes from the main worktree when
-// /worktree-end Step 6i sets COMPOSE_DOC_APPEND_SKILL=1 as an inline env prefix.
-//   1. Command starts with COMPOSE_DOC_APPEND_SKILL=1 (inline prefix)
-//   2. Shape is one of:
-//      a. bash invocation of compose-doc-append-entry script
-//      b. git-add confined to docs/history.md + docs/history/ OR CHANGELOG.md
-//      c. git-commit with docs(history|changelog): record PR #N subject
-function isAllowedHistoryWriteViaComposeDocAppendSkill(cmd) {
-  if (!cmd || typeof cmd !== "string") return false;
-  if (hasShellChaining(cmd)) return false;
-  if (!/^COMPOSE_DOC_APPEND_SKILL=1[ \t]+/.test(cmd)) return false;
-  const BASH_SCRIPT = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+bash[ \t]+"[^"]*\/bin\/compose-doc-append-entry"([ \t]|$)/;
-  const ADD_HISTORY = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+add[ \t]+docs\/history\.md[ \t]+docs\/history\/[ \t]*$/;
-  const ADD_CHANGELOG = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+add[ \t]+CHANGELOG\.md[ \t]*$/;
-  const COMMIT_HISTORY = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(history\): record PR #\d+["'][ \t]*$/;
-  const COMMIT_CHANGELOG = /^COMPOSE_DOC_APPEND_SKILL=1[ \t]+git[ \t]+commit[ \t]+-m[ \t]+["']docs\(changelog\): record PR #\d+["'][ \t]*$/;
-  return BASH_SCRIPT.test(cmd) || ADD_HISTORY.test(cmd) || ADD_CHANGELOG.test(cmd) || COMMIT_HISTORY.test(cmd) || COMMIT_CHANGELOG.test(cmd);
-}
-
-// Returns ONLY the repo's true default branch (origin/HEAD), not the broader
-// "protected" set. Empty string when undetectable (caller MUST fail-closed).
-//
-// Why no env override: any env-based override allows a stale shell var to
-// authorize pushes to a non-default branch. SSOT is git's refs/remotes/origin/HEAD.
-// For repos created via `git remote add` (not `git clone`), run once:
-//   git remote set-head origin <default-branch>
-function getDefaultBranchOnly(repoRoot) {
-  try {
-    const r = spawnSync("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], {
-      cwd: repoRoot, encoding: "utf8", timeout: 2000,
-    });
-    if (r.status === 0) {
-      const v = (r.stdout || "").trim().replace(/^origin\//, "");
-      if (v && /^[A-Za-z0-9._\/-]+$/.test(v)) return v;
-    }
-  } catch (e) {}
-  return ""; // Undetectable — caller MUST fail-closed.
-}
-
-// Allows docs/history push from the main worktree when /issue-close-finalize sets
-// ISSUE_CLOSE_SKILL=1 as an inline env prefix. AND of 4 conditions:
-//   1. Command string starts with ISSUE_CLOSE_SKILL=1 (inline prefix)
-//   2. Shape is exactly: git push origin <default-branch> (with at most -q/--quiet);
-//      remote must be "origin", branch must equal the repo's default branch
-//   3. All outgoing commit subjects match docs(history): record issue #<digits>
-//   4. All touched files confined to docs/history.md or docs/history/
-function isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot) {
-  try {
-    if (!cmd || typeof cmd !== "string" || !repoRoot) return false;
-    if (hasShellChaining(cmd)) return false;
-    if (!/^ISSUE_CLOSE_SKILL=1[ \t]+/.test(cmd)) return false;
-
-    const stripped = stripQuotedArgs(cmd.replace(/^ISSUE_CLOSE_SKILL=1[ \t]+/, ""));
-    const tokens = stripped.trim().split(/\s+/);
-    if (tokens[0] !== "git" || tokens[1] !== "push") return false;
-
-    // Minimal flag allowlist: quiet only. No -u/--set-upstream (upstream mutation),
-    // no --dry-run/--atomic/--porcelain (widens approved shape), no --force*.
-    const KNOWN_FLAGS = new Set(["-q", "--quiet"]);
-    const positionals = [];
-    for (const t of tokens.slice(2)) {
-      if (KNOWN_FLAGS.has(t)) continue;
-      if (t.startsWith("-")) return false; // any other flag → fail-closed
-      positionals.push(t);
-    }
-    if (positionals.length !== 2) return false;
-    const [remote, branch] = positionals;
-
-    // Remote must be the canonical "origin" — the approved bypass shape is
-    // "git push origin <default-branch>" exactly. Any other remote name falls
-    // through to the standard worktree guard.
-    if (remote !== "origin") return false;
-
-    // Branch must be the true default branch only (not just any protected branch).
-    if (branch.includes(":") || branch.startsWith("refs/") || branch.startsWith("+")) return false;
-    if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) return false;
-    const defaultBranch = getDefaultBranchOnly(repoRoot);
-    if (!defaultBranch) return false; // undetectable → fail-closed
-    if (branch !== defaultBranch) return false;
-
-    // Verify both the remote tracking ref AND the local branch ref exist.
-    // git push origin main pushes refs/heads/main, NOT HEAD.
-    const verifyRemoteRes = spawnSync("git", ["rev-parse", "--verify", `${remote}/${branch}`],
-      { cwd: repoRoot, timeout: 2000 });
-    if (verifyRemoteRes.status !== 0) return false;
-    const verifyLocalRes = spawnSync("git", ["rev-parse", "--verify", `refs/heads/${branch}`],
-      { cwd: repoRoot, timeout: 2000 });
-    if (verifyLocalRes.status !== 0) return false;
-
-    const upstreamRef = `${remote}/${branch}`;
-    const localRef = `refs/heads/${branch}`;
-    // Use refs/heads/<branch>..upstreamRef, NOT HEAD..upstreamRef.
-    // The main worktree may be on a different branch or detached when this fires.
-    const range = `${upstreamRef}..${localRef}`;
-
-    // Axis 3: all outgoing commit subjects must match docs(history) pattern.
-    const subjRes = spawnSync("git",
-      ["log", "--pretty=format:%s", range],
-      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
-    if (subjRes.status !== 0) return false;
-    const subjects = (subjRes.stdout || "").split("\n").map(s => s.trim()).filter(Boolean);
-    if (subjects.length === 0) return false; // no-op push → reject
-    const SUBJ_RE = /^docs\(history\): record issue #\d+$/;
-    if (!subjects.every(s => SUBJ_RE.test(s))) return false;
-
-    // Axis 4: all touched files confined to docs/history.md or docs/history/.
-    const logRes = spawnSync("git",
-      ["log", "--name-only", "--pretty=format:", range],
-      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
-    if (logRes.status !== 0) return false;
-    const files = (logRes.stdout || "").split("\n").map(f => f.trim()).filter(Boolean);
-    if (files.length === 0) return false;
-    return files.every(f => {
-      const norm = f.replace(/\\/g, "/");
-      return norm === "docs/history.md" || norm.startsWith("docs/history/");
-    });
-  } catch (e) { return false; }
-}
-
-// Allows docs/history + CHANGELOG.md push from the main worktree when
-// /worktree-end Step 6i sets COMPOSE_DOC_APPEND_SKILL=1 as an inline env prefix.
-//   1. Command starts with COMPOSE_DOC_APPEND_SKILL=1 (inline prefix)
-//   2. Shape is exactly: git push origin <default-branch> (with at most -q/--quiet)
-//   3. All outgoing commit subjects match docs(history|changelog): record PR #<digits>
-//   4. All touched files confined to docs/history.md, docs/history/, or CHANGELOG.md
-function isAllowedHistoryPushViaComposeDocAppendSkill(cmd, repoRoot) {
-  try {
-    if (!cmd || typeof cmd !== "string" || !repoRoot) return false;
-    if (hasShellChaining(cmd)) return false;
-    if (!/^COMPOSE_DOC_APPEND_SKILL=1[ \t]+/.test(cmd)) return false;
-
-    const stripped = stripQuotedArgs(cmd.replace(/^COMPOSE_DOC_APPEND_SKILL=1[ \t]+/, ""));
-    const tokens = stripped.trim().split(/\s+/);
-    if (tokens[0] !== "git" || tokens[1] !== "push") return false;
-
-    const KNOWN_FLAGS = new Set(["-q", "--quiet"]);
-    const positionals = [];
-    for (const t of tokens.slice(2)) {
-      if (KNOWN_FLAGS.has(t)) continue;
-      if (t.startsWith("-")) return false;
-      positionals.push(t);
-    }
-    if (positionals.length !== 2) return false;
-    const [remote, branch] = positionals;
-
-    if (remote !== "origin") return false;
-
-    if (branch.includes(":") || branch.startsWith("refs/") || branch.startsWith("+")) return false;
-    if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) return false;
-    const defaultBranch = getDefaultBranchOnly(repoRoot);
-    if (!defaultBranch) return false;
-    if (branch !== defaultBranch) return false;
-
-    const verifyRemoteRes = spawnSync("git", ["rev-parse", "--verify", `${remote}/${branch}`],
-      { cwd: repoRoot, timeout: 2000 });
-    if (verifyRemoteRes.status !== 0) return false;
-    const verifyLocalRes = spawnSync("git", ["rev-parse", "--verify", `refs/heads/${branch}`],
-      { cwd: repoRoot, timeout: 2000 });
-    if (verifyLocalRes.status !== 0) return false;
-
-    const upstreamRef = `${remote}/${branch}`;
-    const localRef = `refs/heads/${branch}`;
-    const range = `${upstreamRef}..${localRef}`;
-
-    // Axis 3: all outgoing commit subjects must match docs(history|changelog): record PR #N
-    const subjRes = spawnSync("git",
-      ["log", "--pretty=format:%s", range],
-      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
-    if (subjRes.status !== 0) return false;
-    const subjects = (subjRes.stdout || "").split("\n").map(s => s.trim()).filter(Boolean);
-    if (subjects.length === 0) return false; // empty subject set → reject
-    const SUBJ_HISTORY = /^docs\(history\): record PR #\d+$/;
-    const SUBJ_CHANGELOG = /^docs\(changelog\): record PR #\d+$/;
-    if (!subjects.every(s => SUBJ_HISTORY.test(s) || SUBJ_CHANGELOG.test(s))) return false;
-
-    // Axis 4: all touched files confined to history paths or CHANGELOG.md
-    const logRes = spawnSync("git",
-      ["log", "--name-only", "--pretty=format:", range],
-      { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
-    if (logRes.status !== 0) return false;
-    const files = (logRes.stdout || "").split("\n").map(f => f.trim()).filter(Boolean);
-    if (files.length === 0) return false;
-    return files.every(f => {
-      const norm = f.replace(/\\/g, "/");
-      return norm === "docs/history.md"
-        || norm.startsWith("docs/history/")
-        || norm === "CHANGELOG.md";
-    });
-  } catch (e) { return false; }
-}
-
 // Returns true when repoCwd is the main worktree (non-linked).
 // In a linked worktree, --git-common-dir and --git-dir differ.
 function isMainCheckout(repoCwd) {
@@ -1398,7 +1202,9 @@ if (toolName === "Bash") {
       // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
       if (!hasCommandSequencing(cmd)) {
         // Bug 2: all targets resolve outside session scope (incl. non-git paths) → allow.
-        if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) done();
+        // Guard: only fast-allow when we're inside a git repo; non-git CWD must fall
+        // through to Change ④ (fail-closed for Bash).
+        if (repoRoot && areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) done();
 
         // Bug 1: all targets covered by EXCLUDE → allow.
         if (excludePatterns.length > 0 &&
@@ -1464,7 +1270,23 @@ if (toolName === "Bash") {
   done(); // unrecognised tool — allow
 }
 
-if (!repoRoot) done(); // not in a git repo — allow
+// Change ④ (#672): Bash → fail-closed (deny); Edit/Write/MultiEdit → fail-open (allow).
+// Bash writes from a non-git CWD are anomalous when sequencing/parseFailure prevents
+// target extraction. Edit/Write/MultiEdit still target $HOME/.workflow-plans/ staging
+// paths, which must remain allowed (the earlier isInSessionScope guard at line ~1266
+// already handles tool inputs).
+if (!repoRoot) {
+  if (toolName === "Bash") {
+    done({
+      block: true,
+      reason:
+        "ENFORCE_WORKTREE: Bash write blocked. Reason: cannot determine repo root\n" +
+        "(non-git CWD or parseFailure). If this is a legitimate non-repo write,\n" +
+        "use Edit/Write tools or set ENFORCE_WORKTREE=off.",
+    });
+  }
+  done(); // Edit/Write/MultiEdit: fail-open maintained (staging dir writes)
+}
 
 const mainCheckout = isMainCheckout(repoRoot);
 const currentBranch = getCurrentBranch(repoRoot);
@@ -1485,10 +1307,6 @@ if (mainCheckout) {
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
-    if (isAllowedHistoryWriteViaIssueCloseSkill(cmd)) done();
-    if (isAllowedHistoryPushViaIssueCloseSkill(cmd, repoRoot)) done();
-    if (isAllowedHistoryWriteViaComposeDocAppendSkill(cmd)) done();
-    if (isAllowedHistoryPushViaComposeDocAppendSkill(cmd, repoRoot)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
@@ -1528,11 +1346,6 @@ module.exports = {
   hasGitHooksBypass,
   findFirstUnquotedAnd,
   isAllowedMainWorktreeCleanup,
-  isAllowedHistoryWriteViaIssueCloseSkill,
-  getDefaultBranchOnly,
-  isAllowedHistoryPushViaIssueCloseSkill,
-  isAllowedHistoryWriteViaComposeDocAppendSkill,
-  isAllowedHistoryPushViaComposeDocAppendSkill,
   findRepoRootForBash,
   getSessionRepoRoots,
   parseGitCPath,
