@@ -41,6 +41,8 @@ CAP=""
 MAX_EXT=""
 EXT_USED="0"
 TRADEOFFS=""
+ROUND=""
+LEDGER_OVERRIDE=""
 EXTRA_CTX=()
 
 while [[ $# -gt 0 ]]; do
@@ -69,6 +71,12 @@ while [[ $# -gt 0 ]]; do
     --accepted-tradeoffs)
       require_value "--accepted-tradeoffs" "${2:-}"
       TRADEOFFS="$2"; shift 2 ;;
+    --round)
+      require_value "--round" "${2:-}"
+      ROUND="$2"; shift 2 ;;
+    --ledger)
+      require_value "--ledger" "${2:-}"
+      LEDGER_OVERRIDE="$2"; shift 2 ;;
     --context)
       require_value "--context" "${2:-}"
       EXTRA_CTX+=("$2"); shift 2 ;;
@@ -83,6 +91,8 @@ done
 [[ -n "$CAP" ]]       || die "--cap is required"
 [[ -n "$MAX_EXT" ]]   || die "--max-extensions is required"
 [[ -n "$TRADEOFFS" ]] || die "--accepted-tradeoffs is required"
+[[ -n "$ROUND" ]] || { echo "run-codex-review-loop: --round is required" >&2; exit 4; }
+[[ "$ROUND" =~ ^[1-9][0-9]*$ ]] || { echo "run-codex-review-loop: --round must be a positive integer" >&2; exit 4; }
 
 case "$FORMAT" in
   detail-plan|outline-plan) ;;
@@ -102,6 +112,11 @@ mkdir -p "$DRAFTS_DIR" || die "cannot create drafts dir: $DRAFTS_DIR"
 
 CONTEXT_OUT="$DRAFTS_DIR/$SID-context.md"
 MARKER="$DRAFTS_DIR/$SID-context.$FORMAT.built"
+if [[ -n "$LEDGER_OVERRIDE" ]]; then
+  LEDGER="$LEDGER_OVERRIDE"
+else
+  LEDGER="$DRAFTS_DIR/$SID-$FORMAT-concern-ledger.txt"
+fi
 
 if [[ ! -f "$MARKER" ]]; then
   if ! bash "$BUILDER" --plans-dir "$PLANS_DIR" --session-id "$SID" --output "$CONTEXT_OUT"; then
@@ -119,7 +134,12 @@ ARGS=(
   --max-extensions "$MAX_EXT"
   --extensions-used "$EXT_USED"
   --accepted-tradeoffs "$TRADEOFFS"
+  --round "$ROUND"
 )
+
+if [[ "$ROUND" -ge 2 && -f "$LEDGER" ]]; then
+  ARGS+=(--ledger "$LEDGER")
+fi
 
 if [[ -f "$CONTEXT_OUT" && -s "$CONTEXT_OUT" ]]; then
   ARGS+=(--context "$CONTEXT_OUT")
@@ -139,7 +159,6 @@ trap 'rm -f "$TMP_OUT"' EXIT
 
 bash "$REVIEWER" "${ARGS[@]}" > "$TMP_OUT"
 RV=$?
-cat "$TMP_OUT"
 
 if [[ $RV -ne 0 ]]; then
   echo "run-codex-review-loop: codex unavailable (review-plan-codex exited $RV)" >&2
@@ -175,20 +194,175 @@ if [[ -z "$VERDICT" ]]; then
   exit 3
 fi
 
-if [[ "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]]; then
-  exit 0
+# Validate verdict matches expected non-APPROVED keyword for the format
+if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]]; then
+  case "$FORMAT" in
+    detail-plan)
+      [[ "$VERDICT" == "NEEDS_REVISION" ]] || {
+        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
+        exit 3
+      } ;;
+    outline-plan)
+      [[ "$VERDICT" =~ ^MISSING_ALTERNATIVE: ]] || {
+        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
+        exit 3
+      } ;;
+  esac
 fi
 
-case "$FORMAT" in
-  detail-plan)
-    if [[ "$VERDICT" == "NEEDS_REVISION" ]]; then
-      exit 1
-    fi ;;
-  outline-plan)
-    if [[ "$VERDICT" =~ ^MISSING_ALTERNATIVE: ]]; then
-      exit 1
-    fi ;;
-esac
+# --- BEGIN concern-ID ledger + verdict-script block (issue #673) ---
+FINAL_EXIT=0
+HIGH_N=0; MED_N=0; LOW_N=0
 
-echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
-exit 3
+if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
+  if [[ "$ROUND" == "1" ]]; then
+    # Round 1: parse concerns, assign Cn IDs, build ledger.
+    LEDGER_CONTENT=""
+    ID_COUNTER=0
+    TRANSFORMED_CONTENT=""
+    INBLOCK=0
+
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^\<!--[[:space:]]*begin-codex-output ]]; then
+        INBLOCK=1
+        TRANSFORMED_CONTENT+="$line"$'\n'
+        continue
+      fi
+      if [[ "$line" =~ ^\<!--[[:space:]]*end-codex-output ]]; then
+        INBLOCK=0
+        TRANSFORMED_CONTENT+="$line"$'\n'
+        continue
+      fi
+      if [[ "$INBLOCK" -eq 1 ]] && \
+         [[ "$line" =~ ^(C[0-9]+|[0-9]+)\.[[:space:]]\[(HIGH|MEDIUM|LOW)\][[:space:]](.+)$ ]]; then
+        SEV="${BASH_REMATCH[2]}"
+        TEXT="${BASH_REMATCH[3]}"
+        ID_COUNTER=$((ID_COUNTER + 1))
+        CN="C${ID_COUNTER}"
+        LEDGER_CONTENT+="${CN}|${SEV}|${TEXT}"$'\n'
+        TRANSFORMED_CONTENT+="${CN}. [${SEV}] ${TEXT}"$'\n'
+        case "$SEV" in
+          HIGH)   HIGH_N=$((HIGH_N + 1)) ;;
+          MEDIUM) MED_N=$((MED_N + 1)) ;;
+          LOW)    LOW_N=$((LOW_N + 1)) ;;
+        esac
+      elif [[ "$INBLOCK" -eq 1 ]] && [[ "$line" =~ ^[0-9]+\.[[:space:]] ]]; then
+        # Numbered line that did not match the full [HIGH|MEDIUM|LOW] format — format violation.
+        echo "run-codex-review-loop: severity format violation in concern: $line" >&2
+        exit 4
+      else
+        TRANSFORMED_CONTENT+="$line"$'\n'
+      fi
+    done < "$TMP_OUT"
+
+    if [[ $ID_COUNTER -eq 0 ]]; then
+      echo "run-codex-review-loop: NEEDS_REVISION with no parseable concerns" >&2
+      exit 4
+    fi
+
+    LEDGER_TMP="${LEDGER}.tmp.$$"
+    if ! printf '%s' "$LEDGER_CONTENT" > "$LEDGER_TMP"; then
+      echo "run-codex-review-loop: failed to write ledger to $LEDGER" >&2
+      rm -f "$LEDGER_TMP"
+      exit 4
+    fi
+    mv "$LEDGER_TMP" "$LEDGER"
+
+    printf '%s' "$TRANSFORMED_CONTENT" > "$TMP_OUT"
+
+  else
+    # Round 2+: validate against ledger.
+    [[ -f "$LEDGER" ]] || {
+      echo "run-codex-review-loop: ledger missing for round ${ROUND} (expected at ${LEDGER})" >&2
+      exit 4
+    }
+
+    declare -A LEDGER_IDS
+    while IFS='|' read -r LID LSEV _; do
+      [[ -n "$LID" ]] || continue
+      LEDGER_IDS["$LID"]="$LSEV"
+    done < "$LEDGER"
+
+    DISCARDED=()
+    RETAINED_CONTENT=""
+    INBLOCK=0
+
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^\<!--[[:space:]]*begin-codex-output ]]; then
+        INBLOCK=1
+        RETAINED_CONTENT+="$line"$'\n'
+        continue
+      fi
+      if [[ "$line" =~ ^\<!--[[:space:]]*end-codex-output ]]; then
+        INBLOCK=0
+        RETAINED_CONTENT+="$line"$'\n'
+        continue
+      fi
+      if [[ "$INBLOCK" -eq 1 ]] && [[ "$line" =~ ^(C[0-9]+):[[:space:]]*(.*)$ ]]; then
+        CID="${BASH_REMATCH[1]}"
+        STATUS="${BASH_REMATCH[2]}"
+        if [[ -v LEDGER_IDS["$CID"] ]]; then
+          RETAINED_CONTENT+="$line"$'\n'
+          # Tally as unresolved unless the disposition starts with "resolved"
+          if [[ ! "$STATUS" =~ ^resolved($|[[:space:]]) ]]; then
+            case "${LEDGER_IDS[$CID]}" in
+              HIGH)   HIGH_N=$((HIGH_N + 1)) ;;
+              MEDIUM) MED_N=$((MED_N + 1)) ;;
+              LOW)    LOW_N=$((LOW_N + 1)) ;;
+            esac
+          fi
+        else
+          DISCARDED+=("$CID")
+        fi
+      else
+        RETAINED_CONTENT+="$line"$'\n'
+      fi
+    done < "$TMP_OUT"
+
+    if (( ${#DISCARDED[@]} > 0 )); then
+      DISCARDED_STR=$(printf '%s\n' "${DISCARDED[@]}" | sort -V | paste -sd ',' - | sed 's/,/, /g')
+      printf 'run-codex-review-loop: discarded new concern IDs in round %s: %s\n' \
+        "$ROUND" "$DISCARDED_STR" >&2
+    fi
+
+    printf '%s' "$RETAINED_CONTENT" > "$TMP_OUT"
+  fi
+
+  VERDICT_BIN="${AGENTS_CONFIG_DIR}/bin/review-loop-verdict"
+  [[ -x "$VERDICT_BIN" ]] || {
+    echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
+    exit 4
+  }
+  VERDICT_DECISION=$("$VERDICT_BIN" "$ROUND" "$HIGH_N" "$MED_N" "$LOW_N")
+  VERDICT_RC=$?
+  : "${VERDICT_DECISION:=}"
+
+  case "$VERDICT_RC" in
+    0)
+      rm -f "$LEDGER"
+      FINAL_EXIT=0
+      ;;
+    1)
+      FINAL_EXIT=1
+      ;;
+    2)
+      rm -f "$LEDGER"
+      FINAL_EXIT=2
+      ;;
+    3)
+      echo "run-codex-review-loop: review-loop-verdict argument error (round=$ROUND high=$HIGH_N med=$MED_N low=$LOW_N)" >&2
+      exit 4
+      ;;
+    *)
+      echo "run-codex-review-loop: review-loop-verdict unexpected exit: $VERDICT_RC" >&2
+      exit 4
+      ;;
+  esac
+else
+  rm -f "$LEDGER"
+  FINAL_EXIT=0
+fi
+# --- END concern-ID ledger + verdict-script block ---
+
+cat "$TMP_OUT"
+exit "$FINAL_EXIT"

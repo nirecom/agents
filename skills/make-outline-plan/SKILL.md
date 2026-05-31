@@ -87,6 +87,8 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
    **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
    stderr to the user. Only exit 3 falls back silently.
 
+   The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/drafts/<session-id>-outline-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
+
 6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
