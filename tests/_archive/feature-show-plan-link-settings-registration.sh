@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: feature/show/plan/link/settings/registration
+# Tags: show-plan-link-settings-registration
 # Integration test: verify show-plan-link.js is registered in settings.json
 # under both the PostToolUse "Bash|runInTerminal|runCommands" matcher AND
 # the existing "Write" matcher (preservation check).

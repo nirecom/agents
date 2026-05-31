@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/lib/forge-write-extract.js
+# Tags: hook, bin, git, pr, github
 # Unit tests for hooks/lib/forge-write-extract.js
 #
 # The module exports two functions:

@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-325-history-write-bypass.sh
+# Tests: agents/bin/compose-doc-append-entry, agents/bin/other-script, bin/compose-doc-append-entry, bin/other-script, hooks/enforce-worktree.js
+# Tags: worktree, enforce, hook, issue-close, finalize
 #
 # Tests for issue #325 — isAllowedHistoryWriteViaIssueCloseSkill().
 #

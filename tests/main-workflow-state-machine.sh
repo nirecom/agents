@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/lib/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tags: workflow, gate, hook, settings, config
 # Integration regression tests for the Workflow State Machine.
 # Covers: state inheritance, cross-repo commits, RESET_FROM, USER_VERIFIED,
 # branch isolation, and structure smoke tests.

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: feature/424/command/parser
+# Tags: 424, command-parser
 set -euo pipefail
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 run_with_timeout() {

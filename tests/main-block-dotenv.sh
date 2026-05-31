@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/cat, hooks/block-dotenv.js
+# Tags: dotenv, secrets, hook, bin, env
 # Test suite for block-dotenv.js PreToolUse hook
 set -euo pipefail
 

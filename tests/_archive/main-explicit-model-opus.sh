@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: main/explicit/model/opus
+# Tags: explicit-model-opus
 # Structural tests: reasoning-heavy skills and agents must have explicit model: opus
 set -euo pipefail
 
