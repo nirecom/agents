@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-parallel-sessions-worktree-config.sh
+# Tests: hooks/lib/worktree-config.js
+# Tags: parallel-sessions-worktree-config
 #
 # Implementation complete. Tests verify the production contract.
 

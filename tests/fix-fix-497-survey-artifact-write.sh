@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/detail-planner.md, agents/outline-planner.md, agents/survey-code.md, agents/survey-history.md, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/workflow-init/SKILL.md
+# Tags: fix, 497, survey-artifact-write
 # Test suite for issue #497 — survey artifact write failure & post-check verifies existence only.
 # Static doc checks for the shared validity contract and consumer references.
 # Tests will FAIL until the source changes are implemented — that is expected.

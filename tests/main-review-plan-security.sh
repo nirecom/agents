@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: skills/review-code-security/SKILL.md, skills/review-plan-security/SKILL.md
+# Tags: review-plan-security
 # Structural tests for claude-global/skills/review-plan-security/SKILL.md
 set -euo pipefail
 

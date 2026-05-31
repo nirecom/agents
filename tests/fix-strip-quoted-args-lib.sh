@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-strip-quoted-args-lib.sh
+# Tests: hooks/lib/strip-quoted-args.js
+# Tags: strip-quoted-args-lib
 #
 # Tests for hooks/lib/strip-quoted-args.js — exports stripQuotedArgs(str)
 # which strips content inside double-quoted ("..."), single-quoted ('...'),

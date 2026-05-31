@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/survey-code.md, agents/survey-history.md, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/workflow-init/SKILL.md
+# Tags: workflow-init-survey-shift-left
 # Test suite for "shift survey-code/survey-history left into workflow-init" (Issue #327).
 #
 # PRE-IMPLEMENTATION: This test file is written BEFORE source code changes land.

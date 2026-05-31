@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/build-codex-context
+# Tags: build-codex-context
 # Tests for bin/build-codex-context
 #
 # Builds a unified Codex context file by concatenating intent.md and outline.md

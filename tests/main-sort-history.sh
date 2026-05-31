@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/sort-history.py
+# Tags: sort-history
 # Tests for bin/sort-history.py
 # Naming: main direct work → tests/main-<name>.sh
 set -euo pipefail

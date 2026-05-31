@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/block-tests-direct.js
+# Tags: block-tests-direct
 # Test suite for claude-global/hooks/block-tests-direct.js PreToolUse hook.
 # Tests will FAIL until the hook is implemented — that is expected.
 set -uo pipefail

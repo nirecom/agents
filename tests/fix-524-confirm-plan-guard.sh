@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/turn-marker.js, hooks/show-plan-link.js, hooks/stop-confirm-plan-guard.js
+# Tags: 524, confirm-plan-guard
 # Tests for #524 confirm-plan guard:
 #   - hooks/stop-confirm-plan-guard.js (Stop hook)
 #   - hooks/lib/turn-marker.js (marker read/write helpers)

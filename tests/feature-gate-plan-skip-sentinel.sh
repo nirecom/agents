@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/gate-plan-skip-sentinel.js
+# Tags: gate-plan-skip-sentinel
 # Tests for hooks/gate-plan-skip-sentinel.js (PreToolUse hook).
 #
 # Behavior contract:

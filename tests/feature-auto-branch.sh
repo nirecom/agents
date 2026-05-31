@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/auto-branch-guard.js, hooks/lib/path-normalize.js, hooks/post-push-workflow-reset.js, hooks/pre-commit, hooks/workflow-mark.js
+# Tags: auto-branch
 # Tests for AGENT_AUTO_BRANCH enforcement and post-push-workflow-reset hook.
 set -u
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: skills/_shared/assemble-mandatory.sh, skills/make-outline-plan/SKILL.md
+# Tags: 462, assembly
 # Integration tests for skills/_shared/assemble-mandatory.sh (issue #462).
 # Tests will FAIL until skills/_shared/assemble-mandatory.sh is implemented
 # and SKILL.md files are updated.

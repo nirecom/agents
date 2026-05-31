@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/migration/backfill-content-date.sh, bin/github-issues/migration/state.sh
+# Tags: fix, 427, crlf-jq-migration
 # Tests for CRLF defense in migrate-repo's state/jq pipeline (Windows jq.exe).
 # RED before jq_text() exists in state.sh — expected before write-code step.
 #

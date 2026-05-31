@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/run-codex-review-loop, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh
+# Tags: 673, round-counter
 # L1 unit tests for ROUND_NUMBER counter management in
 # skills/make-detail-plan/scripts/run-codex-review-loop.sh (and outline-plan variant).
 # Counter is per-stage: <PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt

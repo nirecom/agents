@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: skills/clarify-intent/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/issue-close-stage/SKILL.md, skills/workflow-init/SKILL.md
+# Tags: gh-skip-non-github-static
 # Static grep-based checks for the non-GitHub-remote gate wiring across 5 SKILL.md files.
 #
 # Pre-implementation: all checks expected to FAIL until SKILL.md gates land.

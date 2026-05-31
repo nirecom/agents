@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: skills/worktree-start/SKILL.md
+# Tags: worktree-start-non-interactive
 # Tests for issue #602 PR1 — skills/worktree-start/SKILL.md non-interactive mode.
 #
 # /worktree-start is a SKILL consumed by the LLM, not an executable CLI, so this

@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-enforce-issue-close.sh
+# Tests: hooks/enforce-issue-close.js
+# Tags: workflow-off-bypass-enforce-issue-close
 #
 # PR2: hooks/enforce-issue-close.js must early-return (exit 0) when
 # <workflowDir>/<sid>.workflow-off marker exists for the calling session.

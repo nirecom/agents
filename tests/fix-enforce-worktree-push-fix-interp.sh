@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-push-fix-interp.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: enforce-worktree-push-fix-interp
 #
 # Integration tests for hooks/enforce-worktree.js — Fix 2:
 # isReadOnlyInterpreterC(cmd)

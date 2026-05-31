@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-enforce-worktree-exclude.sh
+# Tests: hooks/lib/glob-match.js, hooks/pre-commit
+# Tags: enforce-worktree-exclude
 #
 # Integration tests for hooks/pre-commit ENFORCE_WORKTREE_EXCLUDE bypass.
 #

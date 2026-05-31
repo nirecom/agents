@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/is-linked-worktree.sh, bin/is-linked-worktree.sh.
+# Tags: is-linked-worktree
 # Tests for issue #602 PR1 — bin/is-linked-worktree.sh.
 #
 # Parses `git worktree list --porcelain` and prints one of:

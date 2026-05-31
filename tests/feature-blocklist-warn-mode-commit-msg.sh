@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/scan-outbound.sh, hooks/commit-msg
+# Tags: blocklist-warn-mode-commit-msg
 # Test suite for hooks/commit-msg warn-mode behavior.
 #
 # Tests target POST-implementation behavior:

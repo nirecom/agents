@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/detail-planner.md, skills/make-detail-plan/SKILL.md
+# Tags: 673, detail-skip
 # L1 unit tests for change ⑤ of issue #673:
 # AdaCoder-style adaptive detail-plan skip.
 #

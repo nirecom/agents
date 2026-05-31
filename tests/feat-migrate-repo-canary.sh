@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/migration/migrate-history.sh, bin/github-issues/migration/migrate-todo.sh, bin/github-issues/migration/state.sh
+# Tags: migrate-repo-canary
 # Tests for feat/migrate-repo — canary flow across migrate-history.sh and migrate-todo.sh.
 #
 # Sequential canary calls share state across one fixture repo:

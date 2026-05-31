@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/is-private-repo.js, hooks/lib/parse-git-args.js, hooks/workflow-gate.js
+# Tags: workflow-gate-unix-path
 # Tests for workflow-gate.js: resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges
 # Branch: fix/workflow-gate-unix-path
 

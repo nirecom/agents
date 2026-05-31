@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/gh, bin/github-issues/parent-ancestor-reopen.sh
+# Tags: parent-ancestor-reopen
 # Tests for bin/github-issues/parent-ancestor-reopen.sh
 #
 # I/F: parent-ancestor-reopen.sh <owner/repo> <N>

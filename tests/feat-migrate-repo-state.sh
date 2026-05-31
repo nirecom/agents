@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/migration/state.sh
+# Tags: migrate-repo-state
 # Tests for feat/migrate-repo — bin/github-issues/migration/state.sh
 #
 # state.sh provides the .migration-state.json helpers used by the

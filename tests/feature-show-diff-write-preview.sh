@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/show-diff.js
+# Tags: show-diff-write-preview
 set -uo pipefail
 
 REPO_ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/doc-append.py, hooks/check-japanese-in-docs.js
+# Tags: check-japanese-in-docs
 # Test suite for check-japanese-in-docs.js PreToolUse hook
 set -euo pipefail
 

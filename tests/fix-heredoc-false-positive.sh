@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-heredoc-false-positive.sh
+# Tests: hooks/lib/bash-write-patterns.js
+# Tags: heredoc-false-positive
 #
 # Regression tests for the here-doc regex false-positive bug.
 #

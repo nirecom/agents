@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/pull/635, hooks/show-user-verified-context.js
+# Tags: issue, 635, pr-approval-hook
 # Tests for issue #635 — PR approval phrase added to show-user-verified-context.js systemMessage.
 # These tests assert the new fixed English approval-instruction line:
 #   "Click Allow on the next dialog to approve; click Deny to stop."

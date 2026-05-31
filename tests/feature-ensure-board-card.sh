@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: agents/issues/42, bin/gh, bin/github-issues/ensure-board-card.sh
+# Tags: ensure-board-card
 # Tests for bin/github-issues/ensure-board-card.sh — Issue #548
 # Ensures a GitHub issue is on Projects v2 board with Content Date set.
 #

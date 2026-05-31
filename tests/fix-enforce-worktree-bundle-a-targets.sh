@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-bundle-a-targets.sh
+# Tests: hooks/lib/bash-write-targets.js
+# Tags: enforce-worktree-bundle-a-targets
 #
 # Unit tests for hooks/lib/bash-write-targets.js (will be implemented after
 # tests pass red). Tests call the module via `node -e require(...)`.

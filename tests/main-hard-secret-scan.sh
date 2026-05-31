@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/scan-outbound.sh
+# Tags: hard-secret-scan
 # Test suite for hard-secret pattern detection in scan-outbound.sh
 # Tests that the scanner detects API keys, tokens, and private keys with
 # distinct labels in the output.

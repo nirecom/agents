@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/doc-append.py
+# Tags: 277, doc-append-merge-union
 # E2E tests for issue #277 — verify `merge=union` resolves rebase/merge
 # conflicts on docs/history.md and CHANGELOG.md, and that doc-append's
 # INCIDENT auto-numbering still works after the sort refactor.

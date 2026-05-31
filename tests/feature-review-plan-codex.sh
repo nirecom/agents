@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/review-plan-codex, bin/run-codex-review-loop, skills/_shared/codex-review-loop.md, skills/make-detail-plan/SKILL.md, skills/make-outline-plan/SKILL.md
+# Tags: review-plan-codex
 # Tests for bin/review-plan-codex
 # Verifies: SKIPPED/PERFORMED/FAILED status labels, JSONL logging,
 # exit-0 guarantee, security (no shell injection from plan content),

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/parse-closes-issues, hooks/lib/parse-closes-issues.js
+# Tags: issues-section-parser
 # Tests for hooks/lib/parse-closes-issues.js — Issue #548 ## Issues section support.
 #
 # Tests the parser via the CLI wrapper `bin/parse-closes-issues` which prints

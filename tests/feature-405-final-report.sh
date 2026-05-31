@@ -1,16 +1,9 @@
 #!/bin/bash
 # tests/feature-405-final-report.sh
+# Tests: hooks/lib/parse-closes-issues.js, hooks/lib/worktree-notes.js, bin/worktree-final-report.js, skills/worktree-end/SKILL.md
+# Tags: 405, final-report, worktree-end, parse-closes-issues
 #
 # Issue #405 — Final Report feature.
-#
-# Tests the contract of (none of these source files exist yet — tests SKIP
-# gracefully when the implementation hasn't landed):
-#   - hooks/lib/parse-closes-issues.js  (parseClosesIssues parser)
-#   - hooks/lib/worktree-notes.js       (buildNotesBody schema extension:
-#                                        BugsFound / RelatedTasks / NextTasks)
-#   - bin/worktree-final-report.js      (Final Report CLI renderer)
-#   - skills/worktree-end/SKILL.md      (Step 5.5 capture-then-remove flow,
-#                                        Step 7 Final Report invocation)
 #
 # Test-first: most cases either SKIP (source missing) or FAIL until the
 # implementation lands. Once implemented per the contract, all should PASS.

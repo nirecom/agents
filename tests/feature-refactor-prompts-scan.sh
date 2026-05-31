@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/refactor-prompts/lib/filter-kinds.js, bin/refactor-prompts/scan-prompts.js
+# Tags: refactor-prompts-scan
 # Tests for /refactor-prompts — bin/refactor-prompts/scan-prompts.js
 #
 # scan-prompts.js reads {keywords:[{literal, source}]} from stdin (--keywords -)

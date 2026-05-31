@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/show-diff.js, hooks/show-diff.js.
+# Tags: show-diff-plan-file
 # Tests for isPlanFile detection in hooks/show-diff.js.
 #
 # These tests assert the CORRECT POST-FIX behavior (isPlanFile, checking

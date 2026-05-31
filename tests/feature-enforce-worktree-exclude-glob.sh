@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-enforce-worktree-exclude-glob.sh
+# Tests: hooks/lib/glob-match.js, hooks/lib/glob-match.js.
+# Tags: enforce-worktree-exclude-glob
 #
 # Unit tests for hooks/lib/glob-match.js.
 # Drives the module via `node -e` to verify pattern parsing, glob translation,

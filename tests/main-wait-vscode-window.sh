@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/wait-vscode-window.sh
+# Tags: wait-vscode-window
 # Tests for bin/wait-vscode-window.sh
 # Run: bash tests/main-wait-vscode-window.sh
 

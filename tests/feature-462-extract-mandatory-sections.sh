@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/extract-accepted-tradeoffs, bin/extract-mandatory-sections
+# Tags: 462, extract-mandatory-sections
 # Integration tests for bin/extract-mandatory-sections (issue #462).
 # Tests will FAIL until bin/extract-mandatory-sections is implemented.
 # The wrapper test (#9) compares the existing bin/extract-accepted-tradeoffs

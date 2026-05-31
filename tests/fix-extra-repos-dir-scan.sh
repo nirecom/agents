@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-extra-repos-dir-scan.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: extra-repos-dir-scan
 #
 # Integration tests for the directory-scan fallback in getSessionRepoRoots()
 # (enforce-worktree.js).

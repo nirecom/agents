@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/unit-issue-create-dispatch-stdout.sh
+# Tests: bin/github-issues/issue-create-dispatch.sh.
+# Tags: issue-create-dispatch-stdout
 #
 # Unit tests for the stdout-URL extraction pipeline used by callers of
 # bin/github-issues/issue-create-dispatch.sh.

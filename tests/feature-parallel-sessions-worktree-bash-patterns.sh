@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-parallel-sessions-worktree-bash-patterns.sh
+# Tests: agents/bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create-dispatch.sh, hooks/lib/bash-write-patterns.js, hooks/pre-commit, hooks/pre-commit.
+# Tags: parallel-sessions-worktree-bash-patterns
 #
 # Implementation complete. Tests verify the production contract.
 

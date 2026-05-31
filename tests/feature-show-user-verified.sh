@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/pull/314, hooks/show-user-verified-context.js
+# Tags: show-user-verified
 # Tests for hooks/show-user-verified-context.js
 # PreToolUse Bash hook: detects <<WORKFLOW_USER_VERIFIED>> in tool_input.command,
 # emits "User verification context:" systemMessage with staged files and open PR URL

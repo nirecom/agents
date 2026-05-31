@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/issue-close-triage-lib.sh
+# Tags: 325, issue-close-stage-triage
 # Tests for issue #325 — /issue-close-stage skill triage script.
 #
 # Phase 1 (`/issue-close-stage`) runs inside the linked worktree BEFORE PR merge.

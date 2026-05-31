@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/scan-outbound.sh
+# Tags: blocklist-warn-mode-scanner
 # Test suite for `.private-info-blocklist` warn-mode in bin/scan-outbound.sh
 #
 # Tests target POST-implementation behavior:

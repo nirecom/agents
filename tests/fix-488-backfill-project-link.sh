@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/gh, bin/github-issues/migration/backfill-project-link.sh
+# Tags: 488, backfill-project-link
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

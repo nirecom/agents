@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-sweep-hub.sh
+# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md
+# Tags: sweep-hub
 #
 # Structural tests for the /sweep hub skill and the /sweep-worktrees dispatch
 # target. These check only file presence + frontmatter shape — no source-code

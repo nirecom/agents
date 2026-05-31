@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/get-config-var
+# Tags: confirm-flags-helper
 # Tests for bin/get-config-var helper used by confirm-flags feature.
 #
 # Pre-implementation: ALL tests are expected to FAIL with "file/command not

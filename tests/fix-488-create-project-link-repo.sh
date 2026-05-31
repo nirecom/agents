@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/gh, bin/github-issues/migration/create-project.sh, bin/github-issues/migration/state.sh
+# Tags: 488, create-project-link-repo
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

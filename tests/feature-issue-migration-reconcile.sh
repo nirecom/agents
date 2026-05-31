@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/issue-to-history.sh
+# Tags: issue-migration-reconcile
 # Tests for the reconcile path of bin/github-issues/issue-to-history.sh — backfill history
 # entries for issues that were closed without going through /issue-close-stage + /issue-close-finalize.
 #

@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/refactor-enforce-worktree-positive-allow.sh
+# Tests: bin/compose-doc-append-entry, bin/lib/, bin/lib/github-contents-validate.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, hooks/enforce-worktree.js, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-create/SKILL.md
+# Tags: enforce-worktree-positive-allow
 #
 # Tests for refactor/enforce-worktree-positive-allow.
 #

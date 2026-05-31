@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/issue-close-gate.sh
+# Tags: issue-migration-sub-issue-gate
 # Tests for bin/issue-close-gate.sh — gate that blocks issue closure when
 # any sub-issue is still open.
 #

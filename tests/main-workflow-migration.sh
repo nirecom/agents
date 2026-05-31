@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/workflow-state.js
+# Tags: workflow-migration
 # TDD tests for the readState() migration in claude-global/hooks/lib/workflow-state.js
 # Migration (not yet implemented) transforms old state files:
 #   - verify key → renamed to run_tests

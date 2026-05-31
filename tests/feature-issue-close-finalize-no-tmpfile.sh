@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: skills/clarify-intent/lib, skills/clarify-intent/reference/, skills/issue-close-finalize/SKILL.md, skills/issue-close-finalize/scripts/pre-flight.sh, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-close-finalize/scripts/step-g5-loop.sh, skills/worktree-end/lib, skills/worktree-end/scripts/
+# Tags: issue-close-finalize-no-tmpfile
 # Tests for issue-close-finalize SKILL.md invariants:
 #   - #612 (PR3): SKILL.md shortening + lib/ -> scripts/ migration
 #   - #636: tmpfile/mktemp pattern blocked from main worktree under

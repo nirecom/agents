@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-bundle-a.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: enforce-worktree-bundle-a
 #
 # Integration tests for hooks/enforce-worktree.js — Bug 1 (EXCLUDE in PreToolUse)
 # and Bug 2 (session-scope check for Edit/Write/MultiEdit + Bash file targets).

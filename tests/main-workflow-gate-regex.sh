@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/doc-append.py
+# Tags: workflow-gate-regex
 # Tests for workflow-gate.js commit detection regex
 # Tests the FIXED regex: /^git\s+(?:-C\s+\S+\s+)?commit\s/
 # (current source lacks ^ anchor, so bug regression cases will fail on unpatched source)

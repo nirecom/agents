@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/backfill-commit-comments.sh, bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/issue-close-triage.sh, bin/github-issues/parent-body-update.sh, bin/github-issues/post-close-sentinels.sh, skills/issue-close-finalize/SKILL.md
+# Tags: issue, 222
 # Tests for issue #222 — /issue-close skill refactor + backfill script.
 #
 # After the refactor:

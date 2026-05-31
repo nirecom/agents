@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-sweep-worktrees.sh
+# Tests: bin/sweep-worktrees.sh
+# Tags: sweep-worktrees
 #
 # Tests for bin/sweep-worktrees.sh — the zombie-sweep mechanism that replaces
 # the Phase 1 deferred-cleanup model.

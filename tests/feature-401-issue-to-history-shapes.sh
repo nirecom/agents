@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/issue-to-history.sh, bin/github-issues/lib/extract-field.sh
+# Tags: 401, issue-to-history-shapes
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LIB="$AGENTS_DIR/bin/github-issues/lib/extract-field.sh"

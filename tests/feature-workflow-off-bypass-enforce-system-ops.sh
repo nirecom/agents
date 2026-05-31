@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-enforce-system-ops.sh
+# Tests: hooks/enforce-system-ops.js
+# Tags: workflow-off-bypass-enforce-system-ops
 #
 # PR2 invariant: hooks/enforce-system-ops.js must NEVER be bypassed by the
 # workflow-off marker. System-state-changing operations require explicit user

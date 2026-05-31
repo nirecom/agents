@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: skills/save-research/SKILL.md
+# Tags: save-research-skill
 # Structural tests for claude-global/skills/save-research/SKILL.md
 set -euo pipefail
 

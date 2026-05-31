@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-scan-outbound.sh
+# Tests: hooks/scan-outbound.js
+# Tags: workflow-off-bypass-scan-outbound
 #
 # PR2: hooks/scan-outbound.js must early-return (approve) when
 # <workflowDir>/<sid>.workflow-off marker exists for the calling session.

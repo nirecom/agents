@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-merge-gate.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: enforce-worktree-merge-gate
 # Unit tests for isAllowedFastForwardMerge() — added in fix/enforce-worktree-merge-gate.
 
 set -u

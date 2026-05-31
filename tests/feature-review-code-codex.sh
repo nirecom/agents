@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/review-code-codex
+# Tags: review-code-codex
 # Tests for bin/review-code-codex
 # Verifies: SKIPPED/PERFORMED/FAILED status labels, JSONL logging,
 # exit-0 guarantee, security (no shell injection from diff content),

@@ -1,15 +1,9 @@
 #!/bin/bash
 # tests/feature-608-session-close.sh
+# Tests: bin/worktree-final-report.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md
+# Tags: 608, session-close, final-report, issue-close
 #
 # Issue #608 — /session-close orchestration skill + closed_issue_outcomes section.
-#
-# Tests:
-#   - bin/worktree-final-report.js  --outcome-file flag + closedIssueOutcomeLines ctx
-#   - hooks/lib/final-report-schema.js: "### Closed Issue Outcomes" section
-#   - skills/session-close/SKILL.md exists
-#   - skills/worktree-end/SKILL.md no longer has Step 7
-#   - skills/issue-close-finalize/SKILL.md has Step L
-#   - CLAUDE.md routes to /session-close
 #
 # Tests for features not yet implemented are expected to fail until code
 # changes land; structural tests SKIP+PASS when the source file does not

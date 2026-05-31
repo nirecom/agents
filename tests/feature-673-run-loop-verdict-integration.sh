@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
+# Tags: 673, run-loop-verdict-integration
 # L2 integration tests for bin/run-codex-review-loop end-to-end behavior
 # with concern-ID ledger + verdict resolution (issue #673).
 set -uo pipefail

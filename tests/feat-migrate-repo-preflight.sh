@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/migration/orchestrate.sh
+# Tags: migrate-repo-preflight
 # Tests for feat/migrate-repo — pre-flight existing-issues check in orchestrate.sh.
 #
 # Before Step 1, orchestrate.sh must detect whether the target repo already has

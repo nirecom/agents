@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-hooks-bypass.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: enforce-worktree-hooks-bypass
 #
 # Tests for hooks/enforce-worktree.js — detection of git-hooks bypass attempts.
 #

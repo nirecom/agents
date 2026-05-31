@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/block-credentials.js
+# Tags: block-credentials
 # Integration tests for hooks/block-credentials.js PreToolUse hook.
 # Absorbs SSH cases from fix-issue-424-ssh-deny-hook.sh and adds per-family
 # block coverage, false-positive prevention, and WORKFLOW_OFF behavior.

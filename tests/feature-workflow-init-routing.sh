@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
+# Tags: workflow-init-routing
 # Pre-implementation tests for /workflow-init routing skill and workflow_init step.
 # Tests M1-S9 (behavioral): FAIL until source code changes land (detail.md Steps 1-3).
 # Tests C10-C12 (content checks): FAIL until new files are written (detail.md Steps 4-7).

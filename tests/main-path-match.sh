@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/lib/path-match.js
+# Tags: path-match
 # Unit tests for new functions in hooks/lib/path-match.js:
 #   - expandHomeAndEnvVars(p)
 #   - isUnderAnyRoot(p, roots, extraLiteralRoots)

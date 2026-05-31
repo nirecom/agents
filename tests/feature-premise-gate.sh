@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/workflow-mark.js, hooks/workflow-mark.js., skills/make-outline-plan/SKILL.md
+# Tags: premise-gate
 # Test suite for premise-verification gate feature (Issue #262).
 # Static doc/JSON checks + narrow integration tests against hooks/workflow-mark.js.
 # Tests will FAIL until the source updates are implemented — that is expected.

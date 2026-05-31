@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/resume-session-detect
+# Tags: resume-session, 468
 # Test suite for bin/resume-session-detect CLI.
 set -uo pipefail
 

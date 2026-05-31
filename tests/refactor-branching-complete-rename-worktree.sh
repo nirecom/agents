@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/refactor-branching-complete-rename-worktree.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: branching-complete-rename-worktree
 #
 # Tests for enforce-worktree.js: worktree lifecycle commands allowed from main worktree.
 # Covers: git worktree add/remove/prune and New-Item -ItemType Directory.

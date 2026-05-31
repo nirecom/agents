@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: skills/survey-code/SKILL.md, skills/survey-code/SKILL.md.
+# Tags: survey-code-claim-verification
 # Test suite for survey-code claim-verification feature (Issue #262).
 # Static doc checks against skills/survey-code/SKILL.md.
 # Tests will FAIL until the SKILL.md updates are implemented — that is expected.

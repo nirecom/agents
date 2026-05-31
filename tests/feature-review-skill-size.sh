@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/review-skill-size, skills/_archived/old, skills/_archived/old/SKILL.md, skills/bar, skills/bar/SKILL.md, skills/foo, skills/foo/README.md, skills/foo/SKILL.md
+# Tags: review-skill-size
 # Tests for bin/review-skill-size
 # Verifies: SKIPPED/PERFORMED status labels, line-count warnings,
 # _archived/ exclusion, non-SKILL.md exclusion, --base flag, merge-base failure.

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/lib/codex-core.sh
+# Tags: 329, codex-core-ssot
 # Tests for new SSOT helpers added to bin/lib/codex-core.sh (issue #329).
 #
 # Covered functions:
