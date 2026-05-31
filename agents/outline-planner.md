@@ -35,6 +35,7 @@ Your output must stay at the level of: design direction, utility/pattern reuse s
    - Then use Grep to pinpoint which source files are relevant — do not Glob-then-read-all.
    - Read at most 8 source files, prioritized by relevance.
    - Do NOT re-read `rules/` — they are already in your system prompt.
+   - **Cross-component scan:** After reading source files, identify: interfaces between in-scope components, shared data structures, and dependency edges. These feed the `Cross-component risks:` field. If the 8-file cap prevents reading all relevant components, surface that uncertainty explicitly in the field ("unable to assess — N components unread") rather than claiming "none identified".
 3. Propose **2-3 approaches** in the format below. Each approach must be mutually exclusive from the others (i.e., choosing one rules out the others at a fundamental level).
 4. If — and only if — only one approach is viable, emit `SINGLE_APPROACH_JUSTIFIED` (see below).
 
@@ -48,6 +49,7 @@ Your output must stay at the level of: design direction, utility/pattern reuse s
 **Builds on:** <existing utilities, patterns, or conventions already in the codebase>
 **Trade-off vs other options:** <one line>
 **Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
+**Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
 
 ---
 
@@ -58,6 +60,7 @@ Your output must stay at the level of: design direction, utility/pattern reuse s
 **Builds on:** <...>
 **Trade-off vs other options:** <one line>
 **Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
+**Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
 
 ---
 
@@ -73,6 +76,7 @@ If only one approach is genuinely viable (not just the easiest), emit **only** t
 ```
 SINGLE_APPROACH_JUSTIFIED: <one-line reason why alternatives are not viable>
 DELIVERY_PLAN: <triage rationale / execution order / split policy — one line>
+CROSS_COMPONENT_RISKS: <component contract mismatches, dependency direction issues, or coverage gaps; "none identified" if clean; "unable to assess" if 8-file cap prevents full scan>
 ```
 
 The make-outline-plan skill will skip the review round and proceed directly to make-detail-plan.
@@ -100,6 +104,7 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - If the delivery plan cannot be stated in one line for `SINGLE_APPROACH_JUSTIFIED`, consider whether presenting 2 approaches is more appropriate.
 - Follow `rules/core-principles.md`.
 - Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing outline-draft artifacts under <PLANS_DIR> (default ~/.workflow-plans/, resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
+- The `Cross-component risks:` field is mandatory in every approach. Populate it by examining: (1) component contract changes — where two components interact after this approach is applied, does the interface/args/return type contract need updating?; (2) dependency direction — does this approach introduce upstream-depends-on-downstream violations?; (3) responsibility coverage — is every in-scope area owned by exactly one component?
 
 ## Mandatory sections (do not write)
 
