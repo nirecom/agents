@@ -122,6 +122,8 @@ WRITE_CASES=(
     'gh api -X PUT /repos/o/r'
     'gh api -X PATCH /repos/o/r'
     'gh api -X DELETE /repos/o/r'
+    # gh issue create: sanctioned via /issue-create skill only (#672).
+    'gh issue create'
     # Group B (session-scoped writes) — added in fix/enforce-worktree-gh-whitelist
     'gh issue delete 1'
     'gh repo delete owner/repo'
@@ -183,7 +185,6 @@ READ_CASES=(
     'gh pr close 1'
     'gh pr comment 1'
     'gh pr review 1'
-    'gh issue create'
     'gh issue edit 1'
     'gh issue close 1'
     'gh issue comment 1'
@@ -412,7 +413,7 @@ EOF
 content
 EOF
 )"'
-    assert_classify "gh issue create + heredoc body" "$cmd2" "read"
+    assert_classify "gh issue create + heredoc body" "$cmd2" "write"
 
     assert_classify "gh pr edit plain body" 'gh pr edit 1 --body "x"' "read"
 }
@@ -432,7 +433,7 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     # Case 2: gh issue create heredoc body containing rm -rf
     local cmd2
     cmd2=$(printf 'gh issue create --title "T" --body "$(cat <<EOF\nrm -rf /tmp/x\nEOF\n)"')
-    assert_classify "gh issue create heredoc body with rm -rf is read" "$cmd2" "read"
+    assert_classify "gh issue create heredoc body with rm -rf is write" "$cmd2" "write"
 
     # Case 3: gh pr edit heredoc body containing npm install
     local cmd3
@@ -467,7 +468,7 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     # Case 9: #369 original repro
     local cmd9
     cmd9=$(printf 'gh issue create --title "T" --body "$(cat <<EOF\nThis is the background.\ngit push origin main\nMore text.\nEOF\n)"')
-    assert_classify "gh issue create heredoc body #369 original repro" "$cmd9" "read"
+    assert_classify "gh issue create heredoc body #369 original repro" "$cmd9" "write"
 
     # Case 10: lazy-match regression — body contains "this is not EOF" as inner line
     local cmd10
@@ -507,13 +508,13 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
 # re-scanning for git/file-op write patterns.
 
 test_gh_group_a_inline_body_stripping() {
-    # Normal: write-pattern tokens inside inline --body must not cause write
+    # gh issue create: always write (#672 — sanctioned via /issue-create skill only)
     assert_classify "gh issue create --body containing 'git commit'" \
-        'gh issue create --body "git commit"' "read"
+        'gh issue create --body "git commit"' "write"
     assert_classify "gh issue create --body containing 'git push origin main'" \
-        'gh issue create --body "git push origin main"' "read"
+        'gh issue create --body "git push origin main"' "write"
     assert_classify "gh issue create --body containing ISSUE_CLOSE_SKILL prefix" \
-        'gh issue create --body "ISSUE_CLOSE_SKILL=1 git commit -m fix"' "read"
+        'gh issue create --body "ISSUE_CLOSE_SKILL=1 git commit -m fix"' "write"
 
     # Known dispatch script: absolute POSIX path
     assert_classify "bash <abs path>/issue-create-dispatch.sh ... --body 'git commit'" \
@@ -523,18 +524,17 @@ test_gh_group_a_inline_body_stripping() {
     assert_classify "bash <C:/...>/issue-create-dispatch.sh ... --body 'git commit'" \
         'bash "C:/git/agents/bin/github-issues/issue-create-dispatch.sh" --verdict none -- --body "git commit"' "read"
 
-    # Edge: empty body
+    # Edge: empty body — still write (gh issue create is always write)
     assert_classify "gh issue create --body ''" \
-        'gh issue create --body ""' "read"
+        'gh issue create --body ""' "write"
 
-    # Edge: body contains only safe text
+    # Edge: body contains only safe text — still write
     assert_classify "gh issue create --body 'normal body text'" \
-        'gh issue create --body "normal body text"' "read"
+        'gh issue create --body "normal body text"' "write"
 
-    # Edge: --body-file (path arg, not body value) — must NOT be stripped, but
-    # since the path itself contains no write pattern, still classifies as read.
+    # Edge: --body-file — still write (gh issue create is always write)
     assert_classify "gh issue create --body-file /path/to/file.md" \
-        'gh issue create --body-file /path/to/file.md' "read"
+        'gh issue create --body-file /path/to/file.md' "write"
 
     # Security: real git commit (no Group A prefix) must remain write
     assert_classify "real 'git commit -m' must remain write" \
