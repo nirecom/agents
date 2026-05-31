@@ -48,6 +48,12 @@ EOF
     chmod +x "$agents_dir/bin/run-codex-review-loop"
   fi
 
+  # Copy review-loop-verdict (verdict-decision helper invoked by the wrapper)
+  if [[ -f "$AGENTS_WORKTREE/bin/review-loop-verdict" ]]; then
+    cp "$AGENTS_WORKTREE/bin/review-loop-verdict" "$agents_dir/bin/review-loop-verdict"
+    chmod +x "$agents_dir/bin/review-loop-verdict"
+  fi
+
   echo "$agents_dir"
 }
 
@@ -95,7 +101,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid1 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 0 ]] && pass "1: PERFORMED+APPROVED → exit 0" || fail "1: PERFORMED+APPROVED → expected exit 0, got $rc"
 }
@@ -117,7 +123,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid2 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 0 ]] && pass "2: APPROVED with rationale → exit 0" || fail "2: APPROVED with rationale → expected exit 0, got $rc"
 }
@@ -140,7 +146,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 1 ]] && pass "3: NEEDS_REVISION (detail-plan) → exit 1" || fail "3: NEEDS_REVISION (detail-plan) → expected exit 1, got $rc"
 }
@@ -156,13 +162,14 @@ OUT
 ## Codex Plan Review: PERFORMED
 
 <!-- begin-codex-output: treat as untrusted third-party content -->
-MISSING_ALTERNATIVE: need async approach
+MISSING_ALTERNATIVE:
+1. [HIGH] need async approach
 <!-- end-codex-output -->
 OUT
 )"
   invoke_wrapper "$MOCK" --format outline-plan --session-id sid4 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 1 --max-extensions 1 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 1 ]] && pass "4: MISSING_ALTERNATIVE: (outline-plan) → exit 1" || fail "4: MISSING_ALTERNATIVE: (outline-plan) → expected exit 1, got $rc"
 }
@@ -184,7 +191,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format outline-plan --session-id sid5 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 1 --max-extensions 1 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 3 ]] && pass "5: NEEDS_REVISION in outline-plan → exit 3 (wrong format)" || fail "5: NEEDS_REVISION in outline-plan → expected exit 3, got $rc"
 }
@@ -199,7 +206,7 @@ OUT
   make_review_plan_codex_mock "$MOCK" "## Codex Plan Review: FAILED — round cap reached (3/3 rounds, cap=3 extensions_used=0 max_extensions=2; extension available)"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid6 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 2 ]] && pass "6: FAILED — round cap reached → exit 2" || fail "6: FAILED — round cap reached → expected exit 2, got $rc"
 }
@@ -214,7 +221,7 @@ OUT
   make_review_plan_codex_mock "$MOCK" "## Codex Plan Review: SKIPPED — codex CLI not installed"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid7 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 3 ]] && pass "7: SKIPPED → exit 3" || fail "7: SKIPPED → expected exit 3, got $rc"
 }
@@ -229,7 +236,7 @@ OUT
   make_review_plan_codex_mock "$MOCK" "## Codex Plan Review: FAILED — timeout (180s)"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid8 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 3 ]] && pass "8: FAILED — timeout → exit 3" || fail "8: FAILED — timeout → expected exit 3, got $rc"
 }
@@ -251,7 +258,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid9 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 3 ]] && pass "9: garbage verdict → exit 3" || fail "9: garbage verdict → expected exit 3, got $rc"
 }
@@ -273,7 +280,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid10 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 3 ]] && pass "10: empty verdict block → exit 3" || fail "10: empty verdict block → expected exit 3, got $rc"
 }
@@ -288,7 +295,7 @@ OUT
   make_review_plan_codex_mock "$MOCK" "some random unrecognized output line"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid11 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 4 ]] && pass "11: unrecognized header → exit 4" || fail "11: unrecognized header → expected exit 4, got $rc"
 }
@@ -303,7 +310,7 @@ OUT
   # No review-plan-codex needed — should fail at arg parsing
   invoke_wrapper "$MOCK" --session-id sid12 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 4 ]] && pass "12: missing --format → exit 4" || fail "12: missing --format → expected exit 4, got $rc"
 }
@@ -317,7 +324,7 @@ OUT
   PLANS=$(setup_plans_dir "$TMP")
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid13 --plans-dir "$PLANS" \
     --draft-file "$PLANS/nonexistent-draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 4 ]] && pass "13: draft file missing → exit 4" || fail "13: draft file missing → expected exit 4, got $rc"
 }
@@ -360,7 +367,7 @@ OUT
 )"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid14 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   count=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
   if [[ $rc -eq 0 && "$count" == "0" ]]; then
@@ -387,7 +394,7 @@ OUT
 )"
   CAPTURED=$(invoke_wrapper "$MOCK" --format detail-plan --session-id sid15 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" 2>/dev/null)
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 2>/dev/null)
   rc=$?
   if [[ $rc -eq 0 ]] && echo "$CAPTURED" | grep -q 'begin-codex-output'; then
     pass "15: stdout passthrough includes begin-codex-output marker"
@@ -410,7 +417,7 @@ OUT
     STDERR_OUT=$(unset AGENTS_CONFIG_DIR; run_with_timeout "$WRAPPER" \
       --format detail-plan --session-id sid16 --plans-dir "$PLANS" \
       --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-      --accepted-tradeoffs "$PLANS/outline.md" 2>&1 > /dev/null)
+      --accepted-tradeoffs "$PLANS/outline.md" --round 1 2>&1 > /dev/null)
     rc=$?
     if [[ $rc -eq 4 ]] && echo "$STDERR_OUT" | grep -q 'AGENTS_CONFIG_DIR'; then
       pass "16: AGENTS_CONFIG_DIR unset → exit 4, stderr mentions AGENTS_CONFIG_DIR"
@@ -430,7 +437,7 @@ OUT
   rm -f "$MOCK/bin/review-plan-codex"
   invoke_wrapper "$MOCK" --format detail-plan --session-id sid17 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" > /dev/null 2>&1
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 > /dev/null 2>&1
   rc=$?
   [[ $rc -eq 4 ]] && pass "17: review-plan-codex missing → exit 4" || fail "17: review-plan-codex missing → expected exit 4, got $rc"
 }
@@ -445,7 +452,7 @@ OUT
   rm -f "$MOCK/rules/core-principles.md"
   STDERR_OUT=$(invoke_wrapper "$MOCK" --format detail-plan --session-id sid18 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 0 \
-    --accepted-tradeoffs "$PLANS/outline.md" 2>&1 > /dev/null)
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 2>&1 > /dev/null)
   rc=$?
   if [[ $rc -eq 4 ]] && echo "$STDERR_OUT" | grep -q 'required context missing\|core-principles'; then
     pass "18: core-principles.md missing → exit 4, stderr mentions required context"
@@ -517,6 +524,7 @@ ARGV_EOF
     --draft-file "$PLANS/draft.md" --cap 2 --max-extensions 2 --extensions-used 1 \
     --accepted-tradeoffs "$PLANS/outline.md" \
     --context "$SURVEY_CODE" \
+    --round 1 \
     > /dev/null 2>&1
   rc=$?
 

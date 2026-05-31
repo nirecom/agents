@@ -16,11 +16,38 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 | CONCERNS_LOG | `<PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md` | `<PLANS_DIR>/drafts/<session-id>-concerns-log.md` |
 | DEBUG_LOG | `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` | `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` |
 | CAP | 1 | 2 |
-| MAX_EXTENSIONS | 1 | 2 |
+| MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
 | ACCEPTED_TRADEOFFS_FILE | `<PLANS_DIR>/<session-id>-intent.md` | `<PLANS_DIR>/<session-id>-outline.md` |
 | NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE:` | `NEEDS_REVISION` |
+
+## Round Counter (ROUND_NUMBER)
+
+`ROUND_NUMBER` is an orchestrator-tracked integer independent of `EXTENSIONS_USED`.
+
+- Outline stage (CAP=1 / MAX_EXTENSIONS=1): ROUND_NUMBER is 1 on the initial review and 2 after a cap-menu `extend` / `AUTO_EXTEND`.
+- Detail stage (CAP=2 / MAX_EXTENSIONS=1): ROUND_NUMBER reaches 2 on the second review within the same `EXTENSIONS_USED=0` budget; if the user extends, ROUND_NUMBER reaches 3 while `EXTENSIONS_USED=1`.
+
+ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
+
+The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-codex-review-loop.sh`) maintains ROUND_NUMBER on disk at `<PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt` and increments it on each invocation. The file holds a single decimal integer `\n`-terminated. The wrapper passes `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The file is deleted on exit 0 (APPROVED) or exit 2 (ESCALATE); it persists on exit 1 (CONTINUE) and exit 3.
+
+## Concern-ID Ledger
+
+`bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/drafts/<session-id>-<format>-concern-ledger.txt`. The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
+
+Each ledger line is pipe-delimited: `C<N>|<SEVERITY>|<full concern text>`. Full text is stored verbatim (no truncation).
+
+- Round 1: assigns C1, C2, … to each concern; rewrites the forwarded reviewer output so concerns appear as `C<N>. [<SEV>] …`; writes ledger at the end of Round 1 processing.
+- Round 2+: validates each `C<N>:` reference against the ledger; drops unknown IDs from forwarded output and emits a stderr warning `run-codex-review-loop: discarded new concern IDs in round N: C5, C6`; tallies residual severity from ledger for unresolved concerns.
+- Missing ledger at Round 2: exits 4 with `ledger missing for round N` diagnostic (no silent recreation).
+
+The Round 2+ codex prompt in `bin/review-plan-codex` is switched to Cn-reference form via `--round 2 --ledger <path>`. Applies to both `--format detail-plan` and `--format outline-plan`.
+
+The ledger is deleted on terminal verdicts (APPROVED, ESCALATE) and persists across CONTINUE.
+
+Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low>` is invoked on every non-APPROVED reviewer verdict. Its decision overrides the raw reviewer verdict for exit-code selection: APPROVED→0, CONTINUE→1, ESCALATE→2.
 
 ## Per-round protocol
 
