@@ -1,17 +1,16 @@
 #!/usr/bin/env node
-// Stop hook: verify the Final Report turn emits the canonical
-// `### Post-Merge Actions Required` block in the last assistant message.
+// Stop hook: verify the Final Report renderer (bin/worktree-final-report.js)
+// has successfully emitted the canonical Final Report for this session.
 //
 // Trigger: <plans-dir>/<sid>-final-report-env.json exists (written by
 // worktree-end Step 5.5). On any other turn the hook exits 0 silently.
 //
-// On detection, the hook reads the last assistant text in the transcript
-// (last 50 lines, scanned backwards), checks for the heading plus all four
-// category lines, and on violation emits `decision:block` + exit 2 with the
-// rebuilt block (from env-file JSON) as the reason. Fail-open on every
-// uncertainty path (missing transcript, parse errors, malformed env-file,
-// etc.) — the renderer remains the authoritative writer; this hook is a
-// best-effort guard.
+// Contract: the renderer stamps `reported: true` into the env-file after a
+// successful stdout emission. This hook then verifies both: (a) the flag is
+// set, and (b) at least one assistant text message in the transcript contains
+// the Final Report heading (guards against the renderer running in a Bash
+// tool result without the output being pasted verbatim — issue #700). Fail-
+// open on all uncertainty paths (missing/malformed env-file, no transcript).
 "use strict";
 
 const fs = require("fs");
@@ -31,61 +30,24 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+// Used when the renderer did not set the flag at all.
 const REASON_INSTRUCTION_TEMPLATE =
-  "[final-report] The Final Report (## Final Report — <sid>) is missing sections or is " +
-  "incomplete in the last assistant message. Copy the renderer output verbatim — do not " +
-  "reformat, summarize, or reorder any heading. Run the renderer via the Bash tool and " +
-  "paste its stdout (excluding the sentinel line) directly into your response. " +
+  "[final-report] The Final Report renderer has not stamped the `reported` flag " +
+  "in the env file for session <sid>, which means the renderer did not run to " +
+  "completion in this turn. Re-run `bin/worktree-final-report.js` via the Bash " +
+  "tool and paste its stdout verbatim (excluding the sentinel line) into your " +
+  "response — do not reformat, summarize, or reorder any heading. " +
   "(Hook: stop-final-report-guard.js)";
 
-function lastAssistantText(transcriptPath) {
-  let raw;
-  try {
-    raw = fs.readFileSync(transcriptPath, "utf8");
-  } catch (_) {
-    return null;
-  }
-  const lines = raw.split("\n");
-  const tail = lines.slice(Math.max(0, lines.length - 50));
-  for (let i = tail.length - 1; i >= 0; i--) {
-    const line = tail[i];
-    if (!line) continue;
-    let entry;
-    try {
-      entry = JSON.parse(line);
-    } catch (_) {
-      continue;
-    }
-    if (!entry || entry.type !== "assistant") continue;
-    const content = entry.message && entry.message.content;
-    if (!Array.isArray(content)) return null;
-    const texts = [];
-    for (const item of content) {
-      if (item && item.type === "text" && typeof item.text === "string") {
-        texts.push(item.text);
-      }
-    }
-    return texts.join("\n");
-  }
-  return null;
-}
-
-function blockIsComplete(text, sessionId) {
-  if (!text) return false;
-  const headings = schema.getSectionHeadings(sessionId);
-  if (!headings.every((h) => text.includes(h))) return false;
-  if (!schema.getProbes().every((p) => text.includes(p))) return false;
-  const outcomeSection = schema.SECTIONS.find((s) => s.id === "closed_issue_outcomes");
-  if (!outcomeSection) return false;
-  const outcomeHeading = outcomeSection.heading();
-  const idx = text.indexOf(outcomeHeading);
-  if (idx === -1) return false;
-  const after = text.slice(idx + outcomeHeading.length);
-  const nextHeadingIdx = after.search(/\n###? /);
-  const sectionContent = nextHeadingIdx === -1 ? after : after.slice(0, nextHeadingIdx);
-  if (!/^\s*- /m.test(sectionContent)) return false;
-  return true;
-}
+// Used when the renderer ran and set the flag but the heading was not found in
+// any assistant text message — the output likely appeared only in a Bash tool
+// result without being pasted verbatim (issue #700).
+const REASON_PASTE_TEMPLATE =
+  "[final-report] The renderer has set `reported` in the env file but no assistant " +
+  "message containing ‘## Final Report — <sid>’ was found in the " +
+  "transcript. The renderer output may have appeared only in the Bash tool result " +
+  "— paste its stdout verbatim (excluding the sentinel line) into your response. " +
+  "(Hook: stop-final-report-guard.js)";
 
 if (require.main === module) {
   let input = {};
@@ -131,15 +93,43 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  if (typeof input.transcript_path !== "string" || !input.transcript_path) {
-    process.exit(0);
+  // Renderer stamped the flag → also verify the heading appears in at least one
+  // assistant text message (not just a Bash tool result — issue #700).
+  let instructionTemplate = REASON_INSTRUCTION_TEMPLATE;
+  if (env.reported === true) {
+    const transcriptPath = input.transcript_path;
+    let verified = !transcriptPath; // no path in input → fail-open
+    if (transcriptPath) {
+      let raw;
+      try {
+        raw = fs.readFileSync(transcriptPath, "utf8");
+        const HEADING = "## Final Report —";
+        verified = raw.split("\n").some((line) => {
+          if (!line.trim()) return false;
+          try {
+            const entry = JSON.parse(line);
+            if (entry.type !== "assistant") return false;
+            const content = entry.message && entry.message.content;
+            if (!Array.isArray(content)) return false;
+            return content.some(
+              (b) =>
+                b.type === "text" &&
+                typeof b.text === "string" &&
+                b.text.includes(HEADING)
+            );
+          } catch (_) {
+            return false;
+          }
+        });
+      } catch (_) {
+        verified = true; // transcript missing → fail-open
+      }
+    }
+    if (verified) process.exit(0);
+    instructionTemplate = REASON_PASTE_TEMPLATE;
   }
-  const text = lastAssistantText(input.transcript_path);
-  if (text === null) process.exit(0);
 
-  if (blockIsComplete(text, sid)) process.exit(0);
-
-  // Render the canonical Post-Merge Actions block from env for the reason.
+  // Block — rebuild reason from env + chosen instruction template.
   function safeEnvVal(key) {
     const v = env[key];
     if (v === undefined || v === null || v === "") return "(none)";
@@ -168,7 +158,7 @@ if (require.main === module) {
     }
   }
   const reason =
-    REASON_INSTRUCTION_TEMPLATE.replace("<sid>", sid) +
+    instructionTemplate.replace("<sid>", sid) +
     "\n\n" +
     postMergeLines.join("\n");
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");

@@ -223,3 +223,24 @@ const ctx = {
 const body = schema.renderCanonicalReport(envFileValues, sessionId, ctx);
 process.stdout.write(body + "\n");
 process.stdout.write("\n<<WORKFLOW_MARK_STEP_final_report_complete>>\n");
+
+// Stamp env-file with reported: true so stop-final-report-guard.js knows
+// the renderer completed successfully. Only stamp when --env-file was
+// explicitly provided. Non-fatal on failure — the hook fail-safe direction
+// is to block when the flag is missing, prompting a re-run.
+if (envFileExplicit) {
+  try {
+    const stamped = Object.assign({}, envFileValues, {
+      reported: true,
+      reportedAt: new Date().toISOString(),
+    });
+    const tmp = envFilePath + "." + process.pid + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(stamped, null, 2) + "\n", "utf8");
+    fs.renameSync(tmp, envFilePath);
+  } catch (e) {
+    process.stderr.write(
+      "[worktree-final-report] WARN: failed to stamp env-file with reported flag: " +
+        envFilePath + " (" + e.message + ")\n"
+    );
+  }
+}
