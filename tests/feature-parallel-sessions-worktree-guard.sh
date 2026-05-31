@@ -213,16 +213,18 @@ test_dash_C_quoted_path() {
     fi
 }
 
-test_non_git_dir_allows() {
-    require_guard "test_non_git_dir_allows" || return
+test_non_git_dir_blocks() {
+    # Change ④ (#672): Bash writes from non-git CWD are now fail-closed (block).
+    # Edit/Write tools retain fail-open behavior for staging dir writes.
+    require_guard "test_non_git_dir_blocks" || return
     local d="$TMPDIR_BASE/nongit-$$"
     mkdir -p "$d"
     local out
     out="$(run_bash_guard "echo x > $d/foo" "$d" ENFORCE_WORKTREE=on)"
     if guard_decision "$out"; then
-        pass "non-git directory allows Bash write"
+        fail "non-git directory: should block ($out)"
     else
-        fail "non-git directory: should allow ($out)"
+        pass "non-git directory: Bash write blocked (Change ④)"
     fi
 }
 
@@ -664,7 +666,7 @@ test_linked_worktree_on_main_blocks
 test_off_mode_main_checkout_allows
 test_dash_C_to_main_repo_blocks
 test_dash_C_quoted_path
-test_non_git_dir_allows
+test_non_git_dir_blocks
 test_main_checkout_detached_head_blocks
 test_linked_worktree_detached_head_allows
 test_malformed_json_stdin_safe
