@@ -81,62 +81,15 @@
 `--permission-mode plan` is incompatible with this workflow — Skill tool invocations
 are restricted in that mode. Always use default mode for implementation tasks.
 
-## Docs-only Short-circuit
+ドキュメント編集のみのコミットでワークフローを短縮したい場合は `rules/docs-only-short-circuit.md` を見よ。
 
-If every staged file matches the human-facing docs allowlist — any `.md` under `docs/`,
-or one of the root-level files `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
-`LICENSE.md` — steps 1–6 are auto-bypassed. Only `user_verification` is required before
-committing. Root `CLAUDE.md`, `SKILL.md`, and subdirectory `README.md` are behavior/prompt
-code and do NOT qualify.
-
-## Workflow Session Override (WORKFLOW_OFF)
-
-For trivial edits where full workflow overhead is disproportionate, emit the session-scoped bypass sentinel:
-
-    echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>"
-
-This requires user approval (ask gate). When active, steps 1–9 and all workflow hooks are suspended for the current session (except `enforce-system-ops.js` — OS safety is always enforced). See `rules/workflow-off.md` for the full bypass matrix and restore procedure.
-
-To restore enforcement within the same session:
-
-    echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>"
-
-Enforcement also restores automatically in the next session.
+軽微な編集でワークフロー強制を一時停止したい場合は `rules/workflow-off.md` を見よ。
 
 ## Workflow State Recovery
 
-The main conversation can reset workflow state only when it has enough holistic context
-to judge that a reset is genuinely warranted. Skills and subagents must not reset.
+Main conversation only — never from skills/subagents. Reset by emitting `<<WORKFLOW_RESET_FROM_<step>>>`; only when holistic context justifies it.
 
-```
-echo "<<WORKFLOW_RESET_FROM_<step>>>"
-```
-
-## Mid-workflow finding capture
-
-When you discover a bug unrelated to the current task, a related follow-up, or a
-next-task candidate while running the workflow:
-
-**Primary path — invoke `/issue-create` immediately** from the linked worktree.
-Mid-workflow issues are NOT added to the current session's `closes_issues` (1 session = 1
-issue). Address them in a separate session via `/workflow-init <N>`.
-The `/issue-create` Mid-workflow gate surfaces this notice before Phase 1.
-
-**Fallback path** — use `<worktree>/WORKTREE_NOTES.md` only when:
-- Non-interactive session (`claude -p`, subagent, `/loop`), OR
-- Non-GitHub remote (`bin/is-github-dotcom-remote` returns non-zero), OR
-- User explicitly defers.
-
-Fallback recovery: `/worktree-end` Step 5.5(a.5) promotes unconverted
-`WORKTREE_NOTES.md` entries to issues. **Cutoff: Step 5** — findings after that
-go directly to `/issue-create`.
-
-Fallback sections (edit `WORKTREE_NOTES.md` directly; gitignored; not subject to
-`enforce-worktree`). Replace `- (none)` on first append:
-
-- `## BugsFound` — defects observed during the workflow
-- `## RelatedTasks` — adjacent work to address in a separate session
-- `## NextTasks` — follow-ups specific to the current change
+ワークフロー中に別件のバグ・後続作業・next-task を発見した場合は `rules/mid-workflow-findings.md` を見よ。
 
 ## agents Repository Development
 
