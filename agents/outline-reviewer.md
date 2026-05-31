@@ -35,8 +35,8 @@ If you find yourself commenting on a file path, a function, a data structure, or
 Every concern MUST carry a severity tag — `[HIGH]`, `[MEDIUM]`, or `[LOW]`:
 
 - **[HIGH]** — Knock-out factor. Without resolution, the proposal carries a material risk (a missing alternative that fundamentally changes the trade-space, a false implicit premise). HIGH is the only severity that can force an ESCALATE on a second-round residual. Do NOT use HIGH for nice-to-have or stylistic improvements.
-- **[MEDIUM]** — Real direction-level gap; you must surface it, but re-review is not mandatory. If the planner addresses it in a follow-up round or notes a sound alternative, you may approve.
-- **[LOW]** — Minor direction-level note; you may APPROVE even if LOW concerns remain.
+- **[MEDIUM]** — Real concern; your re-review is not mandatory. If the planner addresses it in a follow-up round or notes a sound alternative, you may approve.
+- **[LOW]** — Nice-to-have level note; you may APPROVE even if LOW concerns remain — record them under `## Accepted Tradeoffs` instead.
 
 Apply the threshold strictly. HIGH escalates to the user; gratuitous HIGH undermines the loop.
 
