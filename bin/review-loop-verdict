@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# bin/review-loop-verdict
+# Computes the verdict decision (APPROVED / CONTINUE / ESCALATE) for the
+# planner-reviewer loop based on round number and per-severity residual counts.
+#
+# Usage: review-loop-verdict <round> <high> <medium> <low>
+#
+# Exit codes:
+#   0 — APPROVED
+#   1 — CONTINUE
+#   2 — ESCALATE
+#   3 — argument error
+set -euo pipefail
+
+die() {
+  echo "review-loop-verdict: $1" >&2
+  exit 3
+}
+
+[[ $# -eq 4 ]] || die "expected 4 args (round high medium low), got $#"
+
+ROUND="$1"
+HIGH="$2"
+MED="$3"
+LOW="$4"
+
+is_nonneg_int() { [[ "$1" =~ ^(0|[1-9][0-9]*)$ ]]; }
+
+is_nonneg_int "$ROUND" || die "round must be a non-negative integer: $ROUND"
+is_nonneg_int "$HIGH"  || die "high must be a non-negative integer: $HIGH"
+is_nonneg_int "$MED"   || die "medium must be a non-negative integer: $MED"
+is_nonneg_int "$LOW"   || die "low must be a non-negative integer: $LOW"
+
+[[ "$ROUND" -ge 1 ]] || die "round must be >= 1: $ROUND"
+
+# Verdict matrix (priority order):
+#   high == 0 && medium == 0          -> APPROVED   (LOW alone never blocks)
+#   round < 2 && (high>0 || med>0)    -> CONTINUE
+#   round >= 2 && high > 0            -> ESCALATE
+#   round >= 2 && high == 0 && med>0  -> APPROVED   (MEDIUM downgrades at cap)
+if [[ "$HIGH" -eq 0 && "$MED" -eq 0 ]]; then
+  printf 'APPROVED\n'
+  exit 0
+fi
+
+if [[ "$ROUND" -lt 2 ]]; then
+  printf 'CONTINUE\n'
+  exit 1
+fi
+
+# round >= 2
+if [[ "$HIGH" -gt 0 ]]; then
+  printf 'ESCALATE\n'
+  exit 2
+fi
+
+# round >= 2 && high == 0 && med > 0
+printf 'APPROVED\n'
+exit 0
