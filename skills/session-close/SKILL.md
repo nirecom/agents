@@ -123,8 +123,12 @@ else
 fi
 ```
 
-Paste the renderer output verbatim — `stop-final-report-guard.js` validates
-every heading including `### Closed Issue Outcomes` (requires at least one bullet).
+Paste the renderer output verbatim into your response (exclude the sentinel line).
+`stop-final-report-guard.js` validates completion via two checks: (a) the renderer
+stamps `reported: true` into the env file after a successful stdout emission, and
+(b) at least one assistant text message in the transcript contains the heading
+`## Final Report —` (prevents the renderer Bash tool result from being mistaken
+for a verbatim paste — issue #700). The hook blocks if either condition is unmet.
 
 ## Rules
 
