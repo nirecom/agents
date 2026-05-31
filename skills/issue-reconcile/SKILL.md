@@ -61,7 +61,21 @@ Ask whether to **append**, **skip**, or **stop**.
 On "append":
 
 ```bash
-ISSUE_CLOSE_SKILL=1 bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM"
+# Fetch current docs/history.md into a staging file, append via --target,
+# validate, then PUT to GitHub via the Contents API. The ISSUE_CLOSE_SKILL=1
+# env-var bypass was removed in #672.
+STAGING_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"
+STAGE="$STAGING_DIR/reconcile-${NUM}-history.md"
+OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')
+DEF=$(gh api "repos/$OWNER_REPO" --jq '.default_branch')
+gh api "repos/$OWNER_REPO/contents/docs/history.md?ref=$DEF" \
+    | jq -r '.content' | tr -d '\n' | base64 -d > "$STAGE"
+bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM" --target "$STAGE"
+bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
+    --owner "${OWNER_REPO%%/*}" --repo "${OWNER_REPO#*/}" \
+    --path docs/history.md --file "$STAGE" \
+    --message "docs(history): record issue #$NUM" --branch "$DEF"
+rm -f "$STAGE"
 ```
 
 The script is internally idempotent — running it on `history-only` does
@@ -69,7 +83,9 @@ nothing harmful — but skip those in step 2 anyway to avoid unnecessary
 GitHub API calls.
 
 After a successful append, post the `appended` sentinel so future runs
-classify the issue as clean:
+classify the issue as clean. The `gh issue comment` call is gated by
+`enforce-issue-close.js`; the bare-prefix `ISSUE_CLOSE_SKILL=1` bypass is
+out of scope for #672 and remains in place pending a follow-up:
 
 ```bash
 ISSUE_CLOSE_SKILL=1 gh issue comment "$NUM" \
