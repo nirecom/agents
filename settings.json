@@ -127,38 +127,6 @@
     ],
     "deny": [
       "Bash(echo \"<<WORKFLOW_MARK_STEP_user_verification*>>\")",
-      "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.development)",
-      "Read(**/.env.production)",
-      "Read(**/.env.staging)",
-      "Read(**/.env.test)",
-      "Read(**/.env.dev)",
-      "Read(**/.env.prod)",
-      "Grep(**/.env)",
-      "Grep(**/.env.local)",
-      "Grep(**/.env.development)",
-      "Grep(**/.env.production)",
-      "Grep(**/.env.staging)",
-      "Grep(**/.env.test)",
-      "Grep(**/.env.dev)",
-      "Grep(**/.env.prod)",
-      "Edit(**/.env)",
-      "Edit(**/.env.local)",
-      "Edit(**/.env.development)",
-      "Edit(**/.env.production)",
-      "Edit(**/.env.staging)",
-      "Edit(**/.env.test)",
-      "Edit(**/.env.dev)",
-      "Edit(**/.env.prod)",
-      "Write(**/.env)",
-      "Write(**/.env.local)",
-      "Write(**/.env.development)",
-      "Write(**/.env.production)",
-      "Write(**/.env.staging)",
-      "Write(**/.env.test)",
-      "Write(**/.env.dev)",
-      "Write(**/.env.prod)",
       "Bash(*Remove-Item*-Recurse*-Force*)",
       "Bash(*Remove-Item*-Force*-Recurse*)",
       "Bash(*rm -rf *)",
@@ -202,15 +170,6 @@
       "Bash(*wget *| bash*)",
       "Bash(*wget *|sh*)",
       "Bash(*wget *| sh*)",
-      "Edit(~/.bashrc)",
-      "Edit(~/.zshrc)",
-      "Edit(~/.profile)",
-      "Edit(~/.bash_profile)",
-      "Edit(~/.profile_common)",
-      "Edit(~/.claude/projects/workflow/**)",
-      "Write(~/.claude/projects/workflow/**)",
-      "Edit(**/history.md)",
-      "Write(**/history.md)",
       "Bash(*aws * delete*)",
       "Bash(*aws * terminate*)",
       "Bash(*aws * remove*)",
@@ -368,6 +327,26 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-credentials.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-history-direct.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|editFiles",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-shell-config.js\"",
             "timeout": 5
           }
         ]
@@ -538,5 +517,5 @@
   },
   "effortLevel": "medium",
   "autoUpdatesChannel": "latest",
-  "model": "claude-opus-4-7"
+  "model": "claude-sonnet-4-6"
 }
