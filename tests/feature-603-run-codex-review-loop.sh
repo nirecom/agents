@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/build-codex-context, bin/review-loop-verdict, bin/review-plan-codex, bin/run-codex-review-loop
+# Tags: worktree, codex, review, bin, install
 # Tests for bin/run-codex-review-loop (issue #603)
 # Tests the exit-code matrix, pre-flight checks, and argument forwarding.
 # NOTE: bin/run-codex-review-loop does not exist yet — failures are expected until implementation.

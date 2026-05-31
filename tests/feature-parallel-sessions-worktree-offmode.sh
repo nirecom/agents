@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-parallel-sessions-worktree-offmode.sh
+# Tests: hooks/auto-branch-guard.js, hooks/enforce-worktree.js, hooks/pre-commit
+# Tags: worktree, enforce, hook, git, pre-commit
 #
 # Implementation complete. Tests verify the production contract.
 

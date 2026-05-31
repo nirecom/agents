@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-cwd-fallback.sh
+# Tests: hooks/enforce-issue-close.js, hooks/enforce-worktree.js, skills/worktree-end/SKILL.md
+# Tags: worktree, enforce, hook, issue-close, workflow
 #
 # Tests for hooks/enforce-worktree.js fail-open when process.cwd() points to
 # a directory that no longer exists (issue #268). Companion fix is in

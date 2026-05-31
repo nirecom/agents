@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-worktree-end-step3-state-gate.sh
+# Tests: skills/worktree-end/SKILL.md
+# Tags: worktree, end, cleanup, skill, bin
 #
 # Tests for the PR state gate added to /worktree-end Step 3 (issue #358).
 # The state gate applies to both AUTO_MERGE_PR=on and off modes (runs before the split).

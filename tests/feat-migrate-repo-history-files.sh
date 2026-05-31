@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/migration/migrate-history.sh, bin/github-issues/migration/preview-history.sh, bin/github-issues/migration/state.sh
+# Tags: migration, repo, history, docs, github
 # Tests for feat/migrate-repo — --history-files flag on migrate-history.sh and preview-history.sh.
 #
 # The flag allows callers to bypass auto-discovery and specify history archive files

@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-main-cleanup.sh
+# Tests: hooks/enforce-worktree.js
+# Tags: worktree, enforce, hook, bin, git
 # Tests for isAllowedMainWorktreeCleanup() — #297
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

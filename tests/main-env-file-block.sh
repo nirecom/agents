@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/scan-outbound.sh, hooks/pre-commit
+# Tags: scan, filter, outbound, hook, git
 # Test suite for pre-commit hook .env file blocking.
 # Tests that claude-global/hooks/pre-commit refuses to allow .env files to be
 # committed, while allowing .env.example / .env.sample / .env.template.

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/review-plan-codex
+# Tags: codex, review, bin, env, config
 # Integration tests for bin/review-plan-codex with new round-counter / cap args
 # (--cap, --max-extensions, --extensions-used, --session-id, --log-dir,
 #  --accepted-tradeoffs).

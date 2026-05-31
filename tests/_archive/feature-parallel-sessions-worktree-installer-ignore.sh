@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-parallel-sessions-worktree-installer-ignore.sh
+# Tests: feature/parallel/sessions/worktree/installer/ignore
+# Tags: parallel-sessions-worktree-installer-ignore
 #
 # Implementation complete. Tests verify the production contract.
 

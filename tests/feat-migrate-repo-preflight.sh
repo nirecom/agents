@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/migration/orchestrate.sh
+# Tags: migration, repo, github, issues, bin
 # Tests for feat/migrate-repo — pre-flight existing-issues check in orchestrate.sh.
 #
 # Before Step 1, orchestrate.sh must detect whether the target repo already has
