@@ -26,7 +26,7 @@ Solve from the class, not from the immediate task: identify the root/abstract pa
 
 ## 5. End-to-End Integrity
 
-Look beyond the task assigned to you and consider the whole pipeline — the upstream work that produces your inputs, the downstream work that consumes your outputs, and the end-user experience that results. A fix is complete only when it holds across all of them, not just at the point you patched.
+Look beyond the task assigned to you and consider the whole pipeline — the upstream and downstream of your task, and the end-user experience that results. Confirm the change does not lose integrity across all of them.
 
 ## 6. Name Reflects Substance
 
