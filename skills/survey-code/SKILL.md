@@ -64,7 +64,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
      proposed triage: <MUST | OPTIONAL | NA> — <one-line rationale>
    ```
    List sibling members of the class being changed (per `rules/core-principles.md`
-   §2 Elevate Perspective). Each member is two lines: (a) name + role + primary
+   §3 Elevate Perspective). Each member is two lines: (a) name + role + primary
    file:line reference; (b) `proposed triage:` value and 1-line rationale grounded
    in the survey evidence. Triage values:
    - `proposed triage: MUST` — symmetric to the user-requested change; failing to fix it leaves the class inconsistent.
