@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/find-pr-by-marker.sh
+# Tags: issue-close, workflow, pr, marker, github
 # Tests for issue #325 — bin/github-issues/find-pr-by-marker.sh
 #
 # Maps issue N → (PR_NUMBER, MERGE_COMMIT) using:

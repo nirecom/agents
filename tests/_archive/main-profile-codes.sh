@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: main/profile/codes
+# Tags: profile-codes
 # Tests for the codes function in profile-snippet.sh
 # Run: bash tests/main-profile-codes.sh
 

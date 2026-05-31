@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: main/copilot/prompts
+# Tags: copilot-prompts
 # Static validation tests for copilot/prompts/*.prompt.md
 # All tests are skipped when the prompts directory does not yet exist.
 

@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-unblock-branch-d.sh
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree.js., hooks/lib/bash-write-patterns.js
+# Tags: worktree, enforce, hook, end, cleanup
 #
 # Tests for the worktree-list-gated `git branch -d/-D` decision in
 # hooks/enforce-worktree.js. After retiring the pending-branch-delete-

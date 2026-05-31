@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-block-dotenv.sh
+# Tests: hooks/block-dotenv.js
+# Tags: dotenv, secrets, hook, workflow, bin
 #
 # PR2: hooks/block-dotenv.js must early-return (approve) when
 # <workflowDir>/<sid>.workflow-off marker exists for the calling session.

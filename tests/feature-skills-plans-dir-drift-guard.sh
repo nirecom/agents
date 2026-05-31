@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/., skills/_shared/confirm-plan.md, skills/_shared/resolve-plans-dir.md, skills/agents
+# Tags: workflow, plans, skill, agent, bin
 # Drift guard: ensures SKILL.md and agent prompt files do not hardcode
 # ~/.workflow-plans or use ${WORKFLOW_PLANS_DIR:-...} outside Bash code blocks.
 #

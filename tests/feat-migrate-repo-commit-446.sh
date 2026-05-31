@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: agents/.env, bin/github-issues, bin/github-issues/migration/commit-migration-artifacts.sh, bin/github-issues/migration/orchestrate.sh, bin/github-issues/sync-labels.sh
+# Tags: migration, repo, github, issues, labels
 # Tests for feat/migrate-repo-commit-446 — commit + push migration artifacts.
 # Tests commit-migration-artifacts.sh and orchestrator Step 6.
 # RED: existence gate fails while commit-migration-artifacts.sh is missing.

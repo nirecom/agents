@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/doc-append.py
+# Tags: docs, append, history, settings, config
 # Static validation: settings.json permission rules for doc-append wrapper
 set -euo pipefail
 
