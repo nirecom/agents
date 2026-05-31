@@ -19,4 +19,8 @@ Changes: `/run-tests` now selects only tests relevant to the current PR (Tier 1 
 
 ### FEATURE: PR #709 (2026-06-01)
 Background: feat(#674): strengthen outline-planner with cross-component structural integrity check
-Changes: "outline-planner now surfaces cross-component structural integrity risks in each proposed approach — component contract changes, dependency direction violations, and responsibility coverage gaps are required fields. The SINGLE_APPROACH_JUSTIFIED output includes this analysis as well."
+Changes: "outline-planner now surfaces cross-component structural integrity risks in each proposed approach — component contract changes, dependency direction violations, and responsibility coverage gaps are required fields. The SINGLE_APPROACH_JUSTIFIED output includes this analysis as well."
+
+### FEATURE: PR #710 (2026-06-01)
+Background: fix(#626,#700): replace JSONL scan with flag+transcript handshake in stop-final-report-guard
+Changes: Final Report verification now reliably forces verbatim paste regardless of how many turns follow the Final Report, and blocks when the renderer output appeared only in a Bash tool result without being pasted (fixes #611 silent-pass and #700 tool-result bypass)
