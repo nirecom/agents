@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # tests/feature-630-skill-scripts-extraction.sh
+# Tests: bin/run-codex-review-loop, skills/.../scripts/, skills/_shared/codex-review-loop.md, skills/make-detail-plan/SKILL.md, skills/make-detail-plan/scripts/assemble-mandatory.sh, skills/make-detail-plan/scripts/run-codex-review-loop.sh, skills/make-outline-plan/SKILL.md, skills/make-outline-plan/scripts/assemble-mandatory.sh, skills/make-outline-plan/scripts/run-codex-review-loop.sh
+# Tags: outline, planning, detail, skill, bin
 #
 # Tests for feature/630-skill-scripts-extraction:
 #   - rules/ rename: prompt-criteria→prompt, docs-convention→docs, test-rules→test

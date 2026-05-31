@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/workflow-plans-dir, hooks/lib/load-env.js, hooks/lib/path-match.js, hooks/lib/workflow-plans-dir.js
+# Tags: workflow, plans, hook, bin, windows
 # Contract tests for hooks/lib/workflow-plans-dir.js helper.
 #
 # Test-first: the source file may not exist yet. Each Node test creates a

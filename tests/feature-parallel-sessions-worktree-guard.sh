@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-parallel-sessions-worktree-guard.sh
+# Tests: hooks/auto-branch-guard.js, hooks/enforce-worktree.js
+# Tags: worktree, enforce, hook, workflow, intent
 #
 # Implementation complete. Tests verify the production contract.
 

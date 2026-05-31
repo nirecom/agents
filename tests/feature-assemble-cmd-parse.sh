@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/assemble-cmd-parse.js, skills/_shared/assemble-mandatory.sh
+# Tags: hook, skill, bin, windows, macos
 # Tests for hooks/lib/assemble-cmd-parse.js — pure function extractAssembleDest(cmd).
 #
 # Contract: given a Bash command string that may invoke assemble-mandatory.sh,

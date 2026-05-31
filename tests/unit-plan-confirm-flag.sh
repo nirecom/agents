@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: hooks/lib/plan-confirm-flag.js
+# Tags: workflow, plans, hook, bin, windows
 # Unit tests for hooks/lib/plan-confirm-flag.js
 #
 # Tests getSuffix, getConfirmFlagName, and isConfirmOff in isolation by

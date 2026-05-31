@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: main/claude/agents/symlink
+# Tags: claude-agents-symlink
 # Structural tests for install/linux/dotfileslink.sh — verifies claude-global/agents symlink entry
 # Does NOT execute the install script (would touch real $HOME).
 set -euo pipefail

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/parse-closes-issues, skills/issue-create/SKILL.md, skills/worktree-end/SKILL.md
+# Tags: issue-create, github, worktree, end, cleanup
 # Tests for issue #521: reverse mid-workflow finding capture design
 #   CLAUDE.md                         — ## Mid-workflow finding capture section rewrite
 #   skills/issue-create/SKILL.md      — ## Mid-workflow gate section between Pre-flight and Procedure

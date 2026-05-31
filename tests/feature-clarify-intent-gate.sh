@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/workflow-gate.js
+# Tags: workflow, gate, hook, clarify-intent, planning
 # Integration tests for clarify-intent earlyGate in workflow-gate.js.
 # Pre-implementation: tests 1-5 and 13 are expected to FAIL until earlyGate lands.
 set -euo pipefail

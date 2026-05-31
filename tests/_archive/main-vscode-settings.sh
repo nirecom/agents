@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: main/vscode/settings
+# Tags: vscode-settings
 # Tests for install/linux/vscode-settings.sh
 # Source script does not exist yet — all tests are skipped until it is created.
 

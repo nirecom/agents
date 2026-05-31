@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/check-closes-issues-nonempty.sh, hooks/lib/parse-closes-issues.js
+# Tags: workflow, clarify-intent, planning, github, issues
 # Tests for issue #449 — bin/github-issues/check-closes-issues-nonempty.sh
 #
 # Guard script that verifies the session's intent.md has a non-empty

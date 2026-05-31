@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: agents/refactor-prompts-judge.md, bin/refactor-prompts/extract-keywords.js, bin/refactor-prompts/index.sh, skills/refactor-prompts/SKILL.md
+# Tags: prompts, refactor, skill, agent, bin
 # Tests for /refactor-prompts — skill + agent + wrapper smoke + handoff contract
 #
 # Files exercised:

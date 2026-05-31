@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/refactor-design-principles.sh
+# Tests: agents/detail-reviewer.md, agents/outline-reviewer.md, hooks/workflow-mark.js, skills/make-detail-plan/SKILL.md, skills/survey-code/SKILL.md
+# Tags: workflow, outline, planning, detail, survey
 #
 # Integration tests for the refactor/design-principles branch.
 #
