@@ -3,8 +3,12 @@
 #
 # Usage:
 #   bin/github-issues/issue-to-history.sh <issue-number> [--commit <hash>]
-#       [--history-notes-file <path>]
+#       [--history-notes-file <path>] [--target <abs-path>]
 #       [--non-github-mode --title <title> --body-file <path> --closed-date <YYYY-MM-DD>]
+#
+# When --target <abs-path> is provided, doc-append writes to that path instead
+# of docs/history.md. Used by step-e.sh to append to a staging file fetched
+# from the GitHub Contents API (see bin/lib/github-contents-write.sh).
 #
 # Requires AGENTS_CONFIG_DIR (the docs/ root). The script cd's there before
 # writing so consumer repos can pass their own value to target the right
@@ -24,7 +28,7 @@ set -uo pipefail
 
 # --- Argument parsing ---
 if [ $# -lt 1 ] && [ -z "${DRY_RUN:-}" ]; then
-    echo "Usage: $0 <issue-number> [--commit <hash>] [--history-notes-file <path>] [--non-github-mode --title <t> --body-file <f> --closed-date <d>]" >&2
+    echo "Usage: $0 <issue-number> [--commit <hash>] [--history-notes-file <path>] [--target <abs-path>] [--non-github-mode --title <t> --body-file <f> --closed-date <d>]" >&2
     exit 1
 fi
 
@@ -47,6 +51,7 @@ NON_GITHUB_MODE=0
 NG_TITLE=""
 NG_BODY_FILE=""
 NG_CLOSED_DATE=""
+TARGET=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -76,6 +81,10 @@ while [ $# -gt 0 ]; do
             ;;
         --closed-date)
             NG_CLOSED_DATE="${2:-}"
+            shift 2
+            ;;
+        --target)
+            TARGET="${2:-}"
             shift 2
             ;;
         *) shift ;;
@@ -252,9 +261,9 @@ if [ -n "${DRY_RUN:-}" ]; then
     exit 0
 fi
 
-if ! doc-append "$HISTORY_FILE" "${ARGS[@]}"; then
+if ! doc-append "${TARGET:-$HISTORY_FILE}" "${ARGS[@]}"; then
     echo "Error: doc-append failed" >&2
     exit 1
 fi
 
-echo "Appended issue #${ISSUE_NUM} to ${HISTORY_FILE}"
+echo "Appended issue #${ISSUE_NUM} to ${TARGET:-$HISTORY_FILE}"
