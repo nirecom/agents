@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: feature/robust/workflow/settings
+# Tags: robust-workflow-settings
 # Structural smoke tests for claude-global/settings.json workflow entries.
 # Covers: permissions.ask/allow/deny guards and PostToolUse Bash matcher.
 # Removed: hook count/order tests (fragile), old-path-absent tests (stable).

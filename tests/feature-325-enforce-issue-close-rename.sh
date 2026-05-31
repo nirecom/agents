@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/enforce-issue-close.js
+# Tags: issue-close, enforce, hook, stage, workflow
 # Tests for issue #325 — hooks/enforce-issue-close.js error message update.
 #
 # After the /issue-close split, the hook's error message must mention BOTH

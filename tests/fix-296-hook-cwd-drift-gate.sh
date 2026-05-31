@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/fix-296-hook-cwd-drift-gate.sh
+# Tests: hooks/workflow-gate.js
+# Tags: workflow, gate, hook, bin, git
 #
 # Tests for hooks/workflow-gate.js resolveRepoDir(command) — verifies that
 # the existing `git -C <path>` resolution still wins, AND that a leading

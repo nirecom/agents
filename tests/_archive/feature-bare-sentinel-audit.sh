@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-bare-sentinel-audit.sh
+# Tests: feature/bare/sentinel/audit
+# Tags: bare-sentinel-audit
 #
 # #404 Grep audit gate: bare-form sentinel references must only appear in files
 # that are explicitly allowlisted (LOOKSLIKE handlers, negative-test fixtures,

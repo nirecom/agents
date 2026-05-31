@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md
+# Tags: workflow, clarify-intent, planning, intent, plans
 # Contract tests for clarify-intent skill (Stage 1: interactive user interview)
 # Target files (expected to FAIL until implementation is complete):
 #   $HOME/.claude/skills/clarify-intent/SKILL.md

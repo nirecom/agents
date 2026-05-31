@@ -1,12 +1,9 @@
 #!/bin/bash
 # tests/feature-worktree-end-step55-promotion.sh
+# Tests: bin/worktree-notes-triage.js, bin/worktree-final-report.js
+# Tags: worktree, end, cleanup, hook, bin
 #
 # Worktree-end Step 5.5 promotion feature.
-#
-# Tests:
-#   - bin/worktree-notes-triage.js CLI (list / annotate subcommands)
-#   - bin/worktree-final-report.js golden output (existing script; refactor must
-#     preserve byte-for-byte equivalence)
 #
 # Test-first: the triage CLI does not yet exist. F1–F7 SKIP-gracefully when the
 # binary is absent. R1 (golden report) runs against the existing

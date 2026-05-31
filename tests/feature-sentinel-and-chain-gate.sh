@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
+# Tags: workflow, gate, hook, sentinel, bin
 # Tests for:
 #  Feature: Sentinel chain guard in hooks/workflow-gate.js
 #    - Blocks `echo "<<WORKFLOW_*>>" && <non-sentinel>` chains that would

@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-534-stop-final-report-guard.sh
+# Tests: hooks/stop-final-report-guard.js
+# Tags: settings, config, hook, bin, tests
 #
 # Issue #534 — Stop hook: stop-final-report-guard.js
 #

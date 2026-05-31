@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-436-compose-doc-append.sh
+# Tests: bin/compose-doc-append-entry, hooks/lib/worktree-notes.js
+# Tags: worktree, docs, append, history, compose
 #
 # Tests for bin/compose-doc-append-entry (issue #436).
 # CLI reads WORKTREE_NOTES.md sections and appends entries to

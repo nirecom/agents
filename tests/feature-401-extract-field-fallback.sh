@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-401-extract-field-fallback.sh
+# Tests: bin/github-issues/lib/extract-field.sh
+# Tags: github, issues, bin, tests
 #
 # TDD tests for extract_field_with_fallback() — will be added to
 # bin/github-issues/lib/extract-field.sh (#401).
