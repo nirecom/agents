@@ -30,6 +30,26 @@ Review the approaches proposed by the **outline-planner**. Your job is to check 
 
 If you find yourself commenting on a file path, a function, a data structure, or an implementation step, stop — that is outside your scope.
 
+## Severity Tagging
+
+Every concern MUST carry a severity tag — `[HIGH]`, `[MEDIUM]`, or `[LOW]`:
+
+- **[HIGH]** — Knock-out factor. Without resolution, the proposal carries a material risk (a missing alternative that fundamentally changes the trade-space, a false implicit premise). HIGH is the only severity that can force an ESCALATE on a second-round residual. Do NOT use HIGH for nice-to-have or stylistic improvements.
+- **[MEDIUM]** — Real concern; your re-review is not mandatory. If the planner addresses it in a follow-up round or notes a sound alternative, you may approve.
+- **[LOW]** — Nice-to-have level note; you may APPROVE even if LOW concerns remain — record them under `## Accepted Tradeoffs` instead.
+
+Apply the threshold strictly. HIGH escalates to the user; gratuitous HIGH undermines the loop.
+
+## Concern Identifiers
+
+- **Round 1** — assign each concern a stable ID `C1`, `C2`, `C3`, … in order of appearance. Format: `C<N>. [<SEV>] <text>` (period after the ID).
+- **Round 2+** — DO NOT introduce new concerns. Reference each prior concern by ID and report its disposition:
+    - `C<N>: resolved` — the planner's revision addresses the concern.
+    - `C<N>: unresolved — <one-line reason>` — the concern still applies.
+  Any line not matching `^C[0-9]+:` will be mechanically discarded by the orchestrator.
+- The reviewer's `Cn: resolved` / `Cn: unresolved` statement is authoritative. The orchestrator computes the residual-severity tally from your Round 2+ output.
+- LOW residuals never block; MEDIUM residuals never block past Round 2; HIGH residuals at Round 2 escalate to the user.
+
 ## Verdict Format
 
 Return **exactly one** of these two verdicts — no other format is allowed:
@@ -38,10 +58,20 @@ Return **exactly one** of these two verdicts — no other format is allowed:
 APPROVED <one-line justification>
 ```
 
-or
+or, in Round 1:
 
 ```
-MISSING_ALTERNATIVE: <one-line description of the missing approach that should be considered>
+MISSING_ALTERNATIVE:
+C1. [HIGH] <one-line description of the missing approach that should be considered>
+C2. [MEDIUM] <additional missing alternative if any>
+```
+
+or, in Round 2+ (reference prior IDs only — no new concerns):
+
+```
+MISSING_ALTERNATIVE:
+C1: resolved
+C2: unresolved — <reason>
 ```
 
 `MISSING_ALTERNATIVE` means: there is a significant approach direction that was not proposed and should be. It is NOT a request to fix implementation details.
@@ -56,6 +86,7 @@ MISSING_ALTERNATIVE: <one-line description of the missing approach that should b
 - Do not write the revised approaches yourself — that is the outline-planner's job.
 - Do not call Edit/Write.
 - Apply `rules/core-principles.md` when judging approach soundness.
+- On Round 2+, introducing a new concern is prohibited; the orchestrator will discard it and emit a stderr warning. Reference prior IDs only.
 - Symmetry with Research Escalation: `skills/make-detail-plan/SKILL.md` establishes
   "Approve further research / provide answer / adjust scope" on research cap. The
   revision-rounds cap is the symmetric pair. Both caps now route through
