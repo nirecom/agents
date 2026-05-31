@@ -14,27 +14,76 @@ if [ -z "${C_RESET+x}" ]; then
     fi
 fi
 
+_dl_is_windows=0
+case "${OS:-}${MSYSTEM:-}" in
+    *Windows_NT*|*MINGW*|*MSYS*|*CYGWIN*) _dl_is_windows=1 ;;
+esac
+if [ "$_dl_is_windows" = "1" ]; then
+    export MSYS=winsymlinks:nativestrict
+fi
+
+_link_one() {
+    local source="$1" dest="$2"
+    [ -e "$source" ] || { printf "${C_YELLOW}Source not found: %s (skipping)${C_RESET}\n" "$source" >&2; return 0; }
+    _norm() {
+        if [ "$_dl_is_windows" = "1" ] && command -v cygpath >/dev/null 2>&1; then
+            cygpath -u "$1" 2>/dev/null
+        elif command -v realpath >/dev/null 2>&1; then
+            realpath -m "$1" 2>/dev/null
+        else
+            printf '%s' "$1"
+        fi
+    }
+    if [ -L "$dest" ]; then
+        local cur; cur="$(readlink "$dest" 2>/dev/null || true)"
+        if [ "$(_norm "$cur")" = "$(_norm "$source")" ] \
+                || { [ "$dest" -ef "$source" ] 2>/dev/null; }; then
+            printf "${C_GRAY}Already linked: %s${C_RESET}\n" "$dest"; return 0
+        fi
+        printf "${C_YELLOW}Relinking: %s${C_RESET}\n" "$dest"; rm -f "$dest"
+    elif [ -e "$dest" ]; then
+        local _is_jct=0
+        if [ "$_dl_is_windows" = "1" ] && [ -d "$dest" ] && command -v cmd.exe >/dev/null 2>&1; then
+            local _wpar _base
+            _wpar="$(cygpath -w "$(dirname "$dest")" 2>/dev/null || dirname "$dest")"
+            _base="$(basename "$dest")"
+            local _base_re
+            _base_re="$(printf '%s' "$_base" | sed 's/[][\\.*^$(){}?+|/]/\\&/g')"
+            if cmd.exe //c "dir /AL \"$_wpar\"" 2>/dev/null \
+                    | grep -qE "(<JUNCTION>|<SYMLINKD>)[[:space:]]+$_base_re( |$)"; then
+                _is_jct=1
+            fi
+        fi
+        if [ "$_is_jct" = "1" ]; then
+            if [ "$dest" -ef "$source" ] 2>/dev/null; then
+                printf "${C_GRAY}Junction already correct: %s${C_RESET}\n" "$dest"; return 0
+            fi
+            printf "${C_YELLOW}Removing junction: %s${C_RESET}\n" "$dest"
+            rmdir "$dest" 2>/dev/null || rm -rf "$dest"
+        else
+            local _bak="${dest}.bak"
+            printf "${C_YELLOW}Backing up: %s -> %s${C_RESET}\n" "$dest" "$_bak"
+            rm -rf "$_bak"; mv "$dest" "$_bak"
+        fi
+    fi
+    ln -s "$source" "$dest"
+    printf "${C_GREEN}Linked: %s -> %s${C_RESET}\n" "$dest" "$source"
+}
+
 # --- ~/.claude/ symlinks ---
 mkdir -p ~/.claude
 
 if [ -d ~/.claude/.git ]; then
     echo "WARNING: ~/.claude is a git repo. Remove .git to enable symlinks." >&2
 else
-    for dir in skills rules agents; do
-        if [ -d ~/.claude/$dir ] && [ ! -L ~/.claude/$dir ]; then
-            printf "${C_YELLOW}Backing up ~/.claude/$dir -> ~/.claude/$dir.bak${C_RESET}\n"
-            rm -rf ~/.claude/$dir.bak
-            mv ~/.claude/$dir ~/.claude/$dir.bak
-        fi
-    done
     if [ -L ~/.claude/commands ]; then
         printf "${C_YELLOW}Removing obsolete symlink: ~/.claude/commands${C_RESET}\n"
         rm -f ~/.claude/commands
     fi
-    ln -sf "$AGENTS_ROOT/CLAUDE.md" ~/.claude/
-    ln -snf "$AGENTS_ROOT/skills" ~/.claude/skills
-    ln -snf "$AGENTS_ROOT/rules" ~/.claude/rules
-    ln -snf "$AGENTS_ROOT/agents" ~/.claude/agents
+    _link_one "$AGENTS_ROOT/CLAUDE.md"  "$HOME/.claude/CLAUDE.md"
+    _link_one "$AGENTS_ROOT/skills"     "$HOME/.claude/skills"
+    _link_one "$AGENTS_ROOT/rules"      "$HOME/.claude/rules"
+    _link_one "$AGENTS_ROOT/agents"     "$HOME/.claude/agents"
     # Remove stale settings.json symlink that used to point directly into agents/
     if [ -L ~/.claude/settings.json ]; then
         printf "${C_YELLOW}Removing stale symlink: ~/.claude/settings.json${C_RESET}\n"
