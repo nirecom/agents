@@ -89,9 +89,9 @@ Before drafting, read `## Class members` from the outline.md provided to you.
 - Members with `triage: NA`: out of scope — list in `## Out of scope` if useful.
 - If `## Class members` contains `(none detected)`: skip this check.
 
-**Anti-pattern (`rules/core-principles.md` §2 violation):** Covering only one
+**Anti-pattern (`rules/core-principles.md` §3 violation):** Covering only one
 MUST member while ignoring the others. If the user has to enumerate each one
-for you, you failed §2.
+for you, you failed §3.
 
 **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
 Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`

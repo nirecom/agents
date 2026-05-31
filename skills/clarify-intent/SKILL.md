@@ -157,7 +157,7 @@ Then:
      - **"Manual recovery"** — instruct the user to run `gh issue create` manually and edit `## Issues` in `intent.md` directly. When the user confirms completion, re-run the guard (which on success unlinks the counter file).
      - **"Abort workflow"** — `rm -f "$COUNTER_FILE"`, emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent>>"`, and exit the skill.
 
-     Note (§3 Orthogonality): no new sentinel is introduced here. Existing workflow sentinels are binary (`*_COMPLETE` = stage finished, `*_NOT_NEEDED` = stage skipped); a `BLOCKED` third axis would break the workflow-sentinel class invariant. Retry-exhaustion is treated as an interactive recovery prompt, not a workflow state transition.
+     Note (§4 Orthogonality): no new sentinel is introduced here. Existing workflow sentinels are binary (`*_COMPLETE` = stage finished, `*_NOT_NEEDED` = stage skipped); a `BLOCKED` third axis would break the workflow-sentinel class invariant. Retry-exhaustion is treated as an interactive recovery prompt, not a workflow state transition.
 
 1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
