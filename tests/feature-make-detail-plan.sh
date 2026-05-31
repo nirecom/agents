@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: skills/make-detail-plan/SKILL.md
+# Tags: worktree, detail, planning, sentinel, workflow
 # Contract tests for make-detail-plan skill (issue #462 class enumeration carry-forward)
 # Target files (expected to FAIL until implementation is complete):
 #   skills/make-detail-plan/SKILL.md (worktree-local)

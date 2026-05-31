@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/gate-plan-skip-sentinel.js
+# Tags: workflow, outline, planning, sentinel, hook
 # Tests for hooks/gate-plan-skip-sentinel.js (PreToolUse hook).
 #
 # Behavior contract:

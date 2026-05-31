@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: bin/review-loop-verdict
+# Tags: worktree, bin, env, config, loop
 # L1 unit tests for bin/review-loop-verdict (issue #673)
 # Verdict matrix + argument validation.
 set -uo pipefail

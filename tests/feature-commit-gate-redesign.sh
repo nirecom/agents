@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-commit-gate-redesign.sh
+# Tests: bin/review-code-codex, hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tags: workflow, gate, hook, worktree, codex
 #
 # Integration tests for upcoming commit-gate redesign:
 #   - hooks/workflow-gate.js: merge gate + worktree commit skip for user_verification

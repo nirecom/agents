@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: feature/allow/rules/planning
+# Tags: allow-rules-planning
 set -euo pipefail
 
 REPO_ROOT=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/scan-outbound.sh
+# Tags: scan, filter, outbound, hook, bin
 # Test suite for external blocklist loading from my-private-repo
 # Tests that scan-outbound.sh loads .private-info-blocklist from sibling my-private-repo repo
 set -euo pipefail

@@ -1,9 +1,10 @@
 #!/bin/bash
 # tests/fix-658-write-outcome-session-id.sh
+# Tags: 658, write-outcome-session-id
 #
 # Issue #658 — add --session-id/--out-file CLI flags to issue-close-write-outcome.js
 #
-# Tests:
+# Tests: fix/658/write/outcome/session/id
 #   C1: --session-id/--out-file writes all 6 fields correctly to a new JSON file
 #   C2: --session-id/--out-file upserts existing file (adds entry, preserves others, replaces same-issue)
 #   C3: Normal mode regression: CLAUDE_SESSION_ID env var → writes to PLANS_DIR/<id>-issue-close-outcome.json

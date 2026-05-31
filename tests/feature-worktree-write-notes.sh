@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-worktree-write-notes.sh
+# Tests: bin/worktree-write-notes.js, hooks/lib/worktree-notes.js
+# Tags: worktree, hook, bin, git, tests
 #
 # worktree-write-notes feature: WORKTREE_NOTES.md generation + .git/info/exclude
 # entry append.

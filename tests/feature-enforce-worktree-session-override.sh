@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-enforce-worktree-session-override.sh
+# Tests: hooks/enforce-worktree.js, hooks/workflow-mark.js
+# Tags: worktree, enforce, hook, workflow, bin
 #
 # Integration tests for the session-scoped ENFORCE_WORKTREE escape hatch.
 #

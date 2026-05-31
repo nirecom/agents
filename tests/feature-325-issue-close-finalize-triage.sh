@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-triage-lib.sh, bin/github-issues/issue-close-triage.sh
+# Tags: issue-close, stage, workflow, finalize, triage
 # Tests for issue #325 — /issue-close-finalize skill triage script.
 #
 # Phase 2 (`/issue-close-finalize`) runs from main worktree AFTER PR merge.

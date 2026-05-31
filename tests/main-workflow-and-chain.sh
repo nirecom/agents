@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tags: workflow, gate, hook, sentinel, bin
 # Tests for:
 #  Bug 1: workflow-mark.js must handle sentinels chained with `&&` in one
 #         Bash call (split on \s*&&\s* and evaluate each part).

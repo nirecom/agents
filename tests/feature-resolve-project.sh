@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/gh, bin/github-issues/lib/resolve-project.sh, bin/mv
+# Tags: workflow, github, issues, plans, bin
 # Tests for bin/github-issues/lib/resolve-project.sh — Issue #641
 # Auto-resolve Projects v2 config from git remote via GraphQL.
 #
