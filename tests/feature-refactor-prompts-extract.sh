@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/refactor-prompts/extract-keywords.js, bin/refactor-prompts/lib/filter-kinds.js, hooks/enforce-system-ops.js, hooks/lib/bash-write-patterns.js
+# Tags: system-ops, enforce, hook, prompts, refactor
 # Tests for /refactor-prompts — bin/refactor-prompts/extract-keywords.js
 #
 # extract-keywords.js reads hooks/lib/bash-write-patterns.js and settings.json,

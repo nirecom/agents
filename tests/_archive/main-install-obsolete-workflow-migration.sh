@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: main/install/obsolete/workflow/migration
+# Tags: install-obsolete-workflow-migration
 # Test suite for install-obsolete workflow migration cleanup logic
 # Tests the _salvage_git_workflow / run_migration functions
 

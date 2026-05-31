@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: bin/nonexistent, bin/session-sync.sh
+# Tags: bin, install, git, tests
 # Tests for bin/session-sync.sh and install/linux/session-sync-init.sh
 # Run: bash tests/main-session-sync.sh
 

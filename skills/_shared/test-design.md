@@ -82,3 +82,19 @@ the following — unit tests are structurally blind to these failure modes:
 
 Ask: *"If someone deleted the registration / misplaced the config key / renamed
 the event, would my unit tests still pass?"* If yes, a unit test is not enough.
+
+## Required Frontmatter
+
+Every `tests/*.sh` file (excluding `tests/_archive/`) must carry exactly two single-line
+headers within the first 10 lines, right after the shebang and filename comment:
+
+- `# Tests: <path1>, <path2>` — comma-separated repo-relative source paths (forward slash). Used by `bin/audit-tests.sh` for staleness checks and by Tier 2 semantic selection.
+- `# Tags: <kw1>, <kw2>` — comma-separated kebab-case keywords. Used by the LLM Tier 2 matcher in `skills/run-tests/SKILL.md`.
+
+Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` continuation. Long lines are acceptable; parsers rely on single-line format.
+
+## Test Naming Convention (new tests only)
+
+New test files follow `<area>-<issue-or-feature>-<topic>.sh` where `<area>` is one of `feature`, `fix`, `refactor`, `unit`, `main`.
+
+Existing files are NOT renamed — `git blame` continuity is preserved. Frontmatter handles semantic grouping via `# Tags:`.

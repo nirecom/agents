@@ -1,5 +1,7 @@
 #!/bin/bash
 # tests/feature-workflow-off-bypass-pre-commit.sh
+# Tests: hooks/enforce-worktree.js, hooks/pre-commit
+# Tags: worktree, enforce, hook, git, pre-commit
 #
 # End-to-end test for hooks/pre-commit session-marker bypass (issue #550).
 #

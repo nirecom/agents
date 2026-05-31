@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: hooks/lib/workflow-state.js, hooks/session-start.js
+# Tags: workflow, hook, bin, windows, wsl
 # TDD tests for findLatestStateForContext / session-start.js inheritance logic
 # Features NOT YET IMPLEMENTED — some tests are expected to FAIL (labeled "Expected FAIL").
 set -euo pipefail

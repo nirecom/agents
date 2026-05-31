@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: agents/issues/, agents/issues/100/sub_issues, agents/issues/201, agents/issues/201/sub_issues, agents/issues/42, agents/issues/9999, bin/gh, bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md
+# Tags: issue-create, github, sub-issue, frontmatter, tests
 # Tests for the new /issue-create skill:
 #   bin/github-issues/issue-create.sh  — bash wrapper around gh issue create
 #   skills/issue-create/SKILL.md       — YAML frontmatter skill definition

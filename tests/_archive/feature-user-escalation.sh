@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tests: feature/user/escalation
+# Tags: user-escalation
 # Structural tests for rules/user-escalation.md
 # Validates: existence, required headings, Decision Flow ordering, regression guards
 

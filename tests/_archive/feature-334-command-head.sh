@@ -1,4 +1,6 @@
 #!/bin/bash
+# Tests: feature/334/command/head
+# Tags: 334, command-head
 set -euo pipefail
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 run_with_timeout() {
