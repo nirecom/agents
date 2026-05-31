@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # tests/run-all.sh — Run all (or specified) test scripts, with exit 77 → skip support.
+# Tests: tests/run-all.sh
+# Tags: run-all, test-runner
 #
 # Usage:
-#   tests/run-all.sh [<glob-or-file> ...]
+#   tests/run-all.sh [--all | <glob-or-file> ...]
 #
 # Phase gating (feature-644):
 #   FEATURE_644_PHASE=<N>  Run tests gated at phase ≤N (default: 0 = baseline only)
@@ -38,13 +40,20 @@ run_test() {
   fi
 }
 
-if [ $# -gt 0 ]; then
+if [ $# -gt 0 ] && [ "$1" = "--all" ]; then
+  shift
+  # _archive/ is auto-excluded — *.sh matches top-level files only
+  for f in "$TESTS_DIR"/*.sh; do
+    [ -f "$f" ] && run_test "$f"
+  done
+elif [ $# -gt 0 ]; then
   for pattern in "$@"; do
     for f in $pattern; do
       [ -f "$f" ] && run_test "$f"
     done
   done
 else
+  # _archive/ is auto-excluded — *.sh matches top-level files only
   for f in "$TESTS_DIR"/*.sh; do
     [ -f "$f" ] && run_test "$f"
   done
