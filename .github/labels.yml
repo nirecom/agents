@@ -21,3 +21,7 @@
 - name: "intent:clarified"
   color: "1d76db"
   description: "Issue body ratified via /clarify-intent. /workflow-init Path A skips the interview."
+
+- name: "meta"
+  color: "e4e669"
+  description: "Planning/architecture issue with no implementation. Sub-issues carry the actual work."
