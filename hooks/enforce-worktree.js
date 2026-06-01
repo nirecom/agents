@@ -610,7 +610,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   // Reject multiple -C flags — parseGitCPath only validates the first;
   // git uses the last (or cumulative), creating an ambiguity gap.
   if ((cmd.match(/\s-C\s/g) || []).length > 1) return false;
-  if (/\s-C\s/.test(cmd)) {
+  if (/\s-C\s/.test(stripQuotedArgs(cmd))) {
     const cArg = parseGitCPath(cmd);
     if (!cArg) return false;
     try {
@@ -1169,7 +1169,7 @@ if (toolName === "Bash") {
     // Stage B (main only): require ISSUE_CREATE_SKILL=1 inline prefix to enforce
     // that /issue-create skill (survey-first + duplicate check) is used.
     // Linked worktrees bypass Stage B — bare `gh issue create` is unrestricted there.
-    if (/\bgh\s+issue\s+create\b/.test(cmd)) {
+    if (/\bgh\s+issue\s+create\b/.test(stripQuotedArgs(cmd))) {
       const isMainWt = repoRoot && isMainCheckout(repoRoot);
       if (isMainWt) {
         const SANCTIONED_RE =
