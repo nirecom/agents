@@ -186,7 +186,6 @@ test_group_a_remaining_commands_allow_from_main_checkout() {
         "gh pr close 1"
         "gh pr comment 1 --body x"
         "gh pr review 1 --approve"
-        "gh issue create --title t --body b"
         "gh issue edit 1"
         "gh issue close 1"
         "gh issue comment 1 --body x"

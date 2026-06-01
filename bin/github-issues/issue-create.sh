@@ -121,7 +121,7 @@ if resolve_project_for_repo; then
 fi
 
 echo "[issue-create] gh issue create --title '$TITLE' [body omitted]" >&2
-if ! URL=$(gh "${GH_ARGS[@]}"); then
+if ! URL=$(MSYS_NO_PATHCONV=1 ISSUE_CREATE_SKILL=1 gh "${GH_ARGS[@]}"); then
     echo "Error: gh issue create failed" >&2; exit 1
 fi
 if [ -z "$URL" ]; then

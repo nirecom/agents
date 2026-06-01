@@ -107,7 +107,7 @@ attach_subissue() {
     local child_database_id="$2"
     local slug
     slug="$(get_repo_slug)"
-    gh api -X POST \
+    MSYS_NO_PATHCONV=1 gh api -X POST \
         "repos/${slug}/issues/${parent_number}/sub_issues" \
         -F "sub_issue_id=${child_database_id}" >/dev/null
 }
@@ -166,7 +166,7 @@ case "$VERDICT" in
 
     reopen)
         [ -n "$TARGET" ] || { echo "Error: --target required for --verdict reopen" >&2; exit 2; }
-        gh issue reopen "$TARGET" >/dev/null
+        MSYS_NO_PATHCONV=1 gh issue reopen "$TARGET" >/dev/null
         slug="$(get_repo_slug)"
         echo "https://github.com/${slug}/issues/${TARGET}"
         ;;

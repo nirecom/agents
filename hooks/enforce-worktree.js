@@ -1164,6 +1164,34 @@ if (toolName === "Bash") {
   // from a worktree, on the principle that out-of-session repos are not the
   // current task's concern.
   if (isGhWriteCommand(cmd)) {
+    // --- #713: gh issue create skill-context gate ---
+    // Stage A: determine main worktree vs linked worktree.
+    // Stage B (main only): require ISSUE_CREATE_SKILL=1 inline prefix to enforce
+    // that /issue-create skill (survey-first + duplicate check) is used.
+    // Linked worktrees bypass Stage B — bare `gh issue create` is unrestricted there.
+    if (/\bgh\s+issue\s+create\b/.test(cmd)) {
+      const isMainWt = repoRoot && isMainCheckout(repoRoot);
+      if (isMainWt) {
+        const SANCTIONED_RE =
+          /^[ \t]*(?:MSYS_NO_PATHCONV=1[ \t]+)?ISSUE_CREATE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+create\b/;
+        if (!SANCTIONED_RE.test(cmd)) {
+          done({
+            block: true,
+            reason:
+              "ENFORCE_WORKTREE: bare `gh issue create` blocked from main worktree.\n" +
+              "Reason: /issue-create skill must be used (survey-first + duplicate check).\n" +
+              "Run `/issue-create --title ... --body ...` from this session, or from a linked\n" +
+              "worktree if you really need bare `gh issue create`.\n" +
+              "(`ISSUE_CREATE_SKILL=1` is a content-integrity marker — NOT a worktree-\n" +
+              " enforcement bypass; cf. #672 removal of ISSUE_CLOSE_SKILL bypass.)",
+          });
+        }
+        // Sanctioned: fall through to session-scope check below.
+      }
+      // Linked worktree → Stage B skip → session-scope check below.
+    }
+    // --- end #713 gate ---
+
     const sessionRoots = getSessionRepoRoots();
     const detected = repoRoot ? normalizeForCompare(repoRoot) : null;
 
