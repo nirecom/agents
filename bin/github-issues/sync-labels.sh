@@ -1,10 +1,10 @@
 #!/bin/bash
-# Apply .github/labels.yml to the current repository via `gh label create --force`.
+# Apply .github/labels.yml to the current repository via `gh label create`.
 #
 # Usage: bin/github-issues/sync-labels.sh [path-to-labels.yml]
 #
-# Idempotent — `--force` overwrites existing labels with matching names so this
-# can be re-run safely as the labels.yml evolves.
+# Three-way diff: labels not on remote are created (no --force), labels that
+# differ are updated (--force), labels that already match are skipped entirely.
 
 set -uo pipefail
 
@@ -19,6 +19,11 @@ if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not found" >&2
     exit 1
 fi
+
+C_GREEN='\033[0;32m'
+C_YELLOW='\033[0;33m'
+C_GRAY='\033[0;90m'
+C_RESET='\033[0m'
 
 # Parse the YAML with a small awk script. We only support the limited schema
 # used by .github/labels.yml: a flat list of {name, color, description}.
@@ -40,18 +45,54 @@ parse_and_apply() {
     ' "$LABELS_FILE"
 }
 
-FAIL=0
-COUNT=0
-while IFS=$'\t' read -r NAME COLOR DESC; do
-    [ -z "$NAME" ] && continue
-    COUNT=$((COUNT + 1))
-    echo "Applying label: $NAME (color=$COLOR)"
-    if ! gh label create "$NAME" --color "$COLOR" --description "$DESC" --force; then
-        echo "  Failed to apply $NAME" >&2
-        FAIL=$((FAIL + 1))
-    fi
-done < <(parse_and_apply)
+if ! EXISTING=$(gh label list --json name,color,description --limit 1000 \
+                  --jq '.[] | [.name, .color, .description] | @tsv'); then
+    echo "error: gh label list failed; cannot determine existing labels" >&2
+    exit 1
+fi
 
-echo ""
-echo "Applied $((COUNT - FAIL)) / $COUNT labels."
+CREATED=0
+UPDATED=0
+SKIPPED=0
+FAIL=0
+
+while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
+    [ -z "$ACTION" ] && continue
+    case "$ACTION" in
+        CREATE)
+            printf '%b%s (created)%b\n' "$C_GREEN" "$NAME" "$C_RESET"
+            if ! gh label create "$NAME" --color "$COLOR" --description "$DESC"; then
+                echo "  Failed to create $NAME" >&2
+                FAIL=$((FAIL + 1))
+            else
+                CREATED=$((CREATED + 1))
+            fi
+            ;;
+        UPDATE)
+            printf '%b%s (updated)%b\n' "$C_YELLOW" "$NAME" "$C_RESET"
+            if ! gh label create "$NAME" --color "$COLOR" --description "$DESC" --force; then
+                echo "  Failed to update $NAME" >&2
+                FAIL=$((FAIL + 1))
+            else
+                UPDATED=$((UPDATED + 1))
+            fi
+            ;;
+        SKIP)
+            printf '%b%s (already exists)%b\n' "$C_GRAY" "$NAME" "$C_RESET"
+            SKIPPED=$((SKIPPED + 1))
+            ;;
+    esac
+done < <(awk '
+    BEGIN { FS = OFS = "\t" }
+    NR == FNR { existing[$1] = $2 OFS $3; next }
+    {
+      key = $1
+      if (!(key in existing))              { print "CREATE", $1, $2, $3 }
+      else if (existing[key] == $2 OFS $3) { print "SKIP",   $1, $2, $3 }
+      else                                  { print "UPDATE", $1, $2, $3 }
+    }
+' <(printf '%s\n' "$EXISTING") <(parse_and_apply))
+
+TOTAL=$((CREATED + UPDATED + SKIPPED + FAIL))
+echo "$CREATED created, $UPDATED updated, $SKIPPED already-exists / $TOTAL total"
 [ "$FAIL" -eq 0 ]
