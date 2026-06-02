@@ -23,4 +23,8 @@ Changes: "outline-planner now surfaces cross-component structural integrity risk
 
 ### FEATURE: PR #710 (2026-06-01)
 Background: fix(#626,#700): replace JSONL scan with flag+transcript handshake in stop-final-report-guard
-Changes: Final Report verification now reliably forces verbatim paste regardless of how many turns follow the Final Report, and blocks when the renderer output appeared only in a Bash tool result without being pasted (fixes #611 silent-pass and #700 tool-result bypass)
+Changes: Final Report verification now reliably forces verbatim paste regardless of how many turns follow the Final Report, and blocks when the renderer output appeared only in a Bash tool result without being pasted (fixes #611 silent-pass and #700 tool-result bypass)
+
+### FEATURE: PR #729 (2026-06-02)
+Background: feat(#712): add review-code-size + fix review-skill-size 3-source union
+Changes: Step 6 now runs `review-code-size --base <merge-base>` in parallel, warning when JS/SH/PY files exceed 300 lines (warn) or 500 lines (hard limit). Both `review-code-size` and `review-skill-size` now detect staged, unstaged, and untracked file changes in addition to committed diffs.
