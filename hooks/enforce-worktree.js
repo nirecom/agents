@@ -45,30 +45,22 @@
 
 const fs = require("fs");
 const os = require("os");
-const { spawnSync } = require("child_process");
 const path = require("path");
 
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
-const { normalizeCwd } = require("./lib/path-normalize");
-const { resolveSessionId, getWorkflowDir } = require("./lib/workflow-state");
+const { resolveSessionId } = require("./lib/workflow-state");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
-const { WRITE_PATTERNS, classify } = require("./lib/bash-write-patterns");
-const { parseExcludePatterns, matchesAnyExcludePattern } = require("./lib/glob-match");
+const { classify } = require("./lib/bash-write-patterns");
 const { parseCdCommand } = require("./lib/parse-git-args");
 const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch } = require("./enforce-worktree/config");
-const { isMainCheckout, parseGitCPath, findRepoRootForBash, normalizeForCompare, resolveRepoRoot, findRepoRoot } = require("./enforce-worktree/git-repo-detection");
+const { isMainCheckout, parseGitCPath, findRepoRootForBash, normalizeForCompare, findRepoRoot } = require("./enforce-worktree/git-repo-detection");
 const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } = require("./enforce-worktree/session-scope");
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
-const { hasShellChaining, findFirstUnquotedAnd, hasCommandSequencing, isPathOutsideRepo, isExcluded, getExcludePatterns } = require("./enforce-worktree/shared-cmd-utils");
-const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut, hasForceDeleteFlag, isWorktreeEndSkillForceDelete } = require("./enforce-worktree/branch-delete-guard");
+const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns } = require("./enforce-worktree/shared-cmd-utils");
+const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMainWorktreeCleanup } = require("./enforce-worktree/main-worktree-allows");
-
-const {
-  extractRedirectTargets, extractTeeTargets,
-  extractPwshWriteTargets, extractCpMvDestination,
-  extractRmTargets, extractStagedFiles,
-} = require("./lib/bash-write-targets");
+const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, isWriteTargetAllExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 
 function readStdin() {
   try {
@@ -87,86 +79,6 @@ function getWorktreeBaseDir() {
     ? path.join(os.homedir(), baseRaw.slice(1).replace(/^[\/\\]/, ""))
     : baseRaw;
   return path.resolve(expanded);
-}
-
-function isInSessionScope(repoRoot, sessionRoots) {
-  if (!repoRoot) return false;
-  const norm = normalizeForCompare(repoRoot);
-  return norm ? sessionRoots.has(norm) : false;
-}
-
-// Collect write targets from all applicable extractors (redirect, tee, PS cmdlets).
-// Any extractor returning null → parseFailure = true (fail-closed).
-function collectBashWriteTargets(cmd) {
-  const targets = [];
-  let parseFailure = false;
-
-  if (/(?:^|[\s;|&])(?:\d*)(?:&>>?|>>?)(?!>|\d)/.test(cmd)) {
-    const r = extractRedirectTargets(cmd);
-    if (r === null) parseFailure = true;
-    else targets.push(...r);
-  }
-  if (/(?:^|[\s;|&])tee\b/.test(cmd)) {
-    const t = extractTeeTargets(cmd);
-    if (t === null) parseFailure = true;
-    else targets.push(...t);
-  }
-  if (/\b(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Move-Item|Copy-Item)\b/i.test(cmd)
-      || /(?:^|[\s;|&])(?:sc|ac|ni|ri|mi|ci)\b/.test(cmd)) {
-    const p = extractPwshWriteTargets(cmd);
-    if (p === null) parseFailure = true;
-    else targets.push(...p);
-  }
-  if (/(?:^|[\s;|&])(?:cp|mv)\b/.test(cmd)) {
-    const d = extractCpMvDestination(cmd);
-    if (d === null) parseFailure = true;
-    else targets.push(d);
-  }
-  if (/(?:^|[\s;|&])rm\b/.test(cmd)) {
-    const r = extractRmTargets(cmd);
-    if (r === null) parseFailure = true;
-    else targets.push(...r);
-  }
-
-  return { targets: targets.length > 0 ? targets : null, parseFailure };
-}
-
-// True if all targets resolve to repos outside the session scope.
-// findRepoRoot()==null (non-git path) is also treated as outside scope (allow).
-function areAllBashTargetsOutsideSessionScope(targets, sessionRoots) {
-  if (!targets || targets.length === 0) return false;
-  for (const t of targets) {
-    const repo = findRepoRoot(t);
-    if (repo !== null && isInSessionScope(repo, sessionRoots)) return false;
-  }
-  return true;
-}
-
-// EXCLUDE check for file-target writes and git commit (staged files).
-function isWriteTargetAllExcluded(cmd, targets, repoRoot, patterns) {
-  if (!patterns || patterns.length === 0) return false;
-  const isGitCommit = /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*commit\b/.test(cmd);
-
-  if (isGitCommit) {
-    const staged = extractStagedFiles(repoRoot);
-    if (staged === null || staged.length === 0) return false;
-    if (!staged.every((f) => isExcluded(f, patterns))) return false;
-  }
-
-  if (targets) {
-    if (!targets.every((f) => isExcluded(f, patterns))) return false;
-  }
-
-  return isGitCommit || (targets !== null && targets.length > 0);
-}
-
-// True if cmd matches any kind:"gh" entry in WRITE_PATTERNS (= Group B gh writes).
-function isGhWriteCommand(cmd) {
-  if (!cmd || typeof cmd !== "string") return false;
-  for (const p of WRITE_PATTERNS) {
-    if (p.kind === "gh" && p.regex.test(cmd)) return true;
-  }
-  return false;
 }
 
 function done(decision) {
