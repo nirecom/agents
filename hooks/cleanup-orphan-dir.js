@@ -47,7 +47,7 @@ const { spawnSync } = require("child_process");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
 const { normalizeCwd } = require("./lib/path-normalize");
-const { getWorktreeBaseDir } = require("./enforce-worktree");
+const { getWorktreeBaseDirResolved } = require("./enforce-worktree");
 
 function refuse(msg, code) {
   process.stderr.write(`cleanup-orphan-dir: ${msg}\n`);
@@ -110,7 +110,7 @@ function main(argv) {
   const input = positionals[0];
 
   // 2. WORKTREE_BASE_DIR must be set.
-  const baseRaw = getWorktreeBaseDir();
+  const baseRaw = getWorktreeBaseDirResolved();
   if (!baseRaw) refuse("WORKTREE_BASE_DIR is not set");
 
   let base;
