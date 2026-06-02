@@ -106,10 +106,15 @@ case "$ARGS" in
     NUM=$(echo "$ARGS" | awk '{print $3}')
     echo "I_kwDOmock${NUM}"
     exit 0 ;;
-  issue\ view\ *--json\ databaseId*)
-    # Fix #432: dispatch now fetches databaseId (integer) instead of GraphQL node id.
-    # Mock returns a deterministic integer derived from the issue number.
-    NUM=$(echo "$ARGS" | awk '{print $3}')
+  api\ graphql\ *databaseId*)
+    # Fix #713: dispatch now fetches databaseId via GraphQL API instead of gh issue view.
+    # Extract issue number from the query string (issue(number: N)) and return a
+    # deterministic integer derived from it. The caller uses --jq so return just the value.
+    if [ "${GH_MOCK_GRAPHQL_DBID_FAIL:-0}" = "1" ]; then
+        echo "error: graphql request failed" >&2
+        exit 1
+    fi
+    NUM=$(echo "$ARGS" | sed 's/.*issue(number: \([0-9]*\)).*/\1/')
     echo "${NUM}000"
     exit 0 ;;
   issue\ view\ *--json\ state*)
@@ -128,6 +133,26 @@ case "$ARGS" in
   repo\ view\ *nameWithOwner*)
     echo "nirecom/agents"
     exit 0 ;;
+  repo\ view\ *--json\ owner,name*)
+    echo "nirecom/agents"
+    exit 0 ;;
+  issue\ view\ *--json\ url*)
+    NUM=$(echo "$ARGS" | awk '{print $3}')
+    echo "https://github.com/nirecom/agents/issues/${NUM}"
+    exit 0 ;;
+  api\ graphql\ *projectsV2*)
+    case "$ARGS" in
+      *"| length"*) echo "1"; exit 0 ;;
+      *) printf '{"id":"PVT_kwHOAMF_jc4BXf9E","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+    esac ;;
+  api\ graphql\ *fields*|api\ graphql\ *projectId*)
+    case "$ARGS" in
+      *"hasNextPage"*) echo "false"; exit 0 ;;
+      *"endCursor"*)   echo ""; exit 0 ;;
+      *) echo "PVTF_lAHOAMF_jc4BXf9EzhSsYwA"; exit 0 ;;
+    esac ;;
+  api\ graphql\ *projectItems*)
+    echo ""; exit 0 ;;
   *)
     echo "MOCK GH: no match for args=$ARGS" >&2
     exit 2 ;;
@@ -151,7 +176,7 @@ teardown_mock() {
     TMP=""
     unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_FAIL GH_MOCK_CREATEDAT_EMPTY GH_MOCK_ITEM_EDIT_FAIL 2>/dev/null || true
     unset GH_MOCK_SUBISSUE_API_FAIL GH_MOCK_NEW_ISSUE_NUM GH_MOCK_ISSUE_STATE_42 GH_MOCK_ISSUE_STATE_43 GH_MOCK_ISSUE_STATE_100 2>/dev/null || true
-    unset GH_MOCK_PARENT_NUM_200 GH_MOCK_PARENT_ABSENT_100 GH_MOCK_REOPEN_FAIL_100 2>/dev/null || true
+    unset GH_MOCK_PARENT_NUM_200 GH_MOCK_PARENT_ABSENT_100 GH_MOCK_REOPEN_FAIL_100 GH_MOCK_GRAPHQL_DBID_FAIL 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -503,7 +528,7 @@ run_with_timeout 30 bash "$TARGET" --title "No createdAt" --body "$(printf "$CAN
 RC=$?
 if [ "$RC" -eq 0 ] \
    && ! grep -q "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-   && grep -qi "failed to fetch createdAt" "$STDERR_OUT" 2>/dev/null; then
+   && grep -qiE "failed to fetch createdAt|empty createdAt" "$STDERR_OUT" 2>/dev/null; then
     pass "T2: createdAt failure skips item-edit (non-fatal)"
 else
     fail "T2: createdAt failure handling incorrect (rc=$RC stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
@@ -521,7 +546,7 @@ run_with_timeout 30 bash "$TARGET" --title "Edit fail" --body "$(printf "$CANONI
 RC=$?
 if [ "$RC" -eq 0 ] \
    && grep -qE "https://github.com/.+/issues/[0-9]+" "$STDOUT_OUT" 2>/dev/null \
-   && grep -qi "failed to set Content Date" "$STDERR_OUT" 2>/dev/null; then
+   && grep -qiE "failed to set Content Date|Content Date set failed" "$STDERR_OUT" 2>/dev/null; then
     pass "T3: item-edit failure is non-fatal (exit 0, URL on stdout, warning on stderr)"
 else
     fail "T3: item-edit non-fatal handling incorrect (rc=$RC stderr=$(cat "$STDERR_OUT" 2>/dev/null))"
@@ -529,21 +554,23 @@ fi
 teardown_mock
 
 # ---------------------------------------------------------------------------
-# T4: ISSUE_CREATE_FIELD_ID / ISSUE_CREATE_PROJECT_ID env-var overrides honored
+# T4: _ISSUE_CREATE_INTERNAL_* env-var overrides honored (short-circuit path)
 # ---------------------------------------------------------------------------
 setup_mock
-export ISSUE_CREATE_FIELD_ID=PVTF_override_field
-export ISSUE_CREATE_PROJECT_ID=PVT_override_project
+export _ISSUE_CREATE_INTERNAL_OWNER=nirecom
+export _ISSUE_CREATE_INTERNAL_PROJECT_NUM=1
+export _ISSUE_CREATE_INTERNAL_PROJECT_ID=PVT_override_project
+export _ISSUE_CREATE_INTERNAL_FIELD_ID=PVTF_override_field
 run_with_timeout 30 bash "$TARGET" --title "Override" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
 RC=$?
 if [ "$RC" -eq 0 ] \
    && grep -q -- "--field-id PVTF_override_field" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
    && grep -q -- "--project-id PVT_override_project" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
-    pass "T4: ISSUE_CREATE_FIELD_ID / ISSUE_CREATE_PROJECT_ID env-var overrides honored"
+    pass "T4: _ISSUE_CREATE_INTERNAL_* env-var overrides honored (short-circuit path)"
 else
     fail "T4: env-var override not honored (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
 fi
-unset ISSUE_CREATE_FIELD_ID ISSUE_CREATE_PROJECT_ID
+unset _ISSUE_CREATE_INTERNAL_OWNER _ISSUE_CREATE_INTERNAL_PROJECT_NUM _ISSUE_CREATE_INTERNAL_PROJECT_ID _ISSUE_CREATE_INTERNAL_FIELD_ID
 teardown_mock
 
 # ---------------------------------------------------------------------------
@@ -554,7 +581,7 @@ if [ ! -x "$DISPATCH" ]; then
 else
     setup_mock
     STDOUT_OUT="$TMP/dv1-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict none -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict none -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     CREATE_COUNT=$(grep -c "issue create" "$GH_MOCK_ARGS_LOG" 2>/dev/null || echo 0)
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
@@ -600,7 +627,7 @@ if [ ! -x "$DISPATCH" ]; then
 else
     setup_mock
     STDOUT_OUT="$TMP/dv3-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sibling --related 42 -- --title "T" --body "Original" >"$STDOUT_OUT" 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict sibling --related 42 -- --title "T" --body "$(printf 'Background: Original\nChanges: test')" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     # Body suffix is injected with a real newline, so check the whole args log (multi-line).
@@ -625,16 +652,16 @@ else
     setup_mock
     export GH_MOCK_NEW_ISSUE_NUM=200
     STDOUT_OUT="$TMP/dv4-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     if [ "$RC" -eq 0 ] \
-       && grep -q "issue view 200 --json id" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && ! grep -q "issue view 100 --json id" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "api graphql" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue(number: 200)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "repos/nirecom/agents/issues/100/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "sub_issue_id=I_kwDOmock200" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "sub_issue_id=200000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && echo "$LAST_LINE" | grep -q "/issues/200$"; then
-        pass "DV4: verdict=sub-of --parent 100 → child id fetched and attached"
+        pass "DV4: verdict=sub-of --parent 100 → child databaseId fetched via GraphQL and attached"
     else
         fail "DV4: verdict=sub-of behavior incorrect (rc=$RC stdout='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
@@ -650,16 +677,16 @@ else
     setup_mock
     export GH_MOCK_NEW_ISSUE_NUM=201
     STDOUT_OUT="$TMP/dv5-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict make-parent --children 42,43 -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict make-parent --children 42,43 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     ATTACH_201_COUNT=$(grep -c "repos/nirecom/agents/issues/201/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null || echo 0)
-    # Fix #432: make-parent also uses databaseId (integer) via -F, not GraphQL
-    # node id via -f. Mock returns "${NUM}000" for --json databaseId, so child
-    # 42 → 42000 and child 43 → 43000.
+    # Fix #713: make-parent fetches databaseId via GraphQL (api graphql) instead of
+    # gh issue view --json databaseId. Mock returns "${NUM}000" for issue(number: N),
+    # so child 42 → 42000 and child 43 → 43000.
     if [ "$RC" -eq 0 ] \
-       && grep -q "issue view 42 --json databaseId" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "issue view 43 --json databaseId" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue(number: 42)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue(number: 43)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q -- "-F sub_issue_id=42000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q -- "-F sub_issue_id=43000" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && [ "$ATTACH_201_COUNT" -ge 2 ] \
@@ -680,12 +707,32 @@ else
     setup_mock
     export GH_MOCK_SUBISSUE_API_FAIL=1
     export GH_MOCK_NEW_ISSUE_NUM=202
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >/dev/null 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
     RC=$?
     if [ "$RC" -ne 0 ]; then
         pass "DV6: sub-of + sub-issue API failure → non-zero exit"
     else
         fail "DV6: sub-of + sub-issue API failure should exit non-zero, got rc=$RC"
+    fi
+    teardown_mock
+fi
+
+# ---------------------------------------------------------------------------
+# DV-graphql-fail: GH_MOCK_GRAPHQL_DBID_FAIL=1 → gh api graphql returns non-zero → dispatch exits non-zero
+# Fix #713: get_child_database_id() uses api graphql; a GraphQL failure must propagate as a non-zero exit.
+# ---------------------------------------------------------------------------
+if [ ! -x "$DISPATCH" ]; then
+    fail "DV-graphql-fail: dispatch script missing — RED until implementation"
+else
+    setup_mock
+    export GH_MOCK_GRAPHQL_DBID_FAIL=1
+    export GH_MOCK_NEW_ISSUE_NUM=200
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
+    RC=$?
+    if [ "$RC" -ne 0 ]; then
+        pass "DV-graphql-fail: gh api graphql databaseId failure → dispatch exits non-zero"
+    else
+        fail "DV-graphql-fail: gh api graphql failure should propagate as non-zero exit, got rc=$RC"
     fi
     teardown_mock
 fi
@@ -711,14 +758,15 @@ if [ ! -x "$DISPATCH" ]; then
 else
     setup_mock
     export GH_MOCK_NEW_ISSUE_NUM=200
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >/dev/null 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >/dev/null 2>/dev/null
     RC=$?
     if [ "$RC" -eq 0 ] \
        && grep -q "api .*-X POST" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -q "repos/nirecom/agents/issues/100/sub_issues" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
-       && grep -q "issue view 200 --json databaseId" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "api graphql" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue(number: 200)" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && grep -qE -- "-F sub_issue_id=[0-9]+" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
-        pass "DV8: sub-issue API call has correct shape (api -X POST, sub_issues path, -F sub_issue_id=<integer>)"
+        pass "DV8: sub-issue API call has correct shape (api graphql databaseId, api -X POST, sub_issues path, -F sub_issue_id=<integer>)"
     else
         fail "DV8: sub-issue API call shape incorrect (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
@@ -775,7 +823,7 @@ else
     export GH_MOCK_PARENT_NUM_200=100
     export GH_MOCK_ISSUE_STATE_100=CLOSED
     STDOUT_OUT="$TMP/dv10-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     if [ "$RC" -eq 0 ] \
@@ -799,7 +847,7 @@ else
     export GH_MOCK_PARENT_NUM_200=100
     export GH_MOCK_ISSUE_STATE_100=OPEN
     STDOUT_OUT="$TMP/dv11-stdout.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>/dev/null
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     if [ "$RC" -eq 0 ] \
@@ -825,7 +873,7 @@ else
     export GH_MOCK_REOPEN_FAIL_100=1
     STDOUT_OUT="$TMP/dv12-stdout.txt"
     STDERR_OUT="$TMP/dv12-stderr.txt"
-    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "B" >"$STDOUT_OUT" 2>"$STDERR_OUT"
+    run_with_timeout 30 bash "$DISPATCH" --verdict sub-of --parent 100 -- --title "T" --body "$(printf "$CANONICAL_BODY")" >"$STDOUT_OUT" 2>"$STDERR_OUT"
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
     if [ "$RC" -eq 0 ] \
