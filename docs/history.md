@@ -248,4 +248,8 @@ Changes: Phase 1 — archived 17 confirmed class-A obsolete tests. Phase 2 — b
 
 ### BUGFIX: fix(#713): allow /issue-create from main worktree (post-#687 UX regression) (2026-06-02, 5491a6f)
 Background: PR #687 positive-allow redesign reclassified gh issue create as a write op, blocking /issue-create from main worktree entirely. Mid-workflow issue capture required /worktree-start ceremony first, contradicting the #600 goal.
-Changes: enforce-worktree.js two-stage gate: Stage A detects main vs linked worktree; Stage B requires ISSUE_CREATE_SKILL=1 inline prefix (content-integrity marker). issue-create.sh adds MSYS_NO_PATHCONV=1 prefix. issue-create-dispatch.sh adds MSYS_NO_PATHCONV=1. SKILL.md Step 0 main-worktree abort removed. Tests: test_l3_32 rewritten, test_l3_36-l3_45 added.
+Changes: enforce-worktree.js two-stage gate: Stage A detects main vs linked worktree; Stage B requires ISSUE_CREATE_SKILL=1 inline prefix (content-integrity marker). issue-create.sh adds MSYS_NO_PATHCONV=1 prefix. issue-create-dispatch.sh adds MSYS_NO_PATHCONV=1. SKILL.md Step 0 main-worktree abort removed. Tests: test_l3_32 rewritten, test_l3_36-l3_45 added.
+
+### BUGFIX: Remove orphaned root-level history/ directory (#718) (2026-06-02, 3a29379)
+Background: Commit 24b7bac (2026-05-30) accidentally created history/ at the repo root instead of docs/history/ via doc-rotate.py with a relative path. All 105 entries in history/2026.md confirmed present in docs/history/2026.md.
+Changes: Removed history/2026.md and history/index.md from the repo root via git rm (PR #725). docs/history/ is unaffected.
