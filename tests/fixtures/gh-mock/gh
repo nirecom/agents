@@ -230,9 +230,32 @@ case "$ARGS" in
           ;;
     esac
     ;;
+  # Label list handler — used by sync-labels.sh three-way status (issue #724).
+  # Emits GH_MOCK_LABEL_LIST (TSV: name\tcolor\tdescription per line) verbatim.
+  # Empty/unset GH_MOCK_LABEL_LIST = empty set (no existing labels remotely).
+  # Set GH_MOCK_LABEL_LIST_FAIL=1 to simulate API failure (exit 1 with stderr).
+  "label list --json name,color,description --limit 1000 --jq"*)
+    if [ "${GH_MOCK_LABEL_LIST_FAIL:-0}" = "1" ]; then
+        echo "gh: label list API error" >&2
+        exit 1
+    fi
+    if [ -n "${GH_MOCK_LABEL_LIST:-}" ]; then
+        printf '%s\n' "$GH_MOCK_LABEL_LIST"
+    fi
+    exit 0
+    ;;
   # Label create handler — used by sync-labels.sh / bootstrap-labels.sh.
   # Logs the full args to $GH_MOCK_LABEL_LOG (if set) and exits 0.
   "label create "*"--force"*)
+    if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
+        printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
+    fi
+    exit 0
+    ;;
+  # Non-force label create handler (issue #724 three-way status):
+  # fires when the more-specific --force pattern above did NOT match.
+  # Same logging behavior; exit 0.
+  "label create "*)
     if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
         printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
     fi
