@@ -94,11 +94,17 @@ get_repo_slug() {
 }
 
 # Always called with the CHILD issue number — never the parent.
-# Returns the child's integer databaseId (required by the sub-issues REST API
-# as of 2025-Q4; the older GraphQL node id form returns HTTP 422).
+# Returns the child's integer databaseId via GraphQL (gh issue view --json databaseId
+# was removed from the gh CLI; GraphQL is the supported path).
 get_child_database_id() {
     local issue_number="$1"
-    gh issue view "$issue_number" --json databaseId --jq .databaseId | tr -d '\r'
+    local slug owner repo
+    slug="$(get_repo_slug)"
+    owner="${slug%%/*}"
+    repo="${slug##*/}"
+    gh api graphql \
+        -f query="{ repository(owner: \"${owner}\", name: \"${repo}\") { issue(number: ${issue_number}) { databaseId } } }" \
+        --jq '.data.repository.issue.databaseId' | tr -d '\r'
 }
 
 # $1 = parent issue number (URL path), $2 = child integer databaseId (body).
@@ -229,7 +235,7 @@ case "$VERDICT" in
             echo "Error: failed to attach children to ${url}: ${failed[*]}" >&2
             echo "Parent issue is created. Retry the failed children manually:" >&2
             for f in "${failed[@]}"; do
-                echo "  gh issue view ${f} --json databaseId --jq .databaseId  # get integer id" >&2
+                echo "  gh api graphql -f query='{ repository(owner: \"OWNER\", name: \"REPO\") { issue(number: ${f}) { databaseId } } }' --jq '.data.repository.issue.databaseId'  # get integer id" >&2
                 echo "  gh api -X POST repos/<slug>/issues/${new_parent_number}/sub_issues -F sub_issue_id=<integer>" >&2
             done
             exit 1
