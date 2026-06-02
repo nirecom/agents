@@ -128,8 +128,8 @@ not yet support sub-issues (cli/cli#10298), so the skill uses `gh api` directly.
 Key fact: `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` expects the
 child's **integer databaseId** in `sub_issue_id`, not the issue number and
 not the GraphQL node id. Use
-`gh issue view <N> --json databaseId --jq .databaseId` to fetch it (an integer
-such as `2851234567`). The path parameter `{N}` is the parent's issue number
+`gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { databaseId } } }' --jq '.data.repository.issue.databaseId'`
+to fetch it (an integer such as `2851234567`). The path parameter `{N}` is the parent's issue number
 (integer). Pass it via `gh api -F` (typed integer), not `-f` (string) — the
 API returns HTTP 422 for string values.
 
