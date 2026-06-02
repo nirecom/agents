@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Code file size / quality review for JS / SH / PY files.
+# Code file size / quality review for code files.
 # Usage: review-code-size [--base <ref>] [--all]
+#
+# File extensions checked: space-separated list in CODE_FILE_EXTENSIONS env var.
+# Default: "js sh py". Example override: CODE_FILE_EXTENSIONS="js sh py tf java ts"
 #
 # Always emits one of:
 #   ## Code-size Review: PERFORMED
@@ -10,6 +13,10 @@
 # Always exits 0 — never blocks the workflow.
 
 set -uo pipefail
+
+# Build extension pattern from CODE_FILE_EXTENSIONS (default: js sh py)
+_EXTS="${CODE_FILE_EXTENSIONS:-js sh py}"
+_EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ' ' '|')"
 
 BASE_REF="origin/main"
 BASE_EXPLICIT=0
@@ -54,17 +61,18 @@ EOF
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
-  TARGETS=$(find . -type f \( -name '*.js' -o -name '*.sh' -o -name '*.py' \) \
+  TARGETS=$(find . -type f \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
-    -not -path '*/_archived/*' 2>/dev/null | sort || true)
+    -not -path '*/_archived/*' 2>/dev/null \
+    | grep -E "\.($_EXT_PATTERN)$" | sort || true)
   if [[ -z "$TARGETS" ]]; then
-    echo "## Code-size Review: SKIPPED — no JS/SH/PY files found"; exit 0
+    echo "## Code-size Review: SKIPPED — no code files found"; exit 0
   fi
   echo "## Code-size Review: PERFORMED (all-scan mode)"
   echo ""
   COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-  echo "All JS/SH/PY files scanned: $COUNT"
+  echo "All code files scanned: $COUNT (extensions: $_EXTS)"
   report_targets "$TARGETS"
   exit 0
 fi
@@ -84,16 +92,16 @@ CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
 CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
 
-TARGETS=$(printf '%s\n' "$CHANGED" | grep -E '\.(js|sh|py)$' | grep -v 'node_modules/' | grep -v '\.git/' | grep -v '_archived/' || true)
+TARGETS=$(printf '%s\n' "$CHANGED" | grep -E "\.($_EXT_PATTERN)$" | grep -v 'node_modules/' | grep -v '\.git/' | grep -v '_archived/' || true)
 
 if [[ -z "$TARGETS" ]]; then
-  echo "## Code-size Review: SKIPPED — no JS/SH/PY files changed"; exit 0
+  echo "## Code-size Review: SKIPPED — no code files changed"; exit 0
 fi
 
 echo "## Code-size Review: PERFORMED"
 echo ""
 COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-echo "Changed JS/SH/PY files: $COUNT"
+echo "Changed code files: $COUNT (extensions: $_EXTS)"
 report_targets "$TARGETS"
 
 exit 0
