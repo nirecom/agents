@@ -2,8 +2,8 @@
 # Code file size / quality review for code files.
 # Usage: review-code-size [--base <ref>] [--all]
 #
-# File extensions checked: space-separated list in CODE_FILE_EXTENSIONS env var.
-# Default: "js sh py". Example override: CODE_FILE_EXTENSIONS="js sh py tf java ts"
+# File extensions checked: semicolon-separated list in CODE_FILE_EXTENSIONS env var.
+# Default: "js;sh;py". Example override: CODE_FILE_EXTENSIONS="js;sh;py;tf;java;ts"
 #
 # Always emits one of:
 #   ## Code-size Review: PERFORMED
@@ -14,9 +14,9 @@
 
 set -uo pipefail
 
-# Build extension pattern from CODE_FILE_EXTENSIONS (default: js sh py)
-_EXTS="${CODE_FILE_EXTENSIONS:-js sh py}"
-_EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ' ' '|')"
+# Build extension pattern from CODE_FILE_EXTENSIONS (default: js;sh;py)
+_EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
+_EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ';' '|')"
 
 BASE_REF="origin/main"
 BASE_EXPLICIT=0
