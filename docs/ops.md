@@ -60,7 +60,7 @@ Create via `gh api` (the `gh` CLI does not support sub-issues yet):
 
 ```bash
 # Get child databaseId (integer — not GraphQL node id)
-CHILD_ID=$(gh issue view <CHILD_N> --json databaseId --jq .databaseId)
+CHILD_ID=$(gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: CHILD_N) { databaseId } } }' --jq '.data.repository.issue.databaseId')
 gh api -X POST repos/{owner}/{repo}/issues/<PARENT_N>/sub_issues \
   -F sub_issue_id="$CHILD_ID"
 ```
