@@ -37,6 +37,8 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
      is visible without relying on Claude's summary.
    - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
      (always parallel, non-blocking; warnings only, never blocks workflow)
+   - Bash: `review-code-size --base <merge-base>` for JS/SH/PY file size check
+     (always parallel, non-blocking; advisory only, never blocks workflow)
 7. **Docs** —
    - **`ENFORCE_WORKTREE=on`:** Run `/update-docs`. Mandatory — the skill stages bullets into `WORKTREE_NOTES.md` `## History Notes` / `## Changelog Notes` instead of writing `docs/history.md` / `CHANGELOG.md` directly. `bin/compose-doc-append-entry` consumes those sections during `/worktree-end` Step 6i (post-merge, main worktree).
    - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.

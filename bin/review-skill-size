@@ -74,9 +74,14 @@ BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
 
 ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
-CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD 2>"$ERR") || {
+CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+if [[ -s "$ERR" ]]; then
   echo "## Skill Size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
-}
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
 
 TARGETS=$(printf '%s\n' "$CHANGED" | grep -E '^skills/.+/SKILL\.md$' | grep -v '/_archived/' || true)
 
