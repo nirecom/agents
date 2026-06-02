@@ -27,4 +27,8 @@ Changes: Final Report verification now reliably forces verbatim paste regardless
 
 ### FEATURE: PR #729 (2026-06-02)
 Background: feat(#712): add review-code-size + fix review-skill-size 3-source union
-Changes: Step 6 now runs `review-code-size --base <merge-base>` in parallel, warning when JS/SH/PY files exceed 300 lines (warn) or 500 lines (hard limit). Both `review-code-size` and `review-skill-size` now detect staged, unstaged, and untracked file changes in addition to committed diffs.
+Changes: Step 6 now runs `review-code-size --base <merge-base>` in parallel, warning when JS/SH/PY files exceed 300 lines (warn) or 500 lines (hard limit). Both `review-code-size` and `review-skill-size` now detect staged, unstaged, and untracked file changes in addition to committed diffs.
+
+### FEATURE: PR #728 (2026-06-03)
+Background: fix(#724): sync-labels.sh three-way label status (created/updated/already-exists)
+Changes: `sync-labels.sh` now shows per-label status: `(created)` for new labels, `(updated)` for changed labels, and `(already exists)` for unchanged ones — replacing the previous unconditional recreation. The final summary shows `N created, M updated, K already-exists / T total`.
