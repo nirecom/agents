@@ -252,4 +252,8 @@ Changes: enforce-worktree.js two-stage gate: Stage A detects main vs linked work
 
 ### BUGFIX: Remove orphaned root-level history/ directory (#718) (2026-06-02, 3a29379)
 Background: Commit 24b7bac (2026-05-30) accidentally created history/ at the repo root instead of docs/history/ via doc-rotate.py with a relative path. All 105 entries in history/2026.md confirmed present in docs/history/2026.md.
-Changes: Removed history/2026.md and history/index.md from the repo root via git rm (PR #725). docs/history/ is unaffected.
+Changes: Removed history/2026.md and history/index.md from the repo root via git rm (PR #725). docs/history/ is unaffected.
+
+### FEATURE: PR #729 — feature/712-review-code-size (2026-06-02, cb47ea439f8985235bf976ed92c64fd1def36f50, #729)
+Background: feat(#712): add review-code-size + fix review-skill-size 3-source union
+Changes: issue #712: review-code-size: new code-file size gate for JS/SH/PY + review-skill-size 3-source union fix — Background: Step 6 had a review-skill-size gate for SKILL.md prompt files but no equivalent for JS/SH/PY code files; enforce-worktree.js (1354 lines) could grow unchecked. Additionally, review-skill-size detected only committed diffs, missing staged/unstaged/untracked changes added before /commit-push. LLM Lost-in-the-Middle research supports warn=300/hard=500 line thresholds. Changes: new bin/review-code-size (twin of review-skill-size): 3-source union diff detection (committed+staged+unstaged+untracked via git diff --cached / git diff / git ls-files --others), warn=300/hard=500 thresholds for JS/SH/PY files, exit-0 advisory. Fixed bin/review-skill-size with same 3-source union logic (§4 Orthogonality). Added review-code-size --base <merge-base> bullet to CLAUDE.md Step 6 parallel execution. Tests: feature-review-code-size.sh (13 cases), feature-review-skill-size-uncommitted.sh (3 cases). <!-- compose-doc-append-sentinel: branch=feature/712-review-code-size pr=#729 -->
