@@ -1,40 +1,20 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: enforce worktree-based parallel session workflow.
 //
-// Scope:
-//   Blocks Edit/Write/MultiEdit/Bash write operations when:
-//     1. Running in the main git checkout (not a linked worktree), regardless of branch.
-//     2. Running on a protected branch even inside a linked worktree.
-//   Allows writes only from a linked worktree on a non-protected branch.
+// Blocks Edit/Write/MultiEdit/Bash write operations when:
+//   1. Running in the main git checkout (not a linked worktree), regardless of branch.
+//   2. Running on a protected branch even inside a linked worktree.
+// Allows writes only from a linked worktree on a non-protected branch.
 //
-// Approval axes: (a) main vs linked worktree (only axis). docs(history|changelog) writes
-// are done via GitHub REST API (Contents API: bin/lib/github-contents-write.sh,
-// Git Data API: bin/lib/github-git-data-write.sh) and bypass local file/git writes.
-// env-var bypass functions (ISSUE_CLOSE_SKILL / COMPOSE_DOC_APPEND_SKILL) were removed in #672.
-//
-// Change ④: line ~1467 (!repoRoot) handling differs by tool:
-//   - Bash with findRepoRootForBash(cmd)==null → fail-closed (deny). Bash writes from
-//     non-git CWD are anomalous when sequencing/parseFailure prevents target extraction.
-//   - Edit/Write/MultiEdit with findRepoRoot(filePath)==null → fail-open (allow).
-//     Staging dir writes target $HOME/.workflow-plans/ (non-git path) and must remain
-//     allowed. The check happens earlier at line ~1462 (isInSessionScope guard).
-//
-// Main worktree detection:
-//   git rev-parse --git-common-dir == git rev-parse --git-dir
-//   (Linked worktrees have --git-common-dir pointing to the shared .git while --git-dir
-//   points to .git/worktrees/<name> — they differ only in linked worktrees.)
-//
-// Bash detection:
-//   - Parses git -C <path> from command string (best-effort regex) for target repo root.
-//   - Falls back to process.cwd() when no -C is found.
-//   - Only write-classified commands are checked (see hooks/lib/bash-write-patterns.js).
-//   - gh write commands (kind:"gh" in WRITE_PATTERNS) get an additional
-//     session-scope check: target repo must be in CWD repo + ENFORCE_WORKTREE_EXTRA_REPOS.
-//
-// Limitations (documented; this is a UX guard, not a security boundary):
-//   - Bash write detection is pattern-based. Python/binary/runtime-expanded writes not caught.
-//   - Redirect targets outside cwd are not detected.
-//   - Use ENFORCE_WORKTREE=off to bypass for trivial direct-main work.
+// Implementation is split across sibling modules under hooks/enforce-worktree/:
+//   config / git-repo-detection / session-scope / git-hooks-bypass /
+//   shared-cmd-utils / branch-delete-guard / main-worktree-allows / bash-write-scope.
+// This file holds the dispatch block plus three small helpers (readStdin / done /
+// getWorktreeBaseDirResolved). docs(history|changelog) writes use the GitHub REST
+// API and bypass local file/git writes (Contents API: bin/lib/github-contents-write.sh,
+// Git Data API: bin/lib/github-git-data-write.sh). Limitations: Bash write detection
+// is pattern-based (UX guard, not a security boundary). Use ENFORCE_WORKTREE=off to
+// bypass for trivial direct-main work.
 //
 // --- BEGIN temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 // AGENT_AUTO_BRANCH and AGENT_DEFAULT_BRANCHES are accepted with a deprecation warning.
@@ -72,7 +52,7 @@ function readStdin() {
 
 // Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
 // Per rules/worktree.md, this is the parent directory all linked worktrees live under.
-function getWorktreeBaseDir() {
+function getWorktreeBaseDirResolved() {
   const raw = (process.env.WORKTREE_BASE_DIR || "").trim();
   const baseRaw = raw || path.join(os.homedir(), "git", "worktrees");
   const expanded = baseRaw.startsWith("~")
@@ -440,7 +420,7 @@ module.exports = {
   parseBranchDeleteTarget,
   isAllowedBranchDeleteWhenNotCheckedOut,
   isAllowedReadOnlyConfigCheck,
-  getWorktreeBaseDir,
+  getWorktreeBaseDirResolved,
   isAllowedPushAllExcluded,
   hasGitHooksBypass,
   findFirstUnquotedAnd,
