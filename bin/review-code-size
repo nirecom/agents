@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Code file size / quality review for code files.
+# Usage: review-code-size [--base <ref>] [--all]
+#
+# File extensions checked: semicolon-separated list in CODE_FILE_EXTENSIONS env var.
+# Default: "js;sh;py". Example override: CODE_FILE_EXTENSIONS="js;sh;py;tf;java;ts"
+#
+# Always emits one of:
+#   ## Code-size Review: PERFORMED
+#   ## Code-size Review: PERFORMED (all-scan mode)
+#   ## Code-size Review: SKIPPED — <reason>
+#
+# Always exits 0 — never blocks the workflow.
+
+set -uo pipefail
+
+# Build extension pattern from CODE_FILE_EXTENSIONS (default: js;sh;py)
+_EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
+_EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ';' '|')"
+
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Code-size Review: SKIPPED (--base requires an argument)"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Code-size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+report_targets() {
+  local targets="$1"
+  echo ""
+  echo "[Line counts]"
+  while IFS= read -r file; do
+    [[ -f "$file" ]] || continue
+    local lines
+    lines=$(wc -l < "$file" | tr -d ' ')
+    if (( lines > 500 )); then
+      echo "HARD: $file — $lines lines (exceeds 500-line hard limit)"
+    elif (( lines > 300 )); then
+      echo "WARN: $file — $lines lines (exceeds 300-line warn threshold)"
+    else
+      echo "INFO: $file — $lines lines"
+    fi
+  done <<< "$targets"
+  echo ""
+
+  cat <<'EOF'
+This is advisory output — no action is blocked.
+EOF
+}
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  TARGETS=$(find . -type f \
+    -not -path '*/node_modules/*' \
+    -not -path '*/.git/*' \
+    -not -path '*/_archived/*' 2>/dev/null \
+    | grep -E "\.($_EXT_PATTERN)$" | sort || true)
+  if [[ -z "$TARGETS" ]]; then
+    echo "## Code-size Review: SKIPPED — no code files found"; exit 0
+  fi
+  echo "## Code-size Review: PERFORMED (all-scan mode)"
+  echo ""
+  COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+  echo "All code files scanned: $COUNT (extensions: $_EXTS)"
+  report_targets "$TARGETS"
+  exit 0
+fi
+
+BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+  echo "## Code-size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+}
+
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+if [[ -s "$ERR" ]]; then
+  echo "## Code-size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
+
+TARGETS=$(printf '%s\n' "$CHANGED" | grep -E "\.($_EXT_PATTERN)$" | grep -v 'node_modules/' | grep -v '\.git/' | grep -v '_archived/' || true)
+
+if [[ -z "$TARGETS" ]]; then
+  echo "## Code-size Review: SKIPPED — no code files changed"; exit 0
+fi
+
+echo "## Code-size Review: PERFORMED"
+echo ""
+COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+echo "Changed code files: $COUNT (extensions: $_EXTS)"
+report_targets "$TARGETS"
+
+exit 0
