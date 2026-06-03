@@ -959,7 +959,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# A1–A5: --repo-root forwarding + MCP filesystem server integration (#723)
+# A1–A6: --repo-root forwarding + MCP filesystem server integration (#723, #746)
 #
 # These tests verify that:
 #   - `bin/review-plan-codex` accepts `--repo-root <path>` and forwards an
@@ -970,6 +970,7 @@ fi
 #   - The `CODEX_MCP_FS=off` kill-switch suppresses `--repo-root` forwarding.
 #   - The MCP addendum text is injected into the codex prompt (the TMPFILE)
 #     when `--repo-root` is provided.
+#   - `--full-auto` is used (not the removed `--ask-for-approval` flag).
 #
 # Pre-implementation note: these tests will fail until `bin/review-plan-codex`
 # and `bin/run-codex-review-loop` learn the `--repo-root` flag.
@@ -1059,6 +1060,22 @@ if [[ -f "$A_CODEX_STDIN" ]] && \
     pass "A5: MCP addendum text injected into codex prompt"
 else
     fail "A5: expected MCP addendum in codex prompt. Stdin head: $(head -c 400 "$A_CODEX_STDIN" 2>/dev/null || echo MISSING)"
+fi
+
+# ---------------------------------------------------------------------------
+# A6 — --full-auto is passed; --ask-for-approval is absent (#746)
+# (reuses $A_CODEX_ARGS from the A1 invocation above)
+# ---------------------------------------------------------------------------
+if [[ -f "$A_CODEX_ARGS" ]] && grep -q -- '--full-auto' "$A_CODEX_ARGS"; then
+    pass "A6: --full-auto present in codex args"
+else
+    fail "A6: expected --full-auto in codex args; got: $(cat "$A_CODEX_ARGS" 2>/dev/null || echo MISSING)"
+fi
+
+if [[ -f "$A_CODEX_ARGS" ]] && ! grep -q -- '--ask-for-approval' "$A_CODEX_ARGS"; then
+    pass "A6: --ask-for-approval absent from codex args"
+else
+    fail "A6: --ask-for-approval must not be in codex args; got: $(cat "$A_CODEX_ARGS" 2>/dev/null || echo MISSING)"
 fi
 
 # ---------------------------------------------------------------------------
