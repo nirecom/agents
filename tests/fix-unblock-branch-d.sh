@@ -572,6 +572,69 @@ test_parseBranchDeleteTarget_quoted_branch_names() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T17 — inline prefix + `feat/` branch type → ALLOW (#541 fix)
+#       Currently BLOCKED because `feat` is not in the isWorktreeEndSkillForceDelete regex.
+#       Will pass after source fix.
+# ─────────────────────────────────────────────────────────────────────────────
+test_T17_allow_feat_prefix_branch_delete() {
+    local repo="$TMPDIR_BASE/t17-repo"
+    init_repo "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t checkout -q -b feat/fix-541 && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m "divergent" && \
+        git -c user.email=t@example.com -c user.name=t checkout -q main)
+    local payload out
+    payload="$(hook_payload_bash "WORKTREE_END_SKILL=1 git -C $repo branch -D feat/fix-541")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    case "$out" in
+        *'"decision":"block"'*)
+            fail "T17 expected ALLOW for inline-prefix -D on feat/fix-541 (#541 fix); got block: $out" ;;
+        *)
+            pass "T17 inline WORKTREE_END_SKILL=1 + feat/ branch type → ALLOW (#541)" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T18 — inline prefix + branch name without slash (feat-baz) → BLOCK
+#       The bypass shape requires <type>/<task-name>; bare `feat-baz` has no slash.
+# ─────────────────────────────────────────────────────────────────────────────
+test_T18_block_feat_no_slash() {
+    local repo="$TMPDIR_BASE/t18-repo"
+    init_repo "$repo"
+    (cd "$repo" && git -c user.email=t@example.com -c user.name=t branch feat-baz 2>/dev/null)
+    local payload out
+    payload="$(hook_payload_bash "WORKTREE_END_SKILL=1 git -C $repo branch -D feat-baz")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    case "$out" in
+        *'"decision":"block"'*)
+            pass "T18 inline prefix + feat-baz (no slash) → BLOCK (type/name required)" ;;
+        *)
+            fail "T18 expected BLOCK for feat-baz without slash; got: $out" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T19 — regression: `feature/` still works after adding `feat` to regex
+# ─────────────────────────────────────────────────────────────────────────────
+test_T19_regression_feature_prefix_still_allowed() {
+    local repo="$TMPDIR_BASE/t19-repo"
+    init_repo "$repo"
+    (cd "$repo" && \
+        git -c user.email=t@example.com -c user.name=t checkout -q -b feature/regression-check && \
+        git -c user.email=t@example.com -c user.name=t commit --allow-empty --no-verify -q -m "divergent" && \
+        git -c user.email=t@example.com -c user.name=t checkout -q main)
+    local payload out
+    payload="$(hook_payload_bash "WORKTREE_END_SKILL=1 git -C $repo branch -D feature/regression-check")"
+    out="$(ENFORCE_WORKTREE=on run_hook "$payload" "$repo")"
+    case "$out" in
+        *'"decision":"block"'*)
+            fail "T19 expected ALLOW for inline-prefix on feature/; got block: $out" ;;
+        *)
+            pass "T19 regression: feature/ branch type still ALLOW after #541 fix" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -594,6 +657,9 @@ test_isBranchDeleteCommand_no_FP_in_commit_message
 test_isBranchDeleteCommand_quoted_branch_value
 test_isBranchDeleteCommand_documented_fn
 test_parseBranchDeleteTarget_quoted_branch_names
+test_T17_allow_feat_prefix_branch_delete
+test_T18_block_feat_no_slash
+test_T19_regression_feature_prefix_still_allowed
 
 echo ""
 echo "─────────────────────────────────────────"
