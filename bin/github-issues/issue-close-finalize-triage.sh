@@ -75,8 +75,10 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         exit 1
         ;;
     OPEN:pending)
+        # #690: Step E (doc-append) removed — docs/history.md is now written by
+        # /worktree-end Step 6h from WORKTREE_NOTES.md.
         ACTION=resume_e
-        NEXT_STEPS="E,F,G,H,J,K"
+        NEXT_STEPS="F,G,H,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     OPEN:appended)
@@ -85,10 +87,10 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:appended)
-        # #412: Step E (doc-append) added so History Notes from WORKTREE_NOTES.md
-        # sidecar are synthesized into the history entry on resume.
+        # #690: Step E (doc-append) removed — docs/history.md is now written by
+        # /worktree-end Step 6h from WORKTREE_NOTES.md.
         ACTION=resume_j
-        NEXT_STEPS="E,J,K"
+        NEXT_STEPS="J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:)
@@ -96,34 +98,24 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         # Step B (sub-issue gate) is intentionally omitted: it protects against
         # closing a parent with open children, but the parent is already CLOSED
         # here — gating now only stalls bookkeeping behind long-lived tracker
-        # sub-issues. Step E (doc-append) remains the existing limit and is
-        # blocked under ENFORCE_WORKTREE=on. (#366)
+        # sub-issues. (#366)
+        # #690: Step E (doc-append) removed — auto_close_path has no
+        # WORKTREE_NOTES.md, so history.md write is skipped entirely
+        # (historyEntry="skipped_no_history_notes" in outcome JSON).
         ACTION=auto_close_path
-        NEXT_STEPS="E,G,J,K"
+        NEXT_STEPS="G,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:pending)
         # Stuck: close succeeded but sentinel never promoted.
         # Recovery: post a new `appended` sentinel via J-2 (idempotent). The
         # orphan `pending` is harmless — consumers match only on the
-        # `appended` prefix. If history.md is missing the entry, prepend E.
-        HIST_HIT=0
-        if grep -qE "^### .*#${N}[,)]|^### #${N}:" \
-            "${AGENTS_CONFIG_DIR}/docs/history.md" 2>/dev/null; then
-            HIST_HIT=1
-        elif ls "${AGENTS_CONFIG_DIR}/docs/history/"*.md >/dev/null 2>&1; then
-            if grep -qE "^### .*#${N}[,)]|^### #${N}:" \
-                "${AGENTS_CONFIG_DIR}/docs/history/"*.md 2>/dev/null; then
-                HIST_HIT=1
-            fi
-        fi
-        if [ "$HIST_HIT" -eq 1 ]; then
-            ACTION=stuck_sentinel_only
-            NEXT_STEPS="J,K"
-        else
-            ACTION=stuck_append_sentinel
-            NEXT_STEPS="E,J,K"
-        fi
+        # `appended` prefix.
+        # #690: Step E removed — history.md write is owned by /worktree-end
+        # Step 6h. If the history entry is missing, use /issue-reconcile to
+        # backfill via the standalone issue-to-history.sh.
+        ACTION=stuck_sentinel_only
+        NEXT_STEPS="J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     *)
