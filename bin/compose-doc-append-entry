@@ -18,7 +18,7 @@ MERGE_COMMIT=""
 BACKGROUND=""
 CATEGORY="FEATURE"
 DRY_RUN=0
-SKIP_HISTORY=0
+CLOSES_ISSUES_COUNT=0
 TARGET_HISTORY=""
 TARGET_CHANGELOG=""
 
@@ -31,12 +31,15 @@ while [[ $# -gt 0 ]]; do
         --background)  BACKGROUND="$2";   shift 2 ;;
         --category)    CATEGORY="$2";     shift 2 ;;
         --dry-run)     DRY_RUN=1;         shift ;;
-        --skip-history) SKIP_HISTORY=1;   shift ;;
+        --closes-issues-count) CLOSES_ISSUES_COUNT="$2"; shift 2 ;;
         --target-history)   TARGET_HISTORY="$2";   shift 2 ;;
         --target-changelog) TARGET_CHANGELOG="$2"; shift 2 ;;
         *) echo "compose-doc-append-entry: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
+
+# Validate --closes-issues-count is digits-only
+[[ "$CLOSES_ISSUES_COUNT" =~ ^[0-9]+$ ]] || { echo "compose-doc-append-entry: --closes-issues-count must be digits only (got: $CLOSES_ISSUES_COUNT)" >&2; exit 1; }
 
 # --- Validation ---
 [[ -n "$NOTES_PATH" ]] || { echo "compose-doc-append-entry: --notes is required" >&2; exit 1; }
@@ -129,13 +132,11 @@ write_changelog_marker() {
 LANG_VIOLATIONS="$(
     NOTES_PATH="$NOTES_PATH" \
     AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" \
-    SKIP_HISTORY="$SKIP_HISTORY" \
     env -u DOCS_LANG_HISTORY_PUBLIC -u DOCS_LANG_HISTORY_PRIVATE -u DOCS_LANG_CHANGELOG_PUBLIC -u DOCS_LANG_CHANGELOG_PRIVATE node -e '
         const fs = require("fs");
         const path = require("path");
         const agentsDir = process.env.AGENTS_CONFIG_DIR;
         const notesPath = process.env.NOTES_PATH;
-        const skipHistory = process.env.SKIP_HISTORY === "1";
         let cfgMod, lintMod, privMod;
         try {
             cfgMod = require(path.join(agentsDir, "hooks/lib/lang-config.js"));
@@ -149,7 +150,6 @@ LANG_VIOLATIONS="$(
         try { priv = privMod.isPrivateRepo(process.cwd()) === true; } catch (e) {}
         const violations = lintMod.lintWorktreeNotesLang(content, config, {
             isPrivateRepo: priv,
-            skipHistory: skipHistory,
         });
         if (violations.length > 0) {
             process.stdout.write(JSON.stringify(violations));
@@ -170,6 +170,50 @@ if [[ -n "$LANG_VIOLATIONS" ]]; then
         echo "compose-doc-append-entry: rewrite offending bullets to match the policy before re-running" >&2
         exit 1
     fi
+fi
+
+# --- Pre-flight: extract content and decide write targets (before gh API calls) ---
+TODAY="$(date +%F)"
+
+HISTORY_BULLETS="$(extract_section "History Notes")"
+CHANGELOG_BULLETS="$(extract_section "Changelog Notes")"
+
+# Fail-fast: when closes_issues is non-empty, History Notes MUST contain bullets.
+# This is the canonical write path for docs/history.md (Approach C, #690) — empty
+# History Notes means the user skipped /update-docs or wrote a placeholder.
+if (( CLOSES_ISSUES_COUNT > 0 )) && [[ -z "$HISTORY_BULLETS" ]]; then
+    echo "Error: closes_issues is non-empty but ## History Notes has no bullets. Run /update-docs first." >&2
+    exit 1
+fi
+
+# Soft-warn: bullet count should match issue count (one history entry per closed issue).
+if (( CLOSES_ISSUES_COUNT > 0 )); then
+    HISTORY_BULLET_COUNT=$(printf '%s\n' "$HISTORY_BULLETS" | grep -c . || true)
+    if (( HISTORY_BULLET_COUNT < CLOSES_ISSUES_COUNT )); then
+        echo "Warning: closes_issues count ($CLOSES_ISSUES_COUNT) > history bullet count ($HISTORY_BULLET_COUNT). Expected one bullet per closed issue." >&2
+    fi
+fi
+
+# Decide which targets are in play.
+WANT_HISTORY=0
+WANT_CHANGELOG=0
+if [[ -n "$HISTORY_BULLETS" ]] && ! history_sentinel_found; then
+    WANT_HISTORY=1
+fi
+if [[ -n "$CHANGELOG_BULLETS" ]] && ! changelog_marker_found; then
+    WANT_CHANGELOG=1
+fi
+
+# Nothing to write: exit early without any gh API calls.
+if [[ "$WANT_HISTORY" -eq 0 ]] && [[ "$WANT_CHANGELOG" -eq 0 ]]; then
+    exit 0
+fi
+
+# Dry-run: print intent summary and exit before gh API calls.
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    [[ "$WANT_HISTORY" -eq 1 ]] && echo "[dry-run] would append to docs/history.md on default branch"
+    [[ "$WANT_CHANGELOG" -eq 1 ]] && echo "[dry-run] would append to CHANGELOG.md on default branch"
+    exit 0
 fi
 
 # --- Resolve owner/repo/default branch ---
@@ -195,24 +239,8 @@ fetch_to_staging() {
     return 1
 }
 
-# --- Main processing ---
+# --- Background derivation and staging paths ---
 BG="$(derive_background)"
-TODAY="$(date +%F)"
-
-HISTORY_BULLETS="$(extract_section "History Notes")"
-CHANGELOG_BULLETS="$(extract_section "Changelog Notes")"
-
-# Decide which targets are in play.
-WANT_HISTORY=0
-WANT_CHANGELOG=0
-if [[ "$SKIP_HISTORY" -eq 0 ]] && [[ -n "$HISTORY_BULLETS" ]] && ! history_sentinel_found; then
-    WANT_HISTORY=1
-fi
-if [[ -n "$CHANGELOG_BULLETS" ]] && ! changelog_marker_found; then
-    WANT_CHANGELOG=1
-fi
-
-# Resolve staging paths (caller-overridable for tests).
 SESSION_ID="${CLAUDE_SESSION_ID:-$(date +%s)-$$}"
 HISTORY_STAGING="${TARGET_HISTORY:-$STAGING_DIR/${SESSION_ID}-pr${PR_NUMBER}-history-staging.md}"
 CHANGELOG_STAGING="${TARGET_CHANGELOG:-$STAGING_DIR/${SESSION_ID}-pr${PR_NUMBER}-changelog-staging.md}"
@@ -232,26 +260,22 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
     fi
     SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
 
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        echo "[dry-run] uv run doc-append.py $HISTORY_STAGING --category $CATEGORY --subject \"$SUBJECT\" --date $TODAY --commits \"$COMMITS_ARG\" --background \"$BG\" --changes \"$CHANGES_WITH_SENTINEL\""
-    else
-        if ! uv run "$SCRIPT_DIR/doc-append.py" "$HISTORY_STAGING" \
-                --category "$CATEGORY" \
-                --subject "$SUBJECT" \
-                --date "$TODAY" \
-                --commits "$COMMITS_ARG" \
-                --background "$BG" \
-                --changes "$CHANGES_WITH_SENTINEL"; then
-            echo "compose-doc-append-entry: doc-append.py failed for history staging" >&2
-            exit 1
-        fi
-        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
-                --path "docs/history.md" \
-                --file "$HISTORY_STAGING" \
-                --commit-subject "docs(history): record PR #${PR_NUMBER}"; then
-            echo "compose-doc-append-entry: history validation failed" >&2
-            exit 1
-        fi
+    if ! uv run "$SCRIPT_DIR/doc-append.py" "$HISTORY_STAGING" \
+            --category "$CATEGORY" \
+            --subject "$SUBJECT" \
+            --date "$TODAY" \
+            --commits "$COMMITS_ARG" \
+            --background "$BG" \
+            --changes "$CHANGES_WITH_SENTINEL"; then
+        echo "compose-doc-append-entry: doc-append.py failed for history staging" >&2
+        exit 1
+    fi
+    if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
+            --path "docs/history.md" \
+            --file "$HISTORY_STAGING" \
+            --commit-subject "docs(history): record PR #${PR_NUMBER}"; then
+        echo "compose-doc-append-entry: history validation failed" >&2
+        exit 1
     fi
 fi
 
@@ -263,36 +287,27 @@ if [[ "$WANT_CHANGELOG" -eq 1 ]]; then
         CHANGES="$(echo "$CHANGELOG_BULLETS" | tr '\n' ';' | sed 's/;$//')"
         SUBJ_CHANGELOG="PR #${PR_NUMBER}"
 
-        if [[ "$DRY_RUN" -eq 1 ]]; then
-            echo "[dry-run] uv run doc-append.py $CHANGELOG_STAGING --category $CATEGORY --subject \"$SUBJ_CHANGELOG\" --date $TODAY --no-auto-rotate --background \"$BG\" --changes \"$CHANGES\""
-        else
-            if ! uv run "$SCRIPT_DIR/doc-append.py" "$CHANGELOG_STAGING" \
-                    --category "$CATEGORY" \
-                    --subject "$SUBJ_CHANGELOG" \
-                    --date "$TODAY" \
-                    --no-auto-rotate \
-                    --background "$BG" \
-                    --changes "$CHANGES"; then
-                echo "compose-doc-append-entry: doc-append.py failed for changelog staging" >&2
-                exit 1
-            fi
-            if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
-                    --path "CHANGELOG.md" \
-                    --file "$CHANGELOG_STAGING" \
-                    --commit-subject "docs(changelog): record PR #${PR_NUMBER}"; then
-                echo "compose-doc-append-entry: changelog validation failed" >&2
-                exit 1
-            fi
+        if ! uv run "$SCRIPT_DIR/doc-append.py" "$CHANGELOG_STAGING" \
+                --category "$CATEGORY" \
+                --subject "$SUBJ_CHANGELOG" \
+                --date "$TODAY" \
+                --no-auto-rotate \
+                --background "$BG" \
+                --changes "$CHANGES"; then
+            echo "compose-doc-append-entry: doc-append.py failed for changelog staging" >&2
+            exit 1
+        fi
+        if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
+                --path "CHANGELOG.md" \
+                --file "$CHANGELOG_STAGING" \
+                --commit-subject "docs(changelog): record PR #${PR_NUMBER}"; then
+            echo "compose-doc-append-entry: changelog validation failed" >&2
+            exit 1
         fi
     fi
 fi
 
 # --- Write back to GitHub ---
-if [[ "$DRY_RUN" -eq 1 ]]; then
-    [[ "$WANT_HISTORY" -eq 1 ]] && echo "[dry-run] github-contents-write.sh docs/history.md (or git-data atomic when rotated)"
-    [[ "$WANT_CHANGELOG" -eq 1 ]] && echo "[dry-run] github-contents-write.sh CHANGELOG.md"
-    exit 0
-fi
 
 # Determine if history requires rotation.
 HISTORY_ROTATED=0
