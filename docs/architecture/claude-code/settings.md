@@ -86,6 +86,7 @@ See `docs/security-policy.md` for the full pattern list.
   (any path segments, including zero) and `*` (any non-separator chars). Matching is
   case-insensitive on Windows. Implementation: `hooks/lib/glob-match.js`.
   Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;<redacted>\ai-specs\**\todo.md`
+  Built-in (non-overridable): `.worktree-backup/**` is always excluded so `/worktree-end` Step 5 can copy gitignored files to `.worktree-backup/` even when Bash CWD has reset to the main worktree.
   **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
   - **Classified "write" (session-scope check applies)**: `gh pr merge`, `gh issue create/delete`,
     `gh repo delete`, `gh release create/edit/delete/upload`, `gh api` with
