@@ -1,4 +1,7 @@
 "use strict";
+// Handles PREMISE_FAIL and PREMISE_ACK sentinels for the premise-contradiction gate.
+// PREMISE_FAIL blocks the workflow when a planner premise is invalidated mid-session;
+// PREMISE_ACK clears the block once the contradiction is acknowledged.
 
 const { validateSkipReason } = require("./skip-reason");
 const {

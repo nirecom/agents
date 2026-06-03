@@ -1,4 +1,7 @@
 "use strict";
+// Handles *_NOT_NEEDED step-skip sentinels: RESEARCH, OUTLINE, DETAIL, WRITE_TESTS,
+// REVIEW_SECURITY, CLARIFY_INTENT, and the deprecated DOCS_NOT_NEEDED.
+// Each family validates the skip reason, records the step as skipped, and returns next-step guidance.
 
 const { validateSkipReason } = require("./skip-reason");
 const { markStep, nextStepHint } = require("../lib/workflow-state");

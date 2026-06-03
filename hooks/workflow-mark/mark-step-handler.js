@@ -1,4 +1,7 @@
 "use strict";
+// Handles WORKFLOW_MARK_STEP_<step>_complete sentinels. Validates the step name
+// against VALID_STEPS and marks it complete. Rejects forbidden manual-mark steps
+// (user_verification, write_tests, docs) that must be emitted via their own paths.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, markStep, nextStepHint } = require("../lib/workflow-state");

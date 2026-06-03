@@ -1,4 +1,6 @@
 "use strict";
+// Handles RESET_FROM_<step> sentinels, which roll back workflow state to a
+// specified step (marking that step and all subsequent steps as pending).
 
 const { RESET_FROM_RE_DQ } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow-state");

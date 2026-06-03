@@ -1,4 +1,6 @@
 "use strict";
+// Handles BRANCHING_COMPLETE (and legacy BRANCHING_DECIDED) sentinels, emitted
+// when the worktree/branch setup step finishes. Marks branching_complete in workflow state.
 
 const { validateSkipReason } = require("./skip-reason");
 const { markStep, nextStepHint } = require("../lib/workflow-state");

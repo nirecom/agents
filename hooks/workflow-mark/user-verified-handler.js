@@ -1,4 +1,6 @@
 "use strict";
+// Handles USER_VERIFIED sentinels, emitted when the user approves an implementation
+// step. Marks user_verification as complete and records the approval reason.
 
 const { validateSkipReason } = require("./skip-reason");
 const { markStep, nextStepHint } = require("../lib/workflow-state");

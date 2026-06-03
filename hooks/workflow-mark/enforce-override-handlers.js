@@ -1,4 +1,7 @@
 "use strict";
+// Handles ENFORCE_WORKTREE_OFF/ON and ENFORCE_WORKFLOW_OFF/ON sentinels, which
+// write or delete per-session marker files that temporarily override worktree/workflow
+// enforcement. The only module that receives the signalFatal callback (hard-fail on bad session ID).
 
 const fs = require("fs");
 const path = require("path");

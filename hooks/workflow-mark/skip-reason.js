@@ -1,4 +1,6 @@
 "use strict";
+// Validates the human-readable `: <reason>` portion of *_NOT_NEEDED sentinels.
+// Rejects placeholder values ("none", "skip", etc.) and overly short strings.
 
 const SKIP_REASON_DUDS = new Set([
   "none", "n/a", "na", "nope", "no", "nothing",
