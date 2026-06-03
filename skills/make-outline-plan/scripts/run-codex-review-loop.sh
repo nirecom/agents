@@ -31,6 +31,8 @@ args=(
   --accepted-tradeoffs "$PLANS_DIR/$SESSION_ID-intent.md"
   --round "$ROUND_NUMBER"
 )
+REPO_ROOT_VAL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$REPO_ROOT_VAL" ]]; then args+=(--repo-root "$REPO_ROOT_VAL"); fi
 for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
   p="${!v:-}"
   if [[ -n "$p" && -s "$p" ]]; then args+=(--context "$p"); fi
