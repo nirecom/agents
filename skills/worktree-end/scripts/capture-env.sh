@@ -47,8 +47,19 @@ PR_TITLE="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="title"{sub(/^title=/,"");
 PR_URL="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="url"{sub(/^url=/,"");print;exit}')"
 PR_STATE="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="state"{sub(/^state=/,"");print;exit}')"
 
-# Merge SHA (best-effort; empty before merge or in an empty repo).
-MERGE_SHA="$(git -C "$WORKTREE" rev-parse HEAD 2>/dev/null || echo "")"
+# Merge SHA — resolved from PR's mergeCommit.oid (authoritative; survives
+# main-worktree env reset). Retry once after 2s to absorb GitHub eventual-
+# consistency lag between `gh pr merge` and `gh pr view` reflecting the SHA.
+# Hard-fail if still empty: Step 6h cannot write history.md without it.
+MERGE_SHA="$(gh -R "$REPO" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
+if [[ -z "$MERGE_SHA" ]]; then
+  sleep 2
+  MERGE_SHA="$(gh -R "$REPO" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
+fi
+if [[ -z "$MERGE_SHA" ]]; then
+  printf "ERROR: MERGE_SHA unresolved — 'gh -R %s pr view %s --json mergeCommit' returned no oid after retry. PR may not be merged yet, or gh lacks repo scope.\n" "$REPO" "$PR_NUMBER" >&2
+  exit 1
+fi
 
 # Step 3: Restart detection (four categories).
 RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER")"
@@ -102,15 +113,12 @@ ENV_FILE="$PLANS_DIR/${SESSION_ID}-final-report-env.json"
 PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \
 BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" \
 BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" NOTES_BACKUP_PATH="$NOTES_BACKUP_PATH" \
+MERGE_SHA="$MERGE_SHA" \
 CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" \
 CC_RESTART_REQUIRED="$CC_RESTART_REQUIRED" CC_RESTART_REASON="$CC_RESTART_REASON" \
 VSCODE_RELOAD_REQUIRED="$VSCODE_RELOAD_REQUIRED" VSCODE_RELOAD_REASON="$VSCODE_RELOAD_REASON" \
 INSTALLER_RERUN_REQUIRED="$INSTALLER_RERUN_REQUIRED" INSTALLER_RERUN_REASON="$INSTALLER_RERUN_REASON" \
 OS_REBOOT_REQUIRED="$OS_REBOOT_REQUIRED" OS_REBOOT_REASON="$OS_REBOOT_REASON" \
   node "$LIB_DIR/write-env-json.js" "$ENV_FILE"
-
-# Export MERGE_SHA for callers that source-ish parse the final line — not in JSON
-# (kept session-local; doc-append in SKILL.md Step 6h re-reads via git).
-: "${MERGE_SHA:=}"
 
 echo "env JSON written: $ENV_FILE"

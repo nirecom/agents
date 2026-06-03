@@ -52,12 +52,9 @@ function collectBullets(content, targetHeadings) {
 
 function lintWorktreeNotesLang(content, config, options) {
   const opts = options || {};
-  const skipHistory = opts.skipHistory === true;
   const isPrivateRepo = opts.isPrivateRepo === true;
 
-  const targetHeadings = [];
-  if (!skipHistory) targetHeadings.push(SECTION_HISTORY);
-  targetHeadings.push(SECTION_CHANGELOG);
+  const targetHeadings = [SECTION_HISTORY, SECTION_CHANGELOG];
 
   const bullets = collectBullets(content || "", targetHeadings);
   const violations = [];
