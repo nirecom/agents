@@ -136,7 +136,8 @@ else
 # --- Idempotency: skip if `### #N:` heading already present in history.md or rotated archive ---
 # Anchor on `### ` prefix to avoid false-positive matches against in-body references
 # like "follow-up from #42:" or "see also #42: ...".
-if grep -rqE "(^### #${ISSUE_NUM}:)|(^### [^(]+ \([^)]+, #${ISSUE_NUM}\))" "$HISTORY_FILE" "$HISTORY_DIR" 2>/dev/null; then
+GREP_BIN="$(command -v ggrep || echo grep)"
+if LC_ALL=C.UTF-8 "$GREP_BIN" -rPq "(^### #${ISSUE_NUM}\b)|(^### [^(]+ \([^)]+#${ISSUE_NUM}\b[^)]*\))|(^### [^\n]*#${ISSUE_NUM}\b[^\n]*\([0-9]{4}-)" "$HISTORY_FILE" "$HISTORY_DIR" 2>/dev/null; then
     echo "Already in history (entry for #${ISSUE_NUM} exists). Skipping append."
     exit 0
 fi
