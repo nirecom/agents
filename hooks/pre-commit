@@ -60,41 +60,35 @@ if _is_enforce_worktree_on; then
     # scanner further down still runs. Patterns and paths are passed via env
     # (never as shell-interpolated args) to prevent metacharacter injection.
     _enforce_skip=0
-    _exclude_patterns="${ENFORCE_WORKTREE_EXCLUDE:-}"
-    if [ -n "$_exclude_patterns" ]; then
-        _staged="$(git diff --cached --name-only 2>/dev/null || true)"
-        _repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-        if [ -n "$_staged" ] && [ -n "$_repo_top" ]; then
-            _node_rc=0
-            ENFORCE_WORKTREE_EXCLUDE="$_exclude_patterns" \
-            AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
-            _PRECOMMIT_REPO_TOP="$_repo_top" \
-            _PRECOMMIT_STAGED="$_staged" \
-            node -e '
-              const path = require("path");
-              const cfg = process.env.AGENTS_CONFIG_DIR;
-              if (!cfg) process.exit(2);
-              const { parseExcludePatterns, matchesAnyExcludePattern } =
-                require(cfg + "/hooks/lib/glob-match");
-              const top = process.env._PRECOMMIT_REPO_TOP;
-              const patterns = parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE);
-              const files = process.env._PRECOMMIT_STAGED.split(/\r?\n/).filter(Boolean);
-              if (patterns.length === 0) process.exit(2);
-              for (const rel of files) {
-                const abs = path.resolve(top, rel);
-                if (!matchesAnyExcludePattern(abs, patterns)) process.exit(2);
-              }
-              process.exit(0);
-            ' 2>/dev/null || _node_rc=$?
-            if [ "$_node_rc" = "0" ]; then
-                _enforce_skip=1
-            elif [ "$_node_rc" != "2" ]; then
-                # rc=2 is the documented "patterns did not all match" path.
-                # Other non-zero rc indicates a problem (missing node, broken
-                # glob-match.js, etc.). Surface it so users know their EXCLUDE
-                # config was silently bypassed by an error, not by the gate.
-                echo "pre-commit: ENFORCE_WORKTREE_EXCLUDE matcher failed (rc=$_node_rc); falling back to enforce-worktree gate." >&2
-            fi
+    _staged="$(git diff --cached --name-only 2>/dev/null || true)"
+    _repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -n "$_staged" ] && [ -n "$_repo_top" ]; then
+        _node_rc=0
+        ENFORCE_WORKTREE_EXCLUDE="${ENFORCE_WORKTREE_EXCLUDE:-}" \
+        AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
+        _PRECOMMIT_REPO_TOP="$_repo_top" \
+        _PRECOMMIT_STAGED="$_staged" \
+        node -e '
+          const cfg = process.env.AGENTS_CONFIG_DIR;
+          if (!cfg) process.exit(2);
+          const { getExcludePatterns, isExcluded } =
+            require(cfg + "/hooks/enforce-worktree/shared-cmd-utils");
+          const patterns = getExcludePatterns();
+          const files = process.env._PRECOMMIT_STAGED.split(/\r?\n/).filter(Boolean);
+          if (patterns.length === 0) process.exit(2);
+          for (const rel of files) {
+            if (!isExcluded(rel, patterns)) process.exit(2);
+          }
+          process.exit(0);
+        ' 2>/dev/null || _node_rc=$?
+        if [ "$_node_rc" = "0" ]; then
+            _enforce_skip=1
+        elif [ "$_node_rc" != "2" ]; then
+            # rc=2 is the documented "patterns did not all match" path.
+            # Other non-zero rc indicates a problem (missing node, broken
+            # glob-match.js, etc.). Surface it so users know their EXCLUDE
+            # config was silently bypassed by an error, not by the gate.
+            echo "pre-commit: ENFORCE_WORKTREE_EXCLUDE matcher failed (rc=$_node_rc); falling back to enforce-worktree gate." >&2
         fi
     fi
 
