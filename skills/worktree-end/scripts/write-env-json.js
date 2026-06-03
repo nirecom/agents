@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Write Final Report env vars to JSON file.
 // argv[2] = output JSON path.
-// Reads 18 env vars (BRANCH_DELETED intentionally omitted — issue #504 fail-safe).
+// Reads 19 env vars (BRANCH_DELETED intentionally omitted — issue #504 fail-safe).
 // Exit 0 = success, 1 = write failure.
 //
 // Post-render fields (NOT written by this script):
@@ -28,6 +28,7 @@ const FIELDS = [
   'CREATED_DATE',
   'BACKUP_MANIFEST_PATH',
   'NOTES_BACKUP_PATH',
+  'MERGE_SHA',
   'CLAUDE_CODE_RESTART_REQUIRED',
   'CC_RESTART_REQUIRED',
   'CC_RESTART_REASON',

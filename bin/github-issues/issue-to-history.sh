@@ -1,4 +1,9 @@
 #!/bin/bash
+# STANDALONE TOOL — not invoked by any skill or workflow routing.
+# Use manually for /issue-reconcile backfill or out-of-band history repair.
+# Normal close-path history.md writes are owned by /worktree-end Step 6h
+# (compose-doc-append-entry reading WORKTREE_NOTES.md ## History Notes). #690
+#
 # Convert a (typically closed) GitHub issue into a docs/history.md entry.
 #
 # Usage:

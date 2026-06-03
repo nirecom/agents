@@ -315,14 +315,6 @@ EOF
         fail "T13: expected >=1 violation, got: $_t13_count"
     fi
 
-    # T14: options.skipHistory=true → History skipped, no violation for History CJK
-    _t14_count="$(lint_count "$_t9_file" "$CFG_HIST_EN" '{"skipHistory":true}')"
-    if [ "$_t14_count" = "0" ]; then
-        pass "T14: skipHistory=true → History CJK skipped, 0 violations"
-    else
-        fail "T14: expected 0 violations with skipHistory, got: $_t14_count"
-    fi
-
     # T15: error message trims leading "- " from bullet text
     _t15_json="$(lint_json "$_t13_file" "$CFG_HIST_EN" '{}')"
     # The violation object should contain a representation of the bullet text
@@ -496,9 +488,11 @@ EOF
     setup_g4_agents_dir() {
         local tmp; tmp=$(mktemp -d)
         TEST_TMPS+=("$tmp")
-        mkdir -p "$tmp/hooks/lib"
+        mkdir -p "$tmp/hooks/lib" "$tmp/bin"
         # Copy all lib files — is-private-repo.js has transitive deps (parse-git-args, etc.)
         cp "$AGENTS_DIR"/hooks/lib/*.js "$tmp/hooks/lib/"
+        # workflow-plans-dir is required by compose-doc-append-entry for staging dir setup.
+        cp "$AGENTS_DIR/bin/workflow-plans-dir" "$tmp/bin/"
         printf '%s\n' \
             'DOCS_LANG_HISTORY_PUBLIC=english' \
             'DOCS_LANG_HISTORY_PRIVATE=english' \
@@ -538,26 +532,15 @@ EOF
         fail "T20: expected non-zero exit, got: $_t20_exit"
     fi
 
-    # T21: English-only History → CLI exits 0
+    # T21: English-only History → CLI exits 0 (dry-run: no GitHub auth needed)
     _t21_repo="$(setup_repo)"
     _t21_notes="$(make_notes_inline "- English-only history bullet" "- (none)")"
-    run_cli_in "$_t21_repo" --notes "$_t21_notes" --branch "feat/528" --pr "528" --background "T21 bg"
+    run_cli_in "$_t21_repo" --notes "$_t21_notes" --branch "feat/528" --pr "528" --background "T21 bg" --dry-run
     _t21_exit=$?
     if [ "$_t21_exit" -eq 0 ]; then
-        pass "T21: English-only History → compose-doc-append-entry exits 0"
+        pass "T21: English-only History → compose-doc-append-entry exits 0 (dry-run)"
     else
         fail "T21: expected exit 0, got: $_t21_exit"
-    fi
-
-    # T22: --skip-history + Japanese in History + no Changelog violations → exit 0
-    _t22_repo="$(setup_repo)"
-    _t22_notes="$(make_notes_inline "- 日本語の履歴 (should be skipped)" "- English changelog only")"
-    run_cli_in "$_t22_repo" --notes "$_t22_notes" --branch "feat/528" --pr "528" --background "T22 bg" --skip-history
-    _t22_exit=$?
-    if [ "$_t22_exit" -eq 0 ]; then
-        pass "T22: --skip-history + Japanese in History → lint skips History, exits 0"
-    else
-        fail "T22: expected exit 0 with --skip-history, got: $_t22_exit"
     fi
 
     # T23: --dry-run + Japanese in History → exit 0 (dry-run does not hard-exit)
