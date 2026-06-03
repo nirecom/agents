@@ -47,6 +47,21 @@ git -C "$OTHER_REPO" config user.name "Test"
 git -C "$OTHER_REPO" commit --allow-empty --no-verify -q -m init
 if command -v cygpath >/dev/null 2>&1; then OTHER_N="$(cygpath -m "$OTHER_REPO")"; else OTHER_N="$OTHER_REPO"; fi
 
+# Add DIRTY_WT_N — the actual worktree path of MAIN_DIRTY (needed for S38/S42)
+if command -v cygpath >/dev/null 2>&1; then DIRTY_WT_N="$(cygpath -m "$TMPBASE/dirty-wt")"; else DIRTY_WT_N="$TMPBASE/dirty-wt"; fi
+
+# MAIN_VERY_DIRTY — 2 linked worktrees (wtCount=3) for S34
+MAIN_VERY_DIRTY="$TMPBASE/main-very-dirty"
+mkdir -p "$MAIN_VERY_DIRTY"
+git -C "$MAIN_VERY_DIRTY" init -q -b main
+git -C "$MAIN_VERY_DIRTY" config user.email "test@example.com"
+git -C "$MAIN_VERY_DIRTY" config user.name "Test"
+git -C "$MAIN_VERY_DIRTY" config core.hooksPath /dev/null
+git -C "$MAIN_VERY_DIRTY" commit --allow-empty --no-verify -q -m init
+git -C "$MAIN_VERY_DIRTY" worktree add -q -b feature-a "$TMPBASE/very-dirty-wt1" 2>/dev/null
+git -C "$MAIN_VERY_DIRTY" worktree add -q -b feature-b "$TMPBASE/very-dirty-wt2" 2>/dev/null
+if command -v cygpath >/dev/null 2>&1; then MAIN_VERY_DIRTY_N="$(cygpath -m "$MAIN_VERY_DIRTY")"; else MAIN_VERY_DIRTY_N="$MAIN_VERY_DIRTY"; fi
+
 check_mc() {
   run_with_timeout node -e "
     const {isAllowedMainWorktreeCleanup}=require('$GUARD_JS');
@@ -96,5 +111,29 @@ assert_block "git stash pop && echo done"      "$MAIN_CLEAN_N" "S25: chaining bl
 
 # Block: -C pointing at unrelated repo
 assert_block "git -C \"$OTHER_N\" stash pop"  "$MAIN_CLEAN_N" "S26: -C /other blocked"
+
+# === WORKTREE_END_SKILL=1 prefix handling (S27-S42, new behavior) ===
+# S27-S29, S34, S36-S39, S42 FAIL until source changes are applied.
+
+# S27: skill-prefixed stash at wtCount=2 (linked WT present) → allow after fix
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" stash push -m tmp" "$MAIN_DIRTY_N" "S27: skill-prefixed stash push at wtCount=2 → allow (#705/#739b)"
+# S28: no-prefix stash at wtCount=2 → block (current behavior unchanged)
+assert_block "git -C \"$MAIN_DIRTY_N\" stash push -m tmp" "$MAIN_DIRTY_N" "S28: no-prefix stash push at wtCount=2 → block"
+# S29: skill-prefixed restore at wtCount=2 → allow after fix
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" restore README.md" "$MAIN_DIRTY_N" "S29: skill-prefixed restore at wtCount=2 → allow (#705)"
+# S34: skill-prefixed stash at wtCount=3 → block (cap=2 even with prefix)
+assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_VERY_DIRTY_N\" stash push" "$MAIN_VERY_DIRTY_N" "S34: skill-prefixed stash at wtCount=3 → block (count cap)"
+# S35: shell chaining → block (current behavior)
+assert_block "git stash push && rm README.md" "$MAIN_CLEAN_N" "S35: chaining blocked"
+# S36: skill-prefixed stash at wtCount=1 → allow after fix
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_CLEAN_N\" stash push" "$MAIN_CLEAN_N" "S36: skill-prefixed stash at wtCount=1 → allow"
+# S37: skill-prefixed worktree prune at wtCount=2 → allow after fix (#743)
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree prune" "$MAIN_DIRTY_N" "S37: skill-prefixed worktree prune at wtCount=2 → allow (#743)"
+# S38: skill-prefixed worktree remove at wtCount=2 → allow after fix (#745)
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree remove \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S38: skill-prefixed worktree remove at wtCount=2 → allow (#745)"
+# S39: skill-prefixed worktree prune --dry-run at wtCount=2 → allow after fix
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree prune --dry-run" "$MAIN_DIRTY_N" "S39: skill-prefixed worktree prune --dry-run at wtCount=2 → allow"
+# S42: skill-prefixed worktree remove --force → block (--force prohibited per SKILL.md rule)
+assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree remove --force \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S42: skill-prefixed worktree remove --force → block (--force guard)"
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]
