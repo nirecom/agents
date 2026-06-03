@@ -4,7 +4,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { stripQuotedArgs } = require("../lib/strip-quoted-args");
-const { hasShellChaining, isPathOutsideRepo, isExcluded } = require("./shared-cmd-utils");
+const { hasShellChaining, isPathOutsideRepo, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./shared-cmd-utils");
 const { parseGitCPath } = require("./git-repo-detection");
 
 /**
@@ -268,8 +268,18 @@ function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
 function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
   if (!repoRoot) return false;
+  const skillPrefixed = hasWorktreeEndSkillPrefix(cmd);
+  if (skillPrefixed) cmd = stripWorktreeEndSkillPrefix(cmd);
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd)) return false;
+
+  // #743/#745: belt-and-suspenders over isAllowedWorktreeCommand. The subMatch
+  // regex below only accepts stash|restore|checkout subcommands; "worktree"
+  // would otherwise fall through. --force/-f rejected per SKILL.md §144.
+  if (skillPrefixed && /\bworktree\s+(?:remove|prune)(?:\s|$)/.test(cmd)) {
+    if (/\s--force\b|\s-f\b/.test(cmd)) return false;
+    return true;
+  }
 
   // -C path, if present, must resolve to repoRoot.
   // Reject multiple -C flags — parseGitCPath only validates the first;
@@ -320,7 +330,8 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
     });
     if (r.status !== 0) return false;
     const wtCount = ((r.stdout || "").match(/^worktree\s/gm) || []).length;
-    return wtCount === 1; // main worktree only = cleanup complete
+    const maxCount = skillPrefixed ? 2 : 1;
+    return wtCount >= 1 && wtCount <= maxCount;
   } catch (e) { return false; }
 }
 
