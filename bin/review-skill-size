@@ -7,10 +7,11 @@
 #   ## Skill Size Review: PERFORMED (all-scan mode)
 #   ## Skill Size Review: SKIPPED — <reason>
 #
-# Always exits 0 — never blocks the workflow.
+# Exits 1 when any changed SKILL.md exceeds the HARD limit (>200 lines) in diff mode. --all mode always exits 0 (audit/discovery).
 
 set -uo pipefail
 
+HARD_HIT=0
 BASE_REF="origin/main"
 BASE_EXPLICIT=0
 ALL_SCAN=0
@@ -38,7 +39,10 @@ report_targets() {
     [[ -f "$file" ]] || continue
     local lines
     lines=$(wc -l < "$file" | tr -d ' ')
-    if (( lines > 100 )); then
+    if (( lines > 200 )); then
+      echo "HARD: $file — $lines lines (exceeds 200-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md)"
+      HARD_HIT=1
+    elif (( lines > 100 )); then
       echo "WARN: $file — $lines lines (exceeds 100-line safety net)"
     else
       echo "INFO: $file — $lines lines"
@@ -51,8 +55,8 @@ report_targets() {
 
 Criteria SSOT: rules/prompt.md (§1 Form — directives, one-line, multi-step → CLI).
 
-This is advisory output — no action is blocked.
 EOF
+  echo "  HARD findings block the workflow (exit 1) in diff mode. WARN/INFO are advisory."
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
@@ -95,4 +99,4 @@ COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
 echo "Changed SKILL.md files: $COUNT"
 report_targets "$TARGETS"
 
-exit 0
+[[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0

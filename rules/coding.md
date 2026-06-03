@@ -7,6 +7,7 @@
 - Before writing machine-specific information to any public file, check `.private-info-blocklist` in the repo root for forbidden patterns. Skip silently if the file does not exist.
 - Always add `.env` to `.gitignore` to exclude secrets from version control.
 - Do NOT add `Co-Authored-By` trailers to commit messages.
+- 常に最も単純な実装を選ぶ。
 
 ## Migration Code Blocks
 
@@ -33,3 +34,4 @@ See also `rules/core-principles.md` for the top-level design principles.
 
 - [coding/python.md](coding/python.md) — `uv` 使用必須、bare `python`/`pip` 禁止
 - [coding/nodejs.md](coding/nodejs.md) — `fnm`(Windows) / `nvm`(POSIX) 使用必須
+- [coding/file-split.md](coding/file-split.md) — HARD 超ファイル分割: code は <name>/ 兄弟フォルダ、SKILL.md は scripts/ または bin/
