@@ -74,6 +74,14 @@ function isPathOutsideRepo(targetPath, repoRoot) {
   }
 }
 
+function hasWorktreeEndSkillPrefix(cmd) {
+  return /^WORKTREE_END_SKILL=1\s/.test(cmd);
+}
+
+function stripWorktreeEndSkillPrefix(cmd) {
+  return cmd.replace(/^WORKTREE_END_SKILL=1[ \t]+/, "");
+}
+
 function getExcludePatterns() {
   const user = parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE || "");
   return BUILTIN_EXCLUDE_PATTERNS.concat(user);
@@ -101,5 +109,7 @@ module.exports = {
   isPathOutsideRepo,
   isExcluded,
   getExcludePatterns,
+  hasWorktreeEndSkillPrefix,
+  stripWorktreeEndSkillPrefix,
   BUILTIN_EXCLUDE_PATTERNS,
 };

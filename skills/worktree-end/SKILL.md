@@ -119,9 +119,9 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
       ```
       cd "<main-worktree-root>"
       ```
-   c. `git -C <main> worktree remove <path>` (never `--force` — see rules).
+   c. `WORKTREE_END_SKILL=1 git -C <main> worktree remove <path>` (never `--force` — see rules).
    c.1. On non-zero exit (EPERM, busy, not-empty, any error): print stderr warning that `/sweep-worktrees` will reclaim the directory and branch automatically; skip 6e and 6f; proceed to 6g. (6e skipped: dir occupied — self-resolves at next sweep. 6f skipped: git cascade rule blocks `branch -D` while worktree registered.)
-   d. `git -C <main> worktree prune`
+   d. `WORKTREE_END_SKILL=1 git -C <main> worktree prune`
    e. **Orphan-dir cleanup** at `<WORKTREE_BASE_DIR>/<task-name>`:
       ```
       node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" "<WORKTREE_BASE_DIR>/<task-name>"
@@ -130,6 +130,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    f. `WORKTREE_END_SKILL=1 git -C <main> branch -D <branch>` — `-D` required because squash-merge produces a new commit not recognised by `-d`'s fully-merged check. The inline `WORKTREE_END_SKILL=1` is the authorization token for `enforce-worktree.js`.
    g. `git -C <main> fetch --prune origin`
       `git -C <main> pull --ff-only`
+      Pre-pull stash (if needed when `pull --ff-only` is blocked by pre-existing uncommitted changes): `WORKTREE_END_SKILL=1 git -C <main> stash push`, then `git -C <main> pull --ff-only`, then `WORKTREE_END_SKILL=1 git -C <main> stash pop`.
    h. **Compose doc-append** (main worktree; only when NOTES_BACKUP_PATH is non-empty).
       This step is the single canonical writer of both `docs/history.md` and `CHANGELOG.md` from `WORKTREE_NOTES.md ## History Notes` / `## Changelog Notes` bullets (Approach C, #690). Phase 2 of issue-close no longer writes history.md.
       Parse `closes_issues` from `<PLANS_DIR>/<session-id>-intent.md` to derive `CLOSES_ISSUES_COUNT` (0 when empty/missing). When non-empty, one bullet per closed issue is expected in `## History Notes`; the CLI fail-fasts when bullets are absent.

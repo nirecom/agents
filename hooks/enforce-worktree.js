@@ -37,7 +37,7 @@ const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch } = require(
 const { isMainCheckout, parseGitCPath, findRepoRootForBash, normalizeForCompare, findRepoRoot } = require("./enforce-worktree/git-repo-detection");
 const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } = require("./enforce-worktree/session-scope");
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
-const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns } = require("./enforce-worktree/shared-cmd-utils");
+const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMainWorktreeCleanup } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, isWriteTargetAllExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
@@ -297,6 +297,7 @@ if (toolName === "Bash") {
     if (!targets && !parseFailure && repoRoot) {
       if (!isInSessionScope(repoRoot, sessionRoots)) done();
     }
+    if (parseFailure && hasWorktreeEndSkillPrefix(cmd) && /^cp\s/.test(stripWorktreeEndSkillPrefix(cmd)) && /\.worktree-backup/.test(cmd)) done();
     // parseFailure → fail-closed: fall through to main-checkout block below.
   }
 } else if (["Edit", "Write", "MultiEdit"].includes(toolName)) {

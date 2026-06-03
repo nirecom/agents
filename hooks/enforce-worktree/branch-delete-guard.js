@@ -117,7 +117,7 @@ function isWorktreeEndSkillForceDelete(cmd) {
   );
   if (!m) return false;
   const branch = m[1] || m[2] || m[3];
-  return /^(?:feature|fix|refactor|docs|chore)\/[a-zA-Z0-9_-]+$/.test(branch);
+  return /^(?:feat|feature|fix|refactor|docs|chore)\/[a-zA-Z0-9_-]+$/.test(branch);
 }
 
 module.exports = {
