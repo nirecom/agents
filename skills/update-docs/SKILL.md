@@ -53,8 +53,10 @@ After completing this skill, choose Path A or Path B based on `ENFORCE_WORKTREE`
 ### Path A — ENFORCE_WORKTREE=on (mandatory)
 
 1. Append history bullets to `<worktree>/WORKTREE_NOTES.md` `## History Notes`. Replace `- (none)` on first append.
+   - **MANDATORY when `closes_issues` is non-empty**: write one bullet per closed issue (matching the `closes_issues` count). `/worktree-end` Step 6h is the canonical writer of `docs/history.md` (Approach C, #690) and consumes these bullets via `compose-doc-append-entry --closes-issues-count N`. The CLI fail-fasts (non-zero exit) when `closes_issues > 0` AND `## History Notes` is absent / contains only `- (none)`.
+   - When bullet count is below `closes_issues` count, the CLI emits a soft warning to stderr but proceeds.
 2. For public repos: append user-facing bullets to `## Changelog Notes`. Replace `- (none)` on first append.
-3. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` Step 6i.
+3. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to `/worktree-end` Step 6h (single canonical writer for both files).
 4. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
 5. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
 6. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate.
