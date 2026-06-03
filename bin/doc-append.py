@@ -17,7 +17,7 @@ import argparse
 import re
 import subprocess
 import sys
-from datetime import date as Date
+from datetime import date as Date, timedelta
 from pathlib import Path
 
 DATE_RE = re.compile(r"\((\d{4}-\d{2}-\d{2})")
@@ -25,6 +25,7 @@ INCIDENT_RE = re.compile(r"^### (?:INCIDENT: )?#(\d+):", re.MULTILINE)
 ENTRY_RE = re.compile(r"^### ", re.MULTILINE)
 
 WARN_LINES = 500
+DATE_ORDER_TOLERANCE_DAYS = 7
 
 
 def _detect_line_ending(data: bytes) -> bytes:
@@ -235,9 +236,9 @@ def main():
             last_incident = None
 
     # Ascending date check
-    if last_date is not None and new_date < last_date:
+    if last_date is not None and new_date < last_date - timedelta(days=DATE_ORDER_TOLERANCE_DAYS):
         print(
-            f"Error: new date {new_date} is before last entry date {last_date}",
+            f"Error: new date {new_date} is more than {DATE_ORDER_TOLERANCE_DAYS} days before last entry date {last_date}",
             file=sys.stderr,
         )
         sys.exit(1)

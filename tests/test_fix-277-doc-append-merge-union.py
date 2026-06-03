@@ -288,3 +288,71 @@ class TestCLIAppendIntegration:
         # After sort, last entry remains 2026-06-01; 2026-03-01 must be rejected
         assert result.returncode != 0
         assert b"Older" not in hist.read_bytes()
+
+    # -------- Issue #733 Fix 1: DATE_ORDER_TOLERANCE_DAYS = 7 --------
+
+    def test_append_within_tolerance_window_succeeds(self, tmp_path):
+        """1 day older than last entry → accepted (within 7-day tolerance)."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        hist = docs / "history.md"
+        hist.write_bytes(
+            b"### FEATURE: A (2026-06-03, aaa1111)\n"
+            b"Background: x\nChanges: y\n"
+        )
+        result = _run_cli(
+            str(hist),
+            "--category", "FEATURE",
+            "--subject", "WithinTolerance",
+            "--date", "2026-06-02",  # 1 day older than last
+            "--commits", "bbb2222",
+            "--background", "bg",
+            "--changes", "ch",
+            "--no-auto-rotate",
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert b"WithinTolerance" in hist.read_bytes()
+
+    def test_append_exact_tolerance_boundary_succeeds(self, tmp_path):
+        """Exactly 7 days older than last entry → accepted (boundary)."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        hist = docs / "history.md"
+        hist.write_bytes(
+            b"### FEATURE: A (2026-06-10, aaa1111)\n"
+            b"Background: x\nChanges: y\n"
+        )
+        result = _run_cli(
+            str(hist),
+            "--category", "FEATURE",
+            "--subject", "ExactBoundary",
+            "--date", "2026-06-03",  # exactly 7 days older
+            "--commits", "bbb2222",
+            "--background", "bg",
+            "--changes", "ch",
+            "--no-auto-rotate",
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert b"ExactBoundary" in hist.read_bytes()
+
+    def test_append_just_outside_tolerance_window_fails(self, tmp_path):
+        """8 days older than last entry → rejected (just outside tolerance)."""
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        hist = docs / "history.md"
+        hist.write_bytes(
+            b"### FEATURE: A (2026-06-10, aaa1111)\n"
+            b"Background: x\nChanges: y\n"
+        )
+        result = _run_cli(
+            str(hist),
+            "--category", "FEATURE",
+            "--subject", "JustOutside",
+            "--date", "2026-06-02",  # 8 days older
+            "--commits", "bbb2222",
+            "--background", "bg",
+            "--changes", "ch",
+            "--no-auto-rotate",
+        )
+        assert result.returncode != 0
+        assert b"JustOutside" not in hist.read_bytes()
