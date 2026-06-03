@@ -39,4 +39,8 @@ Changes: fix: large-file commits via `/worktree-end` Step 6h (`docs/history.md` 
 
 ### FEATURE: PR #737 (2026-06-03)
 Background: feat(#723): add MCP filesystem server for repo-scoped codex reviewer file access
-Changes: The codex reviewer can now read actual source files from the current repo on demand via a new MCP filesystem server (`bin/mcp-fs-server.js`). The server is REPO_ROOT-confined with credential protection (`.env*`, private keys, `.git/`, `.ssh/` blocked). Set `CODEX_MCP_FS=off` to disable.
+Changes: The codex reviewer can now read actual source files from the current repo on demand via a new MCP filesystem server (`bin/mcp-fs-server.js`). The server is REPO_ROOT-confined with credential protection (`.env*`, private keys, `.git/`, `.ssh/` blocked). Set `CODEX_MCP_FS=off` to disable.
+
+### FEATURE: PR #744 (2026-06-04)
+Background: fix(#654): add built-in .worktree-backup/** exclusion in enforce-worktree
+Changes: Fixed: `/worktree-end` Step 5 backup copy to `.worktree-backup/` now always succeeds when Bash CWD has reset to the main worktree — enforce-worktree now has `.worktree-backup/**` as a built-in exclude pattern (non-overridable via `ENFORCE_WORKTREE_EXCLUDE`).
