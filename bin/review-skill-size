@@ -40,7 +40,7 @@ report_targets() {
     local lines
     lines=$(wc -l < "$file" | tr -d ' ')
     if (( lines > 200 )); then
-      echo "HARD: $file — $lines lines (exceeds 200-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md)"
+      echo "HARD: $file — $lines lines total (exceeds 200-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md)"
       HARD_HIT=1
     elif (( lines > 100 )); then
       echo "WARN: $file — $lines lines (exceeds 100-line safety net)"

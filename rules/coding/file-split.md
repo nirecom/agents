@@ -1,17 +1,13 @@
 # File Split Rule
 
-Split any file that exceeds its HARD limit. Pattern depends on file type.
+Keep all prompt and code files compact. Split when any size limit is exceeded — HARD or WARN.
 
-## Pattern A — Code files (>500 lines)
+## Pattern A — Code files
 
-- Keep `<name>.<ext>` as a dispatch + re-export shim only; no logic inside.
-- Create a sibling `<name>/` folder; place domain-named modules there.
+- Keep `<name>.<ext>` as a dispatch + re-export shim; place logic in a sibling `<name>/` folder.
 - Shared utilities across hooks: `hooks/lib/`; otherwise adjacent `lib/`.
-- Example: `hooks/enforce-worktree.js` + `hooks/enforce-worktree/`.
 
-## Pattern B — SKILL.md (>200 lines)
+## Pattern B — SKILL.md
 
 - Keep `SKILL.md` as the prompt entrypoint; do not shim it.
 - Extract procedures (3+ steps) to `skills/<name>/scripts/<verb>.sh` or `bin/<tool>`.
-- Replace the inline procedure with a one-line CLI reference in SKILL.md.
-- Do not use `skills/<name>/lib/` — SKILL.md is a prompt file, not a code module.
