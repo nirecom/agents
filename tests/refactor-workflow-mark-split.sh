@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/refactor-workflow-mark-split.sh
-# Tests: hooks/workflow-mark.js, hooks/workflow-mark/skip-reason.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-mark/clarify-intent-complete-handler.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-mark/user-verified-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/premise-handlers.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/reset-handler.js
+# Tests: hooks/workflow-mark.js, hooks/workflow-mark/skip-reason.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-mark/clarify-intent-complete-handler.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-mark/user-verified-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/premise-gate-handlers.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/reset-handler.js
 # Tags: workflow-mark, refactor, module-split, contract
 #
 # REGRESSION tests (1): verify current contract of hooks/workflow-mark.js.
@@ -91,7 +91,7 @@ MODULES=(
     "branching-handler.js"
     "user-verified-handler.js"
     "mark-step-handler.js"
-    "premise-handlers.js"
+    "premise-gate-handlers.js"
     "enforce-override-handlers.js"
     "reset-handler.js"
 )
@@ -142,7 +142,7 @@ HANDLER_MODULES=(
     "branching-handler.js"
     "user-verified-handler.js"
     "mark-step-handler.js"
-    "premise-handlers.js"
+    "premise-gate-handlers.js"
     "enforce-override-handlers.js"
     "reset-handler.js"
 )

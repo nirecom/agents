@@ -18,7 +18,7 @@
 // Dispatch implementation is split across sibling modules under hooks/workflow-mark/:
 //   skip-reason / not-needed-handlers / clarify-intent-complete-handler /
 //   branching-handler / user-verified-handler / mark-step-handler /
-//   premise-handlers / enforce-override-handlers / reset-handler.
+//   premise-gate-handlers / enforce-override-handlers / reset-handler.
 // This file holds the CLI bootstrap (stdin parse, merge-class push detection,
 // `&&` chain split, sentinel-only validation) plus the sequential dispatch loop.
 
@@ -42,7 +42,7 @@ const clarifyIntentCompleteHandler = require("./workflow-mark/clarify-intent-com
 const branchingHandler = require("./workflow-mark/branching-handler");
 const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
-const premiseHandlers = require("./workflow-mark/premise-handlers");
+const premiseHandlers = require("./workflow-mark/premise-gate-handlers");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
 
