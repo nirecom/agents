@@ -55,4 +55,8 @@ Changes: Fixed: codex plan/outline reviews now run correctly via codex (not Clau
 
 ### FEATURE: PR #753 (2026-06-04)
 Background: fix(#733): relax doc-append date-order check, align rotation sort helper, fix idempotency grep
-Changes: `doc-append` now accepts entries whose date is up to 7 days before the last entry's date, so concurrent sessions closing the same issue no longer fail when their merge dates differ by a few days.;`/issue-reconcile` backfill no longer produces duplicate history entries when `#N` appears in the subject line of an existing entry (e.g. `### Fix #N: ...`) rather than only in the trailing parenthetical.
+Changes: `doc-append` now accepts entries whose date is up to 7 days before the last entry's date, so concurrent sessions closing the same issue no longer fail when their merge dates differ by a few days.;`/issue-reconcile` backfill no longer produces duplicate history entries when `#N` appears in the subject line of an existing entry (e.g. `### Fix #N: ...`) rather than only in the trailing parenthetical.
+
+### BUGFIX: PR #754 (2026-06-04)
+Background: fix(#740): extend enforce-worktree allowlist for worktree-end cleanup ops
+Changes: Fixed 5 `enforce-worktree` allowlist gaps that blocked `/worktree-end` cleanup: Step 5 backup cp, Step 6c worktree remove, Step 6d worktree prune, Step 6g pre-pull stash, and `feat/` branch deletion are now correctly permitted when `WORKTREE_END_SKILL=1` prefix is present
