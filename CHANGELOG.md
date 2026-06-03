@@ -35,4 +35,8 @@ Changes: `sync-labels.sh` now shows per-label status: `(created)` for new labels
 
 ### FEATURE: PR #736 (2026-06-03)
 Background: fix(#730): replace gh api -f content= with --input to avoid ARG_MAX on large files
-Changes: fix: large-file commits via `/worktree-end` Step 6h (`docs/history.md` ≥ ~25 KB) no longer fail with "Argument list too long" on Windows (#730)
+Changes: fix: large-file commits via `/worktree-end` Step 6h (`docs/history.md` ≥ ~25 KB) no longer fail with "Argument list too long" on Windows (#730)
+
+### FEATURE: PR #737 (2026-06-03)
+Background: feat(#723): add MCP filesystem server for repo-scoped codex reviewer file access
+Changes: The codex reviewer can now read actual source files from the current repo on demand via a new MCP filesystem server (`bin/mcp-fs-server.js`). The server is REPO_ROOT-confined with credential protection (`.env*`, private keys, `.git/`, `.ssh/` blocked). Set `CODEX_MCP_FS=off` to disable.
