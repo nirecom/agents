@@ -44,6 +44,7 @@ TRADEOFFS=""
 ROUND=""
 LEDGER_OVERRIDE=""
 EXTRA_CTX=()
+REPO_ROOT_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,6 +81,9 @@ while [[ $# -gt 0 ]]; do
     --context)
       require_value "--context" "${2:-}"
       EXTRA_CTX+=("$2"); shift 2 ;;
+    --repo-root)
+      require_value "--repo-root" "${2:-}"
+      REPO_ROOT_ARG="$2"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -101,6 +105,10 @@ esac
 
 [[ -f "$DRAFT" ]]     || die "draft file does not exist: $DRAFT"
 [[ -d "$PLANS_DIR" ]] || die "plans dir does not exist: $PLANS_DIR"
+
+if [[ -z "$REPO_ROOT_ARG" ]]; then
+  REPO_ROOT_ARG="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+fi
 
 BUILDER="$AGENTS_CONFIG_DIR/bin/build-codex-context"
 REVIEWER="$AGENTS_CONFIG_DIR/bin/review-plan-codex"
@@ -153,6 +161,10 @@ for ctx in "${EXTRA_CTX[@]+"${EXTRA_CTX[@]}"}"; do
 done
 
 ARGS+=(--context "$CORE_PRINCIPLES")
+
+if [[ "${CODEX_MCP_FS:-}" != "off" ]] && [[ -n "$REPO_ROOT_ARG" ]]; then
+  ARGS+=(--repo-root "$REPO_ROOT_ARG")
+fi
 
 TMP_OUT=$(mktemp) || die "mktemp failed"
 trap 'rm -f "$TMP_OUT"' EXIT
