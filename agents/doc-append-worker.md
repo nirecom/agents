@@ -29,7 +29,7 @@ For `compose` mode, also:
 - `pr_number`: PR number string
 - `merge_commit`: merge commit SHA (7 chars)
 - `pr_title`: PR title (passed as `--background`)
-- `skip_history`: boolean — pass `--skip-history` when true
+- `closes_issues_count`: integer — number of issues this session closes (used by `--closes-issues-count`)
 
 ## Procedure
 
@@ -37,7 +37,7 @@ For `compose` mode, also:
 2. Dispatch based on `mode`:
    - `history`: `doc-append docs/history.md --category $category --subject "..." --commits $commits --background "..." --changes "..."`
    - `changelog`: `doc-append CHANGELOG.md --category $category --subject "..." --background "..." --changes "..."`
-   - `compose`: `COMPOSE_DOC_APPEND_SKILL=1 bash "$agents_config_dir/bin/compose-doc-append-entry" --notes "$notes_path" --branch "$branch" --pr "$pr_number" --merge-commit "$merge_commit" --background "$pr_title" [--skip-history]`
+   - `compose`: `COMPOSE_DOC_APPEND_SKILL=1 bash "$agents_config_dir/bin/compose-doc-append-entry" --notes "$notes_path" --branch "$branch" --pr "$pr_number" --merge-commit "$merge_commit" --background "$pr_title" --closes-issues-count "$closes_issues_count"`
    - CLI exit code 0 and output containing "already exists" or "noop" → `status: noop`.
    - CLI exit code non-zero → capture stderr; emit `status: failed`, `summary: "<stderr excerpt ≤60 chars>"`, `artifact_path: "<log path if written, else (none)>"` and stop.
 3. Write combined stdout+stderr to `$artifact_dir/<timestamp>-doc-append-worker.log`. Use timestamp `date +%Y%m%d-%H%M%S`.

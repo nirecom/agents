@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: skills/clarify-intent/lib, skills/clarify-intent/reference/, skills/issue-close-finalize/SKILL.md, skills/issue-close-finalize/scripts/pre-flight.sh, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-close-finalize/scripts/step-g5-loop.sh, skills/worktree-end/lib, skills/worktree-end/scripts/
+# Tests: skills/clarify-intent/lib, skills/clarify-intent/reference/, skills/issue-close-finalize/SKILL.md, skills/issue-close-finalize/scripts/pre-flight.sh, skills/issue-close-finalize/scripts/step-g5-loop.sh, skills/worktree-end/lib, skills/worktree-end/scripts/
 # Tags: issue-close, finalize, workflow, worktree, end
 # Tests for issue-close-finalize SKILL.md invariants:
 #   - #612 (PR3): SKILL.md shortening + lib/ -> scripts/ migration
@@ -62,11 +62,6 @@ test_t3_skill_md_line_count() {
 
 test_t4_pre_flight_exists_executable() {
     local f="skills/issue-close-finalize/scripts/pre-flight.sh"
-    [ -f "$f" ] && [ -x "$f" ]
-}
-
-test_t5_step_e_exists_executable() {
-    local f="skills/issue-close-finalize/scripts/step-e.sh"
     [ -f "$f" ] && [ -x "$f" ]
 }
 
@@ -172,7 +167,6 @@ run() {
 run "T1: no tmpfile/mktemp in SKILL.md (#636)"      test_t1_no_tmpfile_in_skill_md
 run "T3: SKILL.md <= 130 lines"                     test_t3_skill_md_line_count
 run "T4: scripts/pre-flight.sh exists+exec"         test_t4_pre_flight_exists_executable
-run "T5: scripts/step-e.sh exists+exec"             test_t5_step_e_exists_executable
 run "T6: scripts/step-g5-loop.sh exists+exec"       test_t6_step_g5_loop_exists_executable
 run "T7 (ST1): triage.sh before find-pr-by-marker"  test_t7_st1_triage_before_pr_marker
 run "T8 (ST2): *,J,* within 25 lines of marker"     test_t8_st2_jpath_near_pr_marker
