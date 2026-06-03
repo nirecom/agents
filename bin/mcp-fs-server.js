@@ -29,6 +29,11 @@ const BLOCKED_SSH_KEY = /^id_(rsa|dsa|ecdsa|ed25519|xmss)$/;
 // Directories whose entire subtree is blocked
 const BLOCKED_DIR_PREFIXES = ['.git', '.ssh'];
 
+const MAX_FILE_BYTES = 5 * 1024 * 1024;  // 5 MB defensive cap (MEDIUM-4)
+const BINARY_PROBE_BYTES = 8192;         // binary scan window in bytes
+const MCP_FS_DEBUG = process.env.MCP_FS_DEBUG === '1';
+function dbg(msg) { if (MCP_FS_DEBUG) process.stderr.write('[mcp-fs] ' + msg + '\n'); }
+
 function isBlocked(relPath) {
   const parts = relPath.split(path.sep);
   // Block entire .git/ and .ssh/ subtrees
@@ -51,6 +56,7 @@ function isBinary(buf) {
 }
 
 function deny(id, message) {
+  dbg('deny: ' + message);
   return { jsonrpc: '2.0', id, error: { code: -32000, message } };
 }
 
@@ -98,18 +104,32 @@ function handleReadFile(id, args) {
     return deny(id, `not a regular file: ${filePath}`);
   }
 
-  // Read and check for binary content
-  let buf;
-  try {
-    buf = fs.readFileSync(real);
-  } catch (e) {
-    return deny(id, `read error: ${e.message}`);
-  }
-  if (isBinary(buf)) {
-    return deny(id, `binary file not served: ${filePath}`);
+  if (stat.size > MAX_FILE_BYTES) {
+    return deny(id, `file too large: ${stat.size} bytes (cap ${MAX_FILE_BYTES})`);
   }
 
-  return ok(id, buf.toString('utf8'));
+  let fd;
+  try {
+    fd = fs.openSync(real, 'r');
+    const fstat = fs.fstatSync(fd);
+    const fileSize = fstat.size;
+    const probe = Buffer.alloc(BINARY_PROBE_BYTES);
+    const probeLen = fs.readSync(fd, probe, 0, BINARY_PROBE_BYTES, 0);
+    if (isBinary(probe.slice(0, probeLen))) {
+      return deny(id, `binary file not served: ${filePath}`);
+    }
+    const full = Buffer.alloc(fileSize);
+    probe.copy(full, 0, 0, probeLen);
+    if (fileSize > probeLen) {
+      fs.readSync(fd, full, probeLen, fileSize - probeLen, probeLen);
+    }
+    dbg('serve: ' + filePath);
+    return ok(id, full.toString('utf8'));
+  } catch (e) {
+    return deny(id, 'read error: ' + e.message);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
 }
 
 // List tools (MCP initialize / tools/list)
