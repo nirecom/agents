@@ -5,6 +5,12 @@ const { normalizeCwd } = require("../lib/path-normalize");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("../lib/glob-match");
 const { stripQuotedArgs } = require("../lib/strip-quoted-args");
 
+// Built-in exclude patterns: always merged with ENFORCE_WORKTREE_EXCLUDE. Users
+// cannot disable these — set ENFORCE_WORKTREE=off session-scoped if needed.
+// .worktree-backup/**: lets /worktree-end Step 5 stage gitignored backups even
+// when Bash CWD has reset to the main worktree.
+const BUILTIN_EXCLUDE_PATTERNS = Object.freeze(["**/.worktree-backup/**"]);
+
 /** True if cmd contains shell chaining/pipe operators outside of quotes.
  *  Also rejects command substitutions ($() and backticks): those spawn a
  *  shell that runs the inner command, which is effectively chaining for
@@ -69,7 +75,8 @@ function isPathOutsideRepo(targetPath, repoRoot) {
 }
 
 function getExcludePatterns() {
-  return parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE || "");
+  const user = parseExcludePatterns(process.env.ENFORCE_WORKTREE_EXCLUDE || "");
+  return BUILTIN_EXCLUDE_PATTERNS.concat(user);
 }
 
 function isExcluded(filePath, patterns) {
@@ -94,4 +101,5 @@ module.exports = {
   isPathOutsideRepo,
   isExcluded,
   getExcludePatterns,
+  BUILTIN_EXCLUDE_PATTERNS,
 };
