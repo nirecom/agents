@@ -220,7 +220,7 @@ if [[ -n "$REPO_ROOT_ARG" ]]; then
     -c "mcp_servers.fs.command=\"node\""
     -c "mcp_servers.fs.args=[\"$MCP_SERVER_JS_TOML\"]"
     --sandbox read-only
-    --ask-for-approval never
+    --full-auto
   )
   MCP_FS_ADDENDUM=$'You have access to a filesystem MCP server "fs" with read_file({path}). Use it to read source files. Reads are confined to REPO_ROOT; .env, keys, and WORKTREE_NOTES.md are blocked.\n\n'
 fi
