@@ -28,6 +28,7 @@ ARG_LOG_DIR=""
 ACCEPTED_TRADEOFFS_FILE=""
 ROUND=1
 LEDGER=""
+REPO_ROOT_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +60,8 @@ while [[ $# -gt 0 ]]; do
       ROUND="$2"; shift 2 ;;
     --ledger)
       LEDGER="$2"; shift 2 ;;
+    --repo-root)
+      REPO_ROOT_ARG="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
     --context)
       if [[ $# -lt 2 ]]; then
@@ -205,6 +208,23 @@ fi
 # Build prompt
 PREAMBLE=$(codex_core_adversarial_preamble "implementation plan")
 
+# MCP filesystem server overrides (empty when --repo-root not provided)
+MCP_OVERRIDES=()
+MCP_FS_ADDENDUM=""
+if [[ -n "$REPO_ROOT_ARG" ]]; then
+  MCP_SERVER_JS="$(dirname "$(realpath "$0")")/mcp-fs-server.js"
+  MCP_SERVER_JS_TOML="${MCP_SERVER_JS//\\/\/}"
+  MCP_SERVER_JS_TOML="${MCP_SERVER_JS_TOML//\\/\\\\}"
+  MCP_SERVER_JS_TOML="${MCP_SERVER_JS_TOML//\"/\\\"}"
+  MCP_OVERRIDES+=(
+    -c "mcp_servers.fs.command=\"node\""
+    -c "mcp_servers.fs.args=[\"$MCP_SERVER_JS_TOML\"]"
+    --sandbox read-only
+    --ask-for-approval never
+  )
+  MCP_FS_ADDENDUM=$'You have access to a filesystem MCP server "fs" with read_file({path}). Use it to read source files. Reads are confined to REPO_ROOT; .env, keys, and WORKTREE_NOTES.md are blocked.\n\n'
+fi
+
 # Build ledger-concerns block (Round 2+)
 LEDGER_CONCERNS=""
 if [[ "$ROUND" -ge 2 && -f "$LEDGER" ]]; then
@@ -230,7 +250,7 @@ ${CONTEXT_CONTENT}
   if [[ "$ROUND" -ge 2 ]]; then
     PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
+${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised plan resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -260,7 +280,7 @@ ${PLAN_CONTENT}
   else
     PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
+${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following implementation plan. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED
@@ -299,7 +319,7 @@ ${CONTEXT_CONTENT}
   if [[ "$ROUND" -ge 2 ]]; then
     PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
+${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Round ${ROUND} review. The Round 1 reviewer raised the following concerns. For EACH concern, decide whether the revised proposal resolves it.
 
 [CONCERNS FROM ROUND 1]
 ${LEDGER_CONCERNS}[END CONCERNS]
@@ -328,7 +348,7 @@ ${PLAN_CONTENT}
   else
     PROMPT="${PREAMBLE}
 
-${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
+${ACCEPTED_TRADEOFFS_BLOCK}${CONTEXT_BLOCK}${MCP_FS_ADDENDUM}Review the following outline plan proposal. Output STRICTLY one of these two formats — no prose before or after:
 
 Format A (approve):
 APPROVED <one-line justification>
@@ -371,7 +391,8 @@ CODEX_STDERR=$(mktemp)
 printf '%s' "$PROMPT" > "$TMPFILE"
 
 codex_exit=0
-timeout 180 codex exec --skip-git-repo-check - < "$TMPFILE" > "$CODEX_OUT_FILE" 2>"$CODEX_STDERR" \
+if [[ -n "$REPO_ROOT_ARG" ]]; then export REPO_ROOT="$REPO_ROOT_ARG"; fi
+timeout 180 codex exec --skip-git-repo-check "${MCP_OVERRIDES[@]+"${MCP_OVERRIDES[@]}"}" - < "$TMPFILE" > "$CODEX_OUT_FILE" 2>"$CODEX_STDERR" \
   || codex_exit=$?
 
 case $codex_exit in
