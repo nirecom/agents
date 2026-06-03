@@ -175,11 +175,14 @@ const QUOTING_ONLY_NAMES = new Set([
 // - posix-redir (posix-redirect, tee): redirect chars inside quoted args
 //   (e.g. `grep -nE "pattern > match" file`, #460) and `tee` in quoted prose
 //   (e.g. `doc-append --subject "tee output"`) must not false-positive.
-// Other kinds (posix [here-doc/here-string], git, gh, interpreter, pwsh*) are
+// - git (#692): git verbs inside quoted args (e.g. `grep -n "git push" file`)
+//   must not false-positive. The git-commit / git-push / git-merge / etc.
+//   regexes use `\bgit\b.*\bverb\b` which span quoted prose without stripping.
+// Other kinds (posix [here-doc/here-string], gh, interpreter, pwsh*) are
 // tested against the original command. here-doc/here-string in particular MUST
 // scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
 // stripHeredocBody contract depend on it (see classify() lines 160-190).
-const STRIP_KINDS = new Set(["file-op", "posix-redir"]);
+const STRIP_KINDS = new Set(["file-op", "posix-redir", "git"]);
 
 /**
  * Classify a Bash command string as "read" or "write".

@@ -542,11 +542,54 @@ test_gh_group_a_inline_body_stripping() {
     assert_classify "real 'git commit -m' must remain write" \
         'git commit -m "message"' "write"
 
-    # Security: unknown bash script invocation must NOT get inline-body stripping
-    assert_classify "bash /tmp/issue-create-dispatch.sh (unknown path) is write" \
-        'bash /tmp/issue-create-dispatch.sh --body "git commit"' "write"
-    assert_classify "bash ./fake-issue-create.sh (unknown path) is write" \
-        'bash ./fake-issue-create.sh --body "git commit"' "write"
+    # Security: unknown bash script invocation must NOT get the known-path
+    # heredoc-body stripping override. Use a `cat <<EOF` heredoc body as the
+    # probe: stripHeredocBody only runs for known paths / Group A, so an
+    # unknown-path heredoc body remains visible to the classifier and matches
+    # the here-doc pattern → write.
+    # (#692 note: a quoted "git commit" probe is no longer reliable here —
+    #  general stripQuotedArgs now removes git verbs from quoted args, so
+    #  known and unknown paths look identical at that layer.)
+    local probe_unknown_tmp
+    probe_unknown_tmp=$(printf 'bash /tmp/issue-create-dispatch.sh --body "$(cat <<EOF\ngit commit\nEOF\n)"')
+    assert_classify "bash /tmp/issue-create-dispatch.sh (unknown path) heredoc body stays visible → write" \
+        "$probe_unknown_tmp" "write"
+    local probe_unknown_rel
+    probe_unknown_rel=$(printf 'bash ./fake-issue-create.sh --body "$(cat <<EOF\ngit commit\nEOF\n)"')
+    assert_classify "bash ./fake-issue-create.sh (unknown path) heredoc body stays visible → write" \
+        "$probe_unknown_rel" "write"
+}
+
+# ============ #692: git-verb quoted-args false positive (Bug B) ============
+# grep / rg / cat / echo with quoted git verbs (e.g. `grep -n "git push" file`)
+# must NOT be misclassified as write. Achieved by adding "git" to STRIP_KINDS
+# so kind:"git" patterns scan the stripped (quote-removed) command.
+test_git_kind_strips_quoted_args() {
+    # Read cases — git verbs inside quoted args
+    assert_classify "grep with quoted 'git push'" \
+        'grep -n "git push" file.md' "read"
+    assert_classify "grep with quoted 'git push|git commit'" \
+        'grep -n "git push|git commit" path/to/file' "read"
+    assert_classify "grep -E with quoted 'git push'" \
+        'grep -nE "git push" docs/foo.md' "read"
+    assert_classify "rg with quoted 'git commit'" \
+        'rg "git commit" .' "read"
+    assert_classify "cat | grep with quoted 'git push'" \
+        'cat README.md | grep "git push"' "read"
+    assert_classify "echo with quoted 'git commit -m test'" \
+        'echo "Run git commit -m test"' "read"
+
+    # Write cases — real git invocations remain classified as write
+    assert_classify "real git commit -m" \
+        'git commit -m "test"' "write"
+    assert_classify "real git push origin main" \
+        'git push origin main' "write"
+    assert_classify "real git checkout -- file" \
+        'git checkout -- file.txt' "write"
+    assert_classify "real git stash push" \
+        'git stash push -m "wip"' "write"
+    assert_classify "real git -C path commit" \
+        'git -C /path commit -m x' "write"
 }
 
 test_git_update_ref_write() {
@@ -693,6 +736,7 @@ test_gh_group_a_with_heredoc_classified_read
 test_gh_group_a_with_redirect_still_write
 test_gh_group_a_heredoc_body_with_write_pattern_is_read
 test_gh_group_a_inline_body_stripping
+test_git_kind_strips_quoted_args
 test_git_update_ref_write
 test_git_commit_subcommand_position
 test_quoted_arg_no_false_positive_file_op
