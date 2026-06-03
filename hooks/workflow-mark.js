@@ -14,44 +14,37 @@
 //   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
 //   echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>"  — session-scoped ENFORCE_WORKFLOW bypass (reason mandatory)
 //   echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
+//
+// Dispatch implementation is split across sibling modules under hooks/workflow-mark/:
+//   skip-reason / not-needed-handlers / clarify-intent-complete-handler /
+//   branching-handler / user-verified-handler / mark-step-handler /
+//   premise-handlers / enforce-override-handlers / reset-handler.
+// This file holds the CLI bootstrap (stdin parse, merge-class push detection,
+// `&&` chain split, sentinel-only validation) plus the sequential dispatch loop.
+
+"use strict";
 
 const fs = require("fs");
-const path = require("path");
+const { execSync } = require("child_process");
 const {
-  VALID_STEPS,
   resolveSessionId,
   markStep,
-  createInitialState,
-  writeState,
-  nextStepHint,
   setLastPushedSha,
-  setPremiseContradiction,
-  clearPremiseContradiction,
-  getWorkflowDir,
+  readState,
 } = require("./lib/workflow-state");
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
+const { resolveRepoCwd } = require("./lib/path-normalize");
 // Sentinel recognition centralized in hooks/lib/sentinel-patterns.js (SSOT).
-const {
-  isSentinel,
-  MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, USER_VERIFIED_RE_DQ,
-  USER_VERIFIED_LOOKSLIKE_RE,
-  RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
-  OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
-  DETAIL_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_LOOKSLIKE_RE,
-  WRITE_TESTS_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE,
-  REVIEW_SECURITY_NOT_NEEDED_RE_DQ, REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE,
-  DOCS_NOT_NEEDED_LOOKSLIKE_RE,
-  CLARIFY_INTENT_NOT_NEEDED_RE_DQ, CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE,
-  CLARIFY_INTENT_COMPLETE_RE_DQ,
-  BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
-  BRANCHING_DECIDED_RE_DQ, BRANCHING_DECIDED_LOOKSLIKE_RE,
-  PREMISE_FAIL_RE_DQ, PREMISE_FAIL_LOOKSLIKE_RE,
-  PREMISE_ACK_RE_DQ, PREMISE_ACK_LOOKSLIKE_RE,
-  ENFORCE_WORKTREE_OFF_RE_DQ, ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE,
-  ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
-  ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
-  ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
-} = require("./lib/sentinel-patterns");
+const { isSentinel } = require("./lib/sentinel-patterns");
+
+const notNeededHandlers = require("./workflow-mark/not-needed-handlers");
+const clarifyIntentCompleteHandler = require("./workflow-mark/clarify-intent-complete-handler");
+const branchingHandler = require("./workflow-mark/branching-handler");
+const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
+const markStepHandler = require("./workflow-mark/mark-step-handler");
+const premiseHandlers = require("./workflow-mark/premise-handlers");
+const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
+const resetHandler = require("./workflow-mark/reset-handler");
 
 function readStdin() {
   const chunks = [];
@@ -66,31 +59,13 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-const SKIP_REASON_DUDS = new Set([
-  "none", "n/a", "na", "nope", "no", "nothing",
-  "skip", "skipped", "not needed", "not required", "nil",
-  "スキップ", "スキップする", "省略する", "特になし", "無し",
-]);
-function validateSkipReason(raw) {
-  const trimmed = (raw || "").trim();
-  const nonSpace = trimmed.replace(/\s+/g, "");
-  if (nonSpace.length < 3) {
-    return { ok: false, msg: "reason too short — provide at least 3 non-space characters explaining why this step is unnecessary in this task's context." };
-  }
-  if (SKIP_REASON_DUDS.has(trimmed.toLowerCase())) {
-    return { ok: false, msg: `reason "${trimmed}" is a placeholder — explain why this step is unnecessary in this task's context.` };
-  }
-  if (/^(.)\1+$/u.test(nonSpace)) {
-    return { ok: false, msg: "reason is a single repeated character — provide a real explanation." };
-  }
-  return { ok: true, reason: trimmed };
-}
-
 function done(additionalContext) {
   const out = additionalContext ? { additionalContext } : {};
   console.log(JSON.stringify(out));
   process.exit(0);
 }
+
+if (require.main === module) {
 
 let input;
 try {
@@ -118,11 +93,6 @@ const sessionId = resolveSessionId({
 // Reset user_verification only after a successful merge-class operation
 // (push to a protected branch / gh pr merge). Feature-branch pushes leave
 // verification state alone so the upcoming gh pr merge gate can pass.
-//
-// Order: pre-push gate (workflow-gate requires uv=complete) → push runs →
-//   post-push (this hook resets uv to pending, stores sha for protected push)
-//   → next user prompt → post-push-workflow-reset.js (sha change resets
-//   branching_decision).
 const mergeResult = isMergeToProtectedCommand(command);
 if (mergeResult.hit) {
   let msg;
@@ -133,9 +103,6 @@ if (mergeResult.hit) {
       catch (e) { msg = `workflow-mark: protected push detected — user_verification reset FAILED: ${e.message}`; }
       // Record last_pushed_sha for post-push-workflow-reset hook.
       try {
-        const { execSync } = require("child_process");
-        const { resolveRepoCwd } = require("./lib/path-normalize");
-        const { readState } = require("./lib/workflow-state");
         const state = readState(sessionId);
         const repoCwd = resolveRepoCwd({
           command, input, stateCwd: state && state.cwd,
@@ -159,14 +126,8 @@ if (mergeResult.hit) {
   done();
 }
 
-// Feature-branch pushes (and other git pushes that don't target a protected
-// branch) intentionally fall through — no state mutation. This lets the same
-// session push WIP commits repeatedly without re-running user_verification.
-
 // Split on `&&` so multiple sentinel echos chained in one Bash call are all processed.
-// All-or-nothing: if any part is NOT a sentinel (e.g. `cd /tmp`, arbitrary shell
-// commands), reject the whole command. This preserves the security property that a
-// sentinel prefixed with untrusted commands does not update state.
+// All-or-nothing: if any part is NOT a sentinel, reject the whole command.
 const commandParts = command
   .split(/\s*&&\s*/)
   .map((s) => s.trim())
@@ -187,733 +148,24 @@ const messages = [];
 // When set, the loop tail flushes messages to stderr and exits with code 2 so
 // the harness surfaces the failure instead of silently swallowing it.
 let fatalError = false;
-function hardFail(msg) {
-  messages.push(msg);
-  fatalError = true;
-}
+
+const ctx = {
+  sessionId,
+  pushMessage: (m) => messages.push(m),
+  signalFatal: (m) => { messages.push(m); fatalError = true; },
+};
 
 for (const cmd of sentinelParts) {
-  const markMatch = cmd.match(MARKER_RE_DQ) || cmd.match(MARKER_RE_SQ);
-  const resetMatch = cmd.match(RESET_FROM_RE_DQ);
-  const userVerifiedMatch = cmd.match(USER_VERIFIED_RE_DQ);
-  const researchNotNeededMatch = cmd.match(RESEARCH_NOT_NEEDED_RE_DQ);
-  const researchNotNeededLooksLike =
-    !researchNotNeededMatch && RESEARCH_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  const writeTestsNotNeededMatch = cmd.match(WRITE_TESTS_NOT_NEEDED_RE_DQ);
-  const writeTestsNotNeededLooksLike =
-    !writeTestsNotNeededMatch && WRITE_TESTS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  const reviewSecurityNotNeededMatch = cmd.match(REVIEW_SECURITY_NOT_NEEDED_RE_DQ);
-  const reviewSecurityNotNeededLooksLike =
-    !reviewSecurityNotNeededMatch && REVIEW_SECURITY_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  const docsNotNeededLooksLike = DOCS_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  const clarifyIntentNotNeededMatch = cmd.match(CLARIFY_INTENT_NOT_NEEDED_RE_DQ);
-  const clarifyIntentNotNeededLooksLike = !clarifyIntentNotNeededMatch && CLARIFY_INTENT_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  // Accept both new (BRANCHING_COMPLETE) and legacy (BRANCHING_DECIDED) sentinel.
-  const branchingDecidedMatch =
-    cmd.match(BRANCHING_COMPLETE_RE_DQ) || cmd.match(BRANCHING_DECIDED_RE_DQ);
-  const branchingDecidedLooksLike =
-    !branchingDecidedMatch &&
-    (BRANCHING_COMPLETE_LOOKSLIKE_RE.test(cmd) || BRANCHING_DECIDED_LOOKSLIKE_RE.test(cmd));
-
-  // --- RESEARCH_NOT_NEEDED handler ---
-  if (researchNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: malformed RESEARCH_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: REASON>>" ` +
-        `(reason must be >=3 non-space chars, no '>')`
-    );
-    continue;
-  }
-  if (researchNotNeededMatch) {
-    const v = validateSkipReason(researchNotNeededMatch[1]);
-    if (!v.ok) {
-      messages.push(
-        `workflow-mark: RESEARCH_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <better reason>>"`
-      );
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — research NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ${v.reason}>>"`
-      );
-      continue;
-    }
-    try {
-      markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("research");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. research NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- OUTLINE_NOT_NEEDED handler ---
-  const outlineNotNeededMatch = cmd.match(OUTLINE_NOT_NEEDED_RE_DQ);
-  const outlineNotNeededLooksLike =
-    !outlineNotNeededMatch && OUTLINE_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  if (outlineNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: malformed OUTLINE_NOT_NEEDED — ` +
-      `expected: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: REASON>>" ` +
-      `(reason must be >=3 non-space chars, no '>')`);
-    continue;
-  }
-  if (outlineNotNeededMatch) {
-    const v = validateSkipReason(outlineNotNeededMatch[1]);
-    if (!v.ok) {
-      messages.push(`workflow-mark: OUTLINE_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: <better reason>>"`);
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(`workflow-mark: could not resolve session_id — outline NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ${v.reason}>>"`);
-      continue;
-    }
-    try {
-      markStep(sessionId, "outline", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("outline");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(`workflow-mark: failed to write state — ${e.message}. outline NOT recorded.`);
-    }
-    continue;
-  }
-
-  // --- DETAIL_NOT_NEEDED handler ---
-  const detailNotNeededMatch = cmd.match(DETAIL_NOT_NEEDED_RE_DQ);
-  const detailNotNeededLooksLike =
-    !detailNotNeededMatch && DETAIL_NOT_NEEDED_LOOKSLIKE_RE.test(cmd);
-  if (detailNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: malformed DETAIL_NOT_NEEDED — ` +
-      `expected: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: REASON>>" ` +
-      `(reason must be >=3 non-space chars, no '>')`);
-    continue;
-  }
-  if (detailNotNeededMatch) {
-    const v = validateSkipReason(detailNotNeededMatch[1]);
-    if (!v.ok) {
-      messages.push(`workflow-mark: DETAIL_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <better reason>>"`);
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(`workflow-mark: could not resolve session_id — detail NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ${v.reason}>>"`);
-      continue;
-    }
-    try {
-      markStep(sessionId, "detail", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("detail");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(`workflow-mark: failed to write state — ${e.message}. detail NOT recorded.`);
-    }
-    continue;
-  }
-
-  // --- WRITE_TESTS_NOT_NEEDED handler ---
-  if (writeTestsNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: malformed WRITE_TESTS_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: REASON>>" ` +
-        `(reason must be >=3 non-space chars, no '>')`
-    );
-    continue;
-  }
-  if (writeTestsNotNeededMatch) {
-    const v = validateSkipReason(writeTestsNotNeededMatch[1]);
-    if (!v.ok) {
-      messages.push(
-        `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <better reason>>"`
-      );
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — write_tests NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ${v.reason}>>"`
-      );
-      continue;
-    }
-    try {
-      markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("write_tests");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. write_tests NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- REVIEW_SECURITY_NOT_NEEDED handler ---
-  if (reviewSecurityNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: malformed REVIEW_SECURITY_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: REASON>>" ` +
-        `(reason must be >=3 non-space chars, no '>')`
-    );
-    continue;
-  }
-  if (reviewSecurityNotNeededMatch) {
-    const v = validateSkipReason(reviewSecurityNotNeededMatch[1]);
-    if (!v.ok) {
-      messages.push(
-        `workflow-mark: REVIEW_SECURITY_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <better reason>>"`
-      );
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — review_security NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ${v.reason}>>"`
-      );
-      continue;
-    }
-    try {
-      markStep(sessionId, "review_security", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("review_security");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. review_security NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- DOCS_NOT_NEEDED deprecation handler ---
-  if (docsNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: WORKFLOW_DOCS_NOT_NEEDED is not accepted — ` +
-        `update docs/ or *.md files and stage them (no skip path).`
-    );
-    continue;
-  }
-
-  // --- CLARIFY_INTENT_NOT_NEEDED handler ---
-  if (clarifyIntentNotNeededLooksLike) {
-    messages.push(
-      `workflow-mark: malformed CLARIFY_INTENT_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: REASON>>" ` +
-        `(reason must be >=3 non-space chars, no '>')`
-    );
-    continue;
-  }
-  if (clarifyIntentNotNeededMatch) {
-    const v = validateSkipReason(clarifyIntentNotNeededMatch[1]);
-    if (!v.ok) {
-      messages.push(
-        `workflow-mark: CLARIFY_INTENT_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <better reason>>"`
-      );
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ${v.reason}>>"`
-      );
-      continue;
-    }
-    try {
-      markStep(sessionId, "clarify_intent", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("clarify_intent");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- CLARIFY_INTENT_COMPLETE handler ---
-  if (CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd)) {
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
-      );
-      continue;
-    }
-    try {
-      markStep(sessionId, "clarify_intent", "complete");
-      const hint = nextStepHint("clarify_intent");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- BRANCHING_COMPLETE handler (also accepts legacy BRANCHING_DECIDED) ---
-  if (branchingDecidedLooksLike) {
-    messages.push(
-      `workflow-mark: malformed BRANCHING_COMPLETE — ` +
-        `expected: echo "<<WORKFLOW_BRANCHING_COMPLETE: DECISION>>" ` +
-        `(decision must be >=3 non-space chars, no '>')`
-    );
-    continue;
-  }
-  if (branchingDecidedMatch) {
-    const v = validateSkipReason(branchingDecidedMatch[1]);
-    if (!v.ok) {
-      messages.push(
-        `workflow-mark: BRANCHING_COMPLETE rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: <decision>>"`
-      );
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — branching_complete NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: ${v.reason}>>"`
-      );
-      continue;
-    }
-    try {
-      markStep(sessionId, "branching_complete", "complete", { decision: v.reason });
-      const hint = nextStepHint("branching_complete");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. branching_complete NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- USER_VERIFIED LOOKSLIKE handler (intercept bare/malformed forms) ---
-  if (!userVerifiedMatch && USER_VERIFIED_LOOKSLIKE_RE.test(cmd)) {
-    messages.push(
-      `workflow-mark: malformed USER_VERIFIED — ` +
-        `expected: echo "<<WORKFLOW_USER_VERIFIED: REASON>>" ` +
-        `(reason: >=3 non-space chars, no '>', not a placeholder)`
-    );
-    continue;
-  }
-
-  // --- USER_VERIFIED handler ---
-  if (userVerifiedMatch) {
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
-          `(reason: >=3 non-space chars, no '>', not a placeholder; ask dialog will re-trigger)`
-      );
-      continue;
-    }
-    const rawUvReason = userVerifiedMatch[1];
-    const v = validateSkipReason(rawUvReason);
-    if (!v.ok) {
-      // Warn but still apply — reason quality must not block verification.
-      messages.push(
-        `workflow-mark: USER_VERIFIED reason rejected — ${v.msg} (verification still recorded)`
-      );
-    }
-    try {
-      markStep(sessionId, "user_verification", "complete");
-      const hint = nextStepHint("user_verification");
-      if (hint) messages.push(hint);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. user_verification NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- MARK_STEP handler ---
-  if (markMatch) {
-    const [, stepName, status] = markMatch;
-
-    // user_verification must go through the WORKFLOW_USER_VERIFIED echo path
-    if (stepName === "user_verification") {
-      messages.push(
-        `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
-          `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
-          `(reason: >=3 non-space chars, no '>', not a placeholder)`
-      );
-      continue;
-    }
-
-    // write_tests and docs must go through evidence (staged files) or NOT_NEEDED sentinels
-    if (stepName === "write_tests") {
-      messages.push(
-        `workflow-mark: write_tests NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Stage tests/ changes (run /write-tests then git add tests/) ` +
-          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"` +
-          ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
-      );
-      continue;
-    }
-    if (stepName === "docs") {
-      messages.push(
-        `workflow-mark: docs NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Run /update-docs, then satisfy either route: ` +
-          `(a) stage docs/ or *.md files (git add docs/ ...); or ` +
-          `(b) inside a linked worktree, ensure WORKTREE_NOTES.md ` +
-          `## History Notes / ## Changelog Notes contain real bullets ` +
-          `(not just "- (none)") — staging path introduced by #436 / #484. ` +
-          `No MARK_STEP skip path.`
-      );
-      continue;
-    }
-
-    // Validate step name (regex already constrains status values)
-    if (!VALID_STEPS.includes(stepName)) {
-      messages.push(`workflow-mark: unknown step "${stepName}" in marker — ignored.`);
-      continue;
-    }
-
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — step "${stepName}" NOT recorded. ` +
-          `Commit gate will block. Re-run: ` +
-          `echo "<<WORKFLOW_MARK_STEP_${stepName}_${status}>>"`
-      );
-      continue;
-    }
-
-    try {
-      markStep(sessionId, stepName, status);
-      if (status === "complete" || status === "skipped") {
-        const hint = nextStepHint(stepName);
-        if (hint) messages.push(hint);
-      }
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- PREMISE_FAIL handler ---
-  const premiseFailLooksLike =
-    !cmd.match(PREMISE_FAIL_RE_DQ) && PREMISE_FAIL_LOOKSLIKE_RE.test(cmd);
-  const premiseFailMatch = cmd.match(PREMISE_FAIL_RE_DQ);
-  if (premiseFailLooksLike) {
-    messages.push(
-      `workflow-mark: malformed PREMISE_FAIL — ` +
-        `expected: echo "<<WORKFLOW_PREMISE_FAIL: SUMMARY>>" ` +
-        `(summary must be >=3 non-space chars, no '>')`
-    );
-    continue;
-  }
-  if (premiseFailMatch) {
-    const v = validateSkipReason(premiseFailMatch[1]);
-    if (!v.ok) {
-      messages.push(
-        `workflow-mark: PREMISE_FAIL rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_PREMISE_FAIL: <summary>>"`
-      );
-      continue;
-    }
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — premise contradiction NOT recorded.`
-      );
-      continue;
-    }
-    try {
-      setPremiseContradiction(sessionId, v.reason);
-      messages.push(`workflow-mark: premise contradiction recorded.`);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. Premise contradiction NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- PREMISE_ACK handler ---
-  const premiseAckLooksLike =
-    !PREMISE_ACK_RE_DQ.test(cmd) && PREMISE_ACK_LOOKSLIKE_RE.test(cmd);
-  if (premiseAckLooksLike) {
-    messages.push(
-      `workflow-mark: malformed PREMISE_ACK — ` +
-        `expected: echo "<<WORKFLOW_PREMISE_ACK>>" (no payload)`
-    );
-    continue;
-  }
-  if (PREMISE_ACK_RE_DQ.test(cmd)) {
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — premise acknowledgement NOT recorded.`
-      );
-      continue;
-    }
-    try {
-      clearPremiseContradiction(sessionId);
-      messages.push(`workflow-mark: premise contradiction cleared (acknowledged).`);
-    } catch (e) {
-      messages.push(
-        `workflow-mark: failed to write state — ${e.message}. Premise acknowledgement NOT recorded.`
-      );
-    }
-    continue;
-  }
-
-  // --- ENFORCE_WORKTREE_OFF handler ---
-  const enforceOffMatch = cmd.match(ENFORCE_WORKTREE_OFF_RE_DQ);
-  const enforceOffLooksLike =
-    !enforceOffMatch && ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(cmd);
-  if (enforceOffLooksLike) {
-    messages.push(
-      `workflow-mark: malformed ENFORCE_WORKTREE_OFF — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: REASON>>" ` +
-        `(reason: >=3 non-space chars, no '>', not a placeholder)`
-    );
-    continue;
-  }
-  if (enforceOffMatch) {
-    if (!sessionId) {
-      hardFail(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE_OFF sentinel NOT applied.`
-      );
-      continue;
-    }
-    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKTREE_OFF sentinel NOT applied.`);
-      continue;
-    }
-    let reasonStored = null;
-    const rawReason = enforceOffMatch[1];
-    const v = validateSkipReason(rawReason);
-    if (v.ok) {
-      reasonStored = v.reason;
-    } else {
-      // Warn but still apply — reason quality must not block emergency recovery.
-      messages.push(
-        `workflow-mark: ENFORCE_WORKTREE_OFF reason rejected — ${v.msg} (override still applied)`
-      );
-    }
-    try {
-      const dir = getWorkflowDir();
-      fs.mkdirSync(dir, { recursive: true });
-      const markerPath = path.join(dir, `${sessionId}.worktree-off`);
-      const tmp = markerPath + ".tmp";
-      fs.writeFileSync(
-        tmp,
-        JSON.stringify({ reason: reasonStored, set_at: new Date().toISOString() }),
-        { mode: 0o600 }
-      );
-      fs.renameSync(tmp, markerPath);
-      messages.push(
-        `workflow-mark: ENFORCE_WORKTREE session override applied (marker: ${markerPath}). ` +
-          `Delete the marker file to restore enforcement.`
-      );
-    } catch (e) {
-      hardFail(
-        `workflow-mark: failed to write ENFORCE_WORKTREE override marker — ${e.message}. Override NOT applied.`
-      );
-    }
-    continue;
-  }
-
-  // --- ENFORCE_WORKTREE_ON handler ---
-  const enforceOnMatch = cmd.match(ENFORCE_WORKTREE_ON_RE_DQ);
-  const enforceOnLooksLike =
-    !enforceOnMatch && ENFORCE_WORKTREE_ON_LOOKSLIKE_RE.test(cmd);
-  if (enforceOnLooksLike) {
-    messages.push(
-      `workflow-mark: malformed ENFORCE_WORKTREE_ON — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: REASON>>" ` +
-        `(reason: >=3 non-space chars, no '>', not a placeholder)`
-    );
-    continue;
-  }
-  if (enforceOnMatch) {
-    if (!sessionId) {
-      hardFail(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKTREE_ON sentinel NOT applied.`
-      );
-      continue;
-    }
-    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKTREE_ON sentinel NOT applied.`);
-      continue;
-    }
-    const rawOnReason = enforceOnMatch[1];
-    const v = validateSkipReason(rawOnReason);
-    if (!v.ok) {
-      // Warn but still apply — reason quality must not block restoration.
-      messages.push(
-        `workflow-mark: ENFORCE_WORKTREE_ON reason rejected — ${v.msg} (restore still applied)`
-      );
-    }
-    try {
-      const dir = getWorkflowDir();
-      const markerPath = path.join(dir, `${sessionId}.worktree-off`);
-      try {
-        fs.unlinkSync(markerPath);
-        messages.push(
-          `workflow-mark: ENFORCE_WORKTREE session override cleared (marker removed: ${markerPath}).`
-        );
-      } catch (e) {
-        if (e.code !== "ENOENT") throw e;
-        // Idempotent: silent no-op when marker is already absent.
-      }
-    } catch (e) {
-      hardFail(
-        `workflow-mark: failed to clear ENFORCE_WORKTREE override marker — ${e.message}. Restore NOT applied.`
-      );
-    }
-    continue;
-  }
-
-  // --- ENFORCE_WORKFLOW_OFF handler ---
-  const workflowOffMatch = cmd.match(ENFORCE_WORKFLOW_OFF_RE_DQ);
-  const workflowOffLooksLike =
-    !workflowOffMatch && ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE.test(cmd);
-  if (workflowOffLooksLike) {
-    messages.push(
-      `workflow-mark: malformed ENFORCE_WORKFLOW_OFF — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: REASON>>" ` +
-        `(reason: >=3 non-space chars, no '>', not a placeholder)`
-    );
-    continue;
-  }
-  if (workflowOffMatch) {
-    if (!sessionId) {
-      hardFail(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW_OFF sentinel NOT applied.`
-      );
-      continue;
-    }
-    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKFLOW_OFF sentinel NOT applied.`);
-      continue;
-    }
-    let reasonStored = null;
-    const rawWorkflowOffReason = workflowOffMatch[1];
-    const wfv = validateSkipReason(rawWorkflowOffReason);
-    if (wfv.ok) {
-      reasonStored = wfv.reason;
-    } else {
-      messages.push(
-        `workflow-mark: ENFORCE_WORKFLOW_OFF reason rejected — ${wfv.msg} (override still applied)`
-      );
-    }
-    try {
-      const dir = getWorkflowDir();
-      fs.mkdirSync(dir, { recursive: true });
-      const markerPath = path.join(dir, `${sessionId}.workflow-off`);
-      const tmp = markerPath + ".tmp";
-      fs.writeFileSync(
-        tmp,
-        JSON.stringify({ reason: reasonStored, set_at: new Date().toISOString() }),
-        { mode: 0o600 }
-      );
-      fs.renameSync(tmp, markerPath);
-      messages.push(
-        `workflow-mark: ENFORCE_WORKFLOW session override applied (marker: ${markerPath}). ` +
-          `Restore with: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>"`
-      );
-    } catch (e) {
-      hardFail(
-        `workflow-mark: failed to write ENFORCE_WORKFLOW override marker — ${e.message}. Override NOT applied.`
-      );
-    }
-    continue;
-  }
-
-  // --- ENFORCE_WORKFLOW_ON handler ---
-  const workflowOnMatch = cmd.match(ENFORCE_WORKFLOW_ON_RE_DQ);
-  const workflowOnLooksLike =
-    !workflowOnMatch && ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE.test(cmd);
-  if (workflowOnLooksLike) {
-    messages.push(
-      `workflow-mark: malformed ENFORCE_WORKFLOW_ON — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: REASON>>" ` +
-        `(reason: >=3 non-space chars, no '>', not a placeholder)`
-    );
-    continue;
-  }
-  if (workflowOnMatch) {
-    if (!sessionId) {
-      hardFail(
-        `workflow-mark: could not resolve session_id — ENFORCE_WORKFLOW_ON sentinel NOT applied.`
-      );
-      continue;
-    }
-    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-      hardFail(`workflow-mark: invalid session_id format — ENFORCE_WORKFLOW_ON sentinel NOT applied.`);
-      continue;
-    }
-    const rawWorkflowOnReason = workflowOnMatch[1];
-    const wfOnv = validateSkipReason(rawWorkflowOnReason);
-    if (!wfOnv.ok) {
-      messages.push(
-        `workflow-mark: ENFORCE_WORKFLOW_ON reason rejected — ${wfOnv.msg} (restore still applied)`
-      );
-    }
-    try {
-      const dir = getWorkflowDir();
-      const markerPath = path.join(dir, `${sessionId}.workflow-off`);
-      try {
-        fs.unlinkSync(markerPath);
-        messages.push(
-          `workflow-mark: ENFORCE_WORKFLOW session override cleared (marker removed: ${markerPath}).`
-        );
-      } catch (e) {
-        if (e.code !== "ENOENT") throw e;
-        // Idempotent: silent no-op when marker is already absent.
-      }
-    } catch (e) {
-      hardFail(
-        `workflow-mark: failed to clear ENFORCE_WORKFLOW override marker — ${e.message}. Restore NOT applied.`
-      );
-    }
-    continue;
-  }
-
-  // --- RESET_FROM handler ---
-  if (resetMatch) {
-    const [, fromStep] = resetMatch;
-
-    if (!VALID_STEPS.includes(fromStep)) {
-      messages.push(
-        `workflow-mark: unknown step "${fromStep}" for reset-from — ignored.`
-      );
-      continue;
-    }
-
-    if (!sessionId) {
-      messages.push(
-        `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
-          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}>>"`
-      );
-      continue;
-    }
-
-    try {
-      const newState = createInitialState(sessionId);
-      const fromIndex = VALID_STEPS.indexOf(fromStep);
-      const now = new Date().toISOString();
-      for (let i = 0; i < fromIndex; i++) {
-        newState.steps[VALID_STEPS[i]] = { status: "complete", updated_at: now };
-      }
-      writeState(sessionId, newState);
-    } catch (e) {
-      messages.push(`workflow-mark: reset-from failed — ${e.message}.`);
-    }
-    continue;
-  }
+  // Dispatch order matters: USER_VERIFIED must precede MARK_STEP to prevent
+  // bypass via WORKFLOW_MARK_STEP_user_verification.
+  if (notNeededHandlers.handle({ ...ctx, cmd })) continue;
+  if (clarifyIntentCompleteHandler.handle({ ...ctx, cmd })) continue;
+  if (branchingHandler.handle({ ...ctx, cmd })) continue;
+  if (userVerifiedHandler.handle({ ...ctx, cmd })) continue;
+  if (markStepHandler.handle({ ...ctx, cmd })) continue;
+  if (premiseHandlers.handle({ ...ctx, cmd })) continue;
+  if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;
+  if (resetHandler.handle({ ...ctx, cmd })) continue;
 }
 
 if (fatalError) {
@@ -921,3 +173,5 @@ if (fatalError) {
   process.exit(2);
 }
 done(messages.length > 0 ? messages.join("\n") : undefined);
+
+} // end if (require.main === module)
