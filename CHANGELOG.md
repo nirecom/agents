@@ -51,4 +51,8 @@ Changes: category=SECURITY subject="fix(#742): mcp-fs-server defensive hardening
 
 ### FEATURE: PR #749 (2026-06-04)
 Background: fix(#746): replace --ask-for-approval with --full-auto in review-plan-codex MCP_OVERRIDES
-Changes: Fixed: codex plan/outline reviews now run correctly via codex (not Claude fallback); codex v0.125.0 removed `--ask-for-approval`, now replaced with `--full-auto`
+Changes: Fixed: codex plan/outline reviews now run correctly via codex (not Claude fallback); codex v0.125.0 removed `--ask-for-approval`, now replaced with `--full-auto`
+
+### FEATURE: PR #753 (2026-06-04)
+Background: fix(#733): relax doc-append date-order check, align rotation sort helper, fix idempotency grep
+Changes: `doc-append` now accepts entries whose date is up to 7 days before the last entry's date, so concurrent sessions closing the same issue no longer fail when their merge dates differ by a few days.;`/issue-reconcile` backfill no longer produces duplicate history entries when `#N` appears in the subject line of an existing entry (e.g. `### Fix #N: ...`) rather than only in the trailing parenthetical.
