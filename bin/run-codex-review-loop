@@ -110,6 +110,10 @@ if [[ -z "$REPO_ROOT_ARG" ]]; then
   REPO_ROOT_ARG="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 fi
 
+if [[ -n "$REPO_ROOT_ARG" ]] && [[ ! -d "$REPO_ROOT_ARG" ]]; then
+  die "--repo-root is not a directory: $REPO_ROOT_ARG"
+fi
+
 BUILDER="$AGENTS_CONFIG_DIR/bin/build-codex-context"
 REVIEWER="$AGENTS_CONFIG_DIR/bin/review-plan-codex"
 [[ -f "$BUILDER" ]]  || die "build-codex-context not found: $BUILDER"

@@ -384,14 +384,25 @@ log_persist_or_fail() {
 
 # Run codex, capturing output to temp file so we can log BEFORE emitting (TODO-2).
 CODEX_OUT_FILE=$(mktemp)
-trap 'rm -f "$CODEX_OUT_FILE" "${TMPFILE:-}" "${CODEX_STDERR:-}"' EXIT
+trap '
+  if [[ "${MCP_FS_DEBUG:-}" == "1" && -n "${EFF_LOG_DIR:-}" && -f "${CODEX_STDERR:-}" ]]; then
+    cp "${CODEX_STDERR}" "${EFF_LOG_DIR}/${LOOP_LABEL:-codex}-codex-stderr.log" 2>/dev/null || true
+  fi
+  rm -f "$CODEX_OUT_FILE" "${TMPFILE:-}" "${CODEX_STDERR:-}"
+' EXIT
 
 TMPFILE=$(mktemp)
 CODEX_STDERR=$(mktemp)
 printf '%s' "$PROMPT" > "$TMPFILE"
 
 codex_exit=0
-if [[ -n "$REPO_ROOT_ARG" ]]; then export REPO_ROOT="$REPO_ROOT_ARG"; fi
+if [[ -n "$REPO_ROOT_ARG" ]]; then
+  if [[ ! -d "$REPO_ROOT_ARG" ]]; then
+    codex_core_emit_failed "REPO_ROOT_ARG is not a directory: $REPO_ROOT_ARG"
+    exit 0
+  fi
+  export REPO_ROOT="$REPO_ROOT_ARG"
+fi
 timeout 180 codex exec --skip-git-repo-check "${MCP_OVERRIDES[@]+"${MCP_OVERRIDES[@]}"}" - < "$TMPFILE" > "$CODEX_OUT_FILE" 2>"$CODEX_STDERR" \
   || codex_exit=$?
 
