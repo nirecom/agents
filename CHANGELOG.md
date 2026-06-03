@@ -31,4 +31,8 @@ Changes: Step 6 now runs `review-code-size --base <merge-base>` in parallel, war
 
 ### FEATURE: PR #728 (2026-06-03)
 Background: fix(#724): sync-labels.sh three-way label status (created/updated/already-exists)
-Changes: `sync-labels.sh` now shows per-label status: `(created)` for new labels, `(updated)` for changed labels, and `(already exists)` for unchanged ones — replacing the previous unconditional recreation. The final summary shows `N created, M updated, K already-exists / T total`.
+Changes: `sync-labels.sh` now shows per-label status: `(created)` for new labels, `(updated)` for changed labels, and `(already exists)` for unchanged ones — replacing the previous unconditional recreation. The final summary shows `N created, M updated, K already-exists / T total`.
+
+### FEATURE: PR #736 (2026-06-03)
+Background: fix(#730): replace gh api -f content= with --input to avoid ARG_MAX on large files
+Changes: fix: large-file commits via `/worktree-end` Step 6h (`docs/history.md` ≥ ~25 KB) no longer fail with "Argument list too long" on Windows (#730)
