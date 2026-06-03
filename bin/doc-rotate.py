@@ -83,6 +83,16 @@ def _parse_date(header_line: str):
         return None
 
 
+def _sort_by_inline_date(entries: list[dict]) -> list[dict]:
+    """Sort entries ascending by the `(YYYY-MM-DD)` inline date in the header.
+
+    Aligns with `sort-history.py`'s inline-date fallback path; entries without
+    a parseable date are filtered out (commit hash resolution is not needed at
+    rotation time — rotation only handles already-archived dated entries).
+    """
+    return sorted([e for e in entries if e["date"] is not None], key=lambda e: e["date"])
+
+
 def _entry_text(entry: dict) -> str:
     body = "\n".join(entry["body_lines"])
     return f"{entry['header']}\n{body}" if body else entry["header"]
@@ -135,9 +145,7 @@ def rotate(
 
     # Order: undated first (treated as oldest), then dated ascending
     undated = [e for e in entries if e["date"] is None]
-    dated = sorted(
-        [e for e in entries if e["date"] is not None], key=lambda e: e["date"]
-    )
+    dated = _sort_by_inline_date(entries)
     all_ordered = undated + dated  # oldest → newest
 
     # Floor: keep last `floor` entries, archive the rest
