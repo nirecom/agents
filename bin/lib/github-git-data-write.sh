@@ -101,16 +101,28 @@ b64enc() {
 
 # 1. Create blobs for each local file (one POST per blob). Blobs are content-
 #    addressed, so this is safe to do once even across retries.
+#
+#    Large files: passing the base64 content via `-f "content=$B64"` exceeds
+#    OS ARG_MAX on Windows (issue #730). Write the JSON body to a temp file
+#    and use `gh api --input` instead. $B64 is RFC 4648 base64 (only
+#    [A-Za-z0-9+/=]) so plain printf is JSON-safe; no jq dependency needed.
 BLOB_SHAS=()
 for lp in "${LOCAL_PATHS[@]}"; do
     B64=$(b64enc "$lp")
-    if ! BLOB_SHA=$(gh api -X POST "repos/$OWNER/$REPO/git/blobs" \
-            -f "encoding=base64" -f "content=$B64" --jq '.sha' 2>&1); then
+    BLOB_TMP=$(mktemp)
+    trap 'rm -f "$BLOB_TMP"' EXIT
+    printf '{"encoding":"base64","content":"%s"}' "$B64" > "$BLOB_TMP"
+    BLOB_OUT=""
+    if ! BLOB_OUT=$(gh api -X POST "repos/$OWNER/$REPO/git/blobs" --input "$BLOB_TMP" --jq '.sha' 2>&1); then
+        rm -f "$BLOB_TMP"
+        trap - EXIT
         echo "github-git-data-write: blob create failed for $lp:" >&2
-        printf '%s\n' "$BLOB_SHA" >&2
+        printf '%s\n' "$BLOB_OUT" >&2
         exit 1
     fi
-    BLOB_SHAS+=("$BLOB_SHA")
+    rm -f "$BLOB_TMP"
+    trap - EXIT
+    BLOB_SHAS+=("$BLOB_OUT")
 done
 
 attempt=1
