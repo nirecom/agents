@@ -88,10 +88,17 @@ The close flow is split into two phases:
   the PR is merged. It performs the sub-issue gate, posts the pending sentinel,
   promotes the sentinel to `appended`, and updates the parent body if applicable.
 - **Phase 2 — `/issue-close-finalize <N>`** runs from the main worktree AFTER
-  the PR is merged. It writes `docs/history.md` (Step E), closes the issue, and
-  posts the resolved-by + appended sentinels. The merge SHA is resolved via
+  the PR is merged. It updates the parent body (Step G), closes the issue
+  (Step H), and posts the resolved-by + appended sentinels (Step J), then
+  clears WIP state (Step K). The merge SHA is resolved via
   `find-pr-by-marker.sh` using the `<!-- issue-close-pr-of: <N> -->` marker that
   `/commit-push` adds to the PR body.
+- **`docs/history.md` is written by `/worktree-end` Step 6h** before Phase 2
+  runs (Approach C, #690). Step 6h is the single canonical writer of both
+  `docs/history.md` and `CHANGELOG.md` from `WORKTREE_NOTES.md ## History Notes`
+  / `## Changelog Notes` bullets. The previous Phase 2 Step E (`docs/history.md`
+  write via `issue-to-history.sh`) was removed. `issue-to-history.sh` is
+  retained as a standalone tool for `/issue-reconcile` and out-of-band repair.
 
 **Flow 1 — standard workflow (Phase 1 then Phase 2):**
 
@@ -108,7 +115,10 @@ The close flow is split into two phases:
 When the PR uses GitHub's `closes #N` keyword and the issue gets auto-closed
 without `/issue-close-stage` having run, `/issue-close-finalize`'s triage
 detects `CLOSED + (none)` and routes to the `auto_close_path` action:
-sub-issue gate → doc-append → parent update → resolved-by/sentinel comments.
+parent update → resolved-by/sentinel comments → WIP clear. `docs/history.md`
+is NOT written on this path (no WORKTREE_NOTES.md available — the outcome
+JSON records `historyEntry=skipped_no_history_notes`). For backfill, use
+`/issue-reconcile`.
 
 **Hook surface:** the `enforce-issue-close.js` PreToolUse hook blocks bare
 `gh issue close` from the Bash tool. The error message points at
@@ -150,10 +160,11 @@ closing the parent is blocked. Cancelled/migrated children must already be close
   `/issue-close-stage` or `/issue-close-finalize` (the skills abort with a
   clear error if unset). Consumer repos (dotfiles, my-private-repo) inherit
   the same variable.
-- `ISSUE_CLOSE_SKILL=1` is set by both skills as an inline env prefix. It serves
-  two purposes: (1) bypasses `enforce-issue-close.js` for `gh issue close` /
-  `gh issue comment` calls; (2) bypasses `enforce-worktree.js` for
-  `git add docs/history.md docs/history/` and `git commit -m "docs(history): ..."`
-  calls issued from the main worktree during Phase 2 Step E. Do not set it elsewhere.
+- `ISSUE_CLOSE_SKILL=1` is set by both skills as an inline env prefix to
+  bypass `enforce-issue-close.js` for `gh issue close` / `gh issue comment`
+  calls. The Phase 2 Step E `enforce-worktree.js` bypass for
+  `git add docs/history.md` was removed in #690 (Step E itself was removed —
+  Step 6h of `/worktree-end` is now the canonical history writer). Do not set
+  it elsewhere.
 - `history.md` entries are written in English regardless of repo visibility
   (`rules/language.md`). The issue body language is the author's choice.
