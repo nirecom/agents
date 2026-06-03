@@ -84,6 +84,14 @@ else
     exit 1
 fi
 
+# Write base64 content to a temp file so jq --rawfile can read it without
+# passing it through argv (avoids "Argument list too long" on Windows, #730).
+# B64_TMP persists for the duration of the retry loop; cleaned up on all exit
+# paths via the outer trap.
+B64_TMP=$(mktemp)
+printf '%s' "$B64" > "$B64_TMP"
+trap 'rm -f "$B64_TMP"' EXIT
+
 attempt=1
 while (( attempt <= MAX_RETRIES )); do
     # Fetch current SHA (empty if file does not exist yet)
@@ -91,20 +99,37 @@ while (( attempt <= MAX_RETRIES )); do
     RESPONSE=$(gh api "repos/$OWNER/$REPO/contents/$FILE_PATH?ref=$BRANCH" 2>/dev/null || echo '{}')
     SHA=$(printf '%s' "$RESPONSE" | jq -r '.sha // empty' 2>/dev/null || true)
 
-    # Build args
-    PUT_ARGS=(-X PUT "repos/$OWNER/$REPO/contents/$FILE_PATH"
-              -f "message=$MESSAGE"
-              -f "branch=$BRANCH"
-              -f "content=$B64")
+    # Build PUT body as a JSON file and pass via `gh api --input`. Passing the
+    # base64 content via `-f "content=$B64"` or `--arg content "$B64"` exceeds
+    # OS ARG_MAX on Windows for large files (issue #730). Use --rawfile to read
+    # content from a file. $MESSAGE is user-provided text — use `--arg` for JSON
+    # escaping.
+    PUT_TMP=$(mktemp)
+    trap 'rm -f "$PUT_TMP" "$B64_TMP"' EXIT
     if [[ -n "$SHA" ]]; then
-        PUT_ARGS+=(-f "sha=$SHA")
+        jq -n \
+            --arg message "$MESSAGE" \
+            --arg branch "$BRANCH" \
+            --rawfile content "$B64_TMP" \
+            --arg sha "$SHA" \
+            '{message: $message, branch: $branch, content: $content, sha: $sha}' > "$PUT_TMP"
+    else
+        jq -n \
+            --arg message "$MESSAGE" \
+            --arg branch "$BRANCH" \
+            --rawfile content "$B64_TMP" \
+            '{message: $message, branch: $branch, content: $content}' > "$PUT_TMP"
     fi
 
     PUT_OUT=""
     PUT_RC=0
-    PUT_OUT=$(gh api "${PUT_ARGS[@]}" 2>&1) || PUT_RC=$?
+    PUT_OUT=$(gh api -X PUT "repos/$OWNER/$REPO/contents/$FILE_PATH" --input "$PUT_TMP" 2>&1) || PUT_RC=$?
+    rm -f "$PUT_TMP"
+    trap 'rm -f "$B64_TMP"' EXIT
 
     if (( PUT_RC == 0 )); then
+        rm -f "$B64_TMP"
+        trap - EXIT
         exit 0
     fi
 
@@ -116,11 +141,15 @@ while (( attempt <= MAX_RETRIES )); do
     fi
 
     # Non-recoverable
+    rm -f "$B64_TMP"
+    trap - EXIT
     echo "github-contents-write: PUT failed (rc=$PUT_RC):" >&2
     printf '%s\n' "$PUT_OUT" >&2
     exit 1
 done
 
+rm -f "$B64_TMP"
+trap - EXIT
 echo "github-contents-write: retry exhausted after ${MAX_RETRIES} attempts (concurrent writers? re-run manually):" >&2
-echo "  gh api -X PUT repos/$OWNER/$REPO/contents/$FILE_PATH -f message=... -f branch=$BRANCH -f content=... -f sha=..." >&2
+echo "  gh api -X PUT repos/$OWNER/$REPO/contents/$FILE_PATH --input <json-body-file>" >&2
 exit 11
