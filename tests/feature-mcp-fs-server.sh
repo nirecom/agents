@@ -39,7 +39,7 @@ fi
 # SKIP for every test case and exit 0 (so the test passes by skipping until
 # bin/mcp-fs-server.js is implemented).
 if [[ ! -f "$SERVER" ]]; then
-    for t in T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14; do
+    for t in T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18; do
         skip "$t: bin/mcp-fs-server.js not yet implemented"
     done
     echo ""
@@ -66,6 +66,30 @@ echo "## BugsFound" > "$REPO/WORKTREE_NOTES.md"
 # An "outside" directory for absolute/traversal targets
 mkdir -p "$TMPDIR_BASE/outside-repo"
 echo "outside-secret" > "$TMPDIR_BASE/outside-repo/secret"
+
+# Defensive-hardening fixtures (issue #742)
+# T15 fixture: oversized text file — exactly MAX_FILE_BYTES + 1 = 5*1024*1024+1 bytes
+# Pure ASCII 'A' (no NUL bytes) so binary detection does NOT fire first.
+if python3 -c "import sys; sys.stdout.buffer.write(b'A' * 5242881)" > "$REPO/oversized.txt" 2>/dev/null \
+    && [[ -s "$REPO/oversized.txt" ]]; then
+    :  # python3 created the file successfully
+elif python -c "import sys; sys.stdout.buffer.write(b'A' * 5242881)" > "$REPO/oversized.txt" 2>/dev/null \
+    && [[ -s "$REPO/oversized.txt" ]]; then
+    :  # python2 created the file successfully
+elif command -v node >/dev/null 2>&1; then
+    # node is always available when running mcp-fs-server.js tests
+    node -e "require('fs').writeFileSync(process.argv[1], Buffer.alloc(5242881, 65))" -- "$REPO/oversized.txt"
+else
+    # Pure-shell fallback: build 5242881 bytes of 'A'
+    yes A | tr -d '\n' | head -c 5242881 > "$REPO/oversized.txt"
+fi
+
+# T16 fixture: small file (~2KB) with a NUL byte near the start (offset 6)
+{
+    printf 'HEADER'
+    printf '\x00MORE'
+    for _ in $(seq 1 500); do printf 'BBBB'; done
+} > "$REPO/early-binary.bin"
 
 # Portable timeout
 _timeout() {
@@ -321,6 +345,77 @@ if [[ "$VALID_JSON" == "yes" ]]; then
     pass "T14: response is valid JSON"
 else
     fail "T14: response is not valid JSON. Output: $SRV_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# T15 — file size cap: oversized text file rejected (issue #742)
+# ---------------------------------------------------------------------------
+# Pre-implementation gate: skip cleanly if the size-cap constant has not been
+# added to mcp-fs-server.js yet. Detect by grepping for MAX_FILE_BYTES.
+if grep -q 'MAX_FILE_BYTES' "$SERVER" 2>/dev/null; then
+    run_server "$(mcp_request 14 'oversized.txt')"
+    if [[ "$(response_is_error "$SRV_OUT")" == "yes" ]]; then
+        if echo "$SRV_OUT" | grep -iEq 'size|too large'; then
+            pass "T15: oversized file rejected with size-related error"
+        else
+            fail "T15: error returned but message lacks 'size'/'too large'. Output: $SRV_OUT"
+        fi
+    else
+        fail "T15: expected error for oversized.txt (>5 MB), got: $SRV_OUT"
+    fi
+else
+    skip "T15: size-cap (MAX_FILE_BYTES) not yet implemented in $SERVER"
+fi
+
+# ---------------------------------------------------------------------------
+# T16 — early binary detection: NUL byte in first 8 KB rejected (issue #742)
+# ---------------------------------------------------------------------------
+# Binary detection already exists in pre-#742 mcp-fs-server.js (T16 reinforces
+# that the early-detection path is preserved by hardening changes — never
+# regressed by the new size check ordering).
+run_server "$(mcp_request 15 'early-binary.bin')"
+if [[ "$(response_is_error "$SRV_OUT")" == "yes" ]]; then
+    if echo "$SRV_OUT" | grep -iq 'binary'; then
+        pass "T16: early-binary file rejected with binary-related error"
+    else
+        fail "T16: error returned but message lacks 'binary'. Output: $SRV_OUT"
+    fi
+else
+    fail "T16: expected error for early-binary.bin (NUL byte in first 8 KB), got: $SRV_OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# T17 — MCP_FS_DEBUG=1: [mcp-fs] debug lines appear on stderr (issue #742)
+# ---------------------------------------------------------------------------
+if grep -q 'MCP_FS_DEBUG' "$SERVER" 2>/dev/null; then
+    TMPSTDERR17=$(mktemp)
+    printf '%s' "$(mcp_request 16 '.env')" \
+        | MCP_FS_DEBUG=1 REPO_ROOT="$REPO" _timeout node "$SERVER" >/dev/null 2>"$TMPSTDERR17" || true
+    if grep -q '\[mcp-fs\]' "$TMPSTDERR17"; then
+        pass "T17: MCP_FS_DEBUG=1 emits [mcp-fs] debug lines to stderr"
+    else
+        fail "T17: expected [mcp-fs] debug lines in stderr when MCP_FS_DEBUG=1. Stderr: $(cat "$TMPSTDERR17")"
+    fi
+    rm -f "$TMPSTDERR17"
+else
+    skip "T17: MCP_FS_DEBUG not yet implemented in $SERVER"
+fi
+
+# ---------------------------------------------------------------------------
+# T18 — MCP_FS_DEBUG unset: no [mcp-fs] lines on stderr (issue #742)
+# ---------------------------------------------------------------------------
+if grep -q 'MCP_FS_DEBUG' "$SERVER" 2>/dev/null; then
+    TMPSTDERR18=$(mktemp)
+    printf '%s' "$(mcp_request 17 '.env')" \
+        | REPO_ROOT="$REPO" _timeout node "$SERVER" >/dev/null 2>"$TMPSTDERR18" || true
+    if grep -q '\[mcp-fs\]' "$TMPSTDERR18"; then
+        fail "T18: unexpected [mcp-fs] debug output when MCP_FS_DEBUG not set. Stderr: $(cat "$TMPSTDERR18")"
+    else
+        pass "T18: no [mcp-fs] debug output when MCP_FS_DEBUG not set"
+    fi
+    rm -f "$TMPSTDERR18"
+else
+    skip "T18: MCP_FS_DEBUG not yet implemented in $SERVER"
 fi
 
 # ---------------------------------------------------------------------------
