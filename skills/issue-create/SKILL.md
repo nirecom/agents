@@ -84,14 +84,16 @@ Dedupe layer for the underlying `bin/github-issues/issue-create.sh`. Skip on non
 # rc != 0 → skip survey, jump to Phase 4 with --verdict none
 ```
 
-**Keyword search.** Extract 3–5 significant tokens (nouns/verbs/identifiers, no stopwords), then:
+**3-pass dedupe survey.** Extract 3–5 significant tokens (nouns/verbs/identifiers, no stopwords).
 
-```bash
-gh issue list --state all --limit 30 --search "<kw1> <kw2> <kw3>"
-```
+**Pass 1 — keyword search:** `gh issue list --state all --limit 50 --search "<kw1> <kw2> <kw3>"`.
+Zero results → extract 3–5 symptom-level tokens (behaviors, affected outputs/artifacts, feature area — including artifact names like `CLAUDE.md` or `Final Report` when they represent the affected feature) → run one additional search with those tokens. Still zero → drop the most specific identifier keyword, retry up to 3 times.
 
-Zero results on first identifier search → extract 3–5 symptom-level tokens from the new issue's Background/Changes text (behaviors, affected outputs/artifacts, feature area — terms that describe function or output, including artifact names like `CLAUDE.md` or `Final Report` when they represent the affected feature) → run one additional search with those tokens.
-Zero results from symptom search → drop most specific identifier keyword, retry up to 3 times. Still zero after all retries → verdict `none`, jump to Phase 4.
+**Pass 2 — recent-open full scan:** `gh issue list --state open --paginate --search "created:>=<YYYY-MM-DD>"` where the date is 30 days before the current date. Deduplicate results against Pass 1 before inspection.
+
+**Pass 3 — closed duplicate scan:** `gh issue list --state closed --limit 30 --search "<kw1> <kw2> <kw3>"`. Surfaces recently-closed duplicates.
+
+Still zero across all three passes → verdict `none`, jump to Phase 4.
 
 **Candidate inspection** (up to ~10): `gh issue view <N> --json number,title,body,state,labels`.
 

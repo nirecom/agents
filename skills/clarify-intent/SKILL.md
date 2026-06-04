@@ -92,6 +92,11 @@ Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_G
 
 1. Read `closes_issues` from intent.md (canonical parser: `hooks/lib/parse-closes-issues.js`).
 2. **Non-empty `closes_issues`** (skip when `NON_GITHUB=1`):
+   - **CLOSED state check for all entries.** For each issue N in `closes_issues` (primary first, then related):
+     `if STATE=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-state-check.sh" "$N" 2>/dev/null); then :; else STATE=error; fi`
+     - Primary CLOSED: `AskUserQuestion` "Primary issue #N is CLOSED. How to proceed?" — options: "Reopen primary issue and continue" / "Abort session".
+     - Related CLOSED: `AskUserQuestion` "Related issue #N is CLOSED." — options: "Reopen and continue" / "Remove this related issue from closes_issues and continue" (Read + Edit intent.md to remove N) / "Abort session".
+     - `error` → warn and continue.
    - **Label all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
      `gh issue edit <N> --add-label "intent:clarified"`.
      On failure for any N: warn `[clarify-intent]`, add `intent:clarified-label-failed: #<N>: <reason>` under Constraints. Continue with the remaining entries (best-effort per-N).
@@ -138,7 +143,7 @@ Then:
    ```
 
    - **`GUARD_RC == 0`** → counter unlinked; proceed to step 1 below (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
-   - **`GUARD_RC != 0` AND `GUARD_ATTEMPT == 1`** (first failure) → STOP. Do NOT
+   - **`GUARD_RC == 1` AND `GUARD_ATTEMPT == 1`** (first failure) → STOP. Do NOT
      emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`. Invoke `/issue-create` to
      create a tracking issue. After `/issue-create` succeeds and returns issue N,
      backfill the `## Issues` section body in `intent.md` from
@@ -147,7 +152,7 @@ Then:
      Then re-run **only this guard step (step 0)** — do NOT re-enter the full "Reconcile with
      GitHub" block (doing so would invoke `gh issue create` a second time and create a duplicate
      issue). Counter file holds `1`.
-   - **`GUARD_RC != 0` AND `GUARD_ATTEMPT >= 2`** (`/issue-create` already ran
+   - **`GUARD_RC == 1` AND `GUARD_ATTEMPT >= 2`** (`/issue-create` already ran
      once but `closes_issues` is still empty) → DO NOT emit any new sentinel.
      Open `AskUserQuestion` with prompt:
      > "Tracking-issue guard failed twice. `closes_issues` is still empty after `/issue-create`. How should we recover?"
@@ -158,6 +163,9 @@ Then:
      - **"Abort workflow"** — `rm -f "$COUNTER_FILE"`, emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent>>"`, and exit the skill.
 
      Note (§4 Orthogonality): no new sentinel is introduced here. Existing workflow sentinels are binary (`*_COMPLETE` = stage finished, `*_NOT_NEEDED` = stage skipped); a `BLOCKED` third axis would break the workflow-sentinel class invariant. Retry-exhaustion is treated as an interactive recovery prompt, not a workflow state transition.
+   - **`GUARD_RC == 2`** (CLOSED entry detected) → STOP. Do NOT emit the completion sentinel. The issue exists; we must NOT create a duplicate.
+     `AskUserQuestion`: "Tracking-issue guard detected a CLOSED entry in `closes_issues`. The issue exists but is closed. How should we recover?"
+     Options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>` manually, then re-run guard; counter unchanged) / "Abort session" (`rm -f "$COUNTER_FILE"`, emit `<<WORKFLOW_RESET_FROM_clarify_intent>>`).
 
 1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
