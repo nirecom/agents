@@ -148,6 +148,19 @@ else
 fi
 teardown_tmp
 
+# --- C9: issue is CLOSED with no sentinel → exit 0 (#686 CLOSED state bypass)
+# Rationale: when the issue is already closed (e.g. merged via auto-close keyword),
+# Phase 1 never ran and can never run — blocking the push is futile.
+# Current check-phase1-complete.sh has no CLOSED bypass → this test is RED.
+setup_tmp
+run_check closed_no_sentinel 42; RC=$?
+if [ "$RC" -eq 0 ]; then
+    pass "C9: CLOSED issue with no sentinel → exit 0 (CLOSED bypass, #686)"
+else
+    fail "C9: CLOSED bypass missing: rc=$RC stderr=$CHECK_STDERR"
+fi
+teardown_tmp
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
