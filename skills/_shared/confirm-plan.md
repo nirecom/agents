@@ -31,7 +31,7 @@ opt-out env): see `docs/architecture/claude-code/settings.md`.
 
 If the hook line is absent, the orchestrator MAY print the absolute path as
 plain text — same prohibitions still apply.
-Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns where a `WORKFLOW_PLANS_DIR` path appears in the last assistant message (active only when `CONFIRM_<STEP>=on`).
+Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns where a `WORKFLOW_PLANS_DIR` path appears in the last assistant message (always active, regardless of `CONFIRM_<STEP>`).
 
 **Step 3 — `CONFIRM_<STEP>` check.**
 ```bash
