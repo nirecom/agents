@@ -59,4 +59,8 @@ Changes: `doc-append` now accepts entries whose date is up to 7 days before the 
 
 ### BUGFIX: PR #754 (2026-06-04)
 Background: fix(#740): extend enforce-worktree allowlist for worktree-end cleanup ops
-Changes: Fixed 5 `enforce-worktree` allowlist gaps that blocked `/worktree-end` cleanup: Step 5 backup cp, Step 6c worktree remove, Step 6d worktree prune, Step 6g pre-pull stash, and `feat/` branch deletion are now correctly permitted when `WORKTREE_END_SKILL=1` prefix is present
+Changes: Fixed 5 `enforce-worktree` allowlist gaps that blocked `/worktree-end` cleanup: Step 5 backup cp, Step 6c worktree remove, Step 6d worktree prune, Step 6g pre-pull stash, and `feat/` branch deletion are now correctly permitted when `WORKTREE_END_SKILL=1` prefix is present
+
+### FEATURE: PR #752 (2026-06-04)
+Background: feat(#741): size-gate — SKILL.md 200-line HARD block, code HARD block, file-split rule
+Changes: bin/review-skill-size and bin/review-code-size now exit 1 (block the workflow) when HARD size limits are exceeded in diff mode (>200 lines for SKILL.md, >500 lines for code files). Previously both checks were advisory (always exit 0).;New rule rules/coding/file-split.md documents the two file-split patterns: code files use a sibling folder + dispatch shim; SKILL.md files extract procedures to scripts/ or bin/ while keeping SKILL.md as the prompt entrypoint.
