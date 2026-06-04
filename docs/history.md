@@ -305,4 +305,8 @@ Changes: category=FEATURE subject="feat(#741): size-gate — SKILL.md 200-line H
 
 ### FEATURE: PR #760 — docs/583-confirm-plan-doc (2026-06-04, 513dd5e1799eeedd75912e7374cbbb37aaa46371, #760)
 Background: docs: fix stale CONFIRM_<STEP>=on guard condition in confirm-plan.md
-Changes: Fix stale doc in `skills/_shared/confirm-plan.md`: `stop-confirm-plan-guard.js` guard description incorrectly stated it was active only when `CONFIRM_<STEP>=on`; PR #597 removed that condition, making the guard always active. <!-- compose-doc-append-sentinel: branch=docs/583-confirm-plan-doc pr=#760 -->
+Changes: Fix stale doc in `skills/_shared/confirm-plan.md`: `stop-confirm-plan-guard.js` guard description incorrectly stated it was active only when `CONFIRM_<STEP>=on`; PR #597 removed that condition, making the guard always active. <!-- compose-doc-append-sentinel: branch=docs/583-confirm-plan-doc pr=#760 -->
+
+### FEATURE: PR #761 — refactor/717-workflow-gate-split (2026-06-04, 06d97297bde67743d9d15898ab738dc005ccef0e, #761)
+Background: refactor(#717): split workflow-gate.js into 5 sibling modules
+Changes: REFACTOR #717 (2026-06-04): Split `hooks/workflow-gate.js` (670→364 lines) into 5 sibling modules under `hooks/workflow-gate/`. Third application of the re-export-shim + sibling-directory pattern (after PR #731 `enforce-worktree.js`, PR #738 `workflow-mark.js`). Extracted: `path-normalize.js` (`normalizeForWindows`), `staged-evidence.js` (6 exports incl. `DOCS_ONLY_ALLOWLIST`), `gh-detect.js` (3 exports), `worktree-context.js` (3 exports), `repo-resolution.js` (2 exports). `module.exports` surface, CLI block, and all regression tests unchanged. <!-- compose-doc-append-sentinel: branch=refactor/717-workflow-gate-split pr=#761 -->
