@@ -23,7 +23,7 @@
 
 "use strict";
 
-const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg } = require("./strip-quoted-args");
+const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("./strip-quoted-args");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
@@ -221,7 +221,7 @@ function classify(cmd) {
     // re-scan. If no write pattern remains, or only quoting-only patterns
     // remain, the command is "read".
     if (GH_GROUP_A_REGEX.test(cmd) || isKnownDispatchInvocation(cmd)) {
-      const bodyStripped = stripInlineBodyArg(stripHeredocBody(cmd));
+      const bodyStripped = stripInlineBodyArg(stripHeredocBody(stripShellVarAssignment(cmd)));
       const reStripped = stripQuotedArgs(bodyStripped);
       const reMatched = [];
       for (const p of WRITE_PATTERNS) {
@@ -351,4 +351,18 @@ function isReadOnlyInterpreterC(cmd) {
   } catch (e) { return false; }
 }
 
-module.exports = { WRITE_PATTERNS, classify, isReadOnlyInterpreterC };
+// Returns { kind, matchedNames } — for test introspection only; production callers use classify()
+function classifyDetailed(cmd) {
+  const kind = classify(cmd);
+  // Re-run pattern matching to collect matched names
+  const stripped = stripShellVarAssignment(stripInlineBodyArg(stripHeredocBody(cmd)));
+  const matchedNames = [];
+  for (const p of WRITE_PATTERNS) {
+    if (p.regex.test(stripped) || p.regex.test(cmd)) {
+      matchedNames.push(p.name || p.kind);
+    }
+  }
+  return { kind, matchedNames };
+}
+
+module.exports = { WRITE_PATTERNS, classify, classifyDetailed, isReadOnlyInterpreterC };
