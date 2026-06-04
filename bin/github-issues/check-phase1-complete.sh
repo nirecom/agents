@@ -31,6 +31,12 @@ fi
 # shellcheck source=./issue-close-triage-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/issue-close-triage-lib.sh"
 
+STATE=$(gh issue view "$N" --json state --jq '.state' 2>/dev/null) || STATE=""
+if [ "$STATE" = "CLOSED" ]; then
+    echo "[check-phase1-complete] #$N already CLOSED — Phase 1 skipped, auto_close_path will handle it (issue-close-finalize-triage.sh)"
+    exit 0
+fi
+
 SENTINEL_RAW=$(gh issue view "$N" --json comments \
     --jq '[.comments[].body | select(test("^<!-- issue-close-sentinel:"))] | first // ""' \
     2>/dev/null) || SENTINEL_RAW=""
