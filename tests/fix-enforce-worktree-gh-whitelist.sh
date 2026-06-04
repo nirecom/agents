@@ -616,6 +616,67 @@ test_gh_write_idempotent
 # Edge
 test_win_path_case_insensitive_scope
 
+# ─────────────────────────────────────────────────────────────────────────────
+# E-series: gh issue create + shell-var body false-positive tests (#659)
+# Validate that BODY='...' prefix with dangerous content does not pollute
+# the classify/block reason when gh issue create is the actual command.
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_e1_issue_create_sanctioned_main_worktree() {
+    require_guard "test_e1_issue_create_sanctioned_main_worktree" || return
+    local repo; repo="$(setup_main_checkout "E1-ic-main")"
+    # Sanctioned form: ISSUE_CREATE_SKILL=1 prefix — hook must allow from main worktree.
+    local cmd="ISSUE_CREATE_SKILL=1 gh issue create --title \"test\" --body \"normal body\""
+    local out; out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "E1: ISSUE_CREATE_SKILL=1 gh issue create from main worktree → allow"
+    else
+        fail "E1: sanctioned gh issue create should allow from main worktree, but was blocked ($out)"
+    fi
+}
+
+test_e2_issue_create_with_body_var_main_worktree() {
+    require_guard "test_e2_issue_create_with_body_var_main_worktree" || return
+    local repo; repo="$(setup_main_checkout "E2-ic-main-body")"
+    # Unsanctioned form from main worktree — hook must block.
+    # IMPORTANT: the block reason must mention /issue-create or gh-issue-create,
+    # NOT rm or file-op (shell var body must not pollute the block classification).
+    local cmd="BODY='multi line with rm -rf /tmp' gh issue create --title \"test\" --body \"\$BODY\""
+    local out; out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        fail "E2: unsanctioned gh issue create from main worktree should block, but was allowed ($out)"
+        return
+    fi
+    # Verify block reason: must mention /issue-create or gh-issue-create, NOT rm/file-op
+    if echo "$out" | grep -qi "issue.create\|/issue-create"; then
+        if echo "$out" | grep -qiE '"rm"|file.op|file_op'; then
+            fail "E2: block reason mentions rm/file-op (false-positive body pollution): $out"
+        else
+            pass "E2: unsanctioned gh issue create blocked with /issue-create reason (not rm/file-op)"
+        fi
+    else
+        fail "E2: block reason does not mention /issue-create or gh-issue-create: $out"
+    fi
+}
+
+test_e3_issue_create_with_body_var_linked_worktree() {
+    require_guard "test_e3_issue_create_with_body_var_linked_worktree" || return
+    local pair; pair="$(setup_linked_worktree "E3-ic-wt")"
+    local wt="${pair#*|}"
+    # From linked worktree: Stage B skip → must allow regardless of BODY content
+    local cmd="BODY='multi line with rm -rf /tmp' gh issue create --title \"test\" --body \"\$BODY\""
+    local out; out="$(run_bash_guard "$cmd" "$wt" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "E3: gh issue create with BODY var from linked worktree → allow"
+    else
+        fail "E3: gh issue create from linked worktree should allow (Stage B skip), but was blocked ($out)"
+    fi
+}
+
+test_e1_issue_create_sanctioned_main_worktree
+test_e2_issue_create_with_body_var_main_worktree
+test_e3_issue_create_with_body_var_linked_worktree
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 
