@@ -228,10 +228,10 @@ git -C "$REPO6" commit -q -m "add 600-line JS file"
 EXIT_CODE=0
 OUTPUT=$(cd "$REPO6" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
 
-if [[ $EXIT_CODE -ne 0 ]]; then
-    fail "Case 6: expected exit 0, got $EXIT_CODE"
+if [[ $EXIT_CODE -ne 1 ]]; then
+    fail "Case 6: expected exit 1 (HARD block), got $EXIT_CODE"
 else
-    pass "Case 6: exits 0 for 600-line JS"
+    pass "Case 6: exits 1 for 600-line JS (HARD block)"
 fi
 
 if echo "$OUTPUT" | grep -q "## Code-size Review: PERFORMED"; then

@@ -10,10 +10,11 @@
 #   ## Code-size Review: PERFORMED (all-scan mode)
 #   ## Code-size Review: SKIPPED — <reason>
 #
-# Always exits 0 — never blocks the workflow.
+# Exits 1 when any changed code file exceeds the HARD limit (>500 lines) in diff mode. --all mode always exits 0 (audit/discovery).
 
 set -uo pipefail
 
+HARD_HIT=0
 # Build extension pattern from CODE_FILE_EXTENSIONS (default: js;sh;py)
 _EXTS="${CODE_FILE_EXTENSIONS:-js;sh;py}"
 _EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ';' '|')"
@@ -46,7 +47,8 @@ report_targets() {
     local lines
     lines=$(wc -l < "$file" | tr -d ' ')
     if (( lines > 500 )); then
-      echo "HARD: $file — $lines lines (exceeds 500-line hard limit)"
+      echo "  HARD: $file — $lines lines total (exceeds 500-line hard limit; split into <name>/ sibling folder — see rules/coding/file-split.md)"
+      HARD_HIT=1
     elif (( lines > 300 )); then
       echo "WARN: $file — $lines lines (exceeds 300-line warn threshold)"
     else
@@ -55,9 +57,7 @@ report_targets() {
   done <<< "$targets"
   echo ""
 
-  cat <<'EOF'
-This is advisory output — no action is blocked.
-EOF
+  echo "  HARD findings block the workflow (exit 1) in diff mode. WARN/INFO are advisory."
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
@@ -104,4 +104,4 @@ COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
 echo "Changed code files: $COUNT (extensions: $_EXTS)"
 report_targets "$TARGETS"
 
-exit 0
+[[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
