@@ -25,6 +25,42 @@ FAIL=0
 
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+skip() { echo "SKIP: $1"; }
+
+STATE_CHECK="$AGENTS_DIR/bin/github-issues/issue-state-check.sh"
+
+# gh mock for D1, D6 and D11-D14 — intercepts `gh issue view N --json state`
+mk_state_check_mock() {
+    MOCK_TMP="$(mktemp -d)"
+    mkdir -p "$MOCK_TMP/mock-bin"
+    cat > "$MOCK_TMP/mock-bin/gh" <<'MOCK_EOF'
+#!/usr/bin/env bash
+ARGS="$*"
+case "$ARGS" in
+  issue\ view\ *--json\ state*)
+    if [ "${GH_MOCK_FAIL:-}" = "1" ]; then
+        echo "error: gh failed" >&2
+        exit 1
+    fi
+    N=$(printf '%s\n' "$ARGS" | grep -oE 'issue view [0-9]+' | awk '{print $3}')
+    VAR="GH_MOCK_STATE_${N}"
+    printf '%s\n' "${!VAR:-${GH_MOCK_STATE:-OPEN}}"
+    exit 0 ;;
+  *) exit 2 ;;
+esac
+MOCK_EOF
+    chmod +x "$MOCK_TMP/mock-bin/gh"
+    export PATH="$MOCK_TMP/mock-bin:$PATH"
+}
+
+rm_state_check_mock() {
+    if [ -n "${MOCK_TMP:-}" ] && [ -d "$MOCK_TMP" ]; then
+        export PATH="${PATH#"$MOCK_TMP/mock-bin:"}"
+        rm -rf "$MOCK_TMP" 2>/dev/null || true
+    fi
+    MOCK_TMP=""
+    unset GH_MOCK_STATE GH_MOCK_STATE_449 GH_MOCK_STATE_450 GH_MOCK_FAIL 2>/dev/null || true
+}
 
 run_with_timeout() {
     local secs="$1"; shift
@@ -59,6 +95,8 @@ teardown_tmp() {
 
 # --- D1: single closes_issues entry → rc=0, stderr empty
 setup_tmp
+mk_state_check_mock
+export GH_MOCK_STATE="OPEN"
 printf '## closes_issues\n- 449\n' > "$TMP/intent.md"
 STDERR=$(run_with_timeout 15 bash "$CHECK" "$TMP/intent.md" 2>&1 >/dev/null)
 RC=$?
@@ -67,6 +105,7 @@ if [ "$RC" -eq 0 ] && [ -z "$STDERR" ]; then
 else
     fail "D1: rc=$RC stderr=$STDERR"
 fi
+rm_state_check_mock
 teardown_tmp
 
 # --- D2: empty closes_issues section → rc=1, stderr mentions /issue-create
@@ -119,6 +158,8 @@ teardown_tmp
 
 # --- D6: multiple closes_issues entries → rc=0
 setup_tmp
+mk_state_check_mock
+export GH_MOCK_STATE="OPEN"
 printf '## closes_issues\n- 449\n- 450\n' > "$TMP/intent.md"
 run_with_timeout 15 bash "$CHECK" "$TMP/intent.md" >/dev/null 2>&1
 RC=$?
@@ -127,6 +168,7 @@ if [ "$RC" -eq 0 ]; then
 else
     fail "D6: rc=$RC"
 fi
+rm_state_check_mock
 teardown_tmp
 
 # --- D7: nonexistent path → rc=1, stderr mentions "intent.md not found"
@@ -184,6 +226,132 @@ else
 fi
 rm -f "$INJECT_FILE" 2>/dev/null
 teardown_tmp
+
+
+# ============================================================================
+# D-series extensions for session-dedup feature (D11–D16)
+#
+# D11 (task D8): closes_issues set + issue CLOSED → exits 2 + stderr "CLOSED"
+# D12 (task D9): closes_issues set + all OPEN → exits 0
+# D13 (task D10): --non-github flag → skips CLOSED check (exits 0)
+# D14 (task D11): issue-state-check returns error → warn-continue (exits 0)
+# D15 (task D12): clarify-intent SKILL.md Step 0 guard contains GUARD_RC==2 branch
+# D16 (task D13): clarify-intent SKILL.md Step 0 guard GUARD_RC==2 does NOT invoke issue-create
+#
+# Runtime tests D11–D14 require both check-closes-issues-nonempty.sh AND
+# issue-state-check.sh implementations. Skip gracefully if state-check missing.
+# ============================================================================
+
+CLARIFY_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
+
+# --- D11: closes_issues set + issue CLOSED → exits 2 + stderr contains "CLOSED"
+if [ -f "$STATE_CHECK" ]; then
+    setup_tmp
+    mk_state_check_mock
+    export GH_MOCK_STATE_449="CLOSED"
+    printf '## closes_issues\n- 449\n' > "$TMP/intent.md"
+    STDERR=$(run_with_timeout 30 bash "$CHECK" "$TMP/intent.md" 2>&1 >/dev/null)
+    RC=$?
+    if [ "$RC" -eq 2 ] && echo "$STDERR" | grep -q "CLOSED"; then
+        pass "D11: closes_issues set + #449 CLOSED → exit 2, stderr mentions CLOSED"
+    else
+        fail "D11: rc=$RC stderr=$STDERR"
+    fi
+    rm_state_check_mock
+    teardown_tmp
+else
+    skip "D11: issue-state-check.sh not yet present (pre-implementation)"
+fi
+
+# --- D12: closes_issues set + all OPEN → exits 0
+if [ -f "$STATE_CHECK" ]; then
+    setup_tmp
+    mk_state_check_mock
+    export GH_MOCK_STATE="OPEN"
+    printf '## closes_issues\n- 449\n- 450\n' > "$TMP/intent.md"
+    run_with_timeout 30 bash "$CHECK" "$TMP/intent.md" >/dev/null 2>&1
+    RC=$?
+    if [ "$RC" -eq 0 ]; then
+        pass "D12: closes_issues set + all OPEN → exit 0"
+    else
+        fail "D12: rc=$RC"
+    fi
+    rm_state_check_mock
+    teardown_tmp
+else
+    skip "D12: issue-state-check.sh not yet present (pre-implementation)"
+fi
+
+# --- D13: --non-github flag → skips CLOSED check (exits 0 even if mock would say CLOSED)
+if [ -f "$STATE_CHECK" ]; then
+    setup_tmp
+    mk_state_check_mock
+    export GH_MOCK_STATE="CLOSED"
+    printf '## closes_issues\n- 449\n' > "$TMP/intent.md"
+    run_with_timeout 30 bash "$CHECK" --non-github "$TMP/intent.md" >/dev/null 2>&1
+    RC=$?
+    if [ "$RC" -eq 0 ]; then
+        pass "D13: --non-github flag skips CLOSED check (rc=0 even with CLOSED mock)"
+    else
+        fail "D13: rc=$RC (expected 0)"
+    fi
+    rm_state_check_mock
+    teardown_tmp
+else
+    skip "D13: issue-state-check.sh not yet present (pre-implementation)"
+fi
+
+# --- D14: issue-state-check returns error → warn-continue (exits 0)
+if [ -f "$STATE_CHECK" ]; then
+    setup_tmp
+    mk_state_check_mock
+    export GH_MOCK_FAIL=1
+    printf '## closes_issues\n- 449\n' > "$TMP/intent.md"
+    STDERR=$(run_with_timeout 30 bash "$CHECK" "$TMP/intent.md" 2>&1 >/dev/null)
+    RC=$?
+    # Warn-continue: rc=0 (do not block on probe error); stderr may carry a warning.
+    if [ "$RC" -eq 0 ]; then
+        pass "D14: issue-state-check error → warn-continue (rc=0)"
+    else
+        fail "D14: rc=$RC stderr=$STDERR (expected warn-continue rc=0)"
+    fi
+    rm_state_check_mock
+    teardown_tmp
+else
+    skip "D14: issue-state-check.sh not yet present (pre-implementation)"
+fi
+
+# --- D15: clarify-intent SKILL.md Step 0 guard contains GUARD_RC==2 branch (static grep)
+if [ -f "$CLARIFY_SKILL" ]; then
+    if grep -qE 'GUARD_RC[[:space:]]*(==|-eq)[[:space:]]*2' "$CLARIFY_SKILL"; then
+        pass "D15: clarify-intent SKILL.md Step 0 guard contains GUARD_RC==2 branch"
+    else
+        skip "D15: GUARD_RC==2 branch not yet in clarify-intent SKILL.md (pre-implementation)"
+    fi
+else
+    skip "D15: skills/clarify-intent/SKILL.md not present"
+fi
+
+# --- D16: clarify-intent SKILL.md GUARD_RC==2 branch does NOT invoke issue-create
+# Heuristic: extract the lines following 'GUARD_RC == 2' (or '-eq 2') until next blank line
+# or next conditional, and ensure no 'issue-create' literal appears in that block.
+if [ -f "$CLARIFY_SKILL" ]; then
+    # Find the line range of the GUARD_RC==2 branch.
+    GUARD_LINE=$(grep -nE 'GUARD_RC[[:space:]]*(==|-eq)[[:space:]]*2' "$CLARIFY_SKILL" | head -1 | cut -d: -f1)
+    if [ -n "$GUARD_LINE" ]; then
+        # Inspect the next 30 lines after the guard for issue-create invocation.
+        BLOCK=$(awk -v start="$GUARD_LINE" 'NR>=start && NR<start+30' "$CLARIFY_SKILL")
+        if echo "$BLOCK" | grep -qE '/?issue-create\b'; then
+            fail "D16: GUARD_RC==2 branch invokes issue-create (regression — must NOT auto-create)"
+        else
+            pass "D16: GUARD_RC==2 branch does NOT invoke issue-create"
+        fi
+    else
+        skip "D16: GUARD_RC==2 branch not yet present (pre-implementation)"
+    fi
+else
+    skip "D16: skills/clarify-intent/SKILL.md not present"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

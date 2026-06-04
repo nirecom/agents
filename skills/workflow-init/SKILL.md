@@ -56,6 +56,7 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
 3. **Fetch issue**: `gh issue view <N> --json number,title,body,labels,state,createdAt`
    - Fails → `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort.
    - `CLOSED` → ask: reopen / pick different #N / continue as Path C.
+     **State-check for related issues (ISSUES[1+]).** For each N in ISSUES[1+], probe state via the helper (same invocation shape as (c) below). On `STATE=closed`, raise a single `AskUserQuestion` "Related issue #N is CLOSED. How to proceed?" with options "Reopen and continue" / "Remove from session" / "Abort" (Remove is allowed for related issues only — never for primary). On `STATE=error`, warn and continue (does NOT abort).
    - `OPEN` →
      (a) **Aggregate WIP check across all ISSUES.** For each issue N in `ISSUES` (primary first), call:
          `WIP_N=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check <N> 2>/dev/null)` and capture `WIP_RC_N=$?`.
@@ -83,6 +84,12 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
            `[workflow-init: wip-state check failed for #<N> (rc=$WIP_RC_N, out='$WIP_N') — proceeding as 'none' for that issue]`
            and treat that N as `none` in the classification above.
            (WIP detection is advisory; transient gh/auth failures must not block legitimate work.)
+     **(c) CLOSED detection (post-WIP).** For each N in ISSUES:
+     `if STATE=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-state-check.sh" "$N" 2>/dev/null); then :; else STATE=error; fi`
+     - Any `STATE=closed` → single `AskUserQuestion`: "Issue #N appears to be CLOSED (possibly merged by another session). How to proceed?"
+       - Primary CLOSED: options are "Reopen and continue" / "Abort" (emit `<<WORKFLOW_ABORTED_ISSUE_CLOSED: #N>>`). Do NOT offer "Remove".
+       - Related CLOSED: additionally offer "Remove from session".
+     - `STATE=error` → warn-and-continue (does NOT abort).
      (b) extract `labels[].name` → step 4.
 4. **Route**: `intent:clarified` ∈ labels → Path A; otherwise → Path B.
 5. **Write `<PLANS_DIR>/<session-id>-context.md`** (all Paths). Sections:
@@ -121,28 +128,7 @@ A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body):
 (none — capture at outline stage)
 ```
 `<title>` for the primary comes from Step 3's `gh issue view` result. For related issues (entries beyond `ISSUES[0]`), fetch the title via `gh issue view <M> --json title --jq .title`. If a title fetch fails, write `- #<M>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — the latter is the `detail-planner.md` Approved Scope gate. The `## Issues` section is the single source of truth for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`); no separate `## closes_issues` section is written.
-A1.5. **Related-issue label assignment + board-card parity.** For each issue in `ISSUES` (primary + related, idempotent):
-
-```bash
-for N in "${ISSUES[@]}"; do
-    # Label related issues with intent:clarified (primary already carries it).
-    if [[ "$N" != "${ISSUES[0]}" ]]; then
-        if ! gh issue edit "$N" --add-label "intent:clarified"; then
-            # Write an abort marker and stop — do NOT proceed to make-outline-plan.
-            # Re-running /workflow-init is safe — gh issue edit --add-label is idempotent.
-            : write "<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md"
-            exit 1
-        fi
-    fi
-    # Ensure every issue (primary + related) has a Projects v2 board card with Content Date.
-    # ensure-board-card.sh is idempotent — no-op when the card is already present.
-    # Covers out-of-band-created primaries and recovers from earlier silent failures.
-    bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" "$N" \
-        || echo "[workflow-init: ensure-board-card.sh failed for #$N (continuing)]"
-done
-```
-
-Label failure for any related issue is fail-closed (abort marker + abort workflow). Board-card failure is best-effort per-N (warn and continue).
+A1.5. **Related-issue label assignment + board-card parity.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with primary first, related issues as remaining args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. For every related issue the script runs `gh issue edit <N> --add-label "intent:clarified"` (fail-closed — on failure it writes the ABORT marker `<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` and exits 1, blocking make-outline-plan). For every issue including the primary it runs `ensure-board-card.sh` (best-effort per-N, warn-and-continue). Both `gh issue edit --add-label` and `ensure-board-card.sh` are idempotent — re-running /workflow-init is safe.
 
 A2. Emit (separate Bash calls):
 ```
