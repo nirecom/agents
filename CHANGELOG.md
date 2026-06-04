@@ -71,4 +71,8 @@ Changes: Fixed: ending a worktree session without files to back up (or choosing 
 
 ### FEATURE: PR #764 (2026-06-05)
 Background: feat(#756): session-dedup — CLOSED issue detection + issue-create survey expansion
-Changes: Added CLOSED-issue detection to workflow-init, clarify-intent, and issue-create to prevent duplicate work when parallel sessions merge the same issue simultaneously.;`issue-create` duplicate survey now scans up to 50 keyword matches plus all open issues from the past 30 days, reducing duplicate ticket creation in multi-session setups.
+Changes: Added CLOSED-issue detection to workflow-init, clarify-intent, and issue-create to prevent duplicate work when parallel sessions merge the same issue simultaneously.;`issue-create` duplicate survey now scans up to 50 keyword matches plus all open issues from the past 30 days, reducing duplicate ticket creation in multi-session setups.
+
+### FEATURE: PR #766 (2026-06-05)
+Background: fix: 3 workflow-blocking hook false-positives (#670, #686, #659)
+Changes: Fixed false PLAN_LANG=japanese violation: the `(none — pending issue creation or NON_GITHUB)` placeholder written by Path C clarify-intent is now exempted from English-run detection.;Fixed `/commit-push` pre-flight incorrectly blocking when the issue was already closed before Phase 1 ran (e.g. via PR `closes #N` auto-close).;Fixed `gh issue create` from the main worktree being blocked by `enforce-worktree` when the issue body (as a `BODY='...'` shell variable) contained write-pattern tokens like `rm` or `mv`.
