@@ -63,4 +63,8 @@ Changes: Fixed 5 `enforce-worktree` allowlist gaps that blocked `/worktree-end` 
 
 ### FEATURE: PR #752 (2026-06-04)
 Background: feat(#741): size-gate — SKILL.md 200-line HARD block, code HARD block, file-split rule
-Changes: bin/review-skill-size and bin/review-code-size now exit 1 (block the workflow) when HARD size limits are exceeded in diff mode (>200 lines for SKILL.md, >500 lines for code files). Previously both checks were advisory (always exit 0).;New rule rules/coding/file-split.md documents the two file-split patterns: code files use a sibling folder + dispatch shim; SKILL.md files extract procedures to scripts/ or bin/ while keeping SKILL.md as the prompt entrypoint.
+Changes: bin/review-skill-size and bin/review-code-size now exit 1 (block the workflow) when HARD size limits are exceeded in diff mode (>200 lines for SKILL.md, >500 lines for code files). Previously both checks were advisory (always exit 0).;New rule rules/coding/file-split.md documents the two file-split patterns: code files use a sibling folder + dispatch shim; SKILL.md files extract procedures to scripts/ or bin/ while keeping SKILL.md as the prompt entrypoint.
+
+### FEATURE: PR #762 (2026-06-04)
+Background: fix(#634): guard capture-env.sh against BACKUP_DIR=(none) and missing dir
+Changes: Fixed: ending a worktree session without files to back up (or choosing "discard") no longer silently drops `docs/history.md` and `CHANGELOG.md` entries (#634)
