@@ -59,4 +59,18 @@ function stripInlineBodyArg(str) {
   }
 }
 
-module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg };
+// Strip values of shell variable assignments: IDENTIFIER='...' and IDENTIFIER="...".
+// Anchored to line-start or after whitespace/command-separator to avoid partial matches.
+// keep in sync with bash-write-patterns.js classify() Group A re-strip block
+function stripShellVarAssignment(str) {
+  if (!str || typeof str !== "string") return str;
+  try {
+    return str
+      .replace(/(^|[\s;|&])([A-Za-z_][A-Za-z0-9_]*=)'[^']*'/gms, "$1$2''")
+      .replace(/(^|[\s;|&])([A-Za-z_][A-Za-z0-9_]*=)"(?:[^"\\]|\\.)*"/gm, '$1$2""');
+  } catch (e) {
+    return str;
+  }
+}
+
+module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment };

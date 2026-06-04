@@ -766,6 +766,17 @@ else
       if (v.length !== 0) { process.stderr.write('expected 0, got ' + v.length + '\n'); process.exit(1); }
     " 2>&1)"
     if [ $? -eq 0 ]; then pass "T56: issue ref line - #N: (empty title) → 0 violations (japanese)"; else fail "T56: $_t56_out"; fi
+
+    # T57: NON_GITHUB sentinel line → 0 violations (#670)
+    # The sentinel uses an em-dash (U+2014), NOT ASCII hyphen-minus.
+    # Current source has no exemption for this line → test is RED.
+    _t57_out="$(node -e "
+      const { lintPlanLang } = require('$_AGENTS_DIR_NODE/hooks/lib/lint-plan-lang');
+      const sentinel = '(none — pending issue creation or NON_GITHUB)';
+      const v = lintPlanLang(sentinel, 'japanese');
+      if (v.length !== 0) { process.stderr.write('expected 0 violations for NON_GITHUB sentinel, got ' + v.length + ': ' + JSON.stringify(v) + '\n'); process.exit(1); }
+    " 2>&1)"
+    if [ $? -eq 0 ]; then pass "T57: NON_GITHUB sentinel line → 0 violations (japanese, #670)"; else fail "T57: NON_GITHUB sentinel exemption missing: $_t57_out"; fi
 fi
 
 # ============================================================================

@@ -2,6 +2,8 @@
 const { hasCJK } = require("./detect-cjk");
 const { classifyPolicy } = require("./lang-config");
 const ENGLISH_RUN_RE = /(?:\b[A-Za-z]{2,}\b[^\S\n]+){3,}\b[A-Za-z]{2,}\b/;
+// keep in sync with skills/clarify-intent/SKILL.md Path C
+const SENTINEL_PATH_C_NONE = "(none — pending issue creation or NON_GITHUB)";
 
 function stripCodeFences(text) {
   return text
@@ -17,6 +19,7 @@ function lintPlanLang(content, policy) {
   stripped.split(/\r?\n/).forEach((line, idx) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) return;
+    if (trimmed === SENTINEL_PATH_C_NONE) return;
     const lineToCheck = trimmed.replace(/^(-\s*)#\d+:.*$/, "$1");
     if (policy === "english" && hasCJK(line)) {
       violations.push({ lineNumber: idx + 1, line: trimmed, reason: "CJK in english-policy file" });
