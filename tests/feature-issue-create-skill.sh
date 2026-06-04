@@ -1081,6 +1081,48 @@ fi
 unset WORKFLOW_PLANS_DIR
 teardown_mock
 
+
+# ============================================================================
+# G-series (session-dedup feature) — Phase 2 survey strategy in SKILL.md.
+#
+# G1: Phase 2 contains `--limit 50` for Pass 1 (static grep)
+# G2: Phase 2 contains `--paginate` in Pass 2 (static grep)
+# G3: Phase 2 Pass 2 does NOT have `--limit` (uses --paginate instead)
+# ============================================================================
+
+skip() { echo "SKIP: $1"; }
+
+if [ ! -f "$SKILL_MD" ]; then
+    fail "G-pre: skills/issue-create/SKILL.md not found"
+else
+    # G1: --limit 50 present for Pass 1.
+    if grep -qE -- '--limit[[:space:]]+50\b' "$SKILL_MD"; then
+        pass "G1: SKILL.md Phase 2 Pass 1 includes '--limit 50'"
+    else
+        skip "G1: '--limit 50' not yet in SKILL.md (pre-implementation)"
+    fi
+
+    # G2: --paginate present in Pass 2.
+    if grep -q -- '--paginate' "$SKILL_MD"; then
+        pass "G2: SKILL.md Phase 2 Pass 2 includes '--paginate'"
+    else
+        skip "G2: '--paginate' not yet in SKILL.md (pre-implementation)"
+    fi
+
+    # G3: Pass 2 (--paginate) line does NOT also carry --limit.
+    # Heuristic: every line that contains --paginate must NOT contain --limit.
+    if grep -q -- '--paginate' "$SKILL_MD"; then
+        BAD=$(grep -- '--paginate' "$SKILL_MD" | grep -c -- '--limit' || true)
+        if [ "${BAD:-0}" -eq 0 ]; then
+            pass "G3: Pass 2 lines with '--paginate' do NOT carry '--limit'"
+        else
+            fail "G3: $BAD line(s) carry both --paginate and --limit (must use --paginate alone)"
+        fi
+    else
+        skip "G3: '--paginate' not yet present, ordering check skipped (pre-implementation)"
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------

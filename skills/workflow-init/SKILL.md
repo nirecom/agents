@@ -56,6 +56,7 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
 3. **Fetch issue**: `gh issue view <N> --json number,title,body,labels,state,createdAt`
    - Fails → `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort.
    - `CLOSED` → ask: reopen / pick different #N / continue as Path C.
+     **State-check for related issues (ISSUES[1+]).** For each N in ISSUES[1+], probe state via the helper (same invocation shape as (c) below). On `STATE=closed`, raise a single `AskUserQuestion` "Related issue #N is CLOSED. How to proceed?" with options "Reopen and continue" / "Remove from session" / "Abort" (Remove is allowed for related issues only — never for primary). On `STATE=error`, warn and continue (does NOT abort).
    - `OPEN` →
      (a) **Aggregate WIP check across all ISSUES.** For each issue N in `ISSUES` (primary first), call:
          `WIP_N=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check <N> 2>/dev/null)` and capture `WIP_RC_N=$?`.
@@ -83,6 +84,12 @@ When `NON_GITHUB=1`: skip steps 1–4 (issue detection / `gh issue view` / route
            `[workflow-init: wip-state check failed for #<N> (rc=$WIP_RC_N, out='$WIP_N') — proceeding as 'none' for that issue]`
            and treat that N as `none` in the classification above.
            (WIP detection is advisory; transient gh/auth failures must not block legitimate work.)
+     **(c) CLOSED detection (post-WIP).** For each N in ISSUES:
+     `if STATE=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-state-check.sh" "$N" 2>/dev/null); then :; else STATE=error; fi`
+     - Any `STATE=closed` → single `AskUserQuestion`: "Issue #N appears to be CLOSED (possibly merged by another session). How to proceed?"
+       - Primary CLOSED: options are "Reopen and continue" / "Abort" (emit `<<WORKFLOW_ABORTED_ISSUE_CLOSED: #N>>`). Do NOT offer "Remove".
+       - Related CLOSED: additionally offer "Remove from session".
+     - `STATE=error` → warn-and-continue (does NOT abort).
      (b) extract `labels[].name` → step 4.
 4. **Route**: `intent:clarified` ∈ labels → Path A; otherwise → Path B.
 5. **Write `<PLANS_DIR>/<session-id>-context.md`** (all Paths). Sections:
