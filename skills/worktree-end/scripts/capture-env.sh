@@ -97,13 +97,28 @@ fi
 BRANCH="$BRANCH_NAME"
 WORKTREE_PATH="$WORKTREE"
 CREATED_DATE="$(date -u +%Y-%m-%d)"
-BACKUP_MANIFEST_PATH="$BACKUP_DIR/manifest.json"
+# Fallback when BACKUP_DIR is the legacy '(none)' sentinel or points to a non-existent dir (discard branch skips Pass 2 — see SKILL.md Step 5, issue #634).
+BACKUP_DIR_VALID=0
+if [[ "$BACKUP_DIR" != "(none)" && -d "$BACKUP_DIR" ]]; then
+  BACKUP_DIR_VALID=1
+fi
+if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
+  BACKUP_MANIFEST_PATH="$BACKUP_DIR/manifest.json"
+else
+  BACKUP_MANIFEST_PATH="(none)"
+fi
 
 # Step 5: Copy WORKTREE_NOTES.md to backup dir (if present).
 NOTES_BACKUP_PATH=""
 if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
-  if cp -p "$WORKTREE/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"; then
+  if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
+    cp -p "$WORKTREE/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"
     NOTES_BACKUP_PATH="$BACKUP_DIR/WORKTREE_NOTES.md"
+  else
+    NOTES_BACKUP_DIR="$PLANS_DIR/${SESSION_ID}-notes-backup"
+    mkdir -p "$NOTES_BACKUP_DIR"
+    cp -p "$WORKTREE/WORKTREE_NOTES.md" "$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
+    NOTES_BACKUP_PATH="$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
   fi
 fi
 

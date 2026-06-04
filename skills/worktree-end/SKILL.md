@@ -70,7 +70,7 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
    BACKUP_MANIFEST_PATH="<artifact_path from worker>"
    ```
 
-   If user chose "discard" and no files were copied, set `BACKUP_MANIFEST_PATH=(none)`.
+   If user chose "discard" or no files were copied: set `BACKUP_MANIFEST_PATH=(none)`. `BACKUP_DIR` may either be left as the default path (Pass 2 was skipped so it points to a directory that does not exist) or explicitly set to the legacy sentinel `(none)`. `capture-env.sh` accepts both forms and falls back to `$PLANS_DIR/<session-id>-notes-backup/` for the WORKTREE_NOTES.md copy (issue #634).
    If Docker containers reference the worktree path, stop them and restart from the main path.
 
 ### Step 5.5
