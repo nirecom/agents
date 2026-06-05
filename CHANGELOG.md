@@ -75,4 +75,8 @@ Changes: Added CLOSED-issue detection to workflow-init, clarify-intent, and issu
 
 ### FEATURE: PR #766 (2026-06-05)
 Background: fix: 3 workflow-blocking hook false-positives (#670, #686, #659)
-Changes: Fixed false PLAN_LANG=japanese violation: the `(none — pending issue creation or NON_GITHUB)` placeholder written by Path C clarify-intent is now exempted from English-run detection.;Fixed `/commit-push` pre-flight incorrectly blocking when the issue was already closed before Phase 1 ran (e.g. via PR `closes #N` auto-close).;Fixed `gh issue create` from the main worktree being blocked by `enforce-worktree` when the issue body (as a `BODY='...'` shell variable) contained write-pattern tokens like `rm` or `mv`.
+Changes: Fixed false PLAN_LANG=japanese violation: the `(none — pending issue creation or NON_GITHUB)` placeholder written by Path C clarify-intent is now exempted from English-run detection.;Fixed `/commit-push` pre-flight incorrectly blocking when the issue was already closed before Phase 1 ran (e.g. via PR `closes #N` auto-close).;Fixed `gh issue create` from the main worktree being blocked by `enforce-worktree` when the issue body (as a `BODY='...'` shell variable) contained write-pattern tokens like `rm` or `mv`.
+
+### FEATURE: PR #768 (2026-06-05)
+Background: fix(#765): remove vestigial COMPOSE_DOC_APPEND_SKILL=1 prefix from doc-append-worker
+Changes: category: BUGFIX | subject: Fix unnecessary ENFORCE_WORKTREE_OFF prompts during doc-append-entry compose | background: doc-append-worker triggered spurious ENFORCE_WORKTREE_OFF requests due to a vestigial env-var prefix | changes: Removed the prefix; doc-append-worker now uses the bash-script form that enforce-worktree.js already allows without any env-var bypass
