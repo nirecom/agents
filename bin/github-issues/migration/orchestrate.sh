@@ -67,8 +67,17 @@ history_entries_total() {
 
 todo_entries_total() {
   # TODO_FILE must be in scope.
+  # Counts only non-empty sections — a section is non-empty if it has at least
+  # one non-blank line beyond the ## header itself.
   if [ -f "$TODO_FILE" ]; then
-    awk '/^## /{n++} END{print n+0}' "$TODO_FILE" 2>/dev/null || echo 0
+    awk '
+      /^## / {
+        if (n > 0 && has_content) non_empty++
+        n++; has_content=0; next
+      }
+      n > 0 && /[^[:space:]]/ && !/^## / { has_content=1 }
+      END { if (n > 0 && has_content) non_empty++; print non_empty+0 }
+    ' "$TODO_FILE" 2>/dev/null || echo 0
   else
     echo 0
   fi
