@@ -99,4 +99,8 @@ Changes: EM Supervisor Layer 1: passive observation layer for skills and agents 
 
 ### FEATURE: PR #773 (2026-06-06)
 Background: fix(#683): skip header-only sections in migrate-todo.sh
-Changes: `migrate-repo` no longer creates spurious GitHub issues for `docs/todo.md` sections that contain only a section header with no task lines. Empty sections are now skipped with a `SKIP: empty section` log line, and the migration summary reports how many sections were skipped vs created.
+Changes: `migrate-repo` no longer creates spurious GitHub issues for `docs/todo.md` sections that contain only a section header with no task lines. Empty sections are now skipped with a `SKIP: empty section` log line, and the migration summary reports how many sections were skipped vs created.
+
+### FEATURE: PR #775 (2026-06-06)
+Background: feat(#771): abolish Final Report renderer; LLM-direct emission + 10-heading stop-hook guard
+Changes: Final Report (/session-close Step 4) now requires all 10 section headings in your reply; missing headings or unsubstituted `<TOKEN>` placeholders block the turn and re-prompt with a specific list.
