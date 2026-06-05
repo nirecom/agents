@@ -95,4 +95,8 @@ Changes: `issue-close-finalize` now auto-closes meta/group parent issues when al
 
 ### FEATURE: PR #755 (2026-06-06)
 Background: feat(#228): add EM Supervisor Layer 1 structural hook checks + supervisor-state.json schema
-Changes: EM Supervisor Layer 1: passive observation layer for skills and agents to report findings (categories: intent/outline/detail/workflow/code/test/security/performance/env/other; severity: error/warning/notice); findings written atomically to per-session supervisor-state.json via bin/supervisor-report CLI; no hooks, no workflow intervention in S-1.
+Changes: EM Supervisor Layer 1: passive observation layer for skills and agents to report findings (categories: intent/outline/detail/workflow/code/test/security/performance/env/other; severity: error/warning/notice); findings written atomically to per-session supervisor-state.json via bin/supervisor-report CLI; no hooks, no workflow intervention in S-1.
+
+### FEATURE: PR #773 (2026-06-06)
+Background: fix(#683): skip header-only sections in migrate-todo.sh
+Changes: `migrate-repo` no longer creates spurious GitHub issues for `docs/todo.md` sections that contain only a section header with no task lines. Empty sections are now skipped with a `SKIP: empty section` log line, and the migration summary reports how many sections were skipped vs created.
