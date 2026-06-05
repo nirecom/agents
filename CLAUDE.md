@@ -88,3 +88,4 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
 - For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
 - For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
+- EM Supervisor reporting (passive observation from skills/agents): see [rules/supervisor-reporting.md](rules/supervisor-reporting.md).

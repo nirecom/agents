@@ -5,7 +5,7 @@
 # Tests for issue #228 — supervisor-state schema module unit tests.
 #
 # Verifies the JSON Schema + validator behavior for supervisor-state.json:
-# createEmptyState, validate, validateFinding, LAYER1_CHECKS.
+# createEmptyState, validate, validateFinding, CATEGORIES, SEVERITY_VALUES.
 #
 # RED: SKIPs all cases while source module is missing.
 
@@ -70,12 +70,12 @@ console.log('OK');
 
 # --- S2 ----------------------------------------------------------------------
 run_s2() {
-    require_source "$SCHEMA_MODULE" "S2: validate(state) ok for valid state + finding" || return
+    require_source "$SCHEMA_MODULE" "S2: validate(state) ok for valid finding" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-s2');
-st.layer1.findings.push({ check: 'plan_artifact', status: 'warn', detail: 'd' });
+st.layer1.findings.push({ categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 'test' });
 const r = s.validate(st);
 if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
 if (!Array.isArray(r.errors) || r.errors.length !== 0) { console.error('errors not empty'); process.exit(3); }
@@ -83,9 +83,9 @@ console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S2: validate(state) ok for valid state + finding"
+        pass "S2: validate(state) ok for valid finding"
     else
-        fail "S2: validate(state) ok for valid state + finding (rc=$rc, out=$out)"
+        fail "S2: validate(state) ok for valid finding (rc=$rc, out=$out)"
     fi
 }
 
@@ -111,12 +111,12 @@ console.log('OK');
 
 # --- S4 ----------------------------------------------------------------------
 run_s4() {
-    require_source "$SCHEMA_MODULE" "S4: validate detects invalid status value" || return
+    require_source "$SCHEMA_MODULE" "S4: validate detects invalid severity value" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-s4');
-st.layer1.findings.push({ check: 'plan_artifact', status: 'invalid', detail: 'd' });
+st.layer1.findings.push({ categories: ['workflow'], severity: 'invalid', detail: 'd' });
 const r = s.validate(st);
 if (r.ok !== false) { console.error('expected ok=false'); process.exit(2); }
 if (!Array.isArray(r.errors) || r.errors.length === 0) { console.error('errors empty'); process.exit(3); }
@@ -124,47 +124,47 @@ console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S4: validate detects invalid status value"
+        pass "S4: validate detects invalid severity value"
     else
-        fail "S4: validate detects invalid status value (rc=$rc, out=$out)"
+        fail "S4: validate detects invalid severity value (rc=$rc, out=$out)"
     fi
 }
 
 # --- S5 ----------------------------------------------------------------------
 run_s5() {
-    require_source "$SCHEMA_MODULE" "S5: validate detects check enum violation" || return
+    require_source "$SCHEMA_MODULE" "S5: validate detects invalid category" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-s5');
-st.layer1.findings.push({ check: 'not_a_real_check', status: 'warn', detail: 'd' });
+st.layer1.findings.push({ categories: ['not_a_real_category'], severity: 'warning', detail: 'd' });
 const r = s.validate(st);
 if (r.ok !== false) { console.error('expected ok=false'); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S5: validate detects check enum violation"
+        pass "S5: validate detects invalid category"
     else
-        fail "S5: validate detects check enum violation (rc=$rc, out=$out)"
+        fail "S5: validate detects invalid category (rc=$rc, out=$out)"
     fi
 }
 
 # --- S6 ----------------------------------------------------------------------
 run_s6() {
-    require_source "$SCHEMA_MODULE" "S6: validateFinding ok for valid finding" || return
+    require_source "$SCHEMA_MODULE" "S6: validateFinding ok for multi-category finding" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
-const r = s.validateFinding({ check: 'plan_artifact', status: 'warn', detail: 'test' });
+const r = s.validateFinding({ categories: ['intent','workflow'], severity: 'error', detail: 'test', reporter: 'write-code' });
 if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S6: validateFinding ok for valid finding"
+        pass "S6: validateFinding ok for multi-category finding"
     else
-        fail "S6: validateFinding ok for valid finding (rc=$rc, out=$out)"
+        fail "S6: validateFinding ok for multi-category finding (rc=$rc, out=$out)"
     fi
 }
 
@@ -191,25 +191,24 @@ console.log('OK');
 
 # --- S8 ----------------------------------------------------------------------
 run_s8() {
-    require_source "$SCHEMA_MODULE" "S8: LAYER1_CHECKS has exactly 4 elements" || return
+    require_source "$SCHEMA_MODULE" "S8: CATEGORIES has exactly 10 elements" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
-const c = s.LAYER1_CHECKS;
+const c = s.CATEGORIES;
 if (!Array.isArray(c)) { console.error('not array'); process.exit(2); }
-if (c.length !== 4) { console.error('expected 4, got '+c.length); process.exit(3); }
-const expected = ['plan_artifact','scope_keyword','non_goal_keyword','sentinel'];
+if (c.length !== 10) { console.error('expected 10, got '+c.length); process.exit(3); }
+const expected = ['intent','outline','detail','workflow','code','test','security','performance','env','other'];
 for (const e of expected) {
   if (!c.includes(e)) { console.error('missing '+e); process.exit(4); }
 }
-if (c.includes('schema_validation')) { console.error('schema_validation should not be present'); process.exit(5); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S8: LAYER1_CHECKS has exactly 4 elements"
+        pass "S8: CATEGORIES has exactly 10 elements"
     else
-        fail "S8: LAYER1_CHECKS has exactly 4 elements (rc=$rc, out=$out)"
+        fail "S8: CATEGORIES has exactly 10 elements (rc=$rc, out=$out)"
     fi
 }
 

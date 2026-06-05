@@ -41,7 +41,13 @@ function appendFinding(sessionId, finding) {
   const findings = state.layer1.findings;
   if (findings.length > 0) {
     const last = findings[findings.length - 1];
-    if (last.check === finding.check && last.status === finding.status && last.detail === finding.detail) {
+    const catsKey = (f) => [...(f.categories || [])].sort().join(",");
+    if (
+      catsKey(last) === catsKey(finding) &&
+      last.severity === finding.severity &&
+      last.detail === finding.detail &&
+      last.reporter === finding.reporter
+    ) {
       return true;
     }
   }

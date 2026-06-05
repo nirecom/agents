@@ -2,11 +2,15 @@
 
 const SCHEMA_VERSION = 1;
 
-const LAYER1_CHECKS = ["plan_artifact", "scope_keyword", "non_goal_keyword", "sentinel"];
+const CATEGORIES = [
+  "intent", "outline", "detail",
+  "workflow", "code", "test", "security",
+  "performance", "env", "other",
+];
 
-const STATUS_VALUES = ["pass", "warn", "fail"];
+const SEVERITY_VALUES = ["error", "warning", "notice"];
 
-const SEVERITY_RANK = { pass: 0, warn: 1, fail: 2 };
+const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
 
 function createEmptyState(sessionId) {
   const now = new Date().toISOString();
@@ -24,9 +28,18 @@ function createEmptyState(sessionId) {
 function validateFinding(f) {
   const errors = [];
   if (!f || typeof f !== "object") return { ok: false, errors: ["finding must be an object"] };
-  if (!LAYER1_CHECKS.includes(f.check)) errors.push(`invalid check: ${f.check}`);
-  if (!STATUS_VALUES.includes(f.status)) errors.push(`invalid status: ${f.status}`);
+  if (!Array.isArray(f.categories) || f.categories.length === 0) {
+    errors.push("categories must be a non-empty array");
+  } else {
+    for (const c of f.categories) {
+      if (!CATEGORIES.includes(c)) errors.push(`invalid category: ${c}`);
+    }
+  }
+  if (!SEVERITY_VALUES.includes(f.severity)) errors.push(`invalid severity: ${f.severity}`);
   if (typeof f.detail !== "string") errors.push("detail must be a string");
+  if (f.reporter !== undefined && typeof f.reporter !== "string") {
+    errors.push("reporter must be a string");
+  }
   return { ok: errors.length === 0, errors };
 }
 
@@ -60,8 +73,8 @@ function validate(obj) {
 
 module.exports = {
   SCHEMA_VERSION,
-  LAYER1_CHECKS,
-  STATUS_VALUES,
+  CATEGORIES,
+  SEVERITY_VALUES,
   SEVERITY_RANK,
   createEmptyState,
   validate,
