@@ -45,6 +45,7 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
   as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
+- **Upstream conflict** — apply `skills/_shared/priority-hierarchy.md` before emitting any concern. At detail stage both `intent.md` and `outline.md` are upstream-approved; concerns that would require reopening an approved decision must be suppressed (or downgraded to LOW under `## Accepted Tradeoffs`).
 
 ## Severity Tagging
 
