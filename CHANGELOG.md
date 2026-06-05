@@ -91,4 +91,8 @@ Changes: `worktree-end` Step 6h now writes both `docs/history.md` and `CHANGELOG
 
 ### FEATURE: PR #770 (2026-06-06)
 Background: feat(#638,#722): admin_close_path + meta cascade + Group: prefix enforcement
-Changes: `issue-close-finalize` now auto-closes meta/group parent issues when all sub-issues are done — no PR or Phase 1 sentinel required (admin_close_path route).
+Changes: `issue-close-finalize` now auto-closes meta/group parent issues when all sub-issues are done — no PR or Phase 1 sentinel required (admin_close_path route).
+
+### FEATURE: PR #755 (2026-06-06)
+Background: feat(#228): add EM Supervisor Layer 1 structural hook checks + supervisor-state.json schema
+Changes: EM Supervisor Layer 1: passive observation layer for skills and agents to report findings (categories: intent/outline/detail/workflow/code/test/security/performance/env/other; severity: error/warning/notice); findings written atomically to per-session supervisor-state.json via bin/supervisor-report CLI; no hooks, no workflow intervention in S-1.
