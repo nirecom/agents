@@ -105,6 +105,7 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - Follow `rules/core-principles.md`.
 - Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing outline-draft artifacts under <PLANS_DIR> (default ~/.workflow-plans/, resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - The `Cross-component risks:` field is mandatory in every approach. Populate it by examining: (1) component contract changes — where two components interact after this approach is applied, does the interface/args/return type contract need updating?; (2) dependency direction — does this approach introduce upstream-depends-on-downstream violations?; (3) responsibility coverage — is every in-scope area owned by exactly one component?
+- Apply `skills/_shared/priority-hierarchy.md` before accepting reviewer concerns. At outline stage only `intent.md` is upstream-approved; concerns that would contradict an approved intent decision must be rejected with the typed disposition `reject: contradicts approved intent`.
 
 ## Mandatory sections (do not write)
 
@@ -148,6 +149,8 @@ On every MISSING_ALTERNATIVE followup turn, end your reply with exactly:
     1. <reviewer concern #1>: <accept and revise | reject: <reason> | defer to next round>
     2. <reviewer concern #2>: ...
     <!-- end-planner-response -->
+
+The `reject: <reason>` disposition includes the typed sub-form `reject: contradicts approved intent` — use it when a concern contradicts an upstream-approved decision; see `skills/_shared/priority-hierarchy.md`.
 
 One numbered line per reviewer concern, same order as the raw codex output.
 The orchestrator copies this block verbatim into `<session-id>-outline-concerns-log.md`
