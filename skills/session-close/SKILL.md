@@ -5,9 +5,10 @@ user-invocable: true
 ---
 
 Session close orchestrator. Drives `/issue-close-finalize` (when applicable),
-collects the outcome JSON written by Step L, and renders the Final Report via
-`bin/worktree-final-report.js`. Replaces the legacy "Step 7" emit inside
-`/worktree-end` so the Final Report reflects every terminal action.
+collects the outcome JSON written by Step L, and emits the Final Report by
+substituting the skeleton from `hooks/lib/final-report-schema.renderSkeleton`.
+Replaces the legacy "Step 7" emit inside `/worktree-end` so the Final Report
+reflects every terminal action.
 
 ## Pre-flight
 
@@ -100,35 +101,35 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ```
 
-## Step 4 — Render Final Report
+## Step 4 — Emit Final Report directly into assistant text
 
-```bash
-ENV_FILE="<PLANS_DIR>/<session-id>-final-report-env.json"
-OUTCOME_FILE="<PLANS_DIR>/<session-id>-issue-close-outcome.json"
-NOTES_PATH="$(node -e "var fs=require('fs'); try { var j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.stdout.write(j.NOTES_BACKUP_PATH||''); } catch(e) { process.stdout.write(''); }" "$ENV_FILE")"
-OUTPUT="$(node "$AGENTS_CONFIG_DIR/bin/worktree-final-report.js" \
-  "<PLANS_DIR>/<session-id>-intent.md" \
-  "$NOTES_PATH" \
-  "<session-id>" \
-  --env-file "$ENV_FILE" \
-  --outcome-file "$OUTCOME_FILE" 2>&1)"
-EXIT_CODE=$?
-SENTINEL='<<WORKFLOW_MARK_STEP_final_report_complete>>'
-if [ $EXIT_CODE -eq 0 ] && echo "$OUTPUT" | grep -qF "$SENTINEL"; then
-  echo "$OUTPUT" | grep -vF "$SENTINEL"
-else
-  echo "WARNING: Final Report renderer failed or sentinel missing (exit=$EXIT_CODE)" >&2
-  echo "$OUTPUT"
-  echo "Manual fallback: review env JSON at $ENV_FILE and outcome JSON at $OUTCOME_FILE"
-fi
-```
+Read four input files via the Read tool:
+- `<PLANS_DIR>/<session-id>-final-report-env.json`
+- `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
+- `<PLANS_DIR>/<session-id>-intent.md`
+- The WORKTREE_NOTES.md backup path from the `NOTES_BACKUP_PATH` field in the env JSON
 
-Paste the renderer output verbatim into your response (exclude the sentinel line).
-`stop-final-report-guard.js` validates completion via two checks: (a) the renderer
-stamps `reported: true` into the env file after a successful stdout emission, and
-(b) at least one assistant text message in the transcript contains the heading
-`## Final Report —` (prevents the renderer Bash tool result from being mistaken
-for a verbatim paste — issue #700). The hook blocks if either condition is unmet.
+Generate the skeleton (run this Bash command):
+  node -e "process.stdout.write(require(process.env.AGENTS_CONFIG_DIR + '/hooks/lib/final-report-schema').renderSkeleton('<session-id>'))"
+(`<session-id>` must match `^[A-Za-z0-9_-]+$` — abort if it does not)
+
+Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read:
+- `<PR_NUMBER>`, `<PR_TITLE>`, `<PR_URL>`, `<PR_STATE>` → env JSON fields (use `(none)` when empty)
+- `<BRANCH>`, `<WORKTREE_PATH>`, `<CREATED_DATE>`, `<BACKUP_MANIFEST_PATH>`, `<BRANCH_DELETED>` → env JSON fields (use `(none)` when empty)
+- `<CLOSED_ISSUES_LIST>` → parse `closes_issues` from intent.md; render as `- #N` lines or `- (none)`
+- `<CLOSED_ISSUE_OUTCOMES>` → one line per issue from outcome JSON `issues[]`: `- #N: <state> (history: <historyEntry>, closed: <issueClosed>, sentinels: <sentinelsPosted>, wip: <wipCleared>)`; when outcome JSON missing or `issues` empty: `- (outcome data not found — investigate)`
+- `<CC_RESTART_REQUIRED_DECISION>` → `required (<CC_RESTART_REASON>)` when `CC_RESTART_REQUIRED` is `required`, otherwise `not_required`
+- `<VSCODE_RELOAD_REQUIRED_DECISION>` → same pattern using `VSCODE_RELOAD_REQUIRED` / `VSCODE_RELOAD_REASON`
+- `<INSTALLER_RERUN_REQUIRED_DECISION>` → same pattern using `INSTALLER_RERUN_REQUIRED` / `INSTALLER_RERUN_REASON`
+- `<OS_REBOOT_REQUIRED_DECISION>` → same pattern using `OS_REBOOT_REQUIRED` / `OS_REBOOT_REASON`
+- `<BUGS_FOUND>`, `<RELATED_TASKS>`, `<NEXT_TASKS>` → extract the matching `##` section content from WORKTREE_NOTES.md backup; or `- (none)` when file absent
+
+Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
+
+After emitting, mark completion:
+  echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
+
+`stop-final-report-guard.js` validates completion by checking all 10 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
 
 ## Rules
 
