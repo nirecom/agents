@@ -87,4 +87,8 @@ Changes: Planning loop reviewers can no longer force the planner to override an 
 
 ### FEATURE: PR #732 (2026-06-06)
 Background: feat(#690,#692): consolidate Step 6h docs-write; fix classify() git false-positive
-Changes: `worktree-end` Step 6h now writes both `docs/history.md` and `CHANGELOG.md` from `WORKTREE_NOTES.md` in a single step; Phase 2 Step E (synthesis fallback) removed from the issue-close workflow.;Fixed false-positive in the worktree write guard: `grep`/`rg`/`echo`/`printf` commands containing quoted strings like `"git push"` or `"git commit"` are no longer blocked.
+Changes: `worktree-end` Step 6h now writes both `docs/history.md` and `CHANGELOG.md` from `WORKTREE_NOTES.md` in a single step; Phase 2 Step E (synthesis fallback) removed from the issue-close workflow.;Fixed false-positive in the worktree write guard: `grep`/`rg`/`echo`/`printf` commands containing quoted strings like `"git push"` or `"git commit"` are no longer blocked.
+
+### FEATURE: PR #770 (2026-06-06)
+Background: feat(#638,#722): admin_close_path + meta cascade + Group: prefix enforcement
+Changes: `issue-close-finalize` now auto-closes meta/group parent issues when all sub-issues are done — no PR or Phase 1 sentinel required (admin_close_path route).
