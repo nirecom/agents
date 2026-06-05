@@ -103,10 +103,10 @@ EOF
 }
 
 run_cli() {
-    # Run CLI with COMPOSE_DOC_APPEND_SKILL=1 in the given repo dir
+    # Run CLI in the given repo dir.
     # Additional args: --notes, --branch, --pr, etc.
     local repo="$1"; shift
-    (cd "$repo" && COMPOSE_DOC_APPEND_SKILL=1 run_with_timeout 30 bash "$CLI" "$@")
+    (cd "$repo" && run_with_timeout 30 bash "$CLI" "$@")
 }
 
 commit_count_since_init() {
