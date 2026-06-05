@@ -1,14 +1,14 @@
 #!/bin/bash
 # tests/feature-worktree-end-step55-promotion.sh
-# Tests: bin/worktree-notes-triage.js, bin/worktree-final-report.js
+# Tests: bin/worktree-notes-triage.js
 # Tags: worktree, end, cleanup, hook, bin
 #
 # Worktree-end Step 5.5 promotion feature.
 #
 # Test-first: the triage CLI does not yet exist. F1–F7 SKIP-gracefully when the
-# binary is absent. R1 (golden report) runs against the existing
-# bin/worktree-final-report.js, which already produces the golden bytes — the
-# refactor must preserve them.
+# binary is absent. R1 has been replaced post-#771: the renderer (bin/worktree-
+# final-report.js) is abolished, so R1 now asserts its absence rather than
+# golden output.
 
 set -u
 
@@ -19,11 +19,9 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 TRIAGE_BIN="${_AGENTS_DIR_NODE}/bin/worktree-notes-triage.js"
-FINAL_REPORT_BIN="${_AGENTS_DIR_NODE}/bin/worktree-final-report.js"
 LIB_JS="${_AGENTS_DIR_NODE}/hooks/lib/worktree-notes-sections.js"
 
 FIXTURE_NOTES="${_AGENTS_DIR_NODE}/tests/fixtures/worktree-notes-sample.md"
-FIXTURE_GOLDEN="${_AGENTS_DIR_NODE}/tests/fixtures/worktree-notes-sample-report.txt"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -44,17 +42,6 @@ run_with_timeout() {
 require_bin() {
     if [ ! -f "$TRIAGE_BIN" ]; then
         skip "$1 (bin/worktree-notes-triage.js not implemented yet)"
-        return 1
-    fi
-    return 0
-}
-
-require_final_report_lib() {
-    # R1 runs against bin/worktree-final-report.js, which already exists. The
-    # golden fixture matches its current output, so R1 passes pre-refactor and
-    # must continue to pass post-refactor (the contract being preserved).
-    if [ ! -f "$FINAL_REPORT_BIN" ]; then
-        skip "$1 (bin/worktree-final-report.js missing)"
         return 1
     fi
     return 0
@@ -119,30 +106,13 @@ EOF
 
 # ============ Tests ============
 
-# ---- R1 (golden): bin/worktree-final-report.js byte-for-byte match ----
-test_R1_golden_report() {
-    require_final_report_lib "R1: final-report golden match" || return
-
-    local intent_dir="$TMPDIR_BASE/r1"
-    mkdir -p "$intent_dir"
-    printf '# Intent\nTest intent\n' > "$intent_dir/intent.md"
-    local intent_node; intent_node="$(node_path "$intent_dir/intent.md")"
-
-    local actual
-    actual="$(run_with_timeout 30 node "$FINAL_REPORT_BIN" "$intent_node" "$FIXTURE_NOTES" "test-session-123" 2>/dev/null)"
-
-    local expected
-    expected="$(cat "$FIXTURE_GOLDEN")"
-
-    if [ "$actual" = "$expected" ]; then
-        pass "R1: final-report output matches golden fixture byte-for-byte"
+# ---- R1 (post-#771): renderer binary must be absent ----
+test_R1_renderer_bin_absent() {
+    local f="$AGENTS_DIR/bin/worktree-final-report.js"
+    if [ ! -f "$f" ]; then
+        pass "R1_renderer_bin_absent: bin/worktree-final-report.js is absent (renderer abolished in #771)"
     else
-        fail "R1: golden mismatch
---- expected ---
-$expected
---- actual ---
-$actual
----"
+        fail "R1_renderer_bin_absent: bin/worktree-final-report.js still exists (should be deleted in #771)"
     fi
 }
 
@@ -345,7 +315,7 @@ test_F7_wrong_basename_rejected() {
 
 # ============ Run all ============
 
-test_R1_golden_report
+test_R1_renderer_bin_absent
 test_F1_triage_list_basic
 test_F2_triage_list_all_none
 test_F3_triage_annotate_then_list

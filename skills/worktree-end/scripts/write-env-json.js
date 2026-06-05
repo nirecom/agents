@@ -3,16 +3,6 @@
 // argv[2] = output JSON path.
 // Reads 19 env vars (BRANCH_DELETED intentionally omitted — issue #504 fail-safe).
 // Exit 0 = success, 1 = write failure.
-//
-// Post-render fields (NOT written by this script):
-//   - `reported` (boolean): set to true by `bin/worktree-final-report.js`
-//     after the renderer successfully writes the Final Report to stdout.
-//     `hooks/stop-final-report-guard.js` reads this flag to decide whether
-//     to block the Stop event. See issue #626.
-//   - `reportedAt` (ISO 8601 string): timestamp of the successful emission,
-//     stamped alongside `reported` by the renderer.
-// These fields are appended to the env-file by the renderer via atomic
-// write (temp + rename); this script only writes the initial 18 fields.
 
 'use strict';
 
