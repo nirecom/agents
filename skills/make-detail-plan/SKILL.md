@@ -177,6 +177,7 @@ Skipping research does NOT justify skipping the detail stage.
   Diagnostics go to <session-id>-detail-debug.log only.
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 7. Never pause for user confirmation during intermediate revision rounds (steps 4–5): write draft files silently and inform the user with plain text only.
+- Planner and reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved `intent.md` or `outline.md` decisions.
 
 ## Completion
 
