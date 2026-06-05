@@ -46,11 +46,28 @@ TMPDIR_ENTRIES=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_ENTRIES"' EXIT
 
 # Parse `## Section` headers (not ###). Each section becomes one issue.
+# Sections with no non-blank body lines (header-only or whitespace-only) are
+# skipped: no .title/.body files are written for them. A .skip file is written
+# instead so the summary can count them.
 awk -v outdir="$TMPDIR_ENTRIES" '
+  function has_content(body,   i, line) {
+    # Return 1 if body has at least one non-blank line that is not the ## header
+    for (i = 2; i <= split(body, a, "\n"); i++) {
+      line = a[i]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      if (line != "") return 1
+    }
+    return 0
+  }
   function flush(n, heading, body,   f) {
     if (n == 0) return
     while (substr(body, length(body) - 1) == "\n\n")
       body = substr(body, 1, length(body) - 1)
+    if (!has_content(body)) {
+      f = sprintf("%s/%04d.skip", outdir, n); print heading > f; close(f)
+      print "SKIP: empty section \"" heading "\""
+      return
+    }
     f = sprintf("%s/%04d.title", outdir, n); print heading > f; close(f)
     f = sprintf("%s/%04d.body",  outdir, n); printf "%s", body > f; close(f)
   }
@@ -63,7 +80,8 @@ awk -v outdir="$TMPDIR_ENTRIES" '
 ' "$FILE_TODO"
 
 total=$(find "$TMPDIR_ENTRIES" -name "*.title" 2>/dev/null | wc -l | tr -d ' ')
-echo "Sections discovered: $total"
+skipped_this_run=$(find "$TMPDIR_ENTRIES" -name "*.skip" 2>/dev/null | wc -l | tr -d ' ')
+echo "Sections discovered: $total (skipped empty: $skipped_this_run)"
 
 if [ "$total" -eq 0 ]; then
   echo "No sections to migrate."
@@ -133,7 +151,7 @@ fi
 
 echo ""
 if [ "$DRY_RUN" -eq 1 ]; then
-  echo "=== Dry run complete: $processed sections would be migrated ==="
+  echo "=== Dry run complete: $processed sections would be migrated, $skipped_this_run skipped (empty) ==="
 else
-  echo "=== Migration step complete: $created_this_run new issues created this run ==="
+  echo "=== Migration step complete: $created_this_run new issues created, $skipped_this_run skipped (empty) this run ==="
 fi
