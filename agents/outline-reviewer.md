@@ -112,3 +112,5 @@ C2: unresolved — <reason>
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
   as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
+
+- Apply `skills/_shared/priority-hierarchy.md` before emitting any concern. At outline stage only `intent.md` is upstream-approved; concerns that would require reopening an approved intent decision must be suppressed (or downgraded to LOW under `## Accepted Tradeoffs`).
