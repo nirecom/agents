@@ -79,4 +79,8 @@ Changes: Fixed false PLAN_LANG=japanese violation: the `(none — pending issue 
 
 ### FEATURE: PR #768 (2026-06-05)
 Background: fix(#765): remove vestigial COMPOSE_DOC_APPEND_SKILL=1 prefix from doc-append-worker
-Changes: category: BUGFIX | subject: Fix unnecessary ENFORCE_WORKTREE_OFF prompts during doc-append-entry compose | background: doc-append-worker triggered spurious ENFORCE_WORKTREE_OFF requests due to a vestigial env-var prefix | changes: Removed the prefix; doc-append-worker now uses the bash-script form that enforce-worktree.js already allows without any env-var bypass
+Changes: category: BUGFIX | subject: Fix unnecessary ENFORCE_WORKTREE_OFF prompts during doc-append-entry compose | background: doc-append-worker triggered spurious ENFORCE_WORKTREE_OFF requests due to a vestigial env-var prefix | changes: Removed the prefix; doc-append-worker now uses the bash-script form that enforce-worktree.js already allows without any env-var bypass
+
+### FEATURE: PR #769 (2026-06-06)
+Background: feat(#647): priority-hierarchy SSOT — planner rejection protocol for upstream-approved decisions
+Changes: Planning loop reviewers can no longer force the planner to override an already-approved intent or outline decision — the planner now formally rejects review concerns that contradict the approved scope, preventing the multi-round drift pattern previously seen during make-detail-plan.
