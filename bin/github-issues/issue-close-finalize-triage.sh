@@ -64,6 +64,26 @@ fi
 
 case "${STATE}:${EFFECTIVE_SENTINEL}" in
     OPEN:)
+        # admin_close_path: OPEN + meta label + all sub-issues closed → direct close.
+        # No Phase 1 sentinel, no PR, no worktree needed. Worker skips A.5.
+        HAS_META=$(gh issue view "$N" --json labels \
+            --jq '[.labels[].name] | contains(["meta"])' 2>/dev/null) || HAS_META=false
+        if [ "$HAS_META" = "true" ]; then
+            OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || OWNER_REPO=""
+            if [ -n "$OWNER_REPO" ]; then
+                SUB_RC=0
+                bash "$(dirname "${BASH_SOURCE[0]}")/parent-all-closed-check.sh" "$OWNER_REPO" "$N" || SUB_RC=$?
+                # exit 0 = all closed; exit 2 = zero sub-issues (treat as "all closed")
+                if [ "$SUB_RC" -eq 0 ] || [ "$SUB_RC" -eq 2 ]; then
+                    ACTION=admin_close_path
+                    NEXT_STEPS="G,H,J,K"
+                    print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
+                    exit 0
+                fi
+                # exit 1 = open child exists → fall through to error
+                # exit 3 = API error → fall through to error (conservative)
+            fi
+        fi
         # Phase 1 was never run, or its sentinel was auto-expired (#360).
         # /issue-close-finalize requires the pending sentinel posted by
         # /issue-close-stage as forcing function.
