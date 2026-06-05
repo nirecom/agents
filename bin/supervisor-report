@@ -1,0 +1,50 @@
+#!/usr/bin/env node
+"use strict";
+
+const { appendFinding } = require("../hooks/lib/supervisor-state-writer");
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function usage(msg) {
+  if (msg) console.error(`[supervisor-report] ERROR: ${msg}`);
+  console.error(
+    "Usage: node bin/supervisor-report" +
+    " --categories <cat1,cat2>" +
+    " --severity <error|warning|notice>" +
+    " --detail <text>" +
+    " --reporter <name>" +
+    " --session-id <sid>"
+  );
+  process.exit(1);
+}
+
+const args = {};
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i].startsWith("--") && i + 1 < argv.length) {
+    args[argv[i].slice(2)] = argv[i + 1];
+    i++;
+  }
+}
+
+const categoriesRaw = args["categories"];
+const severity = args["severity"];
+const detail = args["detail"];
+const reporter = args["reporter"];
+const rawSid = args["session-id"] || process.env.CLAUDE_SESSION_ID || "";
+
+if (!categoriesRaw) usage("--categories required");
+if (!severity) usage("--severity required");
+if (detail === undefined) usage("--detail required");
+if (!reporter) usage("--reporter required");
+if (!rawSid || !SESSION_ID_RE.test(rawSid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
+
+const categories = categoriesRaw.split(",").map((s) => s.trim()).filter(Boolean);
+if (categories.length === 0) usage("--categories must be non-empty");
+
+const ok = appendFinding(rawSid, { categories, severity, detail, reporter });
+if (!ok) {
+  console.error("[supervisor-report] ERROR: appendFinding failed (invalid fields or unexpected error)");
+  process.exit(1);
+}
+process.exit(0);
