@@ -188,3 +188,20 @@ The `-c key=value` form is parsed by `parseGitConfigValues` (in
 the subcommand verb (matching git's own option-parsing semantics). The
 `commit-push` skill's `--wip` flag generates this exact form. See
 `skills/commit-push/SKILL.md` for usage.
+
+### Final Report
+
+`/session-close` Step 4 emits the Final Report directly into assistant text
+using a schema-derived skeleton (`hooks/lib/final-report-schema.renderSkeleton`).
+The LLM reads four input files (env JSON, outcome JSON, intent.md, WORKTREE_NOTES.md
+backup) and substitutes `<PLACEHOLDER>` tokens. It emits the substituted text
+verbatim into its reply, then runs `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"`.
+
+`stop-final-report-guard.js` blocks the turn if any of the 10 headings from
+`getSectionHeadings(sid)` is absent after the last `## Final Report — <sid>` line
+in the transcript, or if any unsubstituted `<TOKEN>` remains. Exit 2 + `decision:
+block` re-prompts with the specific missing headings or residual tokens listed.
+
+The renderer (`bin/worktree-final-report.js`) was removed in #771. Prior to that,
+it emitted a canonical Markdown blob to a Bash tool-result which the LLM pasted
+verbatim — a two-step path that permitted LLM semantic rewrites (#626, #700, #765).

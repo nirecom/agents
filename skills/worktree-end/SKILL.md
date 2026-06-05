@@ -159,10 +159,10 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Step 5.5 (b–d) MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
 - Step 5.5 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
 - Step 5.5 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
-- Step 7 sentinel check is mandatory; absence of `<<WORKFLOW_MARK_STEP_final_report_complete>>` in renderer output = failure. No silent fallback, no hand-written Markdown.
-- Step 7 MUST read `NOTES_BACKUP_PATH` from the JSON via the read-notes-path.js helper, not from a shell variable (shell vars don't survive Windows Bash tool call boundaries).
-- Step 7 MUST invoke renderer with `--env-file $PLANS_DIR/<session-id>-final-report-env.json`.
-- Final Report verbatim output: paste renderer stdout (sentinel line excluded) character-for-character into the assistant message — no formatting changes.
+- Step 6h writes `WORKTREE_NOTES.md`; the env JSON at `$PLANS_DIR/<session-id>-final-report-env.json` is consumed by `/session-close` Step 4.
+- `/session-close` Step 4 reads env JSON + outcome JSON + intent.md + WORKTREE_NOTES.md backup; LLM substitutes placeholders and emits Final Report verbatim into assistant text; then runs `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"`.
+- `stop-final-report-guard.js` validates all 10 headings from `getSectionHeadings()` appear after `## Final Report — <sid>` in transcript (no `reported` flag check).
+- Do not reformat, summarize, reorder, or merge any Final Report section.
 - Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
 - Do not reformat Final Report section content into prose (e.g., writing `Closed Issues: #N` instead of the `### Closed Issues` heading followed by `- #N`).
 - JSONL transcript mtime scan (`bin/lib/resolve-session-id.sh`) must NOT be used in the worktree-end session-id resolution path — it picks the most-recently-touched session which may differ from the session that created the worktree (#642).

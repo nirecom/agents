@@ -3,7 +3,6 @@
 // Single source of truth for ## Issues parsing (new SSOT per #548).
 // Falls back to legacy ## closes_issues only when ## Issues heading is wholly absent.
 // Code-level consumers (require this module):
-//   - bin/worktree-final-report.js
 //   - bin/parse-closes-issues (CLI wrapper)
 // Prose/prompt references (pointer comments only — no require):
 //   - skills/commit-push, issue-close-stage, issue-close-finalize

@@ -101,14 +101,39 @@ function getProbes() {
   return out;
 }
 
-function renderCanonicalReport(envBag, sessionId, ctx) {
+function renderSkeleton(sessionId) {
+  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+    throw new Error(`renderSkeleton: invalid sessionId "${sessionId}"`);
+  }
+  const placeholders = {
+    closed_issues: ["<CLOSED_ISSUES_LIST>"],
+    merged_pr: [
+      "- PR #<PR_NUMBER>: <PR_TITLE>",
+      "- URL: <PR_URL>",
+      "- State: <PR_STATE>",
+    ],
+    worktree: [
+      "- Branch: <BRANCH>",
+      "- Path: <WORKTREE_PATH>",
+      "- Created: <CREATED_DATE>",
+      "- Removed: ✓",
+    ],
+    backup: [
+      "- Manifest: <BACKUP_MANIFEST_PATH>",
+      "- Branches deleted: <BRANCH_DELETED>",
+    ],
+    closed_issue_outcomes: ["<CLOSED_ISSUE_OUTCOMES>"],
+    post_merge: CATEGORIES.map((c) => `- ${c.label}: <${c.newKey}_DECISION>`),
+    bugs_found: ["<BUGS_FOUND>"],
+    related_tasks: ["<RELATED_TASKS>"],
+    next_tasks: ["<NEXT_TASKS>"],
+  };
   const blocks = SECTIONS.map((s) => {
     const heading = s.heading(sessionId);
-    const lines = s.renderLines(envBag, sessionId, ctx);
-    if (lines.length === 0) return heading;
-    return heading + "\n" + lines.join("\n");
+    const lines = placeholders[s.id] || [];
+    return lines.length === 0 ? heading : `${heading}\n${lines.join("\n")}`;
   });
-  return blocks.join("\n\n");
+  return `${blocks.join("\n\n")}\n`;
 }
 
-module.exports = { CATEGORIES, SECTIONS, getSectionHeadings, getProbes, renderCanonicalReport };
+module.exports = { CATEGORIES, SECTIONS, getSectionHeadings, getProbes, renderSkeleton };
