@@ -17,7 +17,7 @@ ARGS="$*"
 # Helper: emit the bare state string for `--json state --jq .state`.
 mock_state_for_scenario() {
   case "$SCENARIO" in
-    issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended|open_with_stale_pending|open_with_malformed_created_at|open_with_future_created_at)
+    issue_task|issue_incident|issue_no_labels|open_with_pending|open_with_appended|open_with_stale_pending|open_with_malformed_created_at|open_with_future_created_at|meta_admin_close_path|meta_child_open|meta_zero_children|meta_no_repo)
       echo "OPEN" ;;
     closed_no_sentinel|closed_no_sentinel_open_subissue|closed_with_appended_sentinel|closed_with_resolved_comment|closed_with_both|closed_with_pending|closed_with_merged_sentinel|closed_with_stale_pending|closed_multi_reference)
       echo "CLOSED" ;;
@@ -79,6 +79,33 @@ case "$ARGS" in
   "issue view "*" --json state --jq"*)
     mock_state_for_scenario
     exit 0
+    ;;
+  # Meta-cascade label query: scripts inspect the `meta` label to decide
+  # whether to route an OPEN issue through admin_close_path.
+  "issue view "*" --json labels --jq"*)
+    case "${GH_MOCK_SCENARIO:-}" in
+      meta_admin_close_path|meta_child_open|meta_zero_children|meta_no_repo)
+        echo "true"
+        ;;
+      *)
+        echo "false"
+        ;;
+    esac
+    exit 0
+    ;;
+  # Repo slug lookup: the meta-cascade probe needs OWNER/REPO to call
+  # parent-all-closed-check.sh; meta_no_repo simulates the failure case.
+  "repo view --json nameWithOwner --jq .nameWithOwner"*)
+    case "${GH_MOCK_SCENARIO:-}" in
+      meta_no_repo)
+        echo "gh: repo not found" >&2
+        exit 1
+        ;;
+      *)
+        echo "owner/repo"
+        exit 0
+        ;;
+    esac
     ;;
   "issue view "*" --json comments --jq"*"resolved-by: "*)
     # Extract hash from `resolved-by: <hash> -->` inside the --jq expression.
@@ -716,6 +743,93 @@ case "$SCENARIO" in
       "api repos/"*"/issues/"*" --jq .parent.number"*)
         exit 0
         ;;
+    esac
+    ;;
+  meta_admin_close_path)
+    # Meta umbrella OPEN with all sub-issues closed → admin_close_path route.
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[]}'
+        exit 0 ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0 ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0 ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Group: umbrella refactor","body":"Background: umbrella\nChanges: all subs done","closedAt":null,"labels":[{"name":"meta"},{"name":"type:task"}]}'
+        exit 0 ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo '{"open":0,"total":3}'
+        exit 0 ;;
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
+        exit 0 ;;
+    esac
+    ;;
+  meta_child_open)
+    # Meta umbrella OPEN with one open child → admin_close_path is gated off;
+    # the caller must surface an error pointing back at /issue-close-stage.
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[]}'
+        exit 0 ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0 ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0 ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Group: partial task","body":"Background: x\nChanges: y","closedAt":null,"labels":[{"name":"meta"},{"name":"type:task"}]}'
+        exit 0 ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo '{"open":1,"total":3}'
+        exit 0 ;;
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
+        exit 0 ;;
+    esac
+    ;;
+  meta_zero_children)
+    # Meta umbrella OPEN with no sub-issues (planning-only) → still
+    # qualifies for admin_close_path.
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[]}'
+        exit 0 ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0 ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0 ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Group: planning only","body":"Background: p\nChanges: n","closedAt":null,"labels":[{"name":"meta"},{"name":"type:task"}]}'
+        exit 0 ;;
+      "api repos/"*"/issues/"*"/sub_issues --paginate --jq"*)
+        echo '{"open":0,"total":0}'
+        exit 0 ;;
+      "api repos/"*"/issues/"*" --jq .parent.number"*)
+        exit 0 ;;
+    esac
+    ;;
+  meta_no_repo)
+    # Meta umbrella OPEN where `gh repo view` fails — the cross-scenario
+    # handler above already simulates the failure. This block just supplies
+    # the issue-view shapes the script reaches before the repo lookup.
+    case "$ARGS" in
+      "issue view "*" --json state,comments")
+        echo '{"state":"OPEN","comments":[]}'
+        exit 0 ;;
+      "issue view "*" --json state")
+        echo '{"state":"OPEN"}'
+        exit 0 ;;
+      "issue view "*" --json comments"*)
+        echo '[]'
+        exit 0 ;;
+      "issue view "*" --json number,title,body,closedAt,labels")
+        echo '{"number":42,"title":"Group: no-repo","body":"Background: p\nChanges: n","closedAt":null,"labels":[{"name":"meta"},{"name":"type:task"}]}'
+        exit 0 ;;
     esac
     ;;
   default|*)
