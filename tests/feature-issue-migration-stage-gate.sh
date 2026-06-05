@@ -341,7 +341,7 @@ fi
 # ============================================================
 REPO_K=$(make_repo)
 printf '### H1\n### H2\n' > "$REPO_K/docs/history.md"
-printf '## Section1\n## Section2\n' > "$REPO_K/docs/todo.md"
+printf '## Section1\n\n- task-001: do something\n\n## Section2\n\n- task-002: do something else\n' > "$REPO_K/docs/todo.md"
 
 # k1: canary-1 -> no migrate-todo calls
 write_state_full "$REPO_K" 2 2 2
