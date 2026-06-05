@@ -83,4 +83,8 @@ Changes: category: BUGFIX | subject: Fix unnecessary ENFORCE_WORKTREE_OFF prompt
 
 ### FEATURE: PR #769 (2026-06-06)
 Background: feat(#647): priority-hierarchy SSOT — planner rejection protocol for upstream-approved decisions
-Changes: Planning loop reviewers can no longer force the planner to override an already-approved intent or outline decision — the planner now formally rejects review concerns that contradict the approved scope, preventing the multi-round drift pattern previously seen during make-detail-plan.
+Changes: Planning loop reviewers can no longer force the planner to override an already-approved intent or outline decision — the planner now formally rejects review concerns that contradict the approved scope, preventing the multi-round drift pattern previously seen during make-detail-plan.
+
+### FEATURE: PR #732 (2026-06-06)
+Background: feat(#690,#692): consolidate Step 6h docs-write; fix classify() git false-positive
+Changes: `worktree-end` Step 6h now writes both `docs/history.md` and `CHANGELOG.md` from `WORKTREE_NOTES.md` in a single step; Phase 2 Step E (synthesis fallback) removed from the issue-close workflow.;Fixed false-positive in the worktree write guard: `grep`/`rg`/`echo`/`printf` commands containing quoted strings like `"git push"` or `"git commit"` are no longer blocked.
