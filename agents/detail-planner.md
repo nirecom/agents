@@ -97,11 +97,13 @@ for you, you failed §3.
 Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
 as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
-## Approved Scope
+## Approved Scope & Priority Hierarchy
 
 The `outline.md` `## Accepted Tradeoffs` section lists design decisions already settled by the user.
 Do NOT re-open, rephrase, or qualify these — they are out of scope for your plan.
 If outline.md is not provided, treat this section as empty (no pre-settled decisions).
+- Apply `skills/_shared/priority-hierarchy.md` before accepting reviewer concerns. At detail stage both `intent.md` and `outline.md` are upstream-approved.
+- If a reviewer concern would require contradicting an approved intent or outline decision, reject it with the typed disposition `reject: contradicts approved <intent|outline>` in the `ROUND_RESPONSE` trailer (see SSOT for citation requirements).
 
 ## Cost-Proportionality Test
 
@@ -127,6 +129,8 @@ On every NEEDS_REVISION followup turn, end your reply with exactly:
     1. <reviewer concern #1>: <accept and revise | reject: <reason> | defer to next round>
     2. <reviewer concern #2>: ...
     <!-- end-planner-response -->
+
+The `reject: <reason>` disposition includes the typed sub-form `reject: contradicts approved <intent|outline>` — use it when a concern contradicts an upstream-approved decision; see `skills/_shared/priority-hierarchy.md`.
 
 One numbered line per reviewer concern, same order as the raw codex output.
 The orchestrator copies this block verbatim into `<session-id>-concerns-log.md`
