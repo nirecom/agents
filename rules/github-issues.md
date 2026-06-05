@@ -54,6 +54,7 @@ Open issues with `gh issue list --state open` or `gh issue view <N>`.
 | `type:incident` | Incident. Closed → INCIDENT entry in `history.md`. |
 | `status:cancelled` | Cancelled without completion. Set after close. |
 | `status:migrated` | Merged into another issue. Set after close. |
+| `meta` | Planning/architecture issue with no implementation. Close via `admin_close_path`. Must use `Group: ` title prefix. Sub-issues carry the actual work. |
 
 Apply labels with `bin/github-issues/sync-labels.sh` (reads `.github/labels.yml`,
 runs `gh label create --force`).
@@ -79,6 +80,14 @@ runs `gh label create --force`).
 Projects v2 attach failure is non-fatal: the issue is created regardless, and a
 warning is printed. Re-run `gh project item-add 1 --owner nirecom --url <issue-url>`
 manually if recovery is needed.
+
+## meta label and admin_close_path
+
+Issues with the `meta` label use a special close path:
+- Title must start with `Group: ` (enforced by `/issue-create` make-parent verdict and `issue-create-dispatch.sh`).
+- `/issue-close-finalize` routes them via `admin_close_path` when OPEN + all sub-issues closed — no Phase 1 sentinel, no PR, no worktree required.
+- G.5 parent-close cascade auto-accepts meta parents (code-based; no AskUserQuestion).
+- `historyEntry` in outcome JSON: `"skipped_admin_close"` (distinct from `auto_close_path`'s `"skipped_no_history_notes"`).
 
 ## Close path
 

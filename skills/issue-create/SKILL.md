@@ -120,6 +120,14 @@ the same routing as `/workflow-init`:
 - If the existing issue has `intent:clarified` → Path A (skip interview).
 - Otherwise → Path B (pre-fill interview from issue body).
 
+**make-parent prefix policy** (strip-then-prepend, idempotent): before confirming,
+normalize the title to start with `Group: `:
+1. If title already starts with `Group: `, leave unchanged.
+2. Otherwise, strip a leading prefix matching `(umbrella|tracking|meta): `
+   (case-insensitive) if present, then prepend `Group: `.
+Examples: `umbrella: foo` → `Group: foo`; `bug: zap` → `Group: bug: zap` (`bug:` not stripped).
+Surface the normalized title in the confirmation AskUserQuestion.
+
 ### Phase 4 — Dispatch
 
 ```bash
