@@ -200,6 +200,20 @@ test_l1_3_compose_doc_append_skill_inline_blocked_in_main() {
     fi
 }
 
+test_l1_3b_compose_doc_append_no_prefix_via_bash_allowed_from_main() {
+    require_file "$GUARD_JS" "test_l1_3b_compose_doc_append_no_prefix_via_bash_allowed_from_main" || return
+    local repo; repo="$(setup_main_checkout "l1-3b-main")"
+    local bin; bin="${_AGENTS_DIR_NODE}/bin/compose-doc-append-entry"
+    local cmd; cmd="bash \"$bin\" --notes /dev/null --branch x --pr 1 --merge-commit abc --background x --closes-issues-count 0"
+    local out
+    out="$(run_bash_guard "$cmd" "$repo" ENFORCE_WORKTREE=on)"
+    if guard_decision "$out"; then
+        pass "L1.3b bash compose-doc-append-entry (no prefix) from main: allows"
+    else
+        fail "L1.3b bash compose-doc-append-entry (no prefix) from main: should allow (bash-script form is read)"
+    fi
+}
+
 test_l1_4_bash_in_non_git_cwd_blocks() {
     # Change ④: Bash write command in a non-git CWD is now BLOCK, not allow.
     # The previous fail-open allowed echo/cp/mv outside any repo, which masked
@@ -1374,6 +1388,7 @@ test_l3_45_issue_713_other_gh_kinds_unaffected_linked() {
 test_l1_1_bypass_functions_not_exported
 test_l1_2_issue_close_skill_inline_blocked_in_main
 test_l1_3_compose_doc_append_skill_inline_blocked_in_main
+test_l1_3b_compose_doc_append_no_prefix_via_bash_allowed_from_main
 test_l1_4_bash_in_non_git_cwd_blocks
 test_l1_5_edit_to_non_git_path_allows
 test_l1_6_linked_worktree_feature_branch_allows
