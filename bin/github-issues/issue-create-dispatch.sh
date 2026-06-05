@@ -215,20 +215,6 @@ case "$VERDICT" in
 
     make-parent)
         [ -n "$CHILDREN" ] || { echo "Error: --children required for --verdict make-parent" >&2; exit 2; }
-        # Defense-in-depth: enforce "Group: " prefix on title (SSOT: SKILL.md Phase 3).
-        for ((i=0; i<${#PASSTHROUGH[@]}; i++)); do
-            if [[ "${PASSTHROUGH[$i]}" == "--title" ]] && (( i+1 < ${#PASSTHROUGH[@]} )); then
-                t="${PASSTHROUGH[$((i+1))]}"
-                case "$t" in
-                    "Group: "*) ;;  # already normalized
-                    *)
-                        stripped=$(printf '%s' "$t" | sed -E 's/^(umbrella|tracking|meta|Umbrella|Tracking|Meta|UMBRELLA|TRACKING|META):[[:space:]]+//')
-                        PASSTHROUGH[$((i+1))]="Group: $stripped"
-                        ;;
-                esac
-                break
-            fi
-        done
         url="$(create_via_issue_create "${PASSTHROUGH[@]}")"
         new_parent_number="$(extract_issue_number "$url")"
         IFS=',' read -ra CHILD_LIST <<< "$CHILDREN"
