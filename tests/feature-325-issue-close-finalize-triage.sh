@@ -119,11 +119,13 @@ else
 fi
 teardown_tmp
 
-# --- FT2: OPEN + pending → resume_e (E,F,G,H,J,K)
+# --- FT2: OPEN + pending → resume_e (F,G,H,J,K)
+# #690: Step E (doc-append) removed from NEXT_STEPS — docs/history.md now written
+# by /worktree-end Step 6h from WORKTREE_NOTES.md.
 setup_tmp
 run_triage open_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "E,F,G,H,J,K" ]; then
-    pass "FT2: OPEN:pending → resume_e (E,F,G,H,J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ] && [ "$T_NEXT_STEPS" = "F,G,H,J,K" ]; then
+    pass "FT2: OPEN:pending → resume_e (F,G,H,J,K)"
 else
     fail "FT2: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -139,39 +141,35 @@ else
 fi
 teardown_tmp
 
-# --- FT4: CLOSED + appended → resume_j (E,J,K)
+# --- FT4: CLOSED + appended → resume_j (J,K)
+# #690: Step E removed.
 setup_tmp
 run_triage closed_with_appended_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "E,J,K" ]; then
-    pass "FT4: CLOSED:appended → resume_j (E,J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
+    pass "FT4: CLOSED:appended → resume_j (J,K)"
 else
     fail "FT4: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT5: CLOSED + no sentinel → auto_close_path (E,G,J,K)
-# Bug #366: previously asserted B,E,G,J. After the fix, Step B (sub-issue gate)
-# is no longer scheduled by auto_close_path — the issue is already CLOSED, so
-# gating its closure on open sub-issues is meaningless and causes spurious
-# failures when the parent has open children that were intentionally left open.
+# --- FT5: CLOSED + no sentinel → auto_close_path (G,J,K)
+# Bug #366: previously asserted B,E,G,J. Step B removed (#366); Step E removed (#690).
+# auto_close_path: issue already CLOSED; gating on open sub-issues is moot.
 setup_tmp
 run_triage closed_no_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
-    pass "FT5: CLOSED:(none) → auto_close_path (E,G,J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "G,J,K" ]; then
+    pass "FT5: CLOSED:(none) → auto_close_path (G,J,K)"
 else
     fail "FT5: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT5b: CLOSED + no sentinel + open sub-issue → auto_close_path (E,G,J,K)
-# Regression trap for bug #366. If a future change re-introduces B into
-# auto_close_path, downstream execution against this scenario exits non-zero
-# (count=1 open sub-issue); at the triage layer the regression surfaces as
-# T_NEXT_STEPS mismatch (B reappears in the list).
+# --- FT5b: CLOSED + no sentinel + open sub-issue → auto_close_path (G,J,K)
+# Regression trap for bug #366. If B or E reappear in NEXT_STEPS, this test fails.
 setup_tmp
 run_triage closed_no_sentinel_open_subissue
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
-    pass "FT5b: CLOSED:(none) + open sub-issue → auto_close_path (E,G,J,K), no Step B"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "G,J,K" ]; then
+    pass "FT5b: CLOSED:(none) + open sub-issue → auto_close_path (G,J,K), no Step B or E"
 else
     fail "FT5b: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -193,12 +191,14 @@ else
 fi
 teardown_tmp
 
-# --- FT7: CLOSED + pending + no history → stuck_append_sentinel (E,J,K)
+# --- FT7: CLOSED + pending + no history → stuck_sentinel_only (J,K)
+# #690: stuck_append_sentinel action removed; triage routes all CLOSED:pending to
+# stuck_sentinel_only (J,K) regardless of history.md state.
 setup_tmp
 # history.md intentionally empty
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_append_sentinel" ] && [ "$T_NEXT_STEPS" = "E,J,K" ]; then
-    pass "FT7: CLOSED:pending + no history → stuck_append_sentinel (E,J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
+    pass "FT7: CLOSED:pending + no history → stuck_sentinel_only (J,K)"
 else
     fail "FT7: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -241,11 +241,12 @@ else
 fi
 teardown_tmp
 
-# --- FT11: CLOSED + stale pending → auto-expired → auto_close_path (E,G,J,K)
+# --- FT11: CLOSED + stale pending → auto-expired → auto_close_path (G,J,K)
+# #690: Step E removed from auto_close_path NEXT_STEPS.
 setup_tmp
 run_triage closed_with_stale_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "E,G,J,K" ]; then
-    pass "FT11: CLOSED + stale pending → auto-expired → auto_close_path (E,G,J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "auto_close_path" ] && [ "$T_NEXT_STEPS" = "G,J,K" ]; then
+    pass "FT11: CLOSED + stale pending → auto-expired → auto_close_path (G,J,K)"
 else
     fail "FT11: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -296,6 +297,59 @@ if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_e" ]; then
     pass "FT15: future createdAt → fail-open → resume_e (OPEN:pending)"
 else
     fail "FT15: rc=$T_RC action=$T_ACTION (expected resume_e for fail-open on future date)"
+fi
+teardown_tmp
+
+# --- FT16: OPEN + meta label + all sub-issues closed → admin_close_path (G,H,J,K)
+# Meta-cascade admin-close path: triage detects the meta label on an OPEN
+# issue with zero open sub-issues and routes to admin_close_path.
+setup_tmp
+run_triage meta_admin_close_path
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "admin_close_path" ] && [ "$T_NEXT_STEPS" = "G,H,J,K" ]; then
+    pass "FT16: OPEN + meta + all subs closed → admin_close_path (G,H,J,K)"
+else
+    fail "FT16: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
+fi
+teardown_tmp
+
+# --- FT17: OPEN + meta label + 1 open child → error fall-through
+# Meta admin-close path is gated on all sub-issues being closed; if any
+# remain open, triage must fall through with an error pointing back at
+# /issue-close-stage.
+setup_tmp
+GH_MOCK_SCENARIO=meta_child_open run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/tmp/ft17_err.$$ >/dev/null
+RC=$?
+FT17_ERR=$(cat /tmp/ft17_err.$$); rm -f /tmp/ft17_err.$$
+if [ "$RC" -ne 0 ] && echo "$FT17_ERR" | grep -qi "issue-close-stage"; then
+    pass "FT17: OPEN + meta + 1 open child → error fall-through"
+else
+    fail "FT17: rc=$RC stderr=$FT17_ERR"
+fi
+teardown_tmp
+
+# --- FT18: OPEN + meta label + 0 sub-issues → admin_close_path (G,H,J,K)
+# Zero-children meta still qualifies: planning-only umbrella collapses cleanly
+# through admin_close_path.
+setup_tmp
+run_triage meta_zero_children
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "admin_close_path" ] && [ "$T_NEXT_STEPS" = "G,H,J,K" ]; then
+    pass "FT18: OPEN + meta + 0 sub-issues → admin_close_path (G,H,J,K)"
+else
+    fail "FT18: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
+fi
+teardown_tmp
+
+# --- FT19: OPEN + meta label + repo view fails → error fall-through
+# If owner/repo cannot be resolved, the sub-issue gate cannot run; triage
+# must NOT silently fall into admin_close_path.
+setup_tmp
+GH_MOCK_SCENARIO=meta_no_repo run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/tmp/ft19_err.$$ >/dev/null
+RC=$?
+FT19_ERR=$(cat /tmp/ft19_err.$$); rm -f /tmp/ft19_err.$$
+if [ "$RC" -ne 0 ]; then
+    pass "FT19: OPEN + meta + repo view fails → error fall-through"
+else
+    fail "FT19: rc=$RC stderr=$FT19_ERR"
 fi
 teardown_tmp
 
