@@ -27,6 +27,16 @@ NODE_HOME="$(node -e "process.stdout.write(require('os').homedir().replace(/\\\\
 export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
 WIN_PLANS_DIR="$(echo "$WORKFLOW_PLANS_DIR" | sed 's|/|\\|g')"
 
+# Isolated AGENTS_CONFIG_DIR with no .env so CONFIRM_* values from the real
+# agents .env (which may set CONFIRM_DETAIL=off, CONFIRM_OUTLINE=off, etc.)
+# do not leak in and suppress the diff for final-artifact paths.
+NODE_TMPDIR_FPDC="$(node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
+ISOLATED_CFG_DIR_FPDC="${NODE_TMPDIR_FPDC}/fpdc-cfg-$$"
+mkdir -p "$ISOLATED_CFG_DIR_FPDC"
+export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR_FPDC"
+trap 'rm -rf "$ISOLATED_CFG_DIR_FPDC"' EXIT
+unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
+
 # ---------------------------------------------------------------------------
 # Test A — plans/drafts/ path → noopExit (stdout empty, exit 0)
 # ---------------------------------------------------------------------------
@@ -71,6 +81,30 @@ if echo "$OUTPUT" | grep -q "systemMessage"; then
   pass "show-diff: non-plans path → systemMessage shown (existing behavior)"
 else
   fail "show-diff: non-plans path → no systemMessage. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Test E — show-diff.js with *-outline.md non-draft path → systemMessage shown
+# Write-direct path coverage: outline.md sitting directly in plans dir is a
+# final artifact and should NOT be suppressed.
+# ---------------------------------------------------------------------------
+INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260605-001819-outline.md\",\"content\":\"plan outline\"}}"
+OUTPUT=$(echo "$INPUT" | node "$HOOK")
+if echo "$OUTPUT" | grep -q "systemMessage"; then
+  pass "show-diff: plans/ (non-drafts) *-outline.md final artifact → systemMessage shown"
+else
+  fail "show-diff: plans/ (non-drafts) *-outline.md final artifact → expected systemMessage, got: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Test F — show-diff.js with *-detail.md non-draft path → systemMessage shown
+# ---------------------------------------------------------------------------
+INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260605-001819-detail.md\",\"content\":\"plan detail\"}}"
+OUTPUT=$(echo "$INPUT" | node "$HOOK")
+if echo "$OUTPUT" | grep -q "systemMessage"; then
+  pass "show-diff: plans/ (non-drafts) *-detail.md final artifact → systemMessage shown"
+else
+  fail "show-diff: plans/ (non-drafts) *-detail.md final artifact → expected systemMessage, got: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
