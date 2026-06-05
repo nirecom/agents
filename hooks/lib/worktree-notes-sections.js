@@ -2,7 +2,6 @@
 
 // Shared helpers for parsing and annotating WORKTREE_NOTES.md.
 // Consumed by:
-//   - bin/worktree-final-report.js (extractSection)
 //   - bin/worktree-notes-triage.js (parseSectionEntries, markEntryPromoted)
 
 const MARKER_RE = / <!-- promoted: #\d+ -->$/;
