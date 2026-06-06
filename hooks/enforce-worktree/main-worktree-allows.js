@@ -7,6 +7,22 @@ const { stripQuotedArgs } = require("../lib/strip-quoted-args");
 const { hasShellChaining, isPathOutsideRepo, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./shared-cmd-utils");
 const { parseGitCPath } = require("./git-repo-detection");
 
+// Returns true if cmd is `git worktree remove` with --force or -f (short form).
+// Tokenizes after "worktree remove" to avoid false positives from path components.
+function hasWorktreeRemoveForceFlag(cmd) {
+  const m = cmd.match(/\bworktree\s+remove\b(.*)/);
+  if (!m) return false;
+  const tokens = [];
+  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+  let mm;
+  while ((mm = re.exec(m[1])) !== null) tokens.push(mm[1] || mm[2] || mm[3]);
+  for (const tok of tokens) {
+    if (tok === "--force") return true;
+    if (/^-[a-zA-Z]+$/.test(tok) && tok.slice(1).includes("f")) return true;
+  }
+  return false;
+}
+
 /**
  * Returns true if cmd is an isolated `git worktree add/remove/prune` command
  * whose add-target path (when parseable) is outside repoRoot.
@@ -21,6 +37,7 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
   if (!/\bgit\b/.test(cmd) || !/\bworktree\s+(?:add|remove|prune)\b/.test(cmd)) return false;
 
   // remove/prune do not create new checkout paths — always allow from main worktree
+  if (/\bworktree\s+remove\b/.test(cmd) && hasWorktreeRemoveForceFlag(cmd)) return false;
   if (/\bworktree\s+(?:remove|prune)\b/.test(cmd)) return true;
 
   // For 'add': parse target path (first non-flag arg after 'add')
@@ -272,14 +289,6 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   if (skillPrefixed) cmd = stripWorktreeEndSkillPrefix(cmd);
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd)) return false;
-
-  // #743/#745: belt-and-suspenders over isAllowedWorktreeCommand. The subMatch
-  // regex below only accepts stash|restore|checkout subcommands; "worktree"
-  // would otherwise fall through. --force/-f rejected per SKILL.md §144.
-  if (skillPrefixed && /\bworktree\s+(?:remove|prune)(?:\s|$)/.test(cmd)) {
-    if (/\s--force\b|\s-f\b/.test(cmd)) return false;
-    return true;
-  }
 
   // -C path, if present, must resolve to repoRoot.
   // Reject multiple -C flags — parseGitCPath only validates the first;
