@@ -131,4 +131,8 @@ Changes: EM Supervisor Layer 2 error blocks now show a direct notification in th
 
 ### FEATURE: PR #784 (2026-06-06)
 Background: fix(#546): normalizeCwd + single-spawn in show-plan-link.js
-Changes: When multiple VS Code windows are open, plan files (intent/outline/detail) now open in the correct window. Two root causes fixed: Windows Git Bash path normalization (`/c/git/agents` → correct URI) and a timing race in the previous two-step spawn. Note: VS Code 1.121 users may still need to click the breadcrumb manually (known VS Code 1.121 regression; fixed in 1.122+).
+Changes: When multiple VS Code windows are open, plan files (intent/outline/detail) now open in the correct window. Two root causes fixed: Windows Git Bash path normalization (`/c/git/agents` → correct URI) and a timing race in the previous two-step spawn. Note: VS Code 1.121 users may still need to click the breadcrumb manually (known VS Code 1.121 regression; fixed in 1.122+).
+
+### FEATURE: PR #787 (2026-06-07)
+Background: fix(#525,#526,#416): hooks triple fix — orphan-CWD tests, workflow-mark signalFatal, sentinel echo classify
+Changes: fix(#526): WORKFLOW_MARK_STEP_* handlers now hard-fail (exit 2) when sessionId cannot be resolved, instead of silently skipping the step record. Affected sentinels: MARK_STEP, *_NOT_NEEDED (6 families), USER_VERIFIED, BRANCHING_COMPLETE, CLARIFY_INTENT_COMPLETE. The commit gate now surfaces the failure immediately rather than allowing a phantom step completion.
