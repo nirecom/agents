@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Write Final Report env vars to JSON file.
 // argv[2] = output JSON path.
-// Reads 19 env vars (BRANCH_DELETED intentionally omitted — issue #504 fail-safe).
+// Reads 21 env vars (BRANCH_DELETED intentionally omitted — issue #504 fail-safe).
+// BOOTSTRAP_MODE / BOOTSTRAP_COMMIT_SHA added for issue #772 new-repo first-commit path.
 // Exit 0 = success, 1 = write failure.
 
 'use strict';
@@ -28,6 +29,8 @@ const FIELDS = [
   'INSTALLER_RERUN_REASON',
   'OS_REBOOT_REQUIRED',
   'OS_REBOOT_REASON',
+  'BOOTSTRAP_MODE',
+  'BOOTSTRAP_COMMIT_SHA',
 ];
 
 const outPath = process.argv[2];

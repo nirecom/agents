@@ -27,7 +27,7 @@ const {
   hasStagedDocChanges,
   hasStagedChanges,
 } = require("./workflow-gate/staged-evidence");
-const { hasOpenPrForBranch } = require("./workflow-gate/gh-detect");
+const { hasOpenPrForBranch, isBranchDirectlyMerged } = require("./workflow-gate/gh-detect");
 const {
   isWorktreeContext,
   isLinkedWorktree,
@@ -228,7 +228,8 @@ if (require.main === module) {
       USER_VERIFIED_RE_DQ.test(command) &&
       process.env.ENFORCE_WORKTREE !== "off" &&
       isWorktreeContext(normalizeForWindows(rawSentinelCwd)) &&
-      !hasOpenPrForBranch(normalizeForWindows(rawSentinelCwd))
+      !hasOpenPrForBranch(normalizeForWindows(rawSentinelCwd)) &&
+      !isBranchDirectlyMerged(normalizeForWindows(rawSentinelCwd))
     ) {
       block(
         "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +

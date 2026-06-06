@@ -142,6 +142,35 @@ ENFORCE_WORKTREE=off   # trivial one-liner; re-enable immediately after
 > **Note:** The merge gate (`user_verification` block on `gh pr merge` and protected-branch push)
 > fires in **both** modes. It is enforced by `workflow-gate.js` independently of the worktree guard.
 
+## New Repo Bootstrap (first commit on empty remote)
+
+**When it fires:** the GitHub remote exists (was just created via `gh repo create` or the web UI) but has no default branch yet — `git ls-remote --symref origin HEAD` returns no `ref:` line.
+
+**How it is detected:** `hooks/lib/bootstrap-state.js` exports `isRemoteInPreBootstrap(repoRoot)`. The probe runs `git ls-remote --symref origin HEAD` with `GIT_TERMINAL_PROMPT=0` / `GIT_ASKPASS=/bin/true` and a 5-second timeout, then classifies the result:
+- `empty-repo` — exit 0 with empty stdout → bootstrap mode activates.
+- `ok` — symref present → normal flow.
+- `network` / `auth` / `not-found` / `timeout` / `spawn-error` / `unknown` → bootstrap mode does NOT activate; the error surfaces in the normal push/PR step.
+
+**What happens automatically:**
+- `/commit-push` runs the probe before pushing. On `empty-repo` it returns `status: bootstrap_pending` and tells the user to run `/worktree-end`. No push, no PR, no user-verified sentinel.
+- `/worktree-end` Step 2.0 re-runs the probe (because the remote may have been bootstrapped externally between the two calls). On `empty-repo` it routes to Step 2b, which calls `skills/worktree-end/scripts/bootstrap-complete.sh`. That script:
+  1. Re-probes once more (refuses to push if the remote is no longer empty).
+  2. `git push -u origin <branch>:main`.
+  3. `gh repo edit --default-branch main` (warn-only).
+  4. Prints JSON with the bootstrap commit SHA and `default_branch_set` flag.
+- Step 2b then emits `<<WORKFLOW_USER_VERIFIED: bootstrap initial commit pushed to main>>` and proceeds to Step 5 (inventory) and Step 6 (cleanup). Steps 3 and 4 (PR resolution and merge) are skipped — there is no PR.
+- `capture-env.sh` (Step 5.5) takes a `BOOTSTRAP_MODE=1` shortcut: it skips the `gh pr view` / `mergeCommit` retry and synthesizes `PR_STATE="BOOTSTRAP"`, `MERGE_SHA=<bootstrap commit SHA>`, empty `PR_NUMBER`/`PR_URL`.
+- Step 6h (compose-doc-append) reads `BOOTSTRAP_MODE` from the env JSON and dispatches `compose-doc-append-entry --bootstrap --merge-commit <sha>` instead of `--pr <N>`. The resulting `docs/history.md` and `CHANGELOG.md` entries use `bootstrap initial commit, <sha-short>` instead of `(PR #N)`.
+
+**What the user sees:**
+- In `/commit-push`: "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push."
+- In `/worktree-end`: a single user-verified sentinel emission, then the normal inventory + cleanup output. The Final Report shows `BOOTSTRAP` as the PR state and lists the bootstrap commit SHA in place of a PR number.
+
+**Troubleshooting:**
+- **Probe misfires due to network/auth issues:** the probe classifies these as `network` / `auth` / `not-found` and lets the normal Step 2 path surface the error. The bootstrap routing only activates on `empty-repo`. If you genuinely have an empty remote but the probe keeps returning `auth`, fix credentials first.
+- **`gh repo edit --default-branch main` fails:** Step 2b treats this as warn-only and continues — the push still completes. Manual recovery: `gh repo edit --default-branch main` (or set it via the GitHub web UI under Settings → General → Default branch).
+- **Bootstrap push fails (exit 3 from `bootstrap-complete.sh`):** no cleanup runs; investigate the push error (auth, branch protection, etc.), fix, and re-run `/worktree-end`.
+
 ## Troubleshooting
 
 **Bash write blocked on main worktree:**
