@@ -67,6 +67,19 @@ if (sessionId) {
           git_branch: ctx.git_branch,
           steps: JSON.parse(JSON.stringify(inherited.steps)),
         };
+        // Issue #772: never carry cleanup state across session boundaries.
+        // cleanup is the terminal step of the prior session's task; a new session
+        // represents a new task whose cleanup obligation has not yet been incurred.
+        // "skipped" bypasses workflow-gate (cleanup is in SKIPPABLE_STEPS).
+        // "pending" would re-block commits — that IS the original bug symptom.
+        // Omitting the key does NOT work: readState() re-injects it as "pending".
+        if (newState.steps && newState.steps.cleanup) {
+          newState.steps.cleanup = {
+            status: 'skipped',
+            updated_at: new Date().toISOString(),
+            skip_reason: 'inherited-from-prior-session',
+          };
+        }
         inheritedFromSessionId = inherited.session_id;
       } else {
         newState = createInitialState(sessionId, ctx);
