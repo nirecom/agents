@@ -103,4 +103,8 @@ Changes: `migrate-repo` no longer creates spurious GitHub issues for `docs/todo.
 
 ### FEATURE: PR #775 (2026-06-06)
 Background: feat(#771): abolish Final Report renderer; LLM-direct emission + 10-heading stop-hook guard
-Changes: Final Report (/session-close Step 4) now requires all 10 section headings in your reply; missing headings or unsubstituted `<TOKEN>` placeholders block the turn and re-prompt with a specific list.
+Changes: Final Report (/session-close Step 4) now requires all 10 section headings in your reply; missing headings or unsubstituted `<TOKEN>` placeholders block the turn and re-prompt with a specific list.
+
+### FEATURE: PR #779 (2026-06-06)
+Background: feat(#613,#614): shrink SKILL.md to ≤100 lines + rename steps to skill-prefixed labels (WI/WE/ICF/MDP)
+Changes: fix: `block-history-direct.js` hook now correctly unblocks edits to `rules/docs/history.md` (rules file); previously, any file named `history.md` regardless of directory was blocked
