@@ -70,6 +70,7 @@ condition: sentinel, history entry, or both). Resolve by invoking
    ```
    On `push_failed` or `conflict`: surface summary + artifact_path to user and stop.
    On `pr_created` or `pr_reused`: extract PR URL from summary for step 7.
+   On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step 7 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step 2b owns that sentinel. Stop.
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
@@ -113,3 +114,4 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
   Exception: `/worktree-end` when `AUTO_MERGE_PR=on` (worktree mode only).
   In worktree mode this skill defers entirely to `/worktree-end` (Step 7a).
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
+- `bootstrap_pending` is terminal for `/commit-push` — defer the actual push to `/worktree-end` Step 2b. No PR is created and no user-verified sentinel is emitted in `/commit-push` for this status.

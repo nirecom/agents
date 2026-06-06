@@ -50,6 +50,23 @@ function toMsys2Path(p) {
   return p.replace(/\\/g, "/");
 }
 
+// isBranchDirectlyMerged: returns true if HEAD is fully contained in origin/main,
+// meaning the branch was pushed directly (no PR) — the bootstrap scenario.
+// Fail-closed: returns false on any git error so the premature guard stays active.
+function isBranchDirectlyMerged(repoDir) {
+  let r;
+  try {
+    r = spawnSync(
+      "git", ["-C", repoDir, "rev-list", "origin/main..HEAD", "--count"],
+      { encoding: "utf8", timeout: 5000 }
+    );
+  } catch (e) {
+    return false;
+  }
+  if (r && r.status === 0) return parseInt((r.stdout || "0").trim(), 10) === 0;
+  return false;
+}
+
 // hasOpenPrForBranch: returns true iff the current branch has an OPEN or MERGED PR.
 // Called with { cwd: repoDir } so gh resolves the correct branch context.
 // Exit-code semantics for `gh pr view`:
@@ -82,4 +99,4 @@ function hasOpenPrForBranch(repoDir) {
   return true; // fail-open: gh error (auth failure, network error, not installed)
 }
 
-module.exports = { findGhInPath, toMsys2Path, hasOpenPrForBranch };
+module.exports = { findGhInPath, toMsys2Path, hasOpenPrForBranch, isBranchDirectlyMerged };

@@ -21,6 +21,7 @@ DRY_RUN=0
 CLOSES_ISSUES_COUNT=0
 TARGET_HISTORY=""
 TARGET_CHANGELOG=""
+BOOTSTRAP=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -31,6 +32,7 @@ while [[ $# -gt 0 ]]; do
         --background)  BACKGROUND="$2";   shift 2 ;;
         --category)    CATEGORY="$2";     shift 2 ;;
         --dry-run)     DRY_RUN=1;         shift ;;
+        --bootstrap)   BOOTSTRAP=1;       shift ;;
         --closes-issues-count) CLOSES_ISSUES_COUNT="$2"; shift 2 ;;
         --target-history)   TARGET_HISTORY="$2";   shift 2 ;;
         --target-changelog) TARGET_CHANGELOG="$2"; shift 2 ;;
@@ -44,10 +46,25 @@ done
 # --- Validation ---
 [[ -n "$NOTES_PATH" ]] || { echo "compose-doc-append-entry: --notes is required" >&2; exit 1; }
 [[ -n "$BRANCH" ]] || { echo "compose-doc-append-entry: --branch is required" >&2; exit 1; }
-[[ -n "$PR_NUMBER" ]] || { echo "compose-doc-append-entry: --pr is required" >&2; exit 1; }
 
-# Validate --pr is digits-only
-[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "compose-doc-append-entry: --pr must be digits only (got: $PR_NUMBER)" >&2; exit 1; }
+# --bootstrap and --pr are mutually exclusive; exactly one must be supplied (issue #772).
+if [[ "$BOOTSTRAP" -eq 1 && -n "$PR_NUMBER" ]]; then
+    echo "compose-doc-append-entry: --bootstrap and --pr are mutually exclusive" >&2
+    exit 1
+fi
+if [[ "$BOOTSTRAP" -eq 0 && -z "$PR_NUMBER" ]]; then
+    echo "compose-doc-append-entry: --pr is required (or pass --bootstrap)" >&2
+    exit 1
+fi
+if [[ "$BOOTSTRAP" -eq 1 ]]; then
+    # In bootstrap mode the merge commit IS the bootstrap commit; require it.
+    [[ -n "$MERGE_COMMIT" ]] || { echo "compose-doc-append-entry: --bootstrap requires --merge-commit" >&2; exit 1; }
+fi
+
+# Validate --pr is digits-only (only when supplied)
+if [[ -n "$PR_NUMBER" ]]; then
+    [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "compose-doc-append-entry: --pr must be digits only (got: $PR_NUMBER)" >&2; exit 1; }
+fi
 
 # Validate --branch has no shell metacharacters
 [[ "$BRANCH" =~ ^[A-Za-z0-9._/+-]+$ ]] || { echo "compose-doc-append-entry: --branch contains invalid characters (got: $BRANCH)" >&2; exit 1; }
@@ -100,6 +117,10 @@ derive_background() {
         echo "$BACKGROUND"
         return
     fi
+    if [[ "$BOOTSTRAP" -eq 1 ]]; then
+        echo "Bootstrap initial commit pushed on $(date +%F)."
+        return
+    fi
     local gh_title
     gh_title="$(gh pr view "$PR_NUMBER" --json title --jq .title 2>/dev/null || true)"
     if [[ -n "$gh_title" ]]; then
@@ -109,10 +130,18 @@ derive_background() {
     echo "PR #${PR_NUMBER} merged on $(date +%F)."
 }
 
-# --- Idempotency: per-branch+pr marker files in staging dir ---
+# --- Idempotency: per-branch marker files in staging dir ---
+# Normal mode keys by PR number; bootstrap mode (#772) has no PR, so it keys
+# by the bootstrap commit SHA instead. Repo+branch+merge-commit is unique
+# enough to prevent duplicate writes on retry.
 ENCODED_BRANCH="${BRANCH//\//%2F}"
-MARKER_HISTORY="$STAGING_DIR/markers/${ENCODED_BRANCH}-pr${PR_NUMBER}-history"
-MARKER_CHANGELOG="$STAGING_DIR/markers/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
+if [[ "$BOOTSTRAP" -eq 1 ]]; then
+    MARKER_HISTORY="$STAGING_DIR/markers/${ENCODED_BRANCH}-bootstrap-${MERGE_COMMIT}-history"
+    MARKER_CHANGELOG="$STAGING_DIR/markers/${ENCODED_BRANCH}-bootstrap-${MERGE_COMMIT}-changelog"
+else
+    MARKER_HISTORY="$STAGING_DIR/markers/${ENCODED_BRANCH}-pr${PR_NUMBER}-history"
+    MARKER_CHANGELOG="$STAGING_DIR/markers/${ENCODED_BRANCH}-pr${PR_NUMBER}-changelog"
+fi
 
 history_sentinel_found() {
     [[ -f "$MARKER_HISTORY" ]]
@@ -242,8 +271,15 @@ fetch_to_staging() {
 # --- Background derivation and staging paths ---
 BG="$(derive_background)"
 SESSION_ID="${CLAUDE_SESSION_ID:-$(date +%s)-$$}"
-HISTORY_STAGING="${TARGET_HISTORY:-$STAGING_DIR/${SESSION_ID}-pr${PR_NUMBER}-history-staging.md}"
-CHANGELOG_STAGING="${TARGET_CHANGELOG:-$STAGING_DIR/${SESSION_ID}-pr${PR_NUMBER}-changelog-staging.md}"
+# SHORT_SHA is used by both WANT_HISTORY and WANT_CHANGELOG blocks; initialize early.
+SHORT_SHA="${MERGE_COMMIT:0:7}"
+if [[ "$BOOTSTRAP" -eq 1 ]]; then
+    STAGE_TAG="bootstrap-${SHORT_SHA}"
+else
+    STAGE_TAG="pr${PR_NUMBER}"
+fi
+HISTORY_STAGING="${TARGET_HISTORY:-$STAGING_DIR/${SESSION_ID}-${STAGE_TAG}-history-staging.md}"
+CHANGELOG_STAGING="${TARGET_CHANGELOG:-$STAGING_DIR/${SESSION_ID}-${STAGE_TAG}-changelog-staging.md}"
 
 # --- Build the staged content for each target ---
 if [[ "$WANT_HISTORY" -eq 1 ]]; then
@@ -251,14 +287,22 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
         echo "compose-doc-append-entry: docs/history.md missing on remote; aborting history append" >&2
         exit 1
     fi
-    SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
-    CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
-    if [[ -n "$MERGE_COMMIT" ]]; then
-        COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
+    if [[ "$BOOTSTRAP" -eq 1 ]]; then
+        # Bootstrap history bullet: no (PR #N) suffix; use (bootstrap initial commit, <sha-short>).
+        SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} bootstrap=${SHORT_SHA} -->"
+        CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
+        COMMITS_ARG="${MERGE_COMMIT}"
+        SUBJECT="bootstrap initial commit — ${BRANCH} (${SHORT_SHA})"
     else
-        COMMITS_ARG="#${PR_NUMBER}"
+        SENTINEL=" <!-- compose-doc-append-sentinel: branch=${BRANCH} pr=#${PR_NUMBER} -->"
+        CHANGES_WITH_SENTINEL="$(echo "$HISTORY_BULLETS" | tr '\n' ';' | sed 's/;$//')${SENTINEL}"
+        if [[ -n "$MERGE_COMMIT" ]]; then
+            COMMITS_ARG="${MERGE_COMMIT}, #${PR_NUMBER}"
+        else
+            COMMITS_ARG="#${PR_NUMBER}"
+        fi
+        SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
     fi
-    SUBJECT="PR #${PR_NUMBER} — ${BRANCH}"
 
     if ! uv run "$SCRIPT_DIR/doc-append.py" "$HISTORY_STAGING" \
             --category "$CATEGORY" \
@@ -270,10 +314,15 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
         echo "compose-doc-append-entry: doc-append.py failed for history staging" >&2
         exit 1
     fi
+    if [[ "$BOOTSTRAP" -eq 1 ]]; then
+        HIST_COMMIT_SUBJECT="docs(history): record bootstrap initial commit ${SHORT_SHA}"
+    else
+        HIST_COMMIT_SUBJECT="docs(history): record PR #${PR_NUMBER}"
+    fi
     if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
             --path "docs/history.md" \
             --file "$HISTORY_STAGING" \
-            --commit-subject "docs(history): record PR #${PR_NUMBER}"; then
+            --commit-subject "$HIST_COMMIT_SUBJECT"; then
         echo "compose-doc-append-entry: history validation failed" >&2
         exit 1
     fi
@@ -285,7 +334,13 @@ if [[ "$WANT_CHANGELOG" -eq 1 ]]; then
         WANT_CHANGELOG=0
     else
         CHANGES="$(echo "$CHANGELOG_BULLETS" | tr '\n' ';' | sed 's/;$//')"
-        SUBJ_CHANGELOG="PR #${PR_NUMBER}"
+        if [[ "$BOOTSTRAP" -eq 1 ]]; then
+            SUBJ_CHANGELOG="bootstrap initial commit"
+            CHLOG_COMMIT_SUBJECT="docs(changelog): record bootstrap initial commit ${SHORT_SHA}"
+        else
+            SUBJ_CHANGELOG="PR #${PR_NUMBER}"
+            CHLOG_COMMIT_SUBJECT="docs(changelog): record PR #${PR_NUMBER}"
+        fi
 
         if ! uv run "$SCRIPT_DIR/doc-append.py" "$CHANGELOG_STAGING" \
                 --category "$CATEGORY" \
@@ -300,7 +355,7 @@ if [[ "$WANT_CHANGELOG" -eq 1 ]]; then
         if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-validate.sh" \
                 --path "CHANGELOG.md" \
                 --file "$CHANGELOG_STAGING" \
-                --commit-subject "docs(changelog): record PR #${PR_NUMBER}"; then
+                --commit-subject "$CHLOG_COMMIT_SUBJECT"; then
             echo "compose-doc-append-entry: changelog validation failed" >&2
             exit 1
         fi
@@ -336,6 +391,17 @@ fi
 # Decide write strategy:
 #   - both targets, or history rotated → single atomic Git Data API commit
 #   - one target only, no rotation     → Contents API single PUT
+# Commit message labels: bootstrap mode uses the bootstrap SHA; normal mode uses PR #N.
+if [[ "$BOOTSTRAP" -eq 1 ]]; then
+    MSG_BOTH="docs: record bootstrap initial commit ${SHORT_SHA} (history + changelog)"
+    MSG_HISTORY="docs(history): record bootstrap initial commit ${SHORT_SHA}"
+    MSG_CHANGELOG="docs(changelog): record bootstrap initial commit ${SHORT_SHA}"
+else
+    MSG_BOTH="docs: record PR #${PR_NUMBER} (history + changelog)"
+    MSG_HISTORY="docs(history): record PR #${PR_NUMBER}"
+    MSG_CHANGELOG="docs(changelog): record PR #${PR_NUMBER}"
+fi
+
 if [[ "$WANT_HISTORY" -eq 1 ]] && [[ "$WANT_CHANGELOG" -eq 1 ]]; then
     # Atomic multi-file commit.
     FILES_ARGS=()
@@ -347,7 +413,7 @@ if [[ "$WANT_HISTORY" -eq 1 ]] && [[ "$WANT_CHANGELOG" -eq 1 ]]; then
     FILES_ARGS+=(--file "CHANGELOG.md=$CHANGELOG_STAGING")
     if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-git-data-write.sh" \
             --owner "$OWNER" --repo "$REPO" --branch "$DEF" \
-            --message "docs: record PR #${PR_NUMBER} (history + changelog)" \
+            --message "$MSG_BOTH" \
             "${FILES_ARGS[@]}"; then
         echo "compose-doc-append-entry: atomic multi-file write failed" >&2
         exit 1
@@ -358,7 +424,7 @@ elif [[ "$WANT_HISTORY" -eq 1 ]]; then
     if [[ "$HISTORY_ROTATED" -eq 1 ]]; then
         if ! bash "$AGENTS_CONFIG_DIR/bin/lib/github-git-data-write.sh" \
                 --owner "$OWNER" --repo "$REPO" --branch "$DEF" \
-                --message "docs(history): record PR #${PR_NUMBER}" \
+                --message "$MSG_HISTORY" \
                 "${HISTORY_FILES_ARGS[@]}"; then
             echo "compose-doc-append-entry: history rotation write failed" >&2
             exit 1
@@ -368,7 +434,7 @@ elif [[ "$WANT_HISTORY" -eq 1 ]]; then
                 --owner "$OWNER" --repo "$REPO" \
                 --path "docs/history.md" \
                 --file "$HISTORY_STAGING" \
-                --message "docs(history): record PR #${PR_NUMBER}" \
+                --message "$MSG_HISTORY" \
                 --branch "$DEF"; then
             echo "compose-doc-append-entry: history single-file write failed" >&2
             exit 1
@@ -380,7 +446,7 @@ elif [[ "$WANT_CHANGELOG" -eq 1 ]]; then
             --owner "$OWNER" --repo "$REPO" \
             --path "CHANGELOG.md" \
             --file "$CHANGELOG_STAGING" \
-            --message "docs(changelog): record PR #${PR_NUMBER}" \
+            --message "$MSG_CHANGELOG" \
             --branch "$DEF"; then
         echo "compose-doc-append-entry: changelog single-file write failed" >&2
         exit 1

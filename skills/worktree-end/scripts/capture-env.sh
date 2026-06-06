@@ -30,6 +30,98 @@ fi
 
 LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Bootstrap mode (issue #772): when the session was a new-repo first commit,
+# /worktree-end Step 2b pushed branch:main directly. There is no PR to query,
+# so skip the gh pr view / mergeCommit retry block entirely and synthesize
+# the PR_* fields with sentinel values.
+BOOTSTRAP_MODE="${BOOTSTRAP_MODE:-0}"
+BOOTSTRAP_COMMIT_SHA="${BOOTSTRAP_COMMIT_SHA:-}"
+if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
+    if [[ -z "$BOOTSTRAP_COMMIT_SHA" ]]; then
+        printf "ERROR: BOOTSTRAP_MODE=1 but BOOTSTRAP_COMMIT_SHA is empty\n" >&2
+        exit 1
+    fi
+    BRANCH_NAME="$(git -C "$WORKTREE" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+    PR_NUMBER=""
+    PR_TITLE="(bootstrap initial commit)"
+    PR_URL=""
+    PR_STATE="BOOTSTRAP"
+    MERGE_SHA="$BOOTSTRAP_COMMIT_SHA"
+
+    # Step 3: Restart detection — feed empty PR_NUMBER; lib must tolerate "".
+    RESTART_OUTPUT="$(bash "$LIB_DIR/detect-restart.sh" "$PR_NUMBER" 2>/dev/null || true)"
+
+    parse_cat() {
+        printf '%s\n' "$RESTART_OUTPUT" | tr -d '\r' \
+            | awk -F= -v k="$1" '$1==k { v=$0; sub(/^[^=]*=/, "", v); split(v, a, "|"); print a[1] }'
+    }
+    parse_reason() {
+        printf '%s\n' "$RESTART_OUTPUT" | tr -d '\r' \
+            | awk -F= -v k="$1" '$1==k { v=$0; sub(/^[^=]*=/, "", v); idx=index(v, "|"); print substr(v, idx+1) }'
+    }
+
+    CC_RESTART_REQUIRED="$(parse_cat cc_restart)"
+    CC_RESTART_REASON="$(parse_reason cc_restart)"
+    VSCODE_RELOAD_REQUIRED="$(parse_cat vscode_reload)"
+    VSCODE_RELOAD_REASON="$(parse_reason vscode_reload)"
+    INSTALLER_RERUN_REQUIRED="$(parse_cat installer_rerun)"
+    INSTALLER_RERUN_REASON="$(parse_reason installer_rerun)"
+    OS_REBOOT_REQUIRED="${OS_REBOOT_REQUIRED:-$(parse_cat os_reboot)}"
+    OS_REBOOT_REASON="${OS_REBOOT_REASON:-$(parse_reason os_reboot)}"
+    if [[ "$OS_REBOOT_REQUIRED" == "required" && -z "$OS_REBOOT_REASON" ]]; then
+        OS_REBOOT_REASON="manual env override"
+    fi
+
+    if [[ "$CC_RESTART_REQUIRED" == "required" ]]; then
+        CLAUDE_CODE_RESTART_REQUIRED="yes"
+    else
+        CLAUDE_CODE_RESTART_REQUIRED="no"
+    fi
+
+    BRANCH="$BRANCH_NAME"
+    WORKTREE_PATH="$WORKTREE"
+    CREATED_DATE="$(date -u +%Y-%m-%d)"
+    BACKUP_DIR_VALID=0
+    if [[ "$BACKUP_DIR" != "(none)" && -d "$BACKUP_DIR" ]]; then
+        BACKUP_DIR_VALID=1
+    fi
+    if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
+        BACKUP_MANIFEST_PATH="$BACKUP_DIR/manifest.json"
+    else
+        BACKUP_MANIFEST_PATH="(none)"
+    fi
+
+    NOTES_BACKUP_PATH=""
+    if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
+        if [[ "$BACKUP_DIR_VALID" == "1" ]]; then
+            cp -p "$WORKTREE/WORKTREE_NOTES.md" "$BACKUP_DIR/WORKTREE_NOTES.md"
+            NOTES_BACKUP_PATH="$BACKUP_DIR/WORKTREE_NOTES.md"
+        else
+            NOTES_BACKUP_DIR="$PLANS_DIR/${SESSION_ID}-notes-backup"
+            mkdir -p "$NOTES_BACKUP_DIR"
+            cp -p "$WORKTREE/WORKTREE_NOTES.md" "$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
+            NOTES_BACKUP_PATH="$NOTES_BACKUP_DIR/WORKTREE_NOTES.md"
+        fi
+    fi
+
+    ENV_FILE="$PLANS_DIR/${SESSION_ID}-final-report-env.json"
+
+    PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \
+    BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" \
+    BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" NOTES_BACKUP_PATH="$NOTES_BACKUP_PATH" \
+    MERGE_SHA="$MERGE_SHA" \
+    CLAUDE_CODE_RESTART_REQUIRED="$CLAUDE_CODE_RESTART_REQUIRED" \
+    CC_RESTART_REQUIRED="$CC_RESTART_REQUIRED" CC_RESTART_REASON="$CC_RESTART_REASON" \
+    VSCODE_RELOAD_REQUIRED="$VSCODE_RELOAD_REQUIRED" VSCODE_RELOAD_REASON="$VSCODE_RELOAD_REASON" \
+    INSTALLER_RERUN_REQUIRED="$INSTALLER_RERUN_REQUIRED" INSTALLER_RERUN_REASON="$INSTALLER_RERUN_REASON" \
+    OS_REBOOT_REQUIRED="$OS_REBOOT_REQUIRED" OS_REBOOT_REASON="$OS_REBOOT_REASON" \
+    BOOTSTRAP_MODE="$BOOTSTRAP_MODE" BOOTSTRAP_COMMIT_SHA="$BOOTSTRAP_COMMIT_SHA" \
+        node "$LIB_DIR/write-env-json.js" "$ENV_FILE"
+
+    echo "env JSON written (bootstrap mode): $ENV_FILE"
+    exit 0
+fi
+
 # Step 1: Re-fetch PR_NUMBER (env-reset safe — explicit repo + branch anchors).
 BRANCH_NAME="$(git -C "$WORKTREE" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
 PR_NUMBER="$(gh -R "$REPO" pr list \
@@ -134,6 +226,7 @@ CC_RESTART_REQUIRED="$CC_RESTART_REQUIRED" CC_RESTART_REASON="$CC_RESTART_REASON
 VSCODE_RELOAD_REQUIRED="$VSCODE_RELOAD_REQUIRED" VSCODE_RELOAD_REASON="$VSCODE_RELOAD_REASON" \
 INSTALLER_RERUN_REQUIRED="$INSTALLER_RERUN_REQUIRED" INSTALLER_RERUN_REASON="$INSTALLER_RERUN_REASON" \
 OS_REBOOT_REQUIRED="$OS_REBOOT_REQUIRED" OS_REBOOT_REASON="$OS_REBOOT_REASON" \
+BOOTSTRAP_MODE="$BOOTSTRAP_MODE" BOOTSTRAP_COMMIT_SHA="$BOOTSTRAP_COMMIT_SHA" \
   node "$LIB_DIR/write-env-json.js" "$ENV_FILE"
 
 echo "env JSON written: $ENV_FILE"
