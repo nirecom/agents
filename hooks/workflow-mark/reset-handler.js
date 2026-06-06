@@ -21,6 +21,7 @@ function handle(ctx) {
       return true;
     }
 
+    // #526: pushMessage retained (not signalFatal) — recovery UX must not hard-fail on null sessionId.
     if (!sessionId) {
       pushMessage(
         `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
