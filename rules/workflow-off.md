@@ -29,6 +29,15 @@ Appropriate for: trivial 1-file edits in private repos, `.env` adjustments, main
 
 Do NOT use for: changes that touch public APIs, security boundaries, or shared infrastructure. Use the full workflow for those.
 
+## Sanctioned-command false-block recovery
+
+When `enforce-worktree.js` unexpectedly blocks a sanctioned command (e.g. a documented step in a skill's cascade script):
+
+1. Retry the command as-is. Sanctioned commands like `git worktree remove <path>` and `git worktree prune` are allowed unconditionally by `isAllowedWorktreeCommand`.
+2. If still blocked, file an issue via `/issue-create` so the hook or skill can be fixed at the source.
+
+Setting WORKFLOW_OFF / WORKTREE_OFF to unblock a single command disables enforcement session-wide and masks the root cause. Treat it as a last resort only — acceptable when you are genuinely stuck and cannot continue otherwise.
+
 ## Restoring enforcement
 
 ```
