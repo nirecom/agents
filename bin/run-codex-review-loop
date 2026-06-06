@@ -149,8 +149,19 @@ ARGS=(
   --round "$ROUND"
 )
 
-if [[ "$ROUND" -ge 2 && -f "$LEDGER" ]]; then
-  ARGS+=(--ledger "$LEDGER")
+if [[ "$ROUND" -ge 2 ]]; then
+  if [[ -f "$LEDGER" ]]; then
+    ARGS+=(--ledger "$LEDGER")
+  elif [[ -z "$LEDGER_OVERRIDE" ]]; then
+    echo "run-codex-review-loop: ledger absent at round ${ROUND} — downgrading effective round to 1 (concern-ID continuity lost; see #748/#776)" >&2
+    ROUND=1
+    for i in "${!ARGS[@]}"; do
+      if [[ "${ARGS[$i]}" == "--round" ]]; then
+        ARGS[$((i+1))]="1"
+        break
+      fi
+    done
+  fi
 fi
 
 if [[ -f "$CONTEXT_OUT" && -s "$CONTEXT_OUT" ]]; then
