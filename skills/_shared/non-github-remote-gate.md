@@ -32,7 +32,7 @@ still runs** as normal — the gate itself does not abort the skill.
 
 ## Current consumers
 
-- `skills/workflow-init/SKILL.md` Step 0.5
+- `skills/workflow-init/SKILL.md` Step WI-2
 - `skills/commit-push/SKILL.md` Phase 1 pre-flight + PR step
 - `skills/issue-close-stage/SKILL.md` Pre-flight
 - `skills/issue-close-finalize/SKILL.md` Pre-flight

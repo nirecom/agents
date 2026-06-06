@@ -2,7 +2,7 @@
 # parent-close-proposal-execute.sh <N>
 #
 # Pre-close issue <N> so that issue-close-finalize-triage.sh reads CLOSED and
-# routes to auto_close_path (Step E,G,J,K), bypassing Phase 1.
+# routes to auto_close_path (Step ICF-D,ICF-I,ICF-J — Step E removed in #690), bypassing Phase 1.
 #
 # Exit 0: success.
 # Exit 1: gh issue close failed.
