@@ -111,4 +111,8 @@ Changes: fix: `block-history-direct.js` hook now correctly unblocks edits to `ru
 
 ### FEATURE: PR #780 (2026-06-06)
 Background: feat(#719): EM Supervisor S-2 — Layer 2 semi-realtime JD monitoring + ScheduleWakeup handshake
-Changes: EM Supervisor now performs Layer 2 semantic JD-checklist analysis automatically. After 5 minutes of tool activity, a ScheduleWakeup is scheduled; on wakeup the main conversation reviews intent alignment, scope drift, non-goal violations, tacit knowledge continuity, and §3/§4/§5 perspective against plan artifacts and recent findings. Layer 2 verdicts surface as `additionalContext` advisories at each tool use and Stop boundary; `cumulative_severity=error` blocks the turn via the Stop hook.
+Changes: EM Supervisor now performs Layer 2 semantic JD-checklist analysis automatically. After 5 minutes of tool activity, a ScheduleWakeup is scheduled; on wakeup the main conversation reviews intent alignment, scope drift, non-goal violations, tacit knowledge continuity, and §3/§4/§5 perspective against plan artifacts and recent findings. Layer 2 verdicts surface as `additionalContext` advisories at each tool use and Stop boundary; `cumulative_severity=error` blocks the turn via the Stop hook.
+
+### FEATURE: PR #781 (2026-06-06)
+Background: feat(#772): new-repo bootstrap path for ENFORCE_WORKTREE=on
+Changes: New-repo bootstrap: `/worktree-end` now auto-detects a brand-new GitHub repo (no default branch) and pushes the initial commit directly to `main` without a PR, enabling the full ENFORCE_WORKTREE=on workflow from day one.;Codex review timeout: configurable via `CODEX_TIMEOUT_SECS` in `.env` (default 300 s, raised from 180 s); documented in `.env.example`.
