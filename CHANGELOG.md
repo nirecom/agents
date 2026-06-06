@@ -107,4 +107,8 @@ Changes: Final Report (/session-close Step 4) now requires all 10 section headin
 
 ### FEATURE: PR #779 (2026-06-06)
 Background: feat(#613,#614): shrink SKILL.md to ≤100 lines + rename steps to skill-prefixed labels (WI/WE/ICF/MDP)
-Changes: fix: `block-history-direct.js` hook now correctly unblocks edits to `rules/docs/history.md` (rules file); previously, any file named `history.md` regardless of directory was blocked
+Changes: fix: `block-history-direct.js` hook now correctly unblocks edits to `rules/docs/history.md` (rules file); previously, any file named `history.md` regardless of directory was blocked
+
+### FEATURE: PR #780 (2026-06-06)
+Background: feat(#719): EM Supervisor S-2 — Layer 2 semi-realtime JD monitoring + ScheduleWakeup handshake
+Changes: EM Supervisor now performs Layer 2 semantic JD-checklist analysis automatically. After 5 minutes of tool activity, a ScheduleWakeup is scheduled; on wakeup the main conversation reviews intent alignment, scope drift, non-goal violations, tacit knowledge continuity, and §3/§4/§5 perspective against plan artifacts and recent findings. Layer 2 verdicts surface as `additionalContext` advisories at each tool use and Stop boundary; `cumulative_severity=error` blocks the turn via the Stop hook.
