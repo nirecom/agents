@@ -127,4 +127,8 @@ Changes: fix: `worktree-end` WE-14 (`git worktree remove`) and WE-16 (`git workt
 
 ### FEATURE: PR #785 (2026-06-06)
 Background: fix(#719): add systemMessage to supervisor-guard.js error-level block output
-Changes: EM Supervisor Layer 2 error blocks now show a direct notification in the Claude Code UI (via systemMessage), not just Claude's mediated response.
+Changes: EM Supervisor Layer 2 error blocks now show a direct notification in the Claude Code UI (via systemMessage), not just Claude's mediated response.
+
+### FEATURE: PR #784 (2026-06-06)
+Background: fix(#546): normalizeCwd + single-spawn in show-plan-link.js
+Changes: When multiple VS Code windows are open, plan files (intent/outline/detail) now open in the correct window. Two root causes fixed: Windows Git Bash path normalization (`/c/git/agents` → correct URI) and a timing race in the previous two-step spawn. Note: VS Code 1.121 users may still need to click the breadcrumb manually (known VS Code 1.121 regression; fixed in 1.122+).
