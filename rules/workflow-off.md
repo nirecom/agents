@@ -33,10 +33,10 @@ Do NOT use for: changes that touch public APIs, security boundaries, or shared i
 
 When `enforce-worktree.js` unexpectedly blocks a sanctioned command (e.g. a documented step in a skill's cascade script):
 
-1. Retry without any redundant skill-token prefix. Sanctioned commands like `git worktree remove <path>` and `git worktree prune` are allowed unconditionally by `isAllowedWorktreeCommand` — no `WORKTREE_END_SKILL=1` prefix is needed.
-2. If still blocked after removing the prefix, file an issue via `/issue-create` so the hook or skill can be fixed at the source.
+1. Retry the command as-is. Sanctioned commands like `git worktree remove <path>` and `git worktree prune` are allowed unconditionally by `isAllowedWorktreeCommand`.
+2. If still blocked, file an issue via `/issue-create` so the hook or skill can be fixed at the source.
 
-Do NOT set WORKFLOW_OFF / WORKTREE_OFF as a workaround for a single blocked command. These settings disable enforcement session-wide and hide the underlying defect.
+Setting WORKFLOW_OFF / WORKTREE_OFF to unblock a single command disables enforcement session-wide and masks the root cause. Treat it as a last resort only — acceptable when you are genuinely stuck and cannot continue otherwise.
 
 ## Restoring enforcement
 
