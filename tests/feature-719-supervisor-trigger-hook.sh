@@ -1,0 +1,250 @@
+#!/bin/bash
+# tests/feature-719-supervisor-trigger-hook.sh
+# Tests: hooks/supervisor-trigger.js (PostToolUse — wakeup writer)
+# Tags: supervisor, em-supervisor, hook, layer2
+# RED for issue #719.
+
+set -u
+
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if command -v cygpath >/dev/null 2>&1; then
+    _AGENTS_DIR_NODE="$(cygpath -m "$AGENTS_DIR")"
+else
+    _AGENTS_DIR_NODE="$AGENTS_DIR"
+fi
+
+HOOK="$AGENTS_DIR/hooks/supervisor-trigger.js"
+HOOK_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-trigger.js"
+WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
+
+PASS=0; FAIL=0; SKIP=0
+pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
+skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
+
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
+    else perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; fi
+}
+
+to_node_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
+}
+
+require_source() {
+    local path="$1" label="$2"
+    if [ ! -f "$path" ]; then skip "$label (source not implemented yet)"; return 1; fi
+    return 0
+}
+
+seed_state() {
+    local tmp="$1" sid="$2" layer2_json="$3"
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const s = require('$SCHEMA_NODE');
+const fs = require('fs');
+const st = s.createEmptyState('$sid');
+st.layer2 = $layer2_json;
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+" >/dev/null 2>&1
+}
+
+read_field() {
+    local tmp="$1" sid="$2" path="$3"
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const st = w.readState('$sid');
+const parts = '$path'.split('.');
+let cur = st;
+for (const p of parts) { if (cur == null) break; cur = cur[p]; }
+process.stdout.write(JSON.stringify(cur));
+" 2>/dev/null
+}
+
+run_t1() {
+    require_source "$HOOK" "T1: no state file -> creates state w/ next_check_at" || return
+    local tmp val rc
+    tmp="$(mktemp -d)"
+    echo '{"tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"t1-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    rc=$?
+    val=$(read_field "$tmp" "t1-sid" "layer2.next_check_at")
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
+        pass "T1: no state file -> creates state w/ next_check_at"
+    else
+        fail "T1: no state file -> creates state w/ next_check_at (rc=$rc, val=$val)"
+    fi
+}
+
+run_t2() {
+    require_source "$HOOK" "T2: last_run_at 1min ago, next null -> no write" || return
+    local tmp out rc val
+    tmp="$(mktemp -d)"
+    local ts
+    ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
+    seed_state "$tmp" "t2-sid" "{ next_check_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t2-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    val=$(read_field "$tmp" "t2-sid" "layer2.next_check_at")
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
+        pass "T2: last_run_at 1min ago, next null -> no write"
+    else
+        fail "T2: last_run_at 1min ago, next null -> no write (rc=$rc, val=$val, out=$out)"
+    fi
+}
+
+run_t3() {
+    require_source "$HOOK" "T3: last_run_at 10min ago -> writes next_check_at" || return
+    local tmp rc val
+    tmp="$(mktemp -d)"
+    local ts
+    ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-600000).toISOString())")
+    seed_state "$tmp" "t3-sid" "{ next_check_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t3-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    rc=$?
+    val=$(read_field "$tmp" "t3-sid" "layer2.next_check_at")
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
+        pass "T3: last_run_at 10min ago -> writes next_check_at"
+    else
+        fail "T3: last_run_at 10min ago -> writes next_check_at (rc=$rc, val=$val)"
+    fi
+}
+
+run_t4() {
+    require_source "$HOOK" "T4: next_check_at already set -> idempotent" || return
+    local tmp rc val
+    tmp="$(mktemp -d)"
+    seed_state "$tmp" "t4-sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t4-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
+    rc=$?
+    val=$(read_field "$tmp" "t4-sid" "layer2.next_check_at")
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$val" = "\"2026-06-06T12:00:00Z\"" ]; then
+        pass "T4: next_check_at already set -> idempotent"
+    else
+        fail "T4: next_check_at already set -> idempotent (rc=$rc, val=$val)"
+    fi
+}
+
+run_t5() {
+    require_source "$HOOK" "T5: cumulative_severity=warning -> additionalContext" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    seed_state "$tmp" "t5-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
+    out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t5-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    # accept "warning" OR "Layer 2" OR the warning marker in output
+    if [ $rc -eq 0 ] && ( echo "$out" | grep -qiE "(warning|layer 2|⚠)" ); then
+        pass "T5: cumulative_severity=warning -> additionalContext"
+    else
+        fail "T5: cumulative_severity=warning -> additionalContext (rc=$rc, out=$out)"
+    fi
+}
+
+run_t6() {
+    require_source "$HOOK" "T6: cumulative_severity=error -> additionalContext, exit 0" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    seed_state "$tmp" "t6-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
+    out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t6-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( echo "$out" | grep -qiE "(error|layer 2)" ); then
+        pass "T6: cumulative_severity=error -> additionalContext, exit 0"
+    else
+        fail "T6: cumulative_severity=error -> additionalContext, exit 0 (rc=$rc, out=$out)"
+    fi
+}
+
+run_t7() {
+    require_source "$HOOK" "T7: WORKFLOW_OFF marker -> {} no-op" || return
+    local tmp wfdir out rc
+    tmp="$(mktemp -d)"; wfdir="$(mktemp -d)"
+    touch "$wfdir/t7-sid.workflow-off"
+    out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t7-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_WORKFLOW_DIR="$wfdir" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp" "$wfdir"
+    # accept empty or {} as no-op
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "T7: WORKFLOW_OFF marker -> {} no-op"
+    else
+        fail "T7: WORKFLOW_OFF marker -> {} no-op (rc=$rc, out=$out)"
+    fi
+}
+
+run_t8() {
+    require_source "$HOOK" "T8: malformed stdin -> exit 0 {}" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    out=$(echo 'not-json' | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "T8: malformed stdin -> exit 0 {}"
+    else
+        fail "T8: malformed stdin -> exit 0 {} (rc=$rc, out=$out)"
+    fi
+}
+
+run_t9() {
+    require_source "$HOOK" "T9: unresolvable session id -> exit 0 {}" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    out=$(echo '{}' | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "T9: unresolvable session id -> exit 0 {}"
+    else
+        fail "T9: unresolvable session id -> exit 0 {} (rc=$rc, out=$out)"
+    fi
+}
+
+run_t10() {
+    require_source "$HOOK" "T10: non-Bash tool input -> exit 0, parseable JSON" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    out=$(echo '{"tool_name":"Read","tool_input":{"file_path":"x"},"session_id":"t10-sid"}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    # accept any exit 0; output may be empty, {}, or JSON with additionalContext
+    if [ $rc -eq 0 ]; then
+        # if output is non-empty, must be parseable JSON
+        if [ -z "$out" ] || run_with_timeout 5 node -e "JSON.parse(process.argv[1])" "$out" >/dev/null 2>&1; then
+            pass "T10: non-Bash tool input -> exit 0, parseable JSON"
+        else
+            fail "T10: non-Bash tool input -> exit 0, parseable JSON (rc=$rc, out=$out, not JSON)"
+        fi
+    else
+        fail "T10: non-Bash tool input -> exit 0, parseable JSON (rc=$rc, out=$out)"
+    fi
+}
+
+run_t1
+run_t2
+run_t3
+run_t4
+run_t5
+run_t6
+run_t7
+run_t8
+run_t9
+run_t10
+
+echo ""
+echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
+[ "$FAIL" -gt 0 ] && exit 1
+exit 0

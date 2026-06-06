@@ -260,6 +260,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-final-report-guard.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-guard.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -469,6 +474,11 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/show-plan-link.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-trigger.js\"",
             "timeout": 5
           }
         ]
