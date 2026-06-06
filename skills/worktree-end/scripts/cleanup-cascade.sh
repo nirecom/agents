@@ -7,13 +7,13 @@
 set -euo pipefail
 cat <<'TEMPLATE'
 ## WE-14 — git worktree remove
-`WORKTREE_END_SKILL=1 git -C <main> worktree remove <path>` (never `--force`).
+`git -C <main> worktree remove <path>` (never `--force`).
 
 ## WE-15 — On WE-14 failure (conditional)
 If WE-14 (git worktree remove) exits non-zero (EPERM, busy, not-empty, any error): print stderr warning that /sweep-worktrees will reclaim automatically; skip WE-17 (orphan-dir cleanup) and WE-18 (branch -D); proceed to WE-19. (WE-17 skipped: dir occupied — self-resolves at next sweep. WE-18 skipped: git cascade rule blocks `branch -D` while worktree registered.)
 
 ## WE-16 — git worktree prune
-`WORKTREE_END_SKILL=1 git -C <main> worktree prune`
+`git -C <main> worktree prune`
 
 ## WE-17 — Orphan-dir cleanup
 `node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" "<WORKTREE_BASE_DIR>/<task-name>"`. If it refuses with "not empty", re-run with `--force-if-not-registered` (requires WE-8 inventory complete — issue #322).
