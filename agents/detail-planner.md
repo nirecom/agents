@@ -134,5 +134,5 @@ The `reject: <reason>` disposition includes the typed sub-form `reject: contradi
 
 One numbered line per reviewer concern, same order as the raw codex output.
 The orchestrator copies this block verbatim into `<session-id>-concerns-log.md`
-(see `make-detail-plan/SKILL.md` Step 5e). Missing trailer on revision round triggers
+(see `make-detail-plan/SKILL.md` Step MDP-5). Missing trailer on revision round triggers
 one re-prompt; second omission escalates.

@@ -217,7 +217,7 @@ if (require.main === module) {
     }
 
     // PREMATURE USER_VERIFIED GUARD: block emission when ENFORCE_WORKTREE=on and
-    // no OPEN/MERGED PR exists for the branch (i.e., before worktree-end Step 4).
+    // no OPEN/MERGED PR exists for the branch (i.e., before worktree-end Step WE-7 (local merge)).
     // Requires toolInput.cwd — without an explicit Bash cwd we cannot reliably
     // determine the worktree context (resolveRepoDir may return a stale path),
     // so we skip the guard and fail-open. Real Claude Code always supplies cwd.
@@ -232,7 +232,7 @@ if (require.main === module) {
     ) {
       block(
         "workflow-gate: premature <<WORKFLOW_USER_VERIFIED>> emission blocked.\n\n" +
-        "Under ENFORCE_WORKTREE=on, emit this sentinel only at /worktree-end Step 4\n" +
+        "Under ENFORCE_WORKTREE=on, emit this sentinel only at /worktree-end Step WE-7 (local merge)\n" +
         "(after the PR is open and merge is imminent).\n\n" +
         "Defer: proceed to /worktree-end which emits the sentinel at the correct point.\n" +
         "Emergency bypass: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>\"\n" +

@@ -396,33 +396,15 @@ assert_absent_local() {
 assert_absent_local "$WORKFLOW_INIT_MD" "pick one" \
     "W6b: 'pick one' (old narrowing behavior) is absent from SKILL.md"
 
-# W7: Path A section contains a multi-line `closes_issues` sample — 2+ consecutive
-# `- ` bullets inside a code fence within 50 lines of "Path A".
+# W7: Path A section documents multi-issue closes_issues (ISSUES[1+] present).
 if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "W7: Path A multi-line closes_issues sample (file not found)"
+    fail "W7: Path A multi-issue documentation (file not found)"
 else
-    HAS_MULTI=$(awk '
-        BEGIN { in_path_a = 0; lines_since_a = 0; in_fence = 0; consec = 0; found = 0 }
-        /Path A/ && !in_path_a { in_path_a = 1; lines_since_a = 0; next }
-        in_path_a {
-            lines_since_a++
-            if (lines_since_a > 50) { in_path_a = 0; in_fence = 0; consec = 0; next }
-            if ($0 ~ /^```/) { in_fence = !in_fence; consec = 0; next }
-            if (in_fence) {
-                if ($0 ~ /^- /) {
-                    consec++
-                    if (consec >= 2) { found = 1; exit }
-                } else {
-                    consec = 0
-                }
-            }
-        }
-        END { print (found ? "YES" : "NO") }
-    ' "$WORKFLOW_INIT_MD")
-    if [ "$HAS_MULTI" = "YES" ]; then
-        pass "W7: Path A section contains a multi-line closes_issues sample (2+ consecutive '- ' bullets in fence)"
+    PATH_A_W7=$(awk '/^#### Path A/{in_a=1;next} in_a{if(/^#### /){exit}print}' "$WORKFLOW_INIT_MD")
+    if printf '%s' "$PATH_A_W7" | grep -qF 'ISSUES[1+]'; then
+        pass "W7: Path A documents multi-issue closes_issues (ISSUES[1+] present)"
     else
-        fail "W7: Path A section missing multi-line closes_issues sample (need 2+ consecutive '- ' bullets in code fence within 50 lines of 'Path A')"
+        fail "W7: Path A missing multi-issue documentation (ISSUES[1+] not found)"
     fi
 fi
 
@@ -447,9 +429,9 @@ if [ ! -f "$WORKFLOW_INIT_MD" ]; then
 else
     # Extract Path A section (from "### Path A" heading to next "### Path " heading or EOF).
     PATH_A_SLICE=$(awk '
-        /^### Path A/ { in_a = 1 }
+        /^#### Path A/ { in_a = 1 }
         in_a {
-            if (/^### Path [BC]/) { exit }
+            if (/^#### Path [BC]/) { exit }
             print
         }
     ' "$WORKFLOW_INIT_MD")
