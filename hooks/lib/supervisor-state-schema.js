@@ -20,7 +20,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    layer2: {},
+    layer2: { next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] },
     layer3: {},
   };
 }
@@ -64,6 +64,29 @@ function validate(obj) {
   }
   if (typeof obj.layer2 !== "object" || obj.layer2 === null || Array.isArray(obj.layer2)) {
     errors.push("layer2 must be an object");
+  } else {
+    const l2 = obj.layer2;
+    if ("next_check_at" in l2 && l2.next_check_at !== null && typeof l2.next_check_at !== "string") {
+      errors.push("layer2.next_check_at must be null or a string");
+    }
+    if ("last_run_at" in l2 && l2.last_run_at !== null && typeof l2.last_run_at !== "string") {
+      errors.push("layer2.last_run_at must be null or a string");
+    }
+    if ("cumulative_severity" in l2 && l2.cumulative_severity !== null && !SEVERITY_VALUES.includes(l2.cumulative_severity)) {
+      errors.push(`layer2.cumulative_severity must be null or one of ${SEVERITY_VALUES.join("|")}`);
+    }
+    if ("findings" in l2) {
+      if (!Array.isArray(l2.findings)) {
+        errors.push("layer2.findings must be an array");
+      } else {
+        for (let i = 0; i < l2.findings.length; i++) {
+          const r = validateFinding(l2.findings[i]);
+          if (!r.ok) {
+            for (const e of r.errors) errors.push(`layer2.findings[${i}]: ${e}`);
+          }
+        }
+      }
+    }
   }
   if (typeof obj.layer3 !== "object" || obj.layer3 === null || Array.isArray(obj.layer3)) {
     errors.push("layer3 must be an object");
