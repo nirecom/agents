@@ -123,4 +123,8 @@ Changes: `/worktree-end` Step WE-8 no longer prompts "Back up, discard, or abort
 
 ### FEATURE: PR #783 (2026-06-06)
 Background: fix(#778): remove redundant WORKTREE_END_SKILL=1 prefix; tighten --force guard for git worktree remove
-Changes: fix: `worktree-end` WE-14 (`git worktree remove`) and WE-16 (`git worktree prune`) no longer require a `WORKTREE_END_SKILL=1` prefix — the hook allowed these commands unconditionally all along. `rules/workflow-off.md` gains a "Sanctioned-command false-block recovery" section: retry without a prefix before disabling enforcement session-wide.
+Changes: fix: `worktree-end` WE-14 (`git worktree remove`) and WE-16 (`git worktree prune`) no longer require a `WORKTREE_END_SKILL=1` prefix — the hook allowed these commands unconditionally all along. `rules/workflow-off.md` gains a "Sanctioned-command false-block recovery" section: retry without a prefix before disabling enforcement session-wide.
+
+### FEATURE: PR #785 (2026-06-06)
+Background: fix(#719): add systemMessage to supervisor-guard.js error-level block output
+Changes: EM Supervisor Layer 2 error blocks now show a direct notification in the Claude Code UI (via systemMessage), not just Claude's mediated response.
