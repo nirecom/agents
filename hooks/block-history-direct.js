@@ -34,7 +34,13 @@ function isProtectedPath(filePath) {
   if (!filePath) return false;
   const basename = getBasename(filePath);
   if (!basename) return false;
-  return PROTECTED_BASENAMES.has(basename);
+  if (!PROTECTED_BASENAMES.has(basename)) return false;
+  // history.md: only protect the canonical docs/history.md, not rules/docs/history.md
+  if (basename === "history.md") {
+    const norm = filePath.replace(/\\/g, "/");
+    return /(^|\/)docs\/history\.md$/.test(norm) && !/(^|\/)rules\/docs\/history\.md$/.test(norm);
+  }
+  return true;
 }
 
 function bashHitsProtected(cmd) {

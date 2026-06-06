@@ -9,7 +9,7 @@ When you discover a bug unrelated to the current task, a related follow-up, or a
 - Non-GitHub remote (`bin/is-github-dotcom-remote` returns non-zero), OR
 - User explicitly defers.
 
-Fallback recovery: `/worktree-end` Step 5.5(a.5) promotes unconverted `WORKTREE_NOTES.md` entries to issues. **Cutoff: Step 5** — findings after that go directly to `/issue-create`.
+Fallback recovery: `/worktree-end` Step WE-10 promotes unconverted `WORKTREE_NOTES.md` entries to issues. **Cutoff: Step WE-8** — findings after that go directly to `/issue-create`.
 
 Fallback sections (edit `WORKTREE_NOTES.md` directly; gitignored; not subject to `enforce-worktree`). Replace `- (none)` on first append:
 

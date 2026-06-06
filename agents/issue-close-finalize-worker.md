@@ -33,8 +33,8 @@ Receive a JSON object with `phase` determining the pass type:
 - `agents_config_dir`: resolved path
 - `finalize_scripts_dir`: resolved absolute path to the finalize skill's `scripts/` directory
 - `artifact_dir`: directory to write log to
-- `session_id`: session ID string (resolves env-var propagation gap for Step L)
-- `outcome_file_path`: absolute path to write outcome JSON (resolves env-var propagation gap for Step L)
+- `session_id`: session ID string (resolves env-var propagation gap for Step ICF-K)
+- `outcome_file_path`: absolute path to write outcome JSON (resolves env-var propagation gap for Step ICF-K)
 
 ## State file schema
 
@@ -77,12 +77,12 @@ Accept only `schema_version: 3`. Reject other versions.
 Run all commands from `main_worktree_path` with `ISSUE_CLOSE_SKILL=1` where needed.
 
 1. Pre-flight: `eval "$(bash "$finalize_scripts_dir/pre-flight.sh")"` — sets `OWNER_REPO`. Non-zero → emit `status: failed`, `summary: "pre-flight failed"` and stop.
-2. Step A (triage): run the finalize triage script from `$agents_config_dir/bin/github-issues/` for `$issue_number` — sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`. (Script: `finalize-triage.sh` in that dir.) Non-zero → emit `status: failed`, `summary: "triage failed for #N"` and stop.
-3. Step A.5 (PR/SHA resolution): only when `J` is in NEXT_STEPS AND `$ACTION != admin_close_path`. Run `eval "$(bash "$agents_config_dir/bin/github-issues/find-pr-by-marker.sh" "$issue_number")"` — sets `PR_NUMBER`, `MERGE_COMMIT`. Non-zero → emit `status: failed`, `summary: "PR marker lookup failed for #N"` and stop. When skipped (admin_close_path): `PR_NUMBER` / `MERGE_COMMIT` remain unset; Step J calls `post-close-sentinels.sh` without hash (J-1 skipped, J-2 posts).
-4. Step B (sub-issue gate when B in NEXT_STEPS): `bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"` — non-zero → emit `status: failed`, `summary: "sub-issue gate blocked #N"` and stop.
-5. Step G (parent body update when G in NEXT_STEPS): `bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"`. Non-zero → log warning; continue (non-fatal).
-6. Step G.5-1 (prepare proposal when G in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$issue_number")"` — sets `PROPOSAL_STATUS`, `PROPOSAL_PARENT`. Non-zero → emit `status: failed`, `summary: "G.5-1 prepare failed for #N"` and stop.
-7. Write initial state file (atomic: `.tmp` → `mv`). Persist `triage_action` from Step A's `$ACTION` so `phase=finalize_terminal` can route Step L's `historyEntry`. If mv fails: emit `status: failed`, `summary: "state file write failed"` and stop. Set `phase=init_done`.
+2. Step ICF-A (triage): run the finalize triage script from `$agents_config_dir/bin/github-issues/` for `$issue_number` — sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`. (Script: `finalize-triage.sh` in that dir.) Non-zero → emit `status: failed`, `summary: "triage failed for #N"` and stop.
+3. Step ICF-B (PR/SHA resolution): only when `J` is in NEXT_STEPS AND `$ACTION != admin_close_path`. Run `eval "$(bash "$agents_config_dir/bin/github-issues/find-pr-by-marker.sh" "$issue_number")"` — sets `PR_NUMBER`, `MERGE_COMMIT`. Non-zero → emit `status: failed`, `summary: "PR marker lookup failed for #N"` and stop. When skipped (admin_close_path): `PR_NUMBER` / `MERGE_COMMIT` remain unset; Step ICF-I calls `post-close-sentinels.sh` without hash (ICF-I-1 skipped, ICF-I-2 posts).
+4. Step ICF-C (sub-issue gate when B in NEXT_STEPS): `bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"` — non-zero → emit `status: failed`, `summary: "sub-issue gate blocked #N"` and stop.
+5. Step ICF-D (parent body update when G in NEXT_STEPS): `bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"`. Non-zero → log warning; continue (non-fatal).
+6. Step ICF-E (prepare proposal when G in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$issue_number")"` — sets `PROPOSAL_STATUS`, `PROPOSAL_PARENT`. Non-zero → emit `status: failed`, `summary: "ICF-E prepare failed for #N"` and stop.
+7. Write initial state file (atomic: `.tmp` → `mv`). Persist `triage_action` from Step ICF-A's `$ACTION` so `phase=finalize_terminal` can route Step ICF-K's `historyEntry`. If mv fails: emit `status: failed`, `summary: "state file write failed"` and stop. Set `phase=init_done`.
 8. Write stdout+stderr to `$artifact_dir/<timestamp>-issue-close-finalize-worker-<N>.log`. If log write fails: use `artifact_path: (none)` in output.
 
 ### phase=loop_step
@@ -111,22 +111,22 @@ Read state file. If missing or invalid schema_version: emit `status: failed`, `s
 
 Run Steps H, J, K, L for `current_issue_number`:
 
-- Step H: `ISSUE_CLOSE_SKILL=1 gh issue close "$current_issue_number" --reason completed`. Non-zero → emit `status: failed`, `summary: "Step H: gh issue close failed for #N"` and stop.
-- Step J: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state). Non-zero → log warning; continue (non-fatal).
-- Step K: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`. Non-zero → log warning; continue (non-fatal).
-- Step L: read `triage_action` from state. Determine `history_entry_status`:
+- Step ICF-H: `ISSUE_CLOSE_SKILL=1 gh issue close "$current_issue_number" --reason completed`. Non-zero → emit `status: failed`, `summary: "Step ICF-H: gh issue close failed for #N"` and stop.
+- Step ICF-I: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state). Non-zero → log warning; continue (non-fatal).
+- Step ICF-J: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`. Non-zero → log warning; continue (non-fatal).
+- Step ICF-K: read `triage_action` from state. Determine `history_entry_status`:
   `"skipped_no_history_notes"` when `triage_action == auto_close_path` (PR used `closes #N` keyword; no WORKTREE_NOTES.md generated this session);
   `"skipped_admin_close"` when `triage_action == admin_close_path` (no worktree, no WORKTREE_NOTES.md ever existed; meta umbrella close requires no history entry);
-  `"written_by_step_6h"` otherwise (normal worktree path: `/worktree-end` Step 6h is the canonical writer of `docs/history.md`, #690).
+  `"written_by_step_6h"` otherwise (normal worktree path: `/worktree-end` Step WE-20 is the canonical writer of `docs/history.md`, #690).
   Then: `node "$agents_config_dir/bin/issue-close-write-outcome.js" --session-id "$session_id" --out-file "$outcome_file_path" "$current_issue_number" "succeeded" "$history_entry_status" "succeeded" "$j_status" "$k_status"`. Non-zero → log warning; continue (non-fatal).
-  (`state`="succeeded" — reached Step L; `historyEntry`=`$history_entry_status`; `issueClosed`="succeeded" — Step H; `sentinelsPosted`=`$j_status`; `wipCleared`=`$k_status`)
+  (`state`="succeeded" — reached Step ICF-K; `historyEntry`=`$history_entry_status`; `issueClosed`="succeeded" — Step ICF-H; `sentinelsPosted`=`$j_status`; `wipCleared`=`$k_status`)
 
 Set `phase=terminal`. Write state (atomic). If atomic write fails: emit `status: failed`, `summary: "terminal state write failed"` and stop.
 
 ## Rules
 
 - Workflow sentinel emission is prohibited (worker runs inside a subagent context).
-- Never call AskUserQuestion — G.5-2 judgement stays in the main context.
+- Never call AskUserQuestion — ICF-F judgement stays in the main context.
 - Recursive skill invocation is prohibited — recursion ownership belongs to the main context.
 - Atomic writes only: write to `<state_file_path>.tmp` then `mv <state_file_path>.tmp <state_file_path>`.
 - Accept only `schema_version: 3` state files.
