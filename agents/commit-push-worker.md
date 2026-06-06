@@ -25,6 +25,13 @@ Receive a JSON object with:
 2. Commit:
    - Normal: `git commit -m "$commit_message"`
    - WIP: `git -c workflow.wip=1 commit -m "$commit_message"`
+3.0. **Bootstrap probe (issue #772):** Before pushing, classify the remote.
+   `PROBE_JSON="$(bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "$repo_root")"`
+   - `preBootstrap === true` AND `classification === "empty-repo"`:
+     - Skip the push step (Step 3) entirely.
+     - Return `status: bootstrap_pending`, `summary: "Remote has no default branch — run /worktree-end to complete bootstrap"`, and the artifact_path of the worker log.
+     - The bootstrap push (`branch:main` + default-branch set) is handled exclusively by `/worktree-end` Step 2b.
+   - Any other classification → fall through to Step 3 (normal push path).
 3. Push to remote (3 attempts):
    - If no upstream: `git push -u origin "$branch"`
    - Otherwise: `git push`
@@ -52,7 +59,7 @@ Receive a JSON object with:
 Respond with exactly three lines:
 
 ```
-status: pushed|pr_created|pr_reused|push_failed|conflict
+status: pushed|pr_created|pr_reused|push_failed|conflict|bootstrap_pending
 summary: "<branch pushed (N commits); PR #N created|reused at <url>>"
 artifact_path: "<absolute log path>"
 ```
