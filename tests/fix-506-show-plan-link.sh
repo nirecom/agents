@@ -50,6 +50,7 @@ run_hook_capture_spawn() {
 }
 
 # Helper to get block-1 URI line
+# single block layout: line 1 = --folder-uri, line 2 = <uri>, line 3 = <filePath>
 get_block1_uri() {
   local marker="$1"
   parse_marker "$marker" 1 | sed -n '2p'

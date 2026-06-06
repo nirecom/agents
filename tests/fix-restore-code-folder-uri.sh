@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: hooks/show-plan-link.js, hooks/show-plan-link.js.
 # Tags: plan, vscode, hook, bin, macos
-# Tests for new VS Code spawn behavior of hooks/show-plan-link.js.
+# Tests for VS Code 1-spawn behavior of hooks/show-plan-link.js.
 # Written first (TDD); spawn-related assertions fail until the source is implemented.
 set -uo pipefail
 
@@ -23,6 +23,7 @@ run_with_timeout() {
 
 parse_marker() {
   # Usage: parse_marker <marker_file> <block_num>  → prints lines of block N (1-indexed)
+  # single block, 3 lines: `--folder-uri`, `<uri>`, `<filePath>`
   local file="$1" block="$2"
   awk -v b="$block" 'BEGIN{n=1} /^$/{n++;next} n==b{print}' "$file"
 }
@@ -61,14 +62,13 @@ run_hook_capture_spawn \
 if [ -f "$MARKER" ]; then
   b1_l1=$(parse_marker "$MARKER" 1 | sed -n '1p')
   b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
-  b2_l1=$(parse_marker "$MARKER" 2 | sed -n '1p')
-  b2_l2=$(parse_marker "$MARKER" 2 | sed -n '2p')
+  b1_l3=$(parse_marker "$MARKER" 1 | sed -n '3p')
   # Normalize backslashes (Windows native abs path) to forward slashes for comparison.
-  b2_l2_norm=$(echo "$b2_l2" | tr '\\' '/')
+  b1_l3_norm=$(echo "$b1_l3" | tr '\\' '/')
   DETAIL_ABS_norm=$(echo "$DETAIL_ABS" | tr '\\' '/')
   if [ "$b1_l1" = "--folder-uri" ] && echo "$b1_l2" | grep -q "^file://" \
-     && [ "$b2_l1" = "-r" ] && [ "$b2_l2_norm" = "$DETAIL_ABS_norm" ]; then
-    pass "T-SPAWN-1 VS Code+CONFIRM_DETAIL=on -> two-step spawn (folder + file)"
+     && [ "$b1_l3_norm" = "$DETAIL_ABS_norm" ]; then
+    pass "T-SPAWN-1 VS Code+CONFIRM_DETAIL=on -> single-spawn (folder-uri + file)"
   else
     fail "T-SPAWN-1 unexpected marker content: $(cat "$MARKER")"
   fi
@@ -150,12 +150,14 @@ run_hook_capture_spawn \
   TERM_PROGRAM=vscode CONFIRM_DETAIL=on
 if [ -f "$MARKER" ]; then
   b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
-  b2_l1=$(parse_marker "$MARKER" 2 | sed -n '1p')
+  b1_l3=$(parse_marker "$MARKER" 1 | sed -n '3p')
+  b1_l3_norm=$(echo "$b1_l3" | tr '\\' '/')
+  PLANS_DIR_abc_detail_norm=$(echo "$PLANS_DIR/abc-detail.md" | tr '\\' '/')
   EXPECTED_URI="file:///tmp/fixture-ws"
-  if [ "$b1_l2" = "$EXPECTED_URI" ] && [ "$b2_l1" = "-r" ]; then
-    pass "T-SPAWN-7 input.cwd -> correct --folder-uri (block-1) + -r (block-2)"
+  if [ "$b1_l2" = "$EXPECTED_URI" ] && [ "$b1_l3_norm" = "$PLANS_DIR_abc_detail_norm" ]; then
+    pass "T-SPAWN-7 input.cwd -> single-spawn (folder-uri + file)"
   else
-    fail "T-SPAWN-7 mismatch: block1-line2='$b1_l2', block2-line1='$b2_l1', expected URI='$EXPECTED_URI'"
+    fail "T-SPAWN-7 mismatch: block1-line2='$b1_l2', block1-line3='$b1_l3', expected URI='$EXPECTED_URI'"
   fi
 else
   fail "T-SPAWN-7 marker not created"
@@ -192,11 +194,13 @@ run_hook_capture_spawn \
 if [ -f "$MARKER" ]; then
   b1_l1=$(parse_marker "$MARKER" 1 | sed -n '1p')
   b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
-  b2_l1=$(parse_marker "$MARKER" 2 | sed -n '1p')
-  if [ "$b1_l1" = "--folder-uri" ] && [ "$b1_l2" = "$EXPECTED_CWD_URI" ] && [ "$b2_l1" = "-r" ]; then
+  b1_l3=$(parse_marker "$MARKER" 1 | sed -n '3p')
+  b1_l3_norm=$(echo "$b1_l3" | tr '\\' '/')
+  DETAIL_ABS_norm=$(echo "$PLANS_DIR/abc-detail.md" | tr '\\' '/')
+  if [ "$b1_l1" = "--folder-uri" ] && [ "$b1_l2" = "$EXPECTED_CWD_URI" ] && [ "$b1_l3_norm" = "$DETAIL_ABS_norm" ]; then
     pass "T-SPAWN-8 no cwd field -> process.cwd() fallback URI (encoded)"
   else
-    fail "T-SPAWN-8 mismatch: b1_l1='$b1_l1', b1_l2='$b1_l2', b2_l1='$b2_l1', expected URI='$EXPECTED_CWD_URI'"
+    fail "T-SPAWN-8 mismatch: b1_l1='$b1_l1', b1_l2='$b1_l2', b1_l3='$b1_l3', expected URI='$EXPECTED_CWD_URI'"
   fi
 else
   fail "T-SPAWN-8 marker not created"
@@ -229,7 +233,7 @@ if [ -f "$MARKER" ]; then
     b1_l2_norm=$(echo "$b1_l2" | tr '\\' '/')
     DETAIL_ABS_norm=$(echo "$DETAIL_ABS" | tr '\\' '/')
     if [ "$b1_l1" = "-r" ] && [ "$b1_l2_norm" = "$DETAIL_ABS_norm" ]; then
-      pass "T-SPAWN-9 empty cwd + root process.cwd -> bare -r (single block)"
+      pass "T-SPAWN-9 empty cwd + root process.cwd -> bare -r (no folder-uri)"
     else
       fail "T-SPAWN-9 unexpected single-block content: b1_l1='$b1_l1', b1_l2='$b1_l2'"
     fi
@@ -260,6 +264,29 @@ if [ ! -f "$MARKER" ]; then
   pass "T-SPAWN-11 failed write does not trigger spawn"
 else
   fail "T-SPAWN-11 marker created despite exit_code:1"
+fi
+
+# T-SPAWN-12
+# Windows-only: Unix-style /<drive>/ cwd must be normalized to a Windows drive URI.
+if [ "${OS:-}" = "Windows_NT" ] || echo "${OSTYPE:-}" | grep -qi "msys\|cygwin\|mingw"; then
+  MARKER="$PLANS_DIR/spawn-marker-T-SPAWN-12"
+  run_hook_capture_spawn \
+    '{"tool_name":"Write","tool_input":{"file_path":"'"$PLANS_DIR"'/abc-detail.md"},"tool_response":{"success":true},"cwd":"/c/git/agents"}' \
+    "$MARKER" \
+    TERM_PROGRAM=vscode CONFIRM_DETAIL=on
+  if [ -f "$MARKER" ]; then
+    b1_l2=$(parse_marker "$MARKER" 1 | sed -n '2p')
+    EXPECTED_WIN_URI="file:///C:/git/agents"
+    if [ "$b1_l2" = "$EXPECTED_WIN_URI" ]; then
+      pass "T-SPAWN-12 Unix-style /<drive>/ cwd normalized to Windows drive URI"
+    else
+      fail "T-SPAWN-12 expected URI '$EXPECTED_WIN_URI', got '$b1_l2'"
+    fi
+  else
+    fail "T-SPAWN-12 marker not created"
+  fi
+else
+  echo "SKIP T-SPAWN-12 (not Windows — Unix-style normalization not applicable)"
 fi
 
 echo ""
