@@ -3,9 +3,8 @@
 // plan artifact written under ~/.workflow-plans/ (basename *-(intent|outline|detail).md;
 // drafts/ excluded). Always emits regardless of CONFIRM_<STEP> — breadcrumb is the sole
 // path surface for orchestrators. When CONFIRM_<STEP>=on AND VS Code is detected,
-// additionally spawns two sequenced `code` invocations: first `code --folder-uri file:///<cwd>`
-// (raises the correct window), then `code -r <file>` (opens the file) — avoids the
-// VS Code CLI bug where --folder-uri silently discards file-open args (#506).
+// additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises
+// window and opens file atomically; avoids two-spawn timing race #546 Gap 3).
 //
 // Triggers on Write (direct file write) and on Bash invocations of
 // skills/_shared/assemble-mandatory.sh — the latter is how SKILL.md authors
@@ -21,6 +20,7 @@ const { spawn } = require("child_process");
 const { normalizeSlashes } = require("./lib/path-match");
 const { getSuffix, isConfirmOff } = require("./lib/plan-confirm-flag");
 const { extractAssembleDest } = require("./lib/assemble-cmd-parse");
+const { normalizeCwd } = require("./lib/path-normalize");
 
 function readStdin() {
   const chunks = [];
@@ -56,6 +56,7 @@ function shouldOpenInVsCode() {
 
 // Returns file:// URI for the given cwd, or null when cwd is missing/empty/root.
 function workspaceFolderUriFrom(cwd) {
+  cwd = normalizeCwd(cwd) || cwd;
   if (!cwd || typeof cwd !== "string") return null;
   if (cwd === "/" || /^[A-Za-z]:[\\/]?$/.test(cwd)) return null;
   const fwd = cwd.replace(/\\/g, "/");
@@ -99,19 +100,19 @@ function spawnCode(args) {
 }
 
 function openInVsCode(absPath, folderUri) {
-  const folderArgs = folderUri ? ["--folder-uri", folderUri] : null;
-  const fileArgs = ["-r", absPath];
+  const args = folderUri
+    ? ["--folder-uri", folderUri, absPath]
+    : ["-r", absPath];
   if (process.env.SHOW_PLAN_LINK_NO_SPAWN === "1") {
     if (process.env.SHOW_PLAN_LINK_MARKER_FILE) {
-      const blocks = [];
-      if (folderArgs) blocks.push(folderArgs.join("\n"));
-      blocks.push(fileArgs.join("\n"));
-      fs.writeFileSync(process.env.SHOW_PLAN_LINK_MARKER_FILE, blocks.join("\n\n"));
+      fs.writeFileSync(
+        process.env.SHOW_PLAN_LINK_MARKER_FILE,
+        args.join("\n")
+      );
     }
     return;
   }
-  if (folderArgs) spawnCode(folderArgs).unref();
-  spawnCode(fileArgs).unref();
+  spawnCode(args).unref();
 }
 
 // Core emit: write the systemMessage breadcrumb, drop the turn marker
