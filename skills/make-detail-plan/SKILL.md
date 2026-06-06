@@ -5,184 +5,93 @@ model: sonnet
 ---
 
 Produce a detailed implementation plan via a planner/reviewer discussion loop.
-The confirmed approach and requirements from `clarify-intent` and `make-outline-plan`
-must be read and passed to the planner before drafting begins.
+Read intent.md + outline.md before drafting.
 
 ## Procedure
 
-### Step 0 — Resolve <PLANS_DIR>
+### Step MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
-Apply `skills/_shared/resolve-plans-dir.md` once at the start of Procedure;
-substitute the resolved absolute path for every `<PLANS_DIR>` placeholder
-below. Reuse across all subsequent steps — do not re-resolve.
+Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Read `<PLANS_DIR>/<session-id>-intent.md` and `<PLANS_DIR>/<session-id>-outline.md` if present; otherwise proceed with task context alone.
 
-1. **Read prior-stage artifacts** (if they exist):
-   - `<PLANS_DIR>/<session-id>-intent.md` — agreed requirements, scope, non-goals
-   - `<PLANS_DIR>/<session-id>-outline.md` — confirmed design direction
-   If neither file exists, proceed with the task context alone (no prior stages ran).
+### Step MDP-2 — Surface delivery plan
 
-2. **Surface the delivery plan to the main conversation.**
-   Read outline.md's `## Delivery plan` section (or the `Delivery plan:` field in the Adopted approach section).
-   - If present and substantive: emit a one-paragraph summary in chat prefixed
-     "Delivery plan (from outline stage):". This appears before the planner subagent runs.
-   - If absent or "(not provided)": emit
-     "Delivery plan: (not surfaced from outline — detail-planner will draft fresh as the first section of detail.md)."
-   Plain text only — do not call AskUserQuestion and do not pause for confirmation.
-   Use English terms only: "delivery plan", "progression", or "execution order".
+Run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/surface-delivery-plan.sh"` against outline.md.
 
-3. **Determine the planner subagent's model**:
-   - Read `skills/_shared/judge-task-complexity.md` to load the signal table.
-   - Evaluate all signals against the full task context plus the contents of intent/outline files (if they exist). Do not short-circuit on the first match.
-   - Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
-   - Emit in Claude text output (NOT Bash echo):
-     > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
+### Step MDP-3 — Choose planner model
 
-4. Delegate initial drafting to the **planner** subagent (Agent tool, `subagent_type: detail-planner`, `model: <model from step 3>`).
-   Pass the full task context **plus** the contents of the intent/approach files above.
+Read `skills/_shared/judge-task-complexity.md`; evaluate all signals against task + intent/outline content. Rule: 1+ signals → `opus`; 0 → `sonnet`; ambiguous → `opus`. Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids or "none"])`.
 
-4a. **Sentinel detection (adaptive skip).**
-   If the planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`:
-   - Invoke the codex review loop (step 5) with `MAX_EXTENSIONS=0` — one review round, no extensions.
-   - On APPROVED: proceed directly to step 7 (assemble-mandatory).
-   - On HIGH or MEDIUM residual after that single round: ESCALATE to the user with the unresolved concerns and the current plan draft.
-   If the sentinel is absent: proceed to step 5 unchanged.
+### Step MDP-4 — Initial draft
 
-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
-   (parameter values for the detail stage: FORMAT=detail-plan, CAP=2,
-   MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner,
-   REVIEWER_AGENT=detail-reviewer,
-   ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-outline.md,
-   NON_APPROVED_VERDICT=NEEDS_REVISION).
+Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <from MDP-3>`). Pass task context + intent/outline contents.
 
-   For each review round, invoke `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/run-codex-review-loop.sh"`
-   (Bash tool) with env vars exported: `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required);
-   `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` (optional — passed as
-   `--context` when the file exists and is non-empty). Exit codes pass through unchanged.
+### Step MDP-4a — Sentinel detection (adaptive skip)
 
-   Detail-stage caller paths:
-   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
-   - CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-concerns-log.md`
-   - DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-detail-debug.log`
+If planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`: invoke MDP-5 with `MAX_EXTENSIONS=0` (one round, no extensions). APPROVED → MDP-7. HIGH/MEDIUM residual → ESCALATE with concerns + draft. Sentinel absent → MDP-5 unchanged.
 
-   Exit code → action mapping: see the SSOT table in
-   `skills/_shared/codex-review-loop.md` (#exit-code--orchestrator-action-ssot).
+### Step MDP-5 — Codex review loop
 
-   **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt the skill and
-   surface the wrapper's stderr to the user. Only exit 3 falls back silently.
+Follows `skills/_shared/codex-review-loop.md` with: FORMAT=detail-plan, CAP=2, MAX_EXTENSIONS=1, PLANNER_AGENT=detail-planner, REVIEWER_AGENT=detail-reviewer, ACCEPTED_TRADEOFFS_FILE=<PLANS_DIR>/<session-id>-outline.md, NON_APPROVED_VERDICT=NEEDS_REVISION.
 
-   The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/drafts/<session-id>-detail-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
+Each round: invoke `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/run-codex-review-loop.sh"` (Bash) with exported `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required); `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` (optional — passed as `--context` when present + non-empty). Exit codes pass through.
 
-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with these parameters:
-   - LABEL: `"Detail Plan Review"`
-   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
-   - MAX_EXTENSIONS: 1
+Detail-stage caller paths:
+- RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
+- CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-concerns-log.md`
+- DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-detail-debug.log`
 
-   Detail-specific dispatch override: `rc==0`, user picks `adjust` → escalate
-   to the user with loop status / current plan / blocking concerns. All other
-   outcomes route per the shared spec; on AUTO_EXTEND or `extend`, loop back
-   into the step 5 review round.
+Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt + surface stderr. Only exit 3 falls back silently.
 
-   **Research/malformed-retry cap escalation**: if a research or malformed-retry cap is hit (see Research Escalation), message in this order:
-   1. **Loop status** — which counter/cap was hit and how many rounds occurred.
-   2. **The planner's current plan** — paste or closely summarize.
-   3. **Blocking issues** — unresolved reviewer concerns or the pending research question.
+ROUND_NUMBER tracked at `<PLANS_DIR>/drafts/<session-id>-detail-plan-round-number.txt` (see codex-review-loop.md SSOT).
 
-7. Once the reviewer returns `APPROVED`, assemble the final plan to
-   `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. The helper
-   carries the 3 mandatory sections (`## Issues`, `## Class members`,
-   `## Accepted Tradeoffs`) verbatim from outline.md and uses the planner's
-   draft as the body source.
-   Run `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/assemble-mandatory.sh"` (Bash tool) with env vars:
-   `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required).
-   - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
-   - Helper exit non-zero → re-prompt detail-planner once and re-assemble; second failure → halt with error.
-   - `--source-kind outline` enforces hard-fail when outline.md is missing `## Class members` (post-#462 outline.md must always carry all 3 mandatory sections).
+### Step MDP-6 — Cap-reach dispatch
 
-   Then apply the confirm-plan protocol (`skills/_shared/confirm-plan.md`)
-   using `CONFIRM_DETAIL` as the flag and `<session-id>-detail.md` as the artifact.
-   - **Revise** (skill-specific): ask what to change, send feedback to the planner
-     as a new revision request, then loop back to step 5a (re-draft → re-review →
-     re-confirm). Each revision consumes `revision_rounds`.
-   - On `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after the
-     one-paragraph summary (per protocol Step 3). DO NOT present any path —
-     the `show-plan-link.js` hook's `Plan file written:` line is the sole
-     surfaced breadcrumb (per protocol Step 2).
-   - On `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after confirmation.
+Apply `skills/_shared/cap-menu-dispatch.md` with LABEL=`"Detail Plan Review"`, RAW_FILE=`<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`, MAX_EXTENSIONS=1.
+
+Detail-specific override: `rc==0`, user picks `adjust` → escalate (loop status / current plan / blocking concerns). Other outcomes route per shared spec; AUTO_EXTEND / `extend` → loop back into MDP-5.
+
+Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/cap-escalation-message.sh"` for message order.
+
+### Step MDP-7 — Assemble + confirm
+
+On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source.
+
+Run `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/assemble-mandatory.sh"` (Bash) with env `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
+
+Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
+- **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
+- `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol Step 3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol Step 2).
+- `ON` path (Proceed): emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after confirmation.
 
 ## Research Escalation
 
-When the planner's reply starts with `NEEDS_RESEARCH` (first non-whitespace token), the orchestrator short-circuits before the reviewer and runs `/deep-research`. Format spec is in `planner.md`.
+Planner reply starting with `NEEDS_RESEARCH` (first non-whitespace token) short-circuits before reviewer + runs `/deep-research`. Format spec: `planner.md`.
 
-**Malformed** (missing/empty field, `skill:` ≠ `deep-research`): re-prompt once with a one-line diagnostic. Second malformed reply → escalate. Malformed retries do **not** consume `research_rounds`.
+**Malformed** (missing/empty field, `skill:` ≠ `deep-research`): re-prompt once with one-line diagnostic. Second malformed → escalate. Malformed retries do NOT consume `research_rounds`.
 
-**Round counters** (per invocation, never reset):
+Round counters (revision: 2, research: 2, malformed_retries: 1) — see codex-review-loop.md SSOT. `NEEDS_RESEARCH` does NOT consume `revision_rounds`; allowed at any planner turn.
 
-| Counter | Cap |
-|---|---|
-| `revision_rounds` | 2 |
-| `research_rounds` | 2 |
-| `malformed_retries` | 1 |
+Re-prompt template: run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/research-reprompt.sh"` for the template.
 
-`NEEDS_RESEARCH` does not consume `revision_rounds`. Allowed at any planner turn.
+Subagent prompts may contain verbatim research (summarize-to-user applies to user-facing chat only). Double-emit of `<<WORKFLOW_MARK_STEP_research_complete>>` is harmless (`markStep` idempotent).
 
-**Re-prompt template:**
-```
-Research complete.
-Findings: <verbatim research output>
+On cap: tell user which budget exhausted, how many times research ran, the pending question. Ask: "Approve further research, provide the answer directly, or adjust scope?" Do not emit `WORKFLOW_MARK_STEP_plan_complete` on escalation.
 
-Original task: <original task prompt>
-pending reviewer concerns (if any — empty on initial-draft turn): <forward verbatim or "(none)">
+## Skip Conditions / Skipping This Stage
 
-Incorporate findings under "## Research Findings (from this session)" and cite with [research: tag].
-Now produce the full plan.
-```
-
-Subagent prompts may contain verbatim research (the "summarize to user" rule applies only to user-facing chat). Double-emit of `<<WORKFLOW_MARK_STEP_research_complete>>` is harmless (`markStep` is idempotent).
-
-**On cap:** tell the user which budget was exhausted, how many times research ran, and the pending question. Ask: "Approve further research, provide the answer directly, or adjust scope?" Do not emit `WORKFLOW_MARK_STEP_plan_complete` on any escalation.
-
-## Skip Conditions
-
-Skip the entire discussion loop when **both** of the following are true:
-- The task is a single-file change
-- No design decision is needed
-
-In that case, skip `judge-task-complexity` and draft the plan directly in the main conversation and present it for approval.
-
-## Skipping This Stage
-
-The Skip Conditions above skip the planner/reviewer discussion loop but still
-produce a plan. To skip the detail stage itself (no detail plan), run:
-
-`echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>>"`
-
-Use this only when the outline already provides file-level clarity (e.g., a
-typo fix, a one-line config tweak, or when the outline stage already enumerated
-the exact file edits).
-Reason must be ≥3 non-space chars, not a placeholder, and contain no '>'.
-
-Skipping research does NOT justify skipping the detail stage.
+See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh"`.
 
 ## Rules
 
-- Read before planning — do not plan from assumptions
-- The outline's Delivery plan must be surfaced in step 2 before the planner subagent runs. This is required, not optional.
-- Orchestrator chat output during the discussion loop is restricted to:
-  (a) one status line per round (`Round N: APPROVED` or `Round N: NEEDS_REVISION (proceeding)`)
-  (b) NO path output — the `show-plan-link.js` PostToolUse hook emits the sole
-      authoritative breadcrumb (`Plan file written: <abs-path>`) automatically.
-      The orchestrator MUST NOT print, duplicate, translate, paraphrase, or
-      reformat that path in any form. See `skills/_shared/confirm-plan.md` Step 2.
-  (c) the `Delivery plan (...)` summary emitted by step 2 before the discussion loop begins
-  Diagnostics go to <session-id>-detail-debug.log only.
+- Read intent/outline before planning — never plan from assumptions.
+- Outline's Delivery plan must be surfaced in MDP-2 before planner subagent runs (required).
+- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) NO path output — `show-plan-link.js` PostToolUse hook is the sole authoritative breadcrumb (do not print/duplicate/translate/paraphrase/reformat); (c) the `Delivery plan (...)` summary from MDP-2. Diagnostics → `<session-id>-detail-debug.log`.
 - Follow `rules/core-principles.md`.
-- **One user-facing confirmation per run** — the only user confirmation is the final plan approval in step 7. Never pause for user confirmation during intermediate revision rounds (steps 4–5): write draft files silently and inform the user with plain text only.
-- Planner and reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved `intent.md` or `outline.md` decisions.
+- **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
+- Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
 
 ## Completion
 
-After completing this skill:
-1. Run: `echo "<<WORKFLOW_MARK_STEP_detail_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
-2. Record the branching decision: consult `rules/branch.md` and `rules/worktree.md`, then run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`
-3. Invoke `write-tests` via the Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`).
-
+1. Run: `echo "<<WORKFLOW_MARK_STEP_detail_complete>>"` (ENTIRE Bash command — no pipes / && / redirection).
+2. Record branching: consult `rules/branch.md` + `rules/worktree.md`, run `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`.
+3. Invoke `write-tests` via Skill tool (or skip with `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`).

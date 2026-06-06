@@ -1,7 +1,7 @@
 #!/bin/bash
 # parent-close-proposal-prepare.sh <owner/repo> <N>
 #
-# Pre-check for Step G.5 parent close proposal: verify that issue <N> has a
+# Pre-check for Step ICF-E..ICF-G parent close proposal: verify that issue <N> has a
 # parent and that all of the parent's sub-issues are closed.
 #
 # Exit 0: proposal may proceed; prints parent issue number on stdout.

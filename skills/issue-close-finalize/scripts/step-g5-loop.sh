@@ -1,11 +1,11 @@
 #!/bin/bash
-# step-g5-loop.sh — mechanical parts of Step G.5 (parent close proposal).
+# step-g5-loop.sh — mechanical parts of Step ICF-D..ICF-G (parent close proposal).
 #
-# G.5-2 (AskUserQuestion + LLM judgement of parent body) stays in SKILL.md.
+# ICF-F (AskUserQuestion + LLM judgement of parent body) stays in SKILL.md.
 # This script implements:
-#   - prepare <N>  : init counters + run G.5-1 pre-check; emit PROPOSAL_PARENT
+#   - prepare <N>  : init counters + run ICF-E pre-check; emit PROPOSAL_PARENT
 #                    and PROPOSAL_STATUS to stdout.
-#   - execute <N> <ACTION> : implement G.5-3 (yes) or counter bumps for the
+#   - execute <N> <ACTION> : implement ICF-G (yes) or counter bumps for the
 #                    LLM/user decisions (no/decline/skip). Emits updated
 #                    counters and NEXT_N for the loop.
 #
@@ -20,7 +20,7 @@ shift
 case "$SUBCMD" in
     prepare)
         N="${1:?N required}"
-        # G.5-1 — Pre-check. Capture stdout only; let stderr pass through.
+        # ICF-E — Pre-check. Capture stdout only; let stderr pass through.
         rc=0
         PROPOSAL_PARENT=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-close-proposal-prepare.sh" \
             "$OWNER_REPO" "$N") || rc=$?
@@ -30,15 +30,15 @@ case "$SUBCMD" in
                 echo "PROPOSAL_STATUS=ok"
                 ;;
             1)
-                echo "[step-g5: G.5-1 returned 1 — skipping (no eligible parent)]" >&2
+                echo "[step-g5: ICF-E returned 1 — skipping (no eligible parent)]" >&2
                 echo "PROPOSAL_STATUS=skipped"
                 ;;
             2)
-                echo "[step-g5: G.5-1 returned 2 — skipping (warning from prepare)]" >&2
+                echo "[step-g5: ICF-E returned 2 — skipping (warning from prepare)]" >&2
                 echo "PROPOSAL_STATUS=skipped"
                 ;;
             *)
-                echo "[step-g5: G.5-1 unexpected rc=$rc]" >&2
+                echo "[step-g5: ICF-E unexpected rc=$rc]" >&2
                 echo "PROPOSAL_STATUS=skipped"
                 ;;
         esac

@@ -74,11 +74,11 @@ check "issue-create Mid-workflow gate section references closes_issues or intent
   ' -- "$REPO_ROOT"
 
 # ---------------------------------------------------------------------------
-# 6. worktree-end SKILL.md Step 5.5(a.5) mentions fallback
+# 6. worktree-end SKILL.md Step WE-10 mentions fallback (formerly Step 5.5(a.5))
 # ---------------------------------------------------------------------------
-check "worktree-end SKILL.md Step 5.5(a.5) mentions fallback" \
+check "worktree-end SKILL.md Step WE-10 mentions fallback" \
   bash -c '
-    grep -A5 "(a.5)" "$1/skills/worktree-end/SKILL.md" \
+    grep "### Step WE-10" "$1/skills/worktree-end/SKILL.md" \
     | grep -qi "fallback"
   ' -- "$REPO_ROOT"
 

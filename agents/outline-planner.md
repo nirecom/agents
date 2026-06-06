@@ -154,5 +154,5 @@ The `reject: <reason>` disposition includes the typed sub-form `reject: contradi
 
 One numbered line per reviewer concern, same order as the raw codex output.
 The orchestrator copies this block verbatim into `<session-id>-outline-concerns-log.md`
-(see `make-outline-plan/SKILL.md` Step 5e). Missing trailer on revision round triggers
+(see `make-outline-plan/SKILL.md` Step 5). <!-- TODO(#614): substitute to MOP-N when make-outline-plan is renumbered --> Missing trailer on revision round triggers
 one re-prompt; second omission escalates.
