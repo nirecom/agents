@@ -16,7 +16,18 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - Verify cwd is inside a linked worktree (not main worktree): `git rev-parse --git-common-dir` must differ from `git rev-parse --git-dir`. If equal, abort: user must `cd` into the worktree first.
 
 ### Step WE-3 — PR resolution (idempotent)
+
+**Bootstrap probe (new-repo first commit):** Before pushing, probe the remote state: `PROBE_JSON="$(bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "$WORKTREE_PATH")"`. `preBootstrap === true` AND `classification === "empty-repo"` → skip to **WE-3b** (autonomous bootstrap, no PR). Any other classification (`ok`, `network`, `auth`, `not-found`, `timeout`, `spawn-error`, `unknown`) → continue with normal push/PR flow below.
+
 Push (`git push -u origin <branch>`), then `gh pr view --json state,url` — reuse if `OPEN`, else `gh pr create --fill`. Display URL. Capture `PR_NUMBER=$(gh pr view --json number --jq .number)`; abort if empty.
+
+### Step WE-3b — Autonomous bootstrap (no-PR mode)
+Used only when Step WE-3 probe detected `empty-repo`.
+
+1. `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/bootstrap-complete.sh" "$WORKTREE_PATH" "$BRANCH" "$OWNER_REPO"` — parse JSON output. Set `BOOTSTRAP_COMMIT_SHA` from `bootstrap_commit_sha` and `DEFAULT_BRANCH_SET` from `default_branch_set`. Non-zero exit → surface error and stop (no cleanup).
+2. Set `BOOTSTRAP_MODE=1`, `PR_NUMBER=""`, `PR_TITLE="(bootstrap initial commit)"`, `PR_URL=""`, `PR_STATE="BOOTSTRAP"`.
+3. Emit `<<WORKFLOW_USER_VERIFIED: bootstrap initial commit pushed to main>>` via `skills/_shared/user-verified.md`.
+4. Skip WE-4 through WE-7 (no PR to merge). Continue at WE-8 (inventory), then WE-11 (capture-env.sh with `BOOTSTRAP_MODE=1` and `BOOTSTRAP_COMMIT_SHA` exported), then WE-14 (cleanup).
 
 ### Step WE-4 — Merge decision (PR state gate + AUTO_MERGE_PR)
 PR state gate (runs before AUTO_MERGE_PR; applies to both modes): `gh pr view "$PR_NUMBER" --json state --jq .state`. `MERGED` → skip to WE-6 (skip AUTO_MERGE_PR and WE-7). `CLOSED` → error "PR #<N> was closed without merging." and stop. `OPEN` → continue; output `PR #<N> is open: [<url>](<url>)`. other/error/empty → error "Unable to determine PR #<N> state." and stop.
@@ -24,8 +35,6 @@ PR state gate (runs before AUTO_MERGE_PR; applies to both modes): `gh pr view "$
 Check `AUTO_MERGE_PR` (default `on`): `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off AUTO_MERGE_PR on && echo OFF || echo ON'`.
 - `on`: announce `AUTO_MERGE_PR=on → merging now.` → WE-7.
 - `off`: `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-7 / WE-5 / stop. If `AskUserQuestion` unavailable, default to **wait-for-web-merge**.
-
-Based on PR_STATE: MERGED → skip to WE-6; OPEN + AUTO_MERGE_PR=on or user-approved → execute WE-7; OPEN + AUTO_MERGE_PR=off and user picks wait → execute WE-5 then WE-6.
 
 ### Step WE-5 — Web-merge wait
 Display `PR #<N>: merge via GitHub UI, then reply here.` + URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → WE-6; else re-display and stop. `$PR_NUMBER` is session-local.
@@ -69,16 +78,18 @@ Releases Windows CWD lock #251; keeps `process.cwd()` healthy #268, #321. Run as
 Canonical spec: `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.sh"`. The orchestrator issues each command separately for auditability. Only after confirmed merge success and inventory — never before.
 
 ## Rules
-- **wait / abort paths: no destructive steps.** Only merge-success path runs cleanup.
+- **wait / abort paths: no destructive steps.** Only merge-success path (Step WE-4 → MERGED) and bootstrap-success path (Step WE-3b → bootstrap-complete.sh exit 0) run cleanup.
 - `git worktree remove --force` is prohibited (see `rules/ops.md` decision path).
 - Branch deletion (`git branch -D`) only in Step WE-18, allowed via inline `WORKTREE_END_SKILL=1` env prefix (enforce-worktree gates `-D` on skill authorization; non-force `-d` allowed for any branch not checked out per `git worktree list --porcelain`).
-- Do not run cleanup if merge step failed or was skipped.
+- Do not run cleanup if merge step failed or was skipped. Exception: bootstrap mode (Step WE-3b) intentionally skips merge — when `bootstrap-complete.sh` exits 0, cleanup proceeds as if merge had succeeded.
+- Bootstrap mode (Step WE-3b) does not create or merge a PR. Trust the `isRemoteInPreBootstrap()` classification — only `empty-repo` activates Step WE-3b.
+- Step WE-3 probe classifications other than `empty-repo` (auth / network / not-found / timeout / spawn-error / unknown) fall through to the normal push/PR flow; surfacing those errors is the push/PR flow's responsibility.
 - Always propose `.worktree-backup/<branch>/` as the default backup destination.
 - Always check stopped containers, not just running ones, for bind mount conflicts.
 - Secret values must not appear in the backup manifest.
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup (WE-17) — never `rm -rf`/`Remove-Item -Recurse -Force`.
 - `gh --version` must succeed before any gh command.
-- `<<WORKFLOW_USER_VERIFIED: <reason>>>` is emitted in Step WE-7 (before `gh pr merge`) or Step WE-6 (after `state == MERGED`), via `skills/_shared/user-verified.md`. Never on abort or while polling.
+- `<<WORKFLOW_USER_VERIFIED: <reason>>>` is emitted in Step WE-7 (before `gh pr merge`), Step WE-6 (after `state == MERGED`), or Step WE-3b (bootstrap mode), via `skills/_shared/user-verified.md`. Never on abort or while polling.
 - Step WE-4 PR state gate runs before the AUTO_MERGE_PR check; applies to both on/off modes; `MERGED` always routes to Step WE-6.
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in Step WE-4 (worktree mode only).
 - `$PR_NUMBER` captured in Step WE-3; used explicitly in Step WE-5. Session-local only.
