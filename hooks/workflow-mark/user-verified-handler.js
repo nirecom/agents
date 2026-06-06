@@ -9,7 +9,7 @@ const {
 } = require("../lib/sentinel-patterns");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
 
   const userVerifiedMatch = cmd.match(USER_VERIFIED_RE_DQ);
 
@@ -26,7 +26,7 @@ function handle(ctx) {
   // --- USER_VERIFIED handler ---
   if (userVerifiedMatch) {
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
           `(reason: >=3 non-space chars, no '>', not a placeholder; ask dialog will re-trigger)`

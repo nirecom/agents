@@ -7,7 +7,7 @@ const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, markStep, nextStepHint } = require("../lib/workflow-state");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
 
   const markMatch = cmd.match(MARKER_RE_DQ) || cmd.match(MARKER_RE_SQ);
 
@@ -55,7 +55,7 @@ function handle(ctx) {
     }
 
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — step "${stepName}" NOT recorded. ` +
           `Commit gate will block. Re-run: ` +
           `echo "<<WORKFLOW_MARK_STEP_${stepName}_${status}>>"`

@@ -10,7 +10,7 @@ const {
 } = require("../lib/sentinel-patterns");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
 
   // Accept both new (BRANCHING_COMPLETE) and legacy (BRANCHING_DECIDED) sentinel.
   const branchingDecidedMatch =
@@ -38,7 +38,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — branching_complete NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: ${v.reason}>>"`
       );

@@ -36,6 +36,7 @@ function handle(ctx) {
       );
       return true;
     }
+    // #526: pushMessage retained (not signalFatal) — recovery UX must not hard-fail on null sessionId.
     if (!sessionId) {
       pushMessage(
         `workflow-mark: could not resolve session_id — premise contradiction NOT recorded.`
@@ -64,6 +65,7 @@ function handle(ctx) {
     return true;
   }
   if (PREMISE_ACK_RE_DQ.test(cmd)) {
+    // #526: pushMessage retained (not signalFatal) — recovery UX must not hard-fail on null sessionId.
     if (!sessionId) {
       pushMessage(
         `workflow-mark: could not resolve session_id — premise acknowledgement NOT recorded.`

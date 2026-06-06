@@ -16,7 +16,7 @@ const {
 } = require("../lib/sentinel-patterns");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
 
   const researchNotNeededMatch = cmd.match(RESEARCH_NOT_NEEDED_RE_DQ);
   const researchNotNeededLooksLike =
@@ -50,7 +50,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — research NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ${v.reason}>>"`
       );
@@ -87,7 +87,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(`workflow-mark: could not resolve session_id — outline NOT recorded. ` +
+      signalFatal(`workflow-mark: could not resolve session_id — outline NOT recorded. ` +
         `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ${v.reason}>>"`);
       return true;
     }
@@ -120,7 +120,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(`workflow-mark: could not resolve session_id — detail NOT recorded. ` +
+      signalFatal(`workflow-mark: could not resolve session_id — detail NOT recorded. ` +
         `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ${v.reason}>>"`);
       return true;
     }
@@ -153,7 +153,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — write_tests NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ${v.reason}>>"`
       );
@@ -190,7 +190,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — review_security NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ${v.reason}>>"`
       );
@@ -236,7 +236,7 @@ function handle(ctx) {
       return true;
     }
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ${v.reason}>>"`
       );
