@@ -62,7 +62,10 @@ codex_core_run() {
   codex_out=""
   codex_exit=0
 
-  local _timeout="${CODEX_TIMEOUT_SECS:-300}"
+  # Read timeout from .env via get-config-var; fall back to 300 s.
+  local _timeout
+  _timeout="$(cd "${AGENTS_CONFIG_DIR:-.}" && get-config-var CODEX_TIMEOUT_SECS 300 2>/dev/null)"
+  _timeout="${_timeout:-300}"
   codex_out=$(timeout "$_timeout" codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
 
   case $codex_exit in
