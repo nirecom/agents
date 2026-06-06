@@ -115,4 +115,8 @@ Changes: EM Supervisor now performs Layer 2 semantic JD-checklist analysis autom
 
 ### FEATURE: PR #781 (2026-06-06)
 Background: feat(#772): new-repo bootstrap path for ENFORCE_WORKTREE=on
-Changes: New-repo bootstrap: `/worktree-end` now auto-detects a brand-new GitHub repo (no default branch) and pushes the initial commit directly to `main` without a PR, enabling the full ENFORCE_WORKTREE=on workflow from day one.;Codex review timeout: configurable via `CODEX_TIMEOUT_SECS` in `.env` (default 300 s, raised from 180 s); documented in `.env.example`.
+Changes: New-repo bootstrap: `/worktree-end` now auto-detects a brand-new GitHub repo (no default branch) and pushes the initial commit directly to `main` without a PR, enabling the full ENFORCE_WORKTREE=on workflow from day one.;Codex review timeout: configurable via `CODEX_TIMEOUT_SECS` in `.env` (default 300 s, raised from 180 s); documented in `.env.example`.
+
+### FEATURE: PR #782 (2026-06-06)
+Background: ux(#774): auto-backup gitignored state without confirmation prompt
+Changes: `/worktree-end` Step WE-8 no longer prompts "Back up, discard, or abort?" — gitignored state is backed up automatically when the inventory is non-empty, and silently skipped when the worktree has no gitignored files.
