@@ -119,4 +119,8 @@ Changes: New-repo bootstrap: `/worktree-end` now auto-detects a brand-new GitHub
 
 ### FEATURE: PR #782 (2026-06-06)
 Background: ux(#774): auto-backup gitignored state without confirmation prompt
-Changes: `/worktree-end` Step WE-8 no longer prompts "Back up, discard, or abort?" — gitignored state is backed up automatically when the inventory is non-empty, and silently skipped when the worktree has no gitignored files.
+Changes: `/worktree-end` Step WE-8 no longer prompts "Back up, discard, or abort?" — gitignored state is backed up automatically when the inventory is non-empty, and silently skipped when the worktree has no gitignored files.
+
+### FEATURE: PR #783 (2026-06-06)
+Background: fix(#778): remove redundant WORKTREE_END_SKILL=1 prefix; tighten --force guard for git worktree remove
+Changes: fix: `worktree-end` WE-14 (`git worktree remove`) and WE-16 (`git worktree prune`) no longer require a `WORKTREE_END_SKILL=1` prefix — the hook allowed these commands unconditionally all along. `rules/workflow-off.md` gains a "Sanctioned-command false-block recovery" section: retry without a prefix before disabling enforcement session-wide.
