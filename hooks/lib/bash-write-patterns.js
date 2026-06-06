@@ -24,6 +24,7 @@
 "use strict";
 
 const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("./strip-quoted-args");
+const { isStrictSentinel } = require("./sentinel-patterns");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
@@ -178,11 +179,38 @@ const QUOTING_ONLY_NAMES = new Set([
 // - git (#692): git verbs inside quoted args (e.g. `grep -n "git push" file`)
 //   must not false-positive. The git-commit / git-push / git-merge / etc.
 //   regexes use `\bgit\b.*\bverb\b` which span quoted prose without stripping.
-// Other kinds (posix [here-doc/here-string], gh, interpreter, pwsh*) are
+// - "pkg-mgr" / "gh" (#416): npm/gh verbs in sentinel echo reason text
+//   (e.g. echo "<<...: npm install fix>>") caused false-positive write.
+//   Stripping quoted args prevents the match.
+// - "pwsh" / "pwsh-alias" / "pwsh-encoded" (#416): defense-in-depth for pwsh
+//   verbs in reason text.
+// Accepted tradeoff (AT-DP1, #416): adding "pkg-mgr"/"gh" causes
+// stripQuotedArgs to collapse quoted write verbs (e.g. npm "install",
+// gh api -X "DELETE") into no-match → 'read' (false-negative). Claude Code
+// normally issues unquoted commands so real-world impact is minimal. To
+// recover true-positive detection for quoted writes, revert this set and use
+// a sentinel-only case-bypass instead.
+// Other kinds (posix [here-doc/here-string], interpreter) are
 // tested against the original command. here-doc/here-string in particular MUST
 // scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
 // stripHeredocBody contract depend on it (see classify() lines 160-190).
-const STRIP_KINDS = new Set(["file-op", "posix-redir", "git"]);
+const STRIP_KINDS = new Set(["file-op", "posix-redir", "git", "pkg-mgr", "gh", "pwsh", "pwsh-alias", "pwsh-encoded"]);
+
+// Reason-text shell-metachar guard for classify(). isStrictSentinel matches the
+// sentinel shape (SSOT in sentinel-patterns.js). This wrapper adds a classify()-
+// specific check: if the reason text contains shell metacharacters that could
+// trigger expansion or injection when bash executes the command, return false so
+// classify() can force 'write' and block the command before bash runs it.
+const UNSAFE_REASON_CHARS = /[$`|;&()<>\\"]/;
+
+function isSentinelEchoSafe(cmd) {
+  if (!isStrictSentinel(cmd)) return false;
+  const m = cmd.match(/<<WORKFLOW_[A-Za-z_]+(?::\s*([^>]+))?>>"/);
+  if (!m) return false;
+  const reason = m[1];
+  if (reason == null) return true;
+  return !UNSAFE_REASON_CHARS.test(reason);
+}
 
 /**
  * Classify a Bash command string as "read" or "write".
@@ -195,6 +223,10 @@ const STRIP_KINDS = new Set(["file-op", "posix-redir", "git"]);
 function classify(cmd) {
   try {
     if (!cmd || typeof cmd !== "string") return "read";
+    const trimmed = cmd.trim();
+    if (isStrictSentinel(trimmed)) {
+      return isSentinelEchoSafe(trimmed) ? "read" : "write";
+    }
     const stripped = stripQuotedArgs(cmd);
     const matchedNames = [];
     for (const p of WRITE_PATTERNS) {
