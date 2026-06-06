@@ -6,12 +6,12 @@ const { markStep, nextStepHint } = require("../lib/workflow-state");
 const { CLARIFY_INTENT_COMPLETE_RE_DQ } = require("../lib/sentinel-patterns");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
 
   // --- CLARIFY_INTENT_COMPLETE handler ---
   if (CLARIFY_INTENT_COMPLETE_RE_DQ.test(cmd)) {
     if (!sessionId) {
-      pushMessage(
+      signalFatal(
         `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
           `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
       );
