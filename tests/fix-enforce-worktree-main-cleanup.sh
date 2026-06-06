@@ -7,6 +7,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
 GUARD_JS="${_A}/hooks/enforce-worktree.js"
+ALLOWS_JS="${_A}/hooks/enforce-worktree/main-worktree-allows.js"
 PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
@@ -71,6 +72,15 @@ check_mc() {
 assert_allow() { local got; got="$(check_mc "$1" "$2")"; [ "$got" = "allow"  ] && pass "$3" || fail "$3 (got=$got)"; }
 assert_block() { local got; got="$(check_mc "$1" "$2")"; [ "$got" = "reject" ] && pass "$3" || fail "$3 (got=$got)"; }
 
+check_wc() {
+  run_with_timeout node -e "
+    const {isAllowedWorktreeCommand}=require('$ALLOWS_JS');
+    console.log(isAllowedWorktreeCommand(process.argv[1],process.argv[2])?'allow':'reject');
+  " -- "$1" "$2" 2>/dev/null
+}
+assert_allow_wc() { local got; got="$(check_wc "$1" "$2")"; [ "$got" = "allow"  ] && pass "$3" || fail "$3 (got=$got)"; }
+assert_block_wc() { local got; got="$(check_wc "$1" "$2")"; [ "$got" = "reject" ] && pass "$3" || fail "$3 (got=$got)"; }
+
 # Allow: no linked worktrees
 assert_allow "git stash push -m wip"           "$MAIN_CLEAN_N" "S1: stash push (no linked WT)"
 assert_allow "git stash pop"                    "$MAIN_CLEAN_N" "S2: stash pop"
@@ -113,7 +123,8 @@ assert_block "git stash pop && echo done"      "$MAIN_CLEAN_N" "S25: chaining bl
 assert_block "git -C \"$OTHER_N\" stash pop"  "$MAIN_CLEAN_N" "S26: -C /other blocked"
 
 # === WORKTREE_END_SKILL=1 prefix handling (S27-S42, new behavior) ===
-# S27-S29, S34, S36-S39, S42 FAIL until source changes are applied.
+# S27-S29, S34, S36 FAIL until source changes are applied.
+# S37/S38/S39/S42 retargeted to isAllowedWorktreeCommand (#778) — no-prefix forms.
 
 # S27: skill-prefixed stash at wtCount=2 (linked WT present) → allow after fix
 assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" stash push -m tmp" "$MAIN_DIRTY_N" "S27: skill-prefixed stash push at wtCount=2 → allow (#705/#739b)"
@@ -127,13 +138,17 @@ assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_VERY_DIRTY_N\" stash push" "$M
 assert_block "git stash push && rm README.md" "$MAIN_CLEAN_N" "S35: chaining blocked"
 # S36: skill-prefixed stash at wtCount=1 → allow after fix
 assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_CLEAN_N\" stash push" "$MAIN_CLEAN_N" "S36: skill-prefixed stash at wtCount=1 → allow"
-# S37: skill-prefixed worktree prune at wtCount=2 → allow after fix (#743)
-assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree prune" "$MAIN_DIRTY_N" "S37: skill-prefixed worktree prune at wtCount=2 → allow (#743)"
-# S38: skill-prefixed worktree remove at wtCount=2 → allow after fix (#745)
-assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree remove \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S38: skill-prefixed worktree remove at wtCount=2 → allow (#745)"
-# S39: skill-prefixed worktree prune --dry-run at wtCount=2 → allow after fix
-assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree prune --dry-run" "$MAIN_DIRTY_N" "S39: skill-prefixed worktree prune --dry-run at wtCount=2 → allow"
-# S42: skill-prefixed worktree remove --force → block (--force prohibited per SKILL.md rule)
-assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" worktree remove --force \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S42: skill-prefixed worktree remove --force → block (--force guard)"
+# S37: no-prefix worktree prune → allow via isAllowedWorktreeCommand (#778)
+assert_allow_wc "git -C \"$MAIN_DIRTY_N\" worktree prune" "$MAIN_DIRTY_N" "S37: no-prefix worktree prune → allow via isAllowedWorktreeCommand (#778)"
+# S38: no-prefix worktree remove → allow via isAllowedWorktreeCommand (#778)
+assert_allow_wc "git -C \"$MAIN_DIRTY_N\" worktree remove \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S38: no-prefix worktree remove → allow via isAllowedWorktreeCommand (#778)"
+# S39: no-prefix worktree prune --dry-run → allow via isAllowedWorktreeCommand (#778)
+assert_allow_wc "git -C \"$MAIN_DIRTY_N\" worktree prune --dry-run" "$MAIN_DIRTY_N" "S39: no-prefix worktree prune --dry-run → allow via isAllowedWorktreeCommand (#778)"
+# S42: no-prefix worktree remove --force → block via isAllowedWorktreeCommand (#778)
+assert_block_wc "git -C \"$MAIN_DIRTY_N\" worktree remove --force \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S42: no-prefix worktree remove --force → block via isAllowedWorktreeCommand (#778)"
+# S43: no-prefix worktree remove -f (short form) → block via isAllowedWorktreeCommand (#778)
+assert_block_wc "git -C \"$MAIN_DIRTY_N\" worktree remove -f \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S43: no-prefix worktree remove -f → block (#778)"
+# S44: path with semicolon + --force (quoted separator bypass guard) → block (#778)
+assert_block_wc "git -C \"$MAIN_DIRTY_N\" worktree remove \"$MAIN_DIRTY_N/a;b\" --force" "$MAIN_DIRTY_N" "S44: quoted path with ; then --force → block (#778)"
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]
