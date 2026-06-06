@@ -83,7 +83,7 @@ if (require.main === module) {
     const topDetail = findings.length > 0 ? findings[findings.length - 1].detail : "(no detail)";
     const reason = `[EM Supervisor] Layer 2 has determined cumulative_severity=error. Top finding: "${topDetail}". Follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`;
     try {
-      process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+      process.stdout.write(JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n");
     } catch (_) {}
     process.exit(2);
   }

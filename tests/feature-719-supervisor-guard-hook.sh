@@ -72,10 +72,10 @@ run_g2() {
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
-        pass "G2: cumulative_severity=error -> decision=block, exit 2"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ) && ( echo "$out" | grep -qi "systemMessage" ); then
+        pass "G2: cumulative_severity=error -> decision=block + systemMessage, exit 2"
     else
-        fail "G2: cumulative_severity=error -> decision=block, exit 2 (rc=$rc, out=$out)"
+        fail "G2: cumulative_severity=error -> decision=block + systemMessage, exit 2 (rc=$rc, out=$out)"
     fi
 }
 
