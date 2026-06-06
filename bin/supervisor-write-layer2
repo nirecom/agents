@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+"use strict";
+
+const { writeLayer2State } = require("../hooks/lib/supervisor-state-writer");
+const { SEVERITY_VALUES } = require("../hooks/lib/supervisor-state-schema");
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+const KNOWN_VALUE_FLAGS = new Set([
+  "--session-id",
+  "--next-check-at",
+  "--last-run-at",
+  "--cumulative-severity",
+  "--finding-categories",
+  "--finding-severity",
+  "--finding-detail",
+  "--finding-reporter",
+]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-next-check-at"]);
+
+function usage(msg) {
+  if (msg) console.error(`[supervisor-write-layer2] ERROR: ${msg}`);
+  console.error(
+    "Usage: node bin/supervisor-write-layer2 --session-id <sid>" +
+    " [--next-check-at <iso>] [--clear-next-check-at]" +
+    " [--last-run-at <iso>] [--cumulative-severity <error|warning|notice|null>]" +
+    " [--finding-categories <csv> --finding-severity <s>" +
+    " --finding-detail <text> --finding-reporter <name>]"
+  );
+  process.exit(1);
+}
+
+const args = {};
+const flags = new Set();
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  const tok = argv[i];
+  if (KNOWN_BOOL_FLAGS.has(tok)) {
+    flags.add(tok);
+    continue;
+  }
+  if (KNOWN_VALUE_FLAGS.has(tok)) {
+    if (i + 1 >= argv.length) usage(`${tok} requires a value`);
+    args[tok.slice(2)] = argv[i + 1];
+    i++;
+    continue;
+  }
+  usage(`unknown flag: ${tok}`);
+}
+
+const sid = args["session-id"];
+if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
+
+const hasNextCheckAt = "next-check-at" in args;
+const hasClearNextCheckAt = flags.has("--clear-next-check-at");
+const hasLastRunAt = "last-run-at" in args;
+const hasCumulativeSeverity = "cumulative-severity" in args;
+
+const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
+const findingPresent = findingKeys.filter((k) => k in args);
+const hasAnyFinding = findingPresent.length > 0;
+const hasAllFindings = findingPresent.length === findingKeys.length;
+
+if (hasNextCheckAt && hasClearNextCheckAt) {
+  usage("--next-check-at and --clear-next-check-at are mutually exclusive");
+}
+
+if (hasAnyFinding && !hasAllFindings) {
+  usage("--finding-categories, --finding-severity, --finding-detail, --finding-reporter must all be provided together");
+}
+
+if (!hasNextCheckAt && !hasClearNextCheckAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding) {
+  usage("at least one mutating flag required");
+}
+
+const patch = {};
+
+if (hasNextCheckAt) patch.next_check_at = args["next-check-at"];
+if (hasClearNextCheckAt) patch.next_check_at = null;
+if (hasLastRunAt) patch.last_run_at = args["last-run-at"];
+
+if (hasCumulativeSeverity) {
+  const raw = args["cumulative-severity"];
+  if (raw === "null") {
+    patch.cumulative_severity = null;
+  } else if (SEVERITY_VALUES.includes(raw)) {
+    patch.cumulative_severity = raw;
+  } else {
+    usage(`--cumulative-severity must be one of ${SEVERITY_VALUES.join("|")}|null`);
+  }
+}
+
+if (hasAllFindings) {
+  const categories = args["finding-categories"].split(",").map((s) => s.trim()).filter(Boolean);
+  if (categories.length === 0) usage("--finding-categories must be non-empty");
+  patch.findings = [
+    {
+      categories,
+      severity: args["finding-severity"],
+      detail: args["finding-detail"],
+      reporter: args["finding-reporter"],
+    },
+  ];
+}
+
+const ok = writeLayer2State(sid, patch);
+if (!ok) {
+  console.error("[supervisor-write-layer2] ERROR: writeLayer2State failed (invalid fields or unexpected error)");
+  process.exit(1);
+}
+process.exit(0);
