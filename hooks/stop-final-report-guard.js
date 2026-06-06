@@ -4,7 +4,7 @@
 // `<PLACEHOLDER>` tokens remaining.
 //
 // Trigger: <plans-dir>/<sid>-final-report-env.json exists (written by
-// worktree-end Step 5.5). On any other turn the hook exits 0 silently.
+// worktree-end Step WE-9..WE-11). On any other turn the hook exits 0 silently.
 //
 // Contract (post-#771):
 // - The previous renderer was abolished; the LLM now substitutes the skeleton
