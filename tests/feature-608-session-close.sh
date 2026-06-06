@@ -140,10 +140,10 @@ test_S4_issue_close_finalize_has_step_l() {
         skip "S4_issue_close_finalize_has_step_l (skills/issue-close-finalize/SKILL.md missing)"
         return
     fi
-    if grep -q "## Step L" "$f"; then
-        pass "S4_issue_close_finalize_has_step_l: '## Step L' present"
+    if grep -q "ICF-K" "$f"; then
+        pass "S4_issue_close_finalize_has_step_l: ICF-K (formerly Step L) present"
     else
-        fail "S4_issue_close_finalize_has_step_l: '## Step L' not found"
+        fail "S4_issue_close_finalize_has_step_l: ICF-K not found"
     fi
 }
 
