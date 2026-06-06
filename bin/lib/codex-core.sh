@@ -62,7 +62,11 @@ codex_core_run() {
   codex_out=""
   codex_exit=0
 
-  codex_out=$(timeout 180 codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
+  # Read timeout from .env via get-config-var; fall back to 300 s.
+  local _timeout
+  _timeout="$(cd "${AGENTS_CONFIG_DIR:-.}" && get-config-var CODEX_TIMEOUT_SECS 300 2>/dev/null)"
+  _timeout="${_timeout:-300}"
+  codex_out=$(timeout "$_timeout" codex exec --skip-git-repo-check - < "$TMPFILE" 2>"$CODEX_STDERR") || codex_exit=$?
 
   case $codex_exit in
     0)
@@ -74,8 +78,8 @@ codex_core_run() {
       codex_core_log performed "" "$_input_lines"
       ;;
     124)
-      echo "## ${CODEX_LABEL}: FAILED — timeout (180s)"
-      codex_core_log failed "timeout (180s)" "$_input_lines"
+      echo "## ${CODEX_LABEL}: FAILED — timeout (${_timeout}s)"
+      codex_core_log failed "timeout (${_timeout}s)" "$_input_lines"
       ;;
     *)
       local stderr_tail
