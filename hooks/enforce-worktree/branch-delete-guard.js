@@ -101,7 +101,7 @@ function hasForceDeleteFlag(cmd) {
   return false;
 }
 
-// True if cmd matches the exact shape /worktree-end Step 6f emits:
+// True if cmd matches the exact shape /worktree-end Step WE-18 emits:
 //   WORKTREE_END_SKILL=1 git -C <path> branch -D <type>/<task-name>
 // The -C path and branch may be quoted ("..." or '...') or bare. No shell
 // chaining, no extra options. Branch name MUST match the feature-branch

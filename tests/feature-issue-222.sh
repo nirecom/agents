@@ -1167,11 +1167,11 @@ else
     fail "D1: SKILL.md missing reference to issue-close-finalize-triage.sh"
 fi
 
-# --- D2: SKILL.md still documents Step J
-if grep -qE "^## Step J" "$SKILL_FILE"; then
-    pass "D2: SKILL.md has '## Step J' section"
+# --- D2: SKILL.md documents ICF-I (post-close sentinels step, formerly Step J)
+if grep -qE "ICF-I" "$SKILL_FILE"; then
+    pass "D2: SKILL.md references ICF-I (post-close sentinels step)"
 else
-    fail "D2: SKILL.md missing '## Step J' section"
+    fail "D2: SKILL.md missing ICF-I reference"
 fi
 
 # --- D3: SKILL.md mentions auto_close_path (the new ACTION name)

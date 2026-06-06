@@ -45,13 +45,13 @@ assert_contains() {
 
 echo "=== issue-close-finalize Step K (WIP clear) contract tests ==="
 
-# K1: Step K section header exists.
-assert_contains "$SKILL_MD" "^## Step K" \
-    "K1: SKILL.md contains '## Step K' section header"
+# K1: ICF-J documented with its own inline entry (replaces old '## Step K' header).
+assert_contains "$SKILL_MD" "^ICF-J:" \
+    "K1: SKILL.md contains 'ICF-J:' inline entry"
 
-# K2: Step K title indicates WIP clearing intent.
-assert_contains "$SKILL_MD" "Step K.*[Ww][Ii][Pp]|WIP state|clear WIP" \
-    "K2: Step K title references WIP / clear WIP state"
+# K2: ICF-J entry references WIP clearing.
+assert_contains "$SKILL_MD" "ICF-J.*[Ww][Ii][Pp]|ICF-J.*wip-state" \
+    "K2: ICF-J entry references WIP / wip-state"
 
 # K3: Step K invokes wip-state.sh clear <N>.
 assert_contains "$SKILL_MD" "wip-state\.sh.*clear" \
@@ -61,16 +61,16 @@ assert_contains "$SKILL_MD" "wip-state\.sh.*clear" \
 assert_contains "$SKILL_MD" "AGENTS_CONFIG_DIR.*wip-state\.sh|wip-state\.sh.*AGENTS_CONFIG_DIR" \
     "K4: Step K invokes wip-state.sh via \$AGENTS_CONFIG_DIR"
 
-# K5: Step K appears AFTER Step J (ordering).
+# K5: ICF-J appears AFTER ICF-I (ordering — both as inline 'ICF-N:' entries).
 if [ ! -f "$SKILL_MD" ]; then
     fail "K5: ordering check (file not found)"
 else
-    J_LN=$(grep -n "^## Step J" "$SKILL_MD" | head -1 | cut -d: -f1)
-    K_LN=$(grep -n "^## Step K" "$SKILL_MD" | head -1 | cut -d: -f1)
-    if [ -n "$J_LN" ] && [ -n "$K_LN" ] && [ "$K_LN" -gt "$J_LN" ]; then
-        pass "K5: Step K appears after Step J (j_ln=$J_LN k_ln=$K_LN)"
+    I_LN=$(grep -n "^ICF-I:" "$SKILL_MD" | head -1 | cut -d: -f1)
+    J_LN=$(grep -n "^ICF-J:" "$SKILL_MD" | head -1 | cut -d: -f1)
+    if [ -n "$I_LN" ] && [ -n "$J_LN" ] && [ "$J_LN" -gt "$I_LN" ]; then
+        pass "K5: ICF-J appears after ICF-I (i_ln=$I_LN j_ln=$J_LN)"
     else
-        fail "K5: Step K must follow Step J (j_ln=$J_LN k_ln=$K_LN)"
+        fail "K5: ICF-J must follow ICF-I (i_ln=$I_LN j_ln=$J_LN)"
     fi
 fi
 

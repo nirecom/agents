@@ -7,7 +7,7 @@ const { stripQuotedArgs } = require("../lib/strip-quoted-args");
 
 // Built-in exclude patterns: always merged with ENFORCE_WORKTREE_EXCLUDE. Users
 // cannot disable these — set ENFORCE_WORKTREE=off session-scoped if needed.
-// .worktree-backup/**: lets /worktree-end Step 5 stage gitignored backups even
+// .worktree-backup/**: lets /worktree-end Step WE-8 stage gitignored backups even
 // when Bash CWD has reset to the main worktree.
 const BUILTIN_EXCLUDE_PATTERNS = Object.freeze(["**/.worktree-backup/**"]);
 
