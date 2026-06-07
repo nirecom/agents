@@ -62,5 +62,4 @@ WF-CODE-12. **Session close** — Run `/session-close` from the main worktree.
 - For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
 - For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
-
-> **Always report** when you encounter an issue, concern, or unexpected outcome → [rules/supervisor-reporting.md](rules/supervisor-reporting.md)
+- When you encounter an issue, concern, or unexpected outcome that core-principles + workflow don't resolve, report it: see [rules/supervisor-reporting.md](rules/supervisor-reporting.md).

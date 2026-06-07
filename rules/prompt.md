@@ -22,7 +22,11 @@ Each directive occupies exactly one line. Do not run two rules into a single sen
 If a procedure has more than 3 steps, move it to `bin/<tool>` or `skills/<name>/lib/`.
 SKILL.md calls the CLI; it does not inline the steps.
 
-### 1.4 No inline code blocks in prompt files
+### 1.4 Every token counts
+
+Remove every word that does not change meaning or add constraint. Prefer the shorter form.
+
+### 1.5 No inline code blocks in prompt files
 
 Code blocks (3+ contiguous lines fenced with ```) are PROHIBITED in `rules/*.md`,
 `skills/*/SKILL.md`, and `agents/*.md` for NEW additions and edits.
@@ -59,28 +63,22 @@ Rules and SKILL.md files **must not** re-enumerate the same literals as illustra
 At most 2 examples per concept. More examples belong in the hook source (machine-checked)
 or in a `bin/` script (executable and testable).
 
-## 3. Brevity
-
-### 3.1 Every token counts
-
-Remove every word that does not change meaning or add constraint. Prefer the shorter form.
-
-### 3.2 "See issue" only for complex background
+### 2.3 "See issue" only for complex background
 
 Omit `see issue #N` (and similar "see X.md" pointers) unless the topic requires complex background or many examples that cannot be inlined.
 
-### 3.3 No post-invocation skill explanations
+### 2.4 No post-invocation skill explanations
 
 After instructing to run a skill, do not describe what the skill does. The skill name is self-documenting.
 Exception: unexpected behavior or out-of-scope cases the reader must anticipate.
 
-## 4. SSOT (specialization of `core-principles.md` §2 for prompt content)
+## 3. SSOT (specialization of `core-principles.md` §2 for prompt content)
 
-### 4.1 Reference the master — never copy
+### 3.1 Reference the master — never copy
 
 Never reproduce content from another authoritative file. Link or reference instead.
 
-### 4.2 No echo in references
+### 3.2 No echo in references
 
 When pointing to a master file, do not restate its content. A one-line pointer is enough.
 

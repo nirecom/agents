@@ -89,7 +89,7 @@ if (require.main === module) {
     for (const f of staged) lines.push(`  - ${f}`);
   }
   if (prUrl) lines.push(`Open PR: ${prUrl}`);
-  // SSOT: approval instruction. Prompts must NOT duplicate this wording (rules/prompt.md §4.1).
+  // SSOT: approval instruction. Prompts must NOT duplicate this wording (rules/prompt.md §3.1).
   lines.push("Click Allow on the next dialog to approve; click Deny to stop.");
 
   process.stdout.write(JSON.stringify({ systemMessage: lines.join("\n") }));
