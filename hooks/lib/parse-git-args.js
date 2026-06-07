@@ -52,6 +52,28 @@ function parseCdCommand(command) {
 }
 
 /**
+ * Extracts the cd target from a `bash/sh/zsh/dash -c '<body>'` command string.
+ * Returns the absolute path of the first cd in the body, or null when:
+ *   - command does not match bash/sh/zsh/dash -\w*c\w* '<body>' form
+ *   - body has no leading cd, or cd target is relative/tilde/env-var
+ * Fail-safe: unrecognized forms return null (caller falls back to parseCdCommand).
+ * pwsh/fish/double-quote body intentionally not supported.
+ *
+ * Flag-set matches isReadOnlyInterpreterC() in bash-write-patterns.js: -\w*c\w*
+ * accepts -c / -lc / -xc / -cx / -lxc / etc. (common login-shell + verbose
+ * combinations). Mismatch with that sibling parser caused #566 HIGH — `bash -lc`
+ * fell through to process.cwd() and bypassed the cd-scope fix.
+ */
+function parseCdCommandInInterpreter(command) {
+  if (!command || typeof command !== "string") return null;
+  const m = command.match(/^\s*(?:bash|sh|zsh|dash)(?:\.exe)?\s+-\w*c\w*\s+'([^']*)'\s*$/i);
+  if (!m) return null;
+  const body = m[1];
+  const segment = body.split(/&&|\|\||;/)[0].trim();
+  return parseCdCommand(segment);
+}
+
+/**
  * Parses the leading "git [global-opts...]" portion of a command and returns
  * { subcommand, rest }. Skips global git options that may appear before the
  * subcommand verb: --no-pager, -C <path>, -c k=v, --git-dir=<x>, --work-tree=<x>,
@@ -123,4 +145,4 @@ function parseGitConfigValues(command, key) {
   return values;
 }
 
-module.exports = { parseGitCArg, parseCdCommand, parseGitGlobalOptions, parseGitConfigValues };
+module.exports = { parseGitCArg, parseCdCommand, parseCdCommandInInterpreter, parseGitGlobalOptions, parseGitConfigValues };

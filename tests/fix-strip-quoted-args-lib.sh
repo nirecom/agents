@@ -366,6 +366,83 @@ test_classify_non_group_a_scope() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# #514: DQ must preserve $(...) command substitution content
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_dq_preserves_command_substitution() {
+    local r
+    # #514: $(...) inside DQ must preserve inner tokens for classifier visibility.
+    # New format (HIGH#1 fix): $( and ) wrapper chars are replaced with spaces so
+    # write tokens land at command-position boundaries. Behavior-based assertions
+    # (substring checks) are used because exact format may evolve; the contract
+    # is "inner tokens visible, literal text gone".
+
+    # Case 1: $(echo hi > out.txt) inside DQ — redirect must be visible
+    r="$(call_strip 'echo "$(echo hi > out.txt)"')"
+    if [[ "$r" == *"echo hi > out.txt"* ]] && [[ "$r" != *'$('* ]]; then
+        pass "DQ #514: \$() inner tokens visible, \$( wrapper unwrapped"
+    else
+        fail "DQ #514: inner tokens missing or \$( wrapper retained — got '$r'"
+    fi
+
+    # Case 2: write command word inside $(...) inside DQ (HIGH#1)
+    r="$(call_strip 'echo "$(rm tmp)"')"
+    if [[ "$r" == *" rm tmp "* ]]; then
+        pass "DQ #514 HIGH#1: rm inside \$() visible at command position"
+    else
+        fail "DQ #514 HIGH#1: rm not visible — got '$r'"
+    fi
+
+    # Case 3: literals around $(cmd) dropped, $(cmd) preserved
+    r="$(call_strip 'echo "a $(cmd) b"')"
+    if [[ "$r" == *" cmd "* ]] && [[ "$r" != *"a "* ]] && [[ "$r" != *" b"* ]]; then
+        pass "DQ strips literals around cmd-subst, preserves inner"
+    else
+        fail "DQ literal+cmd-subst: got '$r'"
+    fi
+
+    # Case 4 (HIGH#2): backtick command substitution inside DQ — same as $()
+    r="$(call_strip 'echo "`rm tmp`"')"
+    if [[ "$r" == *" rm tmp "* ]] && [[ "$r" != *'`'* ]]; then
+        pass "DQ #514 HIGH#2: backtick inner tokens visible, backticks unwrapped"
+    else
+        fail "DQ #514 HIGH#2: backtick handling — got '$r'"
+    fi
+
+    # Case 5 (HIGH#2): mixed $() and backticks
+    r="$(call_strip 'echo "$(touch a) `rm b`"')"
+    if [[ "$r" == *"touch a"* ]] && [[ "$r" == *"rm b"* ]]; then
+        pass "DQ #514 HIGH#2: mixed \$() and backticks both visible"
+    else
+        fail "DQ #514 HIGH#2 mixed: got '$r'"
+    fi
+
+    # Regression: no $(...) — DQ fully collapses to ""
+    r="$(call_strip 'echo "no expansion here"')"
+    if [ "$r" = '"echo \"\""' ]; then
+        pass "DQ regression: no cmd-subst -> empty quotes"
+    else
+        fail "DQ regression no cmd-subst: expected '\"echo \\\"\\\"\"', got '$r'"
+    fi
+
+    # Regression AT-DP1: single-quoted unchanged
+    r="$(call_strip "echo 'no expansion'")"
+    if [ "$r" = "\"echo ''\"" ]; then
+        pass "SQ regression: single-quoted collapses to ''"
+    else
+        fail "SQ regression: expected \"echo ''\" got '$r'"
+    fi
+
+    # Regression: variable substitution ${var} is stripped (only $(...) preserved)
+    r="$(call_strip 'echo "${var}"')"
+    if [ "$r" = '"echo \"\""' ]; then
+        pass "DQ regression: \${var} stripped, only \$(...) preserved"
+    else
+        fail "DQ \${var} regression: expected '\"echo \\\"\\\"\"', got '$r'"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -389,6 +466,9 @@ test_shell_var_non_assignment
 test_classify_with_body_var
 test_classify_clean_body
 test_classify_non_group_a_scope
+
+# #514 — DQ preserves $(...) command substitution
+test_dq_preserves_command_substitution
 
 echo ""
 echo "─────────────────────────────────────────"
