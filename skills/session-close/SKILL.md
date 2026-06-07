@@ -1,6 +1,6 @@
 ---
 name: session-close
-description: Orchestrate session close — Phase 2 issue close + Final Report. Replaces CLAUDE.md Step 10b. Handles both ENFORCE_WORKTREE on (worktree path) and off (branch/main path).
+description: Orchestrate session close — Phase 2 issue close + Final Report. Replaces CLAUDE.md WF-CODE-12. Handles both ENFORCE_WORKTREE on (worktree path) and off (branch/main path).
 user-invocable: true
 ---
 
