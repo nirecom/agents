@@ -17,7 +17,7 @@ printf '%s\n' "$ROUND_NUMBER" > "$ROUND_FILE"
 cleanup_counter() {
   local rc=$1
   case "$rc" in
-    0|2) rm -f "$ROUND_FILE" ;;
+    0|2|4) rm -f "$ROUND_FILE" ;;
   esac
   return "$rc"
 }
