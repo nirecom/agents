@@ -171,4 +171,8 @@ Changes: #589: WIP tracking failure (`wip-state.sh` session-id resolution error)
 
 ### FEATURE: PR #813 (2026-06-07)
 Background: feat(#806): rename CLAUDE.md workflow steps to WF-CODE-N prefix
-Changes: CLAUDE.md workflow steps are now labeled `WF-CODE-N` (e.g. `WF-CODE-5` for **Code**, `WF-CODE-9` for **Phase 1 issue close**). The new prefix distinguishes top-level steps from skill-internal step IDs (WI-, WE-, ICF-, MDP-) and reserves namespace for future workflow types (`WF-TXT-N`, `WF-PLAN-N`).
+Changes: CLAUDE.md workflow steps are now labeled `WF-CODE-N` (e.g. `WF-CODE-5` for **Code**, `WF-CODE-9` for **Phase 1 issue close**). The new prefix distinguishes top-level steps from skill-internal step IDs (WI-, WE-, ICF-, MDP-) and reserves namespace for future workflow types (`WF-TXT-N`, `WF-PLAN-N`).
+
+### FEATURE: PR #814 (2026-06-08)
+Background: docs: trim CLAUDE.md verbose sections + add prompt brevity criteria
+Changes: CLAUDE.md trimmed: workflow steps WF-CODE-5/7/8/9/10/11/12 are shorter; rely on skill names for self-documentation.;New prompt-quality criteria in `rules/prompt.md`: every-token-counts brevity (§1.4), restraint on "see issue" pointers (§2.3), and no post-invocation skill explanations (§2.4).
