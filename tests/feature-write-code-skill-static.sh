@@ -122,44 +122,44 @@ if require_file "$ENV_EXAMPLE"; then
 fi
 
 # ---------------------------------------------------------------------------
-# h. CLAUDE.md Step 5 does NOT contain "Present a diff in chat"
+# h. CLAUDE.md WF-CODE-5 does NOT contain "Present a diff in chat"
 # ---------------------------------------------------------------------------
-echo "=== h. CLAUDE.md Step 5 does NOT contain 'Present a diff in chat' ==="
+echo "=== h. CLAUDE.md WF-CODE-5 does NOT contain 'Present a diff in chat' ==="
 if require_file "$CLAUDE_MD"; then
-    # Extract lines in the Step 5 block (between "5. **Code**" and next top-level step)
-    step5_block=$(awk '/^5\. \*\*Code\*\*/{found=1} found && /^[0-9]+\. \*\*/ && !/^5\./{found=0} found{print}' "$CLAUDE_MD")
+    # Extract lines in the WF-CODE-5 block
+    step5_block=$(awk '/^WF-CODE-5\. \*\*Code\*\*/{found=1} found && /^WF-CODE-[0-9]+[a-z]*\. \*\*/ && !/^WF-CODE-5\./{found=0} found{print}' "$CLAUDE_MD")
     if echo "$step5_block" | grep -F "Present a diff in chat" >/dev/null 2>&1; then
-        fail "CLAUDE.md Step 5 must NOT contain 'Present a diff in chat'"
+        fail "CLAUDE.md WF-CODE-5 must NOT contain 'Present a diff in chat'"
     else
-        pass "CLAUDE.md Step 5 does not contain 'Present a diff in chat'"
+        pass "CLAUDE.md WF-CODE-5 does not contain 'Present a diff in chat'"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# i. CLAUDE.md Step 5 does NOT contain old ENFORCE_WORKTREE=off diff branching pattern
+# i. CLAUDE.md WF-CODE-5 does NOT contain old ENFORCE_WORKTREE=off diff branching pattern
 # ---------------------------------------------------------------------------
-echo "=== i. CLAUDE.md Step 5 does NOT contain old diff branching pattern ==="
+echo "=== i. CLAUDE.md WF-CODE-5 does NOT contain old diff branching pattern ==="
 if require_file "$CLAUDE_MD"; then
-    step5_block=$(awk '/^5\. \*\*Code\*\*/{found=1} found && /^[0-9]+\. \*\*/ && !/^5\./{found=0} found{print}' "$CLAUDE_MD")
+    step5_block=$(awk '/^WF-CODE-5\. \*\*Code\*\*/{found=1} found && /^WF-CODE-[0-9]+[a-z]*\. \*\*/ && !/^WF-CODE-5\./{found=0} found{print}' "$CLAUDE_MD")
     # Old pattern was two lines both present: ENFORCE_WORKTREE=off AND Present a diff
     if echo "$step5_block" | grep -F "ENFORCE_WORKTREE=off" >/dev/null 2>&1 && \
        echo "$step5_block" | grep -F "Present a diff" >/dev/null 2>&1; then
-        fail "CLAUDE.md Step 5 still has old ENFORCE_WORKTREE=off + Present a diff branching pattern"
+        fail "CLAUDE.md WF-CODE-5 still has old ENFORCE_WORKTREE=off + Present a diff branching pattern"
     else
-        pass "CLAUDE.md Step 5 does not have old diff branching pattern"
+        pass "CLAUDE.md WF-CODE-5 does not have old diff branching pattern"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# j. CLAUDE.md Step 5 contains /write-code
+# j. CLAUDE.md WF-CODE-5 contains /write-code
 # ---------------------------------------------------------------------------
-echo "=== j. CLAUDE.md Step 5 contains /write-code ==="
+echo "=== j. CLAUDE.md WF-CODE-5 contains /write-code ==="
 if require_file "$CLAUDE_MD"; then
-    step5_block=$(awk '/^5\. \*\*Code\*\*/{found=1} found && /^[0-9]+\. \*\*/ && !/^5\./{found=0} found{print}' "$CLAUDE_MD")
+    step5_block=$(awk '/^WF-CODE-5\. \*\*Code\*\*/{found=1} found && /^WF-CODE-[0-9]+[a-z]*\. \*\*/ && !/^WF-CODE-5\./{found=0} found{print}' "$CLAUDE_MD")
     if echo "$step5_block" | grep -F "/write-code" >/dev/null 2>&1; then
-        pass "CLAUDE.md Step 5 contains '/write-code'"
+        pass "CLAUDE.md WF-CODE-5 contains '/write-code'"
     else
-        fail "CLAUDE.md Step 5 missing '/write-code'"
+        fail "CLAUDE.md WF-CODE-5 missing '/write-code'"
     fi
 fi
 
