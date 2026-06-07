@@ -27,29 +27,34 @@ function block(reason) { console.log(JSON.stringify({ decision: "block", reason 
 // CREDENTIALS_TABLE — single source of truth for protected paths.
 // Entry shape:
 //   root:               primary ~/... path.
-//   extraLiteralRoots?: additional absolute paths (SSH only adds /root/.ssh).
+//   extraLiteralRoots?: additional absolute paths. Each family adds /root/<tail> (same path as
+//                       root with "~/" stripped) so root-owned container paths are covered symmetrically.
 //   displayName:        human-readable name (reserved for future per-family msgs).
 const CREDENTIALS_TABLE = [
-  { root: "~/.ssh",                                    extraLiteralRoots: ["/root/.ssh"], displayName: "SSH keys" },
-  { root: "~/.gnupg",                                                                     displayName: "GnuPG keyring" },
-  { root: "~/.aws",                                                                       displayName: "AWS credentials" },
-  { root: "~/.azure",                                                                     displayName: "Azure credentials" },
-  { root: "~/.config/gh",                                                                 displayName: "GitHub CLI config" },
-  { root: "~/.git-credentials",                                                           displayName: "Git credentials store" },
-  { root: "~/.docker/config.json",                                                        displayName: "Docker config" },
-  { root: "~/.kube",                                                                      displayName: "Kubernetes config" },
-  { root: "~/.npmrc",                                                                     displayName: "npm credentials" },
-  { root: "~/.pypirc",                                                                    displayName: "PyPI credentials" },
-  { root: "~/.gem/credentials",                                                           displayName: "RubyGems credentials" },
-  { root: "~/.netrc",                                                                     displayName: "netrc credentials" },
-  { root: "~/.pgpass",                                                                    displayName: "PostgreSQL password file" },
-  { root: "~/.my.cnf",                                                                    displayName: "MySQL config" },
-  { root: "~/.curlrc",                                                                    displayName: "curl credentials" },
-  { root: "~/.m2/settings.xml",                                                           displayName: "Maven settings" },
-  { root: "~/.gradle/gradle.properties",                                                  displayName: "Gradle properties" },
-  { root: "~/.terraform.d/credentials.tfrc.json",                                         displayName: "Terraform credentials" },
-  { root: "~/.terraformrc",                                                               displayName: "Terraform CLI config" },
-  { root: "~/.terraform.rc",                                                              displayName: "Terraform CLI config (Windows)" },
+  { root: "~/.ssh",                               extraLiteralRoots: ["/root/.ssh"],                              displayName: "SSH keys" },
+  { root: "~/.gnupg",                             extraLiteralRoots: ["/root/.gnupg"],                            displayName: "GnuPG keyring" },
+  { root: "~/.aws",                               extraLiteralRoots: ["/root/.aws"],                              displayName: "AWS credentials" },
+  { root: "~/.azure",                             extraLiteralRoots: ["/root/.azure"],                            displayName: "Azure credentials" },
+  { root: "~/.config/gh",                         extraLiteralRoots: ["/root/.config/gh"],                        displayName: "GitHub CLI config" },
+  { root: "~/.config/gcloud",                     extraLiteralRoots: ["/root/.config/gcloud"],                    displayName: "gcloud SDK credentials" },
+  { root: "~/.config/op",                         extraLiteralRoots: ["/root/.config/op"],                        displayName: "1Password CLI config" },
+  { root: "~/.git-credentials",                   extraLiteralRoots: ["/root/.git-credentials"],                  displayName: "Git credentials store" },
+  { root: "~/.docker/config.json",                extraLiteralRoots: ["/root/.docker/config.json"],               displayName: "Docker config" },
+  { root: "~/.kube",                              extraLiteralRoots: ["/root/.kube"],                             displayName: "Kubernetes config" },
+  { root: "~/.npmrc",                             extraLiteralRoots: ["/root/.npmrc"],                            displayName: "npm credentials" },
+  { root: "~/.pypirc",                            extraLiteralRoots: ["/root/.pypirc"],                           displayName: "PyPI credentials" },
+  { root: "~/.gem/credentials",                   extraLiteralRoots: ["/root/.gem/credentials"],                  displayName: "RubyGems credentials" },
+  { root: "~/.vault-token",                       extraLiteralRoots: ["/root/.vault-token"],                      displayName: "HashiCorp Vault token" },
+  { root: "~/.cargo/credentials.toml",            extraLiteralRoots: ["/root/.cargo/credentials.toml"],           displayName: "Cargo registry credentials" },
+  { root: "~/.netrc",                             extraLiteralRoots: ["/root/.netrc"],                            displayName: "netrc credentials" },
+  { root: "~/.pgpass",                            extraLiteralRoots: ["/root/.pgpass"],                           displayName: "PostgreSQL password file" },
+  { root: "~/.my.cnf",                            extraLiteralRoots: ["/root/.my.cnf"],                           displayName: "MySQL config" },
+  { root: "~/.curlrc",                            extraLiteralRoots: ["/root/.curlrc"],                           displayName: "curl credentials" },
+  { root: "~/.m2/settings.xml",                   extraLiteralRoots: ["/root/.m2/settings.xml"],                  displayName: "Maven settings" },
+  { root: "~/.gradle/gradle.properties",          extraLiteralRoots: ["/root/.gradle/gradle.properties"],         displayName: "Gradle properties" },
+  { root: "~/.terraform.d/credentials.tfrc.json", extraLiteralRoots: ["/root/.terraform.d/credentials.tfrc.json"], displayName: "Terraform credentials" },
+  { root: "~/.terraformrc",                       extraLiteralRoots: ["/root/.terraformrc"],                      displayName: "Terraform CLI config" },
+  { root: "~/.terraform.rc",                      extraLiteralRoots: ["/root/.terraform.rc"],                     displayName: "Terraform CLI config (Windows)" },
 ];
 
 const ALL_ROOTS = CREDENTIALS_TABLE.map((e) => e.root);
@@ -92,7 +97,7 @@ const BLOCK_MSG =
   "~/.docker/config.json, ~/.npmrc, ~/.pypirc, ~/.gem/credentials, ~/.netrc, ~/.pgpass, " +
   "~/.my.cnf, ~/.curlrc, ~/.m2/settings.xml, ~/.gradle/gradle.properties, " +
   "~/.terraform.d/credentials.tfrc.json, ~/.terraformrc, ~/.terraform.rc, ~/.azure, " +
-  "~/.config/gh) is blocked by hooks/block-credentials.js. " +
+  "~/.config/gh, ~/.config/gcloud, ~/.vault-token, ~/.cargo/credentials.toml, ~/.config/op) is blocked by hooks/block-credentials.js. " +
   "WORKFLOW_OFF does not bypass this hook. If this is a false-positive (e.g. the path " +
   "appears only inside a text-flag value or a quoted message), file an issue.";
 
