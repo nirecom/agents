@@ -163,4 +163,8 @@ Changes: Fix false classification: write operations hidden inside DQ-quoted `$(.
 
 ### FEATURE: PR #804 (2026-06-07)
 Background: fix(#793,#458): expand $HOME/~/WORKFLOW_PLANS_DIR in bash redirect targets
-Changes: Fixed: bash redirections targeting paths outside the repository (e.g., `$HOME/.workflow-plans/...`, `~/...`, `$WORKFLOW_PLANS_DIR/...`) are now correctly allowed from the main worktree instead of being blocked by `enforce-worktree`
+Changes: Fixed: bash redirections targeting paths outside the repository (e.g., `$HOME/.workflow-plans/...`, `~/...`, `$WORKFLOW_PLANS_DIR/...`) are now correctly allowed from the main worktree instead of being blocked by `enforce-worktree`
+
+### FEATURE: PR #812 (2026-06-07)
+Background: fix(#589,#675,#798): wip-state rc=2 escalation + meta WIP skip + meta_pending_subs triage + all-N label check
+Changes: #589: WIP tracking failure (`wip-state.sh` session-id resolution error) now shows a prompt — you can abort the session rather than silently proceeding with no WIP fingerprint.;#675: Running `/issue-close-finalize` on a meta parent with open sub-issues no longer errors; the parent is quietly left open and will auto-close when the last sub-issue closes.;#798: In multi-issue sessions, all issues (not just the primary) are now checked for the `intent:clarified` label — a missing label on a related issue now correctly triggers re-clarification.
