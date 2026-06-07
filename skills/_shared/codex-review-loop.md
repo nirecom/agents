@@ -31,7 +31,7 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 
 ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
 
-The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-codex-review-loop.sh`) maintains ROUND_NUMBER on disk at `<PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt` and increments it on each invocation. The file holds a single decimal integer `\n`-terminated. The wrapper passes `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The file is deleted on exit 0 (APPROVED) or exit 2 (ESCALATE); it persists on exit 1 (CONTINUE) and exit 3.
+The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-codex-review-loop.sh`) maintains ROUND_NUMBER on disk at `<PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt` and increments it on each invocation. The file holds a single decimal integer `\n`-terminated. The wrapper passes `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The file is deleted on exit 0 (APPROVED) or exit 2 (ESCALATE); it persists on exit 1 (CONTINUE) and exit 3 — and on exit 4 (FATAL_ERROR, per #776: cleanup-on-exit-4 keeps retry path clean).
 
 ## Concern-ID Ledger
 
@@ -93,7 +93,7 @@ The wrapper internally:
 | 1 | NON_APPROVED_VERDICT | Capture stdout to `RAW_FILE` (step d.1) → append round log + planner trailer to `CONCERNS_LOG` (step e) → re-invoke `PLANNER_AGENT`. |
 | 2 | `FAILED — round cap reached` | Invoke cap-menu-dispatch (`skills/_shared/cap-menu-dispatch.md`). |
 | 3 | **codex CLI unusable** (SKIPPED / FAILED-other / verdict malformed) | Append `<ISO-timestamp> round=<N> codex unavailable: <stderr>` to `DEBUG_LOG`; **silently launch `REVIEWER_AGENT` subagent**. Do NOT emit to chat. |
-| 4 | **Wrapper / config / parser failure** (unset `AGENTS_CONFIG_DIR`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc.) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. |
+| 4 | **Wrapper / config / parser failure** (unset `AGENTS_CONFIG_DIR`, missing `core-principles.md`, missing arg, missing option value, missing binary, unrecognized status header, etc.) | **HALT with blocking error.** Surface the wrapper's stderr verbatim to the user. Do **NOT** fall back to `REVIEWER_AGENT` — exit 4 means the enforcement infrastructure itself is broken, and silent fallback would hide that. Append diagnostic to `DEBUG_LOG` then abort the skill. Sub-case: when round >= 2 is requested but the ledger file is absent at arg-assembly time, the wrapper auto-downgrades the effective round to 1 and rebuilds the ledger from this round's concerns (concern-ID continuity is lost; tracked by #748). |
 
 **Critical distinction:** exit 3 and exit 4 look superficially similar (neither produced a usable
 verdict) but require opposite responses. Exit 3 is "codex was given a fair chance and could not
