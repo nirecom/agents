@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-bundle-a-targets.sh
 # Tests: hooks/lib/bash-write-targets.js
-# Tags: worktree, enforce, hook, bin, shell
+# Tags: worktree, enforce, hook, bin, shell, shell-expansion, redirect
 #
 # Unit tests for hooks/lib/bash-write-targets.js (will be implemented after
 # tests pass red). Tests call the module via `node -e require(...)`.
@@ -346,6 +346,54 @@ test_cpmv_destination() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# extractRedirectTargets — static shell-token expansion (issue #793)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# After expandStaticShellTokens lands in hooks/lib/bash-write-targets.js,
+# extractRedirectTargets must expand the safe static subset:
+#   $HOME, ${HOME}, ~  → os.homedir()
+#   $WORKFLOW_PLANS_DIR → process.env.WORKFLOW_PLANS_DIR (fail-closed if unset)
+# All other variable expansions remain fail-closed (null).
+
+test_redirect_shell_expansion() {
+    local home_dir expected_home
+    home_dir="$(node -e 'const os=require("os"); process.stdout.write(os.homedir().replace(/\\/g, "/"))')"
+    expected_home='["'"$home_dir"'/.workflow-plans/f.json"]'
+
+    # $HOME double-quoted → expanded.
+    assert_fn_result 'redirect: "$HOME/..." double-quoted → expanded' \
+        "$(call_redirect 'printf x > "$HOME/.workflow-plans/f.json"')" \
+        "$expected_home"
+
+    # ~ prefix → expanded.
+    assert_fn_result 'redirect: ~/... → expanded' \
+        "$(call_redirect 'printf x > ~/.workflow-plans/f.json')" \
+        "$expected_home"
+
+    # Single-quoted '$HOME/foo' must stay literal (POSIX: single quotes
+    # never expand). C1 critical pin.
+    assert_fn_result "redirect: single-quoted '\$HOME/foo' stays literal" \
+        "$(call_redirect "printf x > '\$HOME/foo'")" \
+        '["$HOME/foo"]'
+
+    # Backslash-escaped "\$HOME/foo" → null (escape means "do not expand").
+    assert_fn_result 'redirect: "\$HOME/foo" backslash-escaped → null' \
+        "$(call_redirect 'printf x > "\$HOME/foo"')" \
+        'null'
+
+    # $WORKFLOW_PLANS_DIR set in env → expanded.
+    assert_fn_result 'redirect: $WORKFLOW_PLANS_DIR set → expanded' \
+        "$(MSYS_NO_PATHCONV=1 WORKFLOW_PLANS_DIR=/c/test-plans run_with_timeout 30 node -e "
+            try {
+              const m = require('$MODULE');
+              const r = m.extractRedirectTargets(process.argv[1]);
+              console.log(JSON.stringify(r));
+            } catch (e) { console.log('ERROR: ' + e.message); }
+          " -- 'printf x > $WORKFLOW_PLANS_DIR/state.json' 2>/dev/null)" \
+        '["/c/test-plans/state.json"]'
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -361,6 +409,7 @@ test_staged_files
 test_idempotency
 test_security_redirect_injection
 test_cpmv_destination
+test_redirect_shell_expansion
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
