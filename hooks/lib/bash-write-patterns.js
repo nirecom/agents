@@ -196,6 +196,33 @@ const QUOTING_ONLY_NAMES = new Set([
 // stripHeredocBody contract depend on it (see classify() lines 160-190).
 const STRIP_KINDS = new Set(["file-op", "posix-redir", "git", "pkg-mgr", "gh", "pwsh", "pwsh-alias", "pwsh-encoded"]);
 
+// Write command words that, when quoted at command-position, must still be
+// classified as write (#515). git/npm/gh excluded — too many false positives.
+// sed/perl excluded — in-place flag detection requires argument scanning.
+const QUOTED_COMMAND_WORD_WRITE_NAMES = new Set([
+  "tee", "rm", "mv", "cp", "patch", "touch", "chmod", "dd", "rsync",
+  "unzip", "gunzip", "bunzip2", "sc", "ac", "ni", "ri",
+]);
+
+// Returns true if cmd has a write command word at a command-position that is
+// wrapped in single OR double quotes (e.g. `"rm" file`, `foo; 'tee' out`).
+// Command-position is anchored to start-of-string or a shell command separator
+// (;|&), optionally followed by whitespace. Plain whitespace alone does NOT
+// qualify — that would FP on argument-position quotes like `echo "rm"` or
+// `grep "tee" file` (#566 MEDIUM). Single-quoted form is the sibling required
+// by orthogonality (#515 MEDIUM).
+function isQuotedWriteCommandWord(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const re = /(?:^|[;|&])\s*(?:"([^"]+)"|'([^']+)')/g;
+  let m;
+  while ((m = re.exec(cmd)) !== null) {
+    const content = m[1] != null ? m[1] : m[2];
+    const firstToken = content.trim().split(/\s+/)[0];
+    if (QUOTED_COMMAND_WORD_WRITE_NAMES.has(firstToken)) return true;
+  }
+  return false;
+}
+
 // Reason-text shell-metachar guard for classify(). isStrictSentinel matches the
 // sentinel shape (SSOT in sentinel-patterns.js). This wrapper adds a classify()-
 // specific check: if the reason text contains shell metacharacters that could
@@ -228,6 +255,7 @@ function classify(cmd) {
       return isSentinelEchoSafe(trimmed) ? "read" : "write";
     }
     const stripped = stripQuotedArgs(cmd);
+    if (isQuotedWriteCommandWord(cmd)) return "write";
     const matchedNames = [];
     for (const p of WRITE_PATTERNS) {
       const scanned = STRIP_KINDS.has(p.kind) ? stripped : cmd;
@@ -275,7 +303,7 @@ function classify(cmd) {
     }
     return "write";
   } catch (e) {
-    return "read"; // fail-open
+    return "write"; // fail-safe (line 4 contract: when in doubt, write)
   }
 }
 
