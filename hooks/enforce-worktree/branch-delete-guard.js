@@ -75,7 +75,7 @@ function isAllowedBranchDeleteWhenNotCheckedOut(cmd, repoRoot) {
   // process). The allowlist is tight — only the specific shape
   // `WORKTREE_END_SKILL=1 git -C <path> branch -D <branch>` qualifies.
   if (hasForceDeleteFlag(cmd)) {
-    return isWorktreeEndSkillForceDelete(cmd);
+    return isWorktreeEndSkillForceDelete(cmd) || isSweepBranchesSkillForceDelete(cmd);
   }
   return true;
 }
@@ -120,10 +120,27 @@ function isWorktreeEndSkillForceDelete(cmd) {
   return /^(?:feat|feature|fix|refactor|docs|chore)\/[a-zA-Z0-9_-]+$/.test(branch);
 }
 
+// True if cmd matches the exact shape /sweep-branches emits:
+//   SWEEP_BRANCHES_SKILL=1 git -C <path> branch -D <branch>
+// The -C path and branch may be quoted ("..." or '...') or bare. No shell
+// chaining. Branch name must NOT be main, master, develop, or release/*.
+// This guards against accidental force-deletion of protected branches via
+// the sweep-branches script.
+function isSweepBranchesSkillForceDelete(cmd) {
+  if (hasShellChaining(cmd)) return false;
+  const m = cmd.match(
+    /^SWEEP_BRANCHES_SKILL=1[ \t]+git[ \t]+-C[ \t]+(?:"[^"]+"|'[^']+'|\S+)[ \t]+branch[ \t]+-D[ \t]+(?:"([^"]+)"|'([^']+)'|(\S+))[ \t]*$/
+  );
+  if (!m) return false;
+  const branch = m[1] || m[2] || m[3];
+  return /^(?:feat|feature|fix|refactor|docs|chore|worktree)[/a-zA-Z0-9_-]+$/.test(branch);
+}
+
 module.exports = {
   isBranchDeleteCommand,
   parseBranchDeleteTarget,
   isAllowedBranchDeleteWhenNotCheckedOut,
   hasForceDeleteFlag,
   isWorktreeEndSkillForceDelete,
+  isSweepBranchesSkillForceDelete,
 };

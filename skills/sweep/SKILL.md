@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: Periodic maintenance sweep hub. Dispatches to /sweep-worktrees (and future /sweep-branches, /sweep-wip, /sweep-logs).
+description: Periodic maintenance sweep hub. Dispatches to /sweep-worktrees, /sweep-branches (and future /sweep-wip, /sweep-logs).
 user-invocable: true
 model: sonnet
 ---
@@ -12,8 +12,8 @@ that each reclaim a specific class of residual state. Default is dry-run; pass
 ## Procedure
 
 1. Invoke `/sweep-worktrees` (dry-run by default; pass `--apply` to delete).
-2. (PR2) Future sub-skills to be added in subsequent PRs:
-   - `/sweep-branches` — merged-but-undeleted local branches
+2. Invoke `/sweep-branches` (dry-run by default; pass `--apply` to delete).
+3. (PR3) Future sub-skills to be added in subsequent PRs:
    - `/sweep-wip` — stale WIP fingerprints
    - `/sweep-logs` — old terminal logs / temp files
 
