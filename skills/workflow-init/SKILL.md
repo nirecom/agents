@@ -51,6 +51,8 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/closed-detection.sh" 
 
 `STATE=error` → warn-and-continue (does NOT abort).
 
+On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12 Path A1.5, `path-a-label-and-board.sh` calls `ensure-board-card.sh <N>`. When the issue is OPEN and its board card Status is `Done`, `ensure-board-card.sh` resets Status to `In Progress` before any other board mutation, preventing the Projects v2 `Done → auto-close` loop (#579). If the reset fails, `ensure-board-card.sh` warns and exits 0 without modifying the board — the operator must inspect the warning and re-run `ensure-board-card.sh <N>` manually.
+
 ### Step WI-7 — Label extract
 
 Extract `labels[].name` from the primary's `gh issue view` JSON for routing in WI-8.
