@@ -151,4 +151,8 @@ Changes: Multi-issue sessions no longer prompt "bundle into one PR?": the 1-PR-p
 
 ### FEATURE: PR #794 (2026-06-07)
 Background: feat(#792): implement /sweep-branches sub-skill (remote + local merged-branch cleanup)
-Changes: `/sweep --apply` now also cleans up merged-but-undeleted remote and local branches via the new `/sweep-branches` sub-skill.
+Changes: `/sweep --apply` now also cleans up merged-but-undeleted remote and local branches via the new `/sweep-branches` sub-skill.
+
+### FEATURE: PR #801 (2026-06-07)
+Background: fix(block-credentials): two-component needle + 4 new families + extraLiteralRoots symmetry (#536,#537,#538,#539)
+Changes: block-credentials hook now protects 4 additional credential families (gcloud SDK, HashiCorp Vault, Cargo/crates.io, 1Password CLI); eliminates false-positive blocking of unrelated `~/.config/*` paths (e.g. `~/.config/nvim/**`); extends `/root/<family>` coverage to all 22 protected families (rootful Docker/CI contexts).
