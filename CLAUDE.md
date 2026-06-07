@@ -4,12 +4,11 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
 
 ## Workflow
 
-Steps use a two-stage prefix: `WF-<TYPE>-N`. `WF-CODE-N` covers standard implementation sessions (this file). `WF-TXT-N` (text-creation workflows) and `WF-PLAN-N` (planning-only workflows) are reserved for future types — see issue #721.
+Steps use a two-stage prefix: `WF-<TYPE>-N`. `WF-CODE-N` covers standard implementation sessions (this file). `WF-TXT-N` (text-creation workflows) and `WF-PLAN-N` (planning-only workflows) are reserved for future types.
 
-WF-CODE-1. **Workflow init** — **Before anything else:** Run `/workflow-init` (routes by GH issue context; see `skills/workflow-init/SKILL.md`).
+WF-CODE-1. **Workflow init** — **Before anything else:** Run `/workflow-init`.
    Mid-workflow follow-up issues: use `/issue-create`.
    For docs-only edits skip routing: `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"`.
-   Skipping here does NOT authorize skipping clarify-intent or subsequent steps.
 WF-CODE-2. **Plan** — Three-stage planning pipeline. Run each stage in order.
    Read `rules/core-principles.md` first — it governs every plan stage.
    - **WF-CODE-2a. Research** — Run `/survey-code` and/or `/deep-research`.
@@ -29,7 +28,7 @@ WF-CODE-3. **Branch/Worktree creation** —
    (`main` is only valid when `ENFORCE_WORKTREE=off`.)
 WF-CODE-4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
    - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-WF-CODE-5. **Code** — Run `/write-code`. The skill delegates editing and lint/typecheck/self-repair to a subagent. Behavior is identical under `ENFORCE_WORKTREE=on` and `off` — the Edit permission dialog is the sole approval surface.
+WF-CODE-5. **Code** — Run `/write-code`.
 WF-CODE-6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Skill: `/run-tests`
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
@@ -41,46 +40,19 @@ WF-CODE-6. **Run tests & Security review** — Run all in parallel (single respo
      (always parallel; HARD >200 lines blocks via exit 1; WARN/INFO advisory)
    - Bash: `review-code-size --base <merge-base>` for JS/SH/PY file size check
      (always parallel; HARD >500 lines blocks via exit 1; WARN/INFO advisory)
-WF-CODE-7. **Docs** —
-   - **`ENFORCE_WORKTREE=on`:** Run `/update-docs`. Mandatory — the skill stages bullets into `WORKTREE_NOTES.md` `## History Notes` / `## Changelog Notes` instead of writing `docs/history.md` / `CHANGELOG.md` directly. `bin/compose-doc-append-entry` consumes those sections during `/worktree-end` Step WE-20 (post-merge, main worktree).
-   - **`ENFORCE_WORKTREE=off`:** Run `/update-docs`. Mandatory.
+WF-CODE-7. **Docs** — Run `/update-docs`. Mandatory.
 WF-CODE-8. **User verification:**
-   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-7 (after the PR is open and merge is imminent). Premature emission from a linked worktree without an open PR is blocked by workflow-gate (see issue #577).
-   - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent,
-     skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit
-     `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (the `: <reason>` is mandatory
-     and becomes part of the on-disk audit record), and set the Bash
-     `description` to explain what the user is approving. The PreToolUse hook
-     surfaces staged files (and an open PR URL, if any) above the permission
-     dialog.
-WF-CODE-9. **Phase 1 issue close** — For each issue N in the session's `closes_issues`
-   (parsed from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`),
-   run `/issue-close-stage <N>` from the linked worktree. Phase 1 performs the
-   sub-issue gate, posts the pending sentinel and promotes it to appended (history.md is written by Phase 2 from the main worktree via ISSUE_CLOSE_SKILL bypass), and updates the parent body if applicable.
-   Skip silently when `closes_issues` is empty. Skip entirely when
-   `ENFORCE_WORKTREE=off` (the 2-phase split does not apply to direct-main work
-   — `/issue-close-finalize` runs the full chain at WF-CODE-12 instead).
-WF-CODE-10. **Commit** — Run `/commit-push`. Pre-flights Phase 1 completion per
-   `closes_issues` (aborts if missing) and appends `<!-- issue-close-pr-of: <N> -->`
-   markers to the PR body so `find-pr-by-marker.sh` can resolve the merge SHA in
-   Phase 2. After the PR is created, do not narrate the PR URL in chat — the
-   `<<WORKFLOW_USER_VERIFIED>>` sentinel (emitted from `/worktree-end` Step WE-7 or,
-   in `ENFORCE_WORKTREE=off`, WF-CODE-8) triggers `show-user-verified-context.js`,
-   which surfaces the PR URL and approval instruction above the permission dialog.
-   See `skills/_shared/user-verified.md`.
+   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-7.
+   - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent, skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (`: <reason>` mandatory, becomes part of the audit record), and set the Bash `description` to explain what the user is approving.
+WF-CODE-9. **Phase 1 issue close** — For each N in `closes_issues`, run `/issue-close-stage <N>` from the linked worktree.
+   Skip silently when `closes_issues` is empty. Skip entirely when `ENFORCE_WORKTREE=off` (`/issue-close-finalize` runs the full chain at WF-CODE-12 instead).
+WF-CODE-10. **Commit** — Run `/commit-push`. After the PR is created, do not narrate the PR URL in chat — `<<WORKFLOW_USER_VERIFIED>>` surfaces it above the permission dialog.
 WF-CODE-11. **Cleanup** — Based on the WF-CODE-3 decision:
-    - **worktree:** Run `/worktree-end`. Normal path: merge → sentinel emit → worktree removal. `/worktree-end` no longer emits the Final Report — that responsibility moved to `/session-close` (WF-CODE-12). If removal fails (e.g. Windows CWD lock), treat the step as complete and proceed to WF-CODE-12 — the residual worktree is reclaimed by the next `/sweep-worktrees` run.
-      (Step WE-20 always runs `bin/compose-doc-append-entry`; when `closes_issues` is non-empty, `--skip-history` is added so only `CHANGELOG.md` is written — `docs/history.md` was already committed by Phase 1/2.)
-    - **branch:** Confirm PR is created. After the PR is merged (outside this session),
-      delete the branch: `git branch -d <name>` then `git push origin --delete <name>`.
+    - **worktree:** Run `/worktree-end`. If removal fails (Windows CWD lock), proceed to WF-CODE-12 — reclaimed by next `/sweep-worktrees`.
+    - **branch:** Confirm PR is created. After merge: `git branch -d <name>` then `git push origin --delete <name>`.
     - **main:** Skip.
 
 WF-CODE-12. **Session close** — Run `/session-close` from the main worktree.
-    `/session-close` handles Phase 2 issue close (via `/issue-close-finalize`)
-    plus Final Report emit for both `ENFORCE_WORKTREE=on` (consumes the env
-    JSON written by `/worktree-end` Step WE-9..WE-11) and `off` (builds a minimal env
-    JSON from PR data). Safe when `closes_issues` is empty — outcome renders as
-    `- (none)` and the Final Report still emits.
 
 ## Notes
 
@@ -90,4 +62,5 @@ WF-CODE-12. **Session close** — Run `/session-close` from the main worktree.
 - For trivial edits that temporarily suspend workflow enforcement, see `rules/workflow-off.md`.
 - For bugs, follow-ups, or next-task findings discovered mid-workflow, see `rules/mid-workflow-findings.md`.
 - When working inside the agents repository itself, also consult `docs/agents-repo-dev.md`.
-- When you observe an issue, concern, or unexpected outcome, report it: see [rules/supervisor-reporting.md](rules/supervisor-reporting.md).
+
+> **Always report** when you encounter an issue, concern, or unexpected outcome → [rules/supervisor-reporting.md](rules/supervisor-reporting.md)

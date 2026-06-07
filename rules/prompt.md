@@ -59,13 +59,28 @@ Rules and SKILL.md files **must not** re-enumerate the same literals as illustra
 At most 2 examples per concept. More examples belong in the hook source (machine-checked)
 or in a `bin/` script (executable and testable).
 
-## 3. SSOT (specialization of `core-principles.md` §2 for prompt content)
+## 3. Brevity
 
-### 3.1 Reference the master — never copy
+### 3.1 Every token counts
+
+Remove every word that does not change meaning or add constraint. Prefer the shorter form.
+
+### 3.2 "See issue" only for complex background
+
+Omit `see issue #N` (and similar "see X.md" pointers) unless the topic requires complex background or many examples that cannot be inlined.
+
+### 3.3 No post-invocation skill explanations
+
+After instructing to run a skill, do not describe what the skill does. The skill name is self-documenting.
+Exception: unexpected behavior or out-of-scope cases the reader must anticipate.
+
+## 4. SSOT (specialization of `core-principles.md` §2 for prompt content)
+
+### 4.1 Reference the master — never copy
 
 Never reproduce content from another authoritative file. Link or reference instead.
 
-### 3.2 No echo in references
+### 4.2 No echo in references
 
 When pointing to a master file, do not restate its content. A one-line pointer is enough.
 
