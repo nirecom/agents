@@ -38,10 +38,10 @@ Regex `#\d+`:
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh" "${ISSUES[@]}"`. Output classifies and routes:
 - `ALL_SAME <wip>` → continue (this session already owns WIP on every issue).
-- `ALL_NONE` → if `intent:clarified` ∈ labels of primary: for each N in `ISSUES`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (best-effort per-N — warn on failure, continue). Covers resume of an already-clarified session where clarify-intent will not re-run. Otherwise continue — clarify-intent's Completion sets WIP on all N itself.
+- `ALL_NONE` → `ALL_CLARIFIED=1`, `WIP_TO_SET=()`. For each N in `ISSUES`: fetch `LABELS_JSON=$(gh issue view <N> --json labels --jq '[.labels[].name]' 2>/dev/null)`. On failure (exit non-zero or empty): warn `[warn: label probe for #<N> failed — treating as intent:clarified absent (Path B fallback)]`, set `ALL_CLARIFIED=0`. Otherwise: if `intent:clarified` not in `LABELS_JSON`, set `ALL_CLARIFIED=0`; if `"meta"` not in `LABELS_JSON`, add N to `WIP_TO_SET` (meta-skip detected per-N here while LABELS_JSON is fresh for this N; not reused across iterations). After the loop: if `ALL_CLARIFIED=0`, set `FORCE_PATH_B=1` and skip WIP sets — clarify-intent's Completion sets WIP on all N itself. Otherwise (ALL_CLARIFIED=1): for each N in `WIP_TO_SET`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (best-effort per-N, warn on failure). Log `[workflow-init WI-5: skipping WIP set for #<N> — meta label detected]` for each N not in WIP_TO_SET. Covers resume of an already-clarified session where clarify-intent will not re-run.
 - `MIXED_SAME_NONE` → for each N where `WIP == none`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set <N>` (best-effort) to bring related issues up to parity.
 - `ANY_OTHER <N,...>` → let `CONFLICTED=<list>`. Single `AskUserQuestion` "Issue(s) #<CONFLICTED> may be in progress in another session. Continue?" options Continue (recommended) / Abort. On Continue: for each N in `ISSUES`, call wip-state.sh `set <N>` (override for `other` N; claim for `none` N; `same` N idempotent; best-effort per-N). On Abort: emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<CONFLICTED>>>"` and stop.
-- `ERROR <N,...>` → warn `[workflow-init: wip-state check failed for #<N> — proceeding as 'none' for that issue]` and treat each as `none`. (WIP detection is advisory; transient gh/auth failures must not block.)
+- `ERROR <N,...>` → `AskUserQuestion` "WIP check failed for #<N,...> (transient auth/gh error or session-id resolution failure). How to proceed?" with two options: "Continue without WIP tracking (acknowledge risk)" → warn `[workflow-init: wip-state check failed for #<N> — proceeding as 'none' for that issue]` and treat each as `none` and continue; "Abort session" → emit `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N,...>>>"` and stop.
 
 ### Step WI-6 — CLOSED detection (post-WIP)
 
@@ -59,7 +59,7 @@ Extract `labels[].name` from the primary's `gh issue view` JSON for routing in W
 
 ### Step WI-8 — Route
 
-`intent:clarified` ∈ labels → Path A; otherwise → Path B.
+If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) → Path B. Otherwise: `intent:clarified` ∈ labels of primary → Path A; otherwise → Path B. Path B is the default.
 
 ### Step WI-9 — Write context.md (all Paths)
 
