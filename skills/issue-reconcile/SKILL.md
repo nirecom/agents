@@ -87,6 +87,8 @@ classify the issue as clean. The `gh issue comment` call is gated by
 `enforce-issue-close.js`; the bare-prefix `ISSUE_CLOSE_SKILL=1` bypass is
 out of scope for #672 and remains in place pending a follow-up:
 
+<!-- Note: `gh issue comment` is Group A (classify → "read") in bash-write-patterns.js; ISSUE_CLOSE_SKILL=1 is for enforce-issue-close.js, not enforce-worktree.js. -->
+
 ```bash
 ISSUE_CLOSE_SKILL=1 gh issue comment "$NUM" \
     --body "<!-- issue-close-sentinel: appended -->"
