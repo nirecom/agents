@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-sweep-hub.sh
-# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md
-# Tags: sweep, worktree, maintenance, frontmatter, tests
+# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md, skills/sweep-branches/SKILL.md
+# Tags: sweep, worktree, branch, maintenance, frontmatter, tests
 #
 # Structural tests for the /sweep hub skill and the /sweep-worktrees dispatch
 # target. These check only file presence + frontmatter shape — no source-code
@@ -13,6 +13,7 @@ set -uo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SWEEP_HUB="$AGENTS_DIR/skills/sweep/SKILL.md"
 SWEEP_WT="$AGENTS_DIR/skills/sweep-worktrees/SKILL.md"
+SWEEP_BR="$AGENTS_DIR/skills/sweep-branches/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -138,6 +139,38 @@ T5_sweep_hub_references_sweep_worktrees() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T6 — skills/sweep-branches/SKILL.md exists and is non-empty
+# ─────────────────────────────────────────────────────────────────────────────
+
+T6_sweep_branches_exists_nonempty() {
+    if [ ! -f "$SWEEP_BR" ]; then
+        fail "T6 sweep_branches_exists_nonempty: $SWEEP_BR does not exist"
+        return
+    fi
+    if [ ! -s "$SWEEP_BR" ]; then
+        fail "T6 sweep_branches_exists_nonempty: $SWEEP_BR is empty"
+        return
+    fi
+    pass "T6 sweep_branches_exists_nonempty"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T7 — skills/sweep/SKILL.md body references 'sweep-branches'
+# ─────────────────────────────────────────────────────────────────────────────
+
+T7_sweep_hub_references_sweep_branches() {
+    if [ ! -f "$SWEEP_HUB" ]; then
+        fail "T7 sweep_hub_references_sweep_branches: $SWEEP_HUB does not exist"
+        return
+    fi
+    if grep -qF 'sweep-branches' "$SWEEP_HUB" 2>/dev/null; then
+        pass "T7 sweep_hub_references_sweep_branches"
+    else
+        fail "T7 sweep_hub_references_sweep_branches: 'sweep-branches' not referenced in $SWEEP_HUB"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -146,6 +179,8 @@ T2_sweep_hub_user_invocable
 T3_sweep_worktrees_exists_nonempty
 T4_sweep_worktrees_user_invocable
 T5_sweep_hub_references_sweep_worktrees
+T6_sweep_branches_exists_nonempty
+T7_sweep_hub_references_sweep_branches
 
 echo ""
 echo "─────────────────────────────────────────"
