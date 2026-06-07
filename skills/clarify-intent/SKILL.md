@@ -24,7 +24,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to step 2 (CONFIRM_OUTLINE check) normally. During the interview in step 3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
 
-2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap).
+2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap). **Scope constraint:** the delivery-plan-direction question MUST cover execution order / staging priority only — it MUST NOT ask about PR count or bundling; `rules/github-issues.md` fixes `1 session = 1 PR` as a non-negotiable invariant.
 
 2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
