@@ -33,8 +33,12 @@ function hasWorktreeRemoveForceFlag(cmd) {
  * `--` (end-of-options) is treated as a flag and skipped; the next token is path.
  */
 function isAllowedWorktreeCommand(cmd, repoRoot) {
+  if (/^\s*(?:[A-Z_][A-Z0-9_]*=\S*\s+)*\b(bash|sh|zsh|dash|pwsh|powershell|cmd|node|python|perl|ruby)\b/.test(cmd)) return false;
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd) || !/\bworktree\s+(?:add|remove|prune)\b/.test(cmd)) return false;
+
+  const stripped = stripQuotedArgs(cmd);
+  if (/[|;&]|\$\(|`/.test(stripped)) return false;
 
   // remove/prune do not create new checkout paths — always allow from main worktree
   if (/\bworktree\s+remove\b/.test(cmd) && hasWorktreeRemoveForceFlag(cmd)) return false;
