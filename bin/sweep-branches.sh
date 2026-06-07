@@ -238,7 +238,7 @@ for branch in "${remote_candidates[@]+"${remote_candidates[@]}"}"; do
     errors+=("remote:$branch")
     continue
   fi
-  if gh api -X DELETE "/repos/$REPO_OWNER/$REPO_NAME/git/refs/heads/$branch" 2>/dev/null; then
+  if gh api -X DELETE "repos/$REPO_OWNER/$REPO_NAME/git/refs/heads/$branch" 2>/dev/null; then
     printf 'Deleted remote branch: %s\n' "$branch"
     remote_deleted=$((remote_deleted + 1)) || true
   else
