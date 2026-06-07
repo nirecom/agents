@@ -346,10 +346,13 @@ if [ "$FROM_STEP" -le 4 ]; then
       echo "ERROR: project ids missing from state — Step 4 cannot proceed" >&2
       exit 1
     fi
-    MIGRATE_PROJECT_NUM="$proj_num" \
-    MIGRATE_PROJECT_ID="$proj_id" \
-    MIGRATE_FIELD_ID="$field_id" \
-      bash "$SCRIPT_DIR/backfill-content-date.sh" "$REPO_DIR"
+    if ! MIGRATE_PROJECT_NUM="$proj_num" \
+         MIGRATE_PROJECT_ID="$proj_id" \
+         MIGRATE_FIELD_ID="$field_id" \
+           bash "$SCRIPT_DIR/backfill-content-date.sh" "$REPO_DIR"; then
+      echo "ERROR: backfill-content-date.sh failed — re-run with --from-step 4 after fixing" >&2
+      exit 1
+    fi
     state_set_step 4
   fi
   echo ""
@@ -363,7 +366,10 @@ if [ "$FROM_STEP" -le 5 ]; then
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] would run: REPO_DIR=$REPO_DIR bash $AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh"
   else
-    REPO_DIR="$REPO_DIR" bash "$AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh"
+    if ! REPO_DIR="$REPO_DIR" bash "$AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh"; then
+      echo "ERROR: backfill-commit-comments.sh failed — re-run with --from-step 5 after fixing" >&2
+      exit 1
+    fi
     state_set_step 5
   fi
   echo ""
