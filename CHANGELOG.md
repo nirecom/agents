@@ -155,4 +155,8 @@ Changes: `/sweep --apply` now also cleans up merged-but-undeleted remote and loc
 
 ### FEATURE: PR #801 (2026-06-07)
 Background: fix(block-credentials): two-component needle + 4 new families + extraLiteralRoots symmetry (#536,#537,#538,#539)
-Changes: block-credentials hook now protects 4 additional credential families (gcloud SDK, HashiCorp Vault, Cargo/crates.io, 1Password CLI); eliminates false-positive blocking of unrelated `~/.config/*` paths (e.g. `~/.config/nvim/**`); extends `/root/<family>` coverage to all 22 protected families (rootful Docker/CI contexts).
+Changes: block-credentials hook now protects 4 additional credential families (gcloud SDK, HashiCorp Vault, Cargo/crates.io, 1Password CLI); eliminates false-positive blocking of unrelated `~/.config/*` paths (e.g. `~/.config/nvim/**`); extends `/root/<family>` coverage to all 22 protected families (rootful Docker/CI contexts).
+
+### FEATURE: PR #803 (2026-06-07)
+Background: fix(#514,#515,#566): bash-write-patterns + strip-quoted-args + enforce-worktree hook fixes
+Changes: Fix false classification: write operations hidden inside DQ-quoted `$(...)` or backtick substitutions now correctly block from the main worktree (#514);Fix false classification: quoted command words (`"rm"`, `'cp'`) at command position now correctly classify as write; argument-position quoted verbs no longer false-positive (#515);Fix scope detection: `bash -c` probe with `cd` in the worktree guard now correctly identifies the cd target as the repo root for scope checking (#566)
