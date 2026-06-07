@@ -147,4 +147,8 @@ Changes: Review loop now recovers cleanly from a missing concern-ID ledger at ro
 
 ### FEATURE: PR #790 (2026-06-07)
 Background: fix(#786): suppress PR-bundling question in multi-issue sessions
-Changes: Multi-issue sessions no longer prompt "bundle into one PR?": the 1-PR-per-session rule is now enforced authoritatively in the planning pipeline instead of relying on emergent model behavior.
+Changes: Multi-issue sessions no longer prompt "bundle into one PR?": the 1-PR-per-session rule is now enforced authoritatively in the planning pipeline instead of relying on emergent model behavior.
+
+### FEATURE: PR #794 (2026-06-07)
+Background: feat(#792): implement /sweep-branches sub-skill (remote + local merged-branch cleanup)
+Changes: `/sweep --apply` now also cleans up merged-but-undeleted remote and local branches via the new `/sweep-branches` sub-skill.
