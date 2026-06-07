@@ -2,11 +2,64 @@
 
 const { spawnSync } = require("child_process");
 const path = require("path");
+const os = require("os");
 
 // True if the token looks like a variable expansion or command substitution
 // that we cannot statically resolve.
 function isUnresolvableToken(tok) {
   return /[$`]|\$\(|>\(/.test(tok);
+}
+
+/**
+ * Expand statically resolvable shell variable prefixes in a redirect target token.
+ * Only expands: $HOME, ${HOME}, ~/..., $WORKFLOW_PLANS_DIR, ${WORKFLOW_PLANS_DIR}.
+ * Only expands at the START of the token (leading position).
+ * Returns the expanded string, or the original string if unexpandable.
+ * Returns null if the token contains a dollar sign that was NOT expanded (fail-closed).
+ *
+ * @param {string} s - The token string to expand.
+ * @param {object} opts
+ *   fromQuotedContext: "double" | "unquoted"
+ */
+function expandStaticShellTokens(s, opts = {}) {
+  const { fromQuotedContext = "unquoted" } = opts;
+
+  // Normalize Windows backslash paths to forward slashes for consistent matching
+  // and output. os.homedir() returns backslashes on Windows; downstream callers
+  // (path.resolve, hook regex matching) treat / and \ interchangeably on Windows
+  // but tests expect forward-slash output.
+  const homeDir = os.homedir().replace(/\\/g, "/");
+
+  // Tilde expansion: only in unquoted context (not inside double-quotes)
+  if (fromQuotedContext === "unquoted" && (s === "~" || s.startsWith("~/") || s.startsWith("~\\"))) {
+    const remainder = s.slice(1);
+    if (remainder.includes("$") || remainder.includes("`")) return null;
+    return homeDir + remainder;
+  }
+
+  // $HOME or ${HOME} — expand in both double-quoted and unquoted contexts.
+  // Use alternation to enforce balanced braces: $HOME or ${HOME} only.
+  const homeRe = /^\$(?:\{HOME\}|HOME)(?=\/|\\|$)/;
+  if (homeRe.test(s)) {
+    const remainder = s.replace(homeRe, "");
+    if (remainder.includes("$") || remainder.includes("`")) return null;
+    return homeDir + remainder;
+  }
+
+  // $WORKFLOW_PLANS_DIR or ${WORKFLOW_PLANS_DIR} — expand only when env var is defined and non-empty.
+  const wpRe = /^\$(?:\{WORKFLOW_PLANS_DIR\}|WORKFLOW_PLANS_DIR)(?=\/|\\|$)/;
+  if (wpRe.test(s)) {
+    const wpd = process.env.WORKFLOW_PLANS_DIR;
+    if (!wpd) return null; // fail-closed: unset or empty → cannot resolve
+    const remainder = s.replace(wpRe, "");
+    if (remainder.includes("$") || remainder.includes("`")) return null;
+    return wpd + remainder;
+  }
+
+  // If the token still starts with $ (or contains $ not at a known expansion), fail-closed.
+  if (s.includes("$")) return null;
+
+  return s;
 }
 
 // Pad quoted string CONTENT with null bytes to preserve string length while
@@ -25,29 +78,44 @@ function readTargetAt(cmd, i) {
   if (i >= cmd.length) return { target: null, end: i };
   const ch = cmd[i];
   if (ch === "(") return null;                       // process substitution
-  if (ch === "$" || ch === "`") return null;         // variable/command substitution
+  if (ch === "`") return null;                       // command substitution
   if (ch === '"') {
     let content = "", j = i + 1;
+    let hadEscapedDollar = false;
     while (j < cmd.length && cmd[j] !== '"') {
-      if (cmd[j] === "$" || cmd[j] === "`") return null;
-      if (cmd[j] === "\\" && j + 1 < cmd.length) { content += cmd[j + 1]; j += 2; }
-      else content += cmd[j++];
+      if (cmd[j] === "`") return null;              // command substitution inside double-quotes
+      if (cmd[j] === "\\" && j + 1 < cmd.length) {
+        if (cmd[j + 1] === "$") hadEscapedDollar = true;
+        content += cmd[j + 1]; j += 2;
+      } else {
+        content += cmd[j++];
+      }
     }
-    return { target: content, end: j + 1 };
+    // If a backslash-escaped \$ was encountered, the resulting content contains a literal $
+    // that must NOT be expanded (the user explicitly escaped it). Fail-closed.
+    if (hadEscapedDollar && content.includes("$")) return null;
+    const expanded = expandStaticShellTokens(content, { fromQuotedContext: "double" });
+    if (expanded === null) return null;
+    return { target: expanded, end: j + 1 };
   }
   if (ch === "'") {
     let content = "", j = i + 1;
     while (j < cmd.length && cmd[j] !== "'") content += cmd[j++];
+    // Single-quoted strings: NEVER expand — return literal content as-is.
     return { target: content, end: j + 1 };
   }
   // Unquoted token: read until whitespace or shell delimiter.
+  // Allow $ to accumulate and attempt static expansion via expandStaticShellTokens.
   let content = "", j = i;
   while (j < cmd.length && !/[\s;|&]/.test(cmd[j])) {
     const c = cmd[j];
-    if (c === "$" || c === "`" || c === "(") return null;
+    if (c === "`" || c === "(") return null;        // command/process substitution — fail-closed
     content += c; j++;
   }
-  return content ? { target: content, end: j } : { target: null, end: j };
+  if (!content) return { target: null, end: j };
+  const expanded = expandStaticShellTokens(content, { fromQuotedContext: "unquoted" });
+  if (expanded === null) return null;
+  return { target: expanded, end: j };
 }
 
 /**
