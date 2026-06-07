@@ -381,6 +381,131 @@ else
     fail "k3: rc=$RC todo-calls=$N step=$STEP has-canary=$HAS_CANARY"
 fi
 
+# ============================================================
+# T-step4-fail: backfill-content-date.sh exits 1 →
+#   orchestrate exits non-zero, current_step stays at 3
+# ============================================================
+HARNESS_4="$(mktemp -d)"
+cp "$ORCH_SRC" "$HARNESS_4/orchestrate.sh"
+cp "$STATE_SRC" "$HARNESS_4/state.sh"
+
+# Reuse the same working mocks for steps 1-3 siblings.
+cat > "$HARNESS_4/migrate-history.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "migrate-history: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 0
+EOF
+chmod +x "$HARNESS_4/migrate-history.sh"
+cat > "$HARNESS_4/migrate-todo.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "migrate-todo: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 0
+EOF
+chmod +x "$HARNESS_4/migrate-todo.sh"
+# create-project.sh succeeds and writes project into state.
+cat > "$HARNESS_4/create-project.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "create-project: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+REPO="$1"
+SF="$REPO/.migration-state.json"
+if [ -f "$SF" ]; then
+    tmp="$SF.tmp"
+    jq '.project = {number:1, node_id:"PVT_mock", field_ids:{"Content Date":"FLD_mock"}}' "$SF" > "$tmp" && mv "$tmp" "$SF"
+fi
+exit 0
+EOF
+chmod +x "$HARNESS_4/create-project.sh"
+# backfill-content-date.sh: FAIL (exit 1).
+cat > "$HARNESS_4/backfill-content-date.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "backfill-content-date: FAIL" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 1
+EOF
+chmod +x "$HARNESS_4/backfill-content-date.sh"
+
+REPO_STEP4=$(make_repo)
+write_state_full "$REPO_STEP4" 2 2 3
+: > "$MOCK_CALLS_LOG"
+run_with_timeout 30 bash "$HARNESS_4/orchestrate.sh" "$REPO_STEP4" --from-step 4 2>&1; RC_STEP4=$?
+STEP_AFTER4=$(jq -r '.current_step' "$REPO_STEP4/.migration-state.json" 2>/dev/null || echo "?")
+if [ "$RC_STEP4" -ne 0 ] && [ "$STEP_AFTER4" = "3" ]; then
+    pass "T-step4-fail: backfill-content-date failure → exit non-zero, current_step stays at 3"
+else
+    fail "T-step4-fail: rc=$RC_STEP4 current_step=$STEP_AFTER4 (expected rc!=0, step=3)"
+fi
+rm -rf "$HARNESS_4"
+
+# ============================================================
+# T-step5-fail: backfill-commit-comments.sh exits 1 →
+#   orchestrate exits non-zero, current_step stays at 4
+# ============================================================
+HARNESS_5="$(mktemp -d)"
+cp "$ORCH_SRC" "$HARNESS_5/orchestrate.sh"
+cp "$STATE_SRC" "$HARNESS_5/state.sh"
+
+cat > "$HARNESS_5/migrate-history.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "migrate-history: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 0
+EOF
+chmod +x "$HARNESS_5/migrate-history.sh"
+cat > "$HARNESS_5/migrate-todo.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "migrate-todo: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 0
+EOF
+chmod +x "$HARNESS_5/migrate-todo.sh"
+cat > "$HARNESS_5/create-project.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "create-project: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 0
+EOF
+chmod +x "$HARNESS_5/create-project.sh"
+cat > "$HARNESS_5/backfill-content-date.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "backfill-content-date: $*" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 0
+EOF
+chmod +x "$HARNESS_5/backfill-content-date.sh"
+
+# backfill-commit-comments.sh in AGENTS_CONFIG_DIR: FAIL (exit 1).
+# orchestrate.sh Step 5 uses $AGENTS_CONFIG_DIR/bin/github-issues/backfill-commit-comments.sh.
+FAKE_AGENTS_DIR_5="$(mktemp -d)"
+mkdir -p "$FAKE_AGENTS_DIR_5/bin/github-issues"
+cat > "$FAKE_AGENTS_DIR_5/bin/github-issues/backfill-commit-comments.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "backfill-commit-comments: FAIL" >> "${MOCK_CALLS_LOG:-/dev/null}"
+exit 1
+EOF
+chmod +x "$FAKE_AGENTS_DIR_5/bin/github-issues/backfill-commit-comments.sh"
+# Stub other scripts that may be referenced.
+cat > "$FAKE_AGENTS_DIR_5/bin/github-issues/sync-labels.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_AGENTS_DIR_5/bin/github-issues/sync-labels.sh"
+cat > "$FAKE_AGENTS_DIR_5/bin/github-issues/bootstrap-labels.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$FAKE_AGENTS_DIR_5/bin/github-issues/bootstrap-labels.sh"
+mkdir -p "$FAKE_AGENTS_DIR_5/.github/workflows"
+: > "$FAKE_AGENTS_DIR_5/.github/labels.yml"
+echo "# stub" > "$FAKE_AGENTS_DIR_5/.github/workflows/sync-labels.yml"
+
+REPO_STEP5=$(make_repo)
+write_state_full "$REPO_STEP5" 2 2 4
+: > "$MOCK_CALLS_LOG"
+AGENTS_CONFIG_DIR="$FAKE_AGENTS_DIR_5" \
+    run_with_timeout 30 bash "$HARNESS_5/orchestrate.sh" "$REPO_STEP5" --from-step 5 2>&1; RC_STEP5=$?
+STEP_AFTER5=$(jq -r '.current_step' "$REPO_STEP5/.migration-state.json" 2>/dev/null || echo "?")
+if [ "$RC_STEP5" -ne 0 ] && [ "$STEP_AFTER5" = "4" ]; then
+    pass "T-step5-fail: backfill-commit-comments failure → exit non-zero, current_step stays at 4"
+else
+    fail "T-step5-fail: rc=$RC_STEP5 current_step=$STEP_AFTER5 (expected rc!=0, step=4)"
+fi
+rm -rf "$HARNESS_5" "$FAKE_AGENTS_DIR_5"
+
 # Cleanup harness
 rm -rf "$HARNESS_DIR" "$GH_MOCK_DIR"
 
