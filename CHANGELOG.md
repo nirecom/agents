@@ -159,4 +159,8 @@ Changes: block-credentials hook now protects 4 additional credential families (g
 
 ### FEATURE: PR #803 (2026-06-07)
 Background: fix(#514,#515,#566): bash-write-patterns + strip-quoted-args + enforce-worktree hook fixes
-Changes: Fix false classification: write operations hidden inside DQ-quoted `$(...)` or backtick substitutions now correctly block from the main worktree (#514);Fix false classification: quoted command words (`"rm"`, `'cp'`) at command position now correctly classify as write; argument-position quoted verbs no longer false-positive (#515);Fix scope detection: `bash -c` probe with `cd` in the worktree guard now correctly identifies the cd target as the repo root for scope checking (#566)
+Changes: Fix false classification: write operations hidden inside DQ-quoted `$(...)` or backtick substitutions now correctly block from the main worktree (#514);Fix false classification: quoted command words (`"rm"`, `'cp'`) at command position now correctly classify as write; argument-position quoted verbs no longer false-positive (#515);Fix scope detection: `bash -c` probe with `cd` in the worktree guard now correctly identifies the cd target as the repo root for scope checking (#566)
+
+### FEATURE: PR #804 (2026-06-07)
+Background: fix(#793,#458): expand $HOME/~/WORKFLOW_PLANS_DIR in bash redirect targets
+Changes: Fixed: bash redirections targeting paths outside the repository (e.g., `$HOME/.workflow-plans/...`, `~/...`, `$WORKFLOW_PLANS_DIR/...`) are now correctly allowed from the main worktree instead of being blocked by `enforce-worktree`
