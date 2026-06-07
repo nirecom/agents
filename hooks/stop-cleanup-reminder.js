@@ -25,12 +25,12 @@ const decision = state.steps?.branching_complete?.decision ?? "";
 let reason = null;
 if (decision.startsWith("worktree:")) {
   reason =
-    "[workflow] Step 10 (Cleanup) is pending. Run `/worktree-end` to merge and remove the worktree, " +
+    "[workflow] WF-CODE-11 (Cleanup) is pending. Run `/worktree-end` to merge and remove the worktree, " +
     'then mark complete: echo "<<WORKFLOW_MARK_STEP_cleanup_complete>>"';
 } else if (decision.startsWith("branch:")) {
   const name = decision.replace(/^branch:\s*/, "").trim();
   reason =
-    `[workflow] Step 10 (Cleanup) is pending. Create a PR if not done. ` +
+    `[workflow] WF-CODE-11 (Cleanup) is pending. Create a PR if not done. ` +
     `After the PR is merged, delete the branch: git branch -d ${name} && git push origin --delete ${name}. ` +
     `Then mark complete: echo "<<WORKFLOW_MARK_STEP_cleanup_complete>>"`;
 }
