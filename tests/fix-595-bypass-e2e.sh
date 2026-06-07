@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-595-bypass-e2e.sh
-# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree.js.
-# Tags: worktree, enforce, hook, history, docs
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js.
+# Tags: worktree, enforce, hook, history, docs, security, interpreter-wrapper, fix-802
 #
 # E2E integration tests for bypass predicates still active in
 # hooks/enforce-worktree.js after the #687 positive-allow redesign.
@@ -222,6 +222,59 @@ test_E_WT_REMOVE_3_shell_chaining_blocked() {
     assert_block "E-WT-REMOVE-3: git worktree remove … && echo done → BLOCK (shell chaining)" "$rc"
 }
 
+test_E_WT_REMOVE_4_bash_dash_c_blocked() {
+    # #802 security regression: `bash -c '...'` wraps the worktree command in a
+    # nested shell. stripQuotedArgs collapses the SQ body so hasShellChaining()
+    # returns false, but the raw cmd still matches /\bgit\b/ and
+    # /\bworktree\s+remove\b/, causing isAllowedWorktreeCommand to allow the
+    # wrapper. The nested shell expands $linked and runs `&& echo done`
+    # unconstrained — exactly the chaining the guard is supposed to block.
+    local repo; repo="$(setup_main_worktree "wt-remove-4")"
+    local linked; linked="$(add_linked_worktree "$repo" "lw4" "feature/lw4")"
+    local cmd="bash -c 'git worktree remove $linked && echo done'"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-4: bash -c 'git worktree remove … && echo done' → BLOCK (#802 interpreter wrapper)" "$rc"
+}
+
+test_E_WT_REMOVE_5_sh_dash_c_blocked() {
+    # Sibling of WT-REMOVE-4 covering the POSIX `sh -c` form. The same
+    # quote-stripping path applies regardless of which interpreter wraps the
+    # command, so the guard must reject both bash and sh wrappers symmetrically.
+    local repo; repo="$(setup_main_worktree "wt-remove-5")"
+    local linked; linked="$(add_linked_worktree "$repo" "lw5" "feature/lw5")"
+    local cmd="sh -c 'git worktree remove $linked'"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-5: sh -c 'git worktree remove …' → BLOCK (#802 interpreter wrapper)" "$rc"
+}
+
+test_E_WT_REMOVE_6_quoted_path_allowed() {
+    # Regression pin: the legitimate quoted-path form must continue to ALLOW.
+    # Fixing #802 by rejecting all quoted bodies would over-block this common
+    # case where the linked-worktree path contains spaces or is variable-derived
+    # and the user simply wraps the path in DQ.
+    local repo; repo="$(setup_main_worktree "wt-remove-6")"
+    local linked; linked="$(add_linked_worktree "$repo" "lw6" "feature/lw6")"
+    local cmd="git worktree remove \"$linked\""
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_allow "E-WT-REMOVE-6: git worktree remove \"<linked>\" → ALLOW (regression pin)" "$rc"
+}
+
+test_E_WT_REMOVE_7_env_prefix_bash_c_blocked() {
+    # Combines the WORKTREE_END_SKILL=1 prefix (which is the sanctioned form for
+    # /worktree-end) with a `bash -c '...'` wrapper. The prefix must NOT launder
+    # the nested-shell wrapper — the same security property as WT-REMOVE-4 must
+    # hold even when the caller adds the sanctioned env prefix in front.
+    local repo; repo="$(setup_main_worktree "wt-remove-7")"
+    local linked; linked="$(add_linked_worktree "$repo" "lw7" "feature/lw7")"
+    local cmd="WORKTREE_END_SKILL=1 bash -c 'git worktree remove $linked'"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-7: WORKTREE_END_SKILL=1 bash -c '...' → BLOCK (#802 env-prefix + wrapper)" "$rc"
+}
+
 # ============================================================================
 # BRANCH-DELETE series — isAllowedBranchDeleteWhenNotCheckedOut
 # ============================================================================
@@ -275,6 +328,10 @@ run_all() {
     test_E_WT_REMOVE_1_with_prefix
     test_E_WT_REMOVE_2_unconditional
     test_E_WT_REMOVE_3_shell_chaining_blocked
+    test_E_WT_REMOVE_4_bash_dash_c_blocked
+    test_E_WT_REMOVE_5_sh_dash_c_blocked
+    test_E_WT_REMOVE_6_quoted_path_allowed
+    test_E_WT_REMOVE_7_env_prefix_bash_c_blocked
     # BRANCH-DELETE
     test_E_BD_1_with_prefix_allow
     test_E_BD_2_no_prefix_blocked
