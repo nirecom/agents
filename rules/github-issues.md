@@ -112,7 +112,7 @@ The close flow is split into two phases:
 **Flow 1 — standard workflow (Phase 1 then Phase 2):**
 
 1. Inside the linked worktree, after staging tests/code/docs and before
-   `/commit-push`, run `/issue-close-stage <N>` (Step 8.5 of the workflow).
+   `/commit-push`, run `/issue-close-stage <N>` (WF-CODE-9 of the workflow).
 2. Run `/commit-push`. It pre-flights Phase 1 completion via
    `check-phase1-complete.sh` (sentinel-only) and appends
    `<!-- issue-close-pr-of: <N> -->` to the PR body.
