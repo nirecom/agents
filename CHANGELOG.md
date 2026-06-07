@@ -135,4 +135,8 @@ Changes: When multiple VS Code windows are open, plan files (intent/outline/deta
 
 ### FEATURE: PR #787 (2026-06-07)
 Background: fix(#525,#526,#416): hooks triple fix — orphan-CWD tests, workflow-mark signalFatal, sentinel echo classify
-Changes: fix(#526): WORKFLOW_MARK_STEP_* handlers now hard-fail (exit 2) when sessionId cannot be resolved, instead of silently skipping the step record. Affected sentinels: MARK_STEP, *_NOT_NEEDED (6 families), USER_VERIFIED, BRANCHING_COMPLETE, CLARIFY_INTENT_COMPLETE. The commit gate now surfaces the failure immediately rather than allowing a phantom step completion.
+Changes: fix(#526): WORKFLOW_MARK_STEP_* handlers now hard-fail (exit 2) when sessionId cannot be resolved, instead of silently skipping the step record. Affected sentinels: MARK_STEP, *_NOT_NEEDED (6 families), USER_VERIFIED, BRANCHING_COMPLETE, CLARIFY_INTENT_COMPLETE. The commit gate now surfaces the failure immediately rather than allowing a phantom step completion.
+
+### BUGFIX: PR #791 (2026-06-07)
+Background: fix(#579,#681,#682): migrate-repo robustness + workflow-init reopen Status reset
+Changes: workflow-init reopen no longer re-triggers Projects v2 board auto-close (#579): ensure-board-card.sh now resets card Status from Done to In Progress before any board mutation on reopened issues.;migrate-repo Steps 4 and 5 now fail loudly when backfill scripts exit non-zero (#682): re-run with --from-step 4 or --from-step 5 to resume after fixing the underlying error.
