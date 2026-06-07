@@ -66,18 +66,25 @@ function isUnderAnyRoot(p, roots, extraLiteralRoots) {
   return false;
 }
 
+// Warning: a root of exactly "~/.config" (no second component) would fall back
+// to the single-component needle ".config", causing over-blocking. Add only
+// specific paths like "~/.config/gh" to CREDENTIALS_TABLE.
+const GENERIC_XDG_PARENTS = new Set([".config"]);
+
 function globMatchesUnder(pattern, roots) {
   if (typeof pattern !== "string" || !pattern) return false;
   const s = normalizeSlashes(pattern);
   const subject = process.platform === "win32" ? s.toLowerCase() : s;
   for (const r of roots || []) {
     const parts = normalizeSlashes(r).replace(/\/+$/, "").split("/");
-    // Use the first dot-prefixed component as needle to avoid false positives
-    // for generic filenames like config.json or credentials that appear inside
-    // multi-level roots like ~/.docker/config.json or ~/.gem/credentials.
-    const hiddenPart = parts.find((p) => p.startsWith("."));
-    if (!hiddenPart) continue;
-    const needle = process.platform === "win32" ? hiddenPart.toLowerCase() : hiddenPart;
+    const firstDotIdx = parts.findIndex((p) => p.startsWith("."));
+    if (firstDotIdx < 0) continue;
+    const firstDot = parts[firstDotIdx];
+    const nextPart = parts[firstDotIdx + 1];
+    const rawNeedle = (GENERIC_XDG_PARENTS.has(firstDot) && nextPart)
+      ? firstDot + "/" + nextPart
+      : firstDot;
+    const needle = process.platform === "win32" ? rawNeedle.toLowerCase() : rawNeedle;
     if (
       subject.includes("/" + needle + "/") ||
       subject.endsWith("/" + needle) ||
