@@ -143,4 +143,8 @@ Changes: workflow-init reopen no longer re-triggers Projects v2 board auto-close
 
 ### FEATURE: PR #788 (2026-06-07)
 Background: fix(#776,#748,#777): exit-4 counter reset + ledger-absent recovery + doc step ref
-Changes: Review loop now recovers cleanly from a missing concern-ID ledger at round 2 (auto-downgrade to round 1 with warning) instead of getting stuck; the round counter also resets on fatal errors so retries start fresh.
+Changes: Review loop now recovers cleanly from a missing concern-ID ledger at round 2 (auto-downgrade to round 1 with warning) instead of getting stuck; the round counter also resets on fatal errors so retries start fresh.
+
+### FEATURE: PR #790 (2026-06-07)
+Background: fix(#786): suppress PR-bundling question in multi-issue sessions
+Changes: Multi-issue sessions no longer prompt "bundle into one PR?": the 1-PR-per-session rule is now enforced authoritatively in the planning pipeline instead of relying on emergent model behavior.
