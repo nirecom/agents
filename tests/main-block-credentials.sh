@@ -127,6 +127,13 @@ expect_block "runInTerminal cat ~/.ssh/id_rsa (IDE tool)" \
 expect_block "runCommands cat ~/.ssh/id_rsa (IDE tool)" \
     '{"tool_name":"runCommands","tool_input":{"command":"cat ~/.ssh/id_rsa"}}'
 
+# --config flag regression (#538) — kubectl --config carries a credential path
+expect_block "Bash kubectl --config ~/.kube/config (--config flag path)" \
+    '{"tool_name":"Bash","tool_input":{"command":"kubectl --config ~/.kube/config get pods"}}'
+
+expect_block "Bash kubectl --config=~/.kube/config (attached = form)" \
+    '{"tool_name":"Bash","tool_input":{"command":"kubectl --config=~/.kube/config get pods"}}'
+
 echo ""
 echo "=== Section 1: Other tools — SSH path access (should block) ==="
 
@@ -273,6 +280,95 @@ expect_block "Read ~/.terraformrc" \
 expect_block "Read ~/.terraform.rc" \
     '{"tool_name":"Read","tool_input":{"file_path":"~/.terraform.rc"}}'
 
+# New families from #537
+
+# ~/.config/gcloud
+expect_block "Read ~/.config/gcloud/credentials.db" \
+    '{"tool_name":"Read","tool_input":{"file_path":"~/.config/gcloud/credentials.db"}}'
+expect_block "Bash cat ~/.config/gcloud/credentials.db" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat ~/.config/gcloud/credentials.db"}}'
+expect_block "Glob ~/.config/gcloud/**" \
+    '{"tool_name":"Glob","tool_input":{"pattern":"~/.config/gcloud/**"}}'
+
+# ~/.config/op
+expect_block "Read ~/.config/op/config" \
+    '{"tool_name":"Read","tool_input":{"file_path":"~/.config/op/config"}}'
+expect_block "Bash cat ~/.config/op/config" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat ~/.config/op/config"}}'
+
+# ~/.vault-token (single-file root)
+expect_block "Read ~/.vault-token" \
+    '{"tool_name":"Read","tool_input":{"file_path":"~/.vault-token"}}'
+expect_block "Bash cat ~/.vault-token" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat ~/.vault-token"}}'
+
+# ~/.cargo/credentials.toml (single-file root)
+expect_block "Read ~/.cargo/credentials.toml" \
+    '{"tool_name":"Read","tool_input":{"file_path":"~/.cargo/credentials.toml"}}'
+expect_block "Bash cat ~/.cargo/credentials.toml" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat ~/.cargo/credentials.toml"}}'
+
+###############################################################################
+# Section 2.5 — /root/.* literal-root coverage (#539)
+###############################################################################
+
+echo ""
+echo "=== Section 2.5: /root/.* literal-root coverage (#539) ==="
+
+# Non-SSH families - Bash cat /root/<path>
+expect_block "Bash cat /root/.gnupg/pubring.kbx" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.gnupg/pubring.kbx"}}'
+expect_block "Bash cat /root/.aws/credentials" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.aws/credentials"}}'
+expect_block "Bash cat /root/.azure/accessTokens.json" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.azure/accessTokens.json"}}'
+expect_block "Bash cat /root/.config/gh/hosts.yml" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.config/gh/hosts.yml"}}'
+expect_block "Bash cat /root/.config/gcloud/credentials.db" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.config/gcloud/credentials.db"}}'
+expect_block "Bash cat /root/.config/op/config" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.config/op/config"}}'
+expect_block "Bash cat /root/.git-credentials" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.git-credentials"}}'
+expect_block "Bash cat /root/.docker/config.json" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.docker/config.json"}}'
+expect_block "Bash cat /root/.kube/config" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.kube/config"}}'
+expect_block "Bash cat /root/.npmrc" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.npmrc"}}'
+expect_block "Bash cat /root/.pypirc" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.pypirc"}}'
+expect_block "Bash cat /root/.gem/credentials" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.gem/credentials"}}'
+expect_block "Bash cat /root/.cargo/credentials.toml" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.cargo/credentials.toml"}}'
+expect_block "Bash cat /root/.netrc" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.netrc"}}'
+expect_block "Bash cat /root/.vault-token" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.vault-token"}}'
+expect_block "Bash cat /root/.pgpass" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.pgpass"}}'
+expect_block "Bash cat /root/.my.cnf" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.my.cnf"}}'
+expect_block "Bash cat /root/.curlrc" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.curlrc"}}'
+expect_block "Bash cat /root/.m2/settings.xml" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.m2/settings.xml"}}'
+expect_block "Bash cat /root/.gradle/gradle.properties" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.gradle/gradle.properties"}}'
+expect_block "Bash cat /root/.terraform.d/credentials.tfrc.json" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.terraform.d/credentials.tfrc.json"}}'
+expect_block "Bash cat /root/.terraformrc" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.terraformrc"}}'
+expect_block "Bash cat /root/.terraform.rc" \
+    '{"tool_name":"Bash","tool_input":{"command":"cat /root/.terraform.rc"}}'
+
+# Also Glob and Read variants for one family
+expect_block "Glob /root/.aws/**" \
+    '{"tool_name":"Glob","tool_input":{"pattern":"/root/.aws/**"}}'
+expect_block "Read /root/.config/gh/hosts.yml" \
+    '{"tool_name":"Read","tool_input":{"file_path":"/root/.config/gh/hosts.yml"}}'
+
 ###############################################################################
 # Section 3 — False-positive prevention (should approve)
 ###############################################################################
@@ -297,6 +393,20 @@ expect_approve "Bash gh issue create --body mentioning ~/.aws/config (text flag)
 
 expect_approve "Bash echo mentioning ~/.npmrc (text cmd)" \
     '{"tool_name":"Bash","tool_input":{"command":"echo \"copy ~/.npmrc to remote\""}}'
+
+# ~/.config non-credential false-positive (#536)
+expect_approve "Read ~/.config/nvim/init.lua (not a credential)" \
+    '{"tool_name":"Read","tool_input":{"file_path":"~/.config/nvim/init.lua"}}'
+
+expect_approve "Read ~/.config/htop/htoprc (not a credential)" \
+    '{"tool_name":"Read","tool_input":{"file_path":"~/.config/htop/htoprc"}}'
+
+expect_approve "Glob ~/.config/nvim/** (not a credential)" \
+    '{"tool_name":"Glob","tool_input":{"pattern":"~/.config/nvim/**"}}'
+
+# --config flag in text context (#538) — must not match the path-bearing pattern
+expect_approve "Bash gh issue create --body mentioning --config (text context)" \
+    '{"tool_name":"Bash","tool_input":{"command":"gh issue create --body \"see kubectl --config docs\""}}'
 
 ###############################################################################
 # Section 4 — WORKFLOW_OFF still blocks
@@ -332,6 +442,14 @@ if echo "$result" | grep -q '"block"'; then
     pass "WORKFLOW_OFF active: Bash cat ~/.ssh/id_rsa still blocked"
 else
     fail "WORKFLOW_OFF active: Bash cat ~/.ssh/id_rsa should still block, got: $result"
+fi
+
+# New family (vault-token) is also non-bypassable (#537)
+result=$(CLAUDE_SESSION_ID="$SESSION_ID" sh -c "echo '{\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"~/.vault-token\"}}' | node \"$HOOK\" 2>/dev/null" || true)
+if echo "$result" | grep -q '"block"'; then
+    pass "WORKFLOW_OFF active: Read ~/.vault-token still blocked"
+else
+    fail "WORKFLOW_OFF active: Read ~/.vault-token should still block, got: $result"
 fi
 
 echo ""

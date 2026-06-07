@@ -157,6 +157,58 @@ assert_false "'**/*.js' does not match credential roots" "$result"
 result=$(js_eval "pm.globMatchesUnder('', ['~/.ssh'])")
 assert_false "empty pattern does not match" "$result"
 
+# Two-component needle behavior for multi-level roots (#536/#537/#539):
+# Roots like '~/.config/gh' must use '.config/gh' as needle (not '.config'),
+# so '~/.config/nvim/**' does NOT falsely match '~/.config/gh'.
+
+# 6. false-positive regression: ~/.config/nvim/init.lua vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('~/.config/nvim/init.lua', ['~/.config/gh'])")
+assert_false "'~/.config/nvim/init.lua' does NOT match '~/.config/gh'" "$result"
+
+# 7. false-positive regression: ~/.config/nvim/** vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('~/.config/nvim/**', ['~/.config/gh'])")
+assert_false "'~/.config/nvim/**' does NOT match '~/.config/gh'" "$result"
+
+# 8. false-positive regression: ~/.config/htop/htoprc vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('~/.config/htop/htoprc', ['~/.config/gh'])")
+assert_false "'~/.config/htop/htoprc' does NOT match '~/.config/gh'" "$result"
+
+# 9. false-positive regression: **/.config/nvim/init.lua vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('**/.config/nvim/init.lua', ['~/.config/gh'])")
+assert_false "'**/.config/nvim/init.lua' does NOT match '~/.config/gh'" "$result"
+
+# 10. positive: ~/.config/gh/hosts.yml vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('~/.config/gh/hosts.yml', ['~/.config/gh'])")
+assert_true "'~/.config/gh/hosts.yml' matches root '~/.config/gh'" "$result"
+
+# 11. positive: ~/.config/gh/** vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('~/.config/gh/**', ['~/.config/gh'])")
+assert_true "'~/.config/gh/**' matches root '~/.config/gh'" "$result"
+
+# 12. positive: **/.config/gh/hosts.yml vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('**/.config/gh/hosts.yml', ['~/.config/gh'])")
+assert_true "'**/.config/gh/hosts.yml' matches root '~/.config/gh' via tail" "$result"
+
+# 13. positive: ~/.config/gcloud/credentials.db vs ['~/.config/gcloud']
+result=$(js_eval "pm.globMatchesUnder('~/.config/gcloud/credentials.db', ['~/.config/gcloud'])")
+assert_true "'~/.config/gcloud/credentials.db' matches root '~/.config/gcloud'" "$result"
+
+# 14. positive: ~/.config/op/config vs ['~/.config/op']
+result=$(js_eval "pm.globMatchesUnder('~/.config/op/config', ['~/.config/op'])")
+assert_true "'~/.config/op/config' matches root '~/.config/op'" "$result"
+
+# 15. cross-root isolation: ~/.config/gcloud/credentials.db vs ['~/.config/gh']
+result=$(js_eval "pm.globMatchesUnder('~/.config/gcloud/credentials.db', ['~/.config/gh'])")
+assert_false "'~/.config/gcloud/credentials.db' does NOT match '~/.config/gh'" "$result"
+
+# 16. extraLiteralRoots /root/ coverage (positive via two-component needle)
+result=$(js_eval "pm.globMatchesUnder('/root/.config/gh/hosts.yml', ['/root/.config/gh'])")
+assert_true "'/root/.config/gh/hosts.yml' matches literal root '/root/.config/gh'" "$result"
+
+# 17. extraLiteralRoots /root/ isolation (negative)
+result=$(js_eval "pm.globMatchesUnder('/root/.config/nvim/init.lua', ['/root/.config/gh'])")
+assert_false "'/root/.config/nvim/init.lua' does NOT match '/root/.config/gh'" "$result"
+
 echo ""
 echo "=== Results ==="
 if [ "$ERRORS" -eq 0 ]; then
