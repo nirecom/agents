@@ -167,4 +167,8 @@ Changes: Fixed: bash redirections targeting paths outside the repository (e.g., 
 
 ### FEATURE: PR #812 (2026-06-07)
 Background: fix(#589,#675,#798): wip-state rc=2 escalation + meta WIP skip + meta_pending_subs triage + all-N label check
-Changes: #589: WIP tracking failure (`wip-state.sh` session-id resolution error) now shows a prompt — you can abort the session rather than silently proceeding with no WIP fingerprint.;#675: Running `/issue-close-finalize` on a meta parent with open sub-issues no longer errors; the parent is quietly left open and will auto-close when the last sub-issue closes.;#798: In multi-issue sessions, all issues (not just the primary) are now checked for the `intent:clarified` label — a missing label on a related issue now correctly triggers re-clarification.
+Changes: #589: WIP tracking failure (`wip-state.sh` session-id resolution error) now shows a prompt — you can abort the session rather than silently proceeding with no WIP fingerprint.;#675: Running `/issue-close-finalize` on a meta parent with open sub-issues no longer errors; the parent is quietly left open and will auto-close when the last sub-issue closes.;#798: In multi-issue sessions, all issues (not just the primary) are now checked for the `intent:clarified` label — a missing label on a related issue now correctly triggers re-clarification.
+
+### FEATURE: PR #813 (2026-06-07)
+Background: feat(#806): rename CLAUDE.md workflow steps to WF-CODE-N prefix
+Changes: CLAUDE.md workflow steps are now labeled `WF-CODE-N` (e.g. `WF-CODE-5` for **Code**, `WF-CODE-9` for **Phase 1 issue close**). The new prefix distinguishes top-level steps from skill-internal step IDs (WI-, WE-, ICF-, MDP-) and reserves namespace for future workflow types (`WF-TXT-N`, `WF-PLAN-N`).
