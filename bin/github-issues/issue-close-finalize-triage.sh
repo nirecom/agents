@@ -10,6 +10,9 @@
 # G=parent-body-update, H=gh-issue-close, J=resolved-by+sentinel,
 # K=wip-state-clear. auto_close_path omits B intentionally — the parent is
 # already CLOSED, so the gate's pre-close protection is moot. (#366)
+# meta_pending_subs: no steps when ACTION=meta_pending_subs — graceful no-op,
+# recursion terminates here. (OPEN + meta label + open sub-issues: parent left
+# OPEN until subs close; cascade close fires via ICF-F recursion later.)
 #
 # Uses `gh --jq` (built into the gh CLI) — no external jq dependency.
 # Exit non-zero on argument / environment / gh failures.
@@ -80,7 +83,14 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
                     print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
                     exit 0
                 fi
-                # exit 1 = open child exists → fall through to error
+                # exit 1 = open child exists → graceful no-op (meta_pending_subs)
+                if [ "$SUB_RC" -eq 1 ]; then
+                    echo "Notice: issue #${N} is a meta parent with open sub-issues — leaving open until subs close" >&2
+                    ACTION=meta_pending_subs
+                    NEXT_STEPS=""
+                    print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
+                    exit 0
+                fi
                 # exit 3 = API error → fall through to error (conservative)
             fi
         fi

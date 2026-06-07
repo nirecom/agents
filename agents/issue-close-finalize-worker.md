@@ -53,7 +53,7 @@ Accept only `schema_version: 3`. Reject other versions.
   "agents_config_dir": "<resolved>",
   "main_worktree_path": "<resolved>",
   "phase": "init_done|awaiting_recursion|terminal",
-  "triage_action": "<resume_e|resume_h|resume_j|auto_close_path|stuck_*>",
+  "triage_action": "<resume_e|resume_h|resume_j|auto_close_path|meta_pending_subs|stuck_*>",
   "g5_loop_iteration": 0,
   "g5_history": [
     {
@@ -82,7 +82,7 @@ Run all commands from `main_worktree_path` with `ISSUE_CLOSE_SKILL=1` where need
 4. Step ICF-C (sub-issue gate when B in NEXT_STEPS): `bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"` — non-zero → emit `status: failed`, `summary: "sub-issue gate blocked #N"` and stop.
 5. Step ICF-D (parent body update when G in NEXT_STEPS): `bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"`. Non-zero → log warning; continue (non-fatal).
 6. Step ICF-E (prepare proposal when G in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$issue_number")"` — sets `PROPOSAL_STATUS`, `PROPOSAL_PARENT`. Non-zero → emit `status: failed`, `summary: "ICF-E prepare failed for #N"` and stop.
-7. Write initial state file (atomic: `.tmp` → `mv`). Persist `triage_action` from Step ICF-A's `$ACTION` so `phase=finalize_terminal` can route Step ICF-K's `historyEntry`. If mv fails: emit `status: failed`, `summary: "state file write failed"` and stop. Set `phase=init_done`.
+7. Write initial state file (atomic: `.tmp` → `mv`). Persist `triage_action` from Step ICF-A's `$ACTION` so `phase=finalize_terminal` can route Step ICF-K's `historyEntry`. When `triage_action=meta_pending_subs`: NEXT_STEPS is empty so ICF-B..E are all skipped; `g5_history` is absent in state — main reads this triage_action and returns early before the loop phase, so `phase=loop_step` and `phase=finalize_terminal` are never called for this issue. If mv fails: emit `status: failed`, `summary: "state file write failed"` and stop. Set `phase=init_done`.
 8. Write stdout+stderr to `$artifact_dir/<timestamp>-issue-close-finalize-worker-<N>.log`. If log write fails: use `artifact_path: (none)` in output.
 
 ### phase=loop_step
