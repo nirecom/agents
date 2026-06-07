@@ -312,18 +312,22 @@ else
 fi
 teardown_tmp
 
-# --- FT17: OPEN + meta label + 1 open child → error fall-through
-# Meta admin-close path is gated on all sub-issues being closed; if any
-# remain open, triage must fall through with an error pointing back at
-# /issue-close-stage.
+# --- FT17: OPEN + meta label + 1 open child → graceful leave-open (#675-B)
+# Meta parents with open sub-issues must now exit 0 with ACTION=meta_pending_subs
+# and empty NEXT_STEPS so /issue-close-finalize can return cleanly. The cascade
+# from a child close will re-attempt parent close after the last sub-issue is
+# closed; surfacing an error here just spammed the user with false alarms.
 setup_tmp
-GH_MOCK_SCENARIO=meta_child_open run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/tmp/ft17_err.$$ >/dev/null
+FT17_OUT=$(cd "$TMP" && GH_MOCK_SCENARIO=meta_child_open run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>/tmp/ft17_err.$$)
 RC=$?
+unset STATE SENTINEL ACTION NEXT_STEPS
+# shellcheck disable=SC1090
+eval "$FT17_OUT" 2>/dev/null
 FT17_ERR=$(cat /tmp/ft17_err.$$); rm -f /tmp/ft17_err.$$
-if [ "$RC" -ne 0 ] && echo "$FT17_ERR" | grep -qi "issue-close-stage"; then
-    pass "FT17: OPEN + meta + 1 open child → error fall-through"
+if [ "$RC" -eq 0 ] && [ "${ACTION:-}" = "meta_pending_subs" ] && [ -z "${NEXT_STEPS:-}" ] && echo "$FT17_ERR" | grep -qi "meta parent with open sub-issues"; then
+    pass "FT17: OPEN + meta + 1 open child → graceful exit 0 + meta_pending_subs (#675)"
 else
-    fail "FT17: rc=$RC stderr=$FT17_ERR"
+    fail "FT17: rc=$RC action=${ACTION:-} next='${NEXT_STEPS:-}' stderr=$FT17_ERR"
 fi
 teardown_tmp
 
