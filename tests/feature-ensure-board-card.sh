@@ -32,7 +32,7 @@ run_with_timeout() {
 if [ ! -f "$TARGET" ]; then
     echo "FAIL: bin/github-issues/ensure-board-card.sh not found (implementation missing)"
     echo ""
-    echo "Results: 0 passed, 13 failed"
+    echo "Results: 0 passed, 16 failed"
     exit 1
 fi
 
@@ -110,6 +110,16 @@ case "$ARGS" in
     echo "${GH_MOCK_ISSUE_URL:-https://github.com/nirecom/agents/issues/42}"
     exit 0 ;;
   api\ graphql\ *)
+    # Status-read query: contains "fieldValueByName" or "Status" keyword.
+    # GH_MOCK_FAIL_STATUS_READ=1 simulates gh failure on status read.
+    if echo "$ARGS" | grep -qiE "(fieldValueByName|StatusField|status_field)"; then
+        if [ "${GH_MOCK_FAIL_STATUS_READ:-}" = "1" ]; then
+            echo "error: graphql status query failed" >&2
+            exit 1
+        fi
+        printf '%s\n' "${GH_MOCK_CARD_STATUS:-}"
+        exit 0
+    fi
     # resolve_item_id query. If RESOLVE_AFTER_ADD set, the SECOND call returns
     # that id (simulating concurrent race recovery).
     if [ -n "${GH_MOCK_RESOLVE_COUNTER_FILE:-}" ]; then
@@ -152,7 +162,8 @@ teardown_mock() {
     unset GH_MOCK_ARGS_LOG GH_MOCK_PROJECT_ITEM_ID GH_MOCK_ITEM_ADD_ID \
           GH_MOCK_FAIL GH_MOCK_ISSUE_URL GH_MOCK_MISSING_PROJECT_SCOPE \
           GH_MOCK_RESOLVE_AFTER_ADD GH_MOCK_RESOLVE_COUNTER_FILE \
-          GH_MOCK_OWNER_REPO 2>/dev/null || true
+          GH_MOCK_OWNER_REPO GH_MOCK_CARD_STATUS GH_MOCK_FAIL_STATUS_READ \
+          GH_MOCK_STATUS_FIELD_ID 2>/dev/null || true
     unset AGENTS_CONFIG_DIR ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM \
           ISSUE_CREATE_OWNER EBC_FIELD_ID \
           EBC_PROJECT_NUM 2>/dev/null || true
@@ -487,6 +498,76 @@ else
     fail "R-resolver-fail: rc=$RC item_add=$HAS_ITEM_ADD stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
 fi
 unset WORKFLOW_PLANS_DIR
+teardown_mock
+
+# ===========================================================================
+# Test 14: issue OPEN + card Status=Done → Status reset item-edit called,
+#          then item-add + Content Date proceed normally.
+# GH_MOCK_CARD_STATUS="Done" triggers the reset path.
+# GH_MOCK_STATUS_FIELD_ID distinguishes the reset item-edit in the args log.
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+export GH_MOCK_CARD_STATUS="Done"
+export GH_MOCK_STATUS_FIELD_ID="PVTF_status"
+export EBC_STATUS_FIELD_ID="PVTF_status"
+run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+RC=$?
+HAS_STATUS_RESET=0
+HAS_CONTENT_DATE=0
+# Reset item-edit uses --single-select-option-id (moving off Done) or uses the status field id.
+grep -q "project item-edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_CONTENT_DATE=1
+grep -qE "(single-select-option-id|$GH_MOCK_STATUS_FIELD_ID)" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_STATUS_RESET=1
+if [ "$RC" -eq 0 ] && [ "$HAS_STATUS_RESET" -eq 1 ] && [ "$HAS_CONTENT_DATE" -eq 1 ]; then
+    pass "T14: Status=Done → reset item-edit called + Content Date proceeds"
+else
+    fail "T14: rc=$RC status_reset=$HAS_STATUS_RESET content_date=$HAS_CONTENT_DATE log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+teardown_mock
+
+# ===========================================================================
+# Test 15: issue OPEN + card Status != "Done" (e.g. "In Progress") →
+#          no reset item-edit, normal Content Date flow (idempotency).
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+export GH_MOCK_CARD_STATUS="In Progress"
+export GH_MOCK_STATUS_FIELD_ID="PVTF_status"
+export EBC_STATUS_FIELD_ID="PVTF_status"
+run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>&1
+RC=$?
+HAS_STATUS_RESET=0
+HAS_CONTENT_DATE=0
+grep -qE "(single-select-option-id|$GH_MOCK_STATUS_FIELD_ID)" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_STATUS_RESET=1
+grep -qE -- "--date [0-9]{4}-[0-9]{2}-[0-9]{2}" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_CONTENT_DATE=1
+if [ "$RC" -eq 0 ] && [ "$HAS_STATUS_RESET" -eq 0 ] && [ "$HAS_CONTENT_DATE" -eq 1 ]; then
+    pass "T15: Status=In Progress → no reset item-edit, Content Date proceeds normally"
+else
+    fail "T15: rc=$RC status_reset=$HAS_STATUS_RESET content_date=$HAS_CONTENT_DATE log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+teardown_mock
+
+# ===========================================================================
+# Test 16: Status read failure (gh api graphql for status returns error) →
+#          neither reset item-edit nor item-add is called; exits 0 with WARN.
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+export GH_MOCK_FAIL_STATUS_READ="1"
+export GH_MOCK_STATUS_FIELD_ID="PVTF_status"
+export EBC_STATUS_FIELD_ID="PVTF_status"
+STDERR_FILE="$TMP/t16-stderr.log"
+run_with_timeout 30 bash "$TARGET" 42 >/dev/null 2>"$STDERR_FILE"
+RC=$?
+HAS_STATUS_RESET=0
+HAS_ITEM_ADD=0
+grep -qE "(single-select-option-id|$GH_MOCK_STATUS_FIELD_ID)" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_STATUS_RESET=1
+grep -q "project item-add" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_ITEM_ADD=1
+if [ "$RC" -eq 0 ] && [ "$HAS_STATUS_RESET" -eq 0 ] && [ "$HAS_ITEM_ADD" -eq 0 ] && [ -s "$STDERR_FILE" ]; then
+    pass "T16: Status read failure → no reset, no item-add, exits 0 with WARN"
+else
+    fail "T16: rc=$RC status_reset=$HAS_STATUS_RESET item_add=$HAS_ITEM_ADD stderr=$(cat "$STDERR_FILE" 2>/dev/null) log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
 teardown_mock
 
 # ---------------------------------------------------------------------------

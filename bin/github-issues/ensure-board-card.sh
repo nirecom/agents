@@ -67,6 +67,32 @@ fi
 # 2. Resolve existing item id.
 item_id=$(resolve_item_id "$N") || item_id=""
 
+# 2.5. Status reset (#579): if the card already exists and its board Status is
+# "Done", reset Status to "In Progress" before any other board mutation. This
+# prevents the Projects v2 `Done → auto-close` loop on reopened issues. Any gh
+# failure inside this block warns and exits 0, skipping ALL remaining board
+# mutations (item-add and Content Date edit) to avoid mutating a card that is
+# still at Status=Done. Callers must only invoke this script for OPEN issues.
+if [[ -n "$item_id" ]]; then
+    if ! card_status=$(gh api graphql -f query="{ node(id: \"$item_id\") { ... on ProjectV2Item { fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }" --jq '.data.node.fieldValueByName.name // empty' 2>/dev/null); then
+        echo "warn: ensure-board-card: Status read failed for #$N — skipping board mutations (exit 0)" >&2
+        exit 0
+    fi
+    card_status=$(printf '%s' "$card_status" | tr -d '\r' | head -1)
+
+    # Resolve field IDs from env vars (WIP_STATE_* takes precedence over EBC_*).
+    inprog_opt_id="${WIP_STATE_IN_PROGRESS_OPTION_ID:-${EBC_STATUS_INPROG_OPTION_ID:-}}"
+    status_field_id="${WIP_STATE_STATUS_FIELD_ID:-${EBC_STATUS_FIELD_ID:-}}"
+
+    if [[ "$card_status" == "Done" ]] && [[ -n "$status_field_id" ]]; then
+        if ! gh project item-edit --id "$item_id" --field-id "$status_field_id" \
+                --project-id "$PROJECT_ID" --single-select-option-id "$inprog_opt_id" >/dev/null 2>&1; then
+            echo "warn: ensure-board-card: Status reset failed for #$N — skipping board mutations (exit 0)" >&2
+            exit 0
+        fi
+    fi
+fi
+
 # 3. If absent, add to project. Retry resolve_item_id on failure for concurrent-add race.
 if [[ -z "$item_id" ]]; then
     if new_id=$(gh project item-add "$PROJECT_NUM" --owner "$OWNER" --url "$URL" \
