@@ -3,7 +3,20 @@
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../lib/path-normalize");
-const { parseCdCommand } = require("../lib/parse-git-args");
+const { parseCdCommand, parseCdCommandInInterpreter } = require("../lib/parse-git-args");
+
+// Normalize a path to Windows form when possible. Handles Git Bash style
+// `/c/path` → `C:\path` and `c:/path` → `c:\path` on win32.
+function toWindowsPath(raw) {
+  if (!raw) return raw;
+  const driveMatch = raw.match(/^\/([a-zA-Z])(\/.*)?$/);
+  if (driveMatch) {
+    return driveMatch[1].toUpperCase() + ":\\" +
+      (driveMatch[2] || "").replace(/\//g, "\\").replace(/^\\/, "");
+  }
+  if (process.platform === "win32" && /^[a-zA-Z]:\//.test(raw)) return raw.replace(/\//g, "\\");
+  return raw;
+}
 
 // Returns true when repoCwd is the main worktree (non-linked).
 // In a linked worktree, --git-common-dir and --git-dir differ.
@@ -31,15 +44,7 @@ function parseGitCPath(cmd) {
   if (!m) return null;
   const raw = m[1] || m[2] || m[3];
   if (!raw) return null;
-  // Normalize Unix-style drive paths (Git Bash): /c/path → C:\path
-  const driveMatch = raw.match(/^\/([a-zA-Z])(\/.*)?$/);
-  if (driveMatch) {
-    return driveMatch[1].toUpperCase() + ":\\" +
-      (driveMatch[2] || "").replace(/\//g, "\\").replace(/^\\/, "");
-  }
-  // Normalize Windows forward slashes: c:/path → c:\path
-  if (process.platform === "win32" && /^[a-zA-Z]:\//.test(raw)) return raw.replace(/\//g, "\\");
-  return raw;
+  return toWindowsPath(raw);
 }
 
 function findRepoRootForBash(cmd) {
@@ -47,8 +52,15 @@ function findRepoRootForBash(cmd) {
   // Payload-derived `cd <absolute-path> && ...` extraction (issue #321).
   // No CLAUDE_PROJECT_DIR fallback — Approach E rejects it (start-time-fixed,
   // does not follow Bash `cd`).
-  const cdArg = cArg ? null : parseCdCommand(cmd);
-  const startDir = cArg || cdArg || process.cwd();
+  let cdArg = null;
+  if (!cArg) {
+    cdArg = parseCdCommandInInterpreter(cmd);
+    if (!cdArg) cdArg = parseCdCommand(cmd);
+  }
+  let startDir = cArg || cdArg || process.cwd();
+  if (typeof startDir === "string" && /^\/[a-zA-Z]\//.test(startDir)) {
+    startDir = toWindowsPath(startDir);
+  }
   try {
     const r = spawnSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: startDir, encoding: "utf8", timeout: 2000,
