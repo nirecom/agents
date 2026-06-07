@@ -139,4 +139,8 @@ Changes: fix(#526): WORKFLOW_MARK_STEP_* handlers now hard-fail (exit 2) when se
 
 ### BUGFIX: PR #791 (2026-06-07)
 Background: fix(#579,#681,#682): migrate-repo robustness + workflow-init reopen Status reset
-Changes: workflow-init reopen no longer re-triggers Projects v2 board auto-close (#579): ensure-board-card.sh now resets card Status from Done to In Progress before any board mutation on reopened issues.;migrate-repo Steps 4 and 5 now fail loudly when backfill scripts exit non-zero (#682): re-run with --from-step 4 or --from-step 5 to resume after fixing the underlying error.
+Changes: workflow-init reopen no longer re-triggers Projects v2 board auto-close (#579): ensure-board-card.sh now resets card Status from Done to In Progress before any board mutation on reopened issues.;migrate-repo Steps 4 and 5 now fail loudly when backfill scripts exit non-zero (#682): re-run with --from-step 4 or --from-step 5 to resume after fixing the underlying error.
+
+### FEATURE: PR #788 (2026-06-07)
+Background: fix(#776,#748,#777): exit-4 counter reset + ledger-absent recovery + doc step ref
+Changes: Review loop now recovers cleanly from a missing concern-ID ledger at round 2 (auto-downgrade to round 1 with warning) instead of getting stuck; the round counter also resets on fatal errors so retries start fresh.
