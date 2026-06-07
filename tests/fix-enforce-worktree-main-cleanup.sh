@@ -1,8 +1,8 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-main-cleanup.sh
-# Tests: hooks/enforce-worktree.js
-# Tags: worktree, enforce, hook, bin, git
-# Tests for isAllowedMainWorktreeCleanup() — #297
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
+# Tags: worktree, enforce, hook, bin, git, security, interpreter-wrapper, fix-802
+# Tests for isAllowedMainWorktreeCleanup() — #297; isAllowedWorktreeCommand — #778, #802
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
@@ -150,5 +150,20 @@ assert_block_wc "git -C \"$MAIN_DIRTY_N\" worktree remove --force \"$DIRTY_WT_N\
 assert_block_wc "git -C \"$MAIN_DIRTY_N\" worktree remove -f \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S43: no-prefix worktree remove -f → block (#778)"
 # S44: path with semicolon + --force (quoted separator bypass guard) → block (#778)
 assert_block_wc "git -C \"$MAIN_DIRTY_N\" worktree remove \"$MAIN_DIRTY_N/a;b\" --force" "$MAIN_DIRTY_N" "S44: quoted path with ; then --force → block (#778)"
+
+# === #802 interpreter-wrapper bypass coverage (S45-S48) ===
+# Direct git invocations remain ALLOW (S45/S46), but wrapping the same command
+# inside `bash -c`/`sh -c` must BLOCK (S47/S48). The wrapper hides the inner
+# command behind a quoted body that stripQuotedArgs collapses, neutering the
+# hasShellChaining() guard. The fix must reject any cmd whose top-level token
+# is an interpreter (bash/sh) carrying -c.
+# S45: direct `git -C <main> worktree remove "<linked>"` → allow (regression pin)
+assert_allow_wc "git -C \"$MAIN_DIRTY_N\" worktree remove \"$DIRTY_WT_N\"" "$MAIN_DIRTY_N" "S45: direct git worktree remove (regression pin) → allow"
+# S46: direct `git -C <main> worktree prune` → allow (regression pin)
+assert_allow_wc "git -C \"$MAIN_DIRTY_N\" worktree prune" "$MAIN_DIRTY_N" "S46: direct git worktree prune (regression pin) → allow"
+# S47: `bash -c "git -C <main> worktree prune"` → block (#802 interpreter wrapper)
+assert_block_wc "bash -c \"git -C $MAIN_DIRTY_N worktree prune\"" "$MAIN_DIRTY_N" "S47: bash -c 'git worktree prune' → block (#802)"
+# S48: `sh -c 'git worktree remove /tmp/x'` → block (#802 interpreter wrapper)
+assert_block_wc "sh -c 'git worktree remove /tmp/x'" "$MAIN_DIRTY_N" "S48: sh -c 'git worktree remove …' → block (#802)"
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]
