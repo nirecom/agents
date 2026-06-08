@@ -38,9 +38,13 @@ Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns wh
 bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on && echo OFF || echo ON'
 ```
 - `OFF`: print a one-paragraph prose summary (do not duplicate the breadcrumb path); proceed.
-- `ON`: call `AskUserQuestion`: "Review the [artifact] above. Proceed with this, or revise?"
-  - **Proceed**: continue.
-  - **Revise**: ask what to change, write edits, loop back to Step 1.
+- `ON`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` per the caller:
+
+  `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`
+
+  The `confirm-checkpoint.js` PreToolUse hook resolves the artifact path, opens it in VS Code, and surfaces a "Click Allow / Deny" message above the permission dialog (the sentinel is registered under `permissions.ask`, so the dialog is the user's approval surface).
+  - **Allow** (user clicks Allow on the sentinel's permission dialog): continue.
+  - **Deny**: ask what to change, write edits, loop back to Step 1.
 
 ## Notes
 

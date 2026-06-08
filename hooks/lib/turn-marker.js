@@ -69,4 +69,36 @@ function readAndDeleteTurnMarkers(sessionId) {
   return results;
 }
 
-module.exports = { writeTurnMarker, readAndDeleteTurnMarkers };
+// Non-destructive read: same scan as readAndDeleteTurnMarkers, no unlink.
+// Safe to call from PreToolUse (Stop hook's read-and-delete remains the sole
+// consumer that clears markers).
+function peekTurnMarkers(sessionId) {
+  if (typeof sessionId !== "string" || !SID_RE.test(sessionId)) return [];
+  const dir = getWorkflowDir();
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch (_) {
+    return [];
+  }
+  const prefix = `${sessionId}.confirm-plan-turn-`;
+  const results = [];
+  for (const name of entries) {
+    if (!name.startsWith(prefix) || !name.endsWith(".json")) continue;
+    const full = path.join(dir, name);
+    let raw;
+    try {
+      raw = fs.readFileSync(full, "utf8");
+    } catch (_) {
+      continue;
+    }
+    try {
+      results.push(JSON.parse(raw));
+    } catch (_) {
+      continue;
+    }
+  }
+  return results;
+}
+
+module.exports = { writeTurnMarker, readAndDeleteTurnMarkers, peekTurnMarkers };

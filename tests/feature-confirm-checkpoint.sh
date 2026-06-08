@@ -286,16 +286,16 @@ else
 fi
 clear_markers
 
-# ── T11: PR_CREATED with URL having no /pull/<N> → still renders URL ───────
-echo "=== T11: PR_CREATED URL without /pull/<N> ==="
-T11_URL="https://github.com/user/repo"
+# ── T11: PR_CREATED with non-github.com URL → ignored (security: reject non-PR URLs) ─
+echo "=== T11: PR_CREATED non-github.com/pull/N URL is ignored ==="
+T11_URL="https://evil.example.com/not/a/pr"
 T11_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_PR_CREATED: $T11_URL>>\"")
 T11_OUT=$(run_hook "$T11_JSON")
 T11_MSG=$(extract_system_message "$T11_OUT")
-if [ -n "$T11_MSG" ] && echo "$T11_MSG" | grep -qF "$T11_URL"; then
-  pass "T11 PR_CREATED non-/pull URL still renders URL"
+if [ -z "$T11_MSG" ]; then
+  pass "T11 PR_CREATED non-github.com/pull/N URL is ignored (no systemMessage)"
 else
-  fail "T11 PR_CREATED non-/pull URL — expected URL rendering, got: $T11_MSG"
+  fail "T11 PR_CREATED non-github.com/pull/N URL should be ignored, got: $T11_MSG"
 fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
