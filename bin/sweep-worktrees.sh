@@ -23,6 +23,17 @@ CI_MODE=0
 SKIP_GH_CHECK=0
 SIMULATE_EPERM=0
 DRY_RUN=1 # mirror of !APPLY for orphan-dir scan readability
+SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
+
+validate_sweep_age_days() {
+  local v="$1"
+  if [[ ! "$v" =~ ^[0-9]+$ ]] || [[ "$v" -lt 1 ]]; then
+    printf 'ERROR: SWEEP_AGE_DAYS must be a positive integer (got: %s)\n' "$v" >&2
+    exit 2
+  fi
+}
+
+validate_sweep_age_days "$SWEEP_AGE_DAYS"
 
 usage() {
   cat <<'EOF'
@@ -33,6 +44,8 @@ Options:
   --dry-run             Explicit dry-run (default).
   --min-age-hours N     Skip worktrees modified more recently than N hours
                         (default 24).
+  --sweep-age-days N    Age threshold in days for the empty-parent pass
+                        (default 30; env SWEEP_AGE_DAYS).
   --ci-mode             Emit JSON summary on stdout (instead of plain text).
   --skip-gh-check       Skip the gh PR merged-state check (testing only).
   --simulate-eperm      Pretend every worktree remove failed with EPERM
@@ -48,6 +61,11 @@ while [[ $# -gt 0 ]]; do
     --min-age-hours)
       shift
       MIN_AGE_HOURS="${1:?--min-age-hours requires a value}"
+      ;;
+    --sweep-age-days)
+      shift
+      SWEEP_AGE_DAYS="${1:?--sweep-age-days requires a value}"
+      validate_sweep_age_days "$SWEEP_AGE_DAYS"
       ;;
     --ci-mode) CI_MODE=1 ;;
     --skip-gh-check) SKIP_GH_CHECK=1 ;;
@@ -97,11 +115,19 @@ orphan_dirs_skipped_registered=0
 orphan_dirs_skipped_failed=0
 orphan_dirs_skipped_has_files=0
 orphan_dirs_skipped_repo_mismatch=0
+empty_parents_candidates=0
+empty_parents_removed=0
+empty_parents_skipped_young=0
+empty_parents_skipped_nonempty=0
+empty_parents_skipped_registered=0
 errors=()
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
 # realpath -m equivalent that returns the input on failure (path may not exist).
+# On Windows Git Bash, mktemp -d yields POSIX form (/tmp/...) while
+# `git worktree list --porcelain` returns Windows form (C:/Users/.../...).
+# `cygpath -u` normalizes both to a single POSIX form so equality checks work.
 norm_path() {
   local p="$1"
   if [[ -z "$p" ]]; then
@@ -109,7 +135,10 @@ norm_path() {
     return
   fi
   if command -v realpath >/dev/null 2>&1; then
-    realpath -m -- "$p" 2>/dev/null || printf '%s' "$p"
+    p="$(realpath -m -- "$p" 2>/dev/null || printf '%s' "$p")"
+  fi
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u -- "$p" 2>/dev/null || printf '%s' "$p"
   else
     printf '%s' "$p"
   fi
@@ -166,6 +195,16 @@ is_pr_merged() {
 porcelain="$(git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null || true)"
 
 main_root_norm="$(norm_path "$MAIN_ROOT")"
+
+# ── Cross-repo registered-worktree discovery (#809) ─────────────────────────
+# Snapshot the registry BEFORE the main loop modifies it via `git worktree
+# remove`, so the empty-parent pass can still recognize parents whose leaf
+# was registered at the start of the run.
+declare -A DISCOVERED_MAIN_ROOTS=()
+declare -A REGISTERED_WT_PARENTS=()
+# shellcheck source=./sweep-worktrees/empty-parent.sh
+source "$(dirname "${BASH_SOURCE[0]}")/sweep-worktrees/empty-parent.sh"
+discover_registered_wt_parents
 
 current_path=""
 current_branch=""
@@ -269,7 +308,13 @@ fi
 
 # ── Orphan-directory scan pre-pass guard ─────────────────────────────────────
 registered_norm_file=$(mktemp)
-trap "rm -f \"$registered_norm_file\" \"${registered_norm_file}.raw\"" EXIT
+# Function-form trap: defers expansion of $registered_norm_file to cleanup time
+# and quotes safely even if mktemp ever returns a path containing spaces or
+# shell metacharacters.
+cleanup_registered_files() {
+  rm -f -- "$registered_norm_file" "${registered_norm_file}.raw"
+}
+trap cleanup_registered_files EXIT
 SKIP_ORPHAN_DIR_SCAN=0
 if ! git -C "$MAIN_ROOT" worktree list --porcelain > "${registered_norm_file}.raw" 2>/dev/null; then
   printf 'WARNING: git worktree list --porcelain failed; skipping orphan-dir scan pass\n' >&2
@@ -359,6 +404,9 @@ if [[ "$SKIP_ORPHAN_DIR_SCAN" != "1" && -d "$WORKTREE_BASE_DIR" ]]; then
   done < <(find "$WORKTREE_BASE_DIR" -mindepth 2 -maxdepth 2 -type d -print0 2>/dev/null)
 fi
 
+# ── Empty-parent pass (#809) ────────────────────────────────────────────────
+sweep_empty_parents
+
 # ─── Stale .worktree-backup cleanup ─────────────────────────────────────────
 
 backup_base="$MAIN_ROOT/.worktree-backup"
@@ -400,12 +448,15 @@ if [[ "$CI_MODE" == "1" ]]; then
     errs_json="$(printf '%s\n' "${errors[@]}" | node -e \
       'const xs=require("fs").readFileSync(0,"utf8").split(/\r?\n/).filter(Boolean);process.stdout.write(JSON.stringify(xs))')"
   fi
-  printf '{"scanned":%d,"candidates":%d,"worktree_removed":%d,"branch_deleted":%d,"skipped_eperm":%d,"skipped_unmerged":%d,"orphan_dirs_removed":%d,"orphan_dirs_skipped_has_git":%d,"orphan_dirs_skipped_young":%d,"orphan_dirs_skipped_registered":%d,"orphan_dirs_skipped_failed":%d,"orphan_dirs_skipped_has_files":%d,"orphan_dirs_skipped_repo_mismatch":%d,"errors":%s}\n' \
+  printf '{"scanned":%d,"candidates":%d,"worktree_removed":%d,"branch_deleted":%d,"skipped_eperm":%d,"skipped_unmerged":%d,"orphan_dirs_removed":%d,"orphan_dirs_skipped_has_git":%d,"orphan_dirs_skipped_young":%d,"orphan_dirs_skipped_registered":%d,"orphan_dirs_skipped_failed":%d,"orphan_dirs_skipped_has_files":%d,"orphan_dirs_skipped_repo_mismatch":%d,"empty_parents_candidates":%d,"empty_parents_removed":%d,"empty_parents_skipped_young":%d,"empty_parents_skipped_nonempty":%d,"empty_parents_skipped_registered":%d,"errors":%s}\n' \
     "$scanned" "$candidates" "$worktree_removed" "$branch_deleted" \
     "$skipped_eperm" "$skipped_unmerged" "$orphan_dirs_removed" \
     "$orphan_dirs_skipped_has_git" "$orphan_dirs_skipped_young" \
     "$orphan_dirs_skipped_registered" "$orphan_dirs_skipped_failed" \
     "$orphan_dirs_skipped_has_files" "$orphan_dirs_skipped_repo_mismatch" \
+    "$empty_parents_candidates" "$empty_parents_removed" \
+    "$empty_parents_skipped_young" "$empty_parents_skipped_nonempty" \
+    "$empty_parents_skipped_registered" \
     "$errs_json"
 else
   printf 'sweep-worktrees summary:\n'
