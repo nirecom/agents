@@ -26,6 +26,7 @@ const {
   resolveExternalDocsRepo,
   hasStagedDocChanges,
   hasStagedChanges,
+  hasUnstagedTrackedChanges,
 } = require("./workflow-gate/staged-evidence");
 const { hasOpenPrForBranch, isBranchDirectlyMerged } = require("./workflow-gate/gh-detect");
 const {
@@ -68,8 +69,8 @@ if (require.main === module) {
   const toolInput = input.tool_input || {};
   const sessionId = input.session_id;
 
-  // Session-scoped WORKFLOW override: bypass all workflow-gate checks for this session.
-  const { isWorkflowOff } = require("./lib/session-markers");
+  // WORKFLOW_OFF: bypass all workflow-gate checks (superset of WORKTREE_OFF per workflow-off.md).
+  const { isWorkflowOff, isWorktreeOff } = require("./lib/session-markers");
   if (isWorkflowOff(sessionId)) approve();
 
   // EARLY GATE: 2-tier enforcement before Edit/Write tools.
@@ -283,6 +284,35 @@ if (require.main === module) {
   const wipValues = parseGitConfigValues(command, "workflow.wip");
   const isWip = wipValues.some((v) => v === "1" || v.toLowerCase() === "true");
 
+  // Gate 1 (issue #269): hard-block commits when tracked files have unstaged
+  // working-tree changes. Docs-only short-circuit does NOT skip this — docs-only
+  // staged + unstaged code is still a staging integrity violation (PR #767).
+  // Skipped on isWip OR WORKTREE_OFF (recovery sessions bypass Gate 1 only;
+  // WORKFLOW_OFF bypasses all gates via the early-return above).
+  if (!isWip && !isWorktreeOff(sessionId)) {
+    const unstagedResult = hasUnstagedTrackedChanges(repoDir);
+    // Gate 1 fail-open on error (helper wrote stderr); CLI side is fail-safe.
+    if (unstagedResult.error === null && unstagedResult.hasChanges) {
+      const fileList = unstagedResult.files.map((f) => `  ${f}`).join("\n");
+      block(
+        [
+          "workflow-gate: tracked-file modifications were not staged before commit.",
+          `${unstagedResult.files.length} file(s) modified but not staged:`,
+          fileList,
+          "",
+          "This usually means `git add` was skipped during the commit-push flow (see PR #767).",
+          "",
+          "Resolve by either:",
+          "  - Stage the files: git add <file>",
+          "  - Stash them: git stash push -u -- <file>",
+          "  - Mark as WIP: git -c workflow.wip=1 commit -m \"...\"",
+          "",
+          "Emergency bypass (session-scoped): echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>\"",
+        ].join("\n")
+      );
+    }
+  }
+
   // session_id is required — fail-safe if missing
   if (!sessionId) {
     block(
@@ -362,4 +392,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, findAdditionalDirectories };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, hasUnstagedTrackedChanges, findAdditionalDirectories };
