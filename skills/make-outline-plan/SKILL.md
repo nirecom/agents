@@ -106,7 +106,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
    Step 8 handles the file write — do NOT write here.
 
-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
+8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. On the `ON` path: emit `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"` per protocol Step 3. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -133,7 +133,7 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
   No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state) plus `WORKFLOW_OUTLINE_PLAN_COMPLETE` (status event).
-- **Two `AskUserQuestion` calls per run in ON mode** — step 7 (approach selection, before file write) and step 8 (artifact review via protocol Step 3, after write). OFF mode fires neither.
+- **One `AskUserQuestion` + one sentinel dialog per run in ON mode** — step 7 (approach selection via `AskUserQuestion`) and step 8 (artifact review via `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel permission dialog per protocol Step 3). OFF mode fires neither.
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
 
