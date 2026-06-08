@@ -57,6 +57,8 @@ condition: sentinel, history entry, or both). Resolve by invoking
    rc=1 → list of unstaged tracked files is printed; either `git add` them, `git stash push -u -- <file>`, or pass `--wip` to skip this gate (`git -c workflow.wip=1 commit`).
    rc=2/3 → surface stderr and abort. Skip this verification when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with workflow-gate.js bypass); also set `wip_mode: true` in the step 2-6 worker JSON to propagate the bypass to Gate 3 (Step 1.5).
 
+After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automatically opens the PR URL in your browser — no explicit `open`/`xdg-open` call is needed.
+
 2-6. **Delegate commit/push/PR to commit-push-worker**:
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
    ```
