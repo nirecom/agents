@@ -175,4 +175,8 @@ Changes: CLAUDE.md workflow steps are now labeled `WF-CODE-N` (e.g. `WF-CODE-5` 
 
 ### FEATURE: PR #814 (2026-06-08)
 Background: docs: trim CLAUDE.md verbose sections + add prompt brevity criteria
-Changes: CLAUDE.md trimmed: workflow steps WF-CODE-5/7/8/9/10/11/12 are shorter; rely on skill names for self-documentation.;New prompt-quality criteria in `rules/prompt.md`: every-token-counts brevity (§1.4), restraint on "see issue" pointers (§2.3), and no post-invocation skill explanations (§2.4).
+Changes: CLAUDE.md trimmed: workflow steps WF-CODE-5/7/8/9/10/11/12 are shorter; rely on skill names for self-documentation.;New prompt-quality criteria in `rules/prompt.md`: every-token-counts brevity (§1.4), restraint on "see issue" pointers (§2.3), and no post-invocation skill explanations (§2.4).
+
+### FEATURE: PR #816 (2026-06-08)
+Background: fix(#802): block interpreter-wrapper bypass of isAllowedWorktreeCommand
+Changes: Security fix: main-worktree write enforcement now blocks interpreter wrappers (`bash -c '...'`, `sh -c '...'`, etc., including `WORKTREE_END_SKILL=1 bash -c '...'`) that previously slipped past the chaining detector when chaining operators were hidden inside a single-quoted body. Direct `git worktree add/remove/prune` commands (including quoted paths) remain allowed.
