@@ -91,4 +91,19 @@ function hasStagedChanges(dir) {
   }
 }
 
-module.exports = { DOCS_ONLY_ALLOWLIST, hasStagedTestChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedDocChanges, hasStagedChanges };
+// Evidence-based check: tracked files have unstaged working-tree modifications
+function hasUnstagedTrackedChanges(repoDir) {
+  try {
+    const out = execSync("git diff --name-only", {
+      cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"],
+    });
+    const files = out.trim().split(/\r?\n/).filter(Boolean);
+    if (files.length === 0) return { hasChanges: false, files: [], error: null };
+    return { hasChanges: true, files, error: null };
+  } catch (e) {
+    process.stderr.write(`workflow-gate: hasUnstagedTrackedChanges failed (cwd=${repoDir}): ${e.message}\n`);
+    return { hasChanges: false, files: [], error: e.message };
+  }
+}
+
+module.exports = { DOCS_ONLY_ALLOWLIST, hasStagedTestChanges, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedDocChanges, hasStagedChanges, hasUnstagedTrackedChanges };
