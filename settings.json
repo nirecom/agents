@@ -199,6 +199,10 @@
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: *>>\")",
+      "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
+      "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
+      "Bash(echo \"<<WORKFLOW_CONFIRM_DETAIL: *>>\")",
+      "Bash(echo \"<<WORKFLOW_CONFIRM_PR_CREATED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
       "Bash(*aws * create*)",
       "Bash(*aws * put*)",
@@ -437,6 +441,16 @@
         ]
       },
       {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/confirm-checkpoint.js\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Write|Edit|MultiEdit|editFiles",
         "hooks": [
           {
@@ -479,6 +493,11 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-trigger.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/pr-created-open.js\"",
             "timeout": 5
           }
         ]

@@ -54,6 +54,8 @@ condition: sentinel, history entry, or both). Resolve by invoking
 
 1. Stage changes with `git add`
 
+After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automatically opens the PR URL in your browser — no explicit `open`/`xdg-open` call is needed.
+
 2-6. **Delegate commit/push/PR to commit-push-worker**:
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
    ```
