@@ -179,4 +179,8 @@ Changes: CLAUDE.md trimmed: workflow steps WF-CODE-5/7/8/9/10/11/12 are shorter;
 
 ### FEATURE: PR #816 (2026-06-08)
 Background: fix(#802): block interpreter-wrapper bypass of isAllowedWorktreeCommand
-Changes: Security fix: main-worktree write enforcement now blocks interpreter wrappers (`bash -c '...'`, `sh -c '...'`, etc., including `WORKTREE_END_SKILL=1 bash -c '...'`) that previously slipped past the chaining detector when chaining operators were hidden inside a single-quoted body. Direct `git worktree add/remove/prune` commands (including quoted paths) remain allowed.
+Changes: Security fix: main-worktree write enforcement now blocks interpreter wrappers (`bash -c '...'`, `sh -c '...'`, etc., including `WORKTREE_END_SKILL=1 bash -c '...'`) that previously slipped past the chaining detector when chaining operators were hidden inside a single-quoted body. Direct `git worktree add/remove/prune` commands (including quoted paths) remain allowed.
+
+### FEATURE: PR #817 (2026-06-08)
+Background: feat(#808,#809,#810): sweep series enhancements — --delete-no-pr, empty-parent sweep, /sweep-plans
+Changes: `/sweep-branches` now detects branches with no associated PR and can remove them (`--delete-no-pr`) after verifying all commits are reachable from origin; dry-run output accurately predicts which branches will be deleted; branches with open or unknown-state PRs are never touched;`/sweep-worktrees` now reclaims empty task-name parent directories (e.g. `~/git/worktrees/my-task/` left behind after all worktrees inside are removed); verified empty and not referenced by any repo's worktree registry before deletion;New `/sweep-plans` sub-skill reclaims stale `~/.workflow-plans/` session artifacts (intent.md, outline.md, detail.md, drafts/) older than `SWEEP_AGE_DAYS` (default 30 days); groups by session-id prefix and re-checks for recent activity before deleting to avoid removing in-progress sessions
