@@ -171,6 +171,22 @@ T7_sweep_hub_references_sweep_branches() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T8 — skills/sweep/SKILL.md body references 'sweep-plans'
+# ─────────────────────────────────────────────────────────────────────────────
+
+T8_sweep_hub_references_sweep_plans() {
+    if [ ! -f "$SWEEP_HUB" ]; then
+        fail "T8 sweep_hub_references_sweep_plans: $SWEEP_HUB does not exist"
+        return
+    fi
+    if grep -qF 'sweep-plans' "$SWEEP_HUB" 2>/dev/null; then
+        pass "T8 sweep_hub_references_sweep_plans"
+    else
+        fail "T8 sweep_hub_references_sweep_plans: 'sweep-plans' not referenced in $SWEEP_HUB"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -181,6 +197,7 @@ T4_sweep_worktrees_user_invocable
 T5_sweep_hub_references_sweep_worktrees
 T6_sweep_branches_exists_nonempty
 T7_sweep_hub_references_sweep_branches
+T8_sweep_hub_references_sweep_plans
 
 echo ""
 echo "─────────────────────────────────────────"
