@@ -52,7 +52,10 @@ condition: sentinel, history entry, or both). Resolve by invoking
 
 ## Procedure
 
-1. Stage changes with `git add`
+1. **Stage changes with `git add`** — explicitly add each file you intend to commit.
+   Then run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh"` from the worktree root.
+   rc=1 → list of unstaged tracked files is printed; either `git add` them, `git stash push -u -- <file>`, or pass `--wip` to skip this gate (`git -c workflow.wip=1 commit`).
+   rc=2/3 → surface stderr and abort. Skip this verification when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with workflow-gate.js bypass); also set `wip_mode: true` in the step 2-6 worker JSON to propagate the bypass to Gate 3 (Step 1.5).
 
 2-6. **Delegate commit/push/PR to commit-push-worker**:
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
@@ -68,6 +71,7 @@ condition: sentinel, history entry, or both). Resolve by invoking
      artifact_dir: PLANS_DIR
    }) })
    ```
+   On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_path and stop.
    On `push_failed` or `conflict`: surface summary + artifact_path to user and stop.
    On `pr_created` or `pr_reused`: extract PR URL from summary for step 7.
    On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step 7 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step 2b owns that sentinel. Stop.
@@ -103,6 +107,7 @@ When invoked with `--wip` (for fixup / intermediate commits between substantive 
 - Do NOT set `workflow.wip` in git config globally — the signal must be scoped to the
   single commit invocation to avoid leakage across commits.
 - Works with `--amend`: `git -c workflow.wip=1 commit --amend ...`.
+- `--wip` mode also skips Gate 3 (Step 1 unstaged-tracked verification + commit-push-worker Step 1.5) and Gate 1 (workflow-gate.js unstaged-tracked check), since `workflow.wip=1` signals intentional partial staging.
 
 See `docs/architecture/claude-code/workflow.md` for the signal contract.
 

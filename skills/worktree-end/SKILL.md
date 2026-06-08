@@ -15,6 +15,9 @@ Inventory and preserve gitignored state, merge the PR, then remove the worktree 
 - `gh --version` — abort with installation guidance if not found.
 - Verify cwd is inside a linked worktree (not main worktree): `git rev-parse --git-common-dir` must differ from `git rev-parse --git-dir`. If equal, abort: user must `cd` into the worktree first.
 
+### Step WE-2.5 — Unstaged tracked-file pre-flight
+Run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh" "$WORKTREE_PATH"`. rc=0 → continue. rc=1 → display stdout (modified file list) and abort with guidance: `git add` / `git stash push -u` / `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>` to bypass. rc=2/3 → surface stderr and abort (no bypass — fail-safe). Skip this step entirely when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with WE-2 enforce-worktree bypass).
+
 ### Step WE-3 — PR resolution (idempotent)
 
 **Bootstrap probe (new-repo first commit):** Before pushing, probe the remote state: `PROBE_JSON="$(bash "$AGENTS_CONFIG_DIR/bin/probe-remote-bootstrap.sh" "$WORKTREE_PATH")"`. `preBootstrap === true` AND `classification === "empty-repo"` → skip to **WE-3b** (autonomous bootstrap, no PR). Any other classification (`ok`, `network`, `auth`, `not-found`, `timeout`, `spawn-error`, `unknown`) → continue with normal push/PR flow below.
@@ -90,6 +93,7 @@ Canonical spec: `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-ca
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup (WE-17) — never `rm -rf`/`Remove-Item -Recurse -Force`.
 - `gh --version` must succeed before any gh command.
 - `<<WORKFLOW_USER_VERIFIED: <reason>>>` is emitted in Step WE-7 (before `gh pr merge`), Step WE-6 (after `state == MERGED`), or Step WE-3b (bootstrap mode), via `skills/_shared/user-verified.md`. Never on abort or while polling.
+- Step WE-2.5 honors WORKFLOW_OFF / WORKTREE_OFF session markers; skip when either is active.
 - Step WE-4 PR state gate runs before the AUTO_MERGE_PR check; applies to both on/off modes; `MERGED` always routes to Step WE-6.
 - `AUTO_MERGE_PR=on` skips `AskUserQuestion` in Step WE-4 (worktree mode only).
 - `$PR_NUMBER` captured in Step WE-3; used explicitly in Step WE-5. Session-local only.

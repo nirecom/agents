@@ -22,6 +22,12 @@ Receive a JSON object with:
 ## Procedure
 
 1. Run `git diff --cached --stat` to confirm staged changes.
+1.5. **Staging verification (Gate 3 mechanical path)** — Skip when `wip_mode === true` (workflow.wip=1 bypass parity). Otherwise run:
+     `bash "$agents_config_dir/bin/check-unstaged-tracked.sh" "$repo_root"`
+     - rc=0 → continue to Step 2.
+     - rc=1 → abort. Return `status=staging_incomplete`, `summary="N unstaged tracked file(s) detected — staging incomplete; refusing to commit. Files: <list from stdout, comma-separated, truncate at 5>"`, `artifact_path=<log>`. Do NOT execute `git commit`.
+     - rc=2/3 → abort. Return `status=staging_check_failed`, `summary="check-unstaged-tracked.sh failed (rc=<rc>); refusing to commit. stderr: <first line>"`, `artifact_path=<log>`. Do NOT execute `git commit`.
+     WORKFLOW_OFF / WORKTREE_OFF bypass is NOT evaluated here — the worker has no session ID. The calling `/commit-push` SKILL is responsible for checking session markers before invoking the worker.
 2. Commit:
    - Normal: `git commit -m "$commit_message"`
    - WIP: `git -c workflow.wip=1 commit -m "$commit_message"`
@@ -53,13 +59,14 @@ Receive a JSON object with:
 - `--no-verify` is prohibited.
 - Each git write command must be a separate Bash call (no `&&` chaining).
 - Do not install packages.
+- Staging verification (Step 1.5) is skipped only when `wip_mode === true`. WORKFLOW_OFF / WORKTREE_OFF bypass is evaluated by the calling SKILL, not by this worker.
 
 ## Output contract
 
 Respond with exactly three lines:
 
 ```
-status: pushed|pr_created|pr_reused|push_failed|conflict|bootstrap_pending
+status: pushed|pr_created|pr_reused|push_failed|conflict|bootstrap_pending|staging_incomplete|staging_check_failed
 summary: "<branch pushed (N commits); PR #N created|reused at <url>>"
 artifact_path: "<absolute log path>"
 ```

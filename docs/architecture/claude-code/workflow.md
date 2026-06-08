@@ -115,6 +115,11 @@ Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToo
 
 git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   reads session_id from hook stdin JSON
+  WORKFLOW_OFF → approve (early-return; all checks bypassed for this session)
+  Gate 1 (unstaged-tracked, #269): blocks when tracked files have unstaged working-tree
+    modifications. Skipped on `git -c workflow.wip=1` or WORKTREE_OFF marker.
+    Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
+    Detection logic: hasUnstagedTrackedChanges() in hooks/workflow-gate/staged-evidence.js.
   loads ~/.claude/projects/workflow/<session_id>.json
   docs-only short-circuit: if ALL staged files match the human-facing docs allowlist
     (docs/*.md or root README/CHANGELOG/CONTRIBUTING/LICENSE.md),
@@ -178,10 +183,10 @@ recognizes the per-command global option:
 git -c workflow.wip=1 commit -m "..."
 ```
 
-When detected, the gate skips ONLY `user_verification`. All automated gates
-(`run_tests`, `review_security`, `docs`) still fire. The gate does NOT mutate
-state in the WIP path — `user_verification` remains `pending`, so the next
-non-WIP commit re-blocks until the user verifies.
+When detected, the gate skips `user_verification` and Gate 1 (unstaged-tracked
+check). All other automated gates (`run_tests`, `review_security`, `docs`) still
+fire. The gate does NOT mutate state in the WIP path — `user_verification` remains
+`pending`, so the next non-WIP commit re-blocks until the user verifies.
 
 The `-c key=value` form is parsed by `parseGitConfigValues` (in
 `hooks/lib/parse-git-args.js`) and only recognized when it appears **before**
