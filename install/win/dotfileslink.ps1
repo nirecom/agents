@@ -178,3 +178,9 @@ $rssCmdContent = "@echo off`r`nwsl bash -c ""review-skill-size %*""`r`n"
 Write-Launcher "$LocalBin\review-skill-size.cmd" $rssCmdContent "review-skill-size.cmd"
 $rssShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-skill-size`" `"`$@`"`n"
 Write-Launcher "$LocalBin\review-skill-size" $rssShimContent "review-skill-size (bash shim)"
+
+# --- ~/.local/bin/review-code-size launchers (cmd + bash shim) ---
+$rcsCmdContent = "@echo off`r`nwsl bash -c ""review-code-size %*""`r`n"
+Write-Launcher "$LocalBin\review-code-size.cmd" $rcsCmdContent "review-code-size.cmd"
+$rcsShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-code-size`" `"`$@`"`n"
+Write-Launcher "$LocalBin\review-code-size" $rcsShimContent "review-code-size (bash shim)"
