@@ -4,7 +4,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { stripQuotedArgs } = require("../lib/strip-quoted-args");
-const { hasShellChaining, isPathOutsideRepo, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./shared-cmd-utils");
+const { hasShellChaining, isPathOutsideRepo, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix, rejectRceGitFlags, rejectInterpreterAndChaining } = require("./shared-cmd-utils");
 const { parseGitCPath } = require("./git-repo-detection");
 
 // Returns true if cmd is `git worktree remove` with --force or -f (short form).
@@ -33,16 +33,14 @@ function hasWorktreeRemoveForceFlag(cmd) {
  * `--` (end-of-options) is treated as a flag and skipped; the next token is path.
  */
 function isAllowedWorktreeCommand(cmd, repoRoot) {
-  if (/^\s*(?:[A-Z_][A-Z0-9_]*=\S*\s+)*\b(bash|sh|zsh|dash|pwsh|powershell|cmd|node|python|perl|ruby)\b/.test(cmd)) return false;
+  if (rejectInterpreterAndChaining(cmd)) return false;
   if (hasShellChaining(cmd)) return false;
-  if (!/\bgit\b/.test(cmd) || !/\bworktree\s+(?:add|remove|prune)\b/.test(cmd)) return false;
-
   const stripped = stripQuotedArgs(cmd);
-  if (/[|;&]|\$\(|`/.test(stripped)) return false;
+  if (!/\bgit\b/.test(stripped) || !/\bworktree\s+(?:add|remove|prune)\b/.test(stripped)) return false;
 
   // remove/prune do not create new checkout paths — always allow from main worktree
-  if (/\bworktree\s+remove\b/.test(cmd) && hasWorktreeRemoveForceFlag(cmd)) return false;
-  if (/\bworktree\s+(?:remove|prune)\b/.test(cmd)) return true;
+  if (/\bworktree\s+remove\b/.test(stripped) && hasWorktreeRemoveForceFlag(cmd)) return false;
+  if (/\bworktree\s+(?:remove|prune)\b/.test(stripped)) return true;
 
   // For 'add': parse target path (first non-flag arg after 'add')
   const addMatch = cmd.match(/\bworktree\s+add\s+([\s\S]*)/);
@@ -77,6 +75,7 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
  * unverified in-repo directory creation.
  */
 function isAllowedNewItemDirectory(cmd, repoRoot) {
+  if (rejectInterpreterAndChaining(cmd)) return false;
   if (hasShellChaining(cmd)) return false;
   if (!/\bNew-Item\b/i.test(cmd)) return false;
   if (!/-ItemType\s+Directory\b/i.test(cmd)) return false;
@@ -124,6 +123,8 @@ function isAllowedNewItemDirectory(cmd, repoRoot) {
  * --ff-only` (rebase is not merge).
  */
 function isAllowedFastForwardMerge(cmd) {
+  if (rejectRceGitFlags(cmd)) return false;
+  if (rejectInterpreterAndChaining(cmd)) return false;
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd)) return false;
   if (/\s--no-ff\b/.test(cmd)) return false;
@@ -205,6 +206,8 @@ function resolveUpstream(repoRoot, remote) {
 function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
   try {
     if (!excludePatterns || excludePatterns.length === 0) return false;
+    if (rejectRceGitFlags(cmd)) return false;
+    if (rejectInterpreterAndChaining(cmd)) return false;
     if (hasShellChaining(cmd)) return false;
     if (!/\bgit\b.*\bpush\b/.test(cmd)) return false;
 
@@ -291,6 +294,7 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   if (!repoRoot) return false;
   const skillPrefixed = hasWorktreeEndSkillPrefix(cmd);
   if (skillPrefixed) cmd = stripWorktreeEndSkillPrefix(cmd);
+  if (rejectInterpreterAndChaining(cmd)) return false;
   if (hasShellChaining(cmd)) return false;
   if (!/\bgit\b/.test(cmd)) return false;
 
