@@ -71,6 +71,36 @@ assert_ff "merge --ff-only \$(rm -rf /)" 'git merge --ff-only $(rm -rf /)' "reje
 assert_ff "merge --ff-only with backticks" 'git merge --ff-only `echo origin/main`' "reject"
 assert_ff "pull --ff-only with substitution" 'git pull --ff-only $(echo origin)' "reject"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Fix #820 — interpreter-wrapper hardening (rejectInterpreterAndChaining)
+# These cases are RED until shared-cmd-utils.js exposes
+# rejectInterpreterAndChaining and isAllowedFastForwardMerge calls it.
+# ─────────────────────────────────────────────────────────────────────────────
+
+assert_ff "bash -c 'git pull --ff-only' (interp wrapper)"           "bash -c 'git pull --ff-only'"            "reject"
+assert_ff "bash -c 'git merge --ff-only' (interp wrapper)"          "bash -c 'git merge --ff-only'"           "reject"
+assert_ff "/bin/bash -c 'git merge --ff-only' (path-qualified)"     "/bin/bash -c 'git merge --ff-only'"      "reject"
+assert_ff "env bash -c 'git pull --ff-only' (launcher prefix)"      "env bash -c 'git pull --ff-only'"        "reject"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fix #820 — RCE-flag hardening (rejectRceGitFlags)
+# These cases are RED until isAllowedFastForwardMerge calls rejectRceGitFlags.
+# Note: even the --receive-pack push form is rejected by the merge predicate
+# because the predicate must refuse any cmd carrying RCE-class git flags,
+# regardless of subcommand position.
+# ─────────────────────────────────────────────────────────────────────────────
+
+assert_ff "git -c core.sshCommand=curl pull --ff-only" 'git -c core.sshCommand=curl pull --ff-only' "reject"
+assert_ff "git --upload-pack=cmd pull --ff-only"       'git --upload-pack=cmd pull --ff-only'       "reject"
+assert_ff "git --receive-pack=cmd push (RCE flag)"     'git --receive-pack=cmd push'                "reject"
+
+# Regression pin — these legitimate ff-only forms must still ALLOW after the
+# helper guards are wired in. (Same cases as the original allow block but
+# explicitly grouped post-#820 to make a regression in the new helper visible.)
+assert_ff "regression: git pull --ff-only (post-#820)"               'git pull --ff-only'              "allow"
+assert_ff "regression: git merge --ff-only main (post-#820)"         'git merge --ff-only main'        "allow"
+assert_ff "regression: git pull --ff-only origin main (post-#820)"   'git pull --ff-only origin main'  "allow"
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 exit $FAIL
