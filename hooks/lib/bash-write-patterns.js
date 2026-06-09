@@ -131,8 +131,17 @@ const WRITE_PATTERNS = [
   // Interpreter -c / -Command: shell/interpreter invocations with inline body.
   // Tested against ORIGINAL cmd (not stripped) — the inline body is irrelevant;
   // the interpreter call itself is always a potential write.
+  // Path-qualified prefix (e.g. /bin/bash, /usr/bin/sh) is accepted via the
+  // optional `(?:\S*\/)?` group so wrappers cannot evade by spelling the
+  // interpreter as `/bin/bash` instead of `bash`.
   { name: "interpreter-c", kind: "interpreter",
-    regex: /(?:^|[\s;|&])(?:bash|sh|zsh|dash|fish|pwsh|powershell|cmd)(?:\.exe)?\s+(?:-c\b|-Command\b|-EncodedCommand\b|\/c\b)/i },
+    regex: /(?:^|[\s;|&])(?:\S*\/)?(?:bash|sh|zsh|dash|fish|pwsh|powershell|cmd)(?:\.exe)?\s+(?:-c\b|-Command\b|-EncodedCommand\b|\/c\b)/i },
+  // git -c <key>=<val>: arbitrary config injection. core.sshCommand,
+  // core.fsmonitor, etc. are executed by the transport — RCE-class.
+  // Classify as write so isAllowedFastForwardMerge / isAllowedPushAllExcluded
+  // reach the predicate-level rejectRceGitFlags guard.
+  { name: "git-c-config-flag", kind: "git",
+    regex: /\bgit\b[^|;&]*\s-c\s+\S+=/ },
 ];
 
 // gh "Group A" coordination commands: pr/issue/repo lifecycle that touch
@@ -406,6 +415,13 @@ function isReadOnlyInterpreterC(cmd) {
     // Depth-1 guard: refuse nested interpreter invocations
     const NESTED_INTERP_RE = /(?:^|[\s;|&])(?:bash|sh|zsh|dash|fish|pwsh|powershell)(?:\.exe)?\s+(?:-\w*c|-Command)\b/i;
     if (segments.some((s) => NESTED_INTERP_RE.test(s))) return false;
+
+    // #820: refuse single-segment bare `git <verb>` wrappers. These hide a git
+    // command from the main-worktree-allows predicates (merge / cleanup /
+    // push) so the wrapper-aware rejectInterpreterAndChaining helper can do
+    // its job. Legitimate multi-step bodies (cd ... && git status && echo OK)
+    // still demote to read.
+    if (segments.length === 1 && /^git\b/.test(segments[0])) return false;
 
     return segments.every((s) => classify(s) === "read");
   } catch (e) { return false; }
