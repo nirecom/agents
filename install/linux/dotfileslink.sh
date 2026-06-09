@@ -185,3 +185,7 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/extract-accepted-tradeoffs${C_RESET}\n
 # --- ~/.local/bin/review-skill-size symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-skill-size" ~/.local/bin/review-skill-size
 printf "${C_GREEN}Symlinked: ~/.local/bin/review-skill-size${C_RESET}\n"
+
+# --- ~/.local/bin/review-code-size symlink ---
+ln -sf "$AGENTS_ROOT/bin/review-code-size" ~/.local/bin/review-code-size
+printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-size${C_RESET}\n"
