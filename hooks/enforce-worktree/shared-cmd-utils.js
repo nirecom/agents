@@ -23,6 +23,36 @@ function hasShellChaining(cmd) {
   return /[|;&]|\$\(|`/.test(stripped);
 }
 
+function rejectRceGitFlags(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (/(^|\s)-c(\s|$)/.test(cmd)) return true;
+  if (/(^|\s)--upload-pack(?:=|\s)/.test(cmd)) return true;
+  if (/(^|\s)--receive-pack(?:=|\s)/.test(cmd)) return true;
+  return false;
+}
+
+function rejectInterpreterAndChaining(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const INTERP_NAMES = "bash|sh|zsh|dash|fish|pwsh|powershell|cmd|node|python\\d*|perl|ruby";
+  const ENV_PREFIX   = "(?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+)*";
+  const LAUNCHER_CHAIN = "(?:(?:env|command|exec|sudo)\\s+)*";
+  const OPT_PATH     = "(?:/[^\\s]*/|\\\\\\\\[^\\s\\\\]+\\\\(?:[^\\s\\\\]+\\\\)*)?";
+  // Match at string start: optional env prefix, optional launcher chain, optional path prefix, then interpreter name
+  const startRe = new RegExp(
+    `^\\s*${ENV_PREFIX}${LAUNCHER_CHAIN}${OPT_PATH}(?:${INTERP_NAMES})\\b`
+  );
+  if (startRe.test(cmd)) return true;
+  // Match after shell separator: path-qualified interpreter after ; | & or newline
+  const sepPathRe = new RegExp(
+    `(?:^|[;|&\\n])\\s*(?:/[^\\s]*/|\\\\\\\\[^\\s\\\\]+\\\\(?:[^\\s\\\\]+\\\\)*)(?:${INTERP_NAMES})\\b`
+  );
+  if (sepPathRe.test(cmd)) return true;
+  // Belt-and-braces stripped-gate: operator detection after SQ body collapse
+  const stripped = stripQuotedArgs(cmd);
+  if (/[|;&\n]|\$\(|`|<\(|>\(/.test(stripped)) return true;
+  return false;
+}
+
 /**
  * Returns the index of the first unquoted `&&` in cmd, or -1 if none.
  * Tracks single- and double-quote state so `&&` inside quoted paths is ignored.
@@ -111,5 +141,7 @@ module.exports = {
   getExcludePatterns,
   hasWorktreeEndSkillPrefix,
   stripWorktreeEndSkillPrefix,
+  rejectRceGitFlags,
+  rejectInterpreterAndChaining,
   BUILTIN_EXCLUDE_PATTERNS,
 };
