@@ -3,13 +3,18 @@
 # Tags: migration, repo, github, issues, bin
 # Tests for feat/migrate-repo — pre-flight existing-issues check in orchestrate.sh.
 #
-# Before Step 1, orchestrate.sh must detect whether the target repo already has
-# issues via `gh issue list --state all --limit 1`.
-#   - If issues exist in dry-run: print WARNING about early-number invariant.
-#   - If issues exist in live mode and user answers "n": exit non-zero.
-#   - If no issues exist: no WARNING.
-#
-# RED: fails clean while the pre-flight check is not yet implemented.
+# Before any state mutation, orchestrate.sh detects whether the target repo
+# already has issues via `gh issue list --state all --limit 1`.
+#   - Dry-run + existing issues: print WARNING about early-number invariant; continue.
+#   - Live mode + existing issues, NO MIGRATE_ACK_EXISTING_ISSUES=1: print WARNING +
+#     ERROR with MIGRATE_ACK_EXISTING_ISSUES=1 re-run hint, exit 1 BEFORE Step 1.
+#     The user-facing acknowledgement gate lives in skills/migrate-repo/SKILL.md
+#     as an AskUserQuestion; on "proceed" the skill prepends MIGRATE_ACK_EXISTING_ISSUES=1
+#     to subsequent orchestrate.sh invocations (#679). orchestrate.sh itself does
+#     not read stdin and cannot be bypassed by `yes y |` piping (Incident #2 / #415).
+#   - Live mode + existing issues + MIGRATE_ACK_EXISTING_ISSUES=1: print WARNING +
+#     "acknowledged by caller" message; continue past pre-flight into Step 1.
+#   - No existing issues: no WARNING; proceed.
 
 set -u
 
@@ -121,31 +126,55 @@ fi
 teardown_fixture
 
 # ---------------------------------------------------------------------------
-# PF3: Live mode (not dry-run) with existing issues, user answers "n" →
-#      orchestrate.sh exits non-zero AND the abort must happen BEFORE Step 1
-#      (the pre-flight check runs before any steps).
-#      In RED phase: there is no pre-flight prompt, so "n" is consumed by the
-#      first canary confirm inside Step 2; the output will contain "Step 1"
-#      (label sync), which means the pre-flight check is NOT yet implemented.
+# PF3: Live mode + existing issues + NO MIGRATE_ACK_EXISTING_ISSUES env var →
+#      orchestrate.sh must print WARNING + ERROR with the
+#      MIGRATE_ACK_EXISTING_ISSUES=1 re-run hint, then exit 1 BEFORE Step 1
+#      (the env-var gate is tty-bypass-resistant; no stdin read).
 # ---------------------------------------------------------------------------
 setup_fixture
 export MOCK_HAS_ISSUES=1
+unset MIGRATE_ACK_EXISTING_ISSUES
 
-OUT_PF3=$(echo "n" | run_with_timeout 30 bash "$ORCH_SCRIPT" "$REPO" 2>&1)
+OUT_PF3=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$REPO" 2>&1)
 RC_PF3=$?
 
-# The preflight check must abort BEFORE Step 1:
-# - exit non-zero
-# - output contains WARNING about existing issues (the pre-flight prompt)
-# - output does NOT contain "Step 1:" (aborted before reaching it)
-PRE_STEP1=$(echo "$OUT_PF3" | grep -c "Step 1:" 2>/dev/null) || PRE_STEP1=0
-HAS_WARNING=$(echo "$OUT_PF3" | grep -ci "WARNING" 2>/dev/null) || HAS_WARNING=0
+# Expected: WARNING + ERROR + env-var hint + Step 1 NOT reached + rc != 0
+HAS_WARNING_PF3=$(echo "$OUT_PF3" | grep -ci "WARNING" 2>/dev/null) || HAS_WARNING_PF3=0
+HAS_ERROR_PF3=$(echo "$OUT_PF3" | grep -c "ERROR" 2>/dev/null) || HAS_ERROR_PF3=0
+HAS_HINT_PF3=$(echo "$OUT_PF3" | grep -c "MIGRATE_ACK_EXISTING_ISSUES=1" 2>/dev/null) || HAS_HINT_PF3=0
+STEP1_PF3=$(echo "$OUT_PF3" | grep -c "Step 1:" 2>/dev/null) || STEP1_PF3=0
 
-if [ "$RC_PF3" -ne 0 ] && [ "$HAS_WARNING" -gt 0 ] && [ "$PRE_STEP1" = "0" ]; then
-    pass "PF3: live mode + existing issues + user='n' → WARNING shown, abort before Step 1"
+if [ "$HAS_WARNING_PF3" -gt 0 ] && [ "$HAS_ERROR_PF3" -gt 0 ] && [ "$HAS_HINT_PF3" -gt 0 ] && [ "$STEP1_PF3" -eq 0 ] && [ "$RC_PF3" -ne 0 ]; then
+    pass "PF3: live + existing + no-ack → WARNING + ERROR + env-var hint, Step 1 NOT reached, rc=$RC_PF3"
 else
-    fail "PF3: rc=$RC_PF3 has_warning=$HAS_WARNING pre_step1_in_output=$PRE_STEP1 (expected non-zero exit with WARNING, no Step 1 in output)"
+    fail "PF3: has_warning=$HAS_WARNING_PF3 has_error=$HAS_ERROR_PF3 has_hint=$HAS_HINT_PF3 step1=$STEP1_PF3 rc=$RC_PF3 (expected WARNING + ERROR + MIGRATE_ACK_EXISTING_ISSUES=1 hint, Step 1 NOT reached, rc!=0)"
 fi
+teardown_fixture
+
+# ---------------------------------------------------------------------------
+# PF4: Live mode + existing issues + MIGRATE_ACK_EXISTING_ISSUES=1 →
+#      orchestrate.sh must print WARNING + "acknowledged by caller" message,
+#      continue past pre-flight into Step 1, then hit the expected
+#      Step 2 `--stage required` gate (rc != 0 by design).
+# ---------------------------------------------------------------------------
+setup_fixture
+export MOCK_HAS_ISSUES=1
+export MIGRATE_ACK_EXISTING_ISSUES=1
+
+OUT_PF4=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$REPO" 2>&1)
+RC_PF4=$?
+
+HAS_WARNING_PF4=$(echo "$OUT_PF4" | grep -ci "WARNING" 2>/dev/null) || HAS_WARNING_PF4=0
+HAS_ACK_PF4=$(echo "$OUT_PF4" | grep -c "acknowledged by caller" 2>/dev/null) || HAS_ACK_PF4=0
+STEP1_PF4=$(echo "$OUT_PF4" | grep -c "Step 1:" 2>/dev/null) || STEP1_PF4=0
+STAGE_GATE_PF4=$(echo "$OUT_PF4" | grep -c "Step 2 (history migration) requires --stage" 2>/dev/null) || STAGE_GATE_PF4=0
+
+if [ "$HAS_WARNING_PF4" -gt 0 ] && [ "$HAS_ACK_PF4" -gt 0 ] && [ "$STEP1_PF4" -gt 0 ] && [ "$STAGE_GATE_PF4" -gt 0 ] && [ "$RC_PF4" -ne 0 ]; then
+    pass "PF4: live + existing + ack=1 → WARNING + ack msg, Step 1 reached, Step 2 --stage gate hit (rc=$RC_PF4)"
+else
+    fail "PF4: has_warning=$HAS_WARNING_PF4 has_ack=$HAS_ACK_PF4 step1=$STEP1_PF4 stage_gate=$STAGE_GATE_PF4 rc=$RC_PF4 (expected WARNING + ack msg + Step 1 + Step 2 --stage gate + rc!=0)"
+fi
+unset MIGRATE_ACK_EXISTING_ISSUES
 teardown_fixture
 
 echo ""
