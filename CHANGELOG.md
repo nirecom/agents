@@ -187,4 +187,8 @@ Changes: `/sweep-branches` now detects branches with no associated PR and can re
 
 ### FEATURE: PR #824 (2026-06-09)
 Background: fix(#815): restore confirm-plan UX hooks omitted from PR #767 squash-merge
-Changes: **confirm-plan UX is now functional**: at each planning checkpoint (intent, outline, detail), the plan file opens in VS Code and an Allow/Deny permission dialog appears. After `gh pr create`, the PR URL opens in your browser automatically. These features were announced in PR #767 but their hook implementation was accidentally omitted from the squash-merge commit — this release delivers the actual functionality.
+Changes: **confirm-plan UX is now functional**: at each planning checkpoint (intent, outline, detail), the plan file opens in VS Code and an Allow/Deny permission dialog appears. After `gh pr create`, the PR URL opens in your browser automatically. These features were announced in PR #767 but their hook implementation was accidentally omitted from the squash-merge commit — this release delivers the actual functionality.
+
+### FEATURE: PR #835 (2026-06-10)
+Background: feat(#679): migrate-repo AskUserQuestion canary gates + tty-bypass-resistant pre-flight ack
+Changes: `/migrate-repo` canary confirmation prompts now use native `AskUserQuestion` dialogs instead of repeated Skill re-invocations, preventing automation bypass. Direct shell callers must prefix `MIGRATE_ACK_EXISTING_ISSUES=1` when the target repo already has issues.
