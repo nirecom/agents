@@ -275,6 +275,74 @@ test_E_WT_REMOVE_7_env_prefix_bash_c_blocked() {
     assert_block "E-WT-REMOVE-7: WORKTREE_END_SKILL=1 bash -c '...' → BLOCK (#802 env-prefix + wrapper)" "$rc"
 }
 
+# ----------------------------------------------------------------------------
+# Fix #820 — Interpreter-wrapper + RCE-flag hardening (E-WT-REMOVE-8..12)
+#
+# Each case drives the hook end-to-end with a Bash PreToolUse payload. After
+# source implementation lands, these are blocked by rejectInterpreterAndChaining
+# / rejectRceGitFlags wired into the relevant predicates (merge / cleanup /
+# push). Before implementation, several may pass-by-accident if the existing
+# hasShellChaining/sub-match guards already trip on the pattern — that is fine,
+# the test asserts the expected outcome, not the rejection path.
+# ----------------------------------------------------------------------------
+
+test_E_WT_REMOVE_8_bash_c_pull_ff_blocked() {
+    # #820: `bash -c 'git pull --ff-only'` against the merge predicate.
+    # The wrapper hides `git pull --ff-only` behind a quoted body — without the
+    # new rejectInterpreterAndChaining helper called by isAllowedFastForwardMerge,
+    # nothing in the predicate inspects the outer interpreter token.
+    local repo; repo="$(setup_main_worktree "wt-remove-8")"
+    local cmd="bash -c 'git pull --ff-only'"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-8: bash -c 'git pull --ff-only' → BLOCK (#820 merge predicate interpreter wrapper)" "$rc"
+}
+
+test_E_WT_REMOVE_9_rce_c_sshcommand_pull_blocked() {
+    # #820: `git -c core.sshCommand=… pull --ff-only`. -c sets an arbitrary
+    # config key for the duration of the command; the value of
+    # core.sshCommand is executed by the transport, enabling RCE.
+    # rejectRceGitFlags must catch this in isAllowedFastForwardMerge.
+    local repo; repo="$(setup_main_worktree "wt-remove-9")"
+    local cmd="git -c core.sshCommand=curl pull --ff-only"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-9: git -c core.sshCommand=… pull --ff-only → BLOCK (#820 RCE flag)" "$rc"
+}
+
+test_E_WT_REMOVE_10_bash_c_stash_blocked() {
+    # #820: `bash -c 'git stash'` against the cleanup predicate
+    # (isAllowedMainWorktreeCleanup). With no linked worktree the cleanup
+    # predicate is the natural ALLOW path, but the wrapper must not slip past.
+    local repo; repo="$(setup_main_worktree "wt-remove-10")"
+    local cmd="bash -c 'git stash'"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-10: bash -c 'git stash' → BLOCK (#820 cleanup predicate interpreter wrapper)" "$rc"
+}
+
+test_E_WT_REMOVE_11_bash_c_push_blocked() {
+    # #820: `bash -c 'git push'` against the push predicate
+    # (isAllowedPushAllExcluded). Without the new helper, the wrapper bypasses
+    # hasShellChaining and the predicate may consider the inner command.
+    local repo; repo="$(setup_main_worktree "wt-remove-11")"
+    local cmd="bash -c 'git push'"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-11: bash -c 'git push' → BLOCK (#820 push predicate interpreter wrapper)" "$rc"
+}
+
+test_E_WT_REMOVE_12_rce_c_sshcommand_push_blocked() {
+    # #820: `git -c core.sshCommand=… push`. The same RCE-class flag against
+    # the push predicate — rejectRceGitFlags must catch it in
+    # isAllowedPushAllExcluded.
+    local repo; repo="$(setup_main_worktree "wt-remove-12")"
+    local cmd="git -c core.sshCommand=curl push"
+    local payload; payload="$(build_bash_payload "$cmd")"
+    local rc=0; run_guard "$payload" "$repo" || rc=$?
+    assert_block "E-WT-REMOVE-12: git -c core.sshCommand=… push → BLOCK (#820 push predicate RCE flag)" "$rc"
+}
+
 # ============================================================================
 # BRANCH-DELETE series — isAllowedBranchDeleteWhenNotCheckedOut
 # ============================================================================
@@ -332,6 +400,12 @@ run_all() {
     test_E_WT_REMOVE_5_sh_dash_c_blocked
     test_E_WT_REMOVE_6_quoted_path_allowed
     test_E_WT_REMOVE_7_env_prefix_bash_c_blocked
+    # Fix #820 — interpreter-wrapper + RCE-flag hardening
+    test_E_WT_REMOVE_8_bash_c_pull_ff_blocked
+    test_E_WT_REMOVE_9_rce_c_sshcommand_pull_blocked
+    test_E_WT_REMOVE_10_bash_c_stash_blocked
+    test_E_WT_REMOVE_11_bash_c_push_blocked
+    test_E_WT_REMOVE_12_rce_c_sshcommand_push_blocked
     # BRANCH-DELETE
     test_E_BD_1_with_prefix_allow
     test_E_BD_2_no_prefix_blocked
