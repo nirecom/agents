@@ -109,19 +109,41 @@ _print_next_stage() {
   echo ""
 }
 
-confirm() {
-  local prompt="$1"
+# Pre-flight: check existing issues + require explicit ack in live mode.
+# Runs on EVERY invocation BEFORE state mutation. No stdin read — cannot be
+# bypassed by `yes y |` piping (Incident #2 / #415). Live mode requires
+# MIGRATE_ACK_EXISTING_ISSUES=1 env var. The /migrate-repo skill sets this
+# after the user acknowledges via AskUserQuestion (#679).
+_existing=$(cd "$REPO_DIR" && gh issue list --state all --limit 1 --json number \
+  --jq '.[0].number // empty' 2>/dev/null)
+_existing_rc=$?
+if [ "$_existing_rc" -ne 0 ]; then
+  echo "ERROR: pre-flight check failed: 'gh issue list' exited rc=$_existing_rc." >&2
+  echo "       Cannot confirm whether existing issues are present." >&2
+  echo "       Likely cause: not authenticated ('gh auth login'), network error, or wrong repo." >&2
+  echo "       Aborting to prevent accidental loss of the early-number invariant." >&2
+  exit 1
+fi
+if [ -n "$_existing" ]; then
+  echo "WARNING: Target repo already has issues (latest seen: #${_existing})."
+  echo "         Migration issues will NOT get early issue numbers — they will"
+  echo "         land at #${_existing}+1 onwards. The chronological"
+  echo "         'early numbers = history' invariant cannot be preserved post-hoc."
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry-run] would confirm: $prompt"
-    return 0
+    echo "[dry-run] proceeding despite existing issues"
+  elif [ "${MIGRATE_ACK_EXISTING_ISSUES:-0}" != "1" ]; then
+    echo "" >&2
+    echo "ERROR: live mode requires explicit acknowledgement of the existing-issues" >&2
+    echo "       invariant loss. Re-run with MIGRATE_ACK_EXISTING_ISSUES=1 prefix:" >&2
+    echo "         MIGRATE_ACK_EXISTING_ISSUES=1 bash $0 $REPO_DIR [...]" >&2
+    echo "       The /migrate-repo skill sets this automatically after the user" >&2
+    echo "       acknowledges via AskUserQuestion. Direct shell callers must set" >&2
+    echo "       it themselves. This gate is tty-bypass-resistant (no stdin)." >&2
+    exit 1
+  else
+    echo "         MIGRATE_ACK_EXISTING_ISSUES=1 acknowledged by caller — proceeding."
   fi
-  local reply
-  read -rp "$prompt [y/N] " reply
-  case "$reply" in
-    y|Y|yes|YES) return 0 ;;
-    *) echo "Aborted by user."; exit 1 ;;
-  esac
-}
+fi
 
 # Initialize state file in non-dry-run mode.
 if [ "$DRY_RUN" -eq 0 ]; then
@@ -135,24 +157,6 @@ if [ "$DRY_RUN" -eq 0 ]; then
     fi
   else
     printf '.migration-state.json\n' > "$GITIGNORE"
-  fi
-fi
-
-# Pre-flight: warn if target repo already has issues (early-number invariant).
-# Runs before Step 1 in both dry-run and live modes.
-if [ "$FROM_STEP" -le 1 ]; then
-  _existing=$(cd "$REPO_DIR" && gh issue list --state all --limit 1 --json number \
-    --jq '.[0].number // empty' 2>/dev/null || echo "")
-  if [ -n "$_existing" ]; then
-    echo "WARNING: Target repo already has issues (latest seen: #${_existing})."
-    echo "         Migration issues will NOT get early issue numbers — they will"
-    echo "         land at #${_existing}+1 onwards. The chronological"
-    echo "         'early numbers = history' invariant cannot be preserved post-hoc."
-    if [ "$DRY_RUN" -eq 0 ]; then
-      confirm "issue numbers will not start from #1 — proceed anyway"
-    else
-      echo "[dry-run] proceeding despite existing issues"
-    fi
   fi
 fi
 
