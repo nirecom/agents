@@ -9,6 +9,8 @@ Edit source code for the current task.
 
 ## Procedure
 
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+
 1. Read `rules/core-principles.md` and the target files identified from the plan.
 
 2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then check via Bash:
