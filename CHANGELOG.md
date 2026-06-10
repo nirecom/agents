@@ -191,4 +191,8 @@ Changes: **confirm-plan UX is now functional**: at each planning checkpoint (int
 
 ### FEATURE: PR #835 (2026-06-10)
 Background: feat(#679): migrate-repo AskUserQuestion canary gates + tty-bypass-resistant pre-flight ack
-Changes: `/migrate-repo` canary confirmation prompts now use native `AskUserQuestion` dialogs instead of repeated Skill re-invocations, preventing automation bypass. Direct shell callers must prefix `MIGRATE_ACK_EXISTING_ISSUES=1` when the target repo already has issues.
+Changes: `/migrate-repo` canary confirmation prompts now use native `AskUserQuestion` dialogs instead of repeated Skill re-invocations, preventing automation bypass. Direct shell callers must prefix `MIGRATE_ACK_EXISTING_ISSUES=1` when the target repo already has issues.
+
+### FEATURE: PR #837 (2026-06-10)
+Background: fix(#826): init layer2.next_check_at in appendFinding() + add supervisor-report directives to hotspot skills
+Changes: **EM Supervisor Layer 2 triage now fires reliably**: `appendFinding()` initializes the Layer 2 check schedule on every successful finding (including duplicates), so the supervisor Stop hook can wake up and assess accumulated findings instead of staying dormant indefinitely.;Five skills (`/worktree-end`, `/issue-close-finalize`, `/make-detail-plan`, `/write-code`, `/run-tests`) now include a supervisor-report reminder, improving observation coverage across high-incident workflow paths.
