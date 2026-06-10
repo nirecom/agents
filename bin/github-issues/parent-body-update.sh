@@ -34,6 +34,13 @@ if [ -z "$PARENT" ]; then
     exit 0
 fi
 
+# meta parents use GitHub's native sub-issue UI as SSOT; skip body writes (see rules/github-issues.md meta policy)
+IS_META=$(gh api "repos/${REPO}/issues/${PARENT}" \
+    --jq 'any(.labels[].name; . == "meta")' 2>/dev/null) || IS_META=true
+if [ "$IS_META" = "true" ]; then
+    exit 0
+fi
+
 PARENT_BODY=$(gh issue view "$PARENT" --json body --jq .body)
 NEW_BODY=$(printf '%s' "$PARENT_BODY" \
     | perl -pe "s/- \\[ \\] #${N}\\b/- [x] #${N}/g")
