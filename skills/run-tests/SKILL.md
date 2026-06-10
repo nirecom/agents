@@ -10,6 +10,8 @@ Run the project test suite via the test-runner subagent and emit the workflow se
 
 ## Procedure
 
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+
 1. **Resolve merge-base** (fallback chain):
    - Try: `git fetch origin main --no-tags 2>/dev/null`, then `merge_base=$(git merge-base origin/main HEAD)`.
    - If fetch fails or `origin/main` absent: `merge_base=$(git merge-base main HEAD)`.
