@@ -30,6 +30,13 @@ function writeAtomic(filePath, state) {
   fs.renameSync(tmpPath, filePath);
 }
 
+function ensureLayer2Scheduled(state) {
+  if (!state.layer2 || typeof state.layer2 !== "object" || Array.isArray(state.layer2)) return;
+  if (state.layer2.next_check_at == null) {
+    state.layer2.next_check_at = new Date().toISOString();
+  }
+}
+
 function appendFinding(sessionId, finding) {
   const vr = validateFinding(finding);
   if (!vr.ok) return false;
@@ -50,12 +57,20 @@ function appendFinding(sessionId, finding) {
       last.detail === finding.detail &&
       last.reporter === finding.reporter
     ) {
+      const prevNextCheck = state.layer2 && state.layer2.next_check_at;
+      ensureLayer2Scheduled(state);
+      if (state.layer2 && state.layer2.next_check_at !== prevNextCheck) {
+        const vr3 = validate(state);
+        if (vr3.ok) writeAtomic(filePath, state);
+      }
       return true;
     }
   }
 
   findings.push({ ...finding, timestamp: new Date().toISOString() });
   state.last_updated = new Date().toISOString();
+
+  ensureLayer2Scheduled(state);
 
   const vr2 = validate(state);
   if (!vr2.ok) {
