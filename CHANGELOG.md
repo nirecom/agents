@@ -195,4 +195,8 @@ Changes: `/migrate-repo` canary confirmation prompts now use native `AskUserQues
 
 ### FEATURE: PR #837 (2026-06-10)
 Background: fix(#826): init layer2.next_check_at in appendFinding() + add supervisor-report directives to hotspot skills
-Changes: **EM Supervisor Layer 2 triage now fires reliably**: `appendFinding()` initializes the Layer 2 check schedule on every successful finding (including duplicates), so the supervisor Stop hook can wake up and assess accumulated findings instead of staying dormant indefinitely.;Five skills (`/worktree-end`, `/issue-close-finalize`, `/make-detail-plan`, `/write-code`, `/run-tests`) now include a supervisor-report reminder, improving observation coverage across high-incident workflow paths.
+Changes: **EM Supervisor Layer 2 triage now fires reliably**: `appendFinding()` initializes the Layer 2 check schedule on every successful finding (including duplicates), so the supervisor Stop hook can wake up and assess accumulated findings instead of staying dormant indefinitely.;Five skills (`/worktree-end`, `/issue-close-finalize`, `/make-detail-plan`, `/write-code`, `/run-tests`) now include a supervisor-report reminder, improving observation coverage across high-incident workflow paths.
+
+### FEATURE: PR #836 (2026-06-10)
+Background: fix(#820,#822,#821,#823): enforce-worktree sibling-predicate hardening — interpreter-wrapper + RCE-flag guards
+Changes: The enforce-worktree hook now blocks interpreter-wrapper commands (`bash -c 'git push ...'`, `/bin/bash -c '...'`, `env bash -c '...'`) and RCE-class git flags (`-c core.sshCommand=...`, `--upload-pack=...`, `--receive-pack=...`) in the push, merge, and cleanup allow predicates. Previously only `isAllowedWorktreeCommand` (PR #816) had this protection; all sibling predicates are now hardened to the same level.
