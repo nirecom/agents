@@ -89,6 +89,7 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
+- Report observations per rules/supervisor-reporting.md.
 
 ## Completion
 

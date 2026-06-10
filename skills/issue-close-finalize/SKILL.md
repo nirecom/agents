@@ -80,3 +80,8 @@ Report: issue #N closed, PR #${PR_NUMBER:-<not resolved>} (merge ${MERGE_COMMIT:
 - Hook scope: `enforce-issue-close.js` only blocks Bash-tool closes; external closes route through triage's `auto_close_path`.
 - `admin_close_path` (OPEN + meta label + all sub-issues closed): direct close without Phase 1 sentinel, PR, or worktree. Step ICF-B (`find-pr-by-marker`) skipped; Step ICF-I posts `appended` sentinel only (no `resolved-by`). `historyEntry` in outcome JSON is `"skipped_admin_close"`.
 - `meta_pending_subs` (OPEN + meta label + open sub-issues): no-op triage outcome. Parent left OPEN intentionally; cascade close fires later when last sub-issue closes via ICF-F recursion (re-routes to `admin_close_path` once `parent-all-closed-check.sh` returns 0). No PR, no WIP fingerprint, no history entry written.
+
+## Rules
+
+- On fallback or step degradation (auto_close_path, admin_close_path, gh-failure warn-and-continue, synthetic history skip): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter issue-close-finalize` (session-id auto-resolves).
+- Report observations per rules/supervisor-reporting.md.

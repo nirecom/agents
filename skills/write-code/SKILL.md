@@ -67,6 +67,7 @@ Each is best-effort: if the tool or config is absent, skip AND emit `<tool> not 
 - Mode-orthogonal: behavior is identical regardless of worktree mode. Do not show diffs in the conversation.
 - Never edit test files — `/write-tests` owns them.
 - Subagent self-repair cap: 3 iterations.
+- Report observations per rules/supervisor-reporting.md.
 
 ## Completion
 

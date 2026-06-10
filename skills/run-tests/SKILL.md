@@ -55,3 +55,4 @@ Run the project test suite via the test-runner subagent and emit the workflow se
 - Empty selection on non-doc changes requires user confirmation; no silent `--all` fallback.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
+- Report observations per rules/supervisor-reporting.md.
