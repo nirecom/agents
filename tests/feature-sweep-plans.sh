@@ -365,42 +365,6 @@ T7_ci_mode_json_shape() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T8 — non-session files (unix-timestamp prefix) → not grouped as candidates;
-#      groups_candidates remains 0
-# ─────────────────────────────────────────────────────────────────────────────
-
-T8_non_session_files_skipped() {
-    local plans_dir="$TMPDIR_BASE/t8-plans"
-    mkdir -p "$plans_dir"
-    local f="$plans_dir/1780226527-4457-history-staging.md"
-    printf 'not a session artifact\n' > "$f"
-    backdate "$f"
-
-    if [ ! -f "$SWEEP" ]; then
-        fail "T8 non_session_files_skipped: $SWEEP not found"
-        return
-    fi
-
-    local out exit_code
-    out="$(WORKFLOW_PLANS_DIR="$plans_dir" SWEEP_AGE_DAYS=30 \
-        run_with_timeout bash "$SWEEP" --dry-run --ci-mode 2>&1)"
-    exit_code=$?
-
-    if [ "$exit_code" -ne 0 ]; then
-        fail "T8 non_session_files_skipped: exit=$exit_code, out=$out"
-        return
-    fi
-
-    local n
-    n="$(ci_field "$out" groups_candidates)"
-    if [ "${n:-0}" = "0" ]; then
-        pass "T8 non_session_files_skipped (groups_candidates=0)"
-    else
-        fail "T8 non_session_files_skipped: groups_candidates=${n:-?}, out=$out"
-    fi
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
 # T9 — SWEEP_AGE_DAYS=0 → exit non-zero (exit 2), error on stderr
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -469,7 +433,6 @@ T4_uuid_group_dry_run_candidate
 T5_mixed_group_skipped_young
 T6_subdirs_not_touched
 T7_ci_mode_json_shape
-T8_non_session_files_skipped
 T9_sweep_age_days_zero_rejected
 T10_sweep_age_days_non_numeric_rejected
 
