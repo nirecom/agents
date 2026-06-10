@@ -76,6 +76,21 @@ mock_resolved_by_for_scenario() {
 
 # Cross-scenario dispatch: any --jq invocation we recognize is handled here.
 case "$ARGS" in
+  # parent-body-update.sh meta-label guard (issue #708):
+  # `gh api repos/OWNER/REPO/issues/PARENT --jq 'any(.labels[].name; . == "meta")'`
+  # Controlled by GH_META_LABEL:
+  #   true  → print "true" and exit 0  (parent has meta → guard fires)
+  #   false → print "false" and exit 0 (parent has no meta → script continues)
+  #   fail  → exit 1                    (API failure → fail-safe assumes meta)
+  #   unset → print "false" and exit 0 (safe default — keeps existing tests green)
+  "api repos/"*"/issues/"*" --jq"*"any(.labels"*)
+    case "${GH_META_LABEL:-false}" in
+      true)  echo "true";  exit 0 ;;
+      false) echo "false"; exit 0 ;;
+      fail)  exit 1 ;;
+      *)     echo "false"; exit 0 ;;
+    esac
+    ;;
   "issue view "*" --json state --jq"*)
     mock_state_for_scenario
     exit 0
