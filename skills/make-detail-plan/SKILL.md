@@ -9,6 +9,8 @@ Read intent.md + outline.md before drafting.
 
 ## Procedure
 
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+
 ### Step MDP-1 — Resolve <PLANS_DIR> + read artifacts
 
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Read `<PLANS_DIR>/<session-id>-intent.md` and `<PLANS_DIR>/<session-id>-outline.md` if present; otherwise proceed with task context alone.
