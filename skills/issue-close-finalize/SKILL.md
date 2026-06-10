@@ -12,6 +12,8 @@ Triage routes to the correct subset of steps; each step is idempotent and resuma
 
 ## Procedure
 
+When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
+
 ### Pre-flight (gate)
 `eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")" || exit 0`. Sets `OWNER_REPO`. Non-GitHub remotes exit 0. `AGENTS_CONFIG_DIR` required. `gh issue close` / `gh issue comment` are gated by `enforce-issue-close.js` and remain inside this skill's sanctioned scope.
 
