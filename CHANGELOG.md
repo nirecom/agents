@@ -199,4 +199,8 @@ Changes: **EM Supervisor Layer 2 triage now fires reliably**: `appendFinding()` 
 
 ### FEATURE: PR #836 (2026-06-10)
 Background: fix(#820,#822,#821,#823): enforce-worktree sibling-predicate hardening — interpreter-wrapper + RCE-flag guards
-Changes: The enforce-worktree hook now blocks interpreter-wrapper commands (`bash -c 'git push ...'`, `/bin/bash -c '...'`, `env bash -c '...'`) and RCE-class git flags (`-c core.sshCommand=...`, `--upload-pack=...`, `--receive-pack=...`) in the push, merge, and cleanup allow predicates. Previously only `isAllowedWorktreeCommand` (PR #816) had this protection; all sibling predicates are now hardened to the same level.
+Changes: The enforce-worktree hook now blocks interpreter-wrapper commands (`bash -c 'git push ...'`, `/bin/bash -c '...'`, `env bash -c '...'`) and RCE-class git flags (`-c core.sshCommand=...`, `--upload-pack=...`, `--receive-pack=...`) in the push, merge, and cleanup allow predicates. Previously only `isAllowedWorktreeCommand` (PR #816) had this protection; all sibling predicates are now hardened to the same level.
+
+### FEATURE: PR #840 (2026-06-11)
+Background: feat(#708): add meta-label guard to parent-body-update.sh
+Changes: Meta-labeled parent issues are no longer updated with checkbox state when a sub-issue closes. Use GitHub's native sub-issue progress UI to track sub-issue completion.
