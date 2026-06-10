@@ -78,6 +78,18 @@ the following — unit tests are structurally blind to these failure modes:
 5. **Regression for a bug that slipped past unit tests** — the regression test
    must live at the layer that would have caught it.
 
+### L2 fallback — required gap documentation
+
+When you choose L2 over L3, you MUST add a `# L3 gap` block to the test file header documenting what L3 would additionally verify. Template:
+
+    # L3 gap (what this test does NOT catch):
+    # - <observable behavior 1 that only the real environment exhibits>
+    # - <observable behavior 2 ...>
+    # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+    # via bin/check-verification-gate.sh category: <category-token>.
+
+A test file without an L3 gap block is treated as a claim of full L3 coverage. `/review-tests` will challenge L1/L2 tests lacking this block when the file matches a risk category.
+
 ### Deciding whether to write an integration test
 
 Ask: *"If someone deleted the registration / misplaced the config key / renamed
@@ -92,6 +104,8 @@ headers within the first 10 lines, right after the shebang and filename comment:
 - `# Tags: <kw1>, <kw2>` — comma-separated kebab-case keywords. Used by the LLM Tier 2 matcher in `skills/run-tests/SKILL.md`.
 
 Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` continuation. Long lines are acceptable; parsers rely on single-line format.
+
+- Recognized `# Tags:` values (non-exhaustive): `pwsh-required` — this file exercises PowerShell-specific behavior and must be re-verified under pwsh before merge. `pwsh-not-required` — explicit opt-out for files that mention `powershell` only in comments or docs.
 
 ## Test Naming Convention (new tests only)
 
