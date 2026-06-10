@@ -88,6 +88,7 @@ Issues with the `meta` label use a special close path:
 - `/issue-close-finalize` routes them via `admin_close_path` when OPEN + all sub-issues closed — no Phase 1 sentinel, no PR, no worktree required.
 - G.5 parent-close cascade auto-accepts meta parents (code-based; no AskUserQuestion).
 - `historyEntry` in outcome JSON: `"skipped_admin_close"` (distinct from `auto_close_path`'s `"skipped_no_history_notes"`).
+- Body should NOT carry per-sub-issue completion state (status columns, checkboxes like `- [ ] #N`). The SSOT for sub-issue completion is each sub-issue itself, surfaced via GitHub's native sub-issue progress UI. `bin/github-issues/parent-body-update.sh` skips automated body updates on meta parents to avoid maintaining such state programmatically; manually authored status columns are a convention to avoid, not a programmatically enforced constraint.
 
 ## Close path
 
