@@ -207,4 +207,8 @@ Changes: Meta-labeled parent issues are no longer updated with checkbox state wh
 
 ### FEATURE: PR #843 (2026-06-12)
 Background: fix(#829): widen sweep-plans regex for epoch-PID and empty-SID prefixes; add compose-doc-append-entry cleanup trap
-Changes: fix: `sweep-plans` now correctly removes staging files with unix-epoch-PID or empty session-id prefixes that were previously silently skipped; `compose-doc-append-entry` no longer leaks staging files on SIGINT or early exit
+Changes: fix: `sweep-plans` now correctly removes staging files with unix-epoch-PID or empty session-id prefixes that were previously silently skipped; `compose-doc-append-entry` no longer leaks staging files on SIGINT or early exit
+
+### FEATURE: PR #844 (2026-06-12)
+Background: fix(#825): allow compose-doc-append-entry invocation from main worktree
+Changes: Fix: `compose-doc-append-entry` can now be invoked from the main worktree during `/worktree-end` Step WE-20 without being blocked by `enforce-worktree.js` (#825).
