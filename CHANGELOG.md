@@ -215,4 +215,8 @@ Changes: Fix: `compose-doc-append-entry` can now be invoked from the main worktr
 
 ### FEATURE: PR #844 (2026-06-12)
 Background: fix(#825): allow compose-doc-append-entry invocation from main worktree
+Changes: Fix: `compose-doc-append-entry` can now be invoked from the main worktree during `/worktree-end` Step WE-20 without being blocked by `enforce-worktree.js` (#825).
+
+### FEATURE: PR #844 (2026-06-12)
+Background: fix(#825): allow compose-doc-append-entry invocation from main worktree
 Changes: Fix: `compose-doc-append-entry` can now be invoked from the main worktree during `/worktree-end` Step WE-20 without being blocked by `enforce-worktree.js` (#825).
