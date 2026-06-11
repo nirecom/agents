@@ -203,4 +203,8 @@ Changes: The enforce-worktree hook now blocks interpreter-wrapper commands (`bas
 
 ### FEATURE: PR #840 (2026-06-11)
 Background: feat(#708): add meta-label guard to parent-body-update.sh
-Changes: Meta-labeled parent issues are no longer updated with checkbox state when a sub-issue closes. Use GitHub's native sub-issue progress UI to track sub-issue completion.
+Changes: Meta-labeled parent issues are no longer updated with checkbox state when a sub-issue closes. Use GitHub's native sub-issue progress UI to track sub-issue completion.
+
+### FEATURE: PR #843 (2026-06-12)
+Background: fix(#829): widen sweep-plans regex for epoch-PID and empty-SID prefixes; add compose-doc-append-entry cleanup trap
+Changes: fix: `sweep-plans` now correctly removes staging files with unix-epoch-PID or empty session-id prefixes that were previously silently skipped; `compose-doc-append-entry` no longer leaks staging files on SIGINT or early exit
