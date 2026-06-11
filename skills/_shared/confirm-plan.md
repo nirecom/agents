@@ -43,6 +43,7 @@ bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on &&
   `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`
 
   The `confirm-checkpoint.js` PreToolUse hook resolves the artifact path, opens it in VS Code, and surfaces a "Click Allow / Deny" message above the permission dialog (the sentinel is registered under `permissions.ask`, so the dialog is the user's approval surface).
+  - **Co-emission requirement:** the sentinel echo MUST be co-emitted in the same assistant response as the next step's tool calls (next sentinel / TodoWrite / next skill invocation). Emitting the sentinel as the last tool call stalls execution after Allow.
   - **Allow** (user clicks Allow on the sentinel's permission dialog): continue.
   - **Deny**: ask what to change, write edits, loop back to Step 1.
 
