@@ -265,6 +265,48 @@ else
     fail "F24: expected exit 0 without mismatch warning (exit=$_f24_exit, out='$_f24_out')"
 fi
 
+echo "--- F25: cleanup_staging trap fires when fetch_to_staging exits 1 ---"
+# Use a dedicated staging dir via WORKFLOW_PLANS_DIR (compose-doc-append-entry
+# derives STAGING_DIR from bin/workflow-plans-dir which honors WORKFLOW_PLANS_DIR).
+_f25_staging_dir="$(mktemp -d)"
+TEST_TMPS+=("$_f25_staging_dir")
+_f25_session="f25test"
+_f25_stage_tag="pr99999"
+_f25_hist="$_f25_staging_dir/${_f25_session}-${_f25_stage_tag}-history-staging.md"
+_f25_clog="$_f25_staging_dir/${_f25_session}-${_f25_stage_tag}-changelog-staging.md"
+# Pre-create the staging files to simulate partial-run state
+touch -- "$_f25_hist" "$_f25_clog" 2>/dev/null || true
+# Invoke with a non-existent owner/repo so fetch_to_staging fails immediately
+_f25_tmp_notes="$(mktemp)"
+TEST_TMPS+=("$_f25_tmp_notes")
+cat > "$_f25_tmp_notes" <<'NOTESEOF'
+# WORKTREE_NOTES
+
+## History Notes
+- F25 test history bullet
+
+## Changelog Notes
+- F25 test changelog bullet
+NOTESEOF
+_f25_repo="$(setup_test_repo)"
+# Run with a bad --repo to force gh api failure in fetch_to_staging
+CLAUDE_SESSION_ID="$_f25_session" \
+    WORKFLOW_PLANS_DIR="$_f25_staging_dir" \
+    run_cli "$_f25_repo" \
+    --notes "$_f25_tmp_notes" \
+    --branch "fix/f25-test" \
+    --pr "99999" \
+    --repo "nonexistent-owner-f25test/nonexistent-repo-f25test" \
+    --history >/dev/null 2>&1
+_f25_exit=$?
+if [ ! -e "$_f25_hist" ] && [ ! -e "$_f25_clog" ]; then
+    pass "F25: staging files cleaned up by trap on fetch failure (exit=$_f25_exit)"
+else
+    fail "F25: staging files NOT cleaned up (hist_exists=$([ -e "$_f25_hist" ] && echo yes || echo no), clog_exists=$([ -e "$_f25_clog" ] && echo yes || echo no), exit=$_f25_exit)"
+    # clean up ourselves so we don't pollute the staging dir
+    rm -f "$_f25_hist" "$_f25_clog" 2>/dev/null || true
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

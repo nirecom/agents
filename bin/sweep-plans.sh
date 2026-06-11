@@ -110,22 +110,32 @@ format_date() {
 
 # ─── Group discovery ───────────────────────────────────────────────────────
 #
-# Walk depth-1 files under PLANS_DIR. For each file basename that matches
-# either YYYYMMDD-HHMMSS-... or UUID-... extract the session-id prefix and
-# group files by prefix. Files not matching either pattern (e.g. unix-epoch
-# prefix) are skipped silently.
+# Walk depth-1 files under PLANS_DIR. For each file basename, extract the
+# session-id prefix and group files by prefix. Four accepted shapes:
+#   - YYYYMMDD-HHMMSS  (timestamp)
+#   - UUID             (8-4-4-4-12 hex)
+#   - <epoch>-<pid>    (10-digit unix epoch + numeric pid)
+#   - empty            (basename starts with '-'; prefix=""))
+# Files not matching any shape are skipped silently.
 
+# Bash associative arrays reject empty string subscripts ("bad array subscript"),
+# so the empty-prefix bucket (basenames like "-foo.md") is stored under the
+# sentinel key EMPTY_PREFIX_KEY. The sentinel itself is never a valid prefix
+# shape (contains '@'), so it cannot collide with any real session id.
 declare -A PREFIX_FILES=()
+EMPTY_PREFIX_KEY="__empty@@__"
 
 while IFS= read -r -d '' f; do
   scanned=$(( scanned + 1 ))
   basename="${f##*/}"
-  if [[ "$basename" =~ ^([0-9]{8}-[0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})- ]]; then
-    prefix="${BASH_REMATCH[1]}"
+  if [[ "$basename" =~ ^([0-9]{8}-[0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]{10}-[0-9]+)- ]]; then
+    key="${BASH_REMATCH[1]}"
+  elif [[ "$basename" == -* ]]; then
+    key="$EMPTY_PREFIX_KEY"
   else
     continue
   fi
-  PREFIX_FILES["$prefix"]+="$f"$'\n'
+  PREFIX_FILES["$key"]+="$f"$'\n'
 done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -print0 2>/dev/null)
 
 # ─── Age computation + candidate selection ─────────────────────────────────
@@ -136,8 +146,13 @@ threshold_epoch=$(( now_epoch - SWEEP_AGE_DAYS * 86400 ))
 # Track candidate groups for the apply pass.
 declare -a CAND_PREFIXES=()
 
-for prefix in "${!PREFIX_FILES[@]}"; do
-  files_blob="${PREFIX_FILES[$prefix]}"
+for key in "${!PREFIX_FILES[@]}"; do
+  files_blob="${PREFIX_FILES[$key]}"
+  if [[ "$key" == "$EMPTY_PREFIX_KEY" ]]; then
+    prefix=""
+  else
+    prefix="$key"
+  fi
   min_mtime=0
   max_mtime=0
   file_count=0
@@ -161,7 +176,7 @@ for prefix in "${!PREFIX_FILES[@]}"; do
   fi
 
   groups_candidates=$(( groups_candidates + 1 ))
-  CAND_PREFIXES+=("$prefix")
+  CAND_PREFIXES+=("$key")
 
   if [[ "$DRY_RUN" == "1" ]]; then
     printf 'DRY-RUN: candidate session=%s files=%d oldest=%s newest=%s\n' \
@@ -173,8 +188,13 @@ done
 # ─── Apply pass ────────────────────────────────────────────────────────────
 
 if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
-  for prefix in "${CAND_PREFIXES[@]}"; do
-    files_blob="${PREFIX_FILES[$prefix]}"
+  for key in "${CAND_PREFIXES[@]}"; do
+    files_blob="${PREFIX_FILES[$key]}"
+    if [[ "$key" == "$EMPTY_PREFIX_KEY" ]]; then
+      prefix=""
+    else
+      prefix="$key"
+    fi
     # TOCTOU re-check: a session may have written or touched a matching file
     # after the scan. Recompute the group's newest mtime — including files
     # that appeared *after* the scan via the same prefix glob — and skip the
@@ -191,7 +211,7 @@ if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
       rm="$(file_mtime "$newgf")"
       [[ "$rm" =~ ^[0-9]+$ ]] || rm=0
       [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
-    done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -name "${prefix}-*" -print0 2>/dev/null)
+    done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -name "${prefix}-*" -print0 2>/dev/null)  # prefix="" → -name "-*": matches any '-' prefixed basename; portable on GNU and BSD find
     if [[ "$recheck_max" -ge "$threshold_epoch" ]]; then
       groups_skipped_revived=$(( groups_skipped_revived + 1 ))
       printf 'WARN: session %s touched since scan; skipping (revived)\n' "$prefix" >&2
@@ -201,7 +221,7 @@ if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
     group_removed_any=0
     while IFS= read -r gf; do
       [[ -z "$gf" ]] && continue
-      if rm -f "$gf" 2>/dev/null; then
+      if rm -f -- "$gf" 2>/dev/null; then
         files_removed=$(( files_removed + 1 ))
         group_removed_any=1
       else
