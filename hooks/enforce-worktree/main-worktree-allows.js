@@ -352,6 +352,49 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   } catch (e) { return false; }
 }
 
+/**
+ * True when cmd is the canonical compose-doc-append-entry dispatch shape:
+ *
+ *   bash "<AGENTS_CONFIG_DIR>/bin/compose-doc-append-entry" [--flag value]...
+ *
+ * Hard restrictions (all reject): shell chaining | ; & $(…) `…` > < \n,
+ * wrong interpreter, wrong script path, unset AGENTS_CONFIG_DIR.
+ *
+ * NOTE: rejectInterpreterAndChaining is intentionally NOT called — it rejects
+ * any command starting with `bash` (in INTERP_NAMES). Safety is provided by
+ * the raw argTail scan below, same style as isAllowedReadOnlyConfigCheck §163–165.
+ * Coupling: if doc-append-worker.md changes the dispatch shape, update this matcher.
+ */
+function isAllowedComposeDocAppend(cmd, repoRoot) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
+  if (!acd) return false;
+
+  // Structural opening: `bash "<path>"` double-quoted only (matches worker spec literal).
+  const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
+  if (!m) return false;
+  const scriptPath = m[1];
+  const argTail    = m[2] || "";
+
+  // Resolve both sides case-insensitively (Windows filesystem).
+  let normScript, normTarget;
+  try {
+    const expectedTarget = path.join(acd, "bin", "compose-doc-append-entry");
+    normScript = path.resolve(normalizeCwd(scriptPath) || scriptPath);
+    normTarget = path.resolve(normalizeCwd(expectedTarget) || expectedTarget);
+  } catch (e) { return false; }
+  if (normScript.toLowerCase() !== normTarget.toLowerCase()) return false;
+
+  // Raw-form argTail scan — no stripQuotedArgs, catches:
+  //   · redirect chars > < and embedded newlines (missed by hasShellChaining)
+  //   · $(...) and ` inside double-quoted arg values (masked by stripQuotedArgs)
+  //   · | ; & chaining in the arg portion
+  if (/[|;&><\n]|\$\(|`/.test(argTail)) return false;
+
+  void repoRoot; // signature symmetry with sibling predicates
+  return true;
+}
+
 module.exports = {
   isAllowedWorktreeCommand,
   isAllowedNewItemDirectory,
@@ -359,4 +402,5 @@ module.exports = {
   isAllowedReadOnlyConfigCheck,
   isAllowedPushAllExcluded,
   isAllowedMainWorktreeCleanup,
+  isAllowedComposeDocAppend,
 };

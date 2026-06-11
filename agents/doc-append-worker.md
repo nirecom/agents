@@ -44,14 +44,17 @@ For `compose` mode, also:
    - `compose` (bootstrap, when `bootstrap_mode=true`): `bash "$agents_config_dir/bin/compose-doc-append-entry" --notes "$notes_path" --branch "$branch" --bootstrap --merge-commit "$bootstrap_commit_sha" --background "$pr_title" --closes-issues-count "$closes_issues_count"` (no `--pr`).
    - CLI exit code 0 and output containing "already exists" or "noop" → `status: noop`.
    - CLI exit code non-zero → capture stderr; emit `status: failed`, `summary: "<stderr excerpt ≤60 chars>"`, `artifact_path: "<log path if written, else (none)>"` and stop.
-3. Write combined stdout+stderr to `$artifact_dir/<timestamp>-doc-append-worker.log`. Use timestamp `date +%Y%m%d-%H%M%S`.
+3. Capture combined stdout+stderr of the dispatch in step 2 by reading it from the Bash tool's tool result. Write the captured text to `$artifact_dir/<timestamp>-doc-append-worker.log` using the **Write tool** (not Bash). Use timestamp `date +%Y%m%d-%H%M%S`.
+   - The dispatch Bash command must NOT include `| tee`, `>`, `>>`, `2>`, `2>&1`, redirection, or any shell chaining — issue exactly one of the two canonical forms from step 2, unmodified.
    - If log write fails: use `artifact_path: (none)` in the output.
 
 ## Rules
 
 - Workflow sentinel emission is prohibited (worker runs inside a subagent context).
 - Never call AskUserQuestion.
-- Never write to any file directly — only via `doc-append` CLI or `compose-doc-append-entry`.
+- Never write to `docs/history.md` or `CHANGELOG.md` directly — always use `doc-append` CLI or `compose-doc-append-entry`.
+- For `compose` mode, issue the step 2 Bash command verbatim — no `| tee`, `>`, `>>`, `2>`, `2>&1`, or other shell operators. `enforce-worktree.js` allows this command only in its canonical double-quoted-path shape (`isAllowedComposeDocAppend`).
+- Log capture (step 3) uses the Write tool only. Read the dispatch result from the Bash tool result; do not use `>`-redirect or `tee`.
 - `eval` is prohibited.
 - Do not install packages (`winget`, `apt`, `npm -g`, etc.).
 
