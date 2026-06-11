@@ -25,6 +25,18 @@ function handle(ctx) {
       return true;
     }
 
+    // review_tests must go through the dedicated REVIEW_TESTS_COMPLETE / WARNINGS
+    // sentinel path (which carries a staged-tests-snapshot token). Manual
+    // MARK_STEP would bypass the stale-token anti-bypass guard.
+    if (stepName === "review_tests") {
+      pushMessage(
+        `workflow-mark: review_tests NOT recorded — MARK_STEP not accepted for this step. ` +
+          `Invoke /review-tests skill (which auto-computes the staged-tests token) ` +
+          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>"`
+      );
+      return true;
+    }
+
     // write_tests and docs must go through evidence (staged files) or NOT_NEEDED sentinels
     if (stepName === "write_tests") {
       pushMessage(

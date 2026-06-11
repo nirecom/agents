@@ -6,7 +6,11 @@ Do not write or edit test files directly in the main conversation.
 
 ## Test Coverage Review
 
-After writing test code, run `/review-tests` to verify test case completeness before committing.
+After writing test code, run `/review-tests`. WF-CODE-5 (`/write-code`) is blocked until both `write_tests` and `review_tests` are complete or both are skipped.
+
+`/review-tests` records a staged-tests fingerprint at sentinel-emission time — re-editing test files after a passing review invalidates the pairing and forces re-review before `/write-code` can proceed.
+
+Skip path: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>"` symmetrically waives both gates (no separate skip sentinel for review).
 
 ## Test Execution Timeout
 
