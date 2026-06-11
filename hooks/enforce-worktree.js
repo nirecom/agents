@@ -39,7 +39,7 @@ const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } =
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
-const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMainWorktreeCleanup } = require("./enforce-worktree/main-worktree-allows");
+const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, isWriteTargetAllExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 
 function readStdin() {
@@ -387,6 +387,7 @@ if (mainCheckout) {
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
+    if (isAllowedComposeDocAppend(cmd, repoRoot)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
