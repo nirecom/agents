@@ -22,6 +22,9 @@ CLOSES_ISSUES_COUNT=0
 TARGET_HISTORY=""
 TARGET_CHANGELOG=""
 BOOTSTRAP=0
+REPO_OVERRIDE=""
+HISTORY_ONLY=0
+CHANGELOG_ONLY=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -36,6 +39,9 @@ while [[ $# -gt 0 ]]; do
         --closes-issues-count) CLOSES_ISSUES_COUNT="$2"; shift 2 ;;
         --target-history)   TARGET_HISTORY="$2";   shift 2 ;;
         --target-changelog) TARGET_CHANGELOG="$2"; shift 2 ;;
+        --repo)        REPO_OVERRIDE="$2"; shift 2 ;;
+        --history)     HISTORY_ONLY=1;     shift ;;
+        --changelog)   CHANGELOG_ONLY=1;   shift ;;
         *) echo "compose-doc-append-entry: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
@@ -75,6 +81,20 @@ if [[ -n "$MERGE_COMMIT" ]]; then
         echo "compose-doc-append-entry: --merge-commit must be 7-40 hex chars (got: $MERGE_COMMIT)" >&2
         exit 1
     }
+fi
+
+# Validate --repo if provided (OWNER/REPO — alphanumeric, dots, dashes, underscores only)
+if [[ -n "${REPO_OVERRIDE:-}" ]]; then
+    [[ "$REPO_OVERRIDE" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || {
+        echo "compose-doc-append-entry: --repo must be OWNER/REPO (got: $REPO_OVERRIDE)" >&2
+        exit 1
+    }
+fi
+
+# --history and --changelog are mutually exclusive
+if [[ "${HISTORY_ONLY:-0}" -eq 1 && "${CHANGELOG_ONLY:-0}" -eq 1 ]]; then
+    echo "compose-doc-append-entry: --history and --changelog are mutually exclusive" >&2
+    exit 1
 fi
 
 # --- Bail: notes file missing ---
@@ -232,6 +252,13 @@ fi
 if [[ -n "$CHANGELOG_BULLETS" ]] && ! changelog_marker_found; then
     WANT_CHANGELOG=1
 fi
+# --history / --changelog flags restrict processing to the named target.
+if [[ "$HISTORY_ONLY" -eq 1 ]]; then
+    WANT_CHANGELOG=0
+fi
+if [[ "$CHANGELOG_ONLY" -eq 1 ]]; then
+    WANT_HISTORY=0
+fi
 
 # Nothing to write: exit early without any gh API calls.
 if [[ "$WANT_HISTORY" -eq 0 ]] && [[ "$WANT_CHANGELOG" -eq 0 ]]; then
@@ -246,7 +273,9 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 # --- Resolve owner/repo/default branch ---
-if ! OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null); then
+if [[ -n "$REPO_OVERRIDE" ]]; then
+    OWNER_REPO="$REPO_OVERRIDE"
+elif ! OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null); then
     echo "compose-doc-append-entry: failed to resolve owner/repo via gh" >&2
     exit 1
 fi
@@ -280,6 +309,18 @@ else
 fi
 HISTORY_STAGING="${TARGET_HISTORY:-$STAGING_DIR/${SESSION_ID}-${STAGE_TAG}-history-staging.md}"
 CHANGELOG_STAGING="${TARGET_CHANGELOG:-$STAGING_DIR/${SESSION_ID}-${STAGE_TAG}-changelog-staging.md}"
+
+cleanup_staging() {
+    [[ -f "${HISTORY_STAGING:-}" ]] && rm -f -- "$HISTORY_STAGING"
+    [[ -f "${CHANGELOG_STAGING:-}" ]] && rm -f -- "$CHANGELOG_STAGING"
+    if [[ -n "${ROTATE_DIR:-}" && -d "${ROTATE_DIR}" ]]; then
+        local _sr _rr
+        _sr="$(realpath "$STAGING_DIR" 2>/dev/null || printf '%s' "$STAGING_DIR")"
+        _rr="$(realpath "$ROTATE_DIR"  2>/dev/null || printf '%s' "$ROTATE_DIR")"
+        [[ "$_rr" == "$_sr/"* ]] && rm -rf -- "$ROTATE_DIR"
+    fi
+}
+trap cleanup_staging EXIT HUP INT TERM
 
 # --- Build the staged content for each target ---
 if [[ "$WANT_HISTORY" -eq 1 ]]; then
