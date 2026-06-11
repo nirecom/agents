@@ -59,7 +59,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
      Completion Step 3 backfills `- #<N>: <title>` after a successful `gh issue create`. The empty placeholder satisfies `assemble-mandatory.sh`'s "heading must be present" invariant.
    - **context.md missing or title line absent**: write `- #<N>: (title unavailable)`.
 
-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: emit `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"` per protocol Step 3 — co-emit the Completion block's tool calls in the same response (see confirm-plan.md Step 3 co-emission). Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
+5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: emit `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"` per protocol Step 3 (co-emit Completion tool calls — see confirm-plan.md Step 3). Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
 ## Completion
 

@@ -42,14 +42,19 @@ require_file() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. confirm-plan.md declares the co-emission requirement
+# 1. confirm-plan.md documents the co-emission preferred path + structural fallback
 # ---------------------------------------------------------------------------
-echo "=== 1. confirm-plan.md: co-emission requirement ==="
+echo "=== 1. confirm-plan.md: co-emission directive + structural fallback ==="
 if require_file "$CONFIRM_PLAN_MD"; then
-    if has_fixed "MUST be co-emitted in the same assistant response" "$CONFIRM_PLAN_MD"; then
-        pass "confirm-plan.md contains 'MUST be co-emitted in the same assistant response'"
+    if has_fixed "Co-emission (preferred path)" "$CONFIRM_PLAN_MD"; then
+        pass "confirm-plan.md documents 'Co-emission (preferred path)'"
     else
-        fail "confirm-plan.md missing 'MUST be co-emitted in the same assistant response'"
+        fail "confirm-plan.md missing 'Co-emission (preferred path)' directive"
+    fi
+    if has_fixed "Structural fallback" "$CONFIRM_PLAN_MD" && has_fixed "workflow-mark.js" "$CONFIRM_PLAN_MD"; then
+        pass "confirm-plan.md cites Structural fallback + workflow-mark.js"
+    else
+        fail "confirm-plan.md missing 'Structural fallback' + workflow-mark.js reference"
     fi
 fi
 
@@ -117,6 +122,58 @@ for skill_file in "$CLARIFY_INTENT_SKILL" "$OUTLINE_SKILL" "$DETAIL_SKILL"; do
         fi
     fi
 done
+
+# ---------------------------------------------------------------------------
+# 6. Structural enforcement: workflow-mark.js wires the CONFIRM next-step handler
+#    so the workflow continues even when the LLM does NOT co-emit follow-up calls.
+# ---------------------------------------------------------------------------
+echo "=== 6. workflow-mark.js: CONFIRM next-step handler wired ==="
+HANDLER_FILE="$REPO_ROOT/hooks/workflow-mark/confirm-next-step-handler.js"
+WORKFLOW_MARK="$REPO_ROOT/hooks/workflow-mark.js"
+SENTINEL_PATTERNS="$REPO_ROOT/hooks/lib/sentinel-patterns.js"
+WORKFLOW_STATE="$REPO_ROOT/hooks/lib/workflow-state.js"
+
+if require_file "$HANDLER_FILE"; then
+    if has_fixed "CONFIRM_INTENT_RE_DQ" "$HANDLER_FILE" \
+       && has_fixed "CONFIRM_OUTLINE_RE_DQ" "$HANDLER_FILE" \
+       && has_fixed "CONFIRM_DETAIL_RE_DQ" "$HANDLER_FILE"; then
+        pass "confirm-next-step-handler.js dispatches all three CONFIRM stages"
+    else
+        fail "confirm-next-step-handler.js missing one of CONFIRM_{INTENT,OUTLINE,DETAIL}_RE_DQ"
+    fi
+fi
+
+if require_file "$WORKFLOW_MARK"; then
+    if has_fixed "confirm-next-step-handler" "$WORKFLOW_MARK"; then
+        pass "workflow-mark.js requires confirm-next-step-handler"
+    else
+        fail "workflow-mark.js does NOT require confirm-next-step-handler"
+    fi
+    if has "confirmNextStepHandler\.handle" "$WORKFLOW_MARK"; then
+        pass "workflow-mark.js invokes confirmNextStepHandler.handle in dispatch"
+    else
+        fail "workflow-mark.js missing confirmNextStepHandler.handle dispatch call"
+    fi
+fi
+
+if require_file "$SENTINEL_PATTERNS"; then
+    if has_fixed "CONFIRM_INTENT_RE_DQ" "$SENTINEL_PATTERNS" \
+       && has_fixed "CONFIRM_OUTLINE_RE_DQ" "$SENTINEL_PATTERNS" \
+       && has_fixed "CONFIRM_DETAIL_RE_DQ" "$SENTINEL_PATTERNS"; then
+        pass "sentinel-patterns.js defines all three CONFIRM_*_RE_DQ regexes"
+    else
+        fail "sentinel-patterns.js missing one of CONFIRM_{INTENT,OUTLINE,DETAIL}_RE_DQ"
+    fi
+fi
+
+if require_file "$WORKFLOW_STATE"; then
+    if has_fixed "confirmNextStepHint" "$WORKFLOW_STATE" \
+       && has_fixed "CONFIRM_NEXT_STEP_HINT" "$WORKFLOW_STATE"; then
+        pass "workflow-state.js exports confirmNextStepHint + table"
+    else
+        fail "workflow-state.js missing confirmNextStepHint or CONFIRM_NEXT_STEP_HINT"
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 echo
