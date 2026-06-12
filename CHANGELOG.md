@@ -223,4 +223,8 @@ Changes: Fixed: Plan-confirmation dialogs (CONFIRM_INTENT, CONFIRM_OUTLINE, CONF
 
 ### FEATURE: PR #851 (2026-06-12)
 Background: feat(#846): add layered settings.json drift prevention (post-merge/checkout hooks + session-start backstop)
-Changes: Session-start now warns when `~/.claude/settings.json` is missing entries from the base config — run `node install/assemble-settings.js` to fix.;Git hooks (`post-merge`, `post-checkout`) auto-reassemble `~/.claude/settings.json` when base settings change, preventing stale permission entries that stall workflow sessions.
+Changes: Session-start now warns when `~/.claude/settings.json` is missing entries from the base config — run `node install/assemble-settings.js` to fix.;Git hooks (`post-merge`, `post-checkout`) auto-reassemble `~/.claude/settings.json` when base settings change, preventing stale permission entries that stall workflow sessions.
+
+### BUGFIX: PR #850 (2026-06-12)
+Background: fix(#834): migrate-repo TOCTOU pre-flight gate — Option γ Layer P/C + preview-and-capture.sh
+Changes: **migrate-repo**: Fixed TOCTOU race in the existing-issues pre-flight gate — external issues created between dry-run review and live migration start are now detected and abort the run, preserving the "early issue numbers = migration history" chronology invariant.
