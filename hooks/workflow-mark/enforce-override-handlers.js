@@ -62,6 +62,10 @@ function handle(ctx) {
         { mode: 0o600 }
       );
       fs.renameSync(tmp, markerPath);
+      try {
+        const { reportSentinel } = require("../lib/supervisor-emit");
+        reportSentinel("WORKTREE_OFF", reasonStored, sessionId);
+      } catch (_) { /* fail-open */ }
       pushMessage(
         `workflow-mark: ENFORCE_WORKTREE session override applied (marker: ${markerPath}). ` +
           `Delete the marker file to restore enforcement.`
@@ -169,6 +173,10 @@ function handle(ctx) {
         { mode: 0o600 }
       );
       fs.renameSync(tmp, markerPath);
+      try {
+        const { reportSentinel } = require("../lib/supervisor-emit");
+        reportSentinel("WORKFLOW_OFF", reasonStored, sessionId);
+      } catch (_) { /* fail-open */ }
       pushMessage(
         `workflow-mark: ENFORCE_WORKFLOW session override applied (marker: ${markerPath}). ` +
           `Restore with: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>"`

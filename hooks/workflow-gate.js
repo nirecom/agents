@@ -53,9 +53,16 @@ function approve() {
 }
 
 function block(reason) {
+  try {
+    const { reportBlock } = require("./lib/supervisor-emit");
+    reportBlock("workflow-gate", _gateReportCtx.command || _gateReportCtx.toolName || "<unknown>", _gateReportCtx.sessionId);
+  } catch (_) { /* fail-open */ }
   console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
 }
+
+// Populated at hook-input parse time so block() can self-report.
+let _gateReportCtx = { sessionId: undefined, command: undefined, toolName: undefined };
 
 if (require.main === module) {
   let input;
@@ -68,6 +75,7 @@ if (require.main === module) {
   const toolName = input.tool_name;
   const toolInput = input.tool_input || {};
   const sessionId = input.session_id;
+  _gateReportCtx = { sessionId, command: toolInput.command, toolName };
 
   // WORKFLOW_OFF: bypass all workflow-gate checks (superset of WORKTREE_OFF per workflow-off.md).
   const { isWorkflowOff, isWorktreeOff } = require("./lib/session-markers");
