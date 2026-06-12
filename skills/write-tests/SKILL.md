@@ -56,3 +56,7 @@ After completing this skill:
 If tests are genuinely not needed for this change:
 1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
 2. Run tests.
+
+## Rules
+
+- Report observations per rules/supervisor-reporting.md.

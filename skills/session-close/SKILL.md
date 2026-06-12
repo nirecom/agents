@@ -101,6 +101,10 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ```
 
+## Step 3.5 — Retrospective pass (write-only)
+
+Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings surface in the next L2 triage cycle, not in the current Final Report.
+
 ## Step 4 — Emit Final Report directly into assistant text
 
 Read four input files via the Read tool:
@@ -139,3 +143,5 @@ After emitting, mark completion:
 - Empty `closes_issues` → skip `/issue-close-finalize`, write `{"issues":[]}`, emit Final Report.
 - Fail-open: `/issue-close-finalize` failures surface in outcome JSON; renderer still runs.
 - Every Bash call is self-contained — no shell variable crosses call boundaries.
+- On fallback or step degradation (synthetic outcome fallback, non-GitHub skip path): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter session-close` (session-id auto-resolves).
+- Report observations per rules/supervisor-reporting.md.

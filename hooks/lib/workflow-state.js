@@ -11,8 +11,14 @@ const { execSync } = require("child_process");
  *   1. ctx.sessionIdFromInput — non-empty string from hook input.session_id
  *   2. CLAUDE_ENV_FILE — KEY=VALUE file written by session-start.js
  *      (set by Claude Code in hook contexts: SessionStart, PreToolUse, etc.)
- *   3. ctx.transcriptPath basename — fallback derived from input.transcript_path
+ *   3. CLAUDE_SESSION_ID env var — best-effort; not propagated to all subprocesses
+ *      (Anthropic bug #27987). Covered by step 2 in hook contexts.
+ *   4. ctx.transcriptPath basename — fallback derived from input.transcript_path
  *      (validated against /^[A-Za-z0-9_-]+$/)
+ *   5. WORKTREE_NOTES.md (CWD, then git common-dir parent) — written by
+ *      /worktree-start; survives VS Code restarts; identifies the session that
+ *      owns the worktree rather than the most-recently-active session (#642).
+ *   6. JSONL mtime scan — last resort; multi-candidate path scan.
  * Returns null if no source resolves to a usable session ID.
  *
  * Backward-compat: zero-argument calls behave identically to the previous
@@ -40,6 +46,17 @@ function findMostRecentSessionIdInDir(transcriptDir) {
   return /^[A-Za-z0-9_-]+$/.test(base) ? base : null;
 }
 
+function _readSessionIdFromWorktreeNotes(notesPath) {
+  try {
+    const content = fs.readFileSync(notesPath, "utf8");
+    const m = content.match(/^Session-ID:\s*(\S+)\s*$/m);
+    if (m && /^[A-Za-z0-9_-]+$/.test(m[1])) return m[1];
+  } catch (_) {
+    // ignore
+  }
+  return null;
+}
+
 function resolveSessionId(ctx = {}) {
   if (typeof ctx.sessionIdFromInput === "string" && ctx.sessionIdFromInput.length > 0) {
     return ctx.sessionIdFromInput;
@@ -51,14 +68,34 @@ function resolveSessionId(ctx = {}) {
       const match = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
       if (match) return match[1].trim();
     } catch (e) {
-      // fall through to transcriptPath fallback
+      // fall through to next fallback
     }
   }
+  // Direct env var fallback (best-effort; not propagated to all subprocesses — Anthropic bug #27987).
+  const envSid = process.env.CLAUDE_SESSION_ID;
+  if (envSid && /^[A-Za-z0-9_-]+$/.test(envSid.trim())) return envSid.trim();
   if (typeof ctx.transcriptPath === "string" && ctx.transcriptPath.length > 0) {
     const base = path.basename(ctx.transcriptPath, ".jsonl");
     if (/^[A-Za-z0-9_-]+$/.test(base)) return base;
   }
-  // 4. JSONL scan — multi-candidate (CLAUDE_PROJECT_DIR → cwd → realpath).
+  // 4. WORKTREE_NOTES.md — written by /worktree-start; survives VS Code restarts.
+  //    Superior to JSONL mtime scan for the linked-worktree use case (#642).
+  const fromCwd = _readSessionIdFromWorktreeNotes(path.join(process.cwd(), "WORKTREE_NOTES.md"));
+  if (fromCwd) return fromCwd;
+  try {
+    const commonDir = execSync("git rev-parse --git-common-dir", {
+      encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (commonDir) {
+      const fromGit = _readSessionIdFromWorktreeNotes(
+        path.join(path.resolve(commonDir), "..", "WORKTREE_NOTES.md")
+      );
+      if (fromGit) return fromGit;
+    }
+  } catch (_) {
+    // not in a git repo or git unavailable — continue
+  }
+  // 5. JSONL scan — multi-candidate (CLAUDE_PROJECT_DIR → cwd → realpath).
   // path.resolve normalizes Windows backslashes so encoding matches CC's own
   // convention (C:\git\agents → c:/git/agents → c--git-agents).
   try {

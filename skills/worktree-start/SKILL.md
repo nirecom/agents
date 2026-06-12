@@ -132,3 +132,4 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
   file or edit `.git/info/exclude` manually.
 - Known limit: filenames containing `'` break the POSIX `COPIED_JSON='...'` quoting. Fall
   back to `COPIED_JSON="$(cat file.json)"` if needed.
+- Report observations per rules/supervisor-reporting.md.
