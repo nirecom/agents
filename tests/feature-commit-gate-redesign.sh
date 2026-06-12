@@ -128,6 +128,7 @@ state_json() {
     "detail":             {"status": "$other", "updated_at": "$NOW_ISO"},
     "branching_complete": {"status": "$other", "updated_at": "$NOW_ISO"},
     "write_tests":        {"status": "$other", "updated_at": "$NOW_ISO"},
+    "review_tests":       {"status": "$other", "updated_at": "$NOW_ISO"},
     "review_security":    {"status": "$other", "updated_at": "$NOW_ISO"},
     "run_tests":          {"status": "$other", "updated_at": "$NOW_ISO"},
     "docs":               {"status": "$other", "updated_at": "$NOW_ISO"},
@@ -147,7 +148,7 @@ state_json_custom() {
     if [ "$branch" = "null" ]; then branch_json="null"; else branch_json="\"$branch\""; fi
     # defaults
     local clarify_intent="complete" research="complete" outline="complete" detail="complete"
-    local branching_complete="complete" write_tests="complete"
+    local branching_complete="complete" write_tests="complete" review_tests="complete"
     local review_security="complete" run_tests="complete" docs="complete"
     local user_verification="pending" cleanup="complete"
     while [ $# -ge 2 ]; do
@@ -158,6 +159,7 @@ state_json_custom() {
             detail) detail="$2";;
             branching_complete) branching_complete="$2";;
             write_tests) write_tests="$2";;
+            review_tests) review_tests="$2";;
             review_security) review_security="$2";;
             run_tests) run_tests="$2";;
             docs) docs="$2";;
@@ -177,6 +179,7 @@ state_json_custom() {
     "detail":             {"status": "$detail", "updated_at": "$NOW_ISO"},
     "branching_complete": {"status": "$branching_complete", "updated_at": "$NOW_ISO"},
     "write_tests":        {"status": "$write_tests", "updated_at": "$NOW_ISO"},
+    "review_tests":       {"status": "$review_tests", "updated_at": "$NOW_ISO"},
     "review_security":    {"status": "$review_security", "updated_at": "$NOW_ISO"},
     "run_tests":          {"status": "$run_tests", "updated_at": "$NOW_ISO"},
     "docs":               {"status": "$docs", "updated_at": "$NOW_ISO"},

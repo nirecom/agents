@@ -104,7 +104,7 @@ build_state_with_override() {
       const sid = process.argv[1];
       const step = process.argv[2];
       const override = JSON.parse(process.argv[3]);
-      const STEPS = ['research','outline','detail','write_tests','run_tests','review_security','docs','user_verification'];
+      const STEPS = ['research','outline','detail','write_tests','review_tests','run_tests','review_security','docs','user_verification'];
       const steps = {};
       for (const s of STEPS) {
         steps[s] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };
@@ -133,7 +133,7 @@ build_state_with_multi_override() {
     node -e "
       const sid = process.argv[1];
       const n = parseInt(process.argv[2], 10);
-      const STEPS = ['research','outline','detail','write_tests','run_tests','review_security','docs','user_verification'];
+      const STEPS = ['research','outline','detail','write_tests','review_tests','run_tests','review_security','docs','user_verification'];
       const steps = {};
       for (const s of STEPS) {
         steps[s] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };
@@ -178,11 +178,12 @@ build_mark_json() {
 # State JSON where all steps are complete EXCEPT a given step (pending)
 ALL_COMPLETE_EXCEPT() {
     local except_step="$1" sid="${2:-test-session}"
-    local research_status outline_status detail_status write_tests_status run_tests_status review_security_status docs_status user_ver_status
+    local research_status outline_status detail_status write_tests_status review_tests_status run_tests_status review_security_status docs_status user_ver_status
     research_status=$([ "$except_step" = "research" ] && echo "pending" || echo "complete")
     outline_status=$([ "$except_step" = "outline" ] && echo "pending" || echo "complete")
     detail_status=$([ "$except_step" = "detail" ] && echo "pending" || echo "complete")
     write_tests_status=$([ "$except_step" = "write_tests" ] && echo "pending" || echo "complete")
+    review_tests_status=$([ "$except_step" = "review_tests" ] && echo "skipped" || echo "complete")
     run_tests_status=$([ "$except_step" = "run_tests" ] && echo "pending" || echo "complete")
     review_security_status=$([ "$except_step" = "review_security" ] && echo "pending" || echo "complete")
     docs_status=$([ "$except_step" = "docs" ] && echo "pending" || echo "complete")
@@ -197,6 +198,7 @@ ALL_COMPLETE_EXCEPT() {
     "outline":           {"status": "$outline_status", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "$detail_status", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "$write_tests_status", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "$review_tests_status", "updated_at": "2026-04-11T10:03:30.000Z"},
     "run_tests":         {"status": "$run_tests_status", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "$review_security_status", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "$docs_status", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -219,6 +221,7 @@ ALL_PENDING_EXCEPT_LATER() {
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "pending", "updated_at": null},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -247,6 +250,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<H1_EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -340,6 +344,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<H4_EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "run_tests":         {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -369,6 +374,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<E1_EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:04:00.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},

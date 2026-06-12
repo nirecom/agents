@@ -145,6 +145,8 @@ def _build_entry(args, incident_num: int | None, eol: bytes) -> bytes:
     else:
         header = f"### {args.category}: {args.subject} ({date_field})"
         body = f"Background: {args.background}{e}Changes: {args.changes}"
+        if args.test_gap is not None:
+            body += f"{e}Test gap: {args.test_gap}"
     return (f"{header}{e}{body}{e}").encode("utf-8").replace(b"\n", eol)
 
 
@@ -163,6 +165,11 @@ def main():
     parser.add_argument("--changes")
     parser.add_argument("--cause")
     parser.add_argument("--fix")
+    parser.add_argument(
+        "--test-gap",
+        default=None,
+        help="Test gap field (required on fix-of-fix BUGFIX; warn if omitted on BUGFIX)",
+    )
     parser.add_argument(
         "--no-auto-rotate",
         action="store_true",
@@ -186,6 +193,17 @@ def main():
         if not args.background or not args.changes:
             print("Error: requires --background and --changes", file=sys.stderr)
             sys.exit(1)
+
+    if args.category == "INCIDENT" and args.test_gap is not None:
+        print("Error: --test-gap cannot be combined with --category INCIDENT", file=sys.stderr)
+        sys.exit(1)
+
+    if args.category == "BUGFIX" and args.test_gap is None:
+        print(
+            "WARNING: BUGFIX entry without --test-gap. Required for fix-of-fix entries"
+            " (see rules/docs/history.md).\nProceeding without Test gap: field.",
+            file=sys.stderr,
+        )
 
     path = Path(args.path)
     if not path.parent.exists():

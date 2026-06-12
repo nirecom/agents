@@ -16,8 +16,10 @@ globs: "docs/history.md,docs/history/**/*.md"
   ### Subject (YYYY-MM-DD, commits)
   Background: ...
   Changes: ...
+  Test gap: ...   # required on fix-of-fix BUGFIX; optional otherwise
   ```
   Date is mandatory (rebase-proof — commit hashes can become unresolvable). Commit hashes are 7 chars, no GitHub links. Incident entries use `### #N: Subject (YYYY-MM-DD, commits)` with `Cause:` / `Fix:` instead of `Background:` / `Changes:`.
+- `Test gap:` field: required on fix-of-fix BUGFIX entries (this PR fixes a regression of a previous fix). Format: one short line naming what test was missing that would have caught the regression. Example: `Test gap: no pwsh-runtime test for install/dotfileslink.ps1 PATH munging`. Optional on first-time BUGFIX / FEATURE entries. **Structural enforcement:** `bin/doc-append.py` emits a stderr warning when `--category BUGFIX` is supplied without `--test-gap` (warn, not block).
 
 **Archived history** — entries rotated out of `history.md` live under `history/` as separate `.md` files. `history/index.md` is the lookup index (year-grouped list of all archived entries). When searching for information not present in `history.md`, consult `history/index.md` first, then read the specific archive file listed there. Never reconstruct history solely from `history.md`.
 
@@ -25,7 +27,7 @@ globs: "docs/history.md,docs/history/**/*.md"
 
 | Tool | When to use |
 |------|-------------|
-| `doc-append [path] --category CATEGORY ...` | Append a new entry to `history.md` or `CHANGELOG.md`. `--commits` is optional (omit for `CHANGELOG.md`). |
+| `doc-append [path] --category CATEGORY ... [--test-gap TEXT]` | Append a new entry to `history.md` or `CHANGELOG.md`. `--commits` is optional (omit for `CHANGELOG.md`). `--test-gap` required on fix-of-fix BUGFIX; `doc-append.py` emits a warning when omitted on BUGFIX. |
 | `uv run bin/doc-rotate.py <path> ...` | Archive old entries when size threshold is exceeded |
 | `uv run bin/doc-rotate.py <path> --rebuild-index` | Rebuild `history/index.md` from existing archive files (no rotation) |
 | `uv run bin/sort-history.py <path>` | Sort an existing history.md into ascending order |
