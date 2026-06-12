@@ -79,6 +79,20 @@ const ENFORCE_WORKFLOW_ON_RE_DQ =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: ([^>]+)>>"$/;
 const ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON([: ].*)?>>"$/;
+// review_tests step (issue #833): structural QA gate that pairs with write_tests.
+// COMPLETE carries a `token=<hex>` payload that fingerprints the staged tests/
+// snapshot at sentinel-emission time — workflow-gate compares against a freshly
+// computed token to detect re-edits-after-review (stale-token / anti-bypass).
+// WARNINGS carries `token=<hex>` plus an advisory summary; still marks complete
+// so the workflow can progress but records the warnings for downstream visibility.
+const REVIEW_TESTS_COMPLETE_RE_DQ =
+  /^echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: ([^>]+)>>"$/;
+const REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE([: ].*)?>>"\s*$/;
+const REVIEW_TESTS_WARNINGS_RE_DQ =
+  /^echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: ([^>]+)>>"$/;
+const REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS([: ].*)?>>"\s*$/;
 
 function isSentinel(cmd) {
   return (
@@ -116,7 +130,11 @@ function isSentinel(cmd) {
     ENFORCE_WORKFLOW_OFF_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE.test(cmd) ||
     ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
-    ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE.test(cmd)
+    ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE.test(cmd) ||
+    REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
+    REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
+    REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd) ||
+    REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE.test(cmd)
   );
 }
 
@@ -143,7 +161,9 @@ function isStrictSentinel(cmd) {
     ENFORCE_WORKTREE_OFF_RE_DQ.test(cmd) ||
     ENFORCE_WORKTREE_ON_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_OFF_RE_DQ.test(cmd) ||
-    ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd)
+    ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
+    REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
+    REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd)
   );
 }
 
@@ -211,4 +231,8 @@ module.exports = {
   ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
+  REVIEW_TESTS_COMPLETE_RE_DQ,
+  REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE,
+  REVIEW_TESTS_WARNINGS_RE_DQ,
+  REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE,
 };
