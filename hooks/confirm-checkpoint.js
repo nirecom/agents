@@ -20,6 +20,7 @@ const { peekTurnMarkers } = require("./lib/turn-marker");
 const { resolveSessionId } = require("./lib/workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { isConfirmOff } = require("./lib/plan-confirm-flag");
+const { loadDefaultEnv } = require("./lib/load-env");
 const { shouldOpenInVsCode, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
 const { openInBrowser } = require("./lib/open-external");
 
@@ -95,6 +96,7 @@ function renderMessage(stage, absPath, url) {
 }
 
 if (require.main === module) {
+  try { loadDefaultEnv(); } catch (_) {}
   let input = {};
   try { input = JSON.parse(readStdin()); } catch { noopExit(); }
 

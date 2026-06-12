@@ -42,7 +42,7 @@ bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on &&
 
   `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`
 
-  The `confirm-checkpoint.js` PreToolUse hook resolves the artifact path, opens it in VS Code, and surfaces a "Click Allow / Deny" message above the permission dialog (the sentinel is registered under `permissions.ask`, so the dialog is the user's approval surface).
+  The `confirm-checkpoint.js` PreToolUse hook resolves the artifact path, opens it in VS Code, and surfaces a "Click Allow / Deny" message above the permission dialog (the sentinel is registered under `permissions.ask`, so the dialog is the user's approval surface). `workflow-mark.js` PostToolUse recognizes the CONFIRM sentinel and injects the next-step hint via `additionalContext`, so the workflow advances on its own after Allow.
   - **Allow** (user clicks Allow on the sentinel's permission dialog): continue.
   - **Deny**: ask what to change, write edits, loop back to Step 1.
 
