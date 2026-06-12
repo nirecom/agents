@@ -79,6 +79,17 @@ const ENFORCE_WORKFLOW_ON_RE_DQ =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: ([^>]+)>>"$/;
 const ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON([: ].*)?>>"$/;
+// CONFIRM_<STAGE> sentinels emitted by clarify-intent / make-outline-plan /
+// make-detail-plan after the artifact is written. PreToolUse `confirm-checkpoint.js`
+// surfaces the dialog; PostToolUse `workflow-mark.js` injects the next-step hint
+// after Allow so the LLM continues even when no co-emit occurred.
+const CONFIRM_INTENT_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_INTENT: ([^>]+)>>"$/;
+const CONFIRM_INTENT_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_INTENT([: ].*)?>>"$/;
+const CONFIRM_OUTLINE_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_OUTLINE: ([^>]+)>>"$/;
+const CONFIRM_OUTLINE_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_OUTLINE([: ].*)?>>"$/;
+const CONFIRM_DETAIL_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_DETAIL: ([^>]+)>>"$/;
+const CONFIRM_DETAIL_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_DETAIL([: ].*)?>>"$/;
+
 // review_tests step (issue #833): structural QA gate that pairs with write_tests.
 // COMPLETE carries a `token=<hex>` payload that fingerprints the staged tests/
 // snapshot at sentinel-emission time — workflow-gate compares against a freshly
@@ -131,6 +142,12 @@ function isSentinel(cmd) {
     ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE.test(cmd) ||
     ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE.test(cmd) ||
+    CONFIRM_INTENT_RE_DQ.test(cmd) ||
+    CONFIRM_INTENT_LOOKSLIKE_RE.test(cmd) ||
+    CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
+    CONFIRM_OUTLINE_LOOKSLIKE_RE.test(cmd) ||
+    CONFIRM_DETAIL_RE_DQ.test(cmd) ||
+    CONFIRM_DETAIL_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
     REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd) ||
@@ -162,6 +179,9 @@ function isStrictSentinel(cmd) {
     ENFORCE_WORKTREE_ON_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_OFF_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
+    CONFIRM_INTENT_RE_DQ.test(cmd) ||
+    CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
+    CONFIRM_DETAIL_RE_DQ.test(cmd) ||
     REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
     REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd)
   );
@@ -231,6 +251,9 @@ module.exports = {
   ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
+  CONFIRM_INTENT_RE_DQ, CONFIRM_INTENT_LOOKSLIKE_RE,
+  CONFIRM_OUTLINE_RE_DQ, CONFIRM_OUTLINE_LOOKSLIKE_RE,
+  CONFIRM_DETAIL_RE_DQ, CONFIRM_DETAIL_LOOKSLIKE_RE,
   REVIEW_TESTS_COMPLETE_RE_DQ,
   REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE,
   REVIEW_TESTS_WARNINGS_RE_DQ,

@@ -63,7 +63,7 @@ Run `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/assemble-mandatory.sh"`
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol Step 3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol Step 2).
-- `ON` path: emit `echo "<<WORKFLOW_CONFIRM_DETAIL: <one-line summary>>>"` per protocol Step 3; after Allow, emit `<<WORKFLOW_MARK_STEP_detail_complete>>`.
+- `ON` path: emit `echo "<<WORKFLOW_CONFIRM_DETAIL: <one-line summary>>>"` per protocol Step 3.
 
 ## Research Escalation
 
