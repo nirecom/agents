@@ -390,6 +390,36 @@ function nextStepHint(stepName) {
   return hint ? `[workflow] ${hint}` : null;
 }
 
+// Hint table for CONFIRM_<STAGE> sentinels (PostToolUse after Allow). Emitted by
+// `workflow-mark.js` -> `confirm-next-step-handler.js`. Replaces the prompt-level
+// co-emission directive: when the LLM emits only the CONFIRM sentinel without
+// co-emitting the next steps, this hint reinjects the required follow-up into
+// the LLM's next inference so the workflow does not stall after Allow.
+const CONFIRM_NEXT_STEP_HINT = {
+  intent:
+    "CONFIRM_INTENT approved (Allow). Continue clarify-intent Completion: " +
+    "(a) run non-GitHub gate + GitHub reconciliation (label / WIP / board-card) when applicable; " +
+    "(b) run tracking-issue guard (Step 0); " +
+    "(c) emit echo \"<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>\"; " +
+    "(d) TodoWrite update; " +
+    "(e) apply survey-artifact-valid check, then invoke `make-outline-plan` via Skill tool.",
+  outline:
+    "CONFIRM_OUTLINE approved (Allow). Continue make-outline-plan Completion: " +
+    "emit echo \"<<WORKFLOW_MARK_STEP_outline_complete>>\" then " +
+    "echo \"<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>\", then invoke `make-detail-plan` via Skill tool.",
+  detail:
+    "CONFIRM_DETAIL approved (Allow). Continue make-detail-plan Completion: " +
+    "emit echo \"<<WORKFLOW_MARK_STEP_detail_complete>>\" then " +
+    "echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\" " +
+    "(consult rules/branch.md + rules/worktree.md), then invoke `write-tests` via Skill tool " +
+    "(or skip with echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
+};
+
+function confirmNextStepHint(stage) {
+  const hint = CONFIRM_NEXT_STEP_HINT[stage];
+  return hint ? `[workflow] ${hint}` : null;
+}
+
 /**
  * Record the SHA of the most recent successful push for this session.
  * Used by post-push-workflow-reset.js to detect when HEAD == last_pushed_sha
@@ -438,6 +468,8 @@ module.exports = {
   VALID_STATUSES,
   STEP_HINT,
   nextStepHint,
+  CONFIRM_NEXT_STEP_HINT,
+  confirmNextStepHint,
   resolveSessionId,
   _listJsonlByMtime,
   findMostRecentSessionIdInDir,

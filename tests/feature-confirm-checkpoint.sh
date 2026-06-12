@@ -298,6 +298,24 @@ else
   fail "T11 PR_CREATED non-github.com/pull/N URL should be ignored, got: $T11_MSG"
 fi
 
+# ── T12: CONFIRM_OUTLINE=off in .env file (NOT exported) → [confirm-skipped] ─
+echo "=== T12: CONFIRM_OUTLINE=off in .env file → skipped systemMessage ==="
+clear_markers
+# Write to .env file in AGENTS_CONFIG_DIR; do NOT export to shell
+printf 'CONFIRM_OUTLINE=off\n' > "$ISOLATED_CFG_DIR/.env"
+T12_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_OUTLINE>>\"")
+T12_OUT=$(
+  unset CONFIRM_OUTLINE 2>/dev/null || true
+  echo "$T12_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
+)
+T12_MSG=$(extract_system_message "$T12_OUT")
+if echo "$T12_MSG" | grep -qF "[confirm-skipped: CONFIRM_OUTLINE=off]"; then
+  pass "T12 CONFIRM_OUTLINE=off in .env (not exported) → '[confirm-skipped: CONFIRM_OUTLINE=off]'"
+else
+  fail "T12 .env CONFIRM_OUTLINE=off — missing expected skipped message: $T12_MSG"
+fi
+rm -f "$ISOLATED_CFG_DIR/.env"
+
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
