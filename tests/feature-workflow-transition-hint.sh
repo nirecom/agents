@@ -99,6 +99,7 @@ STATE_CLARIFY_COMPLETE() {
     "detail":             {"status": "pending",  "updated_at": null},
     "branching_complete": {"status": "pending",  "updated_at": null},
     "write_tests":        {"status": "pending",  "updated_at": null},
+    "review_tests":       {"status": "pending",  "updated_at": null},
     "run_tests":          {"status": "pending",  "updated_at": null},
     "review_security":    {"status": "pending",  "updated_at": null},
     "docs":               {"status": "pending",  "updated_at": null},
@@ -122,10 +123,12 @@ ALL_COMPLETE_STATE() {
     "detail":             {"status": "complete", "updated_at": "2026-04-28T10:03:00.000Z"},
     "branching_complete": {"status": "complete", "updated_at": "2026-04-28T10:04:00.000Z"},
     "write_tests":        {"status": "complete", "updated_at": "2026-04-28T10:05:00.000Z"},
+    "review_tests":       {"status": "complete", "updated_at": "2026-04-28T10:05:30.000Z"},
     "run_tests":          {"status": "complete", "updated_at": "2026-04-28T10:06:00.000Z"},
     "review_security":    {"status": "complete", "updated_at": "2026-04-28T10:07:00.000Z"},
     "docs":               {"status": "complete", "updated_at": "2026-04-28T10:08:00.000Z"},
-    "user_verification":  {"status": "complete", "updated_at": "2026-04-28T10:09:00.000Z"}
+    "user_verification":  {"status": "complete", "updated_at": "2026-04-28T10:09:00.000Z"},
+    "cleanup":            {"status": "skipped",  "updated_at": "2026-04-28T10:10:00.000Z"}
   }
 }
 EOF
@@ -287,17 +290,67 @@ else
     fail "WM-7b. detail skipped → expected 'BRANCHING_COMPLETE/DECIDED' or 'branch.md' in hint, got: $WM7B_CTX"
 fi
 
-# Test WM-8: write_tests skipped → hint contains "review-code-security"
+# Test WM-8: write_tests skipped → next step is review_tests; hint mentions review-tests
+# (#833 inserted review_tests immediately after write_tests in VALID_STEPS.)
 WM8_DIR="$TMPDIR_BASE/wm8-workflow"
 mkdir -p "$WM8_DIR"
 WM8_JSON=$(build_mark_json 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: no testable logic changed>>"' "wm8-test")
 WM8_OUT=$(echo "$WM8_JSON" | CLAUDE_WORKFLOW_DIR="$WM8_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
 WM8_CTX=$(extract_additional_context "$WM8_OUT")
-if printf '%s' "$WM8_CTX" | grep -qF "test suite" 2>/dev/null || \
-   printf '%s' "$WM8_CTX" | grep -qF "run_tests" 2>/dev/null; then
-    pass "WM-8. write_tests skipped → hint contains 'test suite' or 'run_tests'"
+if printf '%s' "$WM8_CTX" | grep -qF "review-tests" 2>/dev/null || \
+   printf '%s' "$WM8_CTX" | grep -qF "review_tests" 2>/dev/null; then
+    pass "WM-8. write_tests skipped → next step is review_tests (hint contains 'review-tests' or 'review_tests')"
 else
-    fail "WM-8. write_tests skipped → expected 'test suite' or 'run_tests' in hint, got: $WM8_CTX"
+    fail "WM-8. write_tests skipped → expected 'review-tests' or 'review_tests' in hint, got: $WM8_CTX"
+fi
+
+# Test WM-8b: WRITE_TESTS_NOT_NEEDED propagates skip to review_tests
+# (Once write_tests is skipped because tests are not needed, review_tests is meaningless
+# too — the NOT_NEEDED handler should mark both as skipped in one shot.)
+WM8B_WT_STATUS=$(read_state_status "$WM8_DIR/wm8-test.json" "write_tests")
+WM8B_RT_STATUS=$(read_state_status "$WM8_DIR/wm8-test.json" "review_tests")
+if [ "$WM8B_WT_STATUS" = "skipped" ] && [ "$WM8B_RT_STATUS" = "skipped" ]; then
+    pass "WM-8b. WRITE_TESTS_NOT_NEEDED → both write_tests and review_tests marked skipped"
+else
+    fail "WM-8b. WRITE_TESTS_NOT_NEEDED → expected write_tests=skipped, review_tests=skipped; got: write_tests=$WM8B_WT_STATUS, review_tests=$WM8B_RT_STATUS"
+fi
+
+# Test WM-8c: review_tests skipped → hint mentions run_tests (next step)
+# This validates VALID_STEPS ordering: write_tests → review_tests → run_tests.
+WM8C_DIR="$TMPDIR_BASE/wm8c-workflow"
+mkdir -p "$WM8C_DIR"
+# Pre-write state with write_tests=complete, review_tests=pending → simulate review-tests
+# step in progress. Then mark review_tests=complete via the review-tests-handler path
+# (run-tests is the next step). Since /review-tests is a new skill (#833) the actual
+# sentinel format is internal; for now we directly mark via state shape and read hint.
+cat > "$WM8C_DIR/wm8c-test.json" <<'WM8C_EOF'
+{
+  "version": 1,
+  "session_id": "wm8c-test",
+  "created_at": "2026-04-28T10:00:00.000Z",
+  "steps": {
+    "clarify_intent":     {"status": "complete", "updated_at": "2026-04-28T10:01:00.000Z"},
+    "research":           {"status": "complete", "updated_at": "2026-04-28T10:02:00.000Z"},
+    "outline":            {"status": "complete", "updated_at": "2026-04-28T10:02:30.000Z"},
+    "detail":             {"status": "complete", "updated_at": "2026-04-28T10:03:00.000Z"},
+    "branching_complete": {"status": "complete", "updated_at": "2026-04-28T10:04:00.000Z"},
+    "write_tests":        {"status": "complete", "updated_at": "2026-04-28T10:05:00.000Z"},
+    "review_tests":       {"status": "skipped",  "updated_at": "2026-04-28T10:05:30.000Z"},
+    "run_tests":          {"status": "pending",  "updated_at": null},
+    "review_security":    {"status": "pending",  "updated_at": null},
+    "docs":               {"status": "pending",  "updated_at": null},
+    "user_verification":  {"status": "pending",  "updated_at": null}
+  }
+}
+WM8C_EOF
+WM8C_OUT=$(echo '{"session_id":"wm8c-test"}' | \
+    CLAUDE_WORKFLOW_DIR="$WM8C_DIR" run_with_timeout node "$SESSION_START" 2>/dev/null || true)
+WM8C_CTX=$(extract_additional_context "$WM8C_OUT")
+if printf '%s' "$WM8C_CTX" | grep -qF "run_tests" 2>/dev/null || \
+   printf '%s' "$WM8C_CTX" | grep -qF "run-tests" 2>/dev/null; then
+    pass "WM-8c. review_tests skipped → next step is run_tests (hint contains 'run_tests' or 'run-tests')"
+else
+    fail "WM-8c. review_tests skipped → expected 'run_tests' or 'run-tests' in hint, got: $WM8C_CTX"
 fi
 
 # Test WM-9: review_security skipped → hint contains "update-docs"
