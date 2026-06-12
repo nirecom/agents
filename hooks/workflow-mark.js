@@ -42,6 +42,7 @@ const clarifyIntentCompleteHandler = require("./workflow-mark/clarify-intent-com
 const branchingHandler = require("./workflow-mark/branching-handler");
 const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
+const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const premiseHandlers = require("./workflow-mark/premise-gate-handlers");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
@@ -162,6 +163,10 @@ for (const cmd of sentinelParts) {
   if (clarifyIntentCompleteHandler.handle({ ...ctx, cmd })) continue;
   if (branchingHandler.handle({ ...ctx, cmd })) continue;
   if (userVerifiedHandler.handle({ ...ctx, cmd })) continue;
+  // review-tests-handler must run BEFORE mark-step-handler so the dedicated
+  // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner
+  // (mark-step-handler would otherwise process a manual MARK_STEP form here).
+  if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
   if (markStepHandler.handle({ ...ctx, cmd })) continue;
   if (premiseHandlers.handle({ ...ctx, cmd })) continue;
   if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;

@@ -99,13 +99,14 @@ const VALID_STEPS = [
   "detail",
   "branching_complete",
   "write_tests",
+  "review_tests",
   "run_tests",
   "review_security",
   "docs",
   "user_verification",
   "cleanup",
 ];
-const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_security", "cleanup"];
+const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
 // State is stored in ~/.claude/projects/workflow/{session-id}.json (session-scoped).
@@ -135,6 +136,10 @@ function readState(sessionId) {
       }
       if (!state.steps.review_security) {
         state.steps.review_security = { status: "pending", updated_at: null };
+      }
+      // migration: sessions predating review_tests (issue #833) start it pending.
+      if (!state.steps.review_tests) {
+        state.steps.review_tests = { status: "pending", updated_at: null };
       }
       // --- BEGIN temporary: old sessions → workflow_init migration (added 2026-05-14) ---
       // 3 legacy cases:
@@ -289,6 +294,25 @@ function markStep(sessionId, stepName, status, extraFields = {}) {
   writeState(sessionId, state);
 }
 
+// review_tests-specific: record the staged-tests fingerprint at sentinel-emission time.
+// Stale-token detection in workflow-gate compares this against the live computed
+// token; mismatch means tests were re-edited after the review passed.
+function markReviewTestsComplete(sessionId, token, extraFields = {}) {
+  if (typeof token !== "string" || token.length === 0) {
+    throw new Error("markReviewTestsComplete: token must be a non-empty string");
+  }
+  markStep(sessionId, "review_tests", "complete", { token, ...extraFields });
+}
+
+// review_tests-specific: re-pending the step (e.g. after WARNINGS sentinel without
+// passing review, or out-of-band invalidation). Clears the recorded token.
+function invalidateReviewTests(sessionId, reason) {
+  markStep(sessionId, "review_tests", "pending", {
+    token: null,
+    invalidate_reason: reason || null,
+  });
+}
+
 function cleanupZombies(maxAgeDays = 7) {
   const workflowDir = getWorkflowDir();
   let files;
@@ -351,6 +375,7 @@ const STEP_HINT = {
   detail:             "Invoke `make-detail-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>\").",
   branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
   write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
+  review_tests:       "Invoke /review-tests skill (emits <<WORKFLOW_MARK_STEP_review_tests_complete>> on pass, <<WORKFLOW_REVIEW_TESTS_WARNINGS: reason>> on gaps). Skip symmetrically via WORKFLOW_WRITE_TESTS_NOT_NEEDED (waives both write_tests and review_tests).",
   run_tests:          "Invoke `run-tests` skill via the Skill tool (or run tests directly via Bash).",
   review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
   docs:               "Invoke `update-docs`.",
@@ -419,6 +444,8 @@ module.exports = {
   readState,
   writeState,
   markStep,
+  markReviewTestsComplete,
+  invalidateReviewTests,
   createInitialState,
   cleanupZombies,
   getWorkflowDir,
