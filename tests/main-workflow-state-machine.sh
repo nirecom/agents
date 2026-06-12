@@ -55,6 +55,7 @@ setup_repo() {
     git -C "$repo" init -q
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
+    git -C "$repo" config core.hooksPath /dev/null
     echo "init" > "$repo/README.md"
     git -C "$repo" add README.md
     git -C "$repo" commit -q -m "initial"
@@ -89,10 +90,12 @@ ALL_COMPLETE_JSON() {
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "skipped",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -111,6 +114,7 @@ ALL_PENDING_JSON() {
     "outline":           {"status": "pending", "updated_at": null},
     "detail":            {"status": "pending", "updated_at": null},
     "write_tests":       {"status": "pending", "updated_at": null},
+    "review_tests":      {"status": "pending", "updated_at": null},
     "review_security":   {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "pending", "updated_at": null},
     "docs":              {"status": "pending", "updated_at": null},
@@ -134,6 +138,7 @@ INHERIT_STATE_JSON() {
     "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
     "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
     "docs":              {"status": "pending",  "updated_at": null},
@@ -331,6 +336,7 @@ write_state "$SID_1D_PC" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
     "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
     "docs":              {"status": "pending",  "updated_at": null},
@@ -382,6 +388,7 @@ write_state "$SID_2B" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -405,6 +412,7 @@ write_state "$SID_2C" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -505,10 +513,12 @@ write_state "$SID_2D" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "skipped",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -571,10 +581,12 @@ write_state "$SID_2H" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "skipped",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -604,10 +616,12 @@ write_state "$SID_2I" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "pending",  "updated_at": null},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "skipped",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -637,6 +651,7 @@ write_state "$SID_2J" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
@@ -674,10 +689,12 @@ if [ "$JUNCTION_OK" = "1" ]; then
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "pending",  "updated_at": null},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "skipped",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -706,6 +723,7 @@ EOF
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
     "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
+    "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "pending",  "updated_at": null},
@@ -869,6 +887,7 @@ write_state "$SID_5_MAIN" "$(cat <<EOF
     "outline":           {"status": "pending",  "updated_at": null},
     "detail":            {"status": "pending",  "updated_at": null},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
     "docs":              {"status": "pending",  "updated_at": null},
@@ -887,6 +906,7 @@ write_state "$SID_5_FEAT" "$(cat <<EOF
     "outline":           {"status": "complete", "updated_at": "$NOW_ISO"},
     "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "pending",  "updated_at": null},
+    "review_tests":      {"status": "pending",  "updated_at": null},
     "review_security":   {"status": "pending",  "updated_at": null},
     "run_tests":         {"status": "pending",  "updated_at": null},
     "docs":              {"status": "pending",  "updated_at": null},

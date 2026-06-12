@@ -45,7 +45,7 @@ build_state_json() {
     node -e "
       const sid = process.argv[1];
       const target = process.argv[2] || '';
-      const steps = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','run_tests','review_security','docs','user_verification','cleanup'];
+      const steps = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','review_tests','run_tests','review_security','docs','user_verification','cleanup'];
       const out = { version: 1, session_id: sid, created_at: '2026-05-23T00:00:00.000Z', steps: {} };
       for (const s of steps) {
         out.steps[s] = { status: (s === target ? 'in_progress' : 'pending'), updated_at: null };
