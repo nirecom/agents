@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Post-checkout hook: re-assembles ~/.claude/settings.json when settings.json or
+# settings-extension.json changed across the branch switch.
+#
+# Repo guard: core.hooksPath is globally set to agents/hooks/, so this hook fires
+# in EVERY git repo on this machine. _cfg_dir is derived from $0's location under
+# the globally-set core.hooksPath, so it always resolves to the agents main worktree
+# root — not a linked worktree, not another repo. We exit silently for all non-agents repos.
+
+set -u
+
+# Use git rev-parse for both sides so path format is consistent (avoids POSIX vs Windows path mismatch)
+_cfg_dir="$(cd "$(dirname "$0")/.." && git rev-parse --show-toplevel 2>/dev/null || echo '')"
+_repo_top="$(git rev-parse --show-toplevel 2>/dev/null || echo '')"
+[ -n "$_cfg_dir" ] && [ "$_repo_top" = "$_cfg_dir" ] || exit 0
+
+# $1=prev_head $2=new_head $3=1 if branch switch, 0 if file checkout
+[ "${3:-0}" = "1" ] || exit 0
+
+_changed="$(git diff --name-only "$1" "$2" 2>/dev/null | tr -d '\r' || true)"
+printf '%s\n' "$_changed" | grep -qE '^(settings\.json|settings-extension\.json)$' || exit 0
+
+_node="$(command -v node 2>/dev/null || true)"
+if [ -z "$_node" ]; then
+  printf 'post-checkout: node not found — run install.ps1 / install.sh to re-assemble settings\n' >&2
+  exit 0
+fi
+if "$_node" "$_cfg_dir/install/assemble-settings.js" 2>/dev/null; then
+  printf 'post-checkout: re-assembled ~/.claude/settings.json (settings.json changed across checkout)\n'
+else
+  printf 'post-checkout: assembler failed — run install.ps1 / install.sh manually\n' >&2
+fi
+exit 0
