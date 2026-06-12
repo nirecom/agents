@@ -39,7 +39,7 @@ Receive a JSON object with:
 
 1. Re-run inventory (same as dry_run step 1) to get current state. Non-zero → emit `status: failed`, `summary: "inventory failed: <stderr excerpt>"`, `artifact_path: (none)` and stop.
 2. `mkdir -p "$backup_dir"`. Non-zero → emit `status: failed`, `summary: "mkdir failed for backup_dir: <error>"`, `artifact_path: (none)` and stop. (If blocked by a write hook, surface that error verbatim in summary.)
-3. Copy preservation candidates to `$backup_dir/` (preserve relative paths; skip symlinks pointing outside the worktree). Per-file copy failure → log warning and continue; after all files, if any failed set `status: partial` instead of `copied`.
+3. Copy preservation candidates to `$backup_dir/` (preserve relative paths; skip symlinks pointing outside the worktree). Per-file copy failure → log warning and continue; after all files, if any failed set `status: partial` instead of `copied`. Issue `mkdir -p` and each `cp` as separate Bash invocations (preferred) and substitute the fully resolved absolute backup destination directly into the `cp` argument literal — do not chain `mkdir && cp` and do not rely on shell variables in the destination. If shell variables are unavoidable, prefix the `cp` command with `BACKUP_DIR=<resolved-absolute-path> ...` so the write-hook's env-prefix literal resolver can substitute before glob-matching against the worktree-backup exclude.
 4. Generate `$backup_dir/manifest.json`:
    - Fields per file: `path` (relative), `size_bytes`, `mtime_iso`, `sha256` (hex)
    - **Secret values must never appear in manifest content** — hash file content, never embed it.
