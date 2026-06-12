@@ -114,8 +114,11 @@ _print_next_stage() {
 # bypassed by `yes y |` piping (Incident #2 / #415). Live mode requires
 # MIGRATE_ACK_EXISTING_ISSUES=1 env var. The /migrate-repo skill sets this
 # after the user acknowledges via AskUserQuestion (#679).
-_existing=$(cd "$REPO_DIR" && gh issue list --state all --limit 1 --json number \
-  --jq '.[0].number // empty' 2>/dev/null)
+# #834 Option γ: Layer P (presence + format) + Layer C (snapshot comparison)
+# additionally require MIGRATE_ACK_UP_TO_ISSUE_N + MIGRATE_ACK_SELF_COUNT_AT_ACK
+# from a fresh dry-run snapshot to defeat the TOCTOU window.
+_existing_n=$(cd "$REPO_DIR" && gh issue list --state all --limit 1 \
+  --search "sort:created-desc" --json number --jq '.[0].number // 0' 2>/dev/null)
 _existing_rc=$?
 if [ "$_existing_rc" -ne 0 ]; then
   echo "ERROR: pre-flight check failed: 'gh issue list' exited rc=$_existing_rc." >&2
@@ -124,10 +127,39 @@ if [ "$_existing_rc" -ne 0 ]; then
   echo "       Aborting to prevent accidental loss of the early-number invariant." >&2
   exit 1
 fi
-if [ -n "$_existing" ]; then
-  echo "WARNING: Target repo already has issues (latest seen: #${_existing})."
+
+# Initialize state file in non-dry-run mode — must run BEFORE Layer C so state_count_migrated is available.
+if [ "$DRY_RUN" -eq 0 ]; then
+  state_init "$REPO_DIR"
+  state_load "$REPO_DIR"
+  GITIGNORE="$REPO_DIR/.gitignore"
+  if [ -f "$GITIGNORE" ]; then
+    if ! grep -qxF ".migration-state.json" "$GITIGNORE"; then
+      printf '\n.migration-state.json\n' >> "$GITIGNORE"
+    fi
+  else
+    printf '.migration-state.json\n' > "$GITIGNORE"
+  fi
+fi
+
+# Dry-run sentinel emission (unconditional — even when _existing_n=0).
+if [ "$DRY_RUN" -eq 1 ]; then
+  _self_at_dry_run=0
+  _sf="$REPO_DIR/.migration-state.json"
+  if [ -f "$_sf" ]; then
+    STATE_FILE="$_sf"
+    _hist_n=$(state_count_migrated history 2>/dev/null || echo 0)
+    _todo_n=$(state_count_migrated todo 2>/dev/null || echo 0)
+    _self_at_dry_run=$((_hist_n + _todo_n))
+  fi
+  echo "MIGRATE_DRY_RUN_HIGHEST_ISSUE_N=${_existing_n}"
+  echo "MIGRATE_DRY_RUN_SELF_COUNT=${_self_at_dry_run}"
+fi
+
+if [ "$_existing_n" -gt 0 ]; then
+  echo "WARNING: Target repo already has issues (latest seen: #${_existing_n})."
   echo "         Migration issues will NOT get early issue numbers — they will"
-  echo "         land at #${_existing}+1 onwards. The chronological"
+  echo "         land at #${_existing_n}+1 onwards. The chronological"
   echo "         'early numbers = history' invariant cannot be preserved post-hoc."
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] proceeding despite existing issues"
@@ -141,22 +173,56 @@ if [ -n "$_existing" ]; then
     echo "       it themselves. This gate is tty-bypass-resistant (no stdin)." >&2
     exit 1
   else
-    echo "         MIGRATE_ACK_EXISTING_ISSUES=1 acknowledged by caller — proceeding."
-  fi
-fi
+    # --- Layer P (presence + format check) — EVERY live invocation ---
+    _ack_up_to="${MIGRATE_ACK_UP_TO_ISSUE_N:-}"
+    _ack_self_at_ack="${MIGRATE_ACK_SELF_COUNT_AT_ACK:-}"
 
-# Initialize state file in non-dry-run mode.
-if [ "$DRY_RUN" -eq 0 ]; then
-  state_init "$REPO_DIR"
-  state_load "$REPO_DIR"
-  # Add .migration-state.json to .gitignore if not already present.
-  GITIGNORE="$REPO_DIR/.gitignore"
-  if [ -f "$GITIGNORE" ]; then
-    if ! grep -qxF ".migration-state.json" "$GITIGNORE"; then
-      printf '\n.migration-state.json\n' >> "$GITIGNORE"
+    if [ -z "$_ack_up_to" ]; then
+      echo "" >&2
+      echo "ERROR: MIGRATE_ACK_UP_TO_ISSUE_N required when MIGRATE_ACK_EXISTING_ISSUES=1 (#834 Option γ Layer P)." >&2
+      echo "       Re-run dry-run via preview-and-capture.sh and re-export both env vars:" >&2
+      echo "         eval \"\$(bash \"\$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh\" \"$REPO_DIR\")\"" >&2
+      exit 1
     fi
-  else
-    printf '.migration-state.json\n' > "$GITIGNORE"
+    if [ -z "$_ack_self_at_ack" ]; then
+      echo "" >&2
+      echo "ERROR: MIGRATE_ACK_SELF_COUNT_AT_ACK required when MIGRATE_ACK_EXISTING_ISSUES=1 (#834 Option γ Layer P)." >&2
+      echo "       Re-run dry-run via preview-and-capture.sh to refresh both env vars." >&2
+      exit 1
+    fi
+    if ! printf '%s' "$_ack_up_to" | grep -Eq '^(0|[1-9][0-9]*)$'; then
+      echo "" >&2
+      echo "ERROR: MIGRATE_ACK_UP_TO_ISSUE_N must be a non-negative integer (got: '${_ack_up_to}')." >&2
+      exit 1
+    fi
+    if ! printf '%s' "$_ack_self_at_ack" | grep -Eq '^(0|[1-9][0-9]*)$'; then
+      echo "" >&2
+      echo "ERROR: MIGRATE_ACK_SELF_COUNT_AT_ACK must be a non-negative integer (got: '${_ack_self_at_ack}')." >&2
+      exit 1
+    fi
+
+    # --- Layer C (snapshot comparison with self-count adjustment) — EVERY live invocation ---
+    _self_now=$(( $(state_count_migrated history) + $(state_count_migrated todo) ))
+    _self_delta=$((_self_now - _ack_self_at_ack))
+    if [ "$_self_delta" -lt 0 ]; then
+      echo "" >&2
+      echo "ERROR: self-count regression detected (self_now=${_self_now} < ack=${_ack_self_at_ack}) — state file modified out of band." >&2
+      echo "       Re-run dry-run via preview-and-capture.sh to refresh the snapshot." >&2
+      exit 1
+    fi
+    _expected_max=$((_ack_up_to + _self_delta))
+
+    if [ "$_existing_n" -gt "$_expected_max" ]; then
+      echo "" >&2
+      echo "ERROR: TOCTOU: target repo state moved since dry-run acknowledgement (#834 Option γ Layer C)." >&2
+      echo "       Acked up to #${_ack_up_to}, +${_self_delta} self issues created since, expected max #${_expected_max}." >&2
+      echo "       Current highest is #${_existing_n} — issues from external actor detected." >&2
+      echo "       Re-run dry-run via preview-and-capture.sh to refresh the snapshot:" >&2
+      echo "         eval \"\$(bash \"\$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh\" \"$REPO_DIR\")\"" >&2
+      exit 1
+    fi
+
+    echo "         MIGRATE_ACK_EXISTING_ISSUES=1 + UP_TO=#${_ack_up_to} + SELF_AT_ACK=${_ack_self_at_ack} (delta=${_self_delta}, expected_max=#${_expected_max}) acknowledged — proceeding."
   fi
 fi
 

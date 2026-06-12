@@ -159,13 +159,15 @@ teardown_fixture
 # ---------------------------------------------------------------------------
 setup_fixture
 export MOCK_HAS_ISSUES=1
+export MIGRATE_ACK_UP_TO_ISSUE_N=5
+export MIGRATE_ACK_SELF_COUNT_AT_ACK=0
 export MIGRATE_ACK_EXISTING_ISSUES=1
 
 OUT_PF4=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$REPO" 2>&1)
 RC_PF4=$?
 
 HAS_WARNING_PF4=$(echo "$OUT_PF4" | grep -ci "WARNING" 2>/dev/null) || HAS_WARNING_PF4=0
-HAS_ACK_PF4=$(echo "$OUT_PF4" | grep -c "acknowledged by caller" 2>/dev/null) || HAS_ACK_PF4=0
+HAS_ACK_PF4=$(echo "$OUT_PF4" | grep -c "acknowledged" 2>/dev/null) || HAS_ACK_PF4=0
 STEP1_PF4=$(echo "$OUT_PF4" | grep -c "Step 1:" 2>/dev/null) || STEP1_PF4=0
 STAGE_GATE_PF4=$(echo "$OUT_PF4" | grep -c "Step 2 (history migration) requires --stage" 2>/dev/null) || STAGE_GATE_PF4=0
 
@@ -175,6 +177,8 @@ else
     fail "PF4: has_warning=$HAS_WARNING_PF4 has_ack=$HAS_ACK_PF4 step1=$STEP1_PF4 stage_gate=$STAGE_GATE_PF4 rc=$RC_PF4 (expected WARNING + ack msg + Step 1 + Step 2 --stage gate + rc!=0)"
 fi
 unset MIGRATE_ACK_EXISTING_ISSUES
+unset MIGRATE_ACK_UP_TO_ISSUE_N
+unset MIGRATE_ACK_SELF_COUNT_AT_ACK
 teardown_fixture
 
 echo ""
