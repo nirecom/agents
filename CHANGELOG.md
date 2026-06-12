@@ -219,4 +219,8 @@ Changes: `bin/check-verification-gate.sh` (new): risk-category classifier fires 
 
 ### FEATURE: PR #849 (2026-06-12)
 Background: fix(#842): co-emission directive + workflow-mark.js structural fallback + .env-aware CONFIRM_*
-Changes: Fixed: Plan-confirmation dialogs (CONFIRM_INTENT, CONFIRM_OUTLINE, CONFIRM_DETAIL) no longer stall after the Allow click. A new PostToolUse handler in workflow-mark.js injects the next-step hint automatically, so the workflow advances on its own.;Fixed: CONFIRM_*=off set in $AGENTS_CONFIG_DIR/.env is now honored by the confirmation hook even when not shell-exported.
+Changes: Fixed: Plan-confirmation dialogs (CONFIRM_INTENT, CONFIRM_OUTLINE, CONFIRM_DETAIL) no longer stall after the Allow click. A new PostToolUse handler in workflow-mark.js injects the next-step hint automatically, so the workflow advances on its own.;Fixed: CONFIRM_*=off set in $AGENTS_CONFIG_DIR/.env is now honored by the confirmation hook even when not shell-exported.
+
+### FEATURE: PR #851 (2026-06-12)
+Background: feat(#846): add layered settings.json drift prevention (post-merge/checkout hooks + session-start backstop)
+Changes: Session-start now warns when `~/.claude/settings.json` is missing entries from the base config — run `node install/assemble-settings.js` to fix.;Git hooks (`post-merge`, `post-checkout`) auto-reassemble `~/.claude/settings.json` when base settings change, preventing stale permission entries that stall workflow sessions.
