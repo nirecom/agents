@@ -172,3 +172,7 @@ Then:
    - Either invalid → invoke the affected survey(s) directly before proceeding.
    Optionally invoke `/deep-research` if external knowledge is required.
    Then invoke `/make-outline-plan`.
+
+## Rules
+
+- Report observations per rules/supervisor-reporting.md.

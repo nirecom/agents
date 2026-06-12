@@ -61,8 +61,19 @@ function getWorktreeBaseDirResolved() {
   return path.resolve(expanded);
 }
 
+// Captured at hook-input parse time so the `done()` helper can self-report on block.
+let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined };
+
 function done(decision) {
   if (decision && decision.block) {
+    try {
+      const { reportBlock } = require("./lib/supervisor-emit");
+      reportBlock(
+        "enforce-worktree",
+        _reportContext.command || _reportContext.toolName || "<unknown>",
+        _reportContext.sessionId
+      );
+    } catch (_) { /* fail-open */ }
     console.log(JSON.stringify({ decision: "block", reason: decision.reason }));
   } else {
     console.log(JSON.stringify({}));
@@ -139,6 +150,13 @@ if (!fs.existsSync(_cwd)) {
 
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
+
+// Populate supervisor-emit context for done() block self-report.
+_reportContext = {
+  sessionId: (input && input.session_id) || undefined,
+  command: (toolInput && toolInput.command) || undefined,
+  toolName,
+};
 
 // Populate payload-derived-path cache for this invocation (issue #321).
 // Read by getSessionRepoRoots() to scope the gh-write guard to the paths

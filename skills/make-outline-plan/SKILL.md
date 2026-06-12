@@ -136,6 +136,7 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
 - **One `AskUserQuestion` + one sentinel dialog per run in ON mode** — step 7 (approach selection via `AskUserQuestion`) and step 8 (artifact review via `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel permission dialog per protocol Step 3). OFF mode fires neither.
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
+- Report observations per rules/supervisor-reporting.md.
 
 ## Completion
 
