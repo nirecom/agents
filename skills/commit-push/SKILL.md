@@ -122,3 +122,5 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
   In worktree mode this skill defers entirely to `/worktree-end` (Step 7a).
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
 - `bootstrap_pending` is terminal for `/commit-push` — defer the actual push to `/worktree-end` Step 2b. No PR is created and no user-verified sentinel is emitted in `/commit-push` for this status.
+- On fallback or step degradation (push retry, PR reuse, merge deferral): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter commit-push` (session-id auto-resolves).
+- Report observations per rules/supervisor-reporting.md.

@@ -87,4 +87,8 @@ process.stderr.write(
   "(If Phase 1 is not yet done, first run /issue-close-stage <N> from a linked worktree.\n" +
   " /issue-close-finalize then performs a transaction-safe close and posts the resolved-by sentinel.)\n"
 );
+try {
+  const { reportBlock } = require("./lib/supervisor-emit");
+  reportBlock("enforce-issue-close", cmd, parsed.session_id);
+} catch (_) { /* fail-open */ }
 process.exit(2);
