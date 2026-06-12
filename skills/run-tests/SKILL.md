@@ -57,3 +57,4 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 - Empty selection on non-doc changes requires user confirmation; no silent `--all` fallback.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
+- Report observations per rules/supervisor-reporting.md.

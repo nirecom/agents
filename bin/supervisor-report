@@ -2,6 +2,7 @@
 "use strict";
 
 const { appendFinding } = require("../hooks/lib/supervisor-state-writer");
+const { resolveSessionId } = require("../hooks/lib/workflow-state");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -13,7 +14,7 @@ function usage(msg) {
     " --severity <error|warning|notice>" +
     " --detail <text>" +
     " --reporter <name>" +
-    " --session-id <sid>"
+    " [--session-id <sid>]"
   );
   process.exit(1);
 }
@@ -31,13 +32,21 @@ const categoriesRaw = args["categories"];
 const severity = args["severity"];
 const detail = args["detail"];
 const reporter = args["reporter"];
-const rawSid = args["session-id"] || process.env.CLAUDE_SESSION_ID || "";
 
 if (!categoriesRaw) usage("--categories required");
 if (!severity) usage("--severity required");
 if (detail === undefined) usage("--detail required");
 if (!reporter) usage("--reporter required");
-if (!rawSid || !SESSION_ID_RE.test(rawSid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
+
+// Session-ID resolution: CLI flag → resolveSessionId() chain → usage error
+let rawSid = args["session-id"];
+if (!rawSid) {
+  rawSid = resolveSessionId();
+}
+if (!rawSid || !SESSION_ID_RE.test(rawSid)) {
+  console.error("Error: --session-id required (could not auto-resolve)");
+  process.exit(1);
+}
 
 const categories = categoriesRaw.split(",").map((s) => s.trim()).filter(Boolean);
 if (categories.length === 0) usage("--categories must be non-empty");
