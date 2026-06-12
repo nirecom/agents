@@ -71,3 +71,7 @@ the PR is merged run `/issue-close-finalize --from-session`.
 - **Sentinel body**: hardcoded literal — never interpolate variables or add
   metadata. The Phase 1 marker is shared with `check-phase1-complete.sh` and
   `find-pr-by-marker.sh`; changing the body silently breaks both.
+
+## Rules
+
+- Report observations per rules/supervisor-reporting.md.
