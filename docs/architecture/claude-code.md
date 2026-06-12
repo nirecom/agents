@@ -40,9 +40,10 @@ node "$AGENTS_CONFIG_DIR/bin/supervisor-report" \
   --detail "<description>" --reporter "<skill-name>"
 ```
 
-Auto-resolve precedence: `--session-id` flag → `CLAUDE_SESSION_ID` env →
-`WORKTREE_NOTES.md` in CWD → `WORKTREE_NOTES.md` via git common-dir →
-`resolveSessionId()` JSONL scan → usage error.
+Auto-resolve precedence: `--session-id` flag → `resolveSessionId()` in
+`hooks/lib/workflow-state.js` (CLAUDE_ENV_FILE → CLAUDE_SESSION_ID env →
+WORKTREE_NOTES.md in CWD → WORKTREE_NOTES.md via git common-dir →
+JSONL scan) → usage error.
 See `rules/supervisor-reporting.md` for category reference and usage guidance.
 
 **Finding schema (per finding in `layer1.findings[]`):**

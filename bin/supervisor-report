@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
 const { appendFinding } = require("../hooks/lib/supervisor-state-writer");
 const { resolveSessionId } = require("../hooks/lib/workflow-state");
 
@@ -20,51 +17,6 @@ function usage(msg) {
     " [--session-id <sid>]"
   );
   process.exit(1);
-}
-
-function readSessionIdFromNotes(notesPath) {
-  try {
-    const content = fs.readFileSync(notesPath, "utf8");
-    const m = content.match(/^Session-ID:\s*(\S+)\s*$/m);
-    if (m) return m[1];
-  } catch (_) {
-    // ignore
-  }
-  return null;
-}
-
-function autoResolveSessionId() {
-  // Level 1: CLAUDE_SESSION_ID env var (best-effort; unreliable in subprocesses — Anthropic bug #27987)
-  if (process.env.CLAUDE_SESSION_ID && SESSION_ID_RE.test(process.env.CLAUDE_SESSION_ID)) {
-    return process.env.CLAUDE_SESSION_ID;
-  }
-  // Level 2: CWD WORKTREE_NOTES.md
-  const cwdNotes = path.join(process.cwd(), "WORKTREE_NOTES.md");
-  const fromCwd = readSessionIdFromNotes(cwdNotes);
-  if (fromCwd && SESSION_ID_RE.test(fromCwd)) return fromCwd;
-  // Level 3: git common-dir's parent WORKTREE_NOTES.md
-  try {
-    const commonDir = execSync("git rev-parse --git-common-dir", {
-      encoding: "utf8",
-      timeout: 2000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    if (commonDir) {
-      const notesPath = path.join(path.resolve(commonDir), "..", "WORKTREE_NOTES.md");
-      const fromGit = readSessionIdFromNotes(notesPath);
-      if (fromGit && SESSION_ID_RE.test(fromGit)) return fromGit;
-    }
-  } catch (_) {
-    // ignore
-  }
-  // Level 4: resolveSessionId() from workflow-state
-  try {
-    const sid = resolveSessionId();
-    if (sid && SESSION_ID_RE.test(sid)) return sid;
-  } catch (_) {
-    // ignore
-  }
-  return null;
 }
 
 const args = {};
@@ -86,10 +38,10 @@ if (!severity) usage("--severity required");
 if (detail === undefined) usage("--detail required");
 if (!reporter) usage("--reporter required");
 
-// Session-ID resolution: CLI flag → auto-resolve chain → usage error
+// Session-ID resolution: CLI flag → resolveSessionId() chain → usage error
 let rawSid = args["session-id"];
 if (!rawSid) {
-  rawSid = autoResolveSessionId();
+  rawSid = resolveSessionId();
 }
 if (!rawSid || !SESSION_ID_RE.test(rawSid)) {
   console.error("Error: --session-id required (could not auto-resolve)");
