@@ -8,6 +8,7 @@ const { spawnSync } = require("child_process");
 const { cleanupZombies, createInitialState, writeState, readState,
         getCurrentContext, findLatestStateForContext,
         VALID_STEPS, STEP_HINT } = require("./lib/workflow-state");
+const settingsDrift = require("./lib/settings-drift");
 
 function readStdin() {
   const chunks = [];
@@ -182,4 +183,15 @@ if (sessionId) {
 }
 lines.push("");
 lines.push(buildWorkflowStatus(sessionId));
+try {
+  const d = settingsDrift.detectDrift({ homeDir: os.homedir() });
+  if (d.drifted) {
+    const r = d.missing ? "assembled file missing"
+      : d.broken ? ("parse error: " + d.reason)
+      : "missing entries (permissions or hooks)";
+    lines.push("");
+    lines.push("WARNING: ~/.claude/settings.json drift detected — run: node \"" + path.join(__dirname, "..", "install", "assemble-settings.js") + "\"");
+    lines.push("  reason: " + r);
+  }
+} catch (_e) { /* fail-open */ }
 console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
