@@ -3,7 +3,8 @@
 const { getSessionRepoRoots } = require("./session-scope");
 const { isExcluded } = require("./shared-cmd-utils");
 const { findRepoRoot, normalizeForCompare } = require("./git-repo-detection");
-const { WRITE_PATTERNS } = require("../lib/bash-write-patterns");
+const { WRITE_PATTERNS, classify } = require("../lib/bash-write-patterns");
+const { splitShellCommands } = require("../lib/shell-segments");
 const {
   extractRedirectTargets, extractTeeTargets,
   extractPwshWriteTargets, extractCpMvDestination,
@@ -90,10 +91,41 @@ function isGhWriteCommand(cmd) {
   return false;
 }
 
+// Per-segment EXCLUDE check for sequenced commands (#739).
+// Splits cmd on ; && || (quote-aware), then for each segment:
+//   - "read" → transparent (continue)
+//   - "write" → require all write targets to be EXCLUDE-matched
+// Returns true ONLY when ≥1 write segment was verified excluded AND no write
+// segment produced parseFailure / null targets / a non-excluded target.
+// Fail-closed: any unresolvable segment returns false.
+function isEverySegmentExcluded(cmd, repoRoot, patterns) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (!patterns || patterns.length === 0) return false;
+  if (cmd.includes("\r") || cmd.includes("\n")) return false;
+  const segments = splitShellCommands(cmd);
+  if (segments.length === 0) return false;
+
+  let hasWriteSegment = false;
+  for (const segment of segments) {
+    const kind = classify(segment);
+    if (kind === "read") continue;
+    // write segment
+    hasWriteSegment = true;
+    const result = collectBashWriteTargets(segment);
+    if (result.parseFailure === true) return false;
+    if (result.targets === null || result.targets.length === 0) return false;
+    for (const target of result.targets) {
+      if (!isExcluded(target, patterns)) return false;
+    }
+  }
+  return hasWriteSegment === true;
+}
+
 module.exports = {
   isInSessionScope,
   collectBashWriteTargets,
   areAllBashTargetsOutsideSessionScope,
   isWriteTargetAllExcluded,
+  isEverySegmentExcluded,
   isGhWriteCommand,
 };
