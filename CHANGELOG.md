@@ -227,4 +227,8 @@ Changes: Session-start now warns when `~/.claude/settings.json` is missing entri
 
 ### BUGFIX: PR #850 (2026-06-12)
 Background: fix(#834): migrate-repo TOCTOU pre-flight gate — Option γ Layer P/C + preview-and-capture.sh
-Changes: **migrate-repo**: Fixed TOCTOU race in the existing-issues pre-flight gate — external issues created between dry-run review and live migration start are now detected and abort the run, preserving the "early issue numbers = migration history" chronology invariant.
+Changes: **migrate-repo**: Fixed TOCTOU race in the existing-issues pre-flight gate — external issues created between dry-run review and live migration start are now detected and abort the run, preserving the "early issue numbers = migration history" chronology invariant.
+
+### FEATURE: PR #841 (2026-06-13)
+Background: feat(#831): L1 reporting coverage — supervisor-emit facade + hook auto-report + sid auto-resolve
+Changes: `supervisor-report --session-id` is now optional: auto-resolves from WORKTREE_NOTES.md or env when omitted; hooks (enforce-worktree, workflow-gate, enforce-issue-close, enforce-override-handlers) now auto-report block and sentinel events to the supervisor state file without manual invocation
