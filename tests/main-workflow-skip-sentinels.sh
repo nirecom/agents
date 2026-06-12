@@ -143,7 +143,7 @@ build_state_with_override() {
       const sid = process.argv[1];
       const step = process.argv[2];
       const override = JSON.parse(process.argv[3]);
-      const STEPS = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','run_tests','review_security','docs','user_verification','cleanup'];
+      const STEPS = ['workflow_init','clarify_intent','research','outline','detail','branching_complete','write_tests','review_tests','run_tests','review_security','docs','user_verification','cleanup'];
       const steps = {};
       for (const s of STEPS) {
         steps[s] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };

@@ -335,10 +335,61 @@ if (require.main === module) {
 
   // Check all steps
   const incomplete = [];
+  // Annotates entries pushed to `incomplete` — currently used for review_tests
+  // stale-token / no-staged-tests messaging (issue #833).
+  const incompleteReasons = {};
+  // Tracks whether write_tests was bypassed by evidence (staged tests/) in this
+  // gate evaluation. Used to allow symmetric review_tests bypass (issue #833):
+  // when write_tests itself needs evidence, review_tests should share it.
+  let writeTestsEvidenceBypassed = false;
   for (const step of VALID_STEPS) {
     if (NON_GATE_STEPS.includes(step)) continue;
     const stepState = state.steps && state.steps[step];
     const status = stepState ? stepState.status : "pending";
+
+    // --- review_tests special-case (must precede generic complete shortcut) ---
+    // Compares stored token against a freshly computed fingerprint of staged
+    // tests/. Mismatch = tests were re-edited after a passing review → re-gate.
+    // Lenient when no tests/ are staged: nothing to fingerprint, status=complete
+    // is a deliberate assertion (matches the broader workflow-gate convention
+    // that evidence is only required when evidence-bearing files are present).
+    if (step === "review_tests") {
+      if (status === "skipped") continue;
+      if (docsOnly) continue;
+      if (status !== "complete") {
+        // Symmetric evidence bypass: when write_tests itself was bypassed by
+        // staged tests/, review_tests shares the same evidence (the reviewer
+        // has not yet run because /write-tests hasn't committed — both steps
+        // are satisfied by the same staged tests/ evidence in one commit).
+        if (writeTestsEvidenceBypassed) continue;
+        incomplete.push(step);
+        continue;
+      }
+      // status === "complete": unresolved warnings always block — regardless of
+      // staged token state — because warnings_summary means the reviewer found
+      // gaps that have not been addressed yet (C2 enforcement at gate layer).
+      if (stepState && stepState.warnings_summary) {
+        incompleteReasons[step] = "warnings-pending";
+        incomplete.push(step);
+        continue;
+      }
+      // Validate stored token against freshly computed staged-tests fingerprint.
+      const { computeStagedTestsToken } = require("./workflow-gate/review-tests-evidence");
+      const stagedToken = computeStagedTestsToken(repoDir);
+      const storedToken = stepState && stepState.token;
+      // No staged tests → no fingerprint surface → trust status=complete.
+      if (stagedToken == null) continue;
+      // No stored token but status=complete → legacy / pre-token state.
+      // Trust the status assertion; stale-token detection requires a token
+      // to compare against (cannot regress unaware states).
+      if (!storedToken) continue;
+      // Staged tests + matching token + no warnings → fresh review → approve.
+      if (stagedToken === storedToken) continue;
+      // Staged tests + mismatched token → stale review → re-gate.
+      incompleteReasons[step] = "stale-token";
+      incomplete.push(step);
+      continue;
+    }
 
     if (status === "complete") continue;
     if (status === "skipped" && SKIPPABLE_STEPS.includes(step)) continue;
@@ -350,7 +401,10 @@ if (require.main === module) {
     if (step === "user_verification" && isWorktreeContext(repoDir)) continue;
     if (step === "user_verification" && isWip) continue;
     // Evidence-based overrides: staged files are proof of completion
-    if (step === "write_tests" && hasStagedTestChanges(repoDir)) continue;
+    if (step === "write_tests" && hasStagedTestChanges(repoDir)) {
+      writeTestsEvidenceBypassed = true;
+      continue;
+    }
     if (step === "docs" && (hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir))) continue;
     incomplete.push(step);
   }
@@ -365,6 +419,7 @@ if (require.main === module) {
     detail:  '/make-detail-plan   OR if unnecessary: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     branching_complete: 'consult rules/branch.md + rules/worktree.md, then: echo "<<WORKFLOW_BRANCHING_COMPLETE: main|branch: <name>|worktree: <path>>"',
     write_tests: '/write-tests (then git add tests/)  OR if unnecessary: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
+    review_tests: '/review-tests skill (emits <<WORKFLOW_REVIEW_TESTS_COMPLETE: token=<hex>>> on adequate coverage; re-editing tests/ after a passing review invalidates the pairing — re-run /review-tests)',
     run_tests: 'invoke `run-tests` skill via the Skill tool (emits sentinel automatically); or run tests directly via Bash — PostToolUse hook (workflow-run-tests.js) auto-marks based on exit code.',
     review_security: '/review-code-security  OR if unnecessary: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>" (reason: >=3 non-space chars, no \'>\', not a placeholder)',
     docs: '/update-docs (then either: git add docs/*.md / *.md, OR — inside a linked worktree — let /update-docs stage bullets into WORKTREE_NOTES.md ## History Notes / ## Changelog Notes per #436)',
@@ -385,6 +440,16 @@ if (require.main === module) {
     } else {
       lines.push(
         `  ${step}: echo "<<WORKFLOW_MARK_STEP_${step}_complete>>"`
+      );
+    }
+    if (step === "review_tests" && incompleteReasons[step] === "stale-token") {
+      lines.push(
+        "    (note: tests were re-edited after a passing review — staged-tests fingerprint changed; re-run /review-tests)"
+      );
+    }
+    if (step === "review_tests" && incompleteReasons[step] === "warnings-pending") {
+      lines.push(
+        "    (note: /review-tests reported coverage warnings — re-run /write-tests to address gaps, then /review-tests again)"
       );
     }
   }
