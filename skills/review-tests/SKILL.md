@@ -25,15 +25,16 @@ Review test case completeness against source code.
    - If gaps are found, propose specific test cases to add
    - Apply changes only after user approval
 
-4. **Create review marker**: After review is complete (regardless of whether gaps were found),
-   create the marker file so the commit hook knows review was done:
-   ```bash
-   git rev-parse --short HEAD | tr -d '\n' > "$(git rev-parse --git-dir)/.test-reviewed"
-   ```
+4. **Emit workflow sentinel** — two separate Bash calls, not chained:
+   a. Compute staged-tests token: `TOKEN=$(node -e "const {computeStagedTestsToken}=require(process.env.AGENTS_CONFIG_DIR+'/hooks/workflow-gate/review-tests-evidence');const t=computeStagedTestsToken(process.cwd());process.stdout.write(t||'')")`
+   b. If coverage adequate: `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>"`
+   c. If gaps or warnings: `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} <one-line summary — no '>' characters>>>"`
+   d. Skip when WORKFLOW_WRITE_TESTS_NOT_NEEDED was emitted (propagated skip).
 
 ## Rules
 
 - Always launch the subagent — do not skip the review even if tests look complete
 - The subagent must read actual file contents, not just file names
 - The checklist definition lives in `skills/_shared/test-design.md` — do not duplicate it here
-- Create the marker file only after the review is genuinely complete
+- Emit exactly one sentinel per review run: REVIEW_TESTS_COMPLETE on pass, REVIEW_TESTS_WARNINGS on any gap or warning.
+- Do not emit REVIEW_TESTS_COMPLETE when WORKFLOW_WRITE_TESTS_NOT_NEEDED was emitted (skip path).

@@ -161,6 +161,11 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason });
+      // Symmetric skip propagation (issue #833): review_tests is paired with
+      // write_tests. If there are no tests to write, there are no tests to review.
+      markStep(sessionId, "review_tests", "skipped", {
+        skip_reason: `(symmetric: write_tests not needed) ${v.reason}`,
+      });
       const hint = nextStepHint("write_tests");
       if (hint) pushMessage(hint);
     } catch (e) {

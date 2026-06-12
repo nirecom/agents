@@ -12,6 +12,35 @@ asked "is this ready to ship?".
 immediately before merge). Never emit earlier in the workflow — the PR must exist first,
 because the user is approving the merge of a specific PR, not an abstract diff.
 
+## Preflight — risk-category gate (#833)
+
+Before emitting the sentinel, run:
+
+    bash "$AGENTS_CONFIG_DIR/bin/check-verification-gate.sh"
+
+Parse its structured stdout (each line: `CATEGORY: <token>\tQUESTION: <text>`).
+
+### Interactive mode (default)
+
+Count matched categories:
+- **Zero matches** (empty stdout) → no risk category. Skip the gate; proceed to Protocol.
+- **One match** → single-choice AskUserQuestion using the `QUESTION:` text. Options: `Yes — verified` / `No — skip verification this time`. `Yes`: proceed. `No`: proceed but log the unverified category to `WORKTREE_NOTES.md ## Unverified Categories`.
+- **Multiple matches** → single multi-select AskUserQuestion with one option per category (label = `QUESTION:` text), plus `Skip all — proceed without verification`. Selected categories are verified. Unselected categories are logged to `WORKTREE_NOTES.md ## Unverified Categories`. Emission proceeds regardless.
+
+### Non-interactive mode
+
+When `$CI` or `$CLAUDE_NON_INTERACTIVE` is set:
+- Skip AskUserQuestion.
+- Emit one stderr warning per matched category: `WARNING: verification-gate category <token> not interactively confirmed (non-interactive mode).`
+- Log each matched category to `WORKTREE_NOTES.md ## Unverified Categories`.
+- Proceed with sentinel emission.
+
+### Failure mode
+
+Exit 3 from the tool → fail-safe. In interactive mode ask "Verification gate could not run — proceed anyway?" (Yes/No). In non-interactive mode: log warning, proceed.
+
+Compatibility with PR #818: this gate runs after `check-unstaged-tracked.sh` (WE-2.5) and before the `WORKFLOW_USER_VERIFIED` sentinel. The two guards are orthogonal.
+
 ## Protocol
 
 **Emit the sentinel directly** as its own Bash call — no narrative prelude, no PR URL restated in chat:
@@ -41,3 +70,5 @@ the hook is the single source of truth for the dialog's surrounding text.
   the sentinel emit in Step 4 still requires user approval via the permission dialog.
 - Detection is on `tool_input.command` matching the sentinel form. Sentinel strings in
   stdout (cat/grep output) do not trigger the hook.
+- Preflight runs once per emission path. /worktree-end Steps WE-3b, WE-6, and WE-7 all inherit it via this shared protocol — no per-skill duplication.
+- Unverified categories are persisted to WORKTREE_NOTES.md ## Unverified Categories so /worktree-end can show them in the final summary.

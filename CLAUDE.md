@@ -26,8 +26,10 @@ WF-CODE-3. **Branch/Worktree creation** —
    - **`ENFORCE_WORKTREE=off`**: main worktree writes allowed. Options: branch-only (`git switch -c <name>`, naming → `rules/branch.md`) or main directly for trivial changes. Consult `rules/branch.md` for branch-vs-main.
    Record: `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"`
    (`main` is only valid when `ENFORCE_WORKTREE=off`.)
-WF-CODE-4. **Write tests** — **Always write or update tests before modifying source code.** Run `/write-tests`.
-   - If unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
+WF-CODE-4. **Write tests & review** — **Always write or update tests before modifying source code.** Run `/write-tests`, then immediately run `/review-tests`.
+   - `/review-tests` emits `<<WORKFLOW_MARK_STEP_review_tests_complete>>` on pass (adequate coverage) or `<<WORKFLOW_REVIEW_TESTS_WARNINGS: <summary>>>` on gaps.
+   - On gaps: address in `/write-tests`, then re-run `/review-tests` until it passes.
+   - If both are unnecessary: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>"` (symmetrically waives both the write and review gates).
 WF-CODE-5. **Code** — Run `/write-code`.
 WF-CODE-6. **Run tests & Security review** — Run all in parallel (single response, multiple tool calls):
    - Skill: `/run-tests`
