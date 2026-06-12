@@ -231,4 +231,8 @@ Changes: **migrate-repo**: Fixed TOCTOU race in the existing-issues pre-flight g
 
 ### FEATURE: PR #841 (2026-06-13)
 Background: feat(#831): L1 reporting coverage — supervisor-emit facade + hook auto-report + sid auto-resolve
-Changes: `supervisor-report --session-id` is now optional: auto-resolves from WORKTREE_NOTES.md or env when omitted; hooks (enforce-worktree, workflow-gate, enforce-issue-close, enforce-override-handlers) now auto-report block and sentinel events to the supervisor state file without manual invocation
+Changes: `supervisor-report --session-id` is now optional: auto-resolves from WORKTREE_NOTES.md or env when omitted; hooks (enforce-worktree, workflow-gate, enforce-issue-close, enforce-override-handlers) now auto-report block and sentinel events to the supervisor state file without manual invocation
+
+### FEATURE: PR #854 (2026-06-13)
+Background: fix(#739): generalize enforce-worktree exclusion model for sequenced commands
+Changes: `/worktree-end` Step 5 backup and Step 6g pre-pull stash no longer blocked by `enforce-worktree.js`: `mkdir -p .worktree-backup/x && cp ...` sequenced commands and env-prefix variable cp destinations are now correctly allowed through the exclusion-path fast-path.
