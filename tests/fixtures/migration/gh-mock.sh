@@ -42,11 +42,25 @@ case "$cmd" in
                 ;;
             list)
                 # Return one issue when MOCK_HAS_ISSUES=1, else empty list.
+                # If --jq is provided, apply it to the JSON output (so orchestrate.sh
+                # can pass --jq '.[0].number // 0' and get an integer back).
                 echo "gh issue list $*" >> "$LOG"
+                highest_n="${MOCK_HIGHEST_ISSUE_N:-5}"
                 if [ "${MOCK_HAS_ISSUES:-}" = "1" ]; then
-                    echo '[{"number":5}]'
+                    base_json="[{\"number\":${highest_n}}]"
                 else
-                    echo '[]'
+                    base_json="[]"
+                fi
+                jq_filter=""
+                prev=""
+                for arg in "$@"; do
+                    [ "$prev" = "--jq" ] && jq_filter="$arg"
+                    prev="$arg"
+                done
+                if [ -n "$jq_filter" ] && command -v jq >/dev/null 2>&1; then
+                    echo "$base_json" | jq -r "$jq_filter"
+                else
+                    echo "$base_json"
                 fi
                 exit 0
                 ;;
