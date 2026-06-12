@@ -40,7 +40,7 @@ const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend } = require("./enforce-worktree/main-worktree-allows");
-const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, isWriteTargetAllExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
+const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 
 function readStdin() {
   try {
@@ -290,6 +290,11 @@ if (toolName === "Bash") {
             isWriteTargetAllExcluded(cmd, targets, repoRoot, excludePatterns)) {
           done();
         }
+      } else if (excludePatterns.length > 0 &&
+                 isEverySegmentExcluded(cmd, repoRoot, excludePatterns)) {
+        // #739: sequenced commands where every write segment's targets are all
+        // covered by EXCLUDE → allow (e.g. `mkdir -p .worktree-backup/x && cp src .worktree-backup/x/f`).
+        done();
       }
     }
 
