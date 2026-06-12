@@ -6,6 +6,7 @@
 2. [Session Sync](claude-code/session-sync.md) — cross-machine session history sync via private GitHub repo
 3. [settings.json Design](claude-code/settings.md) — allow/deny rules, hook inventory
 4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
+5. [settings.json Drift Prevention](#6-settingsjson-drift-prevention) — layered defense: git hooks + session-start backstop
 
 ## 5. EM Supervisor (Layer 1)
 
@@ -59,3 +60,36 @@ TDD test writing uses a subagent (`mode: "auto"`) to run the write → run → f
 autonomously. This reduces user confirmations from O(N) (per-edit approval) to exactly 2:
 (a) test case plan approval, (b) final test file review. The subagent is instructed to edit
 only test files, never source code. See `write-tests` skill for the procedure.
+
+
+## 6. settings.json Drift Prevention
+
+`~/.claude/settings.json` is a copy-deployed file assembled by `install/assemble-settings.js`
+from `agents/settings.json` (base) + `agents/settings-extension.json` (extension).
+It cannot be a symlink because the extension contains host-private absolute paths.
+
+**Problem:** When `settings.json` gains new hook registrations or permission entries after
+the assembled file was last generated, the assembled copy becomes stale. Stale permission
+entries cause workflow sessions to stall on blocked tool calls or absent sentinels.
+
+**Defense layers** (all delivered via `core.hooksPath = agents/hooks/`; no installer change needed):
+
+| Layer | Hook | Trigger | Action |
+|---|---|---|---|
+| Proactive | `hooks/post-merge` | git merge / pull changes `settings.json` or `settings-extension.json` | Auto-reassemble `~/.claude/settings.json` |
+| Proactive | `hooks/post-checkout` | Branch switch changes those files | Auto-reassemble |
+| Backstop | `hooks/session-start.js` + `hooks/lib/settings-drift.js` | Every session start | Detect missing entries; inject `WARNING` into `additionalContext` |
+
+**Repo guard:** Both git hooks compare `git rev-parse --show-toplevel` against the agents
+root to fire only inside the agents repo (not in every repo on the machine that uses
+`core.hooksPath`). All hooks are fail-open — any assembler error exits 0.
+
+**Drift detection algorithm** (`hooks/lib/settings-drift.js`):
+- Permissions (`allow`, `deny`, `ask`, `additionalDirectories`): subset check — every entry
+  present in base+ext must exist in the assembled file.
+- Hooks: multiset count — the same `matcher` string can appear multiple times (e.g., one
+  per PreToolUse command), so a Map-based count is used instead of a Set.
+
+**Source of truth:** The assembler always reads from the agents **main worktree**'s
+`settings.json` (`__dirname`-relative from `hooks/lib/`). Linked worktrees are not used
+as assembler input.
