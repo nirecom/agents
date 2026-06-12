@@ -1,15 +1,13 @@
 #!/bin/bash
 # Tests: skills/_shared/confirm-plan.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md
-# Tags: confirm-plan, co-emission, sentinel, outline, detail, intent, ssot
-# Static grep-based checks verifying that #842 co-emission wiring is in place:
-#   - confirm-plan.md documents the MUST co-emit requirement
-#   - each skill references the co-emission requirement via confirm-plan.md Step 3
+# Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback
+# Static grep-based checks verifying that #842 structural wiring is in place:
+#   - confirm-plan.md documents the workflow-mark.js / additionalContext automatic next-step injection
 #   - make-outline-plan Completion emits both WORKFLOW_MARK_STEP_outline_complete AND
-#     WORKFLOW_OUTLINE_PLAN_COMPLETE before calling make-detail-plan (co-emission)
+#     WORKFLOW_OUTLINE_PLAN_COMPLETE before calling make-detail-plan
 #   - make-detail-plan ON path emits WORKFLOW_MARK_STEP_detail_complete after confirm
-#
-# Pre-implementation: assertions about "MUST be co-emitted" and "confirm-plan.md Step 3"
-# references are expected to FAIL until source files are updated.
+#   - workflow-mark.js dispatches the new confirm-next-step-handler so CONFIRM sentinels
+#     are followed up automatically (no explicit co-emit required from the LLM)
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,39 +40,22 @@ require_file() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. confirm-plan.md documents the co-emission preferred path + structural fallback
+# 1. confirm-plan.md documents the workflow-mark.js automatic next-step injection
 # ---------------------------------------------------------------------------
-echo "=== 1. confirm-plan.md: co-emission directive + structural fallback ==="
+echo "=== 1. confirm-plan.md: workflow-mark.js automatic next-step injection ==="
 if require_file "$CONFIRM_PLAN_MD"; then
-    if has_fixed "Co-emission (preferred path)" "$CONFIRM_PLAN_MD"; then
-        pass "confirm-plan.md documents 'Co-emission (preferred path)'"
+    if has_fixed "workflow-mark.js" "$CONFIRM_PLAN_MD" && has_fixed "additionalContext" "$CONFIRM_PLAN_MD"; then
+        pass "confirm-plan.md cites workflow-mark.js + additionalContext"
     else
-        fail "confirm-plan.md missing 'Co-emission (preferred path)' directive"
-    fi
-    if has_fixed "Structural fallback" "$CONFIRM_PLAN_MD" && has_fixed "workflow-mark.js" "$CONFIRM_PLAN_MD"; then
-        pass "confirm-plan.md cites Structural fallback + workflow-mark.js"
-    else
-        fail "confirm-plan.md missing 'Structural fallback' + workflow-mark.js reference"
+        fail "confirm-plan.md missing workflow-mark.js / additionalContext reference"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# 2. clarify-intent/SKILL.md: co-emission reference near WORKFLOW_CONFIRM_INTENT
-# ---------------------------------------------------------------------------
-echo "=== 2. clarify-intent/SKILL.md: co-emission reference ==="
-if require_file "$CLARIFY_INTENT_SKILL"; then
-    if has "co-emit|confirm-plan\.md Step 3" "$CLARIFY_INTENT_SKILL"; then
-        pass "clarify-intent/SKILL.md references co-emit or confirm-plan.md Step 3"
-    else
-        fail "clarify-intent/SKILL.md missing co-emit / confirm-plan.md Step 3 reference"
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# 3. make-outline-plan/SKILL.md Completion: co-emits mark_step AND plan_complete
+# 3. make-outline-plan/SKILL.md Completion: emits mark_step AND plan_complete
 #    AND invokes make-detail-plan
 # ---------------------------------------------------------------------------
-echo "=== 3. make-outline-plan/SKILL.md: Completion co-emission ==="
+echo "=== 3. make-outline-plan/SKILL.md: Completion sentinels ==="
 if require_file "$OUTLINE_SKILL"; then
     if has_fixed "WORKFLOW_MARK_STEP_outline_complete" "$OUTLINE_SKILL"; then
         pass "make-outline-plan/SKILL.md references WORKFLOW_MARK_STEP_outline_complete"
@@ -108,24 +89,24 @@ if require_file "$DETAIL_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 5. SSOT pointer: each skill references "confirm-plan.md Step 3"
-#    (rules/prompt.md §3.2 — no-echo-in-references: pointer only, not duplicate content)
+# 5. Each caller invokes the confirm-plan protocol (generic SSOT reference;
+#    no per-caller "Step 3" pointer required — protocol handles it internally)
 # ---------------------------------------------------------------------------
-echo "=== 5. SSOT pointer: skills reference 'confirm-plan.md Step 3' ==="
+echo "=== 5. Each caller invokes skills/_shared/confirm-plan.md protocol ==="
 for skill_file in "$CLARIFY_INTENT_SKILL" "$OUTLINE_SKILL" "$DETAIL_SKILL"; do
     skill_name="$(basename "$(dirname "$skill_file")")"
     if require_file "$skill_file"; then
-        if has_fixed "confirm-plan.md Step 3" "$skill_file"; then
-            pass "$skill_name/SKILL.md references 'confirm-plan.md Step 3'"
+        if has_fixed "skills/_shared/confirm-plan.md" "$skill_file"; then
+            pass "$skill_name/SKILL.md invokes skills/_shared/confirm-plan.md"
         else
-            fail "$skill_name/SKILL.md missing 'confirm-plan.md Step 3' SSOT pointer"
+            fail "$skill_name/SKILL.md missing skills/_shared/confirm-plan.md invocation"
         fi
     fi
 done
 
 # ---------------------------------------------------------------------------
 # 6. Structural enforcement: workflow-mark.js wires the CONFIRM next-step handler
-#    so the workflow continues even when the LLM does NOT co-emit follow-up calls.
+#    so the workflow continues automatically after Allow (no co-emit needed).
 # ---------------------------------------------------------------------------
 echo "=== 6. workflow-mark.js: CONFIRM next-step handler wired ==="
 HANDLER_FILE="$REPO_ROOT/hooks/workflow-mark/confirm-next-step-handler.js"

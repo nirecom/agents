@@ -106,7 +106,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
    Step 8 handles the file write — do NOT write here.
 
-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. On the `ON` path: emit `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"` per protocol Step 3 (co-emit Completion tool calls — see confirm-plan.md Step 3). Revise → ask what to change, re-run outline-planner, loop back to Step 7.
+8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. On the `ON` path: emit `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"` per protocol Step 3. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
