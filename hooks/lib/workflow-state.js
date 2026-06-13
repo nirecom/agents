@@ -434,22 +434,11 @@ function nextStepHint(stepName) {
 // the LLM's next inference so the workflow does not stall after Allow.
 const CONFIRM_NEXT_STEP_HINT = {
   intent:
-    "CONFIRM_INTENT approved (Allow). Continue clarify-intent Completion: " +
-    "(a) run non-GitHub gate + GitHub reconciliation (label / WIP / board-card) when applicable; " +
-    "(b) run tracking-issue guard (Step 0); " +
-    "(c) emit echo \"<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>\"; " +
-    "(d) TodoWrite update; " +
-    "(e) apply survey-artifact-valid check, then invoke `make-outline-plan` via Skill tool.",
+    "CONFIRM_INTENT approved. Run GitHub reconciliation then invoke `make-outline-plan` via Skill tool.",
   outline:
-    "CONFIRM_OUTLINE approved (Allow). Continue make-outline-plan Completion: " +
-    "emit echo \"<<WORKFLOW_MARK_STEP_outline_complete>>\" then " +
-    "echo \"<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>\", then invoke `make-detail-plan` via Skill tool.",
+    "CONFIRM_OUTLINE approved. Invoke `make-detail-plan` via Skill tool.",
   detail:
-    "CONFIRM_DETAIL approved (Allow). Continue make-detail-plan Completion: " +
-    "emit echo \"<<WORKFLOW_MARK_STEP_detail_complete>>\" then " +
-    "echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\" " +
-    "(consult rules/branch.md + rules/worktree.md), then invoke `write-tests` via Skill tool " +
-    "(or skip with echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
+    "CONFIRM_DETAIL approved. Emit <<WORKFLOW_BRANCHING_COMPLETE: ...>> if not yet done, then invoke `write-tests` via Skill tool.",
 };
 
 function confirmNextStepHint(stage) {
