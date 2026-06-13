@@ -235,4 +235,8 @@ Changes: `supervisor-report --session-id` is now optional: auto-resolves from WO
 
 ### FEATURE: PR #854 (2026-06-13)
 Background: fix(#739): generalize enforce-worktree exclusion model for sequenced commands
-Changes: `/worktree-end` Step 5 backup and Step 6g pre-pull stash no longer blocked by `enforce-worktree.js`: `mkdir -p .worktree-backup/x && cp ...` sequenced commands and env-prefix variable cp destinations are now correctly allowed through the exclusion-path fast-path.
+Changes: `/worktree-end` Step 5 backup and Step 6g pre-pull stash no longer blocked by `enforce-worktree.js`: `mkdir -p .worktree-backup/x && cp ...` sequenced commands and env-prefix variable cp destinations are now correctly allowed through the exclusion-path fast-path.
+
+### FEATURE: PR #859 (2026-06-13)
+Background: fix(#842): simplify CONFIRM_NEXT_STEP_HINT table to single-sentence directives
+Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE / CONFIRM_DETAIL) now reliably continues the workflow: next-step hints simplified to one-sentence directives so the LLM acts immediately instead of treating them as background information.
