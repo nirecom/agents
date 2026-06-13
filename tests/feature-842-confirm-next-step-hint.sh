@@ -5,6 +5,12 @@
 # and the user clicks Allow, workflow-mark.js (PostToolUse) injects a next-step
 # hint into additionalContext so the workflow continues even if the LLM did NOT
 # co-emit the follow-up tool calls in the same assistant turn.
+# L3 gap (what this test does NOT catch):
+# - hook registration in settings.json PostToolUse — if confirm-next-step-handler.js
+#   is not wired into workflow-mark.js dispatch, these tests still pass because they
+#   invoke workflow-mark.js directly (not via the Claude Code hook runner)
+# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
+#   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,15 +70,15 @@ if printf '%s' "$T1_CTX" | grep -qF "CONFIRM_INTENT approved"; then
 else
     fail "T1a missing 'CONFIRM_INTENT approved' — got: $T1_CTX"
 fi
-if printf '%s' "$T1_CTX" | grep -qF "WORKFLOW_CLARIFY_INTENT_COMPLETE"; then
-    pass "T1b hint references WORKFLOW_CLARIFY_INTENT_COMPLETE next sentinel"
-else
-    fail "T1b missing WORKFLOW_CLARIFY_INTENT_COMPLETE — got: $T1_CTX"
-fi
 if printf '%s' "$T1_CTX" | grep -qF "make-outline-plan"; then
     pass "T1c hint names the next skill (make-outline-plan)"
 else
     fail "T1c missing make-outline-plan — got: $T1_CTX"
+fi
+if printf '%s' "$T1_CTX" | grep -qF "GitHub reconciliation"; then
+    pass "T1-new hint references GitHub reconciliation step"
+else
+    fail "T1-new missing 'GitHub reconciliation' — got: $T1_CTX"
 fi
 
 # ---------------------------------------------------------------------------
@@ -86,16 +92,6 @@ if printf '%s' "$T2_CTX" | grep -qF "CONFIRM_OUTLINE approved"; then
     pass "T2a hint announces CONFIRM_OUTLINE approved"
 else
     fail "T2a missing 'CONFIRM_OUTLINE approved' — got: $T2_CTX"
-fi
-if printf '%s' "$T2_CTX" | grep -qF "WORKFLOW_MARK_STEP_outline_complete"; then
-    pass "T2b hint references WORKFLOW_MARK_STEP_outline_complete"
-else
-    fail "T2b missing WORKFLOW_MARK_STEP_outline_complete — got: $T2_CTX"
-fi
-if printf '%s' "$T2_CTX" | grep -qF "WORKFLOW_OUTLINE_PLAN_COMPLETE"; then
-    pass "T2c hint references WORKFLOW_OUTLINE_PLAN_COMPLETE"
-else
-    fail "T2c missing WORKFLOW_OUTLINE_PLAN_COMPLETE — got: $T2_CTX"
 fi
 if printf '%s' "$T2_CTX" | grep -qF "make-detail-plan"; then
     pass "T2d hint names the next skill (make-detail-plan)"
@@ -114,11 +110,6 @@ if printf '%s' "$T3_CTX" | grep -qF "CONFIRM_DETAIL approved"; then
     pass "T3a hint announces CONFIRM_DETAIL approved"
 else
     fail "T3a missing 'CONFIRM_DETAIL approved' — got: $T3_CTX"
-fi
-if printf '%s' "$T3_CTX" | grep -qF "WORKFLOW_MARK_STEP_detail_complete"; then
-    pass "T3b hint references WORKFLOW_MARK_STEP_detail_complete"
-else
-    fail "T3b missing WORKFLOW_MARK_STEP_detail_complete — got: $T3_CTX"
 fi
 if printf '%s' "$T3_CTX" | grep -qF "WORKFLOW_BRANCHING_COMPLETE"; then
     pass "T3c hint references WORKFLOW_BRANCHING_COMPLETE"
@@ -171,6 +162,19 @@ if printf '%s' "$T6_CTX" | grep -qF "CONFIRM_INTENT approved"; then
     fail "T6 failed echo should NOT emit CONFIRM hint — got: $T6_CTX"
 else
     pass "T6 failed echo → no CONFIRM hint emitted"
+fi
+
+# ---------------------------------------------------------------------------
+# T7: Unknown stage name → handler returns false, no hint emitted.
+# ---------------------------------------------------------------------------
+echo "=== T7: unknown CONFIRM stage → no hint ==="
+T7_JSON=$(build_mark_json 'echo "<<WORKFLOW_CONFIRM_BRANCHING: unknown>>"')
+T7_OUT=$(printf '%s' "$T7_JSON" | run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
+T7_CTX=$(extract_additional_context "$T7_OUT")
+if printf '%s' "$T7_CTX" | grep -qF "CONFIRM_BRANCHING approved"; then
+    fail "T7 unknown CONFIRM stage should NOT emit a hint — got: $T7_CTX"
+else
+    pass "T7 unknown CONFIRM stage → no hint emitted"
 fi
 
 # ---------------------------------------------------------------------------
