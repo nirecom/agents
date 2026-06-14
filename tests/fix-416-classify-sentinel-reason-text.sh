@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/fix-416-classify-sentinel-reason-text.sh
 # Tests: hooks/lib/bash-write-patterns.js classify()
-# Tags: classify, strip-kinds, sentinel-echo, isSentinelEchoSafe, issue-416
+# Tags: classify, strip-kinds, sentinel-echo, isSentinelEchoSafe, issue-416, unsafe-reason-chars
 #
 # After fix (#416):
 #   1. STRIP_KINDS gains "pkg-mgr" and "gh" → quoted pkg-mgr/gh verbs in grep/echo
@@ -16,6 +16,17 @@
 #   Group C2 (T3.14b–T3.28): FAIL until write-code adds pkg-mgr/gh to STRIP_KINDS.
 #   Group D (T3.17–T3.36):  Mixed: T3.19/T3.36 are PASS (read, false-neg accepted);
 #                           T3.21/T3.23-T3.25/T3.31/T3.34-T3.35 FAIL until fix.
+#
+# After UNSAFE_REASON_CHARS narrowing (this PR):
+#   Group B2 (T3.13d–h): FAIL until write-code narrows UNSAFE_REASON_CHARS to 3-char set.
+#   Group D2 (T3.37–41): PASS now (3-char set: $ ` " still blocks all DQ expansion).
+#   T3.24/T3.34/T3.35:   Flipped write→read (| and ; are literal in DQ; safe).
+#   Group E (T3.0a–c, T3.13i, T3.50): Edge inputs and dispatch guard.
+#
+# L3 gap: These tests spawn Node.js to call classify() directly (L2). An L3 test
+# would invoke enforce-worktree.js with a real Claude Code hook session and verify
+# that each command string is allow/block at the hook level, not just at the
+# classify() return value level. L3 is out of scope for this PR.
 
 set -u
 
@@ -63,6 +74,32 @@ assert_classify() {
     pass "$label → $expected"
   else
     fail "$label → expected '$expected', got '$got' (cmd: $cmd)"
+  fi
+}
+
+# classify_raw_js: pass a raw JS expression as the classify() argument.
+# Used for edge-input tests (null, empty string, non-string) that cannot be
+# represented as bash variables.
+CLASSIFY_RAW_HELPER="$TMPDIR_BASE/classify-raw-helper.js"
+cat > "$CLASSIFY_RAW_HELPER" <<'NODE_RAW'
+const path = require("path");
+const lib = path.join(process.argv[2], "hooks", "lib", "bash-write-patterns");
+const { classify } = require(lib);
+// process.argv[3] is the JS expression string, eval'd in a controlled context.
+// Only literal-value expressions are expected here (null, "", 42).
+// eslint-disable-next-line no-eval
+const val = eval(process.argv[3]); // safe: test-only, no user input
+process.stdout.write(classify(val));
+NODE_RAW
+
+assert_classify_raw() {
+  local label="$1" jsexpr="$2" expected="$3"
+  local got
+  got="$(run_with_timeout 15 node "$CLASSIFY_RAW_HELPER" "$AGENTS_DIR" "$jsexpr")"
+  if [ "$got" = "$expected" ]; then
+    pass "$label → $expected"
+  else
+    fail "$label → expected '$expected', got '$got' (js: $jsexpr)"
   fi
 }
 
@@ -170,6 +207,45 @@ assert_classify \
 assert_classify \
   "T3.13c sentinel RESET_FROM research (no reason)" \
   'echo "<<WORKFLOW_RESET_FROM_research>>"' \
+  "read"
+
+echo ""
+echo "--- Group B2: isSentinelEchoSafe — chars safe in DQ context (after 3-char narrowing) ---"
+echo "    WILL FAIL until write-code narrows UNSAFE_REASON_CHARS from 11 to 3 chars"
+
+# T3.13d: BRANCHING_COMPLETE with | separator and POSIX path → read
+# Canonical sentinel form per WF-CODE-3: branch:...|worktree:...|main
+assert_classify \
+  "T3.13d sentinel BRANCHING_COMPLETE with | separator and POSIX worktree path → read" \
+  'echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: fix/416-narrow|worktree: /home/u/wt/agents|main>>"' \
+  "read"
+
+# T3.13e: BRANCHING_COMPLETE with | separator and Windows backslash path → read
+# \ before > is NOT a bash escape sequence; safe in DQ context
+assert_classify \
+  "T3.13e sentinel BRANCHING_COMPLETE with | separator and Windows path → read" \
+  'echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: fix/416-narrow|worktree: C:\git\worktrees\416\agents>>"' \
+  "read"
+
+# T3.13f: PREMISE_FAIL with parens and semicolons in reason → read
+# PREMISE_FAIL_RE_DQ is in sentinel-patterns.js; parens/; are literal in DQ
+assert_classify \
+  "T3.13f sentinel PREMISE_FAIL with parens and semicolons in reason → read" \
+  'echo "<<WORKFLOW_PREMISE_FAIL: precondition not met (see #416; already fixed)>>"' \
+  "read"
+
+# T3.13g: USER_VERIFIED with semicolon-separated prose → read
+# ; is literal inside DQ; no injection possible
+assert_classify \
+  "T3.13g sentinel USER_VERIFIED with semicolon prose → read" \
+  'echo "<<WORKFLOW_USER_VERIFIED: docs-only edit; no behavior change>>"' \
+  "read"
+
+# T3.13h: USER_VERIFIED with Windows backslash path → read
+# \ before non-expansion char (g) is literal in DQ
+assert_classify \
+  "T3.13h sentinel USER_VERIFIED with Windows backslash path → read" \
+  'echo "<<WORKFLOW_USER_VERIFIED: path C:\git\agents normalised>>"' \
   "read"
 
 echo ""
@@ -284,11 +360,11 @@ assert_classify \
   'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: `rm foo`>>"' \
   "write"
 
-# T3.24: pipe in reason → isSentinelEchoSafe=false → write
+# T3.24: pipe in reason → | is literal in DQ → isSentinelEchoSafe=true → read
 assert_classify \
-  "T3.24 sentinel with pipe in reason → write" \
+  "T3.24 sentinel with pipe in reason → read" \
   'echo "<<WORKFLOW_USER_VERIFIED: ok | curl evil>>"' \
-  "write"
+  "read"
 
 # T3.25: $(...) in BRANCHING_COMPLETE reason → write
 assert_classify \
@@ -323,17 +399,17 @@ assert_classify \
   'echo "<<WORKFLOW_USER_VERIFIED: ok>>" && rm -rf /tmp' \
   "write"
 
-# T3.34: semicolon embedded in reason → write
+# T3.34: semicolon embedded in reason → ; is literal in DQ → read
 assert_classify \
-  "T3.34 semicolon in reason → write" \
+  "T3.34 semicolon in reason → read" \
   'echo "<<WORKFLOW_USER_VERIFIED: ok;rm foo>>"' \
-  "write"
+  "read"
 
-# T3.35: pipe in reason → write
+# T3.35: pipe in reason → | is literal in DQ → read
 assert_classify \
-  "T3.35 pipe in reason → write" \
+  "T3.35 pipe in reason → read" \
   'echo "<<WORKFLOW_USER_VERIFIED: ok|cat>>"' \
-  "write"
+  "read"
 
 # T3.36: > in reason (or malformed closing) — NOT a strict sentinel because
 # USER_VERIFIED_RE_DQ uses [^>]+; "ok>x>>" breaks the regex match ($-anchor fails).
@@ -344,6 +420,43 @@ assert_classify \
   "T3.36 malformed sentinel with > in reason → read (not strict sentinel, content quoted)" \
   'echo "<<WORKFLOW_USER_VERIFIED: ok>x>>"' \
   "read"
+
+echo ""
+echo "--- Group D2: isSentinelEchoSafe security — 3-char set blocks all DQ expansion triggers ---"
+
+# T3.37: $VAR in reason → dollar in 3-char set → write
+assert_classify \
+  "T3.37 sentinel with dollar-VAR in reason → write (dollar in 3-char set)" \
+  'echo "<<WORKFLOW_USER_VERIFIED: built with $HOME>>"' \
+  "write"
+
+# T3.38: \$HOME in reason → \ before $ does NOT suppress: \$ passes the $ through
+# The dollar is still present in the regex scan → write
+assert_classify \
+  "T3.38 sentinel with escaped dollar-VAR in reason → write (dollar in 3-char set)" \
+  'echo "<<WORKFLOW_USER_VERIFIED: literal \$HOME>>"' \
+  "write"
+
+# T3.39: backtick in reason → backtick in 3-char set → write
+assert_classify \
+  "T3.39 sentinel with backtick in reason → write (backtick in 3-char set)" \
+  'echo "<<WORKFLOW_USER_VERIFIED: like \`this\`>>"' \
+  "write"
+
+# T3.40: escaped double-quote in reason → " char hits 3-char set → write
+# NOTE: USER_VERIFIED_RE_DQ uses [^>]+ so \" DOES pass isStrictSentinel.
+# It is blocked by the " in UNSAFE_REASON_CHARS, not by strict-sentinel failure.
+assert_classify \
+  "T3.40 sentinel with escaped double-quote in reason → write (quote-char in 3-char set)" \
+  'echo "<<WORKFLOW_USER_VERIFIED: he said \"hi\">>"' \
+  "write"
+
+# T3.41: ${VAR} dollar-brace form in reason → dollar in 3-char set → write
+# Symmetric with T3.37 (dollar-VAR) and T3.31 (dollar-paren): all blocked by $
+assert_classify \
+  "T3.41 sentinel with dollar-brace VAR in reason → write (dollar in 3-char set)" \
+  'echo "<<WORKFLOW_USER_VERIFIED: built with ${HOME}>>"' \
+  "write"
 
 echo ""
 echo "--- Regression: feature-692 Group B assertions still pass ---"
@@ -367,6 +480,43 @@ assert_classify \
   "692-B4 real git commit → write" \
   'git commit -m "test"' \
   "write"
+
+echo ""
+echo "--- Group E: Edge inputs and dispatch guard ---"
+
+# T3.0a: classify(null) → "read" — null guard at top of classify()
+assert_classify_raw \
+  "T3.0a classify(null) → read (null guard)" \
+  "null" \
+  "read"
+
+# T3.0b: classify("") → "read" — empty string is falsy, caught by !cmd guard
+assert_classify_raw \
+  "T3.0b classify('') → read (empty string guard)" \
+  "''" \
+  "read"
+
+# T3.0c: classify(42) → "read" — non-string typeof guard
+assert_classify_raw \
+  "T3.0c classify(42) → read (non-string type guard)" \
+  "42" \
+  "read"
+
+# T3.13i: empty reason in sentinel — [^>]+ requires ≥1 char; strict-sentinel
+# regex fails → normal classify → no write pattern → read (accepted false-neg).
+assert_classify \
+  "T3.13i sentinel USER_VERIFIED with empty reason (isStrictSentinel false) → read" \
+  'echo "<<WORKFLOW_USER_VERIFIED: >>"' \
+  "read"
+
+# T3.50: /tmp/ dispatch path — isKnownDispatchInvocation() returns false for
+# /tmp/ paths (injection guard), but no WRITE_PATTERNS match "bash /tmp/..."
+# → classify returns read (accepted false-negative at classify level; the hook
+# enforces the /tmp/ rejection via isKnownDispatchInvocation separately).
+assert_classify \
+  "T3.50 bash /tmp/ dispatch path → read (no write pattern; false-neg accepted)" \
+  "bash /tmp/bin/github-issues/issue-create-dispatch.sh" \
+  "read"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Runner summary
