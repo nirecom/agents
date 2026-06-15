@@ -259,4 +259,8 @@ Changes: BUGFIX: 3 test files on main had stale assertions; all 11 failures are 
 
 ### FEATURE: PR #873 (2026-06-16)
 Background: fix(#857): convert EM Supervisor Layer 2 to Stop-hook block
-Changes: EM Supervisor Layer 2 is now actually invoked: a sentinel hang (C1) or escape-hatch use (C2) at any Stop triggers a `decision:block`, forcing inline L2 review. The previous ScheduleWakeup advisory was a no-op in normal sessions and has been removed.
+Changes: EM Supervisor Layer 2 is now actually invoked: a sentinel hang (C1) or escape-hatch use (C2) at any Stop triggers a `decision:block`, forcing inline L2 review. The previous ScheduleWakeup advisory was a no-op in normal sessions and has been removed.
+
+### FEATURE: PR #874 (2026-06-16)
+Background: feat(#832): auto-accept class member triage, add MUST→OPTIONAL→NA sort
+Changes: category=FEATURE subject="#832: class-members-proposal: auto-accept triage" background="class member triage proposal no longer pauses for user confirmation at the intent stage" changes="clarify-intent now auto-accepts the class member triage proposal (MUST/OPTIONAL/NA) and presents it sorted by priority (MUST → OPTIONAL → NA). The 'Accept / Modify?' question is removed; triage values can still be adjusted by planners at the outline and detail stages."
