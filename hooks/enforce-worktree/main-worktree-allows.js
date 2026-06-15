@@ -271,6 +271,51 @@ function isAllowedPushAllExcluded(cmd, repoRoot, excludePatterns) {
 }
 
 /**
+ * True when cmd is `git [merge|rebase|cherry-pick] (--abort|--continue|--skip)`
+ * from the main worktree. Mid-operation aborts/continues/skips only mutate
+ * in-progress state files (.git/MERGE_HEAD, .git/rebase-merge/, .git/sequencer/)
+ * — never tracked files in linked worktrees — so no linked-worktree-count gate.
+ *
+ * Hard restrictions:
+ *   - rejectInterpreterAndChaining / hasShellChaining → reject
+ *   - Multiple -C flags → reject (parseGitCPath only reads the first)
+ *   - -C path, if present, must resolve to repoRoot
+ *   - Subcommand must be merge | rebase | cherry-pick at the git subcommand position
+ *   - First non-whitespace token after the subcommand must be --abort | --continue | --skip
+ */
+function isAllowedMidOperationAbort(cmd, repoRoot) {
+  if (!cmd || typeof cmd !== "string") return false;
+  if (!repoRoot) return false;
+  if (!/^\s*git\b/.test(cmd)) return false;
+  if (rejectRceGitFlags(cmd)) return false;
+  if (rejectInterpreterAndChaining(cmd)) return false;
+  if (hasShellChaining(cmd)) return false;
+  if (!/\bgit\b/.test(cmd)) return false;
+
+  // Multiple -C flags → reject (same gap-closing policy as isAllowedMainWorktreeCleanup).
+  if ((cmd.match(/\s-C\s/g) || []).length > 1) return false;
+  if (/\s-C\s/.test(stripQuotedArgs(cmd))) {
+    const cArg = parseGitCPath(cmd);
+    if (!cArg) return false;
+    try {
+      const normC    = normalizeCwd(cArg)    || cArg;
+      const normBase = normalizeCwd(repoRoot) || repoRoot;
+      if (path.resolve(normC).toLowerCase() !== path.resolve(normBase).toLowerCase()) return false;
+    } catch (e) { return false; }
+  }
+
+  const stripped = stripQuotedArgs(cmd);
+  const subMatch = stripped.match(
+    /\bgit\b(?:\s+-C\s+\S+)?(?:\s+-\S+(?:\s+\S+)?)*\s+(merge|rebase|cherry-pick)\b([\s\S]*)$/
+  );
+  if (!subMatch) return false;
+  const rest = subMatch[2] || "";
+  const firstTok = rest.trim().split(/\s+/)[0] || "";
+  const MID_OP_ACTIONS = new Set(["--abort", "--continue", "--skip"]);
+  return MID_OP_ACTIONS.has(firstTok);
+}
+
+/**
  * True when cmd is an approved cleanup-class git command AND no linked
  * worktrees remain (confirming cleanup has completed).
  *
@@ -401,6 +446,7 @@ module.exports = {
   isAllowedFastForwardMerge,
   isAllowedReadOnlyConfigCheck,
   isAllowedPushAllExcluded,
+  isAllowedMidOperationAbort,
   isAllowedMainWorktreeCleanup,
   isAllowedComposeDocAppend,
 };
