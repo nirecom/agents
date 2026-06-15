@@ -263,4 +263,8 @@ Changes: EM Supervisor Layer 2 is now actually invoked: a sentinel hang (C1) or 
 
 ### FEATURE: PR #874 (2026-06-16)
 Background: feat(#832): auto-accept class member triage, add MUST→OPTIONAL→NA sort
-Changes: category=FEATURE subject="#832: class-members-proposal: auto-accept triage" background="class member triage proposal no longer pauses for user confirmation at the intent stage" changes="clarify-intent now auto-accepts the class member triage proposal (MUST/OPTIONAL/NA) and presents it sorted by priority (MUST → OPTIONAL → NA). The 'Accept / Modify?' question is removed; triage values can still be adjusted by planners at the outline and detail stages."
+Changes: category=FEATURE subject="#832: class-members-proposal: auto-accept triage" background="class member triage proposal no longer pauses for user confirmation at the intent stage" changes="clarify-intent now auto-accepts the class member triage proposal (MUST/OPTIONAL/NA) and presents it sorted by priority (MUST → OPTIONAL → NA). The 'Accept / Modify?' question is removed; triage values can still be adjusted by planners at the outline and detail stages."
+
+### FEATURE: PR #875 (2026-06-16)
+Background: fix(#842): enforce CONFIRM continuation via Stop hook Layer 2
+Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE / CONFIRM_DETAIL) now reliably continues the workflow: when the model emits only the CONFIRM sentinel without the required follow-up Skill, the Stop hook detects the missing action and forces the model to restart the turn with the correct next step.
