@@ -267,4 +267,8 @@ Changes: category=FEATURE subject="#832: class-members-proposal: auto-accept tri
 
 ### FEATURE: PR #875 (2026-06-16)
 Background: fix(#842): enforce CONFIRM continuation via Stop hook Layer 2
-Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE / CONFIRM_DETAIL) now reliably continues the workflow: when the model emits only the CONFIRM sentinel without the required follow-up Skill, the Stop hook detects the missing action and forces the model to restart the turn with the correct next step.
+Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE / CONFIRM_DETAIL) now reliably continues the workflow: when the model emits only the CONFIRM sentinel without the required follow-up Skill, the Stop hook detects the missing action and forces the model to restart the turn with the correct next step.
+
+### FEATURE: PR #877 (2026-06-16)
+Background: fix(#852): allow git merge/rebase/cherry-pick --abort/--continue/--skip from main worktree
+Changes: `git merge --abort`, `git rebase --abort/--continue/--skip`, and `git cherry-pick --abort/--continue/--skip` from the main worktree are no longer blocked by the worktree enforcement hook when run without a `-C` flag
