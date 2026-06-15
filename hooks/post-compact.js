@@ -4,6 +4,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { getConvLangInjection } = require("./lib/conv-lang");
 
 function readStdin() {
   const chunks = [];
@@ -36,6 +37,10 @@ try {
     `Current workflow session_id: ${sessionId}`,
     `State file: ${path.join(stateDir, sessionId + ".json")}`,
   ];
+  try {
+    const convLang = getConvLangInjection();
+    if (convLang) lines.push(convLang);
+  } catch (_e) { /* fail-open */ }
   console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
 } catch (e) {
   console.log("{}");
