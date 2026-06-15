@@ -243,4 +243,8 @@ Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE 
 
 ### FEATURE: PR #863 (2026-06-15)
 Background: fix(#861): inject CONV_LANG into session-start + post-compact additionalContext
-Changes: `CONV_LANG` now works: setting `CONV_LANG=japanese` (or any language) in `.env` instructs Claude to respond in that language. The setting previously had no effect; it now injects a one-line language directive into session context at startup and after each compact. Set to `english` or leave unset to disable.
+Changes: `CONV_LANG` now works: setting `CONV_LANG=japanese` (or any language) in `.env` instructs Claude to respond in that language. The setting previously had no effect; it now injects a one-line language directive into session context at startup and after each compact. Set to `english` or leave unset to disable.
+
+### FEATURE: PR #864 (2026-06-15)
+Background: fix(#416): narrow UNSAFE_REASON_CHARS to 3-char DQ expansion set
+Changes: `WORKFLOW_BRANCHING_COMPLETE` and other sentinel echoes with `|`, `;`, `(`, `)`, or `\` in the reason text no longer trigger a false write-classification; the canonical `branch:...|worktree:...|main` format and Windows backslash paths now classify as read and pass through the worktree guard correctly.
