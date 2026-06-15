@@ -170,11 +170,17 @@ closing the parent is blocked. Cancelled/migrated children must already be close
   `/issue-close-stage` or `/issue-close-finalize` (the skills abort with a
   clear error if unset). Consumer repos (dotfiles, dotfiles-private) inherit
   the same variable.
-- `ISSUE_CLOSE_SKILL=1` is set by both skills as an inline env prefix to
-  bypass `enforce-issue-close.js` for `gh issue close` / `gh issue comment`
-  calls. The Phase 2 Step E `enforce-worktree.js` bypass for
-  `git add docs/history.md` was removed in #690 (Step E itself was removed —
-  Step WE-20 of `/worktree-end` is now the canonical history writer). Do not set
-  it elsewhere.
+- `ISSUE_CLOSE_SKILL=1` bypasses `enforce-issue-close.js` for `gh issue close`
+  only (`gh issue comment` is not gated). Two forms are accepted:
+  (a) **inline prefix** — exact shape `ISSUE_CLOSE_SKILL=1 gh issue close <N> --reason completed`
+  (digits-only `<N>`; no other env vars; no additional flags such as
+  `--comment`). Used for ad-hoc one-shot invocations.
+  (b) **env export** — `ISSUE_CLOSE_SKILL=1` exported into the hook's process
+  environment permits any `gh issue close` form. Used by `/issue-close-finalize`
+  and `/issue-close-stage` for skill-internal calls.
+  SSOT: `INLINE_SKILL_RE` in `hooks/enforce-issue-close.js`. The Phase 2 Step E
+  `enforce-worktree.js` bypass for `git add docs/history.md` was removed in #690
+  (Step E itself was removed — Step WE-20 of `/worktree-end` is now the canonical
+  history writer). Do not set it elsewhere.
 - `history.md` entries are written in English regardless of repo visibility
   (`rules/language.md`). The issue body language is the author's choice.
