@@ -3,6 +3,14 @@
 # Tests: hooks/supervisor-guard.js (Stop hook — wakeup reader / block-on-error)
 # Tags: supervisor, em-supervisor, hook, layer2, stop
 # RED for issue #719.
+# L3 gap (what this test does NOT catch):
+# - hook registration in settings.json Stop hooks — if supervisor-guard.js is not wired,
+#   L2 sentinel-hang and escape-hatch detection are fully absent but these tests still pass
+#   because they invoke the hook script directly
+# - real Claude Code transcript format differences — tests use minimal crafted JSONL;
+#   live session transcripts may have additional fields or a different JSONL structure
+# Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
+#   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged
 
 set -u
 
@@ -48,7 +56,7 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 }
 
 run_g1() {
-    require_source "$HOOK" "G1: next_check_at non-null -> additionalContext mentions supervisor.md" || return
+    require_source "$HOOK" "G1: next_check_at non-null (no transcript) -> decision=block, exit 2" || return
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g1-sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
@@ -56,10 +64,10 @@ run_g1() {
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "supervisor.md" ) && ( echo "$out" | grep -qi "agents" ); then
-        pass "G1: next_check_at non-null -> additionalContext mentions supervisor.md"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
+        pass "G1: next_check_at non-null (no transcript) -> decision=block, exit 2"
     else
-        fail "G1: next_check_at non-null -> additionalContext mentions supervisor.md (rc=$rc, out=$out)"
+        fail "G1: next_check_at non-null (no transcript) -> decision=block, exit 2 (rc=$rc, out=$out)"
     fi
 }
 
@@ -197,7 +205,7 @@ run_g9() {
 }
 
 run_g10() {
-    require_source "$HOOK" "G10: next_check_at + cumulative_severity=warning -> both refs in context" || return
+    require_source "$HOOK" "G10: next_check_at + cumulative_severity=warning -> decision=block (next_check_at takes precedence)" || return
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state "$tmp" "g10-sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: 'warning', findings: [] }"
@@ -205,10 +213,149 @@ run_g10() {
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "supervisor.md" ) && ( echo "$out" | grep -qi "warning" ); then
-        pass "G10: next_check_at + cumulative_severity=warning -> both refs in context"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
+        pass "G10: next_check_at + cumulative_severity=warning -> decision=block (next_check_at takes precedence)"
     else
-        fail "G10: next_check_at + cumulative_severity=warning -> both refs in context (rc=$rc, out=$out)"
+        fail "G10: next_check_at + cumulative_severity=warning -> decision=block (next_check_at takes precedence) (rc=$rc, out=$out)"
+    fi
+}
+
+make_fixture() {
+    local path="$1"; shift
+    for line in "$@"; do printf '%s\n' "$line"; done > "$path"
+}
+
+node_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
+}
+
+run_g11() {
+    require_source "$HOOK" "G11: MARK_STEP Bash as last tool_use in transcript -> decision=block, exit 2" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g11-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g11-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
+        pass "G11: MARK_STEP Bash as last tool_use in transcript -> decision=block, exit 2"
+    else
+        fail "G11: MARK_STEP Bash as last tool_use in transcript -> decision=block, exit 2 (rc=$rc, out=$out)"
+    fi
+}
+
+run_g12() {
+    require_source "$HOOK" "G12: MARK_STEP Bash + Skill tool_use follows in same content array -> no block" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}},{"type":"tool_use","id":"tu2","name":"Skill","input":{"skill":"write-tests"}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g12-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g12-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "G12: MARK_STEP Bash + Skill tool_use follows in same content array -> no block"
+    else
+        fail "G12: MARK_STEP Bash + Skill tool_use follows in same content array -> no block (rc=$rc, out=$out)"
+    fi
+}
+
+run_g13() {
+    require_source "$HOOK" "G13: CONFIRM_* Bash as last tool_use -> exempt, no block" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_CONFIRM_DETAIL: plan ready>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g13-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g13-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "G13: CONFIRM_* Bash as last tool_use -> exempt, no block"
+    else
+        fail "G13: CONFIRM_* Bash as last tool_use -> exempt, no block (rc=$rc, out=$out)"
+    fi
+}
+
+run_g14() {
+    require_source "$HOOK" "G14: MARK_STEP pattern in non-Bash tool_use -> no block (item.name guard)" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Read","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g14-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g14-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "G14: MARK_STEP pattern in non-Bash tool_use -> no block (item.name guard)"
+    else
+        fail "G14: MARK_STEP pattern in non-Bash tool_use -> no block (item.name guard) (rc=$rc, out=$out)"
+    fi
+}
+
+run_g15() {
+    require_source "$HOOK" "G15: adversarial session_id (path traversal) -> fail-open, exit 0" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    out=$(echo '{"stop_hook_active":false,"session_id":"../evil","transcript_path":""}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ]; then
+        pass "G15: adversarial session_id (path traversal) -> fail-open, exit 0"
+    else
+        fail "G15: adversarial session_id (path traversal) -> fail-open, exit 0 (rc=$rc, out=$out)"
+    fi
+}
+
+run_g16() {
+    require_source "$HOOK" "G16: empty transcript_path -> detectSentinelHang returns false (fail-open)" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    seed_state "$tmp" "g16-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(echo '{"stop_hook_active":false,"session_id":"g16-sid","transcript_path":""}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "G16: empty transcript_path -> detectSentinelHang returns false (fail-open)"
+    else
+        fail "G16: empty transcript_path -> detectSentinelHang returns false (fail-open) (rc=$rc, out=$out)"
+    fi
+}
+
+run_g17() {
+    require_source "$HOOK" "G17: last assistant entry has no message.content -> detectSentinelHang returns false" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"assistant","message":{"role":"assistant"}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g17-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g17-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "G17: last assistant entry has no message.content -> detectSentinelHang returns false"
+    else
+        fail "G17: last assistant entry has no message.content -> detectSentinelHang returns false (rc=$rc, out=$out)"
     fi
 }
 
@@ -222,6 +369,51 @@ run_g7
 run_g8
 run_g9
 run_g10
+run_g11
+run_g12
+run_g13
+run_g18() {
+    require_source "$HOOK" "G18: CONFIRM_NEXT_STEP Bash as last tool_use -> exempt, no block" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_CONFIRM_NEXT_STEP: step ready>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    seed_state "$tmp" "g18-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(printf '{"stop_hook_active":false,"session_id":"g18-sid","transcript_path":"%s"}' "$tp" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
+        pass "G18: CONFIRM_NEXT_STEP Bash as last tool_use -> exempt, no block"
+    else
+        fail "G18: CONFIRM_NEXT_STEP Bash as last tool_use -> exempt, no block (rc=$rc, out=$out)"
+    fi
+}
+
+run_g19() {
+    require_source "$HOOK" "G19: multiple findings -> systemMessage uses last finding detail" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    seed_state "$tmp" "g19-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"first-finding\",\"timestamp\":\"2026-06-06T11:00:00.000Z\"},{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"last-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
+    out=$(echo '{"stop_hook_active":false,"session_id":"g19-sid","transcript_path":""}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -q "last-finding" ); then
+        pass "G19: multiple findings -> systemMessage uses last finding detail"
+    else
+        fail "G19: multiple findings -> systemMessage uses last finding detail (rc=$rc, out=$out)"
+    fi
+}
+
+run_g14
+run_g15
+run_g16
+run_g17
+run_g18
+run_g19
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
