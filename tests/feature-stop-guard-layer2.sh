@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
-# Tags: stop-guard, hook, sentinel, layer2, workflow
-# Tests for Layer 2 sentinel-miss detection in hooks/stop-confirm-plan-guard.js.
+# Tags: stop-guard, hook, sentinel, layer2, workflow, confirm
+# Tests for Layer 2 sentinel-followup detection in hooks/stop-confirm-plan-guard.js.
 #
-# Layer 2 (extension): after the existing path-emission scan, for each marker with
-# suffix in {intent, outline, detail} where isConfirmOff(absPath) === false:
-#   - Scan transcript backward to most recent user entry. If no Bash tool_use
-#     contains <<WORKFLOW_CONFIRM_<SUFFIX>>>, emit a systemMessage (advisory).
-#   - Symmetric USER_VERIFIED check: assistant text contains <<WORKFLOW_USER_VERIFIED:
-#     but no Bash tool_use contains <<WORKFLOW_USER_VERIFIED → same reminder.
+# Layer 2 (new contract for #842): for each CONFIRM_<STAGE> sentinel echoed in the
+# LATEST assistant turn, scan the same turn for a stage-valid follow-up tool_use:
+#   - CONFIRM_INTENT  -> Skill(make-outline-plan)
+#   - CONFIRM_OUTLINE -> Skill(make-detail-plan)
+#   - CONFIRM_DETAIL  -> Skill(write-tests) OR Bash(WORKFLOW_BRANCHING_COMPLETE)
+# If the follow-up is missing, Layer 2 emits `decision:block + exit 2` with a
+# reason derived from CONFIRM_NEXT_STEP_HINT (workflow-state.js). Layer 1
+# (path-emission scan) is preserved unchanged.
 #
-# Layer 2 outputs systemMessage (advisory) NOT decision:block. Tests assert exit 0.
-#
-# The Layer 2 extension to stop-confirm-plan-guard.js is implemented in a later
-# step. When not yet present, tests SKIP gracefully (detected by absence of the
-# Layer 2 marker string in the hook source).
+# The Layer 2 extension is implemented in a later step. When not yet present,
+# tests SKIP gracefully (detected by absence of "Layer 2" marker in the hook).
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
@@ -66,7 +65,7 @@ SID="sg2-test-$$"
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-# Write a turn marker for the session.
+# Write a turn marker for the session (Layer 2 only activates when a marker exists).
 write_marker() {
   local suffix="$1" absPath="$2"
   run_with_timeout node -e "
@@ -86,159 +85,241 @@ write_marker() {
   " 2>/dev/null
 }
 
-# Build a transcript file with user + assistant entries.
-# $1 = transcript path
-# $2 = assistant text content (for the last assistant text)
-# $3 = assistant Bash tool_use command (empty string = no tool_use)
-build_transcript() {
-  local tpath="$1" asst_text="$2" bash_cmd="$3"
-  run_with_timeout node -e "
-    const fs = require('fs');
-    const tpath = process.argv[1];
-    const asstText = process.argv[2];
-    const bashCmd = process.argv[3];
-    const lines = [];
-    // user entry as scan boundary
-    lines.push(JSON.stringify({ type: 'user', message: { role: 'user', content: 'go' } }));
-    // assistant entry
-    const content = [];
-    if (asstText) content.push({ type: 'text', text: asstText });
-    if (bashCmd) content.push({ type: 'tool_use', name: 'Bash', input: { command: bashCmd } });
-    lines.push(JSON.stringify({ type: 'assistant', message: { role: 'assistant', content } }));
-    fs.writeFileSync(tpath, lines.join('\n') + '\n');
-  " "$tpath" "$asst_text" "$bash_cmd"
-}
-
 clear_markers() {
   rm -f "$WORKFLOW_DIR_TEST/$SID".confirm-plan-turn-*.json 2>/dev/null || true
 }
 
-extract_system_message() {
+# Build a transcript file with one user entry + one assistant entry whose
+# content array is supplied as a JSON string.
+# $1 = transcript path
+# $2 = JSON array string of content items
+build_transcript_full() {
+  local tpath="$1" content_json="$2"
+  run_with_timeout node -e "
+    const fs = require('fs');
+    const tpath = process.argv[1];
+    const contentJson = process.argv[2];
+    const content = JSON.parse(contentJson);
+    const lines = [];
+    lines.push(JSON.stringify({ type: 'user', message: { role: 'user', content: 'go' } }));
+    lines.push(JSON.stringify({ type: 'assistant', message: { role: 'assistant', content } }));
+    fs.writeFileSync(tpath, lines.join('\n') + '\n');
+  " "$tpath" "$content_json"
+}
+
+# Build a transcript with two assistant turns: an older one and a newer one.
+# Layer 2 must only scan the LATEST assistant turn.
+# $1 = transcript path
+# $2 = JSON array of content items for the OLDER assistant turn
+# $3 = JSON array of content items for the LATEST assistant turn
+build_transcript_two_turns() {
+  local tpath="$1" old_json="$2" new_json="$3"
+  run_with_timeout node -e "
+    const fs = require('fs');
+    const tpath = process.argv[1];
+    const oldContent = JSON.parse(process.argv[2]);
+    const newContent = JSON.parse(process.argv[3]);
+    const lines = [];
+    lines.push(JSON.stringify({ type: 'user', message: { role: 'user', content: 'go' } }));
+    lines.push(JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: oldContent } }));
+    lines.push(JSON.stringify({ type: 'user', message: { role: 'user', content: 'next' } }));
+    lines.push(JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: newContent } }));
+    fs.writeFileSync(tpath, lines.join('\n') + '\n');
+  " "$tpath" "$old_json" "$new_json"
+}
+
+extract_decision() {
   local result="$1"
   echo "$result" | run_with_timeout node -e "
     let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
-    process.stdout.write(d.systemMessage || '');
+    process.stdout.write(d.decision || '');
   " 2>/dev/null
 }
 
-# Run hook with stdin JSON; returns exit code via global variable.
+extract_reason() {
+  local result="$1"
+  echo "$result" | run_with_timeout node -e "
+    let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+    process.stdout.write(d.reason || '');
+  " 2>/dev/null
+}
+
+# Run hook with stdin JSON; captures both exit code and stdout.
 run_hook_with_rc() {
   local json="$1"
   HOOK_RC=0
   HOOK_OUT=$(echo "$json" | run_with_timeout node "$HOOK" 2>/dev/null) || HOOK_RC=$?
 }
 
-# ── T1: marker(intent) + CONFIRM_INTENT=on + no sentinel → reminder ────────
-echo "=== T1: marker(intent) + no sentinel → reminder systemMessage ==="
+setup_marker() {
+  local suffix="$1"
+  local plan_path="$PLANS_DIR/$SID-${suffix}.md"
+  touch "$plan_path"
+  write_marker "$suffix" "$plan_path"
+}
+
+# Bash CONFIRM tool_use as JSON fragments — note the inner quotes match the
+# CONFIRM_<STAGE>_RE_DQ regex (double-quoted echo with mandatory reason).
+BASH_CONFIRM_INTENT='{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_CONFIRM_INTENT: scope clarified>>\""}}'
+BASH_CONFIRM_OUTLINE='{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_CONFIRM_OUTLINE: approach A>>\""}}'
+BASH_CONFIRM_DETAIL='{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_CONFIRM_DETAIL: file-level plan>>\""}}'
+BASH_BRANCHING_COMPLETE='{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_BRANCHING_COMPLETE: worktree: /tmp/wt>>\""}}'
+
+SKILL_OUTLINE='{"type":"tool_use","name":"Skill","input":{"skill":"make-outline-plan"}}'
+SKILL_DETAIL='{"type":"tool_use","name":"Skill","input":{"skill":"make-detail-plan"}}'
+SKILL_WRITE_TESTS='{"type":"tool_use","name":"Skill","input":{"skill":"write-tests"}}'
+SKILL_CLARIFY_INTENT='{"type":"tool_use","name":"Skill","input":{"skill":"clarify-intent"}}'
+
+TEXT_BLOCK='{"type":"text","text":"Some narration."}'
+
+# ── L2a: CONFIRM_INTENT + Skill(make-outline-plan) after → exit 0 ─────────
+echo "=== L2a: CONFIRM_INTENT + Skill(make-outline-plan) follow-up → pass ==="
 clear_markers
-T1_PLAN="$PLANS_DIR/$SID-intent.md"
-touch "$T1_PLAN"
-write_marker "intent" "$T1_PLAN"
-T1_TRANSCRIPT="$TRANSCRIPT_DIR/$SID-t1.jsonl"
-build_transcript "$T1_TRANSCRIPT" "Plan written." ""
-T1_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$T1_TRANSCRIPT\"}"
-run_hook_with_rc "$T1_JSON"
-T1_MSG=$(extract_system_message "$HOOK_OUT")
-if [ "$HOOK_RC" -ne 0 ]; then
-  fail "T1 expected exit 0 (advisory), got exit $HOOK_RC"
-elif echo "$T1_MSG" | grep -qF "[confirm-plan Layer 2]" && echo "$T1_MSG" | grep -qF "WORKFLOW_CONFIRM_INTENT"; then
-  pass "T1 Layer 2 reminder emitted for missing WORKFLOW_CONFIRM_INTENT"
+setup_marker "intent"
+L2A_TPATH="$TRANSCRIPT_DIR/$SID-l2a.jsonl"
+build_transcript_full "$L2A_TPATH" "[$BASH_CONFIRM_INTENT,$SKILL_OUTLINE]"
+L2A_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2A_TPATH\"}"
+run_hook_with_rc "$L2A_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2a stage-valid follow-up after CONFIRM_INTENT → exit 0"
 else
-  fail "T1 expected Layer 2 reminder for INTENT, got: $HOOK_OUT"
+  fail "L2a expected exit 0 (follow-up present), got exit $HOOK_RC, out: $HOOK_OUT"
 fi
 clear_markers
 
-# ── T2: marker(intent) + WORKFLOW_CONFIRM_INTENT present → no reminder ─────
-echo "=== T2: marker(intent) + sentinel emitted → no reminder ==="
+# ── L2b: CONFIRM_INTENT preceded by Skill (no follow-up after) → block ─────
+echo "=== L2b: CONFIRM_INTENT with Skill BEFORE only → block ==="
 clear_markers
-T2_PLAN="$PLANS_DIR/$SID-intent.md"
-touch "$T2_PLAN"
-write_marker "intent" "$T2_PLAN"
-T2_TRANSCRIPT="$TRANSCRIPT_DIR/$SID-t2.jsonl"
-build_transcript "$T2_TRANSCRIPT" "Plan written." 'echo "<<WORKFLOW_CONFIRM_INTENT>>"'
-T2_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$T2_TRANSCRIPT\"}"
-run_hook_with_rc "$T2_JSON"
-T2_MSG=$(extract_system_message "$HOOK_OUT")
-if [ "$HOOK_RC" -ne 0 ]; then
-  fail "T2 expected exit 0, got exit $HOOK_RC"
-elif echo "$T2_MSG" | grep -qF "[confirm-plan Layer 2]"; then
-  fail "T2 unexpected Layer 2 reminder when sentinel present: $T2_MSG"
+setup_marker "intent"
+L2B_TPATH="$TRANSCRIPT_DIR/$SID-l2b.jsonl"
+build_transcript_full "$L2B_TPATH" "[$SKILL_CLARIFY_INTENT,$BASH_CONFIRM_INTENT]"
+L2B_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2B_TPATH\"}"
+run_hook_with_rc "$L2B_JSON"
+L2B_DECISION=$(extract_decision "$HOOK_OUT")
+L2B_REASON=$(extract_reason "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L2b expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L2B_DECISION" != "block" ]; then
+  fail "L2b expected decision:block, got: '$L2B_DECISION' out: $HOOK_OUT"
+elif ! echo "$L2B_REASON" | grep -qF "make-outline-plan"; then
+  fail "L2b reason missing 'make-outline-plan': $L2B_REASON"
 else
-  pass "T2 no Layer 2 reminder when sentinel present"
+  pass "L2b CONFIRM_INTENT without follow-up Skill → block + intent hint"
 fi
 clear_markers
 
-# ── T3: marker(intent) + CONFIRM_INTENT=off → no reminder (skip) ───────────
-echo "=== T3: marker(intent) + CONFIRM_INTENT=off → no reminder ==="
+# ── L2c: CONFIRM_DETAIL + Bash(WORKFLOW_BRANCHING_COMPLETE) after → pass ───
+echo "=== L2c: CONFIRM_DETAIL + WORKFLOW_BRANCHING_COMPLETE after → pass ==="
 clear_markers
-T3_PLAN="$PLANS_DIR/$SID-intent.md"
-touch "$T3_PLAN"
-write_marker "intent" "$T3_PLAN"
-T3_TRANSCRIPT="$TRANSCRIPT_DIR/$SID-t3.jsonl"
-build_transcript "$T3_TRANSCRIPT" "Plan written." ""
-T3_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$T3_TRANSCRIPT\"}"
-T3_OUT=$(
-  export CONFIRM_INTENT=off
-  echo "$T3_JSON" | run_with_timeout node "$HOOK" 2>/dev/null
-)
-T3_RC=$?
-T3_MSG=$(extract_system_message "$T3_OUT")
-if [ "$T3_RC" -ne 0 ]; then
-  fail "T3 expected exit 0, got exit $T3_RC"
-elif echo "$T3_MSG" | grep -qF "[confirm-plan Layer 2]"; then
-  fail "T3 unexpected Layer 2 reminder when CONFIRM_INTENT=off: $T3_MSG"
+setup_marker "detail"
+L2C_TPATH="$TRANSCRIPT_DIR/$SID-l2c.jsonl"
+build_transcript_full "$L2C_TPATH" "[$BASH_CONFIRM_DETAIL,$BASH_BRANCHING_COMPLETE]"
+L2C_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2C_TPATH\"}"
+run_hook_with_rc "$L2C_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2c CONFIRM_DETAIL + branching-complete follow-up → exit 0"
 else
-  pass "T3 no Layer 2 reminder when CONFIRM_INTENT=off"
+  fail "L2c expected exit 0, got exit $HOOK_RC, out: $HOOK_OUT"
 fi
 clear_markers
 
-# ── T4: no marker → no reminder (Layer 2 inactive) ─────────────────────────
-echo "=== T4: no marker → no reminder ==="
+# ── L2d: branching-complete BEFORE CONFIRM_DETAIL (nothing after) → block ──
+echo "=== L2d: branching-complete BEFORE CONFIRM_DETAIL only → block ==="
 clear_markers
-T4_TRANSCRIPT="$TRANSCRIPT_DIR/$SID-t4.jsonl"
-build_transcript "$T4_TRANSCRIPT" "Some text." ""
-T4_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$T4_TRANSCRIPT\"}"
-run_hook_with_rc "$T4_JSON"
-T4_MSG=$(extract_system_message "$HOOK_OUT")
-if [ "$HOOK_RC" -ne 0 ]; then
-  fail "T4 expected exit 0, got exit $HOOK_RC"
-elif [ -z "$T4_MSG" ] || ! echo "$T4_MSG" | grep -qF "[confirm-plan Layer 2]"; then
-  pass "T4 no Layer 2 reminder without marker"
+setup_marker "detail"
+L2D_TPATH="$TRANSCRIPT_DIR/$SID-l2d.jsonl"
+build_transcript_full "$L2D_TPATH" "[$BASH_BRANCHING_COMPLETE,$BASH_CONFIRM_DETAIL]"
+L2D_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2D_TPATH\"}"
+run_hook_with_rc "$L2D_JSON"
+L2D_DECISION=$(extract_decision "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L2d expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L2D_DECISION" != "block" ]; then
+  fail "L2d expected decision:block, got: '$L2D_DECISION' out: $HOOK_OUT"
 else
-  fail "T4 unexpected reminder without marker: $T4_MSG"
+  pass "L2d follow-up must come AFTER CONFIRM_DETAIL → block"
 fi
+clear_markers
 
-# ── T5: USER_VERIFIED text-only sentinel → reminder systemMessage ──────────
-echo "=== T5: USER_VERIFIED in assistant text only → reminder ==="
+# ── L2e: CONFIRM_OUTLINE alone (no follow-up at all) → block ───────────────
+echo "=== L2e: CONFIRM_OUTLINE alone, no follow-up → block ==="
 clear_markers
-T5_TRANSCRIPT="$TRANSCRIPT_DIR/$SID-t5.jsonl"
-build_transcript "$T5_TRANSCRIPT" "<<WORKFLOW_USER_VERIFIED: approved>>" ""
-T5_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$T5_TRANSCRIPT\"}"
-run_hook_with_rc "$T5_JSON"
-T5_MSG=$(extract_system_message "$HOOK_OUT")
-if [ "$HOOK_RC" -ne 0 ]; then
-  fail "T5 expected exit 0, got exit $HOOK_RC"
-elif echo "$T5_MSG" | grep -qF "[confirm-plan Layer 2]" && echo "$T5_MSG" | grep -qF "WORKFLOW_USER_VERIFIED"; then
-  pass "T5 USER_VERIFIED text-only → Layer 2 reminder emitted"
+setup_marker "outline"
+L2E_TPATH="$TRANSCRIPT_DIR/$SID-l2e.jsonl"
+build_transcript_full "$L2E_TPATH" "[$BASH_CONFIRM_OUTLINE]"
+L2E_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2E_TPATH\"}"
+run_hook_with_rc "$L2E_JSON"
+L2E_DECISION=$(extract_decision "$HOOK_OUT")
+L2E_REASON=$(extract_reason "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L2e expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L2E_DECISION" != "block" ]; then
+  fail "L2e expected decision:block, got: '$L2E_DECISION' out: $HOOK_OUT"
+elif ! echo "$L2E_REASON" | grep -qF "make-detail-plan"; then
+  fail "L2e reason missing 'make-detail-plan': $L2E_REASON"
 else
-  fail "T5 expected USER_VERIFIED reminder, got: $HOOK_OUT"
+  pass "L2e CONFIRM_OUTLINE alone → block + outline hint"
 fi
+clear_markers
 
-# ── T6: USER_VERIFIED in Bash tool_use → no reminder ───────────────────────
-echo "=== T6: USER_VERIFIED in Bash tool_use → no reminder ==="
+# ── L2f: no CONFIRM sentinel at all → exit 0 (Layer 2 not triggered) ───────
+echo "=== L2f: no CONFIRM sentinel → Layer 2 not triggered ==="
 clear_markers
-T6_TRANSCRIPT="$TRANSCRIPT_DIR/$SID-t6.jsonl"
-build_transcript "$T6_TRANSCRIPT" "User verified." 'echo "<<WORKFLOW_USER_VERIFIED: approved>>"'
-T6_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$T6_TRANSCRIPT\"}"
-run_hook_with_rc "$T6_JSON"
-T6_MSG=$(extract_system_message "$HOOK_OUT")
-if [ "$HOOK_RC" -ne 0 ]; then
-  fail "T6 expected exit 0, got exit $HOOK_RC"
-elif echo "$T6_MSG" | grep -qF "[confirm-plan Layer 2]" && echo "$T6_MSG" | grep -qF "WORKFLOW_USER_VERIFIED"; then
-  fail "T6 unexpected USER_VERIFIED reminder when in Bash tool_use: $T6_MSG"
+setup_marker "intent"
+L2F_TPATH="$TRANSCRIPT_DIR/$SID-l2f.jsonl"
+# Plain text + Skill + a non-CONFIRM Bash echo.
+BASH_REGULAR='{"type":"tool_use","name":"Bash","input":{"command":"ls -la"}}'
+build_transcript_full "$L2F_TPATH" "[$TEXT_BLOCK,$BASH_REGULAR,$SKILL_OUTLINE]"
+L2F_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2F_TPATH\"}"
+run_hook_with_rc "$L2F_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2f no CONFIRM sentinel → exit 0 (Layer 2 inert)"
 else
-  pass "T6 USER_VERIFIED in Bash tool_use → no reminder"
+  fail "L2f expected exit 0, got exit $HOOK_RC, out: $HOOK_OUT"
 fi
+clear_markers
+
+# ── L2g: CONFIRM in PAST turn only; latest turn has none → exit 0 ──────────
+echo "=== L2g: CONFIRM in past turn; latest turn clean → no re-block ==="
+clear_markers
+setup_marker "intent"
+L2G_TPATH="$TRANSCRIPT_DIR/$SID-l2g.jsonl"
+# Older turn had CONFIRM_INTENT with NO follow-up (would have blocked then);
+# latest turn is benign. Layer 2 must scan only the latest turn.
+build_transcript_two_turns "$L2G_TPATH" \
+  "[$BASH_CONFIRM_INTENT]" \
+  "[$TEXT_BLOCK]"
+L2G_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2G_TPATH\"}"
+run_hook_with_rc "$L2G_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2g re-block prevention: only latest assistant turn scanned"
+else
+  fail "L2g expected exit 0 (latest turn clean), got exit $HOOK_RC, out: $HOOK_OUT"
+fi
+clear_markers
+
+# ── Layer 1 regression: marker + assistant text contains WORKFLOW_PLANS_DIR ──
+echo "=== L1-reg: Layer 1 path-emission scan still works ==="
+clear_markers
+setup_marker "intent"
+L1R_TPATH="$TRANSCRIPT_DIR/$SID-l1r.jsonl"
+# Embed the plans dir path inside an assistant text block.
+PLANS_DIR_FWD="${PLANS_DIR//\\//}"
+L1R_TEXT_JSON="$(run_with_timeout node -e "
+  process.stdout.write(JSON.stringify({type:'text',text:'See plan at ' + process.argv[1] + '/intent.md'}));
+" "$PLANS_DIR_FWD")"
+build_transcript_full "$L1R_TPATH" "[$L1R_TEXT_JSON]"
+L1R_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L1R_TPATH\"}"
+run_hook_with_rc "$L1R_JSON"
+L1R_DECISION=$(extract_decision "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L1-reg expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L1R_DECISION" != "block" ]; then
+  fail "L1-reg expected decision:block, got: '$L1R_DECISION' out: $HOOK_OUT"
+else
+  pass "L1-reg Layer 1 path-emission block intact"
+fi
+clear_markers
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

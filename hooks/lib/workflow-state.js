@@ -427,11 +427,7 @@ function nextStepHint(stepName) {
   return hint ? `[workflow] ${hint}` : null;
 }
 
-// Hint table for CONFIRM_<STAGE> sentinels (PostToolUse after Allow). Emitted by
-// `workflow-mark.js` -> `confirm-next-step-handler.js`. Replaces the prompt-level
-// co-emission directive: when the LLM emits only the CONFIRM sentinel without
-// co-emitting the next steps, this hint reinjects the required follow-up into
-// the LLM's next inference so the workflow does not stall after Allow.
+// Used by `stop-confirm-plan-guard.js` Layer 2 as the `decision:block` reason text.
 const CONFIRM_NEXT_STEP_HINT = {
   intent:
     "CONFIRM_INTENT approved. Run GitHub reconciliation then invoke `make-outline-plan` via Skill tool.",
