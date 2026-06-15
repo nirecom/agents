@@ -9,6 +9,7 @@ const { cleanupZombies, createInitialState, writeState, readState,
         getCurrentContext, findLatestStateForContext,
         VALID_STEPS, STEP_HINT } = require("./lib/workflow-state");
 const settingsDrift = require("./lib/settings-drift");
+const { getConvLangInjection } = require("./lib/conv-lang");
 
 function readStdin() {
   const chunks = [];
@@ -193,5 +194,9 @@ try {
     lines.push("WARNING: ~/.claude/settings.json drift detected — run: node \"" + path.join(__dirname, "..", "install", "assemble-settings.js") + "\"");
     lines.push("  reason: " + r);
   }
+} catch (_e) { /* fail-open */ }
+try {
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
 } catch (_e) { /* fail-open */ }
 console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
