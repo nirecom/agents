@@ -18,6 +18,12 @@
 #   string[]  on success
 #   null      on parse failure (variable expansion, command substitution,
 #             process substitution, missing destination for Move/Copy)
+#
+# L3 gap (what this test does NOT catch):
+# - The real Claude Code PreToolUse hook pipeline calling bash-write-targets.js in a live session
+# - ENFORCE_WORKTREE=on enforcement end-to-end when a Bash tool fires with quoted rm paths
+# Closest-to-action mitigation: covered at broad-integration level by
+# tests/fix-bash-rm-target-extraction.sh, which runs the real enforce-worktree.js hook process.
 
 set -u
 
@@ -394,6 +400,16 @@ test_redirect_shell_expansion() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# extractPwshWriteTargets — quoted-path coverage gap fill (GREEN already)
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_pwsh_quoted_path() {
+    assert_fn_result "pwsh: Remove-Item double-quoted path with spaces" \
+        "$(call_pwsh 'Remove-Item "C:/path with spaces/file.txt"')" \
+        '["C:/path with spaces/file.txt"]'
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -410,6 +426,7 @@ test_idempotency
 test_security_redirect_injection
 test_cpmv_destination
 test_redirect_shell_expansion
+test_pwsh_quoted_path
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

@@ -128,6 +128,78 @@ run_case "R_Q: quoted in-repo path with spaces → blocked" \
     block \
     "rm \"${_main_worktree_node}/path with spaces/file\""
 
+# --- R_Q2: double-quoted non-repo path → allow ---
+run_case "R_Q2: double-quoted non-repo path with space → allow" \
+    allow \
+    "rm \"${NON_REPO_BASE}/quoted file.md\""
+
+# --- R_Q3: single-quoted non-repo path → allow ---
+run_case "R_Q3: single-quoted non-repo path → allow" \
+    allow \
+    "rm '/tmp/claude-rm-test-single/path.md'"
+
+# --- R_Q4: flag + double-quoted non-repo path with space → allow ---
+run_case "R_Q4: flag + double-quoted non-repo path with space → allow" \
+    allow \
+    "rm -rf \"${NON_REPO_BASE}/sub dir\""
+
+# --- R_Q5: mixed unquoted + quoted non-repo targets → allow ---
+run_case "R_Q5: mixed unquoted + quoted non-repo targets → allow" \
+    allow \
+    "rm ${NON_REPO_BASE}/a \"${NON_REPO_BASE}/b c\""
+
+# --- R_Q_SEMI: rm "a;b.md" → block (outer regex truncates at ;, accepted constraint) ---
+run_case "R_Q_SEMI: rm \"a;b.md\" → blocked (outer regex truncates at ;)" \
+    block \
+    'rm "a;b.md"'
+
+# --- R_Q_BSLASH: rm "foo\"bar.md" → block (backslash escape not handled, accepted constraint) ---
+run_case "R_Q_BSLASH: rm \"foo\\\"bar.md\" → blocked (backslash escape not handled)" \
+    block \
+    'rm "foo\"bar.md"'
+
+# --- R_Q_single_in_repo: single-quoted in-repo path with spaces → blocked (symmetry with R_Q) ---
+run_case "R_Q_single_in_repo: single-quoted in-repo path with spaces → blocked" \
+    block \
+    "rm '${_main_worktree_node}/path with spaces/file'"
+
+# --- R_LONG: long flags + non-repo path → allow (long flags skipped) ---
+run_case "R_LONG: rm --recursive --force non-repo path → allow" \
+    allow \
+    "rm --recursive --force ${NON_REPO_BASE}/sub"
+
+# --- R_EMPTY: rm -rf with no positionals → blocked (empty targets; hook default blocks) ---
+run_case "R_EMPTY: rm -rf with no positionals → blocked" \
+    block \
+    "rm -rf"
+
+# --- R_DD: rm -- README.md → blocked (-- end-of-flags; README.md resolves in-repo) ---
+run_case "R_DD: rm -- README.md → blocked" \
+    block \
+    "rm -- README.md"
+
+# --- R_Q6: multiple double-quoted non-repo targets → allow ---
+run_case "R_Q6: multiple double-quoted non-repo targets → allow" \
+    allow \
+    "rm \"${NON_REPO_BASE}/a\" \"${NON_REPO_BASE}/b c\""
+
+# --- R_Q7: mixed double-quoted, one in-repo → blocked ---
+run_case "R_Q7: mixed double-quoted with in-repo target → blocked" \
+    block \
+    "rm \"${NON_REPO_BASE}/a\" \"${_main_worktree_node}/README.md\""
+
+# --- R_Q_REL: double-quoted relative in-repo path → blocked (regression guard) ---
+run_case "R_Q_REL: rm \"README.md\" (double-quoted relative in-repo) → blocked" \
+    block \
+    'rm "README.md"'
+
+# --- R_TRAVERSAL: double-quoted path traversal back into repo → blocked ---
+# CWD is the main worktree; "../<repo-name>/README.md" resolves in-repo.
+_repo_name="$(basename "${_main_worktree_node}")"
+run_case "R_TRAVERSAL: rm \"../<repo>/README.md\" traversal → blocked" \
+    block \
+    "rm \"../${_repo_name}/README.md\""
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
