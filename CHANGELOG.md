@@ -239,4 +239,8 @@ Changes: `/worktree-end` Step 5 backup and Step 6g pre-pull stash no longer bloc
 
 ### FEATURE: PR #859 (2026-06-13)
 Background: fix(#842): simplify CONFIRM_NEXT_STEP_HINT table to single-sentence directives
-Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE / CONFIRM_DETAIL) now reliably continues the workflow: next-step hints simplified to one-sentence directives so the LLM acts immediately instead of treating them as background information.
+Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE / CONFIRM_DETAIL) now reliably continues the workflow: next-step hints simplified to one-sentence directives so the LLM acts immediately instead of treating them as background information.
+
+### FEATURE: PR #863 (2026-06-15)
+Background: fix(#861): inject CONV_LANG into session-start + post-compact additionalContext
+Changes: `CONV_LANG` now works: setting `CONV_LANG=japanese` (or any language) in `.env` instructs Claude to respond in that language. The setting previously had no effect; it now injects a one-line language directive into session context at startup and after each compact. Set to `english` or leave unset to disable.
