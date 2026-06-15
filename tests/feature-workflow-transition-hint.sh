@@ -29,6 +29,13 @@ run_with_timeout() {
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
+# On Windows / Git Bash, Node interprets "/tmp/..." as "C:\tmp\..." which differs
+# from MSYS bash's "/tmp" mount. Convert to a native Windows path so both bash
+# (writing JSON state files) and Node (reading them via CLAUDE_WORKFLOW_DIR)
+# resolve to the same physical location.
+if command -v cygpath >/dev/null 2>&1; then
+    TMPDIR_BASE="$(cygpath -m "$TMPDIR_BASE")"
+fi
 
 # Write a state file: write_state <dir> <session_id> <json_content>
 write_state() {
@@ -91,9 +98,10 @@ STATE_CLARIFY_COMPLETE() {
 {
   "version": 1,
   "session_id": "$sid",
-  "created_at": "2026-04-28T10:00:00.000Z",
+  "created_at": "2099-04-28T10:00:00.000Z",
   "steps": {
-    "clarify_intent":     {"status": "complete", "updated_at": "2026-04-28T10:01:00.000Z"},
+    "workflow_init":      {"status": "complete", "updated_at": "2099-04-28T10:00:30.000Z"},
+    "clarify_intent":     {"status": "complete", "updated_at": "2099-04-28T10:01:00.000Z"},
     "research":           {"status": "pending",  "updated_at": null},
     "outline":            {"status": "pending",  "updated_at": null},
     "detail":             {"status": "pending",  "updated_at": null},
@@ -115,20 +123,21 @@ ALL_COMPLETE_STATE() {
 {
   "version": 1,
   "session_id": "$sid",
-  "created_at": "2026-04-28T10:00:00.000Z",
+  "created_at": "2099-04-28T10:00:00.000Z",
   "steps": {
-    "clarify_intent":     {"status": "complete", "updated_at": "2026-04-28T10:01:00.000Z"},
-    "research":           {"status": "complete", "updated_at": "2026-04-28T10:02:00.000Z"},
-    "outline":            {"status": "complete", "updated_at": "2026-04-28T10:02:30.000Z"},
-    "detail":             {"status": "complete", "updated_at": "2026-04-28T10:03:00.000Z"},
-    "branching_complete": {"status": "complete", "updated_at": "2026-04-28T10:04:00.000Z"},
-    "write_tests":        {"status": "complete", "updated_at": "2026-04-28T10:05:00.000Z"},
-    "review_tests":       {"status": "complete", "updated_at": "2026-04-28T10:05:30.000Z"},
-    "run_tests":          {"status": "complete", "updated_at": "2026-04-28T10:06:00.000Z"},
-    "review_security":    {"status": "complete", "updated_at": "2026-04-28T10:07:00.000Z"},
-    "docs":               {"status": "complete", "updated_at": "2026-04-28T10:08:00.000Z"},
-    "user_verification":  {"status": "complete", "updated_at": "2026-04-28T10:09:00.000Z"},
-    "cleanup":            {"status": "skipped",  "updated_at": "2026-04-28T10:10:00.000Z"}
+    "workflow_init":      {"status": "complete", "updated_at": "2099-04-28T09:59:30.000Z"},
+    "clarify_intent":     {"status": "complete", "updated_at": "2099-04-28T10:01:00.000Z"},
+    "research":           {"status": "complete", "updated_at": "2099-04-28T10:02:00.000Z"},
+    "outline":            {"status": "complete", "updated_at": "2099-04-28T10:02:30.000Z"},
+    "detail":             {"status": "complete", "updated_at": "2099-04-28T10:03:00.000Z"},
+    "branching_complete": {"status": "complete", "updated_at": "2099-04-28T10:04:00.000Z"},
+    "write_tests":        {"status": "complete", "updated_at": "2099-04-28T10:05:00.000Z"},
+    "review_tests":       {"status": "complete", "updated_at": "2099-04-28T10:05:30.000Z"},
+    "run_tests":          {"status": "complete", "updated_at": "2099-04-28T10:06:00.000Z"},
+    "review_security":    {"status": "complete", "updated_at": "2099-04-28T10:07:00.000Z"},
+    "docs":               {"status": "complete", "updated_at": "2099-04-28T10:08:00.000Z"},
+    "user_verification":  {"status": "complete", "updated_at": "2099-04-28T10:09:00.000Z"},
+    "cleanup":            {"status": "skipped",  "updated_at": "2099-04-28T10:10:00.000Z"}
   }
 }
 EOF
@@ -185,18 +194,13 @@ assert_contains "SS-1a. new session: additionalContext contains 'clarify_intent:
 assert_contains "SS-1b. new session: additionalContext contains 'NEXT ACTION:'" \
     "$SS1_CTX" "NEXT ACTION:"
 
-# For new session, clarify_intent is pending → NEXT_STEP_HINT[clarify_intent] is shown.
-# That hint contains 'make-outline-plan'. The test spec says "NEXT ACTION line contains clarify-intent".
-# But looking at actual output: new session → session-start creates state with all pending.
-# The first pending step is clarify_intent → NEXT_STEP_HINT[clarify_intent] is used.
-# NEXT_STEP_HINT[clarify_intent] contains "make-outline-plan" (not "clarify-intent").
-# However, when no state file exists (state is null), the else branch in buildWorkflowStatus runs:
-# nextAction = "clarify-intent — Skill ツールで /clarify-intent を呼び出してください"
-# BUT a state file IS written by session-start before buildWorkflowStatus is called.
-# So state IS available and clarify_intent is pending → NEXT_STEP_HINT[clarify_intent] applies.
-# NEXT_STEP_HINT[clarify_intent] contains both 'make-outline-plan' and survey-code references.
-assert_contains "SS-1c. new session: NEXT ACTION hint contains 'clarify-intent'" \
-    "$SS1_CTX" "clarify-intent"
+# For a new session, the first pending step is workflow_init (PR #273 added it as the
+# first entry in VALID_STEPS). session-start writes a fresh state file before
+# buildWorkflowStatus runs, so state IS available and workflow_init is pending →
+# STEP_HINT[workflow_init] is shown as NEXT ACTION. That hint contains the literal
+# 'workflow-init' (it directs the user to run the /workflow-init skill).
+assert_contains "SS-1c. new session: NEXT ACTION hint contains 'workflow-init'" \
+    "$SS1_CTX" "workflow-init"
 
 # Test SS-2: State with clarify_intent complete, research pending →
 #   additionalContext contains "clarify_intent: complete" AND "make-outline-plan" in NEXT ACTION
@@ -327,15 +331,15 @@ cat > "$WM8C_DIR/wm8c-test.json" <<'WM8C_EOF'
 {
   "version": 1,
   "session_id": "wm8c-test",
-  "created_at": "2026-04-28T10:00:00.000Z",
+  "created_at": "2099-04-28T10:00:00.000Z",
   "steps": {
-    "clarify_intent":     {"status": "complete", "updated_at": "2026-04-28T10:01:00.000Z"},
-    "research":           {"status": "complete", "updated_at": "2026-04-28T10:02:00.000Z"},
-    "outline":            {"status": "complete", "updated_at": "2026-04-28T10:02:30.000Z"},
-    "detail":             {"status": "complete", "updated_at": "2026-04-28T10:03:00.000Z"},
-    "branching_complete": {"status": "complete", "updated_at": "2026-04-28T10:04:00.000Z"},
-    "write_tests":        {"status": "complete", "updated_at": "2026-04-28T10:05:00.000Z"},
-    "review_tests":       {"status": "skipped",  "updated_at": "2026-04-28T10:05:30.000Z"},
+    "clarify_intent":     {"status": "complete", "updated_at": "2099-04-28T10:01:00.000Z"},
+    "research":           {"status": "complete", "updated_at": "2099-04-28T10:02:00.000Z"},
+    "outline":            {"status": "complete", "updated_at": "2099-04-28T10:02:30.000Z"},
+    "detail":             {"status": "complete", "updated_at": "2099-04-28T10:03:00.000Z"},
+    "branching_complete": {"status": "complete", "updated_at": "2099-04-28T10:04:00.000Z"},
+    "write_tests":        {"status": "complete", "updated_at": "2099-04-28T10:05:00.000Z"},
+    "review_tests":       {"status": "skipped",  "updated_at": "2099-04-28T10:05:30.000Z"},
     "run_tests":          {"status": "pending",  "updated_at": null},
     "review_security":    {"status": "pending",  "updated_at": null},
     "docs":               {"status": "pending",  "updated_at": null},
