@@ -255,4 +255,8 @@ Changes: Fix: `rm` of non-repo paths with quoted arguments (e.g., memory directo
 
 ### FEATURE: PR #865 (2026-06-16)
 Background: fix(#853): fix 11 stale assertions across 3 test files
-Changes: BUGFIX: 3 test files on main had stale assertions; all 11 failures are fixed (CI green restored)
+Changes: BUGFIX: 3 test files on main had stale assertions; all 11 failures are fixed (CI green restored)
+
+### FEATURE: PR #873 (2026-06-16)
+Background: fix(#857): convert EM Supervisor Layer 2 to Stop-hook block
+Changes: EM Supervisor Layer 2 is now actually invoked: a sentinel hang (C1) or escape-hatch use (C2) at any Stop triggers a `decision:block`, forcing inline L2 review. The previous ScheduleWakeup advisory was a no-op in normal sessions and has been removed.
