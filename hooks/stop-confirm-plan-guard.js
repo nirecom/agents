@@ -12,9 +12,19 @@
 // Fail-open everywhere: missing markers, missing transcript, parse errors —
 // all silently pass through. The guard activates only when (a) a marker
 // exists AND (b) the assistant message clearly contains the path.
+//
+// Layer 2: order-aware CONFIRM-continuation guard
+// When a CONFIRM_<STAGE> sentinel is present in the latest assistant turn but
+// no stage-valid follow-up Skill appears AFTER it in the same turn, block the
+// turn so the model restarts and invokes the correct next step.
 "use strict";
 
 const fs = require("fs");
+const {
+  CONFIRM_INTENT_RE_DQ,
+  CONFIRM_OUTLINE_RE_DQ,
+  CONFIRM_DETAIL_RE_DQ,
+} = require("./lib/sentinel-patterns");
 
 function readStdin() {
   const chunks = [];
@@ -56,7 +66,9 @@ if (require.main === module) {
   // produced) is sufficient to activate the scan.
 
   // Read transcript and scan backward for the most recent assistant message.
+  // Capture both the joined text (Layer 1) and the full content array (Layer 2).
   let lastAssistantText = "";
+  let lastAssistantContent = null;
   try {
     const raw = fs.readFileSync(input.transcript_path, "utf8");
     const lines = raw.split("\n");
@@ -73,6 +85,7 @@ if (require.main === module) {
       if (!entry || entry.type !== "assistant") continue;
       const content = entry.message && entry.message.content;
       if (!Array.isArray(content)) process.exit(0);
+      lastAssistantContent = content;
       const texts = [];
       for (const item of content) {
         if (item && item.type === "text" && typeof item.text === "string") {
@@ -82,7 +95,6 @@ if (require.main === module) {
       lastAssistantText = texts.join("\n");
       break;
     }
-    if (!lastAssistantText) process.exit(0);
   } catch (_) {
     process.exit(0);
   }
@@ -119,6 +131,51 @@ if (require.main === module) {
       }));
       process.exit(2);
     }
+  }
+
+  // Layer 2: order-aware CONFIRM-continuation guard. Fail-open on any error.
+  try {
+    if (Array.isArray(lastAssistantContent)) {
+      let confirmIdx = -1;
+      let stage = null;
+      for (let i = 0; i < lastAssistantContent.length; i++) {
+        const item = lastAssistantContent[i];
+        if (!item || item.type !== "tool_use" || item.name !== "Bash") continue;
+        const c = item.input && item.input.command;
+        if (typeof c !== "string") continue;
+        if (CONFIRM_INTENT_RE_DQ.test(c)) { confirmIdx = i; stage = "intent"; break; }
+        if (CONFIRM_OUTLINE_RE_DQ.test(c)) { confirmIdx = i; stage = "outline"; break; }
+        if (CONFIRM_DETAIL_RE_DQ.test(c)) { confirmIdx = i; stage = "detail"; break; }
+      }
+      if (confirmIdx !== -1) {
+        let followUpFound = false;
+        for (let i = confirmIdx + 1; i < lastAssistantContent.length; i++) {
+          const item = lastAssistantContent[i];
+          if (!item || item.type !== "tool_use") continue;
+          if (item.name === "Skill" && item.input && typeof item.input.skill === "string") {
+            if (stage === "intent" && item.input.skill.includes("make-outline-plan")) { followUpFound = true; break; }
+            if (stage === "outline" && item.input.skill.includes("make-detail-plan")) { followUpFound = true; break; }
+            if (stage === "detail" && item.input.skill.includes("write-tests")) { followUpFound = true; break; }
+          }
+          if (stage === "detail" && item.name === "Bash" && item.input && typeof item.input.command === "string"
+              && item.input.command.includes("WORKFLOW_BRANCHING_COMPLETE")) {
+            followUpFound = true; break;
+          }
+        }
+        if (followUpFound) {
+          // #871: add markStep(sid, stage, "complete") here
+        } else {
+          const { confirmNextStepHint } = require("./lib/workflow-state");
+          process.stdout.write(JSON.stringify({
+            decision: "block",
+            reason: confirmNextStepHint(stage) || "[confirm-plan] Layer 2: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase(),
+          }));
+          process.exit(2);
+        }
+      }
+    }
+  } catch (_) {
+    process.exit(0);
   }
 
   process.exit(0);

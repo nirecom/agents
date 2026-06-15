@@ -81,8 +81,9 @@ const ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON([: ].*)?>>"$/;
 // CONFIRM_<STAGE> sentinels emitted by clarify-intent / make-outline-plan /
 // make-detail-plan after the artifact is written. PreToolUse `confirm-checkpoint.js`
-// surfaces the dialog; PostToolUse `workflow-mark.js` injects the next-step hint
-// after Allow so the LLM continues even when no co-emit occurred.
+// surfaces the dialog. Stop hook `stop-confirm-plan-guard.js` (Layer 2) returns
+// `decision:block` + reason when no stage-valid follow-up Skill appears after the
+// CONFIRM sentinel in the same assistant turn.
 const CONFIRM_INTENT_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_INTENT: ([^>]+)>>"$/;
 const CONFIRM_INTENT_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_INTENT([: ].*)?>>"$/;
 const CONFIRM_OUTLINE_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_OUTLINE: ([^>]+)>>"$/;
