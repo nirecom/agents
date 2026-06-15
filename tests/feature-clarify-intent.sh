@@ -272,8 +272,6 @@ assert_absent "$LOCAL_SKILL_MD" "multiSelect: true" \
     "N11a: multiSelect:true removed (Class members no longer uses multiSelect UI)"
 assert_contains "$LOCAL_SKILL_MD" "class-members-proposal.md" \
     "N11b: SKILL.md references class-members-proposal.md lib file"
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" "Accept proposal as-is" \
-    "N11b-lib: class-members-proposal.md contains Accept/Modify 2-choice step"
 
 # N12: triage enum values (MUST, OPTIONAL, NA) replace disposition enum
 assert_contains "$LOCAL_SKILL_MD" "triage: MUST" "N12a: triage: MUST literal present in schema enum"
@@ -288,11 +286,6 @@ assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*c
 # N14–N16: triage schema additions (#555/#556/#557/#582)
 # LOCAL_REPO_ROOT defined above (before N10).
 
-# N14: Phase A/B/C procedure in lib file contains Accept/Modify step
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \
-    "Accept proposal as-is" \
-    "N14: class-members-proposal.md contains the Accept/Modify 2-choice step"
-
 # N15: aggregation procedure in lib file
 assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/aggregate-class-members.md" \
     "Deduplicate by" \
@@ -302,6 +295,21 @@ assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/aggregate-clas
 assert_contains "$LOCAL_REPO_ROOT/agents/lib/triage-legacy-compat.md" \
     "fix in scope" \
     "N16: triage-legacy-compat.md documents legacy disposition mapping"
+
+# N17: Phase B / Phase C / Accept proposal / Round budget removed from class-members-proposal.md (#832)
+assert_absent "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \
+    "Accept proposal as-is|Phase B|Phase C|Round budget" \
+    "N17: class-members-proposal.md no longer contains Phase B/C or Accept/Round budget text"
+
+# N18: MUST→OPTIONAL→NA sort directive present in class-members-proposal.md (#832)
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \
+    "MUST.*OPTIONAL.*NA" \
+    "N18: class-members-proposal.md contains MUST→OPTIONAL→NA sort directive"
+
+# N19: Phase C reference removed from SKILL.md (#832)
+assert_absent "$LOCAL_SKILL_MD" \
+    "Phase C" \
+    "N19: SKILL.md no longer references Phase C"
 
 echo ""
 # ---------------------------------------------------------------------------

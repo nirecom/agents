@@ -45,8 +45,6 @@ below. Reuse across all subsequent steps — do not re-resolve.
    - `triage: NA` — sibling exists but orthogonal; out of scope for this task.
 
    When no candidates were detected: write `- (none detected)` (no triage field).
-   Per reference/class-members-proposal.md Phase C, the Modify parse always records a
-   valid enum value — ambiguous input uses the proposed default.
 
    **`## Issues` section rules** (immediately after H1, before Background/Motivation — mandatory; this is the single SSOT, no separate `## closes_issues` section is written):
    - One `- #<N>: <title>` line per issue in `closes_issues`, in confirmed order (primary first).
