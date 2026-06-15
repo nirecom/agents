@@ -1,5 +1,6 @@
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../lib/path-normalize");
@@ -102,6 +103,22 @@ function findRepoRoot(filePath) {
   try {
     const normalized = normalizeCwd(filePath) || filePath;
     dir = path.dirname(path.resolve(normalized));
+  } catch (e) {
+    return null;
+  }
+  // Walk up to find an existing directory: a non-existent target path (e.g.
+  // `rm "<repo>/path with spaces/file"` where the dir does not exist) must
+  // still resolve to the enclosing repo. Without this walk, spawnSync's cwd
+  // ENOENT yields null and the path is incorrectly treated as outside scope.
+  try {
+    let cur = dir;
+    while (cur && !fs.existsSync(cur)) {
+      const parent = path.dirname(cur);
+      if (parent === cur) { cur = null; break; }
+      cur = parent;
+    }
+    if (!cur) return null;
+    dir = cur;
   } catch (e) {
     return null;
   }
