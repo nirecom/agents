@@ -247,4 +247,8 @@ Changes: `CONV_LANG` now works: setting `CONV_LANG=japanese` (or any language) i
 
 ### FEATURE: PR #864 (2026-06-15)
 Background: fix(#416): narrow UNSAFE_REASON_CHARS to 3-char DQ expansion set
-Changes: `WORKFLOW_BRANCHING_COMPLETE` and other sentinel echoes with `|`, `;`, `(`, `)`, or `\` in the reason text no longer trigger a false write-classification; the canonical `branch:...|worktree:...|main` format and Windows backslash paths now classify as read and pass through the worktree guard correctly.
+Changes: `WORKFLOW_BRANCHING_COMPLETE` and other sentinel echoes with `|`, `;`, `(`, `)`, or `\` in the reason text no longer trigger a false write-classification; the canonical `branch:...|worktree:...|main` format and Windows backslash paths now classify as read and pass through the worktree guard correctly.
+
+### FEATURE: PR #862 (2026-06-15)
+Background: fix(#573): upgrade extractRmTargets to quote-aware tokenizer
+Changes: Fix: `rm` of non-repo paths with quoted arguments (e.g., memory directory files) from the main worktree now allowed. Previously, any `rm` command with quoted arguments was unconditionally blocked even when the target was outside the repository.
