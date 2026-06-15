@@ -251,4 +251,8 @@ Changes: `WORKFLOW_BRANCHING_COMPLETE` and other sentinel echoes with `|`, `;`, 
 
 ### FEATURE: PR #862 (2026-06-15)
 Background: fix(#573): upgrade extractRmTargets to quote-aware tokenizer
-Changes: Fix: `rm` of non-repo paths with quoted arguments (e.g., memory directory files) from the main worktree now allowed. Previously, any `rm` command with quoted arguments was unconditionally blocked even when the target was outside the repository.
+Changes: Fix: `rm` of non-repo paths with quoted arguments (e.g., memory directory files) from the main worktree now allowed. Previously, any `rm` command with quoted arguments was unconditionally blocked even when the target was outside the repository.
+
+### FEATURE: PR #865 (2026-06-16)
+Background: fix(#853): fix 11 stale assertions across 3 test files
+Changes: BUGFIX: 3 test files on main had stale assertions; all 11 failures are fixed (CI green restored)
