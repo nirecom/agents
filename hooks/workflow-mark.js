@@ -46,7 +46,6 @@ const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
 const premiseHandlers = require("./workflow-mark/premise-gate-handlers");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
-const confirmNextStepHandler = require("./workflow-mark/confirm-next-step-handler");
 
 function readStdin() {
   const chunks = [];
@@ -161,7 +160,6 @@ for (const cmd of sentinelParts) {
   // Dispatch order matters: USER_VERIFIED must precede MARK_STEP to prevent
   // bypass via WORKFLOW_MARK_STEP_user_verification.
   if (notNeededHandlers.handle({ ...ctx, cmd })) continue;
-  if (confirmNextStepHandler.handle({ ...ctx, cmd })) continue;
   if (clarifyIntentCompleteHandler.handle({ ...ctx, cmd })) continue;
   if (branchingHandler.handle({ ...ctx, cmd })) continue;
   if (userVerifiedHandler.handle({ ...ctx, cmd })) continue;
