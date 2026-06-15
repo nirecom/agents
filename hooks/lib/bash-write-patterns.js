@@ -232,12 +232,16 @@ function isQuotedWriteCommandWord(cmd) {
   return false;
 }
 
-// Reason-text shell-metachar guard for classify(). isStrictSentinel matches the
-// sentinel shape (SSOT in sentinel-patterns.js). This wrapper adds a classify()-
-// specific check: if the reason text contains shell metacharacters that could
-// trigger expansion or injection when bash executes the command, return false so
-// classify() can force 'write' and block the command before bash runs it.
-const UNSAFE_REASON_CHARS = /[$`|;&()<>\\"]/;
+// Reason-text guard: reject only the 3 chars that carry expansion semantics
+// inside a bash double-quoted string — $ (variable/command expansion), ` (command
+// substitution), and " (quote termination). All other chars (|, ;, &, (, ), <, >,
+// \) are literal inside "..." and are safe to pass through.
+//
+// Bare \ is safe: it is only a bash escape when immediately followed by one of
+// { $ ` " \ newline }. Those second chars are already in this 3-char set, so any
+// dangerous \-sequence is caught by its second character. Trailing \ before >>"
+// (e.g. C:\path>>) is also safe — \ before > is not a bash escape sequence.
+const UNSAFE_REASON_CHARS = /[$`"]/;
 
 function isSentinelEchoSafe(cmd) {
   if (!isStrictSentinel(cmd)) return false;
