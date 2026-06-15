@@ -1014,6 +1014,9 @@ build_mark_json_no_sid() {
         "$esc" "$exit_code" "$esc"
 }
 
+EMPTY_TRANSCRIPT_DIR="$TMPDIR_BASE/transcripts-empty"
+mkdir -p "$EMPTY_TRANSCRIPT_DIR"
+
 echo ""
 echo "=== WS-SK-NO-SID-1: RESEARCH_NOT_NEEDED with no session_id → could not resolve ==="
 
@@ -1021,7 +1024,7 @@ SID="sk-nosid1-$$"
 write_state "$SID" "$(ALL_COMPLETE_EXCEPT research "$SID")"
 
 NO_SID_JSON=$(build_mark_json_no_sid 'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: single file change>>"')
-NO_SID_OUT=$(echo "$NO_SID_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$(to_node_path "$MARK_HOOK")" 2>/dev/null || true)
+NO_SID_OUT=$(cd "$EMPTY_TRANSCRIPT_DIR" && echo "$NO_SID_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" CLAUDE_TRANSCRIPT_BASE_DIR="$EMPTY_TRANSCRIPT_DIR" node "$(to_node_path "$MARK_HOOK")" 2>&1 || true)
 
 if echo "$NO_SID_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "WS-SK-NO-SID-1a. no session_id → 'could not resolve session_id' in output"
@@ -1044,7 +1047,7 @@ SID="sk-nosid2-$$"
 write_state "$SID" "$(ALL_COMPLETE_EXCEPT outline "$SID")"
 
 NO_SID_JSON=$(build_mark_json_no_sid 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: trivial typo fix>>"')
-NO_SID_OUT=$(echo "$NO_SID_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$(to_node_path "$MARK_HOOK")" 2>/dev/null || true)
+NO_SID_OUT=$(cd "$EMPTY_TRANSCRIPT_DIR" && echo "$NO_SID_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" CLAUDE_TRANSCRIPT_BASE_DIR="$EMPTY_TRANSCRIPT_DIR" node "$(to_node_path "$MARK_HOOK")" 2>&1 || true)
 
 if echo "$NO_SID_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "WS-SK-NO-SID-2a. no session_id → 'could not resolve session_id' in output"
@@ -1066,7 +1069,7 @@ SID="sk-nosid3-$$"
 write_state "$SID" "$(ALL_COMPLETE_EXCEPT write_tests "$SID")"
 
 NO_SID_JSON=$(build_mark_json_no_sid 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: hook refactor, no test coverage affected>>"')
-NO_SID_OUT=$(echo "$NO_SID_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" node "$(to_node_path "$MARK_HOOK")" 2>/dev/null || true)
+NO_SID_OUT=$(cd "$EMPTY_TRANSCRIPT_DIR" && echo "$NO_SID_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" CLAUDE_ENV_FILE="" CLAUDE_TRANSCRIPT_BASE_DIR="$EMPTY_TRANSCRIPT_DIR" node "$(to_node_path "$MARK_HOOK")" 2>&1 || true)
 
 if echo "$NO_SID_OUT" | grep -qiE "could not resolve session_id|session_id"; then
     pass "WS-SK-NO-SID-3a. no session_id → 'could not resolve session_id' in output"

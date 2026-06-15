@@ -78,7 +78,7 @@ done
 # 2. Each gated SKILL.md invokes `get-config-var --is-off`
 # ---------------------------------------------------------------------------
 echo "=== SKILL.md invokes get-config-var --is-off ==="
-for f in "$OUTLINE_SKILL" "$DETAIL_SKILL" "$TESTS_SKILL" "$WORKTREE_SKILL" "$WRITE_CODE_SKILL" "$UPDATE_DOCS_SKILL"; do
+for f in "$OUTLINE_SKILL" "$TESTS_SKILL" "$WORKTREE_SKILL" "$WRITE_CODE_SKILL" "$UPDATE_DOCS_SKILL"; do
     if require_file "$f"; then
         if has_fixed "get-config-var --is-off" "$f"; then
             pass "get-config-var --is-off present in $(basename "$(dirname "$f")")/SKILL.md"
@@ -146,9 +146,9 @@ done
 echo "=== make-outline-plan: preserved instructions ==="
 if require_file "$OUTLINE_SKILL"; then
     for needle in \
-        "outline-planner and outline-reviewer are never shown implementation details" \
+        "outline-planner and outline-reviewer never see implementation details" \
         "\`WORKFLOW_MARK_STEP_detail_complete\` is NOT emitted here" \
-        "One \`AskUserQuestion\` per run"
+        "One \`AskUserQuestion\` + one sentinel dialog per run in ON mode"
     do
         if has_fixed "$needle" "$OUTLINE_SKILL"; then
             pass "outline SKILL.md preserves: '$needle'"
@@ -164,7 +164,7 @@ fi
 echo "=== make-detail-plan: preserved instructions ==="
 if require_file "$DETAIL_SKILL"; then
     for needle in \
-        "Read before planning" \
+        "Read intent/outline before planning" \
         "Follow \`rules/core-principles.md\`" \
         "One user-facing confirmation per run"
     do
