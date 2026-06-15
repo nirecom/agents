@@ -6,15 +6,11 @@
 // Trigger: <plans-dir>/<sid>-final-report-env.json exists (written by
 // worktree-end Step WE-9..WE-11). On any other turn the hook exits 0 silently.
 //
-// Contract (post-#771):
-// - The previous renderer was abolished; the LLM now substitutes the skeleton
-//   (from `final-report-schema.renderSkeleton`) and pastes the result verbatim
-//   into assistant text.
-// - Validation: find the LAST occurrence of `## Final Report — <sid>` in the
-//   transcript, then check the post-header region contains all 9 remaining
-//   `###` headings from `getSectionHeadings(sid)` and has no
-//   `<TOKEN>` placeholders left.
-// - Fail-open on uncertainty (missing/malformed env-file, no transcript).
+// Contract (post-#830 fix):
+// - Parse transcript JSONL; backward-scan for the latest type:"assistant" entry
+//   containing `## Final Report — <sid>`; extract finalReportBody (heading to
+//   next \n## or turn end). Check headings + token regex on finalReportBody only.
+// - Fail-open on uncertainty (missing/malformed env-file, no transcript, no FR).
 "use strict";
 
 const fs = require("fs");
@@ -111,25 +107,44 @@ if (require.main === module) {
 
   const transcriptPath = input.transcript_path;
   if (!transcriptPath) process.exit(0);
-  let transcript;
-  try {
-    transcript = fs.readFileSync(transcriptPath, "utf8");
-  } catch (_) {
-    // Transcript unreadable → fail-open.
-    process.exit(0);
-  }
 
   const headings = schema.getSectionHeadings(sid);
   const h2Header = `## Final Report — ${sid}`;
-  const lastIdx = transcript.lastIndexOf(h2Header);
-  if (lastIdx === -1) {
-    // Header not yet emitted → guard not applicable.
+  let finalReportBody = "";
+  let headingFound = false;
+  try {
+    const raw = fs.readFileSync(transcriptPath, "utf8");
+    const lines = raw.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      let entry;
+      try { entry = JSON.parse(line); } catch (_) { continue; }
+      if (!entry || entry.type !== "assistant") continue;
+      const content = entry.message && entry.message.content;
+      if (!Array.isArray(content)) continue;
+      const texts = [];
+      for (const item of content) {
+        if (item && item.type === "text" && typeof item.text === "string") {
+          texts.push(item.text);
+        }
+      }
+      const assistantText = texts.join("\n");
+      const headingIdx = assistantText.lastIndexOf(h2Header);
+      if (headingIdx === -1) continue;
+      const afterHeading = assistantText.slice(headingIdx + h2Header.length);
+      const nextH2 = afterHeading.search(/\n## /);
+      finalReportBody = nextH2 === -1 ? afterHeading : afterHeading.slice(0, nextH2);
+      headingFound = true;
+      break;
+    }
+  } catch (_) {
     process.exit(0);
   }
-  const postHeader = transcript.slice(lastIdx + h2Header.length);
+  if (!headingFound) process.exit(0);
 
   const remainingHeadings = headings.filter((h) => h !== h2Header);
-  const missing = remainingHeadings.filter((h) => !postHeader.includes(h));
+  const missing = remainingHeadings.filter((h) => !finalReportBody.includes(h));
   if (missing.length > 0) {
     const reason =
       `[final-report] Emit the Final Report with all 10 section headings present. ` +
@@ -142,7 +157,7 @@ if (require.main === module) {
   }
 
   const tokenRegex = /<[A-Z][A-Z0-9_]+>/g;
-  const tokens = postHeader.match(tokenRegex);
+  const tokens = finalReportBody.match(tokenRegex);
   if (tokens && tokens.length > 0) {
     const unique = Array.from(new Set(tokens));
     const reason =
