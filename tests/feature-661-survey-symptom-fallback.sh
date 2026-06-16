@@ -8,11 +8,11 @@
 #   SH-FALLBACK-1..2  — survey-history SKILL.md zero-results symptom fallback
 #   REG-D6            — issue-create SKILL.md regression: Survey/Verdict/Confirm present
 #
-# RED tests (expect FAIL until implementation):
-#   IC-FALLBACK-1, IC-FALLBACK-3, IC-FALLBACK-4, SH-FALLBACK-1
+# RED tests (expect FAIL until SKILL.md edits in next workflow step):
+#   IC-FALLBACK-2, IC-FALLBACK-3, IC-FALLBACK-4
 #
 # GREEN tests (already pass in current implementation):
-#   IC-FALLBACK-2, IC-FALLBACK-5, SH-FALLBACK-2, REG-D6
+#   IC-FALLBACK-1, IC-FALLBACK-5, SH-FALLBACK-1, SH-FALLBACK-2, REG-D6
 
 set -u
 
