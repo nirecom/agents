@@ -8,19 +8,20 @@
 4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
 5. [settings.json Drift Prevention](#6-settingsjson-drift-prevention) — layered defense: git hooks + session-start backstop
 
-## 5. EM Supervisor (Layer 1)
+## 5. EM Supervisor (Layers 1–2)
 
 The EM (Engineering Manager) Supervisor is a three-layer architecture that collects
-observations from skills and agents during a session and provides a foundation for
-future automated triage.
-Layer 1 (S-1, issue #228) is the only layer currently implemented; S-2 (#719) and
-S-3 (#720) are placeholders.
+observations from skills and agents during a session and triggers automated review
+when findings accumulate.
+Layer 1 (S-1, #228) and Layer 2 (S-2, #719) are implemented; S-3 (#720) is a placeholder.
 
 **Why:** Layer 1 is a passive observation layer. It does not intervene in the workflow
 or block any action. Three reporting paths feed findings into the state file:
 (A) hooks auto-report block events; (B) skills self-report fallback/degradation paths;
 (C) session-close runs a retrospective pass before the Final Report.
-Severity judgment and remediation are deferred to Layer 2 and Layer 3.
+Layer 2 is an active review: the `supervisor-guard.js` Stop hook fires a `decision:block`
+when findings are present and `l2_phase` is not `done`/`frozen`, invoking the L2 supervisor.
+At most one L2 review runs per session.
 
 **Hook auto-report (`hooks/lib/supervisor-emit.js`):**
 
@@ -58,8 +59,24 @@ See `rules/supervisor-reporting.md` for category reference and usage guidance.
 | `timestamp` | string | ISO 8601 |
 
 **State file:** `<PLANS_DIR>/<session-id>-supervisor-state.json` (per-session, never global).
-Defines the full 3-layer box: `layer1.findings[]`, `layer2: {}`, `layer3: {}`.
-The file is directly inspectable for debugging; Layer 2 will read it for triage.
+Defines the full 3-layer box: `layer1.findings[]`, `layer2: { … }`, `layer3: {}`.
+The file is directly inspectable for debugging.
+
+**`layer2` fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `l2_phase` | `null`/`"pending"`/`"done"`/`"frozen"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, frozen=Final Report emitted |
+| `next_check_at` | ISO string or null | Timestamp for next check; null when phase is done/frozen |
+| `last_run_at` | ISO string or null | Timestamp of last L2 execution |
+| `cumulative_severity` | string or null | Highest severity across L2 findings |
+| `findings[]` | Finding[] | L2 findings (same schema as `layer1.findings`) |
+
+**L2 lifecycle and gate-yield:** `ensureLayer2Scheduled()` and `writeLayer2State()` refuse to
+set `next_check_at` when `l2_phase` is `done` or `frozen` (at-most-1 guarantee). When L2 is
+pending and session-close reaches Step 4 (Final Report), it emits `pre_final_report_gate_complete`
+and yields so the Stop hook can fire L2 first (loose coupling — session-close never invokes L2
+directly). After Final Report, `supervisor-write-layer2 --set-l2-phase frozen` records terminal state.
 
 **Schema validation failures:** logged to `console.error` only — when the state file
 cannot be written, appending a finding is structurally impossible, so no finding is
