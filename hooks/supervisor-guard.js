@@ -160,7 +160,7 @@ if (require.main === module) {
   // (3)
   const hangDetected = detectSentinelHang(input.transcript_path || "");
   if ((hangDetected || nextCheck) && l2Phase !== "done" && l2Phase !== "frozen") {
-    const cause = hangDetected ? "C1 sentinel hang" : "C2 escape-hatch use";
+    const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
     const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
     const reason =
       `[EM Supervisor] Layer 2 review required (${cause}). Invoke agents/supervisor.md (${supervisorPath}) as a subagent: ` +
