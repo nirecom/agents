@@ -291,4 +291,8 @@ Changes: **EM Supervisor**: L2 review now runs at most once per session and fire
 
 ### FEATURE: PR #900 (2026-06-17)
 Background: fix(#883): supervisor dual-identifier model — separate CC UUID (sid) from workflow session ID (wsid)
-Changes: **Fix:** EM Supervisor Layer 2 now correctly identifies plan artifacts when CC session UUID differs from workflow session ID (date-fallback sessions). Silent wrong-scope reviews are replaced by explicit `Workflow session ID: UNAVAILABLE` degradation with a warning finding.
+Changes: **Fix:** EM Supervisor Layer 2 now correctly identifies plan artifacts when CC session UUID differs from workflow session ID (date-fallback sessions). Silent wrong-scope reviews are replaced by explicit `Workflow session ID: UNAVAILABLE` degradation with a warning finding.
+
+### FEATURE: PR #904 (2026-06-17)
+Background: fix(#842): extend Layer 2 to CONFIRM_PR_CREATED; fix marker early-exit; SSOT PR URL regex
+Changes: After clicking Allow on a "PR created" confirmation dialog, `<<WORKFLOW_CONFIRM_PR_CREATED>>` now reliably triggers the next workflow step (worktree-end on `ENFORCE_WORKTREE=on`, `<<WORKFLOW_USER_VERIFIED>>` on `off`), matching the behavior of the INTENT/OUTLINE/DETAIL confirmation sentinels
