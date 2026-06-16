@@ -99,14 +99,16 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 7. On `APPROVED`:
    Output a prose rationale summary in main conversation — one paragraph per approach (rationale + trade-offs + delivery plan). Do NOT write this preamble to outline.md.
 
-   Decide the chosen approach:
+   Decide the chosen approach and record it as `CHOSEN_APPROACH`:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
-   - `OFF` → chosen approach = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
-   - `ON` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting".
+   - `OFF` → set `CHOSEN_APPROACH` = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
+   - `ON` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting". Set `CHOSEN_APPROACH` to the user's selection.
 
    Step 8 handles the file write — do NOT write here.
 
-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. On the `ON` path: emit `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"` per protocol Step 3. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
+8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
+   - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting"): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
+   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — emit `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"`. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -133,7 +135,7 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
   No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state).
-- **One `AskUserQuestion` + one sentinel dialog per run in ON mode** — step 7 (approach selection via `AskUserQuestion`) and step 8 (artifact review via `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel permission dialog per protocol Step 3). OFF mode fires neither.
+- **Confirmation dialogs per run**: OFF mode fires neither. ON mode with a single approach selected fires two: step 7 (`AskUserQuestion`) and step 8 (`<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel). ON mode where step 7 yielded "Pass all approaches to make-detail-plan without selecting" fires step 7 only — step 8 sentinel is bypassed (Logical-OR bypass, same effect as `CONFIRM_OUTLINE=off`).
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
 - Report observations per rules/supervisor-reporting.md.
