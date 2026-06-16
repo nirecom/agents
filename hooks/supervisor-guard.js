@@ -43,6 +43,7 @@ function detectSentinelHang(transcriptPath) {
   } catch (_) {
     return false;
   }
+  const SENTINEL_HANG_EXEMPT_STEPS = new Set(["final_report", "pre_final_report_gate"]);
   const tail = lines.slice(-100);
   let lastAssistant = null;
   for (const line of tail) {
@@ -63,7 +64,10 @@ function detectSentinelHang(transcriptPath) {
     const item = content[i];
     if (item.type === "tool_use" && item.name === "Bash") {
       const cmd = (item.input && item.input.command) || "";
-      if (MARKER_RE_DQ.test(cmd) || MARKER_RE_SQ.test(cmd)) markStepIdx = i;
+      const m = MARKER_RE_DQ.exec(cmd) || MARKER_RE_SQ.exec(cmd);
+      if (m) {
+        if (!SENTINEL_HANG_EXEMPT_STEPS.has(m[1])) markStepIdx = i;
+      }
     }
   }
   if (markStepIdx < 0) return false;
@@ -124,6 +128,7 @@ if (require.main === module) {
   const nextCheck = layer2.next_check_at == null ? null : layer2.next_check_at;
   const cumSev = layer2.cumulative_severity == null ? null : layer2.cumulative_severity;
   const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
+  const l2Phase = layer2.l2_phase === undefined ? null : layer2.l2_phase;
 
   const agentsDir = process.env.AGENTS_CONFIG_DIR || "";
   const supervisorPath = agentsDir
@@ -145,7 +150,7 @@ if (require.main === module) {
 
   // (3)
   const hangDetected = detectSentinelHang(input.transcript_path || "");
-  if (hangDetected || nextCheck) {
+  if ((hangDetected || nextCheck) && l2Phase !== "done" && l2Phase !== "frozen") {
     const cause = hangDetected ? "C1 sentinel hang" : "C2 escape-hatch use";
     const reason =
       `[EM Supervisor] Layer 2 review required (${cause}). Invoke agents/supervisor.md (${supervisorPath}) as a subagent: ` +
