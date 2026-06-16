@@ -196,7 +196,7 @@ the subcommand verb (matching git's own option-parsing semantics). The
 
 ### Final Report
 
-`/session-close` Step 4 emits the Final Report directly into assistant text
+`/session-close` SC-4 emits the Final Report directly into assistant text
 using a schema-derived skeleton (`hooks/lib/final-report-schema.renderSkeleton`).
 The LLM reads four input files (env JSON, outcome JSON, intent.md, WORKTREE_NOTES.md
 backup) and substitutes `<PLACEHOLDER>` tokens. It emits the substituted text
