@@ -38,12 +38,11 @@ Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns wh
 bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on && echo OFF || echo ON'
 ```
 - `OFF`: print a one-paragraph prose summary (do not duplicate the breadcrumb path); proceed.
-- `ON`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` per the caller:
-
-  `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`
-
-  The `confirm-checkpoint.js` PreToolUse hook resolves the artifact path, opens it in VS Code, and surfaces a "Click Allow / Deny" message above the permission dialog (the sentinel is registered under `permissions.ask`, so the dialog is the user's approval surface). After Allow, `stop-confirm-plan-guard.js` (Stop hook, Layer 2) checks at turn end whether a stage-valid follow-up Skill appears after the CONFIRM sentinel in the same turn; if not, it returns `decision: "block"` + `reason: <CONFIRM_NEXT_STEP_HINT>` to force a model turn restart.
-  - **Allow** (user clicks Allow on the sentinel's permission dialog): continue.
+- `ON`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` / `PR_CREATED` per the caller.
+  - Emit: `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`.
+  - In the SAME response, after the CONFIRM Bash echo, also issue the next tool_use (Skill or Bash) per the caller's per-site reminder. Do NOT end the response on the CONFIRM echo.
+  - `confirm-checkpoint.js` (PreToolUse) surfaces the dialog; `stop-confirm-plan-guard.js` (Stop, Layer 2) blocks the turn if no stage-valid follow-up follows the CONFIRM sentinel in the same turn.
+  - **Allow**: continue with the next tool_use already in flight.
   - **Deny**: ask what to change, write edits, loop back to Step 1.
 
 ## Notes
