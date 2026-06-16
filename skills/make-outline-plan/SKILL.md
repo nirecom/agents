@@ -108,7 +108,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
 8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
    - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting"): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — emit `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"`. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
+   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
 
 ## Output Schema (`<session-id>-outline.md`)
 

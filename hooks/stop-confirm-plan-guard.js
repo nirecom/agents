@@ -14,9 +14,13 @@
 // exists AND (b) the assistant message clearly contains the path.
 //
 // Layer 2: order-aware CONFIRM-continuation guard
-// When a CONFIRM_<STAGE> sentinel is present in the latest assistant turn but
-// no stage-valid follow-up Skill appears AFTER it in the same turn, block the
-// turn so the model restarts and invokes the correct next step.
+// When a CONFIRM_<STAGE> sentinel (INTENT / OUTLINE / DETAIL / PR_CREATED) is
+// present in the latest assistant turn but no stage-valid follow-up tool_use
+// appears AFTER it in the same turn, block the turn so the model restarts and
+// invokes the correct next step. PR_CREATED accepts Skill(worktree-end) or
+// Bash(WORKFLOW_USER_VERIFIED) unconditionally; mode-correctness (which form
+// fits the current ENFORCE_WORKTREE value) is enforced by the commit-push
+// SKILL.md prompt (Layer 1), not here.
 "use strict";
 
 const fs = require("fs");
@@ -24,6 +28,7 @@ const {
   CONFIRM_INTENT_RE_DQ,
   CONFIRM_OUTLINE_RE_DQ,
   CONFIRM_DETAIL_RE_DQ,
+  CONFIRM_PR_CREATED_RE_DQ,
 } = require("./lib/sentinel-patterns");
 
 function readStdin() {
@@ -60,10 +65,11 @@ if (require.main === module) {
 
   const { readAndDeleteTurnMarkers } = require("./lib/turn-marker");
   const markers = readAndDeleteTurnMarkers(sid);
-  if (markers.length === 0) process.exit(0);
-  // #563: path-emission scan is CONFIRM_<STEP>-independent. Marker presence
-  // alone (written by show-plan-link.js whenever a final plan artifact is
-  // produced) is sufficient to activate the scan.
+  // Marker absence is no longer a blanket early-exit (#842): CONFIRM_PR_CREATED
+  // turns from `commit-push` never write a plan artifact, so no turn marker exists.
+  // Layer 2 detects CONFIRM_<STAGE> sentinels structurally; the marker gate is
+  // preserved only for Layer 1 path-emission scan (bound to plan-artifact writes).
+  const hasMarker = markers.length > 0;
 
   // Read transcript and scan backward for the most recent assistant message.
   // Capture both the joined text (Layer 1) and the full content array (Layer 2).
@@ -99,37 +105,39 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-  const { workspaceFolderUriFrom } = require("./show-plan-link");
-  let plansDir;
-  try {
-    plansDir = getWorkflowPlansDir();
-  } catch (_) {
-    process.exit(0);
-  }
+  if (hasMarker) {
+    const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
+    const { workspaceFolderUriFrom } = require("./show-plan-link");
+    let plansDir;
+    try {
+      plansDir = getWorkflowPlansDir();
+    } catch (_) {
+      process.exit(0);
+    }
 
-  const patternsRaw = [
-    plansDir,
-    plansDir.replace(/\\/g, "/"),
-    "~/.workflow-plans",
-    workspaceFolderUriFrom(plansDir),
-  ];
-  const seen = new Set();
-  const patterns = [];
-  for (const p of patternsRaw) {
-    if (typeof p !== "string" || p.length === 0) continue;
-    if (seen.has(p)) continue;
-    seen.add(p);
-    patterns.push(p);
-  }
+    const patternsRaw = [
+      plansDir,
+      plansDir.replace(/\\/g, "/"),
+      "~/.workflow-plans",
+      workspaceFolderUriFrom(plansDir),
+    ];
+    const seen = new Set();
+    const patterns = [];
+    for (const p of patternsRaw) {
+      if (typeof p !== "string" || p.length === 0) continue;
+      if (seen.has(p)) continue;
+      seen.add(p);
+      patterns.push(p);
+    }
 
-  for (const pat of patterns) {
-    if (lastAssistantText.includes(pat)) {
-      process.stdout.write(JSON.stringify({
-        decision: "block",
-        reason: "[confirm-plan] Step 2 violation: orchestrator emitted a `~/.workflow-plans/` path representation. `show-plan-link.js` is the sole authoritative path surface. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
-      }));
-      process.exit(2);
+    for (const pat of patterns) {
+      if (lastAssistantText.includes(pat)) {
+        process.stdout.write(JSON.stringify({
+          decision: "block",
+          reason: "[confirm-plan] Step 2 violation: orchestrator emitted a `~/.workflow-plans/` path representation. `show-plan-link.js` is the sole authoritative path surface. Re-issue the response without the path. (Hook: stop-confirm-plan-guard.js)",
+        }));
+        process.exit(2);
+      }
     }
   }
 
@@ -146,6 +154,7 @@ if (require.main === module) {
         if (CONFIRM_INTENT_RE_DQ.test(c)) { confirmIdx = i; stage = "intent"; break; }
         if (CONFIRM_OUTLINE_RE_DQ.test(c)) { confirmIdx = i; stage = "outline"; break; }
         if (CONFIRM_DETAIL_RE_DQ.test(c)) { confirmIdx = i; stage = "detail"; break; }
+        if (CONFIRM_PR_CREATED_RE_DQ.test(c)) { confirmIdx = i; stage = "pr-created"; break; }
       }
       if (confirmIdx !== -1) {
         let followUpFound = false;
@@ -159,6 +168,17 @@ if (require.main === module) {
           }
           if (stage === "detail" && item.name === "Bash" && item.input && typeof item.input.command === "string"
               && item.input.command.includes("WORKFLOW_BRANCHING_COMPLETE")) {
+            followUpFound = true; break;
+          }
+          if (stage === "pr-created" && item.name === "Skill" && item.input && typeof item.input.skill === "string"
+              && item.input.skill.includes("worktree-end")) {
+            followUpFound = true; break;
+          }
+          // pr-created off-mode: Bash(<<WORKFLOW_USER_VERIFIED: ...>>) accepted
+          // Layer 2 accepts both follow-up forms unconditionally. Mode-correctness
+          // is enforced by the commit-push SKILL.md prompt (Layer 1), not here.
+          if (stage === "pr-created" && item.name === "Bash" && item.input && typeof item.input.command === "string"
+              && item.input.command.includes("WORKFLOW_USER_VERIFIED")) {
             followUpFound = true; break;
           }
         }
