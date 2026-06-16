@@ -107,20 +107,19 @@ Before rendering the Final Report, scan the session for any unreported observati
 
 ## Step 3.6 — Pre-Final-Report L2 gate
 
-supervisor state を Read ツールで確認: `<PLANS_DIR>/<session-id>-supervisor-state.json`
-`layer2.l2_phase` を確認:
+Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
 
-- `"pending"` かつ `next_check_at !== null`: L2 未完了 → gate sentinel を emit して yield (Final Report をこのターンでは発行しない):
+- `"pending"` and `next_check_at !== null`: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
   `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
-  次の Stop で supervisor-guard.js が L2 を発火。supervisor が `--set-l2-phase done` を書き込み。session 再開後、gate check は done を検知して Step 4 へ進む。
+  The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to Step 4.
 
-- `"pending"` かつ `next_check_at === null` (異常状態): supervisor-report で warning を記録し、Step 4 へ進む。
+- `"pending"` and `next_check_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to Step 4.
 
-- `"done"` または `null`: Step 4 へ進む (`null` = L2 未スケジュール、このセッションで発火なし)。
+- `"done"` or `null`: proceed to Step 4. (`null` = L2 was never scheduled this session.)
 
-- `"frozen"`: Step 4 へ進む (Final Report 再発行シナリオ; 冪等)。
+- `"frozen"`: proceed to Step 4. (Final Report re-emit scenario; idempotent.)
 
-- supervisor-state ファイルが存在しない: null として扱い Step 4 へ進む。
+- State file absent: treat as `null` and proceed to Step 4.
 
 ## Step 4 — Emit Final Report directly into assistant text
 

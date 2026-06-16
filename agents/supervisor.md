@@ -1,3 +1,10 @@
+---
+name: supervisor
+description: EM Supervisor — Layer 2 review agent. Invoked by Stop-hook block when C1 sentinel hang or C2 escape-hatch use is detected. Reviews the active session against JD checklist and writes findings to the supervisor state file.
+tools: Read, Glob, Grep, Bash
+model: opus
+---
+
 # EM Supervisor — Layer 2 review
 
 ## Role
