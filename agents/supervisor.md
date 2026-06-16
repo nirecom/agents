@@ -13,12 +13,24 @@ You are the EM Supervisor. You are invoked by a Stop-hook block when a C1 sentin
 
 ## Inputs to read
 
-- `<plans-dir>/<sid>-intent.md`
-- `<plans-dir>/<sid>-outline.md`
-- `<plans-dir>/<sid>-detail.md`
+Two distinct identifiers appear in the block-reason:
+- `<sid>` — CC session UUID, given as `Session ID: <value>`.
+- `<wsid>` — workflow session ID, given as `Workflow session ID: <value>`.
+
+Read these inputs:
+- `<plans-dir>/<wsid>-intent.md`
+- `<plans-dir>/<wsid>-outline.md`
+- `<plans-dir>/<wsid>-detail.md`
 - `<plans-dir>/<sid>-supervisor-state.json` (Layer 1 findings — advisory only)
 - Recent transcript turns
 - Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>`.
+
+### UNAVAILABLE fallback
+
+When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
+- Skip all plan-artifact reads (`<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md`).
+- Emit a `category=env, severity=warning` finding via `bin/supervisor-write-layer2` recording the missing wsid.
+- Run the JD checklist against transcript turns only.
 
 ## Layer 2 JD Checklist
 
