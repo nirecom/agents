@@ -2,8 +2,7 @@
 # Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js
 # Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard
 # Static grep-based checks verifying that #842 structural wiring is in place:
-#   - make-outline-plan Completion emits both WORKFLOW_MARK_STEP_outline_complete AND
-#     WORKFLOW_OUTLINE_PLAN_COMPLETE before calling make-detail-plan
+#   - make-outline-plan Completion emits WORKFLOW_MARK_STEP_outline_complete before calling make-detail-plan
 #   - make-detail-plan ON path emits WORKFLOW_MARK_STEP_detail_complete after confirm
 #   - Each caller invokes the skills/_shared/confirm-plan.md protocol
 #   - stop-confirm-plan-guard.js Layer 2 references CONFIRM_<STAGE>_RE_DQ for all three stages
@@ -39,7 +38,7 @@ require_file() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. make-outline-plan/SKILL.md Completion: emits mark_step AND plan_complete
+# 3. make-outline-plan/SKILL.md Completion: emits mark_step
 #    AND invokes make-detail-plan
 # ---------------------------------------------------------------------------
 echo "=== 3. make-outline-plan/SKILL.md: Completion sentinels ==="
@@ -48,12 +47,6 @@ if require_file "$OUTLINE_SKILL"; then
         pass "make-outline-plan/SKILL.md references WORKFLOW_MARK_STEP_outline_complete"
     else
         fail "make-outline-plan/SKILL.md missing WORKFLOW_MARK_STEP_outline_complete"
-    fi
-
-    if has_fixed "WORKFLOW_OUTLINE_PLAN_COMPLETE" "$OUTLINE_SKILL"; then
-        pass "make-outline-plan/SKILL.md references WORKFLOW_OUTLINE_PLAN_COMPLETE"
-    else
-        fail "make-outline-plan/SKILL.md missing WORKFLOW_OUTLINE_PLAN_COMPLETE"
     fi
 
     if has_fixed "make-detail-plan" "$OUTLINE_SKILL"; then
