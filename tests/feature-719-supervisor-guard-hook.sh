@@ -25,7 +25,6 @@ HOOK="$AGENTS_DIR/hooks/supervisor-guard.js"
 HOOK_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
