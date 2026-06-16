@@ -275,4 +275,8 @@ Changes: `git merge --abort`, `git rebase --abort/--continue/--skip`, and `git c
 
 ### FEATURE: PR #880 (2026-06-16)
 Background: fix(#868): enhance issue-create Phase 2 survey — parallel symptom-token search, Pass 3 widened, inspect cap 25, Verdict Rubric, regression row
-Changes: `/issue-create`: now detects same-symptom regressions (issues closed for any reason — merged, won't-fix, manual) and routes to `reopen` instead of creating a duplicate; parallel symptom-token search runs unconditionally in all 3 passes, improving recall for issues described with different vocabulary; candidate inspection cap raised from ~10 to 25 with a new Verdict Rubric that uses symptom-match and scope-overlap as primary signals and treats age as a tie-break rather than a filter
+Changes: `/issue-create`: now detects same-symptom regressions (issues closed for any reason — merged, won't-fix, manual) and routes to `reopen` instead of creating a duplicate; parallel symptom-token search runs unconditionally in all 3 passes, improving recall for issues described with different vocabulary; candidate inspection cap raised from ~10 to 25 with a new Verdict Rubric that uses symptom-match and scope-overlap as primary signals and treats age as a tie-break rather than a filter
+
+### FEATURE: PR #895 (2026-06-16)
+Background: PR #895 merged on 2026-06-16.
+Changes: make-outline-plan: selecting "Pass all approaches to make-detail-plan without selecting" in Step 7 no longer triggers a redundant confirmation dialog before proceeding to detail planning.
