@@ -2,7 +2,7 @@
 "use strict";
 
 const { writeLayer2State } = require("../hooks/lib/supervisor-state-writer");
-const { SEVERITY_VALUES } = require("../hooks/lib/supervisor-state-schema");
+const { SEVERITY_VALUES, L2_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -15,6 +15,7 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--finding-severity",
   "--finding-detail",
   "--finding-reporter",
+  "--set-l2-phase",
 ]);
 const KNOWN_BOOL_FLAGS = new Set(["--clear-next-check-at"]);
 
@@ -25,7 +26,8 @@ function usage(msg) {
     " [--next-check-at <iso>] [--clear-next-check-at]" +
     " [--last-run-at <iso>] [--cumulative-severity <error|warning|notice|null>]" +
     " [--finding-categories <csv> --finding-severity <s>" +
-    " --finding-detail <text> --finding-reporter <name>]"
+    " --finding-detail <text> --finding-reporter <name>]" +
+    " [--set-l2-phase <pending|done|frozen>]"
   );
   process.exit(1);
 }
@@ -55,6 +57,7 @@ const hasNextCheckAt = "next-check-at" in args;
 const hasClearNextCheckAt = flags.has("--clear-next-check-at");
 const hasLastRunAt = "last-run-at" in args;
 const hasCumulativeSeverity = "cumulative-severity" in args;
+const hasSetL2Phase = "set-l2-phase" in args;
 
 const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
 const findingPresent = findingKeys.filter((k) => k in args);
@@ -65,11 +68,15 @@ if (hasNextCheckAt && hasClearNextCheckAt) {
   usage("--next-check-at and --clear-next-check-at are mutually exclusive");
 }
 
+if (hasSetL2Phase && args["set-l2-phase"] === "frozen" && hasNextCheckAt) {
+  usage("--set-l2-phase frozen and --next-check-at are mutually exclusive");
+}
+
 if (hasAnyFinding && !hasAllFindings) {
   usage("--finding-categories, --finding-severity, --finding-detail, --finding-reporter must all be provided together");
 }
 
-if (!hasNextCheckAt && !hasClearNextCheckAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding) {
+if (!hasNextCheckAt && !hasClearNextCheckAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase) {
   usage("at least one mutating flag required");
 }
 
@@ -88,6 +95,12 @@ if (hasCumulativeSeverity) {
   } else {
     usage(`--cumulative-severity must be one of ${SEVERITY_VALUES.join("|")}|null`);
   }
+}
+
+if (hasSetL2Phase) {
+  const raw = args["set-l2-phase"];
+  if (!["pending", "done", "frozen"].includes(raw)) usage("--set-l2-phase must be one of pending|done|frozen");
+  patch.l2_phase = raw;
 }
 
 if (hasAllFindings) {
