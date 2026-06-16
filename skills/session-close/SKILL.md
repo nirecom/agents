@@ -105,6 +105,22 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
 
 Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings surface in the next L2 triage cycle, not in the current Final Report.
 
+## Step 3.6 — Pre-Final-Report L2 gate
+
+Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
+
+- `"pending"` and `next_check_at !== null`: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
+  `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
+  The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to Step 4.
+
+- `"pending"` and `next_check_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to Step 4.
+
+- `"done"` or `null`: proceed to Step 4. (`null` = L2 was never scheduled this session.)
+
+- `"frozen"`: proceed to Step 4. (Final Report re-emit scenario; idempotent.)
+
+- State file absent: treat as `null` and proceed to Step 4.
+
 ## Step 4 — Emit Final Report directly into assistant text
 
 Read four input files via the Read tool:
@@ -131,6 +147,7 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 
 After emitting, mark completion:
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase frozen
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
 `stop-final-report-guard.js` validates completion by checking all 10 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.

@@ -10,6 +10,8 @@ const CATEGORIES = [
 
 const SEVERITY_VALUES = ["error", "warning", "notice"];
 
+const L2_PHASE_VALUES = [null, "pending", "done", "frozen"];
+
 const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
 
 function createEmptyState(sessionId) {
@@ -20,7 +22,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    layer2: { next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [] },
+    layer2: { next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null },
     layer3: {},
   };
 }
@@ -87,6 +89,7 @@ function validate(obj) {
         }
       }
     }
+    if ("l2_phase" in l2 && !L2_PHASE_VALUES.includes(l2.l2_phase)) errors.push("layer2.l2_phase must be null, pending, done, or frozen");
   }
   if (typeof obj.layer3 !== "object" || obj.layer3 === null || Array.isArray(obj.layer3)) {
     errors.push("layer3 must be an object");
@@ -98,6 +101,7 @@ module.exports = {
   SCHEMA_VERSION,
   CATEGORIES,
   SEVERITY_VALUES,
+  L2_PHASE_VALUES,
   SEVERITY_RANK,
   createEmptyState,
   validate,
