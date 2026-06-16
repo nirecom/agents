@@ -86,9 +86,10 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, isWorkflowOff, readState;
+  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
+    ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState } = require("./lib/supervisor-state-writer"));
   } catch (_) {
@@ -105,6 +106,13 @@ if (require.main === module) {
     process.exit(0);
   }
   if (!sessionId) process.exit(0);
+
+  let workflowSessionId = null;
+  try {
+    workflowSessionId = resolveWorkflowSessionId({});
+  } catch (_) {
+    workflowSessionId = null;
+  }
 
   try {
     if (isWorkflowOff(sessionId)) process.exit(0);
@@ -134,7 +142,8 @@ if (require.main === module) {
   if (cumSev === "error") {
     const topDetail =
       findings.length > 0 ? findings[findings.length - 1].detail : "(no detail)";
-    const reason = `[EM Supervisor] Layer 2: cumulative_severity=error. Top finding: "${topDetail}". Follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`;
+    const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
+    const reason = `[EM Supervisor] Layer 2: cumulative_severity=error. Top finding: "${topDetail}". Follow agents/supervisor.md (${supervisorPath}) to resolve before continuing. Session ID: ${sessionId}. Workflow session ID: ${wsidLabel}.`;
     try {
       process.stdout.write(
         JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
@@ -147,10 +156,12 @@ if (require.main === module) {
   const hangDetected = detectSentinelHang(input.transcript_path || "");
   if (hangDetected || nextCheck) {
     const cause = hangDetected ? "C1 sentinel hang" : "C2 escape-hatch use";
+    const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
     const reason =
       `[EM Supervisor] Layer 2 review required (${cause}). Invoke agents/supervisor.md (${supervisorPath}) as a subagent: ` +
       `run the JD checklist, provide first-aid guidance, then recommend /issue-create for root-cause fix. ` +
       `Session ID: ${sessionId}. ` +
+      `Workflow session ID: ${wsidLabel}. ` +
       `To clear and resume: node -e "require('${
         agentsDir
           ? path.join(agentsDir, "hooks/lib/supervisor-state-writer").replace(/\\/g, "\\\\")
