@@ -49,7 +49,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
      Run `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/assemble-mandatory.sh"` (Bash tool) with env vars:
      `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to Step 2.
-   - Emit `WORKFLOW_OUTLINE_PLAN_COMPLETE` (Completion) and stop.
+   - Proceed to the **Completion** sequence below.
 
 4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
@@ -132,7 +132,7 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
   (c) the prose rationale preamble emitted in step 7 before `AskUserQuestion`
   No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
-- `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state) plus `WORKFLOW_OUTLINE_PLAN_COMPLETE` (status event).
+- `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state).
 - **One `AskUserQuestion` + one sentinel dialog per run in ON mode** — step 7 (approach selection via `AskUserQuestion`) and step 8 (artifact review via `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel permission dialog per protocol Step 3). OFF mode fires neither.
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
@@ -141,5 +141,4 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
 ## Completion
 
 1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
-2. `echo "<<WORKFLOW_OUTLINE_PLAN_COMPLETE>>"` (status event for downstream skills)
-3. Invoke `make-detail-plan` via the Skill tool.
+2. Invoke `make-detail-plan` via the Skill tool.
