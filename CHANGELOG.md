@@ -283,4 +283,8 @@ Changes: make-outline-plan: selecting "Pass all approaches to make-detail-plan w
 
 ### BUGFIX: PR #896 (2026-06-17)
 Background: fix(#884): add workflow-init prohibition to supervisor post-diagnosis output
-Changes: Fix: After L2 Supervisor diagnosis, the model no longer incorrectly prompts to start a new `/workflow-init` session — it returns control to the user instead.
+Changes: Fix: After L2 Supervisor diagnosis, the model no longer incorrectly prompts to start a new `/workflow-init` session — it returns control to the user instead.
+
+### FEATURE: PR #899 (2026-06-17)
+Background: fix(#891): add l2_phase lifecycle enum to supervisor state; gate-yield before Final Report
+Changes: **EM Supervisor**: L2 review now runs at most once per session and fires before the Final Report rather than after it; post-session findings no longer re-trigger L2 blocks.
