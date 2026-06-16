@@ -84,18 +84,17 @@ Dedupe layer for the underlying `bin/github-issues/issue-create.sh`. Skip on non
 # rc != 0 → skip survey, jump to Phase 4 with --verdict none
 ```
 
-**3-pass dedupe survey.** Extract 3–5 significant tokens (nouns/verbs/identifiers, no stopwords).
+**3-pass dedupe survey.** Extract 3–5 significant tokens (nouns/verbs/identifiers, no stopwords) AND 3–5 symptom-level tokens (behaviors, affected outputs/artifacts, feature area — including artifact names when they represent the affected feature) from the Background / Changes body.
 
-**Pass 1 — keyword search:** `gh issue list --state all --limit 50 --search "<kw1> <kw2> <kw3>"`.
-Zero results → extract 3–5 symptom-level tokens (behaviors, affected outputs/artifacts, feature area — including artifact names like `CLAUDE.md` or `Final Report` when they represent the affected feature) → run one additional search with those tokens. Still zero → drop the most specific identifier keyword, retry up to 3 times.
+**Pass 1 — keyword + symptom search (parallel):** `gh issue list --state all --limit 50 --search "<kw1> <kw2> <kw3>"` using 3–5 significant tokens. Always also run `gh issue list --state all --limit 50 --search "<st1> <st2> <st3>"` using 3–5 symptom-level tokens. Zero results → drop most specific identifier keyword, retry up to 3 times.
 
-**Pass 2 — recent-open full scan:** `gh issue list --state open --paginate --search "created:>=<YYYY-MM-DD>"` where the date is 30 days before the current date. Deduplicate results against Pass 1 before inspection.
+**Pass 2 — recent-open full scan:** `gh issue list --state open --paginate --search "created:>=<YYYY-MM-DD>"` where the date is 30 days before the current date. Also run `gh issue list --state open --limit 50 --search "<st1> <st2> <st3>"` (symptom tokens, no date filter) to surface older open issues. Deduplicate results against Pass 1 before inspection.
 
-**Pass 3 — closed duplicate scan:** `gh issue list --state closed --limit 30 --search "<kw1> <kw2> <kw3>"`. Surfaces recently-closed duplicates.
+**Pass 3 — closed duplicate scan:** `gh issue list --state closed --limit 50 --search "<kw1> <kw2> <kw3>"`. Also run `gh issue list --state closed --limit 50 --search "<st1> <st2> <st3>"` (symptom tokens). Surfaces closed duplicates regardless of closure reason.
 
 Still zero across all three passes → verdict `none`, jump to Phase 4.
 
-**Candidate inspection** (up to ~10): `gh issue view <N> --json number,title,body,state,labels`.
+**Candidate inspection:** Dedup candidates across Passes 1–3; inspect up to 25 unique candidates (closed candidates first, then exact-token open, then symptom-only open). `gh issue view <N> --json number,title,body,state,labels`.
 
 **Verdict classification** (Claude's semantic judgement):
 
@@ -105,9 +104,17 @@ Still zero across all three passes → verdict `none`, jump to Phase 4.
 | **superset-open** (existing open issue covers the new one) | `sub-of` | Attach the new issue under the existing parent |
 | **siblings-open** (≥2 open issues form a group the new one would head) | `make-parent` | Confirm with user; new issue becomes parent, listed issues become its children |
 | **related-open** (overlapping but not subset/superset) | `sibling` | Append `Related to #N` to the new issue body |
+| **recurrence** (same symptom on a closed issue, regardless of how closed) | `reopen` | Confirm before reopening; treat as regression |
 | **unrelated** | (ignore) | — |
 
 No match → verdict `none`.
+
+**Verdict Rubric** — apply in order before choosing a verdict:
+1. **Symptom match** (weight: high): does the candidate describe the same observable failure/behavior? Same symptom + same scope → `reopen` or `duplicate` class.
+2. **Scope overlap** (weight: high): does the candidate's scope substantially overlap the new report's scope? No overlap → class is at most `sibling`.
+3. **Age is a tie-break only**: a closed issue from 2 years ago with identical symptoms outranks a recent open issue with partial overlap. Do not discard candidates based on age alone.
+4. **Tie-break order** (when rules 1–2 yield equal weight): closed candidates > open candidates; more recent > older; lower issue number > higher (stable sort).
+5. **No verdict**: if no candidate matches on both rules 1 and 2, verdict is `none`.
 
 ### Phase 3 — Confirm
 
