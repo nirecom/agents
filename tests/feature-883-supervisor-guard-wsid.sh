@@ -67,11 +67,11 @@ run_g20() {
     sid="g20-sid"
     TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
     wsid="${TODAY}-g20wsid"
-    # Create the context.md that resolveWorkflowSessionId will find.
-    touch "$tmp/${wsid}-context.md"
+    # Priority 1 (WORKTREE_NOTES.md) supplies wsid when running from $tmp.
+    printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # Seed supervisor state with next_check_at non-null to trigger branch (3).
     seed_state "$tmp" "$sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
-    out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+    out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -88,9 +88,10 @@ run_g21() {
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g21-sid"
-    # No context.md in tmp — resolveWorkflowSessionId should return null -> UNAVAILABLE.
+    # No WORKTREE_NOTES.md, no context.md in tmp — resolveWorkflowSessionId returns null -> UNAVAILABLE.
+    # Running from $tmp ensures the repo's own WORKTREE_NOTES.md in CWD does not interfere.
     seed_state "$tmp" "$sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
-    out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+    out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
@@ -109,10 +110,11 @@ run_g22() {
     sid="g22-sid"
     TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
     wsid="${TODAY}-g22wsid"
-    touch "$tmp/${wsid}-context.md"
+    # Priority 1 (WORKTREE_NOTES.md) supplies wsid when running from $tmp.
+    printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # cumulative_severity=error triggers branch (2)
     seed_state "$tmp" "$sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
-    out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+    out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"

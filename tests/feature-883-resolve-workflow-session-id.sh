@@ -47,26 +47,28 @@ require_function() {
 TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
 YESTERDAY=$(node -e "const d=new Date(Date.now()-86400000); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
 
-# Invoke resolveWorkflowSessionId({}) with WORKFLOW_PLANS_DIR=$1 and (optional) CLAUDE_ENV_FILE=$2.
+# Invoke resolveWorkflowSessionId({}) with WORKFLOW_PLANS_DIR=$1, (optional) CLAUDE_ENV_FILE=$2,
+# and (optional) work_dir=$3 (defaults to $1). process.cwd() is set to work_dir so Priority 1
+# (WORKTREE_NOTES.md) can be controlled per-test without interference from the repo CWD.
 # Stdout: 'NULL' or the resolved sid.
 call_resolve() {
-    local plans_dir="$1" env_file="${2:-}"
+    local plans_dir="$1" env_file="${2:-}" work_dir="${3:-$1}"
     if [ -n "$env_file" ]; then
-        WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_ENV_FILE="$env_file" \
+        (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_ENV_FILE="$env_file" \
             run_with_timeout 5 node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
-" 2>/dev/null
+" 2>/dev/null)
     else
         # Explicitly unset CLAUDE_ENV_FILE so a leaked env var from the host shell
         # cannot influence the test outcome.
-        WORKFLOW_PLANS_DIR="$plans_dir" \
+        (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" \
             run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
-" 2>/dev/null
+" 2>/dev/null)
     fi
 }
 
@@ -84,6 +86,48 @@ for (let i = 0; i < args.length; i += 2) {
     fs.utimesSync(p, t, t);
 }
 " -- "$@" 2>/dev/null
+}
+
+run_r0() {
+    require_function "resolveWorkflowSessionId" "R0: WORKTREE_NOTES.md Session-ID takes priority" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Priority 1: WORKTREE_NOTES.md in CWD with a valid session ID.
+    # Also add a context.md with a different id to confirm it is NOT picked.
+    printf "Session-ID: %s-r0session\n" "$TODAY" > "$tmp/WORKTREE_NOTES.md"
+    : > "$tmp/${TODAY}-other-context.md"
+    out=$(call_resolve "$tmp" "" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-r0session" ]; then
+        pass "R0: WORKTREE_NOTES.md Session-ID takes priority"
+    else
+        fail "R0: WORKTREE_NOTES.md Session-ID takes priority (out=$out)"
+    fi
+}
+
+run_r0b() {
+    require_function "resolveWorkflowSessionId" "R0b: WORKTREE_NOTES.md via git common-dir (linked worktree)" || return
+    if ! command -v git >/dev/null 2>&1; then skip "R0b: git not available"; return; fi
+    local main_repo linked_wt plans_tmp out sid
+    main_repo="$(mktemp -d)"
+    linked_wt="${main_repo}/linked-wt"
+    plans_tmp="$(mktemp -d)"
+    sid="${TODAY}-r0bsession"
+    # Set up a minimal git repo with one commit so git worktree add works.
+    (cd "$main_repo" && git init -q && git config user.email "test@example.com" && \
+        git config user.name "Test" && git commit -q --allow-empty -m "init") 2>/dev/null
+    # Create linked worktree — no WORKTREE_NOTES.md there.
+    (cd "$main_repo" && git worktree add -q "$linked_wt" -b "test-r0b") 2>/dev/null
+    # WORKTREE_NOTES.md in main repo root (git common-dir parent).
+    printf "Session-ID: %s\n" "$sid" > "$main_repo/WORKTREE_NOTES.md"
+    # Run from linked worktree: CWD has no WORKTREE_NOTES.md; common-dir parent does.
+    out=$(call_resolve "$plans_tmp" "" "$linked_wt")
+    rm -rf "$main_repo" "$plans_tmp"
+    if [ "$out" = "$sid" ]; then
+        pass "R0b: WORKTREE_NOTES.md via git common-dir (linked worktree)"
+    else
+        fail "R0b: WORKTREE_NOTES.md via git common-dir (linked worktree) (out=$out)"
+    fi
 }
 
 run_r1() {
@@ -171,11 +215,11 @@ run_r5() {
 
 run_r6() {
     require_function "resolveWorkflowSessionId" "R6: nonexistent plans-dir -> null (no throw)" || return
-    local tmp out
+    local tmp out bogus
     tmp="$(mktemp -d)"
-    # Point at a path that does not exist.
-    local bogus="$tmp/does-not-exist"
-    out=$(call_resolve "$bogus")
+    bogus="$tmp/does-not-exist"
+    # work_dir=$tmp (exists) so cd succeeds; plans_dir=bogus so readdirSync returns null.
+    out=$(call_resolve "$bogus" "" "$tmp")
     rm -rf "$tmp"
     if [ "$out" = "NULL" ]; then
         pass "R6: nonexistent plans-dir -> null (no throw)"
@@ -227,6 +271,8 @@ run_r8() {
     fi
 }
 
+run_r0
+run_r0b
 run_r1
 run_r2
 run_r3

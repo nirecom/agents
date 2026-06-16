@@ -2,6 +2,16 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
+
+function _readSessionIdFromWorktreeNotes(notesPath) {
+  try {
+    const content = fs.readFileSync(notesPath, "utf8");
+    const m = content.match(/^Session-ID:\s*(\S+)\s*$/m);
+    if (m && /^[A-Za-z0-9_-]+$/.test(m[1])) return m[1];
+  } catch (_) {}
+  return null;
+}
 
 /**
  * Resolve the workflow session ID (wsid) — the timestamped session prefix used by
@@ -9,9 +19,11 @@ const path = require("path");
  * Distinct from resolveSessionId() which returns the CC session UUID.
  *
  * Priority chain:
- *   1. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID value (charset-validated),
+ *   1. WORKTREE_NOTES.md Session-ID: line in CWD or git common-dir parent
+ *      (written by /worktree-start — gold source).
+ *   2. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID value (charset-validated),
  *      if `<value>-intent.md` exists in plans-dir.
- *   2. mtime scan of `*-context.md` filenames in plans-dir, filtered by charset and
+ *   3. mtime scan of `*-context.md` filenames in plans-dir, filtered by charset and
  *      same-day date-sanity (prefix must start with today's local YYYYMMDD).
  * Returns null on any failure (no throw).
  */
@@ -23,6 +35,25 @@ function resolveWorkflowSessionId(_ctx = {}) {
   } catch (_) {
     return null;
   }
+
+  // Priority 1: WORKTREE_NOTES.md Session-ID (written by /worktree-start — gold source).
+  const fromCwd = _readSessionIdFromWorktreeNotes(
+    path.join(process.cwd(), "WORKTREE_NOTES.md")
+  );
+  if (fromCwd) return fromCwd;
+  try {
+    const commonDir = execSync("git rev-parse --git-common-dir", {
+      encoding: "utf8",
+      timeout: 2000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (commonDir) {
+      const fromGit = _readSessionIdFromWorktreeNotes(
+        path.join(path.resolve(commonDir), "..", "WORKTREE_NOTES.md")
+      );
+      if (fromGit) return fromGit;
+    }
+  } catch (_) {}
 
   const envFile = process.env.CLAUDE_ENV_FILE;
   if (envFile) {
