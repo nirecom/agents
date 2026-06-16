@@ -104,8 +104,8 @@ Canonical spec: `bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-ca
 - Step WE-11 MUST execute as one Bash tool call (survives Windows env reset, #504). Do not split into separate calls.
 - Step WE-11 JSON output MUST NOT include `BRANCH_DELETED` (accuracy fix tracked separately; renderer renders `(none)` as fail-safe, #504).
 - Step WE-11 JSON output MUST include all four post-merge action categories (cc_restart / vscode_reload / installer_rerun / os_reboot). CLAUDE_CODE_RESTART_REQUIRED is kept as deprecated alias for backward compat.
-- Step WE-20 writes `WORKTREE_NOTES.md`; the env JSON at `$PLANS_DIR/<session-id>-final-report-env.json` is consumed by `/session-close` Step 4.
-- `/session-close` Step 4 reads env JSON + outcome JSON + intent.md + WORKTREE_NOTES.md backup; LLM substitutes placeholders and emits Final Report verbatim into assistant text; then runs `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"`.
+- Step WE-20 writes `WORKTREE_NOTES.md`; the env JSON at `$PLANS_DIR/<session-id>-final-report-env.json` is consumed by `/session-close` SC-4.
+- `/session-close` SC-4 reads env JSON + outcome JSON + intent.md + WORKTREE_NOTES.md backup; LLM substitutes placeholders and emits Final Report verbatim into assistant text; then runs `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"`.
 - `stop-final-report-guard.js` validates all 10 headings from `getSectionHeadings()` appear after `## Final Report — <sid>` in transcript (no `reported` flag check).
 - Do not reformat, summarize, reorder, or merge any Final Report section.
 - Do not delete, transform, summarize, or reorder any heading (`## Final Report` or `### ...`) in the Final Report.
