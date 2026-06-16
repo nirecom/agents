@@ -53,6 +53,34 @@ for pat in "${PATTERNS[@]}"; do
   fi
 done
 
+# --- CI/MOP legacy: ### Step 0 heading in those two SKILL.md files ---
+for _f in \
+    "$REPO_ROOT/skills/clarify-intent/SKILL.md" \
+    "$REPO_ROOT/skills/make-outline-plan/SKILL.md"; do
+  if [ -f "$_f" ]; then
+    if out="$(rg -n --no-heading '### Step 0' "$_f" 2>/dev/null)"; then
+      if [[ -n "$out" ]]; then
+        rel="${_f#$REPO_ROOT/}"
+        printf 'Legacy reference found in %s for pattern: ### Step 0\n' "$rel"
+        printf '%s\n\n' "$out"
+        FOUND=1
+      fi
+    fi
+  fi
+done
+
+# --- SC legacy: ## Step [digit] in session-close/SKILL.md ---
+SC_SKILL="$REPO_ROOT/skills/session-close/SKILL.md"
+if [ -f "$SC_SKILL" ]; then
+  if out="$(rg -n --no-heading '## Step [0-9]' "$SC_SKILL" 2>/dev/null)"; then
+    if [[ -n "$out" ]]; then
+      printf 'Legacy reference found in skills/session-close/SKILL.md for pattern: ## Step [0-9]\n'
+      printf '%s\n\n' "$out"
+      FOUND=1
+    fi
+  fi
+fi
+
 if [[ "$FOUND" -ne 0 ]]; then
   printf 'verify-renumber-sweep: FAIL — legacy step references remain (see above)\n' >&2
   exit 1
