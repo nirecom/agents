@@ -105,6 +105,23 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
 
 Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings surface in the next L2 triage cycle, not in the current Final Report.
 
+## Step 3.6 — Pre-Final-Report L2 gate
+
+supervisor state を Read ツールで確認: `<PLANS_DIR>/<session-id>-supervisor-state.json`
+`layer2.l2_phase` を確認:
+
+- `"pending"` かつ `next_check_at !== null`: L2 未完了 → gate sentinel を emit して yield (Final Report をこのターンでは発行しない):
+  `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
+  次の Stop で supervisor-guard.js が L2 を発火。supervisor が `--set-l2-phase done` を書き込み。session 再開後、gate check は done を検知して Step 4 へ進む。
+
+- `"pending"` かつ `next_check_at === null` (異常状態): supervisor-report で warning を記録し、Step 4 へ進む。
+
+- `"done"` または `null`: Step 4 へ進む (`null` = L2 未スケジュール、このセッションで発火なし)。
+
+- `"frozen"`: Step 4 へ進む (Final Report 再発行シナリオ; 冪等)。
+
+- supervisor-state ファイルが存在しない: null として扱い Step 4 へ進む。
+
 ## Step 4 — Emit Final Report directly into assistant text
 
 Read four input files via the Read tool:
@@ -131,6 +148,7 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 
 After emitting, mark completion:
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase frozen
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
 `stop-final-report-guard.js` validates completion by checking all 10 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
