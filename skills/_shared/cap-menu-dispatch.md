@@ -1,6 +1,6 @@
 # Cap-menu Dispatch — Shared Protocol
 
-Used by `make-outline-plan` Step 6 and `make-detail-plan` Step 6 when
+Used by `make-outline-plan` MOP-6 and `make-detail-plan` MDP-6 when
 `review-plan-codex` returns `FAILED — round cap reached`. Routes the caller
 to land, adjust, or auto-extend via `bin/review-loop-cap-menu`.
 

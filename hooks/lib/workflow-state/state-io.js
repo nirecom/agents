@@ -291,6 +291,8 @@ const CONFIRM_NEXT_STEP_HINT = {
     "CONFIRM_OUTLINE approved. Invoke `make-detail-plan` via Skill tool.",
   detail:
     "CONFIRM_DETAIL approved. Emit <<WORKFLOW_BRANCHING_COMPLETE: ...>> if not yet done, then invoke `write-tests` via Skill tool.",
+  "pr-created":
+    "CONFIRM_PR_CREATED approved. ENFORCE_WORKTREE=on: invoke `worktree-end` via Skill tool. ENFORCE_WORKTREE=off: emit <<WORKFLOW_USER_VERIFIED: <reason>>>.",
 };
 
 function confirmNextStepHint(stage) {
