@@ -163,4 +163,8 @@ Changes: fix(#868): enhance issue-create Phase 2 survey — parallel symptom-tok
 
 ### FEATURE: PR #894 — refactor/871-dead-sentinel-removal (2026-06-16, 39bbb9803c8015b107d6a8b8dd83f68c7ae97c22, #894)
 Background: refactor(#871): remove dead-code WORKFLOW_OUTLINE_PLAN_COMPLETE sentinel from make-outline-plan
-Changes: REFACTOR | #871: make-outline-plan: remove dead-code WORKFLOW_OUTLINE_PLAN_COMPLETE sentinel (never registered in isSentinel(); allAreSentinels guard returned done() immediately; Phase 1 removes literal from 3 sites in SKILL.md + assertion block in static test) <!-- compose-doc-append-sentinel: branch=refactor/871-dead-sentinel-removal pr=#894 -->
+Changes: REFACTOR | #871: make-outline-plan: remove dead-code WORKFLOW_OUTLINE_PLAN_COMPLETE sentinel (never registered in isSentinel(); allAreSentinels guard returned done() immediately; Phase 1 removes literal from 3 sites in SKILL.md + assertion block in static test) <!-- compose-doc-append-sentinel: branch=refactor/871-dead-sentinel-removal pr=#894 -->
+
+### FEATURE: PR #895 — fix/789-skip-step8-confirm-on-pass-all (2026-06-16, 8fbd4bd9359d6e2e8f75b8f631863c220debd992, #895)
+Background: PR #895 merged on 2026-06-16.
+Changes: BUGFIX #789: make-outline-plan Step 8 unconditionally fired the CONFIRM_OUTLINE sentinel dialog even when the user had already selected "Pass all approaches to make-detail-plan without selecting" in Step 7. Added a Logical-OR bypass using a CHOSEN_APPROACH variable: when CONFIRM_OUTLINE=off OR CHOSEN_APPROACH equals the pass-all selection, confirm-plan Steps 1+2 (artifact write + breadcrumb) execute without emitting the <<WORKFLOW_CONFIRM_OUTLINE>> sentinel. <!-- compose-doc-append-sentinel: branch=fix/789-skip-step8-confirm-on-pass-all pr=#895 -->
