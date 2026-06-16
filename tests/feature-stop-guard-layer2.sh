@@ -14,6 +14,12 @@
 #
 # The Layer 2 extension is implemented in a later step. When not yet present,
 # tests SKIP gracefully (detected by absence of "Layer 2" marker in the hook).
+#
+# L3 gap (what this test does NOT catch):
+# - stop-confirm-plan-guard.js firing as a real Claude Code Stop hook in a live session
+#   (hook registration wiring — only verifiable via live claude -p run)
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
@@ -318,6 +324,147 @@ elif [ "$L1R_DECISION" != "block" ]; then
   fail "L1-reg expected decision:block, got: '$L1R_DECISION' out: $HOOK_OUT"
 else
   pass "L1-reg Layer 1 path-emission block intact"
+fi
+clear_markers
+
+# ── L2h-L2n: CONFIRM_PR_CREATED branch (new, defines desired behavior) ─────
+# These tests describe the contract introduced by the #842 fix-confirm-stall
+# feature. The key change is that Layer 2 must activate on CONFIRM_PR_CREATED
+# even WITHOUT a turn-marker (because commit-push does not write a plan
+# artifact, so no marker is dropped). They will fail until the source code
+# is updated to implement the CONFIRM_PR_CREATED branch.
+BASH_CONFIRM_PR_CREATED='{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_CONFIRM_PR_CREATED: https://github.com/nirecom/agents/pull/999>>\""}}'
+BASH_USER_VERIFIED='{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_USER_VERIFIED: PR created at https://github.com/nirecom/agents/pull/999>>\""}}'
+SKILL_WORKTREE_END='{"type":"tool_use","name":"Skill","input":{"skill":"worktree-end"}}'
+
+# ── L2h: CONFIRM_PR_CREATED + Skill(worktree-end) after, WITH marker → pass
+echo "=== L2h: CONFIRM_PR_CREATED + worktree-end follow-up, WITH marker → pass ==="
+clear_markers
+setup_marker "intent"
+L2H_TPATH="$TRANSCRIPT_DIR/$SID-l2h.jsonl"
+build_transcript_full "$L2H_TPATH" "[$BASH_CONFIRM_PR_CREATED,$SKILL_WORKTREE_END]"
+L2H_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2H_TPATH\"}"
+run_hook_with_rc "$L2H_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2h CONFIRM_PR_CREATED + worktree-end follow-up (marker present) → exit 0"
+else
+  fail "L2h expected exit 0, got exit $HOOK_RC, out: $HOOK_OUT"
+fi
+clear_markers
+
+# ── L2i: CONFIRM_PR_CREATED alone, WITH marker → block + pr-created hint
+echo "=== L2i: CONFIRM_PR_CREATED alone (marker present) → block ==="
+clear_markers
+setup_marker "intent"
+L2I_TPATH="$TRANSCRIPT_DIR/$SID-l2i.jsonl"
+build_transcript_full "$L2I_TPATH" "[$BASH_CONFIRM_PR_CREATED]"
+L2I_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2I_TPATH\"}"
+run_hook_with_rc "$L2I_JSON"
+L2I_DECISION=$(extract_decision "$HOOK_OUT")
+L2I_REASON=$(extract_reason "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L2i expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L2I_DECISION" != "block" ]; then
+  fail "L2i expected decision:block, got: '$L2I_DECISION' out: $HOOK_OUT"
+elif ! echo "$L2I_REASON" | grep -qiE "worktree-end|pr.created|user_verified"; then
+  fail "L2i reason missing pr-created hint: $L2I_REASON"
+else
+  pass "L2i CONFIRM_PR_CREATED alone → block + pr-created hint"
+fi
+clear_markers
+
+# ── L2j: CONFIRM_PR_CREATED + Skill(worktree-end), NO marker (the key fix) → pass
+echo "=== L2j: CONFIRM_PR_CREATED + worktree-end follow-up, NO marker → pass ==="
+clear_markers
+L2J_TPATH="$TRANSCRIPT_DIR/$SID-l2j.jsonl"
+build_transcript_full "$L2J_TPATH" "[$BASH_CONFIRM_PR_CREATED,$SKILL_WORKTREE_END]"
+L2J_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2J_TPATH\"}"
+run_hook_with_rc "$L2J_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2j CONFIRM_PR_CREATED + worktree-end (no marker, scans anyway) → exit 0"
+else
+  fail "L2j expected exit 0, got exit $HOOK_RC, out: $HOOK_OUT"
+fi
+clear_markers
+
+# ── L2k: CONFIRM_PR_CREATED alone, NO marker → block (the fix activates Layer 2 marker-less)
+echo "=== L2k: CONFIRM_PR_CREATED alone (no marker) → block ==="
+clear_markers
+L2K_TPATH="$TRANSCRIPT_DIR/$SID-l2k.jsonl"
+build_transcript_full "$L2K_TPATH" "[$BASH_CONFIRM_PR_CREATED]"
+L2K_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2K_TPATH\"}"
+run_hook_with_rc "$L2K_JSON"
+L2K_DECISION=$(extract_decision "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L2k expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L2K_DECISION" != "block" ]; then
+  fail "L2k expected decision:block, got: '$L2K_DECISION' out: $HOOK_OUT"
+else
+  pass "L2k CONFIRM_PR_CREATED alone, no marker → block (marker-less activation)"
+fi
+clear_markers
+
+# ── L2l: CONFIRM_PR_CREATED + wrong Skill(clarify-intent) follow-up → block
+echo "=== L2l: CONFIRM_PR_CREATED + WRONG Skill (clarify-intent) → block ==="
+clear_markers
+setup_marker "intent"
+L2L_TPATH="$TRANSCRIPT_DIR/$SID-l2l.jsonl"
+build_transcript_full "$L2L_TPATH" "[$BASH_CONFIRM_PR_CREATED,$SKILL_CLARIFY_INTENT]"
+L2L_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2L_TPATH\"}"
+run_hook_with_rc "$L2L_JSON"
+L2L_DECISION=$(extract_decision "$HOOK_OUT")
+if [ "$HOOK_RC" -ne 2 ]; then
+  fail "L2l expected exit 2, got exit $HOOK_RC, out: $HOOK_OUT"
+elif [ "$L2L_DECISION" != "block" ]; then
+  fail "L2l expected decision:block, got: '$L2L_DECISION' out: $HOOK_OUT"
+else
+  pass "L2l CONFIRM_PR_CREATED + wrong skill → block"
+fi
+clear_markers
+
+# ── L2m: CONFIRM_PR_CREATED in older turn only; latest turn clean → pass
+echo "=== L2m: CONFIRM_PR_CREATED in past turn; latest turn clean → pass ==="
+clear_markers
+setup_marker "intent"
+L2M_TPATH="$TRANSCRIPT_DIR/$SID-l2m.jsonl"
+build_transcript_two_turns "$L2M_TPATH" \
+  "[$BASH_CONFIRM_PR_CREATED]" \
+  "[$TEXT_BLOCK]"
+L2M_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2M_TPATH\"}"
+run_hook_with_rc "$L2M_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2m latest-turn-only scan honored for CONFIRM_PR_CREATED"
+else
+  fail "L2m expected exit 0 (latest turn clean), got exit $HOOK_RC, out: $HOOK_OUT"
+fi
+clear_markers
+
+# ── L2n: NO marker + CONFIRM_PR_CREATED + Bash(WORKFLOW_USER_VERIFIED URL) → pass
+echo "=== L2n: CONFIRM_PR_CREATED + WORKFLOW_USER_VERIFIED follow-up, no marker → pass ==="
+clear_markers
+L2N_TPATH="$TRANSCRIPT_DIR/$SID-l2n.jsonl"
+build_transcript_full "$L2N_TPATH" "[$BASH_CONFIRM_PR_CREATED,$BASH_USER_VERIFIED]"
+L2N_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2N_TPATH\"}"
+run_hook_with_rc "$L2N_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2n CONFIRM_PR_CREATED + USER_VERIFIED (off-mode terminal) → exit 0"
+else
+  fail "L2n expected exit 0, got exit $HOOK_RC, out: $HOOK_OUT"
+fi
+clear_markers
+
+# ── L2o: CONFIRM_DETAIL + Skill(write-tests) after → pass ───────────────────
+echo "=== L2o: CONFIRM_DETAIL + Skill(write-tests) follow-up → pass ==="
+clear_markers
+setup_marker "detail"
+L2O_TPATH="$TRANSCRIPT_DIR/$SID-l2o.jsonl"
+build_transcript_full "$L2O_TPATH" "[$BASH_CONFIRM_DETAIL,$SKILL_WRITE_TESTS]"
+L2O_JSON="{\"session_id\":\"$SID\",\"transcript_path\":\"$L2O_TPATH\"}"
+run_hook_with_rc "$L2O_JSON"
+if [ "$HOOK_RC" -eq 0 ]; then
+  pass "L2o CONFIRM_DETAIL + Skill(write-tests) follow-up → exit 0"
+else
+  fail "L2o expected exit 0 (write-tests is a valid CONFIRM_DETAIL follow-up), got exit $HOOK_RC, out: $HOOK_OUT"
 fi
 clear_markers
 

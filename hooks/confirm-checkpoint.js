@@ -19,10 +19,10 @@ const path = require("path");
 const { peekTurnMarkers } = require("./lib/turn-marker");
 const { resolveSessionId } = require("./lib/workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-const { isConfirmOff } = require("./lib/plan-confirm-flag");
 const { loadDefaultEnv } = require("./lib/load-env");
 const { shouldOpenInVsCode, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
 const { openInBrowser } = require("./lib/open-external");
+const { CONFIRM_PR_CREATED_BODY_RE } = require("./lib/sentinel-patterns");
 
 function readStdin() {
   const chunks = [];
@@ -52,7 +52,7 @@ function parseSentinel(command) {
   if (/<<WORKFLOW_CONFIRM_DETAIL(?:: [^>]+)?>>/.test(command)) {
     return { stage: "detail" };
   }
-  const pr = command.match(/<<WORKFLOW_CONFIRM_PR_CREATED: (https:\/\/github\.com\/[^/\s>]+\/[^/\s>]+\/pull\/\d+)>>/);
+  const pr = command.match(CONFIRM_PR_CREATED_BODY_RE);
   if (pr) return { stage: "pr-created", url: pr[1] };
   return null;
 }
