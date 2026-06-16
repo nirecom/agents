@@ -279,4 +279,8 @@ Changes: `/issue-create`: now detects same-symptom regressions (issues closed fo
 
 ### FEATURE: PR #895 (2026-06-16)
 Background: PR #895 merged on 2026-06-16.
-Changes: make-outline-plan: selecting "Pass all approaches to make-detail-plan without selecting" in Step 7 no longer triggers a redundant confirmation dialog before proceeding to detail planning.
+Changes: make-outline-plan: selecting "Pass all approaches to make-detail-plan without selecting" in Step 7 no longer triggers a redundant confirmation dialog before proceeding to detail planning.
+
+### BUGFIX: PR #896 (2026-06-17)
+Background: fix(#884): add workflow-init prohibition to supervisor post-diagnosis output
+Changes: Fix: After L2 Supervisor diagnosis, the model no longer incorrectly prompts to start a new `/workflow-init` session — it returns control to the user instead.
