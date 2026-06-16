@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark.js, hooks/workflow-mark.js., skills/make-outline-plan/SKILL.md
-# Tags: workflow, outline, planning, settings, config
+# Tags: workflow, outline, planning, settings, config, step-rename
 # Test suite for premise-verification gate feature (Issue #262).
 # Static doc/JSON checks + narrow integration tests against hooks/workflow-mark.js.
 # Tests will FAIL until the source updates are implemented — that is expected.
@@ -129,11 +129,11 @@ assert_file_contains "PG-H2" \
 echo ""
 echo "=== Section B — make-outline-plan Step 0 documentation ==="
 
-# PG-STEP0-DOC: make-outline-plan SKILL.md contains "Step 0" section
+# PG-STEP0-DOC: make-outline-plan SKILL.md contains "MOP-0" step label
 assert_file_contains "PG-STEP0-DOC" \
-    "make-outline-plan SKILL.md contains 'Step 0' section" \
+    "make-outline-plan SKILL.md contains 'MOP-0' label" \
     "$OUTLINE_SKILL" \
-    "Step 0"
+    "MOP-0"
 
 # PG-BOTH-MISSING: documents handling for missing artifact files
 assert_file_contains "PG-BOTH-MISSING" \

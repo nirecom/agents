@@ -114,7 +114,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
 - Read project source files only — do not modify them. Writing the output artifact
   to `<PLANS_DIR>/<session-id>-survey-history.md` is required and allowed.
-- Do NOT emit the research-complete sentinel — `make-outline-plan` Step 0 aggregates
+- Do NOT emit the research-complete sentinel — `make-outline-plan` MOP-0 aggregates
   both survey-code and survey-history before emitting it
 - Do NOT emit premise-fail or premise-ack sentinels — these are emitted exclusively
   by the `make-outline-plan` orchestrator

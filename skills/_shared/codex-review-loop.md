@@ -1,6 +1,6 @@
 # Codex Review Loop — Shared Protocol
 
-Used by `make-outline-plan` Step 5 and `make-detail-plan` Step 5. The mechanical
+Used by `make-outline-plan` MOP-5 and `make-detail-plan` MDP-5. The mechanical
 parts (context build → codex invocation → verdict parse) are enforced by the
 `bin/run-codex-review-loop` wrapper.
 

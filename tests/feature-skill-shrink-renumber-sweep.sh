@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/verify-renumber-sweep.sh, skills/workflow-init/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/SKILL.md, agents/issue-close-finalize-worker.md
+# Tests: bin/verify-renumber-sweep.sh, skills/workflow-init/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/session-close/SKILL.md, agents/issue-close-finalize-worker.md
 # Tags: renumber, step-rename, sweep, issue-614
 # Verifies renumber sweep tool exists and new step labels appear in SKILL.md files.
 
@@ -61,8 +61,17 @@ check_literal "R5" "ICF-A" "skills/issue-close-finalize/SKILL.md"
 # R6: "MDP-5" in make-detail-plan/SKILL.md
 check_literal "R6" "MDP-5" "skills/make-detail-plan/SKILL.md"
 
-# R7: "written_by_step_6h" literal preserved in agents/issue-close-finalize-worker.md
-check_literal "R7" "written_by_step_6h" "agents/issue-close-finalize-worker.md"
+# R7: "CI-1" in clarify-intent/SKILL.md
+check_literal "R7" "CI-1" "skills/clarify-intent/SKILL.md"
+
+# R8: "MOP-0" in make-outline-plan/SKILL.md
+check_literal "R8" "MOP-0" "skills/make-outline-plan/SKILL.md"
+
+# R9: "SC-1" in session-close/SKILL.md
+check_literal "R9" "SC-1" "skills/session-close/SKILL.md"
+
+# R10: "written_by_step_6h" literal preserved in agents/issue-close-finalize-worker.md
+check_literal "R10" "written_by_step_6h" "agents/issue-close-finalize-worker.md"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
