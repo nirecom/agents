@@ -103,7 +103,7 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
 
 ## Step 3.5 — Retrospective pass (write-only)
 
-Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings surface in the next L2 triage cycle, not in the current Final Report.
+Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings are written to `layer1.findings` for the audit trail only. The final-report-env.json anchor (established at Step 2A) prevents these findings from arming a new L2 cycle for this session.
 
 ## Step 3.6 — Pre-Final-Report L2 gate
 
@@ -112,6 +112,7 @@ Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `lay
 - `"pending"` and `next_check_at !== null`: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
   `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
   The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to Step 4.
+  Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step 3.5 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step 2A). This gate therefore reads a stable value.
 
 - `"pending"` and `next_check_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to Step 4.
 
