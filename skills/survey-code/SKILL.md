@@ -82,7 +82,7 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
   `skills/_shared/survey-artifact-valid.md` for the artifact validity contract.
 - Use Explore subagents for broad searches when needed
 - Follow `rules/core-principles.md`.
-- Do NOT emit the research-complete sentinel — `make-outline-plan` Step 0 aggregates
+- Do NOT emit the research-complete sentinel — `make-outline-plan` MOP-0 aggregates
   both survey-code and survey-history before emitting it.
 
 ## Completion
