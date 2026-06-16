@@ -271,4 +271,8 @@ Changes: CONFIRM plan approval (Allow click on CONFIRM_INTENT / CONFIRM_OUTLINE 
 
 ### FEATURE: PR #877 (2026-06-16)
 Background: fix(#852): allow git merge/rebase/cherry-pick --abort/--continue/--skip from main worktree
-Changes: `git merge --abort`, `git rebase --abort/--continue/--skip`, and `git cherry-pick --abort/--continue/--skip` from the main worktree are no longer blocked by the worktree enforcement hook when run without a `-C` flag
+Changes: `git merge --abort`, `git rebase --abort/--continue/--skip`, and `git cherry-pick --abort/--continue/--skip` from the main worktree are no longer blocked by the worktree enforcement hook when run without a `-C` flag
+
+### FEATURE: PR #880 (2026-06-16)
+Background: fix(#868): enhance issue-create Phase 2 survey — parallel symptom-token search, Pass 3 widened, inspect cap 25, Verdict Rubric, regression row
+Changes: `/issue-create`: now detects same-symptom regressions (issues closed for any reason — merged, won't-fix, manual) and routes to `reopen` instead of creating a duplicate; parallel symptom-token search runs unconditionally in all 3 passes, improving recall for issues described with different vocabulary; candidate inspection cap raised from ~10 to 25 with a new Verdict Rubric that uses symptom-match and scope-overlap as primary signals and treats age as a tie-break rather than a filter
