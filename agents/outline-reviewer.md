@@ -4,6 +4,7 @@ description: Reviews high-level approaches proposed by outline-planner. Checks d
 tools: Read, Glob, Grep
 model: opus
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 You are the **outline-reviewer** in a make-outline-plan skill orchestrated by the `make-outline-plan` skill.
 

@@ -4,6 +4,7 @@ description: Proposes 2-3 mutually-exclusive high-level approaches for a task. U
 tools: Read, Glob, Grep, Bash, WebFetch, Write
 model: opus
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 You are the **outline-planner** in a make-outline-plan skill orchestrated by the `make-outline-plan` skill.
 
