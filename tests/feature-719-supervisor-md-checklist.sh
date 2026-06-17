@@ -85,10 +85,106 @@ run_m4() {
     fi
 }
 
+line_of_heading() {
+    # Print line number of first line matching pattern (case-insensitive), or 0
+    local pattern="$1"
+    local n
+    n="$(grep -n -i -m1 -- "$pattern" "$SUPERVISOR_MD" 2>/dev/null | head -n1 | cut -d: -f1)"
+    if [ -z "$n" ]; then echo 0; else echo "$n"; fi
+}
+
+run_m5() {
+    require_source "$SUPERVISOR_MD" "M5: Layer 2 pre-processing section structural checks" || return
+    local ok=1
+    local pre_ln jd_ln
+    pre_ln="$(line_of_heading '^## Layer 2 pre-processing')"
+    jd_ln="$(line_of_heading '^## Layer 2 JD Checklist')"
+
+    if [ "$pre_ln" -eq 0 ]; then
+        ok=0; echo "  missing: '## Layer 2 pre-processing' heading"
+    fi
+    if [ "$jd_ln" -eq 0 ]; then
+        ok=0; echo "  missing: '## Layer 2 JD Checklist' heading"
+    fi
+    if [ "$pre_ln" -gt 0 ] && [ "$jd_ln" -gt 0 ]; then
+        if [ "$pre_ln" -ge "$jd_ln" ]; then
+            ok=0; echo "  ordering: pre-processing ($pre_ln) must come before JD checklist ($jd_ln)"
+        fi
+        # Extract slice between the two headings (exclusive of jd_ln itself).
+        local end_ln=$((jd_ln - 1))
+        local slice
+        slice="$(sed -n "${pre_ln},${end_ln}p" "$SUPERVISOR_MD")"
+        if ! echo "$slice" | grep -qi 'co_blocked_by'; then
+            ok=0; echo "  missing in slice: co_blocked_by"
+        fi
+        if ! echo "$slice" | grep -q '60'; then
+            ok=0; echo "  missing in slice: 60"
+        fi
+        if ! echo "$slice" | grep -qiE 'second|timestamp|window|s window'; then
+            ok=0; echo "  missing in slice: second|timestamp|window"
+        fi
+        if ! echo "$slice" | grep -qi 'group'; then
+            ok=0; echo "  missing in slice: group"
+        fi
+        if ! echo "$slice" | grep -q '10'; then
+            ok=0; echo "  missing in slice: 10"
+        fi
+        if ! echo "$slice" | grep -qiE 'distinct|independent|different|separate'; then
+            ok=0; echo "  missing in slice: distinct|independent|different|separate"
+        fi
+    fi
+
+    if [ $ok -eq 1 ]; then
+        pass "M5: Layer 2 pre-processing section structural checks"
+    else
+        fail "M5: Layer 2 pre-processing section structural checks"
+    fi
+}
+
+run_m6() {
+    require_source "$SUPERVISOR_MD" "M6: §5 Perspective causality chain tracing" || return
+    local ok=1
+    local p5_ln p6_ln
+    p5_ln="$(grep -n -m1 -E '^5\..*Perspective' "$SUPERVISOR_MD" 2>/dev/null | head -n1 | cut -d: -f1)"
+    p6_ln="$(grep -n -m1 -E '^6\.' "$SUPERVISOR_MD" 2>/dev/null | head -n1 | cut -d: -f1)"
+    [ -z "$p5_ln" ] && p5_ln=0
+    [ -z "$p6_ln" ] && p6_ln=0
+
+    if [ "$p5_ln" -eq 0 ]; then
+        ok=0; echo "  missing: '5. **Perspective' checklist item"
+    fi
+    if [ "$p6_ln" -eq 0 ]; then
+        ok=0; echo "  missing: '6.' checklist item"
+    fi
+    if [ "$p5_ln" -gt 0 ] && [ "$p6_ln" -gt 0 ]; then
+        if [ "$p5_ln" -ge "$p6_ln" ]; then
+            ok=0; echo "  ordering: §5 ($p5_ln) must come before §6 ($p6_ln)"
+        else
+            local end_ln=$((p6_ln - 1))
+            local slice
+            slice="$(sed -n "${p5_ln},${end_ln}p" "$SUPERVISOR_MD")"
+            if ! echo "$slice" | grep -qiE 'causality|causal chain'; then
+                ok=0; echo "  missing in slice: causality|causal chain"
+            fi
+            if ! echo "$slice" | grep -qiE 'root cause|upstream'; then
+                ok=0; echo "  missing in slice: root cause|upstream"
+            fi
+        fi
+    fi
+
+    if [ $ok -eq 1 ]; then
+        pass "M6: §5 Perspective causality chain tracing"
+    else
+        fail "M6: §5 Perspective causality chain tracing"
+    fi
+}
+
 run_m1
 run_m2
 run_m3
 run_m4
+run_m5
+run_m6
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

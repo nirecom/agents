@@ -33,13 +33,19 @@ When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
 - Emit a `category=env, severity=warning` finding via `bin/supervisor-write-layer2` recording the missing wsid.
 - Run the JD checklist against transcript turns only.
 
+## Layer 2 pre-processing
+
+Group Layer 1 findings by the `co_blocked_by` field — sibling findings share the same value when back-annotated within the Layer 1 10-second / 5-findings recency window.
+Separately, cluster Layer 1 findings whose `timestamp` ISO strings fall within a 60-second window of each other — this 60-second Layer 2 grouping window is distinct from (and independent of) the Layer 1 10-second back-annotation window.
+When findings share a `co_blocked_by` link or fall in the same 60-second cluster, identify the single upstream operation that triggered them and treat the cluster as one composite item rather than one item per blocked hook.
+
 ## Layer 2 JD Checklist
 
 1. **Intent alignment** — does the current work serve the stated intent?
 2. **Scope drift** — has the work expanded past the agreed scope?
 3. **Non-goal violation** — has the work touched declared non-goals?
 4. **Tacit knowledge continuity** — is the new code consistent with surrounding patterns and unwritten conventions?
-5. **Perspective (§3/§4/§5)** — is the change solved at the class level (§3), applied across symmetric siblings (§4), and integrity-preserving end-to-end (§5)?
+5. **Perspective (§3/§4/§5)** — is the change solved at the class level (§3), applied across symmetric siblings (§4), and integrity-preserving end-to-end (§5)? For cascade failures, trace the causality chain to the single most-upstream root cause; file one root-cause finding and have downstream findings reference it rather than duplicating the cause.
 6. **`/issue-create` Phase 4 dispatch detection** — when transcript shows `ISSUE_CREATE_SKILL=1 ... issue-create-dispatch.sh`, verify the preceding transcript contains ALL THREE of: (a) `gh issue list --state all --search "<keyword tokens>"` (duplicate-search phase), (b) at least one additional symptom-token `gh issue list` search, (c) `gh issue view <N> --json` (candidate inspection). All three present → legitimate Phase 4 dispatch. Any absent → may be Phase 1–3 bypass.
 
 ## Output protocol
