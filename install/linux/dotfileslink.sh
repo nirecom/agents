@@ -189,3 +189,7 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/review-skill-size${C_RESET}\n"
 # --- ~/.local/bin/review-code-size symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-code-size" ~/.local/bin/review-code-size
 printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-size${C_RESET}\n"
+
+# --- ~/.local/bin/review-env-example symlink ---
+ln -sf "$AGENTS_ROOT/bin/review-env-example" ~/.local/bin/review-env-example
+printf "${C_GREEN}Symlinked: ~/.local/bin/review-env-example${C_RESET}\n"

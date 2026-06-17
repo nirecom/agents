@@ -42,6 +42,8 @@ WF-CODE-6. **Run tests & Security review** — Run all in parallel (single respo
      (always parallel; HARD >200 lines blocks via exit 1; WARN/INFO advisory)
    - Bash: `review-code-size --base <merge-base>` for JS/SH/PY file size check
      (always parallel; HARD >500 lines blocks via exit 1; WARN/INFO advisory)
+   - Bash: `review-env-example --base <merge-base>` for .env.example comment-style check
+     (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
 WF-CODE-7. **Docs** — Run `/update-docs`. Mandatory.
 WF-CODE-8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-7.
