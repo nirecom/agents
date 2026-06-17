@@ -62,7 +62,9 @@ function getWorktreeBaseDirResolved() {
 }
 
 // Captured at hook-input parse time so the `done()` helper can self-report on block.
-let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined };
+let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined, extras: undefined };
+
+const { buildExtras } = require("./enforce-worktree/block-extras");
 
 function done(decision) {
   if (decision && decision.block) {
@@ -71,7 +73,8 @@ function done(decision) {
       reportBlock(
         "enforce-worktree",
         _reportContext.command || _reportContext.toolName || "<unknown>",
-        _reportContext.sessionId
+        _reportContext.sessionId,
+        _reportContext.extras || {}
       );
     } catch (_) { /* fail-open */ }
     console.log(JSON.stringify({ decision: "block", reason: decision.reason }));
@@ -156,7 +159,13 @@ _reportContext = {
   sessionId: (input && input.session_id) || undefined,
   command: (toolInput && toolInput.command) || undefined,
   toolName,
+  extras: undefined,
 };
+
+// toolInput.cwd is the Bash tool's `cwd` parameter when explicitly provided.
+// We populate context.cwd from it when present; falls back to process.cwd()
+// only in places where we need a real path (not propagated to extras).
+const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
 
 // Populate payload-derived-path cache for this invocation (issue #321).
 // Read by getSessionRepoRoots() to scope the gh-write guard to the paths
@@ -239,11 +248,14 @@ if (toolName === "Bash") {
     // that /issue-create skill (survey-first + duplicate check) is used.
     // Linked worktrees bypass Stage B — bare `gh issue create` is unrestricted there.
     if (/\bgh\s+issue\s+create\b/.test(stripQuotedArgs(cmd))) {
-      const isMainWt = repoRoot && isMainCheckout(repoRoot);
-      if (isMainWt) {
+      // Axis A (#885): trivalue-aware — null (isMainCheckout indeterminate) routes
+      // to the block side, same as the main-path at line 441.
+      const mainCheckoutResultGate = repoRoot ? isMainCheckout(repoRoot) : false;
+      if (mainCheckoutResultGate !== false) {
         const SANCTIONED_RE =
           /^[ \t]*(?:MSYS_NO_PATHCONV=1[ \t]+)?ISSUE_CREATE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+create\b/;
         if (!SANCTIONED_RE.test(cmd)) {
+          _reportContext.extras = buildExtras(cmd, _toolCwd, repoRoot, mainCheckoutResultGate);
           done({
             block: true,
             reason:
@@ -343,14 +355,17 @@ if (toolName === "Bash") {
       const isMC = isMainCheckout(root);
       const branch = getCurrentBranch(root);
       const protected_ = getProtectedBranches(root);
-      if (isMC) {
+      // Axis A (#885): null (unresolved) routes to the block side, not allow.
+      if (isMC !== false) {
         const branchDesc = branch ? `branch '${branch}'` : "detached HEAD";
+        _reportContext.extras = buildExtras(undefined, _toolCwd, root, isMC);
         done({
           block: true,
           reason: `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\nWork from a linked worktree (/worktree-start) or set ENFORCE_WORKTREE=off.`,
         });
       }
       if (branch && protected_.includes(branch)) {
+        _reportContext.extras = buildExtras(undefined, _toolCwd, root, isMC);
         done({
           block: true,
           reason: `ENFORCE_WORKTREE: write blocked. Reason: protected branch '${branch}' in linked worktree.\nSwitch to a feature branch or set ENFORCE_WORKTREE=off.`,
@@ -380,6 +395,9 @@ if (toolName === "Bash") {
 // already handles tool inputs).
 if (!repoRoot) {
   if (toolName === "Bash") {
+    // Axis A (#885): repoRoot was probed and absent → null sentinel for the
+    // extras builder (vs. undefined which means "inspection didn't run").
+    _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, null, undefined);
     done({
       block: true,
       reason:
@@ -395,10 +413,12 @@ const mainCheckout = isMainCheckout(repoRoot);
 const currentBranch = getCurrentBranch(repoRoot);
 const protectedBranches = getProtectedBranches(repoRoot);
 
-// Linked worktree on detached HEAD — allow (cannot determine branch)
-if (!currentBranch && !mainCheckout) done();
+// Axis A (#885): trivalue isMainCheckout — null (indeterminate) routes
+// to the block side, not allow. Only an explicit `false` (linked worktree
+// confirmed) permits the detached-HEAD allow path here.
+if (!currentBranch && mainCheckout === false) done();
 
-if (mainCheckout) {
+if (mainCheckout !== false) {
   // Allow isolated worktree lifecycle commands (Bash only).
   // These operate on .git/worktrees/ metadata or external paths, not tracked files,
   // and must be invoked from the main worktree.
@@ -415,6 +435,7 @@ if (mainCheckout) {
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
+  _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, repoRoot, mainCheckout);
   done({
     block: true,
     reason:
@@ -426,6 +447,7 @@ if (mainCheckout) {
 }
 
 if (currentBranch && protectedBranches.includes(currentBranch)) {
+  _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, repoRoot, mainCheckout);
   done({
     block: true,
     reason:
