@@ -67,13 +67,13 @@ The file is directly inspectable for debugging.
 | Field | Type | Description |
 |---|---|---|
 | `l2_phase` | `null`/`"pending"`/`"done"`/`"frozen"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, frozen=Final Report emitted |
-| `next_check_at` | ISO string or null | Timestamp for next check; null when phase is done/frozen |
+| `l2_armed_at` | ISO string or null | Timestamp when L2 was armed in this session; null when phase is done/frozen |
 | `last_run_at` | ISO string or null | Timestamp of last L2 execution |
 | `cumulative_severity` | string or null | Highest severity across L2 findings |
 | `findings[]` | Finding[] | L2 findings (same schema as `layer1.findings`) |
 
 **L2 lifecycle and gate-yield:** `ensureLayer2Scheduled()` and `writeLayer2State()` refuse to
-set `next_check_at` when `l2_phase` is `done` or `frozen` (at-most-1 guarantee). When L2 is
+set `l2_armed_at` when `l2_phase` is `done` or `frozen` (at-most-1 guarantee). When L2 is
 pending and session-close reaches Step 4 (Final Report), it emits `pre_final_report_gate_complete`
 and yields so the Stop hook can fire L2 first (loose coupling — session-close never invokes L2
 directly). After Final Report, `supervisor-write-layer2 --set-l2-phase frozen` records terminal state.
