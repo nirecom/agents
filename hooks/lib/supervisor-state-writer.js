@@ -7,7 +7,7 @@ const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_V
 const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
 const findingStatus = require("./supervisor-finding-status");
 
-const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase"]);
+const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase", "l2_cause"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -216,6 +216,7 @@ function writeLayer2State(sessionId, patch) {
   if ("last_run_at" in patch && patch.last_run_at !== null && typeof patch.last_run_at !== "string") return false;
   if ("cumulative_severity" in patch && patch.cumulative_severity !== null && !SEVERITY_VALUES.includes(patch.cumulative_severity)) return false;
   if ("l2_phase" in patch && !L2_PHASE_VALUES.includes(patch.l2_phase)) return false;
+  if ("l2_cause" in patch && patch.l2_cause !== null && typeof patch.l2_cause !== "string") return false;
 
   // Validate findings
   if ("findings" in patch) {
@@ -253,6 +254,7 @@ function writeLayer2State(sessionId, patch) {
     cumulative_severity: null,
     findings: [],
     l2_phase: null,
+    l2_cause: null,
     ...existing,
   };
 
@@ -261,10 +263,17 @@ function writeLayer2State(sessionId, patch) {
   if ("last_run_at" in patch) layer2.last_run_at = patch.last_run_at;
   if ("cumulative_severity" in patch) layer2.cumulative_severity = patch.cumulative_severity;
   if ("l2_phase" in patch) layer2.l2_phase = patch.l2_phase;
+  if ("l2_cause" in patch) layer2.l2_cause = patch.l2_cause;
+
+  // Co-clear l2_cause when l2_armed_at is cleared to prevent stale-cause mislabeling
+  if ("l2_armed_at" in patch && patch.l2_armed_at === null && !("l2_cause" in patch)) {
+    layer2.l2_cause = null;
+  }
 
   // #905: terminal states must never carry a stale l2_armed_at.
   if (effectivePhase === "done" || effectivePhase === "frozen") {
     layer2.l2_armed_at = null;
+    layer2.l2_cause = null;
   }
 
   // Append findings. Draft-status entries get auto-assigned idx for later --confirm/--drop.
@@ -301,4 +310,4 @@ const confirmFinding = (sid, idx) => mutateLayer2State(sid, (s) => findingStatus
 const dropFindings = (sid, idxs) => mutateLayer2State(sid, (s) => findingStatus.dropFindings(s, idxs));
 const promotePendingDraftsToConfirmed = (sid) => mutateLayer2State(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
 
-module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, confirmFinding, dropFindings, promotePendingDraftsToConfirmed };
+module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, confirmFinding, dropFindings, promotePendingDraftsToConfirmed };

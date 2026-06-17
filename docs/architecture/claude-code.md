@@ -21,7 +21,11 @@ or block any action. Three reporting paths feed findings into the state file:
 (C) session-close runs a retrospective pass before the Final Report.
 Layer 2 is an active review: the `supervisor-guard.js` Stop hook fires a `decision:block`
 when findings are present and `l2_phase` is not `done`/`frozen`, invoking the L2 supervisor.
-At most one L2 review runs per session.
+Three triggers arm `l2_armed_at`: C1 sentinel hang (MARK_STEP Bash tool_use with no following
+tool_use in the last assistant turn), C2 scheduled-review (l2_armed_at already set by
+`appendFinding`), and C3 off-proposal (last assistant turn's text content contains
+`<<WORKFLOW_ENFORCE_WORKTREE_OFF` or `<<WORKFLOW_ENFORCE_WORKFLOW_OFF`; WORKFLOW_OFF takes
+precedence). At most one L2 review runs per session.
 
 **Block message format (`hooks/lib/supervisor-report-format.js`):**
 
@@ -78,6 +82,7 @@ The file is directly inspectable for debugging.
 |---|---|---|
 | `l2_phase` | `null`/`"pending"`/`"done"`/`"frozen"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, frozen=Final Report emitted |
 | `l2_armed_at` | ISO string or null | Timestamp when L2 was armed in this session; null when phase is done/frozen |
+| `l2_cause` | string or null | Trigger label set at arming: `"C1 sentinel hang"`, `"C2 scheduled-review"`, `"C3 worktree-off proposal"`, or `"C3 workflow-off proposal"`; co-cleared when `l2_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last L2 execution |
 | `cumulative_severity` | string or null | Highest severity across L2 findings |
 | `findings[]` | Finding[] | L2 findings; each finding carries an optional `status` field (`"draft"` before adversarial review, `"confirmed"` after); `idx` is a stable integer key |
