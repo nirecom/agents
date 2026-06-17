@@ -63,13 +63,20 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
 function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath) {
   const lines = [];
   const isC1 = typeof cause === "string" && cause.indexOf("C1") === 0;
+  const isC3 = typeof cause === "string" && cause.indexOf("C3") === 0;
   const causeLabel = isC1
     ? "C1 stop_hook_active sentinel hang detected"
+    : isC3
+    ? `C3 off-proposal detected (${cause})`
     : "C2 scheduled review";
 
   lines.push(`[EM Supervisor] Layer 2 review required (${causeLabel}).`);
   if (isC1) {
     lines.push("Trigger: stop_hook_active sentinel hang detected in the assistant transcript.");
+  } else if (isC3) {
+    const proposalType = cause.includes("worktree-off") ? "WORKTREE_OFF" : "WORKFLOW_OFF";
+    lines.push(`Trigger: assistant output contained a ${proposalType} proposal sentinel (<<WORKFLOW_ENFORCE_${proposalType}>>).`);
+    lines.push(`Verify: check whether this was a sanctioned use per rules/workflow-off.md "Sanctioned-command false-block recovery". If so, the session can continue; if improvised bypass, recommend reverting.`);
   } else {
     lines.push("Trigger: scheduled Layer 2 review (l2_armed_at set).");
   }
