@@ -3,7 +3,7 @@
 # Tags: companion-issues, workflow-init, clarify-intent, find-companion-issues
 # Tests for issue #920 — auto-detect companion issues in workflow sessions.
 #
-# Test-first: source artifacts (find-companion-issues.sh, WI-4.5, CI-2a.5,
+# Test-first: source artifacts (find-companion-issues.sh, WI-5, CI-2b,
 # .env.example CONFIRM_COMPANION_ISSUES) do not exist yet. A-series and
 # B/D-series tests will FAIL initially — that is expected RED state.
 #
@@ -248,55 +248,55 @@ teardown_mock
 # ============================================================================
 # B-series: SKILL.md prose contract tests
 # ============================================================================
-# B1: workflow-init SKILL.md contains "WI-4.5" heading and "find-companion-issues.sh"
+# B1: workflow-init SKILL.md contains "WI-5" heading and "find-companion-issues.sh"
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    if grep -q "WI-4.5" "$WORKFLOW_INIT_SKILL" && grep -q "find-companion-issues.sh" "$WORKFLOW_INIT_SKILL"; then
-        pass "B1: workflow-init SKILL.md has WI-4.5 and references find-companion-issues.sh"
+    if grep -q "WI-5" "$WORKFLOW_INIT_SKILL" && grep -q "find-companion-issues.sh" "$WORKFLOW_INIT_SKILL"; then
+        pass "B1: workflow-init SKILL.md has WI-5 and references find-companion-issues.sh"
     else
-        fail "B1: workflow-init SKILL.md missing WI-4.5 or find-companion-issues.sh reference"
+        fail "B1: workflow-init SKILL.md missing WI-5 or find-companion-issues.sh reference"
     fi
 else
     fail "B1: workflow-init SKILL.md not found"
 fi
 
-# B2: WI-4.5 prose contains Path C skip guard (ISSUES empty or Path C)
+# B2: WI-5 prose contains Path C skip guard (ISSUES empty or Path C)
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    # Extract WI-4.5 section (between WI-4.5 and the next WI-N header)
-    WI45_BLOCK=$(awk '/WI-4\.5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-4\.5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
+    # Extract WI-5 section (between WI-5 and the next WI-N header)
+    WI45_BLOCK=$(awk '/WI-5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
     if echo "$WI45_BLOCK" | grep -qE "(Path C|ISSUES.*empty|empty.*ISSUES|skip.*Path C|Path C.*skip)"; then
-        pass "B2: WI-4.5 contains Path C / ISSUES-empty skip guard"
+        pass "B2: WI-5 contains Path C / ISSUES-empty skip guard"
     else
-        fail "B2: WI-4.5 missing Path C / ISSUES-empty skip guard"
+        fail "B2: WI-5 missing Path C / ISSUES-empty skip guard"
     fi
 else
     fail "B2: workflow-init SKILL.md not found"
 fi
 
-# B3: WI-4.5 prose contains NON_GITHUB skip guard
+# B3: WI-5 prose contains NON_GITHUB skip guard
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    WI45_BLOCK=$(awk '/WI-4\.5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-4\.5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
+    WI45_BLOCK=$(awk '/WI-5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
     if echo "$WI45_BLOCK" | grep -qE "(NON_GITHUB|is-github-dotcom-remote|non.GitHub)"; then
-        pass "B3: WI-4.5 contains NON_GITHUB skip guard"
+        pass "B3: WI-5 contains NON_GITHUB skip guard"
     else
-        fail "B3: WI-4.5 missing NON_GITHUB skip guard"
+        fail "B3: WI-5 missing NON_GITHUB skip guard"
     fi
 else
     fail "B3: workflow-init SKILL.md not found"
 fi
 
-# B4: WI-4.5 prose contains CONFIRM_COMPANION_ISSUES and get-config-var
+# B4: WI-5 prose contains CONFIRM_COMPANION_ISSUES and get-config-var
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    WI45_BLOCK=$(awk '/WI-4\.5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-4\.5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
+    WI45_BLOCK=$(awk '/WI-5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
     if echo "$WI45_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES" && echo "$WI45_BLOCK" | grep -q "get-config-var"; then
-        pass "B4: WI-4.5 references CONFIRM_COMPANION_ISSUES and get-config-var"
+        pass "B4: WI-5 references CONFIRM_COMPANION_ISSUES and get-config-var"
     else
-        fail "B4: WI-4.5 missing CONFIRM_COMPANION_ISSUES or get-config-var reference"
+        fail "B4: WI-5 missing CONFIRM_COMPANION_ISSUES or get-config-var reference"
     fi
 else
     fail "B4: workflow-init SKILL.md not found"
 fi
 
-# B5: WI-4.5 (or WI-12 B1) prose mentions appending to issue-prefill.md (Path B companion propagation)
+# B5: WI-5 (or WI-13 B1) prose mentions appending to issue-prefill.md (Path B companion propagation)
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
     if grep -q "issue-prefill.md" "$WORKFLOW_INIT_SKILL"; then
         pass "B5: workflow-init SKILL.md mentions appending to issue-prefill.md"
@@ -307,52 +307,52 @@ else
     fail "B5: workflow-init SKILL.md not found"
 fi
 
-# B6: WI-4.5 prose mentions appending accepted candidates to ISSUES array
+# B6: WI-5 prose mentions appending accepted candidates to ISSUES array
 if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    WI45_BLOCK=$(awk '/WI-4\.5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-4\.5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
+    WI45_BLOCK=$(awk '/WI-5/{flag=1} flag && /^(##|WI-[0-9]+\.[ ]|WI-[0-9]+\b)/ && !/WI-5/{flag=0} flag' "$WORKFLOW_INIT_SKILL" 2>/dev/null || true)
     if echo "$WI45_BLOCK" | grep -qE "(append.*ISSUES|ISSUES.*append|add.*to ISSUES|ISSUES.*\+=)"; then
-        pass "B6: WI-4.5 mentions appending accepted candidates to ISSUES"
+        pass "B6: WI-5 mentions appending accepted candidates to ISSUES"
     else
-        fail "B6: WI-4.5 missing append-to-ISSUES reference"
+        fail "B6: WI-5 missing append-to-ISSUES reference"
     fi
 else
     fail "B6: workflow-init SKILL.md not found"
 fi
 
-# B7: clarify-intent SKILL.md contains CI-2a.5 heading and find-companion-issues.sh
+# B7: clarify-intent SKILL.md contains CI-2b heading and find-companion-issues.sh
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
-    if grep -q "CI-2a.5" "$CLARIFY_INTENT_SKILL" && grep -q "find-companion-issues.sh" "$CLARIFY_INTENT_SKILL"; then
-        pass "B7: clarify-intent SKILL.md has CI-2a.5 and references find-companion-issues.sh"
+    if grep -q "CI-2b" "$CLARIFY_INTENT_SKILL" && grep -q "find-companion-issues.sh" "$CLARIFY_INTENT_SKILL"; then
+        pass "B7: clarify-intent SKILL.md has CI-2b and references find-companion-issues.sh"
     else
-        fail "B7: clarify-intent SKILL.md missing CI-2a.5 or find-companion-issues.sh reference"
+        fail "B7: clarify-intent SKILL.md missing CI-2b or find-companion-issues.sh reference"
     fi
 else
     fail "B7: clarify-intent SKILL.md not found"
 fi
 
-# B8: CI-2a.5 prose passes closes_issues as --exclude list
+# B8: CI-2b prose passes closes_issues as --exclude list
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
-    CI25_BLOCK=$(awk '/CI-2a\.5/{flag=1} flag && /^(##|CI-[0-9]+[a-z]?\.[ ]|CI-[0-9]+[a-z]?\b)/ && !/CI-2a\.5/{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
+    CI25_BLOCK=$(awk '/CI-2b/{flag=1} flag && /^(##|CI-[0-9]+[a-z]?\.[ ]|CI-[0-9]+[a-z]?\b)/ && !/CI-2b/{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
     if echo "$CI25_BLOCK" | grep -q -- "--exclude" && echo "$CI25_BLOCK" | grep -q "closes_issues"; then
-        pass "B8: CI-2a.5 passes closes_issues as --exclude list"
+        pass "B8: CI-2b passes closes_issues as --exclude list"
     else
-        fail "B8: CI-2a.5 missing --exclude with closes_issues"
+        fail "B8: CI-2b missing --exclude with closes_issues"
     fi
 else
     fail "B8: clarify-intent SKILL.md not found"
 fi
 
-# B9: CI-2a.5 prose contains NON_GITHUB skip guard and CONFIRM_COMPANION_ISSUES
+# B9: CI-2b prose contains NON_GITHUB skip guard and CONFIRM_COMPANION_ISSUES
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
-    CI25_BLOCK=$(awk '/CI-2a\.5/{flag=1} flag && /^(##|CI-[0-9]+[a-z]?\.[ ]|CI-[0-9]+[a-z]?\b)/ && !/CI-2a\.5/{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
+    CI25_BLOCK=$(awk '/CI-2b/{flag=1} flag && /^(##|CI-[0-9]+[a-z]?\.[ ]|CI-[0-9]+[a-z]?\b)/ && !/CI-2b/{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
     has_remote=0
     has_confirm=0
     if echo "$CI25_BLOCK" | grep -qE "(NON_GITHUB|is-github-dotcom-remote|non.GitHub)"; then has_remote=1; fi
     if echo "$CI25_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES"; then has_confirm=1; fi
     if [ "$has_remote" -eq 1 ] && [ "$has_confirm" -eq 1 ]; then
-        pass "B9: CI-2a.5 contains NON_GITHUB skip guard and CONFIRM_COMPANION_ISSUES"
+        pass "B9: CI-2b contains NON_GITHUB skip guard and CONFIRM_COMPANION_ISSUES"
     else
-        fail "B9: CI-2a.5 missing NON_GITHUB or CONFIRM_COMPANION_ISSUES (remote=$has_remote confirm=$has_confirm)"
+        fail "B9: CI-2b missing NON_GITHUB or CONFIRM_COMPANION_ISSUES (remote=$has_remote confirm=$has_confirm)"
     fi
 else
     fail "B9: clarify-intent SKILL.md not found"
