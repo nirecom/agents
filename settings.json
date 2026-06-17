@@ -203,7 +203,6 @@
       "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_DETAIL: *>>\")",
-      "Bash(echo \"<<WORKFLOW_CONFIRM_PR_CREATED: *>>\")",
       "Bash(uv run bin/doc-rotate.py *)",
       "Bash(*aws * create*)",
       "Bash(*aws * put*)",

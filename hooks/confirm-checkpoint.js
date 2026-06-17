@@ -7,7 +7,6 @@
 //   <<WORKFLOW_CONFIRM_INTENT[: reason]>>          — intent plan
 //   <<WORKFLOW_CONFIRM_OUTLINE[: reason]>>         — outline plan
 //   <<WORKFLOW_CONFIRM_DETAIL[: reason]>>          — detail plan
-//   <<WORKFLOW_CONFIRM_PR_CREATED: <https-url>>>   — PR creation
 //
 // Output protocol: emits { "systemMessage": "..." } only. Exit code 0 always
 // (fail-open; we never block the user's approval flow).
@@ -21,8 +20,6 @@ const { resolveSessionId } = require("./lib/workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { loadDefaultEnv } = require("./lib/load-env");
 const { shouldOpenInVsCode, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
-const { openInBrowser } = require("./lib/open-external");
-const { CONFIRM_PR_CREATED_BODY_RE } = require("./lib/sentinel-patterns");
 
 function readStdin() {
   const chunks = [];
@@ -52,8 +49,6 @@ function parseSentinel(command) {
   if (/<<WORKFLOW_CONFIRM_DETAIL(?:: [^>]+)?>>/.test(command)) {
     return { stage: "detail" };
   }
-  const pr = command.match(CONFIRM_PR_CREATED_BODY_RE);
-  if (pr) return { stage: "pr-created", url: pr[1] };
   return null;
 }
 
@@ -84,11 +79,6 @@ function resolveArtifact(stage, sid, plansDir) {
 }
 
 function renderMessage(stage, absPath, url) {
-  if (stage === "pr-created") {
-    const m = url ? url.match(/\/pull\/(\d+)/) : null;
-    if (m) return `PR #${m[1]} created: ${url}\nClick Allow to proceed, Deny to abort.`;
-    return `PR created: ${url}\nClick Allow to proceed, Deny to abort.`;
-  }
   if (absPath) {
     return `[${stage}] Plan file: ${absPath}\nClick Allow to proceed, Deny to abort.`;
   }
@@ -107,14 +97,6 @@ if (require.main === module) {
   if (!parsed) noopExit();
 
   const stage = parsed.stage;
-
-  // PR-created branch: open the URL and surface a one-line message.
-  if (stage === "pr-created") {
-    try { openInBrowser(parsed.url); } catch (_) { /* fail-open */ }
-    const msg = renderMessage(stage, null, parsed.url);
-    process.stdout.write(JSON.stringify({ systemMessage: msg }));
-    process.exit(0);
-  }
 
   // Plan-stage branch: resolve artifact, honor CONFIRM_<STAGE>=off, open VS Code, emit message.
   let sid = null;

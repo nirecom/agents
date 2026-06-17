@@ -80,19 +80,6 @@ After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automat
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
-6.5. **PR-created confirmation** (only when worker returned `pr_created` or `pr_reused`):
-   Apply `skills/_shared/confirm-plan.md` Step 3 with `CONFIRM_PR_CREATED`. Read the current `ENFORCE_WORKTREE` value and choose ONE follow-up form — the chosen form is the ONLY valid co-emit in this turn.
-
-   **If `ENFORCE_WORKTREE=on` (default):**
-   - In the SAME response as `echo "<<WORKFLOW_CONFIRM_PR_CREATED: <PR_URL>>>"`, ALSO invoke `worktree-end` via the Skill tool.
-   - Do NOT emit `<<WORKFLOW_USER_VERIFIED: ...>>` here. In on-mode, `<<WORKFLOW_USER_VERIFIED>>` is owned by `/worktree-end` Step WE-7 and emitting it from `commit-push` would bypass the merge gate. The user-verified emission is deferred.
-
-   **If `ENFORCE_WORKTREE=off`:**
-   - In the SAME response as `echo "<<WORKFLOW_CONFIRM_PR_CREATED: <PR_URL>>>"`, ALSO emit `echo "<<WORKFLOW_USER_VERIFIED: PR created at <PR_URL>>>"` via the Bash tool.
-   - Do NOT invoke `worktree-end` here — `/worktree-end` is not part of the off-mode WF-CODE-11 path.
-
-   Skip this entire step when worker returned `pushed` (no PR), `bootstrap_pending`, or any error status. Do NOT end the response on the CONFIRM echo.
-
 7. **Merge prompt:**
 
    Check `ENFORCE_WORKTREE`:
@@ -136,5 +123,4 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
 - `bootstrap_pending` is terminal for `/commit-push` — defer the actual push to `/worktree-end` Step 2b. No PR is created and no user-verified sentinel is emitted in `/commit-push` for this status.
 - On fallback or step degradation (push retry, PR reuse, merge deferral): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter commit-push` (session-id auto-resolves).
-- `<<WORKFLOW_CONFIRM_PR_CREATED: <url>>>` is emitted in Step 6.5 after `pr_created` or `pr_reused`. Never on `pushed`, `bootstrap_pending`, or error status. On-mode co-emit: `Skill(worktree-end)` — do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here. Off-mode co-emit: `Bash(<<WORKFLOW_USER_VERIFIED: PR created at <url>>>)` — do NOT invoke `worktree-end` here.
 - Report observations per rules/supervisor-reporting.md.
