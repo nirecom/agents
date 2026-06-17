@@ -8,7 +8,7 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 const KNOWN_VALUE_FLAGS = new Set([
   "--session-id",
-  "--next-check-at",
+  "--l2-armed-at",
   "--last-run-at",
   "--cumulative-severity",
   "--finding-categories",
@@ -17,13 +17,13 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--finding-reporter",
   "--set-l2-phase",
 ]);
-const KNOWN_BOOL_FLAGS = new Set(["--clear-next-check-at"]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at"]);
 
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-layer2] ERROR: ${msg}`);
   console.error(
     "Usage: node bin/supervisor-write-layer2 --session-id <sid>" +
-    " [--next-check-at <iso>] [--clear-next-check-at]" +
+    " [--l2-armed-at <iso>] [--clear-l2-armed-at]" +
     " [--last-run-at <iso>] [--cumulative-severity <error|warning|notice|null>]" +
     " [--finding-categories <csv> --finding-severity <s>" +
     " --finding-detail <text> --finding-reporter <name>]" +
@@ -53,8 +53,8 @@ for (let i = 0; i < argv.length; i++) {
 const sid = args["session-id"];
 if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
 
-const hasNextCheckAt = "next-check-at" in args;
-const hasClearNextCheckAt = flags.has("--clear-next-check-at");
+const hasL2ArmedAt = "l2-armed-at" in args;
+const hasClearL2ArmedAt = flags.has("--clear-l2-armed-at");
 const hasLastRunAt = "last-run-at" in args;
 const hasCumulativeSeverity = "cumulative-severity" in args;
 const hasSetL2Phase = "set-l2-phase" in args;
@@ -64,26 +64,26 @@ const findingPresent = findingKeys.filter((k) => k in args);
 const hasAnyFinding = findingPresent.length > 0;
 const hasAllFindings = findingPresent.length === findingKeys.length;
 
-if (hasNextCheckAt && hasClearNextCheckAt) {
-  usage("--next-check-at and --clear-next-check-at are mutually exclusive");
+if (hasL2ArmedAt && hasClearL2ArmedAt) {
+  usage("--l2-armed-at and --clear-l2-armed-at are mutually exclusive");
 }
 
-if (hasSetL2Phase && args["set-l2-phase"] === "frozen" && hasNextCheckAt) {
-  usage("--set-l2-phase frozen and --next-check-at are mutually exclusive");
+if (hasSetL2Phase && args["set-l2-phase"] === "frozen" && hasL2ArmedAt) {
+  usage("--set-l2-phase frozen and --l2-armed-at are mutually exclusive");
 }
 
 if (hasAnyFinding && !hasAllFindings) {
   usage("--finding-categories, --finding-severity, --finding-detail, --finding-reporter must all be provided together");
 }
 
-if (!hasNextCheckAt && !hasClearNextCheckAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase) {
+if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase) {
   usage("at least one mutating flag required");
 }
 
 const patch = {};
 
-if (hasNextCheckAt) patch.next_check_at = args["next-check-at"];
-if (hasClearNextCheckAt) patch.next_check_at = null;
+if (hasL2ArmedAt) patch.l2_armed_at = args["l2-armed-at"];
+if (hasClearL2ArmedAt) patch.l2_armed_at = null;
 if (hasLastRunAt) patch.last_run_at = args["last-run-at"];
 
 if (hasCumulativeSeverity) {

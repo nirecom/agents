@@ -45,7 +45,7 @@ When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
 
 1. Determine an overall `cumulative_severity` (`error` / `warning` / `notice` / `null`) reflecting Layer 2 independent judgment — do NOT echo Layer 1 severities.
 2. For each concrete observation, append a finding via `bin/supervisor-write-layer2 --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --session-id <sid>`.
-3. After analysis, clear `next_check_at` and mark run complete via `bin/supervisor-write-layer2 --last-run-at <now-iso> --cumulative-severity <verdict> --clear-next-check-at --set-l2-phase done --session-id <sid>`.
+3. After analysis, clear `l2_armed_at` and mark run complete via `bin/supervisor-write-layer2 --last-run-at <now-iso> --cumulative-severity <verdict> --clear-l2-armed-at --set-l2-phase done --session-id <sid>`.
 4. Provide first-aid guidance: in your response to the main agent, summarize the most critical finding and recommend an immediate corrective action (one sentence per finding, highest severity first).
 5. Recommend `/issue-create` for root-cause fix: tell the main agent which pattern or rule gap caused the regression and suggest filing it via `/issue-create` so it is tracked. Do NOT auto-invoke `/issue-create` — the main agent decides whether to file.
 6. Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.

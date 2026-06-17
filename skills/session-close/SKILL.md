@@ -109,12 +109,12 @@ Before rendering the Final Report, scan the session for any unreported observati
 
 Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
 
-- `"pending"` and `next_check_at !== null`: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
+- `"pending"` and `l2_armed_at !== null`: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
   `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
   The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-4.
   Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step 3.5 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step 2A). This gate therefore reads a stable value.
 
-- `"pending"` and `next_check_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to SC-4.
+- `"pending"` and `l2_armed_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to SC-4.
 
 - `"done"` or `null`: proceed to SC-4. (`null` = L2 was never scheduled this session.)
 

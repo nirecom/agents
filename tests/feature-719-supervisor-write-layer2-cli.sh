@@ -46,17 +46,17 @@ process.stdout.write(JSON.stringify(cur));
 }
 
 run_c1() {
-    require_source "$CLI" "C1: --next-check-at sets layer2.next_check_at" || return
+    require_source "$CLI" "C1: --l2-armed-at sets layer2.l2_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c1-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --next-check-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer2.next_check_at")
+    val=$(read_field "$tmp" "$sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"2026-06-06T12:00:00Z\"" ]; then
-        pass "C1: --next-check-at sets layer2.next_check_at"
+        pass "C1: --l2-armed-at sets layer2.l2_armed_at"
     else
-        fail "C1: --next-check-at sets layer2.next_check_at (rc=$rc, val=$val)"
+        fail "C1: --l2-armed-at sets layer2.l2_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -112,7 +112,7 @@ run_c4() {
     require_source "$CLI" "C4: missing --session-id exits non-zero" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --next-check-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then
@@ -151,19 +151,19 @@ run_c6() {
 }
 
 run_c7() {
-    require_source "$CLI" "C7: --clear-next-check-at nulls layer2.next_check_at" || return
+    require_source "$CLI" "C7: --clear-l2-armed-at nulls layer2.l2_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c7-sid"
     # seed with a value first
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --next-check-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-next-check-at --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-l2-armed-at --session-id "$sid" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer2.next_check_at")
+    val=$(read_field "$tmp" "$sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "C7: --clear-next-check-at nulls layer2.next_check_at"
+        pass "C7: --clear-l2-armed-at nulls layer2.l2_armed_at"
     else
-        fail "C7: --clear-next-check-at nulls layer2.next_check_at (rc=$rc, val=$val)"
+        fail "C7: --clear-l2-armed-at nulls layer2.l2_armed_at (rc=$rc, val=$val)"
     fi
 }
 
