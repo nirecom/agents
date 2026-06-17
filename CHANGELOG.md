@@ -307,4 +307,8 @@ Changes: show-plan-link.js now fires correctly on Bash-tool assemble-mandatory.s
 
 ### FEATURE: PR #916 (2026-06-17)
 Background: refactor(#902): rename supervisor layer2 field next_check_at → l2_armed_at
-Changes: Supervisor layer2 CLI flags renamed: `--next-check-at` → `--l2-armed-at`, `--clear-next-check-at` → `--clear-l2-armed-at`. State field renamed from `next_check_at` to `l2_armed_at`; existing session state files are ephemeral and require no migration.
+Changes: Supervisor layer2 CLI flags renamed: `--next-check-at` → `--l2-armed-at`, `--clear-next-check-at` → `--clear-l2-armed-at`. State field renamed from `next_check_at` to `l2_armed_at`; existing session state files are ephemeral and require no migration.
+
+### FEATURE: PR #918 (2026-06-17)
+Background: fix(#897): CONV_LANG subagent compliance — settings.json language field + SubagentStart hook + per-agent dynamic fallback
+Changes: Fixed: supervisor subagent and planning agents now respect CONV_LANG setting. New `SubagentStart` hook (`hooks/subagent-start.js`) injects the language directive into each subagent's context; `settings.json` `"language"` field adds a framework-level first layer. Previously, all subagents emitted English regardless of `CONV_LANG=japanese`.
