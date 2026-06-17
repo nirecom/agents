@@ -22,7 +22,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    layer2: { next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null },
+    layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null },
     layer3: {},
   };
 }
@@ -68,8 +68,8 @@ function validate(obj) {
     errors.push("layer2 must be an object");
   } else {
     const l2 = obj.layer2;
-    if ("next_check_at" in l2 && l2.next_check_at !== null && typeof l2.next_check_at !== "string") {
-      errors.push("layer2.next_check_at must be null or a string");
+    if ("l2_armed_at" in l2 && l2.l2_armed_at !== null && typeof l2.l2_armed_at !== "string") {
+      errors.push("layer2.l2_armed_at must be null or a string");
     }
     if ("last_run_at" in l2 && l2.last_run_at !== null && typeof l2.last_run_at !== "string") {
       errors.push("layer2.last_run_at must be null or a string");
