@@ -30,10 +30,15 @@ function writeAtomic(filePath, state) {
   fs.renameSync(tmpPath, filePath);
 }
 
-function ensureLayer2Scheduled(state) {
+function ensureLayer2Scheduled(state, sessionId) {
   if (!state.layer2 || typeof state.layer2 !== "object" || Array.isArray(state.layer2)) return;
   const phase = state.layer2.l2_phase;
   if (phase === "done" || phase === "frozen") return;
+  if (sessionId && SESSION_ID_RE.test(sessionId)) {
+    try {
+      if (fs.existsSync(path.join(getWorkflowPlansDir(), `${sessionId}-final-report-env.json`))) return;
+    } catch (_) {}
+  }
   if (state.layer2.next_check_at == null) {
     state.layer2.next_check_at = new Date().toISOString();
     if (phase == null) state.layer2.l2_phase = "pending";
@@ -69,7 +74,7 @@ function appendFinding(sessionId, finding) {
       last.reporter === finding.reporter
     ) {
       const prevNextCheck = state.layer2 && state.layer2.next_check_at;
-      ensureLayer2Scheduled(state);
+      ensureLayer2Scheduled(state, sessionId);
       if (state.layer2 && state.layer2.next_check_at !== prevNextCheck) {
         const vr3 = validate(state);
         if (vr3.ok) writeAtomic(filePath, state);
@@ -81,7 +86,7 @@ function appendFinding(sessionId, finding) {
   findings.push({ ...finding, timestamp: new Date().toISOString() });
   state.last_updated = new Date().toISOString();
 
-  ensureLayer2Scheduled(state);
+  ensureLayer2Scheduled(state, sessionId);
 
   const vr2 = validate(state);
   if (!vr2.ok) {

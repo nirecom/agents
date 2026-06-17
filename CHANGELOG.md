@@ -291,4 +291,12 @@ Changes: **EM Supervisor**: L2 review now runs at most once per session and fire
 
 ### FEATURE: PR #900 (2026-06-17)
 Background: fix(#883): supervisor dual-identifier model — separate CC UUID (sid) from workflow session ID (wsid)
-Changes: **Fix:** EM Supervisor Layer 2 now correctly identifies plan artifacts when CC session UUID differs from workflow session ID (date-fallback sessions). Silent wrong-scope reviews are replaced by explicit `Workflow session ID: UNAVAILABLE` degradation with a warning finding.
+Changes: **Fix:** EM Supervisor Layer 2 now correctly identifies plan artifacts when CC session UUID differs from workflow session ID (date-fallback sessions). Silent wrong-scope reviews are replaced by explicit `Workflow session ID: UNAVAILABLE` degradation with a warning finding.
+
+### FEATURE: PR #904 (2026-06-17)
+Background: fix(#842): extend Layer 2 to CONFIRM_PR_CREATED; fix marker early-exit; SSOT PR URL regex
+Changes: After clicking Allow on a "PR created" confirmation dialog, `<<WORKFLOW_CONFIRM_PR_CREATED>>` now reliably triggers the next workflow step (worktree-end on `ENFORCE_WORKTREE=on`, `<<WORKFLOW_USER_VERIFIED>>` on `off`), matching the behavior of the INTENT/OUTLINE/DETAIL confirmation sentinels
+
+### FEATURE: PR #906 (2026-06-17)
+Background: fix(#879,#892,#891): rename C2 label, add post-Final-Report L2 guard, Phase 4 dispatch detection
+Changes: L2 block-reason label updated from "C2 escape-hatch use" to "C2 scheduled-review" — reflects the actual trigger condition (any non-null next_check_at, not only escape-hatch commands).;Post-Final-Report L2 scheduling suppressed: findings written after session-close Step 2A no longer arm next_check_at, preventing stale L2 reviews in the next session.;EM Supervisor JD checklist gains a Phase 4 dispatch detection rule, reducing false-positive misclassification of legitimate /issue-create invocations as Phase 1-3 bypasses.
