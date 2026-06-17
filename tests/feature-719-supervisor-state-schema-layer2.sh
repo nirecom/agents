@@ -36,7 +36,7 @@ require_layer2_impl() {
     probe=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('probe');
-process.stdout.write(('next_check_at' in (st.layer2 || {})) ? 'yes' : 'no');
+process.stdout.write(('l2_armed_at' in (st.layer2 || {})) ? 'yes' : 'no');
 " 2>/dev/null)
     if [ "$probe" != "yes" ]; then
         skip "$label (S-2 layer2 typed fields not implemented yet)"; return 1
@@ -51,7 +51,7 @@ run_l1() {
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-l1');
 const l2 = st.layer2;
-if (l2.next_check_at !== null) { console.error('next_check_at not null'); process.exit(2); }
+if (l2.l2_armed_at !== null) { console.error('l2_armed_at not null'); process.exit(2); }
 if (l2.last_run_at !== null) { console.error('last_run_at not null'); process.exit(3); }
 if (l2.cumulative_severity !== null) { console.error('cumulative_severity not null'); process.exit(4); }
 if (!Array.isArray(l2.findings) || l2.findings.length !== 0) { console.error('findings not empty array'); process.exit(5); }
@@ -104,21 +104,21 @@ console.log('OK');
 }
 
 run_l4() {
-    require_layer2_impl "L4: validate fails when next_check_at is numeric" || return
+    require_layer2_impl "L4: validate fails when l2_armed_at is numeric" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-l4');
-st.layer2.next_check_at = 42;
+st.layer2.l2_armed_at = 42;
 const r = s.validate(st);
 if (r.ok !== false) { console.error('expected ok=false'); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "L4: validate fails when next_check_at is numeric"
+        pass "L4: validate fails when l2_armed_at is numeric"
     else
-        fail "L4: validate fails when next_check_at is numeric (rc=$rc, out=$out)"
+        fail "L4: validate fails when l2_armed_at is numeric (rc=$rc, out=$out)"
     fi
 }
 

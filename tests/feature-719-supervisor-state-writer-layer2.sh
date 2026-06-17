@@ -45,25 +45,25 @@ process.stdout.write(typeof w.writeLayer2State === 'function' ? 'yes' : 'no');
 }
 
 run_w1() {
-    require_writer_layer2 "W1: writeLayer2State sets next_check_at, preserves layer1" || return
+    require_writer_layer2 "W1: writeLayer2State sets l2_armed_at, preserves layer1" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w1-sid"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'seed', reporter: 't' });
-const r = w.writeLayer2State('$sid', { next_check_at: '2026-06-06T12:00:00Z' });
+const r = w.writeLayer2State('$sid', { l2_armed_at: '2026-06-06T12:00:00Z' });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
-if (!st || st.layer2.next_check_at !== '2026-06-06T12:00:00Z') { console.error('next_check_at not set'); process.exit(3); }
+if (!st || st.layer2.l2_armed_at !== '2026-06-06T12:00:00Z') { console.error('l2_armed_at not set'); process.exit(3); }
 if (!Array.isArray(st.layer1.findings) || st.layer1.findings.length !== 1) { console.error('layer1 not preserved'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W1: writeLayer2State sets next_check_at, preserves layer1"
+        pass "W1: writeLayer2State sets l2_armed_at, preserves layer1"
     else
-        fail "W1: writeLayer2State sets next_check_at, preserves layer1 (rc=$rc, out=$out)"
+        fail "W1: writeLayer2State sets l2_armed_at, preserves layer1 (rc=$rc, out=$out)"
     fi
 }
 
@@ -143,7 +143,7 @@ run_w5() {
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
-w.writeLayer2State('$sid', { next_check_at: '2026-06-06T12:00:00Z', cumulative_severity: 'warning' });
+w.writeLayer2State('$sid', { l2_armed_at: '2026-06-06T12:00:00Z', cumulative_severity: 'warning' });
 const st = w.readState('$sid');
 const r = s.validate(st);
 if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
@@ -167,7 +167,7 @@ const w = require('$WRITER_NODE');
 const fs = require('fs');
 const p = w.getStatePath('$sid');
 if (fs.existsSync(p)) { console.error('state file exists before test'); process.exit(2); }
-const r = w.writeLayer2State('$sid', { next_check_at: '2026-06-06T12:00:00Z' });
+const r = w.writeLayer2State('$sid', { l2_armed_at: '2026-06-06T12:00:00Z' });
 if (r !== true) { console.error('write returned: '+r); process.exit(3); }
 if (!fs.existsSync(p)) { console.error('state file missing after write'); process.exit(4); }
 console.log('OK');

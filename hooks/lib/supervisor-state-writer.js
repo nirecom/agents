@@ -5,7 +5,7 @@ const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES } = require("./supervisor-state-schema");
 
-const LAYER2_PATCH_KEYS = new Set(["next_check_at", "last_run_at", "cumulative_severity", "findings", "l2_phase"]);
+const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -39,8 +39,8 @@ function ensureLayer2Scheduled(state, sessionId) {
       if (fs.existsSync(path.join(getWorkflowPlansDir(), `${sessionId}-final-report-env.json`))) return;
     } catch (_) {}
   }
-  if (state.layer2.next_check_at == null) {
-    state.layer2.next_check_at = new Date().toISOString();
+  if (state.layer2.l2_armed_at == null) {
+    state.layer2.l2_armed_at = new Date().toISOString();
     if (phase == null) state.layer2.l2_phase = "pending";
   }
 }
@@ -73,9 +73,9 @@ function appendFinding(sessionId, finding) {
       last.detail === finding.detail &&
       last.reporter === finding.reporter
     ) {
-      const prevNextCheck = state.layer2 && state.layer2.next_check_at;
+      const prevArmedAt = state.layer2 && state.layer2.l2_armed_at;
       ensureLayer2Scheduled(state, sessionId);
-      if (state.layer2 && state.layer2.next_check_at !== prevNextCheck) {
+      if (state.layer2 && state.layer2.l2_armed_at !== prevArmedAt) {
         const vr3 = validate(state);
         if (vr3.ok) writeAtomic(filePath, state);
       }
@@ -116,7 +116,7 @@ function writeLayer2State(sessionId, patch) {
   }
 
   // Validate scalar override types
-  if ("next_check_at" in patch && patch.next_check_at !== null && typeof patch.next_check_at !== "string") return false;
+  if ("l2_armed_at" in patch && patch.l2_armed_at !== null && typeof patch.l2_armed_at !== "string") return false;
   if ("last_run_at" in patch && patch.last_run_at !== null && typeof patch.last_run_at !== "string") return false;
   if ("cumulative_severity" in patch && patch.cumulative_severity !== null && !SEVERITY_VALUES.includes(patch.cumulative_severity)) return false;
   if ("l2_phase" in patch && !L2_PHASE_VALUES.includes(patch.l2_phase)) return false;
@@ -147,12 +147,12 @@ function writeLayer2State(sessionId, patch) {
     }
   }
   const effectivePhase = ("l2_phase" in patch) ? patch.l2_phase : currentPhase;
-  if ((effectivePhase === "done" || effectivePhase === "frozen") && "next_check_at" in patch && patch.next_check_at !== null) {
-    console.error("[supervisor-state-writer] cannot set next_check_at while l2_phase=" + effectivePhase);
+  if ((effectivePhase === "done" || effectivePhase === "frozen") && "l2_armed_at" in patch && patch.l2_armed_at !== null) {
+    console.error("[supervisor-state-writer] cannot set l2_armed_at while l2_phase=" + effectivePhase);
     return false;
   }
   const layer2 = {
-    next_check_at: null,
+    l2_armed_at: null,
     last_run_at: null,
     cumulative_severity: null,
     findings: [],
@@ -161,7 +161,7 @@ function writeLayer2State(sessionId, patch) {
   };
 
   // Apply scalar overrides (explicit-clear via null permitted)
-  if ("next_check_at" in patch) layer2.next_check_at = patch.next_check_at;
+  if ("l2_armed_at" in patch) layer2.l2_armed_at = patch.l2_armed_at;
   if ("last_run_at" in patch) layer2.last_run_at = patch.last_run_at;
   if ("cumulative_severity" in patch) layer2.cumulative_severity = patch.cumulative_severity;
   if ("l2_phase" in patch) layer2.l2_phase = patch.l2_phase;
