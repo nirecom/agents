@@ -42,6 +42,36 @@ function validateFinding(f) {
   if (f.reporter !== undefined && typeof f.reporter !== "string") {
     errors.push("reporter must be a string");
   }
+  // Axis A (#885): optional fields — reason, context, co_blocked_by.
+  if (f.reason !== undefined) {
+    if (typeof f.reason !== "string" || f.reason.length < 1) {
+      errors.push("reason must be a non-empty string");
+    }
+  }
+  if (f.context !== undefined) {
+    if (!f.context || typeof f.context !== "object" || Array.isArray(f.context)) {
+      errors.push("context must be a non-null object");
+    } else {
+      if (f.context.cwd !== undefined && typeof f.context.cwd !== "string") {
+        errors.push("context.cwd must be a string");
+      }
+      if (f.context.git_root_resolved !== undefined && typeof f.context.git_root_resolved !== "boolean") {
+        errors.push("context.git_root_resolved must be a boolean");
+      }
+    }
+  }
+  if (f.co_blocked_by !== undefined) {
+    if (!Array.isArray(f.co_blocked_by)) {
+      errors.push("co_blocked_by must be an array");
+    } else {
+      for (const r of f.co_blocked_by) {
+        if (typeof r !== "string" || r.length < 1) {
+          errors.push("co_blocked_by elements must be non-empty strings");
+          break;
+        }
+      }
+    }
+  }
   return { ok: errors.length === 0, errors };
 }
 

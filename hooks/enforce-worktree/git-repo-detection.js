@@ -19,8 +19,14 @@ function toWindowsPath(raw) {
   return raw;
 }
 
-// Returns true when repoCwd is the main worktree (non-linked).
-// In a linked worktree, --git-common-dir and --git-dir differ.
+// Trivalue (#885 Axis A):
+//   true  → main worktree (--git-common-dir === --git-dir)
+//   false → linked worktree (paths differ) OR spawnSync threw (fail-safe to
+//           linked-worktree behavior — existing caller semantics)
+//   null  → indeterminate: git rev-parse ran but returned non-zero
+//           (non-git CWD, broken repo, etc.). Callers should treat null as
+//           "checked but unresolved" — by convention block-side under
+//           enforce-worktree (see #885 plan).
 function isMainCheckout(repoCwd) {
   try {
     const common = spawnSync("git", ["rev-parse", "--git-common-dir"], {
@@ -29,7 +35,13 @@ function isMainCheckout(repoCwd) {
     const gitDir = spawnSync("git", ["rev-parse", "--git-dir"], {
       cwd: repoCwd, encoding: "utf8", timeout: 2000,
     });
-    if (common.status !== 0 || gitDir.status !== 0) return false;
+    // Axis A (#885) trivalue:
+    //   spawnSync error (e.g. ENOENT on cwd) → false (fail-safe, existing behavior)
+    //   git rev-parse non-zero status → null (indeterminate: non-git CWD,
+    //                                          broken repo, etc.)
+    //   both succeed and paths match → true; mismatch → false
+    if (common.error || gitDir.error) return false;
+    if (common.status !== 0 || gitDir.status !== 0) return null;
     const c = path.resolve(repoCwd, (common.stdout || "").trim());
     const g = path.resolve(repoCwd, (gitDir.stdout || "").trim());
     return c.toLowerCase() === g.toLowerCase();
