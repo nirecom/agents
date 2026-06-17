@@ -23,6 +23,16 @@ Layer 2 is an active review: the `supervisor-guard.js` Stop hook fires a `decisi
 when findings are present and `l2_phase` is not `done`/`frozen`, invoking the L2 supervisor.
 At most one L2 review runs per session.
 
+**Block message format (`hooks/lib/supervisor-report-format.js`):**
+
+Pure-function module; no I/O or side effects. Two exports:
+`formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath)` for the
+cumSev=error branch — emits aggregated `Categories:`, per-finding list, last `Detail:`,
+session IDs, and `Recommended action:`.
+`formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath)`
+for the l2ArmedAt/hang branch — emits human-readable `To resume`/`Clear:` instructions,
+explicit `File:` path, and an `Equivalent one-liner:` reference.
+
 **Hook auto-report (`hooks/lib/supervisor-emit.js`):**
 
 A fail-open facade over `appendFinding()` with typed emitters:
