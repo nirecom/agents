@@ -315,4 +315,8 @@ Changes: Fixed: supervisor subagent and planning agents now respect CONV_LANG se
 
 ### FEATURE: PR #919 (2026-06-17)
 Background: feat(#885): supervisor accuracy (Axis A) — Layer 1 finding schema: env context + co-block correlation
-Changes: **EM Supervisor**: Layer 1 findings now record CWD, git-root resolution result, and a `co_blocked_by` field when two hooks simultaneously block the same command. Layer 2 root-cause analysis can now distinguish "orphaned worktree (no git root)" from "policy violation" blocks and automatically identifies double-block patterns.
+Changes: **EM Supervisor**: Layer 1 findings now record CWD, git-root resolution result, and a `co_blocked_by` field when two hooks simultaneously block the same command. Layer 2 root-cause analysis can now distinguish "orphaned worktree (no git root)" from "policy violation" blocks and automatically identifies double-block patterns.
+
+### REFACTOR: PR #907 (2026-06-17)
+Background: refactor(#898): rename CI/MOP/SC skill step labels to prefixed format
+Changes: Step labels in `/clarify-intent` (CI-N), `/make-outline-plan` (MOP-N), and `/session-close` (SC-N) now use the prefixed format established by PR #779 for other workflow skills. Cross-references across the repo updated accordingly.
