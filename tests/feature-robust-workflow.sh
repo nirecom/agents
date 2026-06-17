@@ -1016,13 +1016,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# E2E: PostToolUse hook real invocation (requires RUN_E2E=1)
+# E2E: PostToolUse hook real invocation (requires RUN_E2E=on (.env))
 # ---------------------------------------------------------------------------
 
 echo ""
 echo "=== E2E: PostToolUse hook real invocation ==="
 
-if [ "${RUN_E2E:-0}" = "1" ]; then
+if ! "$DOTFILES_DIR/bin/get-config-var" --is-off RUN_E2E off; then
     E1_SESSION_ID="e1e1e1e1-0000-0000-0000-000000000001"
     E1_REPO="$TMPDIR_BASE/e2e-e1-repo"
 
@@ -1088,7 +1088,7 @@ process.stdout.write((s.steps && s.steps.research && s.steps.research.status) ||
         fail "E1. claude -p PostToolUse hook did not create state file $E1_STATE_FILE. claude exit=$E1_EXIT output: $E1_OUTPUT"
     fi
 else
-    echo "SKIP: E1. claude -p E2E (set RUN_E2E=1 to enable)"
+    echo "SKIP: E1. claude -p E2E (set RUN_E2E=on in .env to enable)"
 fi
 
 # ---------------------------------------------------------------------------

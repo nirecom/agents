@@ -12,6 +12,14 @@ if [ "$FEATURE_644_PHASE" -lt 5 ]; then
   echo "SKIP: requires FEATURE_644_PHASE>=5 (currently $FEATURE_644_PHASE)" >&2; exit 77
 fi
 
+# Resolve repo root early so we can read .env via bin/get-config-var.
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Skip unless RUN_E2E is enabled in .env (Anthropic-billable).
+if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_E2E off; then
+  echo "SKIP: requires RUN_E2E=on in .env" >&2; exit 77
+fi
+
 # Also skip if claude CLI not available
 if ! command -v claude >/dev/null 2>&1; then
   echo "SKIP: claude CLI not found" >&2; exit 77
@@ -19,7 +27,6 @@ fi
 
 set -uo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FIXTURE_DIR="$(mktemp -d)"
 trap 'rm -rf "$FIXTURE_DIR"' EXIT
 
