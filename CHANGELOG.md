@@ -303,4 +303,8 @@ Changes: L2 block-reason label updated from "C2 escape-hatch use" to "C2 schedul
 
 ### FEATURE: PR #910 (2026-06-17)
 Background: fix(#726): assemble-mandatory.sh Bash hook not firing when called via SKILL.md wrapper scripts
-Changes: show-plan-link.js now fires correctly on Bash-tool assemble-mandatory.sh calls; VS Code plan preview and breadcrumb appear automatically after make-outline-plan and make-detail-plan assembly steps
+Changes: show-plan-link.js now fires correctly on Bash-tool assemble-mandatory.sh calls; VS Code plan preview and breadcrumb appear automatically after make-outline-plan and make-detail-plan assembly steps
+
+### FEATURE: PR #916 (2026-06-17)
+Background: refactor(#902): rename supervisor layer2 field next_check_at → l2_armed_at
+Changes: Supervisor layer2 CLI flags renamed: `--next-check-at` → `--l2-armed-at`, `--clear-next-check-at` → `--clear-l2-armed-at`. State field renamed from `next_check_at` to `l2_armed_at`; existing session state files are ephemeral and require no migration.
