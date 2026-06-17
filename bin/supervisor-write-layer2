@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { writeLayer2State } = require("../hooks/lib/supervisor-state-writer");
+const { writeLayer2State, confirmFinding, dropFindings } = require("../hooks/lib/supervisor-state-writer");
 const { SEVERITY_VALUES, L2_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
@@ -15,6 +15,9 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--finding-severity",
   "--finding-detail",
   "--finding-reporter",
+  "--finding-status",
+  "--confirm-finding-ids",
+  "--drop-finding-ids",
   "--set-l2-phase",
 ]);
 const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at"]);
@@ -26,7 +29,9 @@ function usage(msg) {
     " [--l2-armed-at <iso>] [--clear-l2-armed-at]" +
     " [--last-run-at <iso>] [--cumulative-severity <error|warning|notice|null>]" +
     " [--finding-categories <csv> --finding-severity <s>" +
-    " --finding-detail <text> --finding-reporter <name>]" +
+    " --finding-detail <text> --finding-reporter <name>" +
+    " [--finding-status <draft|confirmed>]]" +
+    " [--confirm-finding-ids <csv>] [--drop-finding-ids <csv>]" +
     " [--set-l2-phase <pending|done|frozen>]"
   );
   process.exit(1);
@@ -58,6 +63,9 @@ const hasClearL2ArmedAt = flags.has("--clear-l2-armed-at");
 const hasLastRunAt = "last-run-at" in args;
 const hasCumulativeSeverity = "cumulative-severity" in args;
 const hasSetL2Phase = "set-l2-phase" in args;
+const hasFindingStatus = "finding-status" in args;
+const hasConfirmIds = "confirm-finding-ids" in args;
+const hasDropIds = "drop-finding-ids" in args;
 
 const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
 const findingPresent = findingKeys.filter((k) => k in args);
@@ -76,7 +84,27 @@ if (hasAnyFinding && !hasAllFindings) {
   usage("--finding-categories, --finding-severity, --finding-detail, --finding-reporter must all be provided together");
 }
 
-if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase) {
+if (hasFindingStatus && !hasAllFindings) {
+  usage("--finding-status requires --finding-* flags");
+}
+
+if (hasFindingStatus && !["draft", "confirmed"].includes(args["finding-status"])) {
+  usage("--finding-status must be one of draft|confirmed");
+}
+
+function parseIdCsv(raw, flag) {
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const ids = [];
+  for (const p of parts) {
+    const n = Number(p);
+    if (!Number.isInteger(n)) usage(`${flag} contains non-integer: ${p}`);
+    ids.push(n);
+  }
+  if (ids.length === 0) usage(`${flag} must be non-empty`);
+  return ids;
+}
+
+if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase && !hasConfirmIds && !hasDropIds) {
   usage("at least one mutating flag required");
 }
 
@@ -106,19 +134,62 @@ if (hasSetL2Phase) {
 if (hasAllFindings) {
   const categories = args["finding-categories"].split(",").map((s) => s.trim()).filter(Boolean);
   if (categories.length === 0) usage("--finding-categories must be non-empty");
-  patch.findings = [
-    {
-      categories,
-      severity: args["finding-severity"],
-      detail: args["finding-detail"],
-      reporter: args["finding-reporter"],
-    },
-  ];
+  const finding = {
+    categories,
+    severity: args["finding-severity"],
+    detail: args["finding-detail"],
+    reporter: args["finding-reporter"],
+  };
+  if (hasFindingStatus && args["finding-status"] === "draft") {
+    finding.status = "draft";
+  } else if (hasFindingStatus && args["finding-status"] === "confirmed") {
+    finding.status = "confirmed";
+  }
+  patch.findings = [finding];
 }
 
-const ok = writeLayer2State(sid, patch);
-if (!ok) {
-  console.error("[supervisor-write-layer2] ERROR: writeLayer2State failed (invalid fields or unexpected error)");
-  process.exit(1);
+// Order of operations:
+//   1. writeLayer2State without l2_phase (append + scalars except phase)
+//   2. confirmFinding for each --confirm-finding-ids
+//   3. dropFindings for --drop-finding-ids
+//   4. writeLayer2State with only l2_phase (committed last)
+const phasePatch = ("l2_phase" in patch) ? { l2_phase: patch.l2_phase } : null;
+if (phasePatch) delete patch.l2_phase;
+
+const hasAnyPrePhase =
+  Object.keys(patch).length > 0;
+
+if (hasAnyPrePhase) {
+  const ok = writeLayer2State(sid, patch);
+  if (!ok) {
+    console.error("[supervisor-write-layer2] ERROR: writeLayer2State failed (invalid fields or unexpected error)");
+    process.exit(1);
+  }
+}
+
+if (hasConfirmIds) {
+  const ids = parseIdCsv(args["confirm-finding-ids"], "--confirm-finding-ids");
+  for (const idx of ids) {
+    if (!confirmFinding(sid, idx)) {
+      console.error("[supervisor-write-layer2] ERROR: confirmFinding failed");
+      process.exit(1);
+    }
+  }
+}
+
+if (hasDropIds) {
+  const ids = parseIdCsv(args["drop-finding-ids"], "--drop-finding-ids");
+  if (!dropFindings(sid, ids)) {
+    console.error("[supervisor-write-layer2] ERROR: dropFindings failed");
+    process.exit(1);
+  }
+}
+
+if (phasePatch) {
+  const ok = writeLayer2State(sid, phasePatch);
+  if (!ok) {
+    console.error("[supervisor-write-layer2] ERROR: writeLayer2State (phase) failed");
+    process.exit(1);
+  }
 }
 process.exit(0);

@@ -5,6 +5,7 @@ const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES } = require("./supervisor-state-schema");
 const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
+const findingStatus = require("./supervisor-finding-status");
 
 const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase"]);
 
@@ -266,11 +267,13 @@ function writeLayer2State(sessionId, patch) {
     layer2.l2_armed_at = null;
   }
 
-  // Append findings
+  // Append findings. Draft-status entries get auto-assigned idx for later --confirm/--drop.
   if ("findings" in patch) {
     const ts = new Date().toISOString();
     for (const f of patch.findings) {
-      layer2.findings.push({ ...f, timestamp: ts });
+      const entry = { ...f, timestamp: ts };
+      if (entry.status === "draft" && entry.idx === undefined) entry.idx = layer2.findings.length;
+      layer2.findings.push(entry);
     }
   }
 
@@ -287,4 +290,15 @@ function writeLayer2State(sessionId, patch) {
   return true;
 }
 
-module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State };
+function mutateLayer2State(sid, mutator) {
+  const fp = getStatePath(sid); const state = readStateOrInit(sid); mutator(state);
+  state.last_updated = new Date().toISOString();
+  const vr = validate(state);
+  if (!vr.ok) { console.error(`[supervisor-state-writer] mutate failed: ${vr.errors.join("; ")}`); return false; }
+  writeAtomic(fp, state); return true;
+}
+const confirmFinding = (sid, idx) => mutateLayer2State(sid, (s) => findingStatus.confirmFinding(s, idx));
+const dropFindings = (sid, idxs) => mutateLayer2State(sid, (s) => findingStatus.dropFindings(s, idxs));
+const promotePendingDraftsToConfirmed = (sid) => mutateLayer2State(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
+
+module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, confirmFinding, dropFindings, promotePendingDraftsToConfirmed };

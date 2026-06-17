@@ -72,6 +72,12 @@ function validateFinding(f) {
       }
     }
   }
+  if (f.status !== undefined && f.status !== "draft" && f.status !== "confirmed") {
+    errors.push(`invalid status: ${f.status} (must be draft or confirmed)`);
+  }
+  if (f.idx !== undefined && !Number.isInteger(f.idx)) {
+    errors.push("idx must be an integer");
+  }
   return { ok: errors.length === 0, errors };
 }
 
