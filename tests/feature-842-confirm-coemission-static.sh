@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js
+# Tests: skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/make-detail-plan/SKILL.md, hooks/stop-confirm-plan-guard.js, hooks/lib/sentinel-patterns.js, skills/commit-push/SKILL.md
 # Tags: confirm-plan, sentinel, outline, detail, intent, structural-fallback, stop-guard
 # Static grep-based checks verifying that #842 structural wiring is in place:
 #   - make-outline-plan Completion emits WORKFLOW_MARK_STEP_outline_complete before calling make-detail-plan
@@ -92,8 +92,7 @@ done
 
 # ---------------------------------------------------------------------------
 # 7. stop-confirm-plan-guard.js Layer 2: references all CONFIRM_<STAGE>_RE_DQ
-#    constants so it can dispatch follow-up checks per stage. Includes the
-#    PR_CREATED branch added by the #842 fix-confirm-stall feature.
+#    constants so it can dispatch follow-up checks per stage.
 # ---------------------------------------------------------------------------
 echo "=== 7. stop-confirm-plan-guard.js: CONFIRM_<STAGE>_RE_DQ references ==="
 STOP_GUARD="$REPO_ROOT/hooks/stop-confirm-plan-guard.js"
@@ -104,12 +103,6 @@ if require_file "$STOP_GUARD"; then
         pass "stop-confirm-plan-guard.js references all three CONFIRM_<STAGE>_RE_DQ"
     else
         fail "stop-confirm-plan-guard.js missing one of CONFIRM_{INTENT,OUTLINE,DETAIL}_RE_DQ"
-    fi
-
-    if has_fixed "CONFIRM_PR_CREATED_RE_DQ" "$STOP_GUARD"; then
-        pass "stop-confirm-plan-guard.js references CONFIRM_PR_CREATED_RE_DQ"
-    else
-        fail "stop-confirm-plan-guard.js missing CONFIRM_PR_CREATED_RE_DQ"
     fi
 fi
 
@@ -128,58 +121,40 @@ if require_file "$SENTINEL_PATTERNS"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 9. sentinel-patterns.js exports CONFIRM_PR_CREATED_RE_DQ (and looks-like form)
+# Case A: commit-push/SKILL.md must NOT contain WORKFLOW_CONFIRM_PR_CREATED
 # ---------------------------------------------------------------------------
-echo "=== 9. sentinel-patterns.js: CONFIRM_PR_CREATED_RE_DQ export ==="
-if require_file "$SENTINEL_PATTERNS"; then
-    if has_fixed "CONFIRM_PR_CREATED_RE_DQ" "$SENTINEL_PATTERNS"; then
-        pass "sentinel-patterns.js exports CONFIRM_PR_CREATED_RE_DQ"
-    else
-        fail "sentinel-patterns.js missing CONFIRM_PR_CREATED_RE_DQ"
-    fi
-    if has_fixed "CONFIRM_PR_CREATED_LOOKSLIKE_RE" "$SENTINEL_PATTERNS"; then
-        pass "sentinel-patterns.js exports CONFIRM_PR_CREATED_LOOKSLIKE_RE"
-    else
-        fail "sentinel-patterns.js missing CONFIRM_PR_CREATED_LOOKSLIKE_RE"
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# 10. confirm-checkpoint.js: imports CONFIRM_PR_CREATED_RE_DQ from
-#     sentinel-patterns (SSOT) AND does NOT carry the old inline regex literal.
-# ---------------------------------------------------------------------------
-echo "=== 10. confirm-checkpoint.js: SSOT import (no inline regex) ==="
-CONFIRM_CHECKPOINT="$REPO_ROOT/hooks/confirm-checkpoint.js"
-if require_file "$CONFIRM_CHECKPOINT"; then
-    if has_fixed "CONFIRM_PR_CREATED_BODY_RE" "$CONFIRM_CHECKPOINT"; then
-        pass "confirm-checkpoint.js imports CONFIRM_PR_CREATED_BODY_RE from sentinel-patterns"
-    else
-        fail "confirm-checkpoint.js missing CONFIRM_PR_CREATED_BODY_RE import"
-    fi
-    # The old inline literal must be removed (SSOT-1 — sentinel-patterns owns the regex)
-    if has_fixed "<<WORKFLOW_CONFIRM_PR_CREATED: (https" "$CONFIRM_CHECKPOINT"; then
-        fail "confirm-checkpoint.js still contains the old inline CONFIRM_PR_CREATED regex literal"
-    else
-        pass "confirm-checkpoint.js does not contain the old inline CONFIRM_PR_CREATED literal"
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# 11. commit-push/SKILL.md: references CONFIRM_PR_CREATED emission and
-#     branches by ENFORCE_WORKTREE.
-# ---------------------------------------------------------------------------
-echo "=== 11. commit-push/SKILL.md: CONFIRM_PR_CREATED + ENFORCE_WORKTREE references ==="
+echo "=== Case A: commit-push/SKILL.md: WORKFLOW_CONFIRM_PR_CREATED absent ==="
 COMMIT_PUSH_SKILL="$REPO_ROOT/skills/commit-push/SKILL.md"
 if require_file "$COMMIT_PUSH_SKILL"; then
-    if has_fixed "CONFIRM_PR_CREATED" "$COMMIT_PUSH_SKILL"; then
-        pass "commit-push/SKILL.md references CONFIRM_PR_CREATED"
+    if has_fixed "WORKFLOW_CONFIRM_PR_CREATED" "$COMMIT_PUSH_SKILL"; then
+        fail "commit-push/SKILL.md still contains WORKFLOW_CONFIRM_PR_CREATED (sentinel not removed)"
     else
-        fail "commit-push/SKILL.md missing CONFIRM_PR_CREATED reference"
+        pass "commit-push/SKILL.md: WORKFLOW_CONFIRM_PR_CREATED absent"
     fi
-    if has_fixed "ENFORCE_WORKTREE" "$COMMIT_PUSH_SKILL"; then
-        pass "commit-push/SKILL.md has ENFORCE_WORKTREE branch"
+fi
+
+# ---------------------------------------------------------------------------
+# Case B: commit-push/SKILL.md Step 7(a) on-mode references /worktree-end
+#         (documents that WF-CODE-11 owns worktree-end invocation, not CONFIRM)
+# ---------------------------------------------------------------------------
+echo "=== Case B: commit-push/SKILL.md on-mode references /worktree-end ==="
+if require_file "$COMMIT_PUSH_SKILL"; then
+    if has_fixed "worktree-end" "$COMMIT_PUSH_SKILL"; then
+        pass "commit-push/SKILL.md references /worktree-end in on-mode step"
     else
-        fail "commit-push/SKILL.md missing ENFORCE_WORKTREE branch"
+        fail "commit-push/SKILL.md missing /worktree-end reference"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case C: commit-push/SKILL.md must NOT contain Step 6.5 or PR-created heading
+# ---------------------------------------------------------------------------
+echo "=== Case C: commit-push/SKILL.md: no Step 6.5 / PR-created heading ==="
+if require_file "$COMMIT_PUSH_SKILL"; then
+    if has_fixed "6.5." "$COMMIT_PUSH_SKILL" || has_fixed "PR-created confirmation" "$COMMIT_PUSH_SKILL"; then
+        fail "commit-push/SKILL.md still contains Step 6.5 or PR-created confirmation heading"
+    else
+        pass "commit-push/SKILL.md: Step 6.5 and PR-created heading absent"
     fi
 fi
 
@@ -216,6 +191,70 @@ for skill_pair in \
         fi
     fi
 done
+
+# ---------------------------------------------------------------------------
+# Case D: sentinel-patterns.js must NOT contain CONFIRM_PR_CREATED_RE_DQ
+# ---------------------------------------------------------------------------
+echo "=== Case D: sentinel-patterns.js: CONFIRM_PR_CREATED_RE_DQ absent ==="
+if require_file "$SENTINEL_PATTERNS"; then
+    if has_fixed "CONFIRM_PR_CREATED_RE_DQ" "$SENTINEL_PATTERNS"; then
+        fail "sentinel-patterns.js still contains CONFIRM_PR_CREATED_RE_DQ"
+    else
+        pass "sentinel-patterns.js: CONFIRM_PR_CREATED_RE_DQ absent"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case E: confirm-checkpoint.js must NOT contain CONFIRM_PR_CREATED_BODY_RE
+# ---------------------------------------------------------------------------
+echo "=== Case E: confirm-checkpoint.js: CONFIRM_PR_CREATED_BODY_RE absent ==="
+CONFIRM_CHECKPOINT="$REPO_ROOT/hooks/confirm-checkpoint.js"
+if require_file "$CONFIRM_CHECKPOINT"; then
+    if has_fixed "CONFIRM_PR_CREATED_BODY_RE" "$CONFIRM_CHECKPOINT"; then
+        fail "confirm-checkpoint.js still contains CONFIRM_PR_CREATED_BODY_RE reference"
+    else
+        pass "confirm-checkpoint.js: CONFIRM_PR_CREATED_BODY_RE absent"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case F: state-io.js must NOT contain pr-created in CONFIRM_NEXT_STEP_HINT
+# ---------------------------------------------------------------------------
+echo "=== Case F: state-io.js: pr-created hint absent ==="
+STATE_IO="$REPO_ROOT/hooks/lib/workflow-state/state-io.js"
+if require_file "$STATE_IO"; then
+    if has_fixed "pr-created" "$STATE_IO"; then
+        fail "state-io.js still contains pr-created in CONFIRM_NEXT_STEP_HINT"
+    else
+        pass "state-io.js: pr-created absent"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case G: settings.json must NOT contain CONFIRM_PR_CREATED in ask list
+# ---------------------------------------------------------------------------
+echo "=== Case G: settings.json: CONFIRM_PR_CREATED absent from ask list ==="
+SETTINGS_JSON="$REPO_ROOT/settings.json"
+if require_file "$SETTINGS_JSON"; then
+    if has_fixed "CONFIRM_PR_CREATED" "$SETTINGS_JSON"; then
+        fail "settings.json still contains CONFIRM_PR_CREATED in ask list"
+    else
+        pass "settings.json: CONFIRM_PR_CREATED absent"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case H: stop-confirm-plan-guard.js must NOT contain CONFIRM_PR_CREATED_RE_DQ
+# ---------------------------------------------------------------------------
+echo "=== Case H: stop-confirm-plan-guard.js: CONFIRM_PR_CREATED_RE_DQ absent ==="
+STOP_GUARD="$REPO_ROOT/hooks/stop-confirm-plan-guard.js"
+if require_file "$STOP_GUARD"; then
+    if has_fixed "CONFIRM_PR_CREATED_RE_DQ" "$STOP_GUARD"; then
+        fail "stop-confirm-plan-guard.js still contains CONFIRM_PR_CREATED_RE_DQ"
+    else
+        pass "stop-confirm-plan-guard.js: CONFIRM_PR_CREATED_RE_DQ absent"
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 echo
