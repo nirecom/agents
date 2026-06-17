@@ -4,6 +4,7 @@
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "95",
     "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1"
   },
+  "language": "japanese",
   "attribution": {
     "commit": "",
     "pr": ""
@@ -304,6 +305,18 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-compact.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/subagent-start.js\"",
             "timeout": 5
           }
         ]
