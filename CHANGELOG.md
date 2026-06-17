@@ -335,4 +335,8 @@ Changes: category:FEATURE subject:"#925 — .env.example comment style machine-e
 
 ### FEATURE: PR #936 (2026-06-18)
 Background: fix(#913,#905): ensureLayer2Scheduled dual-ID guard + writeLayer2State terminal l2_armed_at null-clear
-Changes: Fixed supervisor Layer 2 false-positive reviews after session close: `ensureLayer2Scheduled` now checks both the CC session UUID and the workflow session ID when testing for the final-report anchor, preventing spurious next-session C2 triggers (#913). Fixed stale `l2_armed_at` on terminal phase transitions (`done`/`frozen`) in `writeLayer2State`, eliminating a second source of false-positive C2 blocks (#905).
+Changes: Fixed supervisor Layer 2 false-positive reviews after session close: `ensureLayer2Scheduled` now checks both the CC session UUID and the workflow session ID when testing for the final-report anchor, preventing spurious next-session C2 triggers (#913). Fixed stale `l2_armed_at` on terminal phase transitions (`done`/`frozen`) in `writeLayer2State`, eliminating a second source of false-positive C2 blocks (#905).
+
+### FEATURE: PR #945 (2026-06-18)
+Background: feat(#928): L2 supervisor report — standardized display format
+Changes: L2 supervisor block messages now show structured multi-line output: aggregated `Categories:` line across all findings, per-finding detail list, `Recommended action:` pointer, and explicit session IDs. The branch (3) resume message now leads with human-readable `Clear:` / `To resume` instructions and an explicit `File:` path to the state file, replacing the previous single-line node one-liner.
