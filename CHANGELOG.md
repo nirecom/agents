@@ -351,4 +351,8 @@ Changes: **EM Supervisor Layer 2**: Added pre-processing step that groups co-blo
 
 ### FEATURE: PR #947 (2026-06-18)
 Background: feat(#941): RUN_E2E migrated to .env key via bin/get-config-var
-Changes: category:FEATURE subject:"#941 — RUN_E2E .env toggle for claude -p E2E tests" changes:"Set `RUN_E2E=off` (default) in `.env` to skip Anthropic-billable `claude -p` E2E tests across all guarded test scripts. Set `RUN_E2E=on` to enable them. New `.env.example` entry documents the toggle. Both `tests/feature-robust-workflow.sh` E1 block and `tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh` now use the standard `bin/get-config-var` reader."
+Changes: category:FEATURE subject:"#941 — RUN_E2E .env toggle for claude -p E2E tests" changes:"Set `RUN_E2E=off` (default) in `.env` to skip Anthropic-billable `claude -p` E2E tests across all guarded test scripts. Set `RUN_E2E=on` to enable them. New `.env.example` entry documents the toggle. Both `tests/feature-robust-workflow.sh` E1 block and `tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh` now use the standard `bin/get-config-var` reader."
+
+### FEATURE: PR #948 (2026-06-18)
+Background: feat(#929): L2 supervisor Codex adversarial review layer
+Changes: L2 supervisor now uses a Codex adversarial second-opinion pass on draft findings before finalizing. Findings Codex agrees with pass unconditionally; findings Codex disagrees with are adjudicated by the L2 supervisor (keep or drop). Silently falls back to single-engine mode when Codex is unavailable.
