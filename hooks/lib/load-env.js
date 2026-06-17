@@ -45,9 +45,22 @@ function loadEnv(envPath) {
 }
 
 function loadDefaultEnv() {
-  // Resolve $AGENTS_CONFIG_DIR/.env, falling back to ../ from this file
-  const cfgDir = process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, "..", "..");
-  return loadEnv(path.join(cfgDir, ".env"));
+  // (a) Honor AGENTS_CONFIG_DIR if set
+  if (process.env.AGENTS_CONFIG_DIR) {
+    return loadEnv(path.join(process.env.AGENTS_CONFIG_DIR, ".env"));
+  }
+  // (b) __dirname two levels up (direct install path)
+  const dirFallback = path.resolve(__dirname, "..", "..");
+  if (loadEnv(path.join(dirFallback, ".env"))) return true;
+  // (c) Resolve __filename through symlinks (e.g. ~/.claude/hooks/lib -> real repo)
+  try {
+    const realCfgDir = path.resolve(path.dirname(fs.realpathSync(__filename)), "..", "..");
+    if (loadEnv(path.join(realCfgDir, ".env"))) return true;
+  } catch (_) {}
+  if (process.env.AGENTS_HOOK_DEBUG === "1") {
+    process.stderr.write("[load-env] loadDefaultEnv: .env not found via AGENTS_CONFIG_DIR, __dirname, or realpathSync\n");
+  }
+  return false;
 }
 
 module.exports = { loadEnv, loadDefaultEnv };
