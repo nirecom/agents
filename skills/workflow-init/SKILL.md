@@ -34,6 +34,18 @@ Regex `#\d+`:
 - `CLOSED` → ask: reopen / pick different #N / continue as Path C. (Related issues handled in WI-6.)
 - `OPEN` → continue to WI-5.
 
+### Step WI-4.5 — Companion-issue detection
+
+**Guards:** If `ISSUES` is empty (Path C) or `NON_GITHUB=1` (set by WI-2), skip this step entirely.
+
+**Flag:** `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_COMPANION_ISSUES on && echo OFF || echo ON'`. `OFF` = auto-append mode; `ON` = confirmation mode (default).
+
+**Search:** `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-companion-issues.sh" --primary "${ISSUES[0]}" --exclude "$(IFS=,; echo "${ISSUES[*]:1}")"`. If stdout is empty → skip rest of WI-4.5.
+
+**Confirmation (flag ON):** For each TSV candidate line, one `AskUserQuestion`: "Add #<number> (<title>) as a related issue for this session?" — options "Yes (add as related)" / "No (skip)". **Confirmation (flag OFF):** auto-accept all candidates without prompting.
+
+**Acceptance:** Append each accepted `#M` to `ISSUES` array. These entries flow into WI-5 aggregate WIP check and WI-12 automatically.
+
 ### Step WI-5 — Aggregate WIP check (OPEN branch)
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh" "${ISSUES[@]}"`. Output classifies and routes:
@@ -88,7 +100,7 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 - A4. Invoke `make-outline-plan` (surveys already complete via WI-10).
 
 #### Path B — issue exists, no intent:clarified
-- B1. Write `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`.
+- B1. Write `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`. If WI-4.5 accepted companion issues, append one section per companion: `\n\n## Companion #<M>\nRelated: #<M>` so `clarify-intent` CI-1a's `#\d+` scan detects them.
 - B2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
 - B3. Invoke `clarify-intent` with `#<N>` in args so step 1a auto-detect fires.
 
