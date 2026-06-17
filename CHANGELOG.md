@@ -331,4 +331,8 @@ Changes: `workflow-init` and `clarify-intent` now automatically surface companio
 
 ### FEATURE: PR #938 (2026-06-18)
 Background: feat(#925): .env.example comment guideline — rule extension + static checker + full rewrite
-Changes: category:FEATURE subject:"#925 — .env.example comment style machine-enforced" changes:"New `review-env-example` checker runs in WF-CODE-6 alongside `review-code-size` and `review-skill-size`. HARD violations (variable-name headings, issue refs, internal implementation names, redundant `Example:` lines, blocks > 5 lines) block the workflow (exit 1); WARN findings are advisory. All 23 existing `.env.example` entries rewritten to comply. Install via `dotfileslink.sh` / `dotfileslink.ps1`."
+Changes: category:FEATURE subject:"#925 — .env.example comment style machine-enforced" changes:"New `review-env-example` checker runs in WF-CODE-6 alongside `review-code-size` and `review-skill-size`. HARD violations (variable-name headings, issue refs, internal implementation names, redundant `Example:` lines, blocks > 5 lines) block the workflow (exit 1); WARN findings are advisory. All 23 existing `.env.example` entries rewritten to comply. Install via `dotfileslink.sh` / `dotfileslink.ps1`."
+
+### FEATURE: PR #936 (2026-06-18)
+Background: fix(#913,#905): ensureLayer2Scheduled dual-ID guard + writeLayer2State terminal l2_armed_at null-clear
+Changes: Fixed supervisor Layer 2 false-positive reviews after session close: `ensureLayer2Scheduled` now checks both the CC session UUID and the workflow session ID when testing for the final-report anchor, preventing spurious next-session C2 triggers (#913). Fixed stale `l2_armed_at` on terminal phase transitions (`done`/`frozen`) in `writeLayer2State`, eliminating a second source of false-positive C2 blocks (#905).
