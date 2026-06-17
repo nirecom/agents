@@ -52,17 +52,33 @@ function approve() {
   process.exit(0);
 }
 
-function block(reason) {
+function block(reason, extras = undefined) {
   try {
     const { reportBlock } = require("./lib/supervisor-emit");
-    reportBlock("workflow-gate", _gateReportCtx.command || _gateReportCtx.toolName || "<unknown>", _gateReportCtx.sessionId);
+    // Axis A (#885): if no explicit extras passed but the parsed context has
+    // a cwd we recorded, use it as a minimum extras payload so the supervisor
+    // state finding always carries context.cwd (and git_root_resolved when
+    // repoDir has been resolved).
+    let effExtras = extras;
+    if (effExtras === undefined) {
+      if (_gateReportCtx.cwd !== undefined) {
+        const ctx = { cwd: _gateReportCtx.cwd };
+        if (_gateReportCtx.repoResolved !== undefined) {
+          ctx.git_root_resolved = !!_gateReportCtx.repoResolved;
+        }
+        effExtras = { context: ctx };
+      } else {
+        effExtras = {};
+      }
+    }
+    reportBlock("workflow-gate", _gateReportCtx.command || _gateReportCtx.toolName || "<unknown>", _gateReportCtx.sessionId, effExtras);
   } catch (_) { /* fail-open */ }
   console.log(JSON.stringify({ decision: "block", reason }));
   process.exit(0);
 }
 
 // Populated at hook-input parse time so block() can self-report.
-let _gateReportCtx = { sessionId: undefined, command: undefined, toolName: undefined };
+let _gateReportCtx = { sessionId: undefined, command: undefined, toolName: undefined, cwd: undefined };
 
 if (require.main === module) {
   let input;
@@ -75,7 +91,13 @@ if (require.main === module) {
   const toolName = input.tool_name;
   const toolInput = input.tool_input || {};
   const sessionId = input.session_id;
-  _gateReportCtx = { sessionId, command: toolInput.command, toolName };
+  _gateReportCtx = {
+    sessionId,
+    command: toolInput.command,
+    toolName,
+    cwd: typeof toolInput.cwd === "string" ? toolInput.cwd : undefined,
+    repoResolved: undefined,
+  };
 
   // WORKFLOW_OFF: bypass all workflow-gate checks (superset of WORKTREE_OFF per workflow-off.md).
   const { isWorkflowOff, isWorktreeOff } = require("./lib/session-markers");
@@ -286,6 +308,8 @@ if (require.main === module) {
   if (!/\scommit(\s|$)/.test(command)) approve();
 
   const repoDir = resolveRepoDir(command, input);
+  // Axis A (#885): record git_root_resolved for late-block extras.
+  _gateReportCtx.repoResolved = !!repoDir;
   const docsOnly = isDocsOnlyStaged(repoDir);
   // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
   // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
