@@ -319,4 +319,8 @@ Changes: **EM Supervisor**: Layer 1 findings now record CWD, git-root resolution
 
 ### REFACTOR: PR #907 (2026-06-17)
 Background: refactor(#898): rename CI/MOP/SC skill step labels to prefixed format
-Changes: Step labels in `/clarify-intent` (CI-N), `/make-outline-plan` (MOP-N), and `/session-close` (SC-N) now use the prefixed format established by PR #779 for other workflow skills. Cross-references across the repo updated accordingly.
+Changes: Step labels in `/clarify-intent` (CI-N), `/make-outline-plan` (MOP-N), and `/session-close` (SC-N) now use the prefixed format established by PR #779 for other workflow skills. Cross-references across the repo updated accordingly.
+
+### FEATURE: PR #934 (2026-06-17)
+Background: fix(#911): remove WORKFLOW_CONFIRM_PR_CREATED sentinel
+Changes: Removed `WORKFLOW_CONFIRM_PR_CREATED`: the Claude Code permission dialog no longer shows a raw `echo` sentinel after `gh pr create`. The PR URL is still shown by the `pr-created-open.js` hook (system message); the merge confirmation gate in `/worktree-end` is unchanged.
