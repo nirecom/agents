@@ -38,7 +38,7 @@ Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns wh
 bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on && echo OFF || echo ON'
 ```
 - `OFF`: print a one-paragraph prose summary (do not duplicate the breadcrumb path); proceed.
-- `ON`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` / `PR_CREATED` per the caller.
+- `ON`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` per the caller.
   - Emit: `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`.
   - In the SAME response, after the CONFIRM Bash echo, also issue the next tool_use (Skill or Bash) per the caller's per-site reminder. Do NOT end the response on the CONFIRM echo.
   - `confirm-checkpoint.js` (PreToolUse) surfaces the dialog; `stop-confirm-plan-guard.js` (Stop, Layer 2) blocks the turn if no stage-valid follow-up follows the CONFIRM sentinel in the same turn.
@@ -50,3 +50,4 @@ bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on &&
 - Revise loop has no explicit cap — trust the user to say "Proceed".
 - Do not paste the full artifact in chat — diff + breadcrumb are sufficient.
 - Each skill defines what "Revise" means concretely.
+- `CONFIRM_*` sentinels are for plan-stage review only. The sole user gate before the final publish action (merge in on-mode; commit+push in off-mode) is `WORKFLOW_USER_VERIFIED` — see `skills/_shared/user-verified.md`. Do not add upstream CONFIRM gates for post-action notifications.

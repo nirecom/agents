@@ -90,12 +90,6 @@ const CONFIRM_OUTLINE_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_OUTLINE: ([^>]+)>>"$/;
 const CONFIRM_OUTLINE_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_OUTLINE([: ].*)?>>"$/;
 const CONFIRM_DETAIL_RE_DQ = /^echo "<<WORKFLOW_CONFIRM_DETAIL: ([^>]+)>>"$/;
 const CONFIRM_DETAIL_LOOKSLIKE_RE = /^echo "<<WORKFLOW_CONFIRM_DETAIL([: ].*)?>>"$/;
-const CONFIRM_PR_CREATED_RE_DQ =
-  /^echo "<<WORKFLOW_CONFIRM_PR_CREATED: (https:\/\/github\.com\/[^/\s>]+\/[^/\s>]+\/pull\/\d+)>>"$/;
-const CONFIRM_PR_CREATED_LOOKSLIKE_RE =
-  /^echo "<<WORKFLOW_CONFIRM_PR_CREATED([: ].*)?>>"$/;
-const CONFIRM_PR_CREATED_BODY_RE =
-  /<<WORKFLOW_CONFIRM_PR_CREATED: (https:\/\/github\.com\/[^/\s>]+\/[^/\s>]+\/pull\/\d+)>>/;
 
 // review_tests step (issue #833): structural QA gate that pairs with write_tests.
 // COMPLETE carries a `token=<hex>` payload that fingerprints the staged tests/
@@ -155,8 +149,6 @@ function isSentinel(cmd) {
     CONFIRM_OUTLINE_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_DETAIL_RE_DQ.test(cmd) ||
     CONFIRM_DETAIL_LOOKSLIKE_RE.test(cmd) ||
-    CONFIRM_PR_CREATED_RE_DQ.test(cmd) ||
-    CONFIRM_PR_CREATED_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
     REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd) ||
@@ -191,7 +183,6 @@ function isStrictSentinel(cmd) {
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
     CONFIRM_DETAIL_RE_DQ.test(cmd) ||
-    CONFIRM_PR_CREATED_RE_DQ.test(cmd) ||
     REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
     REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd)
   );
@@ -264,7 +255,6 @@ module.exports = {
   CONFIRM_INTENT_RE_DQ, CONFIRM_INTENT_LOOKSLIKE_RE,
   CONFIRM_OUTLINE_RE_DQ, CONFIRM_OUTLINE_LOOKSLIKE_RE,
   CONFIRM_DETAIL_RE_DQ, CONFIRM_DETAIL_LOOKSLIKE_RE,
-  CONFIRM_PR_CREATED_RE_DQ, CONFIRM_PR_CREATED_LOOKSLIKE_RE, CONFIRM_PR_CREATED_BODY_RE,
   REVIEW_TESTS_COMPLETE_RE_DQ,
   REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE,
   REVIEW_TESTS_WARNINGS_RE_DQ,
