@@ -44,12 +44,51 @@ When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
 
 ## Output protocol
 
-1. Determine an overall `cumulative_severity` (`error` / `warning` / `notice` / `null`) reflecting Layer 2 independent judgment — do NOT echo Layer 1 severities.
-2. For each concrete observation, append a finding via `bin/supervisor-write-layer2 --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --session-id <sid>`.
-3. After analysis, clear `l2_armed_at` and mark run complete via `bin/supervisor-write-layer2 --last-run-at <now-iso> --cumulative-severity <verdict> --clear-l2-armed-at --set-l2-phase done --session-id <sid>`.
-4. Provide first-aid guidance: in your response to the main agent, summarize the most critical finding and recommend an immediate corrective action (one sentence per finding, highest severity first).
-5. Recommend `/issue-create` for root-cause fix: tell the main agent which pattern or rule gap caused the regression and suggest filing it via `/issue-create` so it is tracked. Do NOT auto-invoke `/issue-create` — the main agent decides whether to file.
-6. Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
+Findings flow through three phases: Draft → Adversarial review (Codex) → Adjudicate. No rewrite loop — Codex gives one verdict per finding; L2 supervisor adjudicates.
+
+### Phase 1 — Draft
+
+For each observation, append a draft finding (keep `l2_phase=pending`; do NOT set `done` yet):
+
+`bin/supervisor-write-layer2 --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --finding-status draft --session-id <sid>`
+
+Each invocation appends one finding and auto-assigns its `idx`. Multiple invocations are allowed.
+
+### Phase 2 — Adversarial review
+
+After all draft findings are written, run:
+
+`bin/supervisor-review-codex`
+
+It locates the state file, extracts draft findings, asks Codex for per-item AGREE/DISAGREE verdicts as JSON Lines, and prints them between `<!-- begin-codex-output ... -->` / `<!-- end-codex-output -->` markers.
+
+Parse the output via `hooks/lib/codex-review-parse.js`:
+
+`node -e 'const {parseCodexFindings}=require("./hooks/lib/codex-review-parse"); console.log(JSON.stringify(parseCodexFindings(require("fs").readFileSync(0,"utf8"))))' < codex-output.txt`
+
+If `ok:false` (Codex unavailable, no markers, or parse error): treat all drafted findings as AGREE and skip to Phase 3 with all their idx values in `confirm_ids` and an empty `drop_ids`.
+
+### Phase 3 — Adjudicate and finalize
+
+For each Codex verdict:
+- **AGREE** → confirm the finding (it will be retained).
+- **DISAGREE** → read the Codex `reason`, then decide:
+  - Accept the criticism → drop the finding (`drop_ids`). If the finding still has merit in amended form, replace it: drop the original idx and append a new draft confirming the amendment in `detail`.
+  - Reject the criticism → confirm as-is (`confirm_ids`).
+
+Build the two lists, then make a single atomic finalize call:
+
+`bin/supervisor-write-layer2 --confirm-finding-ids <csv> --drop-finding-ids <csv> --last-run-at <now-iso> --cumulative-severity <verdict> --clear-l2-armed-at --set-l2-phase done --session-id <sid>`
+
+`cumulative_severity` is computed from confirmed findings only (after drops).
+
+### Reporting back
+
+Provide first-aid guidance: summarize the most critical confirmed finding and recommend an immediate corrective action (one sentence per finding, highest severity first).
+
+Recommend `/issue-create` for root-cause fix when the regression points to a pattern or rule gap. Do NOT auto-invoke `/issue-create` — the main agent decides whether to file.
+
+Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
 
 ## Constraints
 
