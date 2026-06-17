@@ -311,4 +311,8 @@ Changes: Supervisor layer2 CLI flags renamed: `--next-check-at` → `--l2-armed-
 
 ### FEATURE: PR #918 (2026-06-17)
 Background: fix(#897): CONV_LANG subagent compliance — settings.json language field + SubagentStart hook + per-agent dynamic fallback
-Changes: Fixed: supervisor subagent and planning agents now respect CONV_LANG setting. New `SubagentStart` hook (`hooks/subagent-start.js`) injects the language directive into each subagent's context; `settings.json` `"language"` field adds a framework-level first layer. Previously, all subagents emitted English regardless of `CONV_LANG=japanese`.
+Changes: Fixed: supervisor subagent and planning agents now respect CONV_LANG setting. New `SubagentStart` hook (`hooks/subagent-start.js`) injects the language directive into each subagent's context; `settings.json` `"language"` field adds a framework-level first layer. Previously, all subagents emitted English regardless of `CONV_LANG=japanese`.
+
+### FEATURE: PR #919 (2026-06-17)
+Background: feat(#885): supervisor accuracy (Axis A) — Layer 1 finding schema: env context + co-block correlation
+Changes: **EM Supervisor**: Layer 1 findings now record CWD, git-root resolution result, and a `co_blocked_by` field when two hooks simultaneously block the same command. Layer 2 root-cause analysis can now distinguish "orphaned worktree (no git root)" from "policy violation" blocks and automatically identifies double-block patterns.
