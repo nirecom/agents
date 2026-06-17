@@ -327,4 +327,8 @@ Changes: Removed `WORKFLOW_CONFIRM_PR_CREATED`: the Claude Code permission dialo
 
 ### FEATURE: PR #935 (2026-06-18)
 Background: feat(#920): auto-detect companion issues for co-session fix
-Changes: `workflow-init` and `clarify-intent` now automatically surface companion open issues sharing keywords with the primary, with per-candidate confirmation (`AskUserQuestion`). New `CONFIRM_COMPANION_ISSUES` flag (default: `on`) controls the confirmation step; set to `off` to auto-append top candidates silently. Path C sessions and non-GitHub remotes are unaffected.
+Changes: `workflow-init` and `clarify-intent` now automatically surface companion open issues sharing keywords with the primary, with per-candidate confirmation (`AskUserQuestion`). New `CONFIRM_COMPANION_ISSUES` flag (default: `on`) controls the confirmation step; set to `off` to auto-append top candidates silently. Path C sessions and non-GitHub remotes are unaffected.
+
+### FEATURE: PR #938 (2026-06-18)
+Background: feat(#925): .env.example comment guideline — rule extension + static checker + full rewrite
+Changes: category:FEATURE subject:"#925 — .env.example comment style machine-enforced" changes:"New `review-env-example` checker runs in WF-CODE-6 alongside `review-code-size` and `review-skill-size`. HARD violations (variable-name headings, issue refs, internal implementation names, redundant `Example:` lines, blocks > 5 lines) block the workflow (exit 1); WARN findings are advisory. All 23 existing `.env.example` entries rewritten to comply. Install via `dotfileslink.sh` / `dotfileslink.ps1`."
