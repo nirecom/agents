@@ -179,12 +179,27 @@ run_m6() {
     fi
 }
 
+run_m7() {
+    require_source "$SUPERVISOR_MD" "M7: contains C3 off-proposal content (WORKTREE_OFF + off-proposal/C3)" || return
+    local ok=1
+    contains_i "WORKTREE_OFF" || { ok=0; echo "  missing: WORKTREE_OFF"; }
+    if ! contains_i "off-proposal" && ! contains_i "C3"; then
+        ok=0; echo "  missing: off-proposal or C3"
+    fi
+    if [ $ok -eq 1 ]; then
+        pass "M7: contains C3 off-proposal content (WORKTREE_OFF + off-proposal/C3)"
+    else
+        fail "M7: contains C3 off-proposal content (WORKTREE_OFF + off-proposal/C3)"
+    fi
+}
+
 run_m1
 run_m2
 run_m3
 run_m4
 run_m5
 run_m6
+run_m7
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

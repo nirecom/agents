@@ -151,6 +151,34 @@ run_f12() {
 }
 
 # ---------------------------------------------------------------------------
+# F13-F14: C3 worktree-off / workflow-off proposal cause (#903)
+# Mirrors F9/F10 (C1) shape: same call signature, distinct cause string.
+# RED: source branch `isC3` not yet implemented in formatL2ArmedReason.
+# ---------------------------------------------------------------------------
+
+run_f13() {
+    require_source "$FORMATTER" "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner" || return
+    local out
+    out=$(format_l2_armed "C3 worktree-off proposal" "f13-sid" "'f13-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    if echo "$out" | grep -q "WORKTREE_OFF" && echo "$out" | grep -q "l2_armed_at: null"; then
+        pass "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner"
+    else
+        fail "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner (out=$out)"
+    fi
+}
+
+run_f14() {
+    require_source "$FORMATTER" "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner" || return
+    local out
+    out=$(format_l2_armed "C3 workflow-off proposal" "f14-sid" "'f14-wsid'" "agents/supervisor.md" "/tmp/state.json")
+    if echo "$out" | grep -q "WORKFLOW_OFF" && echo "$out" | grep -q "l2_armed_at: null"; then
+        pass "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner"
+    else
+        fail "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner (out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Edge-case formatter tests
 # ---------------------------------------------------------------------------
 
@@ -361,6 +389,8 @@ run_f9
 run_f10
 run_f11
 run_f12
+run_f13
+run_f14
 run_f_empty
 run_f_null_wsid_cumsev
 run_f_null_wsid_l2armed
