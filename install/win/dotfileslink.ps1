@@ -184,3 +184,9 @@ $rcsCmdContent = "@echo off`r`nwsl bash -c ""review-code-size %*""`r`n"
 Write-Launcher "$LocalBin\review-code-size.cmd" $rcsCmdContent "review-code-size.cmd"
 $rcsShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-code-size`" `"`$@`"`n"
 Write-Launcher "$LocalBin\review-code-size" $rcsShimContent "review-code-size (bash shim)"
+
+# --- ~/.local/bin/review-env-example launchers (cmd + bash shim) ---
+$reeCmdContent = "@echo off`r`nwsl bash -c ""review-env-example %*""`r`n"
+Write-Launcher "$LocalBin\review-env-example.cmd" $reeCmdContent "review-env-example.cmd"
+$reeShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-env-example`" `"`$@`"`n"
+Write-Launcher "$LocalBin\review-env-example" $reeShimContent "review-env-example (bash shim)"
