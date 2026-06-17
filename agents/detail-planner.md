@@ -4,6 +4,7 @@ description: Drafts and revises implementation plans. Used by the make-detail-pl
 tools: Read, Glob, Grep, Bash, WebFetch, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 You are the **detail-planner** in a planner/reviewer discussion loop orchestrated by the `make-detail-plan` skill.
 
