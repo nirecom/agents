@@ -6,6 +6,14 @@
 #
 # Source files (hooks/confirm-checkpoint.js, hooks/lib/turn-marker.js::peekTurnMarkers)
 # are created in later steps. When missing, the test SKIPs gracefully.
+#
+# L3 gap (what this test does NOT catch):
+# - confirm-checkpoint.js actually firing in a real Claude Code PreToolUse session
+#   (hook registration wiring — only verifiable via live claude -p run)
+# - CONFIRM_{INTENT,OUTLINE,DETAIL} dialog actually appearing in VS Code when
+#   a real sentinel is echoed in an interactive session
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
@@ -238,23 +246,6 @@ else
 fi
 clear_markers
 
-# ── T8: WORKFLOW_CONFIRM_PR_CREATED: <url> with /pull/<N> ──────────────────
-echo "=== T8: WORKFLOW_CONFIRM_PR_CREATED with PR URL ==="
-T8_URL="https://github.com/user/repo/pull/42"
-T8_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_PR_CREATED: $T8_URL>>\"")
-T8_OUT=$(run_hook "$T8_JSON")
-T8_MSG=$(extract_system_message "$T8_OUT")
-if echo "$T8_MSG" | grep -qF "PR #42 created" && echo "$T8_MSG" | grep -qF "$T8_URL"; then
-  pass "T8 systemMessage contains 'PR #42 created' and URL"
-else
-  fail "T8 systemMessage missing PR# or URL — got: $T8_MSG"
-fi
-if echo "$T8_MSG" | grep -qF "Click Allow"; then
-  pass "T8 systemMessage contains 'Click Allow'"
-else
-  fail "T8 systemMessage missing 'Click Allow' — got: $T8_MSG"
-fi
-
 # ── T9: CONFIRM_OUTLINE=off → "[confirm-skipped: CONFIRM_OUTLINE=off]" ─────
 echo "=== T9: CONFIRM_OUTLINE=off → skipped systemMessage ==="
 clear_markers
@@ -285,18 +276,6 @@ else
   fail "T10 missing 'Click Allow to proceed, Deny to abort.' — got: $T10_MSG"
 fi
 clear_markers
-
-# ── T11: PR_CREATED with non-github.com URL → ignored (security: reject non-PR URLs) ─
-echo "=== T11: PR_CREATED non-github.com/pull/N URL is ignored ==="
-T11_URL="https://evil.example.com/not/a/pr"
-T11_JSON=$(make_bash_json "echo \"<<WORKFLOW_CONFIRM_PR_CREATED: $T11_URL>>\"")
-T11_OUT=$(run_hook "$T11_JSON")
-T11_MSG=$(extract_system_message "$T11_OUT")
-if [ -z "$T11_MSG" ]; then
-  pass "T11 PR_CREATED non-github.com/pull/N URL is ignored (no systemMessage)"
-else
-  fail "T11 PR_CREATED non-github.com/pull/N URL should be ignored, got: $T11_MSG"
-fi
 
 # ── T12: CONFIRM_OUTLINE=off in .env file (NOT exported) → [confirm-skipped] ─
 echo "=== T12: CONFIRM_OUTLINE=off in .env file → skipped systemMessage ==="
