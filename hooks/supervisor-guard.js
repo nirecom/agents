@@ -90,12 +90,14 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState;
+  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath;
+  let formatCumSevErrorReason, formatL2ArmedReason;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
-    ({ readState } = require("./lib/supervisor-state-writer"));
+    ({ readState, getStatePath } = require("./lib/supervisor-state-writer"));
+    ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
   } catch (_) {
     process.exit(0);
   }
@@ -145,10 +147,7 @@ if (require.main === module) {
 
   // (2)
   if (cumSev === "error") {
-    const topDetail =
-      findings.length > 0 ? findings[findings.length - 1].detail : "(no detail)";
-    const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
-    const reason = `[EM Supervisor] Layer 2: cumulative_severity=error. Top finding: "${topDetail}". Follow agents/supervisor.md (${supervisorPath}) to resolve before continuing. Session ID: ${sessionId}. Workflow session ID: ${wsidLabel}.`;
+    const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath);
     try {
       process.stdout.write(
         JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
@@ -161,17 +160,13 @@ if (require.main === module) {
   const hangDetected = detectSentinelHang(input.transcript_path || "");
   if ((hangDetected || l2ArmedAt) && l2Phase !== "done" && l2Phase !== "frozen") {
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
-    const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
-    const reason =
-      `[EM Supervisor] Layer 2 review required (${cause}). Invoke agents/supervisor.md (${supervisorPath}) as a subagent: ` +
-      `run the JD checklist, provide first-aid guidance, then recommend /issue-create for root-cause fix. ` +
-      `Session ID: ${sessionId}. ` +
-      `Workflow session ID: ${wsidLabel}. ` +
-      `To clear and resume: node -e "require('${
-        agentsDir
-          ? path.join(agentsDir, "hooks/lib/supervisor-state-writer").replace(/\\/g, "\\\\")
-          : "hooks/lib/supervisor-state-writer"
-      }').writeLayer2State('${sessionId}', {l2_armed_at: null})"`;
+    let stateFilePath = "";
+    try {
+      stateFilePath = getStatePath(sessionId);
+    } catch (_) {
+      stateFilePath = "";
+    }
+    const reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath);
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     } catch (_) {}
