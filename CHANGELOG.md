@@ -299,4 +299,8 @@ Changes: After clicking Allow on a "PR created" confirmation dialog, `<<WORKFLOW
 
 ### FEATURE: PR #906 (2026-06-17)
 Background: fix(#879,#892,#891): rename C2 label, add post-Final-Report L2 guard, Phase 4 dispatch detection
-Changes: L2 block-reason label updated from "C2 escape-hatch use" to "C2 scheduled-review" — reflects the actual trigger condition (any non-null next_check_at, not only escape-hatch commands).;Post-Final-Report L2 scheduling suppressed: findings written after session-close Step 2A no longer arm next_check_at, preventing stale L2 reviews in the next session.;EM Supervisor JD checklist gains a Phase 4 dispatch detection rule, reducing false-positive misclassification of legitimate /issue-create invocations as Phase 1-3 bypasses.
+Changes: L2 block-reason label updated from "C2 escape-hatch use" to "C2 scheduled-review" — reflects the actual trigger condition (any non-null next_check_at, not only escape-hatch commands).;Post-Final-Report L2 scheduling suppressed: findings written after session-close Step 2A no longer arm next_check_at, preventing stale L2 reviews in the next session.;EM Supervisor JD checklist gains a Phase 4 dispatch detection rule, reducing false-positive misclassification of legitimate /issue-create invocations as Phase 1-3 bypasses.
+
+### FEATURE: PR #910 (2026-06-17)
+Background: fix(#726): assemble-mandatory.sh Bash hook not firing when called via SKILL.md wrapper scripts
+Changes: show-plan-link.js now fires correctly on Bash-tool assemble-mandatory.sh calls; VS Code plan preview and breadcrumb appear automatically after make-outline-plan and make-detail-plan assembly steps
