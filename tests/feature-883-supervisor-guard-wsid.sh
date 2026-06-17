@@ -69,8 +69,8 @@ run_g20() {
     wsid="${TODAY}-g20wsid"
     # Priority 1 (WORKTREE_NOTES.md) supplies wsid when running from $tmp.
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
-    # Seed supervisor state with next_check_at non-null to trigger branch (3).
-    seed_state "$tmp" "$sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # Seed supervisor state with l2_armed_at non-null to trigger branch (3).
+    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -90,7 +90,7 @@ run_g21() {
     sid="g21-sid"
     # No WORKTREE_NOTES.md, no context.md in tmp — resolveWorkflowSessionId returns null -> UNAVAILABLE.
     # Running from $tmp ensures the repo's own WORKTREE_NOTES.md in CWD does not interfere.
-    seed_state "$tmp" "$sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -113,7 +113,7 @@ run_g22() {
     # Priority 1 (WORKTREE_NOTES.md) supplies wsid when running from $tmp.
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # cumulative_severity=error triggers branch (2)
-    seed_state "$tmp" "$sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
+    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?

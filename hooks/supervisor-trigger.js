@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // PostToolUse hook (Bash matcher): EM Supervisor Layer 2 finding-presence gate.
-// - If command is a C2 escape-hatch (ENFORCE_*_OFF sentinel) and next_check_at
-//   is not already set, set next_check_at = now (trigger L2 review at Stop).
+// - If command is a C2 escape-hatch (ENFORCE_*_OFF sentinel) and l2_armed_at
+//   is not already set, set l2_armed_at = now (trigger L2 review at Stop).
 // - Emit an additionalContext advisory when cumulative_severity is set.
 // - Fail-open everywhere; never exit 2 (PostToolUse must not block).
 "use strict";
@@ -89,14 +89,14 @@ if (require.main === module) {
     ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(command);
 
   const layer2 = (state && state.layer2) || {};
-  const nextCheck = layer2.next_check_at == null ? null : layer2.next_check_at;
+  const l2ArmedAt = layer2.l2_armed_at == null ? null : layer2.l2_armed_at;
   const cumSev = layer2.cumulative_severity == null ? null : layer2.cumulative_severity;
   const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
   const findingCount = findings.length;
 
-  if (isEscapeHatch && !nextCheck) {
+  if (isEscapeHatch && !l2ArmedAt) {
     try {
-      writeLayer2State(sessionId, { next_check_at: new Date().toISOString() });
+      writeLayer2State(sessionId, { l2_armed_at: new Date().toISOString() });
     } catch (_) {}
   }
 
