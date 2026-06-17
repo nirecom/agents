@@ -3,7 +3,7 @@
 // 5-way branch (evaluated in order):
 //   (1) stop_hook_active=true       -> exit 0 immediately
 //   (2) cumulative_severity=error   -> decision:block + systemMessage, exit 2
-//   (3) detectSentinelHang || nextCheck -> decision:block (L2 review trigger), exit 2
+//   (3) detectSentinelHang || l2ArmedAt -> decision:block (L2 review trigger), exit 2
 //   (4) cumulative_severity warning/notice -> additionalContext advisory, exit 0
 //   (5) all-null                    -> exit 0 silently
 // Fail-open on any error.
@@ -133,7 +133,7 @@ if (require.main === module) {
   // No early exit on missing state — C1 transcript scan (path 3) runs regardless.
 
   const layer2 = (state && state.layer2) || {};
-  const nextCheck = layer2.next_check_at == null ? null : layer2.next_check_at;
+  const l2ArmedAt = layer2.l2_armed_at == null ? null : layer2.l2_armed_at;
   const cumSev = layer2.cumulative_severity == null ? null : layer2.cumulative_severity;
   const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
   const l2Phase = layer2.l2_phase === undefined ? null : layer2.l2_phase;
@@ -159,7 +159,7 @@ if (require.main === module) {
 
   // (3)
   const hangDetected = detectSentinelHang(input.transcript_path || "");
-  if ((hangDetected || nextCheck) && l2Phase !== "done" && l2Phase !== "frozen") {
+  if ((hangDetected || l2ArmedAt) && l2Phase !== "done" && l2Phase !== "frozen") {
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
     const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
     const reason =
@@ -171,7 +171,7 @@ if (require.main === module) {
         agentsDir
           ? path.join(agentsDir, "hooks/lib/supervisor-state-writer").replace(/\\/g, "\\\\")
           : "hooks/lib/supervisor-state-writer"
-      }').writeLayer2State('${sessionId}', {next_check_at: null})"`;
+      }').writeLayer2State('${sessionId}', {l2_armed_at: null})"`;
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     } catch (_) {}

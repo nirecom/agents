@@ -63,7 +63,7 @@ run_m3() {
     contains_i "bin/supervisor-write-layer2" || { ok=0; echo "  missing: bin/supervisor-write-layer2"; }
     contains_i -- "--cumulative-severity" || { ok=0; echo "  missing: --cumulative-severity"; }
     contains_i -- "--last-run-at" || { ok=0; echo "  missing: --last-run-at"; }
-    contains_i -- "--clear-next-check-at" || { ok=0; echo "  missing: --clear-next-check-at"; }
+    contains_i -- "--clear-l2-armed-at" || { ok=0; echo "  missing: --clear-l2-armed-at"; }
     if [ $ok -eq 1 ]; then
         pass "M3: mentions bin/supervisor-write-layer2 + key flags"
     else
@@ -72,16 +72,16 @@ run_m3() {
 }
 
 run_m4() {
-    require_source "$SUPERVISOR_MD" "M4: instruction to clear next_check_at after wakeup" || return
+    require_source "$SUPERVISOR_MD" "M4: instruction to clear l2_armed_at after wakeup" || return
     local ok=1
     contains_i "clear" || { ok=0; echo "  missing: clear"; }
-    if ! contains_i "next_check_at" && ! contains_i "clear-next-check-at"; then
-        ok=0; echo "  missing: next_check_at or clear-next-check-at"
+    if ! contains_i "l2_armed_at" && ! contains_i "clear-l2-armed-at"; then
+        ok=0; echo "  missing: l2_armed_at or clear-l2-armed-at"
     fi
     if [ $ok -eq 1 ]; then
-        pass "M4: instruction to clear next_check_at after wakeup"
+        pass "M4: instruction to clear l2_armed_at after wakeup"
     else
-        fail "M4: instruction to clear next_check_at after wakeup"
+        fail "M4: instruction to clear l2_armed_at after wakeup"
     fi
 }
 
