@@ -339,4 +339,8 @@ Changes: Fixed supervisor Layer 2 false-positive reviews after session close: `e
 
 ### FEATURE: PR #945 (2026-06-18)
 Background: feat(#928): L2 supervisor report — standardized display format
-Changes: L2 supervisor block messages now show structured multi-line output: aggregated `Categories:` line across all findings, per-finding detail list, `Recommended action:` pointer, and explicit session IDs. The branch (3) resume message now leads with human-readable `Clear:` / `To resume` instructions and an explicit `File:` path to the state file, replacing the previous single-line node one-liner.
+Changes: L2 supervisor block messages now show structured multi-line output: aggregated `Categories:` line across all findings, per-finding detail list, `Recommended action:` pointer, and explicit session IDs. The branch (3) resume message now leads with human-readable `Clear:` / `To resume` instructions and an explicit `File:` path to the state file, replacing the previous single-line node one-liner.
+
+### FEATURE: PR #946 (2026-06-18)
+Background: feat(#944): add test governance, audit-tests.sh, review-code-size fix
+Changes: `bin/audit-tests.sh` — new staleness checker: identifies `feature-NNN-*` tests eligible for deletion (CLOSED issue + >3 months since last commit). Run `bin/audit-tests.sh` to get a candidate report; `--offline` skips gh calls; `--format json` for machine-readable output.;`bin/review-code-size` — fixed exclusion bug: was excluding non-existent `tests/_archived/` instead of the actual `tests/_archive/` directory. Both `--all` and diff modes corrected.;`skills/_shared/test-design.md` — new scope classification convention (`scope:issue-specific` / `scope:common`) and size limits (300 WARN / 500 HARD) now documented for test files.
