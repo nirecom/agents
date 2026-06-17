@@ -4,6 +4,7 @@ description: Scan code for security anti-patterns across three axes. Read-only, 
 tools: Read, Glob, Grep, Bash
 model: opus
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Scan the provided code for security anti-patterns. Never modify any project files. No WebSearch or WebFetch — local code analysis only.
 
