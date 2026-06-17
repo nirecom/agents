@@ -110,6 +110,16 @@ CMD_T10=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --so
 expect_result "T10 multi-line \\<CRLF> continuation — returns last path" \
   "$CMD_T10" "\"${NODE_TMPDIR}/20260527-outline.md\""
 
+# ── T11: wrapper env-var-only form (no positionals) — returns null ────────────
+CMD_T11='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/assemble-mandatory.sh"'
+expect_result "T11 wrapper env-var-only (no positionals) — returns null (retired pattern)" \
+  "$CMD_T11" 'null'
+
+# ── T12: env-var prefix + _shared + positionals — returns 3rd positional ──────
+CMD_T12='SESSION_ID=abc PLANS_DIR=/tmp "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent /a/intent.md /a/draft.md /a/outline.md'
+expect_result "T12 env-var prefix + positionals — returns 3rd positional" \
+  "$CMD_T12" '"/a/outline.md"'
+
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
