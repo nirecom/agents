@@ -44,8 +44,7 @@ MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optiona
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
    - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
-     Run `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/assemble-mandatory.sh"` (Bash tool) with env vars:
-     `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required).
+     Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/drafts/$SESSION_ID-outline-draft.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
@@ -53,8 +52,7 @@ MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then r
 
 MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
    After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
-   Run `skills/make-outline-plan/scripts/assemble-mandatory.sh` (Bash tool) with env vars:
-   `SESSION_ID`, `PLANS_DIR`, `AGENTS_CONFIG_DIR` (required).
+   Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/drafts/$SESSION_ID-outline-draft.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - The helper extracts the 3 sections from intent.md with headers, strips any planner-authored copies plus the planner's H1 from the draft, and writes the assembled outline.md.
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
    - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
