@@ -64,7 +64,7 @@ if [[ "$ALL_SCAN" -eq 1 ]]; then
   TARGETS=$(find . -type f \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
-    -not -path '*/_archived/*' 2>/dev/null \
+    -not -path '*/_archive/*' 2>/dev/null \
     | grep -E "\.($_EXT_PATTERN)$" | sort || true)
   if [[ -z "$TARGETS" ]]; then
     echo "## Code-size Review: SKIPPED — no code files found"; exit 0
@@ -92,7 +92,7 @@ CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
 CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
 
-TARGETS=$(printf '%s\n' "$CHANGED" | grep -E "\.($_EXT_PATTERN)$" | grep -v 'node_modules/' | grep -v '\.git/' | grep -v '_archived/' || true)
+TARGETS=$(printf '%s\n' "$CHANGED" | grep -E "\.($_EXT_PATTERN)$" | grep -v 'node_modules/' | grep -v '\.git/' | grep -v '_archive/' || true)
 
 if [[ -z "$TARGETS" ]]; then
   echo "## Code-size Review: SKIPPED — no code files changed"; exit 0

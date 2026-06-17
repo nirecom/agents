@@ -107,6 +107,22 @@ Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` cont
 
 - Recognized `# Tags:` values (non-exhaustive): `pwsh-required` — this file exercises PowerShell-specific behavior and must be re-verified under pwsh before merge. `pwsh-not-required` — explicit opt-out for files that mention `powershell` only in comments or docs.
 
+## Scope Classification
+
+- Filename convention classifies test files:
+  - `feature-NNN-*` (numeric issue ID after `feature-`) = `scope:issue-specific`
+  - All other files = `scope:common`
+- Recognized `# Tags:` values: `scope:issue-specific`, `scope:common`.
+- New or edited test files MUST include `scope:issue-specific` or `scope:common` in their `# Tags:`.
+- Existing files without this tag are classified by filename convention; backfill of existing files is not required.
+
+## Size Limits
+
+- Same limits as code files: WARN at >300 lines, HARD at >500 lines.
+- Split mechanism: same as code — `tests/<name>/` sibling folder with a dispatcher `.sh`. See `rules/coding/file-split.md`.
+- Canonical split example: `tests/main-workflow-skip-sentinels/` (PR #867).
+- `tests/_archive/` is excluded from size checks.
+
 ## Test Naming Convention (new tests only)
 
 New test files follow `<area>-<issue-or-feature>-<topic>.sh` where `<area>` is one of `feature`, `fix`, `refactor`, `unit`, `main`.
