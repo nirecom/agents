@@ -12,27 +12,25 @@ Emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>"` when a prior `*-int
 
 ## Procedure
 
-### Step 0 — Resolve <PLANS_DIR>
-
 Apply `skills/_shared/resolve-plans-dir.md` once at the start of Procedure;
 substitute the resolved absolute path for every `<PLANS_DIR>` placeholder
 below. Reuse across all subsequent steps — do not re-resolve.
 
-1. Read the user's request; identify the root question that unlocks all downstream decisions.
+CI-1. Read the user's request; identify the root question that unlocks all downstream decisions.
 
-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (step 1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all (`closes_issues: [N1, N2, ...]`) — primary is confirmed at Completion (see preamble). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
+CI-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (CI-1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all (`closes_issues: [N1, N2, ...]`) — primary is confirmed at Completion (see preamble). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
 
-1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to step 2 (CONFIRM_OUTLINE check) normally. During the interview in step 3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
+CI-1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to CI-2 (CONFIRM_OUTLINE check) normally. During the interview in CI-3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
 
-2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap). **Scope constraint:** the delivery-plan-direction question MUST cover execution order / staging priority only — it MUST NOT ask about PR count or bundling; `rules/github-issues.md` fixes `1 session = 1 PR` as a non-negotiable invariant.
+CI-2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`. If OFF: add delivery-plan-direction question (required even past the 5-round cap). **Scope constraint:** the delivery-plan-direction question MUST cover execution order / staging priority only — it MUST NOT ask about PR count or bundling; `rules/github-issues.md` fixes `1 session = 1 PR` as a non-negotiable invariant.
 
-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
+CI-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
+CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
    **Class members proposal (when candidates ≥ 1):** run `reference/class-members-proposal.md`.
 
-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
 
    **`## Class members` schema (mandatory section):** appears immediately before
    `## Accepted Tradeoffs`. Format per member:
@@ -57,7 +55,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
      Completion Step 3 backfills `- #<N>: <title>` after a successful `gh issue create`. The empty placeholder satisfies `assemble-mandatory.sh`'s "heading must be present" invariant.
    - **context.md missing or title line absent**: write `- #<N>: (title unavailable)`.
 
-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"`, also include the next tool_use — the GitHub reconciliation Bash block from Completion, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
+CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"`, also include the next tool_use — the GitHub reconciliation Bash block from Completion, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
 ## Completion
 
@@ -109,11 +107,11 @@ Then:
 
 <!-- closes_issues guard: canonical parser is hooks/lib/parse-closes-issues.js — do not reimplement. -->
 
-0. **Tracking-issue guard** — at most 2 automatic passes; further failures escalate to AskUserQuestion.
+CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures escalate to AskUserQuestion.
 
    `GUARD_ATTEMPT` is persisted to a session-local file under the workflow-plans directory so that the counter survives across `/issue-create` invocations (which run as separate skill contexts and may churn LLM working memory):
 
-   `<session-id>` below is the same value used in Step 4 of the Procedure (read from `$CLAUDE_ENV_FILE` or the `YYYYMMDD-HHMMSS` fallback) — reuse it, do not re-resolve.
+   `<session-id>` below is the same value used in CI-4 of the Procedure (read from `$CLAUDE_ENV_FILE` or the `YYYYMMDD-HHMMSS` fallback) — reuse it, do not re-resolve.
 
    ```bash
    # Pre: NON_GITHUB is already set by the non-GitHub gate at the top of Completion.
@@ -137,14 +135,14 @@ Then:
    fi
    ```
 
-   - **`GUARD_RC == 0`** → counter unlinked; proceed to step 1 below (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
+   - **`GUARD_RC == 0`** → counter unlinked; proceed to CI-C1 below (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
    - **`GUARD_RC == 1` AND `GUARD_ATTEMPT == 1`** (first failure) → STOP. Do NOT
      emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`. Invoke `/issue-create` to
      create a tracking issue. After `/issue-create` succeeds and returns issue N,
      backfill the `## Issues` section body in `intent.md` from
      `(none — pending issue creation or NON_GITHUB)` to `- #N: <title>` using Read + Edit
-     (same shape as Reconcile step 3 Path C).
-     Then re-run **only this guard step (step 0)** — do NOT re-enter the full "Reconcile with
+     (same shape as Reconcile CI-C3 Path C).
+     Then re-run **only this guard step (CI-C0)** — do NOT re-enter the full "Reconcile with
      GitHub" block (doing so would invoke `gh issue create` a second time and create a duplicate
      issue). Counter file holds `1`.
    - **`GUARD_RC == 1` AND `GUARD_ATTEMPT >= 2`** (`/issue-create` already ran
@@ -162,9 +160,9 @@ Then:
      `AskUserQuestion`: "Tracking-issue guard detected a CLOSED entry in `closes_issues`. The issue exists but is closed. How should we recover?"
      Options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>` manually, then re-run guard; counter unchanged) / "Abort session" (`rm -f "$COUNTER_FILE"`, emit `<<WORKFLOW_RESET_FROM_clarify_intent>>`).
 
-1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
-2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
-3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
+CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
+CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
+CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
    - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.
    - Either invalid → invoke the affected survey(s) directly before proceeding.

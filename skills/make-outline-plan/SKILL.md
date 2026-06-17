@@ -14,49 +14,45 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 - `<PLANS_DIR>/<session-id>-intent.md` — output of `clarify-intent` (cross-session carry-in allowed)
 - `<PLANS_DIR>/<session-id>-survey-{code,history}.md` — optional; contain `## Verified Claims`
 - `state.premise_contradiction` — optional; set by `WORKFLOW_PREMISE_FAIL` during Research stage
-- All sentinels in Step 0 are emitted by the orchestrator (Bash tool), never by a subagent.
+- All sentinels in MOP-0 are emitted by the orchestrator (Bash tool), never by a subagent.
 - Session-id used for `*-outline.md` matches the intent file actually used.
 
 ## Procedure
 
-### Step 0 — Resolve <PLANS_DIR>
-
 Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolute path for every `<PLANS_DIR>` below. Reuse across steps.
 
-0. **Surface premise contradictions** from Research artifacts.
-   0a. Determine session-id from `CLAUDE_SESSION_ID` env (Step 1 has not run yet — this lookup precedes intent-file resolution).
-       - `state.steps.research.status === "skipped"` → skip to 0e.
-       - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to 0e. Do not block.
-   0b. Read `## Verified Claims` from each existing artifact; collect items with `verdict: contradicted`.
-   0c. Any contradicted claims:
+MOP-0. **Surface premise contradictions** from Research artifacts.
+   MOP-0a. Determine session-id from `CLAUDE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
+       - `state.steps.research.status === "skipped"` → skip to MOP-0e.
+       - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to MOP-0e. Do not block.
+   MOP-0b. Read `## Verified Claims` from each existing artifact; collect items with `verdict: contradicted`.
+   MOP-0c. Any contradicted claims:
      1. Emit `<<WORKFLOW_PREMISE_FAIL: <one-line summary>>>` (Bash description: "Record premise contradiction in workflow state").
      2. Present a brief contradiction summary; `AskUserQuestion`: (a) revise intent.md and re-run `/clarify-intent`, (b) acknowledge and proceed.
-   0d. (a) → abort the skill with instruction to re-run `/clarify-intent`. (b) → emit `<<WORKFLOW_PREMISE_ACK>>` (clears `state.premise_contradiction`).
-   0e. Emit `<<WORKFLOW_MARK_STEP_research_complete>>` to mark Research complete (aggregating survey-code and survey-history, which no longer emit it individually; deep-research's emit, if any, is idempotent).
+   MOP-0d. (a) → abort the skill with instruction to re-run `/clarify-intent`. (b) → emit `<<WORKFLOW_PREMISE_ACK>>` (clears `state.premise_contradiction`).
+   MOP-0e. Emit `<<WORKFLOW_MARK_STEP_research_complete>>` to mark Research complete (aggregating survey-code and survey-history, which no longer emit it individually; deep-research's emit, if any, is idempotent).
 
-1. Locate the intent file:
+MOP-1. Locate the intent file:
    a. `<session-id>-intent.md` exists → use it.
    b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
    c. Extract session-id from the chosen file's name; use it for all subsequent output paths.
 
-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context.
+MOP-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context.
 
-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
+MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
    - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
-   - Assemble the final outline.md by invoking the shared helper (same call as the normal path in Step 4a):
-     Run `"$AGENTS_CONFIG_DIR/skills/make-outline-plan/scripts/assemble-mandatory.sh"` (Bash tool) with env vars:
-     `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR` (required).
-   - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to Step 2.
+   - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
+     Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/drafts/$SESSION_ID-outline-draft.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+   - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
+MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then re-prompt outline-planner with findings. Research budget: 2 rounds.
 
-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
+MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
    After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
-   Run `skills/make-outline-plan/scripts/assemble-mandatory.sh` (Bash tool) with env vars:
-   `SESSION_ID`, `PLANS_DIR`, `AGENTS_CONFIG_DIR` (required).
+   Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/drafts/$SESSION_ID-outline-draft.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - The helper extracts the 3 sections from intent.md with headers, strips any planner-authored copies plus the planner's H1 from the draft, and writes the assembled outline.md.
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
    - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
@@ -64,7 +60,7 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
    `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
+MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    (parameter values for the outline stage: FORMAT=outline-plan, CAP=1,
    MAX_EXTENSIONS=1, PLANNER_AGENT=outline-planner,
    REVIEWER_AGENT=outline-reviewer,
@@ -89,14 +85,14 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
    The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/drafts/<session-id>-outline-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
 
-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
+MOP-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`
    - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
    - MAX_EXTENSIONS: 1
 
-   Override: `rc==0` + user picks `adjust` → halt and re-run `/clarify-intent` (not generic user-escalation). AUTO_EXTEND / `extend` → loop back into step 5.
+   Override: `rc==0` + user picks `adjust` → halt and re-run `/clarify-intent` (not generic user-escalation). AUTO_EXTEND / `extend` → loop back into MOP-5.
 
-7. On `APPROVED`:
+MOP-7. On `APPROVED`:
    Output a prose rationale summary in main conversation — one paragraph per approach (rationale + trade-offs + delivery plan). Do NOT write this preamble to outline.md.
 
    Decide the chosen approach and record it as `CHOSEN_APPROACH`:
@@ -104,11 +100,11 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
    - `OFF` → set `CHOSEN_APPROACH` = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
    - `ON` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting". Set `CHOSEN_APPROACH` to the user's selection.
 
-   Step 8 handles the file write — do NOT write here.
+   MOP-8 handles the file write — do NOT write here.
 
-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
+MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
    - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting"): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to Step 7.
+   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -131,16 +127,16 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
 - **Chat output during the discussion loop** is restricted to:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
   (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
-  (c) the prose rationale preamble emitted in step 7 before `AskUserQuestion`
+  (c) the prose rationale preamble emitted in MOP-7 before `AskUserQuestion`
   No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state).
-- **Confirmation dialogs per run**: OFF mode fires neither. ON mode with a single approach selected fires two: step 7 (`AskUserQuestion`) and step 8 (`<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel). ON mode where step 7 yielded "Pass all approaches to make-detail-plan without selecting" fires step 7 only — step 8 sentinel is bypassed (Logical-OR bypass, same effect as `CONFIRM_OUTLINE=off`).
-- **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the step 7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
-- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in step 6, between-step summaries). Update files silently; inform the user with plain text only.
+- **Confirmation dialogs per run**: OFF mode fires neither. ON mode with a single approach selected fires two: MOP-7 (`AskUserQuestion`) and MOP-8 (`<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel). ON mode where MOP-7 yielded "Pass all approaches to make-detail-plan without selecting" fires MOP-7 only — MOP-8 sentinel is bypassed (Logical-OR bypass, same effect as `CONFIRM_OUTLINE=off`).
+- **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
+- Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only.
 - Report observations per rules/supervisor-reporting.md.
 
 ## Completion
 
-1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
-2. Invoke `make-detail-plan` via the Skill tool.
+MOP-C1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+MOP-C2. Invoke `make-detail-plan` via the Skill tool.
