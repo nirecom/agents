@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# .env.example comment-style review checker.
+# Usage: review-env-example [--base <ref>] [--all]
+#
+# Target files (hardcoded — do not parse from rule frontmatter):
+#   .env.example  .env.sample  .env.template  .env.dist
+#
+# Always emits one of:
+#   ## Env-example Review: PERFORMED
+#   ## Env-example Review: PERFORMED (all-scan mode)
+#   ## Env-example Review: SKIPPED — <reason>
+#
+# Exits 1 when any HARD finding in diff mode. --all mode always exits 0.
+
+set -uo pipefail
+
+HARD_HIT=0
+HARD_COUNT=0
+WARN_COUNT=0
+TARGET_NAMES=(".env.example" ".env.sample" ".env.template" ".env.dist")
+
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Env-example Review: SKIPPED — --base requires an argument"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Env-example Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+# Build extended-regex alternation for target basenames: \.env\.example|\.env\.sample|...
+_BASENAME_RE=""
+for name in "${TARGET_NAMES[@]}"; do
+  esc="${name//./\\.}"
+  if [[ -z "$_BASENAME_RE" ]]; then
+    _BASENAME_RE="$esc"
+  else
+    _BASENAME_RE="$_BASENAME_RE|$esc"
+  fi
+done
+
+# is_target_file <path>
+is_target_file() {
+  local p="$1"
+  local base
+  base="$(basename "$p")"
+  for name in "${TARGET_NAMES[@]}"; do
+    if [[ "$base" == "$name" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Parse one file and emit HARD/WARN findings.
+# Stdout findings format: "<LEVEL>: <file>:<line>: <message>"
+check_file() {
+  local file="$1"
+  local -a comment_lines=()
+  local -a comment_lineno=()
+  local lineno=0
+  local raw line stripped
+  local has_findings=0
+
+  # Use a unique sentinel to mark IFS-safe reads; we need to preserve leading spaces.
+  while IFS= read -r raw || [[ -n "$raw" ]]; do
+    lineno=$((lineno + 1))
+    # Strip trailing CR (CRLF safety)
+    line="${raw%$'\r'}"
+
+    # Detect category heading like "# --- something ---"
+    if [[ "$line" =~ ^#[[:space:]]*---.*---[[:space:]]*$ ]]; then
+      # flush: standalone heading — discard collected comments (they belong to no variable)
+      comment_lines=()
+      comment_lineno=()
+      continue
+    fi
+
+    # Blank line — discard accumulated comments (orphan block)
+    if [[ -z "${line//[[:space:]]/}" ]]; then
+      comment_lines=()
+      comment_lineno=()
+      continue
+    fi
+
+    # Comment line
+    if [[ "$line" =~ ^[[:space:]]*# ]]; then
+      comment_lines+=("$line")
+      comment_lineno+=("$lineno")
+      continue
+    fi
+
+    # Variable assignment: VAR=value
+    if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+      local var_name="${BASH_REMATCH[1]}"
+      local block_size="${#comment_lines[@]}"
+
+      if (( block_size > 0 )); then
+        # HARD: Line cap > 5
+        if (( block_size > 5 )); then
+          echo "HARD: $file:${comment_lineno[0]}: comment block exceeds 5 lines ($block_size lines)"
+          HARD_COUNT=$((HARD_COUNT + 1))
+          HARD_HIT=1
+          has_findings=1
+        fi
+
+        local i=0
+        while (( i < block_size )); do
+          local cl="${comment_lines[$i]}"
+          local cln="${comment_lineno[$i]}"
+
+          # HARD: variable-name heading on first comment line
+          if (( i == 0 )); then
+            if [[ "$cl" =~ ^[[:space:]]*#[[:space:]]*${var_name}[[:space:]]*—  ]] || \
+               [[ "$cl" =~ ^[[:space:]]*#[[:space:]]*${var_name}[[:space:]]*-[[:space:]] ]]; then
+              echo "HARD: $file:$cln: variable-name heading: $var_name"
+              HARD_COUNT=$((HARD_COUNT + 1))
+              HARD_HIT=1
+              has_findings=1
+            fi
+          fi
+
+          # HARD: issue reference #NNN
+          if [[ "$cl" =~ \#[0-9]+ ]]; then
+            local match="${BASH_REMATCH[0]}"
+            echo "HARD: $file:$cln: issue reference: $match"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # HARD: internal implementation details
+          if [[ "$cl" =~ hooks/[A-Za-z0-9_./-]+\.(js|sh|py|md) ]]; then
+            echo "HARD: $file:$cln: internal implementation detail: hooks path"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          elif [[ "$cl" =~ bin/[A-Za-z0-9_./-]+ ]]; then
+            echo "HARD: $file:$cln: internal implementation detail: bin path"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          elif [[ "$cl" =~ skills/[A-Za-z0-9_./-]+ ]]; then
+            echo "HARD: $file:$cln: internal implementation detail: skills path"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # HARD: bare .js filename (without /)
+          if [[ "$cl" =~ (^|[^/A-Za-z0-9_-])([A-Za-z0-9_-]+\.js)([^A-Za-z0-9]|$) ]]; then
+            echo "HARD: $file:$cln: internal implementation detail: bare .js filename"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # HARD: hook event names
+          if [[ "$cl" =~ (^|[^A-Za-z0-9_])(PreToolUse|PostToolUse|Stop|SubagentStop|UserPromptSubmit|SessionStart)([^A-Za-z0-9_]|$) ]]; then
+            echo "HARD: $file:$cln: internal implementation detail: hook event name"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # HARD: internal protocol terms
+          if [[ "$cl" =~ (orchestrator-injects|resolve-plans-dir) ]]; then
+            echo "HARD: $file:$cln: internal implementation detail: protocol term"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # HARD: redundant Example: VAR= line
+          if [[ "$cl" =~ ^[[:space:]]*#[[:space:]]*Example:[[:space:]]*[A-Z_]+= ]]; then
+            echo "HARD: $file:$cln: redundant Example line"
+            HARD_COUNT=$((HARD_COUNT + 1))
+            HARD_HIT=1
+            has_findings=1
+          fi
+
+          # WARN: architecture rationale
+          local lower
+          lower="$(printf '%s' "$cl" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$lower" =~ (^|[^a-z])(eliminates?|prevents?|avoids?)([^a-z]|$) ]] || \
+             [[ "$lower" =~ (concurrency|race.condition|orchestrat) ]] || \
+             [[ "$lower" =~ (^|[^a-z])(why|because|rationale)([^a-z]|$) ]]; then
+            echo "WARN: $file:$cln: possible architecture rationale"
+            WARN_COUNT=$((WARN_COUNT + 1))
+            has_findings=1
+          fi
+
+          # WARN: command reference
+          if [[ "$cl" =~ (^|[^A-Za-z])(Run|Execute|Invoke)([^A-Za-z]|$) ]] || \
+             [[ "$cl" =~ See[[:space:]] ]] || \
+             [[ "$cl" =~ \`[^\`]+\` ]] || \
+             [[ "$cl" =~ (^|[^A-Za-z])(bash|sh|node|python|uv)[[:space:]]+(bin/|skills/|hooks/) ]]; then
+            echo "WARN: $file:$cln: possible command reference"
+            WARN_COUNT=$((WARN_COUNT + 1))
+            has_findings=1
+          fi
+
+          i=$((i + 1))
+        done
+      fi
+
+      # reset for next variable block
+      comment_lines=()
+      comment_lineno=()
+      continue
+    fi
+
+    # any other line: reset
+    comment_lines=()
+    comment_lineno=()
+  done < "$file"
+
+  return "$has_findings"
+}
+
+emit_findings_for() {
+  local file="$1"
+  local findings_file="$2"
+  local tmp
+  tmp=$(mktemp)
+  check_file "$file" > "$tmp" 2>&1 || true
+  if [[ -s "$tmp" ]]; then
+    echo ""
+    echo "[Findings for $file]"
+    cat "$tmp"
+    cat "$tmp" >> "$findings_file"
+  fi
+  rm -f "$tmp"
+}
+
+collect_diff_targets() {
+  local base_sha
+  base_sha=$(git merge-base "$BASE_REF" HEAD 2>/dev/null)
+  local err
+  err=$(mktemp)
+  local committed staged unstaged untracked
+  committed=$(git diff --name-only --diff-filter=ACMRT "$base_sha"...HEAD 2>"$err" || true)
+  if [[ -s "$err" ]]; then
+    echo "git diff failed: $(cat "$err")" >&2
+    rm -f "$err"
+    return 1
+  fi
+  rm -f "$err"
+  staged=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+  unstaged=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+  untracked=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+  printf '%s\n' "$committed" "$staged" "$unstaged" "$untracked" \
+    | sort -u \
+    | grep -v '^$' \
+    | grep -E "(^|/)($_BASENAME_RE)$" \
+    | grep -v '_archived/' \
+    | grep -v 'node_modules/' \
+    || true
+}
+
+collect_all_targets() {
+  find . -type f \
+    -not -path '*/node_modules/*' \
+    -not -path '*/.git/*' \
+    -not -path '*/_archived/*' 2>/dev/null \
+    | grep -E "(^|/)($_BASENAME_RE)$" \
+    | sort \
+    || true
+}
+
+FINDINGS=$(mktemp)
+trap 'rm -f "$FINDINGS"' EXIT
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  TARGETS=$(collect_all_targets)
+  if [[ -z "$TARGETS" ]]; then
+    echo "## Env-example Review: SKIPPED — no .env.example files found"
+    exit 0
+  fi
+  echo "## Env-example Review: PERFORMED (all-scan mode)"
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    emit_findings_for "$f" "$FINDINGS"
+  done <<< "$TARGETS"
+  HARD_COUNT=$(grep -c '^HARD:' "$FINDINGS" 2>/dev/null | head -n 1)
+  WARN_COUNT=$(grep -c '^WARN:' "$FINDINGS" 2>/dev/null | head -n 1)
+  HARD_COUNT="${HARD_COUNT:-0}"
+  WARN_COUNT="${WARN_COUNT:-0}"
+  echo ""
+  echo "  HARD findings block the workflow (exit 1) in diff mode. WARN/INFO are advisory."
+  echo "  Checked against: rules/docs/env-example.md"
+  echo ""
+  if (( HARD_COUNT == 0 && WARN_COUNT == 0 )); then
+    echo "## Env-example Review: 0 findings"
+  else
+    echo "## Env-example Review: $HARD_COUNT HARD, $WARN_COUNT WARN"
+  fi
+  exit 0
+fi
+
+# Pre-check: exit inside $(...) captures to TARGETS not stdout — check before subshell
+if ! git merge-base "$BASE_REF" HEAD >/dev/null 2>&1; then
+  echo "## Env-example Review: SKIPPED — merge-base unresolved: $BASE_REF"
+  exit 0
+fi
+
+DIFF_ERR=$(mktemp)
+TARGETS=$(collect_diff_targets 2>"$DIFF_ERR")
+if [[ -s "$DIFF_ERR" ]]; then
+  echo "## Env-example Review: SKIPPED — $(cat "$DIFF_ERR")"
+  rm -f "$DIFF_ERR"
+  exit 0
+fi
+rm -f "$DIFF_ERR"
+
+if [[ -z "$TARGETS" ]]; then
+  echo "## Env-example Review: SKIPPED — no .env.example files in diff"
+  exit 0
+fi
+
+echo "## Env-example Review: PERFORMED"
+while IFS= read -r f; do
+  [[ -f "$f" ]] || continue
+  emit_findings_for "$f" "$FINDINGS"
+done <<< "$TARGETS"
+HARD_COUNT=$(grep -c '^HARD:' "$FINDINGS" 2>/dev/null | head -n 1)
+WARN_COUNT=$(grep -c '^WARN:' "$FINDINGS" 2>/dev/null | head -n 1)
+HARD_COUNT="${HARD_COUNT:-0}"
+WARN_COUNT="${WARN_COUNT:-0}"
+echo ""
+echo "  HARD findings block the workflow (exit 1) in diff mode. WARN/INFO are advisory."
+echo "  Checked against: rules/docs/env-example.md"
+echo ""
+if (( HARD_COUNT == 0 && WARN_COUNT == 0 )); then
+  echo "## Env-example Review: 0 findings"
+else
+  echo "## Env-example Review: $HARD_COUNT HARD, $WARN_COUNT WARN"
+fi
+
+if (( HARD_COUNT > 0 )); then exit 1; else exit 0; fi
