@@ -92,7 +92,7 @@ run_g34() {
     require_source "$CLI" "G34: CLI --set-l2-phase done -> state has l2_phase done" || return
     local tmp rc phase
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g34-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null }"
+    seed_state_raw "$tmp" "g34-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null }"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g34-sid --set-l2-phase done >/dev/null 2>&1
     rc=$?
     phase=$(read_l2_phase "$tmp" "g34-sid")
@@ -134,34 +134,34 @@ run_g36() {
 }
 
 run_g37() {
-    require_source "$CLI" "G37: CLI --set-l2-phase frozen + --next-check-at -> exit 1" || return
+    require_source "$CLI" "G37: CLI --set-l2-phase frozen + --l2-armed-at -> exit 1" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g37-sid --set-l2-phase frozen --next-check-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g37-sid --set-l2-phase frozen --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 1 ]; then
-        pass "G37: CLI --set-l2-phase frozen + --next-check-at -> exit 1"
+        pass "G37: CLI --set-l2-phase frozen + --l2-armed-at -> exit 1"
     else
-        fail "G37: CLI --set-l2-phase frozen + --next-check-at -> exit 1 (rc=$rc)"
+        fail "G37: CLI --set-l2-phase frozen + --l2-armed-at -> exit 1 (rc=$rc)"
     fi
 }
 
 # ─── Guard tests (G38–G43) ───────────────────────────────────────────────────
 
 run_g38() {
-    require_source "$HOOK" "G38: l2_phase=frozen + next_check_at non-null -> exit 0 no block" || return
+    require_source "$HOOK" "G38: l2_phase=frozen + l2_armed_at non-null -> exit 0 no block" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g38-sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g38-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g38-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
-        pass "G38: l2_phase=frozen + next_check_at non-null -> exit 0 no block"
+        pass "G38: l2_phase=frozen + l2_armed_at non-null -> exit 0 no block"
     else
-        fail "G38: l2_phase=frozen + next_check_at non-null -> exit 0 no block (rc=$rc, out=$out)"
+        fail "G38: l2_phase=frozen + l2_armed_at non-null -> exit 0 no block (rc=$rc, out=$out)"
     fi
 }
 
@@ -173,7 +173,7 @@ run_g39() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_raw "$tmp" "g39-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g39-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g39-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -193,7 +193,7 @@ run_g40() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_raw "$tmp" "g40-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g40-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g40-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -209,7 +209,7 @@ run_g41() {
     require_source "$HOOK" "G41: l2_phase=done + no triggers -> exit 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g41-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'done' }"
+    seed_state_raw "$tmp" "g41-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'done' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g41-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -229,7 +229,7 @@ run_g42() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_raw "$tmp" "g42-sid" "{ next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null }"
+    seed_state_raw "$tmp" "g42-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g42-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -242,22 +242,22 @@ run_g42() {
 }
 
 run_g43() {
-    require_source "$HOOK" "G43: l2_phase=pending + next_check_at + final_report sentinel only -> exit 2 (C2 fires)" || return
+    require_source "$HOOK" "G43: l2_phase=pending + l2_armed_at + final_report sentinel only -> exit 2 (C2 fires)" || return
     local tmp out rc tp
     tmp="$(mktemp -d)"
     make_fixture "$tmp/t.jsonl" \
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_raw "$tmp" "g43-sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending' }"
+    seed_state_raw "$tmp" "g43-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g43-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
-        pass "G43: l2_phase=pending + next_check_at + final_report sentinel only -> exit 2 (C2 fires)"
+        pass "G43: l2_phase=pending + l2_armed_at + final_report sentinel only -> exit 2 (C2 fires)"
     else
-        fail "G43: l2_phase=pending + next_check_at + final_report sentinel only -> exit 2 (C2 fires) (rc=$rc, out=$out)"
+        fail "G43: l2_phase=pending + l2_armed_at + final_report sentinel only -> exit 2 (C2 fires) (rc=$rc, out=$out)"
     fi
 }
 
