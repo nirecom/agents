@@ -178,7 +178,7 @@ closing the parent is blocked. Cancelled/migrated children must already be close
   (b) **env export** — `ISSUE_CLOSE_SKILL=1` exported into the hook's process
   environment permits any `gh issue close` form. Used by `/issue-close-finalize`
   and `/issue-close-stage` for skill-internal calls.
-  SSOT: `INLINE_SKILL_RE` in `hooks/enforce-issue-close.js`. The Phase 2 Step E
+  SSOT: `INLINE_SKILL_RE` in `hooks/lib/block-predicates.js`. The Phase 2 Step E
   `enforce-worktree.js` bypass for `git add docs/history.md` was removed in #690
   (Step E itself was removed — Step WE-20 of `/worktree-end` is now the canonical
   history writer). Do not set it elsewhere.
