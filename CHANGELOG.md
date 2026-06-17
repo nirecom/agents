@@ -323,4 +323,8 @@ Changes: Step labels in `/clarify-intent` (CI-N), `/make-outline-plan` (MOP-N), 
 
 ### FEATURE: PR #934 (2026-06-17)
 Background: fix(#911): remove WORKFLOW_CONFIRM_PR_CREATED sentinel
-Changes: Removed `WORKFLOW_CONFIRM_PR_CREATED`: the Claude Code permission dialog no longer shows a raw `echo` sentinel after `gh pr create`. The PR URL is still shown by the `pr-created-open.js` hook (system message); the merge confirmation gate in `/worktree-end` is unchanged.
+Changes: Removed `WORKFLOW_CONFIRM_PR_CREATED`: the Claude Code permission dialog no longer shows a raw `echo` sentinel after `gh pr create`. The PR URL is still shown by the `pr-created-open.js` hook (system message); the merge confirmation gate in `/worktree-end` is unchanged.
+
+### FEATURE: PR #935 (2026-06-18)
+Background: feat(#920): auto-detect companion issues for co-session fix
+Changes: `workflow-init` and `clarify-intent` now automatically surface companion open issues sharing keywords with the primary, with per-candidate confirmation (`AskUserQuestion`). New `CONFIRM_COMPANION_ISSUES` flag (default: `on`) controls the confirmation step; set to `off` to auto-append top candidates silently. Path C sessions and non-GitHub remotes are unaffected.
