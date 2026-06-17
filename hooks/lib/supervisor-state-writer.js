@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
 const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES } = require("./supervisor-state-schema");
+const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
 
 const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase"]);
 
@@ -67,11 +68,21 @@ function ensureLayer2Scheduled(state, sessionId) {
   if (!state.layer2 || typeof state.layer2 !== "object" || Array.isArray(state.layer2)) return;
   const phase = state.layer2.l2_phase;
   if (phase === "done" || phase === "frozen") return;
-  if (sessionId && SESSION_ID_RE.test(sessionId)) {
+
+  const plansDir = getWorkflowPlansDir();
+  const candidates = new Set();
+  if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
+  try {
+    const wsid = resolveWorkflowSessionId();
+    if (wsid && SESSION_ID_RE.test(wsid)) candidates.add(wsid);
+  } catch (_) {}
+
+  for (const sid of candidates) {
     try {
-      if (fs.existsSync(path.join(getWorkflowPlansDir(), `${sessionId}-final-report-env.json`))) return;
+      if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) return;
     } catch (_) {}
   }
+
   if (state.layer2.l2_armed_at == null) {
     state.layer2.l2_armed_at = new Date().toISOString();
     if (phase == null) state.layer2.l2_phase = "pending";
@@ -249,6 +260,11 @@ function writeLayer2State(sessionId, patch) {
   if ("last_run_at" in patch) layer2.last_run_at = patch.last_run_at;
   if ("cumulative_severity" in patch) layer2.cumulative_severity = patch.cumulative_severity;
   if ("l2_phase" in patch) layer2.l2_phase = patch.l2_phase;
+
+  // #905: terminal states must never carry a stale l2_armed_at.
+  if (effectivePhase === "done" || effectivePhase === "frozen") {
+    layer2.l2_armed_at = null;
+  }
 
   // Append findings
   if ("findings" in patch) {
