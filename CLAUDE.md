@@ -48,7 +48,7 @@ WF-CODE-8. **User verification:**
    - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent, skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (`: <reason>` mandatory, becomes part of the audit record), and set the Bash `description` to explain what the user is approving.
 WF-CODE-9. **Phase 1 issue close** — For each N in `closes_issues`, run `/issue-close-stage <N>` from the linked worktree.
    Skip silently when `closes_issues` is empty. Skip entirely when `ENFORCE_WORKTREE=off` (`/issue-close-finalize` runs the full chain at WF-CODE-12 instead).
-WF-CODE-10. **Commit** — Run `/commit-push`. After the PR is created, do not narrate the PR URL in chat — `<<WORKFLOW_USER_VERIFIED>>` surfaces it above the permission dialog.
+WF-CODE-10. **Commit** — Run `/commit-push`. After the PR is created, do not narrate the PR URL in chat — the Bash tool result already shows it. In on-mode, `<<WORKFLOW_USER_VERIFIED>>` is emitted later by /worktree-end Step WE-7; in off-mode, /commit-push emits it directly.
 WF-CODE-11. **Cleanup** — Based on the WF-CODE-3 decision:
     - **worktree:** Run `/worktree-end`. If removal fails (Windows CWD lock), proceed to WF-CODE-12 — reclaimed by next `/sweep-worktrees`.
     - **branch:** Confirm PR is created. After merge: `git branch -d <name>` then `git push origin --delete <name>`.
