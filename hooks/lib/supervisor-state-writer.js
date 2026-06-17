@@ -9,6 +9,39 @@ const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_sev
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
+// Axis A (#885) — co-block back-annotation tuning.
+// Scan only the most recent N findings, only when within W ms of the new
+// finding's timestamp. Both bounds protect against cross-event correlation
+// (idle session reuses, or unrelated bursts).
+const CO_BLOCK_RECENCY = 5;
+const CO_BLOCK_WINDOW_MS = 10000;
+
+// Sibling-match key extraction (#885).
+// Hooks self-report via reportBlock() with detail of shape
+// `hook blocked: <reporter> on <command>`. To correlate a new block with a
+// recent sibling block of the SAME command but DIFFERENT reporter, strip the
+// "hook blocked: <reporter> on " prefix so the residual is just the command.
+// Falls back to the full detail when the prefix is absent (non-block finding).
+function extractCoBlockKey(detail) {
+  if (typeof detail !== "string") return null;
+  const m = detail.match(/^hook blocked: [^ ]+ on (.*)$/);
+  return m ? m[1] : detail;
+}
+
+function unionStableDedup(existing, additions) {
+  const seen = new Set();
+  const out = [];
+  if (Array.isArray(existing)) {
+    for (const r of existing) {
+      if (typeof r === "string" && !seen.has(r)) { seen.add(r); out.push(r); }
+    }
+  }
+  for (const r of additions) {
+    if (typeof r === "string" && !seen.has(r)) { seen.add(r); out.push(r); }
+  }
+  return out;
+}
+
 function getStatePath(sessionId) {
   if (!SESSION_ID_RE.test(sessionId)) throw new Error(`invalid sessionId: ${sessionId}`);
   return path.join(getWorkflowPlansDir(), `${sessionId}-supervisor-state.json`);
@@ -63,15 +96,26 @@ function appendFinding(sessionId, finding) {
 
   const state = readStateOrInit(sessionId);
 
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
   const findings = state.layer1.findings;
   if (findings.length > 0) {
     const last = findings[findings.length - 1];
     const catsKey = (f) => [...(f.categories || [])].sort().join(",");
+    // Axis A (#885): extend de-dupe key with reason and context.git_root_resolved.
+    // context.cwd and co_blocked_by are intentionally excluded — same logical
+    // event must collapse even with different working directories, and
+    // co_blocked_by is back-annotated after the dedupe check.
+    const lastCtxResolved = last.context ? last.context.git_root_resolved : undefined;
+    const newCtxResolved = finding.context ? finding.context.git_root_resolved : undefined;
     if (
       catsKey(last) === catsKey(finding) &&
       last.severity === finding.severity &&
       last.detail === finding.detail &&
-      last.reporter === finding.reporter
+      last.reporter === finding.reporter &&
+      last.reason === finding.reason &&
+      lastCtxResolved === newCtxResolved
     ) {
       const prevArmedAt = state.layer2 && state.layer2.l2_armed_at;
       ensureLayer2Scheduled(state, sessionId);
@@ -83,8 +127,48 @@ function appendFinding(sessionId, finding) {
     }
   }
 
-  findings.push({ ...finding, timestamp: new Date().toISOString() });
-  state.last_updated = new Date().toISOString();
+  // Axis A (#885): co-block sibling search (append path only, not collapse).
+  // Walk the last N findings most-recent-first; match a sibling whose
+  // command (extracted from `hook blocked: <r> on <cmd>` detail) equals the
+  // new finding's command AND whose reporter differs from the new finding's.
+  // CWD is intentionally NOT part of the match — enforce-issue-close emits
+  // 3-arg with no context.cwd while enforce-worktree emits 4-arg with cwd;
+  // requiring CWD parity would break the canonical double-block scenario.
+  let siblingIdx = -1;
+  if (typeof finding.reporter === "string") {
+    const newKey = extractCoBlockKey(finding.detail);
+    if (newKey !== null) {
+      const start = Math.max(0, findings.length - CO_BLOCK_RECENCY);
+      for (let i = findings.length - 1; i >= start; i--) {
+        const cand = findings[i];
+        if (!cand || cand.reporter === finding.reporter) continue;
+        if (typeof cand.timestamp !== "string") continue;
+        const candTs = Date.parse(cand.timestamp);
+        if (!Number.isFinite(candTs)) continue;
+        if (Math.abs(now - candTs) > CO_BLOCK_WINDOW_MS) continue;
+        const candKey = extractCoBlockKey(cand.detail);
+        if (candKey === null || candKey !== newKey) continue;
+        siblingIdx = i;
+        break;
+      }
+    }
+  }
+
+  let newFinding = { ...finding, timestamp: nowIso };
+  if (siblingIdx >= 0) {
+    const sibling = findings[siblingIdx];
+    // Idempotent bidirectional populate: dedup elements, skip if already present.
+    const newCo = unionStableDedup(newFinding.co_blocked_by, [sibling.reporter]);
+    if (newCo.length > 0) newFinding.co_blocked_by = newCo;
+    const sibCo = unionStableDedup(sibling.co_blocked_by, [finding.reporter]);
+    if (sibCo.length > 0) {
+      // In-place mutation: write back the same object in the findings array.
+      sibling.co_blocked_by = sibCo;
+    }
+  }
+
+  findings.push(newFinding);
+  state.last_updated = nowIso;
 
   ensureLayer2Scheduled(state, sessionId);
 

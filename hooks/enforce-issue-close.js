@@ -9,6 +9,7 @@
 
 const fs = require("fs");
 const { hasCommandHead } = require("./lib/command-head");
+const { INLINE_SKILL_RE } = require("./lib/block-predicates");
 
 function readStdin() {
   const chunks = [];
@@ -61,18 +62,9 @@ if (!hasCommandHead(cmd, isGhIssueClose)) {
 
 // Inline-skill bypass: /issue-close-finalize invokes `gh issue close` with
 // ISSUE_CLOSE_SKILL=1 as an inline env-var prefix (the env var only reaches
-// the gh subprocess, not this hook process). We recognise ONLY the exact
-// command shape the skill generates (see skills/issue-close-finalize/SKILL.md):
-//
-//   ISSUE_CLOSE_SKILL=1 gh issue close <N> --reason completed
-//
-// Strict-shape: no other env vars, digits-only issue id, `--reason completed`
-// required, end-anchored ($). HWS = `[ \t]` (horizontal only — excludes \n/\r).
-// If /issue-close-finalize ever changes its invocation shape, update this AND
-// the tests.
-const INLINE_SKILL_RE =
-  /^[ \t]*ISSUE_CLOSE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+close[ \t]+\d+[ \t]+--reason[ \t]+completed[ \t]*$/;
-
+// the gh subprocess, not this hook process). The regex SSOT lives in
+// hooks/lib/block-predicates.js (#885). If /issue-close-finalize ever changes
+// its invocation shape, update the SSOT AND the tests.
 if (INLINE_SKILL_RE.test(cmd)) {
   process.exit(0);
 }
