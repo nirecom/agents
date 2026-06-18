@@ -169,7 +169,6 @@ function detectWorktreeOffProposal(transcriptPath) {
   }
   return lastOffIdx >= 0 && (lastOnIdx < 0 || lastOffIdx > lastOnIdx);
 }
-}
 
 if (require.main === module) {
   let input = {};
@@ -218,6 +217,29 @@ if (require.main === module) {
     workflowSessionId = null;
   }
 
+  let effectiveSupervisorStateSessionId = sessionId;
+  try {
+    // Resolve effective state-file session ID: prefer the CC UUID if its state
+    // file is non-null; fall back to workflowSessionId when available, different,
+    // and its state file is non-null. Uses readState() (not existsSync) so that
+    // a zero-length or corrupt CC-UUID file triggers fallback correctly.
+    if (
+      workflowSessionId &&
+      workflowSessionId !== sessionId &&
+      /^[A-Za-z0-9_-]+$/.test(workflowSessionId)
+    ) {
+      const primaryState = readState(sessionId);
+      if (primaryState === null) {
+        const fallbackState = readState(workflowSessionId);
+        if (fallbackState !== null) {
+          effectiveSupervisorStateSessionId = workflowSessionId;
+        }
+      }
+    }
+  } catch (_) {
+    effectiveSupervisorStateSessionId = sessionId; // fail-open
+  }
+
   try {
     if (isWorkflowOff(sessionId)) process.exit(0);
   } catch (_) {
@@ -226,7 +248,7 @@ if (require.main === module) {
 
   let state = null;
   try {
-    state = readState(sessionId);
+    state = readState(effectiveSupervisorStateSessionId);
   } catch (_) {
     state = null;
   }
@@ -249,14 +271,14 @@ if (require.main === module) {
 
   let stateFilePath = "";
   try {
-    stateFilePath = getStatePath(sessionId);
+    stateFilePath = getStatePath(effectiveSupervisorStateSessionId);
   } catch (_) {
     stateFilePath = "";
   }
 
   function tryIncrementFrozen() {
     try {
-      const res = incrementL2RetryCount(sessionId);
+      const res = incrementL2RetryCount(effectiveSupervisorStateSessionId);
       return res.frozen;
     } catch (_) {
       return false; // fail-open
@@ -266,7 +288,7 @@ if (require.main === module) {
   // (C3) WORKTREE_OFF proposal pre-detection
   if (!askUserQuestionTurn && worktreeOffProposal) {
     if (tryIncrementFrozen()) process.exit(0);
-    const reason = formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath);
+    const reason = formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     } catch (_) {}
@@ -276,7 +298,7 @@ if (require.main === module) {
   // (2)
   if (!askUserQuestionTurn && cumSev === "error") {
     if (tryIncrementFrozen()) process.exit(0);
-    const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath);
+    const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(
         JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
@@ -289,7 +311,7 @@ if (require.main === module) {
   if (!askUserQuestionTurn && (hangDetected || l2ArmedAt) && l2Phase !== "done" && l2Phase !== "frozen") {
     if (tryIncrementFrozen()) process.exit(0);
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
-    const reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath);
+    const reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     } catch (_) {}
