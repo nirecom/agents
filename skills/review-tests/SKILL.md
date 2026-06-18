@@ -26,7 +26,7 @@ Review test case completeness against source code.
    - Apply changes only after user approval
 
 4. **Emit workflow sentinel** — two separate Bash calls, not chained:
-   a. Compute staged-tests token: `TOKEN=$(node -e "const {computeStagedTestsToken}=require(process.env.AGENTS_CONFIG_DIR+'/hooks/workflow-gate/review-tests-evidence');const t=computeStagedTestsToken(process.cwd());process.stdout.write(t||'')")`
+   a. Compute staged-tests token: `TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js")`
    b. If coverage adequate: `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>"`
    c. If gaps or warnings: `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} <one-line summary — no '>' characters>>>"`
    d. Skip when WORKFLOW_WRITE_TESTS_NOT_NEEDED was emitted (propagated skip).
