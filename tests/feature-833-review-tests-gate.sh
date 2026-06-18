@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/lib/workflow-state/state-io.js
-# Tags: workflow, gate, hook, review-tests, sentinel, stale-token
+# Tags: workflow, gate, hook, review-tests, sentinel, stale-token, scope:issue-specific
 #
 # Gate / mark integration tests for the review_tests step (issue #833).
 #
