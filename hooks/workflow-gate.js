@@ -379,48 +379,16 @@ if (require.main === module) {
     const stepState = state.steps && state.steps[step];
     const status = stepState ? stepState.status : "pending";
 
-    // --- review_tests special-case (must precede generic complete shortcut) ---
-    // Compares stored token against a freshly computed fingerprint of staged
-    // tests/. Mismatch = tests were re-edited after a passing review → re-gate.
-    // Lenient when no tests/ are staged: nothing to fingerprint, status=complete
-    // is a deliberate assertion (matches the broader workflow-gate convention
-    // that evidence is only required when evidence-bearing files are present).
+    // --- review_tests special-case (delegated to review-tests-checker.js) ---
     if (step === "review_tests") {
-      if (status === "skipped") continue;
-      if (docsOnly) continue;
-      if (status !== "complete") {
-        // Symmetric evidence bypass: when write_tests itself was bypassed by
-        // staged tests/, review_tests shares the same evidence (the reviewer
-        // has not yet run because /write-tests hasn't committed — both steps
-        // are satisfied by the same staged tests/ evidence in one commit).
-        if (writeTestsEvidenceBypassed) continue;
+      const { checkReviewTests } = require("./workflow-gate/review-tests-checker");
+      const rt = checkReviewTests(step, stepState, { docsOnly, writeTestsEvidenceBypassed, repoDir });
+      if (rt.action === "skip") continue;
+      if (rt.action === "block") {
+        if (rt.reason) incompleteReasons[step] = rt.reason;
         incomplete.push(step);
         continue;
       }
-      // status === "complete": unresolved warnings always block — regardless of
-      // staged token state — because warnings_summary means the reviewer found
-      // gaps that have not been addressed yet (C2 enforcement at gate layer).
-      if (stepState && stepState.warnings_summary) {
-        incompleteReasons[step] = "warnings-pending";
-        incomplete.push(step);
-        continue;
-      }
-      // Validate stored token against freshly computed staged-tests fingerprint.
-      const { computeStagedTestsToken } = require("./workflow-gate/review-tests-evidence");
-      const stagedToken = computeStagedTestsToken(repoDir);
-      const storedToken = stepState && stepState.token;
-      // No staged tests → no fingerprint surface → trust status=complete.
-      if (stagedToken == null) continue;
-      // No stored token but status=complete → legacy / pre-token state.
-      // Trust the status assertion; stale-token detection requires a token
-      // to compare against (cannot regress unaware states).
-      if (!storedToken) continue;
-      // Staged tests + matching token + no warnings → fresh review → approve.
-      if (stagedToken === storedToken) continue;
-      // Staged tests + mismatched token → stale review → re-gate.
-      incompleteReasons[step] = "stale-token";
-      incomplete.push(step);
-      continue;
     }
 
     if (status === "complete") continue;
@@ -477,6 +445,11 @@ if (require.main === module) {
     if (step === "review_tests" && incompleteReasons[step] === "stale-token") {
       lines.push(
         "    (note: tests were re-edited after a passing review — staged-tests fingerprint changed; re-run /review-tests)"
+      );
+    }
+    if (step === "review_tests" && incompleteReasons[step] === "stale-wsid") {
+      lines.push(
+        "    (note: stale-wsid — workflow session ID (wsid) changed since /review-tests was run; re-run /review-tests in the current session)"
       );
     }
     if (step === "review_tests" && incompleteReasons[step] === "warnings-pending") {

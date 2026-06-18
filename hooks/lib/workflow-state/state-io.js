@@ -203,7 +203,10 @@ function markReviewTestsComplete(sessionId, token, extraFields = {}) {
   if (typeof token !== "string" || token.length === 0) {
     throw new Error("markReviewTestsComplete: token must be a non-empty string");
   }
-  markStep(sessionId, "review_tests", "complete", { token, ...extraFields });
+  const { resolveWorkflowSessionId } = require("../resolve-workflow-session-id");
+  let wsid = null;
+  try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
+  markStep(sessionId, "review_tests", "complete", { token, ...extraFields, wsid });
 }
 
 // re-pending the review_tests step; clears the recorded token
