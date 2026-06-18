@@ -199,3 +199,36 @@ echo "=== T-NEW-5: cross-suffix CONFIRM_INTENT=off on detail.md — breadcrumb f
 expect_message_with_env "T-NEW-5 cross-suffix CONFIRM_INTENT=off on detail.md — systemMessage emitted" \
   "$PLANS_DIR/abc-detail.md" "Plan file written:" \
   CONFIRM_INTENT=off
+
+# ── T-IDEM-1: idempotency — two identical invocations both succeed ─────────
+# Issue #922 — calling the hook twice with the same payload must not crash
+# and must produce the same systemMessage substring both times. Pins the
+# stateless contract of show-plan-link.js.
+echo "=== T-IDEM-1: identical hook invocation twice — both emit systemMessage ==="
+T_IDEM_JSON="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+T_IDEM_OUT1=$(run_hook "$T_IDEM_JSON")
+T_IDEM_OUT2=$(run_hook "$T_IDEM_JSON")
+T_IDEM_MSG1=$(echo "$T_IDEM_OUT1" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+T_IDEM_MSG2=$(echo "$T_IDEM_OUT2" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+if echo "$T_IDEM_MSG1" | grep -qF "Plan file written:" && \
+   echo "$T_IDEM_MSG2" | grep -qF "Plan file written:"; then
+  pass "T-IDEM-1 two identical invocations both emit systemMessage"
+else
+  fail "T-IDEM-1 expected both calls to emit 'Plan file written:'; got msg1='$T_IDEM_MSG1' msg2='$T_IDEM_MSG2'"
+fi
+
+# ── T-ABSENT-RESPONSE: tool_response missing success/exit_code fields ──────
+# Issue #922 — when tool_response is {} (no success, no exit_code), the
+# exitCode resolution falls through to 0:
+#   resp.exit_code ?? resp.exitCode ?? (resp.success === false ? 1 : 0)
+# So the breadcrumb must still fire.
+echo "=== T-ABSENT-RESPONSE: tool_response={} — systemMessage emitted ==="
+expect_message "T-ABSENT-RESPONSE absent success/exit_code → exitCode resolves to 0, breadcrumb fires" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{}}" \
+  "Plan file written:"
