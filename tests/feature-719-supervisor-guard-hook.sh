@@ -14,14 +14,43 @@
 
 set -u
 
+# shellcheck source=feature-719-supervisor-guard-hook/_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/_lib.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/cases-g1-g19.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/cases-g1-g19.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/cases-g20-g28.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/cases-g20-g28.sh"
 
-source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g1-g19.sh"
-run_g1; run_g2; run_g3; run_g4; run_g5; run_g6; run_g7; run_g8; run_g9; run_g10
-run_g11; run_g12; run_g13; run_g14; run_g15; run_g16; run_g17; run_g18; run_g19
-
-source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-c3.sh"
-run_g_c3a; run_g_c3b; run_g_c3c
+run_g1
+run_g2
+run_g3
+run_g4
+run_g5
+run_g6
+run_g7
+run_g8
+run_g9
+run_g10
+run_g11
+run_g12
+run_g13
+run_g14
+run_g15
+run_g16
+run_g17
+run_g18
+run_g19
+run_g20
+run_g21
+run_g22
+run_g23
+run_g24
+run_g25
+run_g26
+run_g27
+run_g28
+run_g29
+run_g30
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
