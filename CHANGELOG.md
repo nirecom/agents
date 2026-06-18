@@ -371,4 +371,8 @@ Changes: Split tests/feature-robust-workflow.sh (1225 → 49 lines dispatcher): 
 
 ### FEATURE: PR #972 (2026-06-19)
 Background: feat(#942,#697): Claude Code E2E test policy SSOT + dotfileslink transactional safety
-Changes: Safer `dotfileslink` install: existing files are now staged to `.bak.tmp` before linking and promoted to `.bak` only after the symlink succeeds, so a failed install no longer loses both the original file and any prior `.bak`. Watchlist `profile-snippet.{sh,ps1}` now warns when any of `CLAUDE.md`, `skills`, `rules`, or `agents` lose their symlink (previously only `CLAUDE.md` was watched). New `RUN_E2E` config flag in `.env` opts into `claude -p` end-to-end tests (off by default; gates exit 77 on opt-out and when `claude` is not on PATH).
+Changes: Safer `dotfileslink` install: existing files are now staged to `.bak.tmp` before linking and promoted to `.bak` only after the symlink succeeds, so a failed install no longer loses both the original file and any prior `.bak`. Watchlist `profile-snippet.{sh,ps1}` now warns when any of `CLAUDE.md`, `skills`, `rules`, or `agents` lose their symlink (previously only `CLAUDE.md` was watched). New `RUN_E2E` config flag in `.env` opts into `claude -p` end-to-end tests (off by default; gates exit 77 on opt-out and when `claude` is not on PATH).
+
+### FEATURE: PR #974 (2026-06-19)
+Background: fix(#913): supervisor-guard dual-ID readState fallback + stray-} syntax fix
+Changes: Fixed: EM Supervisor Layer 2 review now correctly triggers when supervisor state was written under a workflow session ID rather than the CC UUID — previously the Stop hook silently passed, allowing sessions with findings to continue unreviewed.
