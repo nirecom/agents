@@ -375,6 +375,76 @@ process.stdout.write(f.formatL2ArmedReason(cause, sid, wsid, sp, stp));
 }
 
 # ---------------------------------------------------------------------------
+# F-recipe-{1,2,3}: #912 fallback-recipe block tests
+# Verify that the formatter emits a runnable supervisor-write-layer2 recipe
+# AND substitutes the session ID + stateFilePath. The recipe is a fallback
+# the user can copy when the supervisor subagent invocation fails.
+# ---------------------------------------------------------------------------
+
+# Probe whether the formatter has been updated to emit the recipe block.
+# The recipe block must mention bin/supervisor-write-layer2; it is a new
+# addition (#912). Tests SKIP until source lands.
+require_recipe_block() {
+    local label="$1"
+    local probe
+    probe=$(run_with_timeout 5 node -e "
+const f = require('$FORMATTER_NODE');
+const out1 = f.formatL2ArmedReason('C1 sentinel hang', 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
+const out2 = f.formatCumSevErrorReason([], 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
+const has1 = out1.indexOf('supervisor-write-layer2') >= 0;
+const has2 = out2.indexOf('supervisor-write-layer2') >= 0;
+process.stdout.write((has1 && has2) ? 'yes' : 'no');
+" 2>/dev/null)
+    if [ "$probe" != "yes" ]; then
+        skip "$label (recipe-block not implemented in formatter yet)"; return 1
+    fi
+    return 0
+}
+
+# F-recipe-1 — formatL2ArmedReason output contains the fallback-recipe block
+run_f_recipe_1() {
+    require_source "$FORMATTER" "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block" || return
+    require_recipe_block "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block" || return
+    local out
+    out=$(format_l2_armed "C1 sentinel hang" "frec1-sid" "'frec1-wsid'" "agents/supervisor.md" "/tmp/state-frec1.json")
+    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-layer2"; then
+        pass "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block"
+    else
+        fail "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block (out=$out)"
+    fi
+}
+
+# F-recipe-2 — formatCumSevErrorReason output contains the fallback-recipe block
+run_f_recipe_2() {
+    require_source "$FORMATTER" "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block" || return
+    require_recipe_block "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block" || return
+    local out
+    out=$(format_cumsev_error "$FINDINGS_TWO" "frec2-sid" "'frec2-wsid'" "agents/supervisor.md" "/tmp/state-frec2.json")
+    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-layer2"; then
+        pass "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block"
+    else
+        fail "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block (out=$out)"
+    fi
+}
+
+# F-recipe-3 — fallback recipe includes the exact CLI invocation with correct sid + stateFilePath substitution
+run_f_recipe_3() {
+    require_source "$FORMATTER" "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution" || return
+    require_recipe_block "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution" || return
+    local out
+    out=$(format_cumsev_error "$FINDINGS_ONE" "frec3-sid" "'frec3-wsid'" "agents/supervisor.md" "/tmp/state-frec3.json")
+    if echo "$out" | grep -q "bin/supervisor-write-layer2" \
+       && echo "$out" | grep -q "\-\-clear-l2-armed-at" \
+       && echo "$out" | grep -q "\-\-set-l2-phase frozen" \
+       && echo "$out" | grep -q "\-\-session-id frec3-sid" \
+       && echo "$out" | grep -q "/tmp/state-frec3.json"; then
+        pass "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution"
+    else
+        fail "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution (out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Run all formatter tests
 # ---------------------------------------------------------------------------
 run_f1
@@ -403,6 +473,9 @@ run_f_sparse_findings
 run_f_non_string_category
 run_f_sid_with_quote
 run_f_state_path_special
+run_f_recipe_1
+run_f_recipe_2
+run_f_recipe_3
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

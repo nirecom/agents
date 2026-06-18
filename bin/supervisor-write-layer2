@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { writeLayer2State, confirmFinding, dropFindings } = require("../hooks/lib/supervisor-state-writer");
+const { writeLayer2State, confirmFinding, dropFindings, incrementL2RetryCount } = require("../hooks/lib/supervisor-state-writer");
 const { SEVERITY_VALUES, L2_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
@@ -20,7 +20,7 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--drop-finding-ids",
   "--set-l2-phase",
 ]);
-const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at"]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at", "--increment-l2-retry-count"]);
 
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-layer2] ERROR: ${msg}`);
@@ -104,6 +104,19 @@ function parseIdCsv(raw, flag) {
   return ids;
 }
 
+const hasIncrementRetry = flags.has("--increment-l2-retry-count");
+
+if (hasIncrementRetry) {
+  const hasOtherMutating = hasL2ArmedAt || hasClearL2ArmedAt || hasLastRunAt || hasCumulativeSeverity ||
+    hasSetL2Phase || hasAnyFinding || hasConfirmIds || hasDropIds;
+  if (hasOtherMutating) {
+    usage("--increment-l2-retry-count is mutually exclusive with other mutating flags");
+  }
+  const result = incrementL2RetryCount(sid);
+  console.log(JSON.stringify(result));
+  process.exit(0);
+}
+
 if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase && !hasConfirmIds && !hasDropIds) {
   usage("at least one mutating flag required");
 }
@@ -129,6 +142,7 @@ if (hasSetL2Phase) {
   const raw = args["set-l2-phase"];
   if (!["pending", "done", "frozen"].includes(raw)) usage("--set-l2-phase must be one of pending|done|frozen");
   patch.l2_phase = raw;
+  if (patch.l2_phase === "done") patch.l2_retry_count = 0;
 }
 
 if (hasAllFindings) {

@@ -26,7 +26,19 @@ function aggregateCategories(findings) {
   return out;
 }
 
-function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath) {
+// SSOT for the L2 fallback recipe block — shown on every block reason so
+// the user (or the supervisor subagent itself) can self-recover from an
+// API-error retry loop by freezing the session deterministically.
+function recipeBlock(sessionId, stateFilePath) {
+  return [
+    "Fallback (if the supervisor subagent invocation fails with an API error):",
+    `  Run: bin/supervisor-write-layer2 --clear-l2-armed-at --set-l2-phase frozen --session-id ${sessionId}`,
+    "  This freezes the L2 review for this session so the loop terminates. l2_phase=frozen is terminal.",
+    `  State file: ${stateFilePath}`,
+  ];
+}
+
+function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath) {
   const lines = [];
   lines.push("[EM Supervisor] Layer 2: cumulative_severity=error.");
 
@@ -35,6 +47,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
     lines.push("Detail: (no findings recorded)");
     lines.push(`Session ID: ${sessionId}`);
     lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+    for (const l of recipeBlock(sessionId, stateFilePath)) lines.push(l);
     lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
     return lines.join("\n");
   }
@@ -56,6 +69,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
   lines.push(`Detail: ${lastDetail}`);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+  for (const l of recipeBlock(sessionId, stateFilePath)) lines.push(l);
   lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
   return lines.join("\n");
 }
@@ -86,9 +100,20 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
   lines.push(`File: ${stateFilePath}`);
   const writerPath = path.resolve(__dirname, "supervisor-state-writer");
   lines.push(`Equivalent one-liner: node -e "require('${writerPath}').writeLayer2State('${sessionId}', {l2_armed_at: null})"`);
+  for (const l of recipeBlock(sessionId, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   return lines.join("\n");
 }
 
-module.exports = { formatCumSevErrorReason, formatL2ArmedReason };
+function formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath) {
+  const lines = [];
+  lines.push("[EM Supervisor] C3: WORKTREE_OFF proposal pre-detected.");
+  lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent to review the worktree-off proposal.`);
+  for (const l of recipeBlock(sessionId, stateFilePath)) lines.push(l);
+  lines.push(`Session ID: ${sessionId}`);
+  lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+  return lines.join("\n");
+}
+
+module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason };

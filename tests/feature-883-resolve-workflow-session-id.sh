@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-883-resolve-workflow-session-id.sh
-# Tests: hooks/lib/resolve-workflow-session-id.js
-# Tags: supervisor, em-supervisor, session-id, workflow-state, layer2
+# Tests: hooks/lib/resolve-workflow-session-id.js, hooks/lib/supervisor-state-writer.js
+# Tags: supervisor, em-supervisor, session-id, workflow-state, layer2, scope:issue-specific
 # RED for issue #883.
 # L3 gap (what this test does NOT catch):
 # - tests invoke resolveWorkflowSessionId() directly via node -e rather than
@@ -24,6 +24,7 @@ else
 fi
 
 RESOLVE_WSID_NODE="$_AGENTS_DIR_NODE/hooks/lib/resolve-workflow-session-id.js"
+SUPERVISOR_STATE_WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -271,6 +272,209 @@ run_r8() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# R9 / R10: depth-score tie-breaker
+# Active sessions (with intent.md or detail.md) MUST beat bare-stub sessions
+# (context.md only) even when the stub has the newer mtime. This is the
+# Priority 3 enhancement for issue #949 / #883 follow-up.
+# ---------------------------------------------------------------------------
+
+run_r9() {
+    require_function "resolveWorkflowSessionId" "R9: depth-score beats mtime (detail vs stub)" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # 'active' has context+intent+detail (depth=2), older mtime T-10.
+    : > "$tmp/${TODAY}-active-context.md"
+    : > "$tmp/${TODAY}-active-intent.md"
+    : > "$tmp/${TODAY}-active-detail.md"
+    # 'stub' has context.md only (depth=0), newer mtime T-2.
+    : > "$tmp/${TODAY}-stub-context.md"
+    set_mtimes \
+        "$tmp/${TODAY}-active-context.md" -10 \
+        "$tmp/${TODAY}-active-intent.md" -10 \
+        "$tmp/${TODAY}-active-detail.md" -10 \
+        "$tmp/${TODAY}-stub-context.md" -2
+    out=$(call_resolve "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-active" ]; then
+        pass "R9: depth-score beats mtime (detail vs stub)"
+    else
+        fail "R9: depth-score beats mtime (detail vs stub) (out=$out)"
+    fi
+}
+
+run_r10() {
+    require_function "resolveWorkflowSessionId" "R10: depth-score beats mtime (intent vs stub)" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # 'intonly' has context+intent (depth=1), older mtime T-8.
+    : > "$tmp/${TODAY}-intonly-context.md"
+    : > "$tmp/${TODAY}-intonly-intent.md"
+    # 'stub' has context.md only (depth=0), newer mtime T-2.
+    : > "$tmp/${TODAY}-stub-context.md"
+    set_mtimes \
+        "$tmp/${TODAY}-intonly-context.md" -8 \
+        "$tmp/${TODAY}-intonly-intent.md" -8 \
+        "$tmp/${TODAY}-stub-context.md" -2
+    out=$(call_resolve "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-intonly" ]; then
+        pass "R10: depth-score beats mtime (intent vs stub)"
+    else
+        fail "R10: depth-score beats mtime (intent vs stub) (out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# R11: ensureLayer2Scheduled integration — confirms depth-score fix prevents
+# erroneous L2 arming when the active session has a final-report-env.json.
+# Without the depth-score fix, the resolver returns the bare-stub sid (which
+# has no final-report-env.json) and L2 gets armed incorrectly.
+# ---------------------------------------------------------------------------
+
+run_r11() {
+    require_function "resolveWorkflowSessionId" "R11: ensureLayer2Scheduled honors depth-scored resolver" || return
+    local tmp armed_at_out
+    tmp="$(mktemp -d)"
+    # depth=2 active session, older mtime
+    : > "$tmp/${TODAY}-active-r11-context.md"
+    : > "$tmp/${TODAY}-active-r11-intent.md"
+    : > "$tmp/${TODAY}-active-r11-detail.md"
+    # depth=0 stub session, newer mtime
+    : > "$tmp/${TODAY}-stub-r11-context.md"
+    # active session has a final-report-env.json -> L2 must NOT be armed
+    echo '{}' > "$tmp/${TODAY}-active-r11-final-report-env.json"
+    set_mtimes \
+        "$tmp/${TODAY}-active-r11-context.md" -10 \
+        "$tmp/${TODAY}-active-r11-intent.md" -10 \
+        "$tmp/${TODAY}-active-r11-detail.md" -10 \
+        "$tmp/${TODAY}-stub-r11-context.md" -2
+
+    # Run ensureLayer2Scheduled with CWD = tmp (no WORKTREE_NOTES.md there ->
+    # resolver falls through Priority 1 -> Priority 3 depth-scan). The stub cc
+    # sid validates against SESSION_ID_RE but has no final-report-env.json;
+    # only the resolver-found active sid carries the final-report-env marker.
+    armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+const m = require('$SUPERVISOR_STATE_WRITER_NODE');
+const state = { layer2: { l2_armed_at: null, l2_phase: null } };
+m.ensureLayer2Scheduled(state, '${TODAY}-stub-r11cc');
+process.stdout.write(state.layer2.l2_armed_at == null ? 'NOT_ARMED' : 'ARMED');
+" 2>/dev/null)
+    rm -rf "$tmp"
+    if [ "$armed_at_out" = "NOT_ARMED" ]; then
+        pass "R11: ensureLayer2Scheduled honors depth-scored resolver (no arm when active has final-report)"
+    else
+        fail "R11: ensureLayer2Scheduled honors depth-scored resolver (expected NOT_ARMED, got $armed_at_out)"
+    fi
+}
+
+run_r12() {
+    require_function "resolveWorkflowSessionId" "R12: invalid charset in Session-ID value (P1 path-traversal guard)" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # P1 path-traversal guard: Session-ID value contains dots and slashes
+    # -> /^[A-Za-z0-9_-]+$/ fails -> P1 returns null -> falls through to P3.
+    printf "Session-ID: ../../../someval\n" > "$tmp/WORKTREE_NOTES.md"
+    # Create active context+intent files (depth=1) so P3 picks them up.
+    : > "$tmp/${TODAY}r12active-context.md"
+    : > "$tmp/${TODAY}r12active-intent.md"
+    # Use call_resolve with work_dir=$tmp so P1 reads WORKTREE_NOTES.md from $tmp,
+    # finds the invalid Session-ID, returns null, and P3 scans $tmp for context.md.
+    out=$(call_resolve "$tmp" "" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}r12active" ]; then
+        pass "R12: invalid charset in Session-ID value (P1 path-traversal guard) -> P3 fallback"
+    else
+        fail "R12: invalid charset in Session-ID value (P1 path-traversal guard) (out=$out)"
+    fi
+}
+
+run_r13() {
+    require_function "resolveWorkflowSessionId" "R13: lexicographic sid tie-break when depth and mtime are equal" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Two context.md stubs with depth=0. We set their mtimes to the same value
+    # so the tie-break falls to lexicographic (sid asc) order.
+    : > "$tmp/${TODAY}r13b-context.md"
+    : > "$tmp/${TODAY}r13a-context.md"
+    # Set both to the same timestamp (now - 5 seconds).
+    node -e "
+const fs=require('fs');
+const t=(Date.now()-5000)/1000;
+fs.utimesSync(process.argv[1],t,t);
+fs.utimesSync(process.argv[2],t,t);
+" -- "$tmp/${TODAY}r13b-context.md" "$tmp/${TODAY}r13a-context.md" 2>/dev/null
+    out=$(call_resolve "$tmp")
+    rm -rf "$tmp"
+    # r13a < r13b lexicographically, so r13a should win the tie-break.
+    if [ "$out" = "${TODAY}r13a" ]; then
+        pass "R13: lexicographic sid tie-break when depth and mtime are equal (r13a wins)"
+    else
+        fail "R13: lexicographic sid tie-break when depth and mtime are equal (out=$out, expected ${TODAY}r13a)"
+    fi
+}
+
+run_r14() {
+    require_function "resolveWorkflowSessionId" "R14: CLAUDE_SESSION_ID invalid charset falls through to P3" || return
+    local tmp envfile out
+    tmp="$(mktemp -d)"
+    envfile="$tmp/test.env"
+    # Contains '!' which fails /^[A-Za-z0-9_-]+$/ → P2 skips, P3 scans.
+    printf "CLAUDE_SESSION_ID=%s!invalid\n" "$TODAY" > "$envfile"
+    : > "$tmp/${TODAY}r14active-context.md"
+    : > "$tmp/${TODAY}r14active-intent.md"
+    out=$(call_resolve "$tmp" "$envfile" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}r14active" ]; then
+        pass "R14: CLAUDE_SESSION_ID invalid charset falls through to P3"
+    else
+        fail "R14: CLAUDE_SESSION_ID invalid charset falls through to P3 (out=$out)"
+    fi
+}
+
+run_r15() {
+    require_function "resolveWorkflowSessionId" "R15: two depth=2 sessions secondary mtime sort" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Both sessions have depth=2 (detail.md present); mtime differs on context.md.
+    : > "$tmp/${TODAY}r15early-context.md"
+    : > "$tmp/${TODAY}r15early-detail.md"
+    : > "$tmp/${TODAY}r15later-context.md"
+    : > "$tmp/${TODAY}r15later-detail.md"
+    node -e "
+const fs=require('fs');
+const early=(Date.now()-10000)/1000;
+const later=(Date.now()-2000)/1000;
+const base=process.argv[1];
+fs.utimesSync(base+'/${TODAY}r15early-context.md',early,early);
+fs.utimesSync(base+'/${TODAY}r15later-context.md',later,later);
+" -- "$tmp" 2>/dev/null
+    out=$(call_resolve "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}r15later" ]; then
+        pass "R15: two depth=2 sessions: newer mtime wins within same depth bucket"
+    else
+        fail "R15: two depth=2 sessions mtime sort (out=$out, expected ${TODAY}r15later)"
+    fi
+}
+
+run_r16() {
+    require_function "resolveWorkflowSessionId" "R16: whitespace-only Session-ID falls through to P3" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Session-ID: <space> — \S+ in regex requires non-whitespace; fails match -> P1 null.
+    printf "Session-ID: \n" > "$tmp/WORKTREE_NOTES.md"
+    : > "$tmp/${TODAY}r16active-context.md"
+    : > "$tmp/${TODAY}r16active-intent.md"
+    out=$(call_resolve "$tmp" "" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}r16active" ]; then
+        pass "R16: whitespace-only Session-ID (P1 falls through to P3)"
+    else
+        fail "R16: whitespace-only Session-ID fallthrough (out=$out)"
+    fi
+}
+
 run_r0
 run_r0b
 run_r1
@@ -281,6 +485,14 @@ run_r5
 run_r6
 run_r7
 run_r8
+run_r9
+run_r10
+run_r11
+run_r12
+run_r13
+run_r14
+run_r15
+run_r16
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
