@@ -46,27 +46,73 @@ $links = @(
     @{ Source = "agents";      Dest = "$ClaudeDir\agents";      IsDir = $true }
 )
 
+# Transactional symlink loop. Per-link failure logged + counted; loop continues to next link.
+# Symmetric to install/linux/dotfileslink.sh _link_one contract (rules/core-principles.md §4).
+$linkFailed = 0
 foreach ($link in $links) {
     $source = Join-Path $AgentsRoot $link.Source
     $dest = $link.Dest
     if (-not (Test-Path $source)) { Write-Warning "Source not found: $source (skipping)"; continue }
+    $rollback = "none"   # none | restore-symlink | restore-file
+    $oldTarget = $null
+    $backup = "$dest.bak"
+    $tmpBackup = "$dest.bak.tmp.$PID"
     $item = Get-Item $dest -Force -ErrorAction SilentlyContinue
     if ($item) {
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             $target = $item.Target
             if ($target -and [System.IO.Path]::GetFullPath($target) -eq [System.IO.Path]::GetFullPath($source)) { Write-Host "Already linked: $dest" -ForegroundColor DarkGray; continue }
             Write-Host "Relinking: $dest" -ForegroundColor Yellow
+            $oldTarget = $target
+            $rollback = "restore-symlink"
             Remove-Item $dest -Force
         } else {
-            $backup = "$dest.bak"
             Write-Host "Backing up: $dest -> $backup" -ForegroundColor Yellow
-            if (Test-Path $backup) { Remove-Item -Recurse -Force $backup }
-            Rename-Item $dest $backup
+            Rename-Item $dest $tmpBackup
+            $rollback = "restore-file"
         }
     }
-    New-Item -ItemType SymbolicLink -Path $dest -Target $source | Out-Null
+    try {
+        New-Item -ItemType SymbolicLink -Path $dest -Target $source -ErrorAction Stop | Out-Null
+    } catch {
+        switch ($rollback) {
+            "restore-symlink" {
+                if ($oldTarget) {
+                    try { New-Item -ItemType SymbolicLink -Path $dest -Target $oldTarget -ErrorAction SilentlyContinue | Out-Null } catch {}
+                }
+            }
+            "restore-file" {
+                try { Rename-Item $tmpBackup $dest -ErrorAction SilentlyContinue } catch {}
+            }
+        }
+        Write-Warning "Failed to create symlink: $dest (rollback applied)"
+        $linkFailed++
+        continue
+    }
+    # New-Item succeeded — promote the new backup transactionally so the old .bak
+    # survives any failure of the final Rename-Item (HIGH-2 from codex review).
+    if ($rollback -eq "restore-file") {
+        $oldBackup = "$backup.old.$PID"
+        $hadOldBackup = Test-Path -LiteralPath $backup
+        if ($hadOldBackup) { Rename-Item $backup $oldBackup -ErrorAction Stop }
+        try {
+            Rename-Item $tmpBackup $backup -ErrorAction Stop
+            if ($hadOldBackup) { Remove-Item -Recurse -Force $oldBackup -ErrorAction SilentlyContinue }
+        } catch {
+            if ($hadOldBackup) { Rename-Item $oldBackup $backup -ErrorAction SilentlyContinue }
+            Write-Warning "Backup promotion failed: $dest (old .bak retained at $backup)"
+            $linkFailed++
+            continue
+        }
+    }
     Write-Host "Linked: $dest -> $source" -ForegroundColor Green
 }
+if ($linkFailed -gt 0) {
+    Write-Warning "Symlink failures: $linkFailed"
+    exit 1
+}
+# Test affordance — see tests/feature-697-dotfileslink-link-one.Tests.ps1
+if ($env:DOTFILESLINK_LINKS_ONLY -eq "1") { exit 0 }
 
 # --- Assemble ~/.claude/settings.json from base + extension ---
 # Remove stale symlink that used to point settings.json directly into agents/
