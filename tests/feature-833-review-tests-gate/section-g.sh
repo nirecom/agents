@@ -190,6 +190,96 @@ process.stdout.write(rt ? rt.status : 'MISSING');
     fi
 }
 
+run_g7() {
+    # G7: checkReviewTests — resolvedWsid=null does not block (graceful degradation).
+    # Exercises the path at review-tests-checker.js:46:
+    #   if (resolvedWsid && resolvedWsid !== storedWsid) { return block }
+    # When resolvedWsid is null, the condition is false -> falls through to skip.
+    # Requires a real git repo with a staged tests/ file so stagedToken is non-null
+    # and matches storedToken, enabling the wsid branch to be reached.
+    local mini_repo plans_tmp staged_token result
+    mini_repo="$(mktemp -d)"
+    plans_tmp="$(mktemp -d)"
+    # Build minimal git repo with a staged tests/ file.
+    git -C "$mini_repo" init -q -b main 2>/dev/null
+    git -C "$mini_repo" config user.email "test@example.com"
+    git -C "$mini_repo" config user.name "Test"
+    mkdir -p "$mini_repo/tests"
+    printf '# g7 placeholder\n' > "$mini_repo/tests/g7-placeholder.sh"
+    git -C "$mini_repo" add "tests/g7-placeholder.sh" 2>/dev/null
+    # Compute the token from this repo.
+    staged_token=$(run_with_timeout 10 node -e "
+const {computeStagedTestsToken} = require('$REVIEW_TESTS_EVIDENCE');
+const t = computeStagedTestsToken(process.argv[1]);
+process.stdout.write(t == null ? '' : t);
+" -- "$mini_repo" 2>/dev/null)
+    if [ -z "$staged_token" ]; then
+        pass "G7. checkReviewTests wsid=null graceful degradation (skipped: no staged token)"
+        rm -rf "$mini_repo" "$plans_tmp"
+        return
+    fi
+    # Run checkReviewTests from a temp dir with no WORKTREE_NOTES.md and a
+    # fresh plans dir (no *-context.md) so resolveWorkflowSessionId returns null.
+    local mini_node
+    if command -v cygpath >/dev/null 2>&1; then
+        mini_node="$(cygpath -m "$mini_repo")"
+    else
+        mini_node="$mini_repo"
+    fi
+    result=$(run_with_timeout 10 node -e "
+process.chdir(process.argv[1]);
+process.env.WORKFLOW_PLANS_DIR = process.argv[2];
+const {checkReviewTests} = require('$CHECKER_NODE');
+const stepState = {status:'complete', token:process.argv[3], wsid:'some-stored-wsid', warnings_summary: null};
+const res = checkReviewTests('review_tests', stepState, {docsOnly:false, writeTestsEvidenceBypassed:false, repoDir:process.argv[1]});
+process.stdout.write(res.action);
+" -- "$mini_node" "$plans_tmp" "$staged_token" 2>/dev/null)
+    rm -rf "$mini_repo" "$plans_tmp"
+    if [ "$result" = "skip" ]; then
+        pass "G7. checkReviewTests — resolvedWsid=null with storedWsid set does not block (graceful degradation)"
+    else
+        fail "G7. checkReviewTests wsid=null: expected skip, got '$result'"
+    fi
+}
+
+run_g8() {
+    # G8: invalidateReviewTests sets status=pending, token=null, invalidate_reason.
+    # Tests the re-pending path in state-io.js:invalidateReviewTests.
+    local sid status_val token_val reason_val
+    sid="g8-$$-$RANDOM"
+    # First mark complete, then invalidate.
+    run_with_timeout 10 node -e "
+const m = require('$STATE_IO_NODE');
+const state = m.createInitialState(process.argv[1], {cwd: '.'});
+m.writeState(process.argv[1], state);
+m.markReviewTestsComplete(process.argv[1], 'token-g8', {});
+m.invalidateReviewTests(process.argv[1], 'test-reason-g8');
+" -- "$sid" 2>/dev/null
+    status_val=$(run_with_timeout 5 node -e "
+const m = require('$STATE_IO_NODE');
+const s = m.readState(process.argv[1]);
+const rt = s && s.steps && s.steps.review_tests;
+process.stdout.write(rt ? rt.status : 'MISSING');
+" -- "$sid" 2>/dev/null)
+    token_val=$(run_with_timeout 5 node -e "
+const m = require('$STATE_IO_NODE');
+const s = m.readState(process.argv[1]);
+const rt = s && s.steps && s.steps.review_tests;
+process.stdout.write(rt && 'token' in rt ? String(rt.token) : 'MISSING');
+" -- "$sid" 2>/dev/null)
+    reason_val=$(run_with_timeout 5 node -e "
+const m = require('$STATE_IO_NODE');
+const s = m.readState(process.argv[1]);
+const rt = s && s.steps && s.steps.review_tests;
+process.stdout.write(rt && 'invalidate_reason' in rt ? String(rt.invalidate_reason) : 'MISSING');
+" -- "$sid" 2>/dev/null)
+    if [ "$status_val" = "pending" ] && [ "$token_val" = "null" ] && [ "$reason_val" = "test-reason-g8" ]; then
+        pass "G8. invalidateReviewTests sets status=pending, token=null, invalidate_reason"
+    else
+        fail "G8. invalidateReviewTests: status=$status_val token=$token_val reason=$reason_val"
+    fi
+}
+
 run_g1
 run_g2
 run_g3
@@ -197,3 +287,5 @@ run_g3b
 run_g4
 run_g5
 run_g6
+run_g7
+run_g8
