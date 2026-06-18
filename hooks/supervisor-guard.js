@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 // Stop hook: EM Supervisor Layer 2 block gate.
-// 5-way branch (evaluated in order):
-//   (1) stop_hook_active=true       -> exit 0 immediately
-//   (2) cumulative_severity=error   -> decision:block + systemMessage, exit 2
-//   (3) detectSentinelHang || l2ArmedAt || C3-proposal -> decision:block (L2 review trigger), exit 2
-//   (4) cumulative_severity warning/notice -> additionalContext advisory, exit 0
-//   (5) all-null                    -> exit 0 silently
+// Branch dispatch (evaluated in order):
+//   (1) stop_hook_active=true                    -> exit 0 immediately
+//   (C3) WORKTREE_OFF proposal pre-detected      -> increment-retry; if frozen exit 0; else block, exit 2
+//   (2) cumulative_severity=error                -> increment-retry; if frozen exit 0; else block, exit 2
+//   (3) detectSentinelHang || l2ArmedAt          -> increment-retry; if frozen exit 0; else block, exit 2
+//   (4) cumulative_severity warning/notice       -> additionalContext advisory, exit 0
+//   (5) all-null                                 -> exit 0 silently
+//
+// AskUserQuestion gate (#903): when the last assistant turn ends with an
+// AskUserQuestion tool_use, branches (C3), (2), (3) are suppressed — the
+// user is already mid-dialog and the guard must not block on top.
 // Fail-open on any error.
 "use strict";
 
@@ -77,17 +82,16 @@ function detectSentinelHang(transcriptPath) {
   return true;
 }
 
-// Returns a C3 cause label if the last assistant turn's {type:"text"} content
-// contains <<WORKFLOW_ENFORCE_WORKTREE_OFF or <<WORKFLOW_ENFORCE_WORKFLOW_OFF,
-// or null if neither is found. WORKFLOW_OFF takes precedence (broader scope).
-// Simple substring match — false-positive detection is delegated to the supervisor agent.
-function detectWorktreeOffProposal(transcriptPath) {
-  if (!transcriptPath) return null;
+// Returns true if the last assistant turn's content array's LAST tool_use is
+// an AskUserQuestion. When true, the user is mid-dialog and Layer 2 block
+// branches must be suppressed (#903).
+function detectAskUserQuestionTurn(transcriptPath) {
+  if (!transcriptPath) return false;
   let lines;
   try {
     lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
   } catch (_) {
-    return null;
+    return false;
   }
   const tail = lines.slice(-100);
   let lastAssistant = null;
@@ -98,22 +102,73 @@ function detectWorktreeOffProposal(transcriptPath) {
       if (entry.type === "assistant") lastAssistant = entry;
     } catch (_) {}
   }
-  if (!lastAssistant) return null;
+  if (!lastAssistant) return false;
   const content =
     lastAssistant.message &&
     Array.isArray(lastAssistant.message.content)
       ? lastAssistant.message.content
       : [];
-  let foundWorktreeOff = false;
-  let foundWorkflowOff = false;
+  let lastToolUse = null;
   for (const item of content) {
-    if (item.type !== "text" || typeof item.text !== "string") continue;
-    if (item.text.includes("<<WORKFLOW_ENFORCE_WORKFLOW_OFF")) foundWorkflowOff = true;
-    if (item.text.includes("<<WORKFLOW_ENFORCE_WORKTREE_OFF")) foundWorktreeOff = true;
+    if (item && item.type === "tool_use") lastToolUse = item;
   }
-  if (foundWorkflowOff) return "C3 workflow-off proposal";
-  if (foundWorktreeOff) return "C3 worktree-off proposal";
-  return null;
+  if (!lastToolUse) return false;
+  return lastToolUse.name === "AskUserQuestion";
+}
+
+// Returns true if a WORKTREE_OFF sentinel was proposed (Bash tool_use) in any
+// assistant turn within the FULL transcript, and no later WORKTREE_ON sentinel
+// followed it. This is the C3 pre-detection used to fire a Layer 2 review on
+// the proposal itself before it can be approved.
+// Scope alignment (#912 Orthogonality §4): scans the whole transcript to match
+// stop-enforce-worktree-on-warn.js — both siblings detect the same OFF/ON pair
+// and must agree on visibility, so a stale OFF outside the 100-line tail does
+// not cause one to fire while the other stays silent.
+function detectWorktreeOffProposal(transcriptPath) {
+  if (!transcriptPath) return false;
+  let lines;
+  try {
+    lines = fs.readFileSync(transcriptPath, "utf8").split("\n");
+  } catch (_) {
+    return false;
+  }
+  let OFF_DQ, OFF_LL, ON_DQ, ON_LL;
+  try {
+    ({
+      ENFORCE_WORKTREE_OFF_RE_DQ: OFF_DQ,
+      ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE: OFF_LL,
+      ENFORCE_WORKTREE_ON_RE_DQ: ON_DQ,
+      ENFORCE_WORKTREE_ON_LOOKSLIKE_RE: ON_LL,
+    } = require("./lib/sentinel-patterns"));
+  } catch (_) {
+    return false;
+  }
+  let cmdOrder = 0;
+  let lastOffIdx = -1;
+  let lastOnIdx = -1;
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch (_) {
+      continue;
+    }
+    if (entry.type !== "assistant") continue;
+    const content =
+      entry.message && Array.isArray(entry.message.content)
+        ? entry.message.content
+        : [];
+    for (const item of content) {
+      if (!item || item.type !== "tool_use" || item.name !== "Bash") continue;
+      const cmd = (item.input && item.input.command) || "";
+      cmdOrder++;
+      if (OFF_DQ.test(cmd) || OFF_LL.test(cmd)) lastOffIdx = cmdOrder;
+      if (ON_DQ.test(cmd) || ON_LL.test(cmd)) lastOnIdx = cmdOrder;
+    }
+  }
+  return lastOffIdx >= 0 && (lastOnIdx < 0 || lastOffIdx > lastOnIdx);
+}
 }
 
 if (require.main === module) {
@@ -129,16 +184,14 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath;
-  let readStateOrInit, ensureLayer2Scheduled, writeAtomic, validate;
-  let formatCumSevErrorReason, formatL2ArmedReason;
+  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath, incrementL2RetryCount;
+  let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
-    ({ readState, getStatePath, readStateOrInit, ensureLayer2Scheduled, writeAtomic } = require("./lib/supervisor-state-writer"));
-    ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
-    ({ validate } = require("./lib/supervisor-state-schema"));
+    ({ readState, getStatePath, incrementL2RetryCount } = require("./lib/supervisor-state-writer"));
+    ({ formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason } = require("./lib/supervisor-report-format"));
   } catch (_) {
     process.exit(0);
   }
@@ -153,6 +206,10 @@ if (require.main === module) {
     process.exit(0);
   }
   if (!sessionId) process.exit(0);
+  // Defense-in-depth: sessionId flows into formatter recipe text as `node -e "...('${sessionId}', ...)"`.
+  // resolveSessionId does not regex-validate, so reject anything that does not match the
+  // canonical shape. Fail-open (exit 0) — the guard must never block on its own input parse.
+  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) process.exit(0);
 
   let workflowSessionId = null;
   try {
@@ -186,9 +243,40 @@ if (require.main === module) {
     ? path.join(agentsDir, "agents", "supervisor.md")
     : "agents/supervisor.md";
 
+  const askUserQuestionTurn = detectAskUserQuestionTurn(input.transcript_path || "");
+  const worktreeOffProposal = detectWorktreeOffProposal(input.transcript_path || "");
+  const hangDetected = detectSentinelHang(input.transcript_path || "");
+
+  let stateFilePath = "";
+  try {
+    stateFilePath = getStatePath(sessionId);
+  } catch (_) {
+    stateFilePath = "";
+  }
+
+  function tryIncrementFrozen() {
+    try {
+      const res = incrementL2RetryCount(sessionId);
+      return res.frozen;
+    } catch (_) {
+      return false; // fail-open
+    }
+  }
+
+  // (C3) WORKTREE_OFF proposal pre-detection
+  if (!askUserQuestionTurn && worktreeOffProposal) {
+    if (tryIncrementFrozen()) process.exit(0);
+    const reason = formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath);
+    try {
+      process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+    } catch (_) {}
+    process.exit(2);
+  }
+
   // (2)
-  if (cumSev === "error") {
-    const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath);
+  if (!askUserQuestionTurn && cumSev === "error") {
+    if (tryIncrementFrozen()) process.exit(0);
+    const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath);
     try {
       process.stdout.write(
         JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
@@ -197,39 +285,10 @@ if (require.main === module) {
     process.exit(2);
   }
 
-  // C3: detect off-proposal sentinel; arm l2_armed_at via ensureLayer2Scheduled
-  let c3Cause = null;
-  let c3Armed = false;
-  try {
-    const c3Detected = detectWorktreeOffProposal(input.transcript_path || "");
-    if (c3Detected && l2Phase !== "done" && l2Phase !== "frozen") {
-      const c3State = readStateOrInit(sessionId);
-      const prevArmedAt = c3State.layer2 && c3State.layer2.l2_armed_at;
-      ensureLayer2Scheduled(c3State, sessionId);
-      if (c3State.layer2 && c3State.layer2.l2_armed_at !== prevArmedAt) {
-        c3State.layer2.l2_cause = c3Detected;
-        const vr = validate(c3State);
-        if (vr.ok) {
-          writeAtomic(getStatePath(sessionId), c3State);
-          c3Cause = c3Detected;
-          c3Armed = true;
-        }
-      }
-    }
-  } catch (_) {}
-
   // (3)
-  const hangDetected = detectSentinelHang(input.transcript_path || "");
-  if ((hangDetected || l2ArmedAt || c3Armed) && l2Phase !== "done" && l2Phase !== "frozen") {
-    const cause = hangDetected
-      ? "C1 sentinel hang"
-      : c3Armed ? c3Cause : (layer2.l2_cause || "C2 scheduled-review");
-    let stateFilePath = "";
-    try {
-      stateFilePath = getStatePath(sessionId);
-    } catch (_) {
-      stateFilePath = "";
-    }
+  if (!askUserQuestionTurn && (hangDetected || l2ArmedAt) && l2Phase !== "done" && l2Phase !== "frozen") {
+    if (tryIncrementFrozen()) process.exit(0);
+    const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
     const reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath);
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
