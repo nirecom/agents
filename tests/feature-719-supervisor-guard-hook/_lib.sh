@@ -1,8 +1,6 @@
-#!/bin/bash
 # tests/feature-719-supervisor-guard-hook/_lib.sh
-# Shared setup and helper functions for feature-719-supervisor-guard-hook tests.
-
-set -u
+# Shared helpers for feature-719-supervisor-guard-hook tests.
+# Sourced by the entrypoint and case files; relies on `set -u` from entrypoint.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
