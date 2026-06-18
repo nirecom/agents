@@ -355,4 +355,8 @@ Changes: category:FEATURE subject:"#941 — RUN_E2E .env toggle for claude -p E2
 
 ### FEATURE: PR #948 (2026-06-18)
 Background: feat(#929): L2 supervisor Codex adversarial review layer
-Changes: L2 supervisor now uses a Codex adversarial second-opinion pass on draft findings before finalizing. Findings Codex agrees with pass unconditionally; findings Codex disagrees with are adjudicated by the L2 supervisor (keep or drop). Silently falls back to single-engine mode when Codex is unavailable.
+Changes: L2 supervisor now uses a Codex adversarial second-opinion pass on draft findings before finalizing. Findings Codex agrees with pass unconditionally; findings Codex disagrees with are adjudicated by the L2 supervisor (keep or drop). Silently falls back to single-engine mode when Codex is unavailable.
+
+### FEATURE: PR #956 (2026-06-18)
+Background: feat(#903,#389,#923): supervisor-guard C3 trigger + load-env realpath fallback + enforce-worktree -C form guard
+Changes: Stop hook now detects WORKTREE_OFF / WORKFLOW_OFF off-proposal sentinels immediately when emitted, triggering L2 supervisor review without waiting for the next turn (C3 trigger, #903).;Hooks now load `.env` correctly when the `hooks/` directory is a symlink, fixing WORKTREE_BASE_DIR and other env vars being silently ignored in dotfiles setups (#389).
