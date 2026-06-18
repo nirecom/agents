@@ -14,6 +14,9 @@ const L2_PHASE_VALUES = [null, "pending", "done", "frozen"];
 
 const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
 
+// 2 = guarded fail-fast. One retry permits a transient API error to self-heal; the second consecutive failure freezes the session so the loop cannot continue.
+const L2_RETRY_THRESHOLD = 2;
+
 function createEmptyState(sessionId) {
   const now = new Date().toISOString();
   return {
@@ -22,7 +25,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null },
+    layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0 },
     layer3: {},
   };
 }
@@ -127,6 +130,7 @@ function validate(obj) {
     }
     if ("l2_phase" in l2 && !L2_PHASE_VALUES.includes(l2.l2_phase)) errors.push("layer2.l2_phase must be null, pending, done, or frozen");
     if ("l2_cause" in l2 && l2.l2_cause !== null && typeof l2.l2_cause !== "string") errors.push("layer2.l2_cause must be null or a string");
+    if ("l2_retry_count" in l2 && (!Number.isInteger(l2.l2_retry_count) || l2.l2_retry_count < 0)) errors.push("layer2.l2_retry_count must be a non-negative integer");
   }
   if (typeof obj.layer3 !== "object" || obj.layer3 === null || Array.isArray(obj.layer3)) {
     errors.push("layer3 must be an object");
@@ -140,6 +144,7 @@ module.exports = {
   SEVERITY_VALUES,
   L2_PHASE_VALUES,
   SEVERITY_RANK,
+  L2_RETRY_THRESHOLD,
   createEmptyState,
   validate,
   validateFinding,
