@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/lib/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, sentinel, stale-token
 #
 # Gate / mark integration tests for the review_tests step (issue #833).
@@ -12,6 +12,7 @@
 #   - WRITE_TESTS_NOT_NEEDED propagates skip to review_tests
 #   - Manual MARK_STEP review_tests is rejected (token-only path)
 #   - All-complete sequence approves the commit gate
+#   - wsid (workflow session id) match enforcement (Section F, sourced)
 #
 # L3 gap (what this test does NOT catch):
 # - Whether the live /review-tests skill actually emits a correct token
@@ -159,7 +160,7 @@ state_json_custom() {
     local clarify_intent="complete" research="complete" outline="complete" detail="complete"
     local branching_complete="complete" write_tests="complete" review_tests="pending"
     local review_security="complete" run_tests="complete" docs="complete"
-    local user_verification="complete" cleanup="complete"
+    local user_verification="complete" cleanup="complete" pre_final_report_gate="complete"
     local review_tests_token=""
     local review_tests_warnings_summary=""
     local write_tests_skip_reason=""
@@ -177,6 +178,7 @@ state_json_custom() {
             docs) docs="$2";;
             user_verification) user_verification="$2";;
             cleanup) cleanup="$2";;
+            pre_final_report_gate) pre_final_report_gate="$2";;
             review_tests_token) review_tests_token="$2";;
             review_tests_warnings_summary) review_tests_warnings_summary="$2";;
             write_tests_skip_reason) write_tests_skip_reason="$2";;
@@ -211,7 +213,8 @@ state_json_custom() {
     "run_tests":          {"status": "$run_tests", "updated_at": "$NOW_ISO"},
     "docs":               {"status": "$docs", "updated_at": "$NOW_ISO"},
     "user_verification":  {"status": "$user_verification", "updated_at": "$NOW_ISO"},
-    "cleanup":            {"status": "$cleanup", "updated_at": "$NOW_ISO"}
+    "cleanup":            {"status": "$cleanup", "updated_at": "$NOW_ISO"},
+    "pre_final_report_gate": {"status": "$pre_final_report_gate", "updated_at": "$NOW_ISO"}
   }
 }
 EOF
@@ -458,6 +461,16 @@ if [ "$STATUS_E7" = "pending" ]; then
 else
     fail "E7. expected pending (manual mark rejected), got status=$STATUS_E7"
 fi
+
+# ============================================================================
+# Section F: wsid match enforcement (sourced)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/feature-833-review-tests-gate/section-f.sh"
+
+# ============================================================================
+# Section G: checkReviewTests unit + markReviewTestsComplete error guard (sourced)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/feature-833-review-tests-gate/section-g.sh"
 
 # ============================================================================
 # Summary

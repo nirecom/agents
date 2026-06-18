@@ -23,8 +23,10 @@ function _readSessionIdFromWorktreeNotes(notesPath) {
  *      (written by /worktree-start — gold source).
  *   2. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID value (charset-validated),
  *      if `<value>-intent.md` exists in plans-dir.
- *   3. mtime scan of `*-context.md` filenames in plans-dir, filtered by charset and
+ *   3. Depth-score scan of `*-context.md` filenames in plans-dir, filtered by charset and
  *      same-day date-sanity (prefix must start with today's local YYYYMMDD).
+ *      Each candidate scores depth: 2 = detail.md present, 1 = intent.md only, 0 = stub.
+ *      Sort order: depth desc, mtime desc, sid asc (depth tie-breaks before mtime).
  * Returns null on any failure (no throw).
  */
 function resolveWorkflowSessionId(_ctx = {}) {
@@ -55,6 +57,8 @@ function resolveWorkflowSessionId(_ctx = {}) {
     }
   } catch (_) {}
 
+  // Priority 2: CLAUDE_ENV_FILE → CLAUDE_SESSION_ID + intent.md existence check.
+  // Already guards against stub selection: falls through to Priority 3 only when intent.md is absent.
   const envFile = process.env.CLAUDE_ENV_FILE;
   if (envFile) {
     try {
@@ -95,7 +99,14 @@ function resolveWorkflowSessionId(_ctx = {}) {
     if (prefix.length < 8 || prefix.slice(0, 8) !== todayStr) continue;
     try {
       const mtimeMs = fs.statSync(path.join(plansDir, entry)).mtimeMs;
-      candidates.push({ sid: prefix, mtimeMs });
+      let depth = 0;
+      try {
+        if (fs.existsSync(path.join(plansDir, prefix + "-detail.md"))) depth = 2;
+        else if (fs.existsSync(path.join(plansDir, prefix + "-intent.md"))) depth = 1;
+      } catch (_) {
+        // stat error → fail-open (depth=0)
+      }
+      candidates.push({ sid: prefix, mtimeMs, depth });
     } catch (_) {
       // skip unreadable
     }
@@ -103,7 +114,7 @@ function resolveWorkflowSessionId(_ctx = {}) {
 
   if (candidates.length === 0) return null;
 
-  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs || a.sid.localeCompare(b.sid));
+  candidates.sort((a, b) => b.depth - a.depth || b.mtimeMs - a.mtimeMs || a.sid.localeCompare(b.sid));
   return candidates[0].sid;
 }
 
