@@ -367,4 +367,8 @@ Changes: doc-append CHANGELOG.md --category BUGFIX --subject "#912 — superviso
 
 ### FEATURE: PR #964 (2026-06-18)
 Background: feat(#953,#882,#922): split robust-workflow tests + fix review-tests staged-token
-Changes: Split tests/feature-robust-workflow.sh (1225 → 49 lines dispatcher): removes the pre-existing HARD size violation that caused review-code-size to block every PR that touched this test file;Fix /review-tests stale-token block in linked-worktree sessions: token now computed against the worktree that actually has staged test files, not the main worktree
+Changes: Split tests/feature-robust-workflow.sh (1225 → 49 lines dispatcher): removes the pre-existing HARD size violation that caused review-code-size to block every PR that touched this test file;Fix /review-tests stale-token block in linked-worktree sessions: token now computed against the worktree that actually has staged test files, not the main worktree
+
+### FEATURE: PR #972 (2026-06-19)
+Background: feat(#942,#697): Claude Code E2E test policy SSOT + dotfileslink transactional safety
+Changes: Safer `dotfileslink` install: existing files are now staged to `.bak.tmp` before linking and promoted to `.bak` only after the symlink succeeds, so a failed install no longer loses both the original file and any prior `.bak`. Watchlist `profile-snippet.{sh,ps1}` now warns when any of `CLAUDE.md`, `skills`, `rules`, or `agents` lose their symlink (previously only `CLAUDE.md` was watched). New `RUN_E2E` config flag in `.env` opts into `claude -p` end-to-end tests (off by default; gates exit 77 on opt-out and when `claude` is not on PATH).
