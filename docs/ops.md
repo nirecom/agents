@@ -150,3 +150,26 @@ done
 
 After migration, all session artifacts (`-intent.md`, `-outline.md`,
 `-detail.md`, `drafts/-context.md`) share a prefix-less session-ID stem.
+
+## Claude Code E2E Tests
+
+E2E tests that spawn real `claude -p` sessions are opt-in. They are gated on the
+`RUN_E2E` config flag — `bin/get-config-var --is-off RUN_E2E off && exit 77`
+makes the test skip with TAP exit code 77 when the flag is off. Set
+`RUN_E2E=on` in the agents config `.env` to run them locally.
+
+When `claude` is not on `PATH`, gates also exit 77
+(`command -v claude >/dev/null 2>&1 || exit 77`). This keeps CI green on hosts
+where Claude Code is unavailable.
+
+Each `claude -p` invocation is wrapped in `run_with_timeout 180` per
+[`rules/test/macos-timeout.md`](../rules/test/macos-timeout.md). The 180-second
+budget covers cold-start + plan + execute + Stop hook on a typical workstation.
+
+Native-environment caveat: WSL sessions launched through the Windows-native
+Claude Code binary do not propagate `CLAUDECODE` into the WSL shell and read
+settings from the Windows profile. Tests that pass under WSL-via-Windows may
+still fail on a macOS-native or Linux-native install. Always verify on a true
+native environment before declaring an E2E test green. See
+[`rules/test/claude-e2e.md`](../rules/test/claude-e2e.md) for the full
+precaution list and acceptance criteria.

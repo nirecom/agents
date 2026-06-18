@@ -628,20 +628,33 @@ fi
 TMPDIR_PRIMARY_JS="${TMPDIR_PRIMARY_WIN//\\//}"
 TMPDIR_SIBLING_JS="${TMPDIR_SIBLING_WIN//\\//}"
 
-# Init two bare git repos (use Unix paths for git commands — Git Bash handles them)
+# Init two bare git repos (use Unix paths for git commands — Git Bash handles them).
+# `-c core.hooksPath=` neutralizes the globally-configured agents pre-commit hook so
+# it does not fire inside these throwaway temp repos (which look like main worktrees
+# to the hook because --git-common-dir == --git-dir).
 git -C "$TMPDIR_PRIMARY_UNIX" init -q
-git -C "$TMPDIR_PRIMARY_UNIX" commit --allow-empty -q -m "init"
+git -C "$TMPDIR_PRIMARY_UNIX" -c core.hooksPath= commit --allow-empty -q -m "init"
 git -C "$TMPDIR_SIBLING_UNIX" init -q
-git -C "$TMPDIR_SIBLING_UNIX" commit --allow-empty -q -m "init"
+git -C "$TMPDIR_SIBLING_UNIX" -c core.hooksPath= commit --allow-empty -q -m "init"
 
 # Temporarily replace settings.json with a mock that lists only the sibling.
-# The hook uses __dirname/../settings.json to load additionalDirectories.
+# findAdditionalDirectories() reads ~/.claude/settings.json first, then falls back to
+# agents/settings.json — so mock both to ensure the test environment is deterministic
+# regardless of whether ~/.claude/settings.json is an installed file or a symlink.
 HOOKS_DIR="$(dirname "$HOOK_UNIX")"
 AGENTS_ROOT="$(dirname "$HOOKS_DIR")"
 REAL_SETTINGS="$AGENTS_ROOT/settings.json"
 MOCK_SETTINGS="$AGENTS_ROOT/settings.json.bak"
 cp "$REAL_SETTINGS" "$MOCK_SETTINGS"
 printf '{"permissions":{"additionalDirectories":["%s"]}}' "$TMPDIR_SIBLING_JS" > "$REAL_SETTINGS"
+
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CLAUDE_SETTINGS_BAK=""
+if [ -e "$CLAUDE_SETTINGS" ] && [ ! -L "$CLAUDE_SETTINGS" ]; then
+  CLAUDE_SETTINGS_BAK="$CLAUDE_SETTINGS.test-bak.$$"
+  mv "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS_BAK"
+  printf '{"permissions":{"additionalDirectories":["%s"]}}' "$TMPDIR_SIBLING_JS" > "$CLAUDE_SETTINGS"
+fi
 
 # H1: primary has staged changes → return primary
 touch "$TMPDIR_PRIMARY_UNIX/file.txt"
@@ -705,6 +718,9 @@ fi
 
 # Restore real settings.json
 mv "$MOCK_SETTINGS" "$REAL_SETTINGS"
+if [ -n "$CLAUDE_SETTINGS_BAK" ]; then
+  mv "$CLAUDE_SETTINGS_BAK" "$CLAUDE_SETTINGS"
+fi
 rm -rf "$TMPDIR_PRIMARY_UNIX" "$TMPDIR_SIBLING_UNIX"
 
 # ============================================================
