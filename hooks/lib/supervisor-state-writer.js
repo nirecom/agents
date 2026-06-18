@@ -3,11 +3,11 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
-const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES } = require("./supervisor-state-schema");
+const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES, L2_RETRY_THRESHOLD } = require("./supervisor-state-schema");
 const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
 const findingStatus = require("./supervisor-finding-status");
 
-const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase", "l2_cause"]);
+const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase", "l2_cause", "l2_retry_count"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -255,6 +255,7 @@ function writeLayer2State(sessionId, patch) {
     findings: [],
     l2_phase: null,
     l2_cause: null,
+    l2_retry_count: 0,
     ...existing,
   };
 
@@ -269,11 +270,20 @@ function writeLayer2State(sessionId, patch) {
   if ("l2_armed_at" in patch && patch.l2_armed_at === null && !("l2_cause" in patch)) {
     layer2.l2_cause = null;
   }
+  if ("l2_retry_count" in patch) layer2.l2_retry_count = patch.l2_retry_count;
 
   // #905: terminal states must never carry a stale l2_armed_at.
   if (effectivePhase === "done" || effectivePhase === "frozen") {
     layer2.l2_armed_at = null;
     layer2.l2_cause = null;
+  }
+
+  // #912 C-HIGH-3: supervisor success path resets retry counter at writer SSOT.
+  // Applies to ANY writeLayer2State caller setting l2_phase=done (not just CLI),
+  // so direct callers cannot leave a stale l2_retry_count carrying into the next cycle.
+  // Explicit l2_retry_count in patch wins (test fixtures may set non-zero values).
+  if (effectivePhase === "done" && !("l2_retry_count" in patch)) {
+    layer2.l2_retry_count = 0;
   }
 
   // Append findings. Draft-status entries get auto-assigned idx for later --confirm/--drop.
@@ -299,6 +309,24 @@ function writeLayer2State(sessionId, patch) {
   return true;
 }
 
+function incrementL2RetryCount(sessionId) {
+  const state = readStateOrInit(sessionId);
+  const l2 = state.layer2 || {};
+  // #912 C-HIGH-2: both done and frozen are terminal — never increment from either.
+  // Without the done short-circuit, a stale retry_count on a done session could be
+  // incremented into frozen via a later C3 / cumSev=error path, corrupting terminal-state semantics.
+  if (l2.l2_phase === "frozen" || l2.l2_phase === "done") {
+    return { count: l2.l2_retry_count || 0, frozen: l2.l2_phase === "frozen" };
+  }
+  const nextCount = (l2.l2_retry_count || 0) + 1;
+  if (nextCount >= L2_RETRY_THRESHOLD) {
+    writeLayer2State(sessionId, { l2_retry_count: nextCount, l2_phase: "frozen" });
+    return { count: nextCount, frozen: true };
+  }
+  writeLayer2State(sessionId, { l2_retry_count: nextCount });
+  return { count: nextCount, frozen: false };
+}
+
 function mutateLayer2State(sid, mutator) {
   const fp = getStatePath(sid); const state = readStateOrInit(sid); mutator(state);
   state.last_updated = new Date().toISOString();
@@ -310,4 +338,4 @@ const confirmFinding = (sid, idx) => mutateLayer2State(sid, (s) => findingStatus
 const dropFindings = (sid, idxs) => mutateLayer2State(sid, (s) => findingStatus.dropFindings(s, idxs));
 const promotePendingDraftsToConfirmed = (sid) => mutateLayer2State(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
 
-module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, confirmFinding, dropFindings, promotePendingDraftsToConfirmed };
+module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, incrementL2RetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed };
