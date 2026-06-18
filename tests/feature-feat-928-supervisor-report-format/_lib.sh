@@ -64,9 +64,20 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 }
 
 format_cumsev_error() {
-    # args: findings_json sid wsid supervisorPath
-    local findings="$1" sid="$2" wsid="$3" sp="$4"
-    run_with_timeout 5 node -e "
+    # args: findings_json sid wsid supervisorPath [stateFilePath]
+    local findings="$1" sid="$2" wsid="$3" sp="$4" stp="${5:-}"
+    if [ -n "$stp" ]; then
+        run_with_timeout 5 node -e "
+const f = require('$FORMATTER_NODE');
+const findings = $findings;
+const sid = '$sid';
+const wsid = $wsid;
+const sp = '$sp';
+const stp = '$stp';
+process.stdout.write(f.formatCumSevErrorReason(findings, sid, wsid, sp, stp));
+" 2>/dev/null
+    else
+        run_with_timeout 5 node -e "
 const f = require('$FORMATTER_NODE');
 const findings = $findings;
 const sid = '$sid';
@@ -74,6 +85,7 @@ const wsid = $wsid;
 const sp = '$sp';
 process.stdout.write(f.formatCumSevErrorReason(findings, sid, wsid, sp));
 " 2>/dev/null
+    fi
 }
 
 format_l2_armed() {
