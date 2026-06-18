@@ -4,7 +4,6 @@
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "95",
     "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1"
   },
-  "language": "japanese",
   "attribution": {
     "commit": "",
     "pr": ""
