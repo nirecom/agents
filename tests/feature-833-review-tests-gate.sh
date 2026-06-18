@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/lib/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, sentinel, stale-token
 #
 # Gate / mark integration tests for the review_tests step (issue #833).
@@ -12,6 +12,7 @@
 #   - WRITE_TESTS_NOT_NEEDED propagates skip to review_tests
 #   - Manual MARK_STEP review_tests is rejected (token-only path)
 #   - All-complete sequence approves the commit gate
+#   - wsid (workflow session id) match enforcement (Section F, sourced)
 #
 # L3 gap (what this test does NOT catch):
 # - Whether the live /review-tests skill actually emits a correct token
@@ -464,6 +465,16 @@ if [ "$STATUS_E7" = "pending" ]; then
 else
     fail "E7. expected pending (manual mark rejected), got status=$STATUS_E7"
 fi
+
+# ============================================================================
+# Section F: wsid match enforcement (sourced)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/feature-833-review-tests-gate/section-f.sh"
+
+# ============================================================================
+# Section G: checkReviewTests unit + markReviewTestsComplete error guard (sourced)
+# ============================================================================
+source "$(dirname "${BASH_SOURCE[0]}")/feature-833-review-tests-gate/section-g.sh"
 
 # ============================================================================
 # Summary
