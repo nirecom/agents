@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/assemble-cmd-parse.js, hooks/show-plan-link.js, hooks/show-plan-link.js., skills/_shared/assemble-mandatory.sh
+# Tests: hooks/lib/assemble-cmd-parse.js, hooks/show-plan-link.js, skills/_shared/assemble-mandatory.sh
 # Tags: plan, vscode, hook, workflow, plans
 # Tests for isFinalPlanArtifact detection and systemMessage output in hooks/show-plan-link.js.
 #
