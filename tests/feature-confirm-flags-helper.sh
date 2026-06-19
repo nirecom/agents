@@ -1,7 +1,14 @@
 #!/bin/bash
 # Tests: bin/get-config-var
-# Tags: bin, shell, env, config, tests
+# Tags: bin, shell, env, config, tests, scope:common
 # Tests for bin/get-config-var helper used by confirm-flags feature.
+#
+# L3 gap (what this test does NOT catch):
+# - real symlink installed by dotfileslink.sh/ps1 into ~/.local/bin reading
+#   the actual user .env (symlink regression test uses a tmp fake-agents dir)
+# - pwsh variant behavior (covered by tests/fix-get-config-var-hardening.Tests.ps1)
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
+# preflight via bin/check-verification-gate.sh category: pwsh-required
 #
 # Pre-implementation: ALL tests are expected to FAIL with "file/command not
 # found" because bin/get-config-var has not been written yet. Once the
@@ -72,35 +79,97 @@ capture_exit() {
 # Unit: --is-off truthy values (exit 0)
 # ---------------------------------------------------------------------------
 echo "=== Unit: --is-off truthy (exit 0) ==="
-for v in off OFF Off 0 false no disabled; do
+for v in off OFF Off; do
     unset_isolated_env
     export GETCFG_TESTVAR="$v"
     capture_exit 0 "is-off exits 0 for '$v'" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
 done
 
 # ---------------------------------------------------------------------------
-# Unit: --is-off non-OFF values (exit 1)
+# Unit: --is-off non-OFF values
 # ---------------------------------------------------------------------------
-echo "=== Unit: --is-off non-OFF (exit 1) ==="
-# 'on' explicit
+echo "=== Unit: --is-off non-OFF values ==="
+# 'on' explicit — explicit ON, exit 1
 unset_isolated_env; export GETCFG_TESTVAR="on"
 capture_exit 1 "is-off exits 1 for 'on'" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
 
-# empty value — exporting empty string in bash
+# empty value resolves to default 'on' (substitution), which is an explicit ON → exit 1
 unset_isolated_env; export GETCFG_TESTVAR=""
-capture_exit 1 "is-off exits 1 for empty value" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+capture_exit 1 "is-off exits 1 for empty value (default 'on' substitutes)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
 
-# unknown value
+# unknown value — exit 3 (unrecognized)
 unset_isolated_env; export GETCFG_TESTVAR="maybe"
-capture_exit 1 "is-off exits 1 for 'maybe'" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+capture_exit 3 "is-off exits 3 for 'maybe' (unrecognized value)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
 
-# leading space — NO trim, so " off" != "off"
+# leading space — NO trim, so " off" != "off" → unrecognized, exit 3
 unset_isolated_env; export GETCFG_TESTVAR=" off"
-capture_exit 1 "is-off exits 1 for ' off' (leading space, no trim)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+capture_exit 3 "is-off exits 3 for ' off' (unrecognized)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
 
-# trailing space
+# trailing space → unrecognized, exit 3
 unset_isolated_env; export GETCFG_TESTVAR="off "
-capture_exit 1 "is-off exits 1 for 'off ' (trailing space, no trim)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+capture_exit 3 "is-off exits 3 for 'off ' (unrecognized)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+
+# formerly-synonymous OFF values now exit 3 (vocabulary: off/on only)
+for v in 0 false no disabled; do
+    unset_isolated_env
+    export GETCFG_TESTVAR="$v"
+    capture_exit 3 "is-off exits 3 for '$v' (not in off/on vocabulary)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+done
+
+# ---------------------------------------------------------------------------
+# Unit: --is-off explicit ON values (exit 1)
+# ---------------------------------------------------------------------------
+echo "=== Unit: --is-off explicit ON values (exit 1) ==="
+for v in on ON On; do
+    unset_isolated_env
+    export GETCFG_TESTVAR="$v"
+    capture_exit 1 "is-off exits 1 for explicit ON '$v'" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR off
+done
+
+# formerly-synonymous ON values now exit 3 (vocabulary: off/on only)
+for v in 1 true yes enabled; do
+    unset_isolated_env
+    export GETCFG_TESTVAR="$v"
+    capture_exit 3 "is-off exits 3 for '$v' (not in off/on vocabulary)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR off
+done
+
+# ---------------------------------------------------------------------------
+# Unit: --is-off exit code matrix (#954 hardening)
+# ---------------------------------------------------------------------------
+# pre-implementation: these tests assert post-#954 behaviour and will fail
+# until /write-code updates bin/get-config-var.
+echo "=== Unit: --is-off exit code matrix (#954 hardening) ==="
+
+# Typo value → exit 3 + stderr mentions 'unrecognized'
+unset_isolated_env; export GETCFG_TESTVAR="offf"
+capture_exit 3 "typo 'offf' exits 3 (unrecognized)" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on  # pre-implementation
+unset_isolated_env; export GETCFG_TESTVAR="offf"
+err=$(run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on 2>&1 >/dev/null || true)
+if echo "$err" | grep -qi "unrecognized"; then
+    pass "typo value stderr contains 'unrecognized'"
+else
+    fail "typo value stderr should contain 'unrecognized', got: '$err'"  # pre-implementation
+fi
+
+# Unset key, no default arg → exit 2 (no value resolvable)
+unset_isolated_env
+capture_exit 2 "unset key + no default exits 2" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR  # pre-implementation
+
+# Unset key, default 'off' → exit 0 (default supplied → drives result)
+unset_isolated_env
+capture_exit 0 "unset key + default 'off' exits 0" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR off
+
+# Unset key, default 'on' → exit 1 (default ON)
+unset_isolated_env
+capture_exit 1 "unset key + default 'on' exits 1" -- run_with_timeout "$HELPER" --is-off GETCFG_TESTVAR on
+
+# Internal failure: copy helper to a dir with no sibling hooks/lib/load-env.js
+# and unset AGENTS_CONFIG_DIR so the require() chain cannot resolve.
+mkdir -p "$TMPDIR_BASE/helpers"
+cp "$HELPER" "$TMPDIR_BASE/helpers/get-config-var"
+chmod +x "$TMPDIR_BASE/helpers/get-config-var" 2>/dev/null || true
+unset_isolated_env
+capture_exit 4 "internal failure exits 4 (no load-env.js)" -- run_with_timeout "$TMPDIR_BASE/helpers/get-config-var" --is-off GETCFG_TESTVAR on  # pre-implementation
 
 # ---------------------------------------------------------------------------
 # Unit: --is-off produces no stdout
@@ -115,17 +184,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Unit: missing arg → exit 2 + stderr contains "usage"
+# Unit: missing arg → exit 64 (EX_USAGE) + stderr contains "usage"
 # ---------------------------------------------------------------------------
-echo "=== Unit: missing arg → exit 2 + 'usage' ==="
+# pre-implementation: usage-error exit code moves 2 → 64 per #954.
+echo "=== Unit: missing arg → exit 64 + 'usage' ==="
 unset_isolated_env
 err=$(run_with_timeout "$HELPER" 2>&1 >/dev/null || true)
 rc=0
 run_with_timeout "$HELPER" >/dev/null 2>&1 || rc=$?
-if [ "$rc" = "2" ]; then
-    pass "no-arg exits 2"
+if [ "$rc" = "64" ]; then
+    pass "no-arg exits 64"
 else
-    fail "no-arg should exit 2, got $rc"
+    fail "no-arg should exit 64, got $rc"  # pre-implementation
 fi
 if echo "$err" | grep -qi "usage"; then
     pass "no-arg stderr contains 'usage'"
@@ -333,6 +403,52 @@ if [ "$out1" = "$out2" ]; then
     pass "two consecutive calls produce identical output + exit"
 else
     fail "idempotency broken: '$out1' vs '$out2'"
+fi
+
+# ---------------------------------------------------------------------------
+# Regression: #893 symlink install resolves real agents repo
+# ---------------------------------------------------------------------------
+# pre-implementation: symlink resolution relies on the #893 fix to readlink
+# the script path. On Windows without Developer Mode the symlink creation
+# itself fails (silent skip).
+echo "=== Regression: #893 symlink install ==="
+FAKE_AGENTS="$TMPDIR_BASE/fake-agents"
+FAKE_HOME="$TMPDIR_BASE/fake-home"
+mkdir -p "$FAKE_AGENTS/hooks/lib" "$FAKE_HOME"
+cp "$REPO_ROOT/hooks/lib/load-env.js" "$FAKE_AGENTS/hooks/lib/load-env.js"
+printf 'CONFIRM_DETAIL=off\n' > "$FAKE_AGENTS/.env"
+
+ln_ok=1
+ln -s "$HELPER" "$FAKE_HOME/get-config-var" 2>/dev/null || ln_ok=0
+if [ "$ln_ok" = "0" ] || [ ! -L "$FAKE_HOME/get-config-var" ]; then
+    echo "SKIP: symlink creation not available (Windows non-dev-mode?)"
+else
+    unset_isolated_env
+    capture_exit 0 "symlink resolves real repo (AGENTS_CONFIG_DIR wins)" -- env AGENTS_CONFIG_DIR="$FAKE_AGENTS" run_with_timeout "$FAKE_HOME/get-config-var" --is-off CONFIRM_DETAIL on  # pre-implementation
+    val=$(AGENTS_CONFIG_DIR="$FAKE_AGENTS" run_with_timeout "$FAKE_HOME/get-config-var" CONFIRM_DETAIL on 2>/dev/null || true)
+    if [ "$val" = "off" ]; then
+        pass "symlink value-mode reads .env via AGENTS_CONFIG_DIR"
+    else
+        fail "symlink value-mode should print 'off', got: '$val'"  # pre-implementation
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Call-site: fail-closed [ -x ] guard (static check)
+# ---------------------------------------------------------------------------
+# pre-implementation: guards will be added by /write-code per #954.
+echo "=== Call-site: fail-closed [ -x ] guard (static check) ==="
+PHASE5="$REPO_ROOT/tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh"
+SETTINGS_E2E="$REPO_ROOT/tests/feature-robust-workflow/settings-e2e.sh"
+if [ -f "$PHASE5" ] && grep -q '\[ -x.*bin/get-config-var' "$PHASE5"; then
+    pass "phase5: [ -x ] guard present"
+else
+    fail "phase5: [ -x ] guard missing"  # pre-implementation
+fi
+if [ -f "$SETTINGS_E2E" ] && grep -q '\[ -x.*bin/get-config-var' "$SETTINGS_E2E"; then
+    pass "settings-e2e: [ -x ] guard present"
+else
+    fail "settings-e2e: [ -x ] guard missing"  # pre-implementation
 fi
 
 # ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ fi
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Skip unless RUN_E2E is enabled in .env (Anthropic-billable).
+[ -x "$AGENTS_DIR/bin/get-config-var" ] || { echo "SKIP: $AGENTS_DIR/bin/get-config-var not found or not executable" >&2; exit 77; }
 if "$AGENTS_DIR/bin/get-config-var" --is-off RUN_E2E off; then
   echo "SKIP: requires RUN_E2E=on in .env" >&2; exit 77
 fi
