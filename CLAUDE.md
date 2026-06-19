@@ -35,20 +35,11 @@ WF-CODE-6. **Run tests & Security review** — Run all in parallel (single respo
    - Skill: `/run-tests`
    - Agent: `/review-code-security` as a subagent. If unnecessary: `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"`
    - Bash: `review-code-codex --base <merge-base> --context "$AGENTS_CONFIG_DIR/rules/core-principles.md"` for cross-provider adversarial review
-     (always parallel, never blocks workflow). Output is shown directly to the user via
-     the Bash tool result, so the `## Codex Review: PERFORMED|SKIPPED|FAILED` status line
-     is visible without relying on Claude's summary.
    - Bash: `review-skill-size --base <merge-base>` for skill definition size/quality check
-     (always parallel; HARD >200 lines blocks via exit 1; WARN/INFO advisory)
    - Bash: `review-code-size --base <merge-base>` for JS/SH/PY file size check
-     (always parallel; HARD >500 lines blocks via exit 1; WARN/INFO advisory)
    - Bash: `review-env-example --base <merge-base>` for .env.example comment-style check
-     (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
    - Bash: `review-step-numbers --base <merge-base>` for decimal step-label lint
-     (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
    - Bash: `review-e2e-coverage --base <merge-base>` for hook E2E coverage soft-warn
-     (always parallel; soft-warn only — exit 0; never blocks workflow;
-      complements `check-verification-gate.sh` `hook-registration` category: this gate checks E2E test file existence at WF-CODE-6, while `check-verification-gate.sh` confirms hook firing with the user at WORKFLOW_USER_VERIFIED preflight)
 WF-CODE-7. **Docs** — Run `/update-docs`. Mandatory.
 WF-CODE-8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-8.
