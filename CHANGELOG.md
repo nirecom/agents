@@ -375,4 +375,8 @@ Changes: Safer `dotfileslink` install: existing files are now staged to `.bak.tm
 
 ### FEATURE: PR #974 (2026-06-19)
 Background: fix(#913): supervisor-guard dual-ID readState fallback + stray-} syntax fix
-Changes: Fixed: EM Supervisor Layer 2 review now correctly triggers when supervisor state was written under a workflow session ID rather than the CC UUID — previously the Stop hook silently passed, allowing sessions with findings to continue unreviewed.
+Changes: Fixed: EM Supervisor Layer 2 review now correctly triggers when supervisor state was written under a workflow session ID rather than the CC UUID — previously the Stop hook silently passed, allowing sessions with findings to continue unreviewed.
+
+### FEATURE: PR #976 (2026-06-19)
+Background: feat(#971): step-number rule (rules/prompt.md §4) + bin/review-step-numbers + WE/SC renumber
+Changes: Decimal-fractional step labels (e.g. WE-2.5, SC-3.5) are now formally prohibited by rules/prompt.md §4; new bin/review-step-numbers lint enforces this at WF-CODE-6 with HARD exit 1.
