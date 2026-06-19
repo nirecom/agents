@@ -12,7 +12,8 @@ extension and re-enters the review loop.
 | Parameter | outline value | detail value |
 |---|---|---|
 | LABEL | `"Outline Plan Review"` | `"Detail Plan Review"` |
-| RAW_FILE | `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md` | `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md` |
+| RAW_FILE | `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<ROUND_NUMBER-1>-raw.md` (most recently persisted; the cap-reach round's RAW_FILE is never written — see codex-review-loop.md §d.1) | `<PLANS_DIR>/drafts/<session-id>-codex-round-<ROUND_NUMBER-1>-raw.md` (most recently persisted) |
+| LEDGER_FILE | `<PLANS_DIR>/drafts/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt` | `<PLANS_DIR>/drafts/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt` |
 | MAX_EXTENSIONS | 1 | 1 |
 
 ## Protocol
@@ -23,6 +24,8 @@ b. Inspect `RAW_FILE` → derive `ALL_HIGH` (1 if every concern is HIGH severity
 
 c. CC re-reads the draft + concerns → `CC_AGREES_HIGH` (1 if CC independently
    judges every concern as HIGH severity, 0 otherwise).
+
+c.5. Render the concern summary block to the main conversation: invoke `review-loop-summarize-concerns --ledger <LEDGER_FILE> --raw <RAW_FILE> --budget-remaining $BUDGET_REMAINING --label <LABEL>` and print its stdout verbatim. `<RAW_FILE>` is the path with `<ROUND_NUMBER-1>` already substituted by the caller (MOP-6 / MDP-6). This output is exempted from the per-stage chat-output restrictions. When ROUND_NUMBER==1 the prior-round RAW_FILE does not exist; the helper's degraded RAW mode handles this and is the documented expected outcome — do not patch the persistence contract.
 
 d. Invoke the helper:
 
@@ -60,3 +63,5 @@ invocation fires `FAILED — absolute ceiling reached`.
 - The caller's `revision_rounds` cap and `research_rounds` cap (where
   applicable) are unrelated to the bounded extension budget; they trigger
   separate escalation paths.
+- `bin/review-loop-summarize-concerns` is the canonical concern-summary renderer — see the script for the full argument contract, output schema, the prior-round (`ROUND_NUMBER-1`) RAW_FILE convention, and the first-round cap-reach degraded path.
+- When `ALL_HIGH==true` AND `CC_AGREES_HIGH==true` AND `BUDGET_REMAINING>0`, step c.5 still fires (summary is printed) but step d exits 42 (AUTO_EXTEND) without showing the dialog — the user gets visibility into deferred concerns.
