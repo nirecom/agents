@@ -174,6 +174,8 @@ clause order, different interpreter), the matcher silently re-blocks and the
 CONFIRM_* flag is treated as ON. Any future change to the probe string must
 update the matcher in lockstep.
 
+The helper's `--is-off` exit code map carries five distinct values (OFF=0, explicit-ON=1, unset-no-default=2, unrecognized-value=3, internal-failure=4); the `&& echo OFF || echo ON` shell idiom maps exit 0 → OFF and all non-zero → ON, so the regex's binary classification is unchanged.
+
 ### WIP commit signal (`git -c workflow.wip=1`)
 
 For fixup / intermediate commits between substantive work, `workflow-gate.js`
