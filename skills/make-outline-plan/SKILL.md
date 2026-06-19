@@ -87,8 +87,12 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
 
 MOP-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`
-   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
+   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<round_number-1>-raw.md`
+     - `<round_number-1>` = `$(( $(cat <PLANS_DIR>/drafts/<session-id>-outline-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 the resulting path does not exist — the helper's degraded RAW mode applies (documented expected outcome for first-round cap-reach).
+   - LEDGER_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt`
    - MAX_EXTENSIONS: 1
+
+   Step c.5 of the dispatch protocol prints the concern summary block to chat before AskUserQuestion fires.
 
    Override: `rc==0` + user picks `adjust` → halt and re-run `/clarify-intent` (not generic user-escalation). AUTO_EXTEND / `extend` → loop back into MOP-5.
 
@@ -128,7 +132,8 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
   (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the prose rationale preamble emitted in MOP-7 before `AskUserQuestion`
-  No per-round natural-language summaries, no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
+  (d) the concern summary block rendered by step c.5 of cap-menu-dispatch.md when MOP-6 fires — exactly one block per cap-reach event.
+  No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state).
 - **Confirmation dialogs per run**: OFF mode fires neither. ON mode with a single approach selected fires two: MOP-7 (`AskUserQuestion`) and MOP-8 (`<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel). ON mode where MOP-7 yielded "Pass all approaches to make-detail-plan without selecting" fires MOP-7 only — MOP-8 sentinel is bypassed (Logical-OR bypass, same effect as `CONFIRM_OUTLINE=off`).
