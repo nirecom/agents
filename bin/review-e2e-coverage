@@ -1,0 +1,262 @@
+#!/usr/bin/env bash
+# Hook E2E coverage soft-warn lint per rules/test/claude-e2e.md.
+# Usage: review-e2e-coverage [--base <ref>] [--all]
+#
+# Always emits one of:
+#   ## E2E-Coverage Review: PERFORMED
+#   ## E2E-Coverage Review: PERFORMED (all-scan mode)
+#   ## E2E-Coverage Review: SKIPPED — <reason>
+#
+# Exits 0 always (soft-warn only — WARN/INFO are advisory; never blocks).
+# Parses the Hook Audit table from rules/test/claude-e2e.md (repo root).
+
+set -uo pipefail
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+# Self-contamination guard: exclude files that test review-e2e-coverage itself.
+# Those files contain claude -p / RUN_E2E / hook names as fixtures — they must
+# not be treated as E2E coverage for the hooks they mention.
+SELF_TEST_FRONTMATTER_PATTERN='^# Tests:.*review-e2e-coverage'
+
+# ---------------------------------------------------------------------------
+# Argument parsing (matches bin/review-step-numbers pattern)
+# ---------------------------------------------------------------------------
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## E2E-Coverage Review: SKIPPED (--base requires an argument)"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## E2E-Coverage Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Repository root and Hook Audit table path
+# ---------------------------------------------------------------------------
+REPO_ROOT="$(git -C "${PWD}" rev-parse --show-toplevel 2>/dev/null || pwd)"
+HOOK_AUDIT_PATH="$REPO_ROOT/rules/test/claude-e2e.md"
+
+# ---------------------------------------------------------------------------
+# parse_hook_audit_table — emit "hooks/foo.js<TAB>P1" lines to stdout.
+# Returns 1 if the Hook Audit heading or canonical header row is absent.
+# bash 3.2 compatible (no associative arrays).
+# ---------------------------------------------------------------------------
+parse_hook_audit_table() {
+  local audit_file="$1"
+  [[ -f "$audit_file" ]] || return 1
+
+  local found_heading=0 found_header=0
+
+  while IFS= read -r raw || [[ -n "$raw" ]]; do
+    local line="${raw%$'\r'}"   # strip CRLF
+
+    # Locate ## Hook Audit heading
+    if [[ "$line" =~ ^##[[:space:]]Hook[[:space:]]Audit ]]; then
+      found_heading=1
+      continue
+    fi
+    [[ "$found_heading" -eq 0 ]] && continue
+
+    # Look for canonical header row
+    if [[ "$found_header" -eq 0 ]]; then
+      if echo "$line" | grep -q "| Hook |" && echo "$line" | grep -q "Priority"; then
+        found_header=1
+      fi
+      continue
+    fi
+
+    # Skip separator row
+    [[ "$line" =~ ^\|[[:space:]]*--- ]] && continue
+
+    # End of table
+    [[ -z "$line" || ! "$line" =~ ^\| ]] && break
+
+    # Extract hook name from backtick-quoted path
+    local hook_name
+    hook_name=$(printf '%s' "$line" | sed "s/.*\`\(hooks\/[^\`]*\)\`.*/\1/")
+    echo "$hook_name" | grep -q '^hooks/' || continue
+
+    # Extract priority token (P1, P2, P3, OUT)
+    local priority
+    priority=$(printf '%s' "$line" | grep -oE '\*\*(P[0-9]+|OUT)[[:space:]]*(—|--)' | \
+               sed 's/\*\*//g; s/[[:space:]]*—//g; s/[[:space:]]*--//g' | head -1)
+    [[ -z "$priority" ]] && continue
+
+    printf '%s\t%s\n' "$hook_name" "$priority"
+  done < "$audit_file"
+
+  [[ "$found_heading" -eq 1 && "$found_header" -eq 1 ]] || return 1
+}
+
+# ---------------------------------------------------------------------------
+# find_e2e_for_hook — search tests/ for a compliant E2E file covering HOOK.
+# Prints the matching path(s) to stdout; returns 1 when none found.
+# AND condition: file must contain "claude -p" AND "RUN_E2E" AND hook ref.
+# ---------------------------------------------------------------------------
+find_e2e_for_hook() {
+  local hook_name="$1"
+  local hook_basename; hook_basename=$(basename "$hook_name")   # workflow-mark.js
+  local hook_stem="${hook_basename%.js}"                        # workflow-mark
+
+  local found=0
+  while IFS= read -r candidate; do
+    [[ -f "$candidate" ]] || continue
+
+    # Self-contamination guard
+    if head -10 "$candidate" 2>/dev/null | grep -q "$SELF_TEST_FRONTMATTER_PATTERN"; then
+      continue
+    fi
+
+    # AND condition (fixed-string matching avoids regex metachar issues in hook names)
+    grep -q "claude -p" "$candidate" 2>/dev/null || continue
+    grep -q "RUN_E2E"   "$candidate" 2>/dev/null || continue
+    { grep -qF "$hook_basename" "$candidate" 2>/dev/null || \
+      grep -qF "$hook_stem"     "$candidate" 2>/dev/null; } || continue
+
+    echo "$candidate"
+    found=1
+  done < <(find tests/ -type f -name '*.sh' \
+              -not -path '*/_archived/*' \
+              -not -path '*/node_modules/*' \
+              -not -path '*/.git/*' \
+              2>/dev/null | sort -u || true)
+
+  return $((found == 0 ? 1 : 0))
+}
+
+# ---------------------------------------------------------------------------
+# emit_footer — standard soft-warn footer
+# ---------------------------------------------------------------------------
+emit_footer() {
+  echo ""
+  echo "  Soft-warn only — advisory output; this check never blocks (exit 0)."
+  echo "  Checked against: rules/test/claude-e2e.md Hook Audit table"
+}
+
+# ---------------------------------------------------------------------------
+# scan_hooks — core loop; called with a newline-separated list of hook paths.
+# Reads TABLE_DATA from outer scope.
+# ---------------------------------------------------------------------------
+scan_hooks() {
+  local hook_list="$1"
+  local mode="$2"   # "diff" or "all"
+  local warn_count=0 info_count=0
+
+  while IFS= read -r hook_path; do
+    [[ -z "$hook_path" ]] && continue
+
+    local priority
+    priority=$(printf '%s\n' "$TABLE_DATA" | awk -F'\t' -v h="$hook_path" '$1==h {print $2; exit}')
+
+    if [[ -z "$priority" ]]; then
+      # Not in Hook Audit table
+      if [[ "$mode" == "all" ]]; then
+        echo "INFO: $hook_path — not in Hook Audit table (consider classifying per rules/test/claude-e2e.md)"
+        info_count=$((info_count + 1))
+      fi
+      # diff mode: silent skip (avoid false positives for unlisted hooks)
+      continue
+    fi
+
+    if [[ "$priority" == OUT* ]]; then
+      echo "INFO: $hook_path — OUT-defer; E2E intentionally absent (re-evaluate per Hook Audit Rationale)"
+      info_count=$((info_count + 1))
+    else
+      local e2e_file
+      e2e_file=$(find_e2e_for_hook "$hook_path" 2>/dev/null | head -1 || true)
+      if [[ -n "$e2e_file" ]]; then
+        echo "INFO: $hook_path — E2E coverage present (file: $e2e_file)"
+        info_count=$((info_count + 1))
+      else
+        echo "WARN: $hook_path — E2E test file not found (Priority: $priority per rules/test/claude-e2e.md Hook Audit table)"
+        warn_count=$((warn_count + 1))
+      fi
+    fi
+  done <<< "$hook_list"
+
+  echo ""
+  echo "  Totals: ${warn_count} WARN, ${info_count} INFO"
+}
+
+# ---------------------------------------------------------------------------
+# --all scan mode
+# ---------------------------------------------------------------------------
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  echo "## E2E-Coverage Review: PERFORMED (all-scan mode)"
+  echo ""
+
+  TABLE_DATA=$(parse_hook_audit_table "$HOOK_AUDIT_PATH" 2>/dev/null || true)
+  if [[ -z "$TABLE_DATA" ]]; then
+    echo "INFO: Hook Audit table not parseable — skipping coverage check (rules/test/claude-e2e.md format may have drifted)"
+    emit_footer
+    exit 0
+  fi
+
+  ALL_HOOKS=$(find hooks/ -maxdepth 1 -name '*.js' 2>/dev/null | sort | \
+              sed 's|^\./||' || true)
+  if [[ -z "$ALL_HOOKS" ]]; then
+    echo "No hooks/*.js files found."
+    emit_footer
+    exit 0
+  fi
+
+  scan_hooks "$ALL_HOOKS" "all"
+  emit_footer
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Diff mode
+# ---------------------------------------------------------------------------
+BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+  echo "## E2E-Coverage Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+}
+
+ERR_FILE=$(mktemp)
+trap 'rm -f "$ERR_FILE"' EXIT
+
+CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "${BASE_SHA}...HEAD" 2>"$ERR_FILE" || true)
+if [[ -s "$ERR_FILE" ]]; then
+  echo "## E2E-Coverage Review: SKIPPED (git diff failed: $(cat "$ERR_FILE"))"; exit 0
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+
+CHANGED_HOOKS=$(printf '%s\n' \
+    "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" \
+  | sort -u | grep -E '^hooks/[^/]+\.js$' || true)
+
+if [[ -z "$CHANGED_HOOKS" ]]; then
+  echo "## E2E-Coverage Review: SKIPPED — no hooks/*.js files changed"
+  emit_footer
+  exit 0
+fi
+
+TABLE_DATA=$(parse_hook_audit_table "$HOOK_AUDIT_PATH" 2>/dev/null || true)
+
+echo "## E2E-Coverage Review: PERFORMED"
+echo ""
+
+if [[ -z "$TABLE_DATA" ]]; then
+  echo "INFO: Hook Audit table not parseable — skipping coverage check (rules/test/claude-e2e.md format may have drifted)"
+  emit_footer
+  exit 0
+fi
+
+scan_hooks "$CHANGED_HOOKS" "diff"
+emit_footer
+exit 0
