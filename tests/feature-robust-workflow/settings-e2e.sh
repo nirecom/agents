@@ -41,6 +41,7 @@ fi
 echo ""
 echo "=== E2E: PostToolUse hook real invocation ==="
 
+[ -x "$DOTFILES_DIR/bin/get-config-var" ] || { echo "SKIP: $DOTFILES_DIR/bin/get-config-var not found or not executable" >&2; exit 77; }
 if ! "$DOTFILES_DIR/bin/get-config-var" --is-off RUN_E2E off; then
     E1_SESSION_ID="e1e1e1e1-0000-0000-0000-000000000001"
     E1_REPO="$TMPDIR_BASE/e2e-e1-repo"
