@@ -46,6 +46,9 @@ WF-CODE-6. **Run tests & Security review** — Run all in parallel (single respo
      (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
    - Bash: `review-step-numbers --base <merge-base>` for decimal step-label lint
      (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
+   - Bash: `review-e2e-coverage --base <merge-base>` for hook E2E coverage soft-warn
+     (always parallel; soft-warn only — exit 0; never blocks workflow;
+      complements `check-verification-gate.sh` `hook-registration` category: this gate checks E2E test file existence at WF-CODE-6, while `check-verification-gate.sh` confirms hook firing with the user at WORKFLOW_USER_VERIFIED preflight)
 WF-CODE-7. **Docs** — Run `/update-docs`. Mandatory.
 WF-CODE-8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-8.
