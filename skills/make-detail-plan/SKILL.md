@@ -48,7 +48,11 @@ ROUND_NUMBER tracked at `<PLANS_DIR>/drafts/<session-id>-detail-plan-round-numbe
 
 ### Step MDP-6 — Cap-reach dispatch
 
-Apply `skills/_shared/cap-menu-dispatch.md` with LABEL=`"Detail Plan Review"`, RAW_FILE=`<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`, MAX_EXTENSIONS=1.
+Apply `skills/_shared/cap-menu-dispatch.md` with LABEL=`"Detail Plan Review"`, RAW_FILE=`<PLANS_DIR>/drafts/<session-id>-codex-round-<round_number-1>-raw.md`, LEDGER_FILE=`<PLANS_DIR>/drafts/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt`, MAX_EXTENSIONS=1.
+
+`<round_number-1>` = `$(( $(cat <PLANS_DIR>/drafts/<session-id>-detail-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 (rare for detail stage, which uses CAP=2) the resulting path does not exist — the helper's degraded RAW mode applies.
+
+Step c.5 of the dispatch protocol prints the concern summary block to chat before AskUserQuestion fires.
 
 Detail-specific override: `rc==0`, user picks `adjust` → escalate (loop status / current plan / blocking concerns). Other outcomes route per shared spec; AUTO_EXTEND / `extend` → loop back into MDP-5.
 
@@ -87,7 +91,7 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 
 - Read intent/outline before planning — never plan from assumptions.
 - Outline's Delivery plan must be surfaced in MDP-2 before planner subagent runs (required).
-- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) NO path output — `show-plan-link.js` PostToolUse hook is the sole authoritative breadcrumb (do not print/duplicate/translate/paraphrase/reformat); (c) the `Delivery plan (...)` summary from MDP-2. Diagnostics → `<session-id>-detail-debug.log`.
+- Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) NO path output — `show-plan-link.js` PostToolUse hook is the sole authoritative breadcrumb (do not print/duplicate/translate/paraphrase/reformat); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by step c.5 of cap-menu-dispatch.md when MDP-6 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.

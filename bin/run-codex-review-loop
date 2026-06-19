@@ -373,6 +373,7 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       FINAL_EXIT=1
       ;;
     2)
+      cp "$LEDGER" "${LEDGER%.txt}-cap-snapshot.txt" 2>/dev/null || true
       rm -f "$LEDGER"
       FINAL_EXIT=2
       ;;
