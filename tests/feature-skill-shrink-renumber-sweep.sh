@@ -73,7 +73,7 @@ check_absent() {
     fi
 }
 
-# R3: "WI-11" in workflow-init/SKILL.md
+# R3: "WI-11" in workflow-init/SKILL.md (post-#968 renumber: WI-11 = post-check)
 check_literal "R3" "WI-11" "skills/workflow-init/SKILL.md"
 
 # R4: "WE-20" in worktree-end/scripts/cleanup-cascade.sh (canonical spec for WE-15..WE-22)
