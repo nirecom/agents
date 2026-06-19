@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Pure helper: emit a Markdown concern-summary block to stdout for the cap-menu
+# dialog. Reads a concern ledger and a prior-round RAW_FILE. Never writes to disk.
+#
+# IMPORTANT CONTRACT NOTES:
+#   - This helper consumes ROUND_NUMBER-1's RAW_FILE (not the cap-reach round's).
+#   - The cap-reach round's RAW_FILE is never written: codex-review-loop.md §d.1
+#     persists RAW_FILE only on exit 1 (CONTINUE), not on exit 2 (cap reach).
+#   - When ROUND_NUMBER==1, the prior-round file does not exist on disk and the
+#     helper's degraded RAW mode applies — this is the documented expected
+#     outcome (first-round cap-reach). Do not "fix" by changing the persistence
+#     contract.
+#   - No jq dependency.
+#
+# Usage:
+#   review-loop-summarize-concerns --budget-remaining N
+#                                  [--ledger PATH] [--raw PATH] [--label TEXT]
+#
+# Exit codes:
+#   0  — summary emitted to stdout (including degraded modes)
+#   2  — argument error
+set -uo pipefail
+
+BUDGET_REMAINING=""
+LEDGER=""
+RAW=""
+LABEL=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ledger)           LEDGER="$2";           shift 2 ;;
+    --raw)              RAW="$2";              shift 2 ;;
+    --budget-remaining) BUDGET_REMAINING="$2"; shift 2 ;;
+    --label)            LABEL="$2";            shift 2 ;;
+    *) echo "review-loop-summarize-concerns: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+[[ -n "$BUDGET_REMAINING" ]] || { echo "review-loop-summarize-concerns: --budget-remaining is required" >&2; exit 2; }
+[[ "$BUDGET_REMAINING" =~ ^[0-9]+$ ]] || { echo "review-loop-summarize-concerns: --budget-remaining must be a non-negative integer, got: $BUDGET_REMAINING" >&2; exit 2; }
+
+# Sentinel sanitiser: strip workflow / detail-skippable sentinels before stdout.
+# Uses sed regex; never eval user content.
+sanitize() {
+  sed -E \
+    -e 's/<<WORKFLOW_[A-Z_]+[^>]*>>//g' \
+    -e 's/<<DETAIL_SKIPPABLE_BY_PLANNER:[^>]*>>//g'
+}
+
+# Determine ledger mode
+LEDGER_MODE="ok"
+if [[ -z "$LEDGER" || ! -f "$LEDGER" || ! -s "$LEDGER" ]]; then
+  if [[ -z "$LEDGER" || ! -f "$LEDGER" ]]; then
+    LEDGER_MODE="missing"
+  else
+    LEDGER_MODE="empty"
+  fi
+fi
+
+# Determine raw mode
+RAW_MODE="ok"
+if [[ -z "$RAW" || ! -f "$RAW" ]]; then
+  RAW_MODE="missing"
+fi
+
+# Parse ledger into three severity buckets + OTHER
+HIGH_ITEMS=()
+MED_ITEMS=()
+LOW_ITEMS=()
+OTHER_ITEMS=()
+OTHER_WARN=0
+
+if [[ "$LEDGER_MODE" == "ok" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip blank lines
+    [[ -z "$line" ]] && continue
+    # Skip lines not starting with C<digit>
+    [[ "$line" =~ ^C[0-9] ]] || continue
+
+    id="$(printf '%s' "$line" | cut -d'|' -f1)"
+    sev="$(printf '%s' "$line" | cut -d'|' -f2)"
+    body="$(printf '%s' "$line" | cut -d'|' -f3-)"
+
+    case "$sev" in
+      HIGH)   HIGH_ITEMS+=("${id}|${sev}|${body}") ;;
+      MEDIUM) MED_ITEMS+=("${id}|${sev}|${body}") ;;
+      LOW)    LOW_ITEMS+=("${id}|${sev}|${body}") ;;
+      *)      OTHER_ITEMS+=("${id}|${sev}|${body}"); OTHER_WARN=1 ;;
+    esac
+  done < "$LEDGER"
+fi
+
+if [[ "$OTHER_WARN" -eq 1 ]]; then
+  echo "review-loop-summarize-concerns: warning — ledger contained entries with unexpected severity (not HIGH/MEDIUM/LOW); emitted in OTHER bucket" >&2
+fi
+
+# Lookup resolution from RAW_FILE for a given concern ID.
+# Echoes one of: "resolved" | "unresolved|<reason>" | "unknown"
+lookup_resolution() {
+  local id="$1"
+  if [[ "$RAW_MODE" != "ok" ]]; then
+    echo "unknown"
+    return
+  fi
+  # Find a matching line. Case-insensitive on the verdict word.
+  local hit
+  hit="$(grep -iE "^${id}:[[:space:]]*(resolved|unresolved)" "$RAW" 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$hit" ]]; then
+    echo "unknown"
+    return
+  fi
+  # Determine verdict
+  if printf '%s' "$hit" | grep -qiE "^${id}:[[:space:]]*resolved"; then
+    echo "resolved"
+    return
+  fi
+  # unresolved — capture reason text after the word "unresolved"
+  local reason
+  reason="$(printf '%s' "$hit" | sed -E "s/^${id}:[[:space:]]*[Uu][Nn][Rr][Ee][Ss][Oo][Ll][Vv][Ee][Dd]//")"
+  # Strip leading separator " — " or " - " or ":" plus spaces
+  reason="$(printf '%s' "$reason" | sed -E 's/^[[:space:]]*[-—:][[:space:]]*//' | sed -E 's/^[[:space:]]+//')"
+  echo "unresolved|${reason}"
+}
+
+# Emit one concern entry (4-space indented body).
+emit_concern() {
+  local entry="$1"
+  local id sev body
+  id="$(printf '%s' "$entry" | cut -d'|' -f1)"
+  sev="$(printf '%s' "$entry" | cut -d'|' -f2)"
+  body="$(printf '%s' "$entry" | cut -d'|' -f3-)"
+
+  local res
+  res="$(lookup_resolution "$id")"
+
+  local res_text
+  case "$res" in
+    resolved) res_text="resolved" ;;
+    unknown)  res_text="unknown" ;;
+    unresolved\|*)
+      local reason="${res#unresolved|}"
+      if [[ -n "$reason" ]]; then
+        res_text="unresolved — ${reason}"
+      else
+        res_text="unresolved"
+      fi
+      ;;
+    *) res_text="unknown" ;;
+  esac
+
+  printf '  - **%s** [%s] — %s\n' "$id" "$sev" "$res_text"
+  printf '    %s\n' "$body"
+}
+
+# Build output, then sanitize once.
+{
+  echo "### Round cap reached — review concerns"
+  echo
+  echo "- Budget remaining: ${BUDGET_REMAINING}"
+
+  if [[ "$LEDGER_MODE" != "ok" ]]; then
+    echo "- Concerns (sorted HIGH → MEDIUM → LOW):"
+    if [[ "$LEDGER_MODE" == "missing" ]]; then
+      echo "  - (concern ledger not available)"
+    else
+      echo "  - (concern ledger is empty)"
+    fi
+  else
+    echo "- Concerns (sorted HIGH → MEDIUM → LOW):"
+    for item in "${HIGH_ITEMS[@]:-}"; do
+      [[ -z "$item" ]] && continue
+      emit_concern "$item"
+    done
+    for item in "${MED_ITEMS[@]:-}"; do
+      [[ -z "$item" ]] && continue
+      emit_concern "$item"
+    done
+    for item in "${LOW_ITEMS[@]:-}"; do
+      [[ -z "$item" ]] && continue
+      emit_concern "$item"
+    done
+    for item in "${OTHER_ITEMS[@]:-}"; do
+      [[ -z "$item" ]] && continue
+      emit_concern "$item"
+    done
+  fi
+
+  if [[ "$RAW_MODE" != "ok" && "$LEDGER_MODE" == "ok" ]]; then
+    echo "- (no reviewer output available for cap-reach round — first-round cap-reach or prior raw not persisted)"
+  fi
+} | sanitize
