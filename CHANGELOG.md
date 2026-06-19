@@ -379,4 +379,8 @@ Changes: Fixed: EM Supervisor Layer 2 review now correctly triggers when supervi
 
 ### FEATURE: PR #976 (2026-06-19)
 Background: feat(#971): step-number rule (rules/prompt.md §4) + bin/review-step-numbers + WE/SC renumber
-Changes: Decimal-fractional step labels (e.g. WE-2.5, SC-3.5) are now formally prohibited by rules/prompt.md §4; new bin/review-step-numbers lint enforces this at WF-CODE-6 with HARD exit 1.
+Changes: Decimal-fractional step labels (e.g. WE-2.5, SC-3.5) are now formally prohibited by rules/prompt.md §4; new bin/review-step-numbers lint enforces this at WF-CODE-6 with HARD exit 1.
+
+### FEATURE: PR #978 (2026-06-19)
+Background: feat(#811): surface concern summary before cap-menu AskUserQuestion dialog
+Changes: Cap-menu dialog now shows a structured concern summary (concern ID, severity, body, resolution status, remaining extensions) immediately before the Land/Adjust/Extend choice, giving users the context they need to decide at round cap.
