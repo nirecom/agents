@@ -82,3 +82,20 @@ Never reproduce content from another authoritative file. Link or reference inste
 
 When pointing to a master file, do not restate its content. A one-line pointer is enough.
 
+## 4. Step numbering
+
+### 4.1 Decimal step labels are PROHIBITED
+
+Decimal-fractional step labels (e.g. `WE-2.5`, `SC-3.5`, `WI-4.5`) are PROHIBITED.
+When inserting a new step between existing integer labels, use the next integer and renumber all subsequent siblings.
+
+### 4.2 Letter-suffix labels are permitted for sub-steps
+
+Letter-suffix labels (e.g. `WE-3b`, `MDP-4a`, `SC-3a`, `WF-CODE-2a`) are permitted for conditional branches or sub-steps of a parent integer step.
+Letter-suffix labels do NOT participate in renumber sweeps when a new integer step is inserted.
+
+### 4.3 Renumber the tail, not the head
+
+When a new step lands at integer N, every existing step at integer >= N shifts by +1.
+Update all cross-references (siblings, `Rules` section, scripts under `scripts/`, tests under `tests/`, and `CLAUDE.md` references) in the same diff.
+

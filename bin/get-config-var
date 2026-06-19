@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Usage:
-#   get-config-var <NAME> [<default>]                  -> prints resolved value to stdout
-#   get-config-var --is-off <NAME> [<default>]         -> exit 0 if value is OFF, 1 otherwise (stdout empty)
+#   get-config-var <NAME> [<default>]
+#       Prints resolved value to stdout. Exits 0.
+#   get-config-var --is-off <NAME> [<default>]
+#       Exit 0 (OFF) | 1 (explicit ON) | 2 (unset, no default given) |
+#       3 (unrecognized value, stderr warning) | 4 (internal failure).
+#       Shell idiom '&& echo OFF || echo ON' maps exit 0 → OFF, 1/2/3/4 → ON.
+#   Usage error (missing NAME arg): exit 64.
 #
-# Reads $AGENTS_CONFIG_DIR/.env via hooks/lib/load-env.js.
+# Resolution order for hooks/lib/load-env.js:
+#   1. $AGENTS_CONFIG_DIR/hooks/lib/load-env.js  (when AGENTS_CONFIG_DIR set)
+#   2. $(dirname $0)/../hooks/lib/load-env.js     (SCRIPT_DIR fallback)
 # Process env wins over .env (parity with load-env.js).
-# Always exits 0/1/2 (2 = usage error). Never writes to .env.
 
 set -u
 
@@ -19,23 +25,53 @@ GETCV_DEFAULT="${2:-}"
 
 if [ -z "$GETCV_NAME" ]; then
   printf 'usage: get-config-var [--is-off] <NAME> [<default>]\n' >&2
-  exit 2
+  exit 64
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-GETCV_LOADENV="$SCRIPT_DIR/../hooks/lib/load-env.js"
+if [ -n "${AGENTS_CONFIG_DIR:-}" ] && [ -f "$AGENTS_CONFIG_DIR/hooks/lib/load-env.js" ]; then
+  GETCV_LOADENV="$AGENTS_CONFIG_DIR/hooks/lib/load-env.js"
+else
+  _SCRIPT="${BASH_SOURCE[0]}"
+  _target="$(readlink "$_SCRIPT" 2>/dev/null)"
+  while [ -n "$_target" ]; do
+    case "$_target" in
+      /*) _SCRIPT="$_target" ;;
+      *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
+    esac
+    _target="$(readlink "$_SCRIPT" 2>/dev/null)"
+  done
+  SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
+  GETCV_LOADENV="$SCRIPT_DIR/../hooks/lib/load-env.js"
+fi
+
+GETCV_KIND_FILE=""
+trap 'rm -f "$GETCV_KIND_FILE"' EXIT
+GETCV_KIND_FILE="$(mktemp)"
+export GETCV_KIND_FILE
 
 VAL="$(GETCV_NAME="$GETCV_NAME" GETCV_DEFAULT="$GETCV_DEFAULT" GETCV_LOADENV="$GETCV_LOADENV" node -e '
-  try { require(process.env.GETCV_LOADENV).loadDefaultEnv(); } catch (e) {}
+  const fs = require("fs");
+  try { require(process.env.GETCV_LOADENV).loadDefaultEnv(); fs.writeFileSync(process.env.GETCV_KIND_FILE, "loaded"); } catch (e) { fs.writeFileSync(process.env.GETCV_KIND_FILE, "unloaded"); }
   const v = process.env[process.env.GETCV_NAME];
   process.stdout.write(v && v.length ? v : (process.env.GETCV_DEFAULT || ""));
 ')"
 
 if [ "$MODE" = "is-off" ]; then
+  KIND="$(cat "$GETCV_KIND_FILE" 2>/dev/null || echo 'unloaded')"
+  if [ "$KIND" = "unloaded" ]; then
+    exit 4
+  fi
+  if [ -z "$VAL" ]; then
+    exit 2
+  fi
   v_lower="$(printf '%s' "$VAL" | tr '[:upper:]' '[:lower:]')"
   case "$v_lower" in
-    off|0|false|no|disabled) exit 0 ;;
-    *) exit 1 ;;
+    off) exit 0 ;;
+    on)  exit 1 ;;
+    *)
+      printf 'get-config-var: unrecognized value %s for %s (treated as ON)\n' \
+        "$VAL" "$GETCV_NAME" >&2
+      exit 3 ;;
   esac
 fi
 

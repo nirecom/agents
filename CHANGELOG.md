@@ -367,4 +367,24 @@ Changes: doc-append CHANGELOG.md --category BUGFIX --subject "#912 — superviso
 
 ### FEATURE: PR #964 (2026-06-18)
 Background: feat(#953,#882,#922): split robust-workflow tests + fix review-tests staged-token
-Changes: Split tests/feature-robust-workflow.sh (1225 → 49 lines dispatcher): removes the pre-existing HARD size violation that caused review-code-size to block every PR that touched this test file;Fix /review-tests stale-token block in linked-worktree sessions: token now computed against the worktree that actually has staged test files, not the main worktree
+Changes: Split tests/feature-robust-workflow.sh (1225 → 49 lines dispatcher): removes the pre-existing HARD size violation that caused review-code-size to block every PR that touched this test file;Fix /review-tests stale-token block in linked-worktree sessions: token now computed against the worktree that actually has staged test files, not the main worktree
+
+### FEATURE: PR #972 (2026-06-19)
+Background: feat(#942,#697): Claude Code E2E test policy SSOT + dotfileslink transactional safety
+Changes: Safer `dotfileslink` install: existing files are now staged to `.bak.tmp` before linking and promoted to `.bak` only after the symlink succeeds, so a failed install no longer loses both the original file and any prior `.bak`. Watchlist `profile-snippet.{sh,ps1}` now warns when any of `CLAUDE.md`, `skills`, `rules`, or `agents` lose their symlink (previously only `CLAUDE.md` was watched). New `RUN_E2E` config flag in `.env` opts into `claude -p` end-to-end tests (off by default; gates exit 77 on opt-out and when `claude` is not on PATH).
+
+### FEATURE: PR #974 (2026-06-19)
+Background: fix(#913): supervisor-guard dual-ID readState fallback + stray-} syntax fix
+Changes: Fixed: EM Supervisor Layer 2 review now correctly triggers when supervisor state was written under a workflow session ID rather than the CC UUID — previously the Stop hook silently passed, allowing sessions with findings to continue unreviewed.
+
+### FEATURE: PR #976 (2026-06-19)
+Background: feat(#971): step-number rule (rules/prompt.md §4) + bin/review-step-numbers + WE/SC renumber
+Changes: Decimal-fractional step labels (e.g. WE-2.5, SC-3.5) are now formally prohibited by rules/prompt.md §4; new bin/review-step-numbers lint enforces this at WF-CODE-6 with HARD exit 1.
+
+### FEATURE: PR #978 (2026-06-19)
+Background: feat(#811): surface concern summary before cap-menu AskUserQuestion dialog
+Changes: Cap-menu dialog now shows a structured concern summary (concern ID, severity, body, resolution status, remaining extensions) immediately before the Land/Adjust/Extend choice, giving users the context they need to decide at round cap.
+
+### BUGFIX: PR #977 (2026-06-19)
+Background: fix(#893,#954): get-config-var symlink resolution + --is-off exit code hardening
+Changes: `get-config-var --is-off` now correctly reads `.env` when installed as a symlink (e.g. dotfiles setups via `dotfileslink`). `CONFIRM_*` flag reads no longer silently return ON when the script is invoked via `~/.local/bin/`. (#893);`get-config-var --is-off` now exits 2 when the key is unset and no default was supplied (previously treated as ON without diagnostic). Exits 3 for unrecognized values with a stderr warning. Exits 4 on internal failure. Usage error exits 64. These new codes all map to the ON branch of the `&& echo OFF || echo ON` idiom, so existing call sites are unaffected. (#954)

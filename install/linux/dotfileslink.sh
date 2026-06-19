@@ -22,6 +22,8 @@ if [ "$_dl_is_windows" = "1" ]; then
     export MSYS=winsymlinks:nativestrict
 fi
 
+# _link_one: transactional symlink creation with rollback.
+# Returns 0 on success, 1 on failure (never `exit`s). Caller decides whether to continue.
 _link_one() {
     local source="$1" dest="$2"
     [ -e "$source" ] || { printf "${C_YELLOW}Source not found: %s (skipping)${C_RESET}\n" "$source" >&2; return 0; }
@@ -34,13 +36,20 @@ _link_one() {
             printf '%s' "$1"
         fi
     }
+    local _rollback="none"   # none | restore-symlink | restore-file
+    local _old_target=""
+    local _bak=""
+    local _tmp_bak=""
     if [ -L "$dest" ]; then
         local cur; cur="$(readlink "$dest" 2>/dev/null || true)"
         if [ "$(_norm "$cur")" = "$(_norm "$source")" ] \
                 || { [ "$dest" -ef "$source" ] 2>/dev/null; }; then
             printf "${C_GRAY}Already linked: %s${C_RESET}\n" "$dest"; return 0
         fi
-        printf "${C_YELLOW}Relinking: %s${C_RESET}\n" "$dest"; rm -f "$dest"
+        printf "${C_YELLOW}Relinking: %s${C_RESET}\n" "$dest"
+        _old_target="$cur"
+        _rollback="restore-symlink"
+        rm -f "$dest"
     elif [ -e "$dest" ]; then
         local _is_jct=0
         if [ "$_dl_is_windows" = "1" ] && [ -d "$dest" ] && command -v cmd.exe >/dev/null 2>&1; then
@@ -60,14 +69,48 @@ _link_one() {
             fi
             printf "${C_YELLOW}Removing junction: %s${C_RESET}\n" "$dest"
             rmdir "$dest" 2>/dev/null || rm -rf "$dest"
+            # Junction rollback is best-effort; original target is not reliably captured.
         else
-            local _bak="${dest}.bak"
+            _bak="${dest}.bak"
+            _tmp_bak="${dest}.bak.tmp.$$"
             printf "${C_YELLOW}Backing up: %s -> %s${C_RESET}\n" "$dest" "$_bak"
-            rm -rf "$_bak"; mv "$dest" "$_bak"
+            mv "$dest" "$_tmp_bak"
+            _rollback="restore-file"
         fi
     fi
-    ln -s "$source" "$dest"
+    if ! ln -s "$source" "$dest" 2>/dev/null; then
+        case "$_rollback" in
+            restore-symlink)
+                ln -s "$_old_target" "$dest" 2>/dev/null || true
+                ;;
+            restore-file)
+                mv "$_tmp_bak" "$dest" 2>/dev/null || true
+                ;;
+        esac
+        printf "${C_YELLOW}Failed to link: %s (rollback applied)${C_RESET}\n" "$dest" >&2
+        return 1
+    fi
+    # ln succeeded — promote the new backup transactionally so the old .bak
+    # survives any failure of the final mv (HIGH-2 from codex review).
+    if [ "$_rollback" = "restore-file" ]; then
+        local _old_bak="${_bak}.old.$$"
+        local _had_old_bak=0
+        if [ -e "$_bak" ]; then
+            _had_old_bak=1
+            mv "$_bak" "$_old_bak" || {
+                printf "${C_YELLOW}Backup promotion failed: cannot stage old .bak (%s retained, new .bak at %s)${C_RESET}\n" "$_bak" "$_tmp_bak" >&2
+                return 1
+            }
+        fi
+        if ! mv "$_tmp_bak" "$_bak"; then
+            [ "$_had_old_bak" = "1" ] && mv "$_old_bak" "$_bak" 2>/dev/null || true
+            printf "${C_YELLOW}Backup promotion failed: %s (old .bak retained)${C_RESET}\n" "$dest" >&2
+            return 1
+        fi
+        [ "$_had_old_bak" = "1" ] && rm -rf "$_old_bak"
+    fi
     printf "${C_GREEN}Linked: %s -> %s${C_RESET}\n" "$dest" "$source"
+    return 0
 }
 
 # --- ~/.claude/ symlinks ---
@@ -80,17 +123,26 @@ else
         printf "${C_YELLOW}Removing obsolete symlink: ~/.claude/commands${C_RESET}\n"
         rm -f ~/.claude/commands
     fi
-    _link_one "$AGENTS_ROOT/CLAUDE.md"  "$HOME/.claude/CLAUDE.md"
-    _link_one "$AGENTS_ROOT/skills"     "$HOME/.claude/skills"
-    _link_one "$AGENTS_ROOT/rules"      "$HOME/.claude/rules"
-    _link_one "$AGENTS_ROOT/agents"     "$HOME/.claude/agents"
+    # Track per-link failures; aggregate non-zero exit signals install.sh failure.
+    _link_failed=0
+    _link_one "$AGENTS_ROOT/CLAUDE.md"  "$HOME/.claude/CLAUDE.md"   || _link_failed=$((_link_failed+1))
+    _link_one "$AGENTS_ROOT/skills"     "$HOME/.claude/skills"      || _link_failed=$((_link_failed+1))
+    _link_one "$AGENTS_ROOT/rules"      "$HOME/.claude/rules"       || _link_failed=$((_link_failed+1))
+    _link_one "$AGENTS_ROOT/agents"     "$HOME/.claude/agents"      || _link_failed=$((_link_failed+1))
     # Remove stale settings.json symlink that used to point directly into agents/
     if [ -L ~/.claude/settings.json ]; then
         printf "${C_YELLOW}Removing stale symlink: ~/.claude/settings.json${C_RESET}\n"
         rm -f ~/.claude/settings.json
     fi
+    if [ "$_link_failed" -gt 0 ]; then
+        printf "${C_YELLOW}Symlink failures: %d${C_RESET}\n" "$_link_failed" >&2
+        exit 1
+    fi
     printf "${C_GREEN}Symlinks created in ~/.claude/${C_RESET}\n"
 fi
+
+# Test affordance — see tests/feature-697-dotfileslink-link-one.sh
+[ "${DOTFILESLINK_LINKS_ONLY:-0}" = "1" ] && exit 0
 
 # --- Assemble ~/.claude/settings.json from base + extension ---
 node "$AGENTS_ROOT/install/assemble-settings.js"
@@ -193,3 +245,7 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-size${C_RESET}\n"
 # --- ~/.local/bin/review-env-example symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-env-example" ~/.local/bin/review-env-example
 printf "${C_GREEN}Symlinked: ~/.local/bin/review-env-example${C_RESET}\n"
+
+# --- ~/.local/bin/review-step-numbers symlink ---
+ln -sf "$AGENTS_ROOT/bin/review-step-numbers" ~/.local/bin/review-step-numbers
+printf "${C_GREEN}Symlinked: ~/.local/bin/review-step-numbers${C_RESET}\n"

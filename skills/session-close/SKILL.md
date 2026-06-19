@@ -67,7 +67,7 @@ bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; echo "NON_GITHUB_RC=$?"
 ```
 
 - Non-zero → non-GitHub remote. Write skipped outcomes (pass `'[]'` when
-  `closes_issues` is empty), then skip to SC-4:
+  `closes_issues` is empty), then skip to SC-6:
 
 ```bash
 node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
@@ -80,7 +80,7 @@ via `hooks/lib/parse-closes-issues.js`, inlined as a literal at substitution tim
 
 - Zero → GitHub remote. Parse `closes_issues` from
   `<PLANS_DIR>/<session-id>-intent.md` via the canonical parser.
-  - `[]` → write empty outcome, skip to SC-4:
+  - `[]` → write empty outcome, skip to SC-6:
 
 ```bash
 printf '{"issues":[]}\n' > "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
@@ -101,28 +101,28 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ```
 
-## Step SC-3.5 — Retrospective pass (write-only)
+## Step SC-4 — Retrospective pass (write-only)
 
 Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings are written to `layer1.findings` for the audit trail only. The final-report-env.json anchor (established at Step 2A) prevents these findings from arming a new L2 cycle for this session.
 
-## Step SC-3.6 — Pre-Final-Report L2 gate
+## Step SC-5 — Pre-Final-Report L2 gate
 
 Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
 
 - `"pending"` and `l2_armed_at !== null`: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
   `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
-  The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-4.
+  The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-6.
   Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step 3.5 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step 2A). This gate therefore reads a stable value.
 
-- `"pending"` and `l2_armed_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to SC-4.
+- `"pending"` and `l2_armed_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to SC-6.
 
-- `"done"` or `null`: proceed to SC-4. (`null` = L2 was never scheduled this session.)
+- `"done"` or `null`: proceed to SC-6. (`null` = L2 was never scheduled this session.)
 
-- `"frozen"`: proceed to SC-4. (Final Report re-emit scenario; idempotent.)
+- `"frozen"`: proceed to SC-6. (Final Report re-emit scenario; idempotent.)
 
-- State file absent: treat as `null` and proceed to SC-4.
+- State file absent: treat as `null` and proceed to SC-6.
 
-## Step SC-4 — Emit Final Report directly into assistant text
+## Step SC-6 — Emit Final Report directly into assistant text
 
 Read four input files via the Read tool:
 - `<PLANS_DIR>/<session-id>-final-report-env.json`

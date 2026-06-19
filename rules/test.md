@@ -42,7 +42,6 @@ When an L2 fallback is taken, verification of the residual gap MUST happen at th
 
 The authoritative list of risk categories lives in `bin/check-verification-gate.sh` — its stdout records both the category token and the question text. Do not duplicate the list here. Current categories: `pwsh-required`, `hook-registration`, `skill-orchestration`, `installer`.
 
-### L3 aspiration (long-term, out of scope for current implementation)
+### L3 aspiration
 
-- `agents` repo: VS Code + Claude Code session reproduced inside a Docker/VM image so `claude -p` can run end-to-end on CI.
-- `even` repo: real-device network testing across mobile + VPN; physical lab not yet wired.
+See [test/claude-e2e.md](test/claude-e2e.md) `## Acceptance Criteria for claude -p E2E Tests` for the current L3 contract. Long-term CI containerization for full `claude -p` sessions is out of scope for #942.

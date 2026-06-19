@@ -4,7 +4,7 @@ $AgentsRoot = $PSScriptRoot
 $env:AGENTS_CONFIG_DIR = $AgentsRoot
 $env:AGENTS_DIR        = $AgentsRoot
 
-$_agentSymlinks = @("$HOME\.claude\CLAUDE.md")
+$_agentSymlinks = @("$HOME\.claude\CLAUDE.md", "$HOME\.claude\skills", "$HOME\.claude\rules", "$HOME\.claude\agents")
 $_agentBroken = $_agentSymlinks | Where-Object {
     (Test-Path $_) -and -not ((Get-Item $_ -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)
 }

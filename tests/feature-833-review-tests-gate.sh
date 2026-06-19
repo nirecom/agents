@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/lib/workflow-state/state-io.js
-# Tags: workflow, gate, hook, review-tests, sentinel, stale-token
+# Tags: workflow, gate, hook, review-tests, sentinel, stale-token, scope:issue-specific
 #
 # Gate / mark integration tests for the review_tests step (issue #833).
 #
@@ -157,15 +157,18 @@ state_json_custom() {
     local sid="$1" branch="$2"; shift 2
     local branch_json
     if [ "$branch" = "null" ]; then branch_json="null"; else branch_json="\"$branch\""; fi
-    local clarify_intent="complete" research="complete" outline="complete" detail="complete"
+    local workflow_init="complete" clarify_intent="complete" research="complete"
+    local outline="complete" detail="complete"
     local branching_complete="complete" write_tests="complete" review_tests="pending"
     local review_security="complete" run_tests="complete" docs="complete"
-    local user_verification="complete" cleanup="complete" pre_final_report_gate="complete"
+    local user_verification="complete" cleanup="complete"
+    local pre_final_report_gate="complete"
     local review_tests_token=""
     local review_tests_warnings_summary=""
     local write_tests_skip_reason=""
     while [ $# -ge 2 ]; do
         case "$1" in
+            workflow_init) workflow_init="$2";;
             clarify_intent) clarify_intent="$2";;
             research) research="$2";;
             outline) outline="$2";;
@@ -202,18 +205,19 @@ state_json_custom() {
   "version": 1, "session_id": "$sid", "git_branch": $branch_json,
   "created_at": "$NOW_ISO",
   "steps": {
-    "clarify_intent":     {"status": "$clarify_intent", "updated_at": "$NOW_ISO"},
-    "research":           {"status": "$research", "updated_at": "$NOW_ISO"},
-    "outline":            {"status": "$outline", "updated_at": "$NOW_ISO"},
-    "detail":             {"status": "$detail", "updated_at": "$NOW_ISO"},
-    "branching_complete": {"status": "$branching_complete", "updated_at": "$NOW_ISO"},
-    "write_tests":        {"status": "$write_tests", "updated_at": "$NOW_ISO"$wt_extra},
-    "review_tests":       {"status": "$review_tests", "updated_at": "$NOW_ISO"$rt_extra},
-    "review_security":    {"status": "$review_security", "updated_at": "$NOW_ISO"},
-    "run_tests":          {"status": "$run_tests", "updated_at": "$NOW_ISO"},
-    "docs":               {"status": "$docs", "updated_at": "$NOW_ISO"},
-    "user_verification":  {"status": "$user_verification", "updated_at": "$NOW_ISO"},
-    "cleanup":            {"status": "$cleanup", "updated_at": "$NOW_ISO"},
+    "workflow_init":         {"status": "$workflow_init", "updated_at": "$NOW_ISO"},
+    "clarify_intent":        {"status": "$clarify_intent", "updated_at": "$NOW_ISO"},
+    "research":              {"status": "$research", "updated_at": "$NOW_ISO"},
+    "outline":               {"status": "$outline", "updated_at": "$NOW_ISO"},
+    "detail":                {"status": "$detail", "updated_at": "$NOW_ISO"},
+    "branching_complete":    {"status": "$branching_complete", "updated_at": "$NOW_ISO"},
+    "write_tests":           {"status": "$write_tests", "updated_at": "$NOW_ISO"$wt_extra},
+    "review_tests":          {"status": "$review_tests", "updated_at": "$NOW_ISO"$rt_extra},
+    "review_security":       {"status": "$review_security", "updated_at": "$NOW_ISO"},
+    "run_tests":             {"status": "$run_tests", "updated_at": "$NOW_ISO"},
+    "docs":                  {"status": "$docs", "updated_at": "$NOW_ISO"},
+    "user_verification":     {"status": "$user_verification", "updated_at": "$NOW_ISO"},
+    "cleanup":               {"status": "$cleanup", "updated_at": "$NOW_ISO"},
     "pre_final_report_gate": {"status": "$pre_final_report_gate", "updated_at": "$NOW_ISO"}
   }
 }
