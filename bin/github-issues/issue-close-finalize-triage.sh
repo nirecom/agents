@@ -106,7 +106,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         ;;
     OPEN:pending)
         # #690: Step E (doc-append) removed — docs/history.md is now written by
-        # /worktree-end Step WE-20 from WORKTREE_NOTES.md.
+        # /worktree-end Step WE-21 from WORKTREE_NOTES.md.
         ACTION=resume_e
         NEXT_STEPS="F,G,H,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
@@ -118,7 +118,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         ;;
     CLOSED:appended)
         # #690: Step E (doc-append) removed — docs/history.md is now written by
-        # /worktree-end Step WE-20 from WORKTREE_NOTES.md.
+        # /worktree-end Step WE-21 from WORKTREE_NOTES.md.
         ACTION=resume_j
         NEXT_STEPS="J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
@@ -142,7 +142,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         # orphan `pending` is harmless — consumers match only on the
         # `appended` prefix.
         # #690: Step E removed — history.md write is owned by /worktree-end
-        # Step WE-20. If the history entry is missing, use /issue-reconcile to
+        # Step WE-21. If the history entry is missing, use /issue-reconcile to
         # backfill via the standalone issue-to-history.sh.
         ACTION=stuck_sentinel_only
         NEXT_STEPS="J,K"

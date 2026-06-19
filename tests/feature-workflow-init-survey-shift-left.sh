@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: agents/survey-code.md, agents/survey-history.md, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/workflow-init/SKILL.md
-# Tags: workflow, init, routing, clarify-intent, planning
+# Tags: workflow, init, routing, clarify-intent, planning, scope:issue-specific
 # Test suite for "shift survey-code/survey-history left into workflow-init" (Issue #327).
 #
 # PRE-IMPLEMENTATION: This test file is written BEFORE source code changes land.
@@ -203,12 +203,12 @@ assert_file_not_contains "F4" "SC SKILL.md no longer contains absolute Read-only
 assert_file_contains     "F5" "SC SKILL.md references shared validity contract" \
     "$SC_SKILL" "skills/_shared/survey-artifact-valid.md"
 
-# F6-F10: Bug C — workflow-init Step 6.5
-assert_file_contains     "F6" "WI Step 6.5 references shared validity contract" \
+# F6-F10: Bug C — workflow-init Step WI-12
+assert_file_contains     "F6" "WI Step WI-12 references shared validity contract" \
     "$WI_SKILL" "skills/_shared/survey-artifact-valid.md"
-assert_file_not_contains "F7" "WI Step 6.5 no longer uses existence-only wording" \
+assert_file_not_contains "F7" "WI Step WI-12 no longer uses existence-only wording" \
     "$WI_SKILL" "verify each artifact exists at its absolute path"
-assert_file_not_contains "F8" "WI Step 6.5 does NOT inline artifact_valid() function body" \
+assert_file_not_contains "F8" "WI Step WI-12 does NOT inline artifact_valid() function body" \
     "$WI_SKILL" 'grep -qF "## Verified Claims"'
 assert_file_contains     "F9"  "WI retains WORKFLOW_SURVEY_AGENT_FAILED for survey-code" \
     "$WI_SKILL" "WORKFLOW_SURVEY_AGENT_FAILED: survey-code"

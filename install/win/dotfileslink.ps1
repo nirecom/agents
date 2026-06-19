@@ -190,3 +190,9 @@ $reeCmdContent = "@echo off`r`nwsl bash -c ""review-env-example %*""`r`n"
 Write-Launcher "$LocalBin\review-env-example.cmd" $reeCmdContent "review-env-example.cmd"
 $reeShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-env-example`" `"`$@`"`n"
 Write-Launcher "$LocalBin\review-env-example" $reeShimContent "review-env-example (bash shim)"
+
+# --- ~/.local/bin/review-step-numbers launchers (cmd + bash shim) ---
+$rsnCmdContent = "@echo off`r`nwsl bash -c ""review-step-numbers %*""`r`n"
+Write-Launcher "$LocalBin\review-step-numbers.cmd" $rsnCmdContent "review-step-numbers.cmd"
+$rsnShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-step-numbers`" `"`$@`"`n"
+Write-Launcher "$LocalBin\review-step-numbers" $rsnShimContent "review-step-numbers (bash shim)"

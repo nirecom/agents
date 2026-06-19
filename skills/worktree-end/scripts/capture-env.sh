@@ -142,7 +142,7 @@ PR_STATE="$(printf '%s\n' "$PR_FIELDS" | awk -F= '$1=="state"{sub(/^state=/,"");
 # Merge SHA — resolved from PR's mergeCommit.oid (authoritative; survives
 # main-worktree env reset). Retry once after 2s to absorb GitHub eventual-
 # consistency lag between `gh pr merge` and `gh pr view` reflecting the SHA.
-# Hard-fail if still empty: Step WE-20 cannot write history.md without it.
+# Hard-fail if still empty: Step WE-21 cannot write history.md without it.
 MERGE_SHA="$(gh -R "$REPO" pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
 if [[ -z "$MERGE_SHA" ]]; then
   sleep 2
