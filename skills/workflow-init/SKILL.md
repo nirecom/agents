@@ -25,7 +25,7 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 Regex `#\d+`:
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **≥2** → `ISSUES=(<all found numbers, in the order found>)`. `AskUserQuestion` "Which is the primary issue for this session?" — one branch per issue ("#<N> (first — recommended)" for index 0, "#<M>" for others). Then `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/confirm-primary.sh" "<selected_N>" "<PLANS_DIR>/drafts/<session-id>-issue-prefill.md" "${ISSUES[@]}"` — outputs reordered numbers (primary first) and appends mutex marker to prefill.md (Path B; no-op when file absent). Assign stdout to `ISSUES[]`; all entries become `closes_issues` (confirmed order). Use `ISSUES[0]` for WI-4..WI-8.
+- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. `AskUserQuestion` "Which is the primary issue for this session?" — one branch per issue ("#<N> (first — recommended)" for index 0, "#<M>" for others). Then `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/confirm-primary.sh" "<selected_N>" "<PLANS_DIR>/drafts/<session-id>-issue-prefill.md" "${ISSUES[@]}"` — outputs reordered numbers (primary first) and appends mutex marker to prefill.md (Path B; no-op when file absent). Assign stdout to `ISSUES[]`; all entries become `closes_issues` (confirmed order). Use `ISSUES[0]` for WI-4..WI-8.
 
 ### Step WI-4 — Session ID + fetch issue
 
