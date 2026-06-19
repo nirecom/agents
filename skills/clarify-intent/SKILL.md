@@ -26,7 +26,7 @@ CI-2. `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLI
 
 CI-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
-CI-2b. **Companion-issue re-search.** Guards: if `closes_issues` is empty (Path C) or `NON_GITHUB=1`, skip. Flag: same `CONFIRM_COMPANION_ISSUES` check as WI-5. Search: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-companion-issues.sh" --primary "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")"`. The exclude list contains all current `closes_issues` entries (including WI-5 acceptances) — the same issue is never re-proposed. If stdout is empty → skip. Confirmation and acceptance: same shape as WI-5; accepted `#M` appended to `closes_issues` before CI-4 writes intent.md. Note in CI-4 `## Issues` rules: companions added by CI-2b are written with the `# related` marker.
+CI-2b. **Companion-issue re-search.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/companion-search.sh" --primary "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")"`. Exit 1 → skip. Exit 0: for each TSV line (`<N>\t<title>\t<reason>\t<state>`), one `AskUserQuestion`: "Add #<N> (<title>) as a related issue for this session? Reason: <reason>" — options "Yes (add as related)" / "No (skip)". Accepted `#M` appended to `closes_issues` before CI-4 writes intent.md (`# related` marker).
 
 CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 

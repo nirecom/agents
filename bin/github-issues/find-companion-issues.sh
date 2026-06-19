@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # find-companion-issues.sh --primary <N> [--exclude <N>[,<N>...]] [--max-candidates <int>]
 #
-# Discover open GitHub issues that look related to a primary issue, using a
-# 2-pass keyword search over the primary's title+body tokens.
+# Discover open GitHub issues related to <primary> via three explicit signals:
+# (A) cross-reference (#M in primary body+comments), (B) identifier overlap
+# (token shared in both titles AND in $AGENTS_CONFIG_DIR/{skills,hooks,bin,agents,rules}
+# code-identifier namespace), and (C) sub-issue siblings (only when Pass B fires).
 #
 # stdout (TSV, one candidate per line; no header):
-#   <issue-number>\t<title>\t<matched-token-count>\t<state>
-# Sorted by matched-token-count desc, then issue-number asc. Empty stdout = no candidates.
+#   <issue-number>\t<title>\t<reason>\t<state>
+# reason: comma-separated tag list: xref | ident:<tok> | sibling-of:#<P>
+# Sorted by tag-count desc, then issue-number asc. Empty stdout = no candidates.
 #
 # stderr: human-readable diagnostics only.
 #
@@ -55,7 +58,6 @@ if [[ ! "$MAX_CANDIDATES" =~ ^[0-9]+$ ]] || [[ "$MAX_CANDIDATES" -lt 1 ]]; then
 fi
 
 # NON_GITHUB gate — must be the very first runtime check.
-# Prefer PATH lookup so tests can inject mocks; fall back to absolute path if absent.
 if command -v is-github-dotcom-remote >/dev/null 2>&1; then
     _NGH_CMD=is-github-dotcom-remote
 else
@@ -66,45 +68,17 @@ if ! "${_NGH_CMD}" >/dev/null 2>&1; then
     exit 1
 fi
 
-# Fetch primary issue.
-if ! PRIMARY_JSON=$(gh issue view "$PRIMARY" --json number,title,body,labels 2>/dev/null); then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/companion-passes.sh
+. "$SCRIPT_DIR/lib/companion-passes.sh"
+
+if ! PRIMARY_JSON=$(gh issue view "$PRIMARY" --json number,title,body 2>/dev/null); then
     echo "[find-companion-issues] gh issue view failed for #$PRIMARY" >&2
     exit 1
 fi
+PRIMARY_TITLE=$(printf '%s' "$PRIMARY_JSON" | jq -r '.title // ""')
 
-# Stopwords (space-separated for grep -wF -f).
-STOPWORDS="the and for this that with from into when then been have will which your their there these those about after before issue error should would could using make used also just does more like some what over than such only other need both each same most"
-
-# Extract tokens from title+body: ≥4-char, lowercase, alnum, drop stopwords,
-# sort by frequency desc, take top 5.
-TITLE_BODY=$(printf '%s' "$PRIMARY_JSON" | jq -r '(.title // "") + " " + (.body // "")')
-
-# Build stopword file for fast filtering.
-STOPWORD_FILE=$(mktemp)
-trap 'rm -f "$STOPWORD_FILE"' EXIT
-# shellcheck disable=SC2086  # intentional word-splitting to one-word-per-line
-printf '%s\n' $STOPWORDS > "$STOPWORD_FILE"
-
-# Tokenize: lowercase, split on non-alnum, keep ≥4-char, drop stopwords, dedup-by-frequency.
-mapfile -t TOP_TOKENS < <(
-    printf '%s' "$TITLE_BODY" \
-        | tr '[:upper:]' '[:lower:]' \
-        | tr -c 'a-z0-9' '\n' \
-        | awk 'length($0) >= 3' \
-        | grep -vxFf "$STOPWORD_FILE" \
-        | sort \
-        | uniq -c \
-        | sort -k1,1nr -k2,2 \
-        | awk '{print $2}' \
-        | head -n 5
-)
-
-if [[ "${#TOP_TOKENS[@]}" -lt 2 ]]; then
-    echo "[find-companion-issues] fewer than 2 useful tokens extracted — skipping search" >&2
-    exit 0
-fi
-
-# Build exclude set.
+# Build exclude set. Primary is always excluded first.
 declare -A EXCLUDE_SET
 EXCLUDE_SET["$PRIMARY"]=1
 if [[ -n "$EXCLUDE_CSV" ]]; then
@@ -117,90 +91,54 @@ if [[ -n "$EXCLUDE_CSV" ]]; then
     done
 fi
 
-# Helper: run a single keyword search pass and emit raw TSV lines
-# (number\ttitle\tlabels_csv\tstate). Best-effort: warn on failure, emit nothing.
-# Pipes gh output through jq separately so PATH-based mock gh works in tests.
-run_search() {
-    local query="$1"
-    local json raw
-    if json=$(gh issue list --state open --limit 50 --search "$query" \
-            --json number,title,labels,state \
-            2>/dev/null); then
-        raw=$(printf '%s' "$json" \
-            | jq -r '.[] | [.number, .title, (.labels | map(.name) | join(",")), .state] | @tsv' \
-            2>/dev/null || true)
-        printf '%s\n' "$raw"
-    else
-        echo "[find-companion-issues] gh issue list failed for query: $query" >&2
-    fi
+companion_pass_a "$PRIMARY"
+companion_pass_b_identifiers
+companion_pass_b_candidates "$PRIMARY_TITLE"
+companion_pass_c "$PRIMARY"
+
+declare -A CAND_SEEN
+declare -a CANDIDATES=()
+add_candidate() {
+    local n="$1"
+    [ -z "$n" ] && return
+    [[ ! "$n" =~ ^[0-9]+$ ]] && return
+    [ -n "${EXCLUDE_SET[$n]:-}" ] && return
+    [ -n "${CAND_SEEN[$n]:-}" ] && return
+    CAND_SEEN[$n]=1
+    CANDIDATES+=("$n")
 }
+while IFS= read -r n; do add_candidate "$n"; done <<< "$PASS_A_NUMBERS"
+while IFS= read -r n; do add_candidate "$n"; done <<< "$PASS_B_NUMBERS"
+while IFS= read -r n; do add_candidate "$n"; done <<< "$PASS_C_SIBLINGS"
 
-# Pass 1 — first 3 tokens.
-PASS1_QUERY="${TOP_TOKENS[0]} ${TOP_TOKENS[1]}"
-if [[ "${#TOP_TOKENS[@]}" -ge 3 ]]; then
-    PASS1_QUERY="${TOP_TOKENS[0]} ${TOP_TOKENS[1]} ${TOP_TOKENS[2]}"
-fi
-PASS1_RAW=$(run_search "$PASS1_QUERY" || true)
+[ "${#CANDIDATES[@]}" -eq 0 ] && exit 0
 
-# Pass 2 — tokens 4-5, or token1 alone, or skip if <2 tokens total.
-PASS2_RAW=""
-if [[ "${#TOP_TOKENS[@]}" -ge 5 ]]; then
-    PASS2_QUERY="${TOP_TOKENS[3]} ${TOP_TOKENS[4]}"
-    PASS2_RAW=$(run_search "$PASS2_QUERY" || true)
-elif [[ "${#TOP_TOKENS[@]}" -eq 4 ]]; then
-    PASS2_QUERY="${TOP_TOKENS[3]}"
-    PASS2_RAW=$(run_search "$PASS2_QUERY" || true)
-fi
-# (For 2-3 tokens: skip pass 2 — pass 1 already covered the meaningful tokens.)
-
-# Merge, dedup by issue number, filter (exclude set, meta label).
-declare -A SEEN
-MERGED=""
-while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    num="${line%%	*}"
-    [[ -z "$num" ]] && continue
-    [[ -n "${SEEN[$num]:-}" ]] && continue
-    [[ -n "${EXCLUDE_SET[$num]:-}" ]] && continue
-    # labels is field 3
-    labels=$(printf '%s' "$line" | awk -F'\t' '{print $3}')
-    # Drop meta-labelled issues.
-    if printf '%s' ",$labels," | grep -q ',meta,'; then
+for n in "${CANDIDATES[@]}"; do
+    if ! cand_json=$(gh issue view "$n" --json number,title,labels,state 2>/dev/null); then
         continue
     fi
-    SEEN["$num"]=1
-    MERGED+="${line}"$'\n'
-done <<< "$PASS1_RAW
-$PASS2_RAW"
+    cand_title=$(printf '%s' "$cand_json" | jq -r '.title // ""' | tr -d '\t\n\r')
+    cand_state=$(printf '%s' "$cand_json" | jq -r '.state // ""')
+    cand_labels=$(printf '%s' "$cand_json" | jq -r '[.labels[].name] | join(",")' 2>/dev/null || true)
+    [ "$cand_state" = "OPEN" ] || continue
+    if printf '%s' ",$cand_labels," | grep -q ',meta,'; then continue; fi
 
-if [[ -z "$MERGED" ]]; then
-    exit 0
-fi
+    reasons=""
+    if printf '%s\n' "$PASS_A_NUMBERS" | grep -qx "$n"; then
+        reasons="xref"
+    fi
+    pb=$(companion_pass_b "$PRIMARY_TITLE" "$cand_title")
+    if [ -n "$pb" ]; then
+        reasons="${reasons:+$reasons,}$pb"
+    fi
+    if [ -n "$pb" ] && [ -n "$PASS_C_PARENT_N" ] && \
+       printf '%s\n' "$PASS_C_SIBLINGS" | grep -qx "$n"; then
+        reasons="${reasons:+$reasons,}sibling-of:#${PASS_C_PARENT_N}"
+    fi
 
-# Rank: count how many of TOP_TOKENS appear in each candidate's title
-# (case-insensitive substring). Output: match_count\tnumber\ttitle\tstate
-RANKED=""
-while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    num=$(printf '%s' "$line" | awk -F'\t' '{print $1}')
-    title=$(printf '%s' "$line" | awk -F'\t' '{print $2}')
-    state=$(printf '%s' "$line" | awk -F'\t' '{print $4}')
-    title_lc=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')
-    match_count=0
-    for tok in "${TOP_TOKENS[@]}"; do
-        if [[ "$title_lc" == *"$tok"* ]]; then
-            match_count=$((match_count + 1))
-        fi
-    done
-    RANKED+="${match_count}	${num}	${title}	${state}"$'\n'
-done <<< "$MERGED"
-
-# Sort by match_count desc, number asc; then reorder columns to:
-# number\ttitle\tmatch_count\tstate. Cap to MAX_CANDIDATES.
-printf '%s' "$RANKED" \
-    | grep -v '^$' \
-    | sort -t $'\t' -k1,1nr -k2,2n \
-    | awk -F'\t' -v OFS='\t' '{print $2, $3, $1, $4}' \
-    | head -n "$MAX_CANDIDATES"
-
-exit 0
+    [ -z "$reasons" ] && continue
+    tag_count=$(( $(printf '%s' "$reasons" | tr -cd , | wc -c) + 1 ))
+    printf '%d\t%s\t%s\t%s\n' "$tag_count" "$n" "$cand_title" "$reasons"
+done | sort -t $'\t' -k1,1nr -k2,2n \
+     | awk -F'\t' -v OFS='\t' '{print $2, $3, $4, "OPEN"}' \
+     | head -n "$MAX_CANDIDATES"
