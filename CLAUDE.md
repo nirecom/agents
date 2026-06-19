@@ -44,13 +44,15 @@ WF-CODE-6. **Run tests & Security review** — Run all in parallel (single respo
      (always parallel; HARD >500 lines blocks via exit 1; WARN/INFO advisory)
    - Bash: `review-env-example --base <merge-base>` for .env.example comment-style check
      (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
+   - Bash: `review-step-numbers --base <merge-base>` for decimal step-label lint
+     (always parallel; HARD violations block via exit 1; WARN/INFO advisory)
 WF-CODE-7. **Docs** — Run `/update-docs`. Mandatory.
 WF-CODE-8. **User verification:**
-   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-7.
+   - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-8.
    - **`ENFORCE_WORKTREE=off`:** If staged files and an open PR URL are both absent, skip this step. Otherwise follow `skills/_shared/user-verified.md`: emit `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` (`: <reason>` mandatory, becomes part of the audit record), and set the Bash `description` to explain what the user is approving.
 WF-CODE-9. **Phase 1 issue close** — For each N in `closes_issues`, run `/issue-close-stage <N>` from the linked worktree.
    Skip silently when `closes_issues` is empty. Skip entirely when `ENFORCE_WORKTREE=off` (`/issue-close-finalize` runs the full chain at WF-CODE-12 instead).
-WF-CODE-10. **Commit** — Run `/commit-push`. After the PR is created, do not narrate the PR URL in chat — the Bash tool result already shows it. In on-mode, `<<WORKFLOW_USER_VERIFIED>>` is emitted later by /worktree-end Step WE-7; in off-mode, /commit-push emits it directly.
+WF-CODE-10. **Commit** — Run `/commit-push`. After the PR is created, do not narrate the PR URL in chat — the Bash tool result already shows it. In on-mode, `<<WORKFLOW_USER_VERIFIED>>` is emitted later by /worktree-end Step WE-8; in off-mode, /commit-push emits it directly.
 WF-CODE-11. **Cleanup** — Based on the WF-CODE-3 decision:
     - **worktree:** Run `/worktree-end`. If removal fails (Windows CWD lock), proceed to WF-CODE-12 — reclaimed by next `/sweep-worktrees`.
     - **branch:** Confirm PR is created. After merge: `git branch -d <name>` then `git push origin --delete <name>`.

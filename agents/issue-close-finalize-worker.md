@@ -117,7 +117,7 @@ Run Steps H, J, K, L for `current_issue_number`:
 - Step ICF-K: read `triage_action` from state. Determine `history_entry_status`:
   `"skipped_no_history_notes"` when `triage_action == auto_close_path` (PR used `closes #N` keyword; no WORKTREE_NOTES.md generated this session);
   `"skipped_admin_close"` when `triage_action == admin_close_path` (no worktree, no WORKTREE_NOTES.md ever existed; meta umbrella close requires no history entry);
-  `"written_by_step_6h"` otherwise (normal worktree path: `/worktree-end` Step WE-20 is the canonical writer of `docs/history.md`, #690).
+  `"written_by_step_6h"` otherwise (normal worktree path: `/worktree-end` Step WE-21 is the canonical writer of `docs/history.md`, #690).
   Then: `node "$agents_config_dir/bin/issue-close-write-outcome.js" --session-id "$session_id" --out-file "$outcome_file_path" "$current_issue_number" "succeeded" "$history_entry_status" "succeeded" "$j_status" "$k_status"`. Non-zero → log warning; continue (non-fatal).
   (`state`="succeeded" — reached Step ICF-K; `historyEntry`=`$history_entry_status`; `issueClosed`="succeeded" — Step ICF-H; `sentinelsPosted`=`$j_status`; `wipCleared`=`$k_status`)
 

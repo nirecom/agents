@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: agents/detail-planner.md, agents/outline-planner.md, agents/survey-code.md, agents/survey-history.md, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/workflow-init/SKILL.md
-# Tags: workflow, init, routing, clarify-intent, planning
+# Tags: workflow, init, routing, clarify-intent, planning, scope:issue-specific
 # Test suite for issue #497 — survey artifact write failure & post-check verifies existence only.
 # Static doc checks for the shared validity contract and consumer references.
 # Tests will FAIL until the source changes are implemented — that is expected.
@@ -68,7 +68,7 @@ assert_file_contains "SV-2"  "Contract defines Verified Claims as required conte
 assert_file_contains "SV-3"  "Contract provides reference Bash check function"        "$SHARED_VALID" "artifact_valid"
 assert_file_contains "SV-4"  "Contract uses grep -qF for substring check"            "$SHARED_VALID" "grep -qF"
 assert_file_contains "SV-5"  "Contract documents WORKFLOW_SURVEY_AGENT_FAILED"       "$SHARED_VALID" "WORKFLOW_SURVEY_AGENT_FAILED"
-assert_file_contains "SV-6"  "Contract names workflow-init Step 6.5 as consumer"     "$SHARED_VALID" "workflow-init"
+assert_file_contains "SV-6"  "Contract names workflow-init Step WI-12 as consumer"    "$SHARED_VALID" "workflow-init"
 assert_file_contains "SV-7"  "Contract names clarify-intent as consumer"             "$SHARED_VALID" "clarify-intent"
 assert_file_contains "SV-8"  "Contract states substring match is intentional"        "$SHARED_VALID" "intentional"
 
@@ -77,8 +77,8 @@ assert_file_contains "SV-8"  "Contract states substring match is intentional"   
 # ===========================================================================
 echo "=== Section 2: Consumer one-line pointer references ==="
 
-# workflow-init Step 6.5 must reference the contract
-assert_file_contains     "CR-1" "WI Step 6.5 references shared validity contract" \
+# workflow-init Step WI-12 must reference the contract
+assert_file_contains     "CR-1" "WI Step WI-12 references shared validity contract" \
     "$WI_SKILL" "skills/_shared/survey-artifact-valid.md"
 # workflow-init must NOT duplicate the Bash function body
 assert_file_not_contains "CR-2" "WI does NOT inline grep-qF check" \

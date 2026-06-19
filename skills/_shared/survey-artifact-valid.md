@@ -4,7 +4,7 @@ SSOT for validating that `survey-code` / `survey-history` subagents actually wro
 usable artifact rather than returning findings only in chat.
 
 Consumers (which MUST reference this file with a one-line pointer, never duplicate):
-- `skills/workflow-init/SKILL.md` Step 6.5
+- `skills/workflow-init/SKILL.md` Step WI-12
 - `skills/clarify-intent/SKILL.md` Completion CI-C3
 
 ## Validity criteria
