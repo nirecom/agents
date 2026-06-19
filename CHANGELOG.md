@@ -387,4 +387,8 @@ Changes: Cap-menu dialog now shows a structured concern summary (concern ID, sev
 
 ### BUGFIX: PR #977 (2026-06-19)
 Background: fix(#893,#954): get-config-var symlink resolution + --is-off exit code hardening
-Changes: `get-config-var --is-off` now correctly reads `.env` when installed as a symlink (e.g. dotfiles setups via `dotfileslink`). `CONFIRM_*` flag reads no longer silently return ON when the script is invoked via `~/.local/bin/`. (#893);`get-config-var --is-off` now exits 2 when the key is unset and no default was supplied (previously treated as ON without diagnostic). Exits 3 for unrecognized values with a stderr warning. Exits 4 on internal failure. Usage error exits 64. These new codes all map to the ON branch of the `&& echo OFF || echo ON` idiom, so existing call sites are unaffected. (#954)
+Changes: `get-config-var --is-off` now correctly reads `.env` when installed as a symlink (e.g. dotfiles setups via `dotfileslink`). `CONFIRM_*` flag reads no longer silently return ON when the script is invoked via `~/.local/bin/`. (#893);`get-config-var --is-off` now exits 2 when the key is unset and no default was supplied (previously treated as ON without diagnostic). Exits 3 for unrecognized values with a stderr warning. Exits 4 on internal failure. Usage error exits 64. These new codes all map to the ON branch of the `&& echo OFF || echo ON` idiom, so existing call sites are unaffected. (#954)
+
+### FEATURE: PR #979 (2026-06-19)
+Background: feat(#968): replace companion-issue keyword search with 3-pass explicit-signal detection
+Changes: Companion issue suggestions now show why each issue was flagged (xref, identifier overlap, or sibling relationship) instead of a bare title.;`workflow-init` no longer prompts about companion issues; companion detection is now handled exclusively by `clarify-intent`.;`CONFIRM_COMPANION_ISSUES` config removed; each companion candidate now always requires confirmation.
