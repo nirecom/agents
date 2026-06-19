@@ -103,8 +103,8 @@ The close flow is split into two phases:
   clears WIP state (Step K). The merge SHA is resolved via
   `find-pr-by-marker.sh` using the `<!-- issue-close-pr-of: <N> -->` marker that
   `/commit-push` adds to the PR body.
-- **`docs/history.md` is written by `/worktree-end` Step WE-20** before Phase 2
-  runs (Approach C, #690). Step WE-20 is the single canonical writer of both
+- **`docs/history.md` is written by `/worktree-end` Step WE-21** before Phase 2
+  runs (Approach C, #690). Step WE-21 is the single canonical writer of both
   `docs/history.md` and `CHANGELOG.md` from `WORKTREE_NOTES.md ## History Notes`
   / `## Changelog Notes` bullets. The previous Phase 2 Step E (`docs/history.md`
   write via `issue-to-history.sh`) was removed. `issue-to-history.sh` is
@@ -180,7 +180,7 @@ closing the parent is blocked. Cancelled/migrated children must already be close
   and `/issue-close-stage` for skill-internal calls.
   SSOT: `INLINE_SKILL_RE` in `hooks/lib/block-predicates.js`. The Phase 2 Step E
   `enforce-worktree.js` bypass for `git add docs/history.md` was removed in #690
-  (Step E itself was removed — Step WE-20 of `/worktree-end` is now the canonical
+  (Step E itself was removed — Step WE-21 of `/worktree-end` is now the canonical
   history writer). Do not set it elsewhere.
 - `history.md` entries are written in English regardless of repo visibility
   (`rules/language.md`). The issue body language is the author's choice.

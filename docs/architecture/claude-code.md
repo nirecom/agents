@@ -89,7 +89,7 @@ The file is directly inspectable for debugging.
 
 **L2 lifecycle and gate-yield:** `ensureLayer2Scheduled()` and `writeLayer2State()` refuse to
 set `l2_armed_at` when `l2_phase` is `done` or `frozen` (at-most-1 guarantee). When L2 is
-pending and session-close reaches SC-4 (Final Report), it emits `pre_final_report_gate_complete`
+pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete`
 and yields so the Stop hook can fire L2 first (loose coupling — session-close never invokes L2
 directly). After Final Report, `supervisor-write-layer2 --set-l2-phase frozen` records terminal state.
 
