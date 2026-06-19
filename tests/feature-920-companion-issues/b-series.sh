@@ -91,18 +91,17 @@ else
     fail "B5: clarify-intent SKILL.md not found"
 fi
 
-# B6: CI-2b mentions CONFIRM_COMPANION_ISSUES; companion-search.sh handles GitHub gate
-# (NON_GITHUB guard moved into companion-search.sh; validate it's there instead)
+# B6: companion-search.sh handles GitHub gate; CI-2b has no CONFIRM_COMPANION_ISSUES reference.
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
     CI2B_BLOCK=$(awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
     COMPANION_SCRIPT="$AGENTS_DIR/skills/clarify-intent/scripts/companion-search.sh"
     a=0; b=0
-    echo "$CI2B_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES" && a=1
-    { [ -f "$COMPANION_SCRIPT" ] && grep -qE "is-github-dotcom-remote|NON_GITHUB" "$COMPANION_SCRIPT"; } && b=1
+    { [ -f "$COMPANION_SCRIPT" ] && grep -qE "is-github-dotcom-remote|NON_GITHUB" "$COMPANION_SCRIPT"; } && a=1
+    echo "$CI2B_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES" || b=1
     if [ "$a" -eq 1 ] && [ "$b" -eq 1 ]; then
-        pass "B6: CI-2b references CONFIRM_COMPANION_ISSUES; companion-search.sh has GitHub gate"
+        pass "B6: companion-search.sh has GitHub gate; CI-2b has no CONFIRM_COMPANION_ISSUES reference"
     else
-        fail "B6: CI-2b missing (CONFIRM=$a script-gate=$b)"
+        fail "B6: incomplete (script-gate=$a confirm-absent=$b)"
     fi
 else
     fail "B6: clarify-intent SKILL.md not found"
@@ -131,6 +130,18 @@ if [ -f "$WORKFLOW_INIT_SKILL" ]; then
     fi
 else
     fail "B8: workflow-init SKILL.md not found"
+fi
+
+# B10: CI-2b contains no get-config-var call — CONFIRM_COMPANION_ISSUES removal is complete.
+if [ -f "$CLARIFY_INTENT_SKILL" ]; then
+    CI2B_BLOCK=$(awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
+    if echo "$CI2B_BLOCK" | grep -q "get-config-var"; then
+        fail "B10: CI-2b still references get-config-var (CONFIRM_COMPANION_ISSUES helper lingered)"
+    else
+        pass "B10: CI-2b has no get-config-var reference"
+    fi
+else
+    fail "B10: clarify-intent SKILL.md not found"
 fi
 
 # B9: WI-2 gate ranges renumbered to WI-3..WI-8 (skip) + WI-9..WI-12 (run normally)

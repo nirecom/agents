@@ -4,8 +4,8 @@
 # Tags: companion-issues, clarify-intent, env-example, scope:issue-specific
 #
 # C-series: prefill #N regex preservation + WI-5 stale-pointer scrub.
-# D-series: .env.example CONFIRM_COMPANION_ISSUES 3-section comment +
-# 3-pass detection-signal mention.
+# D-series: CONFIRM_COMPANION_ISSUES fully removed from .env.example,
+# companion-search.sh, and CI-2b (no auto-accept mode).
 #
 # L3 gap (what these tests do NOT catch):
 # - Whether the updated .env.example comment causes any runtime behaviour change
@@ -53,69 +53,39 @@ else
     fail "C2: clarify-intent SKILL.md not found"
 fi
 
-# D1: CONFIRM_COMPANION_ISSUES has default=on and 3-section comment structure.
+# D1: CONFIRM_COMPANION_ISSUES absent from .env.example (removed in #968).
 if [ -f "$ENV_EXAMPLE" ]; then
-    LINE_NO=$(grep -nE '^CONFIRM_COMPANION_ISSUES\b' "$ENV_EXAMPLE" | head -1 | cut -d: -f1 || true)
-    if [ -z "$LINE_NO" ]; then
-        fail "D1: .env.example missing CONFIRM_COMPANION_ISSUES directive"
+    if grep -qE '^CONFIRM_COMPANION_ISSUES\b' "$ENV_EXAMPLE"; then
+        fail "D1: .env.example still contains CONFIRM_COMPANION_ISSUES (removal not applied)"
     else
-        DIRECTIVE=$(sed -n "${LINE_NO}p" "$ENV_EXAMPLE")
-        START=$((LINE_NO > 15 ? LINE_NO - 15 : 1))
-        BEFORE=$(sed -n "${START},${LINE_NO}p" "$ENV_EXAMPLE")
-        d=0; c=0; n=0; f=0
-        echo "$DIRECTIVE" | grep -qE "=on\b|=\"on\"|='on'" && d=1
-        echo "$BEFORE" | grep -qiE "(what you can do|you can do|able to)" && c=1
-        echo "$BEFORE" | grep -qiE "(can't do|cannot do|does NOT|does not|won't|not changed)" && n=1
-        echo "$BEFORE" | grep -qiE "(format|example|values?:|syntax)" && f=1
-        if [ "$d" -eq 1 ] && [ "$c" -eq 1 ] && [ "$n" -eq 1 ] && [ "$f" -eq 1 ]; then
-            pass "D1: CONFIRM_COMPANION_ISSUES default=on + 3-section comment present"
-        else
-            fail "D1: CONFIRM_COMPANION_ISSUES incomplete (on=$d can=$c cant=$n fmt=$f)"
-        fi
+        pass "D1: CONFIRM_COMPANION_ISSUES absent from .env.example"
     fi
 else
     fail "D1: .env.example not found"
 fi
 
-# D2: comment block does NOT mention 'search algorithm' — capture comment
-# lines into a variable, then assert on the captured text (not via pipe-negation).
-if [ -f "$ENV_EXAMPLE" ]; then
-    LINE_NO=$(grep -nE '^CONFIRM_COMPANION_ISSUES\b' "$ENV_EXAMPLE" | head -1 | cut -d: -f1 || true)
-    if [ -z "$LINE_NO" ]; then
-        fail "D2: .env.example missing CONFIRM_COMPANION_ISSUES directive"
+# D2: companion-search.sh has no CONFIRM_COMPANION_ISSUES reference.
+COMPANION_SCRIPT="$AGENTS_DIR/skills/clarify-intent/scripts/companion-search.sh"
+if [ -f "$COMPANION_SCRIPT" ]; then
+    if grep -q "CONFIRM_COMPANION_ISSUES" "$COMPANION_SCRIPT"; then
+        fail "D2: companion-search.sh still references CONFIRM_COMPANION_ISSUES"
     else
-        START=$((LINE_NO > 15 ? LINE_NO - 15 : 1))
-        BEFORE=$(sed -n "${START},${LINE_NO}p" "$ENV_EXAMPLE")
-        if echo "$BEFORE" | grep -q "search algorithm"; then
-            fail "D2: comment still references stale 'search algorithm' phrase"
-        else
-            pass "D2: comment block does not mention 'search algorithm'"
-        fi
+        pass "D2: companion-search.sh has no CONFIRM_COMPANION_ISSUES reference"
     fi
 else
-    fail "D2: .env.example not found"
+    fail "D2: companion-search.sh not found"
 fi
 
-# D3: comment block references the 3-pass detection signals (xref / identifier / sibling).
-if [ -f "$ENV_EXAMPLE" ]; then
-    LINE_NO=$(grep -nE '^CONFIRM_COMPANION_ISSUES\b' "$ENV_EXAMPLE" | head -1 | cut -d: -f1 || true)
-    if [ -z "$LINE_NO" ]; then
-        fail "D3: .env.example missing CONFIRM_COMPANION_ISSUES directive"
+# D3: CI-2b in clarify-intent has no 'Exit 2' auto-accept path.
+if [ -f "$CLARIFY_INTENT_SKILL" ]; then
+    CI2B_BLOCK=$(awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
+    if echo "$CI2B_BLOCK" | grep -q "Exit 2"; then
+        fail "D3: CI-2b still references 'Exit 2' auto-accept (CONFIRM_COMPANION_ISSUES not removed)"
     else
-        START=$((LINE_NO > 15 ? LINE_NO - 15 : 1))
-        BEFORE=$(sed -n "${START},${LINE_NO}p" "$ENV_EXAMPLE")
-        x=0; i=0; s=0
-        echo "$BEFORE" | grep -qiE "(xref|cross.?reference)" && x=1
-        echo "$BEFORE" | grep -qiE "(identifier|ident:)" && i=1
-        echo "$BEFORE" | grep -qiE "(sibling)" && s=1
-        if [ "$x" -eq 1 ] && [ "$i" -eq 1 ] && [ "$s" -eq 1 ]; then
-            pass "D3: comment block references xref + identifier + sibling signals"
-        else
-            fail "D3: 3-pass signals incomplete (xref=$x ident=$i sibling=$s)"
-        fi
+        pass "D3: CI-2b has no 'Exit 2' auto-accept path"
     fi
 else
-    fail "D3: .env.example not found"
+    fail "D3: clarify-intent SKILL.md not found"
 fi
 
 echo ""

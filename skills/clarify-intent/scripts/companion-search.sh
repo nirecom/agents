@@ -3,11 +3,10 @@
 # Usage: companion-search.sh --primary N --exclude N1,N2,...
 #
 # Exits:
-#   0 — candidates found, CONFIRM_COMPANION_ISSUES=on (confirmation needed)
+#   0 — candidates found (confirmation needed)
 #   1 — skip (non-GitHub remote, no candidates, or missing --primary)
-#   2 — candidates found, CONFIRM_COMPANION_ISSUES=off (auto-accept)
 #
-# On exit 0 or 2: TSV to stdout — <N>\t<title>\t<reason>\t<state>
+# On exit 0: TSV to stdout — <N>\t<title>\t<reason>\t<state>
 set -euo pipefail
 
 PRIMARY=""
@@ -34,7 +33,3 @@ RESULTS=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-companion-issues.sh" \
 [ -z "$RESULTS" ] && exit 1
 
 printf '%s\n' "$RESULTS"
-
-# CONFIRM_COMPANION_ISSUES flag: OFF = auto-accept (exit 2), ON = confirm (exit 0)
-bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_COMPANION_ISSUES on' \
-    >/dev/null 2>&1 && exit 2 || exit 0
