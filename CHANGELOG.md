@@ -383,4 +383,8 @@ Changes: Decimal-fractional step labels (e.g. WE-2.5, SC-3.5) are now formally p
 
 ### FEATURE: PR #978 (2026-06-19)
 Background: feat(#811): surface concern summary before cap-menu AskUserQuestion dialog
-Changes: Cap-menu dialog now shows a structured concern summary (concern ID, severity, body, resolution status, remaining extensions) immediately before the Land/Adjust/Extend choice, giving users the context they need to decide at round cap.
+Changes: Cap-menu dialog now shows a structured concern summary (concern ID, severity, body, resolution status, remaining extensions) immediately before the Land/Adjust/Extend choice, giving users the context they need to decide at round cap.
+
+### BUGFIX: PR #977 (2026-06-19)
+Background: fix(#893,#954): get-config-var symlink resolution + --is-off exit code hardening
+Changes: `get-config-var --is-off` now correctly reads `.env` when installed as a symlink (e.g. dotfiles setups via `dotfileslink`). `CONFIRM_*` flag reads no longer silently return ON when the script is invoked via `~/.local/bin/`. (#893);`get-config-var --is-off` now exits 2 when the key is unset and no default was supplied (previously treated as ON without diagnostic). Exits 3 for unrecognized values with a stderr warning. Exits 4 on internal failure. Usage error exits 64. These new codes all map to the ON branch of the `&& echo OFF || echo ON` idiom, so existing call sites are unaffected. (#954)
