@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/verify-renumber-sweep.sh, skills/workflow-init/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/session-close/SKILL.md, agents/issue-close-finalize-worker.md
-# Tags: renumber, step-rename, sweep, issue-614
+# Tags: renumber, step-rename, sweep, issue-614, scope:common
 # Verifies renumber sweep tool exists and new step labels appear in SKILL.md files.
 
 set -u
@@ -49,8 +49,8 @@ check_literal() {
     fi
 }
 
-# R3: "WI-11" in workflow-init/SKILL.md
-check_literal "R3" "WI-11" "skills/workflow-init/SKILL.md"
+# R3: "WI-10" in workflow-init/SKILL.md (parallel survey launch, post-#968 renumber)
+check_literal "R3" "WI-10" "skills/workflow-init/SKILL.md"
 
 # R4: "WE-20" in worktree-end/scripts/cleanup-cascade.sh (canonical spec for WE-14..WE-21)
 check_literal "R4" "WE-20" "skills/worktree-end/scripts/cleanup-cascade.sh"
