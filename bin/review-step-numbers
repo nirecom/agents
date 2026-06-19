@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# Step-number convention lint per rules/prompt.md §4.
+# Usage: review-step-numbers [--base <ref>] [--all]
+#
+# Always emits one of:
+#   ## Step-Numbering Review: PERFORMED
+#   ## Step-Numbering Review: PERFORMED (all-scan mode)
+#   ## Step-Numbering Review: SKIPPED — <reason>
+#
+# Exits 1 when any HARD finding in diff mode. --all mode always exits 0.
+
+set -uo pipefail
+
+command -v rg >/dev/null 2>&1 || { echo "## Step-Numbering Review: SKIPPED — rg (ripgrep) not found"; exit 0; }
+
+HARD_HIT=0
+HARD_COUNT=0
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Step-Numbering Review: SKIPPED (--base requires an argument)"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Step-Numbering Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Scope-exclusion list (SSOT — 3 tiers), passed to all rg full-repo scans
+# ---------------------------------------------------------------------------
+EXCLUDES=(
+  # Tier 1 — append-only/historical (historical decimal labels are preserved)
+  --glob '!docs/history.md'
+  --glob '!docs/history/**'
+  --glob '!CHANGELOG.md'
+  --glob '!rules/docs/history.md'
+  # Tier 2 — test fixtures + rule self-exclusion + known-deferred
+  --glob '!tests/**'
+  --glob '!rules/prompt.md'                  # §4 quotes the forbidden patterns
+  --glob '!skills/survey-history/SKILL.md'   # known-deferred per #966 (Step 2.5 L41,L134)
+  # Tier 3 — the lint script itself
+  --glob '!bin/review-step-numbers'
+)
+
+# Primary generic HARD patterns — catch the entire decimal class
+# Covers WE-2.5 / SC-3.5 / WI-4.5 / CI-2a.5 / Step 6.5 / Step 2.5 etc.
+GENERIC_PATTERNS=(
+  '\b[A-Z][A-Z]+-[0-9]+[a-z]?\.[0-9]+\b'
+  '\bStep [0-9]+\.[0-9]+\b'
+)
+
+# Historical residue HARD patterns (from verify-renumber-sweep.sh PATTERNS array)
+# Kept syntactically distinct so future removal is a one-block delete.
+LEGACY_PATTERNS=(
+  '\bStep 0\.5\b'
+  '\bStep 5\.5\b'
+  '\bStep 6[a-i]\b'
+  '\bStep G\.5(-[123])?\b'
+)
+
+# Targeted structural invariants — (file, pattern) pairs
+# Run unconditionally in both diff and --all modes.
+TARGETED_FILES=(
+  "skills/clarify-intent/SKILL.md"    '^### Step 0\b'
+  "skills/make-outline-plan/SKILL.md" '^### Step 0\b'
+  "skills/session-close/SKILL.md"     '^## Step [0-9]'
+)
+
+emit_hard() {
+  local fpath="$1" lineno="$2" match="$3"
+  echo "HARD: $fpath:$lineno: decimal step label '$match' — rename to next integer; renumber tail (rules/prompt.md §4.1)"
+  HARD_HIT=1
+  HARD_COUNT=$((HARD_COUNT + 1))
+}
+
+parse_and_emit() {
+  while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    local fpath="${hit%%:*}"
+    local rest="${hit#*:}"
+    local lineno="${rest%%:*}"
+    local match="${rest#*:}"
+    emit_hard "$fpath" "$lineno" "$match"
+  done
+}
+
+scan_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  local pat
+  for pat in "${GENERIC_PATTERNS[@]}" "${LEGACY_PATTERNS[@]}"; do
+    parse_and_emit < <(rg --with-filename -n --no-heading -o "$pat" "$file" 2>/dev/null || true)
+  done
+}
+
+run_targeted() {
+  local i=0
+  while [[ $i -lt ${#TARGETED_FILES[@]} ]]; do
+    local file="${TARGETED_FILES[$i]}"
+    local pat="${TARGETED_FILES[$((i+1))]}"
+    i=$((i+2))
+    [[ -f "$file" ]] || continue
+    parse_and_emit < <(rg --with-filename -n --no-heading -o "$pat" "$file" 2>/dev/null || true)
+  done
+}
+
+# ---------------------------------------------------------------------------
+# --all scan mode
+# ---------------------------------------------------------------------------
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  echo "## Step-Numbering Review: PERFORMED (all-scan mode)"
+  echo ""
+  for pat in "${GENERIC_PATTERNS[@]}" "${LEGACY_PATTERNS[@]}"; do
+    parse_and_emit < <(rg --with-filename -n --no-heading -o "${EXCLUDES[@]}" "$pat" . 2>/dev/null || true)
+  done
+  run_targeted
+  [[ "$HARD_COUNT" -eq 0 ]] && echo "No decimal step-label violations found."
+  echo ""
+  echo "  Checked against: rules/prompt.md §4"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Diff mode — collect changed files
+# ---------------------------------------------------------------------------
+BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+  echo "## Step-Numbering Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+}
+
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+
+CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+if [[ -s "$ERR" ]]; then
+  echo "## Step-Numbering Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" \
+    | sort -u | grep -v '^$' || true)
+
+# Apply tier exclusions to the diff file list
+TARGETS=$(printf '%s\n' "$CHANGED" | grep -v \
+    -e '^docs/history\.md$' -e '^docs/history/' -e '^CHANGELOG\.md$' -e '^rules/docs/history\.md$' \
+    -e '^tests/' -e '^rules/prompt\.md$' -e '^skills/survey-history/SKILL\.md$' \
+    -e '^bin/review-step-numbers$' \
+    2>/dev/null || true)
+
+echo "## Step-Numbering Review: PERFORMED"
+echo ""
+if [[ -n "$TARGETS" ]]; then
+  COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+  echo "Changed files scanned: $COUNT"
+  echo ""
+  while IFS= read -r file; do
+    scan_file "$file"
+  done <<< "$TARGETS"
+else
+  echo "No diff-mode files to scan (structural invariant checks run unconditionally)."
+  echo ""
+fi
+run_targeted
+[[ "$HARD_COUNT" -eq 0 ]] && echo "No decimal step-label violations found."
+echo ""
+echo "  HARD findings block the workflow (exit 1) in diff mode. WARN/INFO are advisory."
+echo "  Checked against: rules/prompt.md §4"
+
+[[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
