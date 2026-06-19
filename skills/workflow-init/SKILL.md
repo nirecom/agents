@@ -25,7 +25,7 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 Regex `#\d+`:
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **2+** → `ISSUES=(<all found numbers, in the order found>)`. All entries become `closes_issues` (no narrowing). `ISSUES[0]` is the primary candidate. **Primary confirmation (single-window invariant):** immediately `AskUserQuestion` "Which is the primary issue for this session?" with one branch per found issue (e.g. "#<ISSUES[0]> (first — recommended)" for index 0, "#<ISSUES[1]>" for index 1, etc.). Move the selected entry to index 0 in `ISSUES`; it becomes closes_issues[0] (the primary). Write all entries to `closes_issues` (confirmed order) when intent.md is created. Append the mutual-exclusion marker `<!-- workflow-init: confirmed primary = <selected-N> -->` at the end of `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (Path B) to suppress duplicate confirmation in `clarify-intent` Completion. Path A (label-clarified) does not need the marker (clarify-intent does not run). Use primary `ISSUES[0]` for WI-4..WI-8.
+- **≥2** → `ISSUES=(<all found numbers, in the order found>)`. `AskUserQuestion` "Which is the primary issue for this session?" — one branch per issue ("#<N> (first — recommended)" for index 0, "#<M>" for others). Then `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/confirm-primary.sh" "<selected_N>" "<PLANS_DIR>/drafts/<session-id>-issue-prefill.md" "${ISSUES[@]}"` — outputs reordered numbers (primary first) and appends mutex marker to prefill.md (Path B; no-op when file absent). Assign stdout to `ISSUES[]`; all entries become `closes_issues` (confirmed order). Use `ISSUES[0]` for WI-4..WI-8.
 
 ### Step WI-4 — Session ID + fetch issue
 

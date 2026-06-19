@@ -74,15 +74,16 @@ else
     fail "B4: clarify-intent SKILL.md not found"
 fi
 
-# B5: CI-2b mentions find-companion-issues.sh, --exclude, closes_issues
+# B5: CI-2b mentions companion-search.sh, --exclude, closes_issues
+# (find-companion-issues.sh is now inside companion-search.sh, not referenced directly)
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
     CI2B_BLOCK=$(awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
     a=0; b=0; c=0
-    echo "$CI2B_BLOCK" | grep -q "find-companion-issues.sh" && a=1
+    echo "$CI2B_BLOCK" | grep -q "companion-search.sh" && a=1
     echo "$CI2B_BLOCK" | grep -q -- "--exclude" && b=1
     echo "$CI2B_BLOCK" | grep -q "closes_issues" && c=1
     if [ "$a" -eq 1 ] && [ "$b" -eq 1 ] && [ "$c" -eq 1 ]; then
-        pass "B5: CI-2b references find-companion-issues.sh + --exclude + closes_issues"
+        pass "B5: CI-2b references companion-search.sh + --exclude + closes_issues"
     else
         fail "B5: CI-2b missing pieces (script=$a exclude=$b closes=$c)"
     fi
@@ -90,16 +91,18 @@ else
     fail "B5: clarify-intent SKILL.md not found"
 fi
 
-# B6: CI-2b mentions NON_GITHUB and CONFIRM_COMPANION_ISSUES
+# B6: CI-2b mentions CONFIRM_COMPANION_ISSUES; companion-search.sh handles GitHub gate
+# (NON_GITHUB guard moved into companion-search.sh; validate it's there instead)
 if [ -f "$CLARIFY_INTENT_SKILL" ]; then
     CI2B_BLOCK=$(awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' "$CLARIFY_INTENT_SKILL" 2>/dev/null || true)
+    COMPANION_SCRIPT="$AGENTS_DIR/skills/clarify-intent/scripts/companion-search.sh"
     a=0; b=0
-    echo "$CI2B_BLOCK" | grep -q "NON_GITHUB" && a=1
-    echo "$CI2B_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES" && b=1
+    echo "$CI2B_BLOCK" | grep -q "CONFIRM_COMPANION_ISSUES" && a=1
+    { [ -f "$COMPANION_SCRIPT" ] && grep -qE "is-github-dotcom-remote|NON_GITHUB" "$COMPANION_SCRIPT"; } && b=1
     if [ "$a" -eq 1 ] && [ "$b" -eq 1 ]; then
-        pass "B6: CI-2b references NON_GITHUB + CONFIRM_COMPANION_ISSUES"
+        pass "B6: CI-2b references CONFIRM_COMPANION_ISSUES; companion-search.sh has GitHub gate"
     else
-        fail "B6: CI-2b missing (NON_GITHUB=$a CONFIRM=$b)"
+        fail "B6: CI-2b missing (CONFIRM=$a script-gate=$b)"
     fi
 else
     fail "B6: clarify-intent SKILL.md not found"
