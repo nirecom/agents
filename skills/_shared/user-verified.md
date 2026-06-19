@@ -39,7 +39,7 @@ When `$CI` or `$CLAUDE_NON_INTERACTIVE` is set:
 
 Exit 3 from the tool → fail-safe. In interactive mode ask "Verification gate could not run — proceed anyway?" (Yes/No). In non-interactive mode: log warning, proceed.
 
-Compatibility with PR #818: this gate runs after `check-unstaged-tracked.sh` (WE-2.5) and before the `WORKFLOW_USER_VERIFIED` sentinel. The two guards are orthogonal.
+Compatibility with PR #818: this gate runs after `check-unstaged-tracked.sh` (WE-3) and before the `WORKFLOW_USER_VERIFIED` sentinel. The two guards are orthogonal.
 
 ## Protocol
 
@@ -70,5 +70,5 @@ the hook is the single source of truth for the dialog's surrounding text.
   the sentinel emit in Step 4 still requires user approval via the permission dialog.
 - Detection is on `tool_input.command` matching the sentinel form. Sentinel strings in
   stdout (cat/grep output) do not trigger the hook.
-- Preflight runs once per emission path. /worktree-end Steps WE-3b, WE-6, and WE-7 all inherit it via this shared protocol — no per-skill duplication.
+- Preflight runs once per emission path. /worktree-end Steps WE-4b, WE-7, and WE-8 all inherit it via this shared protocol — no per-skill duplication.
 - Unverified categories are persisted to WORKTREE_NOTES.md ## Unverified Categories so /worktree-end can show them in the final summary.
