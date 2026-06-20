@@ -410,4 +410,8 @@ Changes: worktree-start no longer fails with `Cannot find module 'ignore'` on fr
 
 ### FEATURE: PR #995 (2026-06-20)
 Background: fix(#451,#469,#543): session-id error hints, cleanupZombies marker files, wip-state --session-id
-Changes: Fixed: WIP conflict detection no longer misidentifies the current session when multiple Claude Code sessions run concurrently. `wip-state.sh` now accepts an injected session ID, eliminating the racy JSONL mtime scan. (#543);Fixed: Orphaned `.workflow-off` and `.worktree-off` marker files from past sessions are now cleaned up after 7 days. (#469);Fixed: WIP rc=2 error hints in `clarify-intent` and `workflow-init` now name both `$CLAUDE_ENV_FILE` and `$CLAUDE_SESSION_ID` as triage targets. (#451)
+Changes: Fixed: WIP conflict detection no longer misidentifies the current session when multiple Claude Code sessions run concurrently. `wip-state.sh` now accepts an injected session ID, eliminating the racy JSONL mtime scan. (#543);Fixed: Orphaned `.workflow-off` and `.worktree-off` marker files from past sessions are now cleaned up after 7 days. (#469);Fixed: WIP rc=2 error hints in `clarify-intent` and `workflow-init` now name both `$CLAUDE_ENV_FILE` and `$CLAUDE_SESSION_ID` as triage targets. (#451)
+
+### FEATURE: PR #999 (2026-06-20)
+Background: refactor(#970,#860): split tests/fix-workflow-gate-unix-path.sh per Pattern A
+Changes: Refactored 743-line test file `tests/fix-workflow-gate-unix-path.sh` into a 5-file source-dispatch layout for maintainability (#970)
