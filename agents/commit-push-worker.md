@@ -12,7 +12,7 @@ Execute the mechanical git commit/push and PR creation steps. The merge prompt r
 Receive a JSON object with:
 - `commit_message`: full commit message string
 - `branch`: current branch name
-- `closes_issues`: array of issue numbers (integers; primary first)
+- `closes_issues`: array of issue numbers (integers; insertion order)
 - `pr_body_template`: optional PR body string (may include Closes lines and markers)
 - `wip_mode`: boolean — use `git -c workflow.wip=1 commit` when true
 - `enforce_worktree`: `"on"` | `"off"` — determines whether to create a PR
