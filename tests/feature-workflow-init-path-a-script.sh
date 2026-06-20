@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests: skills/workflow-init/SKILL.md, skills/workflow-init/scripts/path-a-label-and-board.sh
 # Tags: workflow-init, refactor, file-split, static-grep
-# Static checks for the A1.5 extraction (Pattern B file-split):
+# Static checks for the A2 extraction (Pattern B file-split):
 #   H1: script file exists and is non-empty
 #   H2: script declares set -uo pipefail and validates argc >= 1
 #   H3: SKILL.md references the script
@@ -46,7 +46,7 @@ fi
 if grep -qE 'for N in "\$\{ISSUES\[@\]\}"; do' "$SKILL" 2>/dev/null; then
     fail "H4: SKILL.md still contains the inline 'for N in \${ISSUES[@]}' loop body (extraction incomplete)"
 else
-    pass "H4: SKILL.md no longer contains the inline A1.5 loop body"
+    pass "H4: SKILL.md no longer contains the inline A2 loop body"
 fi
 
 # H5

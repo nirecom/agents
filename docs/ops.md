@@ -71,18 +71,17 @@ The parent cannot be closed while any child is `open` (`/issue-close-stage` and 
 
 A session may close multiple issues in a single PR. Quick reference:
 
-- `closes_issues` order matters — index 0 is the **primary** (drives WIP state
-  and Projects v2 tracking). The primary is confirmed exactly once per
-  session, at workflow-init Step 1 (b) OR at clarify-intent Completion
-  (whichever first sees N>=2). The two triggers are mutually exclusive.
+- `closes_issues` is the flat list of issues the session closes. `ISSUES[0]`
+  is the first entry in insertion order (no special representational status).
+  All entries are treated symmetrically for WIP, labels, history, and PR markers.
 - One `history.md` entry per closed issue.
 - One `Closes #<N>` line and one `<!-- issue-close-pr-of: <N> -->` marker
   per closed issue in the PR body.
 - Phase 1 (`/issue-close-stage <N>`) runs once per N from the linked worktree.
 - Phase 2 (`/issue-close-finalize --from-session`) iterates automatically.
-- Path A multi-N: related issues are labeled `intent:clarified` by
-  workflow-init Step 1 A1.5 (fail-closed). If A1.5 aborts due to a gh
-  failure, fix the gh failure and re-run /workflow-init — A1.5 is idempotent.
+- Path A multi-N: all issues are labeled `intent:clarified` by
+  workflow-init Path A2 (fail-closed). If A2 aborts due to a gh
+  failure, fix the gh failure and re-run /workflow-init — A2 is idempotent.
   See the abort marker file under drafts/ for the failed-issue list.
 
 Canonical rules: [`rules/github-issues.md` § Session model](../rules/github-issues.md).
