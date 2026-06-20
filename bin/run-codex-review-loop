@@ -57,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --plans-dir)
       require_value "--plans-dir" "${2:-}"
       PLANS_DIR="$2"; shift 2 ;;
+    # Note: --draft-file is the path the planner wrote to (now the in-place final-artifact path).
     --draft-file)
       require_value "--draft-file" "${2:-}"
       DRAFT="$2"; shift 2 ;;
@@ -119,15 +120,14 @@ REVIEWER="$AGENTS_CONFIG_DIR/bin/review-plan-codex"
 [[ -f "$BUILDER" ]]  || die "build-codex-context not found: $BUILDER"
 [[ -f "$REVIEWER" ]] || die "review-plan-codex not found: $REVIEWER"
 
-DRAFTS_DIR="$PLANS_DIR/drafts"
-mkdir -p "$DRAFTS_DIR" || die "cannot create drafts dir: $DRAFTS_DIR"
+mkdir -p "$PLANS_DIR" || die "cannot create PLANS_DIR: $PLANS_DIR"
 
-CONTEXT_OUT="$DRAFTS_DIR/$SID-context.md"
-MARKER="$DRAFTS_DIR/$SID-context.$FORMAT.built"
+CONTEXT_OUT="$PLANS_DIR/$SID-codex-context.md"
+MARKER="$PLANS_DIR/$SID-codex-context.$FORMAT.built"
 if [[ -n "$LEDGER_OVERRIDE" ]]; then
   LEDGER="$LEDGER_OVERRIDE"
 else
-  LEDGER="$DRAFTS_DIR/$SID-$FORMAT-concern-ledger.txt"
+  LEDGER="$PLANS_DIR/$SID-$FORMAT-concern-ledger.txt"
 fi
 
 if [[ ! -f "$MARKER" ]]; then
@@ -141,7 +141,7 @@ ARGS=(
   --input "$DRAFT"
   --format "$FORMAT"
   --session-id "$SID"
-  --log-dir "$DRAFTS_DIR"
+  --log-dir "$PLANS_DIR"
   --cap "$CAP"
   --max-extensions "$MAX_EXT"
   --extensions-used "$EXT_USED"
