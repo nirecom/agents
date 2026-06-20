@@ -1,3 +1,7 @@
+# L3 gap (what this section does NOT catch):
+# - That additionalDirectories detection fires correctly during a real Claude Code
+#   session switching between linked worktrees (live hook dispatch path)
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 # ============================================================
 # Section H: additionalDirectories detection tests
 # ============================================================

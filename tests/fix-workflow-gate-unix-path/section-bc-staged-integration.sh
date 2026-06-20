@@ -1,3 +1,7 @@
+# L3 gap (what this section does NOT catch):
+# - That hasStagedTestChanges / hasStagedDocChanges correctly operates against the real
+#   Claude Code working tree (not a fixture git repo) under a live hook dispatch
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 # ============================================================
 # Section B: hasStagedTestChanges / hasStagedDocChanges integration
 # ============================================================
