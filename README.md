@@ -117,6 +117,12 @@ hook and a Claude Code PreToolUse hook. Both detect RFC 1918 addresses, email ad
 MAC addresses, absolute local paths, hard-coded secrets (AWS, Anthropic, OpenAI, GitHub,
 Slack, and others), PEM private keys, and Trojan Source hidden Unicode characters.
 Repositories identified as private via `gh api` are skipped automatically.
+A companion offensive-content filter (`bin/scan-offensive`) checks all `gh issue`/`pr`
+writes for hate speech, slurs, harassment, and profanity — active for all repos (public
+and private). Copy `.offensive-content-blocklist.example` to `.offensive-content-blocklist`
+and add patterns; optionally set `ANTHROPIC_API_KEY` to enable LLM-assisted borderline
+classification. Use `/scan-offensive` to retroactively scan and redact offensive content
+in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 

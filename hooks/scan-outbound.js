@@ -2,7 +2,7 @@
 // Claude Code PreToolUse hook: check Edit/Write content for private information
 // Skips scanning for private repos (detected dynamically via GitHub API)
 
-const { execSync, spawnSync } = require("child_process");
+const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir } = require("./lib/is-private-repo");
@@ -57,6 +57,7 @@ function normalizePath(fp) {
 // This script lives in agents/hooks/; scanner is at agents/bin/
 const AGENTS_DIR = path.resolve(__dirname, "..");
 const SCANNER = path.join(AGENTS_DIR, "bin", "scan-outbound.sh");
+const OFFENSIVE_SCANNER = path.join(AGENTS_DIR, "bin", "scan-offensive");
 
 // Parse stdin
 const input = JSON.parse(readStdin());
@@ -128,17 +129,21 @@ if (!content) {
   approve();
 }
 
-// Check if the target repo is private (skip scanning for private repos)
+// Resolve repo dir and private-status. The private-info scanner is skipped for
+// private repos; the offensive scanner ALWAYS runs (public and private).
+let isPrivate = false;
 {
   let repoDir = null;
   if (filePath) {
     // Edit/Write: resolve repo from file path
     try {
-      repoDir = execSync(`git -C "${shellPath(path.dirname(filePath))}" rev-parse --show-toplevel`, {
+      const gitResult = spawnSync("git", ["-C", path.dirname(filePath), "rev-parse", "--show-toplevel"], {
         encoding: "utf8",
         timeout: 5000,
-        stdio: ["pipe", "pipe", "pipe"],
-      }).trim();
+      });
+      if (gitResult.status === 0 && gitResult.stdout) {
+        repoDir = gitResult.stdout.trim();
+      }
     } catch (e) {
       // Not in a git repo — continue with scan
     }
@@ -146,50 +151,81 @@ if (!content) {
     // Bash: resolve repo from git -C <path> or HOOK_CWD
     repoDir = resolveRepoDir(toolInput.command || "");
   }
-  if (isPrivateRepo(repoDir)) {
-    approve();
-  }
+  isPrivate = isPrivateRepo(repoDir);
 }
 
-// Run scanner on the content
+// Run private-info scanner (skipped for private repos) and offensive scanner
+// (always), then merge results.
 {
   const label = filePath || "stdin";
-  const result = spawnSync("bash", [shellPath(SCANNER), "--stdin", shellPath(label)], {
+  let outboundResult = null;
+  if (!isPrivate) {
+    outboundResult = spawnSync("bash", [shellPath(SCANNER), "--stdin", shellPath(label)], {
+      input: content,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+  }
+  const offensiveResult = spawnSync("node", [shellPath(OFFENSIVE_SCANNER), "--stdin", shellPath(label)], {
     input: content,
     encoding: "utf8",
     timeout: 10000,
   });
-  const SCAN_OUT = ((result.stdout || "") + (result.stderr || "")).trim();
 
-  // Fail-closed: timeout / spawn error / unobservable status
-  if (result.error || result.status === null) {
-    block(`Scanner failed (${(result.error && result.error.message) || "no exit status"}):\n${SCAN_OUT}`);
-    return; // defensive: block() exits, but make control flow explicit
+  // Fail-closed: timeout / spawn error / unobservable status (either scanner)
+  if (outboundResult && (outboundResult.error || outboundResult.status === null)) {
+    const out = ((outboundResult.stdout || "") + (outboundResult.stderr || "")).trim();
+    const msg = (outboundResult.error && outboundResult.error.message) || "no exit status";
+    block(`Scanner failed (${msg}):\n${out}`);
+  }
+  if (offensiveResult.error || offensiveResult.status === null) {
+    const out = ((offensiveResult.stdout || "") + (offensiveResult.stderr || "")).trim();
+    const msg = (offensiveResult.error && offensiveResult.error.message) || "no exit status";
+    block(`Offensive scanner failed (${msg}):\n${out}`);
   }
 
-  switch (result.status) {
-    case 0:
-      approve();
-      break;
-    case 1:
-      block(`Private information detected:\n${SCAN_OUT}`);
-      break;
-    case 2:
-      // PreToolUse hook never prompts directly. Return block + reason so Claude
-      // relays the question to the user. Re-display the matched lines so the
-      // user can judge.
-      block(
-        `Possible private information detected (warn-only):\n${SCAN_OUT}\n\n` +
-        `These patterns are flagged as likely false-positive-prone. ` +
-        `Ask the user whether this content is safe to commit. ` +
-        `If the user confirms it is safe, proceed. ` +
-        `If genuinely safe long-term, suggest adding to .private-info-allowlist.`
-      );
-      break;
-    case 3:
-      block(`Scanner usage error (rc=3):\n${SCAN_OUT}`);
-      break;
-    default:
-      block(`Scanner unexpected rc=${result.status}:\n${SCAN_OUT}`);
+  const outboundStatus = outboundResult ? outboundResult.status : 0;
+  const outboundOut = outboundResult
+    ? ((outboundResult.stdout || "") + (outboundResult.stderr || "")).trim()
+    : "";
+  const offensiveStatus = offensiveResult.status;
+  const offensiveOut = ((offensiveResult.stdout || "") + (offensiveResult.stderr || "")).trim();
+
+  // Hard-block precedence: private-info hard > offensive hard > usage error >
+  // private-info warn > offensive warn > approve.
+  if (outboundStatus === 3) {
+    block(`Scanner usage error (rc=3):\n${outboundOut}`);
   }
+  if (offensiveStatus === 3) {
+    block(`Offensive scanner usage error (rc=3):\n${offensiveOut}`);
+  }
+  if (outboundStatus === 1) {
+    block(`Private information detected:\n${outboundOut}`);
+  }
+  if (offensiveStatus === 1) {
+    block(`Offensive content detected:\n${offensiveOut}`);
+  }
+  if (outboundStatus === 2) {
+    block(
+      `Possible private information detected (warn-only):\n${outboundOut}\n\n` +
+      `These patterns are flagged as likely false-positive-prone. ` +
+      `Ask the user whether this content is safe to commit. ` +
+      `If the user confirms it is safe, proceed. ` +
+      `If genuinely safe long-term, suggest adding to .private-info-allowlist.`
+    );
+  }
+  if (offensiveStatus === 2) {
+    block(
+      `Possible offensive content (warn-only):\n${offensiveOut}\n\n` +
+      `Ask the user whether this content is safe to send. ` +
+      `If the user confirms it is safe, proceed.`
+    );
+  }
+  if (outboundStatus !== 0) {
+    block(`Scanner unexpected rc=${outboundStatus}:\n${outboundOut}`);
+  }
+  if (offensiveStatus !== 0) {
+    block(`Offensive scanner unexpected rc=${offensiveStatus}:\n${offensiveOut}`);
+  }
+  approve();
 }

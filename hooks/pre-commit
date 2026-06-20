@@ -232,7 +232,7 @@ if [ -z "$STAGED_FILES" ]; then
 fi
 
 # Files to skip
-SKIP_PATTERNS="bin/scan-outbound.sh|\.private-info-allowlist"
+SKIP_PATTERNS="bin/scan-outbound.sh|\.private-info-allowlist|\.offensive-content-blocklist\.example"
 
 HARD_HITS=0
 WARN_HITS=0
