@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/lib/plan-confirm-flag.js
-# Tags: workflow, plans, hook, bin, windows
+# Tags: workflow, plans, hook, bin, windows, scope:common
 # Unit tests for hooks/lib/plan-confirm-flag.js
 #
 # Tests getSuffix, getConfirmFlagName, and isConfirmOff in isolation by
@@ -159,23 +159,23 @@ expect_result "T16 isConfirmOff CONFIRM_DETAIL=Off detail.md → true" "true" \
   "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
   CONFIRM_DETAIL=Off
 
-# T17: CONFIRM_DETAIL=0 → true
-expect_result "T17 isConfirmOff CONFIRM_DETAIL=0 detail.md → true" "true" \
+# T17: CONFIRM_DETAIL=0 → false (vocabulary narrowed — only 'off' recognized)
+expect_result "T17 isConfirmOff CONFIRM_DETAIL=0 detail.md → false (vocabulary narrowed)" "false" \
   "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
   CONFIRM_DETAIL=0
 
-# T18: CONFIRM_DETAIL=false → true
-expect_result "T18 isConfirmOff CONFIRM_DETAIL=false detail.md → true" "true" \
+# T18: CONFIRM_DETAIL=false → false (vocabulary narrowed)
+expect_result "T18 isConfirmOff CONFIRM_DETAIL=false detail.md → false (vocabulary narrowed)" "false" \
   "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
   CONFIRM_DETAIL=false
 
-# T19: CONFIRM_DETAIL=no → true
-expect_result "T19 isConfirmOff CONFIRM_DETAIL=no detail.md → true" "true" \
+# T19: CONFIRM_DETAIL=no → false (vocabulary narrowed)
+expect_result "T19 isConfirmOff CONFIRM_DETAIL=no detail.md → false (vocabulary narrowed)" "false" \
   "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
   CONFIRM_DETAIL=no
 
-# T20: CONFIRM_DETAIL=disabled → true
-expect_result "T20 isConfirmOff CONFIRM_DETAIL=disabled detail.md → true" "true" \
+# T20: CONFIRM_DETAIL=disabled → false (vocabulary narrowed)
+expect_result "T20 isConfirmOff CONFIRM_DETAIL=disabled detail.md → false (vocabulary narrowed)" "false" \
   "lib.isConfirmOff('$PLANS_DIR/abc-detail.md')" \
   CONFIRM_DETAIL=disabled
 
