@@ -99,10 +99,10 @@ MOP-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
 MOP-7. On `APPROVED`:
    Output a prose rationale summary in main conversation — one paragraph per approach (rationale + trade-offs + delivery plan). Do NOT write this preamble to outline.md.
 
-   Decide the chosen approach and record it as `CHOSEN_APPROACH`:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'`
-   - `OFF` → set `CHOSEN_APPROACH` = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
-   - `ON` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting". Set `CHOSEN_APPROACH` to the user's selection.
+   Decide the chosen approach and record it as `CHOSEN_APPROACH`. Check via Bash:
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_OUTLINE on'`
+   - stdout `OFF` → set `CHOSEN_APPROACH` = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
+   - stdout `ON` or `ERROR` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting". Set `CHOSEN_APPROACH` to the user's selection.
 
    MOP-8 handles the file write — do NOT write here.
 

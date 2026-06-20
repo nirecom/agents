@@ -32,7 +32,7 @@ function getConfirmFlagName(suffix) {
 }
 
 // Exact (case-insensitive) literals. Whitespace-padded values fail-safe to "on".
-const OFF_LITERALS = new Set(["off", "0", "false", "no", "disabled"]);
+const OFF_LITERALS = new Set(["off"]);
 
 function isConfirmOff(filePath) {
   const suffix = getSuffix(filePath);

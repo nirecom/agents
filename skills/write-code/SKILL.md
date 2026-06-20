@@ -14,9 +14,9 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 1. Read `rules/core-principles.md` and the target files identified from the plan.
 
 2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then check via Bash:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_CODE on && echo OFF || echo ON'`
-   - `OFF`: proceed to step 3.
-   - `ON`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
+   - stdout `OFF`: proceed to step 3.
+   - stdout `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
 3. Read `skills/_shared/judge-task-complexity.md`. Emit in Claude text output (NOT Bash echo):
    > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
@@ -34,9 +34,9 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
 
 6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_CODE on && echo OFF || echo ON'`
-   - `OFF`: skip this step; proceed (no user wait).
-   - `ON`: present the file list and notes.
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
+   - stdout `OFF`: skip this step; proceed (no user wait).
+   - stdout `ON` or `ERROR`: present the file list and notes.
 
 ## A-layer language essence (complement of B-layer — zero overlap with `rules/coding/*.md`)
 

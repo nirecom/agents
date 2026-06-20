@@ -36,12 +36,11 @@ do not persist between Bash tool calls.
 
 ## Step SC-1 — Detect ENFORCE_WORKTREE mode
 
-```bash
-bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off ENFORCE_WORKTREE on && echo off || echo on'
-```
+Check via Bash:
+`bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'`
 
-- `on` → worktree path (SC-2A).
-- `off` → branch/main path (SC-2B).
+- stdout `ON` or `ERROR` → worktree path (SC-2A).
+- stdout `OFF` → branch/main path (SC-2B).
 
 ## Step SC-2A — Worktree path: reuse existing env JSON
 

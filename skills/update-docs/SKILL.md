@@ -32,9 +32,9 @@ Target files: all `.md` files in `docs/` that already exist, plus `README.md` in
    - Which sections need changes and why
    - Specific additions or modifications
 5. **CONFIRM_DOCS gate** — check via Bash:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_DOCS on && echo OFF || echo ON'`
-   - `ON`: present the step-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
-   - `OFF`: apply the edits and continue to step 6 without waiting.
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_DOCS on'`
+   - stdout `ON` or `ERROR`: present the step-4 proposal via `AskUserQuestion` and wait for approval before applying edits.
+   - stdout `OFF`: apply the edits and continue to step 6 without waiting.
 6. **Propagate to parent docs**: If the project has a parent-level summary doc (e.g. an engineering hub), update it too. Skip for repo-local `docs/`.
    - Skip `infrastructure.md` — delegate to `/update-infrastructure` instead.
 7. **Commit separately**: If docs are in a separate repo, commit each repo independently
