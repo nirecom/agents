@@ -56,9 +56,11 @@ echo "$out" | grep -qF -- '+new' || fail "test 2: overwrite diff should contain 
 out=$(run_hook "{\"tool_name\":\"editFiles\",\"tool_input\":{\"file_path\":\"$HWORK/existing.md\",\"edits\":[{\"old_string\":\"old\",\"new_string\":\"new\"}]}}")
 echo "$out" | grep -q -- '--- edit 1 ---' || fail "test 3: editFiles should route to MultiEdit branch (--- edit 1 ---)"
 
-# 4) Draft path — output empty (isPlanFile via isUnderPath -> noopExit)
-out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/drafts/foo.md\",\"content\":\"x\"}}")
-[ -z "$out" ] || fail "test 4: draft path should produce empty output"
+# 4) Flat intermediate-suffix path (#866) — output empty (isPlanFile filename
+#    pattern match → noopExit). Drafts/ subdir was removed in #866; suppression
+#    now uses filename-suffix patterns at PLANS_DIR root.
+out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260620-foo-outline-draft.md\",\"content\":\"x\"}}")
+[ -z "$out" ] || fail "test 4: flat intermediate -outline-draft.md should produce empty output"
 
 # 5) Test file path — output empty (isTestFile -> noopExit)
 out=$(run_hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$REPO_ROOT/tests/foo.test.js\",\"content\":\"x\"}}")

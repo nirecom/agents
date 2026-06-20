@@ -814,13 +814,12 @@ else
         fail "T39: expected block, got: $_t39_out"
     fi
 
-    # T40: drafts/ file → approved
-    mkdir -p "$_g10_plans_tmp/drafts"
-    _t40_file="$_g10_plans_dir/drafts/20260526-223459-detail-draft.md"
+    # T40: flat intermediate -detail-draft.md (#866) → approved
+    _t40_file="$_g10_plans_dir/20260526-223459-detail-draft.md"
     _t40_json="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$_t40_file\",\"content\":\"日本語\"},\"tool_response\":{}}"
     _t40_out="$(run_plan_hook "$_t40_json")"
     if ! echo "$_t40_out" | grep -q '"block"'; then
-        pass "T40: drafts/...-detail-draft.md → approve (excluded)"
+        pass "T40: flat <sid>-detail-draft.md → approve (intermediate, excluded)"
     else
         fail "T40: expected approve for draft, got: $_t40_out"
     fi

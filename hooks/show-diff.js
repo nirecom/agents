@@ -14,7 +14,7 @@ const MAX_DIFF = 3000;
 const MAX_READ_SIZE = 1024 * 1024; // 1 MiB cap for overwrite-side reads
 
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-const { isUnderPath } = require("./lib/path-match");
+const { isUnderPath, getBasename } = require("./lib/path-match");
 const { loadDefaultEnv } = require("./lib/load-env");
 const { isConfirmOff } = require("./lib/plan-confirm-flag");
 
@@ -74,12 +74,48 @@ function isTestFile(filePath) {
 
 // ── plan-file detection ──────────────────────────────────────────────────────
 
+// Pattern-based suppression list for intermediate planner artifacts. After the
+// drafts/ flatten in #866, intermediates live alongside final artifacts under
+// PLANS_DIR root and are distinguished by filename suffix. Final artifacts
+// (<sid>-{intent,outline,detail}.md) and the WI-9 session context
+// (<sid>-context.md) are intentionally NOT listed — they should show a diff.
+const INTERMEDIATE_PATTERNS = [
+  // legacy draft names kept for forward-compat suppression
+  /-outline-draft\.md$/,
+  /-detail-draft\.md$/,
+  // codex review intermediates
+  /-codex-round-\d+-raw\.md$/,
+  /-outline-codex-round-\d+-raw\.md$/,
+  // concern logs
+  /-concerns-log\.md$/,
+  /-outline-concerns-log\.md$/,
+  // debug logs
+  /-debug\.log$/,
+  // round counters
+  /-(outline|detail)-plan-round-number\.txt$/,
+  // concern ledgers (including cap snapshots)
+  /-(outline|detail)-plan-concern-ledger(-cap-snapshot)?\.txt$/,
+  // codex-built context (renamed from -context.md to avoid WI-9 collision)
+  /-codex-context\.md$/,
+  // codex-built context build markers
+  /-codex-context\.(outline|detail)-plan\.built$/,
+  // review-plan-codex round log
+  /-plan\.jsonl$/,
+  // workflow-init Path B prefill
+  /-issue-prefill\.md$/,
+  // workflow-init abort marker
+  /-workflow-init-aborted-pathA-multiN-label-failure\.md$/,
+  // clarify-intent CI-C0 guard counter
+  /-guard-attempt\.tmp$/,
+];
+
 function isPlanFile(filePath) {
   if (!filePath) return false;
   try {
     if (!isUnderPath(filePath, getWorkflowPlansDir())) return false;
-    // Drafts subdirectory: always suppress (intermediate, noisy).
-    if (isUnderPath(filePath, path.join(getWorkflowPlansDir(), "drafts"))) return true;
+    // Pattern-based suppression for intermediate artifacts (post-#866 flatten).
+    const base = getBasename(filePath);
+    if (INTERMEDIATE_PATTERNS.some((p) => p.test(base))) return true;
     // Final artifact under CONFIRM_*=off: suppress diff (closes #445).
     if (isConfirmOff(filePath)) return true;
     // Final artifact under CONFIRM_*=on or unset: show the diff inline in chat.
