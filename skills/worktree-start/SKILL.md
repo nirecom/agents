@@ -96,9 +96,9 @@ base path. Default: `~/git/worktrees`. Windows example: `WORKTREE_BASE_DIR=C:\gi
       pattern is also present in `.gitignore`.
 
    Then check CONFIRM_WORKTREE via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_WORKTREE on && echo OFF || echo ON'`
+     `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
    - stdout `OFF`: auto-continue without `AskUserQuestion`.
-   - stdout `ON`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
+   - stdout `ON` or `ERROR`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
    - In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF regardless of config — `AskUserQuestion` cannot be called in subagent contexts.
 
 10. Generate `WORKTREE_NOTES.md` + register in `.git/info/exclude`. Pass Step 9 (b) stdout
