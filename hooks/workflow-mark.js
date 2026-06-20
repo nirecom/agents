@@ -18,7 +18,7 @@
 // Dispatch implementation is split across sibling modules under hooks/workflow-mark/:
 //   skip-reason / not-needed-handlers / clarify-intent-complete-handler /
 //   branching-handler / user-verified-handler / mark-step-handler /
-//   premise-gate-handlers / enforce-override-handlers / reset-handler.
+//   enforce-override-handlers / reset-handler.
 // This file holds the CLI bootstrap (stdin parse, merge-class push detection,
 // `&&` chain split, sentinel-only validation) plus the sequential dispatch loop.
 
@@ -43,7 +43,6 @@ const branchingHandler = require("./workflow-mark/branching-handler");
 const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
-const premiseHandlers = require("./workflow-mark/premise-gate-handlers");
 const enforceOverrideHandlers = require("./workflow-mark/enforce-override-handlers");
 const resetHandler = require("./workflow-mark/reset-handler");
 
@@ -168,7 +167,6 @@ for (const cmd of sentinelParts) {
   // (mark-step-handler would otherwise process a manual MARK_STEP form here).
   if (reviewTestsHandler.handle({ ...ctx, cmd })) continue;
   if (markStepHandler.handle({ ...ctx, cmd })) continue;
-  if (premiseHandlers.handle({ ...ctx, cmd })) continue;
   if (enforceOverrideHandlers.handle({ ...ctx, cmd })) continue;
   if (resetHandler.handle({ ...ctx, cmd })) continue;
 }
