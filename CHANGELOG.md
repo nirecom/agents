@@ -418,4 +418,8 @@ Changes: Refactored 743-line test file `tests/fix-workflow-gate-unix-path.sh` in
 
 ### FEATURE: PR #1002 (2026-06-20)
 Background: feat(#980,#677): add bin/confirm-off + bin/confirm-off.ps1 helpers and fix load-env.js empty-string shadowing
-Changes: confirm-off helper (bash + PowerShell) added: SKILL.md confirm gates now use `bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY default` — eliminates exit-code ambiguity and PATH lookup failures (WSL bash on Windows);`.env` flag vocabulary narrowed: only `off` turns off a confirm gate; `0`, `false`, `no`, `disabled` are no longer accepted and now fail-safe to ON
+Changes: confirm-off helper (bash + PowerShell) added: SKILL.md confirm gates now use `bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY default` — eliminates exit-code ambiguity and PATH lookup failures (WSL bash on Windows);`.env` flag vocabulary narrowed: only `off` turns off a confirm gate; `0`, `false`, `no`, `disabled` are no longer accepted and now fail-safe to ON
+
+### FEATURE: PR #1004 (2026-06-20)
+Background: feat(#990): add scan-offensive CLI + /scan-offensive skill + forward filter
+Changes: Added `scan-outbound.js` forward filter for offensive content in `gh issue/pr` writes; populate `.offensive-content-blocklist` and/or set `ANTHROPIC_API_KEY` to activate (all repos, public and private);Added `/scan-offensive` skill for retroactive scanning and redacting offensive content in any GitHub repo's issues and comments
