@@ -102,8 +102,6 @@
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
       "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
-      "Bash(echo \"<<WORKFLOW_PREMISE_FAIL: *>>\")",
-      "Bash(echo \"<<WORKFLOW_PREMISE_ACK>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
       "Bash(doc-append *)",

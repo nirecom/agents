@@ -1,7 +1,11 @@
 #!/bin/bash
 # tests/refactor-workflow-mark-split.sh
-# Tests: hooks/workflow-mark.js, hooks/workflow-mark/skip-reason.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-mark/clarify-intent-complete-handler.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-mark/user-verified-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/premise-gate-handlers.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/reset-handler.js
-# Tags: workflow-mark, refactor, module-split, contract
+# Tests: hooks/workflow-mark.js, hooks/workflow-mark/skip-reason.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-mark/clarify-intent-complete-handler.js, hooks/workflow-mark/branching-handler.js, hooks/workflow-mark/user-verified-handler.js, hooks/workflow-mark/mark-step-handler.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/workflow-mark/reset-handler.js
+# Tags: workflow-mark, refactor, module-split, contract, scope:common
+# L3 gap (what this test does NOT catch):
+# - That the refactored hook dispatch fires correctly in a live Claude Code session
+# - That all 8 sub-modules are reachable via the real PostToolUse hook path
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 #
 # REGRESSION tests (1): verify current contract of hooks/workflow-mark.js.
 #   These must PASS both BEFORE and AFTER the module split.
@@ -83,7 +87,7 @@ else
     fail_contract "hooks/workflow-mark/ directory exists" "$MARK_DIR missing"
 fi
 
-# 3. All 8 module files load without error
+# 3. All module files load without error
 MODULES=(
     "skip-reason.js"
     "not-needed-handlers.js"
@@ -91,7 +95,6 @@ MODULES=(
     "branching-handler.js"
     "user-verified-handler.js"
     "mark-step-handler.js"
-    "premise-gate-handlers.js"
     "enforce-override-handlers.js"
     "reset-handler.js"
 )
@@ -135,14 +138,13 @@ else
     fail_contract "validateSkipReason returns {ok: false} for input 'none'" "skip-reason.js missing"
 fi
 
-# 5. Each of the 7 handler modules exports a handle function with arity 1
+# 5. Each handler module exports a handle function with arity 1
 HANDLER_MODULES=(
     "not-needed-handlers.js"
     "clarify-intent-complete-handler.js"
     "branching-handler.js"
     "user-verified-handler.js"
     "mark-step-handler.js"
-    "premise-gate-handlers.js"
     "enforce-override-handlers.js"
     "reset-handler.js"
 )
