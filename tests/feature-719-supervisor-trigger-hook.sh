@@ -59,6 +59,21 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
+# Like seed_state but also injects a warning-severity layer1 finding.
+# Required for escape-hatch arm tests after fix #975 (hasBlockingFinding gate).
+seed_state_with_l1_finding() {
+    local tmp="$1" sid="$2" layer2_json="$3"
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const s = require('$SCHEMA_NODE');
+const fs = require('fs');
+const st = s.createEmptyState('$sid');
+st.layer2 = $layer2_json;
+st.layer1.findings = [{ categories: ['workflow'], severity: 'warning', detail: 'blocking-finding', reporter: 'test', timestamp: new Date().toISOString() }];
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+" >/dev/null 2>&1
+}
+
 read_field() {
     local tmp="$1" sid="$2" path="$3"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
@@ -242,20 +257,20 @@ run_t10() {
 }
 
 run_t11() {
-    require_source "$HOOK" "T11: C2 escape-hatch command -> sets l2_armed_at" || return
+    require_source "$HOOK" "T11: C2 escape-hatch command + blocking l1 finding -> sets l2_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t11-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t11-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t11-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t11-sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T11: C2 escape-hatch command -> sets l2_armed_at"
+        pass "T11: C2 escape-hatch command + blocking l1 finding -> sets l2_armed_at"
     else
-        fail "T11: C2 escape-hatch command -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T11: C2 escape-hatch command + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -278,20 +293,20 @@ run_t12() {
 }
 
 run_t13() {
-    require_source "$HOOK" "T13: ENFORCE_WORKTREE_OFF sentinel -> sets l2_armed_at (C2 worktree path)" || return
+    require_source "$HOOK" "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets l2_armed_at (C2 worktree path)" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t13-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t13-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: testing>>\""},"session_id":"t13-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t13-sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T13: ENFORCE_WORKTREE_OFF sentinel -> sets l2_armed_at (C2 worktree path)"
+        pass "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets l2_armed_at (C2 worktree path)"
     else
-        fail "T13: ENFORCE_WORKTREE_OFF sentinel -> sets l2_armed_at (C2 worktree path) (rc=$rc, val=$val)"
+        fail "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets l2_armed_at (C2 worktree path) (rc=$rc, val=$val)"
     fi
 }
 
@@ -311,38 +326,38 @@ run_t14() {
 }
 
 run_t15() {
-    require_source "$HOOK" "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant -> sets l2_armed_at" || return
+    require_source "$HOOK" "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t15-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t15-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF>>\""},"session_id":"t15-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t15-sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant -> sets l2_armed_at"
+        pass "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at"
     else
-        fail "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
     fi
 }
 
 run_t16() {
-    require_source "$HOOK" "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant -> sets l2_armed_at" || return
+    require_source "$HOOK" "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t16-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t16-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF>>\""},"session_id":"t16-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t16-sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant -> sets l2_armed_at"
+        pass "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at"
     else
-        fail "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -412,19 +427,19 @@ run_t12
 run_t13
 run_t14
 run_t20() {
-    require_source "$HOOK" "T20: C2 command with no prior state file -> creates state with l2_armed_at set" || return
+    require_source "$HOOK" "T20: C2 command + blocking l1 finding -> sets l2_armed_at" || return
     local tmp val rc
     tmp="$(mktemp -d)"
-    # No seed_state call — state file must not exist
+    seed_state_with_l1_finding "$tmp" "t20-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t20-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
     val=$(read_field "$tmp" "t20-sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T20: C2 command with no prior state file -> creates state with l2_armed_at set"
+        pass "T20: C2 command + blocking l1 finding -> sets l2_armed_at"
     else
-        fail "T20: C2 command with no prior state file -> creates state with l2_armed_at set (rc=$rc, val=$val)"
+        fail "T20: C2 command + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -444,20 +459,20 @@ run_t21() {
 }
 
 run_t22() {
-    require_source "$HOOK" "T22: C2 escape-hatch + cumSev=warning -> sets l2_armed_at AND emits advisory" || return
+    require_source "$HOOK" "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets l2_armed_at AND emits advisory" || return
     local tmp out rc val ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t22-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: 'warning', findings: [{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
+    seed_state_with_l1_finding "$tmp" "t22-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: 'warning', findings: [{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t22-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     val=$(read_field "$tmp" "t22-sid" "layer2.l2_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ] && ( echo "$out" | grep -qiE "(warning|layer 2)" ); then
-        pass "T22: C2 escape-hatch + cumSev=warning -> sets l2_armed_at AND emits advisory"
+        pass "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets l2_armed_at AND emits advisory"
     else
-        fail "T22: C2 escape-hatch + cumSev=warning -> sets l2_armed_at AND emits advisory (rc=$rc, val=$val, out=$out)"
+        fail "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets l2_armed_at AND emits advisory (rc=$rc, val=$val, out=$out)"
     fi
 }
 
