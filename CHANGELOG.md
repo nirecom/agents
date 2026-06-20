@@ -402,4 +402,8 @@ Background: fix(#987): detect reparse-point in Write-Launcher before WriteAllTex
 Changes: Fixed a bug where running `dotfileslink.ps1` after `dotfileslink.sh` under WSL caused `Write-Launcher` to follow symlinks and overwrite `bin/` source files with shim content.
 ### CONFIG: Eliminate permission dialogs for git fetch/pull in EnterWorktree sessions (2026-06-20)
 Background: Git fetch and pull commands issued from linked worktree CWD had no allow rules, causing interactive permission dialogs mid-workflow.
-Changes: Added allow rules for `git fetch origin *`, `git fetch --prune origin`, and `git pull --rebase --autostash origin *` (plus `-C *` variants of each).
+Changes: Added allow rules for `git fetch origin *`, `git fetch --prune origin`, and `git pull --rebase --autostash origin *` (plus `-C *` variants of each).
+
+### FEATURE: PR #993 (2026-06-20)
+Background: fix(#239,#240): inline gitignore matcher, remove ignore npm dependency
+Changes: worktree-start no longer fails with `Cannot find module 'ignore'` on fresh clones. The npm dependency `ignore@5.3.2` has been removed and replaced with an inline matcher; `package.json` and `package-lock.json` have been deleted.
