@@ -71,10 +71,9 @@ The parent cannot be closed while any child is `open` (`/issue-close-stage` and 
 
 A session may close multiple issues in a single PR. Quick reference:
 
-- `closes_issues` order matters — index 0 is the **primary** (drives WIP state
-  and Projects v2 tracking). The primary is confirmed exactly once per
-  session, at workflow-init Step 1 (b) OR at clarify-intent Completion
-  (whichever first sees N>=2). The two triggers are mutually exclusive.
+- `closes_issues` is the flat list of issues the session closes. `ISSUES[0]`
+  is the first entry in insertion order (no special representational status).
+  All entries are treated symmetrically for WIP, labels, history, and PR markers.
 - One `history.md` entry per closed issue.
 - One `Closes #<N>` line and one `<!-- issue-close-pr-of: <N> -->` marker
   per closed issue in the PR body.

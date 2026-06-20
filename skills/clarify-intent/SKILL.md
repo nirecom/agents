@@ -18,7 +18,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 CI-1. Read the user's request; identify the root question that unlocks all downstream decisions.
 
-CI-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (CI-1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all (`closes_issues: [N1, N2, ...]`) — primary is confirmed at Completion (see preamble). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
+CI-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (CI-1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all in insertion order (`closes_issues: [N1, N2, ...]`). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
 
 CI-1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to CI-2 (CONFIRM_OUTLINE check) normally. During the interview in CI-3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
 
@@ -26,7 +26,7 @@ CI-2. Check via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_
 
 CI-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
-CI-2b. **Companion-issue re-search.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/companion-search.sh" --primary "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")"`. Exit 1 → skip. Exit 0: for each TSV line (`<N>\t<title>\t<reason>\t<state>`), one `AskUserQuestion`: "Add #<N> (<title>) as a related issue for this session? Reason: <reason>" — options "Yes (add as related)" / "No (skip)". Accepted `#M` appended to `closes_issues` before CI-4 writes intent.md (`# related` marker).
+CI-2b. **Companion-issue re-search.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/companion-search.sh" --seed "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")"`. Exit 1 → skip. Exit 0: for each TSV line (`<N>\t<title>\t<reason>\t<state>`), one `AskUserQuestion`: "Add #<N> (<title>) as a companion issue for this session? Reason: <reason>" — options "Yes (add)" / "No (skip)". Accepted `#M` appended to `closes_issues` before CI-4 writes intent.md.
 
 CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
@@ -47,8 +47,8 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `C
    When no candidates were detected: write `- (none detected)` (no triage field).
 
    **`## Issues` section rules** (immediately after H1, before Background/Motivation — mandatory; this is the single SSOT, no separate `## closes_issues` section is written):
-   - One `- #<N>: <title>` line per issue in `closes_issues`, in confirmed order (primary first).
-   - **Path B** (issue known via auto-detect): read the primary title from `context.md ## Issue metadata - title:`; for any related issues, fetch via `gh issue view <N> --json title --jq .title`. If a fetch fails, write `- #<N>: (title unavailable)`.
+   - One `- #<N>: <title>` line per issue in `closes_issues`, in the order found.
+   - **Path B** (issue known via auto-detect): read the first entry's title from `context.md ## Issue metadata - title:`; for any additional issues, fetch via `gh issue view <N> --json title --jq .title`. If a fetch fails, write `- #<N>: (title unavailable)`.
    - **Path C** (no issue yet — empty `closes_issues`): write an EMPTY `## Issues` section as placeholder:
      ```
      ## Issues
@@ -60,16 +60,6 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `C
 CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"`, also include the next tool_use — the GitHub reconciliation Bash block from Completion, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
 ## Completion
-
-**Primary confirmation (interview-emerged multi-N only):**
-If `closes_issues` now has 2+ entries AND the file
-`<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` does NOT contain the marker
-`<!-- workflow-init: confirmed primary = `, then ask the user to confirm
-which is the primary:
-  AskUserQuestion: "Which is the primary issue for this session?"
-  (one branch per closes_issues entry)
-After confirmation, reorder `closes_issues` so the selected issue is first.
-This fires at most once per session (mutex with workflow-init Step 1(b)).
 
 After confirm-plan protocol returns, run the non-GitHub gate:
 
@@ -90,17 +80,16 @@ Reconcile with GitHub (steps 2–3 require `NON_GITHUB=0`; skip them when `NON_G
 
 1. Read `closes_issues` from intent.md (canonical parser: `hooks/lib/parse-closes-issues.js`).
 2. **Non-empty `closes_issues`** (skip when `NON_GITHUB=1`):
-   - **CLOSED state check for all entries.** For each issue N in `closes_issues` (primary first, then related):
+   - **CLOSED state check for all entries.** For each issue N in `closes_issues` (in insertion order):
      `if STATE=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-state-check.sh" "$N" 2>/dev/null); then :; else STATE=error; fi`
-     - Primary CLOSED: `AskUserQuestion` "Primary issue #N is CLOSED. How to proceed?" — options: "Reopen primary issue and continue" / "Abort session".
-     - Related CLOSED: `AskUserQuestion` "Related issue #N is CLOSED." — options: "Reopen and continue" / "Remove this related issue from closes_issues and continue" (Read + Edit intent.md to remove N) / "Abort session".
+     - CLOSED: `AskUserQuestion` "Issue #N is CLOSED. How to proceed?" — options: "Reopen and continue" / "Remove from closes_issues and continue" (offered only when `len(closes_issues) >= 2`; Read + Edit intent.md to remove N) / "Abort session".
      - `error` → warn and continue.
-   - **Label all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
+   - **Label all entries.** For each issue N in `closes_issues` (in insertion order):
      `gh issue edit <N> --add-label "intent:clarified"`.
      On failure for any N: warn `[clarify-intent]`, add `intent:clarified-label-failed: #<N>: <reason>` under Constraints. Continue with the remaining entries (best-effort per-N).
-   - **WIP set for all entries.** For each N in `closes_issues` (primary first, then related): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-set-single.sh" <N>`. Exit 0 (`META_SKIP`): log `[clarify-intent: skipping WIP set for #<N> — meta label detected]`. Exit 1 (`WARN_CONTINUE`): warn `[clarify-intent: wip-state set failed for #<N> — Projects v2 Status not updated]` and continue. Exit 2 (`RC2`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed — neither $CLAUDE_ENV_FILE nor $CLAUDE_SESSION_ID resolvable; conflict detection broken). How to proceed?" → "Skip and continue (acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_SET_RC2: #<N>>>"` + stop.
-     Every issue in `closes_issues` receives its own WIP fingerprint so cross-session conflict detection covers related issues too (see `rules/github-issues.md` "Session model").
-   - **Board-card parity for all entries.** For each issue N in `closes_issues` (primary first, then related in confirmed order):
+   - **WIP set for all entries.** For each N in `closes_issues` (in insertion order): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-set-single.sh" <N>`. Exit 0 (`META_SKIP`): log `[clarify-intent: skipping WIP set for #<N> — meta label detected]`. Exit 1 (`WARN_CONTINUE`): warn `[clarify-intent: wip-state set failed for #<N> — Projects v2 Status not updated]` and continue. Exit 2 (`RC2`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed — neither $CLAUDE_ENV_FILE nor $CLAUDE_SESSION_ID resolvable; conflict detection broken). How to proceed?" → "Skip and continue (acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_SET_RC2: #<N>>>"` + stop.
+     Every issue in `closes_issues` receives its own WIP fingerprint so cross-session conflict detection covers all entries symmetrically (see `rules/github-issues.md` "Session model").
+   - **Board-card parity for all entries.** For each issue N in `closes_issues` (in insertion order):
      `bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" <N>`.
      Best-effort per-N — warn and continue on non-zero exit. Runs independently of `wip-state.sh set` so session-id-resolution failures cannot strand any issue without a board card. The primitive is idempotent — running it for an issue already on the board with the correct Content Date is a no-op.
 3. **Empty** (Path C — skip when `NON_GITHUB=1`): `gh issue create --title "<~50 chars>" --body "<Background + Scope + Constraints + auto-created footer>" --label "intent:clarified"`. On success: backfill the `## Issues` placeholder body from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` using Read + Edit (title is the `--title` arg from this call — no re-fetch needed). Then: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-set-single.sh" <N>` (same exit-code handling as the WIP-set-for-all-entries loop above). Then `bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" <N>` (best-effort). On `gh issue create` failure: warn, leave the `## Issues` placeholder body unchanged.
