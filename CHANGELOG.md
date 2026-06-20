@@ -395,4 +395,8 @@ Changes: Companion issue suggestions now show why each issue was flagged (xref, 
 
 ### FEATURE: PR #985 (2026-06-20)
 Background: fix(#955,#967,#975,#933): supervisor guard/trigger/state-writer L2 lifecycle fixes
-Changes: Fixed: EM Supervisor Stop hook no longer permanently blocks the session after Layer 2 review completes (`l2_phase=frozen` or `done`). Sessions with acknowledged errors can continue. (#955);Fixed: EM Supervisor can now schedule a fresh Layer 2 review after a frozen session resumes work — new findings after a freeze are no longer silently dropped. (#967);Fixed: EM Supervisor no longer triggers a Layer 2 review when WORKFLOW_OFF is pre-authorized with no blocking findings. Notice-only sessions no longer cause spurious reviews. (#975)
+Changes: Fixed: EM Supervisor Stop hook no longer permanently blocks the session after Layer 2 review completes (`l2_phase=frozen` or `done`). Sessions with acknowledged errors can continue. (#955);Fixed: EM Supervisor can now schedule a fresh Layer 2 review after a frozen session resumes work — new findings after a freeze are no longer silently dropped. (#967);Fixed: EM Supervisor no longer triggers a Layer 2 review when WORKFLOW_OFF is pre-authorized with no blocking findings. Notice-only sessions no longer cause spurious reviews. (#975)
+
+### FEATURE: PR #989 (2026-06-20)
+Background: fix(#987): detect reparse-point in Write-Launcher before WriteAllText
+Changes: Fixed a bug where running `dotfileslink.ps1` after `dotfileslink.sh` under WSL caused `Write-Launcher` to follow symlinks and overwrite `bin/` source files with shim content.
