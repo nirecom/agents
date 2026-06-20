@@ -110,6 +110,8 @@
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",
       "Bash(get-config-var *)",
+      "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" *')",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" *)",
       "Write(**/tests/**)",
       "Edit(**/tests/**)",
       "WebSearch",

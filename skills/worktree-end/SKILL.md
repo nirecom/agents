@@ -37,9 +37,9 @@ Used only when Step WE-4 probe detected `empty-repo`.
 ### Step WE-5 — Merge decision (PR state gate + AUTO_MERGE_PR)
 PR state gate (runs before AUTO_MERGE_PR; applies to both modes): `gh pr view "$PR_NUMBER" --json state --jq .state`. `MERGED` → skip to WE-7 (skip AUTO_MERGE_PR and WE-8). `CLOSED` → error "PR #<N> was closed without merging." and stop. `OPEN` → continue; output `PR #<N> is open: [<url>](<url>)`. other/error/empty → error "Unable to determine PR #<N> state." and stop.
 
-Check `AUTO_MERGE_PR` (default `on`): `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off AUTO_MERGE_PR on && echo OFF || echo ON'`.
-- `on`: announce `AUTO_MERGE_PR=on → merging now.` → WE-8.
-- `off`: `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-8 / WE-6 / stop. If `AskUserQuestion` unavailable, default to **wait-for-web-merge**.
+Check `AUTO_MERGE_PR` (default `on`): `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" AUTO_MERGE_PR on'`.
+- stdout `ON` or `ERROR`: announce `AUTO_MERGE_PR=on → merging now.` → WE-8.
+- stdout `OFF`: `AskUserQuestion` "PR #<N> — merge, wait-for-web-merge, or abort?" → WE-8 / WE-6 / stop. If `AskUserQuestion` unavailable, default to **wait-for-web-merge**.
 
 ### Step WE-6 — Web-merge wait
 Display `PR #<N>: merge via GitHub UI, then reply here.` + URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → WE-7; else re-display and stop. `$PR_NUMBER` is session-local.
