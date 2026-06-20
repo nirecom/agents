@@ -20,7 +20,7 @@ CI-1. Read the user's request; identify the root question that unlocks all downs
 
 CI-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (CI-1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all in insertion order (`closes_issues: [N1, N2, ...]`). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
 
-CI-1b. **Pre-fill detection**: Check `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to CI-2 (CONFIRM_OUTLINE check) normally. During the interview in CI-3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
+CI-1b. **Pre-fill detection**: Check `<PLANS_DIR>/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to CI-2 (CONFIRM_OUTLINE check) normally. During the interview in CI-3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
 
 CI-2. Check via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_OUTLINE on'`. If stdout is `OFF`: add delivery-plan-direction question (required even past the 5-round cap). **Scope constraint:** the delivery-plan-direction question MUST cover execution order / staging priority only — it MUST NOT ask about PR count or bundling; `rules/github-issues.md` fixes `1 session = 1 PR` as a non-negotiable invariant.
 
@@ -60,6 +60,17 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `C
 CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"`, also include the next tool_use — the GitHub reconciliation Bash block from Completion, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
 ## Completion
+
+**Primary confirmation (interview-emerged multi-N only):**
+If `closes_issues` now has 2+ entries AND the file
+`<PLANS_DIR>/<session-id>-issue-prefill.md` does NOT contain the marker
+`<!-- workflow-init: confirmed primary = `, then ask the user to confirm
+which is the primary:
+  AskUserQuestion: "Which is the primary issue for this session?"
+  (one branch per closes_issues entry)
+After confirmation, reorder `closes_issues` so the selected issue is first.
+This fires at most once per session (mutex with workflow-init Step 1(b)).
+
 
 After confirm-plan protocol returns, run the non-GitHub gate:
 

@@ -67,7 +67,8 @@ EOF
 setup_plans_dir() {
     local test_tmp="$1"
     local plans_dir="$test_tmp/plans"
-    mkdir -p "$plans_dir/drafts"
+    # #866: intermediate files live under PLANS_DIR root (no drafts/ subdir).
+    mkdir -p "$plans_dir"
     echo "# Draft plan" > "$plans_dir/draft.md"
     echo "# Outline" > "$plans_dir/outline.md"
     echo "$plans_dir"

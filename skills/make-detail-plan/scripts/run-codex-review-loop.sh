@@ -5,8 +5,7 @@ set -euo pipefail
 : "${PLANS_DIR:?PLANS_DIR not set}"
 : "${EXTENSIONS_USED:?EXTENSIONS_USED not set}"
 
-ROUND_FILE="${PLANS_DIR}/drafts/${SESSION_ID}-detail-plan-round-number.txt"
-mkdir -p "$(dirname "$ROUND_FILE")"
+ROUND_FILE="${PLANS_DIR}/${SESSION_ID}-detail-plan-round-number.txt"
 if [[ -f "$ROUND_FILE" ]]; then
   ROUND_NUMBER=$(( $(<"$ROUND_FILE") + 1 ))
 else
@@ -26,7 +25,7 @@ args=(
   --format detail-plan
   --session-id "$SESSION_ID"
   --plans-dir "$PLANS_DIR"
-  --draft-file "$PLANS_DIR/drafts/$SESSION_ID-detail-draft.md"
+  --draft-file "$PLANS_DIR/$SESSION_ID-detail.md"
   --cap 2 --max-extensions 1 --extensions-used "$EXTENSIONS_USED"
   --accepted-tradeoffs "$PLANS_DIR/$SESSION_ID-outline.md"
   --round "$ROUND_NUMBER"

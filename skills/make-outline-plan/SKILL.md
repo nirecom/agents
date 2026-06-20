@@ -42,9 +42,9 @@ MOP-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner
 MOP-3. If outline-planner returns `SINGLE_APPROACH_JUSTIFIED: <reason>` (optionally `DELIVERY_PLAN: <plan>` on next line):
    - Parse both lines. If `DELIVERY_PLAN:` is absent (pre-change planner output), use the fallback text "(not provided — planner pre-dates this convention)".
    - Inform user that only one approach is viable (citing the reason) and that the skill is proceeding directly to `/make-detail-plan`.
-   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/drafts/<session-id>-outline-draft.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
+   - Write a minimal planner output containing the H1, the approved single approach text, and a `## Delivery plan` section from the `DELIVERY_PLAN:` text (or fallback) to `<PLANS_DIR>/<session-id>-outline.md`. Do NOT write `## Issues` / `## Class members` / `## Accepted Tradeoffs` — the helper carries them forward next.
    - Assemble the final outline.md by invoking the shared helper (same call as the normal path in MOP-4a):
-     Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/drafts/$SESSION_ID-outline-draft.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+     Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - Apply the full `skills/_shared/confirm-plan.md` protocol (Steps 1+2+3) using `CONFIRM_OUTLINE`. Even single viable approach may need artifact revision — protocol Step 3 covers that. Revise → ask what to change, re-run outline-planner, loop back to MOP-2.
    - Proceed to the **Completion** sequence below.
 
@@ -52,7 +52,7 @@ MOP-4. If outline-planner returns `NEEDS_RESEARCH`: run `/deep-research`, then r
 
 MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not instruct planner to author them):**
    After outline-planner returns its draft (initial or revised round), the orchestrator carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from intent.md into the final outline.md via the shared helper:
-   Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/drafts/$SESSION_ID-outline-draft.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
+   Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent "$PLANS_DIR/$SESSION_ID-intent.md" "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-outline.md"` (Bash tool).
    - The helper extracts the 3 sections from intent.md with headers, strips any planner-authored copies plus the planner's H1 from the draft, and writes the assembled outline.md.
    - Helper exit non-zero → re-prompt outline-planner once and re-assemble; second failure → halt the loop.
    - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
@@ -73,9 +73,9 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    `--context` when the file exists and is non-empty). Exit codes pass through unchanged.
 
    Outline-stage caller paths:
-   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
-   - CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md`
-   - DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-outline-debug.log`
+   - RAW_FILE: `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`
+   - CONCERNS_LOG: `<PLANS_DIR>/<session-id>-outline-concerns-log.md`
+   - DEBUG_LOG: `<PLANS_DIR>/<session-id>-outline-debug.log`
 
    Exit code → action mapping: see the SSOT table in
    `skills/_shared/codex-review-loop.md` (#exit-code--orchestrator-action-ssot).
@@ -83,13 +83,13 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
    **Exit 4 must NOT trigger `outline-reviewer` fallback** — halt and surface
    stderr to the user. Only exit 3 falls back silently.
 
-   The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/drafts/<session-id>-outline-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
+   The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/<session-id>-outline-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
 
 MOP-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    - LABEL: `"Outline Plan Review"`
-   - RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<round_number-1>-raw.md`
-     - `<round_number-1>` = `$(( $(cat <PLANS_DIR>/drafts/<session-id>-outline-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 the resulting path does not exist — the helper's degraded RAW mode applies (documented expected outcome for first-round cap-reach).
-   - LEDGER_FILE: `<PLANS_DIR>/drafts/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt`
+   - RAW_FILE: `<PLANS_DIR>/<session-id>-outline-codex-round-<round_number-1>-raw.md`
+     - `<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-outline-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 the resulting path does not exist — the helper's degraded RAW mode applies (documented expected outcome for first-round cap-reach).
+   - LEDGER_FILE: `<PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt`
    - MAX_EXTENSIONS: 1
 
    Step c.5 of the dispatch protocol prints the concern summary block to chat before AskUserQuestion fires.

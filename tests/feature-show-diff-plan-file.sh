@@ -30,6 +30,16 @@ NODE_HOME="$(run_with_timeout node -e "process.stdout.write(require('os').homedi
 
 # Set WORKFLOW_PLANS_DIR to the real home's .workflow-plans so isUnderPath matches
 export WORKFLOW_PLANS_DIR="$NODE_HOME/.workflow-plans"
+
+# Empty cfg dir prevents loadDefaultEnv() in the hook from reading the real .env
+# and injecting CONFIRM_*=off values that would suppress diffs in T1-T9.
+NODE_TMPDIR="$(run_with_timeout node -e "process.stdout.write(require('os').tmpdir().replace(/\\\\/g,'/'))")"
+ISOLATED_CFG_DIR="${NODE_TMPDIR}/show-diff-plan-cfg-$$"
+mkdir -p "$ISOLATED_CFG_DIR"
+export AGENTS_CONFIG_DIR="$ISOLATED_CFG_DIR"
+cleanup_isolated() { rm -rf "$ISOLATED_CFG_DIR"; }
+trap cleanup_isolated EXIT
+
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 
 run_hook() {
@@ -70,10 +80,12 @@ echo "=== T1: \$WORKFLOW_PLANS_DIR/foo-intent.md ==="
 expect_nonempty "T1 plan intent file shows diff (final artifact)" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/foo-intent.md\",\"content\":\"x\"}}"
 
-# ── T2: POSIX path under ~/.workflow-plans/drafts/ ─────────────────────────
-echo "=== T2: \$WORKFLOW_PLANS_DIR/drafts/foo.md ==="
-expect_empty "T2 plan drafts file is noop" \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/drafts/foo.md\",\"content\":\"x\"}}"
+# ── T2: POSIX path — flat intermediate (-debug.log suffix, #866) ───────────
+# After #866, intermediate plan files live directly under WORKFLOW_PLANS_DIR
+# (no drafts/ subdir). Suppression is by filename-suffix pattern match.
+echo "=== T2: \$WORKFLOW_PLANS_DIR/20260620-200623-outline-debug.log ==="
+expect_empty "T2 flat intermediate (-debug.log) is noop" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260620-200623-outline-debug.log\",\"content\":\"x\"}}"
 
 # ── T3: POSIX path — date-stamped detail plan ──────────────────────────────
 # Final artifacts are NOT suppressed — diff preview shown.
@@ -103,10 +115,12 @@ echo "=== T6: ${WIN_PLANS_DIR}\\foo.md (Windows path) ==="
 expect_empty "T6 Windows plans path (malformed JSON) → noop fallback" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\foo.md\",\"content\":\"x\"}}"
 
-# ── T7: Windows backslash path under plans\drafts\ ─────────────────────────
-echo "=== T7: ${WIN_PLANS_DIR}\\drafts\\bar.md (Windows path) ==="
-expect_empty "T7 Windows plans/drafts path is noop" \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\drafts\\\\bar.md\",\"content\":\"x\"}}"
+# ── T7: Windows backslash path — flat intermediate (-codex-round-1-raw.md) ─
+# After #866, the Windows-path test asserts the flat intermediate is suppressed
+# via filename-suffix pattern match (no more drafts\ segment).
+echo "=== T7: ${WIN_PLANS_DIR}\\20260620-200623-codex-round-1-raw.md (Windows path) ==="
+expect_empty "T7 Windows flat intermediate (-codex-round-1-raw.md) is noop" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\20260620-200623-codex-round-1-raw.md\",\"content\":\"x\"}}"
 
 # ── T8: Empty file_path ────────────────────────────────────────────────────
 echo "=== T8: empty file_path ==="
