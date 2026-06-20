@@ -400,3 +400,6 @@ Changes: Fixed: EM Supervisor Stop hook no longer permanently blocks the session
 ### FEATURE: PR #989 (2026-06-20)
 Background: fix(#987): detect reparse-point in Write-Launcher before WriteAllText
 Changes: Fixed a bug where running `dotfileslink.ps1` after `dotfileslink.sh` under WSL caused `Write-Launcher` to follow symlinks and overwrite `bin/` source files with shim content.
+### CONFIG: Eliminate permission dialogs for git fetch/pull in EnterWorktree sessions (2026-06-20)
+Background: Git fetch and pull commands issued from linked worktree CWD had no allow rules, causing interactive permission dialogs mid-workflow.
+Changes: Added allow rules for `git fetch origin *`, `git fetch --prune origin`, and `git pull --rebase --autostash origin *` (plus `-C *` variants of each).
