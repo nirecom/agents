@@ -39,8 +39,9 @@ EOF
     chmod +x "$agents_dir/bin/run-codex-review-loop"
 
     local plans_dir="$test_tmp/plans"
-    mkdir -p "$plans_dir/drafts"
-    echo "# Detail draft" > "$plans_dir/drafts/sid-detail-draft.md"
+    # #866: intermediate files live under PLANS_DIR root (no drafts/ subdir).
+    mkdir -p "$plans_dir"
+    echo "# Detail draft" > "$plans_dir/sid-detail-draft.md"
     echo "# Outline" > "$plans_dir/sid-outline.md"
 }
 
@@ -56,11 +57,11 @@ else
     trap 'rm -rf "$TMP"' EXIT
     setup_wrapper_env "$TMP" 4
     # Ensure detail draft exists for this session id
-    echo "# detail draft" > "$TMP/plans/drafts/sid1-detail-draft.md"
+    echo "# detail draft" > "$TMP/plans/sid1-detail-draft.md"
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid1" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
-    CFILE="$TMP/plans/drafts/sid1-detail-plan-round-number.txt"
+    CFILE="$TMP/plans/sid1-detail-plan-round-number.txt"
     if [[ ! -f "$CFILE" ]]; then
       pass "T1: exit 4 deletes counter file (detail wrapper)"
     else
@@ -82,12 +83,12 @@ else
     trap 'rm -rf "$TMP"' EXIT
     setup_wrapper_env "$TMP" 4
     # outline wrapper requires an outline draft file
-    echo "# outline draft" > "$TMP/plans/drafts/sid2-outline-draft.md"
+    echo "# outline draft" > "$TMP/plans/sid2-outline-draft.md"
     echo "# intent" > "$TMP/plans/sid2-intent.md"
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid2" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || true
-    CFILE="$TMP/plans/drafts/sid2-outline-plan-round-number.txt"
+    CFILE="$TMP/plans/sid2-outline-plan-round-number.txt"
     if [[ ! -f "$CFILE" ]]; then
       pass "T2: exit 4 deletes counter file (outline wrapper)"
     else
@@ -106,11 +107,11 @@ else
     TMP=$(mktemp -d)
     trap 'rm -rf "$TMP"' EXIT
     setup_wrapper_env "$TMP" 1
-    echo "# detail draft" > "$TMP/plans/drafts/sid3-detail-draft.md"
+    echo "# detail draft" > "$TMP/plans/sid3-detail-draft.md"
     AGENTS_CONFIG_DIR="$TMP/agents" SESSION_ID="sid3" PLANS_DIR="$TMP/plans" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$DETAIL_WRAPPER" >/dev/null 2>&1 || true
-    CFILE="$TMP/plans/drafts/sid3-detail-plan-round-number.txt"
+    CFILE="$TMP/plans/sid3-detail-plan-round-number.txt"
     if [[ -f "$CFILE" ]] && [[ "$(tr -d '[:space:]' < "$CFILE")" == "1" ]]; then
       pass "T3: CONTINUE (exit 1) preserves counter file at value 1"
     else
@@ -221,16 +222,16 @@ else
     trap 'rm -rf "$TMP"' EXIT
     setup_bin_env "$TMP"
     write_recording_shim_needs_revision "$TMP/agents" "$TMP"
-    mkdir -p "$TMP/plans/drafts"
+    mkdir -p "$TMP/plans"
     echo "# outline (accepted tradeoffs)" > "$TMP/plans/sid4-outline.md"
-    echo "# detail draft" > "$TMP/plans/drafts/sid4-detail-draft.md"
+    echo "# detail draft" > "$TMP/plans/sid4-detail-draft.md"
     # Do NOT create a ledger file
 
     STDERR_FILE="$TMP/stderr.txt"
     AGENTS_CONFIG_DIR="$TMP/agents" \
       run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
         --format detail-plan --session-id sid4 --plans-dir "$TMP/plans" \
-        --draft-file "$TMP/plans/drafts/sid4-detail-draft.md" \
+        --draft-file "$TMP/plans/sid4-detail-draft.md" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$TMP/plans/sid4-outline.md" \
         --round 2 \
@@ -239,7 +240,7 @@ else
 
     ARGV="$(cat "$TMP/rpc-argv.txt" 2>/dev/null || echo "")"
     STDERR_CONTENT="$(cat "$STDERR_FILE" 2>/dev/null || echo "")"
-    LEDGER_FILE="$TMP/plans/drafts/sid4-detail-plan-concern-ledger.txt"
+    LEDGER_FILE="$TMP/plans/sid4-detail-plan-concern-ledger.txt"
 
     T4_OK=1
     if [[ "$RC" -ne 0 && "$RC" -ne 1 && "$RC" -ne 2 ]]; then
@@ -284,16 +285,16 @@ else
     trap 'rm -rf "$TMP"' EXIT
     setup_bin_env "$TMP"
     write_recording_shim_missing_alternative "$TMP/agents" "$TMP"
-    mkdir -p "$TMP/plans/drafts"
+    mkdir -p "$TMP/plans"
     echo "# intent (accepted tradeoffs)" > "$TMP/plans/sid5-intent.md"
-    echo "# outline draft" > "$TMP/plans/drafts/sid5-outline-draft.md"
+    echo "# outline draft" > "$TMP/plans/sid5-outline-draft.md"
     # Do NOT create a ledger file
 
     STDERR_FILE="$TMP/stderr.txt"
     AGENTS_CONFIG_DIR="$TMP/agents" \
       run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
         --format outline-plan --session-id sid5 --plans-dir "$TMP/plans" \
-        --draft-file "$TMP/plans/drafts/sid5-outline-draft.md" \
+        --draft-file "$TMP/plans/sid5-outline-draft.md" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$TMP/plans/sid5-intent.md" \
         --round 2 \
@@ -302,7 +303,7 @@ else
 
     ARGV="$(cat "$TMP/rpc-argv.txt" 2>/dev/null || echo "")"
     STDERR_CONTENT="$(cat "$STDERR_FILE" 2>/dev/null || echo "")"
-    LEDGER_FILE="$TMP/plans/drafts/sid5-outline-plan-concern-ledger.txt"
+    LEDGER_FILE="$TMP/plans/sid5-outline-plan-concern-ledger.txt"
 
     T5_OK=1
     if [[ "$RC" -ne 0 && "$RC" -ne 1 && "$RC" -ne 2 ]]; then
@@ -345,17 +346,17 @@ else
     trap 'rm -rf "$TMP"' EXIT
     setup_bin_env "$TMP"
     write_recording_shim_approved "$TMP/agents" "$TMP"
-    mkdir -p "$TMP/plans/drafts"
+    mkdir -p "$TMP/plans"
     echo "# outline (accepted tradeoffs)" > "$TMP/plans/sid6-outline.md"
-    echo "# detail draft" > "$TMP/plans/drafts/sid6-detail-draft.md"
-    LEDGER_FILE="$TMP/plans/drafts/sid6-detail-plan-concern-ledger.txt"
+    echo "# detail draft" > "$TMP/plans/sid6-detail-draft.md"
+    LEDGER_FILE="$TMP/plans/sid6-detail-plan-concern-ledger.txt"
     printf 'C1|HIGH|prior concern\n' > "$LEDGER_FILE"
 
     STDERR_FILE="$TMP/stderr.txt"
     AGENTS_CONFIG_DIR="$TMP/agents" \
       run_with_timeout "$TMP/agents/bin/run-codex-review-loop" \
         --format detail-plan --session-id sid6 --plans-dir "$TMP/plans" \
-        --draft-file "$TMP/plans/drafts/sid6-detail-draft.md" \
+        --draft-file "$TMP/plans/sid6-detail-draft.md" \
         --cap 2 --max-extensions 1 --extensions-used 0 \
         --accepted-tradeoffs "$TMP/plans/sid6-outline.md" \
         --round 2 \

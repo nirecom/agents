@@ -19,11 +19,13 @@ expect_message "T3 detail file emits systemMessage" \
   "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
   "Plan file written:"
 
-# ── T4: Write in drafts/ subdirectory ──────────────────────────────────────
-echo "=== T4: drafts/abc-detail.md ==="
-mkdir -p "$PLANS_DIR/drafts"
-expect_empty "T4 drafts subdir is excluded (isDirectChild)" \
-  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/drafts/abc-detail.md\"},\"tool_response\":{\"success\":true}}"
+# ── T4: Write flat intermediate-suffix file (#866) ─────────────────────────
+# After #866 drafts/ is gone; intermediate plan files live under PLANS_DIR
+# root and are recognized by filename-suffix pattern. They are NOT final
+# artifacts, so isFinalPlanArtifact must still reject them → no breadcrumb.
+echo "=== T4: flat intermediate -outline-draft.md ==="
+expect_empty "T4 flat intermediate-suffix file excluded (not a final artifact)" \
+  "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-outline-draft.md\"},\"tool_response\":{\"success\":true}}"
 
 # ── T5: Wrong suffix (.bak.md) ─────────────────────────────────────────────
 echo "=== T5: abc-detail.bak.md ==="
