@@ -18,9 +18,9 @@ Write or update tests for the current task.
    cases in the next step.
 4. List all planned test cases by category (include call-path error cases from step 3).
    Then check via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_TESTS on && echo OFF || echo ON'`
+     `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'`
    - stdout `OFF`: print the planned cases and proceed to step 5 without approval wait.
-   - stdout `ON`: present the planned cases to the user — do not write code until approved (existing behavior).
+   - stdout `ON` or `ERROR`: present the planned cases to the user — do not write code until approved (existing behavior).
 5. **Determine the subagent's model**:
    - Read `skills/_shared/judge-task-complexity.md` to load the signal table.
    - Evaluate all signals against the task context, source files from steps 2–3, and the planned test cases from step 4. Do not short-circuit on the first match.
@@ -42,9 +42,9 @@ Write or update tests for the current task.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
 7. Present the final test file content to the user for review — gated by **CONFIRM_TESTS gate (post-action review)**:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_TESTS on && echo OFF || echo ON'`
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'`
    - stdout `OFF`: skip this step; proceed directly to Completion (no user wait).
-   - stdout `ON`: present the test file content.
+   - stdout `ON` or `ERROR`: present the test file content.
 
 ## Completion
 
