@@ -422,4 +422,8 @@ Changes: confirm-off helper (bash + PowerShell) added: SKILL.md confirm gates no
 
 ### FEATURE: PR #1004 (2026-06-20)
 Background: feat(#990): add scan-offensive CLI + /scan-offensive skill + forward filter
-Changes: Added `scan-outbound.js` forward filter for offensive content in `gh issue/pr` writes; populate `.offensive-content-blocklist` and/or set `ANTHROPIC_API_KEY` to activate (all repos, public and private);Added `/scan-offensive` skill for retroactive scanning and redacting offensive content in any GitHub repo's issues and comments
+Changes: Added `scan-outbound.js` forward filter for offensive content in `gh issue/pr` writes; populate `.offensive-content-blocklist` and/or set `ANTHROPIC_API_KEY` to activate (all repos, public and private);Added `/scan-offensive` skill for retroactive scanning and redacting offensive content in any GitHub repo's issues and comments
+
+### FEATURE: PR #1006 (2026-06-21)
+Background: feat(#866): remove drafts/ subdirectory from ~/.workflow-plans/
+Changes: `~/.workflow-plans/` no longer has a `drafts/` subdirectory — all planner intermediate files now live at the root alongside final artifacts, distinguished by filename suffix.
