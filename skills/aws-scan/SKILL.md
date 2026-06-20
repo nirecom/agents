@@ -8,12 +8,12 @@ context: fork
 
 ## Procedure
 
-1. Verify: `aws --version`, AWS_PROFILE set, AWS_STATE_DIR set (default ~/.aws-state). Create dir if absent.
-2. Invoke /aws-scan-resources
-3. Invoke /aws-scan-security
-4. Invoke /aws-scan-cost
-5. Invoke /aws-scan-apps
-6. Write consolidated summary to $AWS_STATE_DIR/scan-<YYYYMMDD>.md
+AS-1. Verify: `aws --version`, AWS_PROFILE set, AWS_STATE_DIR set (default ~/.aws-state). Create dir if absent.
+AS-2. Invoke /aws-scan-resources
+AS-3. Invoke /aws-scan-security
+AS-4. Invoke /aws-scan-cost
+AS-5. Invoke /aws-scan-apps
+AS-6. Write consolidated summary to $AWS_STATE_DIR/scan-<YYYYMMDD>.md
 
 ## Rules
 

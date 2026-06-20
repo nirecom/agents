@@ -24,19 +24,19 @@ Update `infrastructure.md` to reflect infrastructure changes across all stacks a
 
 ## Procedure
 
-1. **Gather recent changes**: For each source repo, run `git log --oneline -20`. Also check `langchain/architecture.md` and `langchain/ops.md` for recently documented changes not yet in infrastructure.md
-2. **Read current infrastructure.md**: Understand what is already documented
-3. **Identify gaps**: Compare against infrastructure.md. Look for:
+UI-1. **Gather recent changes**: For each source repo, run `git log --oneline -20`. Also check `langchain/architecture.md` and `langchain/ops.md` for recently documented changes not yet in infrastructure.md
+UI-2. **Read current infrastructure.md**: Understand what is already documented
+UI-3. **Identify gaps**: Compare against infrastructure.md. Look for:
    - Host service changes (Windows host services, Mac services, QNAP docker-stacks)
    - Stack additions or removals
    - Port allocation changes
    - Connection topology changes
    - Docker network changes
    - Hardware or network equipment changes
-4. **Propose updates**: Present a summary of proposed changes to the user:
+UI-4. **Propose updates**: Present a summary of proposed changes to the user:
    - Which sections need updating and why
    - Specific additions or modifications
-5. **Apply after confirmation**: Edit the file only after user approval
+UI-5. **Apply after confirmation**: Edit the file only after user approval
 
 ## Rules
 

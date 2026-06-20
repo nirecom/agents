@@ -18,11 +18,11 @@ Review security implications of the current task across three axes.
 
 ## Procedure
 
-1. Read the implementation plan or task description.
-2. Register all checklist items from the three axes into TodoWrite
+RPS-1. Read the implementation plan or task description.
+RPS-2. Register all checklist items from the three axes into TodoWrite
    (one task per item, prefixed with axis name, e.g. "Leakage: secrets not hardcoded").
-3. Evaluate each item sequentially — set `in_progress`, evaluate, then `completed` with: PASS / RISK (+ mitigation) / N/A (+ reason).
-4. Present a summary table. If any RISK items exist, propose mitigations before implementation proceeds.
+RPS-3. Evaluate each item sequentially — set `in_progress`, evaluate, then `completed` with: PASS / RISK (+ mitigation) / N/A (+ reason).
+RPS-4. Present a summary table. If any RISK items exist, propose mitigations before implementation proceeds.
 
 ## Security Axes
 

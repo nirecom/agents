@@ -59,7 +59,7 @@ Receive a JSON object with:
 - `--no-verify` is prohibited.
 - Each git write command must be a separate Bash call (no `&&` chaining).
 - Do not install packages.
-- Staging verification (Step 1.5) is skipped only when `wip_mode === true`. WORKFLOW_OFF / WORKTREE_OFF bypass is evaluated by the calling SKILL, not by this worker.
+- Staging verification (Step CP-2) is skipped only when `wip_mode === true`. WORKFLOW_OFF / WORKTREE_OFF bypass is evaluated by the calling SKILL, not by this worker.
 
 ## Output contract
 
