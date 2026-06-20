@@ -406,4 +406,8 @@ Changes: Added allow rules for `git fetch origin *`, `git fetch --prune origin`,
 
 ### FEATURE: PR #993 (2026-06-20)
 Background: fix(#239,#240): inline gitignore matcher, remove ignore npm dependency
-Changes: worktree-start no longer fails with `Cannot find module 'ignore'` on fresh clones. The npm dependency `ignore@5.3.2` has been removed and replaced with an inline matcher; `package.json` and `package-lock.json` have been deleted.
+Changes: worktree-start no longer fails with `Cannot find module 'ignore'` on fresh clones. The npm dependency `ignore@5.3.2` has been removed and replaced with an inline matcher; `package.json` and `package-lock.json` have been deleted.
+
+### FEATURE: PR #995 (2026-06-20)
+Background: fix(#451,#469,#543): session-id error hints, cleanupZombies marker files, wip-state --session-id
+Changes: Fixed: WIP conflict detection no longer misidentifies the current session when multiple Claude Code sessions run concurrently. `wip-state.sh` now accepts an injected session ID, eliminating the racy JSONL mtime scan. (#543);Fixed: Orphaned `.workflow-off` and `.worktree-off` marker files from past sessions are now cleaned up after 7 days. (#469);Fixed: WIP rc=2 error hints in `clarify-intent` and `workflow-init` now name both `$CLAUDE_ENV_FILE` and `$CLAUDE_SESSION_ID` as triage targets. (#451)
