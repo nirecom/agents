@@ -115,10 +115,10 @@ function checkBashCommand(command) {
   });
 }
 
-function isAllowlistPath(filePath) {
+function isProtectedPath(filePath) {
   if (!filePath) return false;
   const basename = getBasename(filePath);
-  return basename === ".private-info-allowlist";
+  return basename === ".private-info-allowlist" || basename === ".offensive-content-blocklist";
 }
 
 // For Glob patterns: detect .env search patterns
@@ -184,8 +184,13 @@ switch (toolName) {
     if (isDotenvPath(toolInput.file_path)) {
       block("Writing .env files is blocked. Use .env.example for documentation.");
     }
-    if (isAllowlistPath(toolInput.file_path)) {
-      block("Writing .private-info-allowlist is blocked. Edit manually if an exception is genuinely needed.");
+    if (isProtectedPath(toolInput.file_path)) {
+      const basename = getBasename(toolInput.file_path);
+      if (basename === ".private-info-allowlist") {
+        block("Writing .private-info-allowlist is blocked. Edit manually if an exception is genuinely needed.");
+      } else {
+        block("Writing .offensive-content-blocklist is blocked. Edit manually if a pattern change is genuinely needed.");
+      }
     }
     break;
 

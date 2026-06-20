@@ -1,0 +1,249 @@
+#!/usr/bin/env node
+// scan-offensive — scan stdin text for offensive content (hate speech, slurs,
+// harassment, profanity) using a two-tier detector: keyword/regex blocklist
+// first, then optional LLM borderline classifier.
+//
+// Contract:
+//   bin/scan-offensive --stdin [label]
+//
+// Exit codes:
+//   0 — clean
+//   1 — hard-block
+//   2 — warn-only
+//   3 — usage error
+//
+// Stderr format on match:
+//   <label>:<lineno>: [offensive-hard] <matched-text>
+//   <label>:<lineno>: [offensive-warn] <matched-text>
+//   <label>:<lineno>: [offensive-llm] <reason>
+
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const https = require("https");
+
+const USAGE =
+  "Usage: scan-offensive --stdin [label]\n" +
+  "       scan-offensive --help\n";
+
+function die(msg, code) {
+  if (msg) process.stderr.write(msg + "\n");
+  process.exit(code);
+}
+
+function parseArgs(argv) {
+  const args = argv.slice(2);
+  let useStdin = false;
+  let label = "stdin";
+  let positionals = 0;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--help" || a === "-h") {
+      process.stdout.write(USAGE);
+      process.exit(0);
+    } else if (a === "--stdin") {
+      useStdin = true;
+    } else if (a.startsWith("--") || a.startsWith("-")) {
+      die("scan-offensive: unknown flag: " + a + "\n" + USAGE, 3);
+    } else {
+      positionals += 1;
+      if (positionals === 1) {
+        label = a;
+      } else {
+        die("scan-offensive: too many positional arguments\n" + USAGE, 3);
+      }
+    }
+  }
+  if (!useStdin) {
+    die("scan-offensive: --stdin is required\n" + USAGE, 3);
+  }
+  return { label };
+}
+
+function readStdinSync() {
+  const chunks = [];
+  const buf = Buffer.alloc(4096);
+  try {
+    while (true) {
+      const n = fs.readSync(0, buf, 0, buf.length);
+      if (n === 0) break;
+      chunks.push(buf.slice(0, n));
+    }
+  } catch (_e) {
+    // EOF or error — fall through
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function loadBlocklist() {
+  const blocklistPath = process.env.SCAN_OFFENSIVE_BLOCKLIST ||
+    path.resolve(__dirname, "..", ".offensive-content-blocklist");
+  if (!fs.existsSync(blocklistPath)) {
+    process.stderr.write("scan-offensive: blocklist not found, skipping keyword scan\n");
+    return { hard: [], warn: [] };
+  }
+  const lines = fs.readFileSync(blocklistPath, "utf8").split(/\r?\n/);
+  const hard = [];
+  const warn = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("#")) continue;
+    if (line.startsWith("warn:")) {
+      const pat = line.slice(5).trim();
+      if (!pat) continue;
+      try {
+        warn.push(new RegExp(pat, "i"));
+      } catch (_e) {
+        process.stderr.write("scan-offensive: invalid warn regex skipped: " + pat + "\n");
+      }
+    } else {
+      try {
+        hard.push(new RegExp(line, "i"));
+      } catch (_e) {
+        process.stderr.write("scan-offensive: invalid regex skipped: " + line + "\n");
+      }
+    }
+  }
+  return { hard, warn };
+}
+
+function scanKeyword(content, label, patterns) {
+  const lines = content.split(/\r?\n/);
+  let hardHits = 0;
+  let warnHits = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const lineno = i + 1;
+    for (const re of patterns.hard) {
+      const m = ln.match(re);
+      if (m) {
+        process.stderr.write(label + ":" + lineno + ": [offensive-hard] " + m[0] + "\n");
+        hardHits += 1;
+      }
+    }
+    for (const re of patterns.warn) {
+      const m = ln.match(re);
+      if (m) {
+        process.stderr.write(label + ":" + lineno + ": [offensive-warn] " + m[0] + "\n");
+        warnHits += 1;
+      }
+    }
+  }
+  return { hardHits, warnHits };
+}
+
+function callAnthropic(apiKey, text) {
+  return new Promise((resolve) => {
+    const body = JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      messages: [
+        {
+          role: "user",
+          content:
+            "Classify whether the following text contains offensive content " +
+            "(hate speech, slurs, harassment, profanity). " +
+            'Return ONLY a JSON object: {"verdict": "clean"|"warn"|"block", "reason": "..."}\n\n' +
+            "---\n" + text + "\n---",
+        },
+      ],
+    });
+    const req = https.request(
+      {
+        method: "POST",
+        hostname: "api.anthropic.com",
+        path: "/v1/messages",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-length": Buffer.byteLength(body),
+        },
+        timeout: 5000,
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          try {
+            const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+            if (res.statusCode !== 200) {
+              resolve({ error: "http " + res.statusCode + ": " + (data.error && data.error.message || "unknown") });
+              return;
+            }
+            const textOut = (data.content && data.content[0] && data.content[0].text) || "";
+            const jsonMatch = textOut.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+              resolve({ error: "no JSON in response" });
+              return;
+            }
+            const parsed = JSON.parse(jsonMatch[0]);
+            resolve({ verdict: parsed.verdict, reason: parsed.reason || "" });
+          } catch (e) {
+            resolve({ error: e.message });
+          }
+        });
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ error: "timeout" });
+    });
+    req.on("error", (e) => resolve({ error: e.message }));
+    req.write(body);
+    req.end();
+  });
+}
+
+async function runLlm(content, label) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    process.stderr.write(
+      "scan-offensive: LLM stage skipped (ANTHROPIC_API_KEY not set) — keyword-only scan\n"
+    );
+    return { skipped: true };
+  }
+  if (!content || content.length === 0) {
+    return { skipped: true };
+  }
+  const result = await callAnthropic(apiKey, content);
+  if (result.error) {
+    process.stderr.write(
+      "scan-offensive: LLM stage error (" + result.error + ") — treating as clean\n"
+    );
+    return { skipped: true };
+  }
+  if (result.verdict === "block" || result.verdict === "warn") {
+    process.stderr.write(
+      label + ":1: [offensive-llm] " + (result.reason || result.verdict) + "\n"
+    );
+  }
+  return { verdict: result.verdict };
+}
+
+async function main() {
+  const { label } = parseArgs(process.argv);
+  const content = readStdinSync();
+  const patterns = loadBlocklist();
+  const { hardHits, warnHits } = scanKeyword(content, label, patterns);
+
+  if (hardHits > 0) process.exit(1);
+
+  if (warnHits === 0 && content.trim().length >= 50) {
+    const llm = await runLlm(content, label);
+    if (!llm.skipped) {
+      if (llm.verdict === "block") process.exit(1);
+      if (llm.verdict === "warn") process.exit(2);
+    }
+  }
+
+  if (warnHits > 0) process.exit(2);
+  process.exit(0);
+}
+
+main().catch((e) => {
+  process.stderr.write("scan-offensive: unexpected error: " + (e && e.message) + "\n");
+  process.exit(1);
+});

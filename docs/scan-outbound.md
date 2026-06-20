@@ -143,6 +143,26 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 | `.private-info-allowlist` | Exception patterns |
 | `.private-info-blocklist` | Additional detection patterns (gitignored, symlinked from private repo) |
 
+## Offensive Content Filter
+
+A companion two-tier detector (`bin/scan-offensive`) flags offensive content
+(hate speech, slurs, harassment, profanity) in addition to the private-info scan.
+Tier 1 is a regex blocklist (`.offensive-content-blocklist`); Tier 2 is an
+optional LLM classifier for borderline text.
+
+| Checkpoint | When | Mode |
+|:---|:---|:---|
+| Claude Code forge write | Every `gh issue`/`pr` write via `scan-outbound.js` | Forward filter (always-on, public + private repos) |
+| Manual retroactive scan | On-demand via `/scan-offensive` skill | Retroactive (any repo) |
+
+- `.offensive-content-blocklist` lives at the repo root and is write-protected
+  by `block-dotenv.js` — Claude Code cannot edit it. Add patterns manually.
+- LLM tier opt-in: requires `ANTHROPIC_API_KEY`. When unset, `bin/scan-offensive`
+  runs keyword-only and emits a stderr warning.
+- Redact behavior: matches are edited to `[redacted by content-scan]`, never deleted.
+- The forward filter runs for **all repos (public and private)**. The private-info
+  scan continues to skip private repos.
+
 ## Scanner Exit Codes
 
 | Code | Meaning | Caller behavior |
