@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Tests: skills/clarify-intent/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/issue-close-stage/SKILL.md, skills/issue-create/SKILL.md, skills/workflow-init/SKILL.md
-# Tags: issue-close, stage, workflow, finalize, issue-create
+# Tags: issue-close, stage, workflow, finalize, issue-create, scope:common
 # Pre-implementation tests for issue #444 — N-issues-per-session SSOT.
 # Tests S1-S8 are pre-implementation assertions — FAIL until source changes land.
+# L3 gap (what this test does NOT catch):
+# - None: these are static SKILL.md/rules content assertions; no real claude -p session needed.
+# Closest-to-action mitigation: N/A (content assertion; no risk category applies).
 set -euo pipefail
 
 # Timeout guard
@@ -59,8 +62,8 @@ assert_contains "$GITHUB_ISSUES_MD" "^## Session model: N issues per session" \
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- S2: primary / related terms ---"
-assert_contains "$GITHUB_ISSUES_MD" "primary" \
-    "S2a: rules/github-issues.md defines 'primary' term"
+assert_absent "$GITHUB_ISSUES_MD" "- \*\*primary\*\*|^\*\*primary\*\*" \
+    "S2a: rules/github-issues.md Terminology no longer defines 'primary' term separately"
 assert_contains "$GITHUB_ISSUES_MD" "related" \
     "S2b: rules/github-issues.md defines 'related' term"
 
@@ -164,9 +167,9 @@ fi
 # S8: workflow-init primary confirmation prompt present.
 # ---------------------------------------------------------------------------
 echo ""
-echo "--- S8: workflow-init primary confirmation window ---"
-assert_contains "$WORKFLOW_INIT_MD" "Which is the primary" \
-    "S8: workflow-init SKILL.md contains 'Which is the primary' confirmation prompt"
+echo "--- S8: workflow-init primary confirmation removed ---"
+assert_absent "$WORKFLOW_INIT_MD" "Which is the primary" \
+    "S8: workflow-init SKILL.md no longer contains 'Which is the primary' confirmation prompt"
 
 # ============================================================
 echo ""
