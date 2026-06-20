@@ -751,41 +751,51 @@ if [[ $ERRS27 -eq 0 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 28. SKILL.md files use drafts/ paths, not %TEMP% or /tmp/
+# 28. SKILL.md files use flat ~/.workflow-plans/ paths (#866 — no drafts/)
 # ---------------------------------------------------------------------------
 OUTLINE_SKILL="$AGENTS_ROOT/skills/make-outline-plan/SKILL.md"
 ERRS28=0
 
-# make-outline-plan: must contain drafts/ path and must NOT contain %TEMP% or /tmp/ draft refs
-if ! grep -qF '~/.workflow-plans/drafts/<session-id>-outline-draft.md' "$OUTLINE_SKILL"; then
-  fail "make-outline-plan SKILL.md: missing ~/.workflow-plans/drafts/<session-id>-outline-draft.md"
+# make-outline-plan: must contain flat root path and must NOT contain %TEMP%, /tmp/,
+# or any drafts/ subdir reference.
+if ! grep -qF '$PLANS_DIR/$SESSION_ID-outline.md' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: missing \$PLANS_DIR/\$SESSION_ID-outline.md (flat path)"
   ERRS28=$((ERRS28 + 1))
 fi
 if grep -qF '%TEMP%' "$OUTLINE_SKILL"; then
-  fail "make-outline-plan SKILL.md: still contains %TEMP% reference (should use drafts/)"
+  fail "make-outline-plan SKILL.md: still contains %TEMP% reference"
   ERRS28=$((ERRS28 + 1))
 fi
 if grep -qE '/tmp/[^/]*-outline-draft' "$OUTLINE_SKILL"; then
   fail "make-outline-plan SKILL.md: still contains /tmp/<session-id>-outline-draft reference"
   ERRS28=$((ERRS28 + 1))
 fi
+if grep -qF '~/.workflow-plans/drafts/' "$OUTLINE_SKILL"; then
+  fail "make-outline-plan SKILL.md: still contains drafts/ subdir reference (removed in #866)"
+  ERRS28=$((ERRS28 + 1))
+fi
 
-# make-detail-plan: must contain drafts/ path and must NOT contain %TEMP% or /tmp/ draft refs
-if ! grep -qF '~/.workflow-plans/drafts/<session-id>-detail-draft.md' "$DETAIL_SKILL"; then
-  fail "make-detail-plan SKILL.md: missing ~/.workflow-plans/drafts/<session-id>-detail-draft.md"
+# make-detail-plan: must contain flat root path and must NOT contain %TEMP%, /tmp/,
+# or any drafts/ subdir reference.
+if ! grep -qF '$PLANS_DIR/$SESSION_ID-detail.md' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: missing \$PLANS_DIR/\$SESSION_ID-detail.md (flat path)"
   ERRS28=$((ERRS28 + 1))
 fi
 if grep -qF '%TEMP%' "$DETAIL_SKILL"; then
-  fail "make-detail-plan SKILL.md: still contains %TEMP% reference (should use drafts/)"
+  fail "make-detail-plan SKILL.md: still contains %TEMP% reference"
   ERRS28=$((ERRS28 + 1))
 fi
 if grep -qE '/tmp/[^/]*-detail-draft' "$DETAIL_SKILL"; then
   fail "make-detail-plan SKILL.md: still contains /tmp/<session-id>-detail-draft reference"
   ERRS28=$((ERRS28 + 1))
 fi
+if grep -qF '~/.workflow-plans/drafts/' "$DETAIL_SKILL"; then
+  fail "make-detail-plan SKILL.md: still contains drafts/ subdir reference (removed in #866)"
+  ERRS28=$((ERRS28 + 1))
+fi
 
 if [[ $ERRS28 -eq 0 ]]; then
-  pass "SKILL.md files: both use ~/.workflow-plans/drafts/ paths (not %TEMP% or /tmp/)"
+  pass "SKILL.md files: both use flat ~/.workflow-plans/ paths (no drafts/, %TEMP%, /tmp/)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -808,8 +818,8 @@ if grep -qF '| Exit | Meaning |' "$OUTLINE_SKILL"; then
   ERRS29=$((ERRS29 + 1))
 fi
 
-if ! grep -qF '<PLANS_DIR>/drafts/<session-id>-context.md' "$SHARED_LOOP"; then
-  fail "shared loop: missing <session-id>-context.md reference"
+if ! grep -qF '<PLANS_DIR>/<session-id>-codex-context.md' "$SHARED_LOOP"; then
+  fail "shared loop: missing <session-id>-codex-context.md reference (flat path, renamed per #866)"
   ERRS29=$((ERRS29 + 1))
 fi
 
@@ -842,7 +852,7 @@ PATH="$MOCK_BIN:$PATH" HOME="$TMPDIR_BASE" _timeout bash "$SCRIPT" \
 
 context_start_count30=0
 if [[ -f "$CAPTURE30" ]]; then
-  context_start_count30=$(grep -c '\[CONTEXT START\]' "$CAPTURE30" || true)
+  context_start_count30=$(grep -cE '^\[CONTEXT START\]$' "$CAPTURE30" || true)
 fi
 
 if [[ $exit_code30 -ne 0 ]]; then
@@ -1123,9 +1133,9 @@ exit 0
 MOCK_EOF
 chmod +x "$A_CFG/bin/review-plan-codex"
 
-# Set up a plans dir + draft for the wrapper
+# Set up a plans dir + draft for the wrapper (#866: no drafts/ subdir)
 A_PLANS="$A_TMP/plans"
-mkdir -p "$A_PLANS/drafts"
+mkdir -p "$A_PLANS"
 A_DRAFT="$A_PLANS/draft.md"
 echo "# Draft plan" > "$A_DRAFT"
 A_TRADEOFFS="$A_PLANS/tradeoffs.txt"

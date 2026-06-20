@@ -38,20 +38,22 @@ trap 'rm -rf "$ISOLATED_CFG_DIR_FPDC"' EXIT
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
-# Test A — plans/drafts/ path → noopExit (stdout empty, exit 0)
+# Test A — flat intermediate path (-detail-draft.md, #866) → noopExit
+# After #866 intermediates live under PLANS_DIR root (no drafts/ subdir);
+# suppression is by filename-suffix pattern match.
 # ---------------------------------------------------------------------------
-INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/drafts/20260510-001819-detail-draft.md\",\"content\":\"hello\"}}"
+INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260510-001819-detail-draft.md\",\"content\":\"hello\"}}"
 OUTPUT=$(echo "$INPUT" | node "$HOOK")
 if [[ -z "$OUTPUT" ]]; then
-  pass "show-diff: plans/drafts path → noopExit (no output)"
+  pass "show-diff: flat intermediate (-detail-draft.md) → noopExit (no output)"
 else
-  fail "show-diff: plans/drafts path → unexpected output: $OUTPUT"
+  fail "show-diff: flat intermediate (-detail-draft.md) → unexpected output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
-# Test B — plans/ (non-drafts, final artifact) → systemMessage shown
+# Test B — plans/ final artifact → systemMessage shown
 # Final artifacts (*-intent.md, *-outline.md, *-detail.md) are NOT suppressed;
-# only drafts/ subdirectory files are suppressed.
+# only intermediate filename-suffix patterns are suppressed (#866).
 # ---------------------------------------------------------------------------
 INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$WORKFLOW_PLANS_DIR/20260510-001819-intent.md\",\"content\":\"hello world\"}}"
 OUTPUT=$(echo "$INPUT" | node "$HOOK")
@@ -62,14 +64,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Test C — Windows backslash plans\drafts\ path → noopExit
+# Test C — Windows backslash flat intermediate (-codex-context.md, #866)
+# After #866 the renamed session-codex-context lives under PLANS_DIR root.
 # ---------------------------------------------------------------------------
-INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\drafts\\\\foo.md\",\"content\":\"hello\"}}"
+INPUT="{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"${WIN_PLANS_DIR}\\\\20260510-001819-codex-context.md\",\"content\":\"hello\"}}"
 OUTPUT=$(echo "$INPUT" | node "$HOOK")
 if [[ -z "$OUTPUT" ]]; then
-  pass "show-diff: Windows backslash plans/drafts path → noopExit"
+  pass "show-diff: Windows backslash flat intermediate (-codex-context.md) → noopExit"
 else
-  fail "show-diff: Windows backslash plans/drafts path → unexpected output: $OUTPUT"
+  fail "show-diff: Windows backslash flat intermediate (-codex-context.md) → unexpected output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------

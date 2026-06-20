@@ -38,19 +38,19 @@ Follows `skills/_shared/codex-review-loop.md` with: FORMAT=detail-plan, CAP=2, M
 Each round: invoke `"$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/run-codex-review-loop.sh"` (Bash) with exported `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED` (required); `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` (optional — passed as `--context` when present + non-empty). Exit codes pass through.
 
 Detail-stage caller paths:
-- RAW_FILE: `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md`
-- CONCERNS_LOG: `<PLANS_DIR>/drafts/<session-id>-concerns-log.md`
-- DEBUG_LOG: `<PLANS_DIR>/drafts/<session-id>-detail-debug.log`
+- RAW_FILE: `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md`
+- CONCERNS_LOG: `<PLANS_DIR>/<session-id>-concerns-log.md`
+- DEBUG_LOG: `<PLANS_DIR>/<session-id>-detail-debug.log`
 
 Exit code → action: SSOT table in `skills/_shared/codex-review-loop.md`. **Exit 4 must NOT trigger `detail-reviewer` fallback** — halt + surface stderr. Only exit 3 falls back silently.
 
-ROUND_NUMBER tracked at `<PLANS_DIR>/drafts/<session-id>-detail-plan-round-number.txt` (see codex-review-loop.md SSOT).
+ROUND_NUMBER tracked at `<PLANS_DIR>/<session-id>-detail-plan-round-number.txt` (see codex-review-loop.md SSOT).
 
 ### Step MDP-6 — Cap-reach dispatch
 
-Apply `skills/_shared/cap-menu-dispatch.md` with LABEL=`"Detail Plan Review"`, RAW_FILE=`<PLANS_DIR>/drafts/<session-id>-codex-round-<round_number-1>-raw.md`, LEDGER_FILE=`<PLANS_DIR>/drafts/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt`, MAX_EXTENSIONS=1.
+Apply `skills/_shared/cap-menu-dispatch.md` with LABEL=`"Detail Plan Review"`, RAW_FILE=`<PLANS_DIR>/<session-id>-codex-round-<round_number-1>-raw.md`, LEDGER_FILE=`<PLANS_DIR>/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt`, MAX_EXTENSIONS=1.
 
-`<round_number-1>` = `$(( $(cat <PLANS_DIR>/drafts/<session-id>-detail-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 (rare for detail stage, which uses CAP=2) the resulting path does not exist — the helper's degraded RAW mode applies.
+`<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-detail-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 (rare for detail stage, which uses CAP=2) the resulting path does not exist — the helper's degraded RAW mode applies.
 
 Step c.5 of the dispatch protocol prints the concern summary block to chat before AskUserQuestion fires.
 
@@ -62,7 +62,7 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/ma
 
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source.
 
-Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/drafts/$SESSION_ID-detail-draft.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
+Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
 
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.

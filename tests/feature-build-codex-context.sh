@@ -44,7 +44,7 @@ mk_tmp() {
     local d
     d="$(mktemp -d)"
     ALL_TMPS+=("$d")
-    mkdir -p "$d/drafts"
+    # #866: build-codex-context writes context output flat under PLANS_DIR root.
     echo "$d"
 }
 
@@ -71,7 +71,7 @@ run_sut() {
 # C1 — intent.md only (non-empty)
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
@@ -90,7 +90,7 @@ fi
 # C2 — outline.md only (non-empty)
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
@@ -109,7 +109,7 @@ fi
 # C3 — both present
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 printf '%s\n' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
@@ -134,7 +134,7 @@ fi
 # C4 — neither present, no pre-existing output
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 0 ] && [ ! -e "$OUT" ]; then
@@ -147,7 +147,7 @@ fi
 # C4b — stale-output deletion regression
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC1=$?
@@ -165,7 +165,7 @@ fi
 # C5 — intent.md present but empty (zero bytes)
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 touch "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC=$?
@@ -179,7 +179,7 @@ fi
 # C5b — both empty + stale pre-existing output
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 touch "$TMP/${SID}-intent.md"
 touch "$TMP/${SID}-outline.md"
 echo "stale prior output" > "$OUT"
@@ -195,7 +195,7 @@ fi
 # C6 — Source comment contains resolved plans-dir path
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 printf '%s\n' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
@@ -212,7 +212,7 @@ fi
 # C7 — Argument validation
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 
 run_with_timeout 10 "$SUT" --session-id "$SID" --output "$OUT" >/dev/null 2>&1
 RC_NO_PLANS=$?
@@ -236,7 +236,7 @@ fi
 # C8 — Overwrite stale intent-only output when outline added later
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 run_sut "$TMP" "$SID" "$OUT" >/dev/null 2>&1
 RC1=$?
@@ -258,8 +258,8 @@ fi
 SPACE_TMP="$(mktemp -d)"
 ALL_TMPS+=("$SPACE_TMP")
 SPACE_DIR="$SPACE_TMP/with space"
-mkdir -p "$SPACE_DIR/drafts"
-OUT="$SPACE_DIR/drafts/test-context.md"
+mkdir -p "$SPACE_DIR"
+OUT="$SPACE_DIR/test-codex-context.md"
 printf '%s\n' "$INTENT_CONTENT" > "$SPACE_DIR/${SID}-intent.md"
 printf '%s\n' "$OUTLINE_CONTENT" > "$SPACE_DIR/${SID}-outline.md"
 run_sut "$SPACE_DIR" "$SID" "$OUT" >/dev/null 2>&1
@@ -282,7 +282,7 @@ fi
 # C11 — No trailing newline in inputs
 # ============================================================================
 TMP="$(mk_tmp)"
-OUT="$TMP/drafts/test-context.md"
+OUT="$TMP/test-codex-context.md"
 printf '%s' "$INTENT_CONTENT" > "$TMP/${SID}-intent.md"
 printf '%s' "$OUTLINE_CONTENT" > "$TMP/${SID}-outline.md"
 # Sanity: confirm fixtures truly lack trailing newline.

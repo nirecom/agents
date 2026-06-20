@@ -24,7 +24,7 @@ expect_message "T-BASH-1 Bash + valid assemble + exit_code=0 — systemMessage e
 
 # ── T-BASH-2: --source-kind detail targeting -detail.md ────────────────────
 echo "=== T-BASH-2: Bash --source-kind detail — systemMessage ==="
-T_BASH_2_CMD="assemble-mandatory.sh --source-kind detail $PLANS_DIR/abc-outline.md $PLANS_DIR/drafts/abc-detail-draft.md $PLANS_DIR/abc-detail.md"
+T_BASH_2_CMD="assemble-mandatory.sh --source-kind detail $PLANS_DIR/abc-outline.md $PLANS_DIR/abc-detail.md $PLANS_DIR/abc-detail.md"
 T_BASH_2_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
@@ -54,10 +54,12 @@ T_BASH_4_JSON=$(run_with_timeout node -e "
 " "$T_BASH_4_CMD")
 expect_empty "T-BASH-4 Bash + assemble + exit_code=1 — noop" "$T_BASH_4_JSON"
 
-# ── T-BASH-5: assemble targeting drafts/ path — noop (not final artifact) ──
-echo "=== T-BASH-5: Bash + assemble target under drafts/ — noop ==="
-mkdir -p "$PLANS_DIR/drafts"
-T_BASH_5_CMD="assemble-mandatory.sh --source-kind intent /a/intent.md /a/draft.md $PLANS_DIR/drafts/abc-outline-draft.md"
+# ── T-BASH-5: assemble targeting flat intermediate-suffix — noop (not final) ─
+# After #866 drafts/ is gone; the orthogonal case is an assemble whose
+# destination matches an intermediate suffix pattern (e.g. -outline-draft.md)
+# sitting directly under PLANS_DIR root. isFinalPlanArtifact must reject it.
+echo "=== T-BASH-5: Bash + assemble target = flat intermediate-suffix — noop ==="
+T_BASH_5_CMD="assemble-mandatory.sh --source-kind intent /a/intent.md /a/draft.md $PLANS_DIR/abc-outline-draft.md"
 T_BASH_5_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
@@ -66,7 +68,7 @@ T_BASH_5_JSON=$(run_with_timeout node -e "
     session_id: 'test-sid-bash-5'
   }));
 " "$T_BASH_5_CMD")
-expect_empty "T-BASH-5 Bash + assemble of drafts/-path — noop (not final artifact)" \
+expect_empty "T-BASH-5 Bash + assemble of flat intermediate-suffix path — noop (not final artifact)" \
   "$T_BASH_5_JSON"
 
 # ── T-BASH-6: Bash + SHOW_PLAN_LINK_NO_SPAWN=1 + CONFIRM_OUTLINE=on ────────
@@ -130,7 +132,7 @@ rm -f "$T_BASH_7_MARKER"
 # ── T-BASH-8: literal multi-line backslash-LF form from SKILL.md ──────────
 # Target is placed under PLANS_DIR so isFinalPlanArtifact accepts it.
 echo "=== T-BASH-8: Bash + multi-line backslash-LF form ==="
-T_BASH_8_CMD=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/drafts/20260527-outline-draft.md" \\\n  "%s/20260527-outline.md"' "$PLANS_DIR" "$PLANS_DIR" "$PLANS_DIR")
+T_BASH_8_CMD=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/20260527-outline.md" \\\n  "%s/20260527-outline.md"' "$PLANS_DIR" "$PLANS_DIR" "$PLANS_DIR")
 T_BASH_8_JSON=$(run_with_timeout node -e "
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
@@ -143,19 +145,16 @@ expect_message "T-BASH-8 multi-line backslash-LF form — systemMessage with 202
   "$T_BASH_8_JSON" "20260527-outline.md"
 
 # ── T-BASH-9: new SKILL.md _shared direct form (single-line, session-ID paths) ─
-# Mirrors the exact expanded form SKILL.md generates after the #726 fix:
-# "$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent
-#   $PLANS_DIR/$SESSION_ID-intent.md  $PLANS_DIR/drafts/$SESSION_ID-outline-draft.md
-#   $PLANS_DIR/$SESSION_ID-outline.md
+# After #866 the expanded form uses in-place mode (arg 2 == arg 3, both point
+# at the final outline.md under PLANS_DIR root; no drafts/ subdir).
 # Uses node to build JSON so Windows path is not mangled by MSYS2.
 echo "=== T-BASH-9: new SKILL.md _shared direct form — systemMessage ==="
-mkdir -p "$PLANS_DIR/drafts"
 T_BASH_9_JSON=$(run_with_timeout node -e "
   var plans = process.argv[1];
   var sid = '20260617-002151';
   process.stdout.write(JSON.stringify({
     tool_name: 'Bash',
-    tool_input: { command: '\"' + '\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh' + '\" --source-kind intent ' + plans + '/' + sid + '-intent.md ' + plans + '/drafts/' + sid + '-outline-draft.md ' + plans + '/' + sid + '-outline.md' },
+    tool_input: { command: '\"' + '\$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh' + '\" --source-kind intent ' + plans + '/' + sid + '-intent.md ' + plans + '/' + sid + '-outline.md ' + plans + '/' + sid + '-outline.md' },
     tool_response: { exit_code: 0 },
     session_id: 'test-sid-bash-9'
   }));
