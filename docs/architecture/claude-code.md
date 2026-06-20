@@ -80,18 +80,18 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `l2_phase` | `null`/`"pending"`/`"done"`/`"frozen"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, frozen=Final Report emitted |
+| `l2_phase` | `null`/`"pending"`/`"done"`/`"frozen"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, frozen=resumable suspended (new findings with severity > notice re-arm L2 from this state; `frozen→pending` re-arm resets `l2_retry_count`) |
 | `l2_armed_at` | ISO string or null | Timestamp when L2 was armed in this session; null when phase is done/frozen |
 | `l2_cause` | string or null | Trigger label set at arming: `"C1 sentinel hang"`, `"C2 scheduled-review"`, `"C3 worktree-off proposal"`, or `"C3 workflow-off proposal"`; co-cleared when `l2_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last L2 execution |
 | `cumulative_severity` | string or null | Highest severity across L2 findings |
 | `findings[]` | Finding[] | L2 findings; each finding carries an optional `status` field (`"draft"` before adversarial review, `"confirmed"` after); `idx` is a stable integer key |
 
-**L2 lifecycle and gate-yield:** `ensureLayer2Scheduled()` and `writeLayer2State()` refuse to
-set `l2_armed_at` when `l2_phase` is `done` or `frozen` (at-most-1 guarantee). When L2 is
+**L2 lifecycle and gate-yield:** `writeLayer2State()` refuses to
+set `l2_armed_at` when `l2_phase` is `done` or `frozen` (at-most-1 guarantee). `ensureLayer2Scheduled()` short-circuits only when `l2_phase=done` — `frozen` is a resumable suspended state and re-arms on the next finding (resetting `l2_phase=pending` and `l2_retry_count=0`). When L2 is
 pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete`
 and yields so the Stop hook can fire L2 first (loose coupling — session-close never invokes L2
-directly). After Final Report, `supervisor-write-layer2 --set-l2-phase frozen` records terminal state.
+directly). After Final Report, `supervisor-write-layer2 --set-l2-phase frozen` records the suspended state.
 
 **L2 three-phase output protocol (#929):**
 

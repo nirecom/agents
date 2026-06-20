@@ -296,7 +296,7 @@ if (require.main === module) {
   }
 
   // (2)
-  if (!askUserQuestionTurn && cumSev === "error") {
+  if (!askUserQuestionTurn && cumSev === "error" && l2Phase !== "done" && l2Phase !== "frozen") {
     if (tryIncrementFrozen()) process.exit(0);
     const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
