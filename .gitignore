@@ -9,3 +9,4 @@ rules/language.md
 .env
 .private-info-blocklist
 .private-info-allowlist
+.offensive-content-blocklist
