@@ -391,4 +391,8 @@ Changes: `get-config-var --is-off` now correctly reads `.env` when installed as 
 
 ### FEATURE: PR #979 (2026-06-19)
 Background: feat(#968): replace companion-issue keyword search with 3-pass explicit-signal detection
-Changes: Companion issue suggestions now show why each issue was flagged (xref, identifier overlap, or sibling relationship) instead of a bare title.;`workflow-init` no longer prompts about companion issues; companion detection is now handled exclusively by `clarify-intent`.;`CONFIRM_COMPANION_ISSUES` config removed; each companion candidate now always requires confirmation.
+Changes: Companion issue suggestions now show why each issue was flagged (xref, identifier overlap, or sibling relationship) instead of a bare title.;`workflow-init` no longer prompts about companion issues; companion detection is now handled exclusively by `clarify-intent`.;`CONFIRM_COMPANION_ISSUES` config removed; each companion candidate now always requires confirmation.
+
+### FEATURE: PR #985 (2026-06-20)
+Background: fix(#955,#967,#975,#933): supervisor guard/trigger/state-writer L2 lifecycle fixes
+Changes: Fixed: EM Supervisor Stop hook no longer permanently blocks the session after Layer 2 review completes (`l2_phase=frozen` or `done`). Sessions with acknowledged errors can continue. (#955);Fixed: EM Supervisor can now schedule a fresh Layer 2 review after a frozen session resumes work — new findings after a freeze are no longer silently dropped. (#967);Fixed: EM Supervisor no longer triggers a Layer 2 review when WORKFLOW_OFF is pre-authorized with no blocking findings. Notice-only sessions no longer cause spurious reviews. (#975)
