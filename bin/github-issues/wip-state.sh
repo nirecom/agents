@@ -19,19 +19,55 @@
 
 set -uo pipefail
 
-CMD="${1:-}"
-shift 2>/dev/null || true
+CMD=""
+N=""
+INJECTED_SID=""
+SID_SET=0
 
 usage() {
     sed -n '2,18p' "$0" >&2
     exit "${1:-2}"
 }
 
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --session-id)
+            if [ $# -lt 2 ]; then
+                echo "Error: --session-id requires a value" >&2; exit 2
+            fi
+            INJECTED_SID="$2"
+            SID_SET=1
+            shift 2
+            ;;
+        --session-id=*)
+            INJECTED_SID="${1#--session-id=}"
+            SID_SET=1
+            shift
+            ;;
+        -h|--help) usage 0 ;;
+        --) shift; break ;;
+        -*)
+            echo "Error: unknown option: $1" >&2; exit 2
+            ;;
+        *)
+            if [ -z "$CMD" ]; then CMD="$1"
+            elif [ -z "$N" ]; then N="$1"
+            else echo "Error: extra positional argument: $1" >&2; exit 2
+            fi
+            shift
+            ;;
+    esac
+done
+
 case "$CMD" in
     set|check|clear|setup) ;;
-    -h|--help) usage 0 ;;
-    *) echo "Error: usage: wip-state.sh {set|check|clear|setup} [<N>]" >&2; exit 2 ;;
+    *) echo "Error: usage: wip-state.sh {set|check|clear|setup} [<N>] [--session-id <SID>]" >&2; exit 2 ;;
 esac
+
+if [ "$CMD" = "clear" ] && [ "$SID_SET" -eq 1 ]; then
+    echo "Error: 'clear' does not accept --session-id (verb does not consume session id)" >&2
+    exit 2
+fi
 
 # ---------------------------------------------------------------------------
 # .env auto-source. Claude Code's Bash subprocess shell does not propagate
@@ -152,6 +188,27 @@ resolve_session_id() {
     return 2
 }
 
+validate_injected_sid() {
+    local sid="$1"
+    if [ -z "$sid" ]; then
+        echo "Error: --session-id requires a non-empty value (empty string rejected; omit the flag to use default resolution chain)" >&2
+        exit 2
+    fi
+    case "$sid" in
+        *[!A-Za-z0-9_-]*) echo "Error: --session-id contains invalid characters (allowed: [A-Za-z0-9_-])" >&2; exit 2 ;;
+    esac
+    return 0
+}
+
+effective_session_id() {
+    if [ "${SID_SET:-0}" -eq 1 ]; then
+        validate_injected_sid "$INJECTED_SID"
+        printf '%s' "$INJECTED_SID"
+        return 0
+    fi
+    resolve_session_id
+}
+
 resolve_plans_dir() {
     if [ -x "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" ]; then
         bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
@@ -210,7 +267,7 @@ cmd_set() {
     fi
 
     local sid
-    if ! sid=$(resolve_session_id); then
+    if ! sid=$(effective_session_id); then
         exit 2
     fi
     local fp
@@ -288,7 +345,7 @@ cmd_check() {
     fi
 
     local sid
-    if ! sid=$(resolve_session_id); then
+    if ! sid=$(effective_session_id); then
         exit 2
     fi
 
@@ -540,8 +597,8 @@ EOF
 }
 
 case "$CMD" in
-    set)   cmd_set   "${1:-}" ;;
-    check) cmd_check "${1:-}" ;;
-    clear) cmd_clear "${1:-}" ;;
+    set)   cmd_set   "$N" ;;
+    check) cmd_check "$N" ;;
+    clear) cmd_clear "$N" ;;
     setup) cmd_setup ;;
 esac
