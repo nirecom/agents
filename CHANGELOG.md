@@ -414,4 +414,8 @@ Changes: Fixed: WIP conflict detection no longer misidentifies the current sessi
 
 ### FEATURE: PR #999 (2026-06-20)
 Background: refactor(#970,#860): split tests/fix-workflow-gate-unix-path.sh per Pattern A
-Changes: Refactored 743-line test file `tests/fix-workflow-gate-unix-path.sh` into a 5-file source-dispatch layout for maintainability (#970)
+Changes: Refactored 743-line test file `tests/fix-workflow-gate-unix-path.sh` into a 5-file source-dispatch layout for maintainability (#970)
+
+### FEATURE: PR #1002 (2026-06-20)
+Background: feat(#980,#677): add bin/confirm-off + bin/confirm-off.ps1 helpers and fix load-env.js empty-string shadowing
+Changes: confirm-off helper (bash + PowerShell) added: SKILL.md confirm gates now use `bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY default` — eliminates exit-code ambiguity and PATH lookup failures (WSL bash on Windows);`.env` flag vocabulary narrowed: only `off` turns off a confirm gate; `0`, `false`, `no`, `disabled` are no longer accepted and now fail-safe to ON
