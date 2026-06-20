@@ -1,0 +1,20 @@
+# .offensive-content-blocklist — patterns to flag as offensive content
+#
+# Each non-blank, non-comment line is a POSIX extended regex.
+# Matched content triggers a scan-offensive violation.
+#
+# Format:
+#   - Lines starting with '#' are comments.
+#   - Plain regex lines are hard-block patterns (exit 1).
+#   - Prefix a regex with 'warn:' for a soft-block (exit 2, asks the user).
+#
+# This file is write-protected by the block-dotenv.js PreToolUse hook —
+# Claude Code cannot edit this file. Add patterns manually when genuinely needed.
+#
+# See docs/scan-outbound.md "Offensive Content Filter" section for details.
+
+# Hard-block — always rejects
+# example_pattern_here
+
+# Soft-block — high false-positive risk, asks the user
+# warn:example_warn_pattern_here
