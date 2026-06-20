@@ -15,7 +15,35 @@ set -uo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
 
-N="${1:?usage: wip-set-single.sh <issue-number>}"
+N=""
+SID_ARG=""
+SID_SET=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --session-id)
+            [ $# -lt 2 ] && { echo "Error: --session-id requires a value" >&2; exit 2; }
+            SID_ARG="$2"; SID_SET=1; shift 2
+            ;;
+        --session-id=*)
+            SID_ARG="${1#--session-id=}"; SID_SET=1; shift
+            ;;
+        --) shift; break ;;
+        -*)
+            echo "Error: unknown option: $1" >&2; exit 2
+            ;;
+        *)
+            if [ -z "$N" ]; then N="$1"; else
+                echo "Error: extra positional argument: $1" >&2; exit 2
+            fi
+            shift
+            ;;
+    esac
+done
+[ -n "$N" ] || { echo "usage: wip-set-single.sh [--session-id <SID>] <issue-number>" >&2; exit 2; }
+
+if [ "$SID_SET" -eq 1 ] && [ -z "$SID_ARG" ]; then
+    echo "Error: --session-id received an empty value" >&2; exit 2
+fi
 
 WIP_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh"
 
@@ -26,8 +54,12 @@ if [ -n "$LABELS_JSON" ] && printf '%s' "$LABELS_JSON" | grep -q '"meta"'; then
     exit 0
 fi
 
+WIP_ARGS=(set "$N")
+if [ "$SID_SET" -eq 1 ]; then
+    WIP_ARGS+=(--session-id "$SID_ARG")
+fi
 RC=0
-bash "$WIP_SCRIPT" set "$N" || RC=$?
+bash "$WIP_SCRIPT" "${WIP_ARGS[@]}" || RC=$?
 
 case "$RC" in
     0)

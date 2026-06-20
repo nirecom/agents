@@ -240,6 +240,14 @@ function cleanupZombies(maxAgeDays = 7) {
       continue;
     }
 
+    if (file.endsWith(".workflow-off") || file.endsWith(".worktree-off")) {
+      try {
+        const st = fs.statSync(filePath);
+        if (st.mtimeMs < cutoff) fs.unlinkSync(filePath);
+      } catch (e) {}
+      continue;
+    }
+
     if (!file.endsWith(".json")) continue;
 
     try {

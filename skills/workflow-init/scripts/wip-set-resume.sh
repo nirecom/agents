@@ -5,7 +5,7 @@
 # are not meta, set the WIP fingerprint. If any N lacks intent:clarified,
 # emit NEEDS_CLARIFY and exit 1 (caller sets FORCE_PATH_B=1).
 #
-# Usage: wip-set-resume.sh [N...]
+# Usage: wip-set-resume.sh [--session-id <SID>] [N...]
 # Env:   AGENTS_CONFIG_DIR (required)
 #
 # Stdout tokens:
@@ -25,13 +25,47 @@ set -uo pipefail
 
 WIP_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh"
 
+SID_ARG=""
+SID_SET=0
+ISSUES=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --session-id)
+            [ $# -lt 2 ] && { echo "Error: --session-id requires a value" >&2; exit 2; }
+            SID_ARG="$2"; SID_SET=1; shift 2
+            ;;
+        --session-id=*)
+            SID_ARG="${1#--session-id=}"; SID_SET=1; shift
+            ;;
+        --) shift; while [ $# -gt 0 ]; do ISSUES+=("$1"); shift; done ;;
+        -*) echo "Error: unknown option: $1" >&2; exit 2 ;;
+        *) ISSUES+=("$1"); shift ;;
+    esac
+done
+
+if [ "$SID_SET" -eq 1 ] && [ -z "$SID_ARG" ]; then
+    echo "Error: --session-id received an empty value" >&2; exit 2
+fi
+
+if [ "$SID_SET" -eq 0 ]; then
+    if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -r "${CLAUDE_ENV_FILE}" ]; then
+        CANDIDATE=$(grep -E '^CLAUDE_SESSION_ID=' "$CLAUDE_ENV_FILE" 2>/dev/null \
+                    | head -1 | cut -d= -f2- | tr -d '\r"')
+        if [ -n "$CANDIDATE" ]; then SID_ARG="$CANDIDATE"; SID_SET=1; fi
+    fi
+    if [ "$SID_SET" -eq 0 ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+        SID_ARG=$(printf '%s' "$CLAUDE_SESSION_ID" | tr -d '\r"')
+        [ -n "$SID_ARG" ] && SID_SET=1
+    fi
+fi
+
 TMPFILE=$(mktemp 2>/dev/null || mktemp -t wipresume)
 trap 'rm -f "$TMPFILE" 2>/dev/null' EXIT
 
 ALL_CLARIFIED=1
 
 # Pass 1: fetch labels for each N, cache to temp file.
-for N in "$@"; do
+for N in ${ISSUES[@]:+"${ISSUES[@]}"}; do
     LABELS_JSON=$(gh issue view "$N" --json labels --jq '[.labels[].name]' 2>/dev/null) || LABELS_JSON=""
     if [ -z "$LABELS_JSON" ]; then
         echo "warn: label probe for #$N failed — treating as intent:clarified absent" >&2
@@ -67,8 +101,12 @@ while IFS=$'\t' read -r N LABELS_JSON; do
         echo "META_SKIP $N"
         continue
     fi
+    WIP_ARGS=(set "$N")
+    if [ "$SID_SET" -eq 1 ]; then
+        WIP_ARGS+=(--session-id "$SID_ARG")
+    fi
     RC=0
-    bash "$WIP_SCRIPT" set "$N" || RC=$?
+    bash "$WIP_SCRIPT" "${WIP_ARGS[@]}" || RC=$?
     case "$RC" in
         0)
             echo "SET_OK $N"
