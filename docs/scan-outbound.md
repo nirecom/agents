@@ -155,8 +155,10 @@ optional LLM classifier for borderline text.
 | Claude Code forge write | Every `gh issue`/`pr` write via `scan-outbound.js` | Forward filter (always-on, public + private repos) |
 | Manual retroactive scan | On-demand via `/scan-offensive` skill | Retroactive (any repo) |
 
-- `.offensive-content-blocklist` lives at the repo root and is write-protected
-  by `block-dotenv.js` — Claude Code cannot edit it. Add patterns manually.
+- `.offensive-content-blocklist` is gitignored and must be created manually from
+  `.offensive-content-blocklist.example`. When absent, `bin/scan-offensive` runs
+  keyword-only with no patterns (clean by default).
+  `block-dotenv.js` write-protects it — Claude Code cannot edit it.
 - LLM tier opt-in: requires `ANTHROPIC_API_KEY`. When unset, `bin/scan-offensive`
   runs keyword-only and emits a stderr warning.
 - Redact behavior: matches are edited to `[redacted by content-scan]`, never deleted.
