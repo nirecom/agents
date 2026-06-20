@@ -426,4 +426,8 @@ Changes: Added `scan-outbound.js` forward filter for offensive content in `gh is
 
 ### FEATURE: PR #1006 (2026-06-21)
 Background: feat(#866): remove drafts/ subdirectory from ~/.workflow-plans/
-Changes: `~/.workflow-plans/` no longer has a `drafts/` subdirectory — all planner intermediate files now live at the root alongside final artifacts, distinguished by filename suffix.
+Changes: `~/.workflow-plans/` no longer has a `drafts/` subdirectory — all planner intermediate files now live at the root alongside final artifacts, distinguished by filename suffix.
+
+### FEATURE: PR #1013 (2026-06-21)
+Background: fix(#350,#986): remove PREMISE sentinel infrastructure, rewrite MOP-0c to abort-only
+Changes: When `make-outline-plan` detects a premise contradiction in survey artifacts, it now always aborts with a message directing you to fix `intent.md` and re-run `/clarify-intent`. The previous "acknowledge and proceed" option has been removed — it was redundant because the downstream EM Supervisor would catch any intent drift anyway. (#986);Re-running `/make-outline-plan` after acknowledging a contradiction in `/clarify-intent` no longer prompts about the same contradiction a second time. The abort-only gate eliminates the double-confirmation UX issue. (#350)
