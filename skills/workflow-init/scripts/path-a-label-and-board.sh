@@ -28,10 +28,8 @@ RELATED=("$@")
 for N in "${RELATED[@]}"; do
     if ! gh issue edit "$N" --add-label "intent:clarified"; then
         if [ -n "${PLANS_DIR:-}" ] && [ -n "${SESSION_ID:-}" ]; then
-            MARKER_DIR="$PLANS_DIR/drafts"
-            mkdir -p "$MARKER_DIR" 2>/dev/null || true
-            MARKER="$MARKER_DIR/$SESSION_ID-workflow-init-aborted-pathA-multiN-label-failure.md"
-            printf 'workflow-init Path A2 aborted: gh issue edit --add-label "intent:clarified" failed for #%s\n' "$N" > "$MARKER" 2>/dev/null || true
+            MARKER="$PLANS_DIR/$SESSION_ID-workflow-init-aborted-pathA-multiN-label-failure.md"
+            printf 'workflow-init Path A1.5 aborted: gh issue edit --add-label "intent:clarified" failed for #%s\n' "$N" > "$MARKER" 2>/dev/null || true
         fi
         echo "[workflow-init: gh issue edit --add-label intent:clarified failed for #$N — aborting]" >&2
         exit 1
