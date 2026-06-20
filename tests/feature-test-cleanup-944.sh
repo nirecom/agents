@@ -86,7 +86,7 @@ backdate_commit() {
     local d
     d=$(date -u -d "$days days ago" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
         || date -u -v-"${days}"d '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-        || python3 -c "import datetime; print((datetime.datetime.utcnow()-datetime.timedelta(days=$days)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
+        || uv run python -c "import datetime; print((datetime.datetime.utcnow()-datetime.timedelta(days=$days)).strftime('%Y-%m-%dT%H:%M:%SZ'))")
     GIT_AUTHOR_DATE="$d" GIT_COMMITTER_DATE="$d" git -C "$repo" commit -q -m "$msg"
 }
 
