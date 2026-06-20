@@ -1,3 +1,6 @@
+# L3 gap (what this section does NOT catch):
+# - That resolveRepoDir fires correctly in a live Claude Code session via the real PreToolUse hook path
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 # ============================================================
 # Section A: resolveRepoDir unit tests
 # ============================================================
@@ -107,3 +110,13 @@ process.stdout.write(resolveRepoDir('git -C "$UNDEFINED_VAR_XYZ_NONEXISTENT" com
 EOF
 )
 assert_eq 'N7: undefined $VAR -> fallback cwd' "$expected_cwd" "$result"
+
+# N8: cd /c/git/dotfiles && git commit -> resolves via parseCdCommand (Tier 2)
+result=$(node_hook --input-type=module <<'EOF'
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { resolveRepoDir } = require(process.env.HOOK_PATH);
+process.stdout.write(resolveRepoDir('cd /c/git/dotfiles && git commit -m "msg"'));
+EOF
+)
+assert_eq 'N8: cd /c/path && git -> resolveRepoDir via parseCdCommand' 'C:\git\dotfiles' "$result"

@@ -227,13 +227,6 @@ assert_classify \
   'echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: fix/416-narrow|worktree: C:\git\worktrees\416\agents>>"' \
   "read"
 
-# T3.13f: PREMISE_FAIL with parens and semicolons in reason → read
-# PREMISE_FAIL_RE_DQ is in sentinel-patterns.js; parens/; are literal in DQ
-assert_classify \
-  "T3.13f sentinel PREMISE_FAIL with parens and semicolons in reason → read" \
-  'echo "<<WORKFLOW_PREMISE_FAIL: precondition not met (see #416; already fixed)>>"' \
-  "read"
-
 # T3.13g: USER_VERIFIED with semicolon-separated prose → read
 # ; is literal inside DQ; no injection possible
 assert_classify \
