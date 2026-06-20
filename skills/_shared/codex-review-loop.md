@@ -52,7 +52,7 @@ Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low>` is i
 
 ### a. Write planner output to final artifact
 
-The planner writes its output directly to `<PLANS_DIR>/<session-id>-{outline,detail}.md` via the Write tool. `assemble-mandatory.sh` later overwrites this same file in place to inject the mandatory sections.
+The planner writes its output to `<PLANS_DIR>/<session-id>-{outline,detail}.md` via the Write tool. `assemble-mandatory.sh` later overwrites this same file in place to inject the mandatory sections.
 
 ### b/c/d. Invoke wrapper (single Bash call)
 
