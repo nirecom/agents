@@ -184,19 +184,22 @@ process.stdout.write(state.layer2.l2_armed_at === null ? 'null' : String(state.l
 }
 
 run_g25() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: l2_phase=frozen -> ensureLayer2Scheduled early-returns, l2_armed_at stays null" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: l2_phase=frozen -> ensureLayer2Scheduled re-arms (l2_armed_at set, l2_phase=pending)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
-const state = { layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' } };
+const state = { layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen', l2_cause: null, l2_retry_count: 0 } };
 if (typeof writerMod.ensureLayer2Scheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
 writerMod.ensureLayer2Scheduled(state);
-process.stdout.write(state.layer2.l2_armed_at === null ? 'null' : String(state.layer2.l2_armed_at));
+const armedOk = typeof state.layer2.l2_armed_at === 'string' && state.layer2.l2_armed_at.length > 0;
+const phaseOk = state.layer2.l2_phase === 'pending';
+const retryOk = state.layer2.l2_retry_count === 0;
+process.stdout.write((armedOk && phaseOk && retryOk) ? 'ok' : ('armed=' + state.layer2.l2_armed_at + ',phase=' + state.layer2.l2_phase + ',retry=' + state.layer2.l2_retry_count));
 " 2>/dev/null)
-    if [ "$out" = "null" ]; then
-        pass "G25: l2_phase=frozen -> ensureLayer2Scheduled early-returns, l2_armed_at stays null"
+    if [ "$out" = "ok" ]; then
+        pass "G25: l2_phase=frozen -> ensureLayer2Scheduled re-arms (l2_armed_at set, l2_phase=pending)"
     else
-        fail "G25: l2_phase=frozen -> ensureLayer2Scheduled early-returns, l2_armed_at stays null (got: $out)"
+        fail "G25: l2_phase=frozen -> ensureLayer2Scheduled re-arms (l2_armed_at set, l2_phase=pending) (got: $out)"
     fi
 }
 
