@@ -25,14 +25,11 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 Regex `#\d+`:
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. `AskUserQuestion` "Which is the primary issue for this session?" — one branch per issue ("#<N> (first — recommended)" for index 0, "#<M>" for others). Then `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/confirm-primary.sh" "<selected_N>" "<PLANS_DIR>/drafts/<session-id>-issue-prefill.md" "${ISSUES[@]}"` — outputs reordered numbers (primary first) and appends mutex marker to prefill.md (Path B; no-op when file absent). Assign stdout to `ISSUES[]`; all entries become `closes_issues` (confirmed order). Use `ISSUES[0]` for WI-4..WI-8.
+- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
 
-### Step WI-4 — Session ID + fetch issue
+### Step WI-4 — Session ID + fetch issues
 
-`CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `date +%Y%m%d-%H%M%S`. Set `SID_PASS=(--session-id "$CLAUDE_SESSION_ID")` if resolved from `$CLAUDE_ENV_FILE` or `$CLAUDE_SESSION_ID` env; else `SID_PASS=()`. Then `gh issue view <N> --json number,title,body,labels,state,createdAt`.
-- Fails → `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort.
-- `CLOSED` → ask: reopen / pick different #N / continue as Path C. (Related issues handled in WI-5.)
-- `OPEN` → continue to WI-5.
+`CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `date +%Y%m%d-%H%M%S`. Set `SID_PASS=(--session-id "$CLAUDE_SESSION_ID")` if resolved from `$CLAUDE_ENV_FILE` or `$CLAUDE_SESSION_ID` env; else `SID_PASS=()`. Then for each N in `ISSUES[@]`, run `gh issue view <N> --json number,title,body,labels,state,createdAt` and retain the JSON per-N. If ANY N's fetch fails, `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort. (Symmetric: one session-level question regardless of which index failed.) `ISSUES[0]` (the first entry) is used downstream only as the Path B prefill seed (positional reference). CLOSED-state handling for all entries is deferred to WI-6.
 
 ### Step WI-5 — Aggregate WIP check (OPEN branch)
 
@@ -45,21 +42,19 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/aggregate-wip-check.s
 
 ### Step WI-6 — CLOSED detection (post-WIP)
 
-Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/closed-detection.sh" "${ISSUES[@]}"`. For each `<N> closed`: `AskUserQuestion`:
-- **Primary** CLOSED (ISSUES[0]): options "Reopen and continue" / "Abort" (emit `<<WORKFLOW_ABORTED_ISSUE_CLOSED: #N>>`). Do NOT offer "Remove".
-- **Related** CLOSED (ISSUES[1+]): "Reopen and continue" / "Remove from session" / "Abort". Remove allowed for related only.
+Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/closed-detection.sh" "${ISSUES[@]}"`. For each `<N> closed`: `AskUserQuestion` "Issue #<N> CLOSED. How to proceed?" with options "Reopen and continue" / "Remove from session" (offered only when `len(closes_issues) >= 2`, ensuring at least 1 remains) / "Abort" (emit `<<WORKFLOW_ABORTED_ISSUE_CLOSED: #N>>`).
 
 `STATE=error` → warn-and-continue (does NOT abort).
 
-On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12 Path A1.5, `path-a-label-and-board.sh` calls `ensure-board-card.sh <N>`. When the issue is OPEN and its board card Status is `Done`, `ensure-board-card.sh` resets Status to `In Progress` before any other board mutation, preventing the Projects v2 `Done → auto-close` loop (#579). If the reset fails, `ensure-board-card.sh` warns and exits 0 without modifying the board — the operator must inspect the warning and re-run `ensure-board-card.sh <N>` manually.
+On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12 Path A2, `path-a-label-and-board.sh` calls `ensure-board-card.sh <N>`. When the issue is OPEN and its board card Status is `Done`, `ensure-board-card.sh` resets Status to `In Progress` before any other board mutation, preventing the Projects v2 `Done → auto-close` loop (#579). If the reset fails, `ensure-board-card.sh` warns and exits 0 without modifying the board — the operator must inspect the warning and re-run `ensure-board-card.sh <N>` manually.
 
 ### Step WI-7 — Label extract
 
-Extract `labels[].name` from the primary's `gh issue view` JSON for routing in WI-9.
+For each N in `ISSUES[@]`, extract `labels[].name` from its `gh issue view` JSON. Retain per-N label sets for the route decision in WI-8.
 
 ### Step WI-8 — Route
 
-If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) → Path B. Otherwise: `intent:clarified` ∈ labels of primary → Path A; otherwise → Path B. Path B is the default.
+If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) OR any N in `ISSUES[@]` lacks the `intent:clarified` label → Path B. Only when every N carries `intent:clarified` → Path A. Path B is the default.
 
 ### Step WI-9 — Write context.md (all Paths)
 
@@ -81,11 +76,11 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 ### Step WI-12 — Path-specific steps
 
 #### Path A — intent:clarified
-- A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (primary `- #<N>: <title>           # primary (index 0)`, related each `- #<M>: <title>           # related`), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Primary `<title>` from WI-4's `gh issue view`. For related (ISSUES[1+]): `gh issue view <M> --json title --jq .title`; fetch failure → `- #<M>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
-- A1.5. **Related-issue label + board-card parity.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` (primary first, related as remaining args); export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue including primary it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
-- A2. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
-- A3. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
-- A4. Invoke `make-outline-plan` (surveys already complete via WI-9).
+- A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, including `ISSUES[1+]` in multi-issue sessions, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Titles come from WI-4's per-N `gh issue view` JSON; for any N where the title is missing, write `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+- A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every entry it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
+- A3. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
+- A4. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
+- A5. Invoke `make-outline-plan` (surveys already complete via WI-9).
 
 #### Path B — issue exists, no intent:clarified
 - B1. Write `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`.
