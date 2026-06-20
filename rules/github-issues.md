@@ -17,28 +17,9 @@ The session's `closes_issues` list lives in
 `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md`
 (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
-### Terminology
+### closes_issues ordering
 
-- **primary** — the first entry of `closes_issues`. Exactly one primary per
-  session. Represents the session in single-issue contexts (Projects v2 card,
-  the `## Issue` anchor in `intent.md`).
-- **related** — every non-primary entry of `closes_issues`. Each related issue
-  is a full first-class member (own `history.md` entry, own `Closes #<N>`
-  line, own close-pr-of marker, own WIP fingerprint) but does not represent
-  the session in single-issue contexts.
-
-### Primary confirmation (single-window invariant)
-
-When N first crosses from 1 to >=2 within a session, exactly one
-AskUserQuestion confirms which issue is the primary. The confirmation fires at
-the earliest of:
-- `workflow-init` Step 1 (b) — when 2+ `#N` are present in the initial user
-  prompt; OR
-- `clarify-intent` Completion — when the interview produces 2+ entries in
-  `closes_issues` (Path C / interview-emerged multi-N).
-
-The two triggers are mutually exclusive. Procedure details live in the
-respective SKILL.md files.
+`closes_issues` is the flat list of related issues the session closes. Order reflects insertion order (the order the user listed the issues). All entries are semantically symmetric — no entry has special representational status in single-issue contexts.
 
 ## Active task list
 
