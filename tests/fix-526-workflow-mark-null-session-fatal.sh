@@ -7,12 +7,12 @@
 # BRANCHING_COMPLETE, CLARIFY_INTENT_COMPLETE) must use signalFatal when
 # sessionId cannot be resolved → exit 2 with message on stderr.
 #
-# OPTIONAL handlers (RESET_FROM, PREMISE_FAIL) remain exit 0 with pushMessage.
+# OPTIONAL handlers (RESET_FROM) remain exit 0 with pushMessage.
 #
 # Expected:
 #   T2.1–T2.6: FAIL until write-code fixes handlers to use signalFatal.
 #   T2.7 (positive control): PASS now (sessionId provided → exit 0).
-#   T2.8, T2.9 (optional handler controls): PASS now (already exit 0).
+#   T2.8 (optional handler control): PASS now (already exit 0).
 
 set -u
 
@@ -199,11 +199,6 @@ test_t2_7_with_session_id
 assert_optional_nonfatal \
   "T2.8 RESET_FROM (optional)" \
   'echo "<<WORKFLOW_RESET_FROM_write_code>>"'
-
-# T2.9: PREMISE_FAIL — OPTIONAL handler — must remain exit 0 even after fix.
-assert_optional_nonfatal \
-  "T2.9 PREMISE_FAIL (optional)" \
-  'echo "<<WORKFLOW_PREMISE_FAIL: some premise issue>>"'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Runner summary

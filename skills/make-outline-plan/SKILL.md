@@ -13,7 +13,6 @@ When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign
 
 - `<PLANS_DIR>/<session-id>-intent.md` — output of `clarify-intent` (cross-session carry-in allowed)
 - `<PLANS_DIR>/<session-id>-survey-{code,history}.md` — optional; contain `## Verified Claims`
-- `state.premise_contradiction` — optional; set by `WORKFLOW_PREMISE_FAIL` during Research stage
 - All sentinels in MOP-0 are emitted by the orchestrator (Bash tool), never by a subagent.
 - Session-id used for `*-outline.md` matches the intent file actually used.
 
@@ -23,14 +22,11 @@ Apply `skills/_shared/resolve-plans-dir.md` once; substitute the resolved absolu
 
 MOP-0. **Surface premise contradictions** from Research artifacts.
    MOP-0a. Determine session-id from `CLAUDE_SESSION_ID` env (MOP-1 has not run yet — this lookup precedes intent-file resolution).
-       - `state.steps.research.status === "skipped"` → skip to MOP-0e.
-       - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to MOP-0e. Do not block.
+       - `state.steps.research.status === "skipped"` → skip to MOP-0d.
+       - One/both `<session-id>-survey-{code,history}.md` missing AND research not skipped → warn once in chat ("Research artifacts incomplete — proceeding without full premise verification") and continue to MOP-0d. Do not block.
    MOP-0b. Read `## Verified Claims` from each existing artifact; collect items with `verdict: contradicted`.
-   MOP-0c. Any contradicted claims:
-     1. Emit `<<WORKFLOW_PREMISE_FAIL: <one-line summary>>>` (Bash description: "Record premise contradiction in workflow state").
-     2. Present a brief contradiction summary; `AskUserQuestion`: (a) revise intent.md and re-run `/clarify-intent`, (b) acknowledge and proceed.
-   MOP-0d. (a) → abort the skill with instruction to re-run `/clarify-intent`. (b) → emit `<<WORKFLOW_PREMISE_ACK>>` (clears `state.premise_contradiction`).
-   MOP-0e. Emit `<<WORKFLOW_MARK_STEP_research_complete>>` to mark Research complete (aggregating survey-code and survey-history, which no longer emit it individually; deep-research's emit, if any, is idempotent).
+   MOP-0c. Any contradicted claims → display the contradicted claim list in chat; instruct the user: "The survey has found premise contradictions. Revise intent.md to reflect the correct premises and re-run /clarify-intent."; abort the skill (do not proceed further).
+   MOP-0d. Emit `<<WORKFLOW_MARK_STEP_research_complete>>` to mark Research complete (aggregating survey-code and survey-history, which no longer emit it individually; deep-research's emit, if any, is idempotent).
 
 MOP-1. Locate the intent file:
    a. `<session-id>-intent.md` exists → use it.
