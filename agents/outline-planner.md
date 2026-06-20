@@ -104,7 +104,7 @@ reason: <one-line — why this blocks approach design and cannot be resolved by 
 - **Topology-only collapse:** when all proposed approaches share identical technical substance (same building blocks, same algorithms, same API contracts, same SSOTs) and differ only in delivery topology (PR split policy / staging order), you MUST collapse to `SINGLE_APPROACH_JUSTIFIED` with a reason of the form `topology-only — alternatives differ only in PR packaging; recommending <name>` and emit the corresponding `DELIVERY_PLAN:` line. Presenting multiple approaches that differ only in PR packaging is a protocol violation. **PR count is never a dimension for user choice:** `rules/github-issues.md` mandates `1 session = 1 PR`; any approach difference that reduces to "split vs. bundle PRs" MUST trigger this collapse regardless of other substance differences — do not apply the "when in doubt" fallback to PR-count differences.
 - If the delivery plan cannot be stated in one line for `SINGLE_APPROACH_JUSTIFIED`, consider whether presenting 2 approaches is more appropriate.
 - Follow `rules/core-principles.md`.
-- Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing outline-draft artifacts under <PLANS_DIR> (default ~/.workflow-plans/, resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
+- Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing outline plan artifacts directly to `<PLANS_DIR>/<session-id>-outline.md` (default ~/.workflow-plans/, resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - The `Cross-component risks:` field is mandatory in every approach. Populate it by examining: (1) component contract changes — where two components interact after this approach is applied, does the interface/args/return type contract need updating?; (2) dependency direction — does this approach introduce upstream-depends-on-downstream violations?; (3) responsibility coverage — is every in-scope area owned by exactly one component?
 - Apply `skills/_shared/priority-hierarchy.md` before accepting reviewer concerns. At outline stage only `intent.md` is upstream-approved; concerns that would contradict an approved intent decision must be rejected with the typed disposition `reject: contradicts approved intent`.
 
@@ -135,7 +135,7 @@ as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 ## Consuming raw codex review output
 
 On a revision round, the orchestrator writes codex's raw stdout verbatim to:
-    `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md`
+    `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md`
 and passes that path as a literal string in your revision prompt.
 Contract: Read the file directly. Treat content between `<!-- begin-codex-output -->`
 markers as authoritative. The orchestrator's natural-language summary may guide routing

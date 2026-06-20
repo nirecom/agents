@@ -11,10 +11,9 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 | Parameter | outline value | detail value |
 |---|---|---|
 | FORMAT | `outline-plan` | `detail-plan` |
-| DRAFT_FILE | `<PLANS_DIR>/drafts/<session-id>-outline-draft.md` | `<PLANS_DIR>/drafts/<session-id>-detail-draft.md` |
-| RAW_FILE | `<PLANS_DIR>/drafts/<session-id>-outline-codex-round-<N>-raw.md` | `<PLANS_DIR>/drafts/<session-id>-codex-round-<N>-raw.md` |
-| CONCERNS_LOG | `<PLANS_DIR>/drafts/<session-id>-outline-concerns-log.md` | `<PLANS_DIR>/drafts/<session-id>-concerns-log.md` |
-| DEBUG_LOG | `<PLANS_DIR>/drafts/<session-id>-outline-debug.log` | `<PLANS_DIR>/drafts/<session-id>-detail-debug.log` |
+| RAW_FILE | `<PLANS_DIR>/<session-id>-outline-codex-round-<N>-raw.md` | `<PLANS_DIR>/<session-id>-codex-round-<N>-raw.md` |
+| CONCERNS_LOG | `<PLANS_DIR>/<session-id>-outline-concerns-log.md` | `<PLANS_DIR>/<session-id>-concerns-log.md` |
+| DEBUG_LOG | `<PLANS_DIR>/<session-id>-outline-debug.log` | `<PLANS_DIR>/<session-id>-detail-debug.log` |
 | CAP | 1 | 2 |
 | MAX_EXTENSIONS | 1 | 1 |
 | PLANNER_AGENT | `outline-planner` | `detail-planner` |
@@ -31,11 +30,11 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 
 ROUND_NUMBER is NEVER `EXTENSIONS_USED + 1` — that derivation would mis-tag the second review of the detail stage as "round 1" and break the ESCALATE policy.
 
-The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-codex-review-loop.sh`) maintains ROUND_NUMBER on disk at `<PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt` and increments it on each invocation. The file holds a single decimal integer `\n`-terminated. The wrapper passes `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The file is deleted on exit 0 (APPROVED) or exit 2 (ESCALATE); it persists on exit 1 (CONTINUE) and exit 3 — and on exit 4 (FATAL_ERROR, per #776: cleanup-on-exit-4 keeps retry path clean).
+The per-stage wrapper script (`skills/make-{detail,outline}-plan/scripts/run-codex-review-loop.sh`) maintains ROUND_NUMBER on disk at `<PLANS_DIR>/<session-id>-<format>-round-number.txt` and increments it on each invocation. The file holds a single decimal integer `\n`-terminated. The wrapper passes `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The file is deleted on exit 0 (APPROVED) or exit 2 (ESCALATE); it persists on exit 1 (CONTINUE) and exit 3 — and on exit 4 (FATAL_ERROR, per #776: cleanup-on-exit-4 keeps retry path clean).
 
 ## Concern-ID Ledger
 
-`bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/drafts/<session-id>-<format>-concern-ledger.txt`. The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
+`bin/run-codex-review-loop` maintains a per-session ledger at `<PLANS_DIR>/<session-id>-<format>-concern-ledger.txt`. The wrapper accepts a REQUIRED `--round N` argument (no default); the per-stage wrapper script always supplies it.
 
 Each ledger line is pipe-delimited: `C<N>|<SEVERITY>|<full concern text>`. Full text is stored verbatim (no truncation).
 
@@ -51,9 +50,9 @@ Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low>` is i
 
 ## Per-round protocol
 
-### a. Write draft
+### a. Write planner output to final artifact
 
-Write the planner's output to `DRAFT_FILE` via the Write tool.
+The planner writes its output directly to `<PLANS_DIR>/<session-id>-{outline,detail}.md` via the Write tool. `assemble-mandatory.sh` later overwrites this same file in place to inject the mandatory sections.
 
 ### b/c/d. Invoke wrapper (single Bash call)
 
@@ -68,8 +67,9 @@ Each script reads from the environment:
 Exit codes pass through to the caller unchanged.
 
 The wrapper internally:
-1. Builds (per-stage, marker-gated at `<PLANS_DIR>/drafts/<session-id>-context.<FORMAT>.built`)
-   the unified context at `<PLANS_DIR>/drafts/<session-id>-context.md` via
+1. Builds (per-stage, marker-gated at `<PLANS_DIR>/<session-id>-codex-context.<FORMAT>.built`)
+   the unified context at `<PLANS_DIR>/<session-id>-codex-context.md` (renamed from
+   `-context.md` to avoid WI-9 collision) via
    `bin/build-codex-context`. Section headers: `## Section 1: Intent (User Requirements)`
    and `## Section 2: Outline (Design Proposal)`, prefixed by
    `<!-- Source: <PLANS_DIR>/<session-id>-intent.md -->` and

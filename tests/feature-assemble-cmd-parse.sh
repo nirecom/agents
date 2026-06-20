@@ -101,12 +101,12 @@ expect_result "T8 trailing && echo — returns 3rd positional, ignores trailing"
 # Mirrors the actual SKILL.md form: backslash followed by newline.
 # NODE_TMPDIR gives a Windows-style path on Windows so MSYS2 path conversion
 # in env vars does not corrupt the \<LF> continuation bytes.
-CMD_T9=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/drafts/20260527-outline-draft.md" \\\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_T9=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\n  "%s/20260527-intent.md" \\\n  "%s/20260527-outline.md" \\\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "T9 multi-line \\<LF> continuation — returns last path" \
   "$CMD_T9" "\"${NODE_TMPDIR}/20260527-outline.md\""
 
 # ── T10: multi-line backslash-CRLF continuation (Windows) ────────────────────
-CMD_T10=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/20260527-intent.md" \\\r\n  "%s/drafts/20260527-outline-draft.md" \\\r\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
+CMD_T10=$(printf '"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind intent \\\r\n  "%s/20260527-intent.md" \\\r\n  "%s/20260527-outline.md" \\\r\n  "%s/20260527-outline.md"' "$NODE_TMPDIR" "$NODE_TMPDIR" "$NODE_TMPDIR")
 expect_result "T10 multi-line \\<CRLF> continuation — returns last path" \
   "$CMD_T10" "\"${NODE_TMPDIR}/20260527-outline.md\""
 

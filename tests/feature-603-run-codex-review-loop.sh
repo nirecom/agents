@@ -62,7 +62,8 @@ EOF
 setup_plans_dir() {
   local test_tmp="$1"
   local plans_dir="$test_tmp/plans"
-  mkdir -p "$plans_dir/drafts"
+  # #866: intermediate files live under PLANS_DIR root (no drafts/ subdir).
+  mkdir -p "$plans_dir"
   echo "# Draft plan" > "$plans_dir/draft.md"
   echo "# Outline" > "$plans_dir/outline.md"
   echo "$plans_dir"
@@ -355,9 +356,8 @@ exit 0
 COUNTER_EOF
   chmod +x "$MOCK/bin/build-codex-context"
 
-  # Pre-create the marker file
-  mkdir -p "$PLANS/drafts"
-  touch "$PLANS/drafts/sid14-context.detail-plan.built"
+  # Pre-create the marker file (#866: flat under PLANS_DIR, renamed -codex-context.*)
+  touch "$PLANS/sid14-codex-context.detail-plan.built"
 
   make_review_plan_codex_mock "$MOCK" "$(cat << 'OUT'
 ## Codex Plan Review: PERFORMED

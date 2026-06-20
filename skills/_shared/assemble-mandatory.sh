@@ -2,6 +2,11 @@
 # Assemble a final plan file by injecting mandatory sections from a source file.
 # Usage: assemble-mandatory.sh [--source-kind intent|outline] <source.md> <planner-output.md> <out.md>
 #
+# <planner-output.md> and <out.md> MAY be the same path (in-place mode used after
+# the drafts/ flatten in #866). When they are the same, a snapshot of the planner
+# output is taken BEFORE the final write overwrites the file, so the read/write
+# paths never alias.
+#
 # Algorithm:
 # 1. Detect which issues-section heading the source uses:
 #      - `## Issues` (plural, canonical, new SSOT per #548)
@@ -19,7 +24,8 @@
 #    heading to `## Issues` so the assembled output is canonical.
 # 4. Extract H1 line from planner output.
 # 5. Strip H1 + mandatory sections from planner body (fence-aware).
-# 6. Assemble: H1 + injected block + remaining body.
+# 6. Assemble: H1 + injected block + remaining body. Write atomically via a
+#    temp file in $TMP (same filesystem as $OUT), then mv -f into place.
 # 7. Verify: count==1 per section / H1, order, verbatim match against source.
 set -uo pipefail
 
@@ -57,8 +63,21 @@ OUT="${3:?assemble-mandatory: <out.md> required}"
 [[ -x "$EXTRACT" ]] || { echo "assemble-mandatory: extract-mandatory-sections not executable: $EXTRACT" >&2; exit 2; }
 [[ -f "$STRIP_AWK" ]] || { echo "assemble-mandatory: strip awk not found: $STRIP_AWK" >&2; exit 2; }
 
-TMP=$(mktemp -d)
+TMP=$(mktemp -d -p "$(dirname "$OUT")" assemble.XXXX)
 trap 'rm -rf "$TMP"' EXIT
+
+# In-place detection: when PLANNER_OUT and OUT resolve to the same file (the
+# in-place mode used after the drafts/ flatten in #866), the Step 6 final write
+# would overwrite the file before the awk passes finish reading it. Snapshot
+# the planner output into $TMP so the read path is decoupled from $OUT.
+# Argument-driven gate (--source-kind), not inferred from layout.
+PLANNER_OUT_READ="$PLANNER_OUT"
+if [[ "$(readlink -f "$PLANNER_OUT" 2>/dev/null || echo "$PLANNER_OUT")" == \
+      "$(readlink -f "$OUT" 2>/dev/null || echo "$OUT")" ]]; then
+  PLANNER_OUT_READ="$TMP/planner_out_snapshot"
+  cp -- "$PLANNER_OUT" "$PLANNER_OUT_READ" \
+    || { echo "assemble-mandatory: snapshot copy failed" >&2; exit 2; }
+fi
 
 # strip awk receives both legacy and canonical heading names so planner-side
 # duplicates of either form are removed.
@@ -139,14 +158,14 @@ if ! grep -q "^## Class members$" "$TMP/injected_block"; then
 fi
 
 # --- Step 4: Extract H1 from planner output ---
-H1_LINE=$(awk '/^# [^#]/ { print; exit }' "$PLANNER_OUT")
+H1_LINE=$(awk '/^# [^#]/ { print; exit }' "$PLANNER_OUT_READ")
 if [[ -z "$H1_LINE" ]]; then
   echo "assemble-mandatory: contract violation: planner output has no H1 line: $PLANNER_OUT" >&2
   exit 3
 fi
 
 # --- Step 5: Strip H1 + mandatory sections from planner body ---
-awk -v names="$MANDATORY_NAMES" -f "$STRIP_AWK" "$PLANNER_OUT" > "$TMP/remaining_body"
+awk -v names="$MANDATORY_NAMES" -f "$STRIP_AWK" "$PLANNER_OUT_READ" > "$TMP/remaining_body"
 
 # --- Step 6: Assemble ---
 # Trim trailing blank lines from injected_block so that section bodies do not
@@ -162,7 +181,8 @@ awk 'NF { found=1 } found { print }' "$TMP/remaining_body" > "$TMP/remaining_bod
   cat "$TMP/injected_block_trimmed"
   printf '\n'
   cat "$TMP/remaining_body_trimmed"
-} > "$OUT"
+} > "$TMP/out_assembled"
+mv -f "$TMP/out_assembled" "$OUT"
 
 # --- Step 7: Verify ---
 verify_fail() {
