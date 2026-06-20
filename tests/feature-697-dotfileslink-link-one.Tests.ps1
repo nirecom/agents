@@ -1,6 +1,6 @@
 # tests/feature-697-dotfileslink-link-one.Tests.ps1
 # Tests: install/win/dotfileslink.ps1, profile-snippet.ps1
-# Tags: installer, dotfileslink, _link_one, watchlist, scope:issue-specific, pwsh-required
+# Tags: installer, dotfileslink, _link_one, watchlist, scope:issue-specific, pwsh-required, bugfix-987
 #
 # L2 design note:
 # install/win/dotfileslink.ps1 hard-codes $HOME for the destination path. $HOME is a
@@ -125,6 +125,52 @@ Describe "dotfileslink.ps1 _link_one behavior (static)" {
             $script:scriptText | Should -Match '\bcontinue\b'
             $script:scriptText | Should -Match 'if\s*\(\s*\$linkFailed\s*-gt\s*0\s*\)'
             $script:scriptText | Should -Match '\bexit\s+1\b'
+        }
+
+        It "edge: warns and skips when source path does not exist" {
+            # Per-link guard: missing source must emit "Source not found" warning and continue.
+            $script:scriptText | Should -Match 'Source not found'
+        }
+
+        It "edge: rollback path uses 'restore-symlink' label for old-target restore" {
+            # When relinking a ReparsePoint and New-Item fails, rollback restores old symlink.
+            $script:scriptText | Should -Match 'restore-symlink'
+        }
+
+        It "security: aborts with exit 1 when symlink privilege is unavailable (`$canSymlink false guard)" {
+            # Early guard: if neither Developer Mode nor Administrator, exit 1 before any work.
+            $script:scriptText | Should -Match 'if\s*\(\s*-not\s+\$canSymlink\s*\)'
+            $script:scriptText | Should -Match 'canSymlink'
+            $script:scriptText | Should -Match '\bexit\s+1\b'
+        }
+
+        It "has DOTFILESLINK_LINKS_ONLY early-exit test affordance" {
+            $script:scriptText | Should -Match 'DOTFILESLINK_LINKS_ONLY'
+            $script:scriptText | Should -Match 'exit\s+0'
+        }
+    }
+
+    Context "Cleanup and registry" {
+
+        It "removes obsolete commands symlink when present" {
+            $script:scriptText | Should -Match 'Removing obsolete symlink'
+        }
+
+        It "removes stale settings.json symlink before assembling" {
+            $script:scriptText | Should -Match 'Removed stale symlink'
+        }
+
+        It "registers review-code-codex launcher via Write-Launcher" {
+            $script:scriptText | Should -Match 'Write-Launcher.*review-code-codex'
+        }
+
+        It "registers review-env-example launcher via Write-Launcher" {
+            $script:scriptText | Should -Match 'Write-Launcher.*review-env-example'
+        }
+
+        It "gap4: assemble-settings.js invocation has an exit-code guard (LASTEXITCODE or throw)" {
+            $script:scriptText | Should -Match 'assemble-settings'
+            $script:scriptText | Should -Match '(?:\$LASTEXITCODE|\bthrow\b)'
         }
     }
 
