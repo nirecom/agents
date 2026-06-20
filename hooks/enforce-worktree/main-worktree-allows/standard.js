@@ -141,10 +141,10 @@ function isAllowedFastForwardMerge(cmd) {
 /**
  * True if cmd is an isolated `bash -c '...'` matching exactly the
  * read-only CONFIRM_* probe shape used by planning skills:
- *   bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off KEY on && echo OFF [|| echo ON]'
+ *   bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY [on|off]'
  *
  * Does NOT call hasShellChaining() — the probe body intentionally uses
- * && and || as control flow. Safety is enforced by structural clause matching.
+ * && as control flow. Safety is enforced by structural clause matching.
  * Coupling: if the skill probe string changes, update this matcher in sync.
  * See docs/architecture/claude-code/workflow.md for the contract.
  */
@@ -164,12 +164,10 @@ function isAllowedReadOnlyConfigCheck(cmd) {
   if (body.includes(";")) return false;
   if (body.replace(/\|\|/g, "").includes("|")) return false;
   const clauses = body.split(/\s*&&\s*/);
-  if (clauses.length !== 3) return false;
-  const [c1, c2, c3Raw] = clauses;
-  const c3 = c3Raw.replace(/\s*\|\|\s*echo\s+ON\s*$/, "").trimEnd();
+  if (clauses.length !== 2) return false;
+  const [c1, c2] = clauses;
   if (!/^cd\s+(?:"?\$AGENTS_CONFIG_DIR"?)\s*$/.test(c1.trim())) return false;
-  if (!/^get-config-var\s+--is-off\s+[A-Z][A-Z0-9_]*\s+(?:on|off)\s*$/.test(c2.trim())) return false;
-  if (!/^echo\s+OFF\s*$/.test(c3.trim())) return false;
+  if (!/^bash\s+"?\$AGENTS_CONFIG_DIR\/bin\/confirm-off"?\s+[A-Z][A-Z0-9_]*(?:\s+(?:on|off))?\s*$/.test(c2.trim())) return false;
   return true;
 }
 

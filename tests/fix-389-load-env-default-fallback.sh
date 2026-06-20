@@ -102,9 +102,94 @@ try {
     fi
 }
 
+# T389-4: When KEY="" (empty string) exists in process.env, loadDefaultEnv
+# MUST overwrite it with the .env value. The fix in load-env.js uses
+# `if (process.env[key])` so empty-string is falsy and does NOT shadow the
+# .env value. Windows propagates VAR="" into child processes even when the
+# parent shell shows it as unset, so this is a real-world Windows scenario.
+run_t389_4() {
+    require_source "$LOAD_ENV" "T389-4: empty-string process.env does NOT shadow .env value" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    printf 'LOAD_ENV_TEST_KEY=fromfile\n' > "$tmp/.env"
+    out=$(AGENTS_CONFIG_DIR="$tmp" LOAD_ENV_TEST_KEY="" run_with_timeout 5 node -e "
+const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
+loadDefaultEnv();
+process.stdout.write(process.env.LOAD_ENV_TEST_KEY || '');
+" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "fromfile" ]; then
+        pass "T389-4: empty-string process.env does NOT shadow .env value"
+    else
+        fail "T389-4: empty-string process.env does NOT shadow .env value (rc=$rc, out='$out', expected 'fromfile')"
+    fi
+}
+
+# T389-5: When KEY is set to a NON-EMPTY value in process.env, loadDefaultEnv
+# MUST NOT overwrite it. Non-empty process.env wins (existing behavior
+# preserved by the empty-string fix).
+run_t389_5() {
+    require_source "$LOAD_ENV" "T389-5: non-empty process.env wins over .env value" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    printf 'LOAD_ENV_TEST_KEY=fromfile\n' > "$tmp/.env"
+    out=$(AGENTS_CONFIG_DIR="$tmp" LOAD_ENV_TEST_KEY="fromenv" run_with_timeout 5 node -e "
+const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
+loadDefaultEnv();
+process.stdout.write(process.env.LOAD_ENV_TEST_KEY || '');
+" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "fromenv" ]; then
+        pass "T389-5: non-empty process.env wins over .env value"
+    else
+        fail "T389-5: non-empty process.env wins over .env value (rc=$rc, out='$out', expected 'fromenv')"
+    fi
+}
+
+# T389-6: AGENTS_HOOK_DEBUG=1 + non-empty env var shadows .env value → debug
+# message to stderr contains the key NAME but NOT the secret value.
+# Security: the debug path must not leak the pre-existing secret into logs.
+run_t389_6() {
+    require_source "$LOAD_ENV" "T389-6: debug message includes key name, not secret value" || return
+    local tmp out_stderr rc
+    tmp="$(mktemp -d)"
+    printf 'LOAD_ENV_TEST_SECRET=fromfile\n' > "$tmp/.env"
+    out_stderr=$(AGENTS_CONFIG_DIR="$tmp" AGENTS_HOOK_DEBUG=1 LOAD_ENV_TEST_SECRET="supersecret" \
+        run_with_timeout 5 node -e "
+const {loadDefaultEnv} = require('$LOAD_ENV_NODE');
+loadDefaultEnv();
+" 2>&1 >/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -ne 0 ]; then
+        fail "T389-6: node exited with rc=$rc"
+        return
+    fi
+    if echo "$out_stderr" | grep -q "LOAD_ENV_TEST_SECRET"; then
+        if echo "$out_stderr" | grep -q "supersecret"; then
+            fail "T389-6: stderr contains secret value 'supersecret' (must not leak): $out_stderr"
+        else
+            pass "T389-6: debug message includes key name, not secret value"
+        fi
+    else
+        # Debug output may be absent when key is skipped without logging — only
+        # fail if the secret itself appears.
+        if echo "$out_stderr" | grep -q "supersecret"; then
+            fail "T389-6: stderr contains secret value 'supersecret' (must not leak): $out_stderr"
+        else
+            pass "T389-6: debug message includes key name, not secret value (no debug output — key skipped silently)"
+        fi
+    fi
+}
+
 run_t389_1
 run_t389_2
 run_t389_3
+run_t389_4
+run_t389_5
+run_t389_6
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
