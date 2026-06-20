@@ -34,11 +34,9 @@ plain text — same prohibitions still apply.
 Enforcement: `stop-confirm-plan-guard.js` Stop hook structurally blocks turns where a `WORKFLOW_PLANS_DIR` path appears in the last assistant message (always active, regardless of `CONFIRM_<STEP>`).
 
 **Step 3 — `CONFIRM_<STEP>` check.**
-```bash
-bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off CONFIRM_<STEP> on && echo OFF || echo ON'
-```
-- `OFF`: print a one-paragraph prose summary (do not duplicate the breadcrumb path); proceed.
-- `ON`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` per the caller.
+Run: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_<STEP> on'`
+- stdout `OFF`: print a one-paragraph prose summary (do not duplicate the breadcrumb path); proceed.
+- stdout `ON` or `ERROR`: emit the matching sentinel via Bash (no `AskUserQuestion` call). Replace `<STAGE>` with `INTENT` / `OUTLINE` / `DETAIL` per the caller.
   - Emit: `echo "<<WORKFLOW_CONFIRM_<STAGE>: <one-line summary>>>"`.
   - In the SAME response, after the CONFIRM Bash echo, also issue the next tool_use (Skill or Bash) per the caller's per-site reminder. Do NOT end the response on the CONFIRM echo.
   - `confirm-checkpoint.js` (PreToolUse) surfaces the dialog; `stop-confirm-plan-guard.js` (Stop, Layer 2) blocks the turn if no stage-valid follow-up follows the CONFIRM sentinel in the same turn.

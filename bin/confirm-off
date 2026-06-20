@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Usage:
+#   confirm-off <KEY> [<default>]
+#       Resolves <KEY> via $AGENTS_CONFIG_DIR/bin/get-config-var --is-off
+#       and prints exactly one of:
+#         OFF   — KEY is explicitly off
+#         ON    — KEY is explicitly on, unset (no default), or holds an
+#                 unrecognized value (fail-safe)
+#         ERROR — internal failure (e.g. load-env.js could not be loaded);
+#                 stderr carries a diagnostic line
+#       Exit: 0 (OFF) | 1 (ON) | 2 (ERROR) | 64 (usage).
+#
+#   Canonical caller idiom (absolute path — resolves #677 WSL/PATH issue):
+#     OUT=$(bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_X on) || true
+#     case "$OUT" in
+#       OFF)   ... ;;
+#       ON)    ... ;;
+#       ERROR) ... ;;
+#     esac
+#   DO NOT use: OUT=$(... confirm-off ...) without || true — exit 1/2 leaks.
+
+set -u
+
+CO_KEY="${1:-}"
+CO_DEFAULT="${2:-}"
+
+if [ -z "$CO_KEY" ]; then
+  printf 'usage: confirm-off <KEY> [<default>]\n' >&2
+  exit 64
+fi
+
+if [ -z "${AGENTS_CONFIG_DIR:-}" ]; then
+  printf 'ERROR\n'
+  printf 'confirm-off: AGENTS_CONFIG_DIR not set\n' >&2
+  exit 2
+fi
+
+GETCV="$AGENTS_CONFIG_DIR/bin/get-config-var"
+if [ ! -f "$GETCV" ]; then
+  printf 'ERROR\n'
+  printf 'confirm-off: get-config-var not found at %s\n' "$GETCV" >&2
+  exit 2
+fi
+
+"$GETCV" --is-off "$CO_KEY" "$CO_DEFAULT"
+rc=$?
+case "$rc" in
+  0) printf 'OFF\n'; exit 0 ;;
+  1) printf 'ON\n';  exit 1 ;;
+  2) printf 'ON\n';  exit 1 ;;   # unset (no default) → fail-safe ON
+  3) printf 'ON\n';  exit 1 ;;   # unrecognized → fail-safe ON
+  4) printf 'ERROR\n'
+     printf 'confirm-off: get-config-var internal failure (load-env)\n' >&2
+     exit 2 ;;
+  64) printf 'ERROR\n'
+      printf 'confirm-off: get-config-var usage error\n' >&2
+      exit 2 ;;
+  *)  printf 'ERROR\n'
+      printf 'confirm-off: get-config-var unexpected exit %s\n' "$rc" >&2
+      exit 2 ;;
+esac
