@@ -1,3 +1,6 @@
+# L3 gap (what this section does NOT catch):
+# - That parseGitCArg / parseCdCommand integration with resolveRepoDir fires correctly in a live Claude Code session
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration
 # ============================================================
 # Section D: parseGitCArg unit tests (git-command.js)
 # ============================================================
