@@ -46,7 +46,7 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/closed-detection.sh" 
 
 `STATE=error` → warn-and-continue (does NOT abort).
 
-On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12 Path A1.5, `path-a-label-and-board.sh` calls `ensure-board-card.sh <N>`. When the issue is OPEN and its board card Status is `Done`, `ensure-board-card.sh` resets Status to `In Progress` before any other board mutation, preventing the Projects v2 `Done → auto-close` loop (#579). If the reset fails, `ensure-board-card.sh` warns and exits 0 without modifying the board — the operator must inspect the warning and re-run `ensure-board-card.sh <N>` manually.
+On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12 Path A2, `path-a-label-and-board.sh` calls `ensure-board-card.sh <N>`. When the issue is OPEN and its board card Status is `Done`, `ensure-board-card.sh` resets Status to `In Progress` before any other board mutation, preventing the Projects v2 `Done → auto-close` loop (#579). If the reset fails, `ensure-board-card.sh` warns and exits 0 without modifying the board — the operator must inspect the warning and re-run `ensure-board-card.sh <N>` manually.
 
 ### Step WI-7 — Label extract
 
@@ -77,10 +77,10 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 
 #### Path A — intent:clarified
 - A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, including `ISSUES[1+]` in multi-issue sessions, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Titles come from WI-4's per-N `gh issue view` JSON; for any N where the title is missing, write `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
-- A1.5. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every entry it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
-- A2. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
-- A3. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
-- A4. Invoke `make-outline-plan` (surveys already complete via WI-9).
+- A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/drafts/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every entry it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
+- A3. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
+- A4. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
+- A5. Invoke `make-outline-plan` (surveys already complete via WI-9).
 
 #### Path B — issue exists, no intent:clarified
 - B1. Write `<PLANS_DIR>/drafts/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`.

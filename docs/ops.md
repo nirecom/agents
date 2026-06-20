@@ -79,9 +79,9 @@ A session may close multiple issues in a single PR. Quick reference:
   per closed issue in the PR body.
 - Phase 1 (`/issue-close-stage <N>`) runs once per N from the linked worktree.
 - Phase 2 (`/issue-close-finalize --from-session`) iterates automatically.
-- Path A multi-N: related issues are labeled `intent:clarified` by
-  workflow-init Step 1 A1.5 (fail-closed). If A1.5 aborts due to a gh
-  failure, fix the gh failure and re-run /workflow-init — A1.5 is idempotent.
+- Path A multi-N: all issues are labeled `intent:clarified` by
+  workflow-init Path A2 (fail-closed). If A2 aborts due to a gh
+  failure, fix the gh failure and re-run /workflow-init — A2 is idempotent.
   See the abort marker file under drafts/ for the failed-issue list.
 
 Canonical rules: [`rules/github-issues.md` § Session model](../rules/github-issues.md).

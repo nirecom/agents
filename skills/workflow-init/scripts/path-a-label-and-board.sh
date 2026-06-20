@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# workflow-init Path A1.5 — label related issues + ensure-board-card parity.
+# workflow-init Path A2 — label all issues + ensure-board-card parity.
 #
 # Usage:
 #   PLANS_DIR=... SESSION_ID=... AGENTS_CONFIG_DIR=... \
@@ -31,7 +31,7 @@ for N in "${RELATED[@]}"; do
             MARKER_DIR="$PLANS_DIR/drafts"
             mkdir -p "$MARKER_DIR" 2>/dev/null || true
             MARKER="$MARKER_DIR/$SESSION_ID-workflow-init-aborted-pathA-multiN-label-failure.md"
-            printf 'workflow-init Path A1.5 aborted: gh issue edit --add-label "intent:clarified" failed for #%s\n' "$N" > "$MARKER" 2>/dev/null || true
+            printf 'workflow-init Path A2 aborted: gh issue edit --add-label "intent:clarified" failed for #%s\n' "$N" > "$MARKER" 2>/dev/null || true
         fi
         echo "[workflow-init: gh issue edit --add-label intent:clarified failed for #$N — aborting]" >&2
         exit 1
