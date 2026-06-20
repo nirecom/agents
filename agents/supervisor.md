@@ -97,6 +97,13 @@ Recommend `/issue-create` for root-cause fix when the regression points to a pat
 
 Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
 
+### Error acknowledgement and resume path
+
+When the user has acknowledged and resolved a blocking error (cumSev=error), the session is resumable — `l2_phase=frozen` is "resumable suspended", not terminal. Resume protocol:
+1. Set `l2_phase=frozen` to suspend the current block: `bin/supervisor-write-layer2 --set-l2-phase frozen --session-id <sid>`.
+2. New findings appended afterward re-arm Layer 2 when severity > notice (frozen→pending re-arm resets `l2_retry_count`).
+3. The session continues; the supervisor-guard branches for cumSev=error and l2_armed_at no longer block while `l2_phase=frozen`.
+
 ## Constraints
 
 - Do not call `claude -p`.

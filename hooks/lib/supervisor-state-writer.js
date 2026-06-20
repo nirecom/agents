@@ -68,31 +68,37 @@ function writeAtomic(filePath, state) {
 function ensureLayer2Scheduled(state, sessionId) {
   if (!state.layer2 || typeof state.layer2 !== "object" || Array.isArray(state.layer2)) return;
   const phase = state.layer2.l2_phase;
-  if (phase === "done" || phase === "frozen") return;
+  if (phase === "done") return;
 
-  const plansDir = getWorkflowPlansDir();
-  const candidates = new Set();
-  if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
-  try {
-    const wsid = resolveWorkflowSessionId();
-    if (wsid && SESSION_ID_RE.test(wsid)) candidates.add(wsid);
-  } catch (_) {}
-
-  for (const sid of candidates) {
+  if (phase !== "frozen") {
+    const plansDir = getWorkflowPlansDir();
+    const candidates = new Set();
+    if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
     try {
-      if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) return;
+      const wsid = resolveWorkflowSessionId();
+      if (wsid && SESSION_ID_RE.test(wsid)) candidates.add(wsid);
     } catch (_) {}
+
+    for (const sid of candidates) {
+      try {
+        if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) return;
+      } catch (_) {}
+    }
   }
 
   if (state.layer2.l2_armed_at == null) {
     state.layer2.l2_armed_at = new Date().toISOString();
     if (phase == null) state.layer2.l2_phase = "pending";
+    if (phase === "frozen") {
+      state.layer2.l2_phase = "pending";
+      state.layer2.l2_retry_count = 0;
+    }
   }
 }
 
 function validateL2PhaseTransition(currentPhase, nextPhase) {
   if (currentPhase === nextPhase) return { ok: true, errors: [] };
-  if (currentPhase === "frozen") return { ok: false, errors: ["cannot transition from frozen (terminal state)"] };
+  if (currentPhase === "frozen" && nextPhase !== "pending") return { ok: false, errors: ["cannot transition from frozen: only frozen→pending (re-arm) is allowed"] };
   if (currentPhase === "done" && nextPhase === "pending") return { ok: false, errors: ["cannot re-schedule L2 after done"] };
   if (currentPhase === "done" && nextPhase === null) return { ok: false, errors: ["cannot revert done to null"] };
   return { ok: true, errors: [] };
@@ -338,4 +344,4 @@ const confirmFinding = (sid, idx) => mutateLayer2State(sid, (s) => findingStatus
 const dropFindings = (sid, idxs) => mutateLayer2State(sid, (s) => findingStatus.dropFindings(s, idxs));
 const promotePendingDraftsToConfirmed = (sid) => mutateLayer2State(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
 
-module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, incrementL2RetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed };
+module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, incrementL2RetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed, validateL2PhaseTransition };
