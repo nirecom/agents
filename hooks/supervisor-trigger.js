@@ -94,7 +94,10 @@ if (require.main === module) {
   const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
   const findingCount = findings.length;
 
-  if (isEscapeHatch && !l2ArmedAt) {
+  const layer1Findings = (state && state.layer1 && Array.isArray(state.layer1.findings)) ? state.layer1.findings : [];
+  const hasBlockingFinding = layer1Findings.some(f => f && f.severity && f.severity !== "notice");
+
+  if (isEscapeHatch && !l2ArmedAt && hasBlockingFinding) {
     try {
       writeLayer2State(sessionId, { l2_armed_at: new Date().toISOString() });
     } catch (_) {}
