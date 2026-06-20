@@ -21,6 +21,10 @@ if (-not $canSymlink) {
 
 function Write-Launcher {
     param([string]$Path, [string]$Content, [string]$Label)
+    $existingItem = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($existingItem -and ($existingItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        Remove-Item -LiteralPath $Path -Force
+    }
     if ((Test-Path $Path) -and ([System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::ASCII) -eq $Content)) {
         Write-Host "Already generated: $Label" -ForegroundColor DarkGray
     } else {
