@@ -36,8 +36,15 @@ function loadEnv(envPath) {
         val = val.slice(1, -1);
       }
     }
-    // Existing process.env wins (explicit shell/test export takes precedence)
-    if (!(key in process.env)) {
+    // Non-empty process.env wins (explicit shell/test export takes precedence).
+    // Empty-string values are treated as "not set" — Windows propagates VAR=""
+    // into child processes even when the parent shell shows it as unset.
+    // Log key NAME only (not value) when shadowing — prevents secret leakage.
+    if (process.env[key]) {
+      if (process.env.AGENTS_HOOK_DEBUG === "1") {
+        process.stderr.write(`load-env: ${key} shadowed by process.env (process.env wins)\n`);
+      }
+    } else {
       process.env[key] = val;
     }
   }

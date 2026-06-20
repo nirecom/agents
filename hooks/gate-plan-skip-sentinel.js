@@ -31,7 +31,7 @@ function allow(reason) {
   process.exit(0);
 }
 
-const OFF_LITERALS = new Set(["off", "0", "false", "no", "disabled"]);
+const OFF_LITERALS = new Set(["off"]);
 
 function isOff(name) {
   const raw = process.env[name];

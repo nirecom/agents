@@ -83,12 +83,12 @@ After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automat
 7. **Merge prompt:**
 
    Check `ENFORCE_WORKTREE`:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && get-config-var --is-off ENFORCE_WORKTREE on && echo OFF || echo ON'`
+   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'`
 
-   **(a) `ENFORCE_WORKTREE=on`:** Output `PR #<N> is open: [<url>](<url>)` and stop.
+   **(a) stdout `ON` or `ERROR` (ENFORCE_WORKTREE=on):** Output `PR #<N> is open: [<url>](<url>)` and stop.
    `/worktree-end` owns the merge prompt and sentinel for worktree mode.
 
-   **(b) `ENFORCE_WORKTREE=off` (unchanged):** Output `PR #<N> is open: [<url>](<url>)`,
+   **(b) stdout `OFF` (ENFORCE_WORKTREE=off):** Output `PR #<N> is open: [<url>](<url>)`,
    then `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
    - **merge**: `gh pr merge --squash --delete-branch`, then `git fetch --prune origin`.
    - **wait** / **abort**: display URL and stop.

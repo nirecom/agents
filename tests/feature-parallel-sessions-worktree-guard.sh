@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-parallel-sessions-worktree-guard.sh
 # Tests: hooks/auto-branch-guard.js, hooks/enforce-worktree.js
-# Tags: worktree, enforce, hook, workflow, intent
+# Tags: worktree, enforce, hook, workflow, intent, scope:common
 #
 # Implementation complete. Tests verify the production contract.
 
@@ -656,6 +656,68 @@ test_read_only_config_check_passthrough() {
         fail "fix-B 15. lowercase key should block, got allow: $out"
     else
         pass "fix-B 15. lowercase key: block"
+    fi
+
+    # ============================================================
+    # confirm-off helper migration (#XXX): new positive + regression
+    # ============================================================
+    # NEW IDIOM: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" KEY default'`
+    # Pre-implementation: positive cases 16-19 will FAIL until isAllowedReadOnlyConfigCheck
+    # is updated to match the new 2-clause absolute-path form. After implementation,
+    # the OLD 3-clause idiom (cases 1-4 above) becomes BLOCKED and case 20 below
+    # acts as a regression guard.
+
+    # 16. New idiom canonical: confirm-off via absolute path, default on
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 16. new confirm-off idiom CONFIRM_OUTLINE on: allow"
+    else
+        fail "fix-B 16. expected allow (post-impl), got: $out"
+    fi
+
+    # 17. New idiom with off default
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_DETAIL off'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 17. new confirm-off idiom CONFIRM_DETAIL off: allow"
+    else
+        fail "fix-B 17. expected allow (post-impl), got: $out"
+    fi
+
+    # 18. New idiom for CONFIRM_WORKTREE
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_WORKTREE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 18. new confirm-off idiom CONFIRM_WORKTREE on: allow"
+    else
+        fail "fix-B 18. expected allow (post-impl), got: $out"
+    fi
+
+    # 19. New idiom — double-outer-quote variant
+    out="$(run_bash_guard "bash -c \"cd \\\"\$AGENTS_CONFIG_DIR\\\" && bash \\\"\$AGENTS_CONFIG_DIR/bin/confirm-off\\\" CONFIRM_OUTLINE on\"" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 19. new confirm-off idiom double-quote outer: allow"
+    else
+        fail "fix-B 19. expected allow (post-impl), got: $out"
+    fi
+
+    # 20. Old 3-clause idiom is a read-only command — enforce-worktree only gates
+    # writes, so non-write commands that don't match any allowlist rule pass through
+    # (return `{}`). The idiom is deprecated (replace with confirm-off), but it is
+    # not a write and therefore not blocked.
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && get-config-var --is-off CONFIRM_OUTLINE on && echo OFF || echo ON'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 20. old 3-clause idiom passes through (non-write, no explicit allow needed)"
+    else
+        fail "fix-B 20. unexpected block on non-write old idiom, got: $out"
+    fi
+
+    # 21. Bare PATH lookup (non-absolute path) is also a non-write command and
+    # passes through. The absolute-path form is the only *allowed* form, but
+    # disallowed non-write commands simply get no decision (`{}`), not a block.
+    out="$(run_bash_guard "bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && confirm-off CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+    if guard_decision "$out"; then
+        pass "fix-B 21. bare confirm-off PATH lookup passes through (non-write, no explicit allow)"
+    else
+        fail "fix-B 21. unexpected block on non-write bare PATH lookup, got: $out"
     fi
 }
 

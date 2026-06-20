@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/gate-plan-skip-sentinel.js
-# Tags: workflow, outline, planning, sentinel, hook
+# Tags: workflow, outline, planning, sentinel, hook, scope:common
 # Tests for hooks/gate-plan-skip-sentinel.js (PreToolUse hook).
 #
 # Behavior contract:
@@ -8,6 +8,12 @@
 #   <<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>> is auto-approved via
 #   permissionDecision=allow. Same for CONFIRM_DETAIL/DETAIL_NOT_NEEDED.
 #   All other inputs pass through (empty JSON output → no decision).
+#
+# L3 gap: these tests invoke the hook via direct `node <hook>` calls (L2).
+#   A live claude -p session would additionally verify:
+#   (a) the hook is registered in settings.json and fires on real PreToolUse events;
+#   (b) the sentinel echo in a real Bash tool invocation is actually allowed without
+#       a prompt interrupt in the live Claude Code UI.
 #
 set -uo pipefail
 
@@ -74,10 +80,10 @@ INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: single approach>>
 CONFIRM_OUTLINE=off CONFIRM_DETAIL=on assert_allow \
     "T1. OUTLINE_NOT_NEEDED + CONFIRM_OUTLINE=off → allow" "$INPUT"
 
-echo "=== T2: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=0 → allow (case literal) ==="
+echo "=== T2: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=0 → pass-through (vocabulary narrowed: 0 no longer recognized) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
-CONFIRM_OUTLINE=0 assert_allow \
-    "T2. CONFIRM_OUTLINE=0 → allow" "$INPUT"
+CONFIRM_OUTLINE=0 assert_passthrough \
+    "T2. CONFIRM_OUTLINE=0 → pass-through (vocabulary narrowed)" "$INPUT"
 
 echo "=== T3: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=on → pass-through (ask permissions) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
@@ -90,15 +96,20 @@ unset CONFIRM_OUTLINE 2>/dev/null || true
 assert_passthrough \
     "T4. CONFIRM_OUTLINE unset → pass-through" "$INPUT"
 
+echo "=== T4b: OUTLINE_NOT_NEEDED with CONFIRM_OUTLINE=\"\" (empty string) → pass-through (fail-safe to ON) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: only one approach>>"')
+CONFIRM_OUTLINE="" assert_passthrough \
+    "T4b. CONFIRM_OUTLINE=\"\" (empty) → pass-through (fail-safe to ON)" "$INPUT"
+
 echo "=== T5: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=off → allow ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
 CONFIRM_DETAIL=off assert_allow \
     "T5. DETAIL_NOT_NEEDED + CONFIRM_DETAIL=off → allow" "$INPUT"
 
-echo "=== T6: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=false → allow ==="
+echo "=== T6: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=false → pass-through (vocabulary narrowed: false no longer recognized) ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')
-CONFIRM_DETAIL=false assert_allow \
-    "T6. CONFIRM_DETAIL=false → allow" "$INPUT"
+CONFIRM_DETAIL=false assert_passthrough \
+    "T6. CONFIRM_DETAIL=false → pass-through (vocabulary narrowed)" "$INPUT"
 
 echo "=== T7: DETAIL_NOT_NEEDED with CONFIRM_DETAIL=on → pass-through ==="
 INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: trivial change>>"')

@@ -113,7 +113,7 @@ if (require.main === module) {
   const absPath = resolveArtifact(stage, sid, plansDir);
 
   // Check CONFIRM_<STAGE>=off directly from env var — works even when absPath is null.
-  const OFF_LITERALS = new Set(["off", "0", "false", "no", "disabled"]);
+  const OFF_LITERALS = new Set(["off"]);
   const flagName = `CONFIRM_${stage.toUpperCase()}`;
   const rawFlag = process.env[flagName];
   const confirmOff = rawFlag != null && OFF_LITERALS.has(rawFlag.toLowerCase().trim());
