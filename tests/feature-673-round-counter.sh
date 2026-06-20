@@ -3,7 +3,8 @@
 # Tags: worktree, outline, planning, detail, plans
 # L1 unit tests for ROUND_NUMBER counter management in
 # skills/make-detail-plan/scripts/run-codex-review-loop.sh (and outline-plan variant).
-# Counter is per-stage: <PLANS_DIR>/drafts/<session-id>-<format>-round-number.txt
+# Counter is per-stage: <PLANS_DIR>/<session-id>-<format>-round-number.txt
+# (#866: flat path, no drafts/ subdir)
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -52,8 +53,9 @@ EOF
     chmod +x "$agents_dir/bin/run-codex-review-loop"
 
     local plans_dir="$test_tmp/plans"
-    mkdir -p "$plans_dir/drafts"
-    echo "# Draft" > "$plans_dir/drafts/sid-detail-draft.md"
+    # #866: intermediate files live under PLANS_DIR root (no drafts/ subdir).
+    mkdir -p "$plans_dir"
+    echo "# Draft" > "$plans_dir/sid-detail-draft.md"
     echo "# Outline" > "$plans_dir/sid-outline.md"
 
     echo "$agents_dir|$plans_dir"
@@ -76,7 +78,8 @@ counter_file() {
     local plans_dir="$1"
     local sid="$2"
     local fmt="$3"
-    echo "$plans_dir/drafts/$sid-$fmt-round-number.txt"
+    # #866: counter lives flat under PLANS_DIR root.
+    echo "$plans_dir/$sid-$fmt-round-number.txt"
 }
 
 # ---------------------------------------------------------------------------
@@ -213,11 +216,11 @@ counter_file() {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
   IFS='|' read -r MOCK PLANS <<< "$(setup_test_env "$TMP" 1)"
   invoke_detail "$MOCK" "$PLANS" "mysid" "0" >/dev/null
-  EXPECTED="$PLANS/drafts/mysid-detail-plan-round-number.txt"
+  EXPECTED="$PLANS/mysid-detail-plan-round-number.txt"
   if [[ -f "$EXPECTED" ]]; then
-    pass "9: counter at <plans>/drafts/<sid>-detail-plan-round-number.txt"
+    pass "9: counter at <plans>/<sid>-detail-plan-round-number.txt (#866 flat)"
   else
-    fail "9: counter not at expected path: $EXPECTED. Listing: $(ls "$PLANS/drafts/" 2>/dev/null)"
+    fail "9: counter not at expected path: $EXPECTED. Listing: $(ls "$PLANS/" 2>/dev/null)"
   fi
 }
 
@@ -228,17 +231,16 @@ if [[ -f "$OUTLINE_WRAPPER" ]]; then
   {
     TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
     IFS='|' read -r MOCK PLANS <<< "$(setup_test_env "$TMP" 1)"
-    # outline wrapper expects an outline draft file
-    mkdir -p "$PLANS/drafts"
-    echo "# Outline Draft" > "$PLANS/drafts/mysid-outline-draft.md"
+    # outline wrapper expects an outline draft file (#866: flat root path)
+    echo "# Outline Draft" > "$PLANS/mysid-outline-draft.md"
     AGENTS_CONFIG_DIR="$MOCK" SESSION_ID="mysid" PLANS_DIR="$PLANS" \
       EXTENSIONS_USED="0" \
       run_with_timeout bash "$OUTLINE_WRAPPER" >/dev/null 2>&1 || true
-    EXPECTED="$PLANS/drafts/mysid-outline-plan-round-number.txt"
+    EXPECTED="$PLANS/mysid-outline-plan-round-number.txt"
     if [[ -f "$EXPECTED" ]]; then
-      pass "9b: outline counter at <plans>/drafts/<sid>-outline-plan-round-number.txt"
+      pass "9b: outline counter at <plans>/<sid>-outline-plan-round-number.txt (#866 flat)"
     else
-      fail "9b: outline counter missing at $EXPECTED. Listing: $(ls "$PLANS/drafts/" 2>/dev/null)"
+      fail "9b: outline counter missing at $EXPECTED. Listing: $(ls "$PLANS/" 2>/dev/null)"
     fi
   }
 else
