@@ -15,6 +15,10 @@
 # RED until bin/supervisor-report grows the fallback chain (p1 already exists
 # via existing CLI; p2/p3/p4 are new — those cases SKIP if the underlying
 # auto-resolve has not been implemented yet, detected by feature-probe).
+#
+# L3 gap (what this L2 test does NOT catch):
+# - Real $CLAUDE_SESSION_ID propagation in a live claude -p session (Anthropic bug #27987 prevents subprocess env inheritance)
+# - P2 fallback via env var is only verifiable in a real Claude Code session where the runtime sets CLAUDE_SESSION_ID
 
 set -u
 
