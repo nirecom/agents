@@ -2,7 +2,7 @@
 "use strict";
 const fs = require("fs");
 try { require("./lib/load-env").loadDefaultEnv(); } catch (_e) { /* fail-open */ }
-const { OUTLINE_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_RE_DQ } =
+const { OUTLINE_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDED_RE_DQ } =
   require("./lib/sentinel-patterns");
 
 function readStdin() {
@@ -48,5 +48,7 @@ if (OUTLINE_NOT_NEEDED_RE_DQ.test(cmd) && isOff("CONFIRM_OUTLINE"))
   allow("CONFIRM_OUTLINE=off — outline skip auto-approved.");
 if (DETAIL_NOT_NEEDED_RE_DQ.test(cmd) && isOff("CONFIRM_DETAIL"))
   allow("CONFIRM_DETAIL=off — detail skip auto-approved.");
+if (WRITE_TESTS_NOT_NEEDED_RE_DQ.test(cmd) && isOff("CONFIRM_TESTS"))
+  allow("CONFIRM_TESTS=off — write-tests skip auto-approved.");
 
 passThrough();
