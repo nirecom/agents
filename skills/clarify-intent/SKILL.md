@@ -61,17 +61,6 @@ CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On
 
 ## Completion
 
-**Primary confirmation (interview-emerged multi-N only):**
-If `closes_issues` now has 2+ entries AND the file
-`<PLANS_DIR>/<session-id>-issue-prefill.md` does NOT contain the marker
-`<!-- workflow-init: confirmed primary = `, then ask the user to confirm
-which is the primary:
-  AskUserQuestion: "Which is the primary issue for this session?"
-  (one branch per closes_issues entry)
-After confirmation, reorder `closes_issues` so the selected issue is first.
-This fires at most once per session (mutex with workflow-init Step 1(b)).
-
-
 After confirm-plan protocol returns, run the non-GitHub gate:
 
 ```bash
