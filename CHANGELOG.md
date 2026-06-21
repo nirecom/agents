@@ -434,4 +434,8 @@ Changes: When `make-outline-plan` detects a premise contradiction in survey arti
 
 ### FEATURE: PR #1018 (2026-06-21)
 Background: fix(#992): replace bare python3/python -c with uv run python -c; add review-bare-python lint guard
-Changes: Fixed: Microsoft Store popup no longer appears during `/run-tests` on Windows; three `.sh` scripts replaced bare `python3`/`python -c` with `uv run python -c`.;Added: `review-bare-python` lint guard detects bare `python3`/`python -c` in `.sh` files and runs automatically in WF-CODE-6.
+Changes: Fixed: Microsoft Store popup no longer appears during `/run-tests` on Windows; three `.sh` scripts replaced bare `python3`/`python -c` with `uv run python -c`.;Added: `review-bare-python` lint guard detects bare `python3`/`python -c` in `.sh` files and runs automatically in WF-CODE-6.
+
+### FEATURE: PR #1019 (2026-06-21)
+Background: feat(#966): add PREFIX-N. step labels to remaining 25 SKILL.md files; fix survey-history SH-3; remove lint exclusion
+Changes: All 32 SKILL.md files now carry globally unique step labels (`CP-1.`, `SH-3.`, `WT-7.`, etc.) — cross-references like "survey-history step 3" are unambiguous. The `survey-history` `Step 2.5` decimal violation and its lint exclusion are resolved.
