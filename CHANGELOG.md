@@ -469,4 +469,8 @@ Changes: **dotfileslink hardening (#969, #965)**: On Windows, `install/win/dotfi
 
 ### FEATURE: PR #1038 (2026-06-21)
 Background: fix/fix-1028-1029
-Changes: Fixed regression where workflow-init and clarify-intent still asked "Which is the primary issue?" in multi-issue sessions after the primary-abolition change in a prior release
+Changes: Fixed regression where workflow-init and clarify-intent still asked "Which is the primary issue?" in multi-issue sessions after the primary-abolition change in a prior release
+
+### BUGFIX: PR #1042 (2026-06-22)
+Background: fix(#983,#878): plans-dir env-var expansion in redirect/tee; narrow null-repoRoot guard
+Changes: `/issue-close-finalize` worker state file writes (e.g. `cat > "$state_path.tmp"`) from the main worktree are no longer blocked by `enforce-worktree`; sanctioned `rm ~/.workflow-plans/*.tmp` from a non-repo CWD is also no longer blocked.
