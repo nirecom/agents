@@ -48,6 +48,23 @@ function expandStaticShellTokens(s, opts = {}) {
     return wpd + remainder;
   }
 
+  // Generic $VAR / ${VAR} — resolve via process.env when env value AND the final
+  // resolved path (envValue + remainder) are both under getWorkflowPlansDir().
+  // The regex captures the identifier head only; any subsequent character (.tmp, /sub,
+  // end-of-string) becomes the remainder appended after expansion.
+  // This covers $state_path.tmp, $state_path/sub, and bare $state_path forms (#983).
+  const genericVarRe = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/;
+  const gm = genericVarRe.exec(s);
+  if (gm) {
+    const varName = gm[1] || gm[2];
+    const remainder = s.slice(gm[0].length);
+    if (!remainder.includes("$") && !remainder.includes("`")) {
+      const { tryResolveEnvUnderPlansDir } = require("./helpers");
+      const resolved = tryResolveEnvUnderPlansDir(varName, remainder);
+      if (resolved !== null) return resolved;
+    }
+  }
+
   // If the token still starts with $ (or contains $ not at a known expansion), fail-closed.
   if (s.includes("$")) return null;
 
