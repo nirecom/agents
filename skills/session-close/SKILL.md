@@ -49,6 +49,8 @@ test -f "<PLANS_DIR>/<session-id>-final-report-env.json" \
   || { echo "ERROR: env JSON missing — /worktree-end must run first" >&2; exit 1; }
 ```
 
+Then write the late-finding L2 eligibility flag (#997):
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-eligible-phase post_final_report_window
 Proceed to SC-3.
 
 ## Step SC-2B — Branch/main path: build minimal env JSON
@@ -57,7 +59,9 @@ Proceed to SC-3.
 node "$AGENTS_CONFIG_DIR/bin/session-close-build-env.js" "<PLANS_DIR>/<session-id>-final-report-env.json"
 ```
 
-Exit 0 → proceed to SC-3. Non-zero → abort (PR unresolvable).
+Exit 0 → write the late-finding L2 eligibility flag (#997):
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-eligible-phase post_final_report_window
+Then proceed to SC-3. Non-zero → abort (PR unresolvable).
 
 ## Step SC-3 — Non-GitHub pre-flight + issue close dispatch
 
@@ -108,9 +112,14 @@ Before rendering the Final Report, scan the session for any unreported observati
 
 Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
 
-- `"pending"` and `l2_armed_at !== null`:
-  - If `last_run_at === null` AND (`Date.parse(l2_armed_at)` is NaN **or** `(now_ms - Date.parse(l2_armed_at)) > 600000` (10 minutes, the **L2_TIMEOUT_MS** threshold)): L2 never fired — elapsed-time fallback. Run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "SC-5 elapsed-time fallback: l2_phase=pending, l2_armed_at=<value>, last_run_at=null, elapsed >10 min (or l2_armed_at unparseable)" --reporter session-close` and proceed to SC-6.
-  - Otherwise: L2 not yet run. Emit the gate sentinel and yield:
+- `"pending"` and `l2_armed_at !== null`: check `last_run_at`:
+  - `last_run_at !== null` (#961 heuristic: L2 ran but `--set-l2-phase done` was not committed):
+    1. Repair state: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase done --clear-l2-armed-at`
+    2. Record audit finding: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "#961 heuristic: l2_phase=pending with last_run_at set — repaired to done" --reporter session-close`
+    3. Proceed to SC-6.
+  - `last_run_at === null`:
+    - If `Date.parse(l2_armed_at)` is NaN **or** `(now_ms - Date.parse(l2_armed_at)) > 600000` (10 minutes, the **L2_TIMEOUT_MS** threshold): L2 never fired — elapsed-time fallback. Run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "SC-5 elapsed-time fallback: l2_phase=pending, l2_armed_at=<value>, last_run_at=null, elapsed >10 min (or l2_armed_at unparseable)" --reporter session-close` and proceed to SC-6.
+    - Otherwise: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
     `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
     The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-6.
     Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step SC-4 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step SC-2A). This gate therefore reads a stable value.
@@ -154,6 +163,20 @@ After emitting, mark completion:
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
 `stop-final-report-guard.js` validates completion by checking all 10 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
+
+## Step SC-7 — Surface Layer 2 findings (post-Final-Report)
+
+Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `layer2.findings` is empty, or `layer2.findings_surfaced_at` is already set, skip to the sentinel and return.
+
+Compute the render:
+
+  node -e "const r=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/supervisor-findings-render');const s=require('fs');const st=JSON.parse(s.readFileSync('<PLANS_DIR>/<session-id>-supervisor-state.json','utf8'));const out=r.formatLayer2Findings(st.layer2.findings||[],{sessionId:'<session-id>',workflowSessionId:process.env.CLAUDE_SESSION_ID||null,supervisorPath:process.env.AGENTS_CONFIG_DIR+'/agents/supervisor.md',stateFilePath:'<PLANS_DIR>/<session-id>-supervisor-state.json'});if(out)process.stdout.write(out+'\n');"
+
+When the render is non-empty: emit the text verbatim into the assistant reply (no preamble, no wrapping).
+
+Mark surfaced and complete:
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --mark-findings-surfaced
+  echo "<<WORKFLOW_MARK_STEP_l2_findings_surfaced_complete>>"
 
 ## Rules
 
