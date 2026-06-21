@@ -16,9 +16,30 @@ const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
  * source locations may reside outside the plans dir even when a destination is
  * inside it. Fail-closed: parseFailure or empty targets → false; no fallback allow.
  */
+// #957: Closed allowlist of known plans-dir writer scripts. These scripts
+// resolve state files under WORKFLOW_PLANS_DIR by their internal implementation,
+// so when invoked as `node bin/<script> --session-id <sid> ...` the write is
+// guaranteed to land inside the plans dir. The --session-id presence is a
+// secondary safety: without a session ID, the script has no state-file context.
+const KNOWN_PLANS_DIR_WRITERS = new Set([
+  "supervisor-report",
+  "supervisor-write-layer2",
+  "supervisor-write-layer3",
+]);
+
 function isAllowedWorkflowPlansDirWrite(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
   void repoRoot; // signature symmetry — plans dir is SSOT-resolved, not repo-relative
+
+  // node bin/<allowlisted-script> --session-id <sid> ... — closed allowlist.
+  // Command sequencing (&&, ||, ;, |) and shell redirects (>, >>) are rejected —
+  // chaining or stdout-redirect could write outside plans-dir.
+  const nodeKnownMatch = /^\s*node\s+bin\/([A-Za-z0-9_-]+)\b/.exec(cmd);
+  if (nodeKnownMatch && KNOWN_PLANS_DIR_WRITERS.has(nodeKnownMatch[1]) &&
+      !/(?:&&|\|\||[;|]|\d*>>?)/.test(cmd)) {
+    const sidMatch = /--session-id\s+([A-Za-z0-9_-]+)/.exec(cmd);
+    if (sidMatch) return true;
+  }
 
   let plansDir;
   try { plansDir = getWorkflowPlansDir(); } catch (e) { return false; }

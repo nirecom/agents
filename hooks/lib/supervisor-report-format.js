@@ -127,4 +127,27 @@ function formatWorktreeOffProposalReason(sessionId, workflowSessionId, superviso
   return lines.join("\n");
 }
 
-module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason };
+// #720 — Layer 3 reason formatters. Mirror the L2 formatters' shape so the
+// integrated formatter (format-integrated.js) can stack them side-by-side.
+
+function formatL3StageBoundaryReason(stage, verdict, sessionId, stateFilePath) {
+  const lines = [];
+  lines.push(`[EM Supervisor] Layer 3 strategic review at CONFIRM_${stage}: ${verdict}.`);
+  lines.push("Trigger: stage-boundary sentinel detected in assistant transcript.");
+  lines.push(`Action: invoke agents/supervisor-layer3.md as a subagent.`);
+  if (sessionId) lines.push(`Session ID: ${sessionId}`);
+  if (stateFilePath) lines.push(`State file: ${stateFilePath}`);
+  return lines.join("\n");
+}
+
+function formatL3SeverityThresholdReason(cumSev, verdict, sessionId, stateFilePath) {
+  const lines = [];
+  lines.push(`[EM Supervisor] Layer 3 strategic review (cumulative_severity=${cumSev}): ${verdict}.`);
+  lines.push("Trigger: cumulative severity reached L3 threshold.");
+  lines.push(`Action: invoke agents/supervisor-layer3.md as a subagent.`);
+  if (sessionId) lines.push(`Session ID: ${sessionId}`);
+  if (stateFilePath) lines.push(`State file: ${stateFilePath}`);
+  return lines.join("\n");
+}
+
+module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason, formatL3StageBoundaryReason, formatL3SeverityThresholdReason };
