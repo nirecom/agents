@@ -465,4 +465,8 @@ Changes: SC-5 (`/session-close`) no longer hangs indefinitely when L2 review was
 
 ### FEATURE: PR #1034 (2026-06-21)
 Background: fix(#969,#965): dotfileslink hardening — junction rollback, dangling-link detection, test sandbox
-Changes: **dotfileslink hardening (#969, #965)**: On Windows, `install/win/dotfileslink.ps1` now correctly restores Junction-type destinations on rollback (previously always restored as SymbolicLink, leaving a dangling stub). Profile startup health checks (`profile-snippet.ps1`, `profile-snippet.sh`) now detect dangling symlinks (target path gone) in addition to missing or regular-file occupants, triggering automatic repair. On Linux/Git-Bash, `_link_one` in `install/linux/dotfileslink.sh` now reports and returns an error when `rm -f` or `mv` fails instead of silently continuing.
+Changes: **dotfileslink hardening (#969, #965)**: On Windows, `install/win/dotfileslink.ps1` now correctly restores Junction-type destinations on rollback (previously always restored as SymbolicLink, leaving a dangling stub). Profile startup health checks (`profile-snippet.ps1`, `profile-snippet.sh`) now detect dangling symlinks (target path gone) in addition to missing or regular-file occupants, triggering automatic repair. On Linux/Git-Bash, `_link_one` in `install/linux/dotfileslink.sh` now reports and returns an error when `rm -f` or `mv` fails instead of silently continuing.
+
+### FEATURE: PR #1038 (2026-06-21)
+Background: fix/fix-1028-1029
+Changes: Fixed regression where workflow-init and clarify-intent still asked "Which is the primary issue?" in multi-issue sessions after the primary-abolition change in a prior release
