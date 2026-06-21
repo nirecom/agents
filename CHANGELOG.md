@@ -473,4 +473,8 @@ Changes: Fixed regression where workflow-init and clarify-intent still asked "Wh
 
 ### BUGFIX: PR #1042 (2026-06-22)
 Background: fix(#983,#878): plans-dir env-var expansion in redirect/tee; narrow null-repoRoot guard
-Changes: `/issue-close-finalize` worker state file writes (e.g. `cat > "$state_path.tmp"`) from the main worktree are no longer blocked by `enforce-worktree`; sanctioned `rm ~/.workflow-plans/*.tmp` from a non-repo CWD is also no longer blocked.
+Changes: `/issue-close-finalize` worker state file writes (e.g. `cat > "$state_path.tmp"`) from the main worktree are no longer blocked by `enforce-worktree`; sanctioned `rm ~/.workflow-plans/*.tmp` from a non-repo CWD is also no longer blocked.
+
+### FEATURE: PR #1041 (2026-06-22)
+Background: feat(#720,#957,#1021): EM Supervisor Layer 3 strategic review; enforce-worktree plans-dir allowlist; supervisor-report dual-store mirror
+Changes: Layer 3 (Opus-class strategic review) added to the EM Supervisor. The Stop hook arms an L3 review at each workflow stage boundary (CONFIRM_INTENT/OUTLINE/DETAIL) and when cumulative error severity is reached; the L3 agent examines cross-stage coherence and escalation patterns and produces a CONTINUE/WARN/BLOCK verdict. (#720);Fixed: `node bin/supervisor-report`, `node bin/supervisor-write-layer2`, and `node bin/supervisor-write-layer3` commands issued from a linked worktree were blocked by the enforce-worktree hook. These scripts now appear in the plans-dir allowlist. (#957);Fixed: supervisor findings written by non-orchestrator agents may not reach downstream readers that use a different session-ID form (CC UUID vs wsid). `supervisor-report` now mirrors findings to both stores when the session ID is auto-resolved. (#1021)
