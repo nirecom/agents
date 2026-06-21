@@ -223,7 +223,7 @@ fi
 # ---------------------------------------------------------------------------
 LOG7="$TMPDIR_BASE/log7.jsonl"
 run_core "codex_core_round_log_append '$LOG7' 'sessA' 'detail-plan' 'APPROVED' '' >/dev/null" >/dev/null 2>&1
-# count=1, cap=2, extensions_used=0 → limit=2, under limit
+# count=1, cap=2, extensions_used=0 → NEW limit=3 (1+2+0), under limit
 RES=$(run_core_rc "codex_core_hard_cap_check '$LOG7' 'sessA' 'detail-plan' 2 0 2")
 RC=$(extract_rc "$RES")
 OUT=$(extract_out "$RES")
@@ -240,8 +240,9 @@ LOG8="$TMPDIR_BASE/log8.jsonl"
 run_core "
 codex_core_round_log_append '$LOG8' 'sessA' 'detail-plan' 'A' '' >/dev/null
 codex_core_round_log_append '$LOG8' 'sessA' 'detail-plan' 'B' '' >/dev/null
+codex_core_round_log_append '$LOG8' 'sessA' 'detail-plan' 'C' '' >/dev/null
 " >/dev/null 2>&1
-# count=2, cap=2, ext_used=0, max_ext=2 → limit=2 → at limit
+# count=3, cap=2, ext_used=0, max_ext=2 → NEW limit=3 (1+2+0) → at limit
 RES=$(run_core_rc "codex_core_hard_cap_check '$LOG8' 'sessA' 'detail-plan' 2 0 2")
 RC=$(extract_rc "$RES")
 OUT=$(extract_out "$RES")
@@ -261,11 +262,11 @@ fi
 # ---------------------------------------------------------------------------
 LOG9="$TMPDIR_BASE/log9.jsonl"
 run_core "
-for i in 1 2 3 4; do
+for i in 1 2 3 4 5; do
   codex_core_round_log_append '$LOG9' 'sessA' 'detail-plan' 'A' '' >/dev/null
 done
 " >/dev/null 2>&1
-# count=4, cap=2, ext_used=2, max_ext=2 → limit=4, at ceiling
+# count=5, cap=2, ext_used=2, max_ext=2 → NEW limit=5 (1+2+2), at ceiling
 RES=$(run_core_rc "codex_core_hard_cap_check '$LOG9' 'sessA' 'detail-plan' 2 2 2")
 RC=$(extract_rc "$RES")
 OUT=$(extract_out "$RES")
