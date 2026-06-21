@@ -23,35 +23,35 @@ else
     fail "W5: SKILL.md must retain ISSUES= AND must NOT contain 'Move the selected entry to index 0'"
 fi
 
-# W6: The 2+ branch is followed by AskUserQuestion reference; `pick one` is absent.
+# W6a: >=2 branch bullet must NOT fire AskUserQuestion or mention 'primary issue' (primary-abolition).
 if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "W6a: 2+ branch references AskUserQuestion (file not found)"
+    fail "W6a: >=2 branch no-AskUserQuestion check (file not found)"
 else
-    PLUS_LN=$(grep -nE "2\+" "$WORKFLOW_INIT_MD" | head -1 | cut -d: -f1 || true)
-    if [ -n "$PLUS_LN" ]; then
-        END_LN=$((PLUS_LN + 50))
-        SLICE=$(awk -v s="$PLUS_LN" -v e="$END_LN" 'NR>=s && NR<=e' "$WORKFLOW_INIT_MD")
-        if printf '%s' "$SLICE" | grep -qF "AskUserQuestion"; then
-            pass "W6a: 2+ branch is followed by AskUserQuestion reference within 50 lines"
-        else
-            fail "W6a: 2+ branch (line $PLUS_LN) not followed by AskUserQuestion within 50 lines"
-        fi
+    PLUS_BULLET=$(grep -E "\*\*>=2\*\*" "$WORKFLOW_INIT_MD" | head -1 || true)
+    if [ -z "$PLUS_BULLET" ]; then
+        fail "W6a: no '**>=2**' marker found in SKILL.md"
+    elif printf '%s' "$PLUS_BULLET" | grep -qF '`AskUserQuestion`'; then
+        fail "W6a: >=2 branch bullet must not invoke AskUserQuestion (primary-abolition regression)"
+    elif printf '%s' "$PLUS_BULLET" | grep -qF "primary issue"; then
+        fail "W6a: >=2 branch bullet must not contain 'primary issue' (primary-abolition regression)"
     else
-        fail "W6a: no '2+' marker found in SKILL.md"
+        pass "W6a: >=2 branch bullet contains neither 'AskUserQuestion' nor 'primary issue'"
     fi
 fi
 assert_absent_local "$WORKFLOW_INIT_MD" "pick one" \
     "W6b: 'pick one' (old narrowing behavior) is absent from SKILL.md"
+assert_absent_local "$WORKFLOW_INIT_MD" "confirm-primary.sh" \
+    "W6c: confirm-primary.sh is absent from workflow-init SKILL.md"
 
-# W7: Path A section documents multi-issue closes_issues (ISSUES[1+] present).
+# W7: Path A section documents all-N symmetric handling (ISSUES[@] present).
 if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "W7: Path A multi-issue documentation (file not found)"
+    fail "W7: Path A all-N documentation (file not found)"
 else
     PATH_A_W7=$(awk '/^#### Path A/{in_a=1;next} in_a{if(/^#### /){exit}print}' "$WORKFLOW_INIT_MD")
-    if printf '%s' "$PATH_A_W7" | grep -qF 'ISSUES[1+]'; then
-        pass "W7: Path A documents multi-issue closes_issues (ISSUES[1+] present)"
+    if printf '%s' "$PATH_A_W7" | grep -qF 'ISSUES[@]'; then
+        pass "W7: Path A documents all-N handling via ISSUES[@]"
     else
-        fail "W7: Path A missing multi-issue documentation (ISSUES[1+] not found)"
+        fail "W7: Path A missing all-N documentation (ISSUES[@] not found)"
     fi
 fi
 
