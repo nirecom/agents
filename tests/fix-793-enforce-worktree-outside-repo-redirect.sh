@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-793-enforce-worktree-outside-repo-redirect.sh
-# Tests: hooks/lib/bash-write-targets.js
-# Tags: worktree, enforce, hook, redirect, shell-expansion
+# Tests: hooks/lib/bash-write-targets.js, hooks/lib/bash-write-targets/redirect.js, hooks/lib/bash-write-targets/tee.js, hooks/lib/bash-write-targets/helpers.js
+# Tags: worktree, enforce, hook, redirect, shell-expansion, fix-983, fix-878
 #
 # Unit + integration tests for issue #793: extractRedirectTargets must
 # expand a safe, static subset of shell tokens ($HOME, ${HOME}, ~,
@@ -239,6 +239,157 @@ test_security_mixed_expansion_pins() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# V-series: Approach C — generic env var expansion constrained to plans-dir
+# (#983 / #878). A "$<VAR>"-prefixed target whose env value resolves UNDER
+# WORKFLOW_PLANS_DIR may be expanded. If the value is outside plans-dir,
+# the var is unset, or the resulting path escapes via "..", the expansion
+# must fail-closed (null).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Call extractRedirectTargets with multiple env vars: WORKFLOW_PLANS_DIR + extras.
+# extra_env is a single string of KEY=VALUE pairs (space-separated) or empty.
+call_redirect_with_envs() {
+    local wpd="$1" extra_env="$2" cmd="$3"
+    if command -v timeout >/dev/null 2>&1; then
+        MSYS_NO_PATHCONV=1 WORKFLOW_PLANS_DIR="$wpd" env $extra_env timeout 30 node -e "
+          try {
+            const m = require('$MODULE');
+            const r = m.extractRedirectTargets(process.argv[1]);
+            console.log(JSON.stringify(r));
+          } catch (e) { console.log('ERROR: ' + e.message); }
+        " -- "$cmd" 2>/dev/null
+    else
+        MSYS_NO_PATHCONV=1 WORKFLOW_PLANS_DIR="$wpd" env $extra_env node -e "
+          try {
+            const m = require('$MODULE');
+            const r = m.extractRedirectTargets(process.argv[1]);
+            console.log(JSON.stringify(r));
+          } catch (e) { console.log('ERROR: ' + e.message); }
+        " -- "$cmd" 2>/dev/null
+    fi
+}
+
+# Call extractTeeTargets with WORKFLOW_PLANS_DIR + extras.
+call_tee_with_envs() {
+    local wpd="$1" extra_env="$2" cmd="$3"
+    if command -v timeout >/dev/null 2>&1; then
+        MSYS_NO_PATHCONV=1 WORKFLOW_PLANS_DIR="$wpd" env $extra_env timeout 30 node -e "
+          try {
+            const m = require('$MODULE');
+            const r = m.extractTeeTargets(process.argv[1]);
+            console.log(JSON.stringify(r));
+          } catch (e) { console.log('ERROR: ' + e.message); }
+        " -- "$cmd" 2>/dev/null
+    else
+        MSYS_NO_PATHCONV=1 WORKFLOW_PLANS_DIR="$wpd" env $extra_env node -e "
+          try {
+            const m = require('$MODULE');
+            const r = m.extractTeeTargets(process.argv[1]);
+            console.log(JSON.stringify(r));
+          } catch (e) { console.log('ERROR: ' + e.message); }
+        " -- "$cmd" 2>/dev/null
+    fi
+}
+
+# Call extractTeeTargets with no extra env (literal/static cases only).
+call_tee() {
+    if command -v timeout >/dev/null 2>&1; then
+        MSYS_NO_PATHCONV=1 timeout 30 node -e "
+          try {
+            const m = require('$MODULE');
+            const r = m.extractTeeTargets(process.argv[1]);
+            console.log(JSON.stringify(r));
+          } catch (e) { console.log('ERROR: ' + e.message); }
+        " -- "$1" 2>/dev/null
+    else
+        MSYS_NO_PATHCONV=1 node -e "
+          try {
+            const m = require('$MODULE');
+            const r = m.extractTeeTargets(process.argv[1]);
+            console.log(JSON.stringify(r));
+          } catch (e) { console.log('ERROR: ' + e.message); }
+        " -- "$1" 2>/dev/null
+    fi
+}
+
+# Use /c/test-plans as a fake plans dir for V cases (matches existing Case 7 style).
+V_PLANS_DIR='/c/test-plans'
+
+test_V1_state_path_double_quoted() {
+    # V1: "$STATE_PATH" → env value points inside plans dir → expanded.
+    assert_fn_result 'V1: "$STATE_PATH" → plans-dir → expanded' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "STATE_PATH=$V_PLANS_DIR/state.json" \
+            'printf x > "$STATE_PATH"')" \
+        '["/c/test-plans/state.json"]'
+}
+
+test_V2_state_file_dot_suffix() {
+    # V2: "$STATE_FILE.tmp" — identifier followed by `.` (C1 fix).
+    assert_fn_result 'V2: "$STATE_FILE.tmp" → plans-dir with suffix → expanded' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "STATE_FILE=$V_PLANS_DIR/state.json" \
+            'printf x > "$STATE_FILE.tmp"')" \
+        '["/c/test-plans/state.json.tmp"]'
+}
+
+test_V3_brace_form_lower() {
+    # V3: "${state_path}" brace form, lowercase identifier — also accepted.
+    assert_fn_result 'V3: "${state_path}" brace form → expanded' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "state_path=$V_PLANS_DIR/state.json" \
+            'printf x > "${state_path}"')" \
+        '["/c/test-plans/state.json"]'
+}
+
+test_V4_outside_plans_dir() {
+    # V4: env value resolves OUTSIDE plans dir → null (fail-closed).
+    assert_fn_result 'V4: "$STATE_PATH" → outside plans-dir → null' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "STATE_PATH=/tmp/elsewhere.json" \
+            'printf x > "$STATE_PATH"')" \
+        'null'
+}
+
+test_V5_unset_envvar() {
+    # V5: env var unset → null (fail-closed, Case 9 preserved for unknown vars).
+    # Make sure UNKNOWN_ENVVAR_XYZ_983 is not in the environment.
+    assert_fn_result 'V5: "$UNKNOWN_ENVVAR_XYZ_983" unset → null' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "" \
+            'printf x > "$UNKNOWN_ENVVAR_XYZ_983"')" \
+        'null'
+}
+
+test_V6_path_traversal() {
+    # V6: "$STATE_PATH/../../outside" — STATE_PATH is one level deep, so two ".."
+    # escapes above plans-dir → null (path-traversal blocked, C2).
+    assert_fn_result 'V6: "$STATE_PATH/../../outside" → path-traversal → null' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "STATE_PATH=$V_PLANS_DIR/sub" \
+            'printf x > "$STATE_PATH/../../outside"')" \
+        'null'
+}
+
+test_V7_tee_double_quoted_envvar() {
+    # V7: tee "$state_path" → tee target extracted (symmetric tee fix, C3).
+    assert_fn_result 'V7: tee "$state_path" → plans-dir → expanded' \
+        "$(call_tee_with_envs "$V_PLANS_DIR" "state_path=$V_PLANS_DIR/state.json" \
+            'tee "$state_path"')" \
+        '["/c/test-plans/state.json"]'
+}
+
+test_V8_tee_single_quoted_literal() {
+    # V8: tee '$state_path' single-quoted → POSIX literal (single-quote contract).
+    assert_fn_result "V8: tee '\$state_path' single-quoted → literal" \
+        "$(call_tee "tee '\$state_path'")" \
+        '["$state_path"]'
+}
+
+test_V_security_path_traversal_etc_passwd() {
+    # Security: "$STATE_PATH/../../../etc/passwd" — must fail-closed even when
+    # STATE_PATH resolves inside plans dir.
+    assert_fn_result 'V-security: "$STATE_PATH/../../../etc/passwd" → null (path-traversal)' \
+        "$(call_redirect_with_envs "$V_PLANS_DIR" "STATE_PATH=$V_PLANS_DIR/state.json" \
+            'printf x > "$STATE_PATH/../../../etc/passwd"')" \
+        'null'
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -254,6 +405,15 @@ test_unknown_var_unquoted
 test_midpath_home_no_expansion
 test_security_mixed_expansion_pins
 test_integration_outside_repo_redirect_allowed
+test_V1_state_path_double_quoted
+test_V2_state_file_dot_suffix
+test_V3_brace_form_lower
+test_V4_outside_plans_dir
+test_V5_unset_envvar
+test_V6_path_traversal
+test_V7_tee_double_quoted_envvar
+test_V8_tee_single_quoted_literal
+test_V_security_path_traversal_etc_passwd
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
