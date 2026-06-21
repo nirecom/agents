@@ -2,7 +2,7 @@
 "use strict";
 
 const { writeLayer2State, confirmFinding, dropFindings, incrementL2RetryCount } = require("../hooks/lib/supervisor-state-writer");
-const { SEVERITY_VALUES, L2_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
+const { SEVERITY_VALUES, L2_PHASE_VALUES, L2_ELIGIBLE_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -19,8 +19,9 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--confirm-finding-ids",
   "--drop-finding-ids",
   "--set-l2-phase",
+  "--set-l2-eligible-phase",
 ]);
-const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at", "--increment-l2-retry-count"]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at", "--increment-l2-retry-count", "--mark-findings-surfaced"]);
 
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-layer2] ERROR: ${msg}`);
@@ -32,7 +33,8 @@ function usage(msg) {
     " --finding-detail <text> --finding-reporter <name>" +
     " [--finding-status <draft|confirmed>]]" +
     " [--confirm-finding-ids <csv>] [--drop-finding-ids <csv>]" +
-    " [--set-l2-phase <pending|done|frozen>]"
+    " [--set-l2-phase <pending|done|frozen>]" +
+    " [--mark-findings-surfaced] [--set-l2-eligible-phase <post_final_report_window|null>]"
   );
   process.exit(1);
 }
@@ -66,6 +68,8 @@ const hasSetL2Phase = "set-l2-phase" in args;
 const hasFindingStatus = "finding-status" in args;
 const hasConfirmIds = "confirm-finding-ids" in args;
 const hasDropIds = "drop-finding-ids" in args;
+const hasMarkFindingsSurfaced = flags.has("--mark-findings-surfaced");
+const hasSetL2EligiblePhase = "set-l2-eligible-phase" in args;
 
 const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
 const findingPresent = findingKeys.filter((k) => k in args);
@@ -108,7 +112,7 @@ const hasIncrementRetry = flags.has("--increment-l2-retry-count");
 
 if (hasIncrementRetry) {
   const hasOtherMutating = hasL2ArmedAt || hasClearL2ArmedAt || hasLastRunAt || hasCumulativeSeverity ||
-    hasSetL2Phase || hasAnyFinding || hasConfirmIds || hasDropIds;
+    hasSetL2Phase || hasAnyFinding || hasConfirmIds || hasDropIds || hasMarkFindingsSurfaced || hasSetL2EligiblePhase;
   if (hasOtherMutating) {
     usage("--increment-l2-retry-count is mutually exclusive with other mutating flags");
   }
@@ -117,7 +121,7 @@ if (hasIncrementRetry) {
   process.exit(0);
 }
 
-if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase && !hasConfirmIds && !hasDropIds) {
+if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetL2EligiblePhase) {
   usage("at least one mutating flag required");
 }
 
@@ -143,6 +147,19 @@ if (hasSetL2Phase) {
   if (!["pending", "done", "frozen"].includes(raw)) usage("--set-l2-phase must be one of pending|done|frozen");
   patch.l2_phase = raw;
   if (patch.l2_phase === "done") patch.l2_retry_count = 0;
+}
+
+if (hasMarkFindingsSurfaced) patch.findings_surfaced_at = new Date().toISOString();
+
+if (hasSetL2EligiblePhase) {
+  const raw = args["set-l2-eligible-phase"];
+  if (raw === "null") {
+    patch.l2_eligible_phase = null;
+  } else if (L2_ELIGIBLE_PHASE_VALUES.includes(raw)) {
+    patch.l2_eligible_phase = raw;
+  } else {
+    usage(`--set-l2-eligible-phase must be one of ${L2_ELIGIBLE_PHASE_VALUES.filter(v => v !== null).join("|")}|null`);
+  }
 }
 
 if (hasAllFindings) {
