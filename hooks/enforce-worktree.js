@@ -40,7 +40,7 @@ const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkflowPlansDirWrite } = require("./enforce-worktree/main-worktree-allows");
-const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
+const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 
 function readStdin() {
   try {
@@ -311,9 +311,10 @@ if (toolName === "Bash") {
       // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
       if (!hasCommandSequencing(cmd)) {
         // Bug 2: all targets resolve outside session scope (incl. non-git paths) → allow.
-        // Guard: only fast-allow when we're inside a git repo; non-git CWD must fall
-        // through to Change ④ (fail-closed for Bash).
-        if (repoRoot && areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) done();
+        // Non-git CWD (#878): allow when all targets are provably under plans-dir;
+        // arbitrary external paths (e.g. /tmp/x) remain fail-closed.
+        if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
+            (repoRoot || areAllBashTargetsUnderPlansDir(targets))) done();
 
         // Bug 1: all targets covered by EXCLUDE → allow.
         if (excludePatterns.length > 0 &&
