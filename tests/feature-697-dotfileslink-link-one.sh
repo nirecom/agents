@@ -8,13 +8,6 @@
 # - real Windows junction collisions (cmd.exe dir /AL detection path)
 # - real shell-startup interaction (profile-snippet.sh sourced under a live ~/.bashrc)
 # Closest-to-action mitigation: install/uninstall smoke run on native Windows after install.ps1 changes.
-#
-# Notes on pending-implementation cases:
-# - t_rollback_when_ln_fails and t_old_bak_preserved_until_ln_succeeds verify the
-#   transactional _link_one rollback semantics planned for WF-CODE-5. They will FAIL
-#   until that change lands; failure here is EXPECTED (do not skip).
-# - t_watchlist_includes_all_siblings asserts the extended profile-snippet.sh
-#   watchlist (skills/rules/agents) planned for WF-CODE-5. Will FAIL until updated.
 
 set -u
 
@@ -167,10 +160,10 @@ t_backup_when_regular_file_present() {
 }
 
 # -------------------------------------------------------------------
-# [error] t_rollback_when_ln_fails (PENDING — requires WF-CODE-5)
+# [error] t_rollback_when_ln_fails
 # -------------------------------------------------------------------
 t_rollback_when_ln_fails() {
-    local name="t_rollback_when_ln_fails (pending implementation)"
+    local name="t_rollback_when_ln_fails"
     reset_home
     local marker="PRESERVE_ME_$$"
     printf '%s\n' "$marker" > "$HOME/.claude/CLAUDE.md"
@@ -217,10 +210,10 @@ STUB
 }
 
 # -------------------------------------------------------------------
-# [edge] t_old_bak_preserved_until_ln_succeeds (PENDING)
+# [edge] t_old_bak_preserved_until_ln_succeeds
 # -------------------------------------------------------------------
 t_old_bak_preserved_until_ln_succeeds() {
-    local name="t_old_bak_preserved_until_ln_succeeds (pending implementation)"
+    local name="t_old_bak_preserved_until_ln_succeeds"
     reset_home
     printf 'new content\n' > "$HOME/.claude/CLAUDE.md"
     printf 'old bak content\n' > "$HOME/.claude/CLAUDE.md.bak"
@@ -251,10 +244,10 @@ STUB
 }
 
 # -------------------------------------------------------------------
-# [static] t_watchlist_includes_all_siblings (PENDING)
+# [static] t_watchlist_includes_all_siblings
 # -------------------------------------------------------------------
 t_watchlist_includes_all_siblings() {
-    local name="t_watchlist_includes_all_siblings (pending implementation)"
+    local name="t_watchlist_includes_all_siblings"
     if [ ! -f "$PROFILE_SH" ]; then
         fail "$name (profile-snippet.sh not found at $PROFILE_SH)"
         return

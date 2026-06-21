@@ -49,7 +49,10 @@ _link_one() {
         printf "${C_YELLOW}Relinking: %s${C_RESET}\n" "$dest"
         _old_target="$cur"
         _rollback="restore-symlink"
-        rm -f "$dest"
+        if ! rm -f "$dest"; then
+            printf "${C_YELLOW}Failed to remove existing symlink: %s${C_RESET}\n" "$dest" >&2
+            return 1
+        fi
     elif [ -e "$dest" ]; then
         local _is_jct=0
         if [ "$_dl_is_windows" = "1" ] && [ -d "$dest" ] && command -v cmd.exe >/dev/null 2>&1; then
@@ -68,13 +71,24 @@ _link_one() {
                 printf "${C_GRAY}Junction already correct: %s${C_RESET}\n" "$dest"; return 0
             fi
             printf "${C_YELLOW}Removing junction: %s${C_RESET}\n" "$dest"
-            rmdir "$dest" 2>/dev/null || rm -rf "$dest"
+            if ! rmdir "$dest" 2>/dev/null; then
+                if cmd.exe //c "dir /AL \"$_wpar\"" 2>/dev/null \
+                        | grep -qE "(<JUNCTION>|<SYMLINKD>)[[:space:]]+$_base_re( |$)"; then
+                    rm -rf "$dest" || { printf "${C_YELLOW}Failed to remove junction: %s${C_RESET}\n" "$dest" >&2; return 1; }
+                else
+                    printf "${C_YELLOW}Refused rm -rf: %s no longer detected as junction${C_RESET}\n" "$dest" >&2
+                    return 1
+                fi
+            fi
             # Junction rollback is best-effort; original target is not reliably captured.
         else
             _bak="${dest}.bak"
             _tmp_bak="${dest}.bak.tmp.$$"
             printf "${C_YELLOW}Backing up: %s -> %s${C_RESET}\n" "$dest" "$_bak"
-            mv "$dest" "$_tmp_bak"
+            if ! mv "$dest" "$_tmp_bak"; then
+                printf "${C_YELLOW}Backup failed: %s${C_RESET}\n" "$dest" >&2
+                return 1
+            fi
             _rollback="restore-file"
         fi
     fi
