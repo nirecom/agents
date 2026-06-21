@@ -234,6 +234,21 @@ if (require.main === module) {
         if (fallbackState !== null) {
           effectiveSupervisorStateSessionId = workflowSessionId;
         }
+      } else {
+        // Also fall through when primaryState exists but is unarmed and
+        // the wsid state is armed (e.g. report-writer wrote to wsid file).
+        const primaryArmed =
+          primaryState.layer2 && primaryState.layer2.l2_armed_at;
+        if (primaryArmed == null) {
+          const fallbackState = readState(workflowSessionId);
+          if (
+            fallbackState &&
+            fallbackState.layer2 &&
+            fallbackState.layer2.l2_armed_at != null
+          ) {
+            effectiveSupervisorStateSessionId = workflowSessionId;
+          }
+        }
       }
     }
   } catch (_) {
