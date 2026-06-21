@@ -31,7 +31,7 @@ Runs after Pre-flight, before Phase 1. Detects mid-workflow context to surface
 adjacent-issue awareness to the user. Informational-only — never aborts the skill.
 Phase 1 runs unconditionally regardless of gate outcome.
 
-1. Resolve session intent:
+IC-1. Resolve session intent:
    ```bash
    PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
                  || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
@@ -40,13 +40,13 @@ Phase 1 runs unconditionally regardless of gate outcome.
    ```
    Skip gate silently when `SESSION_ID` is empty or `INTENT_MD` does not exist.
 
-2. Parse `closes_issues` (pass path as script argument — never use `node -e`):
+IC-2. Parse `closes_issues` (pass path as script argument — never use `node -e`):
    ```bash
    CLOSES=$(node "$AGENTS_CONFIG_DIR/bin/parse-closes-issues" "$INTENT_MD" 2>/dev/null || echo "[]")
    ```
    If `CLOSES` is `[]` or empty: skip gate silently, proceed to Phase 1.
 
-3. When `CLOSES` is non-empty, emit a notice:
+IC-3. When `CLOSES` is non-empty, emit a notice:
    - **Interactive:** "The new issue will NOT be added to the current session's
      `closes_issues` (#N, ...). It will require a separate session. Alternatively,
      write to `<worktree>/WORKTREE_NOTES.md` as a fallback — see `CLAUDE.md`
@@ -109,12 +109,12 @@ Still zero across all three passes → verdict `none`, jump to Phase 4.
 
 No match → verdict `none`.
 
-**Verdict Rubric** — apply in order before choosing a verdict:
-1. **Symptom match** (weight: high): does the candidate describe the same observable failure/behavior? Same symptom + same scope → `reopen` or `duplicate` class.
-2. **Scope overlap** (weight: high): does the candidate's scope substantially overlap the new report's scope? No overlap → class is at most `sibling`.
-3. **Age is a tie-break only**: a closed issue from 2 years ago with identical symptoms outranks a recent open issue with partial overlap. Do not discard candidates based on age alone.
-4. **Tie-break order** (when rules 1–2 yield equal weight): closed candidates > open candidates; more recent > older; lower issue number > higher (stable sort).
-5. **No verdict**: if no candidate matches on both rules 1 and 2, verdict is `none`.
+IC-4. Apply the Verdict Rubric — apply in order before choosing a verdict:
+IC-4a. **Symptom match** (weight: high): does the candidate describe the same observable failure/behavior? Same symptom + same scope → `reopen` or `duplicate` class.
+IC-4b. **Scope overlap** (weight: high): does the candidate's scope substantially overlap the new report's scope? No overlap → class is at most `sibling`.
+IC-4c. **Age is a tie-break only**: a closed issue from 2 years ago with identical symptoms outranks a recent open issue with partial overlap. Do not discard candidates based on age alone.
+IC-4d. **Tie-break order** (when rules IC-4a–IC-4b yield equal weight): closed candidates > open candidates; more recent > older; lower issue number > higher (stable sort).
+IC-4e. **No verdict**: if no candidate matches on both rules IC-4a and IC-4b, verdict is `none`.
 
 ### Phase 3 — Confirm
 

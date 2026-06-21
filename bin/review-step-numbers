@@ -44,10 +44,9 @@ EXCLUDES=(
   --glob '!docs/history/**'
   --glob '!CHANGELOG.md'
   --glob '!rules/docs/history.md'
-  # Tier 2 — test fixtures + rule self-exclusion + known-deferred
+  # Tier 2 — test fixtures + rule self-exclusion
   --glob '!tests/**'
   --glob '!rules/prompt.md'                  # §4 quotes the forbidden patterns
-  --glob '!skills/survey-history/SKILL.md'   # known-deferred per #966 (Step 2.5 L41,L134)
   # Tier 3 — the lint script itself
   --glob '!bin/review-step-numbers'
 )
@@ -153,7 +152,7 @@ CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGE
 # Apply tier exclusions to the diff file list
 TARGETS=$(printf '%s\n' "$CHANGED" | grep -v \
     -e '^docs/history\.md$' -e '^docs/history/' -e '^CHANGELOG\.md$' -e '^rules/docs/history\.md$' \
-    -e '^tests/' -e '^rules/prompt\.md$' -e '^skills/survey-history/SKILL\.md$' \
+    -e '^tests/' -e '^rules/prompt\.md$' \
     -e '^bin/review-step-numbers$' \
     2>/dev/null || true)
 
