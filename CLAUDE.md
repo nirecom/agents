@@ -40,6 +40,7 @@ WF-CODE-6. **Run tests & Security review** — Run all in parallel (single respo
    - Bash: `review-env-example --base <merge-base>` for .env.example comment-style check
    - Bash: `review-step-numbers --base <merge-base>` for decimal step-label lint
    - Bash: `review-e2e-coverage --base <merge-base>` for hook E2E coverage soft-warn
+   - Bash: `review-bare-python --base <merge-base>` for bare python3/python in .sh files
 WF-CODE-7. **Docs** — Run `/update-docs`. Mandatory.
 WF-CODE-8. **User verification:**
    - **`ENFORCE_WORKTREE=on`:** No action here — proceed to WF-CODE-9. **Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` here.** Emission is deferred to `/worktree-end` Step WE-8.
