@@ -25,7 +25,7 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 Regex `#\d+`:
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. `AskUserQuestion` "Which is the primary issue for this session?" — one branch per issue ("#<N> (first — recommended)" for index 0, "#<M>" for others). Then `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/confirm-primary.sh" "<selected_N>" "<PLANS_DIR>/<session-id>-issue-prefill.md" "${ISSUES[@]}"` — outputs reordered numbers (primary first) and appends mutex marker to prefill.md (Path B; no-op when file absent). Assign stdout to `ISSUES[]`; all entries become `closes_issues` (confirmed order). Use `ISSUES[0]` for WI-4..WI-8.
+- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
 
 ### Step WI-4 — Session ID + fetch issues
 
@@ -76,11 +76,11 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 ### Step WI-12 — Path-specific steps
 
 #### Path A — intent:clarified
-- A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (primary `- #<N>: <title>           # primary (index 0)`, related each `- #<M>: <title>           # related`), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Primary `<title>` from WI-4's `gh issue view`. For related (ISSUES[1+]): `gh issue view <M> --json title --jq .title`; fetch failure → `- #<M>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
-- A1.5. **Related-issue label + board-card parity.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` (primary first, related as remaining args); export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue including primary it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
-- A2. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
-- A3. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
-- A4. Invoke `make-outline-plan` (surveys already complete via WI-9).
+- A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+- A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
+- A3. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
+- A4. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
+- A5. Invoke `make-outline-plan` (surveys already complete via WI-9).
 
 #### Path B — issue exists, no intent:clarified
 - B1. Write `<PLANS_DIR>/<session-id>-issue-prefill.md` with `<!-- Issue #<N> seed for clarify-intent. Confirm framing, do not start from scratch. -->`, `# Issue #<N>: <title>`, `<body>`.
