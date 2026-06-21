@@ -4,6 +4,9 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
+const PRIORITY3_DAYS_BACK = 2;
+const CONTEXT_READ_CAP_BYTES = 16384;
+
 function _readSessionIdFromWorktreeNotes(notesPath) {
   try {
     const content = fs.readFileSync(notesPath, "utf8");
@@ -86,17 +89,58 @@ function resolveWorkflowSessionId(_ctx = {}) {
   }
 
   const now = new Date();
-  const todayStr =
-    String(now.getFullYear()) +
-    String(now.getMonth() + 1).padStart(2, "0") +
-    String(now.getDate()).padStart(2, "0");
+  const allowedDateStrs = [];
+  for (let i = 0; i < PRIORITY3_DAYS_BACK; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    allowedDateStrs.push(
+      String(d.getFullYear()) +
+        String(d.getMonth() + 1).padStart(2, "0") +
+        String(d.getDate()).padStart(2, "0")
+    );
+  }
+
+  // Read CC UUID from CLAUDE_ENV_FILE (re-read for Priority 3 bucket-sort tie-break).
+  let ccUuid = "";
+  if (envFile) {
+    try {
+      const content = fs.readFileSync(envFile, "utf8");
+      // Use the LAST match — session-start.js appends on every new session,
+      // so earlier entries are stale CC UUIDs from previous sessions.
+      const all = content.match(/^CLAUDE_SESSION_ID=(.+)$/gm) || [];
+      if (all.length > 0) {
+        const value = all[all.length - 1].replace(/^CLAUDE_SESSION_ID=/, "").trim();
+        if (/^[A-Za-z0-9_-]+$/.test(value)) ccUuid = value;
+      }
+    } catch (_) {
+      ccUuid = "";
+    }
+  }
+
+  function readContextSnippet(prefix) {
+    try {
+      const fd = fs.openSync(path.join(plansDir, prefix + "-context.md"), "r");
+      try {
+        const buf = Buffer.alloc(CONTEXT_READ_CAP_BYTES);
+        const n = fs.readSync(fd, buf, 0, CONTEXT_READ_CAP_BYTES, 0);
+        return buf.slice(0, n).toString("utf8");
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch (_) {
+      return "";
+    }
+  }
 
   const candidates = [];
   for (const entry of entries) {
     if (!entry.endsWith("-context.md")) continue;
     const prefix = entry.slice(0, -"-context.md".length);
     if (!/^[A-Za-z0-9_-]+$/.test(prefix)) continue;
-    if (prefix.length < 8 || prefix.slice(0, 8) !== todayStr) continue;
+    if (prefix.length < 8) continue;
+    const dayPrefix = prefix.slice(0, 8);
+    const dayIndex = allowedDateStrs.indexOf(dayPrefix);
+    if (dayIndex < 0) continue;
     try {
       const mtimeMs = fs.statSync(path.join(plansDir, entry)).mtimeMs;
       let depth = 0;
@@ -106,7 +150,12 @@ function resolveWorkflowSessionId(_ctx = {}) {
       } catch (_) {
         // stat error → fail-open (depth=0)
       }
-      candidates.push({ sid: prefix, mtimeMs, depth });
+      let ccBucket = 1;
+      if (ccUuid) {
+        const snippet = readContextSnippet(prefix);
+        if (snippet && snippet.indexOf(ccUuid) !== -1) ccBucket = 0;
+      }
+      candidates.push({ sid: prefix, mtimeMs, depth, dayIndex, ccBucket });
     } catch (_) {
       // skip unreadable
     }
@@ -114,7 +163,14 @@ function resolveWorkflowSessionId(_ctx = {}) {
 
   if (candidates.length === 0) return null;
 
-  candidates.sort((a, b) => b.depth - a.depth || b.mtimeMs - a.mtimeMs || a.sid.localeCompare(b.sid));
+  candidates.sort(
+    (a, b) =>
+      a.dayIndex - b.dayIndex ||
+      a.ccBucket - b.ccBucket ||
+      b.depth - a.depth ||
+      b.mtimeMs - a.mtimeMs ||
+      a.sid.localeCompare(b.sid)
+  );
   return candidates[0].sid;
 }
 
