@@ -138,11 +138,60 @@ run_t5() {
     fi
 }
 
+run_t_prompt() {
+    require_cli "T-prompt: buildLlmPrompt exports STANDING_INSTRUCTION + <item> envelope" || return
+    if ! command -v node >/dev/null 2>&1; then
+        skip "T-prompt: node missing"
+        return
+    fi
+    local rc out
+    rc=0
+    out=$(cd "$AGENTS_DIR" && run_with_timeout 10 node -e \
+        'const m = require("./bin/scan-offensive"); process.stdout.write(m.buildLlmPrompt("hello body", "test-label"));' 2>&1) || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        fail "T-prompt: node invocation failed rc=$rc; out=$out"
+        return
+    fi
+    # (a) standing instruction substring
+    if ! grep -q "untrusted content scanned" <<< "$out"; then
+        fail "T-prompt(a): output missing 'untrusted content scanned' from STANDING_INSTRUCTION"
+        return
+    fi
+    # (b) <item ...> attributes — keyword-verdict="n/a", source="stdin", and </item> close
+    if ! grep -q '<item ' <<< "$out"; then
+        fail "T-prompt(b): output missing '<item '"
+        return
+    fi
+    if ! grep -q 'keyword-verdict="n/a"' <<< "$out"; then
+        fail "T-prompt(b): output missing keyword-verdict=\"n/a\""
+        return
+    fi
+    if ! grep -q 'source="stdin"' <<< "$out"; then
+        fail "T-prompt(b): output missing source=\"stdin\""
+        return
+    fi
+    if ! grep -q '</item>' <<< "$out"; then
+        fail "T-prompt(b): output missing '</item>'"
+        return
+    fi
+    # (c) length comparison
+    local prompt_len si_len
+    prompt_len=$(printf '%s' "$out" | wc -c)
+    si_len=$(cd "$AGENTS_DIR" && run_with_timeout 10 node -e \
+        'const m = require("./bin/scan-offensive"); process.stdout.write(String(m.STANDING_INSTRUCTION.length));' 2>/dev/null)
+    if [ -z "$si_len" ] || [ "$prompt_len" -le "$si_len" ]; then
+        fail "T-prompt(c): prompt len ($prompt_len) not greater than STANDING_INSTRUCTION len ($si_len)"
+        return
+    fi
+    pass "T-prompt: buildLlmPrompt has standing-instruction + envelope + correct envelope shape"
+}
+
 run_t1
 run_t2
 run_t3
 run_t4
 run_t5
+run_t_prompt
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
