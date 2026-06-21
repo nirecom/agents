@@ -77,13 +77,8 @@ CUTOFF_DAYS=$(( STALE_MONTHS * 30 ))
 CUTOFF_DATE=""
 if date -d "${CUTOFF_DAYS} days ago" +%Y-%m-%d >/dev/null 2>&1; then
   CUTOFF_DATE="$(date -d "${CUTOFF_DAYS} days ago" +%Y-%m-%d)"
-elif command -v python3 >/dev/null 2>&1; then
-  CUTOFF_DATE="$(python3 -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=${CUTOFF_DAYS})).isoformat())")"
-elif command -v python >/dev/null 2>&1; then
-  CUTOFF_DATE="$(python -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=${CUTOFF_DAYS})).isoformat())")"
 else
-  echo "ERROR: cannot compute cutoff date (no usable date -d or python)" >&2
-  exit 2
+  CUTOFF_DATE="$(uv run python -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=${CUTOFF_DAYS})).isoformat())")"
 fi
 
 TODAY="$(date +%Y-%m-%d)"
