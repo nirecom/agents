@@ -30,7 +30,7 @@ those instead of running Step 0.
 
 Canonical documentation: skills/_shared/resolve-plans-dir.md.
 
-1. **Input and issue number resolution:**
+SH-1. **Input and issue number resolution:**
    Input precedence (read whichever exists first):
      (a) `<PLANS_DIR>/<session-id>-intent.md` — preferred (post-clarify-intent calls)
      (b) `<PLANS_DIR>/<session-id>-context.md` — fallback (pre-clarify-intent calls
@@ -38,29 +38,29 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
    Issue number N:
    - From intent.md: extract from `## Issues` section (canonical parser: `hooks/lib/parse-closes-issues.js`).
    - From context.md: read `issue-number` from `## Session metadata`.
-   - If N is `(none)`, absent, or non-integer → proceed in **keyword-only mode** (Step 2.5).
+   - If N is `(none)`, absent, or non-integer → proceed in **keyword-only mode** (Step SH-3).
 
-2.5 **Keyword-only mode** (no issue number available):
+SH-2. Run: `gh issue view <N> --json createdAt --jq .createdAt`
+   - On success: record `openedAt` (ISO-8601 date string).
+   - On failure (gh unavailable, auth error, etc.): record "gh unavailable — using
+     approximate date" and continue; set `openedAt` to 90 days ago as a conservative fallback.
+
+SH-3. **Keyword-only mode** (no issue number available):
     Output header MUST include: `**DEGRADED MODE** — no issue context; results are best-effort`
-    - Skip Step 2 (gh issue view) — no issue = no reliable issue data.
+    - Skip Step SH-2 (gh issue view) — no issue = no reliable issue data.
     - Skip `gh pr list` — no issue context means PR filter is unreliable.
     - Use `--since='1 year ago'` for git log scope (avoids unbounded history scan).
     - Source keywords from context.md `## Keywords` section if present;
       otherwise extract from `## User initial prompt` inline (≥4 chars, stop-words excluded).
       When initial keyword search returns zero results, extract 3–5 symptom-level tokens from `## User initial prompt` or issue body text (behaviors, affected outputs/artifacts, feature area — including artifact/file names that represent the affected feature) and retry once.
-    - Run Step 3a and 3b only (git log + history docs); skip Step 3c (gh pr list).
+    - Run Step SH-4a and SH-4b only (git log + history docs); skip Step SH-4c (gh pr list).
     - All claims produced in this mode get `verdict: indeterminate`
       (never `holds` or `contradicted` — insufficient evidence without issue context).
     - Rationale: without issue context, gh pr list has no filter; git log needs a date cap;
       verdicts require traceable evidence.
-    After writing the artifact (Step 5), stop. Do NOT invoke make-outline-plan.
+    After writing the artifact (Step SH-6), stop. Do NOT invoke make-outline-plan.
 
-2. Run: `gh issue view <N> --json createdAt --jq .createdAt`
-   - On success: record `openedAt` (ISO-8601 date string).
-   - On failure (gh unavailable, auth error, etc.): record "gh unavailable — using
-     approximate date" and continue; set `openedAt` to 90 days ago as a conservative fallback.
-
-3. Run the following three investigations in parallel:
+SH-4. Run the following three investigations in parallel:
 
    a. **Git log since issue opened:**
       `git log --since=<openedAt> --pretty=format:"%h %ad %s" --date=short`
@@ -76,13 +76,13 @@ Canonical documentation: skills/_shared/resolve-plans-dir.md.
       `gh pr list --state merged --search "merged:>=<openedAt>" --limit 20 --json number,title,mergedAt`
       On gh failure: record "gh pr list unavailable" and continue.
 
-4. **Relevance scoring:**
+SH-5. **Relevance scoring:**
    Extract keywords from intent.md Background/Motivation and Scope (≥4 characters,
    excluding stop words: the, and, for, with, that, this, from, into, have, been).
    Score each commit/PR subject by keyword match count.
    Keep: score ≥ 1 entries, plus the top 5 by score regardless of threshold.
 
-5. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
+SH-6. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
    ```
    ## Survey history — changes since issue #<N> opened (<openedAt>)
 
@@ -131,6 +131,6 @@ After completing this skill:
 ## Skip conditions
 
 - `closes_issues` absent or empty and no context.md → emit `WORKFLOW_RESEARCH_NOT_NEEDED`
-- No issue number available → use keyword-only mode (Step 2.5); do NOT skip entirely
+- No issue number available → use keyword-only mode (Step SH-3); do NOT skip entirely
 - docs-only or typo task with no behavioral claims → emit
   `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only task — history check not applicable>>"`

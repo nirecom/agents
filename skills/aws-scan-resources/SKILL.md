@@ -8,8 +8,8 @@ context: fork
 
 ## Procedure
 
-1. Verify: aws CLI, AWS_PROFILE, AWS_STATE_DIR.
-2. Enumerate with read-only CLI (pass `--profile $AWS_PROFILE --region $AWS_DEFAULT_REGION` on every call):
+ASR-1. Verify: aws CLI, AWS_PROFILE, AWS_STATE_DIR.
+ASR-2. Enumerate with read-only CLI (pass `--profile $AWS_PROFILE --region $AWS_DEFAULT_REGION` on every call):
    - EC2: `aws ec2 describe-instances --query 'Reservations[].Instances[].{id:InstanceId,state:State.Name,type:InstanceType}'`
    - ECS: `aws ecs list-clusters` + `aws ecs list-services --cluster <name>`
    - Lambda: `aws lambda list-functions --query 'Functions[].{name:FunctionName,runtime:Runtime}'`
@@ -18,12 +18,12 @@ context: fork
    - RDS: `aws rds describe-db-instances --query 'DBInstances[].{id:DBInstanceIdentifier,engine:Engine}'`
    - VPC/SG: `aws ec2 describe-vpcs`, `aws ec2 describe-security-groups`
    - IAM: `aws iam list-users`, `aws iam list-roles`, `aws iam list-policies --scope Local`
-3. Write raw data to `$AWS_STATE_DIR/resources-<YYYYMMDD>.json`. Single-region scope.
-4. Write human-readable summary to `$AWS_STATE_DIR/resources-<YYYYMMDD>.md`:
+ASR-3. Write raw data to `$AWS_STATE_DIR/resources-<YYYYMMDD>.json`. Single-region scope.
+ASR-4. Write human-readable summary to `$AWS_STATE_DIR/resources-<YYYYMMDD>.md`:
    - Header: profile, region, scan timestamp
    - Table: resource type | count | notes (e.g. running/stopped for EC2)
    - No ARNs, IDs, or IP addresses.
-5. Print to conversation: resource type → count only (no ARNs, IDs, IPs).
+ASR-5. Print to conversation: resource type → count only (no ARNs, IDs, IPs).
 
 ## Rules
 

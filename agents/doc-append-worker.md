@@ -32,7 +32,7 @@ For `compose` mode, also:
 - `pr_title`: PR title (passed as `--background`)
 - `closes_issues_count`: integer — number of issues this session closes (used by `--closes-issues-count`)
 - `bootstrap_mode`: boolean — optional, default false. When true, the dispatch uses `--bootstrap` instead of `--pr` and `merge_commit` carries the bootstrap commit SHA.
-- `bootstrap_commit_sha`: string — bootstrap commit SHA when `bootstrap_mode=true`. Caller (worktree-end Step 6h) reads this from the env JSON.
+- `bootstrap_commit_sha`: string — bootstrap commit SHA when `bootstrap_mode=true`. Caller (worktree-end Step WE-21) reads this from the env JSON.
 
 ## Procedure
 

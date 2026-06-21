@@ -11,11 +11,11 @@ branches (`main`, `master`, `develop`, `release/*`) are never deleted.
 
 ## Procedure
 
-1. Resolve `$AGENTS_CONFIG_DIR` from the environment; abort with a clear error
+SB-1. Resolve `$AGENTS_CONFIG_DIR` from the environment; abort with a clear error
    if unset.
-2. Invoke the sweeper script (no `--apply` = dry-run):
+SB-2. Invoke the sweeper script (no `--apply` = dry-run):
    `bash "$AGENTS_CONFIG_DIR/bin/sweep-branches.sh" [--apply] [--min-age-hours N] [--ci-mode]`
-3. Print the script's stdout verbatim. Do not summarize or filter.
+SB-3. Print the script's stdout verbatim. Do not summarize or filter.
 
 Forward the user's flags verbatim. Add no flags of your own.
 

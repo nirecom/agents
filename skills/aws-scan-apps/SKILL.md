@@ -8,20 +8,20 @@ context: fork
 
 ## Procedure
 
-1. Verify prerequisites.
-2. Enumerate (pass `--profile $AWS_PROFILE --region $AWS_DEFAULT_REGION`):
+ASA-1. Verify prerequisites.
+ASA-2. Enumerate (pass `--profile $AWS_PROFILE --region $AWS_DEFAULT_REGION`):
    - ECS: list-clusters, list-services, describe-task-definition
    - Lambda: `aws lambda list-functions`
    - ALB/NLB: `aws elbv2 describe-load-balancers`
    - API GW REST: `aws apigateway get-rest-apis`
    - API GW HTTP: `aws apigatewayv2 get-apis`
    - CloudFront: `aws cloudfront list-distributions`
-3. Build topology: entry points (ALB/API GW/CloudFront) → compute (ECS/Lambda).
-4. Write raw data to `$AWS_STATE_DIR/apps-<YYYYMMDD>.json`.
-5. Write human-readable summary to `$AWS_STATE_DIR/apps-<YYYYMMDD>.md`:
+ASA-3. Build topology: entry points (ALB/API GW/CloudFront) → compute (ECS/Lambda).
+ASA-4. Write raw data to `$AWS_STATE_DIR/apps-<YYYYMMDD>.json`.
+ASA-5. Write human-readable summary to `$AWS_STATE_DIR/apps-<YYYYMMDD>.md`:
    - Topology table: entry point type | backend type | count
    - No ARNs, domain names, or IDs
-6. Print: counts by type (no ARNs, domain names, IDs).
+ASA-6. Print: counts by type (no ARNs, domain names, IDs).
 
 ## Rules
 
