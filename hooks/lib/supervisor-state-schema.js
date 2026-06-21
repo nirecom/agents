@@ -19,6 +19,13 @@ const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
 // 2 = guarded fail-fast. One retry permits a transient API error to self-heal; the second consecutive failure freezes the session so the loop cannot continue.
 const L2_RETRY_THRESHOLD = 2;
 
+// L3 (#720) — Layer 3 strategic review.
+const L3_PHASE_VALUES = [null, "pending", "in_progress", "done", "frozen"];
+const L3_VERDICT_VALUES = ["CONTINUE", "WARN", "BLOCK"];
+const L3_RETRY_THRESHOLD = 2;
+// Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers L3 arming.
+const L3_CUMULATIVE_SEVERITY_THRESHOLD = "error";
+
 function createEmptyState(sessionId) {
   const now = new Date().toISOString();
   return {
@@ -28,7 +35,7 @@ function createEmptyState(sessionId) {
     last_updated: now,
     layer1: { findings: [] },
     layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
-    layer3: {},
+    layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
   };
 }
 
@@ -142,6 +149,15 @@ function validate(obj) {
   }
   if (typeof obj.layer3 !== "object" || obj.layer3 === null || Array.isArray(obj.layer3)) {
     errors.push("layer3 must be an object");
+  } else {
+    const l3 = obj.layer3;
+    if ("l3_phase" in l3 && !L3_PHASE_VALUES.includes(l3.l3_phase)) errors.push("layer3.l3_phase must be null, pending, in_progress, done, or frozen");
+    if ("l3_verdict" in l3 && l3.l3_verdict !== null && !L3_VERDICT_VALUES.includes(l3.l3_verdict)) errors.push("layer3.l3_verdict must be null, CONTINUE, WARN, or BLOCK");
+    if ("l3_last_run_at" in l3 && l3.l3_last_run_at !== null && typeof l3.l3_last_run_at !== "string") errors.push("layer3.l3_last_run_at must be null or a string");
+    if ("l3_armed_at" in l3 && l3.l3_armed_at !== null && typeof l3.l3_armed_at !== "string") errors.push("layer3.l3_armed_at must be null or a string");
+    if ("l3_cause" in l3 && l3.l3_cause !== null && typeof l3.l3_cause !== "string") errors.push("layer3.l3_cause must be null or a string");
+    if ("l3_retry_count" in l3 && (!Number.isInteger(l3.l3_retry_count) || l3.l3_retry_count < 0)) errors.push("layer3.l3_retry_count must be a non-negative integer");
+    if ("findings" in l3 && !Array.isArray(l3.findings)) errors.push("layer3.findings must be an array");
   }
   return { ok: errors.length === 0, errors };
 }
@@ -154,6 +170,10 @@ module.exports = {
   L2_ELIGIBLE_PHASE_VALUES,
   SEVERITY_RANK,
   L2_RETRY_THRESHOLD,
+  L3_PHASE_VALUES,
+  L3_VERDICT_VALUES,
+  L3_RETRY_THRESHOLD,
+  L3_CUMULATIVE_SEVERITY_THRESHOLD,
   createEmptyState,
   validate,
   validateFinding,

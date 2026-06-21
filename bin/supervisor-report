@@ -15,7 +15,8 @@ function usage(msg) {
     " --severity <error|warning|notice>" +
     " --detail <text>" +
     " --reporter <name>" +
-    " [--session-id <sid>]"
+    " [--session-id <sid>]" +
+    " [--mirror-session-id <sid>]"
   );
   process.exit(1);
 }
@@ -39,18 +40,22 @@ if (!severity) usage("--severity required");
 if (detail === undefined) usage("--detail required");
 if (!reporter) usage("--reporter required");
 
-// Session-ID resolution: CLI flag → wsid (preferred) → CC UUID fallback → error
+// Session-ID resolution: CLI flag → wsid (preferred) → CC UUID fallback → error.
+// Track which source produced rawSid so the dual-store mirror-write below can
+// resolve the "other" identity when --mirror-session-id is not explicit.
 let rawSid = args["session-id"];
+let rawSidSource = "explicit";
 if (!rawSid) {
   try {
     const wsid = resolveWorkflowSessionId({});
-    if (wsid && SESSION_ID_RE.test(wsid)) rawSid = wsid;
+    if (wsid && SESSION_ID_RE.test(wsid)) { rawSid = wsid; rawSidSource = "wsid"; }
   } catch (_) {
     // fall through to CC UUID
   }
 }
 if (!rawSid) {
   rawSid = resolveSessionId();
+  if (rawSid) rawSidSource = "ccuuid";
 }
 if (!rawSid || !SESSION_ID_RE.test(rawSid)) {
   console.error("Error: --session-id required (could not auto-resolve)");
@@ -65,4 +70,35 @@ if (!ok) {
   console.error("[supervisor-report] ERROR: appendFinding failed (invalid fields or unexpected error)");
   process.exit(1);
 }
+
+// #1021: Identity-agnostic dual-store mirror-write. The cc-uuid <-> wsid pair
+// can both exist for a single session; a finding must land in both stores so
+// downstream readers — supervisor-guard.js (cc-uuid) and stop-final-report
+// (wsid) — see the same data. Failure of the mirror write is non-fatal: the
+// primary write already succeeded, and identity-bridge gaps are best-effort.
+// Mirror only when the session ID was AUTO-RESOLVED (wsid or ccuuid source);
+// explicit --session-id callers control exactly which store to write.
+let mirrorSid = args["mirror-session-id"];
+if (!mirrorSid && rawSidSource !== "explicit") {
+  // No explicit mirror: try to resolve the "other" identity automatically.
+  if (rawSidSource === "wsid") {
+    try {
+      const ccId = resolveSessionId();
+      if (ccId && ccId !== rawSid && SESSION_ID_RE.test(ccId)) mirrorSid = ccId;
+    } catch (_) {}
+  } else if (rawSidSource === "ccuuid") {
+    try {
+      const ws = resolveWorkflowSessionId({});
+      if (ws && ws !== rawSid && SESSION_ID_RE.test(ws)) mirrorSid = ws;
+    } catch (_) {}
+  }
+}
+if (mirrorSid && mirrorSid !== rawSid && SESSION_ID_RE.test(mirrorSid)) {
+  try {
+    appendFinding(mirrorSid, { categories, severity, detail, reporter });
+  } catch (e) {
+    console.error(`[supervisor-report] WARN: mirror-write to ${mirrorSid} failed: ${e && e.message || e}`);
+  }
+}
+
 process.exit(0);
