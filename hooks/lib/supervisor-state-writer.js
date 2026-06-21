@@ -3,11 +3,11 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
-const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES, L2_RETRY_THRESHOLD } = require("./supervisor-state-schema");
+const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES, L2_ELIGIBLE_PHASE_VALUES, L2_RETRY_THRESHOLD } = require("./supervisor-state-schema");
 const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
 const findingStatus = require("./supervisor-finding-status");
 
-const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase", "l2_cause", "l2_retry_count"]);
+const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase", "l2_cause", "l2_retry_count", "findings_surfaced_at", "l2_eligible_phase"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -81,7 +81,10 @@ function ensureLayer2Scheduled(state, sessionId) {
 
     for (const sid of candidates) {
       try {
-        if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) return;
+        if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) {
+          // Anchor present: skip normal-run arm UNLESS late-phase eligibility is set (#997)
+          if (state.layer2.l2_eligible_phase !== "post_final_report_window") return;
+        }
       } catch (_) {}
     }
   }
@@ -223,6 +226,8 @@ function writeLayer2State(sessionId, patch) {
   if ("cumulative_severity" in patch && patch.cumulative_severity !== null && !SEVERITY_VALUES.includes(patch.cumulative_severity)) return false;
   if ("l2_phase" in patch && !L2_PHASE_VALUES.includes(patch.l2_phase)) return false;
   if ("l2_cause" in patch && patch.l2_cause !== null && typeof patch.l2_cause !== "string") return false;
+  if ("findings_surfaced_at" in patch && patch.findings_surfaced_at !== null && typeof patch.findings_surfaced_at !== "string") return false;
+  if ("l2_eligible_phase" in patch && !L2_ELIGIBLE_PHASE_VALUES.includes(patch.l2_eligible_phase)) return false;
 
   // Validate findings
   if ("findings" in patch) {
@@ -262,6 +267,8 @@ function writeLayer2State(sessionId, patch) {
     l2_phase: null,
     l2_cause: null,
     l2_retry_count: 0,
+    findings_surfaced_at: null,
+    l2_eligible_phase: null,
     ...existing,
   };
 
@@ -277,6 +284,8 @@ function writeLayer2State(sessionId, patch) {
     layer2.l2_cause = null;
   }
   if ("l2_retry_count" in patch) layer2.l2_retry_count = patch.l2_retry_count;
+  if ("findings_surfaced_at" in patch) layer2.findings_surfaced_at = patch.findings_surfaced_at;
+  if ("l2_eligible_phase" in patch) layer2.l2_eligible_phase = patch.l2_eligible_phase;
 
   // #905: terminal states must never carry a stale l2_armed_at.
   if (effectivePhase === "done" || effectivePhase === "frozen") {
