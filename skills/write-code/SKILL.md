@@ -11,18 +11,18 @@ Edit source code for the current task.
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
 
-1. Read `rules/core-principles.md` and the target files identified from the plan.
+WCD-1. Read `rules/core-principles.md` and the target files identified from the plan.
 
-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then check via Bash:
+WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: path + change intent). Then check via Bash:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
-   - stdout `OFF`: proceed to step 3.
+   - stdout `OFF`: proceed to step WCD-3.
    - stdout `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-3. Read `skills/_shared/judge-task-complexity.md`. Emit in Claude text output (NOT Bash echo):
+WCD-3. Read `skills/_shared/judge-task-complexity.md`. Emit in Claude text output (NOT Bash echo):
    > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
-4. **Launch subagent** (`Agent` tool, `mode: "default"`, model = verdict from step 3) with a prompt containing:
-   - Target files and planned edit summary from step 2.
+WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, model = verdict from step WCD-3) with a prompt containing:
+   - Target files and planned edit summary from step WCD-2.
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding/<lang>.md` before the first Edit for each language present."
    - Lint/typecheck recipe table (see below).
@@ -31,9 +31,9 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
    - Scope-expansion policy: if editing reveals additional files not in the original list need changes, include them in the final summary with a reason. Do NOT prompt mid-edit; do NOT silently expand scope.
    - Prohibitions: no diffs shown in the conversation; no mid-edit confirmation prompts.
 
-5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
+WCD-5. Parse the subagent summary. Surface tool output on failure. Collect all `check skipped` notes and scope-expansion notes.
 
-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
+WCD-6. Present the final edited file list + skipped-check notes + scope-expansion notes to the user — gated by **CONFIRM_CODE gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_CODE on'`
    - stdout `OFF`: skip this step; proceed (no user wait).
    - stdout `ON` or `ERROR`: present the file list and notes.

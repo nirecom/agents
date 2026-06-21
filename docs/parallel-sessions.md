@@ -153,14 +153,14 @@ ENFORCE_WORKTREE=off   # trivial one-liner; re-enable immediately after
 
 **What happens automatically:**
 - `/commit-push` runs the probe before pushing. On `empty-repo` it returns `status: bootstrap_pending` and tells the user to run `/worktree-end`. No push, no PR, no user-verified sentinel.
-- `/worktree-end` Step 2.0 re-runs the probe (because the remote may have been bootstrapped externally between the two calls). On `empty-repo` it routes to Step 2b, which calls `skills/worktree-end/scripts/bootstrap-complete.sh`. That script:
+- `/worktree-end` Step WE-4 re-runs the probe (because the remote may have been bootstrapped externally between the two calls). On `empty-repo` it routes to Step WE-4b, which calls `skills/worktree-end/scripts/bootstrap-complete.sh`. That script:
   1. Re-probes once more (refuses to push if the remote is no longer empty).
   2. `git push -u origin <branch>:main`.
   3. `gh repo edit --default-branch main` (warn-only).
   4. Prints JSON with the bootstrap commit SHA and `default_branch_set` flag.
-- Step 2b then emits `<<WORKFLOW_USER_VERIFIED: bootstrap initial commit pushed to main>>` and proceeds to Step 5 (inventory) and Step 6 (cleanup). Steps 3 and 4 (PR resolution and merge) are skipped — there is no PR.
-- `capture-env.sh` (Step 5.5) takes a `BOOTSTRAP_MODE=1` shortcut: it skips the `gh pr view` / `mergeCommit` retry and synthesizes `PR_STATE="BOOTSTRAP"`, `MERGE_SHA=<bootstrap commit SHA>`, empty `PR_NUMBER`/`PR_URL`.
-- Step 6h (compose-doc-append) reads `BOOTSTRAP_MODE` from the env JSON and dispatches `compose-doc-append-entry --bootstrap --merge-commit <sha>` instead of `--pr <N>`. The resulting `docs/history.md` and `CHANGELOG.md` entries use `bootstrap initial commit, <sha-short>` instead of `(PR #N)`.
+- Step WE-4b then emits `<<WORKFLOW_USER_VERIFIED: bootstrap initial commit pushed to main>>` and proceeds to Step WE-9 (inventory) and Step WE-15 (cleanup). Steps WE-5 through WE-8 (PR resolution and merge) are skipped — there is no PR.
+- `capture-env.sh` (Step WE-12) takes a `BOOTSTRAP_MODE=1` shortcut: it skips the `gh pr view` / `mergeCommit` retry and synthesizes `PR_STATE="BOOTSTRAP"`, `MERGE_SHA=<bootstrap commit SHA>`, empty `PR_NUMBER`/`PR_URL`.
+- Step WE-21 (compose-doc-append) reads `BOOTSTRAP_MODE` from the env JSON and dispatches `compose-doc-append-entry --bootstrap --merge-commit <sha>` instead of `--pr <N>`. The resulting `docs/history.md` and `CHANGELOG.md` entries use `bootstrap initial commit, <sha-short>` instead of `(PR #N)`.
 
 **What the user sees:**
 - In `/commit-push`: "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push."

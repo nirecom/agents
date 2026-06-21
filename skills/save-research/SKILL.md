@@ -11,14 +11,14 @@ Save research findings from the current conversation to a persistent research-re
 
 ## Procedure
 
-1. **Identify findings**: Review the current conversation for research results worth preserving.
+SR-1. **Identify findings**: Review the current conversation for research results worth preserving.
    If no research has been conducted yet, tell the user and stop.
-2. **Determine filename**: Use the argument as the filename slug (kebab-case `.md`).
+SR-2. **Determine filename**: Use the argument as the filename slug (kebab-case `.md`).
    If no argument was given, derive a slug from the research topic.
-3. **Check for duplicates**: Read `../ai-specs/projects/engineering/research-results/`
+SR-3. **Check for duplicates**: Read `../ai-specs/projects/engineering/research-results/`
    to see if a file on the same topic already exists.
    - If it exists, propose updating the existing file instead of creating a new one.
-4. **Draft the document** in chat using this template:
+SR-4. **Draft the document** in chat using this template:
 
    ```
    # <Title>
@@ -50,12 +50,12 @@ Save research findings from the current conversation to a persistent research-re
    <actionable conclusion with numbered rationale>
    ```
 
-5. **Wait for user approval** before writing the file.
-6. **Write the file** to `../ai-specs/projects/engineering/research-results/<slug>.md`.
-7. **Commit**: Run `git -C ../ai-specs add` and `git -C ../ai-specs commit` for the new file.
+SR-5. **Wait for user approval** before writing the file.
+SR-6. **Write the file** to `../ai-specs/projects/engineering/research-results/<slug>.md`.
+SR-7. **Commit**: Run `git -C ../ai-specs add` and `git -C ../ai-specs commit` for the new file.
    This commit is to a separate repository (ai-specs). It is NOT the main project commit
    and must NOT trigger USER_VERIFIED or advance the calling workflow step.
-8. **Return to caller**: After the commit, explicitly state which workflow step to resume
+SR-8. **Return to caller**: After the commit, explicitly state which workflow step to resume
    (e.g., "save-research complete. Resuming Step 2a (research).") and do not mark
    any workflow phase as complete.
 
