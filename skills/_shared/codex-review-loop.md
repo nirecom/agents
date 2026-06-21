@@ -85,6 +85,12 @@ The wrapper internally:
    exists and is non-empty.
 4. Parses status header + verdict.
 
+The hard-cap gate fires **after** the reviewer's verdict is recorded (post-verdict),
+not before the reviewer runs. The reviewer always gets at least one look per
+planner-cap budget: `limit = 1 + cap + extensions_used`. On exit 1
+(NON_APPROVED_VERDICT) the wrapper re-checks the cap and promotes to exit 2
+(`FAILED — round cap reached`) when the budget is exhausted.
+
 ## Exit code → orchestrator action (SSOT) {#exit-code--orchestrator-action-ssot}
 
 | Exit | Meaning | Orchestrator action |
