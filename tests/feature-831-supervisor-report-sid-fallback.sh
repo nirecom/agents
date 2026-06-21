@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-831-supervisor-report-sid-fallback.sh
 # Tests: bin/supervisor-report (session-id auto-resolve fallback chain)
-# Tags: supervisor, em-supervisor, cli, session-id, fallback
+# Tags: supervisor, em-supervisor, cli, session-id, fallback, scope:issue-specific
 # Tests for issue #831 — supervisor-report session-id auto-resolve.
 #
 # Fallback priority order:
@@ -102,10 +102,16 @@ run_s2() {
     require_source "$CLI" "S2: CLAUDE_SESSION_ID env is adopted when flag absent" || return
     local tmp tmp_node
     tmp="$(mktemp -d)"; tmp_node="$(to_node_path "$tmp")"
-    CLAUDE_SESSION_ID="env-sid-s2" \
+    local workdir="$tmp/work"
+    mkdir -p "$workdir"
+    # workdir has no WORKTREE_NOTES.md — prevents wsid Priority 1 resolution
+    (
+        cd "$workdir" && \
+        CLAUDE_SESSION_ID="env-sid-s2" \
         WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
             --categories workflow --severity warning --detail "d" \
             --reporter "r" >/dev/null 2>&1
+    )
     if [ -f "$tmp/env-sid-s2-supervisor-state.json" ]; then
         pass "S2: CLAUDE_SESSION_ID env is adopted when flag absent"
     else
