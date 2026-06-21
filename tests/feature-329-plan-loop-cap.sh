@@ -104,36 +104,38 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2. --cap 2 --extensions-used 2 --max-extensions 2, 4 rows present
-#    → FAILED "absolute ceiling reached"; no codex invocation
+# 2. --cap 2 --extensions-used 2 --max-extensions 2, 4 pre-existing rows.
+#    NEW behavior: pre-review gate removed. limit=1+2+2=5. Codex runs and appends
+#    row 5 → count=5 >= 5 → post-verdict cap fires with "absolute ceiling reached".
 # ---------------------------------------------------------------------------
 LOG_DIR2="$TMPDIR_BASE/log2"
 mkdir -p "$LOG_DIR2"
-# Pre-populate with 4 rows for sess002/detail-plan using the implementation's field names
 ROUND_LOG2="$LOG_DIR2/sess002-plan.jsonl"
 for i in 1 2 3 4; do
     printf '{"session":"sess002","label":"detail-plan","verdict":"X","ts":"t%d","round":%d,"severity_summary":""}\n' "$i" "$i" >> "$ROUND_LOG2"
 done
 
-# Make codex emit something distinctive so we can detect if it ran
-make_mock_codex "SHOULD_NOT_APPEAR"
+# Codex is now expected to run; emit APPROVED for the verdict.
+make_mock_codex "APPROVED"
 
 OUT=$(run_with_log "$LOG_DIR2" "sess002" --cap 2 --extensions-used 2 --max-extensions 2 --no-log)
 
-if echo "$OUT" | grep -q "## Codex Plan Review: FAILED" && echo "$OUT" | grep -qi "absolute ceiling reached"; then
-    pass "ceiling: FAILED with 'absolute ceiling reached'"
+if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+    pass "ceiling: PERFORMED present (codex was invoked — pre-review gate removed)"
 else
-    fail "ceiling: expected FAILED + 'absolute ceiling reached'. Output: $OUT"
+    fail "ceiling: expected PERFORMED before cap. Output: $OUT"
 fi
 
-if echo "$OUT" | grep -q "SHOULD_NOT_APPEAR"; then
-    fail "ceiling: codex was invoked despite ceiling"
+if echo "$OUT" | grep -qi "absolute ceiling reached"; then
+    pass "ceiling: post-verdict cap fires with 'absolute ceiling reached'"
 else
-    pass "ceiling: codex not invoked"
+    fail "ceiling: expected 'absolute ceiling reached'. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
-# 3. --cap 2 --extensions-used 0 --max-extensions 2, 2 rows → "extension available"
+# 3. --cap 2 --extensions-used 0 --max-extensions 2, 2 pre-existing rows.
+#    NEW behavior: limit=1+2+0=3. Codex runs, appends row 3 → count=3 >= 3 →
+#    post-verdict cap fires with "extension available".
 # ---------------------------------------------------------------------------
 LOG_DIR3="$TMPDIR_BASE/log3"
 mkdir -p "$LOG_DIR3"
@@ -146,10 +148,16 @@ make_mock_codex "APPROVED"
 
 OUT=$(run_with_log "$LOG_DIR3" "sess003" --cap 2 --extensions-used 0 --max-extensions 2 --no-log)
 
-if echo "$OUT" | grep -q "## Codex Plan Review: FAILED" && echo "$OUT" | grep -qi "extension available"; then
-    pass "at-limit: FAILED with 'extension available'"
+if echo "$OUT" | grep -q "## Codex Plan Review: PERFORMED"; then
+    pass "at-limit: PERFORMED present (codex invoked before post-verdict cap)"
 else
-    fail "at-limit: expected FAILED + 'extension available'. Output: $OUT"
+    fail "at-limit: expected PERFORMED. Output: $OUT"
+fi
+
+if echo "$OUT" | grep -qi "extension available"; then
+    pass "at-limit: post-verdict cap fires with 'extension available'"
+else
+    fail "at-limit: expected 'extension available'. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
