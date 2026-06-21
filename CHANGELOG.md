@@ -449,4 +449,8 @@ Changes: bin/github-issues/wip-state.sh entrypoint shrunk from 604 to 213 lines;
 
 ### FEATURE: gate-plan-skip-sentinel: add CONFIRM_TESTS=off gate (#1014) (2026-06-21)
 Background: CONFIRM_TESTS=off gate was missing for the WORKFLOW_WRITE_TESTS_NOT_NEEDED sentinel.
-Changes: `CONFIRM_TESTS=off` now also suppresses the `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel permission dialog, in addition to the existing test-file content review gate.
+Changes: `CONFIRM_TESTS=off` now also suppresses the `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel permission dialog, in addition to the existing test-file content review gate.
+
+### FEATURE: PR #1031 (2026-06-21)
+Background: feat(#1027,#961,#997): surface L2 supervisor findings at session close; fix l2_phase stale-pending and late-finding arm
+Changes: Layer 2 supervisor findings (severity >= warning) are now surfaced at session close after the Final Report — non-blocking L2 completions no longer go silent; a Stop hook provides autonomous fallback display when session-close does not run normally (#1027/#961/#997).
