@@ -95,12 +95,21 @@ run_p3() {
 }
 
 run_p4() {
-    require_script "P4: calls bin/scan-offensive --stdin for each item" || return
-    # Must reference bin/scan-offensive or $SCANNER with --stdin somewhere
-    if grep -Eq '(\$SCANNER|scan-offensive).*--stdin' "$SCRIPT"; then
-        pass "P4: calls bin/scan-offensive --stdin"
+    require_script "P4: calls bin/scan-offensive with --stdin AND --skill-mode (flag-order-tolerant)" || return
+    # Must reference bin/scan-offensive or $SCANNER, with both --stdin and --skill-mode
+    # appearing on the same logical scanner invocation (flag order does not matter).
+    local has_stdin=0 has_skill_mode=0
+    if grep -Eq '(\$SCANNER|scan-offensive)[^|;&]*--stdin' "$SCRIPT"; then
+        has_stdin=1
+    fi
+    if grep -Eq -e '(\$SCANNER|scan-offensive)[^|;&]*--skill-mode' "$SCRIPT" \
+       || grep -Eq -e '--skill-mode[^|;&]*(\$SCANNER|scan-offensive)' "$SCRIPT"; then
+        has_skill_mode=1
+    fi
+    if [ "$has_stdin" -eq 1 ] && [ "$has_skill_mode" -eq 1 ]; then
+        pass "P4: scanner invocation includes --stdin and --skill-mode"
     else
-        fail "P4: bin/scan-offensive --stdin invocation not found in $SCRIPT"
+        fail "P4: stdin=$has_stdin skill_mode=$has_skill_mode (both required)"
     fi
 }
 
@@ -113,11 +122,33 @@ run_p5() {
     fi
 }
 
+run_p6() {
+    require_script "P6: scanner invocation uses SCAN_OFFENSIVE_SOURCE_JSON env-var prefix" || return
+    if grep -Eq 'SCAN_OFFENSIVE_SOURCE_JSON=[^[:space:]]+[[:space:]]+(node[[:space:]]+)?(\$SCANNER|scan-offensive|\$\{SCANNER\})' "$SCRIPT"; then
+        pass "P6: SCAN_OFFENSIVE_SOURCE_JSON= prefix present on scanner call"
+    else
+        fail "P6: SCAN_OFFENSIVE_SOURCE_JSON= env-var prefix on scanner not found"
+    fi
+}
+
+run_p7() {
+    require_script "P7: invokes scanner --print-standing-instruction exactly once" || return
+    local count
+    count=$(grep -cE -e '(node[[:space:]]+)?(\$SCANNER|"\$SCANNER"|scan-offensive|\$\{SCANNER\})[^|;&]*--print-standing-instruction' "$SCRIPT")
+    if [ "$count" -eq 1 ]; then
+        pass "P7: --print-standing-instruction invoked exactly once"
+    else
+        fail "P7: --print-standing-instruction invocation count = $count (expected 1)"
+    fi
+}
+
 run_p1
 run_p2
 run_p3
 run_p4
 run_p5
+run_p6
+run_p7
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

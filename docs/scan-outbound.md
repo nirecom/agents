@@ -142,13 +142,15 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 | `claude-global/hooks/lib/is-private-repo.js` | Shared module: dynamic private repo detection via `gh api` |
 | `.private-info-allowlist` | Exception patterns |
 | `.private-info-blocklist` | Additional detection patterns (gitignored, symlinked from private repo) |
+| `bin/scan-offensive` | Offensive content detector: keyword tier + optional LLM tier (forward filter) / `--skill-mode` JSONL manifest (skill path) |
+| `skills/scan-offensive/scripts/scan-repo.sh` | Drives retroactive scan: fetches issues/comments, invokes `bin/scan-offensive --skill-mode`, emits JSONL manifest |
 
 ## Offensive Content Filter
 
 A companion two-tier detector (`bin/scan-offensive`) flags offensive content
 (hate speech, slurs, harassment, profanity) in addition to the private-info scan.
 Tier 1 is a regex blocklist (`.offensive-content-blocklist`); Tier 2 is an
-optional LLM classifier for borderline text.
+optional LLM classifier for borderline text (forward filter only — see below).
 
 | Checkpoint | When | Mode |
 |:---|:---|:---|
@@ -159,11 +161,36 @@ optional LLM classifier for borderline text.
   `.offensive-content-blocklist.example`. When absent, `bin/scan-offensive` runs
   keyword-only with no patterns (clean by default).
   `block-dotenv.js` write-protects it — Claude Code cannot edit it.
-- LLM tier opt-in: requires `ANTHROPIC_API_KEY`. When unset, `bin/scan-offensive`
-  runs keyword-only and emits a stderr warning.
+- **Forward filter LLM tier**: `ANTHROPIC_API_KEY` enables the LLM classifier in
+  `scan-outbound.js`. When unset, the forward filter runs keyword-only with a stderr
+  warning. The `/scan-offensive` skill path does not use an external API — CC
+  evaluates all items inline.
 - Redact behavior: matches are edited to `[redacted by content-scan]`, never deleted.
 - The forward filter runs for **all repos (public and private)**. The private-info
   scan continues to skip private repos.
+
+### Retroactive scan — three-phase procedure
+
+`/scan-offensive` fetches issues and comments via `skills/scan-offensive/scripts/scan-repo.sh`,
+passes each body through `bin/scan-offensive --skill-mode` to produce a JSONL manifest
+(preamble record + one item record per issue/comment body), then CC evaluates each item
+inline against the classification rubric. Each item record's `envelope` field wraps the
+body in a typed XML `<item>` structure with XML-entity escaping and a standing instruction
+that marks the `<content>` region as untrusted data.
+
+Range filters narrow the scan for large repos:
+
+| Flag | Effect |
+|:---|:---|
+| `--since YYYY-MM-DD` | Issues updated on or after this date (server-side) |
+| `--until YYYY-MM-DD` | Issues updated on or before this date (client-side) |
+| `--from-issue N` | Issue numbers ≥ N |
+| `--to-issue N` | Issue numbers ≤ N |
+| `--limit N` | Stop after N issues |
+
+`--apply --manifest-path FILE --confirm-ids ID,...` applies redactions from a previously
+produced manifest. Canary semantics: first confirmed ID is redacted, then the script
+exits 0 so CC can verify before proceeding to remaining IDs (override with `--canary-skip`).
 
 ## Scanner Exit Codes
 
@@ -173,6 +200,7 @@ optional LLM classifier for borderline text.
 | 1 | Hard violation(s) found | Block |
 | 2 | Warn-only — possible match, user confirmation recommended | Ask user (interactive) or auto-block (non-interactive) |
 | 3 | Usage error (invalid arguments) | Block (configuration error) |
+| 5 | STALE — body changed since manifest was generated (`--apply` only) | Abort redaction; re-run scan |
 
 **Migration note**: exit code `2` previously meant "usage error." It was changed to `3`
 to make room for the warn-only exit code. Scripts that invoke `scan-outbound.sh` directly
