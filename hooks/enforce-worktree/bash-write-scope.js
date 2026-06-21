@@ -64,6 +64,32 @@ function areAllBashTargetsOutsideSessionScope(targets, sessionRoots) {
   return true;
 }
 
+// True if all targets are provably under getWorkflowPlansDir().
+// Used to allow out-of-session-scope Bash writes from a non-git CWD (#878):
+// non-git CWD is allowed ONLY when every target is under plans-dir, preserving
+// fail-closed denial for arbitrary /tmp or external paths.
+function areAllBashTargetsUnderPlansDir(targets) {
+  if (!targets || targets.length === 0) return false;
+  try {
+    const nodePath = require("path");
+    const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
+    let plansDir;
+    try { plansDir = getWorkflowPlansDir(); } catch (_) { return false; }
+    if (!plansDir) return false;
+    const normPlans = nodePath.resolve(plansDir).toLowerCase();
+    const isUnder = (t) => {
+      const raw = t.replace(/^["']|["']$/g, ""); // strip surrounding quotes
+      const n = nodePath.resolve(raw).toLowerCase();
+      return n === normPlans ||
+        n.startsWith(normPlans + nodePath.sep) ||
+        n.startsWith(normPlans + "/");
+    };
+    return targets.every(isUnder);
+  } catch (_) {
+    return false; // fail-closed
+  }
+}
+
 // EXCLUDE check for file-target writes and git commit (staged files).
 function isWriteTargetAllExcluded(cmd, targets, repoRoot, patterns) {
   if (!patterns || patterns.length === 0) return false;
@@ -125,6 +151,7 @@ module.exports = {
   isInSessionScope,
   collectBashWriteTargets,
   areAllBashTargetsOutsideSessionScope,
+  areAllBashTargetsUnderPlansDir,
   isWriteTargetAllExcluded,
   isEverySegmentExcluded,
   isGhWriteCommand,
