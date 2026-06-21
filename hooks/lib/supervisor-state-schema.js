@@ -12,6 +12,8 @@ const SEVERITY_VALUES = ["error", "warning", "notice"];
 
 const L2_PHASE_VALUES = [null, "pending", "done", "frozen"];
 
+const L2_ELIGIBLE_PHASE_VALUES = [null, "post_final_report_window"];
+
 const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
 
 // 2 = guarded fail-fast. One retry permits a transient API error to self-heal; the second consecutive failure freezes the session so the loop cannot continue.
@@ -25,7 +27,7 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0 },
+    layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
     layer3: {},
   };
 }
@@ -131,6 +133,12 @@ function validate(obj) {
     if ("l2_phase" in l2 && !L2_PHASE_VALUES.includes(l2.l2_phase)) errors.push("layer2.l2_phase must be null, pending, done, or frozen");
     if ("l2_cause" in l2 && l2.l2_cause !== null && typeof l2.l2_cause !== "string") errors.push("layer2.l2_cause must be null or a string");
     if ("l2_retry_count" in l2 && (!Number.isInteger(l2.l2_retry_count) || l2.l2_retry_count < 0)) errors.push("layer2.l2_retry_count must be a non-negative integer");
+    if ("findings_surfaced_at" in l2 && l2.findings_surfaced_at !== null && typeof l2.findings_surfaced_at !== "string") {
+      errors.push("layer2.findings_surfaced_at must be null or a string");
+    }
+    if ("l2_eligible_phase" in l2 && !L2_ELIGIBLE_PHASE_VALUES.includes(l2.l2_eligible_phase)) {
+      errors.push(`layer2.l2_eligible_phase must be null or "post_final_report_window"`);
+    }
   }
   if (typeof obj.layer3 !== "object" || obj.layer3 === null || Array.isArray(obj.layer3)) {
     errors.push("layer3 must be an object");
@@ -143,6 +151,7 @@ module.exports = {
   CATEGORIES,
   SEVERITY_VALUES,
   L2_PHASE_VALUES,
+  L2_ELIGIBLE_PHASE_VALUES,
   SEVERITY_RANK,
   L2_RETRY_THRESHOLD,
   createEmptyState,

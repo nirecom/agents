@@ -225,6 +225,21 @@ test_S6_session_close_step4_uses_skeleton
 test_S7_renderer_bin_absent
 test_S8_schema_exports_renderSkeleton
 
+# S9 (#1027): SC-7 step present in session-close SKILL.md after SC-6.
+test_S9_session_close_has_sc7() {
+    local f="${AGENTS_DIR}/skills/session-close/SKILL.md"
+    if [ ! -f "$f" ]; then
+        skip "S9_session_close_has_sc7 (skills/session-close/SKILL.md missing)"
+        return
+    fi
+    if grep -q "SC-7" "$f"; then
+        pass "S9_session_close_has_sc7: SC-7 step present (#1027)"
+    else
+        fail "S9_session_close_has_sc7: SC-7 step not found in skills/session-close/SKILL.md"
+    fi
+}
+test_S9_session_close_has_sc7
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "Total: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

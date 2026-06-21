@@ -87,6 +87,8 @@ Build the two lists, then make a single atomic finalize call:
 
 `bin/supervisor-write-layer2 --confirm-finding-ids <csv> --drop-finding-ids <csv> --last-run-at <now-iso> --cumulative-severity <verdict> --clear-l2-armed-at --set-l2-phase done --session-id <sid>`
 
+`--set-l2-phase done` MUST be included in every finalize call; omitting it leaves the session in stale-pending state that SC-5 must repair via heuristic (#961).
+
 `cumulative_severity` is computed from confirmed findings only (after drops).
 
 ### Reporting back
