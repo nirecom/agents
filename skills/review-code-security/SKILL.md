@@ -20,7 +20,7 @@ Use when the implementation touches external input, secrets handling, or third-p
 
 ## Procedure
 
-1-3. **Delegate scan to security-scanner**:
+RCS-1. **Delegate scan to security-scanner**:
    ```
    Agent({ subagent_type: "security-scanner", prompt: JSON.stringify({
      topic: "security review", context: SCAN_TARGET,
