@@ -3,6 +3,7 @@
 
 const { appendFinding } = require("../hooks/lib/supervisor-state-writer");
 const { resolveSessionId } = require("../hooks/lib/workflow-state");
+const { resolveWorkflowSessionId } = require("../hooks/lib/resolve-workflow-session-id");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -38,8 +39,16 @@ if (!severity) usage("--severity required");
 if (detail === undefined) usage("--detail required");
 if (!reporter) usage("--reporter required");
 
-// Session-ID resolution: CLI flag → resolveSessionId() chain → usage error
+// Session-ID resolution: CLI flag → wsid (preferred) → CC UUID fallback → error
 let rawSid = args["session-id"];
+if (!rawSid) {
+  try {
+    const wsid = resolveWorkflowSessionId({});
+    if (wsid && SESSION_ID_RE.test(wsid)) rawSid = wsid;
+  } catch (_) {
+    // fall through to CC UUID
+  }
+}
 if (!rawSid) {
   rawSid = resolveSessionId();
 }

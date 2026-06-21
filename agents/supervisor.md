@@ -14,15 +14,16 @@ You are the EM Supervisor. You are invoked by a Stop-hook block when a C1 sentin
 
 ## Inputs to read
 
-Two distinct identifiers appear in the block-reason:
+Three distinct identifiers appear in the block-reason:
 - `<sid>` — CC session UUID, given as `Session ID: <value>`.
 - `<wsid>` — workflow session ID, given as `Workflow session ID: <value>`.
+- `<effective-state-sid>` — the supervisor state session ID, given as `Effective state session ID: <value>`. **Always use this value (not `<sid>`) for every `bin/supervisor-write-layer2 --session-id <X>` call.** When the block reason omits this line (legacy formatter), fall back to `<sid>`.
 
 Read these inputs:
 - `<plans-dir>/<wsid>-intent.md`
 - `<plans-dir>/<wsid>-outline.md`
 - `<plans-dir>/<wsid>-detail.md`
-- `<plans-dir>/<sid>-supervisor-state.json` (Layer 1 findings — advisory only)
+- `<plans-dir>/<effective-state-sid>-supervisor-state.json` (Layer 1 findings — advisory only)
 - Recent transcript turns
 - Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>`.
 
@@ -57,7 +58,7 @@ Findings flow through three phases: Draft → Adversarial review (Codex) → Adj
 
 For each observation, append a draft finding (keep `l2_phase=pending`; do NOT set `done` yet):
 
-`bin/supervisor-write-layer2 --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --finding-status draft --session-id <sid>`
+`bin/supervisor-write-layer2 --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --finding-status draft --session-id <effective-state-sid>`
 
 Each invocation appends one finding and auto-assigns its `idx`. Multiple invocations are allowed.
 
@@ -85,9 +86,18 @@ For each Codex verdict:
 
 Build the two lists, then make a single atomic finalize call:
 
-`bin/supervisor-write-layer2 --confirm-finding-ids <csv> --drop-finding-ids <csv> --last-run-at <now-iso> --cumulative-severity <verdict> --clear-l2-armed-at --set-l2-phase done --session-id <sid>`
+`bin/supervisor-write-layer2 --confirm-finding-ids <csv> --drop-finding-ids <csv> --last-run-at <now-iso> --cumulative-severity <verdict> --clear-l2-armed-at --set-l2-phase done --session-id <effective-state-sid>`
 
 `cumulative_severity` is computed from confirmed findings only (after drops).
+
+#### Phase 3 post-condition check
+
+After the finalize call, re-read `<plans-dir>/<effective-state-sid>-supervisor-state.json` with the Read tool and verify both `layer2.l2_phase === "done"` and `layer2.l2_armed_at === null`.
+
+If either condition fails:
+1. Run the finalize call once more with the same `--session-id <effective-state-sid>` and the same `--set-l2-phase done --clear-l2-armed-at` flags.
+2. Re-read and re-verify.
+3. If the second attempt still does not yield `l2_phase=done` or `l2_armed_at` remains non-null, run: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity error --detail "Phase 3 finalize did not reach terminal state on <effective-state-sid>; l2_phase=<observed-phase>, l2_armed_at=<observed-armed-at>" --reporter supervisor` and abort.
 
 ### Reporting back
 
@@ -100,7 +110,7 @@ Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
 ### Error acknowledgement and resume path
 
 When the user has acknowledged and resolved a blocking error (cumSev=error), the session is resumable — `l2_phase=frozen` is "resumable suspended", not terminal. Resume protocol:
-1. Set `l2_phase=frozen` to suspend the current block: `bin/supervisor-write-layer2 --set-l2-phase frozen --session-id <sid>`.
+1. Set `l2_phase=frozen` to suspend the current block: `bin/supervisor-write-layer2 --set-l2-phase frozen --session-id <effective-state-sid>`.
 2. New findings appended afterward re-arm Layer 2 when severity > notice (frozen→pending re-arm resets `l2_retry_count`).
 3. The session continues; the supervisor-guard branches for cumSev=error and l2_armed_at no longer block while `l2_phase=frozen`.
 

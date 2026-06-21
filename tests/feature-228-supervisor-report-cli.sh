@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-228-supervisor-report-cli.sh
 # Tests: bin/supervisor-report
-# Tags: supervisor, em-supervisor, cli, report
+# Tags: supervisor, em-supervisor, cli, report, scope:issue-specific
 # Tests for issue #228 — supervisor-report CLI integration tests.
 #
 # Verifies bin/supervisor-report writes findings correctly to supervisor-state.json,
@@ -185,9 +185,20 @@ let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
 # --- R8 ----------------------------------------------------------------------
 run_r8() {
     require_source "$CLI" "R8: missing --session-id exits non-zero" || return
-    run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
-        --categories workflow --severity warning --detail "d" --reporter "r" >/dev/null 2>&1
-    [ $? -ne 0 ] && pass "R8: missing --session-id exits non-zero" \
+    local tmp rc
+    tmp="$(mktemp -d)"
+    local isolated_workdir="$tmp/isolated"
+    mkdir -p "$isolated_workdir"
+    # isolated_workdir has no WORKTREE_NOTES.md — prevents wsid Priority 1 resolution
+    (
+        cd "$isolated_workdir" && \
+        unset CLAUDE_SESSION_ID && \
+        WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$_AGENTS_DIR_NODE/bin/supervisor-report" \
+            --categories workflow --severity warning --detail "d" --reporter "r" >/dev/null 2>&1
+    )
+    rc=$?
+    rm -rf "$tmp"
+    [ "$rc" -ne 0 ] && pass "R8: missing --session-id exits non-zero" \
         || fail "R8: missing --session-id exits non-zero"
 }
 
