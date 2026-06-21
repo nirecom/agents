@@ -4,9 +4,9 @@
 # Tests for hooks/gate-plan-skip-sentinel.js (PreToolUse hook).
 #
 # Behavior contract:
-#   When CONFIRM_OUTLINE=off (or other OFF literal), echo of
-#   <<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>> is auto-approved via
-#   permissionDecision=allow. Same for CONFIRM_DETAIL/DETAIL_NOT_NEEDED.
+#   When CONFIRM_OUTLINE=off, echo of <<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>>
+#   is auto-approved via permissionDecision=allow. Same for CONFIRM_DETAIL/
+#   DETAIL_NOT_NEEDED and CONFIRM_TESTS/WRITE_TESTS_NOT_NEEDED.
 #   All other inputs pass through (empty JSON output → no decision).
 #
 # L3 gap: these tests invoke the hook via direct `node <hook>` calls (L2).
@@ -136,12 +136,44 @@ INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: x>>" && rm /tmp/x
 CONFIRM_OUTLINE=off assert_passthrough \
     "T11. chained command must NOT be auto-allowed" "$INPUT"
 
-echo "=== T12: Malformed input (not valid JSON) → pass-through (fail-open) ==="
+echo "=== T12: WRITE_TESTS_NOT_NEEDED with CONFIRM_TESTS=off → allow ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only change>>"')
+CONFIRM_TESTS=off assert_allow \
+    "T12. WRITE_TESTS_NOT_NEEDED + CONFIRM_TESTS=off → allow" "$INPUT"
+
+echo "=== T13: WRITE_TESTS_NOT_NEEDED with CONFIRM_TESTS=on → pass-through ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only change>>"')
+CONFIRM_TESTS=on assert_passthrough \
+    "T13. CONFIRM_TESTS=on → pass-through" "$INPUT"
+
+echo "=== T14: WRITE_TESTS_NOT_NEEDED with CONFIRM_TESTS=\"\" (empty string) → pass-through (fail-safe to ON) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only change>>"')
+# Isolate from parent .env (load-env.js treats "" as unset, so .env wins otherwise)
+_T14_ENV=$(mktemp -d)
+CONFIRM_TESTS="" AGENTS_CONFIG_DIR="$_T14_ENV" assert_passthrough \
+    "T14. CONFIRM_TESTS=\"\" (empty) → pass-through (fail-safe to ON)" "$INPUT"
+rmdir "$_T14_ENV" 2>/dev/null || true
+
+echo "=== T14b: WRITE_TESTS_NOT_NEEDED with CONFIRM_TESTS unset → pass-through ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: docs-only change>>"')
+# Isolate from parent .env so unset truly means unset
+_T14B_ENV=$(mktemp -d)
+unset CONFIRM_TESTS 2>/dev/null || true
+AGENTS_CONFIG_DIR="$_T14B_ENV" assert_passthrough \
+    "T14b. CONFIRM_TESTS unset → pass-through" "$INPUT"
+rmdir "$_T14B_ENV" 2>/dev/null || true
+
+echo "=== T15: WRITE_TESTS chained + CONFIRM_TESTS=off → pass-through ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: x>>" && rm /tmp/x')
+CONFIRM_TESTS=off assert_passthrough \
+    "T15. chained command must NOT be auto-allowed" "$INPUT"
+
+echo "=== T16: Malformed input (not valid JSON) → pass-through (fail-open) ==="
 OUT=$(echo "not json {{{" | run_with_timeout node "$(to_node_path "$GATE_HOOK")" 2>/dev/null || true)
 if [ -z "$OUT" ] || [ "$OUT" = "{}" ] || ! echo "$OUT" | grep -q '"permissionDecision"'; then
-    pass "T12. malformed JSON → pass-through (fail-open)"
+    pass "T16. malformed JSON → pass-through (fail-open)"
 else
-    fail "T12. expected pass-through on malformed stdin, got: $OUT"
+    fail "T16. expected pass-through on malformed stdin, got: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
