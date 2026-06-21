@@ -443,3 +443,10 @@ Changes: All 32 SKILL.md files now carry globally unique step labels (`CP-1.`, `
 ### FEATURE: PR #1022 (2026-06-21)
 Background: fix(#962): move cap gate post-verdict in codex review loop
 Changes: After a planner revises a draft in response to reviewer concerns, the revised draft now always reaches the reviewer for a confirmation check — previously it was silently skipped when the review count hit the cap before the confirmation round could fire.
+### REFACTOR: split bin/github-issues/wip-state.sh into wip-state/ sibling folder (2026-06-21)
+Background: bin/github-issues/wip-state.sh reached 604 lines — a HARD limit violation per rules/coding/file-split.md. Applied Pattern A split; no user-visible behavior change.
+Changes: bin/github-issues/wip-state.sh entrypoint shrunk from 604 to 213 lines; verb logic extracted to 5 sourced subfiles under bin/github-issues/wip-state/. CLI interface unchanged.
+
+### FEATURE: gate-plan-skip-sentinel: add CONFIRM_TESTS=off gate (#1014) (2026-06-21)
+Background: CONFIRM_TESTS=off gate was missing for the WORKFLOW_WRITE_TESTS_NOT_NEEDED sentinel.
+Changes: `CONFIRM_TESTS=off` now also suppresses the `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel permission dialog, in addition to the existing test-file content review gate.
