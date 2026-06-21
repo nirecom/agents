@@ -453,4 +453,8 @@ Changes: `CONFIRM_TESTS=off` now also suppresses the `WORKFLOW_WRITE_TESTS_NOT_N
 
 ### FEATURE: PR #1031 (2026-06-21)
 Background: feat(#1027,#961,#997): surface L2 supervisor findings at session close; fix l2_phase stale-pending and late-finding arm
-Changes: Layer 2 supervisor findings (severity >= warning) are now surfaced at session close after the Final Report — non-blocking L2 completions no longer go silent; a Stop hook provides autonomous fallback display when session-close does not run normally (#1027/#961/#997).
+Changes: Layer 2 supervisor findings (severity >= warning) are now surfaced at session close after the Final Report — non-blocking L2 completions no longer go silent; a Stop hook provides autonomous fallback display when session-close does not run normally (#1027/#961/#997).
+
+### FEATURE: PR #1033 (2026-06-21)
+Background: feat(#990/#1010/#1011): add /scan-offensive skill — JSONL manifest, inline CC evaluation, prompt injection protection
+Changes: `/scan-offensive` skill now scans **all** issues and comments retroactively and emits a JSONL manifest; Claude evaluates each item inline with XML-entity-escaped content envelopes guarding against prompt injection — no external API key required on the skill path.;`bin/scan-offensive --skill-mode` new flag: produces JSONL manifest (preamble + per-item records with keyword verdicts, SHA-256 content hashes, and injection-safe envelopes) for all items regardless of keyword hits.;`scan-repo.sh` range filters: `--since`/`--until` (date), `--from-issue`/`--to-issue` (issue number), `--limit N` — batch large repos without scanning everything in one pass.;`scan-repo.sh --apply`: redact confirmed items from a previous manifest; stale-check (SHA-256) exits 5 if the body changed; canary mode redacts the first item and pauses for confirmation.
