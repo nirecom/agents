@@ -11,7 +11,16 @@ export AGENTS_DIR="$_agents_root"
 
 _agent_broken=0
 for _f in "$HOME/.claude/CLAUDE.md" "$HOME/.claude/skills" "$HOME/.claude/rules" "$HOME/.claude/agents"; do
-    if [ -e "$_f" ] && [ ! -L "$_f" ]; then _agent_broken=1; break; fi
+    if [ -L "$_f" ]; then
+        # symlink present — check if target resolves
+        [ ! -e "$_f" ] && { _agent_broken=1; break; }
+    elif [ -e "$_f" ]; then
+        # regular file/dir occupying the slot
+        _agent_broken=1; break
+    else
+        # missing entirely
+        _agent_broken=1; break
+    fi
 done
 if [ "$_agent_broken" = "1" ]; then
     echo "Repairing agents symlink(s)..."
