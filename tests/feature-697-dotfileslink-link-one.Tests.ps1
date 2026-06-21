@@ -20,8 +20,8 @@
 #   on a real $HOME — covered by the bash _link_one rollback test as a proxy)
 # Closest-to-action mitigation: install/uninstall smoke run on native Windows after install.ps1 changes.
 #
-# Pending behaviors (WF-CODE-5 not yet implemented) are marked with Set-ItResult -Skip
-# so they show as skipped in Pester output instead of failing the suite.
+# Some assertions for behaviors implemented under WF-CODE-5 may use Set-ItResult -Skip
+# when source code is not yet updated, so they show as skipped instead of failing.
 
 if ($env:OS -ne "Windows_NT") {
     Write-Host "SKIP: Windows-only test"
@@ -174,7 +174,7 @@ Describe "dotfileslink.ps1 _link_one behavior (static)" {
         }
     }
 
-    Context "Static checks — profile-snippet.ps1 watchlist (pending implementation)" {
+    Context "Static checks — profile-snippet.ps1 watchlist" {
 
         It "profile-snippet.ps1 watchlist includes all four sibling paths" {
             if (-not $script:profileText) {
