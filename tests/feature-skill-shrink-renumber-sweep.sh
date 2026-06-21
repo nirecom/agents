@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/review-step-numbers, skills/workflow-init/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/SKILL.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, skills/session-close/SKILL.md, agents/issue-close-finalize-worker.md
-# Tags: renumber, step-rename, sweep, issue-614, issue-971, scope:issue-specific
+# Tags: renumber, step-rename, sweep, issue-614, issue-971, issue-966, scope:issue-specific
 # Verifies renumber sweep tool exists and new step labels appear in SKILL.md files.
 
 # L3 gap: These tests invoke `bash bin/review-step-numbers` directly in
@@ -428,6 +428,9 @@ if command -v rg >/dev/null 2>&1; then
 else
     pass "R32: rg not in PATH — --all exclusion test skipped"
 fi
+
+# shellcheck source=feature-skill-shrink-renumber-sweep/r33-r57.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-skill-shrink-renumber-sweep/r33-r57.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
