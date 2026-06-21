@@ -6,13 +6,32 @@ $env:AGENTS_DIR        = $AgentsRoot
 
 $_agentSymlinks = @("$HOME\.claude\CLAUDE.md", "$HOME\.claude\skills", "$HOME\.claude\rules", "$HOME\.claude\agents")
 $_agentBroken = $_agentSymlinks | Where-Object {
-    (Test-Path $_) -and -not ((Get-Item $_ -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)
+    $_path = $_
+    $_item = Get-Item -LiteralPath $_path -Force -ErrorAction SilentlyContinue
+    if (-not $_item) {
+        $true
+    } elseif (-not ($_item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        $true
+    } else {
+        $_target = $_item.Target
+        if ($_target -is [array]) { $_target = $_target | Select-Object -First 1 }
+        if ([string]::IsNullOrEmpty($_target)) {
+            $true
+        } else {
+            $_resolved = if ([System.IO.Path]::IsPathRooted($_target)) {
+                $_target
+            } else {
+                Join-Path (Split-Path -Parent $_path) $_target
+            }
+            -not (Test-Path -LiteralPath $_resolved -ErrorAction SilentlyContinue)
+        }
+    }
 }
 if ($_agentBroken) {
     Write-Host "Repairing $($_agentBroken.Count) agents symlink(s)..." -ForegroundColor Yellow
     & "$AgentsRoot\install\win\dotfileslink.ps1"
 }
-Remove-Variable _agentSymlinks, _agentBroken -ErrorAction SilentlyContinue
+Remove-Variable _agentSymlinks, _agentBroken, _path, _item, _target, _resolved -ErrorAction SilentlyContinue
 
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
 $SessionDir = "$HOME\.claude\projects"

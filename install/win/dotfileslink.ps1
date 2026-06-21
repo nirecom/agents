@@ -3,6 +3,8 @@
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+# test affordance — do not set DOTFILESLINK_HOME_OVERRIDE / DOTFILESLINK_SKIP_PRIV_CHECK / DOTFILESLINK_FAIL_AT_INDEX in production
+$EffectiveHome = if ($env:DOTFILESLINK_HOME_OVERRIDE) { $env:DOTFILESLINK_HOME_OVERRIDE } else { $HOME }
 
 $AgentsRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 
@@ -15,8 +17,10 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIde
 $canSymlink = $devMode -or $isAdmin
 
 if (-not $canSymlink) {
-    Write-Warning "Cannot create symlinks: Developer Mode not enabled and not running as Administrator."
-    exit 1
+    if (-not $env:DOTFILESLINK_SKIP_PRIV_CHECK) {
+        Write-Warning "Cannot create symlinks: Developer Mode not enabled and not running as Administrator."
+        exit 1
+    }
 }
 
 function Write-Launcher {
@@ -34,7 +38,7 @@ function Write-Launcher {
 }
 
 # --- ~/.claude/ symlinks ---
-$ClaudeDir = "$HOME\.claude"
+$ClaudeDir = "$EffectiveHome\.claude"
 if (-not (Test-Path $ClaudeDir)) { New-Item -ItemType Directory -Path $ClaudeDir -Force | Out-Null }
 
 $oldCommands = "$ClaudeDir\commands"
@@ -53,15 +57,19 @@ $links = @(
 # Transactional symlink loop. Per-link failure logged + counted; loop continues to next link.
 # Symmetric to install/linux/dotfileslink.sh _link_one contract (rules/core-principles.md §4).
 $linkFailed = 0
+$_failAfterN = if ($env:DOTFILESLINK_FAIL_AT_INDEX -match '^\d+$') { [int]$env:DOTFILESLINK_FAIL_AT_INDEX } else { -1 }
+$_linkIdx = 0
 foreach ($link in $links) {
     $source = Join-Path $AgentsRoot $link.Source
     $dest = $link.Dest
     if (-not (Test-Path $source)) { Write-Warning "Source not found: $source (skipping)"; continue }
     $rollback = "none"   # none | restore-symlink | restore-file
     $oldTarget = $null
+    $oldLinkType = $null
     $backup = "$dest.bak"
     $tmpBackup = "$dest.bak.tmp.$PID"
     $item = Get-Item $dest -Force -ErrorAction SilentlyContinue
+    $oldLinkType = if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $item.LinkType } else { $null }
     if ($item) {
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             $target = $item.Target
@@ -76,13 +84,17 @@ foreach ($link in $links) {
             $rollback = "restore-file"
         }
     }
+    $_curIdx = $_linkIdx; $_linkIdx++
     try {
+        if ($_failAfterN -ge 0 -and $_curIdx -ge $_failAfterN) {
+            throw [System.IO.IOException]::new("DOTFILESLINK_FAIL_AT_INDEX=$_failAfterN test injection at index $_curIdx")
+        }
         New-Item -ItemType SymbolicLink -Path $dest -Target $source -ErrorAction Stop | Out-Null
     } catch {
         switch ($rollback) {
             "restore-symlink" {
-                if ($oldTarget) {
-                    try { New-Item -ItemType SymbolicLink -Path $dest -Target $oldTarget -ErrorAction SilentlyContinue | Out-Null } catch {}
+                if ($oldTarget -and $oldLinkType) {
+                    try { New-Item -ItemType $oldLinkType -Path $dest -Target $oldTarget -ErrorAction SilentlyContinue | Out-Null } catch {}
                 }
             }
             "restore-file" {
@@ -131,16 +143,16 @@ if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCOD
 
 # --- git core.hooksPath ---
 $_hooksPath = "$AgentsRoot\hooks"
-$_currentHooksPath = git config --file "$HOME\.gitconfig" core.hooksPath 2>$null
+$_currentHooksPath = git config --file "$EffectiveHome\.gitconfig" core.hooksPath 2>$null
 if ($_currentHooksPath -eq $_hooksPath) {
     Write-Host "core.hooksPath already set: $_hooksPath" -ForegroundColor DarkGray
 } else {
-    git config --file "$HOME\.gitconfig" core.hooksPath $_hooksPath
+    git config --file "$EffectiveHome\.gitconfig" core.hooksPath $_hooksPath
     Write-Host "core.hooksPath -> $_hooksPath" -ForegroundColor Green
 }
 
 # --- ~/.local/bin/doc-append.cmd launcher ---
-$LocalBin = "$HOME\.local\bin"
+$LocalBin = "$EffectiveHome\.local\bin"
 New-Item -ItemType Directory -Force -Path $LocalBin | Out-Null
 $cmdContent = @"
 @echo off
