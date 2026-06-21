@@ -438,4 +438,8 @@ Changes: Fixed: Microsoft Store popup no longer appears during `/run-tests` on W
 
 ### FEATURE: PR #1019 (2026-06-21)
 Background: feat(#966): add PREFIX-N. step labels to remaining 25 SKILL.md files; fix survey-history SH-3; remove lint exclusion
-Changes: All 32 SKILL.md files now carry globally unique step labels (`CP-1.`, `SH-3.`, `WT-7.`, etc.) — cross-references like "survey-history step 3" are unambiguous. The `survey-history` `Step 2.5` decimal violation and its lint exclusion are resolved.
+Changes: All 32 SKILL.md files now carry globally unique step labels (`CP-1.`, `SH-3.`, `WT-7.`, etc.) — cross-references like "survey-history step 3" are unambiguous. The `survey-history` `Step 2.5` decimal violation and its lint exclusion are resolved.
+
+### FEATURE: PR #1022 (2026-06-21)
+Background: fix(#962): move cap gate post-verdict in codex review loop
+Changes: After a planner revises a draft in response to reviewer concerns, the revised draft now always reaches the reviewer for a confirmation check — previously it was silently skipped when the review count hit the cap before the confirmation round could fire.
