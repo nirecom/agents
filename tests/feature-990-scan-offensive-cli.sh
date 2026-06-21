@@ -263,6 +263,39 @@ run_t12() {
     fi
 }
 
+run_t13() {
+    require_cli "T13: --skill-mode with hard keyword → exit 0; one JSONL line; keyword_verdict==hard" || return
+    if ! command -v jq >/dev/null 2>&1; then
+        skip "T13: --skill-mode (jq missing)"
+        return
+    fi
+    local rc out tmp_bl
+    tmp_bl=$(mktemp)
+    printf '%s\n' "__cli_t13_hard_kw__" > "$tmp_bl"
+    local src_json='{"kind":"issue-body","repo":"o/r","issue":42,"comment_id":null,"url":"https://github.com/o/r/issues/42"}'
+    rc=0
+    out=$(echo "body with __cli_t13_hard_kw__ hit" \
+        | SCAN_OFFENSIVE_BLOCKLIST="$tmp_bl" \
+          SCAN_OFFENSIVE_SOURCE_JSON="$src_json" \
+          run_with_timeout 30 "$CLI" --stdin "t13-skill-hard" --skill-mode 2>/dev/null) || rc=$?
+    rm -f "$tmp_bl"
+    if [ "$rc" -ne 0 ]; then
+        fail "T13: expected rc=0 in --skill-mode (hits do not change exit), got rc=$rc"
+        return
+    fi
+    local nlines
+    nlines=$(printf '%s\n' "$out" | grep -c '.')
+    if [ "$nlines" -ne 1 ]; then
+        fail "T13: expected 1 JSONL line, got $nlines"
+        return
+    fi
+    if ! printf '%s' "$out" | jq -e '.keyword_verdict=="hard"' >/dev/null 2>&1; then
+        fail "T13: keyword_verdict != hard; out=$out"
+        return
+    fi
+    pass "T13: --skill-mode with hard keyword → exit 0, one JSONL line, keyword_verdict==hard"
+}
+
 run_t1
 run_t2
 run_t3
@@ -275,6 +308,7 @@ run_t9
 run_t10
 run_t11
 run_t12
+run_t13
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
