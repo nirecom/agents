@@ -143,14 +143,6 @@ fi
 ROUND_LOG="${EFF_LOG_DIR}/${EFF_SESSION_ID}-plan.jsonl"
 LOOP_LABEL="$FORMAT"
 
-# Hard-cap gate — only enforce when caller supplies an explicit session-id.
-# Without it the session ID is a timestamp that may collide across quick re-runs,
-# making the cap non-deterministic for callers that don't opt into tracking.
-if [[ -n "$ARG_SESSION_ID" ]]; then
-  codex_core_hard_cap_check "$ROUND_LOG" "$EFF_SESSION_ID" "$LOOP_LABEL" \
-    "$CAP" "$EXTENSIONS_USED" "$MAX_EXTENSIONS" || exit 0
-fi
-
 # Read input
 PLAN_CONTENT=$(<"$INPUT")
 INPUT_LINES=$(wc -l < "$INPUT")
@@ -419,6 +411,10 @@ case $codex_exit in
     printf '%s\n' "$CODEX_STDOUT"
     echo "<!-- end-codex-output -->"
     codex_core_log performed "" "$INPUT_LINES"
+    if [[ -n "$ARG_SESSION_ID" ]]; then
+      codex_core_hard_cap_check "$ROUND_LOG" "$EFF_SESSION_ID" "$LOOP_LABEL" \
+        "$CAP" "$EXTENSIONS_USED" "$MAX_EXTENSIONS" || true
+    fi
     ;;
   124)
     log_persist_or_fail "FAILED-timeout" ""
