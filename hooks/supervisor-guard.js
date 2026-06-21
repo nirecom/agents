@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Stop hook: EM Supervisor Layer 2 block gate.
+// Stop hook: EM Supervisor Layer 2/3 block gate.
 // Branch dispatch (evaluated in order):
 //   (1) stop_hook_active=true                    -> exit 0 immediately
+//   (L3-B) l3_phase=done                         -> surface L3 verdict; if BLOCK -> exit 2; else fall through
 //   (C3) WORKTREE_OFF proposal pre-detected      -> increment-retry; if frozen exit 0; else block, exit 2
 //   (2) cumulative_severity=error                -> increment-retry; if frozen exit 0; else block, exit 2
 //   (3) detectSentinelHang || l2ArmedAt          -> increment-retry; if frozen exit 0; else block, exit 2
 //   (4) cumulative_severity warning/notice       -> additionalContext advisory, exit 0
+//   (L3-A) CONFIRM_* sentinel or cumSev>=error   -> arm L3 (write pending); block with agent invocation msg; exit 2
 //   (5) all-null                                 -> exit 0 silently
 //
 // AskUserQuestion gate (#903): when the last assistant turn ends with an
@@ -116,6 +118,24 @@ function detectAskUserQuestionTurn(transcriptPath) {
   return lastToolUse.name === "AskUserQuestion";
 }
 
+// Parses the JSONL transcript into [{role,content}] format for collectL3Candidates.
+function parseTranscriptForL3(transcriptPath) {
+  if (!transcriptPath) return [];
+  let lines;
+  try { lines = fs.readFileSync(transcriptPath, "utf8").split("\n"); } catch (_) { return []; }
+  const result = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry.type === "assistant" && entry.message) {
+        result.push({ role: "assistant", content: entry.message.content || "" });
+      }
+    } catch (_) {}
+  }
+  return result;
+}
+
 // Returns true if a WORKTREE_OFF sentinel was proposed (Bash tool_use) in any
 // assistant turn within the FULL transcript, and no later WORKTREE_ON sentinel
 // followed it. This is the C3 pre-detection used to fire a Layer 2 review on
@@ -183,17 +203,23 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath, incrementL2RetryCount;
+  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath, incrementL2RetryCount, writeLayer3State;
   let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
-    ({ readState, getStatePath, incrementL2RetryCount } = require("./lib/supervisor-state-writer"));
+    ({ readState, getStatePath, incrementL2RetryCount, writeLayer3State } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason } = require("./lib/supervisor-report-format"));
   } catch (_) {
     process.exit(0);
   }
+
+  // L3 modules load separately so a bug in new files doesn't disable the L2 guard.
+  let collectL3CandidatesFn = null;
+  try {
+    ({ collectL3Candidates: collectL3CandidatesFn } = require("./lib/supervisor-guard/collect-l3"));
+  } catch (_) {}
 
   let sessionId = null;
   try {
@@ -275,6 +301,23 @@ if (require.main === module) {
   const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
   const l2Phase = layer2.l2_phase === undefined ? null : layer2.l2_phase;
 
+  // L3 Phase B: surface completed verdict (before L2 branches so L3 BLOCK takes precedence).
+  const layer3 = (state && state.layer3) || {};
+  const l3Phase = layer3.l3_phase === undefined ? null : layer3.l3_phase;
+  if (l3Phase === "done" && writeLayer3State) {
+    const l3Verdict = layer3.l3_verdict;
+    // Consume l3_phase regardless of verdict so it doesn't re-fire.
+    try { writeLayer3State(effectiveSupervisorStateSessionId, { l3_phase: null }); } catch (_) {}
+    if (l3Verdict === "BLOCK") {
+      const l3Reason = layer3.l3_cause || "Layer 3 strategic review: BLOCK verdict.";
+      try {
+        process.stdout.write(JSON.stringify({ decision: "block", reason: l3Reason }) + "\n");
+      } catch (_) {}
+      process.exit(2);
+    }
+    // WARN/CONTINUE: fall through to L2 branches.
+  }
+
   const agentsDir = process.env.AGENTS_CONFIG_DIR || "";
   const supervisorPath = agentsDir
     ? path.join(agentsDir, "agents", "supervisor.md")
@@ -342,6 +385,53 @@ if (require.main === module) {
       process.stdout.write(JSON.stringify({ additionalContext: advisory }) + "\n");
     } catch (_) {}
     process.exit(0);
+  }
+
+  // (L3) Phase A: arm L3 if a trigger fires and it hasn't already run for this cause.
+  if (collectL3CandidatesFn && writeLayer3State && !askUserQuestionTurn) {
+    const activePendingOrRunning = l3Phase === "pending" || l3Phase === "in_progress";
+    if (!activePendingOrRunning && l3Phase !== "frozen") {
+      const transcriptForL3 = parseTranscriptForL3(input.transcript_path || "");
+      let l3Trigger = { shouldArm: false, cause: null };
+      try { l3Trigger = collectL3CandidatesFn(transcriptForL3, state); } catch (_) {}
+      // Dedup: skip if L3 already ran for this exact cause.
+      const lastRunCause = layer3.l3_cause || null;
+      const lastRunAt = layer3.l3_last_run_at || null;
+      const alreadyRanForCause = lastRunAt && l3Trigger.cause && l3Trigger.cause === lastRunCause;
+      // Severity-threshold arm is suppressed when L2 is already done or frozen — L2 already reviewed.
+      const shouldSkipForSeverity = l3Trigger.cause &&
+        l3Trigger.cause.startsWith("severity-threshold") &&
+        (l2Phase === "done" || l2Phase === "frozen");
+      if (l3Trigger.shouldArm && !alreadyRanForCause && !shouldSkipForSeverity) {
+        try {
+          writeLayer3State(effectiveSupervisorStateSessionId, {
+            l3_phase: "pending",
+            l3_armed_at: new Date().toISOString(),
+            l3_cause: l3Trigger.cause || "",
+            l3_retry_count: 0,
+          });
+        } catch (_) {}
+        const l3AgentPath = agentsDir
+          ? path.join(agentsDir, "agents", "supervisor-layer3.md")
+          : "agents/supervisor-layer3.md";
+        const l3ArmReason = [
+          "[EM Supervisor] Layer 3 strategic review triggered.",
+          `Trigger: ${l3Trigger.cause}`,
+          `Session ID: ${effectiveSupervisorStateSessionId}`,
+          `State file: ${stateFilePath}`,
+          "",
+          "Run the Layer 3 strategic review agent (Task tool or Agent tool):",
+          `  Agent file: ${l3AgentPath}`,
+          "",
+          "The agent reads the state file and plan artifacts, then writes a verdict.",
+          "After it completes, continue the workflow — the next Stop event surfaces the result.",
+        ].join("\n");
+        try {
+          process.stdout.write(JSON.stringify({ decision: "block", reason: l3ArmReason }) + "\n");
+        } catch (_) {}
+        process.exit(2);
+      }
+    }
   }
 
   // (5)

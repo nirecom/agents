@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
-const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES, L2_ELIGIBLE_PHASE_VALUES, L2_RETRY_THRESHOLD } = require("./supervisor-state-schema");
+const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES, L2_ELIGIBLE_PHASE_VALUES, L2_RETRY_THRESHOLD, L3_PHASE_VALUES, L3_VERDICT_VALUES, L3_RETRY_THRESHOLD } = require("./supervisor-state-schema");
 const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
 const findingStatus = require("./supervisor-finding-status");
 
@@ -342,6 +342,83 @@ function incrementL2RetryCount(sessionId) {
   return { count: nextCount, frozen: false };
 }
 
+// #720: Layer 3 writer. Symmetric to writeLayer2State — accepts a small patch
+// object, validates each field's type/enum, then merges into state.layer3.
+const LAYER3_PATCH_KEYS = new Set(["l3_phase", "l3_verdict", "l3_last_run_at", "l3_armed_at", "l3_cause", "l3_retry_count", "findings"]);
+
+function writeLayer3State(sessionId, patch) {
+  if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return false;
+
+  for (const k of Object.keys(patch)) {
+    if (!LAYER3_PATCH_KEYS.has(k)) return false;
+  }
+
+  if ("l3_phase" in patch && !L3_PHASE_VALUES.includes(patch.l3_phase)) return false;
+  if ("l3_verdict" in patch && patch.l3_verdict !== null && !L3_VERDICT_VALUES.includes(patch.l3_verdict)) return false;
+  if ("l3_last_run_at" in patch && patch.l3_last_run_at !== null && typeof patch.l3_last_run_at !== "string") return false;
+  if ("l3_armed_at" in patch && patch.l3_armed_at !== null && typeof patch.l3_armed_at !== "string") return false;
+  if ("l3_cause" in patch && patch.l3_cause !== null && typeof patch.l3_cause !== "string") return false;
+  if ("l3_retry_count" in patch && (!Number.isInteger(patch.l3_retry_count) || patch.l3_retry_count < 0)) return false;
+  if ("findings" in patch) {
+    if (!Array.isArray(patch.findings)) return false;
+    for (const f of patch.findings) {
+      const vr = validateFinding(f);
+      if (!vr.ok) return false;
+    }
+  }
+
+  const plansDir = getWorkflowPlansDir();
+  fs.mkdirSync(plansDir, { recursive: true });
+  const filePath = getStatePath(sessionId);
+
+  const state = readStateOrInit(sessionId);
+  if (!state.layer3 || typeof state.layer3 !== "object" || Array.isArray(state.layer3)) {
+    state.layer3 = {};
+  }
+
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === "findings") {
+      if (!Array.isArray(state.layer3.findings)) state.layer3.findings = [];
+      const ts = new Date().toISOString();
+      for (const f of v) state.layer3.findings.push({ ...f, timestamp: ts });
+    } else {
+      state.layer3[k] = v;
+    }
+  }
+  // #912 mirror C-HIGH-3 to L3: setting phase=done resets retry counter at SSOT.
+  if (patch.l3_phase === "done" && !("l3_retry_count" in patch)) {
+    state.layer3.l3_retry_count = 0;
+  }
+  state.last_updated = new Date().toISOString();
+
+  const vr = validate(state);
+  if (!vr.ok) {
+    console.error(`[supervisor-state-writer] writeLayer3State validate failed: ${vr.errors.join("; ")}`);
+    return false;
+  }
+  writeAtomic(filePath, state);
+  return true;
+}
+
+function incrementL3RetryCount(sessionId) {
+  if (!sessionId || !SESSION_ID_RE.test(sessionId)) return { count: 0, frozen: false };
+  const state = readStateOrInit(sessionId);
+  if (!state.layer3 || typeof state.layer3 !== "object" || Array.isArray(state.layer3)) {
+    state.layer3 = {};
+  }
+  const l3 = state.layer3;
+  // Terminal-state short-circuit (symmetric to L2 increment).
+  if (l3.l3_phase === "frozen" || l3.l3_phase === "done") {
+    return { count: l3.l3_retry_count || 0, frozen: l3.l3_phase === "frozen" };
+  }
+  const nextCount = (l3.l3_retry_count || 0) + 1;
+  const patch = { l3_retry_count: nextCount };
+  if (nextCount >= L3_RETRY_THRESHOLD) patch.l3_phase = "frozen";
+  writeLayer3State(sessionId, patch);
+  return { count: nextCount, frozen: nextCount >= L3_RETRY_THRESHOLD };
+}
+
 function mutateLayer2State(sid, mutator) {
   const fp = getStatePath(sid); const state = readStateOrInit(sid); mutator(state);
   state.last_updated = new Date().toISOString();
@@ -353,4 +430,4 @@ const confirmFinding = (sid, idx) => mutateLayer2State(sid, (s) => findingStatus
 const dropFindings = (sid, idxs) => mutateLayer2State(sid, (s) => findingStatus.dropFindings(s, idxs));
 const promotePendingDraftsToConfirmed = (sid) => mutateLayer2State(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
 
-module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, incrementL2RetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed, validateL2PhaseTransition };
+module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, incrementL2RetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed, validateL2PhaseTransition, writeLayer3State, incrementL3RetryCount };

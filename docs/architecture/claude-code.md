@@ -8,12 +8,34 @@
 4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
 5. [settings.json Drift Prevention](#6-settingsjson-drift-prevention) — layered defense: git hooks + session-start backstop
 
-## 5. EM Supervisor (Layers 1–2)
+## 5. EM Supervisor (Layers 1–3)
 
 The EM (Engineering Manager) Supervisor is a three-layer architecture that collects
 observations from skills and agents during a session and triggers automated review
 when findings accumulate.
-Layer 1 (S-1, #228) and Layer 2 (S-2, #719) are implemented; S-3 (#720) is a placeholder.
+Layer 1 (S-1, #228), Layer 2 (S-2, #719), and Layer 3 (S-3, #720) are implemented.
+
+### Layer 3 — Strategic review (S-3, #720)
+
+Layer 3 is an Opus-class strategic review agent (`agents/supervisor-layer3.md`) invoked
+when one of two triggers fires (see `hooks/lib/supervisor-guard/collect-l3.js`):
+(a) **stage boundary** — a `<<WORKFLOW_CONFIRM_{INTENT|OUTLINE|DETAIL}>>` sentinel
+appears in the most recent assistant turn; (b) **severity threshold** —
+`layer2.cumulative_severity` reaches `L3_CUMULATIVE_SEVERITY_THRESHOLD` (`error`).
+
+L3 produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in
+`state.layer3.l3_verdict`, written via `bin/supervisor-write-layer3`. The verdict is
+combined with any concurrent L2 verdict by `hooks/lib/supervisor-guard/arbitrate.js`
+(rule table R0–R8: BLOCK wins, WARN aggregates, otherwise allow) before the Stop hook
+emits a single block-or-allow decision.
+
+**Lifecycle (two-phase):** *arm* — Stop hook detects trigger, writes `l3_phase=pending`
++ `l3_armed_at` + `l3_cause`, then blocks with a prompt to invoke the L3 agent.
+*surface* — the agent runs, writes `l3_phase=done` + `l3_verdict`; the next Stop event
+reads the verdict, surfaces it through `arbitrate()`, then clears `l3_phase=null` so
+the next stage boundary can re-arm. Anti-thrash: `incrementL3RetryCount` auto-freezes
+the session after `L3_RETRY_THRESHOLD` (2) consecutive failures. L2 and L3 freeze
+independently — a frozen L2 does not block L3 arming and vice versa.
 
 **Why:** Layer 1 is a passive observation layer. It does not intervene in the workflow
 or block any action. Three reporting paths feed findings into the state file:
