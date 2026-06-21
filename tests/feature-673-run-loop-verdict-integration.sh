@@ -56,6 +56,11 @@ EOF
       cp "$AGENTS_WORKTREE/bin/review-loop-verdict" "$agents_dir/bin/review-loop-verdict"
       chmod +x "$agents_dir/bin/review-loop-verdict"
     fi
+
+    mkdir -p "$agents_dir/bin/lib"
+    if [[ -f "$AGENTS_WORKTREE/bin/lib/codex-core.sh" ]]; then
+      cp "$AGENTS_WORKTREE/bin/lib/codex-core.sh" "$agents_dir/bin/lib/codex-core.sh"
+    fi
     echo "$agents_dir"
 }
 

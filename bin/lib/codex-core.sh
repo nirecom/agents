@@ -157,12 +157,12 @@ codex_core_round_count() {
 }
 
 # codex_core_hard_cap_check <log> <session> <label> <cap> <extensions_used> <max_extensions>
-# limit = cap + extensions_used. Returns 2 when round_count >= limit.
+# limit = 1 + cap + extensions_used. Returns 2 when round_count >= limit.
 codex_core_hard_cap_check() {
   local log_path="$1" session_id="$2" label="$3" cap="$4" extensions_used="$5" max_extensions="$6"
   local count limit ceiling_note
   count=$(codex_core_round_count "$log_path" "$session_id" "$label")
-  limit=$(( cap + extensions_used ))
+  limit=$(( 1 + cap + extensions_used ))
   if (( count >= limit )); then
     if (( extensions_used >= max_extensions )); then
       ceiling_note="absolute ceiling reached"
