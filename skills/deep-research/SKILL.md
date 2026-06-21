@@ -9,7 +9,7 @@ Investigate external information related to the given task.
 
 ## Procedure
 
-1-3. **Delegate to web-researcher**:
+DR-1. **Delegate to web-researcher**:
    ```
    Agent({ subagent_type: "web-researcher", prompt: JSON.stringify({
      topic: TOPIC, context: CONTEXT,
@@ -18,8 +18,8 @@ Investigate external information related to the given task.
    ```
    On `failed` status: surface summary to user and stop.
 
-4. Read the report from `artifact_path` (one read, at the end).
-5. **Present findings** — output format: `## Deep Research: PERFORMED|FAILED` (1 line) + artifact_path pointer (1 line) + ≤200 char summary. Do not re-emit the full report text in assistant output.
+DR-2. Read the report from `artifact_path` (one read, at the end).
+DR-3. **Present findings** — output format: `## Deep Research: PERFORMED|FAILED` (1 line) + artifact_path pointer (1 line) + ≤200 char summary. Do not re-emit the full report text in assistant output.
 
 ## Rules
 

@@ -52,14 +52,14 @@ condition: sentinel, history entry, or both). Resolve by invoking
 
 ## Procedure
 
-1. **Stage changes with `git add`** — explicitly add each file you intend to commit.
+CP-1. **Stage changes with `git add`** — explicitly add each file you intend to commit.
    Then run `bash "$AGENTS_CONFIG_DIR/bin/check-unstaged-tracked.sh"` from the worktree root.
    rc=1 → list of unstaged tracked files is printed; either `git add` them, `git stash push -u -- <file>`, or pass `--wip` to skip this gate (`git -c workflow.wip=1 commit`).
-   rc=2/3 → surface stderr and abort. Skip this verification when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with workflow-gate.js bypass); also set `wip_mode: true` in the step 2-6 worker JSON to propagate the bypass to Gate 3 (Step 1.5).
+   rc=2/3 → surface stderr and abort. Skip this verification when WORKFLOW_OFF or WORKTREE_OFF session marker is active (parity with workflow-gate.js bypass); also set `wip_mode: true` in the step CP-2 worker JSON to propagate the bypass to the worker's Gate 3 staging-verification step.
 
 After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automatically opens the PR URL in your browser — no explicit `open`/`xdg-open` call is needed.
 
-2-6. **Delegate commit/push/PR to commit-push-worker**:
+CP-2. **Delegate commit/push/PR to commit-push-worker**:
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
    ```
    Agent({ subagent_type: "commit-push-worker", prompt: JSON.stringify({
@@ -75,12 +75,12 @@ After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automat
    ```
    On `staging_incomplete` or `staging_check_failed`: surface summary + artifact_path and stop.
    On `push_failed` or `conflict`: surface summary + artifact_path to user and stop.
-   On `pr_created` or `pr_reused`: extract PR URL from summary for step 7.
-   On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step 7 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step 2b owns that sentinel. Stop.
+   On `pr_created` or `pr_reused`: extract PR URL from summary for step CP-3.
+   On `bootstrap_pending` (issue #772 — remote has no default branch): surface guidance text "Remote has no default branch yet (new repo). Run `/worktree-end` to push the first commit as `main` and set the default branch — this is the bootstrap path, not a normal push." Skip step CP-3 (no merge confirmation; nothing was pushed). Do NOT emit `<<WORKFLOW_USER_VERIFIED>>` — `/worktree-end` Step WE-4b owns that sentinel. Stop.
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
-7. **Merge prompt:**
+CP-3. **Merge prompt:**
 
    Check `ENFORCE_WORKTREE`:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'`
@@ -109,7 +109,7 @@ When invoked with `--wip` (for fixup / intermediate commits between substantive 
 - Do NOT set `workflow.wip` in git config globally — the signal must be scoped to the
   single commit invocation to avoid leakage across commits.
 - Works with `--amend`: `git -c workflow.wip=1 commit --amend ...`.
-- `--wip` mode also skips Gate 3 (Step 1 unstaged-tracked verification + commit-push-worker Step 1.5) and Gate 1 (workflow-gate.js unstaged-tracked check), since `workflow.wip=1` signals intentional partial staging.
+- `--wip` mode also skips Gate 3 (Step CP-1 unstaged-tracked verification + commit-push-worker staging-verification step) and Gate 1 (workflow-gate.js unstaged-tracked check), since `workflow.wip=1` signals intentional partial staging.
 
 See `docs/architecture/claude-code/workflow.md` for the signal contract.
 
@@ -121,6 +121,6 @@ See `docs/architecture/claude-code/workflow.md` for the signal contract.
   Exception: `/worktree-end` when `AUTO_MERGE_PR=on` (worktree mode only).
   In worktree mode this skill defers entirely to `/worktree-end` (Step 7a).
 - Note: `git branch -D` (force-delete) and `--no-verify` are prohibited.
-- `bootstrap_pending` is terminal for `/commit-push` — defer the actual push to `/worktree-end` Step 2b. No PR is created and no user-verified sentinel is emitted in `/commit-push` for this status.
+- `bootstrap_pending` is terminal for `/commit-push` — defer the actual push to `/worktree-end` Step WE-4b. No PR is created and no user-verified sentinel is emitted in `/commit-push` for this status.
 - On fallback or step degradation (push retry, PR reuse, merge deferral): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter commit-push` (session-id auto-resolves).
 - Report observations per rules/supervisor-reporting.md.

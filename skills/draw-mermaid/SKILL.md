@@ -13,15 +13,15 @@ Two modes depending on what's available:
 
 ## Procedure
 
-1. If args are empty, output:
+DM-1. If args are empty, output:
    > No description provided. Usage: `/draw-mermaid <what to diagram>`
 
    and stop.
 
-2. **Check for Gemini CLI:**
+DM-2. **Check for Gemini CLI:**
    Run via Bash: `command -v gemini > /dev/null 2>&1 && echo GEMINI_AVAILABLE || echo GEMINI_ABSENT`
 
-3. **If GEMINI_AVAILABLE** — generate SVG:
+DM-3. **If GEMINI_AVAILABLE** — generate SVG:
    - Determine output path: default `docs/workflow.svg`; use a path from args if specified (e.g. `--output docs/foo.svg`)
    - Run via Bash (single line, no `&&` chaining):
      ```
@@ -31,7 +31,7 @@ Two modes depending on what's available:
      from conversation context if this is an "update" request.
    - Report the output path to the user and suggest embedding as `![diagram](<output-path>)`.
 
-4. **If GEMINI_ABSENT** — generate Mermaid (fallback):
+DM-4. **If GEMINI_ABSENT** — generate Mermaid (fallback):
    - Spawn a subagent (Agent tool, `subagent_type: general-purpose`, `model: sonnet`) with
      a self-contained prompt that includes:
      - The diagram conventions below (copy verbatim into the prompt)

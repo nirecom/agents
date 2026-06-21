@@ -73,20 +73,20 @@ test_3_status_enum_values() {
     fi
 }
 
-# Test 4: worker contains the rules sentence about Step 1.5 skip
+# Test 4: worker contains the rules sentence about Step CP-2 skip
 test_4_rules_skip_sentence() {
     if [ ! -f "$WORKER_MD" ]; then
         fail "4: $WORKER_MD missing"
         return
     fi
-    if grep -qF 'Staging verification (Step 1.5) is skipped only when' "$WORKER_MD"; then
-        pass "4: worker contains 'Staging verification (Step 1.5) is skipped only when'"
+    if grep -qF 'Staging verification (Step CP-2) is skipped only when' "$WORKER_MD"; then
+        pass "4: worker contains 'Staging verification (Step CP-2) is skipped only when'"
     else
-        fail "4: worker missing Step 1.5 skip sentence"
+        fail "4: worker missing Step CP-2 skip sentence"
     fi
 }
 
-# Test 5: skills/commit-push/SKILL.md Step 1 area mentions the CLI literal
+# Test 5: skills/commit-push/SKILL.md Step CP-1 area mentions the CLI literal
 test_5_cp_skill_step1_mentions_cli() {
     if [ ! -f "$CP_SKILL_MD" ]; then
         fail "5: $CP_SKILL_MD missing"
@@ -99,7 +99,7 @@ test_5_cp_skill_step1_mentions_cli() {
     fi
 }
 
-# Test 6: skills/commit-push/SKILL.md step 2-6 block handles staging_incomplete and staging_check_failed
+# Test 6: skills/commit-push/SKILL.md step CP-2 block handles staging_incomplete and staging_check_failed
 test_6_cp_skill_handles_staging_statuses() {
     if [ ! -f "$CP_SKILL_MD" ]; then
         fail "6: $CP_SKILL_MD missing"

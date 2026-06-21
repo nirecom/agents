@@ -13,13 +13,13 @@ git's worktree registry.
 
 ## Procedure
 
-1. Resolve `$AGENTS_CONFIG_DIR` from the environment; abort with a clear error
+SWT-1. Resolve `$AGENTS_CONFIG_DIR` from the environment; abort with a clear error
    if unset.
-2. Invoke the sweeper script (no `--apply` = dry-run):
+SWT-2. Invoke the sweeper script (no `--apply` = dry-run):
    ```
    bash "$AGENTS_CONFIG_DIR/bin/sweep-worktrees.sh" [--apply] [--min-age-hours N] [--ci-mode]
    ```
-3. Print the script's stdout verbatim. Do not summarize or filter.
+SWT-3. Print the script's stdout verbatim. Do not summarize or filter.
 
 Forward the user's flags verbatim. Add no flags of your own.
 
