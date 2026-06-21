@@ -117,12 +117,15 @@ Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `lay
     1. Repair state: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase done --clear-l2-armed-at`
     2. Record audit finding: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "#961 heuristic: l2_phase=pending with last_run_at set — repaired to done" --reporter session-close`
     3. Proceed to SC-6.
-  - `last_run_at === null` (L2 not yet run): emit the gate sentinel and yield — do not emit the Final Report this turn:
+  - `last_run_at === null`:
+    - If `Date.parse(l2_armed_at)` is NaN **or** `(now_ms - Date.parse(l2_armed_at)) > 600000` (10 minutes, the **L2_TIMEOUT_MS** threshold): L2 never fired — elapsed-time fallback. Run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "SC-5 elapsed-time fallback: l2_phase=pending, l2_armed_at=<value>, last_run_at=null, elapsed >10 min (or l2_armed_at unparseable)" --reporter session-close` and proceed to SC-6.
+    - Otherwise: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
     `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
     The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-6.
     Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step SC-4 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step SC-2A). This gate therefore reads a stable value.
 
-- `"pending"` and `l2_armed_at === null` (anomalous state): record a warning via `supervisor-report` and proceed to SC-6.
+- `"pending"` and `l2_armed_at === null` (anomalous state — writer set `l2_phase=pending` without `l2_armed_at`, indicating an interrupted write or upstream writer bug): record an **error** finding via `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity error --detail "SC-5 anomalous state: l2_phase=pending, l2_armed_at=null; supervisor-state snapshot: <one-line JSON of layer2 object>" --reporter session-close` and proceed to SC-6.
+  **No L2 review is promised by this branch.** Because the final-report-env.json anchor (Step SC-2A) has already been written, `ensureLayer2Scheduled` is a no-op (frozen schedule). The finding is recorded for audit trail only.
 
 - `"done"` or `null`: proceed to SC-6. (`null` = L2 was never scheduled this session.)
 

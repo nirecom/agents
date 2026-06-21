@@ -48,6 +48,8 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
     lines.push("Detail: (no findings recorded)");
     lines.push(`Session ID: ${sessionId}`);
     lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+    lines.push(`Effective state session ID: ${sk}`);
+    lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
     for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
     lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
     return lines.join("\n");
@@ -70,6 +72,8 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
   lines.push(`Detail: ${lastDetail}`);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+  lines.push(`Effective state session ID: ${sk}`);
+  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
   return lines.join("\n");
@@ -105,6 +109,8 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+  lines.push(`Effective state session ID: ${sk}`);
+  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
   return lines.join("\n");
 }
 
@@ -116,6 +122,8 @@ function formatWorktreeOffProposalReason(sessionId, workflowSessionId, superviso
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
+  lines.push(`Effective state session ID: ${sk}`);
+  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
   return lines.join("\n");
 }
 
