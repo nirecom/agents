@@ -70,12 +70,9 @@ echo "outside-secret" > "$TMPDIR_BASE/outside-repo/secret"
 # Defensive-hardening fixtures (issue #742)
 # T15 fixture: oversized text file — exactly MAX_FILE_BYTES + 1 = 5*1024*1024+1 bytes
 # Pure ASCII 'A' (no NUL bytes) so binary detection does NOT fire first.
-if python3 -c "import sys; sys.stdout.buffer.write(b'A' * 5242881)" > "$REPO/oversized.txt" 2>/dev/null \
+if uv run python -c "import sys; sys.stdout.buffer.write(b'A' * 5242881)" > "$REPO/oversized.txt" 2>/dev/null \
     && [[ -s "$REPO/oversized.txt" ]]; then
-    :  # python3 created the file successfully
-elif python -c "import sys; sys.stdout.buffer.write(b'A' * 5242881)" > "$REPO/oversized.txt" 2>/dev/null \
-    && [[ -s "$REPO/oversized.txt" ]]; then
-    :  # python2 created the file successfully
+    :  # uv run python created the file successfully
 elif command -v node >/dev/null 2>&1; then
     # node is always available when running mcp-fs-server.js tests
     node -e "require('fs').writeFileSync(process.argv[1], Buffer.alloc(5242881, 65))" -- "$REPO/oversized.txt"
@@ -327,10 +324,10 @@ if command -v jq >/dev/null 2>&1; then
             break
         fi
     done <<< "$SRV_OUT"
-elif command -v python3 >/dev/null 2>&1; then
+elif command -v uv >/dev/null 2>&1; then
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
-        if printf '%s' "$line" | python3 -c 'import json,sys; json.loads(sys.stdin.read())' >/dev/null 2>&1; then
+        if printf '%s' "$line" | uv run python -c 'import json,sys; json.loads(sys.stdin.read())' >/dev/null 2>&1; then
             VALID_JSON=yes
             break
         fi
