@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Bare python3/python detection lint for .sh files.
+# Usage: review-bare-python [--base <ref>] [--all]
+#
+# Forbids bare `python3 -c` / `python -c` invocations in shell scripts.
+# Sanctioned form is `uv run python -c "..."`.
+#
+# Always emits one of:
+#   ## Bare Python Review: PERFORMED
+#   ## Bare Python Review: PERFORMED (all-scan mode)
+#   ## Bare Python Review: SKIPPED — <reason>
+#
+# Exits 1 when any HARD finding in diff mode. --all mode always exits 0.
+
+set -uo pipefail
+
+HARD_HIT=0
+HARD_COUNT=0
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Bare Python Review: SKIPPED — --base requires an argument"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Bare Python Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Exclusion list — files with intentional bare python3/python strings
+# (Store-stub probes, fixture strings inside test JSON / bash -c examples).
+# ---------------------------------------------------------------------------
+EXCLUDED_FILES=(
+  "tests/fix-277-doc-append-merge-union.sh"
+  "tests/enforce-worktree-bash-c-cd-scope.sh"
+  "tests/feature-parallel-sessions-worktree-bash-patterns/basics.sh"
+  "tests/feature-enforce-system-ops.sh"
+  "tests/fix-enforce-worktree-main-cleanup.sh"
+  "tests/fix-992-bare-python.sh"
+)
+
+is_excluded() {
+  local file="$1"
+  local ex
+  for ex in "${EXCLUDED_FILES[@]}"; do
+    if [[ "$file" == "$ex" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Detection pattern: `python` or `python3` followed by `-c "..."` or `-c '...'`,
+# preceded by start-of-line or a non-identifier char (avoids matching e.g.
+# `my-python3 -c`).
+DETECT_RE='(^|[^-_a-zA-Z0-9./])(python3?)[[:space:]]+-c[[:space:]]+["'"'"']'
+
+# Sanctioned form filter: `uv run python -c` (anywhere in the matched line).
+# Uses same non-identifier prefix class as DETECT_RE so $(uv …) is also covered.
+SANCTION_RE='(^|[^-_a-zA-Z0-9])uv[[:space:]]+run[[:space:]]+python3?[[:space:]]+-c'
+
+emit_hard() {
+  local fpath="$1" lineno="$2" match="$3"
+  echo "HARD: $fpath:$lineno: bare python3/python invocation — use 'uv run python -c' instead"
+  echo "  > $match"
+  HARD_HIT=1
+  HARD_COUNT=$((HARD_COUNT + 1))
+}
+
+scan_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  is_excluded "$file" && return 0
+
+  # Collect candidate hits, then filter out lines containing the sanctioned form.
+  local hits
+  hits="$(grep -nE -- "$DETECT_RE" "$file" 2>/dev/null || true)"
+  [[ -z "$hits" ]] && return 0
+
+  local line lineno content
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    lineno="${line%%:*}"
+    content="${line#*:}"
+    # Skip lines where the sanctioned `uv run python -c` form covers the match.
+    if echo "$content" | grep -qE "$SANCTION_RE" 2>/dev/null; then
+      continue
+    fi
+    emit_hard "$file" "$lineno" "$content"
+  done <<< "$hits"
+}
+
+# ---------------------------------------------------------------------------
+# --all scan mode
+# ---------------------------------------------------------------------------
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  echo "## Bare Python Review: PERFORMED (all-scan mode)"
+  echo ""
+  TARGETS="$(git ls-files '*.sh' 2>/dev/null || true)"
+  if [[ -z "$TARGETS" ]]; then
+    echo "No .sh files tracked."
+    exit 0
+  fi
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    scan_file "$f"
+  done <<< "$TARGETS"
+  [[ "$HARD_COUNT" -eq 0 ]] && echo "No bare python3/python invocations found in .sh files."
+  echo ""
+  echo "  Checked: bare 'python3 -c' / 'python -c' in .sh files. Sanctioned form: 'uv run python -c'."
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Diff mode — collect changed .sh files
+# ---------------------------------------------------------------------------
+if ! BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null); then
+  echo "## Bare Python Review: SKIPPED — merge-base unresolved: $BASE_REF"
+  exit 0
+fi
+
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+
+CHANGED=$(git diff --diff-filter=AM --name-only "$BASE_SHA"...HEAD 2>"$ERR" || true)
+if [[ -s "$ERR" ]]; then
+  echo "## Bare Python Review: SKIPPED — git diff failed: $(cat "$ERR")"
+  exit 0
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=AM 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=AM 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+
+TARGETS=$(printf '%s\n' "$CHANGED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" \
+    | sort -u | grep -v '^$' | grep -E '\.sh$' || true)
+
+if [[ -z "$TARGETS" ]]; then
+  echo "## Bare Python Review: SKIPPED — no .sh files changed"
+  exit 0
+fi
+
+echo "## Bare Python Review: PERFORMED"
+echo ""
+COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+echo "Changed .sh files scanned: $COUNT"
+echo ""
+while IFS= read -r file; do
+  scan_file "$file"
+done <<< "$TARGETS"
+
+[[ "$HARD_COUNT" -eq 0 ]] && echo "No bare python3/python invocations found."
+echo ""
+echo "  HARD findings block the workflow (exit 1) in diff mode."
+echo "  Checked: bare 'python3 -c' / 'python -c' in .sh files. Sanctioned form: 'uv run python -c'."
+
+[[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
