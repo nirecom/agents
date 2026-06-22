@@ -48,16 +48,11 @@ Choose exactly one:
 
 ## Output
 
-Write the verdict via the CLI. **When `<wsid>` is available (not `UNAVAILABLE`), prefer omitting `--session-id`** — `bin/supervisor-write-layer3` auto-resolves the wsid from env and mirrors the write to the CC UUID store so both supervisor-guard.js (CC UUID) and downstream readers (wsid) see the verdict:
+Write the verdict via the CLI wrapper — one line, no template to deviate from:
 
-```
-node bin/supervisor-write-layer3 \
-  --set-l3-phase done \
-  --set-l3-verdict <CONTINUE|WARN|BLOCK> \
-  --l3-cause "<short one-line summary of the strategic concern>"
-```
+`node bin/supervisor-write-l3-verdict <CONTINUE|WARN|BLOCK> "<short one-line summary of the strategic concern>"`
 
-Use `--session-id <effective-state-sid>` only for defensive writes that must skip the mirror (e.g. when wsid is `UNAVAILABLE` and you need to pin the store explicitly).
+When wsid is available (not `UNAVAILABLE`), omit `--session-id` — the wrapper auto-resolves wsid from env and mirrors the write to both stores. When wsid is `UNAVAILABLE`, add `--session-id <effective-state-sid>` to pin to a single store.
 
 When the verdict is WARN or BLOCK, also append a finding describing what you observed. Use `bin/supervisor-report` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
 
