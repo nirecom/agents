@@ -9,7 +9,6 @@
 
 const fs = require("fs");
 const { hasCommandHead } = require("./lib/command-head");
-const { INLINE_SKILL_RE } = require("./lib/block-predicates");
 
 function readStdin() {
   const chunks = [];
@@ -60,24 +59,18 @@ if (!hasCommandHead(cmd, isGhIssueClose)) {
   process.exit(0);
 }
 
-// Inline-skill bypass: /issue-close-finalize invokes `gh issue close` with
-// ISSUE_CLOSE_SKILL=1 as an inline env-var prefix (the env var only reaches
-// the gh subprocess, not this hook process). The regex SSOT lives in
-// hooks/lib/block-predicates.js (#885). If /issue-close-finalize ever changes
-// its invocation shape, update the SSOT AND the tests.
-if (INLINE_SKILL_RE.test(cmd)) {
-  process.exit(0);
-}
-
 // Skill bypass.
 if (process.env.ISSUE_CLOSE_SKILL === "1") {
   process.exit(0);
 }
 
+const isNotPlanned = cmd.includes("--reason not_planned");
 process.stderr.write(
-  "Direct `gh issue close` is not allowed. Use /issue-close-finalize <N> instead.\n" +
-  "(If Phase 1 is not yet done, first run /issue-close-stage <N> from a linked worktree.\n" +
-  " /issue-close-finalize then performs a transaction-safe close and posts the resolved-by sentinel.)\n"
+  isNotPlanned
+    ? "Direct `gh issue close` is not allowed. Use /issue-close-migrated <N> --type migrated|cancelled instead.\n"
+    : "Direct `gh issue close` is not allowed. Use /issue-close-finalize <N> instead.\n" +
+      "(If Phase 1 is not yet done, first run /issue-close-stage <N> from a linked worktree.\n" +
+      " /issue-close-finalize then performs a transaction-safe close and posts the resolved-by sentinel.)\n"
 );
 try {
   const { reportBlock } = require("./lib/supervisor-emit");

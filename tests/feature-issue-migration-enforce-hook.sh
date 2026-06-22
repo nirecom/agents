@@ -6,6 +6,11 @@
 # ISSUE_CLOSE_SKILL=1 in the environment.
 #
 # RED: this suite fails clean while hooks/enforce-issue-close.js is missing.
+#
+# L3 gap (what this test does NOT catch):
+# - Whether the hook registration in settings.json actually fires in a real Claude Code session
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: hook-registration
 
 set -u
 
@@ -164,14 +169,14 @@ else
     fail "R2: empty input → exit 0 (rc=$RC)"
 fi
 
-# --- N11: skill's exact shape → allowed ---
-# This matches the actual skill invocation per skills/issue-close-finalize/SKILL.md.
-# --reason completed is REQUIRED, not optional.
+# --- N11: inline form now blocked (env-export required after #927) ---
+# Before #927: inline ISSUE_CLOSE_SKILL=1 ... --reason completed bypassed the hook.
+# After #927: only env-export form (ISSUE_CLOSE_SKILL=1 in process.env) bypasses.
 run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}'
-if [ "$RC" -eq 0 ]; then
-    pass "N11: skill's exact shape allows close"
+if [ "$RC" -eq 2 ]; then
+    pass "N11: inline form now blocked (env-export required after #927)"
 else
-    fail "N11: skill's exact shape allows close (rc=$RC stderr=$ERR)"
+    fail "N11: expected exit 2 (rc=$RC stderr=$ERR)"
 fi
 
 # --- N12: without --reason completed → blocked (strict-shape: reason is mandatory) ---

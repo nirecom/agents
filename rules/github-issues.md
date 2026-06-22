@@ -33,8 +33,8 @@ Open issues with `gh issue list --state open` or `gh issue view <N>`.
 |---|---|
 | `type:task` | Normal task. Closed → FEATURE entry in `history.md`. |
 | `type:incident` | Incident. Closed → INCIDENT entry in `history.md`. |
-| `status:cancelled` | Cancelled without completion. Set after close. |
-| `status:migrated` | Merged into another issue. Set after close. |
+| `status:cancelled` | Cancelled without completion. Applied before close by `/issue-close-migrated`. |
+| `status:migrated` | Merged into another issue. Applied before close by `/issue-close-migrated`. |
 | `meta` | Planning/architecture issue with no implementation. Close via `admin_close_path`. Convention: `Group: ` title prefix. Sub-issues carry the actual work. |
 
 Apply labels with `bin/github-issues/sync-labels.sh` (reads `.github/labels.yml`,
@@ -152,16 +152,15 @@ closing the parent is blocked. Cancelled/migrated children must already be close
   clear error if unset). Consumer repos (dotfiles, dotfiles-private) inherit
   the same variable.
 - `ISSUE_CLOSE_SKILL=1` bypasses `enforce-issue-close.js` for `gh issue close`
-  only (`gh issue comment` is not gated). Two forms are accepted:
-  (a) **inline prefix** — exact shape `ISSUE_CLOSE_SKILL=1 gh issue close <N> --reason completed`
-  (digits-only `<N>`; no other env vars; no additional flags such as
-  `--comment`). Used for ad-hoc one-shot invocations.
-  (b) **env export** — `ISSUE_CLOSE_SKILL=1` exported into the hook's process
-  environment permits any `gh issue close` form. Used by `/issue-close-finalize`
-  and `/issue-close-stage` for skill-internal calls.
-  SSOT: `INLINE_SKILL_RE` in `hooks/lib/block-predicates.js`. The Phase 2 Step E
-  `enforce-worktree.js` bypass for `git add docs/history.md` was removed in #690
-  (Step E itself was removed — Step WE-21 of `/worktree-end` is now the canonical
-  history writer). Do not set it elsewhere.
+  only (`gh issue comment` is not gated). **Sole sanctioned bypass form: env export** —
+  `export ISSUE_CLOSE_SKILL=1` before running `gh issue close` from a direct Bash-tool
+  call. Used by `/issue-close-finalize` and `/issue-close-stage` for skill-internal calls.
+  Script-internal `gh issue close` calls (from within bash CLI scripts such as
+  `bin/github-issues/close-not-planned.sh`) are structurally invisible to
+  `enforce-issue-close.js` — PreToolUse fires on the Bash-tool command head only, not on
+  subprocess calls — so no bypass marker is needed for them.
+  The Phase 2 Step E `enforce-worktree.js` bypass for `git add docs/history.md` was
+  removed in #690 (Step E itself was removed — Step WE-21 of `/worktree-end` is now
+  the canonical history writer). Do not set it elsewhere.
 - `history.md` entries are written in English regardless of repo visibility
   (`rules/language.md`). The issue body language is the author's choice.
