@@ -214,7 +214,7 @@ if [[ -n "$REPO_ROOT_ARG" ]]; then
     --sandbox read-only
     --full-auto
   )
-  MCP_FS_ADDENDUM=$'You have access to a filesystem MCP server "fs" with read_file({path}). Use it to read source files. Reads are confined to REPO_ROOT; .env, keys, and WORKTREE_NOTES.md are blocked.\n\nVERIFICATION REQUIREMENT: For any concern about hook behavior, runtime scope, or subprocess reachability, append a [verified: <files>] annotation to the concern line — listing the source files you read with read_file. Concerns matching hook-scope keywords (enforce-issue-close, PreToolUse, ISSUE_CLOSE_SKILL, command-head.js) without this annotation are auto-rejected by the parser.\n\nKey facts to verify in source before asserting:\n- hooks/enforce-issue-close.js fires only on the Bash tool command head (PreToolUse).\n- Subprocess gh issue close calls from bash scripts are invisible to it; no bypass needed.\n- Source files: hooks/enforce-issue-close.js, hooks/lib/command-head.js\n\n'
+  MCP_FS_ADDENDUM=$'You have access to a filesystem MCP server "fs" with read_file({path}); reads confined to REPO_ROOT (.env, keys, WORKTREE_NOTES.md blocked). For concerns about hook behavior, runtime scope, or subprocess reachability: read the relevant source first, then append [verified: <files>] to the concern line — hook-scope keywords (enforce-issue-close, PreToolUse, ISSUE_CLOSE_SKILL, command-head.js) without this annotation are auto-rejected.\n\n'
 fi
 
 # Build ledger-concerns block (Round 2+)
