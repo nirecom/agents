@@ -122,12 +122,12 @@ else
     fail "H4: rc=$RC stderr=$ERR"
 fi
 
-# --- H5: ISSUE_CLOSE_SKILL=1 ... --reason completed inline shape still passes
+# --- H5: inline form now blocked (INLINE_SKILL_RE removed in #927)
 run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}'
-if [ "$RC" -eq 0 ]; then
-    pass "H5: inline skill shape still passes (INLINE_SKILL_RE unchanged)"
+if [ "$RC" -eq 2 ]; then
+    pass "H5: inline form now blocked (env-export required after #927)"
 else
-    fail "H5: rc=$RC stderr=$ERR"
+    fail "H5: expected exit 2 (rc=$RC stderr=$ERR)"
 fi
 
 echo ""

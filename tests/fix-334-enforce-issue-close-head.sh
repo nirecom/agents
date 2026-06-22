@@ -126,12 +126,14 @@ else
     fail "ISSUE_CLOSE_SKILL=1 env bypass — expected exit 0 (rc=$RC stderr=$ERR)"
 fi
 
-# Inline-shape bypass: ISSUE_CLOSE_SKILL=1 prefix inside the command string
+# Inline-shape bypass REMOVED (#927): the inline prefix
+# `ISSUE_CLOSE_SKILL=1 gh issue close N --reason completed` is now BLOCKED.
+# Only env-export form (ISSUE_CLOSE_SKILL=1 in process.env) bypasses the hook.
 run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}'
-if [ "$RC" -eq 0 ]; then
-    pass "inline ISSUE_CLOSE_SKILL=1 shape bypass preserved"
+if [ "$RC" -eq 2 ]; then
+    pass "inline ISSUE_CLOSE_SKILL=1 shape now BLOCKED (#927)"
 else
-    fail "inline ISSUE_CLOSE_SKILL=1 shape — expected exit 0 (rc=$RC stderr=$ERR)"
+    fail "inline ISSUE_CLOSE_SKILL=1 shape — expected exit 2 (rc=$RC stderr=$ERR)"
 fi
 
 echo ""
