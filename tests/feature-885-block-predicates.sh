@@ -2,12 +2,9 @@
 # tests/feature-885-block-predicates.sh
 # Tests: hooks/lib/block-predicates.js
 # Tags: block-predicates, inline-skill-re, ssot, feature-885
-# Tests for issue #885 — INLINE_SKILL_RE moves to hooks/lib/block-predicates.js
-# as SSOT. enforce-issue-close.js will require() it from this new module.
-#
-# Test verifies the regex exported from the future module matches the same
-# shape currently inlined in enforce-issue-close.js (lines 73-74):
-#   /^[ \t]*ISSUE_CLOSE_SKILL=1[ \t]+gh[ \t]+issue[ \t]+close[ \t]+\d+[ \t]+--reason[ \t]+completed[ \t]*$/
+# Original tests for #885 verified INLINE_SKILL_RE was exported as SSOT.
+# After #927 the export is REMOVED — block-predicates.js no longer carries it.
+# This file is reduced to a single absence assertion.
 
 set -u
 
@@ -39,61 +36,28 @@ run_with_timeout() {
 }
 
 if [ ! -f "$MODULE" ]; then
-    skip "B1: block-predicates.js not present yet (TDD red phase)"
-    skip "B2: block-predicates.js not present yet (TDD red phase)"
-    skip "B3: block-predicates.js not present yet (TDD red phase)"
-    skip "B4: block-predicates.js not present yet (TDD red phase)"
-    skip "B5: block-predicates.js not present yet (TDD red phase)"
-    skip "B6: block-predicates.js not present yet (TDD red phase)"
+    skip "B1: block-predicates.js not present"
     echo ""
     echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
-    [ "$FAIL" -gt 0 ] && exit 1
     exit 0
 fi
 
-# expect_match <label> <command-string-js> <expected: yes|no>
-expect_match() {
-    local label="$1" cmd_js="$2" expected="$3"
-    local out rc
-    out=$(run_with_timeout 5 node -e "
+# --- B1: INLINE_SKILL_RE is NOT exported from block-predicates.js ------------
+# Original B1-B6 verified the regex shape; after #927 the export is removed.
+OUT=$(run_with_timeout 5 node -e "
 const m = require('$MODULE_NODE');
-if (!(m.INLINE_SKILL_RE instanceof RegExp)) { console.error('INLINE_SKILL_RE not a RegExp'); process.exit(2); }
-const cmd = $cmd_js;
-const matched = m.INLINE_SKILL_RE.test(cmd);
-const expected = ('$expected' === 'yes');
-if (matched !== expected) { console.error('expected '+expected+', got '+matched); process.exit(3); }
+if (typeof m.INLINE_SKILL_RE !== 'undefined') {
+    console.error('INLINE_SKILL_RE still exported: ' + String(m.INLINE_SKILL_RE));
+    process.exit(2);
+}
 console.log('OK');
 " 2>&1)
-    rc=$?
-    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "$label"
-    else
-        fail "$label (rc=$rc, out=$out)"
-    fi
-}
-
-# --- B1: inline-skill form matches -------------------------------------------
-expect_match "B1: 'ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed' matches" \
-"'ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed'" "yes"
-
-# --- B2: bare gh issue close does NOT match ----------------------------------
-expect_match "B2: 'gh issue close 123' does NOT match" \
-"'gh issue close 123'" "no"
-
-# --- B3: non-numeric issue id does NOT match (regex uses \d+) ---------------
-expect_match "B3: 'ISSUE_CLOSE_SKILL=1 gh issue close abc --reason completed' does NOT match" \
-"'ISSUE_CLOSE_SKILL=1 gh issue close abc --reason completed'" "no"
-
-# --- B4: empty string does NOT match -----------------------------------------
-expect_match "B4: empty string does NOT match" "''" "no"
-
-# --- B5: trailing-space-no-number does NOT match -----------------------------
-expect_match "B5: 'ISSUE_CLOSE_SKILL=1 gh issue close ' does NOT match" \
-"'ISSUE_CLOSE_SKILL=1 gh issue close '" "no"
-
-# --- B6: missing --reason completed does NOT match ---------------------------
-expect_match "B6: 'ISSUE_CLOSE_SKILL=1 gh issue close 123' (no --reason) does NOT match" \
-"'ISSUE_CLOSE_SKILL=1 gh issue close 123'" "no"
+RC=$?
+if [ $RC -eq 0 ] && [ "$OUT" = "OK" ]; then
+    pass "B1: INLINE_SKILL_RE absent from block-predicates.js exports"
+else
+    fail "B1: INLINE_SKILL_RE still present (rc=$RC, out=$OUT)"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
