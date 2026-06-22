@@ -45,11 +45,14 @@ else
     pass "IC1: enforce-issue-close.js no longer defines INLINE_SKILL_RE inline"
 fi
 
-# --- IC2: source DOES require block-predicates ------------------------------
-if grep -E 'require\(.*block-predicates' "$HOOK" >/dev/null 2>&1; then
-    pass "IC2: enforce-issue-close.js requires block-predicates"
+# --- IC2: after #927, source no longer references INLINE_SKILL_RE -----------
+# Original assertion: hook DID require block-predicates for INLINE_SKILL_RE.
+# After #927 the inline-skill bypass is removed entirely; the hook no longer
+# references INLINE_SKILL_RE at all.
+if grep -q 'INLINE_SKILL_RE' "$HOOK" 2>/dev/null; then
+    fail "IC2: enforce-issue-close.js still references INLINE_SKILL_RE (should be removed in #927)"
 else
-    fail "IC2: enforce-issue-close.js does NOT require block-predicates"
+    pass "IC2: enforce-issue-close.js no longer references INLINE_SKILL_RE (#927)"
 fi
 
 # --- IC3: hook does NOT pass co_blocked_by to reportBlock -------------------
@@ -78,15 +81,18 @@ expect_block() {
 expect_block "IC4: bare 'gh issue close 123' still blocked (rc=2)" \
     '{"tool_name":"Bash","tool_input":{"command":"gh issue close 123"}}'
 
-# --- IC5: behavioral regression — inline form still passes ------------------
-OUT=$(echo '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}' | \
-    run_with_timeout 15 node "$HOOK" 2>/tmp/.ic_err.$$)
+# --- IC5: inline form now BLOCKED (#927) -----------------------------------
+OUT=$(
+    unset ISSUE_CLOSE_SKILL
+    echo '{"tool_name":"Bash","tool_input":{"command":"ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed"}}' | \
+        run_with_timeout 15 node "$HOOK" 2>/tmp/.ic_err.$$
+)
 RC=$?
 rm -f /tmp/.ic_err.$$
-if [ "$RC" -eq 0 ]; then
-    pass "IC5: inline 'ISSUE_CLOSE_SKILL=1 gh issue close 123 --reason completed' still passes"
+if [ "$RC" -eq 2 ]; then
+    pass "IC5: inline 'ISSUE_CLOSE_SKILL=1 gh issue close ... --reason completed' now BLOCKED (#927)"
 else
-    fail "IC5: inline shape blocked (rc=$RC)"
+    fail "IC5: inline shape expected exit 2 (rc=$RC)"
 fi
 
 echo ""

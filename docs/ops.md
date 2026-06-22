@@ -28,6 +28,13 @@ or out-of-band creation, use `.github/ISSUE_TEMPLATE/incident.yml` (or
 
 The two phases together run the full transaction-safe flow: sub-issue gate → pending sentinel comment → history.md append → parent body update → `gh issue close` → resolved-by + appended sentinel. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
 
+To close an issue as `status:migrated` or `status:cancelled` (uses `--reason not_planned`):
+
+```
+/issue-close-migrated <N> --type migrated --into <M>   # migrated into issue M
+/issue-close-migrated <N> --type cancelled             # cancelled with no successor
+```
+
 ### Backfill Projects v2 board cards (catch-up) — *Migration (catch-up)*
 
 For sessions that pre-date #548 where related issues never received a
