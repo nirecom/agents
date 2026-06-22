@@ -3,11 +3,14 @@
 
 const { writeLayer3State, incrementL3RetryCount } = require("../hooks/lib/supervisor-state-writer");
 const { L3_PHASE_VALUES, L3_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
+const { resolveSessionId } = require("../hooks/lib/workflow-state");
+const { resolveWorkflowSessionId } = require("../hooks/lib/resolve-workflow-session-id");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 const KNOWN_VALUE_FLAGS = new Set([
   "--session-id",
+  "--mirror-session-id",
   "--l3-armed-at",
   "--last-run-at",
   "--set-l3-phase",
@@ -19,7 +22,7 @@ const KNOWN_BOOL_FLAGS = new Set(["--clear-l3-armed-at", "--increment-l3-retry-c
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-layer3] ERROR: ${msg}`);
   console.error(
-    "Usage: node bin/supervisor-write-layer3 --session-id <sid>" +
+    "Usage: node bin/supervisor-write-layer3 [--session-id <sid>] [--mirror-session-id <sid>]" +
     " [--l3-armed-at <iso>] [--clear-l3-armed-at]" +
     " [--last-run-at <iso>]" +
     " [--set-l3-phase <pending|in_progress|done|frozen>]" +
@@ -45,8 +48,27 @@ for (let i = 0; i < argv.length; i++) {
   usage(`unknown flag: ${tok}`);
 }
 
-const sid = args["session-id"];
-if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
+// Session-ID resolution: CLI flag → WORKFLOW_SESSION_ID env (wsid) →
+// CLAUDE_SESSION_ID env (CC UUID) → error.
+// Track source so the dual-store mirror-write below can resolve the "other"
+// identity automatically when --mirror-session-id is not explicit.
+// NOTE: We intentionally do NOT fall back to WORKTREE_NOTES.md / plans-dir
+// scan auto-resolve here — callers without an env or flag must error out so
+// the writer cannot land in an unintended store.
+let rawSid = args["session-id"];
+let rawSidSource = "explicit";
+if (!rawSid) {
+  const envWsid = process.env.WORKFLOW_SESSION_ID;
+  if (envWsid && SESSION_ID_RE.test(envWsid)) { rawSid = envWsid; rawSidSource = "wsid"; }
+}
+if (!rawSid) {
+  const envCc = process.env.CLAUDE_SESSION_ID;
+  if (envCc && SESSION_ID_RE.test(envCc)) { rawSid = envCc; rawSidSource = "ccuuid"; }
+}
+if (!rawSid || !SESSION_ID_RE.test(rawSid)) {
+  console.error("Error: --session-id required (could not auto-resolve)");
+  process.exit(1);
+}
 
 const hasL3ArmedAt = "l3-armed-at" in args;
 const hasClearL3ArmedAt = flags.has("--clear-l3-armed-at");
@@ -61,7 +83,7 @@ if (hasL3ArmedAt && hasClearL3ArmedAt) usage("--l3-armed-at and --clear-l3-armed
 if (hasIncrementRetry) {
   const hasOther = hasL3ArmedAt || hasClearL3ArmedAt || hasLastRunAt || hasSetL3Phase || hasSetL3Verdict || hasL3Cause;
   if (hasOther) usage("--increment-l3-retry-count is mutually exclusive with other mutating flags");
-  const result = incrementL3RetryCount(sid);
+  const result = incrementL3RetryCount(rawSid);
   console.log(JSON.stringify(result));
   process.exit(0);
 }
@@ -95,9 +117,42 @@ if (hasSetL3Verdict) {
   patch.l3_verdict = raw;
 }
 
-const ok = writeLayer3State(sid, patch);
+const ok = writeLayer3State(rawSid, patch);
 if (!ok) {
   console.error("[supervisor-write-layer3] ERROR: writeLayer3State failed (invalid fields or unexpected error)");
   process.exit(1);
 }
+
+// #1052: Identity-agnostic dual-store mirror-write. Mirror only when rawSidSource
+// is auto-resolved OR explicit --mirror-session-id was supplied; explicit
+// --session-id without --mirror-session-id writes only to the named store.
+let mirrorSid = args["mirror-session-id"];
+if (!mirrorSid && rawSidSource !== "explicit") {
+  if (rawSidSource === "wsid") {
+    const envCc = process.env.CLAUDE_SESSION_ID;
+    if (envCc && envCc !== rawSid && SESSION_ID_RE.test(envCc)) mirrorSid = envCc;
+    if (!mirrorSid) {
+      try {
+        const ccId = resolveSessionId({ sessionIdFromInput: null, transcriptPath: null });
+        if (ccId && ccId !== rawSid && SESSION_ID_RE.test(ccId)) mirrorSid = ccId;
+      } catch (_) {}
+    }
+  } else if (rawSidSource === "ccuuid") {
+    const envWs = process.env.WORKFLOW_SESSION_ID;
+    if (envWs && envWs !== rawSid && SESSION_ID_RE.test(envWs)) mirrorSid = envWs;
+    if (!mirrorSid) {
+      try {
+        const ws = resolveWorkflowSessionId({});
+        if (ws && ws !== rawSid && SESSION_ID_RE.test(ws)) mirrorSid = ws;
+      } catch (_) {}
+    }
+  }
+}
+if (mirrorSid && mirrorSid !== rawSid && SESSION_ID_RE.test(mirrorSid)) {
+  const mirrorOk = writeLayer3State(mirrorSid, patch);
+  if (!mirrorOk) {
+    console.error(`[supervisor-write-layer3] WARN: mirror-write to ${mirrorSid} failed`);
+  }
+}
+
 process.exit(0);
