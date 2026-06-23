@@ -3,7 +3,7 @@
 // when the worktree/branch setup step finishes. Marks branching_complete in workflow state.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, nextStepHint } = require("../lib/workflow-state");
+const { markStep } = require("../lib/workflow-state");
 const {
   BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
   BRANCHING_DECIDED_RE_DQ, BRANCHING_DECIDED_LOOKSLIKE_RE,
@@ -46,8 +46,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "branching_complete", "complete", { decision: v.reason });
-      const hint = nextStepHint("branching_complete");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. branching_complete NOT recorded.`

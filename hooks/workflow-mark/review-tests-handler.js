@@ -20,7 +20,6 @@ const {
 } = require("../lib/sentinel-patterns");
 const {
   markReviewTestsComplete,
-  nextStepHint,
 } = require("../lib/workflow-state");
 
 function extractToken(payload) {
@@ -55,8 +54,6 @@ function handle(ctx) {
     try {
       markReviewTestsComplete(sessionId, token);
       pushMessage(`[workflow] review_tests: complete (token: ${token}).`);
-      const hint = nextStepHint("review_tests");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. review_tests NOT recorded.`
