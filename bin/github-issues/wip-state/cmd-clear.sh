@@ -13,6 +13,20 @@
 cmd_clear() {
     local n="$1"
     validate_n "$n"
+    # State guard: skip all Projects v2 mutations on OPEN issues (or gh failure).
+    # Setting Status=Done on an OPEN issue triggers GitHub's auto-close workflow.
+    local _clear_dir
+    _clear_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local _issue_state
+    if _issue_state=$(bash "$_clear_dir/../issue-state-check.sh" "$n" 2>/dev/null); then
+        :
+    else
+        _issue_state="error"
+    fi
+    if [ "$_issue_state" != "closed" ]; then
+        delete_lock_file "$n"
+        exit 0
+    fi
     preflight_field_ids
 
     # clear is non-fatal: when no project is linked, still try to remove the
