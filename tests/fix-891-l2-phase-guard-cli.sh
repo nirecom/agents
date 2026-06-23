@@ -288,6 +288,50 @@ process.stdout.write(unknown ? 'unknown' : 'recognized');
     fi
 }
 
+# ─── workflow_init downstream reset test (G45) ───────────────────────────────
+
+run_g45() {
+    require_source "$MARK_STEP_HANDLER" "G45: workflow_init_complete resets downstream steps" || return
+    local out
+    out=$(run_with_timeout 5 node -e "
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'g45-wf-'));
+process.env.CLAUDE_WORKFLOW_DIR = tmpDir;
+
+const { VALID_STEPS, writeState, readState } = require('$_AGENTS_DIR_NODE/hooks/lib/workflow-state');
+const h = require('$MARK_STEP_HANDLER_NODE');
+
+// Seed stale state: all steps complete (prior workflow contamination)
+const staleState = { version: 1, session_id: 'g45-sid', created_at: new Date().toISOString(), steps: {}, closes_issues: [999] };
+for (const s of VALID_STEPS) staleState.steps[s] = { status: 'complete', updated_at: new Date().toISOString() };
+writeState('g45-sid', staleState);
+
+// Fire workflow_init_complete sentinel
+const messages = [];
+const ctx = {
+  cmd: 'echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\"',
+  sessionId: 'g45-sid',
+  pushMessage: (m) => messages.push(m),
+  signalFatal: (m) => { throw new Error('signalFatal: ' + m); },
+};
+h.handle(ctx);
+
+// Read back state and verify downstream steps are all pending
+const after = readState('g45-sid');
+const downstream = VALID_STEPS.filter(s => s !== 'workflow_init');
+const allPending = downstream.every(s => (after.steps[s] || {}).status === 'pending');
+const wfInitComplete = (after.steps['workflow_init'] || {}).status === 'complete';
+process.stdout.write(allPending && wfInitComplete ? 'pass' : 'fail:' + JSON.stringify(Object.fromEntries(VALID_STEPS.map(s => [s, (after.steps[s] || {}).status]))));
+" 2>/dev/null)
+    if [ "$out" = "pass" ]; then
+        pass "G45: workflow_init_complete resets downstream steps to pending"
+    else
+        fail "G45: workflow_init_complete resets downstream steps to pending (got: $out)"
+    fi
+}
+
 # ─── Runner ──────────────────────────────────────────────────────────────────
 
 run_g34
@@ -301,6 +345,7 @@ run_g41
 run_g42
 run_g43
 run_g44
+run_g45
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
