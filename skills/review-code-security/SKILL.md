@@ -20,7 +20,7 @@ Use when the implementation touches external input, secrets handling, or third-p
 
 ## Procedure
 
-RCS-1. **Delegate scan to security-scanner**:
+RCS-1. **Delegate scan to security-scanner** and run quality gates in parallel (same response, two tool calls):
    ```
    Agent({ subagent_type: "security-scanner", prompt: JSON.stringify({
      topic: "security review", context: SCAN_TARGET,
@@ -29,6 +29,8 @@ RCS-1. **Delegate scan to security-scanner**:
    ```
    On `failed` status: surface summary + artifact_path to user.
    Output: `## Security Review: PERFORMED|FAILED` (1 line) + artifact_path pointer. Read report only on failure or explicit user request.
+
+RCS-2. **Quality gates** (Bash, parallel with RCS-1): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs review-code-codex + 6 lint gates. Each gate is advisory; non-zero exit is a warning, not a blocker.
 
 ## Patterns by Axis
 

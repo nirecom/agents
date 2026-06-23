@@ -39,7 +39,7 @@ const STEP_DESC = Object.freeze({
   write_tests: "Write tests for planned changes",
   review_tests: "Review test coverage adequacy",
   run_tests: "Run test suite and security review",
-  review_security: "Adversarial security code review",
+  review_security: "Adversarial security review and code quality gates",
   docs: "Update docs and changelog",
   user_verification: "User verifies the implementation",
   cleanup: "Remove worktree and merge branch",
@@ -48,8 +48,8 @@ const STEP_DESC = Object.freeze({
 
 const STEP_HINT = Object.freeze({
   branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed.",
-  user_verification: "Emit WORKFLOW_USER_VERIFIED sentinel per WF-CODE-8 rules.",
-  cleanup: "Run /worktree-end or handle cleanup per WF-CODE-11.",
+  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol.",
+  cleanup: "Run /worktree-end (worktree path), delete branch + git push origin --delete (branch path), or echo WORKFLOW_MARK_STEP_cleanup_skipped (main/no-worktree path).",
   pre_final_report_gate: "Run /session-close from the main worktree.",
 });
 
