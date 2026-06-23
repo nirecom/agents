@@ -67,7 +67,7 @@ Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind out
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol Step 3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol Step 2).
-- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: <one-line summary>>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per Completion Step 2) or the `write-tests` Skill invocation (per Completion Step 3). Do NOT end the response on the CONFIRM echo.
+- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: <one-line summary>>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per Completion Step 2) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
 
 ## Research Escalation
 

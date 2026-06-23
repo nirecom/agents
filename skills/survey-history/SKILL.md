@@ -123,11 +123,6 @@ SH-6. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
 
 ## Completion
 
-After completing this skill:
-1. Invoke `make-outline-plan` via the Skill tool.
-   Note: when invoked as a parallel Agent subagent by workflow-init, skip this step —
-   Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.
-
 ## Skip conditions
 
 - `closes_issues` absent or empty and no context.md → emit `WORKFLOW_RESEARCH_NOT_NEEDED`

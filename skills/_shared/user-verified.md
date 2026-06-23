@@ -6,7 +6,7 @@ asked "is this ready to ship?".
 
 ## When to emit
 
-**`ENFORCE_WORKTREE=off`** — emit in `CLAUDE.md` WF-CODE-8, immediately before `/commit-push`.
+**`ENFORCE_WORKTREE=off`** — emit immediately before `/commit-push`.
 
 **`ENFORCE_WORKTREE=on`** — emit in `/worktree-end` Steps 3b and 4 (after the PR is open,
 immediately before merge). Never emit earlier in the workflow — the PR must exist first,

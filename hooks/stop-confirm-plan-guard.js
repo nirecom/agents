@@ -163,10 +163,11 @@ if (require.main === module) {
         if (followUpFound) {
           // #871: add markStep(sid, stage, "complete") here
         } else {
-          const { confirmNextStepHint } = require("./lib/workflow-state");
+          const STAGE_NEXT_SKILL = { intent: "make-outline-plan", outline: "make-detail-plan", detail: "write-tests or WORKFLOW_BRANCHING_COMPLETE" };
+          const nextSkillHint = STAGE_NEXT_SKILL[stage] ? " — invoke " + STAGE_NEXT_SKILL[stage] : "";
           process.stdout.write(JSON.stringify({
             decision: "block",
-            reason: confirmNextStepHint(stage) || "[confirm-plan] Layer 2: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase(),
+            reason: "[confirm-plan] Layer 2: stage-valid follow-up Skill not found after CONFIRM_" + stage.toUpperCase() + nextSkillHint,
           }));
           process.exit(2);
         }
