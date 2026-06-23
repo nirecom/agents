@@ -69,51 +69,6 @@ function isAllowedWorktreeCommand(cmd, repoRoot) {
 }
 
 /**
- * Returns true if cmd is an isolated `New-Item -ItemType Directory` command
- * whose target path is outside repoRoot.
- * Fails CLOSED (returns false) when no path can be parsed, to prevent
- * unverified in-repo directory creation.
- */
-function isAllowedNewItemDirectory(cmd, repoRoot) {
-  if (rejectInterpreterAndChaining(cmd)) return false;
-  if (hasShellChaining(cmd)) return false;
-  if (!/\bNew-Item\b/i.test(cmd)) return false;
-  if (!/-ItemType\s+Directory\b/i.test(cmd)) return false;
-
-  // Try named -Path/-p argument first
-  const pathMatch = cmd.match(/-(?:Path|p)\s+(?:"([^"]+)"|'([^']+)'|(\S+))/i);
-  if (pathMatch) {
-    const targetPath = pathMatch[1] || pathMatch[2] || pathMatch[3];
-    return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : false;
-  }
-
-  // Positional path: first non-flag, non-flag-value token after New-Item
-  const afterCmd = cmd.replace(/^.*?\bNew-Item\b\s*/i, "");
-  const tokens = [];
-  const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
-  let m;
-  while ((m = re.exec(afterCmd)) !== null) tokens.push(m[1] || m[2] || m[3]);
-
-  // PS flags that consume the next token as a value
-  const flagsWithNextValue = new Set(["-itemtype", "-name", "-n", "-value", "-encoding"]);
-  let skipNext = false;
-  let targetPath = null;
-  for (const tok of tokens) {
-    if (skipNext) { skipNext = false; continue; }
-    const key = tok.toLowerCase().replace(/^-+/, "-");
-    if (tok.startsWith("-")) {
-      if (flagsWithNextValue.has(key)) skipNext = true;
-      continue;
-    }
-    targetPath = tok;
-    break;
-  }
-
-  // Fail-closed: reject when path cannot be determined
-  return targetPath ? isPathOutsideRepo(targetPath, repoRoot) : false;
-}
-
-/**
  * True if cmd is an isolated `git pull --ff-only` or `git merge --ff-only`
  * command. Allows the merge step from the main worktree — the one operation
  * main is reserved for ("Main worktree is reserved for merge/pull only").
@@ -440,7 +395,6 @@ function isAllowedComposeDocAppend(cmd, repoRoot) {
 
 module.exports = {
   isAllowedWorktreeCommand,
-  isAllowedNewItemDirectory,
   isAllowedFastForwardMerge,
   isAllowedReadOnlyConfigCheck,
   isAllowedPushAllExcluded,
