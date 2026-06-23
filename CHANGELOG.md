@@ -489,4 +489,8 @@ Changes: Fixed: `wip-state clear` no longer accidentally closes open issues via 
 
 ### FEATURE: PR #1054 (2026-06-23)
 Background: fix(#939,#1043,#1044,#1051,#1052,#883): L3 supervisor: wire Phase B arbitrate, fix T5 arm, SC-5b stale-pending, wsid routing, session-ID stanza, test rename
-Changes: L3 review WARN and BLOCK verdicts now surface at the next Stop event — previously WARN was dropped and BLOCK was unreachable when L2 phase was done/frozen (#1043, #1044);`/session-close` now repairs stale L3 pending state using the same elapsed-time heuristic as the L2 SC-5 repair (#1051);`bin/supervisor-write-layer3` now mirrors writes to both wsid and CC UUID stores when both are available, matching `bin/supervisor-report` behavior (#1052);L3 arm block reason now shows Session ID, Workflow session ID, and Effective state session ID separately for easier cross-store debugging (#883)
+Changes: L3 review WARN and BLOCK verdicts now surface at the next Stop event — previously WARN was dropped and BLOCK was unreachable when L2 phase was done/frozen (#1043, #1044);`/session-close` now repairs stale L3 pending state using the same elapsed-time heuristic as the L2 SC-5 repair (#1051);`bin/supervisor-write-layer3` now mirrors writes to both wsid and CC UUID stores when both are available, matching `bin/supervisor-report` behavior (#1052);L3 arm block reason now shows Session ID, Workflow session ID, and Effective state session ID separately for easier cross-store debugging (#883)
+
+### FEATURE: PR #1056 (2026-06-23)
+Background: refactor(#1053): replace prose WF-CODE-N workflow with oracle-driven state machine
+Changes: REFACTOR: Workflow step sequencing is now oracle-driven — after each skill the model queries `bin/workflow/next-step` for the next step, replacing the previous prose STEP_HINT table injected via PostToolUse hooks. The CLAUDE.md Workflow section is now dispatch-only (oracle pointer + ## Notes).
