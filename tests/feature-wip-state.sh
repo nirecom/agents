@@ -103,6 +103,9 @@ case "$ARGS" in
         exit 1
     fi
     exit 0 ;;
+  issue\ view\ *--json\ state*)
+    echo "CLOSED"
+    exit 0 ;;
   issue\ view\ *--json\ url*)
     if [ "${GH_MOCK_FAIL:-}" = "issue-view" ]; then
         echo "error: gh issue view failed" >&2
@@ -1009,6 +1012,9 @@ if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
     printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
 fi
 case "$ARGS" in
+  issue\ view\ *--json\ state*)
+    echo "CLOSED"
+    exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
   repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
@@ -1037,6 +1043,113 @@ if [ "$RC" -eq 0 ] \
     pass "T-new-8: clear <N> on empty fingerprint — exit 0, no spurious warning, Status=Done set"
 else
     fail "T-new-8: rc=$RC warn_fp=$WARN_FP_PRESENT warn_status=$WARN_STATUS_PRESENT ss_opt=$SS_OPT_LOGGED stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+fi
+teardown_mock
+
+# ===========================================================================
+# T-new-8b: clear on OPEN issue — state-first guard skips Status=Done, only deletes lock.
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+LOCKFILE="$PLANS_DIR/wip-lock-42.md"
+echo "stale lock" > "$LOCKFILE"
+cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
+    printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
+fi
+case "$ARGS" in
+  issue\ view\ *--json\ state*) echo "OPEN"; exit 0 ;;
+  auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
+  project\ item-edit\ *) exit 0 ;;
+  *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
+esac
+MOCK_EOF
+chmod +x "$TMP/mock-bin/gh"
+run_with_timeout 60 bash "$TARGET" clear 42 >/dev/null 2>&1
+RC=$?
+LOCK_DELETED=0
+[ ! -f "$LOCKFILE" ] && LOCK_DELETED=1
+HAS_SS_OPT=0; grep -q -- "--single-select-option-id" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_SS_OPT=1
+HAS_TEXT=0; grep -qE -- '--text ' "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_TEXT=1
+if [ "$RC" -eq 0 ] && [ "$LOCK_DELETED" -eq 1 ] && [ "$HAS_SS_OPT" -eq 0 ] && [ "$HAS_TEXT" -eq 0 ]; then
+    pass "T-new-8b: clear on OPEN issue — lock deleted, Status=Done NOT called"
+else
+    fail "T-new-8b: rc=$RC lock_deleted=$LOCK_DELETED ss_opt=$HAS_SS_OPT text=$HAS_TEXT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+teardown_mock
+
+# ===========================================================================
+# T-new-8c: clear when gh fails in issue-state-check — treated as OPEN (guard skips).
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+LOCKFILE="$PLANS_DIR/wip-lock-42.md"
+echo "stale lock" > "$LOCKFILE"
+cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
+    printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
+fi
+case "$ARGS" in
+  issue\ view\ *--json\ state*) exit 1 ;;
+  auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
+  project\ item-edit\ *) exit 0 ;;
+  *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
+esac
+MOCK_EOF
+chmod +x "$TMP/mock-bin/gh"
+run_with_timeout 60 bash "$TARGET" clear 42 >/dev/null 2>&1
+RC=$?
+LOCK_DELETED=0
+[ ! -f "$LOCKFILE" ] && LOCK_DELETED=1
+HAS_SS_OPT=0; grep -q -- "--single-select-option-id" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_SS_OPT=1
+if [ "$RC" -eq 0 ] && [ "$LOCK_DELETED" -eq 1 ] && [ "$HAS_SS_OPT" -eq 0 ]; then
+    pass "T-new-8c: clear on gh-failure from state-check — lock deleted, Status=Done NOT called"
+else
+    fail "T-new-8c: rc=$RC lock_deleted=$LOCK_DELETED ss_opt=$HAS_SS_OPT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
+fi
+teardown_mock
+
+# ===========================================================================
+# T-new-8d: clear on CLOSED issue — full path (Status=Done + fingerprint + lock).
+# ===========================================================================
+setup_mock
+export GH_MOCK_PROJECT_ITEM_ID="PVTI_existing"
+LOCKFILE="$PLANS_DIR/wip-lock-42.md"
+echo "stale lock" > "$LOCKFILE"
+cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+if [ -n "${GH_MOCK_ARGS_LOG:-}" ]; then
+    printf '%s\n' "$ARGS" >> "$GH_MOCK_ARGS_LOG"
+fi
+case "$ARGS" in
+  issue\ view\ *--json\ state*) echo "CLOSED"; exit 0 ;;
+  auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
+  repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
+  project\ item-edit\ *) exit 0 ;;
+  *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
+esac
+MOCK_EOF
+chmod +x "$TMP/mock-bin/gh"
+run_with_timeout 60 bash "$TARGET" clear 42 >/dev/null 2>&1
+RC=$?
+LOCK_DELETED=0
+[ ! -f "$LOCKFILE" ] && LOCK_DELETED=1
+HAS_SS_OPT=0; grep -q -- "--single-select-option-id" "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_SS_OPT=1
+HAS_TEXT=0; grep -qE -- '--text ' "$GH_MOCK_ARGS_LOG" 2>/dev/null && HAS_TEXT=1
+if [ "$RC" -eq 0 ] && [ "$LOCK_DELETED" -eq 1 ] && [ "$HAS_SS_OPT" -ge 1 ] && [ "$HAS_TEXT" -ge 1 ]; then
+    pass "T-new-8d: clear on CLOSED issue — full path, Status=Done called, fingerprint cleared, lock deleted"
+else
+    fail "T-new-8d: rc=$RC lock_deleted=$LOCK_DELETED ss_opt=$HAS_SS_OPT text=$HAS_TEXT log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
 teardown_mock
 
