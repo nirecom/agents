@@ -32,10 +32,8 @@ DR-3. **Present findings** — output format: `## Deep Research: PERFORMED|FAILE
 
 After completing this skill:
 1. Run: `echo "<<WORKFLOW_MARK_STEP_research_complete>>"` (must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
-2. Invoke `make-outline-plan` via the Skill tool.
 
 Skip this skill when no external knowledge is needed (e.g., the task is purely internal to the codebase).
 
 If research is genuinely not needed for this task:
 1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')
-2. Invoke `make-outline-plan` via the Skill tool.
