@@ -493,4 +493,8 @@ Changes: L3 review WARN and BLOCK verdicts now surface at the next Stop event �
 
 ### FEATURE: PR #1056 (2026-06-23)
 Background: refactor(#1053): replace prose WF-CODE-N workflow with oracle-driven state machine
-Changes: REFACTOR: Workflow step sequencing is now oracle-driven — after each skill the model queries `bin/workflow/next-step` for the next step, replacing the previous prose STEP_HINT table injected via PostToolUse hooks. The CLAUDE.md Workflow section is now dispatch-only (oracle pointer + ## Notes).
+Changes: REFACTOR: Workflow step sequencing is now oracle-driven — after each skill the model queries `bin/workflow/next-step` for the next step, replacing the previous prose STEP_HINT table injected via PostToolUse hooks. The CLAUDE.md Workflow section is now dispatch-only (oracle pointer + ## Notes).
+
+### FEATURE: PR #1065 (2026-06-23)
+Background: refactor(#1045): replace enforce-worktree allowlist with universal session-scope target-aware allow
+Changes: enforce-worktree (`ENFORCE_WORKTREE=on`): Bash writes from the main worktree are now allowed whenever every parseable write target resolves outside the session scope — covering plans-dir paths, `/tmp`, and other out-of-repo destinations without explicit per-target allowlists. Set `ENFORCE_WORKTREE_EXTRA_REPOS` (semicolon-separated repo paths) to extend the session scope when working across sibling repositories.
