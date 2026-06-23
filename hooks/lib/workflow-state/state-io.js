@@ -273,41 +273,6 @@ function cleanupZombies(maxAgeDays = 7) {
   }
 }
 
-const STEP_HINT = {
-  workflow_init:      "Invoke `workflow-init` via the Skill tool. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".",
-  clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
-  research:           "Invoke `survey-code` AND `survey-history` in parallel (premise verification), and/or `deep-research` (external knowledge). Skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>\". Then invoke `make-outline-plan`.",
-  outline:            "Invoke `make-outline-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>\").",
-  detail:             "Invoke `make-detail-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>\").",
-  branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
-  write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
-  review_tests:       "Invoke /review-tests skill (emits <<WORKFLOW_MARK_STEP_review_tests_complete>> on pass, <<WORKFLOW_REVIEW_TESTS_WARNINGS: reason>> on gaps). Skip symmetrically via WORKFLOW_WRITE_TESTS_NOT_NEEDED (waives both write_tests and review_tests).",
-  run_tests:          "Invoke `run-tests` skill via the Skill tool (or run tests directly via Bash).",
-  review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
-  docs:               "Invoke `update-docs`.",
-  user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED: <reason>>>\" (reason: >=3 non-space chars, no '>', not a placeholder), then invoke `commit-push`.",
-  cleanup:            "Run `/worktree-end` (worktree), or delete the branch after PR merge (branch), or skip (main): echo \"<<WORKFLOW_MARK_STEP_cleanup_skipped>>\".",
-};
-
-function nextStepHint(stepName) {
-  const nextStep = VALID_STEPS[VALID_STEPS.indexOf(stepName) + 1];
-  const hint = nextStep && STEP_HINT[nextStep];
-  return hint ? `[workflow] ${hint}` : null;
-}
-
-const CONFIRM_NEXT_STEP_HINT = {
-  intent:
-    "CONFIRM_INTENT approved. Run GitHub reconciliation then invoke `make-outline-plan` via Skill tool.",
-  outline:
-    "CONFIRM_OUTLINE approved. Invoke `make-detail-plan` via Skill tool.",
-  detail:
-    "CONFIRM_DETAIL approved. Emit <<WORKFLOW_BRANCHING_COMPLETE: ...>> if not yet done, then invoke `write-tests` via Skill tool.",
-};
-
-function confirmNextStepHint(stage) {
-  const hint = CONFIRM_NEXT_STEP_HINT[stage];
-  return hint ? `[workflow] ${hint}` : null;
-}
 
 function setLastPushedSha(sessionId, sha) {
   const state = readState(sessionId);
@@ -329,10 +294,6 @@ module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   VALID_STATUSES,
-  STEP_HINT,
-  nextStepHint,
-  CONFIRM_NEXT_STEP_HINT,
-  confirmNextStepHint,
   getWorkflowDir,
   getStatePath,
   readState,

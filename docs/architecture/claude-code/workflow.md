@@ -1,6 +1,6 @@
 # Workflow State Machine
 
-All 10 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
+All 14 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
 time by a PreToolUse hook.
 
 ## State file
@@ -15,14 +15,20 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
   "git_branch": "main",
   "created_at": "2026-04-12T10:00:00.000Z",
   "steps": {
-    "research":          { "status": "complete", "updated_at": "..." },
-    "plan":              { "status": "skipped",  "updated_at": "..." },
-    "write_tests":       { "status": "complete", "updated_at": "..." },
-    "run_tests":         { "status": "complete", "updated_at": "..." },
-    "review_security":   { "status": "complete", "updated_at": "..." },
-    "docs":              { "status": "complete", "updated_at": "..." },
-    "user_verification": { "status": "complete", "updated_at": "..." },
-    "cleanup":           { "status": "skipped",  "updated_at": "..." }
+    "workflow_init":        { "status": "complete", "updated_at": "..." },
+    "clarify_intent":       { "status": "complete", "updated_at": "..." },
+    "research":             { "status": "complete", "updated_at": "..." },
+    "outline":              { "status": "skipped",  "updated_at": "..." },
+    "detail":               { "status": "complete", "updated_at": "..." },
+    "branching_complete":   { "status": "complete", "updated_at": "..." },
+    "write_tests":          { "status": "complete", "updated_at": "..." },
+    "review_tests":         { "status": "complete", "updated_at": "..." },
+    "run_tests":            { "status": "complete", "updated_at": "..." },
+    "review_security":      { "status": "skipped",  "updated_at": "..." },
+    "docs":                 { "status": "complete", "updated_at": "..." },
+    "user_verification":    { "status": "complete", "updated_at": "..." },
+    "cleanup":              { "status": "skipped",  "updated_at": "..." },
+    "pre_final_report_gate":{ "status": "pending",  "updated_at": "..." }
   }
 }
 ```
@@ -31,23 +37,30 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
 `git_branch` is `null` for non-git directories and detached HEAD.
 
 Statuses: `pending` | `in_progress` | `complete` | `skipped`
-- `skipped`: allowed for `research`, `plan`, `write_tests`, `review_security`, and `cleanup`
+- `skipped`: allowed for `research`, `outline`, `detail`, `write_tests`, `review_security`, and `cleanup`
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
+- `branching_complete` and `pre_final_report_gate`: cannot be `skipped`
 
 ## Steps and owners
 
+The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io.js`. `bin/workflow/next-step --list` renders it with status markers.
+
 | Step | How completed |
 |---|---|
-| `clarify_intent` | `/clarify-intent` skill (emits `WORKFLOW_CLARIFY_INTENT_COMPLETE` marker) |
-| `research` | `/survey-code` or `/deep-research` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` |
-| `plan` | `/make-outline-plan` → `/make-detail-plan` (2-stage pipeline; marker emitted by `make-detail-plan`) |
-| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"` after consulting `rules/branch.md` and `rules/worktree.md` (legacy: `WORKFLOW_BRANCHING_DECIDED` also accepted) |
-| `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` |
-| `run_tests` | `/run-tests` skill (preferred) — invokes test-runner agent internally, emits sentinel automatically. Direct Bash path retained: PostToolUse hook (`workflow-run-tests.js`) auto-marks based on exit code when command touches `tests/` or invokes a test runner. Manual fallback: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
-| `review_security` | `/review-code-security` skill (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
+| `workflow_init` | `/workflow-init` skill (emits `WORKFLOW_MARK_STEP_workflow_init_complete`) |
+| `clarify_intent` | `/clarify-intent` skill (emits `WORKFLOW_CLARIFY_INTENT_COMPLETE`) |
+| `research` | `/survey-code` or `/deep-research` (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` |
+| `outline` | `/make-outline-plan` (emits `WORKFLOW_MARK_STEP_outline_complete`) **or** skipped via `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>"` |
+| `detail` | `/make-detail-plan` (emits `WORKFLOW_MARK_STEP_detail_complete`) **or** skipped via `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>"` |
+| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"` after consulting `rules/branch.md` + `rules/worktree.md` |
+| `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>` |
+| `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
+| `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash fallback: `workflow-run-tests.js` PostToolUse hook auto-marks based on exit code. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
+| `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
-| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` — triggers `ask` permission dialog; user must approve (reason mandatory; `validateSkipReason` warns but applies when reason is weak — soft-validation) |
-| `cleanup` | `/worktree-end` skill (worktree path), or branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
+| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` — triggers `ask` permission dialog; reason mandatory |
+| `cleanup` | `/worktree-end` skill (worktree path), branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
+| `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
 
 `write_tests` and `docs` accept evidence-based completion: at commit time, `workflow-gate.js`
 checks `git diff --cached --name-only` and treats staged test/doc files as proof of completion,
@@ -55,8 +68,9 @@ bypassing the state file entry for those steps. The state file still contains th
 (created by `session-start.js` with status `pending`); the evidence override happens only in
 the gate, not in the file.
 
-`research` and `plan` can be bypassed with `skipped` status (written via
-`echo "<<WORKFLOW_MARK_STEP_research_skipped>>"` etc.) when CLAUDE.md skip conditions are met.
+`research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
+their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>"`)
+when CLAUDE.md skip conditions are met.
 
 Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"` as
 the sole Bash command (no pipes, no `&&`, no redirection). The PostToolUse hook
@@ -91,6 +105,8 @@ Session start → session-start.js (SessionStart hook)
       else: copies matching session's steps (state inheritance)
     if no match found in any transcript: creates fresh state with all steps pending
   writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
+  calls bin/workflow/next-step --session <sid> (oracle) → injects all 14 step statuses
+    + "NEXT ACTION: <oracle NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
     (→ recorded in transcript for future sessions to find via the scan above)
   runs zombie cleanup (deletes state files older than 7 days)
@@ -147,11 +163,35 @@ recent session_id in any given JSONL file.
 | Step `pending` or `in_progress` | block |
 | Non-skippable step marked `skipped` | block |
 
-To reset from a specific step (e.g., re-running code phase):
+## Oracle-driven sequencing
+
+Step ordering is owned by `bin/workflow/next-step` (the workflow oracle). After each skill completes, the model queries the oracle with:
+
+```
+node bin/workflow/next-step --session $CLAUDE_SESSION_ID
+```
+
+Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
+
+`--list` mode renders the full 14-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
+
+`session-start.js` also calls the oracle on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
+
+## Reset and emergency resume
+
+To roll back to a specific step (e.g. after a crash or to redo a phase):
+
 ```
 echo "<<WORKFLOW_RESET_FROM_<step>>>"
 ```
-Marks all prior steps `complete`, resets target step and after to `pending`.
+
+`reset-handler.js` (PostToolUse, via `workflow-mark.js`) marks all prior steps `complete` and resets the target step and all subsequent steps to `pending`. The resulting state is consistent and immediately queryable by the oracle. Use `--list` to verify before proceeding.
+
+Priority order for recovery:
+1. **Session resume**: `session-start.js` re-injects oracle verdict automatically — no action needed.
+2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID` for an in-session verdict.
+3. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
+4. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
 
 ## Exemptions
 
