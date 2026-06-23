@@ -96,42 +96,47 @@ run_f1() {
     fi
 }
 
-# F2: l2_phase=frozen, cumulative_severity=error -> SHOULD NOT block (bug fix)
-# Also asserts that l2_retry_count is NOT incremented (the branch should be skipped entirely,
-# not bailed via tryIncrementFrozen).
+# F2: l2_phase=frozen, cumulative_severity=error -> L3 arm, exit 2 (#1044: shouldSkipForSeverity removed)
 run_f2() {
-    require_source "$HOOK" "F2: l2_phase=frozen + cumSev=error -> no block, exit 0" || return
-    local tmp out rc retry_after
+    require_source "$HOOK" "F2: l2_phase=frozen + cumSev=error -> L3 arm, exit 2" || return
+    local tmp out rc l3_phase_after
     tmp="$(mktemp -d)"
     seed_state_phase "$tmp" "f2-sid" "'frozen'" "'error'"
     out=$(run_guard "$tmp" "f2-sid")
     rc=$?
-    retry_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    l3_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('f2-sid');
-process.stdout.write(String(st && st.layer2 ? st.layer2.l2_retry_count : -1));
+if (!st || !st.layer3) { process.stdout.write('MISSING'); process.exit(0); }
+process.stdout.write(String(st.layer3.l3_phase));
 " 2>/dev/null)
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi '"decision":"block"' ) && [ "$retry_after" = "0" ]; then
-        pass "F2: l2_phase=frozen + cumSev=error -> no block, exit 0"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi 'Layer 3 strategic review triggered' ) && [ "$l3_phase_after" = "pending" ]; then
+        pass "F2: l2_phase=frozen + cumSev=error -> L3 arm, exit 2"
     else
-        fail "F2: l2_phase=frozen + cumSev=error -> no block, exit 0 (rc=$rc, retry_count=$retry_after, out=$out)"
+        fail "F2: l2_phase=frozen + cumSev=error -> L3 arm, exit 2 (rc=$rc, l3_phase=$l3_phase_after, out=$out)"
     fi
 }
 
-# F3: l2_phase=done, cumulative_severity=error -> SHOULD NOT block (symmetric)
+# F3: l2_phase=done, cumulative_severity=error -> L3 arm, exit 2 (symmetric with F2)
 run_f3() {
-    require_source "$HOOK" "F3: l2_phase=done + cumSev=error -> no block, exit 0" || return
-    local tmp out rc
+    require_source "$HOOK" "F3: l2_phase=done + cumSev=error -> L3 arm, exit 2" || return
+    local tmp out rc l3_phase_after
     tmp="$(mktemp -d)"
     seed_state_phase "$tmp" "f3-sid" "'done'" "'error'"
     out=$(run_guard "$tmp" "f3-sid")
     rc=$?
+    l3_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const st = w.readState('f3-sid');
+if (!st || !st.layer3) { process.stdout.write('MISSING'); process.exit(0); }
+process.stdout.write(String(st.layer3.l3_phase));
+" 2>/dev/null)
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi '"decision":"block"' ); then
-        pass "F3: l2_phase=done + cumSev=error -> no block, exit 0"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi 'Layer 3 strategic review triggered' ) && [ "$l3_phase_after" = "pending" ]; then
+        pass "F3: l2_phase=done + cumSev=error -> L3 arm, exit 2"
     else
-        fail "F3: l2_phase=done + cumSev=error -> no block, exit 0 (rc=$rc, out=$out)"
+        fail "F3: l2_phase=done + cumSev=error -> L3 arm, exit 2 (rc=$rc, l3_phase=$l3_phase_after, out=$out)"
     fi
 }
 
