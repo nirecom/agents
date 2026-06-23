@@ -20,6 +20,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/cases-g1-g19.sh"
 # shellcheck source=feature-719-supervisor-guard-hook/cases-g20-g28.sh
 source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/cases-g20-g28.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/g-l3-phase-b.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-l3-phase-b.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/g-l3-t5-arm.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-l3-t5-arm.sh"
 
 run_g1
 run_g2
@@ -51,6 +55,15 @@ run_g27
 run_g28
 run_g29
 run_g30
+run_g_b1
+run_g_b2
+run_g_b3
+run_g_b4
+run_g_b5
+run_g_b6
+run_g_t5_1
+run_g_t5_2
+run_g_t5_3
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

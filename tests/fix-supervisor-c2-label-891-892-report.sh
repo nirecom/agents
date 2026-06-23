@@ -36,9 +36,9 @@ guard_implemented() {
     touch "$tmp/probe-sid-final-report-env.json"
     probe=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const state = { layer2: { next_check_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null } };
+const state = { layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null } };
 try { w.ensureLayer2Scheduled(state, 'probe-sid'); } catch (e) { process.stdout.write('error'); process.exit(0); }
-process.stdout.write(state.layer2.next_check_at === null ? 'guarded' : 'unguarded');
+process.stdout.write(state.layer2.l2_armed_at === null ? 'guarded' : 'unguarded');
 " 2>/dev/null)
     rm -rf "$tmp"
     [ "$probe" = "guarded" ]
@@ -56,7 +56,7 @@ require_guard() {
 }
 
 run_r1() {
-    local label="R1: env JSON present -> supervisor-report appends finding, next_check_at stays null"
+    local label="R1: env JSON present -> supervisor-report appends finding, l2_armed_at stays null"
     require_guard "$label" || return
     local tmp out rc sid
     tmp="$(mktemp -d)"
@@ -77,7 +77,7 @@ run_r1() {
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { console.error('no state'); process.exit(2); }
-if (st.layer2.next_check_at !== null) { console.error('next_check_at='+st.layer2.next_check_at); process.exit(3); }
+if (st.layer2.l2_armed_at !== null) { console.error('l2_armed_at='+st.layer2.l2_armed_at); process.exit(3); }
 if (!Array.isArray(st.layer1.findings) || st.layer1.findings.length !== 1) { console.error('findings len='+(st.layer1.findings||[]).length); process.exit(4); }
 console.log('OK');
 " 2>&1)
@@ -91,7 +91,7 @@ console.log('OK');
 }
 
 run_r2() {
-    local label="R2: no env JSON -> supervisor-report schedules L2 review (next_check_at non-null)"
+    local label="R2: no env JSON -> supervisor-report schedules L2 review (l2_armed_at non-null)"
     if [ ! -f "$WRITER_MODULE" ] || [ ! -f "$REPORT_BIN" ]; then
         skip "$label (source not implemented yet)"; return
     fi
@@ -112,7 +112,7 @@ run_r2() {
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { console.error('no state'); process.exit(2); }
-if (st.layer2.next_check_at == null) { console.error('next_check_at not set'); process.exit(3); }
+if (st.layer2.l2_armed_at == null) { console.error('l2_armed_at not set'); process.exit(3); }
 console.log('OK');
 " 2>&1)
     local check_rc=$?

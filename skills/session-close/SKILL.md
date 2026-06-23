@@ -133,6 +133,15 @@ Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `lay
 
 - State file absent: treat as `null` and proceed to SC-6.
 
+### SC-5b — L3 stale-pending repair
+
+Read `layer3.l3_phase` from the same state file.
+
+- If `"pending"` and `l3_last_run_at` is a non-null string (#1051 heuristic: L3 ran but `--set-l3-phase done` was not committed): repair via `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer3" --set-l3-phase done --clear-l3-armed-at` (omit `--session-id` — auto-resolves and mirrors both stores), record a `notice` finding (`detail`: `#1051 heuristic: l3_phase=pending with l3_last_run_at set — repaired to done`), proceed to SC-6.
+- If `"pending"` and `l3_last_run_at === null` and `Date.parse(l3_armed_at)` is NaN OR `(now_ms - Date.parse(l3_armed_at)) > 600000` (L3_TIMEOUT_MS = 10 min): record a `warning` finding (`detail`: `SC-5 L3 elapsed-time fallback: l3_phase=pending, elapsed >10 min`) and proceed to SC-6.
+- If `"pending"` and within the window: same yield pattern as L2 — emit `<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>` and return (the next Stop fires L3 review).
+- If `"done"`, `"frozen"`, `null`, or state-file absent: proceed to SC-6.
+
 ## Step SC-6 — Emit Final Report directly into assistant text
 
 Read four input files via the Read tool:

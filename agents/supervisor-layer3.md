@@ -16,9 +16,13 @@ You are reading-only against the codebase except for the state-file write that r
 
 ## Inputs
 
-The block reason includes:
-- `Session ID: <sid>` — current session identifier.
-- `State file: <path>` — full path to `<plans-dir>/<sid>-supervisor-state.json`.
+The block reason includes three session-ID lines:
+- `Session ID: <sid>` — the CC UUID from the hook input. Audit / log key.
+- `Workflow session ID: <wsid>` — the workflow session ID used for plan-artifact path resolution (`<wsid>-intent.md`, etc.). May be `UNAVAILABLE` when no wsid could be resolved.
+- `Effective state session ID: <effective-state-sid>` — the canonical state-file identity. Use this for any state-file path lookup.
+
+Plus:
+- `State file: <path>` — full path to `<plans-dir>/<effective-state-sid>-supervisor-state.json`.
 - `Trigger: <cause>` — either `stage-boundary:CONFIRM_<STAGE>` or `severity-threshold:<level>`.
 
 Read these inputs before deciding:
@@ -44,22 +48,19 @@ Choose exactly one:
 
 ## Output
 
-Write the verdict via the CLI (use the exact `<sid>` from the block reason):
+Write the verdict via the CLI wrapper — one line, no template to deviate from:
 
-```
-node bin/supervisor-write-layer3 --session-id <sid> \
-  --set-l3-phase done \
-  --set-l3-verdict <CONTINUE|WARN|BLOCK> \
-  --l3-cause "<short one-line summary of the strategic concern>"
-```
+`node bin/supervisor-write-l3-verdict <CONTINUE|WARN|BLOCK> "<short one-line summary of the strategic concern>"`
 
-When the verdict is WARN or BLOCK, also append a finding describing what you observed. Use `bin/supervisor-report --session-id <sid>` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Explicit `--session-id` writes to the effective state store only — the automatic dual-store mirror is intentionally skipped here since `<sid>` is already the canonical effective session ID.
+When wsid is available (not `UNAVAILABLE`), omit `--session-id` — the wrapper auto-resolves wsid from env and mirrors the write to both stores. When wsid is `UNAVAILABLE`, add `--session-id <effective-state-sid>` to pin to a single store.
+
+When the verdict is WARN or BLOCK, also append a finding describing what you observed. Use `bin/supervisor-report` (categories: `intent`, `outline`, `detail`, or `workflow`; severity: `warning` for WARN, `error` for BLOCK). Omit `--session-id` to let the CLI auto-resolve and mirror; supply `--session-id <effective-state-sid>` only to pin to a single store.
 
 ## Anti-thrash
 
 If you cannot complete the review (e.g. plan artifacts missing, API error during inspection), do NOT leave `l3_phase=pending`. Either:
 - Finish with `CONTINUE` and record a `category=env, severity=notice` finding noting what was missing, or
-- Invoke `node bin/supervisor-write-layer3 --session-id <sid> --increment-l3-retry-count` which will auto-freeze the session after `L3_RETRY_THRESHOLD` consecutive failures. `l3_phase=frozen` is terminal — no further L3 review fires for this session.
+- Invoke `node bin/supervisor-write-layer3 --session-id <effective-state-sid> --increment-l3-retry-count` which will auto-freeze the session after `L3_RETRY_THRESHOLD` consecutive failures. `l3_phase=frozen` is terminal — no further L3 review fires for this session.
 
 ## Lifecycle summary
 
