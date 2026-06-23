@@ -205,12 +205,15 @@ if (require.main === module) {
 
   let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath, incrementL2RetryCount, writeLayer3State;
   let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
+  let arbitrate, formatIntegratedReason;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState, getStatePath, incrementL2RetryCount, writeLayer3State } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason } = require("./lib/supervisor-report-format"));
+    ({ arbitrate } = require("./lib/supervisor-guard/arbitrate"));
+    ({ formatIntegratedReason } = require("./lib/supervisor-guard/format-integrated"));
   } catch (_) {
     process.exit(0);
   }
@@ -236,11 +239,20 @@ if (require.main === module) {
   // canonical shape. Fail-open (exit 0) — the guard must never block on its own input parse.
   if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) process.exit(0);
 
+  // wsid resolution for the L3-arm three-ID stanza and effective-state fallback.
+  // Priority: WORKFLOW_SESSION_ID env var (set by /worktree-start, propagates
+  // cleanly into hook subprocesses) > CWD WORKTREE_NOTES.md / plans-dir scan
+  // (defensive fallback when env propagation breaks — Anthropic bug #27987).
   let workflowSessionId = null;
-  try {
-    workflowSessionId = resolveWorkflowSessionId({});
-  } catch (_) {
-    workflowSessionId = null;
+  const envWsid = process.env.WORKFLOW_SESSION_ID;
+  if (envWsid && /^[A-Za-z0-9_-]+$/.test(envWsid)) {
+    workflowSessionId = envWsid;
+  } else {
+    try {
+      workflowSessionId = resolveWorkflowSessionId({});
+    } catch (_) {
+      workflowSessionId = null;
+    }
   }
 
   let effectiveSupervisorStateSessionId = sessionId;
@@ -301,23 +313,6 @@ if (require.main === module) {
   const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
   const l2Phase = layer2.l2_phase === undefined ? null : layer2.l2_phase;
 
-  // L3 Phase B: surface completed verdict (before L2 branches so L3 BLOCK takes precedence).
-  const layer3 = (state && state.layer3) || {};
-  const l3Phase = layer3.l3_phase === undefined ? null : layer3.l3_phase;
-  if (l3Phase === "done" && writeLayer3State) {
-    const l3Verdict = layer3.l3_verdict;
-    // Consume l3_phase regardless of verdict so it doesn't re-fire.
-    try { writeLayer3State(effectiveSupervisorStateSessionId, { l3_phase: null }); } catch (_) {}
-    if (l3Verdict === "BLOCK") {
-      const l3Reason = layer3.l3_cause || "Layer 3 strategic review: BLOCK verdict.";
-      try {
-        process.stdout.write(JSON.stringify({ decision: "block", reason: l3Reason }) + "\n");
-      } catch (_) {}
-      process.exit(2);
-    }
-    // WARN/CONTINUE: fall through to L2 branches.
-  }
-
   const agentsDir = process.env.AGENTS_CONFIG_DIR || "";
   const supervisorPath = agentsDir
     ? path.join(agentsDir, "agents", "supervisor.md")
@@ -341,6 +336,64 @@ if (require.main === module) {
     } catch (_) {
       return false; // fail-open
     }
+  }
+
+  // L3 Phase B: surface completed verdict. Placed after detector vars and tryIncrementFrozen.
+  const layer3 = (state && state.layer3) || {};
+  const l3Phase = layer3.l3_phase === undefined ? null : layer3.l3_phase;
+  let pendingL3WarnContext = null;
+  if (l3Phase === "done" && writeLayer3State) {
+    const l3Verdict = layer3.l3_verdict;
+    const l3Cause = layer3.l3_cause || null;
+    // Consume l3_phase regardless of verdict so Phase B doesn't re-fire next cycle.
+    try { writeLayer3State(effectiveSupervisorStateSessionId, { l3_phase: null }); } catch (_) {}
+    // Mirror the clear so the other identity's store doesn't retain a stale l3_phase=done.
+    const l3PhaseClearMirrorSid =
+      effectiveSupervisorStateSessionId === sessionId ? workflowSessionId : sessionId;
+    if (l3PhaseClearMirrorSid && l3PhaseClearMirrorSid !== effectiveSupervisorStateSessionId) {
+      try { writeLayer3State(l3PhaseClearMirrorSid, { l3_phase: null }); } catch (_) {}
+    }
+    const l3Candidate = {
+      verdict: l3Verdict || "CONTINUE",
+      reason: l3Cause || `Layer 3 strategic review: ${l3Verdict || "CONTINUE"} verdict.`,
+    };
+    // Build L2 candidate only when an L2 branch would also fire this cycle.
+    let l2Candidate = null;
+    const l2WouldFire = !askUserQuestionTurn &&
+      l2Phase !== "done" && l2Phase !== "frozen" &&
+      (cumSev === "error" || hangDetected || l2ArmedAt);
+    if (l2WouldFire) {
+      let l2Reason;
+      if (cumSev === "error") {
+        l2Reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+      } else {
+        const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
+        l2Reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+      }
+      l2Candidate = { verdict: "BLOCK", reason: l2Reason };
+    }
+    const arbitration = arbitrate ? arbitrate(l2Candidate, l3Candidate) : { decision: "allow", source: null, reason: "" };
+    if (arbitration.decision === "block") {
+      if (arbitration.source === "l2") {
+        // L2-only block: apply L2 freeze logic (matches branches 2/3 behavior).
+        if (tryIncrementFrozen()) process.exit(0);
+      }
+      // l3 or both source: never call tryIncrementFrozen (L3 has its own freeze).
+      const integratedReason = formatIntegratedReason
+        ? formatIntegratedReason(arbitration, l2Candidate && l2Candidate.reason, l3Candidate.reason)
+        : (arbitration.reason || l3Candidate.reason);
+      try {
+        process.stdout.write(JSON.stringify({ decision: "block", reason: integratedReason }) + "\n");
+      } catch (_) {}
+      process.exit(2);
+    }
+    if (arbitration.decision === "warn") {
+      // Stash WARN and fall through — C3 BLOCK must take precedence (surfaced below at sub-step 2d).
+      pendingL3WarnContext = formatIntegratedReason
+        ? formatIntegratedReason(arbitration, l2Candidate && l2Candidate.reason, l3Candidate.reason)
+        : l3Candidate.reason;
+    }
+    // decision === "allow" or unrecognized: fall through to existing branches.
   }
 
   // (C3) WORKTREE_OFF proposal pre-detection
@@ -376,6 +429,15 @@ if (require.main === module) {
     process.exit(2);
   }
 
+  // L3 WARN surface (sub-step 2d): after L2 blocking branches, before advisory branch (4).
+  // Precedence: L3 BLOCK > C3 > L2 BLOCK > L3 WARN > L2 advisory. Stash was set in Phase B above.
+  if (pendingL3WarnContext !== null) {
+    try {
+      process.stdout.write(JSON.stringify({ additionalContext: pendingL3WarnContext }) + "\n");
+    } catch (_) {}
+    process.exit(0);
+  }
+
   // (4)
   if (cumSev === "warning" || cumSev === "notice") {
     const advisory =
@@ -398,11 +460,7 @@ if (require.main === module) {
       const lastRunCause = layer3.l3_cause || null;
       const lastRunAt = layer3.l3_last_run_at || null;
       const alreadyRanForCause = lastRunAt && l3Trigger.cause && l3Trigger.cause === lastRunCause;
-      // Severity-threshold arm is suppressed when L2 is already done or frozen — L2 already reviewed.
-      const shouldSkipForSeverity = l3Trigger.cause &&
-        l3Trigger.cause.startsWith("severity-threshold") &&
-        (l2Phase === "done" || l2Phase === "frozen");
-      if (l3Trigger.shouldArm && !alreadyRanForCause && !shouldSkipForSeverity) {
+      if (l3Trigger.shouldArm && !alreadyRanForCause) {
         try {
           writeLayer3State(effectiveSupervisorStateSessionId, {
             l3_phase: "pending",
@@ -417,7 +475,9 @@ if (require.main === module) {
         const l3ArmReason = [
           "[EM Supervisor] Layer 3 strategic review triggered.",
           `Trigger: ${l3Trigger.cause}`,
-          `Session ID: ${effectiveSupervisorStateSessionId}`,
+          `Session ID: ${sessionId}`,
+          `Workflow session ID: ${workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId}`,
+          `Effective state session ID: ${effectiveSupervisorStateSessionId}`,
           `State file: ${stateFilePath}`,
           "",
           "Run the Layer 3 strategic review agent (Task tool or Agent tool):",

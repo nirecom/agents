@@ -1,10 +1,17 @@
 #!/bin/bash
 # tests/feature-885-enforce-issue-close-ssot-import.sh
 # Tests: hooks/enforce-issue-close.js
-# Tags: enforce-issue-close, ssot, inline-skill-re, axis-a, feature-885
+# Tags: enforce-issue-close, ssot, inline-skill-re, axis-a, feature-885, scope:issue-specific
 # Tests for issue #885 — INLINE_SKILL_RE moves to hooks/lib/block-predicates.js
 # (SSOT). enforce-issue-close.js must require() it from there and must not
 # redefine it inline. Also verifies behavioral compatibility unchanged.
+#
+# L3 gap (what this test does NOT catch):
+# - hook registration in settings.json Stop hooks — if enforce-issue-close.js is not wired,
+#   bare gh-issue-close blocking is fully absent but these tests still pass
+#   because they invoke the hook script directly
+# - Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
+#   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged
 
 set -u
 
