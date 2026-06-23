@@ -82,12 +82,12 @@ run_l1e() {
     local label="L1-e: block-reason interpolates 'Layer 2 review required (C2 scheduled-review)'"
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "l1e-sid" "{ next_check_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending' }"
+    seed_state "$tmp" "l1e-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"l1e-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -q 'Layer 2 review required (C2 scheduled-review)' ); then
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -q 'Layer 2 review required (C2 scheduled review)' ); then
         pass "$label"
     else
         fail "$label (rc=$rc, out=$out)"

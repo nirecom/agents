@@ -3,11 +3,14 @@
 
 const { writeLayer3State, incrementL3RetryCount } = require("../hooks/lib/supervisor-state-writer");
 const { L3_PHASE_VALUES, L3_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
+const { resolveSessionId } = require("../hooks/lib/workflow-state");
+const { resolveWorkflowSessionId } = require("../hooks/lib/resolve-workflow-session-id");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 const KNOWN_VALUE_FLAGS = new Set([
   "--session-id",
+  "--mirror-session-id",
   "--l3-armed-at",
   "--last-run-at",
   "--set-l3-phase",
@@ -19,7 +22,7 @@ const KNOWN_BOOL_FLAGS = new Set(["--clear-l3-armed-at", "--increment-l3-retry-c
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-layer3] ERROR: ${msg}`);
   console.error(
-    "Usage: node bin/supervisor-write-layer3 --session-id <sid>" +
+    "Usage: node bin/supervisor-write-layer3 [--session-id <sid>] [--mirror-session-id <sid>]" +
     " [--l3-armed-at <iso>] [--clear-l3-armed-at]" +
     " [--last-run-at <iso>]" +
     " [--set-l3-phase <pending|in_progress|done|frozen>]" +
@@ -45,59 +48,127 @@ for (let i = 0; i < argv.length; i++) {
   usage(`unknown flag: ${tok}`);
 }
 
-const sid = args["session-id"];
-if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
+// Session-ID resolution: ordered fallback chain.
+// Track source so MIRROR_RESOLVERS can find the "other" identity automatically.
+// NOTE: no WORKTREE_NOTES.md / plans-dir scan — callers without env or flag must error out.
+const SID_SOURCES = [
+  { source: "explicit", get: () => args["session-id"] },
+  { source: "wsid",     get: () => process.env.WORKFLOW_SESSION_ID },
+  { source: "ccuuid",   get: () => process.env.CLAUDE_SESSION_ID },
+];
+let rawSid, rawSidSource;
+for (const src of SID_SOURCES) {
+  const val = src.get();
+  if (val && SESSION_ID_RE.test(val)) { rawSid = val; rawSidSource = src.source; break; }
+}
+if (!rawSid) {
+  console.error("Error: --session-id required (could not auto-resolve)");
+  process.exit(1);
+}
 
-const hasL3ArmedAt = "l3-armed-at" in args;
-const hasClearL3ArmedAt = flags.has("--clear-l3-armed-at");
-const hasLastRunAt = "last-run-at" in args;
-const hasSetL3Phase = "set-l3-phase" in args;
-const hasSetL3Verdict = "set-l3-verdict" in args;
-const hasL3Cause = "l3-cause" in args;
-const hasIncrementRetry = flags.has("--increment-l3-retry-count");
+const FLAG_SPECS = {
+  "l3-armed-at":       { kind: "value", patch: (v) => ({ l3_armed_at: v }),        mutexGroup: "armed-at" },
+  "clear-l3-armed-at": { kind: "bool",  patch: ()  => ({ l3_armed_at: null }),      mutexGroup: "armed-at" },
+  "last-run-at":       { kind: "value", patch: (v) => ({ l3_last_run_at: v }) },
+  "l3-cause":          { kind: "value", patch: (v) => ({ l3_cause: v }) },
+  "set-l3-phase": {
+    kind: "value",
+    validate(v) {
+      const allowed = L3_PHASE_VALUES.filter((x) => x !== null);
+      if (!allowed.includes(v)) usage(`--set-l3-phase must be one of ${allowed.join("|")}`);
+    },
+    patch(v, ctx) {
+      const p = { l3_phase: v };
+      if (v === "done") {
+        p.l3_retry_count = 0;
+        if (!ctx.activeFlags.has("last-run-at")) p.l3_last_run_at = new Date().toISOString();
+      }
+      return p;
+    },
+  },
+  "set-l3-verdict": {
+    kind: "value",
+    validate(v) {
+      if (!L3_VERDICT_VALUES.includes(v)) usage(`--set-l3-verdict must be one of ${L3_VERDICT_VALUES.join("|")}`);
+    },
+    patch: (v) => ({ l3_verdict: v }),
+  },
+};
 
-if (hasL3ArmedAt && hasClearL3ArmedAt) usage("--l3-armed-at and --clear-l3-armed-at are mutually exclusive");
+// #1052: Identity-agnostic dual-store mirror-write.
+// Mirror only when rawSidSource is auto-resolved OR explicit --mirror-session-id supplied;
+// explicit --session-id without --mirror-session-id writes only to the named store.
+const MIRROR_RESOLVERS = {
+  explicit: () => null,
+  wsid: () => {
+    const envCc = process.env.CLAUDE_SESSION_ID;
+    if (envCc && envCc !== rawSid && SESSION_ID_RE.test(envCc)) return envCc;
+    try {
+      const ccId = resolveSessionId({ sessionIdFromInput: null, transcriptPath: null });
+      if (ccId && ccId !== rawSid && SESSION_ID_RE.test(ccId)) return ccId;
+    } catch (_) {}
+    return null;
+  },
+  ccuuid: () => {
+    const envWs = process.env.WORKFLOW_SESSION_ID;
+    if (envWs && envWs !== rawSid && SESSION_ID_RE.test(envWs)) return envWs;
+    try {
+      const ws = resolveWorkflowSessionId({});
+      if (ws && ws !== rawSid && SESSION_ID_RE.test(ws)) return ws;
+    } catch (_) {}
+    return null;
+  },
+};
 
-if (hasIncrementRetry) {
-  const hasOther = hasL3ArmedAt || hasClearL3ArmedAt || hasLastRunAt || hasSetL3Phase || hasSetL3Verdict || hasL3Cause;
-  if (hasOther) usage("--increment-l3-retry-count is mutually exclusive with other mutating flags");
-  const result = incrementL3RetryCount(sid);
+// Detect active flags
+const activeFlags = new Set();
+for (const flag of Object.keys(FLAG_SPECS)) {
+  const spec = FLAG_SPECS[flag];
+  if (spec.kind === "bool" ? flags.has(`--${flag}`) : (flag in args)) activeFlags.add(flag);
+}
+
+// Mutex group check
+const groupCounts = {};
+for (const flag of activeFlags) {
+  const grp = FLAG_SPECS[flag].mutexGroup;
+  if (grp) groupCounts[grp] = (groupCounts[grp] || 0) + 1;
+}
+for (const [grp, count] of Object.entries(groupCounts)) {
+  if (count > 1) usage(`flags in group "${grp}" are mutually exclusive`);
+}
+
+// --increment-l3-retry-count: orthogonal terminal path (no FLAG_SPEC — handled separately)
+if (flags.has("--increment-l3-retry-count")) {
+  if (activeFlags.size > 0) usage("--increment-l3-retry-count is mutually exclusive with other mutating flags");
+  const result = incrementL3RetryCount(rawSid);
   console.log(JSON.stringify(result));
   process.exit(0);
 }
 
-if (!hasL3ArmedAt && !hasClearL3ArmedAt && !hasLastRunAt && !hasSetL3Phase && !hasSetL3Verdict && !hasL3Cause) {
-  usage("at least one mutating flag required");
-}
+if (activeFlags.size === 0) usage("at least one mutating flag required");
 
+// Build patch via FLAG_SPECS table
+const ctx = { activeFlags };
 const patch = {};
-if (hasL3ArmedAt) patch.l3_armed_at = args["l3-armed-at"];
-if (hasClearL3ArmedAt) patch.l3_armed_at = null;
-if (hasLastRunAt) patch.l3_last_run_at = args["last-run-at"];
-if (hasL3Cause) patch.l3_cause = args["l3-cause"];
-
-if (hasSetL3Phase) {
-  const raw = args["set-l3-phase"];
-  // Exclude null from the user-facing enum (null is internal-only via writer).
-  const allowed = L3_PHASE_VALUES.filter((v) => v !== null);
-  if (!allowed.includes(raw)) usage(`--set-l3-phase must be one of ${allowed.join("|")}`);
-  patch.l3_phase = raw;
-  if (raw === "done") {
-    patch.l3_retry_count = 0;
-    // Auto-populate l3_last_run_at so dedup in Phase A works without requiring --last-run-at.
-    if (!hasLastRunAt) patch.l3_last_run_at = new Date().toISOString();
-  }
+for (const flag of activeFlags) {
+  const spec = FLAG_SPECS[flag];
+  const value = spec.kind === "bool" ? true : args[flag];
+  if (spec.validate) spec.validate(value);
+  Object.assign(patch, spec.patch(value, ctx));
 }
 
-if (hasSetL3Verdict) {
-  const raw = args["set-l3-verdict"];
-  if (!L3_VERDICT_VALUES.includes(raw)) usage(`--set-l3-verdict must be one of ${L3_VERDICT_VALUES.join("|")}`);
-  patch.l3_verdict = raw;
-}
-
-const ok = writeLayer3State(sid, patch);
+const ok = writeLayer3State(rawSid, patch);
 if (!ok) {
   console.error("[supervisor-write-layer3] ERROR: writeLayer3State failed (invalid fields or unexpected error)");
   process.exit(1);
 }
+
+// Mirror-write via MIRROR_RESOLVERS table
+let mirrorSid = args["mirror-session-id"];
+if (!mirrorSid) mirrorSid = MIRROR_RESOLVERS[rawSidSource]();
+if (mirrorSid && mirrorSid !== rawSid && SESSION_ID_RE.test(mirrorSid)) {
+  const mirrorOk = writeLayer3State(mirrorSid, patch);
+  if (!mirrorOk) console.error(`[supervisor-write-layer3] WARN: mirror-write to ${mirrorSid} failed`);
+}
+
 process.exit(0);
