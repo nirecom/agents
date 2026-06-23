@@ -15,8 +15,7 @@ const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 
 // Steps tracked by the workflow but not enforced at commit time.
-// The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
-const NON_GATE_STEPS = ["research"];
+const NON_GATE_STEPS = ["research", "pre_final_report_gate"];
 const { parseGitConfigValues } = require("./lib/parse-git-args");
 
 const { normalizeForWindows } = require("./workflow-gate/path-normalize");

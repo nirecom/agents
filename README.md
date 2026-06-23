@@ -16,8 +16,8 @@ Codex CLI and Gemini CLI are both supported (install with `-Develop`).
 ### Hook-enforced end-to-end workflow
 
 Most agent frameworks rely on the model to remember process steps. This framework encodes
-the dev workflow — research → plan → write-tests → code → run-tests → security-review →
-docs → user-verification — as a per-session state machine. A PreToolUse hook physically
+the dev workflow as a deterministic oracle-driven state machine. After each skill completes,
+the model queries `bin/workflow/next-step` for the next step; a PreToolUse hook physically
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
 
 ```mermaid
@@ -29,10 +29,10 @@ flowchart TD
     classDef parallel  fill:#6d28d9,stroke:#4c1d95,color:#fff
 
     Task([Task]) --> DocCheck{Docs-only<br/>changes?}
-    DocCheck -- Yes --> UV["8 · User verify"]
+    DocCheck -- Yes --> UV["12 · User verify"]
     DocCheck -- No  --> S0_sg
 
-    subgraph S0_sg["0 · workflow-init"]
+    subgraph S0_sg["1 · workflow-init"]
         direction TB
         S0_R["Issue routing"]
         subgraph S0_surv["Parallel surveys"]
@@ -42,39 +42,39 @@ flowchart TD
         S0_R --> S0_surv
     end
 
-    S0_sg --> S1["1 · clarify-intent<br/>skippable"]
+    S0_sg --> S1["2 · clarify-intent<br/>skippable"]
     S1  --> P2a
 
-    subgraph Plan["2 · Plan  —  3-stage pipeline"]
+    subgraph Plan["3-5 · Plan  —  3-stage pipeline"]
         direction TB
-        P2a["2a · survey / deep-research<br/>fallback · skippable"] --> P2b_sg
-        subgraph P2b_sg["2b · make-outline-plan"]
+        P2a["3 · survey / deep-research<br/>fallback · skippable"] --> P2b_sg
+        subgraph P2b_sg["4 · make-outline-plan"]
             direction LR
             P2b_L["Planner<br/>(Claude)"] <--> P2b_R["Reviewer<br/>(Codex)"]
         end
         P2b_sg --> P2c_sg
-        subgraph P2c_sg["2c · make-detail-plan"]
+        subgraph P2c_sg["5 · make-detail-plan"]
             direction LR
             P2c_L["Planner<br/>(Claude)"] <--> P2c_R["Reviewer<br/>(Codex)"]
         end
     end
 
-    Plan --> S3["3 · Branch / Worktree decision<br/>main · branch · worktree"]
-    S3   --> S4["4 · write-tests<br/>before code · skippable"]
-    S4   --> S5["5 · Code<br/>on: Edit direct / off: diff → approve"]
+    Plan --> S3["6 · Branch / Worktree<br/>main · branch · worktree"]
+    S3   --> S4["7-8 · write-tests & review<br/>before code · skippable"]
+    S4   --> S5["Code"]
 
     S5 --> S6a & S6b & S6c & S6d
 
-    subgraph Review["6 · Parallel review"]
-        S6a["Run tests"]
-        S6b["/review-code-security"]
+    subgraph Review["9-10 · Tests & Security"]
+        S6a["run-tests"]
+        S6b["review-code-security"]
         S6c["review-code-codex<br/>Codex second opinion"]
         S6d["review-skill-size"]
     end
 
-    S6a & S6b & S6c & S6d --> S7["7 · update-docs"]
+    S6a & S6b & S6c & S6d --> S7["11 · Docs"]
     S7 --> UV
-    UV --> S9["9 · commit-push<br/>blocked until all steps done"]
+    UV --> S9["Commit & push<br/>blocked until all steps done"]
 
     S9 --> Cleanup{worktree · branch<br/>or main?}
     Cleanup -- worktree --> WE["/worktree-end<br/>merge + cleanup"]
@@ -96,6 +96,25 @@ flowchart TD
     class S1,P2a,S4 skippable
     class P2b_L,P2c_L,S0_R,S3,S5,S7,UV,S9,WE,PR,IC required
     class P2b_R,P2c_R,S0_SC,S0_SH,S6a,S6b,S6c,S6d parallel
+```
+
+Inspect the step list and current session state with `bin/workflow/next-step --list`:
+
+```
+ 1  workflow_init       Initialize session state and GitHub issue
+ 2  clarify_intent      Interview and write intent.md
+ 3  research            Run survey-code and/or deep-research
+ 4  outline             Propose high-level approaches
+ 5  detail              File-level implementation plan
+ 6  branching_complete  Create feature branch and worktree
+ 7  write_tests         Write tests for planned changes
+ 8  review_tests        Review test coverage adequacy
+ 9  run_tests           Run test suite and security review
+10  review_security     Adversarial security code review
+11  docs                Update docs and changelog
+12  user_verification   User verifies the implementation
+13  cleanup             Remove worktree and merge branch
+14  pre_final_report_gate  Final report and session close
 ```
 
 - **Evidence-based completion**: staging `tests/` and `docs/*.md` files automatically

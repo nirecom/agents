@@ -3,7 +3,7 @@
 // step. Marks user_verification as complete and records the approval reason.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, nextStepHint } = require("../lib/workflow-state");
+const { markStep } = require("../lib/workflow-state");
 const {
   USER_VERIFIED_RE_DQ, USER_VERIFIED_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
@@ -43,8 +43,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "user_verification", "complete");
-      const hint = nextStepHint("user_verification");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. user_verification NOT recorded.`
