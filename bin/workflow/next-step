@@ -243,7 +243,12 @@ function computeVerdict(rawSid) {
       return;
     }
     if (i > currentIdx && status === "complete") {
-      emit("abort", "", "", "inconsistent: " + step + " is complete but " + currentStep + " is pending");
+      emit(
+        "abort",
+        "",
+        'Stale state from a prior workflow run detected. Re-run /workflow-init to reset (it clears downstream steps automatically), or run: echo "<<WORKFLOW_RESET_FROM_' + currentStep + '>>>"',
+        "inconsistent: " + step + " is complete but " + currentStep + " is pending"
+      );
       return;
     }
   }
