@@ -485,4 +485,8 @@ Changes: **Hook:** `gh issue close` inline bypass form (`ISSUE_CLOSE_SKILL=1 gh 
 
 ### FEATURE: PR #1055 (2026-06-23)
 Background: fix(#1049): state-first guard in wip-state clear prevents Status=Done on open issues
-Changes: Fixed: `wip-state clear` no longer accidentally closes open issues via Projects v2 Status=Done when removing a stale WIP lock.
+Changes: Fixed: `wip-state clear` no longer accidentally closes open issues via Projects v2 Status=Done when removing a stale WIP lock.
+
+### FEATURE: PR #1054 (2026-06-23)
+Background: fix(#939,#1043,#1044,#1051,#1052,#883): L3 supervisor: wire Phase B arbitrate, fix T5 arm, SC-5b stale-pending, wsid routing, session-ID stanza, test rename
+Changes: L3 review WARN and BLOCK verdicts now surface at the next Stop event — previously WARN was dropped and BLOCK was unreachable when L2 phase was done/frozen (#1043, #1044);`/session-close` now repairs stale L3 pending state using the same elapsed-time heuristic as the L2 SC-5 repair (#1051);`bin/supervisor-write-layer3` now mirrors writes to both wsid and CC UUID stores when both are available, matching `bin/supervisor-report` behavior (#1052);L3 arm block reason now shows Session ID, Workflow session ID, and Effective state session ID separately for easier cross-store debugging (#883)
