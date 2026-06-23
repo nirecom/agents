@@ -62,7 +62,7 @@ UD-8c. Do NOT write `docs/history.md` or `CHANGELOG.md` directly — deferred to
 UD-8d. Stage: `git add docs/ README.md` (intentionally omits `CHANGELOG.md` and `docs/history.md`).
 UD-8e. Commit gate is satisfied by `docs/` staged entries (architecture.md, ops.md, README.md, etc.).
 UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate.
-UD-8g. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
+UD-8g. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>`.
 
 ### Path B — ENFORCE_WORKTREE=off
 
@@ -75,4 +75,4 @@ UD-9b. For public repos — delegate changelog entry to doc-append-worker:
    On `failed` status: surface `artifact_path` to the user and stop.
 UD-9c. `git add docs/ README.md CHANGELOG.md`
 UD-9d. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate.
-UD-9e. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>` and invoke `commit-push`.
+UD-9e. Wait for user verification; emit `<<WORKFLOW_USER_VERIFIED: <reason>>>`.

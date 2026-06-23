@@ -74,7 +74,6 @@ RCS-1. **Delegate scan to security-scanner**:
 After reporting findings:
 1. Run (as a standalone Bash command — no pipes, no && chaining):
    `echo "<<WORKFLOW_MARK_STEP_review_security_complete>>"`
-2. Invoke `update-docs` via the Skill tool.
 
 ## Relationship to Other Tools
 

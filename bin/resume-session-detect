@@ -5,7 +5,6 @@ const {
   resolveSessionId,
   readState,
   VALID_STEPS,
-  STEP_HINT,
 } = require("../hooks/lib/workflow-state");
 
 const STEP_TO_SKILL = Object.freeze({
@@ -29,7 +28,7 @@ function detect() {
     const s = (state.steps[step] || {}).status;
     if (s === "in_progress") {
       if (STEP_TO_SKILL[step]) return { type: "skill", step, skill: STEP_TO_SKILL[step] };
-      return { type: "sentinel-wait", step, hint: STEP_HINT[step] || step };
+      return { type: "sentinel-wait", step, hint: step };
     }
   }
   return { type: "none", reason: "no_in_progress" };

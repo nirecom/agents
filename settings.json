@@ -257,11 +257,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-cleanup-reminder.js\"",
-            "timeout": 5
-          },
-          {
-            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-confirm-plan-guard.js\"",
             "timeout": 5
           },
