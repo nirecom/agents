@@ -24,6 +24,10 @@ TMPDIR_WT="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_WT"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_WT"
 
+# Derive oracle path from the test file's own location so worktree runs
+# test the worktree's oracle rather than the one in $AGENTS_CONFIG_DIR.
+ORACLE_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 PASS=0
 FAIL=0
 
@@ -63,7 +67,7 @@ write_state() {
 }
 
 run_oracle() {
-  run_with_timeout node "$AGENTS_CONFIG_DIR/bin/workflow/next-step" "$@"
+  run_with_timeout node "$ORACLE_AGENTS_DIR/bin/workflow/next-step" "$@"
 }
 
 # All-pending fixture (closes_issues populated so clarify_intent isn't blocked).
@@ -93,6 +97,10 @@ JSON_CORRUPT='{invalid json'
 
 # review_tests complete while write_tests still pending — impossible ordering.
 JSON_INCONSISTENT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"pending"},"review_tests":{"status":"complete"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
+
+# Cross-task contamination: workflow_init+clarify_intent just ran (new session start), but
+# pre_final_report_gate is complete from a prior workflow on the same CC session UUID (#1068).
+JSON_CROSS_TASK_CONTAM='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[1053]}'
 
 # Mixed-state fixture for --list (case 15): a few complete, one skipped, current is detail.
 JSON_LIST_MIXED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"skipped"},"outline":{"status":"complete"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
@@ -215,6 +223,23 @@ run_tests() {
   eval "$OUT" 2>/dev/null || true
   check "13: inconsistent-state ACTION=abort" "abort" "${ACTION:-}"
   check_contains "13: inconsistent-state REASON marker" "inconsistent:" "${REASON:-}"
+
+  # ---- Case 13b: cross-task contamination (#1068) --------------------------
+  # pre_final_report_gate=complete from a prior workflow run; clarify_intent=pending now.
+  # Oracle must abort with a non-empty NEXT_HINT (recovery hint).
+  ACTION=""; REASON=""; NEXT_HINT=""
+  write_state "case13b" "$JSON_CROSS_TASK_CONTAM"
+  OUT="$(run_oracle --session "case13b" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "13b: cross-task-contam ACTION=abort" "abort" "${ACTION:-}"
+  check_contains "13b: cross-task-contam REASON marker" "inconsistent:" "${REASON:-}"
+  if [ -n "${NEXT_HINT:-}" ]; then
+    echo "PASS: 13b: cross-task-contam NEXT_HINT non-empty"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL: 13b: cross-task-contam NEXT_HINT should be non-empty (got empty)"
+    FAIL=$((FAIL + 1))
+  fi
 
   # ---- Case 14: --list (no session) ----------------------------------------
   local LIST_OUT LINE_COUNT
