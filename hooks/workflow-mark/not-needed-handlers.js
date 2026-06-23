@@ -4,7 +4,7 @@
 // Each family validates the skip reason, records the step as skipped, and returns next-step guidance.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, nextStepHint } = require("../lib/workflow-state");
+const { markStep } = require("../lib/workflow-state");
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
@@ -58,8 +58,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("research");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. research NOT recorded.`
@@ -93,8 +91,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "outline", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("outline");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(`workflow-mark: failed to write state — ${e.message}. outline NOT recorded.`);
     }
@@ -126,8 +122,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "detail", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("detail");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(`workflow-mark: failed to write state — ${e.message}. detail NOT recorded.`);
     }
@@ -166,8 +160,6 @@ function handle(ctx) {
       markStep(sessionId, "review_tests", "skipped", {
         skip_reason: `(symmetric: write_tests not needed) ${v.reason}`,
       });
-      const hint = nextStepHint("write_tests");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. write_tests NOT recorded.`
@@ -203,8 +195,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "review_security", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("review_security");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. review_security NOT recorded.`
@@ -249,8 +239,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "clarify_intent", "skipped", { skip_reason: v.reason });
-      const hint = nextStepHint("clarify_intent");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`

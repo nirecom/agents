@@ -140,4 +140,3 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
 ## Completion
 
 MOP-C1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
-MOP-C2. Invoke `make-detail-plan` via the Skill tool.

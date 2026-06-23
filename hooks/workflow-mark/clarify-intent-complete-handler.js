@@ -2,7 +2,7 @@
 // Handles the CLARIFY_INTENT_COMPLETE sentinel emitted when the clarify-intent
 // interview finishes. Marks the clarify_intent step as complete in workflow state.
 
-const { markStep, nextStepHint } = require("../lib/workflow-state");
+const { markStep } = require("../lib/workflow-state");
 const { CLARIFY_INTENT_COMPLETE_RE_DQ } = require("../lib/sentinel-patterns");
 
 function handle(ctx) {
@@ -19,8 +19,6 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "clarify_intent", "complete");
-      const hint = nextStepHint("clarify_intent");
-      if (hint) pushMessage(hint);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`

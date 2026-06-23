@@ -1,0 +1,283 @@
+#!/usr/bin/env node
+"use strict";
+
+const fs = require("fs");
+const {
+  VALID_STEPS,
+  VALID_STATUSES,
+  readState,
+  getStatePath,
+  resolveSessionId,
+} = require("../../hooks/lib/workflow-state");
+
+// ---- Lookup tables --------------------------------------------------------
+
+const STEP_TO_SKILL = Object.freeze({
+  workflow_init: "workflow-init",
+  clarify_intent: "clarify-intent",
+  research: "survey-code",
+  outline: "make-outline-plan",
+  detail: "make-detail-plan",
+  branching_complete: "",
+  write_tests: "write-tests",
+  review_tests: "review-tests",
+  run_tests: "run-tests",
+  review_security: "review-code-security",
+  docs: "update-docs",
+  user_verification: "",
+  cleanup: "",
+  pre_final_report_gate: "",
+});
+
+const STEP_DESC = Object.freeze({
+  workflow_init: "Initialize session state and GitHub issue",
+  clarify_intent: "Interview and write intent.md",
+  research: "Run survey-code and/or deep-research",
+  outline: "Propose high-level approaches",
+  detail: "File-level implementation plan",
+  branching_complete: "Create feature branch and worktree",
+  write_tests: "Write tests for planned changes",
+  review_tests: "Review test coverage adequacy",
+  run_tests: "Run test suite and security review",
+  review_security: "Adversarial security review and code quality gates",
+  docs: "Update docs and changelog",
+  user_verification: "User verifies the implementation",
+  cleanup: "Remove worktree and merge branch",
+  pre_final_report_gate: "Final report and session close",
+});
+
+const STEP_HINT = Object.freeze({
+  branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed.",
+  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol.",
+  cleanup: "Run /worktree-end (worktree path), delete branch + git push origin --delete (branch path), or echo WORKFLOW_MARK_STEP_cleanup_skipped (main/no-worktree path).",
+  pre_final_report_gate: "Run /session-close from the main worktree.",
+});
+
+// ---- Import-time assertions -----------------------------------------------
+
+(function assertInvariants() {
+  for (const step of VALID_STEPS) {
+    if (!Object.prototype.hasOwnProperty.call(STEP_TO_SKILL, step)) {
+      console.error("next-step: missing STEP_TO_SKILL entry for " + step);
+      process.exit(1);
+    }
+    if (!Object.prototype.hasOwnProperty.call(STEP_DESC, step)) {
+      console.error("next-step: missing STEP_DESC entry for " + step);
+      process.exit(1);
+    }
+  }
+  const checkNoQuote = (obj, label) => {
+    for (const k of Object.keys(obj)) {
+      if (typeof obj[k] === "string" && obj[k].indexOf("'") !== -1) {
+        console.error("next-step: single-quote character in " + label + "[" + k + "]");
+        process.exit(1);
+      }
+    }
+  };
+  checkNoQuote(STEP_TO_SKILL, "STEP_TO_SKILL");
+  checkNoQuote(STEP_DESC, "STEP_DESC");
+  checkNoQuote(STEP_HINT, "STEP_HINT");
+})();
+
+// ---- CLI ------------------------------------------------------------------
+
+function printUsage() {
+  process.stdout.write(
+    "Usage: next-step [--session <sid>] [--list]\n" +
+    "\n" +
+    "Deterministic workflow oracle. Reads session state and emits the next\n" +
+    "workflow step as four KEY=value lines on stdout (ACTION, NEXT_SKILL,\n" +
+    "NEXT_HINT, REASON). Always exits 0.\n" +
+    "\n" +
+    "Options:\n" +
+    "  --session <sid>   Use the given session id instead of resolving one.\n" +
+    "  --list            Print the 14-step workflow plan, with status markers\n" +
+    "                    when --session is provided.\n" +
+    "  -h, --help        Show this help.\n"
+  );
+}
+
+function parseArgs(argv) {
+  const out = { list: false, session: undefined };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") {
+      printUsage();
+      process.exit(0);
+    } else if (a === "--list") {
+      out.list = true;
+    } else if (a === "--session") {
+      if (i + 1 >= argv.length) {
+        process.stderr.write("next-step: --session requires an argument\n");
+        process.exit(1);
+      }
+      out.session = argv[i + 1];
+      i++;
+    } else {
+      process.stderr.write("next-step: unknown option: " + a + "\n");
+      process.exit(1);
+    }
+  }
+  return out;
+}
+
+function emit(action, skill, hint, reason) {
+  process.stdout.write(
+    "ACTION=" + action + "\n" +
+    "NEXT_SKILL=" + (skill || "") + "\n" +
+    "NEXT_HINT='" + (hint || "") + "'\n" +
+    "REASON='" + (reason || "") + "'\n"
+  );
+  process.exit(0);
+}
+
+// ---- --list rendering -----------------------------------------------------
+
+function pad2(n) {
+  const s = String(n);
+  return s.length >= 2 ? s : " " + s;
+}
+
+function renderListPlain() {
+  const lines = [];
+  for (let i = 0; i < VALID_STEPS.length; i++) {
+    const step = VALID_STEPS[i];
+    lines.push(pad2(i + 1) + "  " + step + "  " + STEP_DESC[step]);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function renderListWithState(sid) {
+  // Fail-open: any error -> fall back to plain list.
+  let state = null;
+  try {
+    const sp = getStatePath(sid);
+    if (!fs.existsSync(sp)) return renderListPlain();
+    state = readState(sid);
+    if (!state || typeof state.steps !== "object" || !state.steps) {
+      return renderListPlain();
+    }
+  } catch (_) {
+    return renderListPlain();
+  }
+
+  // Find current step (first non-complete/non-skipped).
+  let currentIdx = -1;
+  for (let i = 0; i < VALID_STEPS.length; i++) {
+    const s = (state.steps[VALID_STEPS[i]] || {}).status || "pending";
+    if (s !== "complete" && s !== "skipped") { currentIdx = i; break; }
+  }
+
+  const issues = state.closes_issues;
+  const issuesEmpty = !issues || !Array.isArray(issues) || issues.length === 0;
+
+  const lines = [];
+  for (let i = 0; i < VALID_STEPS.length; i++) {
+    const step = VALID_STEPS[i];
+    const s = (state.steps[step] || {}).status || "pending";
+    let marker;
+    if (s === "complete") {
+      marker = "[x]";
+    } else if (s === "skipped") {
+      marker = "[-]";
+    } else if (i === currentIdx) {
+      if (step === "clarify_intent" && issuesEmpty) {
+        marker = "[!]";
+      } else {
+        marker = "[*]";
+      }
+    } else {
+      marker = "[ ]";
+    }
+    lines.push(marker + " " + pad2(i + 1) + "  " + step + "  " + STEP_DESC[step]);
+  }
+  return lines.join("\n") + "\n";
+}
+
+// ---- Verdict computation --------------------------------------------------
+
+function computeVerdict(rawSid) {
+  const sid = resolveSessionId({ sessionIdFromInput: rawSid });
+  if (!sid) {
+    emit("blocked", "", "", "session-id-unresolved");
+    return;
+  }
+
+  const statePath = getStatePath(sid);
+  if (!fs.existsSync(statePath)) {
+    emit("invoke", "workflow-init", "Run /workflow-init to initialize the session state.", "no-state");
+    return;
+  }
+
+  const state = readState(sid);
+  if (!state || typeof state.steps !== "object" || !state.steps) {
+    emit("abort", "", "", "corrupt-state: unreadable or non-object JSON");
+    return;
+  }
+
+  // Walk to find currentStep.
+  let currentIdx = -1;
+  let currentStep = null;
+  for (let i = 0; i < VALID_STEPS.length; i++) {
+    const step = VALID_STEPS[i];
+    const status = (state.steps[step] || {}).status || "pending";
+    if (status !== "complete" && status !== "skipped") {
+      currentIdx = i;
+      currentStep = step;
+      break;
+    }
+  }
+
+  if (currentStep === null) {
+    emit("done", "", "", "workflow-complete");
+    return;
+  }
+
+  // Inconsistency: later step is complete OR invalid status anywhere.
+  for (let i = 0; i < VALID_STEPS.length; i++) {
+    const step = VALID_STEPS[i];
+    const stEntry = state.steps[step];
+    const status = stEntry ? stEntry.status : undefined;
+    if (status !== undefined && status !== null && VALID_STATUSES.indexOf(status) === -1) {
+      emit("abort", "", "", "inconsistent: " + step + " has unknown status " + status);
+      return;
+    }
+    if (i > currentIdx && status === "complete") {
+      emit("abort", "", "", "inconsistent: " + step + " is complete but " + currentStep + " is pending");
+      return;
+    }
+  }
+
+  // Per-step precondition: clarify_intent requires closes_issues.
+  if (currentStep === "clarify_intent") {
+    const issues = state.closes_issues;
+    if (!issues || !Array.isArray(issues) || issues.length === 0) {
+      emit("blocked", "", "closes_issues is empty -- run /workflow-init to populate it.", "closes_issues-empty");
+      return;
+    }
+  }
+
+  const skill = STEP_TO_SKILL[currentStep];
+  const hint = skill
+    ? ("Run /" + skill + " via the Skill tool.")
+    : (STEP_HINT[currentStep] || currentStep);
+
+  emit("invoke", skill, hint, currentStep);
+}
+
+// ---- Main -----------------------------------------------------------------
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.list) {
+    if (args.session !== undefined && args.session !== "") {
+      process.stdout.write(renderListWithState(args.session));
+    } else {
+      process.stdout.write(renderListPlain());
+    }
+    process.exit(0);
+  }
+  computeVerdict(args.session);
+}
+
+main();

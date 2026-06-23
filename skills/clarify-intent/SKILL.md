@@ -158,7 +158,6 @@ CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` t
    - Both valid → emit `WORKFLOW_RESEARCH_NOT_NEEDED: surveys already complete via workflow-init`.
    - Either invalid → invoke the affected survey(s) directly before proceeding.
    Optionally invoke `/deep-research` if external knowledge is required.
-   Then invoke `/make-outline-plan`.
 
 ## Rules
 

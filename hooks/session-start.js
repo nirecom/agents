@@ -7,7 +7,7 @@ const os = require("os");
 const { spawnSync } = require("child_process");
 const { cleanupZombies, createInitialState, writeState, readState,
         getCurrentContext, findLatestStateForContext,
-        VALID_STEPS, STEP_HINT } = require("./lib/workflow-state");
+        VALID_STEPS } = require("./lib/workflow-state");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
 
@@ -119,31 +119,45 @@ try {
 function buildWorkflowStatus(sessionId) {
   const state = sessionId ? readState(sessionId) : null;
   const statusLines = ["# Workflow status (this session)"];
-  let nextAction = "clarify-intent (state unavailable)";
+  let nextAction = "run /workflow-init to initialize the session state";
 
   if (state && state.steps) {
     for (const step of VALID_STEPS) {
       const s = (state.steps[step] || {}).status || "pending";
       statusLines.push(`- ${step}: ${s}`);
     }
-    // Find first incomplete step
-    for (const step of VALID_STEPS) {
-      const s = (state.steps[step] || {}).status || "pending";
-      if (s !== "complete" && s !== "skipped") {
-        nextAction = STEP_HINT[step] || step;
-        break;
-      }
-    }
-    // All steps done
-    if (nextAction === "clarify-intent (state unavailable)" &&
-        VALID_STEPS.every(step => ["complete","skipped"].includes((state.steps[step]||{}).status))) {
-      nextAction = "All steps complete. Run /commit-push to commit.";
-    }
   } else {
     for (const step of VALID_STEPS) {
       statusLines.push(`- ${step}: pending`);
     }
-    nextAction = STEP_HINT.workflow_init;
+  }
+
+  // Call oracle for next-action hint (fail-open).
+  if (sessionId) {
+    try {
+      const oracleBin = path.join(__dirname, "..", "bin", "workflow", "next-step");
+      if (fs.existsSync(oracleBin)) {
+        const r = spawnSync(process.execPath, [oracleBin, "--session", sessionId], {
+          encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"],
+        });
+        if (r.status === 0 && r.stdout) {
+          let oracleAction = "";
+          let oracleHint = "";
+          for (const line of r.stdout.split("\n")) {
+            const m = line.match(/^(\w+)=(?:'([^']*)'|(.*))$/);
+            if (m) {
+              if (m[1] === "ACTION") oracleAction = m[2] !== undefined ? m[2] : (m[3] || "");
+              if (m[1] === "NEXT_HINT") oracleHint = m[2] !== undefined ? m[2] : (m[3] || "");
+            }
+          }
+          if (oracleAction === "done") {
+            nextAction = "All steps complete. Run /session-close.";
+          } else if (oracleHint) {
+            nextAction = oracleHint;
+          }
+        }
+      }
+    } catch (e) { /* fail-open */ }
   }
 
   statusLines.push("");

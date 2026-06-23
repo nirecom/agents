@@ -4,7 +4,7 @@
 // (user_verification, write_tests, docs) that must be emitted via their own paths.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, markStep, nextStepHint } = require("../lib/workflow-state");
+const { VALID_STEPS, markStep } = require("../lib/workflow-state");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal } = ctx;
@@ -77,10 +77,6 @@ function handle(ctx) {
 
     try {
       markStep(sessionId, stepName, status);
-      if (status === "complete" || status === "skipped") {
-        const hint = nextStepHint(stepName);
-        if (hint) pushMessage(hint);
-      }
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
