@@ -104,43 +104,22 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ```
 
-## Step SC-4 — Retrospective pass (write-only)
+## Steps SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
-Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings are written to `layer1.findings` for the audit trail only. The final-report-env.json anchor (established at Step 2A) prevents these findings from arming a new L2 cycle for this session.
+Invoke `session-close-worker` via Task tool with resolved absolute paths:
+- `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
+- `plans_dir`: `<PLANS_DIR>` (resolved in SC-0)
+- `agents_config_dir`: absolute path resolved from `$AGENTS_CONFIG_DIR`
+- `artifact_dir`: `$AGENTS_CONFIG_DIR/artifacts/` (create temp dir if needed)
+- `outcome_json_path`: absolute path to `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
 
-## Step SC-5 — Pre-Final-Report L2 gate
+On `status: failed`: emit `supervisor-report` warning and **STOP**. Do NOT proceed to SC-6. User must manually re-run `/session-close`. This path is fail-closed — SC-6 never runs on worker failure.
 
-Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
-
-- `"pending"` and `l2_armed_at !== null`: check `last_run_at`:
-  - `last_run_at !== null` (#961 heuristic: L2 ran but `--set-l2-phase done` was not committed):
-    1. Repair state: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase done --clear-l2-armed-at`
-    2. Record audit finding: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "#961 heuristic: l2_phase=pending with last_run_at set — repaired to done" --reporter session-close`
-    3. Proceed to SC-6.
-  - `last_run_at === null`:
-    - If `Date.parse(l2_armed_at)` is NaN **or** `(now_ms - Date.parse(l2_armed_at)) > 600000` (10 minutes, the **L2_TIMEOUT_MS** threshold): L2 never fired — elapsed-time fallback. Run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "SC-5 elapsed-time fallback: l2_phase=pending, l2_armed_at=<value>, last_run_at=null, elapsed >10 min (or l2_armed_at unparseable)" --reporter session-close` and proceed to SC-6.
-    - Otherwise: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
-    `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
-    The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-6.
-    Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step SC-4 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step SC-2A). This gate therefore reads a stable value.
-
-- `"pending"` and `l2_armed_at === null` (anomalous state — writer set `l2_phase=pending` without `l2_armed_at`, indicating an interrupted write or upstream writer bug): record an **error** finding via `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity error --detail "SC-5 anomalous state: l2_phase=pending, l2_armed_at=null; supervisor-state snapshot: <one-line JSON of layer2 object>" --reporter session-close` and proceed to SC-6.
-  **No L2 review is promised by this branch.** Because the final-report-env.json anchor (Step SC-2A) has already been written, `ensureLayer2Scheduled` is a no-op (frozen schedule). The finding is recorded for audit trail only.
-
-- `"done"` or `null`: proceed to SC-6. (`null` = L2 was never scheduled this session.)
-
-- `"frozen"`: proceed to SC-6. (Final Report re-emit scenario; idempotent.)
-
-- State file absent: treat as `null` and proceed to SC-6.
-
-### SC-5b — L3 stale-pending repair
-
-Read `layer3.l3_phase` from the same state file.
-
-- If `"pending"` and `l3_last_run_at` is a non-null string (#1051 heuristic: L3 ran but `--set-l3-phase done` was not committed): repair via `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer3" --set-l3-phase done --clear-l3-armed-at` (omit `--session-id` — auto-resolves and mirrors both stores), record a `notice` finding (`detail`: `#1051 heuristic: l3_phase=pending with l3_last_run_at set — repaired to done`), proceed to SC-6.
-- If `"pending"` and `l3_last_run_at === null` and `Date.parse(l3_armed_at)` is NaN OR `(now_ms - Date.parse(l3_armed_at)) > 600000` (L3_TIMEOUT_MS = 10 min): record a `warning` finding (`detail`: `SC-5 L3 elapsed-time fallback: l3_phase=pending, elapsed >10 min`) and proceed to SC-6.
-- If `"pending"` and within the window: same yield pattern as L2 — emit `<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>` and return (the next Stop fires L3 review).
-- If `"done"`, `"frozen"`, `null`, or state-file absent: proceed to SC-6.
+On `status: complete`:
+1. Read `gate_action` from `artifact_path` (gate JSON).
+2. **Always** emit `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`.
+3. `gate_action: yield` → **STOP** after sentinel. SC-6 does not run. Supervisor review runs later.
+4. `gate_action: proceed` → continue to SC-6.
 
 ## Step SC-6 — Emit Final Report directly into assistant text
 
@@ -193,7 +172,7 @@ Mark surfaced and complete:
 - `/issue-close-finalize` is invoked via the Skill tool only (never `bash`/`spawnSync`).
 - Non-GitHub remotes never invoke `/issue-close-finalize`; outcomes written by SC-3.
 - Empty `closes_issues` → skip `/issue-close-finalize`, write `{"issues":[]}`, emit Final Report.
-- Fail-open: `/issue-close-finalize` failures surface in outcome JSON; renderer still runs.
+- `/issue-close-finalize` failures surface in outcome JSON; renderer still runs (non-blocking).
 - Every Bash call is self-contained — no shell variable crosses call boundaries.
 - On fallback or step degradation (synthetic outcome fallback, non-GitHub skip path): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter session-close` (session-id auto-resolves).
 - Report observations per rules/supervisor-reporting.md.

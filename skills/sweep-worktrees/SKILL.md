@@ -3,6 +3,7 @@ name: sweep-worktrees
 description: Reclaims zombie linked worktrees (and their branches) that /worktree-end could not remove due to Windows CWD lock or similar.
 user-invocable: true
 model: sonnet
+context: fork
 ---
 
 Reclaims zombie linked worktrees left behind when `/worktree-end` could not
