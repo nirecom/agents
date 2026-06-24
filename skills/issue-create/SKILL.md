@@ -77,50 +77,17 @@ When the user-provided body is missing one or both required fields, use `AskUser
 
 ### Phase 2 — Survey
 
-Dedupe layer for the underlying `bin/github-issues/issue-create.sh`. Skip on non-GitHub remotes:
+Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — proceed to Phase 3 with `verdict: none`.
 
-```bash
-"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
-# rc != 0 → skip survey, jump to Phase 4 with --verdict none
-```
-
-**3-pass dedupe survey.** Extract 3–5 significant tokens (nouns/verbs/identifiers, no stopwords) AND 3–5 symptom-level tokens (behaviors, affected outputs/artifacts, feature area — including artifact names when they represent the affected feature) from the Background / Changes body.
-
-**Pass 1 — keyword + symptom search (parallel):** `gh issue list --state all --limit 50 --search "<kw1> <kw2> <kw3>"` using 3–5 significant tokens. Always also run `gh issue list --state all --limit 50 --search "<st1> <st2> <st3>"` using 3–5 symptom-level tokens. Zero results → drop most specific identifier keyword, retry up to 3 times.
-
-**Pass 2 — recent-open full scan:** `gh issue list --state open --paginate --search "created:>=<YYYY-MM-DD>"` where the date is 30 days before the current date. Also run `gh issue list --state open --limit 50 --search "<st1> <st2> <st3>"` (symptom tokens, no date filter) to surface older open issues. Deduplicate results against Pass 1 before inspection.
-
-**Pass 3 — closed duplicate scan:** `gh issue list --state closed --limit 50 --search "<kw1> <kw2> <kw3>"`. Also run `gh issue list --state closed --limit 50 --search "<st1> <st2> <st3>"` (symptom tokens). Surfaces closed duplicates regardless of closure reason.
-
-Still zero across all three passes → verdict `none`, jump to Phase 4.
-
-**Candidate inspection:** Dedup candidates across Passes 1–3; inspect up to 25 unique candidates (closed candidates first, then exact-token open, then symptom-only open). `gh issue view <N> --json number,title,body,state,labels`.
-
-**Verdict classification** (Claude's semantic judgement):
-
-| Class | Verdict | Notes |
-|---|---|---|
-| **duplicate** (closed or open, same scope) | `reopen` | Confirm before reopening; warn on open-duplicate |
-| **superset-open** (existing open issue covers the new one) | `sub-of` | Attach the new issue under the existing parent |
-| **siblings-open** (≥2 open issues form a group the new one would head) | `make-parent` | Confirm with user; new issue becomes parent, listed issues become its children |
-| **related-open** (overlapping but not subset/superset) | `sibling` | Append `Related to #N` to the new issue body |
-| **recurrence** (same symptom on a closed issue, regardless of how closed) | `reopen` | Confirm before reopening; treat as regression |
-| **unrelated** | (ignore) | — |
-
-No match → verdict `none`.
-
-IC-4. Apply the Verdict Rubric — apply in order before choosing a verdict:
-IC-4a. **Symptom match** (weight: high): does the candidate describe the same observable failure/behavior? Same symptom + same scope → `reopen` or `duplicate` class.
-IC-4b. **Scope overlap** (weight: high): does the candidate's scope substantially overlap the new report's scope? No overlap → class is at most `sibling`.
-IC-4c. **Age is a tie-break only**: a closed issue from 2 years ago with identical symptoms outranks a recent open issue with partial overlap. Do not discard candidates based on age alone.
-IC-4d. **Tie-break order** (when rules IC-4a–IC-4b yield equal weight): closed candidates > open candidates; more recent > older; lower issue number > higher (stable sort).
-IC-4e. **No verdict**: if no candidate matches on both rules IC-4a and IC-4b, verdict is `none`.
+2a. Pre-resolve in main: `session_id` (from `$CLAUDE_SESSION_ID` or env), `agents_config_dir` (absolute), `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
+2b. Invoke `issue-create-survey-worker` via Task tool with `title`, `background`, `changes` from Phase 1 input.
+2c. `status: failed` → stop and report error.
+2d. `status: no_candidates` → `verdict: none` (proceed to Phase 3 directly).
+2e. `status: complete` → read verdict JSON from `artifact_path`.
 
 ### Phase 3 — Confirm
 
-Confirmation is **required** for `reopen` and `make-parent` (mutating actions on
-existing issues). Use `AskUserQuestion`. `sub-of` and `sibling` proceed without
-confirmation; `none` proceeds without confirmation.
+Use `AskUserQuestion` to confirm before acting on `reopen` (mutating — reopens a closed issue) and `make-parent` (mutating — reclassifies existing issues). `reopen` required confirm; `make-parent` required confirm. `sub-of` and `sibling` proceed without confirmation; `none` proceeds without confirmation.
 
 After a `reopen`: continue the workflow using the existing issue number. Follow
 the same routing as `/workflow-init`:

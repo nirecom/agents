@@ -3,6 +3,7 @@ name: sweep-branches
 description: Reclaim merged-but-undeleted local and remote branches. Dry-run by default; --apply to delete.
 user-invocable: true
 model: sonnet
+context: fork
 ---
 
 Reclaims merged-but-undeleted local and remote branches. Local branches are

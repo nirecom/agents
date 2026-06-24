@@ -3,6 +3,7 @@ name: sweep-plans
 description: Reclaim stale ~/.workflow-plans/ session artifacts
 user-invocable: true
 model: sonnet
+context: fork
 ---
 
 # /sweep-plans
