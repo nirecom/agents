@@ -104,6 +104,7 @@
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")",
       "Bash(doc-append *)",
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",

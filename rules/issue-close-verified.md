@@ -11,10 +11,10 @@ or any other hook. Does NOT arm the supervisor (no `reportSentinel()` call).
 
 ## Sentinels
 
-| Sentinel | Effect |
-|---|---|
-| `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: <reason>>>` | Opens bypass window — `gh issue close` allowed from Bash tool |
-| `<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: <reason>>>` | Closes bypass window — guard restored |
+| Sentinel | Permission | Effect |
+|---|---|---|
+| `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: <reason>>>` | **ask** (requires user approval) | Opens bypass window — `gh issue close` allowed from Bash tool |
+| `<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: <reason>>>` | **allow** (auto-approved) | Closes bypass window — guard restored |
 
 The `<reason>` field is mandatory and non-empty.
 
