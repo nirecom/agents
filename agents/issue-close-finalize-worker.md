@@ -4,6 +4,7 @@ description: Multi-pass issue-close-finalize chain with durable state file. Loop
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Execute one pass of the finalize chain using a durable state file for multi-pass coordination. The G.5 recursion is owned by the calling main context — this worker never recurses.
 

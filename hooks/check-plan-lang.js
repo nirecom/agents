@@ -4,9 +4,9 @@ const os = require("os");
 const path = require("path");
 const { loadLangConfig, classifyPolicy } = require("./lib/lang-config");
 const { lintPlanLang } = require("./lib/lint-plan-lang");
+const { isPlanArtifact } = require("./lib/is-plan-artifact");
 
 const TARGET_TOOLS = new Set(["Write", "Edit", "MultiEdit", "editFiles"]);
-const ARTIFACT_RE = /^[0-9]{8}-[0-9]{6}-(intent|outline|detail)\.md$/;
 
 // Read stdin, parse JSON, dispatch
 let raw = "";
@@ -27,7 +27,7 @@ process.stdin.on("end", () => {
   const rel = path.relative(plansDir, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) { approve(); return; }
 
-  if (!ARTIFACT_RE.test(path.basename(resolved))) { approve(); return; }
+  if (!isPlanArtifact(path.basename(resolved))) { approve(); return; }
 
   const policy = loadLangConfig("plan");
   const tier = classifyPolicy(policy);

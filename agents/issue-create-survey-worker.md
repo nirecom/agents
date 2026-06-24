@@ -4,6 +4,7 @@ description: 3-pass GitHub issue dedupe survey. Classifies verdict (none/reopen/
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Survey existing GitHub issues for duplicates, parents, and siblings of a proposed new issue.
 
