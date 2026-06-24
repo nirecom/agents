@@ -68,6 +68,20 @@ def _parse_entries(content: str):
     if current is not None:
         entries.append(current)
 
+    clean_preamble = []
+    in_archived_block = False
+    for line in preamble_lines:
+        if line.startswith("## Archived"):
+            in_archived_block = True
+            continue
+        if in_archived_block:
+            if line.startswith("## ") and not line.startswith("## Archived"):
+                in_archived_block = False
+                clean_preamble.append(line)
+        else:
+            clean_preamble.append(line)
+    preamble_lines = clean_preamble
+
     return entries, "\n".join(preamble_lines)
 
 
@@ -169,7 +183,7 @@ def rotate(
     for e in archive_dated:
         by_year.setdefault(e["date"].year, []).append(e)
 
-    archive_dir = path.parent / "history"
+    archive_dir = path.parent / path.stem.lower()
 
     if dry_run:
         line_count = len(content.splitlines())
@@ -186,10 +200,12 @@ def rotate(
         if archive_undated:
             print(f"  {archive_dir}/legacy.md: {len(archive_undated)} entries")
         print(f"Would keep {len(to_keep)} entries in body")
-        print(f"Would generate/update {archive_dir}/index.md")
+        if path.stem == "history":
+            print(f"Would generate/update {archive_dir}/index.md")
         return 0
 
     archive_dir.mkdir(exist_ok=True)
+    stem_label = path.stem.capitalize()
 
     # Archive dated entries by year
     for y, es in sorted(by_year.items()):
@@ -207,7 +223,7 @@ def rotate(
             )
         else:
             text = (
-                f"# History {y}\n\n"
+                f"# {stem_label} {y}\n\n"
                 + "\n\n".join(_entry_text(e) for e in es)
                 + "\n"
             )
@@ -229,19 +245,20 @@ def rotate(
                 legacy_path.write_text(text, encoding="utf-8")
         else:
             text = (
-                "# History (legacy — pre-dating convention)\n\n"
+                f"# {stem_label} (legacy — pre-dating convention)\n\n"
                 + "\n\n".join(_entry_text(e) for e in archive_undated)
                 + "\n"
             )
             legacy_path.write_text(text, encoding="utf-8")
 
     # Build ## Archived section
+    archived_dir_name = archive_dir.name
     archived_lines = ["## Archived"]
     for y in sorted(by_year.keys()):
-        archived_lines.append(f"- [{y}](history/{y}.md) — {len(by_year[y])} entries")
+        archived_lines.append(f"- [{y}]({archived_dir_name}/{y}.md) — {len(by_year[y])} entries")
     if archive_undated:
         archived_lines.append(
-            f"- [legacy](history/legacy.md) — {len(archive_undated)} entries"
+            f"- [legacy]({archived_dir_name}/legacy.md) — {len(archive_undated)} entries"
         )
 
     body_parts = []
@@ -256,7 +273,8 @@ def rotate(
     if new_body != content:
         path.write_text(new_body, encoding="utf-8")
 
-    _write_index(archive_dir / "index.md", to_keep + to_archive, by_year, archive_dir)
+    if path.stem == "history":
+        _write_index(archive_dir / "index.md", to_keep + to_archive, by_year, archive_dir)
 
     return 0
 
@@ -339,6 +357,13 @@ def _write_index(
 
 def rebuild_index(history_path: Path) -> int:
     """Rebuild history/index.md from existing archive files without rotating."""
+    if history_path.stem != "history":
+        print(
+            f"Warning: rebuild-index is only supported for history.md "
+            f"(got: {history_path.name}). Skipping.",
+            file=sys.stderr,
+        )
+        return 0
     archive_dir = history_path.parent / "history"
     if not archive_dir.exists():
         print(f"Error: {archive_dir} not found", file=sys.stderr)
