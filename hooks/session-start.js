@@ -93,6 +93,16 @@ if (sessionId) {
   }
 }
 
+// Resume/fresh path: clear ⏳ waiting indicator, then set VS Code title
+if (sessionId) {
+  try {
+    const { writeClearWaiting, writeSetIssue } = require("./lib/session-title");
+    const plansDir = require("./lib/workflow-plans-dir").getWorkflowPlansDir();
+    writeClearWaiting(sessionId, process.cwd());
+    writeSetIssue(sessionId, process.cwd(), plansDir);
+  } catch (e) { /* fail-open */ }
+}
+
 // --- BEGIN temporary: .git/workflow/ → ~/.claude/projects/workflow/ migration ---
 // Delete old per-repo state files left by the previous implementation.
 // Safe to run on every session start — idempotent, only touches CLAUDE_PROJECT_DIR.
