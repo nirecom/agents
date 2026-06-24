@@ -509,4 +509,8 @@ Changes: Fixed: `doc-append CHANGELOG.md` now archives to `changelog/<year>.md` 
 
 ### FEATURE: PR #1084 (2026-06-25)
 Background: feat(#1077): add WORKFLOW_ISSUE_CLOSE_VERIFIED session-scoped bypass for gh issue close
-Changes: New `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>` / `<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: reason>>` sentinel pair: lets you approve a window of planned `gh issue close` operations without triggering supervisor alerts or using the broader WORKFLOW_OFF bypass.
+Changes: New `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>` / `<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: reason>>` sentinel pair: lets you approve a window of planned `gh issue close` operations without triggering supervisor alerts or using the broader WORKFLOW_OFF bypass.
+
+### FEATURE: PR #1088 (2026-06-25)
+Background: fix(#1080): extend workflow-gate plans-path allowlist to Edit and MultiEdit
+Changes: Workflow gate now allows Edit and MultiEdit tools to target `~/.workflow-plans/` files during the `clarify_intent` pending phase, so skills can patch existing plan files (intent.md, outline.md) without being blocked.
