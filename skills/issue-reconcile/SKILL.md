@@ -1,6 +1,7 @@
 ---
 name: issue-reconcile
 description: Backfill docs/history.md for issues that were closed outside the /issue-close-stage + /issue-close-finalize path (web UI, mobile, another shell). Best-effort scan + interactive confirmation.
+user-invocable: false
 ---
 
 `/issue-close-stage` + `/issue-close-finalize` is the sanctioned close path
@@ -15,39 +16,16 @@ Usage: `/issue-reconcile`
 ## Pre-flight
 
 - `AGENTS_CONFIG_DIR` must be set.
-- Determine `<owner/repo>` from `gh repo view --json owner,name --jq '.owner.login + "/" + .name'`.
 
-## Step 1: enumerate closed issues (paginated)
+## Step 1: pre-resolve
 
-```bash
-gh issue list --state closed --limit 1000 --paginate \
-    --json number,title,body,labels,closedAt,comments \
-    | jq -c '.[]'
-```
+Resolve in main: `OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')`, `HISTORY_MD_PATH` (absolute path to `docs/history.md`), `HISTORY_DIR_PATH` (absolute path to `docs/history/` directory).
 
-Each output line is one closed-issue JSON object.
+## Step 2: scan via worker
 
-## Step 2: classify
+Invoke `issue-reconcile-worker` via Task tool with `owner_repo`, `history_md_path`, `history_dir_path`, `agents_config_dir`, and `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
 
-For each issue:
-
-```bash
-NUM=$(printf '%s' "$LINE" | jq -r .number)
-SENTINEL=$(printf '%s' "$LINE" | jq -r '[.comments[].body | select(test("^<!-- issue-close-sentinel: appended"))] | first')
-```
-
-Then check history:
-
-```bash
-HAS_HISTORY=$(grep -rqE "#${NUM}:" docs/history.md docs/history/ 2>/dev/null && echo yes || echo no)
-```
-
-| sentinel | has_history | classification | action |
-|----------|-------------|----------------|--------|
-| non-null | yes         | clean          | skip |
-| non-null | no          | sentinel-only  | append (recovery) |
-| null     | yes         | history-only   | skip (history is the SSOT; sentinel can be added) |
-| null     | no          | unappended     | prompt the user before appending |
+On `status: failed`: stop and report. On `status: complete`: read JSONL artifact — issues with `classification: needs-reconcile` feed Step 3.
 
 ## Step 3: prompt and append
 

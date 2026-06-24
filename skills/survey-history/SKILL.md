@@ -2,6 +2,7 @@
 name: survey-history
 description: Investigate git history, docs/history.md, and GitHub issue/PR timeline since the relevant issue opened, to surface changes that may invalidate the issue's premises.
 model: sonnet
+user-invocable: false
 ---
 
 Investigate the project's git history and GitHub issue/PR timeline to detect changes
