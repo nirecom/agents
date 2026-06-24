@@ -146,6 +146,8 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 
+SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
+
 After emitting, mark completion:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase frozen
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
