@@ -206,6 +206,7 @@
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_DETAIL: *>>\")",
