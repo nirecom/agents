@@ -4,7 +4,7 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
 
 ## Workflow
 
-Steps use prefix `WF-<TYPE>-N`; `WF-CODE-N` = standard implementation. `WF-TXT-N` and `WF-PLAN-N` reserved.
+Steps use prefix `WF-<TYPE>-N`; `WF-CODE-N` = standard implementation. `WF-PLAN-N` = planning-only (meta issues, no worktree).
 
 After each skill completes, consult the oracle: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID`. Follow `ACTION` / `NEXT_SKILL` / `NEXT_HINT` output — `invoke` means run the named skill, `done` means proceed to session close, `blocked`/`abort` means see `NEXT_HINT` for recovery. Run `bin/workflow/next-step --list` for the full 14-step plan. Emergency partial reset: `echo "<<WORKFLOW_RESET_FROM_<step>>>"` (marks prior steps complete, resets target step and after to pending).
 

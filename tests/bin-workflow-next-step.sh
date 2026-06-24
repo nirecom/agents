@@ -119,6 +119,18 @@ JSON_EMPTY_STEPS='{"steps":{},"closes_issues":[1053]}'
 JSON_BRANCHING_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 JSON_USER_VERIFICATION_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 
+# WF-PLAN: detail complete, non-applicable steps pending, pre_final_report_gate pending
+JSON_WF_PLAN_AT_PREFINAL='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
+
+# WF-PLAN: all applicable steps complete, non-applicable pending, pre_final_report_gate complete
+JSON_WF_PLAN_ALL_DONE='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[721]}'
+
+# WF-PLAN mid-planning: workflow_init complete, clarify_intent pending
+JSON_WF_PLAN_MID='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
+
+# WF-CODE with explicit workflow_type field (regression: must be unaffected by WF-PLAN logic)
+JSON_WF_CODE_EXPLICIT='{"workflow_type":"wf-code","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
+
 run_tests() {
   local OUT ACTION NEXT_SKILL NEXT_HINT REASON
 
@@ -338,24 +350,26 @@ run_tests() {
   check "19: idempotency same output on re-run" "$OUT1" "$OUT2"
 
   # ---- Case 20: security -- path traversal in --session arg ----------------
-  # ../evil-$$ resolves outside TMPDIR_WT — file not found → same as no-state-file.
-  ACTION=""; NEXT_SKILL=""
-  OUT="$(run_oracle --session "../evil-$$" 2>/dev/null || true)"
-  eval "$OUT" 2>/dev/null || true
-  check "20: path-traversal ACTION=invoke" "invoke" "${ACTION:-}"
-  check "20: path-traversal NEXT_SKILL=workflow-init" "workflow-init" "${NEXT_SKILL:-}"
-
-  # ---- Case 20b: security -- shell metachar injection in --session arg ------
-  # Node.js constructs the path; semicolons/parens never reach a shell.
-  ACTION=""; NEXT_SKILL=""
-  OUT="$(run_oracle --session 'foo;bar$(evil)' 2>/dev/null || true)"
-  eval "$OUT" 2>/dev/null || true
-  # file won't exist → no-state behavior; at minimum ACTION must be non-empty.
-  if [ -n "${ACTION:-}" ]; then
-    echo "PASS: 20b: metachar injection yields valid ACTION (${ACTION})"
+  # next-step now validates --session against [A-Za-z0-9_-]+ → exits non-zero.
+  rc=0
+  run_oracle --session "../evil-$$" 2>/dev/null || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "PASS: 20: path-traversal --session rejected (exit $rc)"
     PASS=$((PASS + 1))
   else
-    echo "FAIL: 20b: metachar injection produced empty ACTION (crash)"
+    echo "FAIL: 20: path-traversal --session should be rejected"
+    FAIL=$((FAIL + 1))
+  fi
+
+  # ---- Case 20b: security -- shell metachar injection in --session arg ------
+  # Validation rejects meta characters ([A-Za-z0-9_-]+ allowlist) → exits non-zero.
+  rc=0
+  run_oracle --session 'foo;bar$(evil)' 2>/dev/null || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "PASS: 20b: metachar injection rejected (exit $rc)"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL: 20b: metachar injection should be rejected"
     FAIL=$((FAIL + 1))
   fi
 
@@ -418,6 +432,44 @@ run_tests() {
     echo "FAIL: 23: unknown flag should exit non-zero but exited 0"
     FAIL=$((FAIL + 1))
   fi
+
+  # ---- Case 24: WF-PLAN — detail done → pre_final_report_gate (auto-skip non-applicable) ----
+  ACTION=""; NEXT_SKILL=""; REASON=""
+  write_state "case24" "$JSON_WF_PLAN_AT_PREFINAL"
+  OUT="$(run_oracle --session "case24" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "24: wf-plan detail-done ACTION=invoke" "invoke" "${ACTION:-}"
+  check_contains "24: wf-plan detail-done REASON=pre_final_report_gate" "pre_final_report_gate" "${REASON:-}"
+
+  # ---- Case 25: WF-PLAN — all applicable steps done → done ----------------------
+  ACTION=""
+  write_state "case25" "$JSON_WF_PLAN_ALL_DONE"
+  OUT="$(run_oracle --session "case25" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "25: wf-plan all-done ACTION=done" "done" "${ACTION:-}"
+
+  # ---- Case 26: WF-PLAN mid-planning — clarify_intent pending ------------------
+  ACTION=""; NEXT_SKILL=""
+  write_state "case26" "$JSON_WF_PLAN_MID"
+  OUT="$(run_oracle --session "case26" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "26: wf-plan mid ACTION=invoke" "invoke" "${ACTION:-}"
+  check "26: wf-plan mid NEXT_SKILL=clarify-intent" "clarify-intent" "${NEXT_SKILL:-}"
+
+  # ---- Case 27: WF-CODE explicit type — existing behavior unaffected -----------
+  ACTION=""; NEXT_SKILL=""
+  write_state "case27" "$JSON_WF_CODE_EXPLICIT"
+  OUT="$(run_oracle --session "case27" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "27: wf-code explicit type NEXT_SKILL=survey-code" "survey-code" "${NEXT_SKILL:-}"
+
+  # ---- Case 28: WF-PLAN --list shows [-] for auto-skipped steps ---------------
+  write_state "case28" "$JSON_WF_PLAN_AT_PREFINAL"
+  PLAN_LIST="$(run_oracle --list --session "case28" 2>/dev/null || true)"
+  line_branching28="$(echo "$PLAN_LIST" | grep -E 'branching_complete' | head -n1 || true)"
+  line_uv28="$(echo "$PLAN_LIST" | grep -E 'user_verification' | head -n1 || true)"
+  check_contains "28a: wf-plan --list branching_complete shows [-]" "[-]" "$line_branching28"
+  check_contains "28b: wf-plan --list user_verification shows [-]" "[-]" "$line_uv28"
 }
 
 # run_with_timeout wraps each individual `node` invocation inside run_oracle
