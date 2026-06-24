@@ -497,4 +497,8 @@ Changes: REFACTOR: Workflow step sequencing is now oracle-driven — after each 
 
 ### FEATURE: PR #1065 (2026-06-23)
 Background: refactor(#1045): replace enforce-worktree allowlist with universal session-scope target-aware allow
-Changes: enforce-worktree (`ENFORCE_WORKTREE=on`): Bash writes from the main worktree are now allowed whenever every parseable write target resolves outside the session scope — covering plans-dir paths, `/tmp`, and other out-of-repo destinations without explicit per-target allowlists. Set `ENFORCE_WORKTREE_EXTRA_REPOS` (semicolon-separated repo paths) to extend the session scope when working across sibling repositories.
+Changes: enforce-worktree (`ENFORCE_WORKTREE=on`): Bash writes from the main worktree are now allowed whenever every parseable write target resolves outside the session scope — covering plans-dir paths, `/tmp`, and other out-of-repo destinations without explicit per-target allowlists. Set `ENFORCE_WORKTREE_EXTRA_REPOS` (semicolon-separated repo paths) to extend the session scope when working across sibling repositories.
+
+### FEATURE: PR #1074 (2026-06-24)
+Background: refactor(#1071): skill/agent fork+worker audit — context:fork sweep cluster, 4 new workers, user-invocable audit
+Changes: **Skill picker:** `/issue-close-migrated`, `survey-code`, `survey-history`, and `issue-reconcile` no longer appear as direct-invocation candidates in the skill picker — they are internal-only skills invoked by other skills.
