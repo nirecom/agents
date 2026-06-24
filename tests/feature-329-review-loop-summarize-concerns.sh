@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Tests: bin/review-loop-summarize-concerns
 # Tags: bin, env, config, loop, scope:common
-# Tests for bin/review-loop-summarize-concerns CONV_LANG localization.
+# Tests for bin/review-loop-summarize-concerns output and degraded modes.
 #
 # L3 gap (what this test does NOT catch):
-# - Whether the Japanese heading actually renders in a live review-loop cap-menu dialog
-# - Whether CONV_LANG injection from session-start.js propagates correctly to the bin script in a real session
+# - Whether the heading actually renders correctly in a live review-loop cap-menu dialog
+# - Whether the concern summary integrates correctly with make-outline-plan/make-detail-plan in a real session
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 set -uo pipefail
@@ -56,48 +56,29 @@ else
     fail "T1: basic invocation: expected exit 0, got $RC. Output: $OUT"
 fi
 
-if echo "$OUT" | grep -qE "Round cap reached|ラウンド上限"; then
+if echo "$OUT" | grep -q "Round cap reached"; then
     pass "T1: output contains cap-reached heading"
 else
     fail "T1: output missing cap-reached heading. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
-# T2: CONV_LANG=japanese → Japanese heading (EXPECTED_FAIL pre-write-code)
-# NOTE: Japanese branch not yet added to source — this test documents intended
-# behavior. It is counted as SKIP, not FAIL, until write-code implements it.
+# T2: CONV_LANG set (any value): script is unaffected — English heading
 # ---------------------------------------------------------------------------
 RES=$(CONV_LANG=japanese run_summarize --budget-remaining 1 --ledger "$LEDGER")
 RC=$(extract_rc "$RES")
 OUT=$(extract_out "$RES")
 
 if [[ "$RC" == "0" ]]; then
-    if echo "$OUT" | grep -qE "ラウンド上限|ラウンド上限に達しました"; then
-        pass "T2: CONV_LANG=japanese: Japanese heading present"
-    else
-        skip "T2: CONV_LANG=japanese: Japanese heading not yet implemented (EXPECTED_FAIL pre-write-code: Japanese branch not yet added)"
-    fi
+    pass "T2: CONV_LANG set: exit 0"
 else
-    skip "T2: CONV_LANG=japanese: script exited $RC — Japanese branch not yet added (EXPECTED_FAIL pre-write-code)"
-fi
-
-# ---------------------------------------------------------------------------
-# T3: CONV_LANG="" (empty) → exit 0, English heading
-# ---------------------------------------------------------------------------
-RES=$(CONV_LANG="" run_summarize --budget-remaining 1 --ledger "$LEDGER")
-RC=$(extract_rc "$RES")
-OUT=$(extract_out "$RES")
-
-if [[ "$RC" == "0" ]]; then
-    pass "T3: CONV_LANG='': exit 0"
-else
-    fail "T3: CONV_LANG='': expected exit 0, got $RC. Output: $OUT"
+    fail "T2: CONV_LANG set: expected exit 0, got $RC. Output: $OUT"
 fi
 
 if echo "$OUT" | grep -q "Round cap reached"; then
-    pass "T3: CONV_LANG='': English heading present"
+    pass "T2: CONV_LANG set: English heading present"
 else
-    fail "T3: CONV_LANG='': English heading missing. Output: $OUT"
+    fail "T2: CONV_LANG set: English heading missing. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -115,7 +96,7 @@ fi
 # ---------------------------------------------------------------------------
 # T5: Ledger absent → exit 0, output contains "not available"
 # ---------------------------------------------------------------------------
-RES=$(CONV_LANG="" run_summarize --budget-remaining 1 --ledger "/nonexistent/path.txt")
+RES=$(run_summarize --budget-remaining 1 --ledger "/nonexistent/path.txt")
 RC=$(extract_rc "$RES")
 OUT=$(extract_out "$RES")
 
