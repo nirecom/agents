@@ -93,11 +93,12 @@ if (sessionId) {
   }
 }
 
-// Resume/fresh path: set VS Code title if intent.md already exists (or mtime fallback)
+// Resume/fresh path: clear ⏳ waiting indicator, then set VS Code title
 if (sessionId) {
   try {
-    const { writeSetIssue } = require("./lib/session-title");
+    const { writeClearWaiting, writeSetIssue } = require("./lib/session-title");
     const plansDir = require("./lib/workflow-plans-dir").getWorkflowPlansDir();
+    writeClearWaiting(sessionId, process.cwd());
     writeSetIssue(sessionId, process.cwd(), plansDir);
   } catch (e) { /* fail-open */ }
 }
