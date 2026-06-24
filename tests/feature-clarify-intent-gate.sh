@@ -134,6 +134,16 @@ SID="sid-pending-plans"
 write_state "$SID" "$(pending_state "$SID")"
 assert_decision "pending_write_plans_approves" "$(input_write "$SID" "$PLANS_DIR_NATIVE/test-intent.md")" "approve"
 
+# 8a. pending + Edit(.workflow-plans/...) → approve  [plans-path allowlist]
+SID="sid-pending-plans-edit"
+write_state "$SID" "$(pending_state "$SID")"
+assert_decision "pending_edit_plans_approves" "$(input_edit "$SID" "$PLANS_DIR_NATIVE/test-intent.md")" "approve"
+
+# 8b. pending + MultiEdit(.workflow-plans/...) → approve  [plans-path allowlist]
+SID="sid-pending-plans-multiedit"
+write_state "$SID" "$(pending_state "$SID")"
+assert_decision "pending_multiedit_plans_approves" "$(input_multiedit "$SID" "$PLANS_DIR_NATIVE/test-outline.md")" "approve"
+
 # 9. no session_id → approve  [fail-open]
 assert_decision "no_session_id_approves" "$(input_edit_no_sid "/c/git/myproject/src/foo.js")" "approve"
 
