@@ -102,6 +102,18 @@ const REVIEW_TESTS_WARNINGS_RE_DQ =
 const REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS([: ].*)?>>"\s*$/;
 
+// ISSUE_CLOSE_VERIFIED ON/OFF: session-scoped bypass for gh issue close only.
+// ON (opens bypass window): <<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>
+// OFF (closes bypass window): <<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: reason>>
+const ISSUE_CLOSE_VERIFIED_RE_DQ =
+  /^echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED: ([^>]+)>>"$/;
+const ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED([: ].*)?>>"/;
+const ISSUE_CLOSE_VERIFIED_END_RE_DQ =
+  /^echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: ([^>]+)>>"$/;
+const ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END([: ].*)?>>"/;
+
 function isSentinel(cmd) {
   return (
     MARKER_RE_DQ.test(cmd) ||
@@ -144,7 +156,11 @@ function isSentinel(cmd) {
     REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
     REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE.test(cmd) ||
     REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd) ||
-    REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE.test(cmd)
+    REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE.test(cmd) ||
+    ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
+    ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
+    ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd) ||
+    ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE.test(cmd)
   );
 }
 
@@ -174,7 +190,9 @@ function isStrictSentinel(cmd) {
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
     CONFIRM_DETAIL_RE_DQ.test(cmd) ||
     REVIEW_TESTS_COMPLETE_RE_DQ.test(cmd) ||
-    REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd)
+    REVIEW_TESTS_WARNINGS_RE_DQ.test(cmd) ||
+    ISSUE_CLOSE_VERIFIED_RE_DQ.test(cmd) ||
+    ISSUE_CLOSE_VERIFIED_END_RE_DQ.test(cmd)
   );
 }
 
@@ -247,4 +265,8 @@ module.exports = {
   REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE,
   REVIEW_TESTS_WARNINGS_RE_DQ,
   REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE,
+  ISSUE_CLOSE_VERIFIED_RE_DQ,
+  ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
+  ISSUE_CLOSE_VERIFIED_END_RE_DQ,
+  ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
 };
