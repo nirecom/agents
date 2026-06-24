@@ -44,11 +44,12 @@ if (!parsed || parsed.tool_name !== "Bash") {
   process.exit(0);
 }
 
-// Session-scoped WORKFLOW override: bypass gh issue close guard for this session.
+// Session-scoped overrides: bypass gh issue close guard for this session.
 {
   const sid = parsed.session_id;
-  const { isWorkflowOff } = require("./lib/session-markers");
+  const { isWorkflowOff, isIssueCloseVerified } = require("./lib/session-markers");
   if (isWorkflowOff(sid)) { process.exit(0); }
+  if (isIssueCloseVerified(sid)) { process.exit(0); }
 }
 
 const cmd = (parsed.tool_input && parsed.tool_input.command) || "";
