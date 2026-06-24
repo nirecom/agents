@@ -3,7 +3,7 @@
 # Tags: supervisor, em-supervisor, layer2, trigger, posttooluse, fix-975, scope:issue-specific
 # RED for issue #975.
 #
-# Validates: supervisor-trigger.js must only arm L2 (set l2_armed_at) on
+# Validates: supervisor-trigger.js must only arm L2 (set alert_armed_at) on
 # escape-hatch sentinels when at least one finding with severity !== "notice"
 # exists. Pre-authorized WORKFLOW_OFF prompts (and notice-only sessions)
 # must NOT arm a Layer 2 review.
@@ -59,7 +59,7 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 }
 
 # Pipe a Bash PostToolUse JSON envelope with the WORKFLOW_OFF escape-hatch
-# command into the trigger hook. Returns the post-invocation l2_armed_at value
+# command into the trigger hook. Returns the post-invocation alert_armed_at value
 # (string "null" when null, JSON-string otherwise).
 run_trigger_and_get_armed_at() {
     local tmp="$1" sid="$2"
@@ -69,7 +69,7 @@ run_trigger_and_get_armed_at() {
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-process.stdout.write(st && st.layer2 ? JSON.stringify(st.layer2.l2_armed_at) : 'no-state');
+process.stdout.write(st && st.alert ? JSON.stringify(st.alert.alert_armed_at) : 'no-state');
 " 2>/dev/null
 }
 
@@ -82,7 +82,7 @@ run_trigger_worktreeoff_get_armed_at() {
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-process.stdout.write(st && st.layer2 ? JSON.stringify(st.layer2.l2_armed_at) : 'no-state');
+process.stdout.write(st && st.alert ? JSON.stringify(st.alert.alert_armed_at) : 'no-state');
 " 2>/dev/null
 }
 
@@ -95,23 +95,23 @@ run_trigger_nonescape_get_armed_at() {
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-process.stdout.write(st && st.layer2 ? JSON.stringify(st.layer2.l2_armed_at) : 'no-state');
+process.stdout.write(st && st.alert ? JSON.stringify(st.alert.alert_armed_at) : 'no-state');
 " 2>/dev/null
 }
 
 # T1: no state file -> trigger should not arm (no state to mutate). Verify
-# that a state file is not created (or, if created, l2_armed_at remains null).
+# that a state file is not created (or, if created, alert_armed_at remains null).
 run_t1() {
     require_source "$HOOK" "T1: no state file -> no arm" || return
     local tmp out
     tmp="$(mktemp -d)"
     out=$(run_trigger_and_get_armed_at "$tmp" "t1-sid")
     rm -rf "$tmp"
-    # Accept either: "no-state" (file never created) or "null" (file created with l2_armed_at=null).
+    # Accept either: "no-state" (file never created) or "null" (file created with alert_armed_at=null).
     if [ "$out" = "no-state" ] || [ "$out" = "null" ]; then
         pass "T1: no state file -> no arm"
     else
-        fail "T1: no state file -> no arm (l2_armed_at=$out)"
+        fail "T1: no state file -> no arm (alert_armed_at=$out)"
     fi
 }
 
@@ -127,7 +127,7 @@ run_t2() {
     if [ "$out" = "null" ]; then
         pass "T2: notice-only findings -> no arm"
     else
-        fail "T2: notice-only findings -> no arm (l2_armed_at=$out)"
+        fail "T2: notice-only findings -> no arm (alert_armed_at=$out)"
     fi
 }
 
@@ -143,7 +143,7 @@ run_t3() {
     if [ "$out" != "null" ] && [ "$out" != "no-state" ] && [ -n "$out" ]; then
         pass "T3: warning finding -> arm"
     else
-        fail "T3: warning finding -> arm (l2_armed_at=$out)"
+        fail "T3: warning finding -> arm (alert_armed_at=$out)"
     fi
 }
 
@@ -159,7 +159,7 @@ run_t4() {
     if [ "$out" != "null" ] && [ "$out" != "no-state" ] && [ -n "$out" ]; then
         pass "T4: error finding -> arm"
     else
-        fail "T4: error finding -> arm (l2_armed_at=$out)"
+        fail "T4: error finding -> arm (alert_armed_at=$out)"
     fi
 }
 
@@ -174,7 +174,7 @@ run_t5() {
     if [ "$out" = "null" ]; then
         pass "T5: empty findings -> no arm"
     else
-        fail "T5: empty findings -> no arm (l2_armed_at=$out)"
+        fail "T5: empty findings -> no arm (alert_armed_at=$out)"
     fi
 }
 
@@ -191,7 +191,7 @@ run_t6() {
     if [ "$out" = "null" ] || [ "$out" = "no-state" ]; then
         pass "T6: non-escape-hatch cmd -> no arm"
     else
-        fail "T6: non-escape-hatch cmd -> no arm (l2_armed_at=$out)"
+        fail "T6: non-escape-hatch cmd -> no arm (alert_armed_at=$out)"
     fi
 }
 
@@ -207,7 +207,7 @@ run_t7() {
     if [ "$out" = "null" ]; then
         pass "T7: WORKTREE_OFF + notice-only -> no arm"
     else
-        fail "T7: WORKTREE_OFF + notice-only -> no arm (l2_armed_at=$out)"
+        fail "T7: WORKTREE_OFF + notice-only -> no arm (alert_armed_at=$out)"
     fi
 }
 
@@ -223,30 +223,30 @@ run_t8() {
     if [ "$out" != "null" ] && [ "$out" != "no-state" ] && [ -n "$out" ]; then
         pass "T8: mixed notice+warning -> arm"
     else
-        fail "T8: mixed notice+warning -> arm (l2_armed_at=$out)"
+        fail "T8: mixed notice+warning -> arm (alert_armed_at=$out)"
     fi
 }
 
-# T9: escape-hatch with warning finding when already armed -> l2_armed_at unchanged (idempotency)
+# T9: escape-hatch with warning finding when already armed -> alert_armed_at unchanged (idempotency)
 run_t9() {
-    require_source "$HOOK" "T9: escape-hatch + already armed -> l2_armed_at unchanged" || return
+    require_source "$HOOK" "T9: escape-hatch + already armed -> alert_armed_at unchanged" || return
     local tmp out before after
     tmp="$(mktemp -d)"
     before="2026-01-01T00:00:00.000Z"
     seed_state_l1_findings "$tmp" "t9-sid" \
         '[{"categories":["workflow"],"severity":"warning","detail":"sus","reporter":"t","timestamp":"2026-06-06T12:00:00.000Z"}]'
-    # Pre-set l2_armed_at so !l2ArmedAt is false in the hook
+    # Pre-set alert_armed_at so !l2ArmedAt is false in the hook
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-w.writeLayer2State('t9-sid', { l2_armed_at: '$before' });
+w.writeAlertState('t9-sid', { alert_armed_at: '$before' });
 " >/dev/null 2>&1
     out=$(run_trigger_and_get_armed_at "$tmp" "t9-sid")
     rm -rf "$tmp"
     # Armed-at should still be the original timestamp (not overwritten)
     if [ "$out" = "\"$before\"" ]; then
-        pass "T9: escape-hatch + already armed -> l2_armed_at unchanged"
+        pass "T9: escape-hatch + already armed -> alert_armed_at unchanged"
     else
-        fail "T9: escape-hatch + already armed -> l2_armed_at unchanged (got=$out, expected=\"$before\")"
+        fail "T9: escape-hatch + already armed -> alert_armed_at unchanged (got=$out, expected=\"$before\")"
     fi
 }
 
@@ -262,7 +262,7 @@ run_t10() {
     if [ "$out" != "null" ] && [ "$out" != "no-state" ] && [ -n "$out" ]; then
         pass "T10: WORKTREE_OFF + warning -> arm"
     else
-        fail "T10: WORKTREE_OFF + warning -> arm (l2_armed_at=$out)"
+        fail "T10: WORKTREE_OFF + warning -> arm (alert_armed_at=$out)"
     fi
 }
 
@@ -286,7 +286,7 @@ fs.writeFileSync(w.getStatePath('t11-sid'), JSON.stringify(st));
     if [ "$out" = "null" ]; then
         pass "T11: layer1 missing -> fail-open no arm"
     else
-        fail "T11: layer1 missing -> fail-open no arm (l2_armed_at=$out)"
+        fail "T11: layer1 missing -> fail-open no arm (alert_armed_at=$out)"
     fi
 }
 

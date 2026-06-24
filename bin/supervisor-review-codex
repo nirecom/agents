@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# supervisor-review-codex — One-shot Codex adversarial review of L2 supervisor draft findings.
+# supervisor-review-codex — One-shot Codex adversarial review of alert mode supervisor draft findings.
 #
 # Reads the supervisor state file, extracts draft findings, asks Codex for
 # per-finding AGREE/DISAGREE verdicts as JSON Lines, and prints them between
@@ -43,15 +43,15 @@ if [[ ! -f "$STATE_FILE" ]]; then
   exit 0
 fi
 
-# Extract l2_phase and draft findings via Node (single inline script).
+# Extract alert_phase and draft findings via Node (single inline script).
 EXTRACT_OUT=$(node -e '
 "use strict";
 const fs = require("fs");
 const raw = fs.readFileSync(process.argv[1], "utf8");
 const state = JSON.parse(raw);
-const l2 = state.layer2 || {};
-const phase = l2.l2_phase == null ? "null" : l2.l2_phase;
-const all = Array.isArray(l2.findings) ? l2.findings : [];
+const al = state.alert || {};
+const phase = al.alert_phase == null ? "null" : al.alert_phase;
+const all = Array.isArray(al.findings) ? al.findings : [];
 const drafts = all
   .filter((f) => f && f.status === "draft")
   .map((f) => ({
@@ -64,11 +64,11 @@ const drafts = all
 process.stdout.write(phase + "\n" + JSON.stringify(drafts));
 ' "$STATE_FILE")
 
-L2_PHASE="${EXTRACT_OUT%%$'\n'*}"
+ALERT_PHASE="${EXTRACT_OUT%%$'\n'*}"
 DRAFTS_JSON="${EXTRACT_OUT#*$'\n'}"
 
-if [[ "$L2_PHASE" != "pending" ]]; then
-  echo "SKIPPED: l2_phase=$L2_PHASE"
+if [[ "$ALERT_PHASE" != "pending" ]]; then
+  echo "SKIPPED: alert_phase=$ALERT_PHASE"
   exit 0
 fi
 
@@ -80,15 +80,20 @@ fi
 # shellcheck source=lib/codex-core.sh
 source "$AGENTS_CONFIG_DIR/bin/lib/codex-core.sh"
 
-codex_core_init "Supervisor L2 Codex Review"
+codex_core_init "Supervisor Alert Mode Codex Review"
 
 if ! command -v codex >/dev/null 2>&1; then
+  node -e "
+\"use strict\";
+const {reportFallback} = require(process.env.AGENTS_CONFIG_DIR + '/hooks/lib/supervisor-emit');
+reportFallback('supervisor-review-codex', 'codex-unavailable-treat-all-agree', process.env.SID || '');
+" 2>/dev/null || true
   echo "SKIPPED: codex unavailable"
   exit 0
 fi
 
 PROMPT=$(cat <<EOF
-You are an adversarial reviewer of L2 supervisor findings.
+You are an adversarial reviewer of alert mode supervisor findings.
 Review each finding below and output ONE JSON object per line:
 {"idx": <N>, "verdict": "AGREE"|"DISAGREE", "reason": "<one sentence>"}
 
@@ -114,6 +119,11 @@ rc=$?
 set -e
 
 if [[ $rc -eq 3 ]]; then
+  node -e "
+\"use strict\";
+const {reportFallback} = require(process.env.AGENTS_CONFIG_DIR + '/hooks/lib/supervisor-emit');
+reportFallback('supervisor-review-codex', 'codex-unavailable-treat-all-agree', process.env.SID || '');
+" 2>/dev/null || true
   echo "SKIPPED: codex unavailable"
   exit 0
 fi

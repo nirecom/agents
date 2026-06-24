@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/fix-supervisor-l3-stale-pending.sh
+# tests/fix-supervisor-audit-stale-pending.sh
 # Tests: skills/session-close/SKILL.md
 # Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific
 # L3 gap (what this test does NOT catch):
@@ -27,9 +27,9 @@ step3_done() {
 }
 
 run_t1() {
-    local label="T1: SKILL.md contains 'l3_phase=pending' marker"
-    if ! step3_done; then skip "$label (SC-5 L3 repair not yet added to SKILL.md)"; return; fi
-    if grep -q 'l3_phase=pending' "$SKILL_MD"; then
+    local label="T1: SKILL.md contains 'audit_phase=pending' marker"
+    if ! step3_done; then skip "$label (SC-5 audit repair not yet added to SKILL.md)"; return; fi
+    if grep -q 'audit_phase=pending' "$SKILL_MD"; then
         pass "$label"
     else
         fail "$label"
@@ -37,9 +37,9 @@ run_t1() {
 }
 
 run_t2() {
-    local label="T2: SKILL.md contains 'clear-l3-armed-at' flag reference"
-    if ! step3_done; then skip "$label (SC-5 L3 repair not yet added to SKILL.md)"; return; fi
-    if grep -q 'clear-l3-armed-at' "$SKILL_MD"; then
+    local label="T2: SKILL.md contains 'clear-audit-armed-at' flag reference"
+    if ! step3_done; then skip "$label (SC-5 audit repair not yet added to SKILL.md)"; return; fi
+    if grep -q 'clear-audit-armed-at' "$SKILL_MD"; then
         pass "$label"
     else
         fail "$label"
@@ -57,9 +57,9 @@ run_t3() {
 }
 
 run_t4() {
-    local label="T4: SKILL.md mentions 'l3_last_run_at' field"
-    if ! step3_done; then skip "$label (SC-5 L3 repair not yet added to SKILL.md)"; return; fi
-    if grep -q 'l3_last_run_at' "$SKILL_MD"; then
+    local label="T4: SKILL.md mentions 'audit_last_run_at' field"
+    if ! step3_done; then skip "$label (SC-5 audit repair not yet added to SKILL.md)"; return; fi
+    if grep -q 'audit_last_run_at' "$SKILL_MD"; then
         pass "$label"
     else
         fail "$label"

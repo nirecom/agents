@@ -3,11 +3,11 @@
 const fs = require("fs");
 const path = require("path");
 const { getWorkflowPlansDir } = require("./workflow-plans-dir");
-const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, L2_PHASE_VALUES, L2_ELIGIBLE_PHASE_VALUES, L2_RETRY_THRESHOLD, L3_PHASE_VALUES, L3_VERDICT_VALUES, L3_RETRY_THRESHOLD } = require("./supervisor-state-schema");
+const { createEmptyState, validate, validateFinding, SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES, ALERT_RETRY_THRESHOLD, AUDIT_PHASE_VALUES, AUDIT_VERDICT_VALUES, AUDIT_RETRY_THRESHOLD } = require("./supervisor-state-schema");
 const { resolveWorkflowSessionId } = require("./resolve-workflow-session-id");
 const findingStatus = require("./supervisor-finding-status");
 
-const LAYER2_PATCH_KEYS = new Set(["l2_armed_at", "last_run_at", "cumulative_severity", "findings", "l2_phase", "l2_cause", "l2_retry_count", "findings_surfaced_at", "l2_eligible_phase"]);
+const ALERT_PATCH_KEYS = new Set(["alert_armed_at", "last_run_at", "cumulative_severity", "findings", "alert_phase", "alert_cause", "alert_retry_count", "findings_surfaced_at", "alert_eligible_phase"]);
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -65,9 +65,12 @@ function writeAtomic(filePath, state) {
   fs.renameSync(tmpPath, filePath);
 }
 
-function ensureLayer2Scheduled(state, sessionId) {
-  if (!state.layer2 || typeof state.layer2 !== "object" || Array.isArray(state.layer2)) return;
-  const phase = state.layer2.l2_phase;
+function ensureAlertScheduled(state, sessionId, finding = null) {
+  // Arming threshold: notice-severity findings do not arm alert mode.
+  if (finding !== null && finding !== undefined && finding.severity === "notice") return;
+
+  if (!state.alert || typeof state.alert !== "object" || Array.isArray(state.alert)) return;
+  const phase = state.alert.alert_phase;
   if (phase === "done") return;
 
   if (phase !== "frozen") {
@@ -83,26 +86,26 @@ function ensureLayer2Scheduled(state, sessionId) {
       try {
         if (fs.existsSync(path.join(plansDir, `${sid}-final-report-env.json`))) {
           // Anchor present: skip normal-run arm UNLESS late-phase eligibility is set (#997)
-          if (state.layer2.l2_eligible_phase !== "post_final_report_window") return;
+          if (state.alert.alert_eligible_phase !== "post_final_report_window") return;
         }
       } catch (_) {}
     }
   }
 
-  if (state.layer2.l2_armed_at == null) {
-    state.layer2.l2_armed_at = new Date().toISOString();
-    if (phase == null) state.layer2.l2_phase = "pending";
+  if (state.alert.alert_armed_at == null) {
+    state.alert.alert_armed_at = new Date().toISOString();
+    if (phase == null) state.alert.alert_phase = "pending";
     if (phase === "frozen") {
-      state.layer2.l2_phase = "pending";
-      state.layer2.l2_retry_count = 0;
+      state.alert.alert_phase = "pending";
+      state.alert.alert_retry_count = 0;
     }
   }
 }
 
-function validateL2PhaseTransition(currentPhase, nextPhase) {
+function validateAlertPhaseTransition(currentPhase, nextPhase) {
   if (currentPhase === nextPhase) return { ok: true, errors: [] };
   if (currentPhase === "frozen" && nextPhase !== "pending") return { ok: false, errors: ["cannot transition from frozen: only frozen→pending (re-arm) is allowed"] };
-  if (currentPhase === "done" && nextPhase === "pending") return { ok: false, errors: ["cannot re-schedule L2 after done"] };
+  if (currentPhase === "done" && nextPhase === "pending") return { ok: false, errors: ["cannot re-schedule alert after done"] };
   if (currentPhase === "done" && nextPhase === null) return { ok: false, errors: ["cannot revert done to null"] };
   return { ok: true, errors: [] };
 }
@@ -138,9 +141,9 @@ function appendFinding(sessionId, finding) {
       last.reason === finding.reason &&
       lastCtxResolved === newCtxResolved
     ) {
-      const prevArmedAt = state.layer2 && state.layer2.l2_armed_at;
-      ensureLayer2Scheduled(state, sessionId);
-      if (state.layer2 && state.layer2.l2_armed_at !== prevArmedAt) {
+      const prevArmedAt = state.alert && state.alert.alert_armed_at;
+      ensureAlertScheduled(state, sessionId, finding);
+      if (state.alert && state.alert.alert_armed_at !== prevArmedAt) {
         const vr3 = validate(state);
         if (vr3.ok) writeAtomic(filePath, state);
       }
@@ -191,7 +194,7 @@ function appendFinding(sessionId, finding) {
   findings.push(newFinding);
   state.last_updated = nowIso;
 
-  ensureLayer2Scheduled(state, sessionId);
+  ensureAlertScheduled(state, sessionId, finding);
 
   const vr2 = validate(state);
   if (!vr2.ok) {
@@ -212,22 +215,22 @@ function readState(sessionId) {
   }
 }
 
-function writeLayer2State(sessionId, patch) {
+function writeAlertState(sessionId, patch) {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return false;
 
   // Reject unknown keys
   for (const k of Object.keys(patch)) {
-    if (!LAYER2_PATCH_KEYS.has(k)) return false;
+    if (!ALERT_PATCH_KEYS.has(k)) return false;
   }
 
   // Validate scalar override types
-  if ("l2_armed_at" in patch && patch.l2_armed_at !== null && typeof patch.l2_armed_at !== "string") return false;
+  if ("alert_armed_at" in patch && patch.alert_armed_at !== null && typeof patch.alert_armed_at !== "string") return false;
   if ("last_run_at" in patch && patch.last_run_at !== null && typeof patch.last_run_at !== "string") return false;
   if ("cumulative_severity" in patch && patch.cumulative_severity !== null && !SEVERITY_VALUES.includes(patch.cumulative_severity)) return false;
-  if ("l2_phase" in patch && !L2_PHASE_VALUES.includes(patch.l2_phase)) return false;
-  if ("l2_cause" in patch && patch.l2_cause !== null && typeof patch.l2_cause !== "string") return false;
+  if ("alert_phase" in patch && !ALERT_PHASE_VALUES.includes(patch.alert_phase)) return false;
+  if ("alert_cause" in patch && patch.alert_cause !== null && typeof patch.alert_cause !== "string") return false;
   if ("findings_surfaced_at" in patch && patch.findings_surfaced_at !== null && typeof patch.findings_surfaced_at !== "string") return false;
-  if ("l2_eligible_phase" in patch && !L2_ELIGIBLE_PHASE_VALUES.includes(patch.l2_eligible_phase)) return false;
+  if ("alert_eligible_phase" in patch && !ALERT_ELIGIBLE_PHASE_VALUES.includes(patch.alert_eligible_phase)) return false;
 
   // Validate findings
   if ("findings" in patch) {
@@ -244,61 +247,61 @@ function writeLayer2State(sessionId, patch) {
 
   const state = readStateOrInit(sessionId);
 
-  // Up-cast S-1-era layer2 to S-2 shape
-  const existing = state.layer2 && typeof state.layer2 === "object" && !Array.isArray(state.layer2) ? state.layer2 : {};
-  const currentPhase = (existing.l2_phase === undefined) ? null : existing.l2_phase;
-  if ("l2_phase" in patch) {
-    const vr = validateL2PhaseTransition(currentPhase, patch.l2_phase);
+  // Up-cast S-1-era alert to S-2 shape
+  const existing = state.alert && typeof state.alert === "object" && !Array.isArray(state.alert) ? state.alert : {};
+  const currentPhase = (existing.alert_phase === undefined) ? null : existing.alert_phase;
+  if ("alert_phase" in patch) {
+    const vr = validateAlertPhaseTransition(currentPhase, patch.alert_phase);
     if (!vr.ok) {
-      console.error("[supervisor-state-writer] invalid l2_phase transition: " + vr.errors.join("; "));
+      console.error("[supervisor-state-writer] invalid alert_phase transition: " + vr.errors.join("; "));
       return false;
     }
   }
-  const effectivePhase = ("l2_phase" in patch) ? patch.l2_phase : currentPhase;
-  if ((effectivePhase === "done" || effectivePhase === "frozen") && "l2_armed_at" in patch && patch.l2_armed_at !== null) {
-    console.error("[supervisor-state-writer] cannot set l2_armed_at while l2_phase=" + effectivePhase);
+  const effectivePhase = ("alert_phase" in patch) ? patch.alert_phase : currentPhase;
+  if ((effectivePhase === "done" || effectivePhase === "frozen") && "alert_armed_at" in patch && patch.alert_armed_at !== null) {
+    console.error("[supervisor-state-writer] cannot set alert_armed_at while alert_phase=" + effectivePhase);
     return false;
   }
-  const layer2 = {
-    l2_armed_at: null,
+  const alert = {
+    alert_armed_at: null,
     last_run_at: null,
     cumulative_severity: null,
     findings: [],
-    l2_phase: null,
-    l2_cause: null,
-    l2_retry_count: 0,
+    alert_phase: null,
+    alert_cause: null,
+    alert_retry_count: 0,
     findings_surfaced_at: null,
-    l2_eligible_phase: null,
+    alert_eligible_phase: null,
     ...existing,
   };
 
   // Apply scalar overrides (explicit-clear via null permitted)
-  if ("l2_armed_at" in patch) layer2.l2_armed_at = patch.l2_armed_at;
-  if ("last_run_at" in patch) layer2.last_run_at = patch.last_run_at;
-  if ("cumulative_severity" in patch) layer2.cumulative_severity = patch.cumulative_severity;
-  if ("l2_phase" in patch) layer2.l2_phase = patch.l2_phase;
-  if ("l2_cause" in patch) layer2.l2_cause = patch.l2_cause;
+  if ("alert_armed_at" in patch) alert.alert_armed_at = patch.alert_armed_at;
+  if ("last_run_at" in patch) alert.last_run_at = patch.last_run_at;
+  if ("cumulative_severity" in patch) alert.cumulative_severity = patch.cumulative_severity;
+  if ("alert_phase" in patch) alert.alert_phase = patch.alert_phase;
+  if ("alert_cause" in patch) alert.alert_cause = patch.alert_cause;
 
-  // Co-clear l2_cause when l2_armed_at is cleared to prevent stale-cause mislabeling
-  if ("l2_armed_at" in patch && patch.l2_armed_at === null && !("l2_cause" in patch)) {
-    layer2.l2_cause = null;
+  // Co-clear alert_cause when alert_armed_at is cleared to prevent stale-cause mislabeling
+  if ("alert_armed_at" in patch && patch.alert_armed_at === null && !("alert_cause" in patch)) {
+    alert.alert_cause = null;
   }
-  if ("l2_retry_count" in patch) layer2.l2_retry_count = patch.l2_retry_count;
-  if ("findings_surfaced_at" in patch) layer2.findings_surfaced_at = patch.findings_surfaced_at;
-  if ("l2_eligible_phase" in patch) layer2.l2_eligible_phase = patch.l2_eligible_phase;
+  if ("alert_retry_count" in patch) alert.alert_retry_count = patch.alert_retry_count;
+  if ("findings_surfaced_at" in patch) alert.findings_surfaced_at = patch.findings_surfaced_at;
+  if ("alert_eligible_phase" in patch) alert.alert_eligible_phase = patch.alert_eligible_phase;
 
-  // #905: terminal states must never carry a stale l2_armed_at.
+  // #905: terminal states must never carry a stale alert_armed_at.
   if (effectivePhase === "done" || effectivePhase === "frozen") {
-    layer2.l2_armed_at = null;
-    layer2.l2_cause = null;
+    alert.alert_armed_at = null;
+    alert.alert_cause = null;
   }
 
   // #912 C-HIGH-3: supervisor success path resets retry counter at writer SSOT.
-  // Applies to ANY writeLayer2State caller setting l2_phase=done (not just CLI),
-  // so direct callers cannot leave a stale l2_retry_count carrying into the next cycle.
-  // Explicit l2_retry_count in patch wins (test fixtures may set non-zero values).
-  if (effectivePhase === "done" && !("l2_retry_count" in patch)) {
-    layer2.l2_retry_count = 0;
+  // Applies to ANY writeAlertState caller setting alert_phase=done (not just CLI),
+  // so direct callers cannot leave a stale alert_retry_count carrying into the next cycle.
+  // Explicit alert_retry_count in patch wins (test fixtures may set non-zero values).
+  if (effectivePhase === "done" && !("alert_retry_count" in patch)) {
+    alert.alert_retry_count = 0;
   }
 
   // Append findings. Draft-status entries get auto-assigned idx for later --confirm/--drop.
@@ -306,17 +309,17 @@ function writeLayer2State(sessionId, patch) {
     const ts = new Date().toISOString();
     for (const f of patch.findings) {
       const entry = { ...f, timestamp: ts };
-      if (entry.status === "draft" && entry.idx === undefined) entry.idx = layer2.findings.length;
-      layer2.findings.push(entry);
+      if (entry.status === "draft" && entry.idx === undefined) entry.idx = alert.findings.length;
+      alert.findings.push(entry);
     }
   }
 
-  state.layer2 = layer2;
+  state.alert = alert;
   state.last_updated = new Date().toISOString();
 
   const vr2 = validate(state);
   if (!vr2.ok) {
-    console.error(`[supervisor-state-writer] writeLayer2State validate failed: ${vr2.errors.join("; ")}`);
+    console.error(`[supervisor-state-writer] writeAlertState validate failed: ${vr2.errors.join("; ")}`);
     return false;
   }
 
@@ -324,42 +327,42 @@ function writeLayer2State(sessionId, patch) {
   return true;
 }
 
-function incrementL2RetryCount(sessionId) {
+function incrementAlertRetryCount(sessionId) {
   const state = readStateOrInit(sessionId);
-  const l2 = state.layer2 || {};
+  const al = state.alert || {};
   // #912 C-HIGH-2: both done and frozen are terminal — never increment from either.
   // Without the done short-circuit, a stale retry_count on a done session could be
   // incremented into frozen via a later C3 / cumSev=error path, corrupting terminal-state semantics.
-  if (l2.l2_phase === "frozen" || l2.l2_phase === "done") {
-    return { count: l2.l2_retry_count || 0, frozen: l2.l2_phase === "frozen" };
+  if (al.alert_phase === "frozen" || al.alert_phase === "done") {
+    return { count: al.alert_retry_count || 0, frozen: al.alert_phase === "frozen" };
   }
-  const nextCount = (l2.l2_retry_count || 0) + 1;
-  if (nextCount >= L2_RETRY_THRESHOLD) {
-    writeLayer2State(sessionId, { l2_retry_count: nextCount, l2_phase: "frozen" });
+  const nextCount = (al.alert_retry_count || 0) + 1;
+  if (nextCount >= ALERT_RETRY_THRESHOLD) {
+    writeAlertState(sessionId, { alert_retry_count: nextCount, alert_phase: "frozen" });
     return { count: nextCount, frozen: true };
   }
-  writeLayer2State(sessionId, { l2_retry_count: nextCount });
+  writeAlertState(sessionId, { alert_retry_count: nextCount });
   return { count: nextCount, frozen: false };
 }
 
-// #720: Layer 3 writer. Symmetric to writeLayer2State — accepts a small patch
-// object, validates each field's type/enum, then merges into state.layer3.
-const LAYER3_PATCH_KEYS = new Set(["l3_phase", "l3_verdict", "l3_last_run_at", "l3_armed_at", "l3_cause", "l3_retry_count", "findings"]);
+// #720: Audit writer. Symmetric to writeAlertState — accepts a small patch
+// object, validates each field's type/enum, then merges into state.audit.
+const AUDIT_PATCH_KEYS = new Set(["audit_phase", "audit_verdict", "audit_last_run_at", "audit_armed_at", "audit_cause", "audit_retry_count", "findings"]);
 
-function writeLayer3State(sessionId, patch) {
+function writeAuditState(sessionId, patch) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return false;
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return false;
 
   for (const k of Object.keys(patch)) {
-    if (!LAYER3_PATCH_KEYS.has(k)) return false;
+    if (!AUDIT_PATCH_KEYS.has(k)) return false;
   }
 
-  if ("l3_phase" in patch && !L3_PHASE_VALUES.includes(patch.l3_phase)) return false;
-  if ("l3_verdict" in patch && patch.l3_verdict !== null && !L3_VERDICT_VALUES.includes(patch.l3_verdict)) return false;
-  if ("l3_last_run_at" in patch && patch.l3_last_run_at !== null && typeof patch.l3_last_run_at !== "string") return false;
-  if ("l3_armed_at" in patch && patch.l3_armed_at !== null && typeof patch.l3_armed_at !== "string") return false;
-  if ("l3_cause" in patch && patch.l3_cause !== null && typeof patch.l3_cause !== "string") return false;
-  if ("l3_retry_count" in patch && (!Number.isInteger(patch.l3_retry_count) || patch.l3_retry_count < 0)) return false;
+  if ("audit_phase" in patch && !AUDIT_PHASE_VALUES.includes(patch.audit_phase)) return false;
+  if ("audit_verdict" in patch && patch.audit_verdict !== null && !AUDIT_VERDICT_VALUES.includes(patch.audit_verdict)) return false;
+  if ("audit_last_run_at" in patch && patch.audit_last_run_at !== null && typeof patch.audit_last_run_at !== "string") return false;
+  if ("audit_armed_at" in patch && patch.audit_armed_at !== null && typeof patch.audit_armed_at !== "string") return false;
+  if ("audit_cause" in patch && patch.audit_cause !== null && typeof patch.audit_cause !== "string") return false;
+  if ("audit_retry_count" in patch && (!Number.isInteger(patch.audit_retry_count) || patch.audit_retry_count < 0)) return false;
   if ("findings" in patch) {
     if (!Array.isArray(patch.findings)) return false;
     for (const f of patch.findings) {
@@ -373,61 +376,61 @@ function writeLayer3State(sessionId, patch) {
   const filePath = getStatePath(sessionId);
 
   const state = readStateOrInit(sessionId);
-  if (!state.layer3 || typeof state.layer3 !== "object" || Array.isArray(state.layer3)) {
-    state.layer3 = {};
+  if (!state.audit || typeof state.audit !== "object" || Array.isArray(state.audit)) {
+    state.audit = {};
   }
 
   for (const [k, v] of Object.entries(patch)) {
     if (k === "findings") {
-      if (!Array.isArray(state.layer3.findings)) state.layer3.findings = [];
+      if (!Array.isArray(state.audit.findings)) state.audit.findings = [];
       const ts = new Date().toISOString();
-      for (const f of v) state.layer3.findings.push({ ...f, timestamp: ts });
+      for (const f of v) state.audit.findings.push({ ...f, timestamp: ts });
     } else {
-      state.layer3[k] = v;
+      state.audit[k] = v;
     }
   }
-  // #912 mirror C-HIGH-3 to L3: setting phase=done resets retry counter at SSOT.
-  if (patch.l3_phase === "done" && !("l3_retry_count" in patch)) {
-    state.layer3.l3_retry_count = 0;
+  // #912 mirror C-HIGH-3 to audit: setting phase=done resets retry counter at SSOT.
+  if (patch.audit_phase === "done" && !("audit_retry_count" in patch)) {
+    state.audit.audit_retry_count = 0;
   }
   state.last_updated = new Date().toISOString();
 
   const vr = validate(state);
   if (!vr.ok) {
-    console.error(`[supervisor-state-writer] writeLayer3State validate failed: ${vr.errors.join("; ")}`);
+    console.error(`[supervisor-state-writer] writeAuditState validate failed: ${vr.errors.join("; ")}`);
     return false;
   }
   writeAtomic(filePath, state);
   return true;
 }
 
-function incrementL3RetryCount(sessionId) {
+function incrementAuditRetryCount(sessionId) {
   if (!sessionId || !SESSION_ID_RE.test(sessionId)) return { count: 0, frozen: false };
   const state = readStateOrInit(sessionId);
-  if (!state.layer3 || typeof state.layer3 !== "object" || Array.isArray(state.layer3)) {
-    state.layer3 = {};
+  if (!state.audit || typeof state.audit !== "object" || Array.isArray(state.audit)) {
+    state.audit = {};
   }
-  const l3 = state.layer3;
-  // Terminal-state short-circuit (symmetric to L2 increment).
-  if (l3.l3_phase === "frozen" || l3.l3_phase === "done") {
-    return { count: l3.l3_retry_count || 0, frozen: l3.l3_phase === "frozen" };
+  const au = state.audit;
+  // Terminal-state short-circuit (symmetric to alert increment).
+  if (au.audit_phase === "frozen" || au.audit_phase === "done") {
+    return { count: au.audit_retry_count || 0, frozen: au.audit_phase === "frozen" };
   }
-  const nextCount = (l3.l3_retry_count || 0) + 1;
-  const patch = { l3_retry_count: nextCount };
-  if (nextCount >= L3_RETRY_THRESHOLD) patch.l3_phase = "frozen";
-  writeLayer3State(sessionId, patch);
-  return { count: nextCount, frozen: nextCount >= L3_RETRY_THRESHOLD };
+  const nextCount = (au.audit_retry_count || 0) + 1;
+  const patch = { audit_retry_count: nextCount };
+  if (nextCount >= AUDIT_RETRY_THRESHOLD) patch.audit_phase = "frozen";
+  writeAuditState(sessionId, patch);
+  return { count: nextCount, frozen: nextCount >= AUDIT_RETRY_THRESHOLD };
 }
 
-function mutateLayer2State(sid, mutator) {
+function mutateAlertState(sid, mutator) {
   const fp = getStatePath(sid); const state = readStateOrInit(sid); mutator(state);
   state.last_updated = new Date().toISOString();
   const vr = validate(state);
   if (!vr.ok) { console.error(`[supervisor-state-writer] mutate failed: ${vr.errors.join("; ")}`); return false; }
   writeAtomic(fp, state); return true;
 }
-const confirmFinding = (sid, idx) => mutateLayer2State(sid, (s) => findingStatus.confirmFinding(s, idx));
-const dropFindings = (sid, idxs) => mutateLayer2State(sid, (s) => findingStatus.dropFindings(s, idxs));
-const promotePendingDraftsToConfirmed = (sid) => mutateLayer2State(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
+const confirmFinding = (sid, idx) => mutateAlertState(sid, (s) => findingStatus.confirmFinding(s, idx));
+const dropFindings = (sid, idxs) => mutateAlertState(sid, (s) => findingStatus.dropFindings(s, idxs));
+const promotePendingDraftsToConfirmed = (sid) => mutateAlertState(sid, (s) => findingStatus.promotePendingDraftsToConfirmed(s));
 
-module.exports = { getStatePath, readStateOrInit, ensureLayer2Scheduled, appendFinding, readState, writeLayer2State, writeAtomic, incrementL2RetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed, validateL2PhaseTransition, writeLayer3State, incrementL3RetryCount };
+module.exports = { getStatePath, readStateOrInit, ensureAlertScheduled, appendFinding, readState, writeAlertState, writeAtomic, incrementAlertRetryCount, confirmFinding, dropFindings, promotePendingDraftsToConfirmed, validateAlertPhaseTransition, writeAuditState, incrementAuditRetryCount };

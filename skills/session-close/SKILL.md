@@ -49,8 +49,8 @@ test -f "<PLANS_DIR>/<session-id>-final-report-env.json" \
   || { echo "ERROR: env JSON missing — /worktree-end must run first" >&2; exit 1; }
 ```
 
-Then write the late-finding L2 eligibility flag (#997):
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-eligible-phase post_final_report_window
+Then write the late-finding alert eligibility flag (#997):
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Proceed to SC-3.
 
 ## Step SC-2B — Branch/main path: build minimal env JSON
@@ -59,8 +59,8 @@ Proceed to SC-3.
 node "$AGENTS_CONFIG_DIR/bin/session-close-build-env.js" "<PLANS_DIR>/<session-id>-final-report-env.json"
 ```
 
-Exit 0 → write the late-finding L2 eligibility flag (#997):
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-eligible-phase post_final_report_window
+Exit 0 → write the late-finding alert eligibility flag (#997):
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Then proceed to SC-3. Non-zero → abort (PR unresolvable).
 
 ## Step SC-3 — Non-GitHub pre-flight + issue close dispatch
@@ -128,6 +128,7 @@ Read four input files via the Read tool:
 - `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
 - `<PLANS_DIR>/<session-id>-intent.md`
 - The WORKTREE_NOTES.md backup path from the `NOTES_BACKUP_PATH` field in the env JSON
+- `<PLANS_DIR>/<session-id>-supervisor-state.json` (optional — absent → treat as no supervisor run)
 
 Generate the skeleton (run this Bash command):
   node -e "process.stdout.write(require(process.env.AGENTS_CONFIG_DIR + '/hooks/lib/final-report-schema').renderSkeleton('<session-id>'))"
@@ -143,27 +144,29 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 - `<INSTALLER_RERUN_REQUIRED_DECISION>` → same pattern using `INSTALLER_RERUN_REQUIRED` / `INSTALLER_RERUN_REASON`
 - `<OS_REBOOT_REQUIRED_DECISION>` → same pattern using `OS_REBOOT_REQUIRED` / `OS_REBOOT_REASON`
 - `<BUGS_FOUND>`, `<RELATED_TASKS>`, `<NEXT_TASKS>` → extract the matching `##` section content from WORKTREE_NOTES.md backup; or `- (none)` when file absent
+- `<SUPERVISOR_ALERT_SUMMARY>` → from supervisor state: `phase: <alert.alert_phase|none>, severity: <alert.cumulative_severity|none>, findings: <count>`; or `(not run)` when state absent
+- `<SUPERVISOR_AUDIT_SUMMARY>` → from supervisor state: `phase: <audit.audit_phase|none>, verdict: <audit.audit_verdict|none>, cause: <audit.audit_cause|none>`; or `(not run)` when state absent
 
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 
 After emitting, mark completion:
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase frozen
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase frozen
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
-`stop-final-report-guard.js` validates completion by checking all 10 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
+`stop-final-report-guard.js` validates completion by checking all 12 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
 
-## Step SC-7 — Surface Layer 2 findings (post-Final-Report)
+## Step SC-7 — Surface alert findings (post-Final-Report)
 
-Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `layer2.findings` is empty, or `layer2.findings_surfaced_at` is already set, skip to the sentinel and return.
+Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
 
 Compute the render:
 
-  node -e "const r=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/supervisor-findings-render');const s=require('fs');const st=JSON.parse(s.readFileSync('<PLANS_DIR>/<session-id>-supervisor-state.json','utf8'));const out=r.formatLayer2Findings(st.layer2.findings||[],{sessionId:'<session-id>',workflowSessionId:process.env.CLAUDE_SESSION_ID||null,supervisorPath:process.env.AGENTS_CONFIG_DIR+'/agents/supervisor.md',stateFilePath:'<PLANS_DIR>/<session-id>-supervisor-state.json'});if(out)process.stdout.write(out+'\n');"
+  node -e "const r=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/supervisor-findings-render');const s=require('fs');const st=JSON.parse(s.readFileSync('<PLANS_DIR>/<session-id>-supervisor-state.json','utf8'));const out=r.formatLayer2Findings(st.alert.findings||[],{sessionId:'<session-id>',workflowSessionId:process.env.CLAUDE_SESSION_ID||null,supervisorPath:process.env.AGENTS_CONFIG_DIR+'/agents/supervisor.md',stateFilePath:'<PLANS_DIR>/<session-id>-supervisor-state.json'});if(out)process.stdout.write(out+'\n');"
 
 When the render is non-empty: emit the text verbatim into the assistant reply (no preamble, no wrapping).
 
 Mark surfaced and complete:
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --mark-findings-surfaced
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --mark-findings-surfaced
   echo "<<WORKFLOW_MARK_STEP_l2_findings_surfaced_complete>>"
 
 ## Rules

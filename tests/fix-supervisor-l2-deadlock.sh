@@ -60,7 +60,7 @@ const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = $layer2_json;
+st.alert = $layer2_json;
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
@@ -329,9 +329,9 @@ run_c9() {
 # Cases 10-12: supervisor-guard dual-ID fallback
 # ============================================================================
 
-# Case 10: primaryState exists with l2_armed_at=null → reads workflowSessionId state.
+# Case 10: primaryState exists with alert_armed_at=null → reads workflowSessionId state.
 # The bug: current code checks `if (primaryState === null)`. When primaryState
-# is non-null but has l2_armed_at=null AND cumSev=null AND no findings (zero state),
+# is non-null but has alert_armed_at=null AND cumSev=null AND no findings (zero state),
 # the fallback should still trigger to read the wsid file. After fix, the guard
 # should fire branch (3) using wsid state.
 run_c10() {
@@ -343,16 +343,16 @@ run_c10() {
     wsid="20260101-120000-c10wsid"
     ccuuid="c10-cc-uuid"
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
-    # Seed CC UUID state file with all-null (zero state — no l2_armed_at).
-    seed_state "$tmp" "$ccuuid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0 }"
-    # Seed wsid state with l2_armed_at set — guard should branch (3) via fallback.
-    seed_state "$tmp" "$wsid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending', l2_cause: null, l2_retry_count: 0 }"
+    # Seed CC UUID state file with all-null (zero state — no alert_armed_at).
+    seed_state "$tmp" "$ccuuid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0 }"
+    # Seed wsid state with alert_armed_at set — guard should branch (3) via fallback.
+    seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    # After fix: the guard should block (exit 2) because wsid state has l2_armed_at,
+    # After fix: the guard should block (exit 2) because wsid state has alert_armed_at,
     # and the retry counter on the wsid file should increment.
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.layer2?.l2_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
     if [ "$rc" = "2" ] && [ "$wsid_retry" != "0" ] && [ "$wsid_retry" != "err" ]; then
         pass "C10: primaryState zero-state → wsid fallback"
@@ -361,7 +361,7 @@ run_c10() {
     fi
 }
 
-# Case 11: primaryState has l2_armed_at set → use primaryState (no fallthrough).
+# Case 11: primaryState has alert_armed_at set → use primaryState (no fallthrough).
 # This is the regression guard for the fix: when primary IS armed, do NOT fall through.
 run_c11() {
     require_source "$HOOK" "C11: primaryState armed → no fallthrough" || return
@@ -372,16 +372,16 @@ run_c11() {
     wsid="20260101-120000-c11wsid"
     ccuuid="c11-cc-uuid"
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
-    # Both files have l2_armed_at — verify CC UUID (primary) is used, not wsid.
-    seed_state "$tmp" "$ccuuid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending', l2_cause: null, l2_retry_count: 0 }"
-    seed_state "$tmp" "$wsid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending', l2_cause: null, l2_retry_count: 0 }"
+    # Both files have alert_armed_at — verify CC UUID (primary) is used, not wsid.
+    seed_state "$tmp" "$ccuuid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
+    seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    ccuuid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${ccuuid}-supervisor-state.json','utf8')); process.stdout.write(String(s.layer2?.l2_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.layer2?.l2_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    ccuuid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${ccuuid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
-    # When primaryState has l2_armed_at, that path is used — CC UUID retry should
+    # When primaryState has alert_armed_at, that path is used — CC UUID retry should
     # be incremented and wsid retry should remain at 0.
     if [ "$rc" = "2" ] && [ "$ccuuid_retry" != "0" ] && [ "$ccuuid_retry" != "err" ] && [ "$wsid_retry" = "0" ]; then
         pass "C11: primaryState armed → no fallthrough"
@@ -400,12 +400,12 @@ run_c12() {
     wsid="20260101-120000-c12wsid"
     ccuuid="c12-cc-uuid"
     printf 'Session-ID: %s\n' "$wsid" > "$workdir/WORKTREE_NOTES.md"
-    # NO CC UUID state file. Only wsid file with l2_armed_at.
-    seed_state "$tmp" "$wsid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending', l2_cause: null, l2_retry_count: 0 }"
+    # NO CC UUID state file. Only wsid file with alert_armed_at.
+    seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending', alert_cause: null, alert_retry_count: 0 }"
     out=$(cd "$workdir" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.layer2?.l2_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$tmp_node/${wsid}-supervisor-state.json','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
     if [ "$rc" = "2" ] && [ "$wsid_retry" != "0" ] && [ "$wsid_retry" != "err" ]; then
         pass "C12: primaryState null → wsid fallback (existing)"

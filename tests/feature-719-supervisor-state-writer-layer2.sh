@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-719-supervisor-state-writer-layer2.sh
-# Tests: hooks/lib/supervisor-state-writer.js (writeLayer2State)
+# Tests: hooks/lib/supervisor-state-writer.js (writeAlertState)
 # Tags: supervisor, em-supervisor, writer, layer2, unit
 # RED for issue #719.
 
@@ -36,70 +36,70 @@ require_writer_layer2() {
     local probe
     probe=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-process.stdout.write(typeof w.writeLayer2State === 'function' ? 'yes' : 'no');
+process.stdout.write(typeof w.writeAlertState === 'function' ? 'yes' : 'no');
 " 2>/dev/null)
     if [ "$probe" != "yes" ]; then
-        skip "$label (writeLayer2State not implemented yet)"; return 1
+        skip "$label (writeAlertState not implemented yet)"; return 1
     fi
     return 0
 }
 
 run_w1() {
-    require_writer_layer2 "W1: writeLayer2State sets l2_armed_at, preserves layer1" || return
+    require_writer_layer2 "W1: writeAlertState sets alert_armed_at, preserves layer1" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w1-sid"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'seed', reporter: 't' });
-const r = w.writeLayer2State('$sid', { l2_armed_at: '2026-06-06T12:00:00Z' });
+const r = w.writeAlertState('$sid', { alert_armed_at: '2026-06-06T12:00:00Z' });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_armed_at !== '2026-06-06T12:00:00Z') { console.error('l2_armed_at not set'); process.exit(3); }
+if (!st || st.alert.alert_armed_at !== '2026-06-06T12:00:00Z') { console.error('alert_armed_at not set'); process.exit(3); }
 if (!Array.isArray(st.layer1.findings) || st.layer1.findings.length !== 1) { console.error('layer1 not preserved'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W1: writeLayer2State sets l2_armed_at, preserves layer1"
+        pass "W1: writeAlertState sets alert_armed_at, preserves layer1"
     else
-        fail "W1: writeLayer2State sets l2_armed_at, preserves layer1 (rc=$rc, out=$out)"
+        fail "W1: writeAlertState sets alert_armed_at, preserves layer1 (rc=$rc, out=$out)"
     fi
 }
 
 run_w2() {
-    require_writer_layer2 "W2: writeLayer2State sets last_run_at + cumulative_severity" || return
+    require_writer_layer2 "W2: writeAlertState sets last_run_at + cumulative_severity" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w2-sid"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.writeLayer2State('$sid', { last_run_at: '2026-06-06T11:00:00Z', cumulative_severity: 'warning' });
+const r = w.writeAlertState('$sid', { last_run_at: '2026-06-06T11:00:00Z', cumulative_severity: 'warning' });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
-if (st.layer2.last_run_at !== '2026-06-06T11:00:00Z') { console.error('last_run_at'); process.exit(3); }
-if (st.layer2.cumulative_severity !== 'warning') { console.error('cumulative_severity'); process.exit(4); }
+if (st.alert.last_run_at !== '2026-06-06T11:00:00Z') { console.error('last_run_at'); process.exit(3); }
+if (st.alert.cumulative_severity !== 'warning') { console.error('cumulative_severity'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W2: writeLayer2State sets last_run_at + cumulative_severity"
+        pass "W2: writeAlertState sets last_run_at + cumulative_severity"
     else
-        fail "W2: writeLayer2State sets last_run_at + cumulative_severity (rc=$rc, out=$out)"
+        fail "W2: writeAlertState sets last_run_at + cumulative_severity (rc=$rc, out=$out)"
     fi
 }
 
 run_w3() {
-    require_writer_layer2 "W3: writeLayer2State appends to layer2.findings" || return
+    require_writer_layer2 "W3: writeAlertState appends to layer2.findings" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w3-sid"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.writeLayer2State('$sid', { findings: [{ categories: ['intent'], severity: 'error', detail: 'd', reporter: 'supervisor' }] });
+const r = w.writeAlertState('$sid', { findings: [{ categories: ['intent'], severity: 'error', detail: 'd', reporter: 'supervisor' }] });
 if (r !== true) { console.error('write returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
-if (!Array.isArray(st.layer2.findings) || st.layer2.findings.length !== 1) { console.error('findings len'); process.exit(3); }
-const f = st.layer2.findings[0];
+if (!Array.isArray(st.alert.findings) || st.alert.findings.length !== 1) { console.error('findings len'); process.exit(3); }
+const f = st.alert.findings[0];
 if (!Array.isArray(f.categories) || f.categories[0] !== 'intent') { console.error('cat'); process.exit(4); }
 if (f.severity !== 'error') { console.error('sev'); process.exit(5); }
 console.log('OK');
@@ -107,21 +107,21 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W3: writeLayer2State appends to layer2.findings"
+        pass "W3: writeAlertState appends to layer2.findings"
     else
-        fail "W3: writeLayer2State appends to layer2.findings (rc=$rc, out=$out)"
+        fail "W3: writeAlertState appends to layer2.findings (rc=$rc, out=$out)"
     fi
 }
 
 run_w4() {
-    require_writer_layer2 "W4: writeLayer2State rejects invalid cumulative_severity" || return
+    require_writer_layer2 "W4: writeAlertState rejects invalid cumulative_severity" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w4-sid"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-w.writeLayer2State('$sid', { cumulative_severity: 'warning' });
+w.writeAlertState('$sid', { cumulative_severity: 'warning' });
 const before = JSON.stringify(w.readState('$sid'));
-const r = w.writeLayer2State('$sid', { cumulative_severity: 'critical' });
+const r = w.writeAlertState('$sid', { cumulative_severity: 'critical' });
 if (r !== false) { console.error('expected false, got '+r); process.exit(2); }
 const after = JSON.stringify(w.readState('$sid'));
 if (before !== after) { console.error('state mutated despite invalid'); process.exit(3); }
@@ -130,9 +130,9 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W4: writeLayer2State rejects invalid cumulative_severity"
+        pass "W4: writeAlertState rejects invalid cumulative_severity"
     else
-        fail "W4: writeLayer2State rejects invalid cumulative_severity (rc=$rc, out=$out)"
+        fail "W4: writeAlertState rejects invalid cumulative_severity (rc=$rc, out=$out)"
     fi
 }
 
@@ -143,7 +143,7 @@ run_w5() {
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
-w.writeLayer2State('$sid', { l2_armed_at: '2026-06-06T12:00:00Z', cumulative_severity: 'warning' });
+w.writeAlertState('$sid', { alert_armed_at: '2026-06-06T12:00:00Z', cumulative_severity: 'warning' });
 const st = w.readState('$sid');
 const r = s.validate(st);
 if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
@@ -159,7 +159,7 @@ console.log('OK');
 }
 
 run_w6() {
-    require_writer_layer2 "W6: writeLayer2State on missing file creates it" || return
+    require_writer_layer2 "W6: writeAlertState on missing file creates it" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="w6-sid"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
@@ -167,7 +167,7 @@ const w = require('$WRITER_NODE');
 const fs = require('fs');
 const p = w.getStatePath('$sid');
 if (fs.existsSync(p)) { console.error('state file exists before test'); process.exit(2); }
-const r = w.writeLayer2State('$sid', { l2_armed_at: '2026-06-06T12:00:00Z' });
+const r = w.writeAlertState('$sid', { alert_armed_at: '2026-06-06T12:00:00Z' });
 if (r !== true) { console.error('write returned: '+r); process.exit(3); }
 if (!fs.existsSync(p)) { console.error('state file missing after write'); process.exit(4); }
 console.log('OK');
@@ -175,9 +175,9 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W6: writeLayer2State on missing file creates it"
+        pass "W6: writeAlertState on missing file creates it"
     else
-        fail "W6: writeLayer2State on missing file creates it (rc=$rc, out=$out)"
+        fail "W6: writeAlertState on missing file creates it (rc=$rc, out=$out)"
     fi
 }
 
