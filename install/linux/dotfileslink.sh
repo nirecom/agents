@@ -169,6 +169,7 @@ printf "${C_GREEN}core.hooksPath -> $AGENTS_ROOT/hooks${C_RESET}\n"
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/doc-append << 'LAUNCHER_EOF'
 #!/usr/bin/env bash
+export MSYS_NO_PATHCONV=1
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 AGENTS_ROOT_RESOLVED="${AGENTS_CONFIG_DIR:-}"
 if [ -z "$AGENTS_ROOT_RESOLVED" ] && [ -f "$SCRIPT_DIR/../agents/bin/doc-append.py" ]; then
@@ -183,6 +184,7 @@ LAUNCHER_EOF
 # Rewrite with the actual path now that we know AGENTS_ROOT
 cat > ~/.local/bin/doc-append << EOF
 #!/usr/bin/env bash
+export MSYS_NO_PATHCONV=1
 if [[ -z "\${1:-}" || "\${1:-}" == --* ]]; then
   exec uv run "$AGENTS_ROOT/bin/doc-append.py" "docs/history.md" "\$@"
 else
