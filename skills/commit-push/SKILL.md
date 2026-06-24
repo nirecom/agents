@@ -80,6 +80,8 @@ CP-2. **Delegate commit/push/PR to commit-push-worker**:
 
    `settings.json` `model` and `effort` fields are auto-updated by the system — exclude them from the commit if they appear in the diff.
 
+CP-2a. **Append PR number to session title:** `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" add-pr "$(pwd)" "<PR_NUMBER>"` where `<PR_NUMBER>` is extracted from `pr_url` by taking the last path segment (format: `https://github.com/<owner>/<repo>/pull/<N>` → `<N>`). Skip when outcome is `bootstrap_pending`, `staging_incomplete`, `staging_check_failed`, `push_failed`, or `conflict`. Fail-open.
+
 CP-3. **Merge prompt:**
 
    Check `ENFORCE_WORKTREE`:

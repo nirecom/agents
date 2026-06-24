@@ -1,0 +1,136 @@
+#!/usr/bin/env node
+// bin/cc-session-title — VS Code session title CLI
+// Subcommands:
+//   set-issue <cwd> <plansDir>      → writeSetIssue
+//   add-pr <cwd> <prNumber>         → writeAddPr
+//   mark-complete <cwd>             → writeMarkComplete
+//
+// Session ID is resolved internally:
+//   1. CLAUDE_ENV_FILE → CLAUDE_SESSION_ID line
+//   2. CLAUDE_SESSION_ID env var
+//   3. mtime JSONL scan in transcriptBase/<encodedCwd>/
+//
+// All errors are silently swallowed. Exit code always 0.
+
+"use strict";
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+try {
+  const agentsDir = path.join(__dirname, "..");
+  const { writeSetIssue, writeAddPr, writeMarkComplete, writeWaiting, writeClearWaiting } = require(
+    path.join(agentsDir, "hooks", "lib", "session-title")
+  );
+  const { resolveSessionId } = require(
+    path.join(agentsDir, "hooks", "lib", "workflow-state", "session-id")
+  );
+
+  const [, , subcmd, ...args] = process.argv;
+
+  // Resolve session ID internally
+  function resolveInternalSessionId(cwd) {
+    // Try CLAUDE_ENV_FILE first
+    const envFile = process.env.CLAUDE_ENV_FILE;
+    if (envFile) {
+      try {
+        const content = fs.readFileSync(envFile, "utf8");
+        const m = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
+        if (m) {
+          const sid = m[1].trim();
+          if (/^[A-Za-z0-9_-]+$/.test(sid)) return sid;
+        }
+      } catch (_) {}
+    }
+
+    // Try CLAUDE_SESSION_ID env var
+    const envSid = process.env.CLAUDE_SESSION_ID;
+    if (envSid && /^[A-Za-z0-9_-]+$/.test(envSid.trim())) {
+      return envSid.trim();
+    }
+
+    // mtime JSONL scan in transcriptBase/<encodedCwd>/
+    if (cwd) {
+      try {
+        const transcriptBase =
+          process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
+          path.join(os.homedir(), ".claude", "projects");
+        const rawDir = process.env.CLAUDE_PROJECT_DIR || path.resolve(cwd);
+        const encoded = path.resolve(rawDir).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
+        const transcriptDir = path.join(transcriptBase, encoded);
+        const files = fs
+          .readdirSync(transcriptDir)
+          .filter((f) => f.endsWith(".jsonl"))
+          .map((f) => ({
+            name: f,
+            mtime: fs.statSync(path.join(transcriptDir, f)).mtimeMs,
+          }))
+          .sort((a, b) => b.mtime - a.mtime);
+        if (files.length > 0) {
+          const base = path.basename(files[0].name, ".jsonl");
+          if (/^[A-Za-z0-9_-]+$/.test(base)) return base;
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  if (!subcmd) process.exit(0);
+
+  switch (subcmd) {
+    case "set-issue": {
+      const [cwd, plansDir] = args;
+      if (!cwd || !plansDir) process.exit(0);
+      const sessionId = resolveInternalSessionId(cwd);
+      if (sessionId) {
+        writeSetIssue(sessionId, cwd, plansDir);
+      }
+      break;
+    }
+    case "add-pr": {
+      const [cwd, prNumber] = args;
+      if (!cwd || !prNumber) process.exit(0);
+      const sessionId = resolveInternalSessionId(cwd);
+      if (sessionId) {
+        writeAddPr(sessionId, cwd, String(prNumber));
+      }
+      break;
+    }
+    case "mark-complete": {
+      const [cwd] = args;
+      if (!cwd) process.exit(0);
+      const sessionId = resolveInternalSessionId(cwd);
+      if (sessionId) {
+        writeMarkComplete(sessionId, cwd);
+      }
+      break;
+    }
+    case "write-waiting": {
+      const [cwd] = args;
+      if (!cwd) process.exit(0);
+      const sessionId = resolveInternalSessionId(cwd);
+      if (sessionId) {
+        writeWaiting(sessionId, cwd);
+      }
+      break;
+    }
+    case "clear-waiting": {
+      const [cwd] = args;
+      if (!cwd) process.exit(0);
+      const sessionId = resolveInternalSessionId(cwd);
+      if (sessionId) {
+        writeClearWaiting(sessionId, cwd);
+      }
+      break;
+    }
+    default:
+      // Unknown subcommand — exit 0 (fail-open)
+      break;
+  }
+} catch (_) {
+  // Fail-open: any error is silently swallowed
+}
+
+process.exit(0);
