@@ -48,20 +48,48 @@ fi
 ABSOLUTE_CEILING="false"
 [[ "$BUDGET_REMAINING" -eq 0 ]] && ABSOLUTE_CEILING="true"
 
+# Respect an explicitly-set CONV_LANG (including empty string) over the config file.
+if [[ -z "${CONV_LANG+x}" ]]; then
+  CONV_LANG="$("$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG 2>/dev/null || true)"
+fi
+
 # Build options array (jq -n produces valid JSON from shell vars)
 if [[ "$BUDGET_REMAINING" -gt 0 ]]; then
-  OPTIONS_JSON='[
+  case "$CONV_LANG" in
+    japanese)
+      QUESTION="このラウンドのレビューが上限に達しました。次のアクションを選択してください："
+      OPTIONS_JSON='[
+    {"label":"承認してランディング","description":"Accept the current plan/code as-is and proceed to the next workflow step.","value":"land"},
+    {"label":"懸念点を調整","description":"Halt the pipeline and adjust scope, requirements, or approach before restarting.","value":"adjust"},
+    {"label":"ラウンドを延長","description":"Spend one more extension round — the reviewer runs again with the revised output.","value":"extend"}
+  ]'
+      ;;
+    *)
+      QUESTION="Round cap reached for ${LABEL}. Choose: Land (proceed as-is), Adjust (halt and revise scope), or Extend (one more review round; ${BUDGET_REMAINING} extension(s) remaining)."
+      OPTIONS_JSON='[
     {"label":"Land","description":"Accept the current plan/code as-is and proceed to the next workflow step.","value":"land"},
     {"label":"Adjust","description":"Halt the pipeline and adjust scope, requirements, or approach before restarting.","value":"adjust"},
     {"label":"Extend","description":"Spend one more extension round — the reviewer runs again with the revised output.","value":"extend"}
   ]'
-  QUESTION="Round cap reached for ${LABEL}. Choose: Land (proceed as-is), Adjust (halt and revise scope), or Extend (one more review round; ${BUDGET_REMAINING} extension(s) remaining)."
+      ;;
+  esac
 else
-  OPTIONS_JSON='[
+  case "$CONV_LANG" in
+    japanese)
+      QUESTION="絶対上限に達しました。次のアクションを選択してください："
+      OPTIONS_JSON='[
+    {"label":"承認してランディング","description":"Accept the current plan/code as-is and proceed to the next workflow step.","value":"land"},
+    {"label":"懸念点を調整","description":"Halt the pipeline and adjust scope, requirements, or approach before restarting.","value":"adjust"}
+  ]'
+      ;;
+    *)
+      QUESTION="Round cap reached for ${LABEL} — absolute ceiling reached, no more extensions available. Choose: Land (proceed as-is) or Adjust (halt and revise scope)."
+      OPTIONS_JSON='[
     {"label":"Land","description":"Accept the current plan/code as-is and proceed to the next workflow step.","value":"land"},
     {"label":"Adjust","description":"Halt the pipeline and adjust scope, requirements, or approach before restarting.","value":"adjust"}
   ]'
-  QUESTION="Round cap reached for ${LABEL} — absolute ceiling reached, no more extensions available. Choose: Land (proceed as-is) or Adjust (halt and revise scope)."
+      ;;
+  esac
 fi
 
 jq -n \

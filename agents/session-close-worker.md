@@ -4,6 +4,7 @@ description: Run SC-4 retrospective scan and SC-5/SC-5b L2/L3 supervisor gate ev
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Evaluate the pre-Final-Report supervisor gate (SC-4 + SC-5 + SC-5b) and write a gate JSON artifact.
 

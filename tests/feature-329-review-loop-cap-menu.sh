@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/review-loop-cap-menu
-# Tags: bin, env, config, loop, tests
+# Tags: bin, env, config, loop, tests, scope:common
 # Tests for bin/review-loop-cap-menu (issue #329).
 # Verifies JSON output schema, options invariants, auto-extend exit 42,
 # and arg-validation exit 2.
@@ -223,6 +223,59 @@ if [[ "$LABEL" == "foo" ]]; then
     pass "--label: JSON .label == 'foo'"
 else
     fail "--label: expected .label='foo', got '$LABEL'. JSON: $OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# 10. CONV_LANG=japanese: valid JSON, question is non-empty
+# ---------------------------------------------------------------------------
+RES=$(CONV_LANG=japanese run_menu --budget-remaining 1)
+RC=$(extract_rc "$RES")
+OUT=$(extract_out "$RES")
+if [[ "$RC" == "0" ]]; then
+    pass "CONV_LANG=japanese: exit 0"
+else
+    fail "CONV_LANG=japanese: expected exit 0, got $RC. Output: $OUT"
+fi
+if echo "$OUT" | jq -e '.question | length > 0' >/dev/null 2>&1; then
+    pass "CONV_LANG=japanese: question field non-empty"
+else
+    fail "CONV_LANG=japanese: question field empty. JSON: $OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# 11. CONV_LANG=japanese: value fields stable (land/adjust/extend)
+# ---------------------------------------------------------------------------
+RES=$(CONV_LANG=japanese run_menu --budget-remaining 1)
+OUT=$(extract_out "$RES")
+VALUES=$(echo "$OUT" | jq -r '.options[].value' 2>/dev/null | tr -d '\r' | sort | tr '\n' ',')
+if [[ "$VALUES" == "adjust,extend,land," ]]; then
+    pass "CONV_LANG=japanese: value fields stable (land/adjust/extend)"
+else
+    fail "CONV_LANG=japanese: value fields wrong. Got: $VALUES"
+fi
+
+# ---------------------------------------------------------------------------
+# 12. CONV_LANG=french (unsupported — English fallback): valid JSON
+# ---------------------------------------------------------------------------
+RES=$(CONV_LANG=french run_menu --budget-remaining 1)
+RC=$(extract_rc "$RES")
+OUT=$(extract_out "$RES")
+if [[ "$RC" == "0" ]] && echo "$OUT" | jq -e . >/dev/null 2>&1; then
+    pass "CONV_LANG=french: exit 0, valid JSON (English fallback)"
+else
+    fail "CONV_LANG=french: expected exit 0 + valid JSON, got RC=$RC. Output: $OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# 13. CONV_LANG="" (empty): valid JSON, same as no CONV_LANG
+# ---------------------------------------------------------------------------
+RES=$(CONV_LANG="" run_menu --budget-remaining 1)
+RC=$(extract_rc "$RES")
+OUT=$(extract_out "$RES")
+if [[ "$RC" == "0" ]] && echo "$OUT" | jq -e . >/dev/null 2>&1; then
+    pass "CONV_LANG='': exit 0, valid JSON"
+else
+    fail "CONV_LANG='': expected exit 0 + valid JSON, got RC=$RC. Output: $OUT"
 fi
 
 # ---------------------------------------------------------------------------
