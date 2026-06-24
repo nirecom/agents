@@ -505,4 +505,8 @@ Changes: **Skill picker:** `/issue-close-migrated`, `survey-code`, `survey-histo
 
 ### FEATURE: PR #1075 (2026-06-24)
 Background: fix(#1073,#319): doc-rotate archives CHANGELOG.md to changelog/; doc-append launcher sets MSYS_NO_PATHCONV=1
-Changes: Fixed: `doc-append CHANGELOG.md` now archives to `changelog/<year>.md` instead of `history/<year>.md`; `## Archived` links and headers are correct; re-rotation no longer duplicates the `## Archived` block. (#1073);Fixed: `doc-append` bash wrapper now sets `MSYS_NO_PATHCONV=1`, preventing Git Bash from mangling Unix-style path arguments (e.g. `/worktree-start`) to Windows paths. (#319)
+Changes: Fixed: `doc-append CHANGELOG.md` now archives to `changelog/<year>.md` instead of `history/<year>.md`; `## Archived` links and headers are correct; re-rotation no longer duplicates the `## Archived` block. (#1073);Fixed: `doc-append` bash wrapper now sets `MSYS_NO_PATHCONV=1`, preventing Git Bash from mangling Unix-style path arguments (e.g. `/worktree-start`) to Windows paths. (#319)
+
+### FEATURE: PR #1084 (2026-06-25)
+Background: feat(#1077): add WORKFLOW_ISSUE_CLOSE_VERIFIED session-scoped bypass for gh issue close
+Changes: New `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>` / `<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: reason>>` sentinel pair: lets you approve a window of planned `gh issue close` operations without triggering supervisor alerts or using the broader WORKFLOW_OFF bypass.
