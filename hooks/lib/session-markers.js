@@ -68,9 +68,41 @@ function worktreeOffNoticeText(hookName, sid) {
   );
 }
 
+// isIssueCloseVerified(sid): returns true iff <workflowDir>/<sid>.issue-close-verified
+// exists. Fail-closed: any error → false.
+function isIssueCloseVerified(sid) {
+  try {
+    if (typeof sid !== "string" || !SID_RE.test(sid)) return false;
+    const dir = getWorkflowDir();
+    const markerPath = path.join(dir, sid + ".issue-close-verified");
+    return fs.existsSync(markerPath);
+  } catch (_e) {
+    return false;
+  }
+}
+
+// issueCloseVerifiedNoticeText(hookName, sid): returns a human-readable string
+// about the issue-close-verified override. NEVER throws.
+function issueCloseVerifiedNoticeText(hookName, sid) {
+  let markerPath;
+  try {
+    const dir = getWorkflowDir();
+    markerPath = path.join(dir, sid + ".issue-close-verified");
+  } catch (e) {
+    markerPath = "<unresolved: " + (e && e.message ? e.message : String(e)) + ">";
+  }
+  return (
+    "[" + hookName + "] ISSUE_CLOSE_VERIFIED is active for this session (sid=" + sid + "). " +
+    "Marker: " + markerPath + ". " +
+    "End with: echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: <reason>>>\""
+  );
+}
+
 module.exports = {
   isWorkflowOff,
   isWorktreeOff,
   workflowOffNoticeText,
   worktreeOffNoticeText,
+  isIssueCloseVerified,
+  issueCloseVerifiedNoticeText,
 };
