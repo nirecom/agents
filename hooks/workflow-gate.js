@@ -108,7 +108,7 @@ if (require.main === module) {
   // Fail-open precedence (do NOT reorder):
   //   1. No sessionId → fall through (cannot enforce)
   //   2. readState() returns null → fall through (no state to check)
-  //   3. plans-path Write allowlist → fall through (skill output path)
+  //   3. plans-path Write/Edit/MultiEdit allowlist → fall through (skill output path)
   //   4. Tier 1 not clear → block (references /workflow-init)
   //   5. Tier 2 not clear → block (references /clarify-intent)
   //   6. Both clear → fall through (gate dormant)
@@ -125,12 +125,12 @@ if (require.main === module) {
   if (sessionId && EARLY_GATE_TOOLS.has(toolName)) {
     const earlyState = readState(sessionId);
     if (earlyState) {
-      // Plans-path allowlist: Write tool only, to ~/.workflow-plans/**
+      // Plans-path allowlist: Write/Edit/MultiEdit tools, targeting ~/.workflow-plans/**
       // (skill writes intent/outline/detail .md here while workflow_init is still pending).
       // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
       const filePath = toolInput.file_path || toolInput.path || "";
       let isPlansAllowed = false;
-      if (toolName === "Write" && filePath) {
+      if ((toolName === "Write" || toolName === "Edit" || toolName === "MultiEdit") && filePath) {
         try {
           const resolved = path.resolve(filePath);
           const plansRoot = path.resolve(getWorkflowPlansDir()) + path.sep;
