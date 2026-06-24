@@ -54,73 +54,22 @@ WS-6. Create the worktree (isolated command — same chaining caveat as step WS-
    git worktree add <path> -b <type>/<task-name>
    ```
 
-WS-7. Enumerate gitignored and untracked files in main (NUL-delimited for paths with spaces
-   and non-ASCII characters):
-   ```
-   git -C <main> ls-files --others --ignored --exclude-standard -z
-   git -C <main> ls-files --others --exclude-standard -z
-   ```
+WS-7. Invoke `worktree-copy-worker` via Task tool. Build input JSON with Node to avoid quoting issues, passing: `main_root` (resolve via `git rev-parse --show-toplevel`), `worktree_path` (Step WS-3 path), `branch` (`<type>/<task-name>`), `session_id` (current session, empty string if unknown), `agents_config_dir` (resolve absolute path from `$AGENTS_CONFIG_DIR`), `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
 
-WS-8. Classify the results and present to the user:
-   - **Copy recommended:** `.env.local`, `.env.development`, dev credentials, development configs
-   - **Copy prohibited:** `.env.production`, cloud credentials, deploy keys, prod tokens,
-     customer data access keys
-   - **Alternative recommended:** Create new dev credentials for the worktree using `.env.example`
-     as a base. Present the generation command (e.g., `/create-key`) —
-     the user must create and fill in the actual `.env` file. Claude must not write to `.env`
-     directly.
+   Check `CONFIRM_WORKTREE` via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
+   In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF — `AskUserQuestion` cannot be called in subagent contexts.
 
-WS-9. Run the automated copy using `.worktreeinclude`:
+   Response handling when `CONFIRM_WORKTREE=OFF`:
+   - `status: complete` → surface summary, proceed.
+   - `status: partial` → surface warning, proceed (non-blocking).
+   - `status: failed` → surface error and stop.
 
-   WS-9a. Get the main worktree absolute path (already available from the prior steps, or run
-      `git rev-parse --show-toplevel`). Use forward slashes — Git for Windows already
-      returns forward slashes.
+   Response handling when `CONFIRM_WORKTREE=ON` (default):
+   - `status: complete` → call `AskUserQuestion` to confirm copy results before proceeding.
+   - `status: partial` → call `AskUserQuestion` in main (surface denied/errors via artifact log path); user must confirm or abort.
+   - `status: failed` → surface error and stop.
 
-   WS-9b. Pipe a JSON payload to the copy script. Build the payload with Node to avoid
-      shell quoting and backslash issues:
-      ```
-      node -e "process.stdout.write(JSON.stringify({mainRoot:process.argv[1],worktreePath:process.argv[2],includeFile:null}))" -- "<mainRoot>" "<step-3-path>" | node bin/worktree-copy-include.js
-      ```
-      Files listed in `.worktreeinclude` that are also gitignored will be copied.
-      Files listed in `.worktree-copyignore` are always denied, regardless of `.worktreeinclude`.
-
-   WS-9c. Display the `"copied"` list to the user.
-   WS-9d. If `"denied"` is non-empty, report: "Skipped by .worktree-copyignore: <files>".
-   WS-9e. If `"errors"` is non-empty, report them to the user.
-      **Symlink note:** "Symlink source rejected: .env" is expected when `.env` is a
-      symlink (common in dotfiles setups). It does NOT require manual action if
-      `AGENTS_CONFIG_DIR` is already set in the parent shell environment — verify
-      with `echo "$AGENTS_CONFIG_DIR"` after `EnterWorktree`. Only escalate if
-      the variable is unset.
-   WS-9f. If stderr contains `WARN:`, display it and ask the user to verify that the
-      pattern is also present in `.gitignore`.
-
-   Then check CONFIRM_WORKTREE via Bash:
-     `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
-   - stdout `OFF`: auto-continue without `AskUserQuestion`.
-   - stdout `ON` or `ERROR`: call `AskUserQuestion` to let the user confirm the copy results before proceeding.
-   - In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF regardless of config — `AskUserQuestion` cannot be called in subagent contexts.
-
-WS-10. Generate `WORKTREE_NOTES.md` + register in `.git/info/exclude`. Pass Step WS-9b stdout
-    via `COPIED_JSON` env var (the script reads `.copied` from it).
-
-    POSIX:
-    ```
-    COPIED_JSON='<step-9-stdout>' node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>" "" "<session-id>"
-    ```
-    Claude Code が現セッションの session-id を持つ場合はそれを使用。不明な場合は空文字でも可（既存挙動）。
-
-    PowerShell:
-    ```
-    $env:COPIED_JSON = '<step-9-stdout>'
-    node bin/worktree-write-notes.js "<mainRoot>" "<step-3-path>" "<type>/<task-name>" "" "<session-id>"
-    ```
-    Claude Code が現セッションの session-id を持つ場合はそれを使用。不明な場合は空文字でも可（既存挙動）。
-
-    `<mainRoot>`: main repository root from Step WS-9a — never a linked worktree path.
-    Exit 0 with `notesWritten:true` = success. Exit 1 = investigate stderr and re-run.
-
-WS-11. Final report: worktree path, branch, and which gitignored state was copied.
+WS-8. Final report: worktree path, branch, and which gitignored state was copied.
 
 ## Rules
 
@@ -130,6 +79,4 @@ WS-11. Final report: worktree path, branch, and which gitignored state was copie
 - Task name validation: reject names that fail `[a-zA-Z0-9_-]+` — do not proceed with invalid names.
 - WORKTREE_NOTES.md generation is owned by `bin/worktree-write-notes.js`. Do not write the
   file or edit `.git/info/exclude` manually.
-- Known limit: filenames containing `'` break the POSIX `COPIED_JSON='...'` quoting. Fall
-  back to `COPIED_JSON="$(cat file.json)"` if needed.
 - Report observations per rules/supervisor-reporting.md.
