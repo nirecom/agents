@@ -11,6 +11,8 @@ const {
   ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
+  ISSUE_CLOSE_VERIFIED_RE_DQ, ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
+  ISSUE_CLOSE_VERIFIED_END_RE_DQ, ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
 const { getWorkflowDir } = require("../lib/workflow-state");
 
@@ -234,6 +236,114 @@ function handle(ctx) {
     } catch (e) {
       signalFatal(
         `workflow-mark: failed to clear ENFORCE_WORKFLOW override marker — ${e.message}. Restore NOT applied.`
+      );
+    }
+    return true;
+  }
+
+  // --- ISSUE_CLOSE_VERIFIED ON handler ---
+  // Writes <sid>.issue-close-verified marker; does NOT call reportSentinel()
+  // (no supervisor alert — this is a planned operation, not an escape hatch).
+  const issueCloseVerifiedMatch = cmd.match(ISSUE_CLOSE_VERIFIED_RE_DQ);
+  const issueCloseVerifiedLooksLike =
+    !issueCloseVerifiedMatch && ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE.test(cmd);
+  if (issueCloseVerifiedLooksLike) {
+    pushMessage(
+      `workflow-mark: malformed ISSUE_CLOSE_VERIFIED — ` +
+        `expected: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
+    );
+    return true;
+  }
+  if (issueCloseVerifiedMatch) {
+    if (!sessionId) {
+      signalFatal(
+        `workflow-mark: could not resolve session_id — ISSUE_CLOSE_VERIFIED sentinel NOT applied.`
+      );
+      return true;
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+      signalFatal(`workflow-mark: invalid session_id format — ISSUE_CLOSE_VERIFIED sentinel NOT applied.`);
+      return true;
+    }
+    let reasonStored = null;
+    const rawReason = issueCloseVerifiedMatch[1];
+    const v = validateSkipReason(rawReason);
+    if (v.ok) {
+      reasonStored = v.reason;
+    } else {
+      pushMessage(
+        `workflow-mark: ISSUE_CLOSE_VERIFIED reason rejected — ${v.msg} (override still applied)`
+      );
+    }
+    try {
+      const dir = getWorkflowDir();
+      fs.mkdirSync(dir, { recursive: true });
+      const markerPath = path.join(dir, `${sessionId}.issue-close-verified`);
+      const tmp = markerPath + ".tmp";
+      fs.writeFileSync(
+        tmp,
+        JSON.stringify({ reason: reasonStored, set_at: new Date().toISOString() }),
+        { mode: 0o600 }
+      );
+      fs.renameSync(tmp, markerPath);
+      pushMessage(
+        `workflow-mark: ISSUE_CLOSE_VERIFIED session override applied (marker: ${markerPath}). ` +
+          `End with: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: <reason>>>"`
+      );
+    } catch (e) {
+      signalFatal(
+        `workflow-mark: failed to write ISSUE_CLOSE_VERIFIED marker — ${e.message}. Override NOT applied.`
+      );
+    }
+    return true;
+  }
+
+  // --- ISSUE_CLOSE_VERIFIED_END (OFF) handler ---
+  const issueCloseVerifiedEndMatch = cmd.match(ISSUE_CLOSE_VERIFIED_END_RE_DQ);
+  const issueCloseVerifiedEndLooksLike =
+    !issueCloseVerifiedEndMatch && ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE.test(cmd);
+  if (issueCloseVerifiedEndLooksLike) {
+    pushMessage(
+      `workflow-mark: malformed ISSUE_CLOSE_VERIFIED_END — ` +
+        `expected: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: REASON>>" ` +
+        `(reason: >=3 non-space chars, no '>', not a placeholder)`
+    );
+    return true;
+  }
+  if (issueCloseVerifiedEndMatch) {
+    if (!sessionId) {
+      signalFatal(
+        `workflow-mark: could not resolve session_id — ISSUE_CLOSE_VERIFIED_END sentinel NOT applied.`
+      );
+      return true;
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+      signalFatal(`workflow-mark: invalid session_id format — ISSUE_CLOSE_VERIFIED_END sentinel NOT applied.`);
+      return true;
+    }
+    const rawEndReason = issueCloseVerifiedEndMatch[1];
+    const endV = validateSkipReason(rawEndReason);
+    if (!endV.ok) {
+      pushMessage(
+        `workflow-mark: ISSUE_CLOSE_VERIFIED_END reason rejected — ${endV.msg} (restore still applied)`
+      );
+    }
+    try {
+      const dir = getWorkflowDir();
+      const markerPath = path.join(dir, `${sessionId}.issue-close-verified`);
+      try {
+        fs.unlinkSync(markerPath);
+        pushMessage(
+          `workflow-mark: ISSUE_CLOSE_VERIFIED session override cleared (marker removed: ${markerPath}).`
+        );
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+        // Idempotent: silent no-op when marker is already absent.
+      }
+    } catch (e) {
+      signalFatal(
+        `workflow-mark: failed to clear ISSUE_CLOSE_VERIFIED marker — ${e.message}. Restore NOT applied.`
       );
     }
     return true;
