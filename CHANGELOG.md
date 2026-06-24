@@ -501,4 +501,8 @@ Changes: enforce-worktree (`ENFORCE_WORKTREE=on`): Bash writes from the main wor
 
 ### FEATURE: PR #1074 (2026-06-24)
 Background: refactor(#1071): skill/agent fork+worker audit — context:fork sweep cluster, 4 new workers, user-invocable audit
-Changes: **Skill picker:** `/issue-close-migrated`, `survey-code`, `survey-history`, and `issue-reconcile` no longer appear as direct-invocation candidates in the skill picker — they are internal-only skills invoked by other skills.
+Changes: **Skill picker:** `/issue-close-migrated`, `survey-code`, `survey-history`, and `issue-reconcile` no longer appear as direct-invocation candidates in the skill picker — they are internal-only skills invoked by other skills.
+
+### FEATURE: PR #1075 (2026-06-24)
+Background: fix(#1073,#319): doc-rotate archives CHANGELOG.md to changelog/; doc-append launcher sets MSYS_NO_PATHCONV=1
+Changes: Fixed: `doc-append CHANGELOG.md` now archives to `changelog/<year>.md` instead of `history/<year>.md`; `## Archived` links and headers are correct; re-rotation no longer duplicates the `## Archived` block. (#1073);Fixed: `doc-append` bash wrapper now sets `MSYS_NO_PATHCONV=1`, preventing Git Bash from mangling Unix-style path arguments (e.g. `/worktree-start`) to Windows paths. (#319)
