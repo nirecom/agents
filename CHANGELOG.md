@@ -513,4 +513,8 @@ Changes: New `<<WORKFLOW_ISSUE_CLOSE_VERIFIED: reason>>` / `<<WORKFLOW_ISSUE_CLO
 
 ### FEATURE: PR #1088 (2026-06-25)
 Background: fix(#1080): extend workflow-gate plans-path allowlist to Edit and MultiEdit
-Changes: Workflow gate now allows Edit and MultiEdit tools to target `~/.workflow-plans/` files during the `clarify_intent` pending phase, so skills can patch existing plan files (intent.md, outline.md) without being blocked.
+Changes: Workflow gate now allows Edit and MultiEdit tools to target `~/.workflow-plans/` files during the `clarify_intent` pending phase, so skills can patch existing plan files (intent.md, outline.md) without being blocked.
+
+### FEATURE: PR #1086 (2026-06-25)
+Background: feat(#299): auto-set VS Code session title from workflow state
+Changes: VS Code session titles are now set automatically: `#N issue-title` at session open, `⏳ #N issue-title` while waiting for user input, `#N issue-title PR #N` appended after commit-push, and `✓ #N issue-title PR #N` prepended when the session closes cleanly.
