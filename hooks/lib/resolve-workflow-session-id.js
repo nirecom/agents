@@ -24,9 +24,13 @@ function _readSessionIdFromWorktreeNotes(notesPath) {
  * Priority chain:
  *   1. WORKTREE_NOTES.md Session-ID: line in CWD or git common-dir parent
  *      (written by /worktree-start — gold source).
- *   2. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID value (charset-validated),
+ *   2. CLAUDE_CODE_SESSION_ID env var (charset-validated), if any
+ *      `<value>-*.md` plan artifact exists in plans-dir. CC-native and reliably
+ *      present in the Bash-tool path where CLAUDE_ENV_FILE is not propagated
+ *      (#1082); existence-guarded to avoid resolving to an artifact-less session.
+ *   3. CLAUDE_ENV_FILE -> CLAUDE_SESSION_ID value (charset-validated),
  *      if `<value>-intent.md` exists in plans-dir.
- *   3. Depth-score scan of `*-context.md` filenames in plans-dir, filtered by charset and
+ *   4. Depth-score scan of `*-context.md` filenames in plans-dir, filtered by charset and
  *      same-day date-sanity (prefix must start with today's local YYYYMMDD).
  *      Each candidate scores depth: 2 = detail.md present, 1 = intent.md only, 0 = stub.
  *      Sort order: depth desc, mtime desc, sid asc (depth tie-breaks before mtime).
@@ -60,7 +64,24 @@ function resolveWorkflowSessionId(_ctx = {}) {
     }
   } catch (_) {}
 
-  // Priority 2: CLAUDE_ENV_FILE → CLAUDE_SESSION_ID + intent.md existence check.
+  // Priority 2: native CLAUDE_CODE_SESSION_ID (existence-guarded). CC-native,
+  // per-session-distinct, present in the Bash-tool path where CLAUDE_ENV_FILE is
+  // not propagated (#1082). Guard against selecting a session with no plan
+  // artifacts yet (early-session false resolve) — accept only when any
+  // `<value>-*.md` artifact exists in plans-dir.
+  const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
+  if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) {
+    const v = codeSid.trim();
+    let hasArtifact = false;
+    try {
+      hasArtifact = fs
+        .readdirSync(plansDir)
+        .some((f) => f.startsWith(v + "-") && f.endsWith(".md"));
+    } catch (_) {}
+    if (hasArtifact) return v;
+  }
+
+  // Priority 3: CLAUDE_ENV_FILE → CLAUDE_SESSION_ID + intent.md existence check.
   // Already guards against stub selection: falls through to Priority 3 only when intent.md is absent.
   const envFile = process.env.CLAUDE_ENV_FILE;
   if (envFile) {
@@ -100,7 +121,7 @@ function resolveWorkflowSessionId(_ctx = {}) {
     );
   }
 
-  // Read CC UUID from CLAUDE_ENV_FILE (re-read for Priority 3 bucket-sort tie-break).
+  // Read CC UUID from CLAUDE_ENV_FILE (re-read for Priority 4 bucket-sort tie-break).
   let ccUuid = "";
   if (envFile) {
     try {
