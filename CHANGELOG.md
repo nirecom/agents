@@ -128,3 +128,7 @@ Changes: `meta` label issues now use a shorter WF-META flow — oracle auto-skip
 ### FEATURE: PR #1098 (2026-06-25)
 Background: fix(#1067): add migrateLegacyState() to handle pre-#1092 state files
 Changes: Fixed: `supervisor-report` no longer crashes with "validate failed: alert must be an object; audit must be an object" on sessions that had state files written before PR #1092.
+
+### FEATURE: PR #1106 (2026-06-26)
+Background: fix(#721): add "detail" to WF_META_AUTO_SKIP — WF-META sessions no longer invoke make-detail-plan
+Changes: WF-META sessions no longer invoke `make-detail-plan`: the oracle now auto-skips `detail` (along with 8 other non-applicable steps) after `outline` completes.
