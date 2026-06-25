@@ -34,10 +34,10 @@ run_m1() {
 }
 
 run_m2() {
-    require_source "$SUPERVISOR_MD" "M2: contains Layer 2 + JD/checklist + 5 axes" || return
+    require_source "$SUPERVISOR_MD" "M2: contains alert mode + JD/checklist + 5 axes" || return
     local ok=1
     # Layer 2 heading-ish presence
-    contains_i "layer 2" || { ok=0; echo "  missing: layer 2"; }
+    contains_i "alert mode" || { ok=0; echo "  missing: layer 2"; }
     # JD or checklist
     if ! contains_i "JD" && ! contains_i "checklist"; then
         ok=0; echo "  missing: JD or checklist"
@@ -51,37 +51,37 @@ run_m2() {
         ok=0; echo "  missing: perspective or §3/§4/§5"
     fi
     if [ $ok -eq 1 ]; then
-        pass "M2: contains Layer 2 + JD/checklist + 5 axes"
+        pass "M2: contains alert mode + JD/checklist + 5 axes"
     else
-        fail "M2: contains Layer 2 + JD/checklist + 5 axes"
+        fail "M2: contains alert mode + JD/checklist + 5 axes"
     fi
 }
 
 run_m3() {
-    require_source "$SUPERVISOR_MD" "M3: mentions bin/supervisor-write-layer2 + key flags" || return
+    require_source "$SUPERVISOR_MD" "M3: mentions bin/supervisor-write-alert + key flags" || return
     local ok=1
-    contains_i "bin/supervisor-write-layer2" || { ok=0; echo "  missing: bin/supervisor-write-layer2"; }
+    contains_i "bin/supervisor-write-alert" || { ok=0; echo "  missing: bin/supervisor-write-alert"; }
     contains_i -- "--cumulative-severity" || { ok=0; echo "  missing: --cumulative-severity"; }
     contains_i -- "--last-run-at" || { ok=0; echo "  missing: --last-run-at"; }
-    contains_i -- "--clear-l2-armed-at" || { ok=0; echo "  missing: --clear-l2-armed-at"; }
+    contains_i -- "--clear-alert-armed-at" || { ok=0; echo "  missing: --clear-alert-armed-at"; }
     if [ $ok -eq 1 ]; then
-        pass "M3: mentions bin/supervisor-write-layer2 + key flags"
+        pass "M3: mentions bin/supervisor-write-alert + key flags"
     else
-        fail "M3: mentions bin/supervisor-write-layer2 + key flags"
+        fail "M3: mentions bin/supervisor-write-alert + key flags"
     fi
 }
 
 run_m4() {
-    require_source "$SUPERVISOR_MD" "M4: instruction to clear l2_armed_at after wakeup" || return
+    require_source "$SUPERVISOR_MD" "M4: instruction to clear alert_armed_at after wakeup" || return
     local ok=1
     contains_i "clear" || { ok=0; echo "  missing: clear"; }
-    if ! contains_i "l2_armed_at" && ! contains_i "clear-l2-armed-at"; then
-        ok=0; echo "  missing: l2_armed_at or clear-l2-armed-at"
+    if ! contains_i "alert_armed_at" && ! contains_i "clear-l2-armed-at"; then
+        ok=0; echo "  missing: alert_armed_at or clear-l2-armed-at"
     fi
     if [ $ok -eq 1 ]; then
-        pass "M4: instruction to clear l2_armed_at after wakeup"
+        pass "M4: instruction to clear alert_armed_at after wakeup"
     else
-        fail "M4: instruction to clear l2_armed_at after wakeup"
+        fail "M4: instruction to clear alert_armed_at after wakeup"
     fi
 }
 
@@ -94,17 +94,17 @@ line_of_heading() {
 }
 
 run_m5() {
-    require_source "$SUPERVISOR_MD" "M5: Layer 2 pre-processing section structural checks" || return
+    require_source "$SUPERVISOR_MD" "M5: Alert mode pre-processing section structural checks" || return
     local ok=1
     local pre_ln jd_ln
-    pre_ln="$(line_of_heading '^## Layer 2 pre-processing')"
-    jd_ln="$(line_of_heading '^## Layer 2 JD Checklist')"
+    pre_ln="$(line_of_heading '^## Alert mode pre-processing')"
+    jd_ln="$(line_of_heading '^## Alert mode JD Checklist')"
 
     if [ "$pre_ln" -eq 0 ]; then
-        ok=0; echo "  missing: '## Layer 2 pre-processing' heading"
+        ok=0; echo "  missing: '## Alert mode pre-processing' heading"
     fi
     if [ "$jd_ln" -eq 0 ]; then
-        ok=0; echo "  missing: '## Layer 2 JD Checklist' heading"
+        ok=0; echo "  missing: '## Alert mode JD Checklist' heading"
     fi
     if [ "$pre_ln" -gt 0 ] && [ "$jd_ln" -gt 0 ]; then
         if [ "$pre_ln" -ge "$jd_ln" ]; then
@@ -135,9 +135,9 @@ run_m5() {
     fi
 
     if [ $ok -eq 1 ]; then
-        pass "M5: Layer 2 pre-processing section structural checks"
+        pass "M5: Alert mode pre-processing section structural checks"
     else
-        fail "M5: Layer 2 pre-processing section structural checks"
+        fail "M5: Alert mode pre-processing section structural checks"
     fi
 }
 

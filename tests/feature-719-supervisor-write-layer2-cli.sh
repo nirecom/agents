@@ -1,6 +1,6 @@
 #!/bin/bash
-# tests/feature-719-supervisor-write-layer2-cli.sh
-# Tests: bin/supervisor-write-layer2
+# tests/feature-719-supervisor-write-alert-cli.sh
+# Tests: bin/supervisor-write-alert
 # Tags: supervisor, em-supervisor, cli, layer2
 # RED for issue #719.
 
@@ -13,7 +13,7 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 
-CLI="$AGENTS_DIR/bin/supervisor-write-layer2"
+CLI="$AGENTS_DIR/bin/supervisor-write-alert"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
@@ -46,17 +46,17 @@ process.stdout.write(JSON.stringify(cur));
 }
 
 run_c1() {
-    require_source "$CLI" "C1: --l2-armed-at sets layer2.l2_armed_at" || return
+    require_source "$CLI" "C1: --alert-armed-at sets alert.alert_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c1-sid"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "$sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"2026-06-06T12:00:00Z\"" ]; then
-        pass "C1: --l2-armed-at sets layer2.l2_armed_at"
+        pass "C1: --alert-armed-at sets alert.alert_armed_at"
     else
-        fail "C1: --l2-armed-at sets layer2.l2_armed_at (rc=$rc, val=$val)"
+        fail "C1: --alert-armed-at sets alert.alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -66,8 +66,8 @@ run_c2() {
     tmp="$(mktemp -d)"; sid="c2-sid"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --last-run-at "2026-06-06T11:00:00Z" --cumulative-severity warning --session-id "$sid" >/dev/null 2>&1
     rc=$?
-    v1=$(read_field "$tmp" "$sid" "layer2.last_run_at")
-    v2=$(read_field "$tmp" "$sid" "layer2.cumulative_severity")
+    v1=$(read_field "$tmp" "$sid" "alert.last_run_at")
+    v2=$(read_field "$tmp" "$sid" "alert.cumulative_severity")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$v1" = "\"2026-06-06T11:00:00Z\"" ] && [ "$v2" = "\"warning\"" ]; then
         pass "C2: --last-run-at + --cumulative-severity"
@@ -90,7 +90,7 @@ run_c3() {
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-const fs2 = st.layer2.findings;
+const fs2 = st.alert.findings;
 if (!Array.isArray(fs2) || fs2.length !== 1) { console.error('len'); process.exit(2); }
 const f = fs2[0];
 if (!Array.isArray(f.categories) || f.categories.length !== 2) { console.error('cat'); process.exit(3); }
@@ -112,7 +112,7 @@ run_c4() {
     require_source "$CLI" "C4: missing --session-id exits non-zero" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then
@@ -151,19 +151,19 @@ run_c6() {
 }
 
 run_c7() {
-    require_source "$CLI" "C7: --clear-l2-armed-at nulls layer2.l2_armed_at" || return
+    require_source "$CLI" "C7: --clear-alert-armed-at nulls layer2.alert_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c7-sid"
     # seed with a value first
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-l2-armed-at --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --alert-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" --clear-alert-armed-at --session-id "$sid" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "$sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "C7: --clear-l2-armed-at nulls layer2.l2_armed_at"
+        pass "C7: --clear-alert-armed-at nulls layer2.alert_armed_at"
     else
-        fail "C7: --clear-l2-armed-at nulls layer2.l2_armed_at (rc=$rc, val=$val)"
+        fail "C7: --clear-alert-armed-at nulls layer2.alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 

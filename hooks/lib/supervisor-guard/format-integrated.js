@@ -1,13 +1,13 @@
 "use strict";
 
-// #720 — Format the arbitrated L2/L3 verdict into a single block-reason string.
+// #720 — Format the arbitrated alert/audit verdict into a single block-reason string.
 // Inputs:
-//   arbitration       — result of arbitrate(l2, l3) (decision/source/reason).
-//   formattedL2Reason — pre-formatted L2 reason from supervisor-report-format
-//                       (may be null when no L2 candidate fired).
-//   formattedL3Reason — pre-formatted L3 reason (may be null).
-// Output: the final reason string. When both layers contributed, L3 is shown
-// first (strategic context) followed by L2 (operational detail), separated by
+//   arbitration         — result of arbitrate(alert, audit) (decision/source/reason).
+//   formattedAlertReason — pre-formatted alert reason from supervisor-report-format
+//                         (may be null when no alert candidate fired).
+//   formattedAuditReason — pre-formatted audit reason (may be null).
+// Output: the final reason string. When both modes contributed, audit is shown
+// first (strategic context) followed by alert (operational detail), separated by
 // a horizontal rule.
 
 function formatIntegratedReason(arbitration, formattedL2Reason, formattedL3Reason) {

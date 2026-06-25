@@ -2,9 +2,9 @@
 
 const path = require("path");
 
-// Pure-function formatter for EM Supervisor Layer 2 block reasons.
+// Pure-function formatter for EM Supervisor alert/audit block reasons.
 // Used by hooks/supervisor-guard.js branches (2) cumSev=error and
-// (3) l2ArmedAt / sentinel-hang. No side effects; receives pre-populated
+// (3) alertArmedAt / sentinel-hang. No side effects; receives pre-populated
 // data from the guard.
 
 function wsidLabel(workflowSessionId) {
@@ -26,14 +26,14 @@ function aggregateCategories(findings) {
   return out;
 }
 
-// SSOT for the L2 fallback recipe block — shown on every block reason so
+// SSOT for the alert fallback recipe block — shown on every block reason so
 // the user (or the supervisor subagent itself) can self-recover from an
 // API-error retry loop by freezing the session deterministically.
 function recipeBlock(stateSessionId, stateFilePath) {
   return [
     "Fallback (if the supervisor subagent invocation fails with an API error):",
-    `  Run: bin/supervisor-write-layer2 --clear-l2-armed-at --set-l2-phase frozen --session-id ${stateSessionId}`,
-    "  This freezes the L2 review for this session so the loop terminates. l2_phase=frozen is terminal.",
+    `  Run: bin/supervisor-write-alert --clear-alert-armed-at --set-alert-phase frozen --session-id ${stateSessionId}`,
+    "  This freezes the alert review for this session so the loop terminates. alert_phase=frozen is terminal.",
     `  State file: ${stateFilePath}`,
   ];
 }
@@ -41,7 +41,7 @@ function recipeBlock(stateSessionId, stateFilePath) {
 function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, stateSessionId) {
   const sk = stateSessionId == null ? sessionId : stateSessionId;
   const lines = [];
-  lines.push("[EM Supervisor] Layer 2: cumulative_severity=error.");
+  lines.push("[EM Supervisor] Alert mode: cumulative_severity=error.");
 
   if (!Array.isArray(findings) || findings.length === 0) {
     lines.push("Categories: (none)");
@@ -49,7 +49,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
     lines.push(`Session ID: ${sessionId}`);
     lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
     lines.push(`Effective state session ID: ${sk}`);
-    lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
+    lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
     for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
     lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
     return lines.join("\n");
@@ -73,7 +73,7 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
-  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
+  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Recommended action: follow agents/supervisor.md (${supervisorPath}) to resolve before continuing.`);
   return lines.join("\n");
@@ -90,7 +90,7 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
     ? `C3 off-proposal detected (${cause})`
     : "C2 scheduled review";
 
-  lines.push(`[EM Supervisor] Layer 2 review required (${causeLabel}).`);
+  lines.push(`[EM Supervisor] Alert mode review required (${causeLabel}).`);
   if (isC1) {
     lines.push("Trigger: stop_hook_active sentinel hang detected in the assistant transcript.");
   } else if (isC3) {
@@ -98,43 +98,43 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
     lines.push(`Trigger: assistant output contained a ${proposalType} proposal sentinel (<<WORKFLOW_ENFORCE_${proposalType}>>).`);
     lines.push(`Verify: check whether this was a sanctioned use per rules/workflow-off.md "Sanctioned-command false-block recovery". If so, the session can continue; if improvised bypass, recommend reverting.`);
   } else {
-    lines.push("Trigger: scheduled Layer 2 review (l2_armed_at set).");
+    lines.push("Trigger: scheduled alert review (alert_armed_at set).");
   }
   lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent - run the JD checklist, provide first-aid guidance, then recommend /issue-create for root-cause fix.`);
-  lines.push("To resume: clear the l2_armed_at field in the supervisor state file after the review is complete.");
-  lines.push(`Clear: set layer2.l2_armed_at = null in the state file.`);
+  lines.push("To resume: clear the alert_armed_at field in the supervisor state file after the review is complete.");
+  lines.push(`Clear: set alert.alert_armed_at = null in the state file.`);
   lines.push(`File: ${stateFilePath}`);
   const writerPath = path.resolve(__dirname, "supervisor-state-writer");
-  lines.push(`Equivalent one-liner: node -e "require('${writerPath}').writeLayer2State('${sk}', {l2_armed_at: null})"`);
+  lines.push(`Equivalent one-liner: node -e "require('${writerPath}').writeAlertState('${sk}', {alert_armed_at: null})"`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
-  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
+  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
   return lines.join("\n");
 }
 
 function formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath, stateSessionId) {
   const sk = stateSessionId == null ? sessionId : stateSessionId;
   const lines = [];
-  lines.push("[EM Supervisor] C3: WORKTREE_OFF proposal pre-detected.");
-  lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent to review the worktree-off proposal.`);
+  lines.push("[EM Supervisor] C3: OFF proposal pre-detected.");
+  lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent to review the off-proposal.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
-  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-layer2 call.`);
+  lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
   return lines.join("\n");
 }
 
-// #720 — Layer 3 reason formatters. Mirror the L2 formatters' shape so the
+// #720 — Audit reason formatters. Mirror the alert formatters' shape so the
 // integrated formatter (format-integrated.js) can stack them side-by-side.
 
 function formatL3StageBoundaryReason(stage, verdict, sessionId, stateFilePath) {
   const lines = [];
-  lines.push(`[EM Supervisor] Layer 3 strategic review at CONFIRM_${stage}: ${verdict}.`);
+  lines.push(`[EM Supervisor] Audit mode review at CONFIRM_${stage}: ${verdict}.`);
   lines.push("Trigger: stage-boundary sentinel detected in assistant transcript.");
-  lines.push(`Action: invoke agents/supervisor-layer3.md as a subagent.`);
+  lines.push(`Action: invoke agents/supervisor-audit.md as a subagent.`);
   if (sessionId) lines.push(`Session ID: ${sessionId}`);
   if (stateFilePath) lines.push(`State file: ${stateFilePath}`);
   return lines.join("\n");
@@ -142,9 +142,9 @@ function formatL3StageBoundaryReason(stage, verdict, sessionId, stateFilePath) {
 
 function formatL3SeverityThresholdReason(cumSev, verdict, sessionId, stateFilePath) {
   const lines = [];
-  lines.push(`[EM Supervisor] Layer 3 strategic review (cumulative_severity=${cumSev}): ${verdict}.`);
-  lines.push("Trigger: cumulative severity reached L3 threshold.");
-  lines.push(`Action: invoke agents/supervisor-layer3.md as a subagent.`);
+  lines.push(`[EM Supervisor] Audit mode review (cumulative_severity=${cumSev}): ${verdict}.`);
+  lines.push("Trigger: cumulative severity reached audit threshold.");
+  lines.push(`Action: invoke agents/supervisor-audit.md as a subagent.`);
   if (sessionId) lines.push(`Session ID: ${sessionId}`);
   if (stateFilePath) lines.push(`State file: ${stateFilePath}`);
   return lines.join("\n");

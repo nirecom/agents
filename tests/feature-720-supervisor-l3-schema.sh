@@ -35,10 +35,10 @@ require_source() {
     return 0
 }
 
-# L3 additions are detected by presence of L3_PHASE_VALUES export.
+# L3 additions are detected by presence of AUDIT_PHASE_VALUES export.
 l3_present() {
     [ -f "$SCHEMA" ] || return 1
-    grep -q "L3_PHASE_VALUES" "$SCHEMA" 2>/dev/null
+    grep -q "AUDIT_PHASE_VALUES" "$SCHEMA" 2>/dev/null
 }
 
 require_l3() {
@@ -54,9 +54,9 @@ run_s1() {
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('s1');
-const need = ['l3_phase','l3_verdict','l3_last_run_at','l3_armed_at','l3_cause','l3_retry_count'];
+const need = ['audit_phase','audit_verdict','audit_last_run_at','audit_armed_at','audit_cause','audit_retry_count'];
 for (const k of need) {
-  if (!(k in st.layer3)) { console.error('missing '+k); process.exit(2); }
+  if (!(k in st.audit)) { console.error('missing '+k); process.exit(2); }
 }
 console.log('OK');
 " 2>&1)
@@ -69,63 +69,63 @@ console.log('OK');
 }
 
 run_s2() {
-    require_source "$SCHEMA" "S2: validate accepts l3_phase=pending, l3_verdict=null" || return
-    require_l3 "S2: validate accepts l3_phase=pending, l3_verdict=null" || return
+    require_source "$SCHEMA" "S2: validate accepts audit_phase=pending, audit_verdict=null" || return
+    require_l3 "S2: validate accepts audit_phase=pending, audit_verdict=null" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('s2');
-st.layer3.l3_phase = 'pending';
-st.layer3.l3_verdict = null;
+st.audit.audit_phase = 'pending';
+st.audit.audit_verdict = null;
 const r = s.validate(st);
 if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S2: validate accepts l3_phase=pending, l3_verdict=null"
+        pass "S2: validate accepts audit_phase=pending, audit_verdict=null"
     else
-        fail "S2: validate accepts l3_phase=pending, l3_verdict=null (rc=$rc, out=$out)"
+        fail "S2: validate accepts audit_phase=pending, audit_verdict=null (rc=$rc, out=$out)"
     fi
 }
 
 run_s3() {
-    require_source "$SCHEMA" "S3: validate rejects bad l3_phase enum" || return
-    require_l3 "S3: validate rejects bad l3_phase enum" || return
+    require_source "$SCHEMA" "S3: validate rejects bad audit_phase enum" || return
+    require_l3 "S3: validate rejects bad audit_phase enum" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('s3');
-st.layer3.l3_phase = 'bad-value';
+st.audit.audit_phase = 'bad-value';
 const r = s.validate(st);
 if (r.ok !== false) { console.error('expected ok=false'); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S3: validate rejects bad l3_phase enum"
+        pass "S3: validate rejects bad audit_phase enum"
     else
-        fail "S3: validate rejects bad l3_phase enum (rc=$rc, out=$out)"
+        fail "S3: validate rejects bad audit_phase enum (rc=$rc, out=$out)"
     fi
 }
 
 run_s4() {
-    require_source "$SCHEMA" "S4: validate rejects bad l3_verdict enum" || return
-    require_l3 "S4: validate rejects bad l3_verdict enum" || return
+    require_source "$SCHEMA" "S4: validate rejects bad audit_verdict enum" || return
+    require_l3 "S4: validate rejects bad audit_verdict enum" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('s4');
-st.layer3.l3_verdict = 'bad-value';
+st.audit.audit_verdict = 'bad-value';
 const r = s.validate(st);
 if (r.ok !== false) { console.error('expected ok=false'); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S4: validate rejects bad l3_verdict enum"
+        pass "S4: validate rejects bad audit_verdict enum"
     else
-        fail "S4: validate rejects bad l3_verdict enum (rc=$rc, out=$out)"
+        fail "S4: validate rejects bad audit_verdict enum (rc=$rc, out=$out)"
     fi
 }
 
@@ -136,7 +136,7 @@ run_s5() {
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('s5');
-st.layer3 = {};
+st.audit = {};
 const r = s.validate(st);
 if (r.ok !== true) { console.error('expected ok=true (legacy): '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
@@ -150,29 +150,29 @@ console.log('OK');
 }
 
 run_s6() {
-    require_source "$SCHEMA" "S6: L3_CUMULATIVE_SEVERITY_THRESHOLD exported = 'error'" || return
-    require_l3 "S6: L3_CUMULATIVE_SEVERITY_THRESHOLD exported = 'error'" || return
+    require_source "$SCHEMA" "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error'" || return
+    require_l3 "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error'" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
-if (s.L3_CUMULATIVE_SEVERITY_THRESHOLD !== 'error') { console.error('got '+s.L3_CUMULATIVE_SEVERITY_THRESHOLD); process.exit(2); }
+if (s.AUDIT_SEVERITY_THRESHOLD !== 'error') { console.error('got '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S6: L3_CUMULATIVE_SEVERITY_THRESHOLD exported = 'error'"
+        pass "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error'"
     else
-        fail "S6: L3_CUMULATIVE_SEVERITY_THRESHOLD exported = 'error' (rc=$rc, out=$out)"
+        fail "S6: AUDIT_SEVERITY_THRESHOLD exported = 'error' (rc=$rc, out=$out)"
     fi
 }
 
 run_s7() {
-    require_source "$SCHEMA" "S7: L3_PHASE_VALUES contains expected enum" || return
-    require_l3 "S7: L3_PHASE_VALUES contains expected enum" || return
+    require_source "$SCHEMA" "S7: AUDIT_PHASE_VALUES contains expected enum" || return
+    require_l3 "S7: AUDIT_PHASE_VALUES contains expected enum" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
-const v = s.L3_PHASE_VALUES;
+const v = s.AUDIT_PHASE_VALUES;
 if (!Array.isArray(v)) { console.error('not array'); process.exit(2); }
 const need = [null, 'pending', 'in_progress', 'done', 'frozen'];
 for (const e of need) {
@@ -182,19 +182,19 @@ console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S7: L3_PHASE_VALUES contains expected enum"
+        pass "S7: AUDIT_PHASE_VALUES contains expected enum"
     else
-        fail "S7: L3_PHASE_VALUES contains expected enum (rc=$rc, out=$out)"
+        fail "S7: AUDIT_PHASE_VALUES contains expected enum (rc=$rc, out=$out)"
     fi
 }
 
 run_s8() {
-    require_source "$SCHEMA" "S8: L3_VERDICT_VALUES contains CONTINUE/WARN/BLOCK" || return
-    require_l3 "S8: L3_VERDICT_VALUES contains CONTINUE/WARN/BLOCK" || return
+    require_source "$SCHEMA" "S8: AUDIT_VERDICT_VALUES contains CONTINUE/WARN/BLOCK" || return
+    require_l3 "S8: AUDIT_VERDICT_VALUES contains CONTINUE/WARN/BLOCK" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
-const v = s.L3_VERDICT_VALUES;
+const v = s.AUDIT_VERDICT_VALUES;
 if (!Array.isArray(v)) { console.error('not array'); process.exit(2); }
 for (const e of ['CONTINUE','WARN','BLOCK']) {
   if (!v.includes(e)) { console.error('missing '+e); process.exit(3); }
@@ -203,9 +203,9 @@ console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S8: L3_VERDICT_VALUES contains CONTINUE/WARN/BLOCK"
+        pass "S8: AUDIT_VERDICT_VALUES contains CONTINUE/WARN/BLOCK"
     else
-        fail "S8: L3_VERDICT_VALUES contains CONTINUE/WARN/BLOCK (rc=$rc, out=$out)"
+        fail "S8: AUDIT_VERDICT_VALUES contains CONTINUE/WARN/BLOCK (rc=$rc, out=$out)"
     fi
 }
 
