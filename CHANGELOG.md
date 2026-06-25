@@ -517,4 +517,8 @@ Changes: Workflow gate now allows Edit and MultiEdit tools to target `~/.workflo
 
 ### FEATURE: PR #1086 (2026-06-25)
 Background: feat(#299): auto-set VS Code session title from workflow state
-Changes: VS Code session titles are now set automatically: `#N issue-title` at session open, `⏳ #N issue-title` while waiting for user input, `#N issue-title PR #N` appended after commit-push, and `✓ #N issue-title PR #N` prepended when the session closes cleanly.
+Changes: VS Code session titles are now set automatically: `#N issue-title` at session open, `⏳ #N issue-title` while waiting for user input, `#N issue-title PR #N` appended after commit-push, and `✓ #N issue-title PR #N` prepended when the session closes cleanly.
+
+### FEATURE: PR #1089 (2026-06-25)
+Background: fix(#917,#1078,#1079): CONV_LANG/PLAN_LANG compliance — fallback headers, orchestrator localization, UUID artifact fix
+Changes: Planning confirmation dialogs (make-outline-plan, make-detail-plan) now respond in the language configured via `CONV_LANG`;Fixed `PLAN_LANG` enforcement: plan artifact language checks were silently skipped for all current sessions due to a session ID format mismatch in `hooks/check-plan-lang.js`
