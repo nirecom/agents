@@ -25,6 +25,10 @@ function _getTranscriptBase() {
 }
 
 function _getJsonlPath(sessionId, cwd) {
+  // Prefer the direct path supplied by the hook (from stdin's transcript_path).
+  // CLAUDE_PROJECT_DIR is the worktree path for linked-worktree sessions, which
+  // encodes to the wrong directory; transcript_path is always the real JSONL file.
+  if (process.env.CLAUDE_SESSION_JSONL_PATH) return process.env.CLAUDE_SESSION_JSONL_PATH;
   const encodedCwd = _encodeCwd(cwd);
   const transcriptBase = _getTranscriptBase();
   return path.join(transcriptBase, encodedCwd, sessionId + ".jsonl");
