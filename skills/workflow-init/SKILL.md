@@ -77,10 +77,10 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 
 ### Step WI-12 — Path-specific steps
 
-#### Path META — meta ラベル issue
+#### Path META — meta label issue
 - PM1. `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call, before any sentinel).
 - PM2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
-- PM3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META タイプ、intent は issue 本文で確認済み>>"`.
+- PM3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
 - PM4. Invoke `make-outline-plan`.
 
 #### Path A — intent:clarified

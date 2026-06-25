@@ -40,8 +40,8 @@ CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing i
    - **If VERDICT is `wf-meta`** (≥2 signals triggered):
      - Compose a concrete sub-deliverable list: one bullet per natural split point identified during the signals evaluation.
      - Present it via `AskUserQuestion`:
-       - Prompt: "このスコープはセッション分割の候補です。提案する分解案: [sub-deliverable bullets]. WF-META モード（meta issue として計画フェーズのみ実施）で進めますか？"
-       - Options: "はい、WF-META で進める (WF-META — 計画のみ)" / "いいえ、このセッションで全実装する (WF-CODE)"
+       - Prompt: "This scope is a candidate for session decomposition. Proposed breakdown: [sub-deliverable bullets]. Proceed in WF-META mode (planning phase only, no implementation this session)?"
+       - Options: "Yes, proceed as WF-META (planning only)" / "No, implement everything in this session (WF-CODE)"
      - **If user chooses WF-META**:
        - Read `$CLAUDE_ENV_FILE` to resolve `SESSION_ID` (same value as used in CI-4).
        - Run `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call).
