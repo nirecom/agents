@@ -4,6 +4,7 @@ description: Enumerate gitignored/untracked files from main worktree, copy inclu
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Copy gitignored state from main worktree to linked worktree, then generate WORKTREE_NOTES.md.
 

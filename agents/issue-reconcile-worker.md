@@ -4,6 +4,7 @@ description: Paginate closed issues, classify each as clean/needs-reconcile/hist
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Scan closed issues for missing `<!-- issue-close-sentinel: appended -->` markers and classify each.
 
