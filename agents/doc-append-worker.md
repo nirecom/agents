@@ -4,6 +4,7 @@ description: Execute doc-append / compose-doc-append-entry CLI invocations with 
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Execute a single `doc-append` or `compose-doc-append-entry` CLI call and return minimal status.
 

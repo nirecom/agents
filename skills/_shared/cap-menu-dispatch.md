@@ -12,6 +12,7 @@ extension and re-enters the review loop.
 | Parameter | outline value | detail value |
 |---|---|---|
 | LABEL | `"Outline Plan Review"` | `"Detail Plan Review"` |
+| ROUND_NUMBER | `$(cat <PLANS_DIR>/<session-id>-outline-plan-round-number.txt)` | `$(cat <PLANS_DIR>/<session-id>-detail-plan-round-number.txt)` |
 | RAW_FILE | `<PLANS_DIR>/<session-id>-outline-codex-round-<ROUND_NUMBER-1>-raw.md` (most recently persisted; the cap-reach round's RAW_FILE is never written — see codex-review-loop.md §d.1) | `<PLANS_DIR>/<session-id>-codex-round-<ROUND_NUMBER-1>-raw.md` (most recently persisted) |
 | LEDGER_FILE | `<PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt` | `<PLANS_DIR>/<session-id>-detail-plan-concern-ledger-cap-snapshot.txt` |
 | MAX_EXTENSIONS | 1 | 1 |
@@ -33,7 +34,7 @@ d. Invoke the helper:
 menu_json=$(review-loop-cap-menu \
   --budget-remaining $BUDGET_REMAINING \
   --all-high $ALL_HIGH --cc-agrees-high $CC_AGREES_HIGH \
-  --label <LABEL>)
+  --label <LABEL> --round $ROUND_NUMBER)
 rc=$?
 ```
 
