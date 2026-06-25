@@ -521,4 +521,8 @@ Changes: VS Code session titles are now set automatically: `#N issue-title` at s
 
 ### FEATURE: PR #1089 (2026-06-25)
 Background: fix(#917,#1078,#1079): CONV_LANG/PLAN_LANG compliance — fallback headers, orchestrator localization, UUID artifact fix
-Changes: Planning confirmation dialogs (make-outline-plan, make-detail-plan) now respond in the language configured via `CONV_LANG`;Fixed `PLAN_LANG` enforcement: plan artifact language checks were silently skipped for all current sessions due to a session ID format mismatch in `hooks/check-plan-lang.js`
+Changes: Planning confirmation dialogs (make-outline-plan, make-detail-plan) now respond in the language configured via `CONV_LANG`;Fixed `PLAN_LANG` enforcement: plan artifact language checks were silently skipped for all current sessions due to a session ID format mismatch in `hooks/check-plan-lang.js`
+
+### FEATURE: PR #1092 (2026-06-25)
+Background: feat(#1067): EM Supervisor L2/L3 → alert/audit two-mode merge
+Changes: EM Supervisor: L2/L3 unified into alert/audit two-mode design — alert mode (Sonnet, narrow) and audit mode (Opus, broad) replace the old layer2/layer3 naming. C3 trigger now detects both WORKTREE_OFF and WORKFLOW_OFF proposals. Arming threshold raised to severity≥warning (notice-only sessions no longer arm the supervisor). Final Report gains Supervisor Alert and Supervisor Audit summary sections.
