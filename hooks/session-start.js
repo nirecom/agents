@@ -28,6 +28,8 @@ let sessionId;
 try {
   const input = JSON.parse(readStdin());
   sessionId = input.session_id;
+  // transcript_path → correct JSONL path for worktree sessions
+  if (input.transcript_path) process.env.CLAUDE_SESSION_JSONL_PATH = input.transcript_path;
 } catch (e) {
   // Fail-open: malformed input — continue without setting session ID
 }

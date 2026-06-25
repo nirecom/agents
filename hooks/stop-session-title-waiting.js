@@ -31,6 +31,10 @@ try {
   try {
     const input = JSON.parse(readStdin());
     sessionId = input.session_id;
+    // transcript_path is the actual JSONL file; use it directly so worktree
+    // sessions (where CLAUDE_PROJECT_DIR is the worktree path, not main repo)
+    // resolve to the correct file instead of a phantom encoded path.
+    if (input.transcript_path) process.env.CLAUDE_SESSION_JSONL_PATH = input.transcript_path;
   } catch (_) {}
 
   if (sessionId) {
