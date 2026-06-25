@@ -4,6 +4,7 @@ description: Execute Phase 1 issue-close-stage Bash chain (Steps A,B,D,F,G) insi
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Execute the Phase 1 issue-close-stage Bash chain for a single issue number and return minimal status.
 
