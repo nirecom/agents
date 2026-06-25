@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Claude Code Stop hook: set ⏳ waiting indicator in VS Code session title.
-// Fires at the end of every Claude turn. Skipped for child sessions, completed
-// sessions (✓ prefix), and when no title has been set yet.
+// Claude Code Stop hook: clear ⏳ indicator when Claude finishes responding.
+// Fires at the end of every Claude turn. Skipped when no ⏳ is present.
 
 "use strict";
 
@@ -35,8 +34,8 @@ try {
   } catch (_) {}
 
   if (sessionId) {
-    const { writeWaiting } = require(path.join(__dirname, "lib", "session-title"));
-    writeWaiting(sessionId, process.cwd());
+    const { writeClearWaiting } = require(path.join(__dirname, "lib", "session-title"));
+    writeClearWaiting(sessionId, process.cwd());
   }
 } catch (_) {
   // fail-open
