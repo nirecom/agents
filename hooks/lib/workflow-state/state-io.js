@@ -90,6 +90,10 @@ function readState(sessionId) {
       if (!state.workflow_type) {
         state.workflow_type = "wf-code";
       }
+      // migration: wf-plan → wf-meta rename
+      if (state.workflow_type === "wf-plan") {
+        state.workflow_type = "wf-meta";
+      }
     }
     return state;
   } catch (e) {

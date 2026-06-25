@@ -54,7 +54,7 @@ For each N in `ISSUES[@]`, extract `labels[].name` from its `gh issue view` JSON
 
 ### Step WI-8 — Route
 
-If ALL issues in `ISSUES[@]` carry the `meta` label → **Path PLAN** (WI-12 Path PLAN). If any issue carries `meta` but not all → warn "mixed meta/non-meta issues — falling through to Path A/B" and continue with standard routing below.
+If ALL issues in `ISSUES[@]` carry the `meta` label → **Path META** (WI-12 Path META). If any issue carries `meta` but not all → warn "mixed meta/non-meta issues — falling through to Path A/B" and continue with standard routing below.
 
 If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) OR any N in `ISSUES[@]` lacks the `intent:clarified` label → Path B. Only when every N carries `intent:clarified` → Path A. Path B is the default.
 
@@ -77,11 +77,11 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 
 ### Step WI-12 — Path-specific steps
 
-#### Path PLAN — meta ラベル issue
-- PP1. `bin/workflow/set-workflow-type "$SESSION_ID" "wf-plan"` (separate Bash call, before any sentinel).
-- PP2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
-- PP3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-PLAN タイプ、intent は issue 本文で確認済み>>"`.
-- PP4. Invoke `make-outline-plan`.
+#### Path META — meta ラベル issue
+- PM1. `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call, before any sentinel).
+- PM2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
+- PM3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META タイプ、intent は issue 本文で確認済み>>"`.
+- PM4. Invoke `make-outline-plan`.
 
 #### Path A — intent:clarified
 - A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).

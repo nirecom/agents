@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/next-step
-# Tags: L2, workflow, oracle, scope:common
+# Tags: L2, workflow, wf-meta, scope:common
 #
 # L2 test of the workflow oracle's state-transition resolver and --list renderer.
 # Source under test does NOT yet exist (TDD phase A — RED state expected).
@@ -119,17 +119,20 @@ JSON_EMPTY_STEPS='{"steps":{},"closes_issues":[1053]}'
 JSON_BRANCHING_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 JSON_USER_VERIFICATION_NEXT='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
 
-# WF-PLAN: detail complete, non-applicable steps pending, pre_final_report_gate pending
-JSON_WF_PLAN_AT_PREFINAL='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
+# WF-META: detail complete, non-applicable steps pending, pre_final_report_gate pending
+JSON_WF_META_AT_PREFINAL='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
 
-# WF-PLAN: all applicable steps complete, non-applicable pending, pre_final_report_gate complete
-JSON_WF_PLAN_ALL_DONE='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[721]}'
+# WF-META: all applicable steps complete, non-applicable pending, pre_final_report_gate complete
+JSON_WF_META_ALL_DONE='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[721]}'
 
-# WF-PLAN mid-planning: workflow_init complete, clarify_intent pending
-JSON_WF_PLAN_MID='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
+# WF-META mid-planning: workflow_init complete, clarify_intent pending
+JSON_WF_META_MID='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
 
-# WF-CODE with explicit workflow_type field (regression: must be unaffected by WF-PLAN logic)
+# WF-CODE with explicit workflow_type field (regression: must be unaffected by WF-META logic)
 JSON_WF_CODE_EXPLICIT='{"workflow_type":"wf-code","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1053]}'
+
+# migration: old wf-plan state file must be treated as wf-meta via readState() migration shim
+JSON_WF_PLAN_LEGACY='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
 
 run_tests() {
   local OUT ACTION NEXT_SKILL NEXT_HINT REASON
@@ -433,28 +436,28 @@ run_tests() {
     FAIL=$((FAIL + 1))
   fi
 
-  # ---- Case 24: WF-PLAN — detail done → pre_final_report_gate (auto-skip non-applicable) ----
+  # ---- Case 24: WF-META — detail done → pre_final_report_gate (auto-skip non-applicable) ----
   ACTION=""; NEXT_SKILL=""; REASON=""
-  write_state "case24" "$JSON_WF_PLAN_AT_PREFINAL"
+  write_state "case24" "$JSON_WF_META_AT_PREFINAL"
   OUT="$(run_oracle --session "case24" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
-  check "24: wf-plan detail-done ACTION=invoke" "invoke" "${ACTION:-}"
-  check_contains "24: wf-plan detail-done REASON=pre_final_report_gate" "pre_final_report_gate" "${REASON:-}"
+  check "24: wf-meta detail-done ACTION=invoke" "invoke" "${ACTION:-}"
+  check_contains "24: wf-meta detail-done REASON=pre_final_report_gate" "pre_final_report_gate" "${REASON:-}"
 
-  # ---- Case 25: WF-PLAN — all applicable steps done → done ----------------------
+  # ---- Case 25: WF-META — all applicable steps done → done ----------------------
   ACTION=""
-  write_state "case25" "$JSON_WF_PLAN_ALL_DONE"
+  write_state "case25" "$JSON_WF_META_ALL_DONE"
   OUT="$(run_oracle --session "case25" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
-  check "25: wf-plan all-done ACTION=done" "done" "${ACTION:-}"
+  check "25: wf-meta all-done ACTION=done" "done" "${ACTION:-}"
 
-  # ---- Case 26: WF-PLAN mid-planning — clarify_intent pending ------------------
+  # ---- Case 26: WF-META mid-planning — clarify_intent pending ------------------
   ACTION=""; NEXT_SKILL=""
-  write_state "case26" "$JSON_WF_PLAN_MID"
+  write_state "case26" "$JSON_WF_META_MID"
   OUT="$(run_oracle --session "case26" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
-  check "26: wf-plan mid ACTION=invoke" "invoke" "${ACTION:-}"
-  check "26: wf-plan mid NEXT_SKILL=clarify-intent" "clarify-intent" "${NEXT_SKILL:-}"
+  check "26: wf-meta mid ACTION=invoke" "invoke" "${ACTION:-}"
+  check "26: wf-meta mid NEXT_SKILL=clarify-intent" "clarify-intent" "${NEXT_SKILL:-}"
 
   # ---- Case 27: WF-CODE explicit type — existing behavior unaffected -----------
   ACTION=""; NEXT_SKILL=""
@@ -463,13 +466,24 @@ run_tests() {
   eval "$OUT" 2>/dev/null || true
   check "27: wf-code explicit type NEXT_SKILL=survey-code" "survey-code" "${NEXT_SKILL:-}"
 
-  # ---- Case 28: WF-PLAN --list shows [-] for auto-skipped steps ---------------
-  write_state "case28" "$JSON_WF_PLAN_AT_PREFINAL"
+  # ---- Case 28: WF-META --list shows [-] for auto-skipped steps ---------------
+  write_state "case28" "$JSON_WF_META_AT_PREFINAL"
   PLAN_LIST="$(run_oracle --list --session "case28" 2>/dev/null || true)"
   line_branching28="$(echo "$PLAN_LIST" | grep -E 'branching_complete' | head -n1 || true)"
   line_uv28="$(echo "$PLAN_LIST" | grep -E 'user_verification' | head -n1 || true)"
-  check_contains "28a: wf-plan --list branching_complete shows [-]" "[-]" "$line_branching28"
-  check_contains "28b: wf-plan --list user_verification shows [-]" "[-]" "$line_uv28"
+  check_contains "28a: wf-meta --list branching_complete shows [-]" "[-]" "$line_branching28"
+  check_contains "28b: wf-meta --list user_verification shows [-]" "[-]" "$line_uv28"
+
+  # ---- Case 29: WF-PLAN legacy state migrated to wf-meta by readState() ------
+  ACTION=""; REASON=""
+  write_state "case29" "$JSON_WF_PLAN_LEGACY"
+  OUT="$(run_oracle --session "case29" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "29: wf-plan legacy state migrated → ACTION=invoke" "invoke" "${ACTION:-}"
+  check_contains "29: wf-plan legacy state migrated → REASON=pre_final_report_gate" "pre_final_report_gate" "${REASON:-}"
+  PLAN_LIST_LEGACY="$(run_oracle --list --session "case29" 2>/dev/null || true)"
+  line_branching29="$(echo "$PLAN_LIST_LEGACY" | grep -E 'branching_complete' | head -n1 || true)"
+  check_contains "29c: wf-plan legacy --list branching_complete shows [-]" "[-]" "$line_branching29"
 }
 
 # run_with_timeout wraps each individual `node` invocation inside run_oracle
