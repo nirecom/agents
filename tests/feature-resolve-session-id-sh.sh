@@ -48,7 +48,7 @@ setup() {
     TMP="$(mktemp -d)"
     export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
     mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
-    unset CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+    unset CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 teardown() {
@@ -56,7 +56,7 @@ teardown() {
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_ENV_FILE 2>/dev/null || true
+    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 # ===========================================================================
@@ -166,7 +166,7 @@ else
     echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/codex-jsonl-sid.jsonl"
     touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/codex-jsonl-sid.jsonl"
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         cd '$FAKE_CWD'
         source '$CODEX_CORE'
@@ -195,7 +195,7 @@ else
     echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/gemini-jsonl-sid.jsonl"
     touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/gemini-jsonl-sid.jsonl"
     OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
         export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
         cd '$FAKE_CWD'
         source '$GEMINI_CORE'
@@ -324,6 +324,140 @@ elif [ "$RC14b" -eq 0 ] && [ -z "$OUT14b" ]; then
     fail "B-14: encode_path_for_claude_projects 'C:/' produced empty output (must not produce empty)"
 else
     pass "B-14: root-path inputs (/, C:/) do not crash or produce empty output (encoding undefined — crash/hang guard only)"
+fi
+teardown
+
+WIP_SID_HELPER="$AGENTS_DIR/bin/github-issues/wip-state/session-id.sh"
+
+# ===========================================================================
+# B-15: resolve_session_id (wip-state/session-id.sh) — CLAUDE_CODE_SESSION_ID
+# beats a newer foreign JSONL (concurrent-session fix, #1082).
+# When CLAUDE_CODE_SESSION_ID=own-sid and a newer JSONL for a foreign session
+# exists, the resolver must return own-sid.
+# ===========================================================================
+setup
+if [ ! -f "$HELPER" ] || [ ! -f "$WIP_SID_HELPER" ]; then
+    fail "B-15: $WIP_SID_HELPER not found"
+else
+    FAKE_CWD="$TMP/b15-cwd"
+    mkdir -p "$FAKE_CWD"
+    ENCODED=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+    mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED"
+    # A newer foreign session JSONL that the old code would return.
+    echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-sid-b15.jsonl"
+    touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-sid-b15.jsonl"
+    # Source resolve-session-id.sh first (provides resolve_session_id_from_jsonl),
+    # then wip-state/session-id.sh (provides resolve_session_id).
+    OUT=$(bash -c "
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
+        export CLAUDE_CODE_SESSION_ID='own-sid-b15'
+        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
+        cd '$FAKE_CWD'
+        source '$HELPER'
+        source '$WIP_SID_HELPER'
+        resolve_session_id
+    " 2>/dev/null)
+    RC=$?
+    if [ "$RC" -eq 0 ] && [ "$OUT" = "own-sid-b15" ]; then
+        pass "B-15: resolve_session_id: CLAUDE_CODE_SESSION_ID beats newer foreign JSONL (concurrent-session fix)"
+    else
+        fail "B-15: rc=$RC out='$OUT' expected='own-sid-b15'"
+    fi
+fi
+teardown
+
+# ===========================================================================
+# B-16: resolve_session_id (wip-state/session-id.sh) — CLAUDE_CODE_SESSION_ID
+# unset → JSONL fallback still works (no regression for headless/CI).
+# ===========================================================================
+setup
+if [ ! -f "$HELPER" ] || [ ! -f "$WIP_SID_HELPER" ]; then
+    fail "B-16: $WIP_SID_HELPER not found"
+else
+    FAKE_CWD="$TMP/b16-cwd"
+    mkdir -p "$FAKE_CWD"
+    ENCODED=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+    mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED"
+    echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/headless-sid-b16.jsonl"
+    touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/headless-sid-b16.jsonl"
+    OUT=$(bash -c "
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
+        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
+        cd '$FAKE_CWD'
+        source '$HELPER'
+        source '$WIP_SID_HELPER'
+        resolve_session_id
+    " 2>/dev/null)
+    RC=$?
+    if [ "$RC" -eq 0 ] && [ "$OUT" = "headless-sid-b16" ]; then
+        pass "B-16: resolve_session_id: CLAUDE_CODE_SESSION_ID unset → JSONL fallback no regression"
+    else
+        fail "B-16: rc=$RC out='$OUT' expected='headless-sid-b16'"
+    fi
+fi
+teardown
+
+# ===========================================================================
+# B-17: codex_core_init SESSION_ID — CLAUDE_CODE_SESSION_ID beats newer foreign JSONL.
+# codex-core.sh concurrent-session fix (#1082).
+# ===========================================================================
+setup
+if [ ! -f "$CODEX_CORE" ]; then
+    fail "B-17: $CODEX_CORE not found"
+else
+    FAKE_CWD="$TMP/b17-cwd"
+    mkdir -p "$FAKE_CWD"
+    ENCODED=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+    mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED"
+    echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-codex-b17.jsonl"
+    touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-codex-b17.jsonl"
+    OUT=$(bash -c "
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
+        export CLAUDE_CODE_SESSION_ID='own-codex-b17'
+        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
+        export NO_LOG=true
+        cd '$FAKE_CWD'
+        source '$CODEX_CORE'
+        codex_core_init 'test-label' >/dev/null 2>&1
+        printf '%s' \"\$SESSION_ID\"
+    " 2>/dev/null)
+    if [ "$OUT" = "own-codex-b17" ]; then
+        pass "B-17: codex_core_init: CLAUDE_CODE_SESSION_ID beats newer foreign JSONL"
+    else
+        fail "B-17: out='$OUT' expected='own-codex-b17'"
+    fi
+fi
+teardown
+
+# ===========================================================================
+# B-18: gemini_core_init SESSION_ID — CLAUDE_CODE_SESSION_ID beats newer foreign JSONL.
+# gemini-core.sh concurrent-session fix (#1082, byte-identical to codex).
+# ===========================================================================
+setup
+if [ ! -f "$GEMINI_CORE" ]; then
+    fail "B-18: $GEMINI_CORE not found"
+else
+    FAKE_CWD="$TMP/b18-cwd"
+    mkdir -p "$FAKE_CWD"
+    ENCODED=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+    mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED"
+    echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-gemini-b18.jsonl"
+    touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED/foreign-gemini-b18.jsonl"
+    OUT=$(bash -c "
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE
+        export CLAUDE_CODE_SESSION_ID='own-gemini-b18'
+        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
+        export NO_LOG=true
+        cd '$FAKE_CWD'
+        source '$GEMINI_CORE'
+        gemini_core_init 'test-label' >/dev/null 2>&1
+        printf '%s' \"\$SESSION_ID\"
+    " 2>/dev/null)
+    if [ "$OUT" = "own-gemini-b18" ]; then
+        pass "B-18: gemini_core_init: CLAUDE_CODE_SESSION_ID beats newer foreign JSONL"
+    else
+        fail "B-18: out='$OUT' expected='own-gemini-b18'"
+    fi
 fi
 teardown
 
