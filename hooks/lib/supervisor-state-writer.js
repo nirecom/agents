@@ -49,11 +49,51 @@ function getStatePath(sessionId) {
   return path.join(getWorkflowPlansDir(), `${sessionId}-supervisor-state.json`);
 }
 
+// Migrate pre-#1092 layer2/layer3 schema to alert/audit in-place.
+// Called by readStateOrInit; safe to call on already-migrated states.
+function migrateLegacyState(state) {
+  if (state.layer2 && typeof state.layer2 === "object" && !Array.isArray(state.layer2) &&
+      (typeof state.alert !== "object" || state.alert === null || Array.isArray(state.alert))) {
+    const l2 = state.layer2;
+    state.alert = {
+      alert_armed_at: l2.l2_armed_at !== undefined ? l2.l2_armed_at : null,
+      last_run_at: l2.last_run_at !== undefined ? l2.last_run_at : null,
+      cumulative_severity: l2.cumulative_severity !== undefined ? l2.cumulative_severity : null,
+      findings: Array.isArray(l2.findings) ? l2.findings : [],
+      alert_phase: l2.l2_phase !== undefined ? l2.l2_phase : null,
+      alert_cause: l2.l2_cause !== undefined ? l2.l2_cause : null,
+      alert_retry_count: typeof l2.l2_retry_count === "number" ? l2.l2_retry_count : 0,
+      findings_surfaced_at: l2.findings_surfaced_at !== undefined ? l2.findings_surfaced_at : null,
+      alert_eligible_phase: l2.l2_eligible_phase !== undefined ? l2.l2_eligible_phase : null,
+    };
+    delete state.layer2;
+  }
+  if (state.layer3 && typeof state.layer3 === "object" && !Array.isArray(state.layer3) &&
+      (typeof state.audit !== "object" || state.audit === null || Array.isArray(state.audit))) {
+    const l3 = state.layer3;
+    state.audit = {
+      audit_phase: l3.l3_phase !== undefined ? l3.l3_phase : null,
+      audit_verdict: l3.l3_verdict !== undefined ? l3.l3_verdict : null,
+      audit_last_run_at: l3.l3_last_run_at !== undefined ? l3.l3_last_run_at : null,
+      audit_armed_at: l3.l3_armed_at !== undefined ? l3.l3_armed_at : null,
+      audit_cause: l3.l3_cause !== undefined ? l3.l3_cause : null,
+      audit_retry_count: typeof l3.l3_retry_count === "number" ? l3.l3_retry_count : 0,
+      findings: Array.isArray(l3.findings) ? l3.findings : [],
+    };
+    delete state.layer3;
+  }
+  // Backfill top-level timestamps required by validate() that pre-#1092 states lack.
+  const now = new Date().toISOString();
+  if (!state.created_at) state.created_at = now;
+  if (!state.last_updated) state.last_updated = now;
+  return state;
+}
+
 function readStateOrInit(sessionId) {
   const filePath = getStatePath(sessionId);
   try {
     const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw);
+    return migrateLegacyState(JSON.parse(raw));
   } catch (_) {
     return createEmptyState(sessionId);
   }
