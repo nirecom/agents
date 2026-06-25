@@ -4,6 +4,7 @@ description: Execute mechanical git add/commit/push and gh pr view/create. Exclu
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Execute the mechanical git commit/push and PR creation steps. The merge prompt remains in the calling main context.
 
