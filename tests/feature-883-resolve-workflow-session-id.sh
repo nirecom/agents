@@ -56,21 +56,32 @@ call_resolve() {
     local plans_dir="$1" env_file="${2:-}" work_dir="${3:-$1}"
     if [ -n "$env_file" ]; then
         (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_ENV_FILE="$env_file" \
-            run_with_timeout 5 node -e "
+            run_with_timeout 5 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
 " 2>/dev/null)
     else
-        # Explicitly unset CLAUDE_ENV_FILE so a leaked env var from the host shell
-        # cannot influence the test outcome.
+        # Explicitly unset CLAUDE_ENV_FILE and CLAUDE_CODE_SESSION_ID so leaked env
+        # vars from the host shell cannot influence the test outcome.
         (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" \
-            run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+            run_with_timeout 5 env -u CLAUDE_ENV_FILE -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$RESOLVE_WSID_NODE');
 const r = m.resolveWorkflowSessionId({});
 process.stdout.write(r == null ? 'NULL' : r);
 " 2>/dev/null)
     fi
+}
+
+# Variant of call_resolve that injects CLAUDE_CODE_SESSION_ID explicitly.
+call_resolve_with_code_sid() {
+    local plans_dir="$1" code_sid="$2" work_dir="${3:-$1}"
+    (cd "$work_dir" && WORKFLOW_PLANS_DIR="$plans_dir" CLAUDE_CODE_SESSION_ID="$code_sid" \
+        run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
+const m = require('$RESOLVE_WSID_NODE');
+const r = m.resolveWorkflowSessionId({});
+process.stdout.write(r == null ? 'NULL' : r);
+" 2>/dev/null)
 }
 
 # Set mtime on a list of files: pairs of (path, offset-seconds-from-now).
@@ -493,6 +504,95 @@ run_r13
 run_r14
 run_r15
 run_r16
+
+# ---------------------------------------------------------------------------
+# R17: CLAUDE_CODE_SESSION_ID beats newer foreign context.md (concurrent-session fix).
+# A foreign session's context.md has newer mtime; own-sid artifacts exist in plans-dir.
+# CLAUDE_CODE_SESSION_ID existence-guarded: accepted because own-sid-*.md artifact exists.
+# ---------------------------------------------------------------------------
+
+run_r17() {
+    require_function "resolveWorkflowSessionId" "R17: CLAUDE_CODE_SESSION_ID beats newer foreign context.md" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Own session has artifact (context+intent, depth=1), older mtime T-10.
+    : > "$tmp/${TODAY}-r17own-context.md"
+    : > "$tmp/${TODAY}-r17own-intent.md"
+    # Foreign session is a depth=2 session with newer mtime T-2 — would win depth+mtime sort.
+    : > "$tmp/${TODAY}-r17foreign-context.md"
+    : > "$tmp/${TODAY}-r17foreign-intent.md"
+    : > "$tmp/${TODAY}-r17foreign-detail.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r17own-context.md" -10 \
+        "$tmp/${TODAY}-r17own-intent.md" -10 \
+        "$tmp/${TODAY}-r17foreign-context.md" -2 \
+        "$tmp/${TODAY}-r17foreign-intent.md" -2 \
+        "$tmp/${TODAY}-r17foreign-detail.md" -2
+    out=$(call_resolve_with_code_sid "$tmp" "${TODAY}-r17own" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-r17own" ]; then
+        pass "R17: CLAUDE_CODE_SESSION_ID beats newer foreign context.md (concurrent-session fix)"
+    else
+        fail "R17: CLAUDE_CODE_SESSION_ID beats newer foreign context.md (out=$out, expected ${TODAY}-r17own)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# R18: CLAUDE_CODE_SESSION_ID existence-guard — no artifact → falls through to P3.
+# When CLAUDE_CODE_SESSION_ID is set but no <value>-*.md artifact exists in plans-dir,
+# the resolver must NOT return it; it must fall through to the depth-scan (P3).
+# ---------------------------------------------------------------------------
+
+run_r18() {
+    require_function "resolveWorkflowSessionId" "R18: CLAUDE_CODE_SESSION_ID without artifact falls through to P3" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # own-sid has NO artifact in plans-dir.
+    # A foreign session has a valid context+intent — should be returned via P3.
+    : > "$tmp/${TODAY}-r18foreign-context.md"
+    : > "$tmp/${TODAY}-r18foreign-intent.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r18foreign-context.md" -4 \
+        "$tmp/${TODAY}-r18foreign-intent.md" -4
+    out=$(call_resolve_with_code_sid "$tmp" "${TODAY}-r18own-no-artifact" "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-r18foreign" ]; then
+        pass "R18: CLAUDE_CODE_SESSION_ID without artifact falls through to P3 depth-scan"
+    else
+        fail "R18: CLAUDE_CODE_SESSION_ID without artifact (out=$out, expected ${TODAY}-r18foreign)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# R19: CLAUDE_CODE_SESSION_ID unset → P3 depth-scan still works (no regression).
+# Verifies the fix did not break headless/CI paths where CLAUDE_CODE_SESSION_ID
+# is absent.
+# ---------------------------------------------------------------------------
+
+run_r19() {
+    require_function "resolveWorkflowSessionId" "R19: CLAUDE_CODE_SESSION_ID unset → P3 depth-scan no regression" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    : > "$tmp/${TODAY}-r19active-context.md"
+    : > "$tmp/${TODAY}-r19active-intent.md"
+    : > "$tmp/${TODAY}-r19stub-context.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r19active-context.md" -8 \
+        "$tmp/${TODAY}-r19active-intent.md" -8 \
+        "$tmp/${TODAY}-r19stub-context.md" -2
+    out=$(call_resolve "$tmp" "" "$tmp")
+    rm -rf "$tmp"
+    # depth-score: active wins over stub even with older mtime.
+    if [ "$out" = "${TODAY}-r19active" ]; then
+        pass "R19: CLAUDE_CODE_SESSION_ID unset → P3 depth-scan no regression (active beats stub)"
+    else
+        fail "R19: CLAUDE_CODE_SESSION_ID unset fallback (out=$out, expected ${TODAY}-r19active)"
+    fi
+}
+
+run_r17
+run_r18
+run_r19
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
