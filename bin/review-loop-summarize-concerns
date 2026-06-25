@@ -39,6 +39,12 @@ done
 [[ -n "$BUDGET_REMAINING" ]] || { echo "review-loop-summarize-concerns: --budget-remaining is required" >&2; exit 2; }
 [[ "$BUDGET_REMAINING" =~ ^[0-9]+$ ]] || { echo "review-loop-summarize-concerns: --budget-remaining must be a non-negative integer, got: $BUDGET_REMAINING" >&2; exit 2; }
 
+HDG_CAP_REACHED="### Round cap reached — review concerns"
+HDG_BUDGET="- Budget remaining: ${BUDGET_REMAINING}"
+HDG_CONCERNS="- Concerns (sorted HIGH → MEDIUM → LOW):"
+MSG_LEDGER_MISSING="  - (concern ledger not available)"
+MSG_LEDGER_EMPTY="  - (concern ledger is empty)"
+
 # Sentinel sanitiser: strip workflow / detail-skippable sentinels before stdout.
 # Uses sed regex; never eval user content.
 sanitize() {
@@ -154,19 +160,19 @@ emit_concern() {
 
 # Build output, then sanitize once.
 {
-  echo "### Round cap reached — review concerns"
+  echo "$HDG_CAP_REACHED"
   echo
-  echo "- Budget remaining: ${BUDGET_REMAINING}"
+  echo "$HDG_BUDGET"
 
   if [[ "$LEDGER_MODE" != "ok" ]]; then
-    echo "- Concerns (sorted HIGH → MEDIUM → LOW):"
+    echo "$HDG_CONCERNS"
     if [[ "$LEDGER_MODE" == "missing" ]]; then
-      echo "  - (concern ledger not available)"
+      echo "$MSG_LEDGER_MISSING"
     else
-      echo "  - (concern ledger is empty)"
+      echo "$MSG_LEDGER_EMPTY"
     fi
   else
-    echo "- Concerns (sorted HIGH → MEDIUM → LOW):"
+    echo "$HDG_CONCERNS"
     for item in "${HIGH_ITEMS[@]:-}"; do
       [[ -z "$item" ]] && continue
       emit_concern "$item"

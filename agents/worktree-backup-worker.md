@@ -4,6 +4,7 @@ description: Inventory gitignored worktree state, generate backup manifest, copy
 tools: Bash, Read, Write
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Inventory and (optionally) back up gitignored state from a linked worktree. Returns a one-line summary and manifest path.
 
