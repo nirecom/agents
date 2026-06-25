@@ -22,6 +22,12 @@ function readStdin() {
 }
 
 try {
+  // Hooks are spawned as child processes by Claude Code and may inherit
+  // CLAUDE_CODE_CHILD_SESSION=1, which would cause _isChildSession() in
+  // session-title.js to suppress all writes. Delete it so this hook — a
+  // top-level actor, not a subagent — can write correctly.
+  delete process.env.CLAUDE_CODE_CHILD_SESSION;
+
   let sessionId;
   try {
     const input = JSON.parse(readStdin());
