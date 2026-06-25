@@ -100,6 +100,7 @@ flowchart TD
 
 Inspect the step list and current session state with `bin/workflow/next-step --list`:
 
+**WF-CODE** (standard implementation — all 14 steps active):
 ```
  1  workflow_init       Initialize session state and GitHub issue
  2  clarify_intent      Interview and write intent.md
@@ -114,6 +115,24 @@ Inspect the step list and current session state with `bin/workflow/next-step --l
 11  docs                Update docs and changelog
 12  user_verification   User verifies the implementation
 13  cleanup             Remove worktree and merge branch
+14  pre_final_report_gate  Final report and session close
+```
+
+**WF-META** (meta-label issues — planning only; steps 7–13 auto-skipped):
+```
+ 1  workflow_init       Initialize session state and GitHub issue
+ 2  clarify_intent      Interview and write intent.md
+ 3  research            Run survey-code and/or deep-research
+ 4  outline             Propose high-level approaches
+ 5  detail              File-level implementation plan
+ 6  branching_complete  Create feature branch and worktree
+[-] 7  write_tests      (auto-skipped)
+[-] 8  review_tests     (auto-skipped)
+[-] 9  run_tests        (auto-skipped)
+[-]10  review_security  (auto-skipped)
+[-]11  docs             (auto-skipped)
+[-]12  user_verification  (auto-skipped)
+[-]13  cleanup          (auto-skipped)
 14  pre_final_report_gate  Final report and session close
 ```
 
