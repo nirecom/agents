@@ -17,7 +17,13 @@ codex_core_init() {
   # shellcheck source=resolve-session-id.sh
   . "$(dirname "${BASH_SOURCE[0]}")/resolve-session-id.sh"
   local _jsonl_sid
-  if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+  # CLAUDE_CODE_SESSION_ID is CC-native and per-session-distinct, reliably present
+  # in the Bash-tool subprocess where CLAUDE_SESSION_ID is not. Without it, the
+  # chain falls through to the JSONL mtime scan, which returns the most recently
+  # active OTHER session in a concurrent environment (#1082).
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    SESSION_ID="$CLAUDE_CODE_SESSION_ID"
+  elif [ -n "${CLAUDE_SESSION_ID:-}" ]; then
     SESSION_ID="$CLAUDE_SESSION_ID"
   elif _jsonl_sid=$(resolve_session_id_from_jsonl 2>/dev/null); then
     SESSION_ID="$_jsonl_sid"
