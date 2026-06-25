@@ -54,7 +54,7 @@ const STEP_HINT = Object.freeze({
 });
 
 const WF_META_AUTO_SKIP = new Set([
-  "branching_complete", "write_tests", "review_tests", "run_tests",
+  "branching_complete", "detail", "write_tests", "review_tests", "run_tests",
   "review_security", "docs", "user_verification", "cleanup",
 ]);
 
