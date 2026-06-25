@@ -124,3 +124,7 @@ Changes: Each session now reliably resolves its own session id, so concurrent se
 ### FEATURE: PR #1090 (2026-06-25)
 Background: feat(#721): add WF-PLAN workflow type for meta-label issues
 Changes: `meta` label issues now use a shorter WF-META flow — oracle auto-skips 8 non-applicable steps (tests, branch, security review, docs, user verification, cleanup) so workflow-init through session-close completes with only the planning steps. When a new issue looks like it may require multi-session decomposition, `clarify-intent` now probes for decomposition signals and proposes WF-META to the user.
+
+### FEATURE: PR #1098 (2026-06-25)
+Background: fix(#1067): add migrateLegacyState() to handle pre-#1092 state files
+Changes: Fixed: `supervisor-report` no longer crashes with "validate failed: alert must be an object; audit must be an object" on sessions that had state files written before PR #1092.
