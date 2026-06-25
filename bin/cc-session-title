@@ -24,6 +24,11 @@ try {
     path.join(agentsDir, "hooks", "lib", "workflow-state", "session-id")
   );
 
+  // When invoked from Claude Code's Bash tool, CLAUDE_CODE_CHILD_SESSION=1 is
+  // inherited, causing _isChildSession() in session-title.js to suppress all
+  // writes. Unset it here so the CLI operates as a top-level caller.
+  delete process.env.CLAUDE_CODE_CHILD_SESSION;
+
   const [, , subcmd, ...args] = process.argv;
 
   if (!subcmd) process.exit(0);
