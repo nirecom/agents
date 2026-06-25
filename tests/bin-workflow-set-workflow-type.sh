@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/workflow/set-workflow-type, hooks/lib/workflow-state/state-io.js
-# Tags: L2, workflow, wf-plan, scope:common
+# Tags: L2, workflow, wf-meta, scope:common
 #
 # L3 gap (what this test does NOT catch):
 # - Real Claude Code session where set-workflow-type runs before mark-step-handler fires
@@ -124,7 +124,7 @@ run_tests() {
 
   # 2a: session-id with ".." → exit 1
   rc=0
-  run_script "../evil" "wf-plan" 2>/dev/null || rc=$?
+  run_script "../evil" "wf-meta" 2>/dev/null || rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "PASS: 2a: dotdot traversal rejected"
     PASS=$((PASS + 1))
@@ -135,7 +135,7 @@ run_tests() {
 
   # 2b: session-id with "/" → exit 1
   rc=0
-  run_script "foo/bar" "wf-plan" 2>/dev/null || rc=$?
+  run_script "foo/bar" "wf-meta" 2>/dev/null || rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "PASS: 2b: slash in session-id rejected"
     PASS=$((PASS + 1))
@@ -146,7 +146,7 @@ run_tests() {
 
   # 2c: session-id with backslash → exit 1 (allowlist rejects non-alphanumeric)
   rc=0
-  run_script "..\\..\\etc\\passwd" "wf-plan" 2>/dev/null || rc=$?
+  run_script "..\\..\\etc\\passwd" "wf-meta" 2>/dev/null || rc=$?
   if [ "$rc" -ne 0 ]; then
     echo "PASS: 2c: backslash traversal rejected"
     PASS=$((PASS + 1))
@@ -157,8 +157,8 @@ run_tests() {
 
   # ---- 3: no-existing-state path --------------------------------------------
 
-  local SID3="wf-plan-new-$$"
-  run_script "$SID3" "wf-plan"
+  local SID3="wf-meta-new-$$"
+  run_script "$SID3" "wf-meta"
   local STATE3="$TMPDIR_WT/${SID3}.json"
 
   if [ -f "$STATE3" ]; then
@@ -173,18 +173,18 @@ run_tests() {
     return
   fi
 
-  check "3b: workflow_type=wf-plan" "wf-plan" "$(json_val "$STATE3" 's.workflow_type')"
+  check "3b: workflow_type=wf-meta" "wf-meta" "$(json_val "$STATE3" 's.workflow_type')"
   check "3c: session_id matches" "$SID3" "$(json_val "$STATE3" 's.session_id')"
   check "3d: workflow_init status=pending" "pending" "$(json_val "$STATE3" 's.steps.workflow_init.status')"
 
   # ---- 4: existing-state overwrite ------------------------------------------
 
-  local SID4="wf-plan-existing-$$"
+  local SID4="wf-meta-existing-$$"
   write_state_json "$SID4" '{"version":1,"session_id":"'"$SID4"'","workflow_type":"wf-code","steps":{"workflow_init":{"status":"complete","updated_at":null},"clarify_intent":{"status":"pending","updated_at":null}},"closes_issues":[999]}'
-  run_script "$SID4" "wf-plan"
+  run_script "$SID4" "wf-meta"
   local STATE4="$TMPDIR_WT/${SID4}.json"
 
-  check "4a: workflow_type overwritten to wf-plan" "wf-plan" "$(json_val "$STATE4" 's.workflow_type')"
+  check "4a: workflow_type overwritten to wf-meta" "wf-meta" "$(json_val "$STATE4" 's.workflow_type')"
   check "4b: closes_issues[0] preserved" "999" "$(json_val "$STATE4" 's.closes_issues[0]')"
   check "4c: workflow_init.status preserved" "complete" "$(json_val "$STATE4" 's.steps.workflow_init.status')"
 
@@ -192,8 +192,8 @@ run_tests() {
   # workflow_type must survive a readState+writeState roundtrip (simulating
   # mark-step-handler.js running AFTER set-workflow-type in PP1→PP2 order).
 
-  local SID5="wf-plan-order-$$"
-  run_script "$SID5" "wf-plan"
+  local SID5="wf-meta-order-$$"
+  run_script "$SID5" "wf-meta"
   local PRESERVED
   PRESERVED="$(cd "$SCRIPT_AGENTS_DIR" && node -e "
     const {readState,writeState}=require('./hooks/lib/workflow-state');
@@ -202,7 +202,20 @@ run_tests() {
     const st2=readState('$SID5');
     console.log(st2.workflow_type??'__NULL__');
   " 2>/dev/null || echo "__ERROR__")"
-  check "5: workflow_type preserved after readState+writeState" "wf-plan" "$PRESERVED"
+  check "5: workflow_type preserved after readState+writeState" "wf-meta" "$PRESERVED"
+
+  # ---- 6: wf-plan now rejected (renamed to wf-meta) --------------------------
+
+  # 6a: wf-plan type → exit 1 (removed from VALID_TYPES)
+  rc=0
+  run_script "sess-6a" "wf-plan" 2>/dev/null || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "PASS: 6a: wf-plan type rejected (renamed to wf-meta)"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL: 6a: wf-plan type should be rejected"
+    FAIL=$((FAIL + 1))
+  fi
 }
 
 run_tests
