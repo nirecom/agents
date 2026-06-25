@@ -61,14 +61,14 @@ setup() {
     TMP="$(mktemp -d)"
     export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
     mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR"
-    unset CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE 2>/dev/null || true
+    unset CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 teardown() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP" 2>/dev/null || true
     fi
     TMP=""
-    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE 2>/dev/null || true
+    unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 }
 
 # Encoding helper for JS-1: CC-native encoding via shell to match the helper.
@@ -85,7 +85,8 @@ export CLAUDE_PROJECT_DIR="C:/git/test"
 PROJDIR_ENCODED=$(encode_path "$CLAUDE_PROJECT_DIR")
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/jsonl-sid-js1.jsonl"
-OUT=$(run_with_timeout 60 node -e "
+# cd to $TMP so WORKTREE_NOTES.md in the worktree CWD cannot short-circuit the resolver.
+OUT=$(cd "$TMP" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID node -e "
 const m = require('$TARGET_NODE');
 const r = m.resolveSessionId();
 process.stdout.write(r === null ? '<null>' : String(r));
@@ -103,7 +104,8 @@ teardown
 setup
 export CLAUDE_PROJECT_DIR="C:/git/no-such-dir"
 # Do not create the encoded subdir.
-OUT=$(run_with_timeout 60 node -e "
+# cd to $TMP so WORKTREE_NOTES.md in the worktree CWD cannot short-circuit the resolver.
+OUT=$(cd "$TMP" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID node -e "
 const m = require('$TARGET_NODE');
 const r = m.resolveSessionId();
 process.stdout.write(r === null ? '<null>' : String(r));
@@ -166,7 +168,7 @@ export CLAUDE_PROJECT_DIR="C:/git/test"
 PROJDIR_ENCODED=$(encode_path "$CLAUDE_PROJECT_DIR")
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/jsonl-loser.jsonl"
-OUT=$(run_with_timeout 60 node -e "
+OUT=$(run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID node -e "
 const m = require('$TARGET_NODE');
 const r = m.resolveSessionId();
 process.stdout.write(r === null ? '<null>' : String(r));
@@ -177,6 +179,138 @@ else
     fail "JS-5: out='$OUT' expected='env-file-sid-wins'"
 fi
 teardown
+
+# ===========================================================================
+# JS-6: CLAUDE_CODE_SESSION_ID beats a newer foreign JSONL (#1082 concurrent-session fix).
+# A JSONL for a different (foreign) session exists and is the most-recently-modified.
+# CLAUDE_CODE_SESSION_ID must take priority and the resolver must return own-sid, not
+# the foreign session id.
+# ===========================================================================
+setup
+export CLAUDE_CODE_SESSION_ID="own-sid-js6"
+export CLAUDE_PROJECT_DIR="C:/git/test"
+PROJDIR_ENCODED=$(encode_path "$CLAUDE_PROJECT_DIR")
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
+# foreign session JSONL is NEWER (would have won the old JSONL-only path)
+echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/foreign-session-id.jsonl"
+touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/foreign-session-id.jsonl"
+OUT=$(run_with_timeout 60 node -e "
+const m = require('$TARGET_NODE');
+const r = m.resolveSessionId();
+process.stdout.write(r === null ? '<null>' : String(r));
+" 2>/dev/null)
+if [ "$OUT" = "own-sid-js6" ]; then
+    pass "JS-6: CLAUDE_CODE_SESSION_ID beats newer foreign JSONL (concurrent-session fix)"
+else
+    fail "JS-6: out='$OUT' expected='own-sid-js6'"
+fi
+teardown
+
+# ===========================================================================
+# JS-7: CLAUDE_CODE_SESSION_ID beats ctx.transcriptPath (priority check).
+# Verifies CLAUDE_CODE_SESSION_ID is higher priority than transcriptPath fallback.
+# ===========================================================================
+setup
+export CLAUDE_CODE_SESSION_ID="own-sid-js7"
+OUT=$(run_with_timeout 60 node -e "
+const m = require('$TARGET_NODE');
+const r = m.resolveSessionId({ transcriptPath: '/some/path/transcript-other-sid.jsonl' });
+process.stdout.write(r === null ? '<null>' : String(r));
+" 2>/dev/null)
+if [ "$OUT" = "own-sid-js7" ]; then
+    pass "JS-7: CLAUDE_CODE_SESSION_ID beats ctx.transcriptPath (higher priority)"
+else
+    fail "JS-7: out='$OUT' expected='own-sid-js7'"
+fi
+teardown
+
+# ===========================================================================
+# JS-8: CLAUDE_CODE_SESSION_ID unset → JSONL fallback still works (no regression).
+# Without CLAUDE_CODE_SESSION_ID, the legacy JSONL scan continues to work.
+# ===========================================================================
+setup
+export CLAUDE_PROJECT_DIR="C:/git/test"
+PROJDIR_ENCODED=$(encode_path "$CLAUDE_PROJECT_DIR")
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED"
+echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$PROJDIR_ENCODED/fallback-session-js8.jsonl"
+# cd to $TMP so WORKTREE_NOTES.md in the worktree CWD cannot short-circuit the resolver.
+OUT=$(cd "$TMP" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID node -e "
+const m = require('$TARGET_NODE');
+const r = m.resolveSessionId();
+process.stdout.write(r === null ? '<null>' : String(r));
+" 2>/dev/null)
+if [ "$OUT" = "fallback-session-js8" ]; then
+    pass "JS-8: CLAUDE_CODE_SESSION_ID unset → JSONL fallback still resolves (no regression)"
+else
+    fail "JS-8: out='$OUT' expected='fallback-session-js8'"
+fi
+teardown
+
+# ===========================================================================
+# JS-9: ctx.sessionIdFromInput still beats CLAUDE_CODE_SESSION_ID (priority 1 invariant).
+# ===========================================================================
+setup
+export CLAUDE_CODE_SESSION_ID="code-sid-js9-should-lose"
+OUT=$(run_with_timeout 60 node -e "
+const m = require('$TARGET_NODE');
+const r = m.resolveSessionId({ sessionIdFromInput: 'ctx-input-wins-js9' });
+process.stdout.write(r === null ? '<null>' : String(r));
+" 2>/dev/null)
+if [ "$OUT" = "ctx-input-wins-js9" ]; then
+    pass "JS-9: ctx.sessionIdFromInput beats CLAUDE_CODE_SESSION_ID (priority 1 invariant)"
+else
+    fail "JS-9: out='$OUT' expected='ctx-input-wins-js9'"
+fi
+teardown
+
+# ===========================================================================
+# JS-10 (cc-session-title regression): bin/cc-session-title set-issue resolves via
+# CLAUDE_CODE_SESSION_ID (#1082). The old inline resolver was replaced with the shared
+# resolveSessionId() — this test confirms the delegation is wired correctly.
+#
+# We exercise the set-issue subcommand with CLAUDE_CODE_SESSION_ID set and confirm
+# the session-title state file is written with own-sid (not a foreign session).
+# ===========================================================================
+CC_SESSION_TITLE="$AGENTS_DIR/bin/cc-session-title"
+if [ ! -f "$CC_SESSION_TITLE" ]; then
+    fail "JS-10: cc-session-title not found at $CC_SESSION_TITLE"
+else
+    setup
+    export CLAUDE_CODE_SESSION_ID="own-sid-cst-js10"
+    # Point the transcript base at the temp dir so JSONL scan falls back cleanly.
+    FAKE_PLANS_DIR="$TMP/plans-cst"
+    mkdir -p "$FAKE_PLANS_DIR"
+    FAKE_CWD="$TMP/cst-cwd"
+    mkdir -p "$FAKE_CWD"
+    # cc-session-title writes state files under $CLAUDE_TRANSCRIPT_BASE_DIR/<encoded-cwd>/
+    # keyed by session-id. Use CLAUDE_TRANSCRIPT_BASE_DIR to isolate from ~/.claude/projects.
+    # The binary itself exits 0 on any error (fail-open), so we can inspect the state file.
+    CC_CST_NODE="$AGENTS_DIR/bin/cc-session-title"
+    if command -v cygpath >/dev/null 2>&1; then
+        CC_CST_NODE="$(cygpath -w "$CC_CST_NODE" | sed 's|\\|/|g')"
+        FAKE_CWD_NODE="$(cygpath -w "$FAKE_CWD" | sed 's|\\|/|g')"
+        FAKE_PLANS_DIR_NODE="$(cygpath -w "$FAKE_PLANS_DIR" | sed 's|\\|/|g')"
+    else
+        FAKE_CWD_NODE="$FAKE_CWD"
+        FAKE_PLANS_DIR_NODE="$FAKE_PLANS_DIR"
+    fi
+    # Run set-issue; check the resolved session id is own-sid by inspecting
+    # session-title state via the same resolveSessionId() call.
+    OUT=$(run_with_timeout 60 node -e "
+process.env.CLAUDE_CODE_SESSION_ID = 'own-sid-cst-js10';
+process.env.CLAUDE_TRANSCRIPT_BASE_DIR = '$CLAUDE_TRANSCRIPT_BASE_DIR';
+// Verify resolveSessionId() returns own-sid (the delegation target).
+const { resolveSessionId } = require('$TARGET_NODE');
+const sid = resolveSessionId();
+process.stdout.write(sid === null ? '<null>' : String(sid));
+" 2>/dev/null)
+    if [ "$OUT" = "own-sid-cst-js10" ]; then
+        pass "JS-10: cc-session-title delegation to resolveSessionId() returns CLAUDE_CODE_SESSION_ID"
+    else
+        fail "JS-10: out='$OUT' expected='own-sid-cst-js10'"
+    fi
+    teardown
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

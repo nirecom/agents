@@ -5,17 +5,14 @@
 //   add-pr <cwd> <prNumber>         → writeAddPr
 //   mark-complete <cwd>             → writeMarkComplete
 //
-// Session ID is resolved internally:
-//   1. CLAUDE_ENV_FILE → CLAUDE_SESSION_ID line
-//   2. CLAUDE_SESSION_ID env var
-//   3. mtime JSONL scan in transcriptBase/<encodedCwd>/
+// Session ID is resolved via the shared resolveSessionId() (hooks/lib/workflow-state/
+// session-id.js) — single source of truth for the resolution chain, which reads
+// CLAUDE_CODE_SESSION_ID before the JSONL mtime scan (#1082).
 //
 // All errors are silently swallowed. Exit code always 0.
 
 "use strict";
 
-const fs = require("fs");
-const os = require("os");
 const path = require("path");
 
 try {
@@ -29,61 +26,13 @@ try {
 
   const [, , subcmd, ...args] = process.argv;
 
-  // Resolve session ID internally
-  function resolveInternalSessionId(cwd) {
-    // Try CLAUDE_ENV_FILE first
-    const envFile = process.env.CLAUDE_ENV_FILE;
-    if (envFile) {
-      try {
-        const content = fs.readFileSync(envFile, "utf8");
-        const m = content.match(/^CLAUDE_SESSION_ID=(.+)$/m);
-        if (m) {
-          const sid = m[1].trim();
-          if (/^[A-Za-z0-9_-]+$/.test(sid)) return sid;
-        }
-      } catch (_) {}
-    }
-
-    // Try CLAUDE_SESSION_ID env var
-    const envSid = process.env.CLAUDE_SESSION_ID;
-    if (envSid && /^[A-Za-z0-9_-]+$/.test(envSid.trim())) {
-      return envSid.trim();
-    }
-
-    // mtime JSONL scan in transcriptBase/<encodedCwd>/
-    if (cwd) {
-      try {
-        const transcriptBase =
-          process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
-          path.join(os.homedir(), ".claude", "projects");
-        const rawDir = process.env.CLAUDE_PROJECT_DIR || path.resolve(cwd);
-        const encoded = path.resolve(rawDir).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
-        const transcriptDir = path.join(transcriptBase, encoded);
-        const files = fs
-          .readdirSync(transcriptDir)
-          .filter((f) => f.endsWith(".jsonl"))
-          .map((f) => ({
-            name: f,
-            mtime: fs.statSync(path.join(transcriptDir, f)).mtimeMs,
-          }))
-          .sort((a, b) => b.mtime - a.mtime);
-        if (files.length > 0) {
-          const base = path.basename(files[0].name, ".jsonl");
-          if (/^[A-Za-z0-9_-]+$/.test(base)) return base;
-        }
-      } catch (_) {}
-    }
-
-    return null;
-  }
-
   if (!subcmd) process.exit(0);
 
   switch (subcmd) {
     case "set-issue": {
       const [cwd, plansDir] = args;
       if (!cwd || !plansDir) process.exit(0);
-      const sessionId = resolveInternalSessionId(cwd);
+      const sessionId = resolveSessionId();
       if (sessionId) {
         writeSetIssue(sessionId, cwd, plansDir);
       }
@@ -92,7 +41,7 @@ try {
     case "add-pr": {
       const [cwd, prNumber] = args;
       if (!cwd || !prNumber) process.exit(0);
-      const sessionId = resolveInternalSessionId(cwd);
+      const sessionId = resolveSessionId();
       if (sessionId) {
         writeAddPr(sessionId, cwd, String(prNumber));
       }
@@ -101,7 +50,7 @@ try {
     case "mark-complete": {
       const [cwd] = args;
       if (!cwd) process.exit(0);
-      const sessionId = resolveInternalSessionId(cwd);
+      const sessionId = resolveSessionId();
       if (sessionId) {
         writeMarkComplete(sessionId, cwd);
       }
@@ -110,7 +59,7 @@ try {
     case "write-waiting": {
       const [cwd] = args;
       if (!cwd) process.exit(0);
-      const sessionId = resolveInternalSessionId(cwd);
+      const sessionId = resolveSessionId();
       if (sessionId) {
         writeWaiting(sessionId, cwd);
       }
@@ -119,7 +68,7 @@ try {
     case "clear-waiting": {
       const [cwd] = args;
       if (!cwd) process.exit(0);
-      const sessionId = resolveInternalSessionId(cwd);
+      const sessionId = resolveSessionId();
       if (sessionId) {
         writeClearWaiting(sessionId, cwd);
       }

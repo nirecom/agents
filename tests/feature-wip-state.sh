@@ -60,6 +60,8 @@ SUB_DIR="$SCRIPT_DIR/feature-wip-state"
 . "$SUB_DIR/t-new-6-11.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/resolver.sh"
+# shellcheck source=/dev/null
+. "$SUB_DIR/t-1082.sh"
 
 # ---------------------------------------------------------------------------
 echo ""
