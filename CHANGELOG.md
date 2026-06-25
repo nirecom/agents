@@ -121,4 +121,6 @@ Background: Running multiple Claude Code sessions at the same time could corrupt
 
 Changes: Each session now reliably resolves its own session id, so concurrent sessions no longer collide on workflow state.
 
-
+### FEATURE: PR #1090 (2026-06-25)
+Background: feat(#721): add WF-PLAN workflow type for meta-label issues
+Changes: `meta` label issues now use a shorter WF-META flow — oracle auto-skips 8 non-applicable steps (tests, branch, security review, docs, user verification, cleanup) so workflow-init through session-close completes with only the planning steps. When a new issue looks like it may require multi-session decomposition, `clarify-intent` now probes for decomposition signals and proposes WF-META to the user.
