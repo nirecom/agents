@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 "use strict";
 
-const { writeLayer2State, confirmFinding, dropFindings, incrementL2RetryCount } = require("../hooks/lib/supervisor-state-writer");
-const { SEVERITY_VALUES, L2_PHASE_VALUES, L2_ELIGIBLE_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
+const { writeAlertState, confirmFinding, dropFindings, incrementAlertRetryCount } = require("../hooks/lib/supervisor-state-writer");
+const { SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 const KNOWN_VALUE_FLAGS = new Set([
   "--session-id",
-  "--l2-armed-at",
+  "--alert-armed-at",
   "--last-run-at",
   "--cumulative-severity",
   "--finding-categories",
@@ -18,23 +18,23 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--finding-status",
   "--confirm-finding-ids",
   "--drop-finding-ids",
-  "--set-l2-phase",
-  "--set-l2-eligible-phase",
+  "--set-alert-phase",
+  "--set-alert-eligible-phase",
 ]);
-const KNOWN_BOOL_FLAGS = new Set(["--clear-l2-armed-at", "--increment-l2-retry-count", "--mark-findings-surfaced"]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-alert-armed-at", "--increment-alert-retry-count", "--mark-findings-surfaced"]);
 
 function usage(msg) {
-  if (msg) console.error(`[supervisor-write-layer2] ERROR: ${msg}`);
+  if (msg) console.error(`[supervisor-write-alert] ERROR: ${msg}`);
   console.error(
-    "Usage: node bin/supervisor-write-layer2 --session-id <sid>" +
-    " [--l2-armed-at <iso>] [--clear-l2-armed-at]" +
+    "Usage: node bin/supervisor-write-alert --session-id <sid>" +
+    " [--alert-armed-at <iso>] [--clear-alert-armed-at]" +
     " [--last-run-at <iso>] [--cumulative-severity <error|warning|notice|null>]" +
     " [--finding-categories <csv> --finding-severity <s>" +
     " --finding-detail <text> --finding-reporter <name>" +
     " [--finding-status <draft|confirmed>]]" +
     " [--confirm-finding-ids <csv>] [--drop-finding-ids <csv>]" +
-    " [--set-l2-phase <pending|done|frozen>]" +
-    " [--mark-findings-surfaced] [--set-l2-eligible-phase <post_final_report_window|null>]"
+    " [--set-alert-phase <pending|done|frozen>]" +
+    " [--mark-findings-surfaced] [--set-alert-eligible-phase <post_final_report_window|null>]"
   );
   process.exit(1);
 }
@@ -60,28 +60,28 @@ for (let i = 0; i < argv.length; i++) {
 const sid = args["session-id"];
 if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
 
-const hasL2ArmedAt = "l2-armed-at" in args;
-const hasClearL2ArmedAt = flags.has("--clear-l2-armed-at");
+const hasAlertArmedAt = "alert-armed-at" in args;
+const hasClearAlertArmedAt = flags.has("--clear-alert-armed-at");
 const hasLastRunAt = "last-run-at" in args;
 const hasCumulativeSeverity = "cumulative-severity" in args;
-const hasSetL2Phase = "set-l2-phase" in args;
+const hasSetAlertPhase = "set-alert-phase" in args;
 const hasFindingStatus = "finding-status" in args;
 const hasConfirmIds = "confirm-finding-ids" in args;
 const hasDropIds = "drop-finding-ids" in args;
 const hasMarkFindingsSurfaced = flags.has("--mark-findings-surfaced");
-const hasSetL2EligiblePhase = "set-l2-eligible-phase" in args;
+const hasSetAlertEligiblePhase = "set-alert-eligible-phase" in args;
 
 const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
 const findingPresent = findingKeys.filter((k) => k in args);
 const hasAnyFinding = findingPresent.length > 0;
 const hasAllFindings = findingPresent.length === findingKeys.length;
 
-if (hasL2ArmedAt && hasClearL2ArmedAt) {
-  usage("--l2-armed-at and --clear-l2-armed-at are mutually exclusive");
+if (hasAlertArmedAt && hasClearAlertArmedAt) {
+  usage("--alert-armed-at and --clear-alert-armed-at are mutually exclusive");
 }
 
-if (hasSetL2Phase && args["set-l2-phase"] === "frozen" && hasL2ArmedAt) {
-  usage("--set-l2-phase frozen and --l2-armed-at are mutually exclusive");
+if (hasSetAlertPhase && args["set-alert-phase"] === "frozen" && hasAlertArmedAt) {
+  usage("--set-alert-phase frozen and --alert-armed-at are mutually exclusive");
 }
 
 if (hasAnyFinding && !hasAllFindings) {
@@ -108,27 +108,27 @@ function parseIdCsv(raw, flag) {
   return ids;
 }
 
-const hasIncrementRetry = flags.has("--increment-l2-retry-count");
+const hasIncrementRetry = flags.has("--increment-alert-retry-count");
 
 if (hasIncrementRetry) {
-  const hasOtherMutating = hasL2ArmedAt || hasClearL2ArmedAt || hasLastRunAt || hasCumulativeSeverity ||
-    hasSetL2Phase || hasAnyFinding || hasConfirmIds || hasDropIds || hasMarkFindingsSurfaced || hasSetL2EligiblePhase;
+  const hasOtherMutating = hasAlertArmedAt || hasClearAlertArmedAt || hasLastRunAt || hasCumulativeSeverity ||
+    hasSetAlertPhase || hasAnyFinding || hasConfirmIds || hasDropIds || hasMarkFindingsSurfaced || hasSetAlertEligiblePhase;
   if (hasOtherMutating) {
-    usage("--increment-l2-retry-count is mutually exclusive with other mutating flags");
+    usage("--increment-alert-retry-count is mutually exclusive with other mutating flags");
   }
-  const result = incrementL2RetryCount(sid);
+  const result = incrementAlertRetryCount(sid);
   console.log(JSON.stringify(result));
   process.exit(0);
 }
 
-if (!hasL2ArmedAt && !hasClearL2ArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetL2Phase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetL2EligiblePhase) {
+if (!hasAlertArmedAt && !hasClearAlertArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetAlertPhase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetAlertEligiblePhase) {
   usage("at least one mutating flag required");
 }
 
 const patch = {};
 
-if (hasL2ArmedAt) patch.l2_armed_at = args["l2-armed-at"];
-if (hasClearL2ArmedAt) patch.l2_armed_at = null;
+if (hasAlertArmedAt) patch.alert_armed_at = args["alert-armed-at"];
+if (hasClearAlertArmedAt) patch.alert_armed_at = null;
 if (hasLastRunAt) patch.last_run_at = args["last-run-at"];
 
 if (hasCumulativeSeverity) {
@@ -142,23 +142,23 @@ if (hasCumulativeSeverity) {
   }
 }
 
-if (hasSetL2Phase) {
-  const raw = args["set-l2-phase"];
-  if (!["pending", "done", "frozen"].includes(raw)) usage("--set-l2-phase must be one of pending|done|frozen");
-  patch.l2_phase = raw;
-  if (patch.l2_phase === "done") patch.l2_retry_count = 0;
+if (hasSetAlertPhase) {
+  const raw = args["set-alert-phase"];
+  if (!["pending", "done", "frozen"].includes(raw)) usage("--set-alert-phase must be one of pending|done|frozen");
+  patch.alert_phase = raw;
+  if (patch.alert_phase === "done") patch.alert_retry_count = 0;
 }
 
 if (hasMarkFindingsSurfaced) patch.findings_surfaced_at = new Date().toISOString();
 
-if (hasSetL2EligiblePhase) {
-  const raw = args["set-l2-eligible-phase"];
+if (hasSetAlertEligiblePhase) {
+  const raw = args["set-alert-eligible-phase"];
   if (raw === "null") {
-    patch.l2_eligible_phase = null;
-  } else if (L2_ELIGIBLE_PHASE_VALUES.includes(raw)) {
-    patch.l2_eligible_phase = raw;
+    patch.alert_eligible_phase = null;
+  } else if (ALERT_ELIGIBLE_PHASE_VALUES.includes(raw)) {
+    patch.alert_eligible_phase = raw;
   } else {
-    usage(`--set-l2-eligible-phase must be one of ${L2_ELIGIBLE_PHASE_VALUES.filter(v => v !== null).join("|")}|null`);
+    usage(`--set-alert-eligible-phase must be one of ${ALERT_ELIGIBLE_PHASE_VALUES.filter(v => v !== null).join("|")}|null`);
   }
 }
 
@@ -180,20 +180,20 @@ if (hasAllFindings) {
 }
 
 // Order of operations:
-//   1. writeLayer2State without l2_phase (append + scalars except phase)
+//   1. writeAlertState without alert_phase (append + scalars except phase)
 //   2. confirmFinding for each --confirm-finding-ids
 //   3. dropFindings for --drop-finding-ids
-//   4. writeLayer2State with only l2_phase (committed last)
-const phasePatch = ("l2_phase" in patch) ? { l2_phase: patch.l2_phase } : null;
-if (phasePatch) delete patch.l2_phase;
+//   4. writeAlertState with only alert_phase (committed last)
+const phasePatch = ("alert_phase" in patch) ? { alert_phase: patch.alert_phase } : null;
+if (phasePatch) delete patch.alert_phase;
 
 const hasAnyPrePhase =
   Object.keys(patch).length > 0;
 
 if (hasAnyPrePhase) {
-  const ok = writeLayer2State(sid, patch);
+  const ok = writeAlertState(sid, patch);
   if (!ok) {
-    console.error("[supervisor-write-layer2] ERROR: writeLayer2State failed (invalid fields or unexpected error)");
+    console.error("[supervisor-write-alert] ERROR: writeAlertState failed (invalid fields or unexpected error)");
     process.exit(1);
   }
 }
@@ -202,7 +202,7 @@ if (hasConfirmIds) {
   const ids = parseIdCsv(args["confirm-finding-ids"], "--confirm-finding-ids");
   for (const idx of ids) {
     if (!confirmFinding(sid, idx)) {
-      console.error("[supervisor-write-layer2] ERROR: confirmFinding failed");
+      console.error("[supervisor-write-alert] ERROR: confirmFinding failed");
       process.exit(1);
     }
   }
@@ -211,15 +211,15 @@ if (hasConfirmIds) {
 if (hasDropIds) {
   const ids = parseIdCsv(args["drop-finding-ids"], "--drop-finding-ids");
   if (!dropFindings(sid, ids)) {
-    console.error("[supervisor-write-layer2] ERROR: dropFindings failed");
+    console.error("[supervisor-write-alert] ERROR: dropFindings failed");
     process.exit(1);
   }
 }
 
 if (phasePatch) {
-  const ok = writeLayer2State(sid, phasePatch);
+  const ok = writeAlertState(sid, phasePatch);
   if (!ok) {
-    console.error("[supervisor-write-layer2] ERROR: writeLayer2State (phase) failed");
+    console.error("[supervisor-write-alert] ERROR: writeAlertState (phase) failed");
     process.exit(1);
   }
 }

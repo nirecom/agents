@@ -20,7 +20,7 @@ else
 fi
 
 CLI="$AGENTS_DIR/bin/supervisor-review-codex"
-WRITE_CLI="$AGENTS_DIR/bin/supervisor-write-layer2"
+WRITE_CLI="$AGENTS_DIR/bin/supervisor-write-alert"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
@@ -68,18 +68,18 @@ run_rc2() {
 }
 
 run_rc3() {
-    require_cli "RC3: SKIPPED when l2_phase != pending" || return
+    require_cli "RC3: SKIPPED when alert_phase != pending" || return
     local tmp sid rc out
     tmp="$(mktemp -d)"; sid="rc3-sid"
-    # Seed state with l2_phase=done (and no findings).
+    # Seed state with alert_phase=done (and no findings).
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_CLI" \
-        --set-l2-phase done --session-id "$sid" >/dev/null 2>&1
+        --set-alert-phase done --session-id "$sid" >/dev/null 2>&1
     out=$(WORKFLOW_PLANS_DIR="$tmp" AGENTS_CONFIG_DIR="$AGENTS_DIR" \
         SID="$sid" run_with_timeout 10 bash "$CLI" 2>&1) || true
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && echo "$out" | grep -qi "skipped"; then
-        pass "RC3: SKIPPED (exit 0 + SKIPPED in output) when l2_phase=done"
+        pass "RC3: SKIPPED (exit 0 + SKIPPED in output) when alert_phase=done"
     else
         fail "RC3: expected exit 0 with SKIPPED in output (rc=$rc, out=$out)"
     fi
@@ -89,7 +89,7 @@ run_rc4() {
     require_cli "RC4: SKIPPED when pending but no draft findings" || return
     local tmp sid rc out
     tmp="$(mktemp -d)"; sid="rc4-sid"
-    # Seed pending phase with l2_armed_at; no findings.
+    # Seed pending phase with alert_armed_at; no findings.
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_CLI" \
         --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid" >/dev/null 2>&1
     out=$(WORKFLOW_PLANS_DIR="$tmp" AGENTS_CONFIG_DIR="$AGENTS_DIR" \

@@ -11,8 +11,8 @@ run_g20() {
     wsid="${TODAY}-g20wsid"
     # Priority 1 (WORKTREE_NOTES.md) supplies wsid when running from $tmp.
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
-    # Seed supervisor state with l2_armed_at non-null to trigger branch (3).
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # Seed supervisor state with alert_armed_at non-null to trigger branch (3).
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -32,7 +32,7 @@ run_g21() {
     sid="g21-sid"
     # No WORKTREE_NOTES.md, no context.md in tmp — resolveWorkflowSessionId returns null -> UNAVAILABLE.
     # Running from $tmp ensures the repo's own WORKTREE_NOTES.md in CWD does not interfere.
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -55,7 +55,7 @@ run_g22() {
     # Priority 1 (WORKTREE_NOTES.md) supplies wsid when running from $tmp.
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # cumulative_severity=error triggers branch (2)
-    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -79,7 +79,7 @@ run_g23() {
     # Seed supervisor state under the WSID key (not the CC UUID) — simulates
     # the case where Layer-1 wrote state keyed by workflow session id but the
     # Stop hook receives a different CC UUID (dual-ID fallback regression).
-    seed_state "$tmp" "$wsid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     # Invoke guard with session_id = ccuuid (CC UUID, different from wsid).
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$ccuuid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
@@ -93,7 +93,7 @@ run_g23() {
     wsid_state_path="$_tmp_node/${wsid}-supervisor-state.json"
     ccuuid_state_path="$_tmp_node/${ccuuid}-supervisor-state.json"
     # Read retry count from wsid file (proves the fix routes writes through the effective ID).
-    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$wsid_state_path','utf8')); process.stdout.write(String(s.layer2?.l2_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
+    wsid_retry=$(node -e "try{const s=JSON.parse(require('fs').readFileSync('$wsid_state_path','utf8')); process.stdout.write(String(s.alert?.alert_retry_count??0));}catch(_){process.stdout.write('err');}" 2>/dev/null)
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && [ "$wsid_retry" != "0" ] && [ "$wsid_retry" != "err" ]; then
         pass "G23: cross-ID dual-ID fallback — guard fires + freeze counter on wsid file"
@@ -142,7 +142,7 @@ run_g25() {
     sid="g25-sid"
     # wsid same as sessionId — resolver must skip fallback path.
     printf "Session-ID: %s\n" "$sid" > "$tmp/WORKTREE_NOTES.md"
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -164,7 +164,7 @@ run_g26() {
     # rejects it via the regex inside _readSessionIdFromWorktreeNotes. The resolver in
     # supervisor-guard.js then skips fallback and uses sessionId for state lookup.
     printf "Session-ID: %s\n" "invalid@charset!" > "$tmp/WORKTREE_NOTES.md"
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -205,7 +205,7 @@ run_g28() {
     wsid="${TODAY}-g28wsid"
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # cumulative_severity=error with empty findings triggers formatCumSevErrorReason empty-findings branch
-    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -223,8 +223,8 @@ run_g29() {
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g29-sid"
-    # cumulative_severity=warning with l2_armed_at=null triggers branch (4) advisory path
-    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
+    # cumulative_severity=warning with alert_armed_at=null triggers branch (4) advisory path
+    seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -269,8 +269,8 @@ run_g31() {
 const obj = {type:"assistant",message:{content:[{type:"tool_use",name:"AskUserQuestion",input:{question:"?"}}]}};
 require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 ' "$transcript_path_native" 2>/dev/null
-    # Seed l2_armed_at so branch (3) would normally fire.
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # Seed alert_armed_at so branch (3) would normally fire.
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"$transcript_path_native\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -312,8 +312,8 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
 }
 
 run_g33() {
-    require_source "$HOOK" "G33: frozen state (l2_retry_count at threshold) exits 0" || return
-    require_wsid "G33: frozen state (l2_retry_count at threshold) exits 0" || return
+    require_source "$HOOK" "G33: frozen state (alert_retry_count at threshold) exits 0" || return
+    require_wsid "G33: frozen state (alert_retry_count at threshold) exits 0" || return
     local tmp out rc sid tmp_node
     tmp="$(mktemp -d)"
     sid="g33-sid"
@@ -322,13 +322,13 @@ run_g33() {
     else
         tmp_node="$tmp"
     fi
-    # Seed state with l2_retry_count=2 (at threshold) — incrementL2RetryCount returns frozen=true.
+    # Seed state with alert_retry_count=2 (at threshold) — incrementAlertRetryCount returns frozen=true.
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = { l2_armed_at: '2026-01-01T12:00:00Z', l2_retry_count: 2, last_run_at: null, cumulative_severity: null, findings: [] };
+st.alert = { alert_armed_at: '2026-01-01T12:00:00Z', alert_retry_count: 2, last_run_at: null, cumulative_severity: null, findings: [] };
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
@@ -336,8 +336,8 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
-        pass "G33: frozen state (l2_retry_count at threshold) exits 0"
+        pass "G33: frozen state (alert_retry_count at threshold) exits 0"
     else
-        fail "G33: frozen state (l2_retry_count at threshold) exits 0 (rc=$rc, out=$out)"
+        fail "G33: frozen state (alert_retry_count at threshold) exits 0 (rc=$rc, out=$out)"
     fi
 }

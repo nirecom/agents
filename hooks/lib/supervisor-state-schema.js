@@ -10,21 +10,21 @@ const CATEGORIES = [
 
 const SEVERITY_VALUES = ["error", "warning", "notice"];
 
-const L2_PHASE_VALUES = [null, "pending", "done", "frozen"];
+const ALERT_PHASE_VALUES = [null, "pending", "done", "frozen"];
 
-const L2_ELIGIBLE_PHASE_VALUES = [null, "post_final_report_window"];
+const ALERT_ELIGIBLE_PHASE_VALUES = [null, "post_final_report_window"];
 
 const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
 
 // 2 = guarded fail-fast. One retry permits a transient API error to self-heal; the second consecutive failure freezes the session so the loop cannot continue.
-const L2_RETRY_THRESHOLD = 2;
+const ALERT_RETRY_THRESHOLD = 2;
 
-// L3 (#720) — Layer 3 strategic review.
-const L3_PHASE_VALUES = [null, "pending", "in_progress", "done", "frozen"];
-const L3_VERDICT_VALUES = ["CONTINUE", "WARN", "BLOCK"];
-const L3_RETRY_THRESHOLD = 2;
-// Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers L3 arming.
-const L3_CUMULATIVE_SEVERITY_THRESHOLD = "error";
+// Audit (#720) — audit mode strategic review.
+const AUDIT_PHASE_VALUES = [null, "pending", "in_progress", "done", "frozen"];
+const AUDIT_VERDICT_VALUES = ["CONTINUE", "WARN", "BLOCK"];
+const AUDIT_RETRY_THRESHOLD = 2;
+// Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers audit arming.
+const AUDIT_SEVERITY_THRESHOLD = "error";
 
 function createEmptyState(sessionId) {
   const now = new Date().toISOString();
@@ -34,8 +34,8 @@ function createEmptyState(sessionId) {
     created_at: now,
     last_updated: now,
     layer1: { findings: [] },
-    layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
-    layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
+    alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_cause: null, alert_retry_count: 0, findings_surfaced_at: null, alert_eligible_phase: null },
+    audit: { audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] },
   };
 }
 
@@ -112,52 +112,52 @@ function validate(obj) {
       }
     }
   }
-  if (typeof obj.layer2 !== "object" || obj.layer2 === null || Array.isArray(obj.layer2)) {
-    errors.push("layer2 must be an object");
+  if (typeof obj.alert !== "object" || obj.alert === null || Array.isArray(obj.alert)) {
+    errors.push("alert must be an object");
   } else {
-    const l2 = obj.layer2;
-    if ("l2_armed_at" in l2 && l2.l2_armed_at !== null && typeof l2.l2_armed_at !== "string") {
-      errors.push("layer2.l2_armed_at must be null or a string");
+    const al = obj.alert;
+    if ("alert_armed_at" in al && al.alert_armed_at !== null && typeof al.alert_armed_at !== "string") {
+      errors.push("alert.alert_armed_at must be null or a string");
     }
-    if ("last_run_at" in l2 && l2.last_run_at !== null && typeof l2.last_run_at !== "string") {
-      errors.push("layer2.last_run_at must be null or a string");
+    if ("last_run_at" in al && al.last_run_at !== null && typeof al.last_run_at !== "string") {
+      errors.push("alert.last_run_at must be null or a string");
     }
-    if ("cumulative_severity" in l2 && l2.cumulative_severity !== null && !SEVERITY_VALUES.includes(l2.cumulative_severity)) {
-      errors.push(`layer2.cumulative_severity must be null or one of ${SEVERITY_VALUES.join("|")}`);
+    if ("cumulative_severity" in al && al.cumulative_severity !== null && !SEVERITY_VALUES.includes(al.cumulative_severity)) {
+      errors.push(`alert.cumulative_severity must be null or one of ${SEVERITY_VALUES.join("|")}`);
     }
-    if ("findings" in l2) {
-      if (!Array.isArray(l2.findings)) {
-        errors.push("layer2.findings must be an array");
+    if ("findings" in al) {
+      if (!Array.isArray(al.findings)) {
+        errors.push("alert.findings must be an array");
       } else {
-        for (let i = 0; i < l2.findings.length; i++) {
-          const r = validateFinding(l2.findings[i]);
+        for (let i = 0; i < al.findings.length; i++) {
+          const r = validateFinding(al.findings[i]);
           if (!r.ok) {
-            for (const e of r.errors) errors.push(`layer2.findings[${i}]: ${e}`);
+            for (const e of r.errors) errors.push(`alert.findings[${i}]: ${e}`);
           }
         }
       }
     }
-    if ("l2_phase" in l2 && !L2_PHASE_VALUES.includes(l2.l2_phase)) errors.push("layer2.l2_phase must be null, pending, done, or frozen");
-    if ("l2_cause" in l2 && l2.l2_cause !== null && typeof l2.l2_cause !== "string") errors.push("layer2.l2_cause must be null or a string");
-    if ("l2_retry_count" in l2 && (!Number.isInteger(l2.l2_retry_count) || l2.l2_retry_count < 0)) errors.push("layer2.l2_retry_count must be a non-negative integer");
-    if ("findings_surfaced_at" in l2 && l2.findings_surfaced_at !== null && typeof l2.findings_surfaced_at !== "string") {
-      errors.push("layer2.findings_surfaced_at must be null or a string");
+    if ("alert_phase" in al && !ALERT_PHASE_VALUES.includes(al.alert_phase)) errors.push("alert.alert_phase must be null, pending, done, or frozen");
+    if ("alert_cause" in al && al.alert_cause !== null && typeof al.alert_cause !== "string") errors.push("alert.alert_cause must be null or a string");
+    if ("alert_retry_count" in al && (!Number.isInteger(al.alert_retry_count) || al.alert_retry_count < 0)) errors.push("alert.alert_retry_count must be a non-negative integer");
+    if ("findings_surfaced_at" in al && al.findings_surfaced_at !== null && typeof al.findings_surfaced_at !== "string") {
+      errors.push("alert.findings_surfaced_at must be null or a string");
     }
-    if ("l2_eligible_phase" in l2 && !L2_ELIGIBLE_PHASE_VALUES.includes(l2.l2_eligible_phase)) {
-      errors.push(`layer2.l2_eligible_phase must be null or "post_final_report_window"`);
+    if ("alert_eligible_phase" in al && !ALERT_ELIGIBLE_PHASE_VALUES.includes(al.alert_eligible_phase)) {
+      errors.push(`alert.alert_eligible_phase must be null or "post_final_report_window"`);
     }
   }
-  if (typeof obj.layer3 !== "object" || obj.layer3 === null || Array.isArray(obj.layer3)) {
-    errors.push("layer3 must be an object");
+  if (typeof obj.audit !== "object" || obj.audit === null || Array.isArray(obj.audit)) {
+    errors.push("audit must be an object");
   } else {
-    const l3 = obj.layer3;
-    if ("l3_phase" in l3 && !L3_PHASE_VALUES.includes(l3.l3_phase)) errors.push("layer3.l3_phase must be null, pending, in_progress, done, or frozen");
-    if ("l3_verdict" in l3 && l3.l3_verdict !== null && !L3_VERDICT_VALUES.includes(l3.l3_verdict)) errors.push("layer3.l3_verdict must be null, CONTINUE, WARN, or BLOCK");
-    if ("l3_last_run_at" in l3 && l3.l3_last_run_at !== null && typeof l3.l3_last_run_at !== "string") errors.push("layer3.l3_last_run_at must be null or a string");
-    if ("l3_armed_at" in l3 && l3.l3_armed_at !== null && typeof l3.l3_armed_at !== "string") errors.push("layer3.l3_armed_at must be null or a string");
-    if ("l3_cause" in l3 && l3.l3_cause !== null && typeof l3.l3_cause !== "string") errors.push("layer3.l3_cause must be null or a string");
-    if ("l3_retry_count" in l3 && (!Number.isInteger(l3.l3_retry_count) || l3.l3_retry_count < 0)) errors.push("layer3.l3_retry_count must be a non-negative integer");
-    if ("findings" in l3 && !Array.isArray(l3.findings)) errors.push("layer3.findings must be an array");
+    const au = obj.audit;
+    if ("audit_phase" in au && !AUDIT_PHASE_VALUES.includes(au.audit_phase)) errors.push("audit.audit_phase must be null, pending, in_progress, done, or frozen");
+    if ("audit_verdict" in au && au.audit_verdict !== null && !AUDIT_VERDICT_VALUES.includes(au.audit_verdict)) errors.push("audit.audit_verdict must be null, CONTINUE, WARN, or BLOCK");
+    if ("audit_last_run_at" in au && au.audit_last_run_at !== null && typeof au.audit_last_run_at !== "string") errors.push("audit.audit_last_run_at must be null or a string");
+    if ("audit_armed_at" in au && au.audit_armed_at !== null && typeof au.audit_armed_at !== "string") errors.push("audit.audit_armed_at must be null or a string");
+    if ("audit_cause" in au && au.audit_cause !== null && typeof au.audit_cause !== "string") errors.push("audit.audit_cause must be null or a string");
+    if ("audit_retry_count" in au && (!Number.isInteger(au.audit_retry_count) || au.audit_retry_count < 0)) errors.push("audit.audit_retry_count must be a non-negative integer");
+    if ("findings" in au && !Array.isArray(au.findings)) errors.push("audit.findings must be an array");
   }
   return { ok: errors.length === 0, errors };
 }
@@ -166,14 +166,14 @@ module.exports = {
   SCHEMA_VERSION,
   CATEGORIES,
   SEVERITY_VALUES,
-  L2_PHASE_VALUES,
-  L2_ELIGIBLE_PHASE_VALUES,
+  ALERT_PHASE_VALUES,
+  ALERT_ELIGIBLE_PHASE_VALUES,
   SEVERITY_RANK,
-  L2_RETRY_THRESHOLD,
-  L3_PHASE_VALUES,
-  L3_VERDICT_VALUES,
-  L3_RETRY_THRESHOLD,
-  L3_CUMULATIVE_SEVERITY_THRESHOLD,
+  ALERT_RETRY_THRESHOLD,
+  AUDIT_PHASE_VALUES,
+  AUDIT_VERDICT_VALUES,
+  AUDIT_RETRY_THRESHOLD,
+  AUDIT_SEVERITY_THRESHOLD,
   createEmptyState,
   validate,
   validateFinding,
