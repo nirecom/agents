@@ -87,6 +87,13 @@ function readState(sessionId) {
       if (!state.steps.cleanup) {
         state.steps.cleanup = { status: "pending", updated_at: null };
       }
+      if (!state.workflow_type) {
+        state.workflow_type = "wf-code";
+      }
+      // migration: wf-plan → wf-meta rename
+      if (state.workflow_type === "wf-plan") {
+        state.workflow_type = "wf-meta";
+      }
     }
     return state;
   } catch (e) {
@@ -118,6 +125,7 @@ function createInitialState(sessionId, ctx) {
     if (typeof ctx.cwd === "string") state.cwd = ctx.cwd;
     state.git_branch = ctx.git_branch ?? null;
   }
+  state.workflow_type = "wf-code";
   return state;
 }
 
