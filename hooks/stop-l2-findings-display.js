@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
-// Stop hook: surface Layer 2 supervisor findings after session completion
+// Stop hook: surface alert mode supervisor findings after session completion
 // when SC-7 did not run (or when the hook fires before session-close).
-// Fires only when findings_surfaced_at is null and L2 has completed (or is
+// Fires only when findings_surfaced_at is null and alert mode has completed (or is
 // in the #961 stale-pending state). Emits additionalContext only — never blocks.
 
 const fs = require("fs");
@@ -32,14 +32,14 @@ if (require.main === module) {
 
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, resolveWorkflowSessionId, readState, writeLayer2State, getStatePath;
+  let resolveSessionId, resolveWorkflowSessionId, readState, writeAlertState, getStatePath;
   let formatLayer2Findings;
   const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
-    ({ readState, writeLayer2State, getStatePath } = require("./lib/supervisor-state-writer"));
+    ({ readState, writeAlertState, getStatePath } = require("./lib/supervisor-state-writer"));
     ({ formatLayer2Findings } = require("./lib/supervisor-findings-render"));
   } catch (_) {
     process.exit(0);
@@ -86,18 +86,18 @@ if (require.main === module) {
     const state = readState(effectiveSid);
     if (!state) process.exit(0);
 
-    const l2 = state.layer2;
-    if (!l2 || !Array.isArray(l2.findings) || l2.findings.length === 0) process.exit(0);
+    const al = state.alert;
+    if (!al || !Array.isArray(al.findings) || al.findings.length === 0) process.exit(0);
 
     // Gate 1: not yet surfaced
-    if (l2.findings_surfaced_at != null) process.exit(0);
+    if (al.findings_surfaced_at != null) process.exit(0);
 
-    // Gate 2: L2 has completed or is in #961 stale-pending state
-    const phase = l2.l2_phase;
+    // Gate 2: alert mode has completed or is in #961 stale-pending state
+    const phase = al.alert_phase;
     const isCompleted =
       phase === "done" ||
       phase === "frozen" ||
-      (phase === "pending" && l2.last_run_at != null);
+      (phase === "pending" && al.last_run_at != null);
     if (!isCompleted) process.exit(0);
 
     // Gate 3: renderer has content
@@ -105,7 +105,7 @@ if (require.main === module) {
     const supervisorPath = agentsConfigDir ? `${agentsConfigDir}/agents/supervisor.md` : "agents/supervisor.md";
     const stateFilePath = getStatePath(effectiveSid);
 
-    const rendered = formatLayer2Findings(l2.findings, {
+    const rendered = formatLayer2Findings(al.findings, {
       sessionId,
       workflowSessionId,
       supervisorPath,
@@ -118,7 +118,7 @@ if (require.main === module) {
 
     // Mark surfaced (best effort — fail-open; hook may re-surface on next Stop if write fails)
     try {
-      const ok = writeLayer2State(effectiveSid, { findings_surfaced_at: new Date().toISOString() });
+      const ok = writeAlertState(effectiveSid, { findings_surfaced_at: new Date().toISOString() });
       void ok; // fail-open: acceptable if state write fails
     } catch (_) {}
 

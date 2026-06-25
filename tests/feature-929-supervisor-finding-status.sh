@@ -54,12 +54,12 @@ run_fs1() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['intent'], severity:'warning', detail:'a', reporter:'x', status:'confirmed' },
   { idx:1, categories:['code'],   severity:'warning', detail:'b', reporter:'x', status:'confirmed' },
 ] } };
 m.appendDraftFinding(state, { categories:['workflow'], severity:'error', detail:'c', reporter:'supervisor' });
-const f = state.layer2.findings;
+const f = state.alert.findings;
 if (f.length !== 3) { console.error('len='+f.length); process.exit(2); }
 const last = f[2];
 if (last.status !== 'draft') { console.error('status='+last.status); process.exit(3); }
@@ -79,9 +79,9 @@ run_fs2() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [] } };
+const state = { alert: { findings: [] } };
 m.appendDraftFinding(state, { categories:['intent'], severity:'notice', detail:'x', reporter:'supervisor' });
-const f = state.layer2.findings;
+const f = state.alert.findings;
 if (f.length !== 1) { console.error('len='+f.length); process.exit(2); }
 if (f[0].idx !== 0) { console.error('idx='+f[0].idx); process.exit(3); }
 if (f[0].status !== 'draft') { console.error('status='+f[0].status); process.exit(4); }
@@ -100,12 +100,12 @@ run_fs3() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['intent'], severity:'warning', detail:'a', reporter:'x', status:'draft' },
   { idx:1, categories:['code'],   severity:'warning', detail:'b', reporter:'x', status:'draft' },
 ] } };
 m.confirmFinding(state, 1);
-const f = state.layer2.findings;
+const f = state.alert.findings;
 if (f[0].status !== 'draft') { console.error('idx0 mutated: '+f[0].status); process.exit(2); }
 if (f[1].status !== 'confirmed') { console.error('idx1: '+f[1].status); process.exit(3); }
 console.log('OK');
@@ -123,7 +123,7 @@ run_fs4() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['intent'], severity:'warning', detail:'a', reporter:'x', status:'draft' },
 ] } };
 const before = JSON.stringify(state);
@@ -149,14 +149,14 @@ run_fs5() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['a'], severity:'warning', detail:'A', reporter:'x', status:'draft' },
   { idx:1, categories:['b'], severity:'warning', detail:'B', reporter:'x', status:'draft' },
   { idx:2, categories:['c'], severity:'warning', detail:'C', reporter:'x', status:'draft' },
   { idx:3, categories:['d'], severity:'warning', detail:'D', reporter:'x', status:'draft' },
 ] } };
 m.dropFindings(state, [0, 2]);
-const f = state.layer2.findings;
+const f = state.alert.findings;
 if (f.length !== 2) { console.error('len='+f.length); process.exit(2); }
 const details = f.map(x => x.detail).join(',');
 if (details !== 'B,D') { console.error('details='+details); process.exit(3); }
@@ -175,7 +175,7 @@ run_fs6() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['a'], severity:'warning', detail:'A', reporter:'x', status:'draft' },
 ] } };
 const before = JSON.stringify(state);
@@ -197,13 +197,13 @@ run_fs7() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['a'], severity:'warning', detail:'A', reporter:'x', status:'draft' },
   { idx:1, categories:['b'], severity:'warning', detail:'B', reporter:'x', status:'draft' },
   { idx:2, categories:['c'], severity:'warning', detail:'C', reporter:'x', status:'draft' },
 ] } };
 m.dropFindings(state, [1, 1, 1]);
-const f = state.layer2.findings;
+const f = state.alert.findings;
 if (f.length !== 2) { console.error('len='+f.length); process.exit(2); }
 const details = f.map(x => x.detail).join(',');
 if (details !== 'A,C') { console.error('details='+details); process.exit(3); }
@@ -222,13 +222,13 @@ run_fs8() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['a'], severity:'warning', detail:'A', reporter:'x', status:'draft' },
   { idx:1, categories:['b'], severity:'warning', detail:'B', reporter:'x', status:'confirmed' },
   { idx:2, categories:['c'], severity:'warning', detail:'C', reporter:'x', status:'draft' },
 ] } };
 m.promotePendingDraftsToConfirmed(state);
-const f = state.layer2.findings;
+const f = state.alert.findings;
 if (!f.every(x => x.status === 'confirmed')) {
   console.error('statuses='+JSON.stringify(f.map(x => x.status))); process.exit(2);
 }
@@ -247,7 +247,7 @@ run_fs9() {
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$FS_NODE');
-const state = { layer2: { findings: [
+const state = { alert: { findings: [
   { idx:0, categories:['a'], severity:'warning', detail:'A', reporter:'x', status:'confirmed' },
   { idx:1, categories:['b'], severity:'warning', detail:'B', reporter:'x', status:'confirmed' },
 ] } };

@@ -2,7 +2,7 @@
 # tests/feature-961-sc5-heuristic.sh
 # Tests: skills/session-close/SKILL.md
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
-# Tests for issue #961 — SC-5 heuristic for orphaned l2_armed_at + #1027 SC-7.
+# Tests for issue #961 — SC-5 heuristic for orphaned alert_armed_at + #1027 SC-7.
 # Text-contract assertions on skills/session-close/SKILL.md.
 #
 # # L3 gap
