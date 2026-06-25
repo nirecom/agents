@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Claude Code UserPromptSubmit hook: clear ⏳ waiting indicator when the
-// user submits a message. Mirrors the session-start.js clear so that ⏳
-// is removed at the start of each user turn, not only at session open.
+// Claude Code UserPromptSubmit hook: set ⏳ indicator when the user submits
+// a message — signals that the user is now waiting for Claude to respond.
 
 "use strict";
 
@@ -33,8 +32,8 @@ try {
   } catch (_) {}
 
   if (sessionId) {
-    const { writeClearWaiting } = require(path.join(__dirname, "lib", "session-title"));
-    writeClearWaiting(sessionId, process.cwd());
+    const { writeWaiting } = require(path.join(__dirname, "lib", "session-title"));
+    writeWaiting(sessionId, process.cwd());
   }
 } catch (_) {
   // fail-open
