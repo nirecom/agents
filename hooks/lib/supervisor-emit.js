@@ -23,7 +23,7 @@ function reportBlock(hook, command, sessionId, extras = {}) {
   try {
     const finding = {
       categories: ["workflow"],
-      severity: "warning",
+      severity: "error",
       detail: `hook blocked: ${hook} on ${command || "<unknown>"}`,
       reporter: hook,
     };
@@ -54,7 +54,7 @@ function reportFallback(skill, fallbackName, sessionId) {
   try {
     safeAppend(sessionId, {
       categories: ["workflow"],
-      severity: "notice",
+      severity: "warning",
       detail: `fallback taken: ${fallbackName}`,
       reporter: skill,
     });

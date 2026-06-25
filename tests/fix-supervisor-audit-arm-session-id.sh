@@ -1,7 +1,7 @@
 #!/bin/bash
-# tests/fix-supervisor-l3-arm-session-id.sh
-# Tests: hooks/supervisor-guard.js, agents/supervisor-layer3.md
-# Tags: supervisor, em-supervisor, layer3, fix, scope:issue-specific
+# tests/fix-supervisor-audit-arm-session-id.sh
+# Tests: hooks/supervisor-guard.js, agents/supervisor-audit.md
+# Tags: supervisor, em-supervisor, audit, fix, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 # - real Claude Code Stop event firing — tests invoke hook directly, not via hook registration
 # - WORKFLOW_SESSION_ID propagation into a live session (Anthropic bug #27987)
@@ -23,7 +23,7 @@ HOOK="$AGENTS_DIR/hooks/supervisor-guard.js"
 HOOK_NODE="$_AGENTS_DIR_NODE/hooks/supervisor-guard.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-L3_AGENT_MD="$AGENTS_DIR/agents/supervisor-layer3.md"
+AUDIT_AGENT_MD="$AGENTS_DIR/agents/supervisor-audit.md"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -61,15 +61,15 @@ require_stanza_runtime() {
     return 0
 }
 
-seed_l3_state_arm() {
+seed_audit_state_arm() {
     local tmp="$1" sid="$2" layer2_json="$3" layer3_json="$4"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = Object.assign({}, st.layer2, $layer2_json);
-st.layer3 = Object.assign({}, st.layer3, $layer3_json);
+st.alert = Object.assign({}, st.alert, $layer2_json);
+st.audit = Object.assign({}, st.audit, $layer3_json);
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
@@ -98,12 +98,12 @@ run_t1() {
     local tmp out rc reason cc_id wsid_id effective_id
     tmp="$(mktemp -d)"
     # Both files must exist for wsid fallback to fire.
-    seed_l3_state_arm "$tmp" "wsid-bbbb" \
-        "{ l2_phase: 'done', l2_armed_at: '2026-06-22T10:00:00Z', cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], l2_retry_count: 0 }" \
-        "{ l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] }"
-    seed_l3_state_arm "$tmp" "cc-uuid-aaaa" \
-        "{ l2_phase: null, l2_armed_at: null, cumulative_severity: null, findings: [], l2_retry_count: 0 }" \
-        "{ l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] }"
+    seed_audit_state_arm "$tmp" "wsid-bbbb" \
+        "{ alert_phase: 'done', alert_armed_at: '2026-06-22T10:00:00Z', cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
+        "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
+    seed_audit_state_arm "$tmp" "cc-uuid-aaaa" \
+        "{ alert_phase: null, alert_armed_at: null, cumulative_severity: null, findings: [], alert_retry_count: 0 }" \
+        "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     out=$(CLAUDE_SESSION_ID=cc-uuid-aaaa \
         WORKFLOW_SESSION_ID=wsid-bbbb \
         WORKFLOW_PLANS_DIR="$tmp" \
@@ -133,9 +133,9 @@ run_t2() {
     require_stanza_runtime "$label" || return
     local tmp out rc reason cc_id wsid_id effective_id
     tmp="$(mktemp -d)"
-    seed_l3_state_arm "$tmp" "cc-uuid-aaaa" \
-        "{ l2_phase: 'done', l2_armed_at: '2026-06-22T10:00:00Z', cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], l2_retry_count: 0 }" \
-        "{ l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] }"
+    seed_audit_state_arm "$tmp" "cc-uuid-aaaa" \
+        "{ alert_phase: 'done', alert_armed_at: '2026-06-22T10:00:00Z', cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
+        "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
     unset WORKFLOW_SESSION_ID || true
     out=$(cd "$tmp" && CLAUDE_SESSION_ID=cc-uuid-aaaa \
         WORKFLOW_PLANS_DIR="$tmp" \
@@ -158,28 +158,28 @@ run_t2() {
     fi
 }
 
-# T3 — static: supervisor-layer3.md documents the three-ID stanza.
+# T3 — static: supervisor-audit.md documents the three-ID stanza.
 run_t3() {
-    local label="T3: supervisor-layer3.md documents 'Effective state session ID' + 'Workflow session ID'"
-    if [ ! -f "$L3_AGENT_MD" ]; then
-        skip "$label (agents/supervisor-layer3.md not present)"; return
+    local label="T3: supervisor-audit.md documents 'Effective state session ID' + 'Workflow session ID'"
+    if [ ! -f "$AUDIT_AGENT_MD" ]; then
+        skip "$label (agents/supervisor-audit.md not present)"; return
     fi
-    if ! grep -q 'Effective state session ID' "$L3_AGENT_MD"; then
+    if ! grep -q 'Effective state session ID' "$AUDIT_AGENT_MD"; then
         skip "$label (Step 5 not done yet — 'Effective state session ID' absent)"; return
     fi
-    if ! grep -q 'Workflow session ID' "$L3_AGENT_MD"; then
+    if ! grep -q 'Workflow session ID' "$AUDIT_AGENT_MD"; then
         skip "$label (Step 5 not done yet — 'Workflow session ID' absent)"; return
     fi
     pass "$label"
 }
 
-# T4 — static: supervisor-layer3.md mentions 'auto-resolve' guidance.
+# T4 — static: supervisor-audit.md mentions 'auto-resolve' guidance.
 run_t4() {
-    local label="T4: supervisor-layer3.md mentions 'auto-resolve' guidance"
-    if [ ! -f "$L3_AGENT_MD" ]; then
-        skip "$label (agents/supervisor-layer3.md not present)"; return
+    local label="T4: supervisor-audit.md mentions 'auto-resolve' guidance"
+    if [ ! -f "$AUDIT_AGENT_MD" ]; then
+        skip "$label (agents/supervisor-audit.md not present)"; return
     fi
-    if ! grep -q 'auto-resolve' "$L3_AGENT_MD"; then
+    if ! grep -q 'auto-resolve' "$AUDIT_AGENT_MD"; then
         skip "$label (Step 5 not done yet — 'auto-resolve' absent)"; return
     fi
     pass "$label"

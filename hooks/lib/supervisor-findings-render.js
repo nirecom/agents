@@ -13,10 +13,10 @@ function aggregateCategories(findings) {
 }
 
 /**
- * Format L2 findings for display after the Final Report.
+ * Format alert findings for display after the Final Report.
  * Returns a string when there is content to show, null when nothing to surface.
  *
- * @param {Array} findings - layer2.findings array from supervisor state
+ * @param {Array} findings - alert.findings array from supervisor state
  * @param {Object} opts
  * @param {string} opts.sessionId
  * @param {string|null} [opts.workflowSessionId]
@@ -37,7 +37,7 @@ function formatLayer2Findings(findings, opts) {
   const allCats = aggregateCategories(findings);
   const lines = [];
 
-  lines.push(`[EM Supervisor] Layer 2 findings (post-completion review):`);
+  lines.push(`[EM Supervisor] Alert mode findings (post-completion review):`);
   lines.push(`Categories: ${allCats.length > 0 ? allCats.join(", ") : "(none)"}`);
 
   if (warningOrErrorFindings.length > 0) {

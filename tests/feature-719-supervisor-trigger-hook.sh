@@ -54,7 +54,7 @@ const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = $layer2_json;
+st.alert = $layer2_json;
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
@@ -68,7 +68,7 @@ const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = $layer2_json;
+st.alert = $layer2_json;
 st.layer1.findings = [{ categories: ['workflow'], severity: 'warning', detail: 'blocking-finding', reporter: 'test', timestamp: new Date().toISOString() }];
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
@@ -93,7 +93,7 @@ run_t1() {
     echo '{"tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"t1-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t1-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t1-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$val" ] || [ "$val" = "null" ] ); then
         pass "T1: no state file + non-C2 command -> no state file created"
@@ -103,57 +103,57 @@ run_t1() {
 }
 
 run_t2() {
-    require_source "$HOOK" "T2: non-C2 command with existing state -> l2_armed_at stays null (last_run_at not used as cooldown)" || return
+    require_source "$HOOK" "T2: non-C2 command with existing state -> alert_armed_at stays null (last_run_at not used as cooldown)" || return
     local tmp out rc val
     tmp="$(mktemp -d)"
     local ts
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t2-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "t2-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t2-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    val=$(read_field "$tmp" "t2-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t2-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "T2: non-C2 command with existing state -> l2_armed_at stays null (last_run_at not used as cooldown)"
+        pass "T2: non-C2 command with existing state -> alert_armed_at stays null (last_run_at not used as cooldown)"
     else
-        fail "T2: non-C2 command with existing state -> l2_armed_at stays null (last_run_at not used as cooldown) (rc=$rc, val=$val, out=$out)"
+        fail "T2: non-C2 command with existing state -> alert_armed_at stays null (last_run_at not used as cooldown) (rc=$rc, val=$val, out=$out)"
     fi
 }
 
 run_t3() {
-    require_source "$HOOK" "T3: non-C2 command with old last_run_at -> l2_armed_at stays null (no wall-clock timer)" || return
+    require_source "$HOOK" "T3: non-C2 command with old last_run_at -> alert_armed_at stays null (no wall-clock timer)" || return
     local tmp rc val
     tmp="$(mktemp -d)"
     local ts
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-600000).toISOString())")
-    seed_state "$tmp" "t3-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "t3-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo hi"},"session_id":"t3-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t3-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t3-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "T3: non-C2 command with old last_run_at -> l2_armed_at stays null (no wall-clock timer)"
+        pass "T3: non-C2 command with old last_run_at -> alert_armed_at stays null (no wall-clock timer)"
     else
-        fail "T3: non-C2 command with old last_run_at -> l2_armed_at stays null (no wall-clock timer) (rc=$rc, val=$val)"
+        fail "T3: non-C2 command with old last_run_at -> alert_armed_at stays null (no wall-clock timer) (rc=$rc, val=$val)"
     fi
 }
 
 run_t4() {
-    require_source "$HOOK" "T4: l2_armed_at already set -> idempotent" || return
+    require_source "$HOOK" "T4: alert_armed_at already set -> idempotent" || return
     local tmp rc val
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "t4-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "t4-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t4-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t4-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t4-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"2026-06-06T12:00:00Z\"" ]; then
-        pass "T4: l2_armed_at already set -> idempotent"
+        pass "T4: alert_armed_at already set -> idempotent"
     else
-        fail "T4: l2_armed_at already set -> idempotent (rc=$rc, val=$val)"
+        fail "T4: alert_armed_at already set -> idempotent (rc=$rc, val=$val)"
     fi
 }
 
@@ -161,7 +161,7 @@ run_t5() {
     require_source "$HOOK" "T5: cumulative_severity=warning -> additionalContext" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "t5-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
+    seed_state "$tmp" "t5-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'warning', findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t5-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -178,12 +178,12 @@ run_t6() {
     require_source "$HOOK" "T6: cumulative_severity=error -> additionalContext, exit 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "t6-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
+    seed_state "$tmp" "t6-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t6-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ( echo "$out" | grep -qiE "(error|layer 2)" ); then
+    if [ $rc -eq 0 ] && ( echo "$out" | grep -qiE "(error|alert mode|blocking)" ); then
         pass "T6: cumulative_severity=error -> additionalContext, exit 0"
     else
         fail "T6: cumulative_severity=error -> additionalContext, exit 0 (rc=$rc, out=$out)"
@@ -257,56 +257,56 @@ run_t10() {
 }
 
 run_t11() {
-    require_source "$HOOK" "T11: C2 escape-hatch command + blocking l1 finding -> sets l2_armed_at" || return
+    require_source "$HOOK" "T11: C2 escape-hatch command + blocking l1 finding -> sets alert_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state_with_l1_finding "$tmp" "t11-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t11-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t11-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t11-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t11-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T11: C2 escape-hatch command + blocking l1 finding -> sets l2_armed_at"
+        pass "T11: C2 escape-hatch command + blocking l1 finding -> sets alert_armed_at"
     else
-        fail "T11: C2 escape-hatch command + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T11: C2 escape-hatch command + blocking l1 finding -> sets alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 
 run_t12() {
-    require_source "$HOOK" "T12: C2 ON sentinel -> no l2_armed_at" || return
+    require_source "$HOOK" "T12: C2 ON sentinel -> no alert_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t12-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "t12-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>\""},"session_id":"t12-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t12-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t12-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "T12: C2 ON sentinel -> no l2_armed_at"
+        pass "T12: C2 ON sentinel -> no alert_armed_at"
     else
-        fail "T12: C2 ON sentinel -> no l2_armed_at (rc=$rc, val=$val)"
+        fail "T12: C2 ON sentinel -> no alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 
 run_t13() {
-    require_source "$HOOK" "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets l2_armed_at (C2 worktree path)" || return
+    require_source "$HOOK" "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets alert_armed_at (C2 worktree path)" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state_with_l1_finding "$tmp" "t13-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t13-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: testing>>\""},"session_id":"t13-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t13-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t13-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets l2_armed_at (C2 worktree path)"
+        pass "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets alert_armed_at (C2 worktree path)"
     else
-        fail "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets l2_armed_at (C2 worktree path) (rc=$rc, val=$val)"
+        fail "T13: ENFORCE_WORKTREE_OFF sentinel + blocking l1 finding -> sets alert_armed_at (C2 worktree path) (rc=$rc, val=$val)"
     fi
 }
 
@@ -326,73 +326,73 @@ run_t14() {
 }
 
 run_t15() {
-    require_source "$HOOK" "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at" || return
+    require_source "$HOOK" "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets alert_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state_with_l1_finding "$tmp" "t15-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t15-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF>>\""},"session_id":"t15-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t15-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t15-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at"
+        pass "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets alert_armed_at"
     else
-        fail "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T15: ENFORCE_WORKFLOW_OFF LOOKSLIKE variant + blocking l1 finding -> sets alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 
 run_t16() {
-    require_source "$HOOK" "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at" || return
+    require_source "$HOOK" "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets alert_armed_at" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state_with_l1_finding "$tmp" "t16-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t16-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF>>\""},"session_id":"t16-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t16-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t16-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at"
+        pass "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets alert_armed_at"
     else
-        fail "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T16: ENFORCE_WORKTREE_OFF LOOKSLIKE variant + blocking l1 finding -> sets alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 
 run_t17() {
-    require_source "$HOOK" "T17: C2 escape-hatch when l2_armed_at already set -> idempotent (no-op)" || return
+    require_source "$HOOK" "T17: C2 escape-hatch when alert_armed_at already set -> idempotent (no-op)" || return
     local tmp val rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "t17-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "t17-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: test>>\""},"session_id":"t17-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t17-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t17-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = '"2026-06-06T12:00:00Z"' ]; then
-        pass "T17: C2 escape-hatch when l2_armed_at already set -> idempotent (no-op)"
+        pass "T17: C2 escape-hatch when alert_armed_at already set -> idempotent (no-op)"
     else
-        fail "T17: C2 escape-hatch when l2_armed_at already set -> idempotent (no-op) (rc=$rc, val=$val)"
+        fail "T17: C2 escape-hatch when alert_armed_at already set -> idempotent (no-op) (rc=$rc, val=$val)"
     fi
 }
 
 run_t18() {
-    require_source "$HOOK" "T18: ENFORCE_WORKTREE_ON command -> no l2_armed_at (ON sentinels are not C2)" || return
+    require_source "$HOOK" "T18: ENFORCE_WORKTREE_ON command -> no alert_armed_at (ON sentinels are not C2)" || return
     local tmp val rc ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state "$tmp" "t18-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "t18-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: done>>\""},"session_id":"t18-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t18-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t18-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "T18: ENFORCE_WORKTREE_ON command -> no l2_armed_at (ON sentinels are not C2)"
+        pass "T18: ENFORCE_WORKTREE_ON command -> no alert_armed_at (ON sentinels are not C2)"
     else
-        fail "T18: ENFORCE_WORKTREE_ON command -> no l2_armed_at (ON sentinels are not C2) (rc=$rc, val=$val)"
+        fail "T18: ENFORCE_WORKTREE_ON command -> no alert_armed_at (ON sentinels are not C2) (rc=$rc, val=$val)"
     fi
 }
 
@@ -400,7 +400,7 @@ run_t19() {
     require_source "$HOOK" "T19: cumulative_severity=notice -> additionalContext" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "t19-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
+    seed_state "$tmp" "t19-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"x"},"session_id":"t19-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -427,19 +427,19 @@ run_t12
 run_t13
 run_t14
 run_t20() {
-    require_source "$HOOK" "T20: C2 command + blocking l1 finding -> sets l2_armed_at" || return
+    require_source "$HOOK" "T20: C2 command + blocking l1 finding -> sets alert_armed_at" || return
     local tmp val rc
     tmp="$(mktemp -d)"
-    seed_state_with_l1_finding "$tmp" "t20-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state_with_l1_finding "$tmp" "t20-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t20-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" >/dev/null 2>&1
     rc=$?
-    val=$(read_field "$tmp" "t20-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t20-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ]; then
-        pass "T20: C2 command + blocking l1 finding -> sets l2_armed_at"
+        pass "T20: C2 command + blocking l1 finding -> sets alert_armed_at"
     else
-        fail "T20: C2 command + blocking l1 finding -> sets l2_armed_at (rc=$rc, val=$val)"
+        fail "T20: C2 command + blocking l1 finding -> sets alert_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -459,20 +459,20 @@ run_t21() {
 }
 
 run_t22() {
-    require_source "$HOOK" "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets l2_armed_at AND emits advisory" || return
+    require_source "$HOOK" "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets alert_armed_at AND emits advisory" || return
     local tmp out rc val ts
     tmp="$(mktemp -d)"
     ts=$(run_with_timeout 5 node -e "console.log(new Date(Date.now()-60000).toISOString())")
-    seed_state_with_l1_finding "$tmp" "t22-sid" "{ l2_armed_at: null, last_run_at: '$ts', cumulative_severity: 'warning', findings: [{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
+    seed_state_with_l1_finding "$tmp" "t22-sid" "{ alert_armed_at: null, last_run_at: '$ts', cumulative_severity: 'warning', findings: [{\"categories\":[\"workflow\"],\"severity\":\"warning\",\"detail\":\"test-finding\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     out=$(echo '{"tool_name":"Bash","tool_input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: testing>>\""},"session_id":"t22-sid"}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
-    val=$(read_field "$tmp" "t22-sid" "layer2.l2_armed_at")
+    val=$(read_field "$tmp" "t22-sid" "alert.alert_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" != "null" ] && [ -n "$val" ] && ( echo "$out" | grep -qiE "(warning|layer 2)" ); then
-        pass "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets l2_armed_at AND emits advisory"
+        pass "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets alert_armed_at AND emits advisory"
     else
-        fail "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets l2_armed_at AND emits advisory (rc=$rc, val=$val, out=$out)"
+        fail "T22: C2 escape-hatch + cumSev=warning + blocking l1 finding -> sets alert_armed_at AND emits advisory (rc=$rc, val=$val, out=$out)"
     fi
 }
 

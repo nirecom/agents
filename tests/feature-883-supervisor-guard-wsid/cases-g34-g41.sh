@@ -20,38 +20,38 @@ run_g34() {
 }
 
 run_g35() {
-    require_source "$HOOK" "G35: l2_phase=done suppresses branch (3) despite l2_armed_at" || return
+    require_source "$HOOK" "G35: alert_phase=done suppresses branch (3) despite alert_armed_at" || return
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g35-sid"
-    # l2_phase=done causes branch (3) condition l2Phase !== "done" to short-circuit.
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', l2_phase: 'done', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # alert_phase=done causes branch (3) condition l2Phase !== "done" to short-circuit.
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'done', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
-        pass "G35: l2_phase=done suppresses branch (3) despite l2_armed_at"
+        pass "G35: alert_phase=done suppresses branch (3) despite alert_armed_at"
     else
-        fail "G35: l2_phase=done suppresses branch (3) despite l2_armed_at (rc=$rc, out=$out)"
+        fail "G35: alert_phase=done suppresses branch (3) despite alert_armed_at (rc=$rc, out=$out)"
     fi
 }
 
 run_g36() {
-    require_source "$HOOK" "G36: l2_phase=frozen suppresses branch (3) despite l2_armed_at" || return
+    require_source "$HOOK" "G36: alert_phase=frozen suppresses branch (3) despite alert_armed_at" || return
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g36-sid"
-    # G33 reaches frozen-on-threshold via retry count; G36 sets l2_phase=frozen directly.
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', l2_phase: 'frozen', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # G33 reaches frozen-on-threshold via retry count; G36 sets alert_phase=frozen directly.
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'frozen', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
-        pass "G36: l2_phase=frozen suppresses branch (3) despite l2_armed_at"
+        pass "G36: alert_phase=frozen suppresses branch (3) despite alert_armed_at"
     else
-        fail "G36: l2_phase=frozen suppresses branch (3) despite l2_armed_at (rc=$rc, out=$out)"
+        fail "G36: alert_phase=frozen suppresses branch (3) despite alert_armed_at (rc=$rc, out=$out)"
     fi
 }
 
@@ -154,7 +154,7 @@ run_g40() {
     tmp="$(mktemp -d)"
     sid="g40-sid"
     # Two findings sharing category "code". Dedup should output "code" once, not twice.
-    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"finding1\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"},{\"categories\":[\"code\",\"security\"],\"severity\":\"error\",\"detail\":\"finding2\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"}] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"finding1\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"},{\"categories\":[\"code\",\"security\"],\"severity\":\"error\",\"detail\":\"finding2\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -194,7 +194,7 @@ run_g42() {
     tmp="$(mktemp -d)"
     sid="g42-sid"
     # cumulative_severity=notice hits the same advisory branch (4) as warning -> exit 0.
-    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'notice', findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -216,9 +216,9 @@ run_g43() {
     # WORKTREE_NOTES.md supplies wsid so resolveWorkflowSessionId returns it.
     printf "Session-ID: %s\n" "$wsid" > "$tmp/WORKTREE_NOTES.md"
     # CC UUID state is non-null (cumSev=error with finding) -> resolver stays on CC UUID.
-    seed_state "$tmp" "$cc_uuid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"cc-uuid-finding\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"}] }"
+    seed_state "$tmp" "$cc_uuid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"cc-uuid-finding\",\"timestamp\":\"2026-01-01T12:00:00.000Z\"}] }"
     # wsid state is empty (cumSev=null) — if resolver wrongly fell back, cumSev=null -> rc=0 (regression).
-    seed_state "$tmp" "$wsid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$wsid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$cc_uuid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -236,8 +236,8 @@ run_g44() {
     tmp="$(mktemp -d)"
     wf_dir="$(mktemp -d)"
     sid="g44-sid"
-    # Seed state with l2_armed_at so branch (3) would normally fire (rc=2).
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # Seed state with alert_armed_at so branch (3) would normally fire (rc=2).
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     # Create the .workflow-off marker file in CLAUDE_WORKFLOW_DIR so isWorkflowOff returns true.
     touch "$wf_dir/${sid}.workflow-off"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
@@ -271,7 +271,7 @@ require("fs").writeFileSync(process.argv[1], JSON.stringify(obj)+"\n");
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && echo "$out" | grep -q "C3: WORKTREE_OFF proposal pre-detected" && echo "$out" | grep -q "Action:"; then
+    if [ $rc -eq 2 ] && echo "$out" | grep -q "C3: OFF proposal pre-detected" && echo "$out" | grep -q "Action:"; then
         pass "G45: C3 branch output contains WORKTREE_OFF-specific text"
     else
         fail "G45: C3 branch output contains WORKTREE_OFF-specific text (rc=$rc, out=$out)"
@@ -283,7 +283,7 @@ run_g46() {
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g46-sid"
-    seed_state "$tmp" "$sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"first-finding\",\"timestamp\":\"2026-06-01T00:00:00.000Z\"},{\"categories\":[\"test\"],\"severity\":\"warning\",\"detail\":\"second-finding\",\"timestamp\":\"2026-06-01T00:00:01.000Z\"}] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"code\"],\"severity\":\"error\",\"detail\":\"first-finding\",\"timestamp\":\"2026-06-01T00:00:00.000Z\"},{\"categories\":[\"test\"],\"severity\":\"warning\",\"detail\":\"second-finding\",\"timestamp\":\"2026-06-01T00:00:01.000Z\"}] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -296,19 +296,19 @@ run_g46() {
 }
 
 run_g47() {
-    require_source "$HOOK" "G47: l2_armed_at without hang takes C2 path — output contains C2 label" || return
+    require_source "$HOOK" "G47: alert_armed_at without hang takes C2 path — output contains C2 label" || return
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g47-sid"
-    seed_state "$tmp" "$sid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && echo "$out" | grep -q "C2 scheduled review"; then
-        pass "G47: l2_armed_at without hang takes C2 path — output contains C2 label"
+        pass "G47: alert_armed_at without hang takes C2 path — output contains C2 label"
     else
-        fail "G47: l2_armed_at without hang takes C2 path — output contains C2 label (rc=$rc, out=$out)"
+        fail "G47: alert_armed_at without hang takes C2 path — output contains C2 label (rc=$rc, out=$out)"
     fi
 }
 
@@ -322,7 +322,7 @@ run_g48() {
     wsid="g48-wsid-from-env"
     printf "CLAUDE_SESSION_ID=%s\n" "$wsid" > "$env_file"
     touch "$tmp/${wsid}-intent.md"
-    seed_state "$tmp" "$wsid" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$wsid" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     # No WORKTREE_NOTES.md — Priority 1 skips; Priority 2 picks wsid via CLAUDE_ENV_FILE.
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" CLAUDE_ENV_FILE="$env_file" run_with_timeout 5 node "$HOOK" 2>/dev/null)
@@ -348,7 +348,7 @@ run_g49() {
     touch "$tmp/${wsid_low}-context.md" "$tmp/${wsid_low}-intent.md"
     touch "$tmp/${wsid_high}-context.md" "$tmp/${wsid_high}-intent.md" "$tmp/${wsid_high}-detail.md"
     # State only under wsid_high — guard fires only if depth-sort selects it.
-    seed_state "$tmp" "$wsid_high" "{ l2_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "$wsid_high" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
