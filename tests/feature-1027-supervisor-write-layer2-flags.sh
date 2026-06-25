@@ -3,7 +3,7 @@
 # Tests: bin/supervisor-write-layer2, hooks/lib/supervisor-state-writer.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 — CLI flags --mark-findings-surfaced and
-# --set-l2-eligible-phase <value>.
+# --set-alert-eligible-phase <value>.
 #
 # # L3 gap
 # CLI exercised at L2 (real process spawn + tmpdir state). L3 would require
@@ -68,12 +68,12 @@ console.log('OK');
     fi
 }
 
-# --- C2: --set-l2-eligible-phase post_final_report_window persists ----------
+# --- C2: --set-alert-eligible-phase post_final_report_window persists ----------
 run_c2() {
-    require_source "$CLI" "C2: --set-l2-eligible-phase post_final_report_window" || return
+    require_source "$CLI" "C2: --set-alert-eligible-phase post_final_report_window" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c2-sid --set-l2-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c2-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
@@ -89,19 +89,19 @@ console.log('OK');
 " 2>/dev/null)"
     rm -rf "$tmp"
     if [ "$out" = "OK" ]; then
-        pass "C2: --set-l2-eligible-phase post_final_report_window persists"
+        pass "C2: --set-alert-eligible-phase post_final_report_window persists"
     else
         fail "C2: l2_eligible_phase not persisted (out=$out)"
     fi
 }
 
-# --- C3: --set-l2-eligible-phase null clears the field ----------------------
+# --- C3: --set-alert-eligible-phase null clears the field ----------------------
 run_c3() {
-    require_source "$CLI" "C3: --set-l2-eligible-phase null clears the field" || return
+    require_source "$CLI" "C3: --set-alert-eligible-phase null clears the field" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-l2-eligible-phase post_final_report_window >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-l2-eligible-phase null >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c3-sid --set-alert-eligible-phase null >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
@@ -117,7 +117,7 @@ console.log('OK');
 " 2>/dev/null)"
     rm -rf "$tmp"
     if [ "$out" = "OK" ]; then
-        pass "C3: --set-l2-eligible-phase null clears the field"
+        pass "C3: --set-alert-eligible-phase null clears the field"
     else
         fail "C3: l2_eligible_phase not cleared (out=$out)"
     fi
@@ -125,25 +125,25 @@ console.log('OK');
 
 # --- C4: invalid value -> exit 1 with usage on stderr -----------------------
 run_c4() {
-    require_source "$CLI" "C4: --set-l2-eligible-phase invalid -> exit 1 + usage" || return
+    require_source "$CLI" "C4: --set-alert-eligible-phase invalid -> exit 1 + usage" || return
     local tmp rc err
     tmp="$(mktemp -d)"
-    err="$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c4-sid --set-l2-eligible-phase normal_run 2>&1 >/dev/null)"
+    err="$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c4-sid --set-alert-eligible-phase normal_run 2>&1 >/dev/null)"
     rc=$?
     rm -rf "$tmp"
     if [ "$rc" != "0" ] && echo "$err" | grep -qi "usage\|set-l2-eligible-phase\|invalid\|must be"; then
-        pass "C4: invalid --set-l2-eligible-phase value -> exit non-zero + usage/error on stderr"
+        pass "C4: invalid --set-alert-eligible-phase value -> exit non-zero + usage/error on stderr"
     else
         fail "C4: expected non-zero exit + usage (rc=$rc, err=$err)"
     fi
 }
 
-# --- C5: --mark-findings-surfaced combined with --set-l2-phase done ----------
+# --- C5: --mark-findings-surfaced combined with --set-alert-phase done ----------
 run_c5() {
-    require_source "$CLI" "C5: --mark-findings-surfaced + --set-l2-phase done both succeed" || return
+    require_source "$CLI" "C5: --mark-findings-surfaced + --set-alert-phase done both succeed" || return
     local tmp rc out
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c5-sid --mark-findings-surfaced --set-l2-phase done >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id c5-sid --mark-findings-surfaced --set-alert-phase done >/dev/null 2>&1
     rc=$?
     if [ "$rc" != "0" ]; then
         rm -rf "$tmp"
@@ -160,7 +160,7 @@ console.log('OK');
 " 2>/dev/null)"
     rm -rf "$tmp"
     if [ "$out" = "OK" ]; then
-        pass "C5: --mark-findings-surfaced + --set-l2-phase done both apply"
+        pass "C5: --mark-findings-surfaced + --set-alert-phase done both apply"
     else
         fail "C5: combined effects not applied (out=$out)"
     fi

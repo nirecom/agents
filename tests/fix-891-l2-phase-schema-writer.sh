@@ -37,7 +37,7 @@ require_source() {
 }
 
 seed_state_raw() {
-    local tmp="$1" sid="$2" layer2_json="$3"
+    local tmp="$1" sid="$2" alert_json="$3"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const fs = require('fs');
@@ -48,14 +48,14 @@ const st = {
   created_at: now,
   last_updated: now,
   layer1: { findings: [] },
-  layer2: $layer2_json,
-  layer3: {},
+  alert: $alert_json,
+  audit: {},
 };
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
-read_l2_armed_at() {
+read_alert_armed_at() {
     local tmp="$1" sid="$2"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
@@ -63,7 +63,7 @@ const fs = require('fs');
 try {
   const raw = fs.readFileSync(w.getStatePath('$sid'), 'utf8');
   const st = JSON.parse(raw);
-  const v = st && st.layer2 ? st.layer2.l2_armed_at : undefined;
+  const v = st && st.alert ? st.alert.alert_armed_at : undefined;
   process.stdout.write(v === undefined ? 'undefined' : (v === null ? 'null' : String(v)));
 } catch (e) {
   process.stdout.write('error:' + e.message);
@@ -71,7 +71,7 @@ try {
 " 2>/dev/null
 }
 
-read_l2_phase() {
+read_alert_phase() {
     local tmp="$1" sid="$2"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
@@ -79,7 +79,7 @@ const fs = require('fs');
 try {
   const raw = fs.readFileSync(w.getStatePath('$sid'), 'utf8');
   const st = JSON.parse(raw);
-  const v = st && st.layer2 ? st.layer2.l2_phase : undefined;
+  const v = st && st.alert ? st.alert.alert_phase : undefined;
   process.stdout.write(v === undefined ? 'undefined' : (v === null ? 'null' : String(v)));
 } catch (e) {
   process.stdout.write('error:' + e.message);
@@ -90,39 +90,39 @@ try {
 # ─── Schema tests (G20–G23) ──────────────────────────────────────────────────
 
 run_g20() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G20: createEmptyState includes l2_phase null" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G20: createEmptyState includes alert_phase null" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('g20-sid');
-process.stdout.write(st.layer2 && ('l2_phase' in st.layer2) ? String(st.layer2.l2_phase) : 'missing');
+process.stdout.write(st.alert && ('alert_phase' in st.alert) ? String(st.alert.alert_phase) : 'missing');
 " 2>/dev/null)
     if [ "$out" = "null" ]; then
-        pass "G20: createEmptyState includes l2_phase null"
+        pass "G20: createEmptyState includes alert_phase null"
     else
-        fail "G20: createEmptyState includes l2_phase null (got: $out)"
+        fail "G20: createEmptyState includes alert_phase null (got: $out)"
     fi
 }
 
 run_g21() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G21: validate rejects invalid l2_phase value" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G21: validate rejects invalid alert_phase value" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('g21-sid');
-st.layer2.l2_phase = 'bogus';
+st.alert.alert_phase = 'bogus';
 const r = s.validate(st);
 process.stdout.write(r.ok ? 'ok' : 'rejected');
 " 2>/dev/null)
     if [ "$out" = "rejected" ]; then
-        pass "G21: validate rejects invalid l2_phase value"
+        pass "G21: validate rejects invalid alert_phase value"
     else
-        fail "G21: validate rejects invalid l2_phase value (got: $out)"
+        fail "G21: validate rejects invalid alert_phase value (got: $out)"
     fi
 }
 
 run_g22() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G22: validate accepts all valid l2_phase values" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G22: validate accepts all valid alert_phase values" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
@@ -130,225 +130,225 @@ const phases = [null, 'pending', 'done', 'frozen'];
 let failed = '';
 for (const p of phases) {
   const st = s.createEmptyState('g22-sid');
-  st.layer2.l2_phase = p;
+  st.alert.alert_phase = p;
   const r = s.validate(st);
   if (!r.ok) { failed = String(p); break; }
 }
 process.stdout.write(failed ? ('failed:' + failed) : 'ok');
 " 2>/dev/null)
     if [ "$out" = "ok" ]; then
-        pass "G22: validate accepts all valid l2_phase values"
+        pass "G22: validate accepts all valid alert_phase values"
     else
-        fail "G22: validate accepts all valid l2_phase values (got: $out)"
+        fail "G22: validate accepts all valid alert_phase values (got: $out)"
     fi
 }
 
 run_g23() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G23: validate accepts state missing l2_phase (backward compat)" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" "G23: validate accepts state missing alert_phase (backward compat)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('g23-sid');
-if (st.layer2 && 'l2_phase' in st.layer2) delete st.layer2.l2_phase;
+if (st.alert && 'alert_phase' in st.alert) delete st.alert.alert_phase;
 const r = s.validate(st);
 process.stdout.write(r.ok ? 'ok' : 'rejected:' + r.errors.join(','));
 " 2>/dev/null)
     if [ "$out" = "ok" ]; then
-        pass "G23: validate accepts state missing l2_phase (backward compat)"
+        pass "G23: validate accepts state missing alert_phase (backward compat)"
     else
-        fail "G23: validate accepts state missing l2_phase (backward compat) (got: $out)"
+        fail "G23: validate accepts state missing alert_phase (backward compat) (got: $out)"
     fi
 }
 
 # ─── Writer tests (G24–G33) ──────────────────────────────────────────────────
 
 run_g24() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G24: l2_phase=done -> ensureLayer2Scheduled early-returns, l2_armed_at stays null" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G24: alert_phase=done -> ensureAlertScheduled early-returns, alert_armed_at stays null" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
-const state = { layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'done' } };
-if (typeof writerMod.ensureLayer2Scheduled === 'function') {
-  writerMod.ensureLayer2Scheduled(state);
+const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' } };
+if (typeof writerMod.ensureAlertScheduled === 'function') {
+  writerMod.ensureAlertScheduled(state);
 } else {
   process.stdout.write('not_exported');
   process.exit(0);
 }
-process.stdout.write(state.layer2.l2_armed_at === null ? 'null' : String(state.layer2.l2_armed_at));
+process.stdout.write(state.alert.alert_armed_at === null ? 'null' : String(state.alert.alert_armed_at));
 " 2>/dev/null)
     if [ "$out" = "null" ]; then
-        pass "G24: l2_phase=done -> ensureLayer2Scheduled early-returns, l2_armed_at stays null"
+        pass "G24: alert_phase=done -> ensureAlertScheduled early-returns, alert_armed_at stays null"
     else
-        fail "G24: l2_phase=done -> ensureLayer2Scheduled early-returns, l2_armed_at stays null (got: $out)"
+        fail "G24: alert_phase=done -> ensureAlertScheduled early-returns, alert_armed_at stays null (got: $out)"
     fi
 }
 
 run_g25() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: l2_phase=frozen -> ensureLayer2Scheduled re-arms (l2_armed_at set, l2_phase=pending)" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=frozen -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
-const state = { layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen', l2_cause: null, l2_retry_count: 0 } };
-if (typeof writerMod.ensureLayer2Scheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
-writerMod.ensureLayer2Scheduled(state);
-const armedOk = typeof state.layer2.l2_armed_at === 'string' && state.layer2.l2_armed_at.length > 0;
-const phaseOk = state.layer2.l2_phase === 'pending';
-const retryOk = state.layer2.l2_retry_count === 0;
-process.stdout.write((armedOk && phaseOk && retryOk) ? 'ok' : ('armed=' + state.layer2.l2_armed_at + ',phase=' + state.layer2.l2_phase + ',retry=' + state.layer2.l2_retry_count));
+const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen', alert_cause: null, alert_retry_count: 0 } };
+if (typeof writerMod.ensureAlertScheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
+writerMod.ensureAlertScheduled(state);
+const armedOk = typeof state.alert.alert_armed_at === 'string' && state.alert.alert_armed_at.length > 0;
+const phaseOk = state.alert.alert_phase === 'pending';
+const retryOk = state.alert.alert_retry_count === 0;
+process.stdout.write((armedOk && phaseOk && retryOk) ? 'ok' : ('armed=' + state.alert.alert_armed_at + ',phase=' + state.alert.alert_phase + ',retry=' + state.alert.alert_retry_count));
 " 2>/dev/null)
     if [ "$out" = "ok" ]; then
-        pass "G25: l2_phase=frozen -> ensureLayer2Scheduled re-arms (l2_armed_at set, l2_phase=pending)"
+        pass "G25: alert_phase=frozen -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)"
     else
-        fail "G25: l2_phase=frozen -> ensureLayer2Scheduled re-arms (l2_armed_at set, l2_phase=pending) (got: $out)"
+        fail "G25: alert_phase=frozen -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending) (got: $out)"
     fi
 }
 
 run_g26() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G26: l2_phase=null -> ensureLayer2Scheduled sets l2_armed_at + l2_phase=pending" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G26: alert_phase=null -> ensureAlertScheduled sets alert_armed_at + alert_phase=pending" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
-const state = { layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null } };
-if (typeof writerMod.ensureLayer2Scheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
-writerMod.ensureLayer2Scheduled(state);
-const ncOk = typeof state.layer2.l2_armed_at === 'string' && state.layer2.l2_armed_at.length > 0;
-const phOk = state.layer2.l2_phase === 'pending';
-process.stdout.write((ncOk && phOk) ? 'ok' : ('nc=' + state.layer2.l2_armed_at + ',ph=' + state.layer2.l2_phase));
+const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null } };
+if (typeof writerMod.ensureAlertScheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
+writerMod.ensureAlertScheduled(state);
+const ncOk = typeof state.alert.alert_armed_at === 'string' && state.alert.alert_armed_at.length > 0;
+const phOk = state.alert.alert_phase === 'pending';
+process.stdout.write((ncOk && phOk) ? 'ok' : ('nc=' + state.alert.alert_armed_at + ',ph=' + state.alert.alert_phase));
 " 2>/dev/null)
     if [ "$out" = "ok" ]; then
-        pass "G26: l2_phase=null -> ensureLayer2Scheduled sets l2_armed_at + l2_phase=pending"
+        pass "G26: alert_phase=null -> ensureAlertScheduled sets alert_armed_at + alert_phase=pending"
     else
-        fail "G26: l2_phase=null -> ensureLayer2Scheduled sets l2_armed_at + l2_phase=pending (got: $out)"
+        fail "G26: alert_phase=null -> ensureAlertScheduled sets alert_armed_at + alert_phase=pending (got: $out)"
     fi
 }
 
 run_g27() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G27: l2_phase=pending + l2_armed_at already set -> ensureLayer2Scheduled no-op" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G27: alert_phase=pending + alert_armed_at already set -> ensureAlertScheduled no-op" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
 const before = '2026-06-06T12:00:00.000Z';
-const state = { layer2: { l2_armed_at: before, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'pending' } };
-if (typeof writerMod.ensureLayer2Scheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
-writerMod.ensureLayer2Scheduled(state);
-process.stdout.write(state.layer2.l2_armed_at === before ? 'noop' : ('changed:' + state.layer2.l2_armed_at));
+const state = { alert: { alert_armed_at: before, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' } };
+if (typeof writerMod.ensureAlertScheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
+writerMod.ensureAlertScheduled(state);
+process.stdout.write(state.alert.alert_armed_at === before ? 'noop' : ('changed:' + state.alert.alert_armed_at));
 " 2>/dev/null)
     if [ "$out" = "noop" ]; then
-        pass "G27: l2_phase=pending + l2_armed_at already set -> ensureLayer2Scheduled no-op"
+        pass "G27: alert_phase=pending + alert_armed_at already set -> ensureAlertScheduled no-op"
     else
-        fail "G27: l2_phase=pending + l2_armed_at already set -> ensureLayer2Scheduled no-op (got: $out)"
+        fail "G27: alert_phase=pending + alert_armed_at already set -> ensureAlertScheduled no-op (got: $out)"
     fi
 }
 
 run_g28() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G28: appendFinding with l2_phase=done -> finding appended, l2_armed_at stays null" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G28: appendFinding with alert_phase=done -> finding appended, alert_armed_at stays null" || return
     local tmp out
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g28-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'done' }"
+    seed_state_raw "$tmp" "g28-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.appendFinding('g28-sid', { categories: ['workflow'], severity: 'notice', detail: 'd', reporter: 'r' });
 process.stdout.write(ok ? 'ok' : 'fail');
 " 2>/dev/null)
     local nc
-    nc=$(read_l2_armed_at "$tmp" "g28-sid")
+    nc=$(read_alert_armed_at "$tmp" "g28-sid")
     rm -rf "$tmp"
     if [ "$out" = "ok" ] && [ "$nc" = "null" ]; then
-        pass "G28: appendFinding with l2_phase=done -> finding appended, l2_armed_at stays null"
+        pass "G28: appendFinding with alert_phase=done -> finding appended, alert_armed_at stays null"
     else
-        fail "G28: appendFinding with l2_phase=done -> finding appended, l2_armed_at stays null (out=$out, nc=$nc)"
+        fail "G28: appendFinding with alert_phase=done -> finding appended, alert_armed_at stays null (out=$out, nc=$nc)"
     fi
 }
 
 run_g29() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G29: writeLayer2State frozen->done -> rejected" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G29: writeAlertState frozen->done -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g29-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeLayer2State('g29-sid', { l2_phase: 'done' });
+const ok = w.writeAlertState('g29-sid', { alert_phase: 'done' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ "$out" = "rejected" ]; then
-        pass "G29: writeLayer2State frozen->done -> rejected"
+        pass "G29: writeAlertState frozen->done -> rejected"
     else
-        fail "G29: writeLayer2State frozen->done -> rejected (got: $out)"
+        fail "G29: writeAlertState frozen->done -> rejected (got: $out)"
     fi
 }
 
 run_g30() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G30: writeLayer2State done->pending -> rejected" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G30: writeAlertState done->pending -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g30-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'done' }"
+    seed_state_raw "$tmp" "g30-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeLayer2State('g30-sid', { l2_phase: 'pending' });
+const ok = w.writeAlertState('g30-sid', { alert_phase: 'pending' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ "$out" = "rejected" ]; then
-        pass "G30: writeLayer2State done->pending -> rejected"
+        pass "G30: writeAlertState done->pending -> rejected"
     else
-        fail "G30: writeLayer2State done->pending -> rejected (got: $out)"
+        fail "G30: writeAlertState done->pending -> rejected (got: $out)"
     fi
 }
 
 run_g31() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G31: writeLayer2State done->frozen -> accepted" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G31: writeAlertState done->frozen -> accepted" || return
     local tmp out phase
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g31-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'done' }"
+    seed_state_raw "$tmp" "g31-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeLayer2State('g31-sid', { l2_phase: 'frozen' });
+const ok = w.writeAlertState('g31-sid', { alert_phase: 'frozen' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
-    phase=$(read_l2_phase "$tmp" "g31-sid")
+    phase=$(read_alert_phase "$tmp" "g31-sid")
     rm -rf "$tmp"
     if [ "$out" = "accepted" ] && [ "$phase" = "frozen" ]; then
-        pass "G31: writeLayer2State done->frozen -> accepted"
+        pass "G31: writeAlertState done->frozen -> accepted"
     else
-        fail "G31: writeLayer2State done->frozen -> accepted (out=$out, phase=$phase)"
+        fail "G31: writeAlertState done->frozen -> accepted (out=$out, phase=$phase)"
     fi
 }
 
 run_g32() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G32: writeLayer2State frozen->frozen -> accepted (idempotent)" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G32: writeAlertState frozen->frozen -> accepted (idempotent)" || return
     local tmp out phase
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g32-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g32-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeLayer2State('g32-sid', { l2_phase: 'frozen' });
+const ok = w.writeAlertState('g32-sid', { alert_phase: 'frozen' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
-    phase=$(read_l2_phase "$tmp" "g32-sid")
+    phase=$(read_alert_phase "$tmp" "g32-sid")
     rm -rf "$tmp"
     if [ "$out" = "accepted" ] && [ "$phase" = "frozen" ]; then
-        pass "G32: writeLayer2State frozen->frozen -> accepted (idempotent)"
+        pass "G32: writeAlertState frozen->frozen -> accepted (idempotent)"
     else
-        fail "G32: writeLayer2State frozen->frozen -> accepted (idempotent) (out=$out, phase=$phase)"
+        fail "G32: writeAlertState frozen->frozen -> accepted (idempotent) (out=$out, phase=$phase)"
     fi
 }
 
 run_g33() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G33: writeLayer2State frozen + l2_armed_at set -> rejected" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G33: writeAlertState frozen + alert_armed_at set -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g33-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null }"
+    seed_state_raw "$tmp" "g33-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeLayer2State('g33-sid', { l2_phase: 'frozen', l2_armed_at: '2026-06-06T12:00:00Z' });
+const ok = w.writeAlertState('g33-sid', { alert_phase: 'frozen', alert_armed_at: '2026-06-06T12:00:00Z' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ "$out" = "rejected" ]; then
-        pass "G33: writeLayer2State frozen + l2_armed_at set -> rejected"
+        pass "G33: writeAlertState frozen + alert_armed_at set -> rejected"
     else
-        fail "G33: writeLayer2State frozen + l2_armed_at set -> rejected (got: $out)"
+        fail "G33: writeAlertState frozen + alert_armed_at set -> rejected (got: $out)"
     fi
 }
 

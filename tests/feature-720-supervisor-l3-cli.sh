@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-720-supervisor-l3-cli.sh
-# Tests: bin/supervisor-write-layer3
+# Tests: bin/supervisor-write-audit
 # Tags: supervisor, em-supervisor, cli, layer3, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 #   Exercises the CLI as a child process against a temp WORKFLOW_PLANS_DIR.
@@ -18,7 +18,7 @@ else
     _TMPCONV() { printf '%s' "$1"; }
 fi
 
-CLI="$AGENTS_DIR/bin/supervisor-write-layer3"
+CLI="$AGENTS_DIR/bin/supervisor-write-audit"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
@@ -62,78 +62,78 @@ invoke_cli() {
 }
 
 run_c1() {
-    require_source "$CLI" "C1: --l3-armed-at sets layer3.l3_armed_at" || return
+    require_source "$CLI" "C1: --audit-armed-at sets layer3.audit_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c1sid"
-    invoke_cli "$tmp" --l3-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
+    invoke_cli "$tmp" --audit-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer3.l3_armed_at")
+    val=$(read_field "$tmp" "$sid" "audit.audit_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"2026-06-06T12:00:00Z\"" ]; then
-        pass "C1: --l3-armed-at sets layer3.l3_armed_at"
+        pass "C1: --audit-armed-at sets layer3.audit_armed_at"
     else
-        fail "C1: --l3-armed-at sets layer3.l3_armed_at (rc=$rc, val=$val)"
+        fail "C1: --audit-armed-at sets layer3.audit_armed_at (rc=$rc, val=$val)"
     fi
 }
 
 run_c2() {
-    require_source "$CLI" "C2: --set-l3-phase pending sets layer3.l3_phase" || return
+    require_source "$CLI" "C2: --set-audit-phase pending sets layer3.audit_phase" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c2sid"
-    invoke_cli "$tmp" --set-l3-phase pending --session-id "$sid"
+    invoke_cli "$tmp" --set-audit-phase pending --session-id "$sid"
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer3.l3_phase")
+    val=$(read_field "$tmp" "$sid" "audit.audit_phase")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"pending\"" ]; then
-        pass "C2: --set-l3-phase pending sets layer3.l3_phase"
+        pass "C2: --set-audit-phase pending sets layer3.audit_phase"
     else
-        fail "C2: --set-l3-phase pending sets layer3.l3_phase (rc=$rc, val=$val)"
+        fail "C2: --set-audit-phase pending sets layer3.audit_phase (rc=$rc, val=$val)"
     fi
 }
 
 run_c3() {
-    require_source "$CLI" "C3: --set-l3-verdict BLOCK sets layer3.l3_verdict" || return
+    require_source "$CLI" "C3: --set-audit-verdict BLOCK sets layer3.audit_verdict" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c3sid"
-    invoke_cli "$tmp" --set-l3-verdict BLOCK --session-id "$sid"
+    invoke_cli "$tmp" --set-audit-verdict BLOCK --session-id "$sid"
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer3.l3_verdict")
+    val=$(read_field "$tmp" "$sid" "audit.audit_verdict")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"BLOCK\"" ]; then
-        pass "C3: --set-l3-verdict BLOCK sets layer3.l3_verdict"
+        pass "C3: --set-audit-verdict BLOCK sets layer3.audit_verdict"
     else
-        fail "C3: --set-l3-verdict BLOCK sets layer3.l3_verdict (rc=$rc, val=$val)"
+        fail "C3: --set-audit-verdict BLOCK sets layer3.audit_verdict (rc=$rc, val=$val)"
     fi
 }
 
 run_c4() {
-    require_source "$CLI" "C4: --last-run-at sets layer3.l3_last_run_at" || return
+    require_source "$CLI" "C4: --last-run-at sets layer3.audit_last_run_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c4sid"
     invoke_cli "$tmp" --last-run-at "2026-06-06T11:00:00Z" --session-id "$sid"
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer3.l3_last_run_at")
+    val=$(read_field "$tmp" "$sid" "audit.audit_last_run_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "\"2026-06-06T11:00:00Z\"" ]; then
-        pass "C4: --last-run-at sets layer3.l3_last_run_at"
+        pass "C4: --last-run-at sets layer3.audit_last_run_at"
     else
-        fail "C4: --last-run-at sets layer3.l3_last_run_at (rc=$rc, val=$val)"
+        fail "C4: --last-run-at sets layer3.audit_last_run_at (rc=$rc, val=$val)"
     fi
 }
 
 run_c5() {
-    require_source "$CLI" "C5: --clear-l3-armed-at nulls layer3.l3_armed_at" || return
+    require_source "$CLI" "C5: --clear-audit-armed-at nulls layer3.audit_armed_at" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c5sid"
-    invoke_cli "$tmp" --l3-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
-    invoke_cli "$tmp" --clear-l3-armed-at --session-id "$sid"
+    invoke_cli "$tmp" --audit-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
+    invoke_cli "$tmp" --clear-audit-armed-at --session-id "$sid"
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer3.l3_armed_at")
+    val=$(read_field "$tmp" "$sid" "audit.audit_armed_at")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "null" ]; then
-        pass "C5: --clear-l3-armed-at nulls layer3.l3_armed_at"
+        pass "C5: --clear-audit-armed-at nulls layer3.audit_armed_at"
     else
-        fail "C5: --clear-l3-armed-at nulls layer3.l3_armed_at (rc=$rc, val=$val)"
+        fail "C5: --clear-audit-armed-at nulls layer3.audit_armed_at (rc=$rc, val=$val)"
     fi
 }
 
@@ -160,7 +160,7 @@ run_c7() {
     tmp="$(mktemp -d)"
     (
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
-        run_with_timeout 5 node "$CLI" --l3-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+        run_with_timeout 5 node "$CLI" --audit-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     )
     rc=$?
     rm -rf "$tmp"
@@ -172,7 +172,7 @@ run_c7() {
 }
 
 run_c8() {
-    require_source "$CLI" "C8: --set-l3-phase done resets l3_retry_count to 0" || return
+    require_source "$CLI" "C8: --set-audit-phase done resets audit_retry_count to 0" || return
     local tmp sid val rc
     tmp="$(mktemp -d)"; sid="c8sid"
     # Bump retry count first via CLI (if --increment supported), else write via writer module.
@@ -180,31 +180,31 @@ run_c8() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-// Seed retry count > 0 directly via writeLayer3State if exported; otherwise
-// fall back to writing the state file manually with a non-zero l3_retry_count.
-if (typeof w.writeLayer3State === 'function') {
-  w.writeLayer3State('$sid', { l3_retry_count: 1, l3_phase: 'pending' });
+// Seed retry count > 0 directly via writeAuditState if exported; otherwise
+// fall back to writing the state file manually with a non-zero audit_retry_count.
+if (typeof w.writeAuditState === 'function') {
+  w.writeAuditState('$sid', { audit_retry_count: 1, audit_phase: 'pending' });
 } else {
   const fs = require('fs'); const path = require('path');
   const { createEmptyState } = require('$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js');
   const plansDir = process.env.WORKFLOW_PLANS_DIR;
   const fp = path.join(plansDir, '$sid' + '-supervisor-state.json');
   const st = createEmptyState('$sid');
-  if (!st.layer3 || typeof st.layer3 !== 'object') st.layer3 = {};
-  st.layer3.l3_retry_count = 1;
-  st.layer3.l3_phase = 'pending';
+  if (!st.audit || typeof st.audit !== 'object') st.audit = {};
+  st.audit.audit_retry_count = 1;
+  st.audit.audit_phase = 'pending';
   fs.writeFileSync(fp, JSON.stringify(st, null, 2));
 }
 " >/dev/null 2>&1
     )
-    invoke_cli "$tmp" --set-l3-phase done --session-id "$sid"
+    invoke_cli "$tmp" --set-audit-phase done --session-id "$sid"
     rc=$?
-    val=$(read_field "$tmp" "$sid" "layer3.l3_retry_count")
+    val=$(read_field "$tmp" "$sid" "audit.audit_retry_count")
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$val" = "0" ]; then
-        pass "C8: --set-l3-phase done resets l3_retry_count to 0"
+        pass "C8: --set-audit-phase done resets audit_retry_count to 0"
     else
-        fail "C8: --set-l3-phase done resets l3_retry_count to 0 (rc=$rc, val=$val)"
+        fail "C8: --set-audit-phase done resets audit_retry_count to 0 (rc=$rc, val=$val)"
     fi
 }
 

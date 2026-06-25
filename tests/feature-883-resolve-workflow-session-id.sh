@@ -326,14 +326,14 @@ run_r10() {
 }
 
 # ---------------------------------------------------------------------------
-# R11: ensureLayer2Scheduled integration — confirms depth-score fix prevents
+# R11: ensureAlertScheduled integration — confirms depth-score fix prevents
 # erroneous L2 arming when the active session has a final-report-env.json.
 # Without the depth-score fix, the resolver returns the bare-stub sid (which
 # has no final-report-env.json) and L2 gets armed incorrectly.
 # ---------------------------------------------------------------------------
 
 run_r11() {
-    require_function "resolveWorkflowSessionId" "R11: ensureLayer2Scheduled honors depth-scored resolver" || return
+    require_function "resolveWorkflowSessionId" "R11: ensureAlertScheduled honors depth-scored resolver" || return
     local tmp armed_at_out
     tmp="$(mktemp -d)"
     # depth=2 active session, older mtime
@@ -350,21 +350,21 @@ run_r11() {
         "$tmp/${TODAY}-active-r11-detail.md" -10 \
         "$tmp/${TODAY}-stub-r11-context.md" -2
 
-    # Run ensureLayer2Scheduled with CWD = tmp (no WORKTREE_NOTES.md there ->
+    # Run ensureAlertScheduled with CWD = tmp (no WORKTREE_NOTES.md there ->
     # resolver falls through Priority 1 -> Priority 3 depth-scan). The stub cc
     # sid validates against SESSION_ID_RE but has no final-report-env.json;
     # only the resolver-found active sid carries the final-report-env marker.
     armed_at_out=$(cd "$tmp" && WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 env -u CLAUDE_ENV_FILE node -e "
 const m = require('$SUPERVISOR_STATE_WRITER_NODE');
-const state = { layer2: { l2_armed_at: null, l2_phase: null } };
-m.ensureLayer2Scheduled(state, '${TODAY}-stub-r11cc');
-process.stdout.write(state.layer2.l2_armed_at == null ? 'NOT_ARMED' : 'ARMED');
+const state = { layer2: { alert_armed_at: null, alert_phase: null } };
+m.ensureAlertScheduled(state, '${TODAY}-stub-r11cc');
+process.stdout.write(state.layer2.alert_armed_at == null ? 'NOT_ARMED' : 'ARMED');
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ "$armed_at_out" = "NOT_ARMED" ]; then
-        pass "R11: ensureLayer2Scheduled honors depth-scored resolver (no arm when active has final-report)"
+        pass "R11: ensureAlertScheduled honors depth-scored resolver (no arm when active has final-report)"
     else
-        fail "R11: ensureLayer2Scheduled honors depth-scored resolver (expected NOT_ARMED, got $armed_at_out)"
+        fail "R11: ensureAlertScheduled honors depth-scored resolver (expected NOT_ARMED, got $armed_at_out)"
     fi
 }
 
