@@ -46,7 +46,7 @@ CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing i
        - Read `$CLAUDE_ENV_FILE` to resolve `SESSION_ID` (same value as used in CI-4).
        - Run `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call).
        - Proceed to CI-4 (write intent.md as normal — scope is already agreed).
-       - After CI-5 confirm-plan, route to `make-outline-plan` as normal; the oracle will auto-skip the 8 non-applicable WF-CODE steps.
+       - After CI-5 confirm-plan, route to `make-outline-plan` as normal; the oracle will auto-skip the 9 non-applicable WF-CODE steps (includes `detail`).
      - **If user chooses WF-CODE**: proceed silently to CI-4.
 
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
