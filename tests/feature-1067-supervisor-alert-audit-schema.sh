@@ -8,6 +8,11 @@
 #
 # RED: All cases FAIL/SKIP until source changes land (schema still has layer2/layer3).
 
+# L3 gap (what this test does NOT catch):
+# - migrateLegacyState interaction with concurrent writes (race between read and atomic rename)
+# - validate() rejection surfacing to real Stop-hook callers in a live session
+# Closest-to-action mitigation: no supervisor risk category; manual review at WORKFLOW_USER_VERIFIED.
+
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -120,9 +125,304 @@ console.log('OK');
     fi
 }
 
+# SA4: readStateOrInit migrates legacy layer2/layer3 schema to alert/audit
+run_sa4() {
+    require_source "$WRITER_MODULE" "SA4: readStateOrInit migrates legacy layer2/layer3 to alert/audit" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa4-legacy';
+const legacyState = {
+  version: 1,
+  session_id: sid,
+  layer1: { findings: [] },
+  layer2: { l2_armed_at: '2026-01-01T00:00:00Z', last_run_at: null, cumulative_severity: 'warning', findings: [{categories:['code'],severity:'warning',detail:'test',timestamp:'2026-01-01T00:00:00.000Z'}], l2_phase: 'pending', l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
+  layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+const migrated = w.readStateOrInit(sid);
+const errs = [];
+if (!migrated.alert || typeof migrated.alert !== 'object') errs.push('alert missing');
+if (!migrated.audit || typeof migrated.audit !== 'object') errs.push('audit missing');
+if (migrated.layer2 !== undefined) errs.push('layer2 still present');
+if (migrated.layer3 !== undefined) errs.push('layer3 still present');
+if (migrated.alert && migrated.alert.alert_armed_at !== '2026-01-01T00:00:00Z') errs.push('alert_armed_at not migrated');
+if (migrated.alert && migrated.alert.alert_phase !== 'pending') errs.push('alert_phase not migrated');
+if (migrated.alert && migrated.alert.cumulative_severity !== 'warning') errs.push('cumulative_severity not migrated');
+if (migrated.alert && (!Array.isArray(migrated.alert.findings) || migrated.alert.findings.length !== 1)) errs.push('findings not migrated');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA4: readStateOrInit migrates legacy layer2/layer3 to alert/audit"
+    else
+        fail "SA4: readStateOrInit migrates legacy layer2/layer3 to alert/audit (rc=$rc, out=$out)"
+    fi
+}
+
+# SA4b: readStateOrInit is idempotent — already-migrated state is not re-processed
+run_sa4b() {
+    require_source "$WRITER_MODULE" "SA4b: readStateOrInit is idempotent on already-migrated state" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa4b-already';
+const legacyState = {
+  version: 1, session_id: sid, layer1: { findings: [] },
+  layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
+  layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+w.readStateOrInit(sid);
+const second = w.readStateOrInit(sid);
+const errs = [];
+if (!second.alert || typeof second.alert !== 'object') errs.push('alert missing on second read');
+if (!second.audit || typeof second.audit !== 'object') errs.push('audit missing on second read');
+if (second.layer2 !== undefined) errs.push('layer2 present on second read');
+if (second.layer3 !== undefined) errs.push('layer3 present on second read');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA4b: readStateOrInit is idempotent on already-migrated state"
+    else
+        fail "SA4b: readStateOrInit is idempotent on already-migrated state (rc=$rc, out=$out)"
+    fi
+}
+
+# SA4c: readStateOrInit migrates layer2-only legacy state (no layer3 key)
+run_sa4c() {
+    require_source "$WRITER_MODULE" "SA4c: readStateOrInit migrates layer2-only legacy state" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa4c-l2only';
+const legacyState = {
+  version: 1, session_id: sid, layer1: { findings: [] },
+  layer2: { l2_armed_at: '2026-02-01T00:00:00Z', last_run_at: null, cumulative_severity: 'error', findings: [], l2_phase: 'done', l2_cause: 'test', l2_retry_count: 1, findings_surfaced_at: null, l2_eligible_phase: null },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+const migrated = w.readStateOrInit(sid);
+const errs = [];
+if (!migrated.alert || typeof migrated.alert !== 'object') errs.push('alert missing');
+if (migrated.layer2 !== undefined) errs.push('layer2 still present');
+if (migrated.alert && migrated.alert.alert_armed_at !== '2026-02-01T00:00:00Z') errs.push('alert_armed_at not migrated');
+if (migrated.alert && migrated.alert.alert_phase !== 'done') errs.push('alert_phase not migrated');
+if (migrated.alert && migrated.alert.alert_cause !== 'test') errs.push('alert_cause not migrated');
+if (migrated.alert && migrated.alert.alert_retry_count !== 1) errs.push('alert_retry_count not migrated');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA4c: readStateOrInit migrates layer2-only legacy state"
+    else
+        fail "SA4c: readStateOrInit migrates layer2-only legacy state (rc=$rc, out=$out)"
+    fi
+}
+
+# SA4d: readStateOrInit migrates layer3-only legacy state (no layer2 key)
+run_sa4d() {
+    require_source "$WRITER_MODULE" "SA4d: readStateOrInit migrates layer3-only legacy state" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa4d-l3only';
+const legacyState = {
+  version: 1, session_id: sid, layer1: { findings: [] },
+  layer3: { l3_phase: 'done', l3_verdict: 'WARN', l3_last_run_at: '2026-03-01T00:00:00Z', l3_armed_at: '2026-03-01T00:00:00Z', l3_cause: 'drift', l3_retry_count: 2, findings: [] },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+const migrated = w.readStateOrInit(sid);
+const errs = [];
+if (!migrated.audit || typeof migrated.audit !== 'object') errs.push('audit missing');
+if (migrated.layer3 !== undefined) errs.push('layer3 still present');
+if (migrated.audit && migrated.audit.audit_phase !== 'done') errs.push('audit_phase not migrated');
+if (migrated.audit && migrated.audit.audit_verdict !== 'WARN') errs.push('audit_verdict not migrated');
+if (migrated.audit && migrated.audit.audit_cause !== 'drift') errs.push('audit_cause not migrated');
+if (migrated.audit && migrated.audit.audit_retry_count !== 2) errs.push('audit_retry_count not migrated');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA4d: readStateOrInit migrates layer3-only legacy state"
+    else
+        fail "SA4d: readStateOrInit migrates layer3-only legacy state (rc=$rc, out=$out)"
+    fi
+}
+
+# SA4e: migrated state passes validate()
+run_sa4e() {
+    require_source "$WRITER_MODULE" "SA4e: migrated state passes validate()" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const s = require('$SCHEMA_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa4e-validate';
+const legacyState = {
+  version: 1, session_id: sid, layer1: { findings: [] },
+  layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
+  layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+const migrated = w.readStateOrInit(sid);
+const vr = s.validate(migrated);
+if (!vr.ok) { console.error('validate failed: ' + vr.errors.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA4e: migrated state passes validate()"
+    else
+        fail "SA4e: migrated state passes validate() (rc=$rc, out=$out)"
+    fi
+}
+
+# SA4f: appendFinding() succeeds end-to-end against a legacy state file
+run_sa4f() {
+    require_source "$WRITER_MODULE" "SA4f: appendFinding() succeeds on legacy state file" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa4f-e2e';
+const legacyState = {
+  version: 1, session_id: sid, layer1: { findings: [] },
+  layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
+  layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+const ok = w.appendFinding(sid, { categories: ['code'], severity: 'warning', detail: 'migration e2e test', reporter: 'sa4f' });
+if (!ok) { console.error('appendFinding returned false'); process.exit(2); }
+const written = JSON.parse(fs.readFileSync(w.getStatePath(sid), 'utf8'));
+if (!written.layer1 || !Array.isArray(written.layer1.findings)) { console.error('layer1.findings missing after write'); process.exit(3); }
+if (written.layer1.findings.length !== 1) { console.error('expected 1 finding in layer1, got ' + written.layer1.findings.length); process.exit(4); }
+if (written.layer2 !== undefined || written.layer3 !== undefined) { console.error('legacy keys persisted after appendFinding'); process.exit(5); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA4f: appendFinding() succeeds on legacy state file"
+    else
+        fail "SA4f: appendFinding() succeeds on legacy state file (rc=$rc, out=$out)"
+    fi
+}
+
 run_sa1
 run_sa2
 run_sa3
+run_sa4
+run_sa4b
+run_sa4c
+run_sa4d
+run_sa4e
+run_sa4f
+
+# SA5: readStateOrInit returns createEmptyState result when no file exists
+run_sa5() {
+    require_source "$WRITER_MODULE" "SA5: readStateOrInit returns createEmptyState when no file exists" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const state = w.readStateOrInit('sa5-fresh');
+const errs = [];
+if (!state.alert || typeof state.alert !== 'object') errs.push('alert missing or not object');
+if (!state.audit || typeof state.audit !== 'object') errs.push('audit missing or not object');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA5: readStateOrInit returns createEmptyState when no file exists"
+    else
+        fail "SA5: readStateOrInit returns createEmptyState when no file exists (rc=$rc, out=$out)"
+    fi
+}
+
+# SA7: readStateOrInit falls back to createEmptyState on corrupt (non-JSON) file
+run_sa7() {
+    require_source "$WRITER_MODULE" "SA7: readStateOrInit falls back to createEmptyState on corrupt file" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa7-corrupt';
+fs.writeFileSync(w.getStatePath(sid), '{corrupt json');
+const state = w.readStateOrInit(sid);
+const errs = [];
+if (!state.alert || typeof state.alert !== 'object') errs.push('alert missing or not object');
+if (!state.audit || typeof state.audit !== 'object') errs.push('audit missing or not object');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA7: readStateOrInit falls back to createEmptyState on corrupt file"
+    else
+        fail "SA7: readStateOrInit falls back to createEmptyState on corrupt file (rc=$rc, out=$out)"
+    fi
+}
+
+# SA8: migrateLegacyState backfills created_at and last_updated when absent
+run_sa8() {
+    require_source "$WRITER_MODULE" "SA8: migrateLegacyState backfills created_at and last_updated when absent" || return
+    local out rc tmp
+    tmp="$(mktemp -d)"
+    out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_MODULE_NODE');
+const fs = require('fs');
+const sid = 'sa8-timestamps';
+const legacyState = {
+  version: 1,
+  session_id: sid,
+  layer1: { findings: [] },
+  layer2: { l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_cause: null, l2_retry_count: 0, findings_surfaced_at: null, l2_eligible_phase: null },
+  layer3: { l3_phase: null, l3_verdict: null, l3_last_run_at: null, l3_armed_at: null, l3_cause: null, l3_retry_count: 0, findings: [] },
+};
+fs.writeFileSync(w.getStatePath(sid), JSON.stringify(legacyState));
+const migrated = w.readStateOrInit(sid);
+const errs = [];
+if (typeof migrated.created_at !== 'string' || !migrated.created_at) errs.push('created_at missing or not string');
+if (typeof migrated.last_updated !== 'string' || !migrated.last_updated) errs.push('last_updated missing or not string');
+if (errs.length > 0) { console.error(errs.join('; ')); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "SA8: migrateLegacyState backfills created_at and last_updated when absent"
+    else
+        fail "SA8: migrateLegacyState backfills created_at and last_updated when absent (rc=$rc, out=$out)"
+    fi
+}
+
+run_sa5
+run_sa7
+run_sa8
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
