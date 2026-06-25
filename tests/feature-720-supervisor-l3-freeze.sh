@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-720-supervisor-l3-freeze.sh
-# Tests: bin/supervisor-write-layer2, bin/supervisor-write-layer3 (independent freeze gates)
+# Tests: bin/supervisor-write-alert, bin/supervisor-write-audit (independent freeze gates)
 # Tags: supervisor, em-supervisor, freeze, layer2, layer3, integration, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 #   Verifies CLI-driven retry-count increments and resulting frozen phase
@@ -18,12 +18,12 @@ else
     _TMPCONV() { printf '%s' "$1"; }
 fi
 
-CLI_L2="$AGENTS_DIR/bin/supervisor-write-layer2"
-CLI_L3="$AGENTS_DIR/bin/supervisor-write-layer3"
+CLI_L2="$AGENTS_DIR/bin/supervisor-write-alert"
+CLI_L3="$AGENTS_DIR/bin/supervisor-write-audit"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
-COLLECT_L3_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-guard/collect-l3.js"
-COLLECT_L3_FILE="$AGENTS_DIR/hooks/lib/supervisor-guard/collect-l3.js"
+COLLECT_L3_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-guard/collect-audit-triggers.js"
+COLLECT_L3_FILE="$AGENTS_DIR/hooks/lib/supervisor-guard/collect-audit-triggers.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -43,12 +43,12 @@ require_source() {
 }
 
 l3_retry_threshold_present() {
-    grep -q "L3_RETRY_THRESHOLD" "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" 2>/dev/null
+    grep -q "AUDIT_RETRY_THRESHOLD" "$AGENTS_DIR/hooks/lib/supervisor-state-schema.js" 2>/dev/null
 }
 
 require_l3_threshold() {
     local label="$1"
-    if ! l3_retry_threshold_present; then skip "$label (L3_RETRY_THRESHOLD not yet exported)"; return 1; fi
+    if ! l3_retry_threshold_present; then skip "$label (AUDIT_RETRY_THRESHOLD not yet exported)"; return 1; fi
     return 0
 }
 
@@ -72,7 +72,7 @@ get_threshold() {
     (
         run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
-const v = '$layer' === 'l2' ? s.L2_RETRY_THRESHOLD : s.L3_RETRY_THRESHOLD;
+const v = '$layer' === 'l2' ? s.ALERT_RETRY_THRESHOLD : s.AUDIT_RETRY_THRESHOLD;
 process.stdout.write(String(v));
 " 2>/dev/null
     )
@@ -94,51 +94,51 @@ invoke_l3() {
 }
 
 run_f1() {
-    require_source "$CLI_L2" "F1: L2 retry threshold → l2_phase=frozen" || return
+    require_source "$CLI_L2" "F1: L2 retry threshold → alert_phase=frozen" || return
     local tmp sid threshold val i
     tmp="$(mktemp -d)"; sid="f1sid"
     threshold=$(get_threshold l2)
     if [ -z "$threshold" ] || ! [[ "$threshold" =~ ^[0-9]+$ ]]; then
-        rm -rf "$tmp"; skip "F1: L2 retry threshold → l2_phase=frozen (L2_RETRY_THRESHOLD not numeric)"; return
+        rm -rf "$tmp"; skip "F1: L2 retry threshold → alert_phase=frozen (ALERT_RETRY_THRESHOLD not numeric)"; return
     fi
     # Arm first
     invoke_l2 "$tmp" --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
     # Increment to threshold
     i=0
     while [ $i -lt "$threshold" ]; do
-        invoke_l2 "$tmp" --increment-l2-retry-count --session-id "$sid"
+        invoke_l2 "$tmp" --increment-alert-retry-count --session-id "$sid"
         i=$((i+1))
     done
-    val=$(read_field "$tmp" "$sid" "layer2.l2_phase")
+    val=$(read_field "$tmp" "$sid" "alert.alert_phase")
     rm -rf "$tmp"
     if [ "$val" = "\"frozen\"" ]; then
-        pass "F1: L2 retry threshold → l2_phase=frozen"
+        pass "F1: L2 retry threshold → alert_phase=frozen"
     else
-        fail "F1: L2 retry threshold → l2_phase=frozen (val=$val)"
+        fail "F1: L2 retry threshold → alert_phase=frozen (val=$val)"
     fi
 }
 
 run_f2() {
-    require_source "$CLI_L3" "F2: L3 retry threshold → l3_phase=frozen" || return
-    require_l3_threshold "F2: L3 retry threshold → l3_phase=frozen" || return
+    require_source "$CLI_L3" "F2: L3 retry threshold → audit_phase=frozen" || return
+    require_l3_threshold "F2: L3 retry threshold → audit_phase=frozen" || return
     local tmp sid threshold val i
     tmp="$(mktemp -d)"; sid="f2sid"
     threshold=$(get_threshold l3)
     if [ -z "$threshold" ] || ! [[ "$threshold" =~ ^[0-9]+$ ]]; then
-        rm -rf "$tmp"; skip "F2: L3 retry threshold → l3_phase=frozen (L3_RETRY_THRESHOLD not numeric)"; return
+        rm -rf "$tmp"; skip "F2: L3 retry threshold → audit_phase=frozen (AUDIT_RETRY_THRESHOLD not numeric)"; return
     fi
-    invoke_l3 "$tmp" --l3-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
+    invoke_l3 "$tmp" --audit-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
     i=0
     while [ $i -lt "$threshold" ]; do
-        invoke_l3 "$tmp" --increment-l3-retry-count --session-id "$sid"
+        invoke_l3 "$tmp" --increment-audit-retry-count --session-id "$sid"
         i=$((i+1))
     done
-    val=$(read_field "$tmp" "$sid" "layer3.l3_phase")
+    val=$(read_field "$tmp" "$sid" "audit.audit_phase")
     rm -rf "$tmp"
     if [ "$val" = "\"frozen\"" ]; then
-        pass "F2: L3 retry threshold → l3_phase=frozen"
+        pass "F2: L3 retry threshold → audit_phase=frozen"
     else
-        fail "F2: L3 retry threshold → l3_phase=frozen (val=$val)"
+        fail "F2: L3 retry threshold → audit_phase=frozen (val=$val)"
     fi
 }
 
@@ -149,8 +149,8 @@ run_f3() {
 const m = require('$COLLECT_L3_NODE');
 const transcript = [{ role: 'assistant', content: '<<WORKFLOW_CONFIRM_INTENT: scope>>' }];
 const state = { version: '1', session_id: 't', layer1: { findings: [] },
-  layer2: { l2_phase: 'frozen' }, layer3: {} };
-const r = m.collectL3Candidates(transcript, state);
+  alert: { alert_phase: 'frozen' }, audit: {} };
+const r = m.collectAuditCandidates(transcript, state);
 if (r.shouldArm !== true) { console.error('shouldArm='+r.shouldArm); process.exit(2); }
 console.log('OK');
 " 2>&1)
@@ -164,8 +164,8 @@ console.log('OK');
 
 run_f4() {
     require_source "$CLI_L2" "F4: L3 frozen, L2 not frozen → L2 can still arm" || return
-    # L2 arming is managed by writer's ensureLayer2Scheduled; verify it still arms
-    # when only L3 is frozen. We achieve this by writing layer3.l3_phase=frozen
+    # L2 arming is managed by writer's ensureAlertScheduled; verify it still arms
+    # when only L3 is frozen. We achieve this by writing layer3.audit_phase=frozen
     # directly, then calling appendFinding (which auto-arms L2 when not done/frozen).
     local tmp sid out
     tmp="$(mktemp -d)"; sid="f4sid"
@@ -176,12 +176,12 @@ const fs = require('fs'); const path = require('path');
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const st = s.createEmptyState('$sid');
-if (!st.layer3 || typeof st.layer3 !== 'object') st.layer3 = {};
-st.layer3.l3_phase = 'frozen';
+if (!st.audit || typeof st.audit !== 'object') st.audit = {};
+st.audit.audit_phase = 'frozen';
 fs.writeFileSync(path.join(process.env.WORKFLOW_PLANS_DIR, '$sid' + '-supervisor-state.json'), JSON.stringify(st, null, 2));
 const ok = w.appendFinding('$sid', { categories: ['code'], severity: 'warning', detail: 'd', reporter: 'test' });
 const after = w.readState('$sid');
-console.log(after.layer2 && after.layer2.l2_armed_at ? 'ARMED' : 'NOT_ARMED');
+console.log(after.alert && after.alert.alert_armed_at ? 'ARMED' : 'NOT_ARMED');
 " 2>&1
     )
     rm -rf "$tmp"
@@ -194,15 +194,15 @@ console.log(after.layer2 && after.layer2.l2_armed_at ? 'ARMED' : 'NOT_ARMED');
 
 run_f5() {
     require_source "$COLLECT_L3_FILE" "F5: both frozen → both phases stay frozen" || return
-    # When both layers are already frozen, collect-l3 must NOT re-arm L3,
+    # When both layers are already frozen, collect-audit-triggers must NOT re-arm L3,
     # and the writer must not transition l2 out of frozen on its own.
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$COLLECT_L3_NODE');
 const transcript = [{ role: 'assistant', content: '<<WORKFLOW_CONFIRM_INTENT: scope>>' }];
 const state = { version: '1', session_id: 't', layer1: { findings: [] },
-  layer2: { l2_phase: 'frozen' }, layer3: { l3_phase: 'frozen' } };
-const r = m.collectL3Candidates(transcript, state);
+  alert: { alert_phase: 'frozen' }, audit: { audit_phase: 'frozen' } };
+const r = m.collectAuditCandidates(transcript, state);
 if (r.shouldArm !== false) { console.error('expected shouldArm=false, got '+r.shouldArm); process.exit(2); }
 console.log('OK');
 " 2>&1)

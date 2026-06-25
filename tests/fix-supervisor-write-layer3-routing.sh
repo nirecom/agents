@@ -75,7 +75,7 @@ run_r1() {
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
-        --session-id sid-a --set-l3-phase done >/dev/null 2>&1
+        --session-id sid-a --set-audit-phase done >/dev/null 2>&1
     rc=$?
     count=$(count_state_files "$tmp")
     local exists=0
@@ -97,7 +97,7 @@ run_r2() {
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID || true
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
-        --set-l3-phase done 2>&1)
+        --set-audit-phase done 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ] && ( echo "$out" | grep -qiE 'auto-resolve|session-id required' ); then
@@ -116,7 +116,7 @@ run_r3() {
     unset CLAUDE_SESSION_ID || true
     WORKFLOW_SESSION_ID=wsid-r3test \
         WORKFLOW_PLANS_DIR="$tmp" \
-        run_with_timeout 5 node "$CLI_NODE" --set-l3-phase done >/dev/null 2>&1
+        run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
     rc=$?
     exists=0
     [ -f "$tmp/wsid-r3test-supervisor-state.json" ] && exists=1
@@ -138,7 +138,7 @@ run_r4() {
     WORKFLOW_SESSION_ID=wsid-r4 \
         CLAUDE_SESSION_ID=ccu-r4 \
         WORKFLOW_PLANS_DIR="$tmp" \
-        run_with_timeout 5 node "$CLI_NODE" --set-l3-phase done >/dev/null 2>&1
+        run_with_timeout 5 node "$CLI_NODE" --set-audit-phase done >/dev/null 2>&1
     rc=$?
     wsid_phase=$(read_phase "$tmp" "wsid-r4")
     cc_phase=$(read_phase "$tmp" "ccu-r4")
@@ -161,7 +161,7 @@ run_r5() {
     unset WORKFLOW_SESSION_ID || true
     unset CLAUDE_SESSION_ID || true
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" \
-        --session-id sid-x --mirror-session-id sid-y --set-l3-phase done >/dev/null 2>&1
+        --session-id sid-x --mirror-session-id sid-y --set-audit-phase done >/dev/null 2>&1
     rc=$?
     x_phase=$(read_phase "$tmp" "sid-x")
     y_phase=$(read_phase "$tmp" "sid-y")
@@ -175,14 +175,14 @@ run_r5() {
 
 # R6 — increment-l3-retry-count is single-store: env wsid is NOT mirrored.
 run_r6() {
-    local label="R6: --increment-l3-retry-count is single-store (no wsid mirror)"
+    local label="R6: --increment-audit-retry-count is single-store (no wsid mirror)"
     require_wsid_routing "$label" || return
     local tmp out rc count exists_wsid
     tmp="$(mktemp -d)"
     out=$(WORKFLOW_SESSION_ID=wsid-r6 \
         WORKFLOW_PLANS_DIR="$tmp" \
         run_with_timeout 5 node "$CLI_NODE" \
-            --session-id sid-r6 --increment-l3-retry-count 2>&1)
+            --session-id sid-r6 --increment-audit-retry-count 2>&1)
     rc=$?
     count=$(count_state_files "$tmp")
     exists_wsid=0

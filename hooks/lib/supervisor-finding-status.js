@@ -1,19 +1,19 @@
 "use strict";
 
-// Pure functions over the supervisor state object's layer2.findings array.
+// Pure functions over the supervisor state object's alert.findings array.
 // No fs, no requires of the writer — the caller is responsible for persistence.
 // Status values: "draft" | "confirmed". A missing status is treated as "confirmed"
 // by readers (backward compat) but never assigned implicitly here.
 
-function getLayer2Findings(state) {
+function getAlertFindings(state) {
   if (!state || typeof state !== "object") return null;
-  if (!state.layer2 || typeof state.layer2 !== "object" || Array.isArray(state.layer2)) return null;
-  if (!Array.isArray(state.layer2.findings)) return null;
-  return state.layer2.findings;
+  if (!state.alert || typeof state.alert !== "object" || Array.isArray(state.alert)) return null;
+  if (!Array.isArray(state.alert.findings)) return null;
+  return state.alert.findings;
 }
 
 function appendDraftFinding(state, finding) {
-  const findings = getLayer2Findings(state);
+  const findings = getAlertFindings(state);
   if (!findings) return state;
   if (!finding || typeof finding !== "object") return state;
   // Use max existing idx + 1 so drops never create duplicate idx values.
@@ -24,7 +24,7 @@ function appendDraftFinding(state, finding) {
 }
 
 function confirmFinding(state, idx) {
-  const findings = getLayer2Findings(state);
+  const findings = getAlertFindings(state);
   if (!findings) return state;
   for (const f of findings) {
     if (f && f.idx === idx) {
@@ -36,7 +36,7 @@ function confirmFinding(state, idx) {
 }
 
 function dropFindings(state, idxList) {
-  const findings = getLayer2Findings(state);
+  const findings = getAlertFindings(state);
   if (!findings) return state;
   if (!Array.isArray(idxList) || idxList.length === 0) return state;
 
@@ -55,7 +55,7 @@ function dropFindings(state, idxList) {
 }
 
 function promotePendingDraftsToConfirmed(state) {
-  const findings = getLayer2Findings(state);
+  const findings = getAlertFindings(state);
   if (!findings) return state;
   for (const f of findings) {
     if (f && f.status === "draft") f.status = "confirmed";

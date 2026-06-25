@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-997-late-finding-arm-integration.sh
-# Tests: hooks/lib/supervisor-state-writer.js, bin/supervisor-write-layer2
+# Tests: hooks/lib/supervisor-state-writer.js, bin/supervisor-write-alert
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #997 — late finding arming via eligibility flag.
 # End-to-end state simulation against a real tmpdir-backed WORKFLOW_PLANS_DIR.
@@ -21,7 +21,7 @@ fi
 WRITER_SRC="$AGENTS_DIR/hooks/lib/supervisor-state-writer.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-CLI="$AGENTS_DIR/bin/supervisor-write-layer2"
+CLI="$AGENTS_DIR/bin/supervisor-write-alert"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -56,7 +56,7 @@ read_armed_at() {
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
 if (!st) { process.exit(2); }
-const v = st.layer2.l2_armed_at;
+const v = st.alert.alert_armed_at;
 if (v === null) console.log('NULL'); else console.log(v);
 " 2>/dev/null
 }
@@ -70,7 +70,7 @@ run_l1() {
     armed="$(read_armed_at "$tmp" "l1-sid")"
     rm -rf "$tmp"
     if [ "$armed" != "NULL" ] && [ -n "$armed" ]; then
-        pass "L1 (baseline): no anchor, appendFinding sets l2_armed_at"
+        pass "L1 (baseline): no anchor, appendFinding sets alert_armed_at"
     else
         fail "L1: baseline arm failed (armed=$armed)"
     fi
@@ -102,7 +102,7 @@ run_l3() {
     append_finding "$tmp" "l3-sid"
     armed_before="$(read_armed_at "$tmp" "l3-sid")"
     # Promote eligibility via CLI
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id l3-sid --set-l2-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id l3-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
     append_finding "$tmp" "l3-sid"
     armed_after="$(read_armed_at "$tmp" "l3-sid")"
     rm -rf "$tmp"
@@ -120,13 +120,13 @@ run_l4() {
     local tmp armed
     tmp="$(mktemp -d)"
     # No anchor; explicitly mark done with eligibility set
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-l2-eligible-phase post_final_report_window >/dev/null 2>&1
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-l2-phase done >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-alert-eligible-phase post_final_report_window >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$CLI" --session-id l4-sid --set-alert-phase done >/dev/null 2>&1
     append_finding "$tmp" "l4-sid"
     armed="$(read_armed_at "$tmp" "l4-sid")"
     rm -rf "$tmp"
     if [ "$armed" = "NULL" ]; then
-        pass "L4 (done overrides): l2_phase=done overrides eligibility -> no arm"
+        pass "L4 (done overrides): alert_phase=done overrides eligibility -> no arm"
     else
         fail "L4: done did not override eligibility (armed=$armed)"
     fi

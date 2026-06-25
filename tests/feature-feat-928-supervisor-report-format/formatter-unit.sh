@@ -160,7 +160,7 @@ run_f13() {
     require_source "$FORMATTER" "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner" || return
     local out
     out=$(format_l2_armed "C3 worktree-off proposal" "f13-sid" "'f13-wsid'" "agents/supervisor.md" "/tmp/state.json")
-    if echo "$out" | grep -q "WORKTREE_OFF" && echo "$out" | grep -q "l2_armed_at: null"; then
+    if echo "$out" | grep -q "WORKTREE_OFF" && echo "$out" | grep -q "alert_armed_at: null"; then
         pass "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner"
     else
         fail "F13: l2Armed C3 worktree-off proposal -> output contains WORKTREE_OFF and resume one-liner (out=$out)"
@@ -171,7 +171,7 @@ run_f14() {
     require_source "$FORMATTER" "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner" || return
     local out
     out=$(format_l2_armed "C3 workflow-off proposal" "f14-sid" "'f14-wsid'" "agents/supervisor.md" "/tmp/state.json")
-    if echo "$out" | grep -q "WORKFLOW_OFF" && echo "$out" | grep -q "l2_armed_at: null"; then
+    if echo "$out" | grep -q "WORKFLOW_OFF" && echo "$out" | grep -q "alert_armed_at: null"; then
         pass "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner"
     else
         fail "F14: l2Armed C3 workflow-off proposal -> output contains WORKFLOW_OFF and resume one-liner (out=$out)"
@@ -376,13 +376,13 @@ process.stdout.write(f.formatL2ArmedReason(cause, sid, wsid, sp, stp));
 
 # ---------------------------------------------------------------------------
 # F-recipe-{1,2,3}: #912 fallback-recipe block tests
-# Verify that the formatter emits a runnable supervisor-write-layer2 recipe
+# Verify that the formatter emits a runnable supervisor-write-alert recipe
 # AND substitutes the session ID + stateFilePath. The recipe is a fallback
 # the user can copy when the supervisor subagent invocation fails.
 # ---------------------------------------------------------------------------
 
 # Probe whether the formatter has been updated to emit the recipe block.
-# The recipe block must mention bin/supervisor-write-layer2; it is a new
+# The recipe block must mention bin/supervisor-write-alert; it is a new
 # addition (#912). Tests SKIP until source lands.
 require_recipe_block() {
     local label="$1"
@@ -391,8 +391,8 @@ require_recipe_block() {
 const f = require('$FORMATTER_NODE');
 const out1 = f.formatL2ArmedReason('C1 sentinel hang', 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
 const out2 = f.formatCumSevErrorReason([], 's', 'w', 'agents/supervisor.md', '/tmp/state.json');
-const has1 = out1.indexOf('supervisor-write-layer2') >= 0;
-const has2 = out2.indexOf('supervisor-write-layer2') >= 0;
+const has1 = out1.indexOf('supervisor-write-alert') >= 0;
+const has2 = out2.indexOf('supervisor-write-alert') >= 0;
 process.stdout.write((has1 && has2) ? 'yes' : 'no');
 " 2>/dev/null)
     if [ "$probe" != "yes" ]; then
@@ -407,7 +407,7 @@ run_f_recipe_1() {
     require_recipe_block "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block" || return
     local out
     out=$(format_l2_armed "C1 sentinel hang" "frec1-sid" "'frec1-wsid'" "agents/supervisor.md" "/tmp/state-frec1.json")
-    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-layer2"; then
+    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-alert"; then
         pass "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block"
     else
         fail "F-recipe-1: formatL2ArmedReason output contains fallback-recipe block (out=$out)"
@@ -420,7 +420,7 @@ run_f_recipe_2() {
     require_recipe_block "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block" || return
     local out
     out=$(format_cumsev_error "$FINDINGS_TWO" "frec2-sid" "'frec2-wsid'" "agents/supervisor.md" "/tmp/state-frec2.json")
-    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-layer2"; then
+    if echo "$out" | grep -qi "Fallback" && echo "$out" | grep -q "bin/supervisor-write-alert"; then
         pass "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block"
     else
         fail "F-recipe-2: formatCumSevErrorReason output contains fallback-recipe block (out=$out)"
@@ -433,7 +433,7 @@ run_f_recipe_3() {
     require_recipe_block "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution" || return
     local out
     out=$(format_cumsev_error "$FINDINGS_ONE" "frec3-sid" "'frec3-wsid'" "agents/supervisor.md" "/tmp/state-frec3.json")
-    if echo "$out" | grep -q "bin/supervisor-write-layer2" \
+    if echo "$out" | grep -q "bin/supervisor-write-alert" \
        && echo "$out" | grep -q "\-\-clear-l2-armed-at" \
        && echo "$out" | grep -q "\-\-set-l2-phase frozen" \
        && echo "$out" | grep -q "\-\-session-id frec3-sid" \

@@ -1,9 +1,9 @@
 "use strict";
 
-// #720 — Layer 2 / Layer 3 verdict arbitration.
+// #720 — Alert / audit verdict arbitration.
 // Pure rule table. Inputs are candidate objects of shape:
 //   { verdict: "CONTINUE" | "WARN" | "BLOCK", reason: string }
-// or null (layer did not produce a candidate this cycle).
+// or null (mode did not produce a candidate this cycle).
 // Output: { decision: "allow" | "warn" | "block", source: "l2"|"l3"|"both"|null, reason: string }
 // BLOCK wins; WARN aggregates; otherwise allow.
 

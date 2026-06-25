@@ -85,6 +85,18 @@ const SECTIONS = [
     renderLines: (envBag, sid, ctx) => ctx.nextLines,
     probes: [],
   },
+  {
+    id: "supervisor_alert",
+    heading: () => "### Supervisor Alert",
+    renderLines: (envBag, sid, ctx) => ["<SUPERVISOR_ALERT_SUMMARY>"],
+    probes: [],
+  },
+  {
+    id: "supervisor_audit",
+    heading: () => "### Supervisor Audit",
+    renderLines: (envBag, sid, ctx) => ["<SUPERVISOR_AUDIT_SUMMARY>"],
+    probes: [],
+  },
 ];
 
 function getSectionHeadings(sessionId) {
@@ -127,6 +139,8 @@ function renderSkeleton(sessionId) {
     bugs_found: ["<BUGS_FOUND>"],
     related_tasks: ["<RELATED_TASKS>"],
     next_tasks: ["<NEXT_TASKS>"],
+    supervisor_alert: ["<SUPERVISOR_ALERT_SUMMARY>"],
+    supervisor_audit: ["<SUPERVISOR_AUDIT_SUMMARY>"],
   };
   const blocks = SECTIONS.map((s) => {
     const heading = s.heading(sessionId);

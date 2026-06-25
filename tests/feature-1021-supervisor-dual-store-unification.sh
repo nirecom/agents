@@ -100,8 +100,8 @@ run_b2() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-w.writeLayer2State('$wsid', { l2_armed_at: null });
-w.writeLayer2State('$ccuuid', { l2_armed_at: null });
+w.writeAlertState('$wsid', { alert_armed_at: null });
+w.writeAlertState('$ccuuid', { alert_armed_at: null });
 " >/dev/null 2>&1
         run_with_timeout 5 node "$CLI" \
             --session-id "$wsid" \
@@ -132,8 +132,8 @@ run_b3() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-w.writeLayer2State('$wsid', { l2_armed_at: null });
-w.writeLayer2State('$ccuuid', { l2_armed_at: null });
+w.writeAlertState('$wsid', { alert_armed_at: null });
+w.writeAlertState('$ccuuid', { alert_armed_at: null });
 " >/dev/null 2>&1
         run_with_timeout 5 node "$CLI" \
             --session-id "$ccuuid" \
@@ -164,8 +164,8 @@ run_b4() {
         export WORKFLOW_PLANS_DIR="$(_TMPCONV "$tmp")"
         run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-w.writeLayer2State('$wsid', { l2_armed_at: null });
-w.writeLayer2State('$ccuuid', { l2_armed_at: null });
+w.writeAlertState('$wsid', { alert_armed_at: null });
+w.writeAlertState('$ccuuid', { alert_armed_at: null });
 " >/dev/null 2>&1
         # Single call: same finding must not be written twice to the same store.
         run_with_timeout 5 node "$CLI" \

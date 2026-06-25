@@ -32,13 +32,13 @@ require_source() {
 }
 
 seed_state() {
-    local tmp="$1" sid="$2" layer2_json="$3"
+    local tmp="$1" sid="$2" alert_json="$3"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = $layer2_json;
+st.alert = $alert_json;
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
