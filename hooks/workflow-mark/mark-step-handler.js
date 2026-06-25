@@ -95,6 +95,7 @@ function handle(ctx) {
               st.steps[s] = { status: "pending", updated_at: null };
             }
           }
+          // workflow_type is a top-level field, not inside steps[], so the reset loop above does not overwrite it.
           writeState(sessionId, st);
         }
       } catch (e) {

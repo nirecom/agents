@@ -32,6 +32,23 @@ CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recom
 
    **Class members proposal (when candidates ≥ 1):** run `reference/class-members-proposal.md`.
 
+CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing intent.md):
+   - Read `skills/_shared/judge-decomposition.md` to load the signal table.
+   - Evaluate all D1–D5 signals against the agreed scope. Do not short-circuit on the first match.
+   - Emit in Claude text output: `VERDICT: wf-meta | <signal IDs>` or `VERDICT: wf-code | none`
+   - **If VERDICT is `wf-code`**: proceed silently to CI-4 (no user prompt).
+   - **If VERDICT is `wf-meta`** (≥2 signals triggered):
+     - Compose a concrete sub-deliverable list: one bullet per natural split point identified during the signals evaluation.
+     - Present it via `AskUserQuestion`:
+       - Prompt: "This scope is a candidate for session decomposition. Proposed breakdown: [sub-deliverable bullets]. Proceed in WF-META mode (planning phase only, no implementation this session)?"
+       - Options: "Yes, proceed as WF-META (planning only)" / "No, implement everything in this session (WF-CODE)"
+     - **If user chooses WF-META**:
+       - Read `$CLAUDE_ENV_FILE` to resolve `SESSION_ID` (same value as used in CI-4).
+       - Run `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call).
+       - Proceed to CI-4 (write intent.md as normal — scope is already agreed).
+       - After CI-5 confirm-plan, route to `make-outline-plan` as normal; the oracle will auto-skip the 8 non-applicable WF-CODE steps.
+     - **If user chooses WF-CODE**: proceed silently to CI-4.
+
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
 
    **`## Class members` schema (mandatory section):** appears immediately before
