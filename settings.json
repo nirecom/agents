@@ -513,6 +513,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/pre-askuserquestion-clear-waiting.js\"",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "PostToolUse": [
