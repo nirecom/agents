@@ -1,6 +1,6 @@
 #!/bin/bash
-# tests/feature-929-supervisor-write-layer2-status.sh
-# Tests: bin/supervisor-write-layer2 (new --finding-status, --confirm-finding-ids, --drop-finding-ids flags)
+# tests/feature-929-supervisor-write-alert-status.sh
+# Tests: bin/supervisor-write-alert (new --finding-status, --confirm-finding-ids, --drop-finding-ids flags)
 # Tags: supervisor, em-supervisor, cli, layer2, finding-status
 # RED for issue #929.
 #
@@ -19,7 +19,7 @@ else
     _AGENTS_DIR_NODE="$AGENTS_DIR"
 fi
 
-CLI="$AGENTS_DIR/bin/supervisor-write-layer2"
+CLI="$AGENTS_DIR/bin/supervisor-write-alert"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 
 PASS=0; FAIL=0; SKIP=0
@@ -64,7 +64,7 @@ read_finding_field() {
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-const f = st && st.layer2 && st.layer2.findings && st.layer2.findings[$idx];
+const f = st && st.alert && st.alert.findings && st.alert.findings[$idx];
 process.stdout.write(f ? JSON.stringify(f.$field) : 'MISSING');
 " 2>/dev/null
 }
@@ -74,7 +74,7 @@ read_findings_len() {
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-process.stdout.write(String((st && st.layer2 && st.layer2.findings && st.layer2.findings.length) || 0));
+process.stdout.write(String((st && st.alert && st.alert.findings && st.alert.findings.length) || 0));
 " 2>/dev/null
 }
 
@@ -216,7 +216,7 @@ run_wl8() {
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
         --confirm-finding-ids 0 \
         --drop-finding-ids 1 \
-        --set-l2-phase done \
+        --set-alert-phase done \
         --session-id "$sid" >/dev/null 2>&1
     rc=$?
     len=$(read_findings_len "$tmp" "$sid")
@@ -224,7 +224,7 @@ run_wl8() {
     phase=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('$sid');
-process.stdout.write(JSON.stringify(st && st.layer2 && st.layer2.l2_phase));
+process.stdout.write(JSON.stringify(st && st.alert && st.alert.alert_phase));
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$len" = "1" ] && [ "$s0" = '"confirmed"' ] && [ "$phase" = '"done"' ]; then

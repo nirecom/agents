@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/supervisor-state-writer.js (ensureLayer2Scheduled frozen re-arm; validateL2PhaseTransition)
+# Tests: hooks/lib/supervisor-state-writer.js (ensureAlertScheduled frozen re-arm; validateL2PhaseTransition)
 # Tags: supervisor, em-supervisor, layer2, writer, fix-967, scope:issue-specific
 # RED for issue #967.
 #
 # Validates:
-# - ensureLayer2Scheduled() must re-arm when phase is "frozen" (only "done"
-#   short-circuits). Re-arm resets l2_phase=pending, sets l2_armed_at=<now>,
-#   and resets l2_retry_count=0 so the freeze-on-retry counter starts fresh.
+# - ensureAlertScheduled() must re-arm when phase is "frozen" (only "done"
+#   short-circuits). Re-arm resets alert_phase=pending, sets alert_armed_at=<now>,
+#   and resets alert_retry_count=0 so the freeze-on-retry counter starts fresh.
 # - The final-report-env.json marker must be IGNORED when phase is "frozen"
 #   (the marker only suppresses re-arm for non-frozen pre-final-report sessions).
 # - validateL2PhaseTransition must allow frozen->pending (re-arm),
@@ -73,22 +73,22 @@ const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = {
-  l2_armed_at: $armed_at,
+st.alert = {
+  alert_armed_at: $armed_at,
   last_run_at: null,
   cumulative_severity: null,
   findings: [],
-  l2_phase: $phase,
-  l2_cause: null,
-  l2_retry_count: $retry_count
+  alert_phase: $phase,
+  alert_cause: null,
+  alert_retry_count: $retry_count
 };
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
-# R1: frozen phase + appendFinding -> ensureLayer2Scheduled re-arms (l2_phase becomes "pending")
+# R1: frozen phase + appendFinding -> ensureAlertScheduled re-arms (alert_phase becomes "pending")
 run_r1() {
-    require_writer "R1: frozen + appendFinding -> l2_phase becomes pending" || return
+    require_writer "R1: frozen + appendFinding -> alert_phase becomes pending" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r1-sid"
     seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
@@ -97,21 +97,21 @@ const w = require('$WRITER_NODE');
 const r = w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'new finding after freeze', reporter: 'test' });
 if (r !== true) { console.error('appendFinding returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'pending') { console.error('l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(3); }
+if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R1: frozen + appendFinding -> l2_phase becomes pending"
+        pass "R1: frozen + appendFinding -> alert_phase becomes pending"
     else
-        fail "R1: frozen + appendFinding -> l2_phase becomes pending (rc=$rc, out=$out)"
+        fail "R1: frozen + appendFinding -> alert_phase becomes pending (rc=$rc, out=$out)"
     fi
 }
 
-# R2: frozen + appendFinding -> l2_armed_at is set to non-null
+# R2: frozen + appendFinding -> alert_armed_at is set to non-null
 run_r2() {
-    require_writer "R2: frozen + appendFinding -> l2_armed_at non-null" || return
+    require_writer "R2: frozen + appendFinding -> alert_armed_at non-null" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r2-sid"
     seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
@@ -119,21 +119,21 @@ run_r2() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_armed_at == null) { console.error('l2_armed_at='+JSON.stringify(st && st.layer2.l2_armed_at)); process.exit(3); }
+if (!st || st.alert.alert_armed_at == null) { console.error('alert_armed_at='+JSON.stringify(st && st.alert.alert_armed_at)); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R2: frozen + appendFinding -> l2_armed_at non-null"
+        pass "R2: frozen + appendFinding -> alert_armed_at non-null"
     else
-        fail "R2: frozen + appendFinding -> l2_armed_at non-null (rc=$rc, out=$out)"
+        fail "R2: frozen + appendFinding -> alert_armed_at non-null (rc=$rc, out=$out)"
     fi
 }
 
-# R3: frozen + appendFinding -> l2_retry_count reset to 0
+# R3: frozen + appendFinding -> alert_retry_count reset to 0
 run_r3() {
-    require_writer "R3: frozen + appendFinding -> l2_retry_count reset to 0" || return
+    require_writer "R3: frozen + appendFinding -> alert_retry_count reset to 0" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r3-sid"
     seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
@@ -141,19 +141,19 @@ run_r3() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_retry_count !== 0) { console.error('l2_retry_count='+JSON.stringify(st && st.layer2.l2_retry_count)); process.exit(3); }
+if (!st || st.alert.alert_retry_count !== 0) { console.error('alert_retry_count='+JSON.stringify(st && st.alert.alert_retry_count)); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R3: frozen + appendFinding -> l2_retry_count reset to 0"
+        pass "R3: frozen + appendFinding -> alert_retry_count reset to 0"
     else
-        fail "R3: frozen + appendFinding -> l2_retry_count reset to 0 (rc=$rc, out=$out)"
+        fail "R3: frozen + appendFinding -> alert_retry_count reset to 0 (rc=$rc, out=$out)"
     fi
 }
 
-# R4: done + appendFinding -> ensureLayer2Scheduled still short-circuits (done terminal)
+# R4: done + appendFinding -> ensureAlertScheduled still short-circuits (done terminal)
 run_r4() {
     require_writer "R4: done + appendFinding -> still short-circuits (done terminal)" || return
     local tmp sid out rc
@@ -163,8 +163,8 @@ run_r4() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'done') { console.error('l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(3); }
-if (st.layer2.l2_armed_at != null) { console.error('l2_armed_at unexpectedly set: '+JSON.stringify(st.layer2.l2_armed_at)); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'done') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (st.alert.alert_armed_at != null) { console.error('alert_armed_at unexpectedly set: '+JSON.stringify(st.alert.alert_armed_at)); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -182,14 +182,14 @@ run_r5() {
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5-sid"
     seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
-    # Marker file uses sessionId-final-report-env.json (see ensureLayer2Scheduled line ~83).
+    # Marker file uses sessionId-final-report-env.json (see ensureAlertScheduled line ~83).
     touch "$tmp/${sid}-final-report-env.json"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'pending') { console.error('l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(3); }
-if (st.layer2.l2_armed_at == null) { console.error('l2_armed_at not set'); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (st.alert.alert_armed_at == null) { console.error('alert_armed_at not set'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -214,7 +214,7 @@ run_r5b() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_armed_at != null) { console.error('l2_armed_at unexpectedly set: '+JSON.stringify(st && st.layer2.l2_armed_at)); process.exit(3); }
+if (!st || st.alert.alert_armed_at != null) { console.error('alert_armed_at unexpectedly set: '+JSON.stringify(st && st.alert.alert_armed_at)); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -239,18 +239,18 @@ const w = require('$WRITER_NODE');
 // Re-arm from frozen
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 let st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'pending') { console.error('post-rearm l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(3); }
-if (st.layer2.l2_retry_count !== 0) { console.error('retry_count not reset: '+st.layer2.l2_retry_count); process.exit(4); }
-// Exhaust retries to re-freeze (L2_RETRY_THRESHOLD=2)
-const threshold = s.L2_RETRY_THRESHOLD;
-for (let i = 0; i < threshold; i++) { w.incrementL2RetryCount('$sid'); }
+if (!st || st.alert.alert_phase !== 'pending') { console.error('post-rearm alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (st.alert.alert_retry_count !== 0) { console.error('retry_count not reset: '+st.alert.alert_retry_count); process.exit(4); }
+// Exhaust retries to re-freeze (ALERT_RETRY_THRESHOLD=2)
+const threshold = s.ALERT_RETRY_THRESHOLD;
+for (let i = 0; i < threshold; i++) { w.incrementAlertRetryCount('$sid'); }
 st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'frozen') { console.error('post-exhaust l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(5); }
+if (!st || st.alert.alert_phase !== 'frozen') { console.error('post-exhaust alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(5); }
 // Re-arm again from re-frozen
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 're-arm-2', reporter: 't' });
 st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'pending') { console.error('second rearm l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(6); }
-if (st.layer2.l2_retry_count !== 0) { console.error('second cycle retry_count: '+st.layer2.l2_retry_count); process.exit(7); }
+if (!st || st.alert.alert_phase !== 'pending') { console.error('second rearm alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(6); }
+if (st.alert.alert_retry_count !== 0) { console.error('second cycle retry_count: '+st.alert.alert_retry_count); process.exit(7); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -357,7 +357,7 @@ console.log('OK');
     fi
 }
 
-# R7: pending phase + appendFinding -> ensureLayer2Scheduled skips (already armed)
+# R7: pending phase + appendFinding -> ensureAlertScheduled skips (already armed)
 run_r7() {
     require_writer "R7: pending + appendFinding -> skips re-arm (already armed)" || return
     local tmp sid out rc
@@ -367,8 +367,8 @@ run_r7() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_armed_at !== '2026-06-06T11:00:00.000Z') { console.error('l2_armed_at changed: '+JSON.stringify(st && st.layer2.l2_armed_at)); process.exit(3); }
-if (st.layer2.l2_phase !== 'pending') { console.error('l2_phase changed: '+JSON.stringify(st.layer2.l2_phase)); process.exit(4); }
+if (!st || st.alert.alert_armed_at !== '2026-06-06T11:00:00.000Z') { console.error('alert_armed_at changed: '+JSON.stringify(st && st.alert.alert_armed_at)); process.exit(3); }
+if (st.alert.alert_phase !== 'pending') { console.error('alert_phase changed: '+JSON.stringify(st.alert.alert_phase)); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -380,7 +380,7 @@ console.log('OK');
     fi
 }
 
-# R8: null phase + appendFinding -> ensureLayer2Scheduled arms normally
+# R8: null phase + appendFinding -> ensureAlertScheduled arms normally
 run_r8() {
     require_writer "R8: null phase + appendFinding -> arms normally" || return
     local tmp sid out rc
@@ -390,8 +390,8 @@ run_r8() {
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 't' });
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'pending') { console.error('l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(3); }
-if (st.layer2.l2_armed_at == null) { console.error('l2_armed_at not set'); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
+if (st.alert.alert_armed_at == null) { console.error('alert_armed_at not set'); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -403,28 +403,28 @@ console.log('OK');
     fi
 }
 
-# R9: writeLayer2State({l2_phase:'pending', l2_armed_at:<now>, l2_retry_count:0}) on frozen state -> returns true
-# Tests that writeLayer2State uses validateL2PhaseTransition internally and allows frozen->pending.
+# R9: writeAlertState({alert_phase:'pending', alert_armed_at:<now>, alert_retry_count:0}) on frozen state -> returns true
+# Tests that writeAlertState uses validateL2PhaseTransition internally and allows frozen->pending.
 run_r9() {
-    require_writer "R9: writeLayer2State frozen->pending -> returns true" || return
+    require_writer "R9: writeAlertState frozen->pending -> returns true" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r9-sid"
     seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const now = new Date().toISOString();
-const result = w.writeLayer2State('$sid', { l2_phase: 'pending', l2_armed_at: now, l2_retry_count: 0 });
-if (result !== true) { console.error('writeLayer2State returned: '+JSON.stringify(result)); process.exit(3); }
+const result = w.writeAlertState('$sid', { alert_phase: 'pending', alert_armed_at: now, alert_retry_count: 0 });
+if (result !== true) { console.error('writeAlertState returned: '+JSON.stringify(result)); process.exit(3); }
 const st = w.readState('$sid');
-if (!st || st.layer2.l2_phase !== 'pending') { console.error('l2_phase='+JSON.stringify(st && st.layer2.l2_phase)); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(4); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R9: writeLayer2State frozen->pending -> returns true"
+        pass "R9: writeAlertState frozen->pending -> returns true"
     else
-        fail "R9: writeLayer2State frozen->pending -> returns true (rc=$rc, out=$out)"
+        fail "R9: writeAlertState frozen->pending -> returns true (rc=$rc, out=$out)"
     fi
 }
 

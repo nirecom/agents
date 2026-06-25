@@ -20,10 +20,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/cases-g1-g19.sh"
 # shellcheck source=feature-719-supervisor-guard-hook/cases-g20-g28.sh
 source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/cases-g20-g28.sh"
-# shellcheck source=feature-719-supervisor-guard-hook/g-l3-phase-b.sh
-source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-l3-phase-b.sh"
-# shellcheck source=feature-719-supervisor-guard-hook/g-l3-t5-arm.sh
-source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-l3-t5-arm.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/g-c3.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-c3.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/g-audit-phase-b.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-audit-phase-b.sh"
+# shellcheck source=feature-719-supervisor-guard-hook/g-audit-t5-arm.sh
+source "$(dirname "${BASH_SOURCE[0]}")/feature-719-supervisor-guard-hook/g-audit-t5-arm.sh"
 
 run_g1
 run_g2
@@ -64,6 +66,9 @@ run_g_b6
 run_g_t5_1
 run_g_t5_2
 run_g_t5_3
+run_g_c3a
+run_g_c3b
+run_g_c3c
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
