@@ -125,6 +125,9 @@ JSON_WF_META_AT_PREFINAL='{"workflow_type":"wf-meta","steps":{"workflow_init":{"
 # WF-META: all applicable steps complete, non-applicable pending, pre_final_report_gate complete
 JSON_WF_META_ALL_DONE='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"complete"}},"closes_issues":[721]}'
 
+# WF-META: outline complete, detail pending — oracle must auto-skip detail (bug #721 regression)
+JSON_WF_META_DETAIL_PENDING='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
+
 # WF-META mid-planning: workflow_init complete, clarify_intent pending
 JSON_WF_META_MID='{"workflow_type":"wf-meta","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"pending"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
 
@@ -484,6 +487,17 @@ run_tests() {
   PLAN_LIST_LEGACY="$(run_oracle --list --session "case29" 2>/dev/null || true)"
   line_branching29="$(echo "$PLAN_LIST_LEGACY" | grep -E 'branching_complete' | head -n1 || true)"
   check_contains "29c: wf-plan legacy --list branching_complete shows [-]" "[-]" "$line_branching29"
+
+  # ---- Case 30: WF-META — detail pending → auto-skipped, routes to pre_final_report_gate (#721 regression) ----
+  ACTION=""; NEXT_SKILL=""; REASON=""
+  write_state "case30" "$JSON_WF_META_DETAIL_PENDING"
+  OUT="$(run_oracle --session "case30" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "30a: wf-meta detail-pending ACTION=invoke" "invoke" "${ACTION:-}"
+  check_contains "30a: wf-meta detail-pending REASON=pre_final_report_gate" "pre_final_report_gate" "${REASON:-}"
+  PLAN_LIST30="$(run_oracle --list --session "case30" 2>/dev/null || true)"
+  line_detail30="$(echo "$PLAN_LIST30" | grep -E 'detail' | head -n1 || true)"
+  check_contains "30b: wf-meta detail-pending --list detail shows [-]" "[-]" "$line_detail30"
 }
 
 # run_with_timeout wraps each individual `node` invocation inside run_oracle
