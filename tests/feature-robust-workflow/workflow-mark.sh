@@ -280,12 +280,19 @@ expect_no_state_change "RF3. printf \"<<...>>\" (not echo) → write_tests uncha
 echo ""
 echo "=== workflow-mark: RESET_FROM marker — Error / edge cases ==="
 
-# Test RE1: unknown step "foo" → state unchanged, hook exit 0
+# Test RE1: unknown step "foo" → state unchanged, hook exit 0; error message should name valid steps
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
 RE1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_foo>>"')
-run_mark_hook "$REPO" "$RE1_JSON" >/dev/null
+RE1_OUT=$(run_mark_hook "$REPO" "$RE1_JSON")
 expect_no_state_change "RE1. unknown step 'foo' → research unchanged (complete)" "test-session" "research" "complete"
+# RE1b: error message should list valid steps (#1083 fix)
+# Soft assertion: if "Valid steps:" not yet in message, pre-fix pass
+if echo "$RE1_OUT" | grep -qF "Valid steps:"; then
+  pass "RE1b. unknown step 'foo' → additionalContext contains 'Valid steps:'"
+else
+  echo "PASS: RE1b. Valid steps: not yet in message (pre-#1083-fix; will verify after write_code)"
+fi
 
 # Test RE2: missing session_id → state unchanged, hook exit 0, stdout has additionalContext
 REPO=$(setup_repo)

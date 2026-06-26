@@ -12,7 +12,7 @@ const path = require("path");
 const { execSync } = require("child_process");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
-const { hasStagedDocChanges } = require("../../workflow-gate/staged-evidence");
+const { hasStagedDocChanges, hasStagedTestChanges } = require("../../workflow-gate/staged-evidence");
 const { hasWorktreeNotesDocEvidence } = require("../../workflow-gate/worktree-context");
 
 // Resolve the git repository root used by docs evidence checks.
@@ -58,6 +58,11 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       if (!repoDir) return false;
       return hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir);
     }
+    if (step === "write_tests") {
+      const repoDir = resolveRepoDir(opts);
+      if (!repoDir) return false;
+      return hasStagedTestChanges(repoDir);
+    }
     return false;
   } catch (e) {
     return false;
@@ -78,6 +83,9 @@ function describeEvidence(step) {
       "a staged file is under docs/ or matches *.md (any name/location, case-insensitive)",
       "in a linked worktree: WORKTREE_NOTES.md ## History Notes / ## Changelog Notes has a non-'(none)' bullet",
     ];
+  }
+  if (step === "write_tests") {
+    return ["a staged file is under tests/ or test/ (per hasStagedTestChanges)"];
   }
   return [];
 }

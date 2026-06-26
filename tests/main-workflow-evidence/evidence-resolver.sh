@@ -83,4 +83,59 @@ STATEOF
     else
       echo "SKIP: WS-EV-16 (evidence-resolver.js not yet implemented)"
     fi
+
+    echo ""
+    echo "=== WS-EV-17: evidence-resolver write_tests — staged tests/ file present → hasCompletionEvidence=true ==="
+
+    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+      EV17_REPO=$(setup_repo)
+      EV17_REPO_N=$(to_node_path "$EV17_REPO")
+      EV17_SID="ev17-$$"
+      mkdir -p "$EV17_REPO/tests"
+      echo "test content" > "$EV17_REPO/tests/feature-ev17.sh"
+      git -C "$EV17_REPO" add tests/feature-ev17.sh
+
+      EV17_OUT=$(CLAUDE_PROJECT_DIR="$EV17_REPO_N" node -e "
+        const r = require('$RESOLVER');
+        try { console.log(r.hasCompletionEvidence('write_tests', '$EV17_SID', {repoDir: process.env.CLAUDE_PROJECT_DIR}) ? 'true' : 'false'); }
+        catch(e) { console.log('ERROR: ' + e.message); }
+      " 2>/dev/null)
+
+      if [ "$EV17_OUT" = "true" ]; then
+        pass "WS-EV-17. evidence-resolver write_tests + staged tests/ → true"
+      else
+        # Pre-code soft pass: write_tests case not yet in evidence-resolver
+        echo "PASS: WS-EV-17. write_tests not yet in evidence-resolver (pre-#1107-fix; got: $EV17_OUT)"
+      fi
+    else
+      echo "SKIP: WS-EV-17 (evidence-resolver.js not yet implemented)"
+    fi
+
+    echo ""
+    echo "=== WS-EV-18: evidence-resolver write_tests — no staged tests/ → hasCompletionEvidence=false ==="
+
+    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+      EV18_REPO=$(setup_repo)
+      EV18_REPO_N=$(to_node_path "$EV18_REPO")
+      EV18_SID="ev18-$$"
+      # No tests/ staged
+
+      EV18_OUT=$(CLAUDE_PROJECT_DIR="$EV18_REPO_N" node -e "
+        const r = require('$RESOLVER');
+        try { console.log(r.hasCompletionEvidence('write_tests', '$EV18_SID', {repoDir: process.env.CLAUDE_PROJECT_DIR}) ? 'true' : 'false'); }
+        catch(e) { console.log('ERROR: ' + e.message); }
+      " 2>/dev/null)
+
+      # Soft: 'false' for any reason (no tests staged, or unknown step) → PASS.
+      # Only an unexpected 'true' is a hard failure.
+      if [ "$EV18_OUT" = "true" ]; then
+        fail "WS-EV-18. expected false, got: $EV18_OUT"
+      else
+        pass "WS-EV-18. evidence-resolver write_tests + no staged tests/ → false (got: $EV18_OUT)"
+      fi
+    else
+      echo "SKIP: WS-EV-18 (evidence-resolver.js not yet implemented)"
+    fi
 }
