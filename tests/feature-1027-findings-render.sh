@@ -230,10 +230,9 @@ process.stdout.write(v);
     fi
 }
 
-# --- R9: forFinalReport:true -> long detail truncated with '…' ---------------
-# RED: fails until forFinalReport option is implemented.
+# --- R9: forFinalReport:true -> full detail shown, no truncation ---------------
 run_r9() {
-    require_source "$RENDER_SRC" "R9: forFinalReport:true truncates detail at ~120 chars" || return
+    require_source "$RENDER_SRC" "R9: forFinalReport:true shows full detail without truncation" || return
     local out rc
     # Construct a detail string > 120 chars with no special chars.
     local long_detail="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_END"
@@ -247,13 +246,13 @@ if (v === null || typeof v !== 'string') process.exit(2);
 process.stdout.write(v);
 " 2>/dev/null)"
     rc=$?
-    # Must contain truncation ellipsis and must NOT contain '_END' (truncated before it).
+    # Full detail must appear including '_END'; no truncation ellipsis.
     if [ "$rc" = "0" ] && \
-       echo "$out" | grep -qF "…" && \
-       ! echo "$out" | grep -qF "_END"; then
-        pass "R9: forFinalReport:true truncates long detail with '…' (no trailing _END)"
+       echo "$out" | grep -qF "_END" && \
+       ! echo "$out" | grep -qF "…"; then
+        pass "R9: forFinalReport:true shows full detail (no truncation, _END present)"
     else
-        fail "R9: truncation not working (rc=$rc, out=$out)"
+        fail "R9: detail truncated or missing in forFinalReport mode (rc=$rc, out=$out)"
     fi
 }
 
