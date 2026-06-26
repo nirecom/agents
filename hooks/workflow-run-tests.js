@@ -32,7 +32,7 @@ function done() {
 // Read-only / non-execution command prefixes — exclude from test detection.
 // Also excludes all git subcommands except those that could actually run tests.
 const READ_ONLY_RE = /^(ls|cat|head|tail|grep|rg|find|wc|file|stat|echo|printf|which|type|pwd)\b/;
-const GIT_NON_EXEC_RE = /^git\s+(diff|log|show|status|blame|ls-files|ls-tree|cat-file|rev-parse|fetch|remote|add|commit|push|merge|rebase|pull|stash|tag)\b/;
+const GIT_NON_EXEC_RE = /^git\s+(?:-C\s+(?:"[^"]+"|'[^']+'|\S+)\s+)?(diff|log|show|status|blame|ls-files|ls-tree|cat-file|rev-parse|fetch|remote|add|commit|push|merge|rebase|pull|stash|tag)\b/;
 
 // Test runner / test path patterns.
 const TEST_PATH_RE = /\btests?\//;
@@ -41,25 +41,87 @@ const TEST_RUNNER_UV_RE = /\buv\s+run\s+pytest\b/;
 const TEST_BASH_RE = /\b(bash|sh|node|pwsh|powershell(?:\.[a-z]+)?)\s+\S*tests?\//i;
 const PESTER_RE = /\.Tests\.ps1\b/i;
 
+// Split a command into segments at top-level (unquoted) occurrences of
+// && || | ; and newline. Operators inside single or double quotes do NOT
+// split, so `echo "a && b"` stays a single segment. Pure string scan,
+// never throws — fail-open friendly. Backslash escapes the next char.
+function splitTopLevelSegments(command) {
+  const segments = [];
+  let current = "";
+  let quote = null; // null | '\'' | '"'
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    if (quote) {
+      // Inside quotes: only a matching close-quote (or backslash escape) is special.
+      if (ch === "\\" && i + 1 < command.length) {
+        current += ch + command[i + 1];
+        i++;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      current += ch;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === "\\" && i + 1 < command.length) {
+      current += ch + command[i + 1];
+      i++;
+      continue;
+    }
+    // Top-level operators: && || (two chars) and | ; \n (one char).
+    if ((ch === "&" && command[i + 1] === "&") || (ch === "|" && command[i + 1] === "|")) {
+      segments.push(current);
+      current = "";
+      i++; // consume the second operator char
+      continue;
+    }
+    if (ch === "|" || ch === ";" || ch === "\n") {
+      segments.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  segments.push(current);
+  return segments;
+}
+
+// True iff a single command segment matches a test-detection pattern.
+function segmentMatchesDetection(seg) {
+  return (
+    TEST_PATH_RE.test(seg) ||
+    TEST_RUNNER_RE.test(seg) ||
+    TEST_RUNNER_UV_RE.test(seg) ||
+    TEST_BASH_RE.test(seg) ||
+    PESTER_RE.test(seg)
+  );
+}
+
+// True iff a single segment is excluded (sentinel echo / read-only / git non-exec).
+function segmentExcluded(seg) {
+  if (seg.startsWith('echo "<<') || seg.startsWith("echo '<<")) return true;
+  if (READ_ONLY_RE.test(seg)) return true;
+  if (GIT_NON_EXEC_RE.test(seg)) return true;
+  return false;
+}
+
 function isTestCommand(command) {
   const trimmed = command.trim();
-
-  // Sentinel echoes are not test runs.
-  if (trimmed.startsWith('echo "<<') || trimmed.startsWith("echo '<<")) return false;
-
-  // Extract the first token of the command (before any shell operators).
-  const firstToken = trimmed.split(/[\s|&;]/)[0].toLowerCase();
-
-  if (READ_ONLY_RE.test(trimmed)) return false;
-  if (GIT_NON_EXEC_RE.test(trimmed)) return false;
-
-  return (
-    TEST_PATH_RE.test(trimmed) ||
-    TEST_RUNNER_RE.test(trimmed) ||
-    TEST_RUNNER_UV_RE.test(trimmed) ||
-    TEST_BASH_RE.test(trimmed) ||
-    PESTER_RE.test(trimmed)
-  );
+  // Quote-aware split on top-level shell operators (&&, ||, |, ;, newline).
+  // Operators inside quotes are NOT split points, so `echo "a && pytest tests/"`
+  // stays one segment and is excluded by the leading `echo` (read-only).
+  const segments = splitTopLevelSegments(trimmed);
+  for (const raw of segments) {
+    const seg = raw.trim();
+    if (!seg) continue;
+    if (segmentExcluded(seg)) continue;
+    if (segmentMatchesDetection(seg)) return true;
+  }
+  return false;
 }
 
 let input;
