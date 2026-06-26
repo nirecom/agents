@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stop hook: validate that the Final Report was emitted into assistant text
-// with all 10 canonical section headings present and no unsubstituted
+// with all 13 canonical section headings present and no unsubstituted
 // `<PLACEHOLDER>` tokens remaining.
 //
 // Trigger: <plans-dir>/<sid>-final-report-env.json exists (written by
@@ -147,7 +147,7 @@ if (require.main === module) {
   const missing = remainingHeadings.filter((h) => !finalReportBody.includes(h));
   if (missing.length > 0) {
     const reason =
-      `[final-report] Emit the Final Report with all 10 section headings present. ` +
+      `[final-report] Emit the Final Report with all 13 section headings present. ` +
       `The following headings were missing from your output: ${missing.join(", ")}. ` +
       `Re-emit the Final Report verbatim — do not reformat, summarize, reorder, or merge sections. ` +
       `(Hook: stop-final-report-guard.js)\n\n` +

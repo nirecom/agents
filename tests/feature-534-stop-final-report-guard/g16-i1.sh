@@ -43,7 +43,7 @@ test_G16_only_header_no_subheadings() {
 }
 
 # ---------------------------------------------------------------------------
-# G17 (new): env-file + header + 8 of 9 `###` headings (missing `### Bugs Found`)
+# G17 (new): env-file + header + 11 of 12 `###` headings (missing `### Bugs Found`)
 #            → exit 2 + decision:block
 # ---------------------------------------------------------------------------
 test_G17_nine_of_ten_headings() {
@@ -75,6 +75,12 @@ test_G17_nine_of_ten_headings() {
 - (none)
 ### Next Tasks
 - (none)
+### Supervisor Alert
+(not run)
+### Supervisor Audit
+(not run)
+### Supervisor Findings
+(no findings)
 EOF
 )"
     write_transcript_with_assistant "$transcript" "$report_text"
@@ -97,14 +103,14 @@ EOF
             process.exit(obj.decision==='block'?0:1);
           } catch(e){ process.exit(1); }
         });" 2>/dev/null; then
-        pass "G17: header + 8/9 ### (missing Bugs Found) → exit 2 + decision:block"
+        pass "G17: header + 11/12 ### (missing Bugs Found) → exit 2 + decision:block"
     else
         fail "G17: expected exit 2 + decision:block, got code=$code out=$(printf '%s' "$out" | head -c 200)"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# G18 (new): env-file + all 10 headings in scrambled order → exit 0
+# G18 (new): env-file + all 13 headings in scrambled order → exit 0
 # (order-agnostic — only presence matters)
 # ---------------------------------------------------------------------------
 test_G18_all_ten_reordered() {
@@ -117,7 +123,7 @@ test_G18_all_ten_reordered() {
     write_default_env_file "$envfile"
 
     local transcript="$TMPDIR_BASE/g18-transcript.jsonl"
-    # `## Final Report` first, then ### headings in scrambled order.
+    # `## Final Report` first, then all 13 headings in scrambled order.
     local report_text
     report_text="$(cat <<EOF
 ## Final Report — ${sid}
@@ -139,6 +145,12 @@ test_G18_all_ten_reordered() {
 - Claude Code restart: not_required
 ### Closed Issue Outcomes
 - (none)
+### Supervisor Findings
+(no findings)
+### Supervisor Alert
+(not run)
+### Supervisor Audit
+(not run)
 EOF
 )"
     write_transcript_with_assistant "$transcript" "$report_text"
@@ -152,15 +164,17 @@ EOF
     code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
 
     if [ "$code" = "0" ]; then
-        pass "G18: all 10 headings in scrambled order → exit 0 (order-agnostic)"
+        pass "G18: all 13 headings in scrambled order → exit 0 (order-agnostic)"
     else
         fail "G18: expected exit 0 (all headings present), got $code"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# G19 (new): env-file + all 10 headings + residual `<PR_NUMBER>` token in
+# G19 (new): env-file + all 13 headings + residual `<PR_NUMBER>` token in
 #            post-header region → exit 2 + decision:block
+# Note: uses ‹ (U+2039) for supervisor-findings content so it doesn't trigger
+# the token check; the PR_NUMBER token in Merged PR section does.
 # ---------------------------------------------------------------------------
 test_G19_residual_tokens() {
     require_hook "G19_residual_tokens" || return
@@ -199,6 +213,12 @@ test_G19_residual_tokens() {
 - (none)
 ### Next Tasks
 - (none)
+### Supervisor Alert
+(not run)
+### Supervisor Audit
+(not run)
+### Supervisor Findings
+(no findings)
 EOF
 )"
     write_transcript_with_assistant "$transcript" "$report_text"
@@ -221,7 +241,7 @@ EOF
             process.exit(obj.decision==='block'?0:1);
           } catch(e){ process.exit(1); }
         });" 2>/dev/null; then
-        pass "G19: all 10 headings + residual <PR_NUMBER> token → exit 2 + decision:block"
+        pass "G19: all 13 headings + residual <PR_NUMBER> token → exit 2 + decision:block"
     else
         fail "G19: expected exit 2 + decision:block (residual token), got code=$code out=$(printf '%s' "$out" | head -c 200)"
     fi
