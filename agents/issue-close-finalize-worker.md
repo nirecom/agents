@@ -111,7 +111,7 @@ Read state file. If missing or invalid schema_version: emit `status: failed`, `s
 
 Run Steps H, J, K, L for `current_issue_number`:
 
-- Step ICF-H: `ISSUE_CLOSE_SKILL=1 gh issue close "$current_issue_number" --reason completed`. Non-zero → emit `status: failed`, `summary: "Step ICF-H: gh issue close failed for #N"` and stop.
+- Step ICF-H: `bash "$agents_config_dir/bin/github-issues/close-completed.sh" --repo "$owner_repo" "$current_issue_number"`. Non-zero → emit `status: failed`, `summary: "Step ICF-H: gh issue close failed for #N"` and stop.
 - Step ICF-I: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state). Non-zero → log warning; continue (non-fatal).
 - Step ICF-J: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`. Non-zero → log warning; continue (non-fatal).
 - Step ICF-K: read `triage_action` from state. Determine `history_entry_status`:

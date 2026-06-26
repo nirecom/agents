@@ -152,13 +152,15 @@ closing the parent is blocked. Cancelled/migrated children must already be close
   clear error if unset). Consumer repos (dotfiles, dotfiles-private) inherit
   the same variable.
 - `ISSUE_CLOSE_SKILL=1` bypasses `enforce-issue-close.js` for `gh issue close`
-  only (`gh issue comment` is not gated). **Sole sanctioned bypass form: env export** —
-  `export ISSUE_CLOSE_SKILL=1` before running `gh issue close` from a direct Bash-tool
-  call. Used by `/issue-close-finalize` and `/issue-close-stage` for skill-internal calls.
-  Script-internal `gh issue close` calls (from within bash CLI scripts such as
-  `bin/github-issues/close-not-planned.sh`) are structurally invisible to
-  `enforce-issue-close.js` — PreToolUse fires on the Bash-tool command head only, not on
-  subprocess calls — so no bypass marker is needed for them.
+  only (`gh issue comment` is not gated). Script-internal `gh issue close` calls
+  (from within bash CLI scripts such as `bin/github-issues/close-completed.sh` for
+  completed closes, or `bin/github-issues/close-not-planned.sh` for not_planned closes)
+  are structurally invisible to `enforce-issue-close.js` — PreToolUse fires on the
+  Bash-tool command head only, not on subprocess calls — so no bypass marker is needed.
+  `/issue-close-finalize` uses `close-completed.sh` for this reason.
+  `ISSUE_CLOSE_SKILL=1` is effective only when set in the hook process environment
+  (Node.js process started at session launch) — Bash-tool inline or `export` forms
+  do not reach the hook process and have no effect.
   The Phase 2 Step E `enforce-worktree.js` bypass for `git add docs/history.md` was
   removed in #690 (Step E itself was removed — Step WE-21 of `/worktree-end` is now
   the canonical history writer). Do not set it elsewhere.
