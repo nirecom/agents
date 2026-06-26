@@ -30,7 +30,22 @@ function getWorkflowDir() {
   return path.join(os.homedir(), ".claude", "projects", "workflow");
 }
 
+// SSOT for sessionId validation (defense-in-depth against path traversal).
+// Real session IDs — UUIDs (hex+hyphen), YYYYMMDD-HHMMSS fallbacks (digit+hyphen),
+// and test sids ("test-sid-bash-9", "20260509-bundle-a") — all match this regex,
+// so legitimate use is never broken. Rejects path separators, "..", and the like.
+const SESSION_ID_VALID_RE = /^[A-Za-z0-9_-]+$/;
+
+// Throws on an invalid sessionId. Used by path-building callers where an
+// unvalidated sessionId is a caller bug (path traversal), not a recoverable state.
+function assertValidSessionId(sessionId) {
+  if (typeof sessionId !== "string" || !SESSION_ID_VALID_RE.test(sessionId)) {
+    throw new Error(`Invalid sessionId: ${JSON.stringify(sessionId)}`);
+  }
+}
+
 function getStatePath(sessionId) {
+  assertValidSessionId(sessionId);
   return path.join(getWorkflowDir(), sessionId + ".json");
 }
 
@@ -304,6 +319,8 @@ module.exports = {
   VALID_STATUSES,
   getWorkflowDir,
   getStatePath,
+  assertValidSessionId,
+  SESSION_ID_VALID_RE,
   readState,
   writeState,
   createInitialState,
