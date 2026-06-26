@@ -26,7 +26,7 @@ CI-2. Check via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_
 
 CI-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
-CI-2b. **Companion-issue re-search.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/companion-search.sh" --seed "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")"`. Exit 1 → skip. Exit 0: for each TSV line (`<N>\t<title>\t<reason>\t<state>`), one `AskUserQuestion`: "Add #<N> (<title>) as a companion issue for this session? Reason: <reason>" — options "Yes (add)" / "No (skip)". Accepted `#M` appended to `closes_issues` before CI-4 writes intent.md.
+CI-2b. **Companion-issue re-search.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/companion-search.sh" --seed "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")"`. Exit 1 → skip. Exit 0: for each TSV line (`<N>\t<title>\t<reason>\t<state>`), one `AskUserQuestion`: "Add #<N> (<title>) as a companion issue for this session? Reason: <reason>" — options "Yes (add)" / "No (skip)". Accepted `#M` appended to `closes_issues` before CI-4 writes intent.md. On "Yes (add)": immediately call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-set-single.sh" <M>`; exit-code handling matches the Completion WIP-set loop (exit 0 `META_SKIP` → log; exit 1 → warn-continue; exit 2 `RC2` → AskUserQuestion "Skip and continue / Abort").
 
 CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 

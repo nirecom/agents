@@ -25,7 +25,7 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 Regex `#\d+`:
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
+- **>=2** → Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/filter-primary-candidates.sh" <all found numbers>`. Set `ISSUES=(<stdout lines, in emission order>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
 
 ### Step WI-4 — Session ID + fetch issues
 
@@ -35,7 +35,7 @@ Regex `#\d+`:
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh" "${ISSUES[@]}"`. Output classifies and routes:
 - `ALL_SAME <wip>` → continue (this session already owns WIP on every issue).
-- `ALL_NONE` → `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/wip-set-resume.sh" "${ISSUES[@]}"`. Exit 0 (`ALL_SET`): WIP set for all eligible N's. Exit 1 (`NEEDS_CLARIFY <N,...>`): set `FORCE_PATH_B=1`; skip WIP — clarify-intent Completion sets WIP on all N. Exit 2 (`RC2 <N>`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed). How to proceed?" → "Continue (skip WIP, acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N>>>"` + stop.
+- `ALL_NONE` → `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/wip-set-resume.sh" "${ISSUES[@]}"`. Exit 0 (`ALL_SET`): WIP set for all eligible N's. Exit 1 (`NEEDS_CLARIFY <N,...>`): set `FORCE_PATH_B=1`; early-claim WIP for each OPEN non-meta N (best-effort; RC2 escalates with exit 2). clarify-intent Completion re-confirms WIP idempotently on all N. Exit 2 (`RC2 <N>`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed). How to proceed?" → "Continue (skip WIP, acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N>>>"` + stop.
 - `MIXED_SAME_NONE` → for each N where `WIP == none`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" "${SID_PASS[@]}" set <N>` (best-effort) to bring related issues up to parity.
 - `ANY_OTHER <N,...>` → let `CONFLICTED=<list>`. Single `AskUserQuestion` "Issue(s) #<CONFLICTED> may be in progress in another session. Continue?" options Continue (recommended) / Abort. On Continue: for each N in `ISSUES`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" "${SID_PASS[@]}" set <N>` (override for `other` N; claim for `none` N; `same` N idempotent; best-effort per-N). On Abort: emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<CONFLICTED>>>"` and stop.
 - `ERROR <N,...>` → `AskUserQuestion` "WIP check failed for #<N,...> (transient auth/gh error or session-id resolution failure — check $CLAUDE_ENV_FILE or $CLAUDE_SESSION_ID). How to proceed?" with two options: "Continue without WIP tracking (acknowledge risk)" → warn `[workflow-init: wip-state check failed for #<N> — proceeding as 'none' for that issue]` and treat each as `none` and continue; "Abort session" → emit `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N,...>>>"` and stop.
