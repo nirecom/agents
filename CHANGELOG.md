@@ -167,3 +167,7 @@ Changes: Workflow oracle now auto-completes the `write_tests` step when staged t
 ### FEATURE: Early WIP claim, companion WIP/parent filter, primary candidate filter (#1117,#1081,#1005) (2026-06-26)
 Background: Three related issues: #1117 (wip-set-resume NEEDS_CLARIFY branch did not claim WIP before exit, leaving session unclaimed on resume), #1081 (companion issue filter included parent and WIP-claimed-by-other candidates), #1005 (workflow-init had no filter for multiple primary candidates).
 Changes: wip-set-resume now claims WIP before exiting in the NEEDS_CLARIFY branch; companion candidate filter excludes parent-of-primary and WIP-claimed-by-other issues; new primary candidate filter script for workflow-init; clarify-intent claims WIP on companion accept.
+
+### BUGFIX: PR #1136 (2026-06-27)
+Background: fix(#1123): exclude extensionHost from isVsCode() CLAUDE_CODE_ENTRYPOINT clause
+Changes: Fixed: VS Code extension (extensionHost) users no longer receive unexpected plan-file auto-open popups when plans are written
