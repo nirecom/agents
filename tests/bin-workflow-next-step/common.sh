@@ -38,6 +38,17 @@ check_contains() {
   fi
 }
 
+check_not_contains() {
+  local desc="$1" needle="$2" haystack="$3"
+  if echo "$haystack" | grep -qF "$needle"; then
+    echo "FAIL: $desc -- did NOT expect [$needle] in: $haystack"
+    FAIL=$((FAIL + 1))
+  else
+    echo "PASS: $desc"
+    PASS=$((PASS + 1))
+  fi
+}
+
 write_state() {
   local sid="$1" json="$2"
   printf '%s' "$json" > "$TMPDIR_WT/${sid}.json"
