@@ -160,3 +160,7 @@ Changes: enforce-worktree guard no longer false-blocks git merge-base, git stash
 ### FEATURE: PR #1121 (2026-06-26)
 Background: fix(#299): write ⏳ sentinel for untitled sessions; let issue # override sentinel
 Changes: VS Code session title now shows ⏳ reliably for all sessions including fresh ones with no workflow issue; issue number appears in the tab after /workflow-init runs even if a prompt was submitted before the intent was created
+
+### FEATURE: PR #1130 (2026-06-26)
+Background: fix(#1107,#1085,#1083): write_tests evidence auto-repair, abort hint cleanup, RESET_FROM error
+Changes: Workflow oracle now auto-completes the `write_tests` step when staged test files are present, eliminating the need for manual `WORKFLOW_RESET_FROM_write_tests` workarounds when tests are written before the step is formally advanced.;Oracle abort messages no longer expose the `WORKFLOW_RESET_FROM_` recipe; recovery guidance now points to `/workflow-init` exclusively.;Unknown step names in `WORKFLOW_RESET_FROM_<step>` sentinels now produce an actionable error listing all valid step names instead of a silent "ignored" message.
