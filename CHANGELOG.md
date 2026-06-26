@@ -136,3 +136,7 @@ Changes: WF-META sessions no longer invoke `make-detail-plan`: the oracle now au
 ### FEATURE: PR #1111 (2026-06-26)
 Background: fix(#1094,#1064): evidence-based step completion for clarify_intent and docs — gate and oracle auto-repair
 Changes: `workflow-gate` and oracle now auto-repair stale `clarify_intent=pending` state when `<sessionId>-intent.md` already exists — no more `WORKFLOW_OFF` workaround needed after a session restore or state reset.;Oracle auto-completes the `docs` step when staged doc changes or `WORKTREE_NOTES.md` bullets are present, eliminating false "re-run `/update-docs`" instructions.
+
+### FEATURE: PR #1110 (2026-06-26)
+Background: feat(#1097): add block-memory-direct.js PreToolUse hook to intercept agents-repo memory writes
+Changes: Memory writes to the agents-repo behavior notes directory are now intercepted; CC presents a choice to create a GitHub issue (recommended), allow the write (one-shot per session), or cancel.
