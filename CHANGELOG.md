@@ -152,3 +152,7 @@ Changes: Fixed a workflow bug where commands using `git -C <path>`, or compound/
 ### FEATURE: PR #1125 (2026-06-26)
 Background: fix(#1114): surface per-finding detail in Final Report Supervisor Findings section (#1125)
 Changes: The session-close Final Report's `### Supervisor Findings` section now shows per-finding detail (categories, severity, detail, reporter) instead of only an aggregate count — findings remain visible even when SC-7 is skipped because findings were already surfaced earlier in the session
+
+### FEATURE: PR #1126 (2026-06-26)
+Background: fix(#1095,#1024,#982,#286,#234): enforce-worktree false-positive fixes + migration cleanup
+Changes: enforce-worktree guard no longer false-blocks git merge-base, git stash drop/clear, or rm $VAR (scratchpad cleanup) from the main worktree (#1095, #1024);enforce-worktree: git worktree add ... && cd <path> chains now pass through from main worktree; git -C <main-path> worktree remove/prune from linked worktrees also fixed (#982, #838);enforce-worktree: subagents launched from a linked worktree no longer mistakenly blocked — tool CWD is now used for repo-root detection (#286)
