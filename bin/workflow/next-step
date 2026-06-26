@@ -250,6 +250,28 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
+  // Evidence-based auto-complete for write_tests (#1107): staged test files →
+  // mark complete and recompute. MUST run BEFORE the inconsistency scan: when a
+  // later step (review_tests/run_tests) is already complete while write_tests is
+  // pending, the scan would otherwise fire `abort` first and never auto-repair.
+  if (currentStep === "write_tests" && !_didAutoRepair &&
+      (state.steps.write_tests || {}).status === "pending") {
+    const { hasCompletionEvidence } = require("../../hooks/lib/workflow-state/evidence-resolver");
+    let repoDir = process.env.CLAUDE_PROJECT_DIR || null;
+    if (!repoDir) {
+      try {
+        repoDir = require("child_process").execSync(
+          "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+        ).trim();
+      } catch (e) { repoDir = process.cwd(); }
+    }
+    if (hasCompletionEvidence("write_tests", sid, { repoDir })) {
+      const { markStep } = require("../../hooks/lib/workflow-state");
+      try { markStep(sid, "write_tests", "complete"); } catch (e) { /* fail-open */ }
+      return computeVerdict(rawSid, true);
+    }
+  }
+
   // Inconsistency: later step is complete OR invalid status anywhere.
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
@@ -266,7 +288,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
       emit(
         "abort",
         "",
-        'Stale state from a prior workflow run detected. Re-run /workflow-init to reset (it clears downstream steps automatically), or run: echo "<<WORKFLOW_RESET_FROM_' + currentStep + '>>>"',
+        "Stale state from a prior workflow run detected. Re-run /workflow-init to reset (it clears downstream steps automatically).",
         "inconsistent: " + step + " is complete but " + currentStep + " is pending"
       );
       return;
