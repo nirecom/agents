@@ -15,11 +15,6 @@
 // Git Data API: bin/lib/github-git-data-write.sh). Limitations: Bash write detection
 // is pattern-based (UX guard, not a security boundary). Use ENFORCE_WORKTREE=off to
 // bypass for trivial direct-main work.
-//
-// --- BEGIN temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
-// AGENT_AUTO_BRANCH and AGENT_DEFAULT_BRANCHES are accepted with a deprecation warning.
-// Remove this block once all agents configs have been updated.
-// --- END temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 
 "use strict";
 
@@ -199,7 +194,7 @@ if (toolName === "Bash") {
   const cmd = toolInput.command || "";
   if (!cmd) done();
   if (classify(cmd) !== "write") done(); // read-only command — allow
-  repoRoot = findRepoRootForBash(cmd);
+  repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
   // Allowed only when the target branch is not currently checked out in any worktree.
