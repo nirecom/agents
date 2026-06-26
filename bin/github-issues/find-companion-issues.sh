@@ -123,6 +123,16 @@ for n in "${CANDIDATES[@]}"; do
     [ "$cand_state" = "OPEN" ] || continue
     if printf '%s' ",$cand_labels," | grep -q ',meta,'; then continue; fi
 
+    # 3-axis filter axis 1: CLOSED — handled above (cand_state=OPEN check)
+    # 3-axis filter axis 2: parent filter — skip if candidate IS the primary's parent issue
+    # (PASS_C_PARENT_N holds the primary's parent number from companion_pass_c; empty = no parent)
+    if [[ -n "$PASS_C_PARENT_N" ]] && [[ "$n" = "$PASS_C_PARENT_N" ]]; then continue; fi
+    # 3-axis filter axis 3: WIP filter — skip if owned by another session
+    _wip_check_result=""
+    _wip_rc=0
+    _wip_check_result=$(bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" check "$n" 2>/dev/null) || _wip_rc=$?
+    if [[ $_wip_rc -eq 0 ]] && [[ "$_wip_check_result" = "other" ]]; then continue; fi
+
     reasons=""
     if printf '%s\n' "$PASS_A_NUMBERS" | grep -qx "$n"; then
         reasons="xref"
