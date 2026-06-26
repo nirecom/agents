@@ -4,7 +4,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { stripQuotedArgs } = require("../../lib/strip-quoted-args");
-const { hasShellChaining, isPathOutsideRepo, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix, rejectRceGitFlags, rejectInterpreterAndChaining } = require("../shared-cmd-utils");
+const { hasShellChaining, isPathOutsideRepo, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix, rejectRceGitFlags, rejectInterpreterAndChaining, findFirstUnquotedAnd } = require("../shared-cmd-utils");
 const { parseGitCPath } = require("../git-repo-detection");
 
 // Returns true if cmd is `git worktree remove` with --force or -f (short form).
@@ -33,17 +33,33 @@ function hasWorktreeRemoveForceFlag(cmd) {
  * `--` (end-of-options) is treated as a flag and skipped; the next token is path.
  */
 function isAllowedWorktreeCommand(cmd, repoRoot) {
-  if (rejectInterpreterAndChaining(cmd)) return false;
-  if (hasShellChaining(cmd)) return false;
-  const stripped = stripQuotedArgs(cmd);
+  // Split off a trailing `&& cd <path>` (the sanctioned worktree-start shape)
+  // before the chaining guards, then evaluate the guards against `head` only.
+  // The cd tail must be a bare `cd <single-path>` — no further chaining,
+  // interpreter invocation, or command substitution (#982, #838).
+  const andIdx = findFirstUnquotedAnd(cmd);
+  let head = cmd;
+  if (andIdx !== -1) {
+    head = cmd.slice(0, andIdx).trim();
+    const tail = cmd.slice(andIdx + 2).trim();
+    if (tail !== "") {
+      if (!/^cd\s+(?:"[^"$`]+"|'[^']+'|[^\s$`;|&<>()]+)\s*$/.test(tail)) return false;
+      if (hasShellChaining(tail)) return false;
+      if (rejectInterpreterAndChaining(tail)) return false;
+    }
+  }
+
+  if (rejectInterpreterAndChaining(head)) return false;
+  if (hasShellChaining(head)) return false;
+  const stripped = stripQuotedArgs(head);
   if (!/\bgit\b/.test(stripped) || !/\bworktree\s+(?:add|remove|prune)\b/.test(stripped)) return false;
 
   // remove/prune do not create new checkout paths — always allow from main worktree
-  if (/\bworktree\s+remove\b/.test(stripped) && hasWorktreeRemoveForceFlag(cmd)) return false;
+  if (/\bworktree\s+remove\b/.test(stripped) && hasWorktreeRemoveForceFlag(head)) return false;
   if (/\bworktree\s+(?:remove|prune)\b/.test(stripped)) return true;
 
   // For 'add': parse target path (first non-flag arg after 'add')
-  const addMatch = cmd.match(/\bworktree\s+add\s+([\s\S]*)/);
+  const addMatch = head.match(/\bworktree\s+add\s+([\s\S]*)/);
   if (!addMatch) return true; // can't parse — fail-open
 
   const tokens = [];
