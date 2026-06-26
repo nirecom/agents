@@ -173,6 +173,8 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")/feature-299-session-titles"
 . "$SCRIPT_DIR/cli-and-resolution.sh"
 # shellcheck source=./feature-299-session-titles/integration.sh
 . "$SCRIPT_DIR/integration.sh"
+# shellcheck source=./feature-299-session-titles/null-title-sentinel.sh
+. "$SCRIPT_DIR/null-title-sentinel.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
