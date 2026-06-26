@@ -16,7 +16,8 @@ function handle(ctx) {
 
     if (!VALID_STEPS.includes(fromStep)) {
       pushMessage(
-        `workflow-mark: unknown step "${fromStep}" for reset-from — ignored.`
+        `workflow-mark: ERROR — unknown step "${fromStep}" for RESET_FROM; ` +
+        `state NOT changed. Valid steps: ${VALID_STEPS.join(", ")}.`
       );
       return true;
     }
