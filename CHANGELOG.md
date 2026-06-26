@@ -156,3 +156,7 @@ Changes: The session-close Final Report's `### Supervisor Findings` section now 
 ### FEATURE: PR #1126 (2026-06-26)
 Background: fix(#1095,#1024,#982,#286,#234): enforce-worktree false-positive fixes + migration cleanup
 Changes: enforce-worktree guard no longer false-blocks git merge-base, git stash drop/clear, or rm $VAR (scratchpad cleanup) from the main worktree (#1095, #1024);enforce-worktree: git worktree add ... && cd <path> chains now pass through from main worktree; git -C <main-path> worktree remove/prune from linked worktrees also fixed (#982, #838);enforce-worktree: subagents launched from a linked worktree no longer mistakenly blocked — tool CWD is now used for repo-root detection (#286)
+
+### FEATURE: PR #1121 (2026-06-26)
+Background: fix(#299): write ⏳ sentinel for untitled sessions; let issue # override sentinel
+Changes: VS Code session title now shows ⏳ reliably for all sessions including fresh ones with no workflow issue; issue number appears in the tab after /workflow-init runs even if a prompt was submitted before the intent was created
