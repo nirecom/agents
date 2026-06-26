@@ -88,6 +88,57 @@ else
     fail "D3: clarify-intent SKILL.md not found"
 fi
 
+# --- #1117 static assertions (RED until SKILL.md prose lands) ----------------
+# Helper: extract the CI-2b companion-accept block from clarify-intent SKILL.md.
+ci2b_block() {
+    awk '/CI-2b\./{flag=1} flag && /^CI-[0-9]+[a-z]?\./ && !/CI-2b\./{flag=0} flag' \
+        "$CLARIFY_INTENT_SKILL" 2>/dev/null || true
+}
+
+# D4: CI-2b accept block references wip-set-single.sh — accepting a companion
+# issue claims its WIP immediately (#1117 Step 2).
+if [ -f "$CLARIFY_INTENT_SKILL" ]; then
+    if ci2b_block | grep -q "wip-set-single.sh"; then
+        pass "D4: CI-2b references wip-set-single.sh (immediate WIP claim on accept)"
+    else
+        fail "D4: CI-2b does not reference wip-set-single.sh — accepted companion not claimed early"
+    fi
+else
+    fail "D4: clarify-intent SKILL.md not found"
+fi
+
+# D5: WI-3 references filter-primary-candidates.sh (#1117 Step 4 — CLOSED+parent
+# primary-candidate filter). The reference may live in WI-3 or its body prose;
+# assert the script name appears in workflow-init SKILL.md.
+if [ -f "$WORKFLOW_INIT_SKILL" ]; then
+    if grep -q "filter-primary-candidates.sh" "$WORKFLOW_INIT_SKILL"; then
+        pass "D5: workflow-init SKILL.md references filter-primary-candidates.sh"
+    else
+        fail "D5: workflow-init SKILL.md does not reference filter-primary-candidates.sh"
+    fi
+else
+    fail "D5: workflow-init SKILL.md not found"
+fi
+
+# D6: WI-5 ALL_NONE NEEDS_CLARIFY (Exit 1) branch no longer says "skip WIP" as a
+# definitive statement — early claim now happens in wip-set-resume.sh (#1117
+# Step 1). The Exit 2 RC2 branch may still legitimately say "skip WIP,
+# acknowledge risk", so isolate just the Exit-1 segment (between `Exit 1` and
+# `Exit 2`) of the ALL_NONE bullet.
+if [ -f "$WORKFLOW_INIT_SKILL" ]; then
+    ALL_NONE_BULLET=$(grep -E '^- `ALL_NONE`' "$WORKFLOW_INIT_SKILL" | head -1 || true)
+    EXIT1_SEG=$(printf '%s' "$ALL_NONE_BULLET" | sed -E 's/.*Exit 1//; s/Exit 2.*//')
+    if [ -z "$ALL_NONE_BULLET" ]; then
+        fail "D6: WI-5 ALL_NONE bullet not found in workflow-init SKILL.md"
+    elif printf '%s' "$EXIT1_SEG" | grep -qi "skip WIP"; then
+        fail "D6: WI-5 ALL_NONE Exit-1 branch still says 'skip WIP' definitively; seg='$EXIT1_SEG'"
+    else
+        pass "D6: WI-5 ALL_NONE Exit-1 branch no longer says 'skip WIP' definitively"
+    fi
+else
+    fail "D6: workflow-init SKILL.md not found"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
