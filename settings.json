@@ -405,6 +405,16 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-memory-direct.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Edit|Write|MultiEdit",
         "hooks": [
           {
