@@ -26,7 +26,7 @@ function aggregateCategories(findings) {
  * @param {string|null} [opts.workflowSessionId]
  * @param {string} opts.supervisorPath
  * @param {string} opts.stateFilePath
- * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039 and truncate detail to 120 chars
+ * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039, normalize newlines, and suppress footer
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
@@ -56,7 +56,6 @@ function formatLayer2Findings(findings, opts) {
       let reporterValue = typeof f.reporter === "string" && f.reporter ? f.reporter : "(none)";
       if (forFinalReport) {
         detail = detail.replace(/[\r\n]+/g, " ");
-        if (detail.length > 120) detail = detail.slice(0, 120) + "…";
         cats = escapeTokens(cats);
         detail = escapeTokens(detail);
         reporterValue = escapeTokens(reporterValue);
