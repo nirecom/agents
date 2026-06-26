@@ -314,6 +314,31 @@ process.stdout.write(v);
     fi
 }
 
+# --- R12: forFinalReport:true -> footer suppressed (no Session ID / audit trail / Recommended action) ---
+run_r12() {
+    require_source "$RENDER_SRC" "R12: forFinalReport:true suppresses footer" || return
+    local out rc
+    out="$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'warning', detail:'wd12', reporter:'r12' },
+];
+const v = r.formatLayer2Findings(findings, { forFinalReport: true });
+if (v === null || typeof v !== 'string') process.exit(2);
+process.stdout.write(v);
+" 2>/dev/null)"
+    rc=$?
+    if [ "$rc" = "0" ] && \
+       ! echo "$out" | grep -qF "Session ID:" && \
+       ! echo "$out" | grep -qF "Full audit trail:" && \
+       ! echo "$out" | grep -qF "Recommended action:" && \
+       echo "$out" | grep -qF "wd12"; then
+        pass "R12: forFinalReport:true suppresses Session ID / audit trail / Recommended action footer"
+    else
+        fail "R12: footer not suppressed in forFinalReport mode (rc=$rc, out=$out)"
+    fi
+}
+
 run_r1
 run_r2
 run_r3
@@ -325,6 +350,7 @@ run_r8
 run_r9
 run_r10
 run_r11
+run_r12
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
