@@ -7,8 +7,8 @@
 #   - VS Code extension JSONL polling and actual tab title display in a live VS Code window
 #   - The custom-title record being read and applied by the vscode-claude extension
 #   - CLAUDE_CODE_CHILD_SESSION propagation into real Claude Code subagent environments
-#   - Hook registration: session-start.js wiring is exercised here by direct Node.js invocation,
-#     not via a real SessionStart hook event from a live claude -p session
+#   - Hook registration: session-start.js wiring is exercised here by direct invocation of the
+#     real hook via piped stdin, not via a real SessionStart hook event from a live claude -p session
 #   - CLAUDE_SESSION_ID propagation bug #27987: resolved via CLAUDE_ENV_FILE path in tests;
 #     the fallback mtime path is tested with synthetic JSONL fixtures, not a live session
 
@@ -35,6 +35,7 @@ to_node_path() {
 _AGENTS_DIR_NODE="$(to_node_path "$AGENTS_DIR")"
 SESSION_TITLE_LIB="$_AGENTS_DIR_NODE/hooks/lib/session-title.js"
 BIN_CC_SESSION_TITLE="$_AGENTS_DIR_NODE/bin/cc-session-title"
+SESSION_START_HOOK="$_AGENTS_DIR_NODE/hooks/session-start.js"
 
 PASS=0; FAIL=0
 
