@@ -146,6 +146,7 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 - `<BUGS_FOUND>`, `<RELATED_TASKS>`, `<NEXT_TASKS>` → extract the matching `##` section content from WORKTREE_NOTES.md backup; or `- (none)` when file absent
 - `<SUPERVISOR_ALERT_SUMMARY>` → from supervisor state: `phase: <alert.alert_phase|none>, severity: <alert.cumulative_severity|none>, findings: <count>`; or `(not run)` when state absent
 - `<SUPERVISOR_AUDIT_SUMMARY>` → from supervisor state: `phase: <audit.audit_phase|none>, verdict: <audit.audit_verdict|none>, cause: <audit.audit_cause|none>`; or `(not run)` when state absent
+- `<SUPERVISOR_FINDINGS_DETAIL>` → when `alert.findings` is non-empty, call `formatLayer2Findings(alert.findings, { sessionId, workflowSessionId, supervisorPath, stateFilePath, forFinalReport: true })` and expand its result as literal text; when state absent, `alert.findings` empty, or render is null, expand to `(no findings)`
 
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 
@@ -155,7 +156,7 @@ After emitting, mark completion:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase frozen
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
-`stop-final-report-guard.js` validates completion by checking all 12 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
+`stop-final-report-guard.js` validates completion by checking all 13 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
 
 ## Step SC-7 — Surface alert findings (post-Final-Report)
 
