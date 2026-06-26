@@ -210,7 +210,7 @@ function renderListWithState(sid) {
 
 // ---- Verdict computation --------------------------------------------------
 
-function computeVerdict(rawSid) {
+function computeVerdict(rawSid, _didAutoRepair) {
   const sid = resolveSessionId({ sessionIdFromInput: rawSid });
   if (!sid) {
     emit("blocked", "", "", "session-id-unresolved");
@@ -279,6 +279,37 @@ function computeVerdict(rawSid) {
     if (!issues || !Array.isArray(issues) || issues.length === 0) {
       emit("blocked", "", "closes_issues is empty -- run /workflow-init to populate it.", "closes_issues-empty");
       return;
+    }
+
+    // Evidence-based auto-complete (#1094): intent.md exists → mark complete and
+    // recompute to advance past clarify_intent. Recursion is capped at 1 via the
+    // _didAutoRepair flag to prevent an infinite loop on concurrent writes.
+    if (!_didAutoRepair) {
+      const { hasCompletionEvidence } = require("../../hooks/lib/workflow-state/evidence-resolver");
+      if (hasCompletionEvidence("clarify_intent", sid)) {
+        const { markStep } = require("../../hooks/lib/workflow-state");
+        try { markStep(sid, "clarify_intent", "complete"); } catch (e) { /* fail-open */ }
+        return computeVerdict(rawSid, true);
+      }
+    }
+  }
+
+  // Evidence-based auto-complete for docs (#1064): staged docs or WORKTREE_NOTES.md
+  // bullets → mark complete and recompute, instead of invoking /update-docs in a loop.
+  if (currentStep === "docs" && !_didAutoRepair) {
+    const { hasCompletionEvidence } = require("../../hooks/lib/workflow-state/evidence-resolver");
+    let repoDir = process.env.CLAUDE_PROJECT_DIR || null;
+    if (!repoDir) {
+      try {
+        repoDir = require("child_process").execSync(
+          "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+        ).trim();
+      } catch (e) { repoDir = process.cwd(); }
+    }
+    if (hasCompletionEvidence("docs", sid, { repoDir })) {
+      const { markStep } = require("../../hooks/lib/workflow-state");
+      try { markStep(sid, "docs", "complete"); } catch (e) { /* fail-open */ }
+      return computeVerdict(rawSid, true);
     }
   }
 

@@ -9,6 +9,8 @@ const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   readState,
+  markStep,
+  hasCompletionEvidence,
 } = require("./lib/workflow-state");
 
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
@@ -156,6 +158,12 @@ if (require.main === module) {
         const ci = earlyState.steps && earlyState.steps.clarify_intent;
         const ciStatus = ci ? ci.status : "pending";
         if (ciStatus !== "complete" && ciStatus !== "skipped") {
+          // Evidence-based self-repair (#1094): if intent.md already exists,
+          // mark clarify_intent complete and fall through (gate clears) instead
+          // of hard-blocking. fail-open: markStep error leaves the gate dormant.
+          if (hasCompletionEvidence("clarify_intent", sessionId)) {
+            try { markStep(sessionId, "clarify_intent", "complete"); } catch (e) { /* fail-open */ }
+          } else {
           block(
             "workflow-gate: clarify_intent has not been completed for this session.\n" +
             "Tool \"" + toolName + "\" is blocked until intent is locked in.\n\n" +
@@ -166,6 +174,7 @@ if (require.main === module) {
             "For docs-only edits: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: docs-only edit>>\"\n\n" +
             "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent>>\""
           );
+          }
         }
       }
     }
