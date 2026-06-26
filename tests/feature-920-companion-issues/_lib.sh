@@ -189,6 +189,21 @@ MOCKREMOTE
     touch "$TMP/agents-root/agents/detail-planner.md"
     touch "$TMP/agents-root/rules/test.md"
     export AGENTS_CONFIG_DIR="$TMP/agents-root"
+
+    # wip-state.sh mock (Pass-C 3-axis WIP filter, #1117 Step 3). `check <N>`
+    # prints MOCK_WIP_STATE_GET_RESULT (default "none") and exits
+    # MOCK_WIP_STATE_GET_RC (default 0). RC!=0 lets tests exercise the
+    # fail-open branch (candidate included when WIP probe errors).
+    mkdir -p "$TMP/agents-root/bin/github-issues"
+    cat > "$TMP/agents-root/bin/github-issues/wip-state.sh" <<'MOCKWIPSTATE'
+#!/bin/bash
+# args: check <N>  → print same|other|none, exit MOCK_WIP_STATE_GET_RC.
+rc="${MOCK_WIP_STATE_GET_RC:-0}"
+if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+echo "${MOCK_WIP_STATE_GET_RESULT:-none}"
+exit 0
+MOCKWIPSTATE
+    chmod +x "$TMP/agents-root/bin/github-issues/wip-state.sh"
 }
 
 teardown_mock() {
@@ -202,6 +217,7 @@ teardown_mock() {
         unset "$v"
     done
     unset GH_MOCK_LIST GH_MOCK_REPO MOCK_REMOTE_RC 2>/dev/null || true
+    unset MOCK_WIP_STATE_GET_RESULT MOCK_WIP_STATE_GET_RC 2>/dev/null || true
     # Restore AGENTS_CONFIG_DIR to repo root for non-mock tests.
     export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 }
