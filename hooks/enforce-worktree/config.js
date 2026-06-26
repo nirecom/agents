@@ -3,16 +3,7 @@
 const { spawnSync } = require("child_process");
 
 function isEnforceWorktreeOn() {
-  let raw = process.env.ENFORCE_WORKTREE;
-  if (raw === undefined || raw === null) {
-    const legacy = process.env.AGENT_AUTO_BRANCH;
-    if (legacy !== undefined && legacy !== null) {
-      process.stderr.write(
-        "enforce-worktree: AGENT_AUTO_BRANCH is deprecated; rename to ENFORCE_WORKTREE in agents config.\n"
-      );
-      raw = legacy;
-    }
-  }
+  const raw = process.env.ENFORCE_WORKTREE;
   // No trim — whitespace-padded values are unknown and default ON (fail-safe block)
   const v = (raw || "").toLowerCase();
   // Default ON — only OFF when explicitly set to a recognised falsy value
@@ -20,14 +11,7 @@ function isEnforceWorktreeOn() {
 }
 
 function getProtectedBranches(repoCwd) {
-  // Prefer DEFAULT_BRANCHES; fall back to AGENT_DEFAULT_BRANCHES for migration.
-  let override = (process.env.DEFAULT_BRANCHES || "").trim();
-  if (!override && process.env.AGENT_DEFAULT_BRANCHES) {
-    process.stderr.write(
-      "enforce-worktree: AGENT_DEFAULT_BRANCHES is deprecated; rename to DEFAULT_BRANCHES in agents config.\n"
-    );
-    override = (process.env.AGENT_DEFAULT_BRANCHES || "").trim();
-  }
+  const override = (process.env.DEFAULT_BRANCHES || "").trim();
   if (override) {
     return override.split(",").map((s) => s.trim()).filter(Boolean);
   }
