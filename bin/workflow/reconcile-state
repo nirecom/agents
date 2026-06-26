@@ -3,8 +3,8 @@
 
 // reconcile-state: repair stale workflow state JSON.
 //
-// For each evidence-backed step (clarify_intent, docs), if completion evidence
-// exists on disk but the step is still `pending` in state, mark it complete.
+// For each evidence-backed step (clarify_intent, docs, write_tests), if completion
+// evidence exists on disk but the step is still `pending` in state, mark it complete.
 // With --dry-run, only logs what would change without writing state.
 //
 // Usage: node bin/workflow/reconcile-state --session <sid> [--dry-run]
@@ -16,14 +16,14 @@ const {
   describeEvidence,
 } = require("../../hooks/lib/workflow-state");
 
-const EVIDENCE_STEPS = ["clarify_intent", "docs"];
+const EVIDENCE_STEPS = ["clarify_intent", "docs", "write_tests"];
 
 function printUsage() {
   process.stdout.write(
     "Usage: reconcile-state --session <sid> [--dry-run]\n" +
     "\n" +
     "Repair stale workflow state: mark evidence-backed steps (clarify_intent,\n" +
-    "docs) complete when completion evidence exists but state is still pending.\n" +
+    "docs, write_tests) complete when completion evidence exists but state is still pending.\n" +
     "\n" +
     "Options:\n" +
     "  --session <sid>   Session id whose state to reconcile (required).\n" +
