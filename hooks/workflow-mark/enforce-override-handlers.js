@@ -238,6 +238,40 @@ function handle(ctx) {
         `workflow-mark: failed to clear ENFORCE_WORKFLOW override marker — ${e.message}. Restore NOT applied.`
       );
     }
+    // Inconsistency detection (#1094): WORKFLOW_ON restores enforcement, but a
+    // step that has on-disk completion evidence may still be `pending` in state.
+    // Surface a self-repair hint rather than letting the gate hard-block.
+    // fail-open: any error here is ignored.
+    try {
+      const { readState } = require("../lib/workflow-state");
+      const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
+      const state = readState(sessionId);
+      if (state && state.steps) {
+        let repoDir = process.env.CLAUDE_PROJECT_DIR || null;
+        if (!repoDir) {
+          try {
+            repoDir = require("child_process").execSync(
+              "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+            ).trim();
+          } catch (e) { repoDir = null; }
+        }
+        const stepsToCheck = repoDir ? ["clarify_intent", "docs"] : ["clarify_intent"];
+        const gaps = [];
+        for (const step of stepsToCheck) {
+          const rawStatus = (state.steps[step] || {}).status || "pending";
+          if (rawStatus === "pending" && hasCompletionEvidence(step, sessionId, { repoDir })) {
+            gaps.push(step);
+          }
+        }
+        if (gaps.length > 0) {
+          pushMessage(
+            `workflow-mark: WORKFLOW_ON restored, but the following steps have completion ` +
+              `evidence yet remain pending: ${gaps.join(", ")}. ` +
+              `Run: node bin/workflow/reconcile-state --session ${sessionId} to auto-repair.`
+          );
+        }
+      }
+    } catch (e) { /* fail-open: detection failure is ignored */ }
     return true;
   }
 
