@@ -66,13 +66,18 @@ function formatLayer2Findings(findings, opts) {
   }
 
   if (noticeFindings.length > 0) {
-    lines.push(`Notices: ${noticeFindings.length} additional notice-severity finding(s) recorded — not shown (consult ${stateFilePath} for the full audit trail).`);
+    const noticeRef = forFinalReport
+      ? "see supervisor state for full audit trail"
+      : `consult ${stateFilePath} for the full audit trail`;
+    lines.push(`Notices: ${noticeFindings.length} additional notice-severity finding(s) recorded — not shown (${noticeRef}).`);
   }
 
-  lines.push(`Session ID: ${sessionId}`);
-  lines.push(`Workflow session ID: ${wsidLabel}`);
-  lines.push(`Full audit trail: ${stateFilePath}`);
-  lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
+  if (!forFinalReport) {
+    lines.push(`Session ID: ${sessionId}`);
+    lines.push(`Workflow session ID: ${wsidLabel}`);
+    lines.push(`Full audit trail: ${stateFilePath}`);
+    lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
+  }
 
   return lines.join("\n");
 }
