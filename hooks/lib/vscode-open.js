@@ -15,7 +15,8 @@ const { normalizeCwd } = require("./path-normalize");
 
 function isVsCode() {
   return process.env.TERM_PROGRAM === "vscode"
-      || process.env.CLAUDE_CODE_ENTRYPOINT === "claude-vscode";
+      || (process.env.CLAUDE_CODE_ENTRYPOINT === "claude-vscode"
+          && process.env.VSCODE_CRASH_REPORTER_PROCESS_TYPE !== "extensionHost");
 }
 
 function shouldOpenInVsCode() {
