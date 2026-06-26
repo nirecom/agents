@@ -7,6 +7,17 @@
 # runs each test function. Parts live under
 # tests/feature-parallel-sessions-worktree-bash-patterns/.
 
+# ─────────────────────────────────────────────────────────────────────────────
+# L3 gap: this dispatcher sources thematic parts that exercise the bash
+# write/read classifier and pre-commit helpers as units (L2 — real node, real
+# fixtures, no live session). It does NOT drive the full pre-commit hook or the
+# enforce-worktree PreToolUse pipeline end-to-end. An L3 test would issue real
+# write/read Bash tool calls (and a real `git commit`) inside a Claude Code
+# session and observe whether the hooks block or pass them through — only a real
+# host can confirm event registration, settings loading, and the shell's own
+# tokenization of the command before the hook ever sees it.
+# ─────────────────────────────────────────────────────────────────────────────
+
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -56,6 +67,8 @@ test_gh_group_a_inline_body_stripping
 test_git_kind_strips_quoted_args
 test_git_update_ref_write
 test_git_commit_subcommand_position
+test_git_merge_base_read
+test_git_stash_reclassify
 test_quoted_arg_no_false_positive_file_op
 test_interpreter_c_always_write
 test_cosmetic_quote_file_op_documented_fn

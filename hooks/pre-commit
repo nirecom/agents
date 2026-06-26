@@ -35,15 +35,10 @@ _load_env_file
 
 # ENFORCE_WORKTREE defense-in-depth: block commit from main worktree or on default branch.
 # Mirrors hooks/enforce-worktree.js logic. Bash-side because git hooks run outside Node.
-# --- BEGIN temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
-# AGENT_AUTO_BRANCH is read as a fallback with a deprecation warning.
 _is_enforce_worktree_on() {
     local v
     if printenv ENFORCE_WORKTREE >/dev/null 2>&1; then
         v="$(printf %s "${ENFORCE_WORKTREE}" | tr '[:upper:]' '[:lower:]')"
-    elif printenv AGENT_AUTO_BRANCH >/dev/null 2>&1; then
-        echo "pre-commit: AGENT_AUTO_BRANCH is deprecated; rename to ENFORCE_WORKTREE in agents config." >&2
-        v="$(printf %s "${AGENT_AUTO_BRANCH}" | tr '[:upper:]' '[:lower:]')"
     else
         v=""
     fi
@@ -52,7 +47,6 @@ _is_enforce_worktree_on() {
         *) return 0 ;;
     esac
 }
-# --- END temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 
 if _is_enforce_worktree_on; then
     # ENFORCE_WORKTREE_EXCLUDE: when ALL staged files match the exclude patterns,
@@ -139,14 +133,8 @@ if _is_enforce_worktree_on; then
         cur_branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
         if [ -n "$cur_branch" ]; then
             # Build protected branches list
-            # --- BEGIN temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
             protected=""
             _default_branches_var="${DEFAULT_BRANCHES:-}"
-            if [ -z "$_default_branches_var" ] && printenv AGENT_DEFAULT_BRANCHES >/dev/null 2>&1; then
-                echo "pre-commit: AGENT_DEFAULT_BRANCHES is deprecated; rename to DEFAULT_BRANCHES in agents config." >&2
-                _default_branches_var="${AGENT_DEFAULT_BRANCHES:-}"
-            fi
-            # --- END temporary: AGENT_DEFAULT_BRANCHES → DEFAULT_BRANCHES migration ---
             if [ -n "$_default_branches_var" ]; then
                 protected="$(printf %s "$_default_branches_var" | tr ',' ' ')"
             else

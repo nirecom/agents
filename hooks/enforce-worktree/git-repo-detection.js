@@ -60,7 +60,7 @@ function parseGitCPath(cmd) {
   return toWindowsPath(raw);
 }
 
-function findRepoRootForBash(cmd) {
+function findRepoRootForBash(cmd, toolCwd) {
   const cArg = parseGitCPath(cmd);
   // Payload-derived `cd <absolute-path> && ...` extraction (issue #321).
   // No CLAUDE_PROJECT_DIR fallback — Approach E rejects it (start-time-fixed,
@@ -70,7 +70,9 @@ function findRepoRootForBash(cmd) {
     cdArg = parseCdCommandInInterpreter(cmd);
     if (!cdArg) cdArg = parseCdCommand(cmd);
   }
-  let startDir = cArg || cdArg || process.cwd();
+  // Prefer the Bash tool's explicit cwd (#286) over process.cwd() when neither
+  // -C nor a leading cd names a start directory.
+  let startDir = cArg || cdArg || toolCwd || process.cwd();
   if (typeof startDir === "string" && /^\/[a-zA-Z]\//.test(startDir)) {
     startDir = toWindowsPath(startDir);
   }
