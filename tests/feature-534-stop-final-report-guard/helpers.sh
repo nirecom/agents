@@ -36,7 +36,7 @@ let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
         "$escaped" >> "$path"
 }
 
-# Build the full 10-heading canonical report text (1 ## + 9 ###) for given sid.
+# Build the full 13-heading canonical report text (1 ## + 12 ###) for given sid.
 full_canonical_report_text() {
     local sid="$1"
     cat <<EOF
@@ -64,6 +64,12 @@ full_canonical_report_text() {
 - (none)
 ### Next Tasks
 - (none)
+### Supervisor Alert
+(not run)
+### Supervisor Audit
+(not run)
+### Supervisor Findings
+(no findings)
 EOF
 }
 
