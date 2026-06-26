@@ -1,5 +1,9 @@
 "use strict";
 
+function escapeTokens(str) {
+  return typeof str === "string" ? str.replace(/</g, "‹") : str;
+}
+
 function aggregateCategories(findings) {
   const seen = new Set();
   const out = [];
@@ -22,11 +26,13 @@ function aggregateCategories(findings) {
  * @param {string|null} [opts.workflowSessionId]
  * @param {string} opts.supervisorPath
  * @param {string} opts.stateFilePath
+ * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039 and truncate detail to 120 chars
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
 
   const { sessionId, workflowSessionId, supervisorPath, stateFilePath } = opts;
+  const forFinalReport = opts.forFinalReport === true;
   const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
 
   const warningOrErrorFindings = findings.filter(f => f && (f.severity === "error" || f.severity === "warning"));
@@ -34,7 +40,8 @@ function formatLayer2Findings(findings, opts) {
 
   if (warningOrErrorFindings.length === 0 && noticeFindings.length === 0) return null;
 
-  const allCats = aggregateCategories(findings);
+  const allCatsRaw = aggregateCategories(findings);
+  const allCats = forFinalReport ? allCatsRaw.map(escapeTokens) : allCatsRaw;
   const lines = [];
 
   lines.push(`[EM Supervisor] Alert mode findings (post-completion review):`);
@@ -44,9 +51,17 @@ function formatLayer2Findings(findings, opts) {
     lines.push(`Findings (severity >= warning):`);
     for (let i = 0; i < warningOrErrorFindings.length; i++) {
       const f = warningOrErrorFindings[i];
-      const cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
-      const detail = typeof f.detail === "string" ? f.detail : "(no detail)";
-      lines.push(`  [${i + 1}] categories=${cats} severity=${f.severity || "(none)"} detail=${detail}`);
+      let cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
+      let detail = typeof f.detail === "string" ? f.detail : "(no detail)";
+      let reporterValue = typeof f.reporter === "string" && f.reporter ? f.reporter : "(none)";
+      if (forFinalReport) {
+        detail = detail.replace(/[\r\n]+/g, " ");
+        if (detail.length > 120) detail = detail.slice(0, 120) + "…";
+        cats = escapeTokens(cats);
+        detail = escapeTokens(detail);
+        reporterValue = escapeTokens(reporterValue);
+      }
+      lines.push(`  [${i + 1}] categories=${cats} severity=${f.severity || "(none)"} reporter=${reporterValue} detail=${detail}`);
     }
   }
 

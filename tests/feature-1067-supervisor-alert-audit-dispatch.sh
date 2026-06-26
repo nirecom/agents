@@ -188,6 +188,26 @@ fs.writeFileSync(w.getStatePath('di9-sid'), JSON.stringify(st));
     fi
 }
 
+# DI_FINDINGS: renderSkeleton contains <SUPERVISOR_FINDINGS_DETAIL>
+# RED: fails until final-report-schema.js adds supervisor_findings section (#1114).
+run_di_findings_detail() {
+    local label="DI_FINDINGS: renderSkeleton contains <SUPERVISOR_FINDINGS_DETAIL>"
+    require_source "$FINAL_REPORT_SCHEMA" "$label" || return
+    local out rc
+    out=$(run_with_timeout 5 node -e "
+const s = require('$FINAL_REPORT_SCHEMA_NODE');
+const skel = s.renderSkeleton('test-sid-di-findings');
+if (skel.indexOf('<SUPERVISOR_FINDINGS_DETAIL>') === -1) { console.error('SUPERVISOR_FINDINGS_DETAIL not found'); process.exit(2); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "$label"
+    else
+        fail "$label (rc=$rc, out=$out)"
+    fi
+}
+
 run_di1
 run_di2
 run_di3
@@ -197,6 +217,7 @@ run_di6
 run_di7
 run_di8
 run_di9
+run_di_findings_detail
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
