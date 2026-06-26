@@ -121,8 +121,8 @@ function _parseIssuesWithTitles(intentContent) {
  * Reads <plansDir>/<sessionId>-intent.md, parses ## Issues section,
  * builds the title, and writes a custom-title JSONL record.
  *
- * Skip guard: if _readCurrentTitle returns non-null → return immediately
- * (preserves any existing PR # / ✓ suffix).
+ * Skip guard: overwrites null, bare "⏳", and /^⏳\S/ (VS Code extension temp form).
+ * Preserves any other existing title (PR # suffix, ✓ prefix, real issue title).
  *
  * Fail-open: missing intent.md, no issues found → no write.
  */
