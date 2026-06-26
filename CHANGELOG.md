@@ -140,3 +140,7 @@ Changes: `workflow-gate` and oracle now auto-repair stale `clarify_intent=pendin
 ### FEATURE: PR #1110 (2026-06-26)
 Background: feat(#1097): add block-memory-direct.js PreToolUse hook to intercept agents-repo memory writes
 Changes: Memory writes to the agents-repo behavior notes directory are now intercepted; CC presents a choice to create a GitHub issue (recommended), allow the write (one-shot per session), or cancel.
+
+### FEATURE: PR #1118 (2026-06-26)
+Background: fix(#1103): block subagent sentinel pollution via PreToolUse hook + workflow-mark backstop
+Changes: Fixed: subagents running in parallel with the main conversation can no longer accidentally reset or advance workflow steps — only the orchestrator (main conversation) can emit workflow sentinels.
