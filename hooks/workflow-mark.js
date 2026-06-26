@@ -36,6 +36,7 @@ const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 const { resolveRepoCwd } = require("./lib/path-normalize");
 // Sentinel recognition centralized in hooks/lib/sentinel-patterns.js (SSOT).
 const { isSentinel } = require("./lib/sentinel-patterns");
+const { isSubagentCall } = require("./lib/subagent-detect");
 
 const notNeededHandlers = require("./workflow-mark/not-needed-handlers");
 const clarifyIntentCompleteHandler = require("./workflow-mark/clarify-intent-complete-handler");
@@ -125,6 +126,10 @@ if (mergeResult.hit) {
   }
   done();
 }
+
+// Backstop: subagent calls must not drive the workflow state machine.
+// push/merge detection above still runs for subagents (C1 regression guard).
+if (isSubagentCall(input)) done();
 
 // Split on `&&` so multiple sentinel echos chained in one Bash call are all processed.
 // All-or-nothing: if any part is NOT a sentinel, reject the whole command.
