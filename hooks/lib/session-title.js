@@ -50,7 +50,7 @@ function _readCurrentTitle(sessionId, cwd) {
           record.sessionId === sessionId &&
           typeof record.customTitle === "string"
         ) {
-          return record.customTitle;
+          return record.customTitle === "" ? null : record.customTitle;
         }
       } catch (_) {
         // ignore malformed lines
@@ -130,9 +130,10 @@ function writeSetIssue(sessionId, cwd, plansDir) {
   if (_isChildSession()) return;
   if (!sessionId) return;
 
-  // Skip guard: if a title already exists, don't overwrite
+  // Skip guard: if a real title already exists, don't overwrite.
+  // "⏳" alone is the no-prior-title sentinel — allow writing the issue title over it.
   const existing = _readCurrentTitle(sessionId, cwd);
-  if (existing !== null) return;
+  if (existing !== null && existing !== "⏳") return;
 
   const intentPath = path.join(plansDir, sessionId + "-intent.md");
   let intentContent;
@@ -207,15 +208,19 @@ function writeMarkComplete(sessionId, cwd) {
   if (current.startsWith("✓")) return;
 
   // Strip ⏳ if present before marking complete
-  const base = current.startsWith("⏳ ") ? current.slice("⏳ ".length) : current;
-  _writeTitle(sessionId, cwd, `✓ ${base}`);
+  const base = current === "⏳" || current === ""
+    ? ""
+    : current.startsWith("⏳ ")
+    ? current.slice("⏳ ".length)
+    : current;
+  _writeTitle(sessionId, cwd, base ? `✓ ${base}` : "✓");
 }
 
 /**
  * writeWaiting(sessionId, cwd)
  *
  * Prepends "⏳ " to the current title when Claude stops and waits for user input.
- * Skip if: no title, already starts with "⏳", or starts with "✓" (session complete).
+ * Skip if: already starts with "⏳", or starts with "✓" (session complete).
  * Idempotent: second call is a no-op.
  */
 function writeWaiting(sessionId, cwd) {
@@ -223,7 +228,10 @@ function writeWaiting(sessionId, cwd) {
   if (!sessionId) return;
 
   const current = _readCurrentTitle(sessionId, cwd);
-  if (current === null) return;     // no title to decorate — fail-open
+  if (current === null) {
+    _writeTitle(sessionId, cwd, "⏳");  // no prior title — use sentinel
+    return;
+  }
   if (current.startsWith("✓")) return; // session complete — preserve
   if (current.startsWith("⏳")) return; // already waiting — idempotent
 
@@ -242,6 +250,10 @@ function writeClearWaiting(sessionId, cwd) {
 
   const current = _readCurrentTitle(sessionId, cwd);
   if (current === null) return;
+  if (current === "⏳") {
+    _writeTitle(sessionId, cwd, "");  // unset custom-title → extension falls back to ai-title
+    return;
+  }
   if (!current.startsWith("⏳ ")) return;
 
   _writeTitle(sessionId, cwd, current.slice("⏳ ".length));
