@@ -33,7 +33,7 @@ test_G1_envfile_absent() {
 }
 
 # ---------------------------------------------------------------------------
-# G2 (rewritten): env-file + all 10 headings present in transcript after
+# G2 (rewritten): env-file + all 13 headings present in transcript after
 #                 last `## Final Report — <sid>` → exit 0
 # ---------------------------------------------------------------------------
 test_G2_all_headings_present_passes() {
@@ -45,7 +45,7 @@ test_G2_all_headings_present_passes() {
     local envfile="$plans_dir/${sid}-final-report-env.json"
     write_default_env_file "$envfile"
 
-    # Build a transcript containing the full 10-heading report in assistant text.
+    # Build a transcript containing the full 13-heading report in assistant text.
     local transcript="$TMPDIR_BASE/g2-transcript.jsonl"
     local report_text; report_text="$(full_canonical_report_text "$sid")"
     write_transcript_with_assistant "$transcript" "$report_text"
@@ -59,7 +59,7 @@ test_G2_all_headings_present_passes() {
     code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
 
     if [ "$code" = "0" ]; then
-        pass "G2: env-file + all 10 headings in transcript → exit 0"
+        pass "G2: env-file + all 13 headings in transcript → exit 0"
     else
         fail "G2: expected exit 0 (all headings present), got $code"
     fi
@@ -162,8 +162,8 @@ test_G6_envfile_malformed_json() {
 }
 
 # ---------------------------------------------------------------------------
-# G7 (rewritten): env-file + `## Final Report — <sid>` present + 8 of 9 `###`
-#                 headings present (one missing) → exit 2 + decision:block
+# G7 (rewritten): env-file + `## Final Report — <sid>` present + 12 of 13
+#                 headings present (missing ### Next Tasks only) → exit 2 + decision:block
 # ---------------------------------------------------------------------------
 test_G7_header_present_subheading_missing() {
     require_hook "G7_header_present_subheading_missing" || return
@@ -174,7 +174,7 @@ test_G7_header_present_subheading_missing() {
     local envfile="$plans_dir/${sid}-final-report-env.json"
     write_default_env_file "$envfile"
 
-    # Build report with `### Next Tasks` omitted.
+    # Build report with `### Next Tasks` omitted (12 of 13 headings present).
     local transcript="$TMPDIR_BASE/g7-transcript.jsonl"
     local report_text
     report_text="$(cat <<EOF
@@ -195,6 +195,12 @@ test_G7_header_present_subheading_missing() {
 - (none)
 ### Related Tasks
 - (none)
+### Supervisor Alert
+(not run)
+### Supervisor Audit
+(not run)
+### Supervisor Findings
+(no findings)
 EOF
 )"
     write_transcript_with_assistant "$transcript" "$report_text"
@@ -217,7 +223,7 @@ EOF
             process.exit(obj.decision==='block'?0:1);
           } catch(e){ process.exit(1); }
         });" 2>/dev/null; then
-        pass "G7: header + 8/9 ### headings (missing Next Tasks) → exit 2 + decision:block"
+        pass "G7: header + 12/13 ### headings (missing Next Tasks) → exit 2 + decision:block"
     else
         fail "G7: expected exit 2 + decision:block, got code=$code out=$(printf '%s' "$out" | head -c 200)"
     fi

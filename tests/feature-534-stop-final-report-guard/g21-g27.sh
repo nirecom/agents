@@ -249,7 +249,7 @@ let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
   process.stdout.write(JSON.stringify(s));
 });")";
 
-    # entry3: incomplete FR — missing ### Next Tasks
+    # entry3: incomplete FR — missing ### Next Tasks (has all others including supervisor headings)
     local incomplete_text
     incomplete_text="$(cat <<EOF
 ## Final Report — ${sid}
@@ -269,6 +269,12 @@ let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
 - (none)
 ### Related Tasks
 - (none)
+### Supervisor Alert
+(not run)
+### Supervisor Audit
+(not run)
+### Supervisor Findings
+(no findings)
 EOF
 )"
     local incomplete_escaped

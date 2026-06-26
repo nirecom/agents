@@ -5,8 +5,8 @@
 #
 # Issue #534 / #626 / #771 — Stop hook: stop-final-report-guard.js
 #
-# Contract after #771 (renderer abolition):
-# all 10 headings from getSectionHeadings(sid) required after last
+# Contract after #771 (renderer abolition), updated for #1114 (13 headings):
+# all 13 headings from getSectionHeadings(sid) required after last
 # `## Final Report — <sid>` in transcript; residual <TOKEN> check;
 # no env-file `reported` flag check.
 #
@@ -14,7 +14,7 @@
 # 2. env file malformed JSON → exit 0 (fail-open)
 # 3. stop_hook_active:true → exit 0
 # 4. last `## Final Report — <sid>` absent in transcript → exit 0
-# 5. any of the 9 `###` headings missing AFTER that position → exit 2 + decision:block
+# 5. any of the 12 `###` headings missing AFTER that position → exit 2 + decision:block
 # 6. residual `<[A-Z][A-Z_]+>` token in post-header region → exit 2 + decision:block
 # 7. otherwise → exit 0
 #
