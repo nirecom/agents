@@ -80,11 +80,18 @@ const WRITE_PATTERNS = [
   // git mutating subcommands
   { name: "git-commit", kind: "git", regex: /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*commit\b/ },
   { name: "git-push", kind: "git", regex: /\bgit\b.*\bpush\b/ },
-  { name: "git-merge", kind: "git", regex: /\bgit\b.*\bmerge\b/ },
+  // negative-lookahead excludes read-only plumbing: merge-base (ancestry check) and
+  // merge-tree (tree-object output only). merge-file writes back to the first arg
+  // and must still classify as write.
+  { name: "git-merge", kind: "git", regex: /\bgit\b.*\bmerge(?!-base\b|-tree\b)(?:\b|$)/ },
   { name: "git-rebase", kind: "git", regex: /\bgit\b.*\brebase\b/ },
   { name: "git-reset", kind: "git", regex: /\bgit\b.*\breset\b/ },
   { name: "git-am", kind: "git", regex: /\bgit\b.*\bam\b/ },
-  { name: "git-apply", kind: "git", regex: /\bgit\b.*\bapply\b/ },
+  // Anchor `apply` at the git subcommand position (after `git` + optional global
+  // flags) so `apply` inside an argument value (e.g. `git stash list --grep=apply`,
+  // #1024) is not a false-positive. `git stash apply` is still caught by
+  // git-stash-write; real `git apply <patch>` still matches here.
+  { name: "git-apply", kind: "git", regex: /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*apply\b/ },
   { name: "git-cherry-pick", kind: "git", regex: /\bgit\b.*\bcherry-pick\b/ },
   { name: "git-revert", kind: "git", regex: /\bgit\b.*\brevert\b/ },
   // git tag: write (create/delete) but not list (-l, -v, --list, --points-at, etc.)
@@ -100,7 +107,9 @@ const WRITE_PATTERNS = [
   { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[dDmMcC](?:\s|$)/ },
   { name: "git-checkout-force", kind: "git", regex: /\bgit\b.*\bcheckout\b.*(?:--|\.|\bHEAD\b)/ },
   { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
-  { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\b.*\b(?:push|pop|drop|clear|apply)\b/ },
+  // only push/pop/apply at subcommand position mutate the working tree (write);
+  // drop/clear delete a stash ref only — read (#1024); subcommand-position avoids FP on `stash list --grep=apply`.
+  { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\s+(?:push|pop|apply)\b/ },
   { name: "git-worktree-write", kind: "git", regex: /\bgit\b.*\bworktree\b.*\b(?:add|remove|prune)\b/ },
   { name: "git-add-history", kind: "git", regex: /\bgit\s+add\b(?:.*\bdocs\/history\b|.*\bCHANGELOG\.md\b)/ },
   // git update-ref: directly rewrites a ref — write op (classifier gap fix).

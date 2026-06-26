@@ -26,7 +26,36 @@ function tokenizeRmArgs(argsRegion) {
       let content = "";
       let j = i + 1;
       while (j < s.length && s[j] !== '"') {
-        if (s[j] === "$" || s[j] === "`") return null;
+        // Backtick anywhere inside double-quotes → command substitution, fail-closed.
+        if (s[j] === "`") return null;
+        if (s[j] === "$") {
+          // Resolve ONLY the simple `$VAR` form (optionally followed by a
+          // literal `/suffix`). Everything else (${VAR}, $(...), mixed
+          // pre$VAR / $VAR$X) fails closed.
+          const rest = s.slice(j);
+          const vm = rest.match(/^\$([A-Za-z_][A-Za-z0-9_]*)/);
+          if (!vm) return null; // ${VAR}, $(...), $1, bare $, etc.
+          const varName = vm[1];
+          let k = j + vm[0].length; // index just past the var name
+          // Collect an optional literal suffix up to the closing quote.
+          // The suffix must contain no further $ or backtick (no mixed forms).
+          let suffix = "";
+          while (k < s.length && s[k] !== '"') {
+            if (s[k] === "$" || s[k] === "`") return null;
+            suffix += s[k++];
+          }
+          if (k >= s.length) return null; // unterminated quote
+          // Suffix, if present, must start with `/` (accept `$VAR/literal/path`).
+          if (suffix !== "" && suffix[0] !== "/") return null;
+          const val = process.env[varName];
+          if (val === undefined || val === "") return null; // undefined/empty → fail-closed
+          // Reject resolved values carrying shell-meta — they would word-split
+          // or glob-expand at shell runtime, defeating single-target analysis.
+          if (/[\s*?[\]{}$`]/.test(val)) return null;
+          content += val + suffix;
+          j = k; // loop sees closing quote next and terminates
+          continue;
+        }
         content += s[j++];
       }
       if (j >= s.length) return null;
