@@ -40,6 +40,7 @@ trap 'rm -rf "$TMPDIR_LOCAL"' EXIT
 # Unset VS Code detection vars by default
 unset TERM_PROGRAM 2>/dev/null || true
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+unset VSCODE_CRASH_REPORTER_PROCESS_TYPE 2>/dev/null || true
 unset SHOW_PLAN_LINK_NO_AUTO_OPEN 2>/dev/null || true
 unset SHOW_PLAN_LINK_NO_SPAWN 2>/dev/null || true
 unset SHOW_PLAN_LINK_MARKER_FILE 2>/dev/null || true
@@ -52,7 +53,7 @@ expect_result() {
   local result
   result=$(
     # Unset baseline env vars in subshell
-    unset TERM_PROGRAM CLAUDE_CODE_ENTRYPOINT SHOW_PLAN_LINK_NO_AUTO_OPEN
+    unset TERM_PROGRAM CLAUDE_CODE_ENTRYPOINT VSCODE_CRASH_REPORTER_PROCESS_TYPE SHOW_PLAN_LINK_NO_AUTO_OPEN
     for assignment in "$@"; do
       key="${assignment%%=*}"
       val="${assignment#*=}"
@@ -90,6 +91,13 @@ expect_result "T2 isVsCode() with TERM_PROGRAM=vscode → true" "true" \
 expect_result "T3 isVsCode() with CLAUDE_CODE_ENTRYPOINT=claude-vscode → true" "true" \
   "lib.isVsCode()" \
   CLAUDE_CODE_ENTRYPOINT=claude-vscode
+
+# T3b: isVsCode() returns false when running inside the extension host
+# (VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost), even with claude-vscode entrypoint.
+expect_result "T3b isVsCode() extensionHost guard + claude-vscode → false" "false" \
+  "lib.isVsCode()" \
+  CLAUDE_CODE_ENTRYPOINT=claude-vscode \
+  VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost
 
 # ══════════════════════════════════════════════════════════════════════════
 # shouldOpenInVsCode() tests
