@@ -1,6 +1,7 @@
 # Heredoc-quoted tokens, FD redirect, newline injection, git -c flag,
 # /dev/null compound, git-branch mutate/name/delete, #692 git-kind strip,
-# git-update-ref, git-commit subcommand position.
+# git-update-ref, git-commit subcommand position, git-merge-base read vs write.
+# Tags: scope:common
 
 test_heredoc_quoted_tokens() {
     assert_classify "heredoc <<'EOF' (single-quoted token)" "cat <<'EOF'
@@ -112,4 +113,59 @@ test_git_commit_subcommand_position() {
         'git log --grep="commit message"' "read"
     assert_classify "git diff -- pre-commit (filename pathspec)" \
         'git diff -- pre-commit' "read"
+}
+
+# ============ #1095: git merge-base / merge-tree → read; merge-file → write ============
+test_git_merge_base_read() {
+    # FIXED BEHAVIOR (#1095):
+    # git merge-base, merge-tree are read-only plumbing — classify as "read".
+    # git merge-file writes merge results to its first file argument — classify as "write".
+    assert_classify "git merge-base --is-ancestor HEAD origin/main → read" \
+        'git merge-base --is-ancestor HEAD origin/main' "read"
+    assert_classify "git merge-tree base branch1 branch2 → read" \
+        'git merge-tree base branch1 branch2' "read"
+    assert_classify "git merge-file a.txt b.txt c.txt → write" \
+        'git merge-file a.txt b.txt c.txt' "write"
+    assert_classify "git -C /path merge-base A B → read" \
+        'git -C /path merge-base A B' "read"
+
+    # EXISTING BEHAVIOR (must pass now and after fix):
+    # git merge (the porcelain) is a write operation.
+    assert_classify "git merge --ff-only origin/main → write" \
+        'git merge --ff-only origin/main' "write"
+    assert_classify "git merge origin/main → write" \
+        'git merge origin/main' "write"
+    assert_classify "git -C /path merge origin/main → write" \
+        'git -C /path merge origin/main' "write"
+}
+
+# ============ #1024: git stash drop/clear (ref-only) → read; push/pop/apply → write ============
+test_git_stash_reclassify() {
+    # NEW BEHAVIOR (will fail until bash-write-patterns.js git-stash-write is fixed):
+    # drop/clear delete a stash ref without touching tracked files — read.
+    # list/show are also read; subcommand-position match avoids FP on
+    # `git stash list --grep=apply`.
+    assert_classify "git stash drop → read" \
+        'git stash drop' "read"
+    assert_classify "git stash clear → read" \
+        'git stash clear' "read"
+    assert_classify "git stash drop stash@{0} → read" \
+        'git stash drop stash@{0}' "read"
+    assert_classify "git stash list --grep=apply → read" \
+        'git stash list --grep=apply' "read"
+    assert_classify "git stash show -p → read" \
+        'git stash show -p' "read"
+    assert_classify "git stash (bare) → read" \
+        'git stash' "read"
+
+    # EXISTING BEHAVIOR (must pass now and after fix):
+    # push/pop/apply rewrite the working tree — write.
+    assert_classify "git stash push -m x → write" \
+        'git stash push -m x' "write"
+    assert_classify "git stash pop → write" \
+        'git stash pop' "write"
+    assert_classify "git stash apply → write" \
+        'git stash apply' "write"
+    assert_classify "git -C /some/path stash push → write" \
+        'git -C /some/path stash push' "write"
 }
