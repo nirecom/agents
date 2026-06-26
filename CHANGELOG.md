@@ -144,3 +144,7 @@ Changes: Memory writes to the agents-repo behavior notes directory are now inter
 ### FEATURE: PR #1118 (2026-06-26)
 Background: fix(#1103): block subagent sentinel pollution via PreToolUse hook + workflow-mark backstop
 Changes: Fixed: subagents running in parallel with the main conversation can no longer accidentally reset or advance workflow steps — only the orchestrator (main conversation) can emit workflow sentinels.
+
+### FEATURE: PR #1116 (2026-06-26)
+Background: fix(#1105,#703): per-segment quote-aware test-command detection + harness path
+Changes: Fixed a workflow bug where commands using `git -C <path>`, or compound/diagnostic commands that merely reference a `tests/` path (e.g. `node build.js && wc -l tests/x`), could prematurely mark the test step complete and trigger false "inconsistent state" workflow aborts.
