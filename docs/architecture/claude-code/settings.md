@@ -28,6 +28,13 @@ See `docs/security-policy.md` for the full pattern list.
 - `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
 - `block-credentials.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands`) — blocks Read/Edit/Write/Grep/Glob/Bash access to 22 credential-path families (24 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform, gcloud SDK, HashiCorp Vault, Cargo, 1Password CLI. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, and dot-segment forms; additionally recognizes the corresponding `/root/<tail>` sibling of every `~/`-rooted family (same path with `~/` stripped; see `CREDENTIALS_TABLE` in `hooks/block-credentials.js`). `..` traversal resolved by `path.posix.normalize`.
+- `block-subagent-sentinels.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — blocks
+  `WORKFLOW_*` sentinel echoes issued from subagents. Sentinels are reserved for the orchestrator
+  (main conversation); subagents cannot drive the workflow state machine. Detection uses the
+  `isStrictSentinel`, `CHAIN_BOUNDARY_SENTINEL_DQ_RE`, and `CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE`
+  patterns from `hooks/lib/sentinel-patterns.js`. Subagent identification via `agent_id` presence
+  (see `hooks/lib/subagent-detect.js`). Fail-open: approves on malformed stdin or absent `agent_id`.
+  Defense-in-depth with the `workflow-mark.js` PostToolUse backstop (C2).
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
