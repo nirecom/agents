@@ -148,3 +148,7 @@ Changes: Fixed: subagents running in parallel with the main conversation can no 
 ### FEATURE: PR #1116 (2026-06-26)
 Background: fix(#1105,#703): per-segment quote-aware test-command detection + harness path
 Changes: Fixed a workflow bug where commands using `git -C <path>`, or compound/diagnostic commands that merely reference a `tests/` path (e.g. `node build.js && wc -l tests/x`), could prematurely mark the test step complete and trigger false "inconsistent state" workflow aborts.
+
+### FEATURE: PR #1125 (2026-06-26)
+Background: fix(#1114): surface per-finding detail in Final Report Supervisor Findings section (#1125)
+Changes: The session-close Final Report's `### Supervisor Findings` section now shows per-finding detail (categories, severity, detail, reporter) instead of only an aggregate count — findings remain visible even when SC-7 is skipped because findings were already surfaced earlier in the session
