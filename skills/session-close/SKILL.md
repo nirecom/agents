@@ -149,6 +149,7 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 - `<SUPERVISOR_FINDINGS_DETAIL>` → when `alert.findings` is non-empty, call `formatLayer2Findings(alert.findings, { sessionId, workflowSessionId, supervisorPath, stateFilePath, forFinalReport: true })` and expand its result as literal text; when state absent, `alert.findings` empty, or render is null, expand to `(no findings)`
 
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
+When `CONV_LANG` is set in `$CLAUDE_ENV_FILE` and is not `english`, write all substituted section body text in that language — headings (`##`, `###` lines) remain English.
 
 SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
 
