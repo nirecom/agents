@@ -15,13 +15,20 @@ const { normalizeCwd } = require("./path-normalize");
 
 function isVsCode() {
   return process.env.TERM_PROGRAM === "vscode"
-      || (process.env.CLAUDE_CODE_ENTRYPOINT === "claude-vscode"
-          && process.env.VSCODE_CRASH_REPORTER_PROCESS_TYPE !== "extensionHost");
+      || process.env.CLAUDE_CODE_ENTRYPOINT === "claude-vscode";
 }
 
 function shouldOpenInVsCode() {
   if (process.env.SHOW_PLAN_LINK_NO_AUTO_OPEN === "1") return false;
   return isVsCode();
+}
+
+// Returns vscode://file/ URI for the given absolute path.
+// Windows: C:\Users\nire\file.md  → vscode://file/C:/Users/nire/file.md
+// POSIX:   /home/user/file.md     → vscode://file/home/user/file.md
+function toVsCodeFileUri(absPath) {
+  const fwd = absPath.replace(/\\/g, "/");
+  return "vscode://file/" + fwd.replace(/^\//, "");
 }
 
 // Returns file:// URI for the given cwd, or null when cwd is missing/empty/root.
@@ -88,6 +95,7 @@ function openInVsCode(absPath, folderUri) {
 module.exports = {
   isVsCode,
   shouldOpenInVsCode,
+  toVsCodeFileUri,
   workspaceFolderUriFrom,
   resolveWorkspaceFolderUri,
   spawnCode,

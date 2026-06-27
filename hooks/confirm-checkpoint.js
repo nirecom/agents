@@ -19,7 +19,7 @@ const { peekTurnMarkers } = require("./lib/turn-marker");
 const { resolveSessionId } = require("./lib/workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { loadDefaultEnv } = require("./lib/load-env");
-const { shouldOpenInVsCode, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
+const { isVsCode, shouldOpenInVsCode, toVsCodeFileUri, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
 
 function readStdin() {
   const chunks = [];
@@ -80,7 +80,10 @@ function resolveArtifact(stage, sid, plansDir) {
 
 function renderMessage(stage, absPath, url) {
   if (absPath) {
-    return `[${stage}] Plan file: ${absPath}\nClick Allow to proceed, Deny to abort.`;
+    const fileRef = url
+      ? `[${path.basename(absPath)}](${url})`
+      : absPath;
+    return `[${stage}] Plan file: ${fileRef}\nClick Allow to proceed, Deny to abort.`;
   }
   return `[${stage}] Plan ready (file path unavailable)\nClick Allow to proceed, Deny to abort.`;
 }
@@ -130,7 +133,8 @@ if (require.main === module) {
     } catch (_) { /* fail-open */ }
   }
 
-  const msg = renderMessage(stage, absPath, null);
+  const url = (absPath && isVsCode()) ? toVsCodeFileUri(absPath) : null;
+  const msg = renderMessage(stage, absPath, url);
   process.stdout.write(JSON.stringify({ systemMessage: msg }));
   process.exit(0);
 }
