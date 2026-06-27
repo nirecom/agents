@@ -52,7 +52,8 @@ Agent({
     worktree_path: CWD,
     owner_repo: OWNER_REPO,
     agents_config_dir: AGENTS_CONFIG_DIR,
-    artifact_dir: PLANS_DIR
+    artifact_dir: PLANS_DIR,
+    issue_repo: ISSUE_REPO  // from closes_issues entry's `repo` field; omit for current-repo issues
   })
 })
 ```
