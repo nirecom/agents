@@ -173,6 +173,8 @@ node bin/workflow/next-step --session $CLAUDE_SESSION_ID
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
 
+At the `outline` and `detail` steps only, the oracle appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). It is advisory only — a suggestion that the model may emit the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by `hooks/lib/workflow-state/skip-signal-resolver.js` (`isTrivial`), which fails closed to "not trivial" on any uncertainty.
+
 `--list` mode renders the full 14-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
 `session-start.js` also calls the oracle on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
