@@ -19,7 +19,7 @@ DR-1. **Delegate to web-researcher**:
    On `failed` status: surface summary to user and stop.
 
 DR-2. Read the report from `artifact_path` (one read, at the end).
-DR-3. **Present findings** — output format: `## Deep Research: PERFORMED|FAILED` (1 line) + artifact_path pointer (1 line) + ≤200 char summary. Do not re-emit the full report text in assistant output.
+DR-3. **Present findings** — output format: `## Deep Research: PERFORMED|FAILED` (1 line) + artifact_path pointer (1 line) + ≤200 char summary. Do not re-emit the full report text in assistant output. The caller must not re-summarize or paraphrase these findings — DR-3 output is the complete user-facing surface.
 
 ## Rules
 
