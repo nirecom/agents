@@ -52,9 +52,15 @@ On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12
 
 For each N in `ISSUES[@]`, extract `labels[].name` from its `gh issue view` JSON. Retain per-N label sets for the route decision in WI-8.
 
-### Step WI-8 — Route
+### Step WI-8 — Route (open sub-issue guard: HAS_OPEN → AskUserQuestion; ERROR → AskUserQuestion; NO_OPEN → Path META)
 
-If ALL issues in `ISSUES[@]` carry the `meta` label → **Path META** (WI-12 Path META). If any issue carries `meta` but not all → warn "mixed meta/non-meta issues — falling through to Path A/B" and continue with standard routing below.
+If ALL issues in `ISSUES[@]` carry the `meta` label → **Path META** (WI-12 Path META). Before entering Path META: resolve `OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')`. Then loop over `ISSUES[@]`: for each N, run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/list-open-sub-issues.sh" "$OWNER_REPO" "$N"`.
+
+- **open sub-issues found (HAS_OPEN, exit 0)**: Present open sub-issues via `AskUserQuestion` — one option per `#M: title` line from script stdout. If user selects a valid option: set `ISSUES=($SELECTED_N)`, then `gh issue view $SELECTED_N --json number,title,body,labels,state,createdAt` to re-fetch per-N JSON cache and label set. Clear meta routing; fall through to standard FORCE_PATH_B / A/B routing. If user enters "Other" with a parseable `#M`: same re-fetch + fallthrough. If "Other" is unparseable: `echo "<<WORKFLOW_ABORTED_META_SUBISSUE_SELECTION: invalid input>>"` and stop.
+- **script error (ERROR, exit 2)**: `AskUserQuestion` "sub-issue fetch failed for #N. How to proceed?" → "Continue to Path META" / "Abort (`<<WORKFLOW_ABORTED_META_SUBISSUE_FETCH_ERROR: #N>>`)".
+- **all NO_OPEN (exit 1 for all ISSUES[@])**: proceed to Path META (PM1–PM5) as before.
+
+If any issue carries `meta` but not all → warn "mixed meta/non-meta issues — falling through to Path A/B" and continue with standard routing below.
 
 If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) OR any N in `ISSUES[@]` lacks the `intent:clarified` label → Path B. Only when every N carries `intent:clarified` → Path A. Path B is the default.
 
@@ -78,6 +84,7 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 ### Step WI-12 — Path-specific steps
 
 #### Path META — meta label issue
+WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before reaching this path.
 - PM1. `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call, before any sentinel).
 - PM2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
 - PM3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
