@@ -175,3 +175,7 @@ Changes: Fixed: VS Code extension (extensionHost) users no longer receive unexpe
 ### FEATURE: PR #1143 (2026-06-27)
 Background: fix(#1138,#1112): cross-repo bypass and cleanup exemption in workflow-gate
 Changes: `workflow-gate.js` no longer blocks `git -C <foreign-repo> commit` when the target repo is not the agents session repo (cross-repo bypass for #1138).;`workflow-gate.js` no longer blocks on a pending `cleanup` step during worktree-based sessions; cleanup is deferred to `/worktree-end` (fix for #1112).
+
+### FEATURE: PR #1140 (2026-06-27)
+Background: fix(#927): replace ISSUE_CLOSE_SKILL=1 inline form with close-completed.sh subprocess in ICF-H
+Changes: `/issue-close-finalize` now reliably closes issues: the ICF-H step was silently blocked by `enforce-issue-close.js` because `ISSUE_CLOSE_SKILL=1` set in a Bash subprocess cannot reach the hook's process environment. Closes no longer fail silently when run via the finalize skill.
