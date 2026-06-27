@@ -259,11 +259,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-session-title-waiting.js\"",
-            "timeout": 3
-          },
-          {
-            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-confirm-plan-guard.js\"",
             "timeout": 5
           },
@@ -315,16 +310,6 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/post-push-workflow-reset.js\"",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/user-prompt-clear-waiting.js\"",
-            "timeout": 3
           }
         ]
       }
@@ -531,16 +516,6 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-tests-direct.js\"",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/pre-askuserquestion-clear-waiting.js\"",
-            "timeout": 3
           }
         ]
       }

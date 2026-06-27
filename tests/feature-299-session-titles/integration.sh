@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Tests: hooks/session-start.js, hooks/lib/session-title.js
 # Tags: scope:issue-specific
-# T18-T22: session-start integration, skip guard, mtime fallback
+# T18a/T18b: real session-start.js hook execution (writeSetIssue wired; writeClearWaiting NOT called)
+# T19-T22: skip guard, cwd-constrained mtime fallback
 
 # ===========================================================================
-# T18: session-start.js integration — intent.md present → title written to JSONL
+# T18a: REAL hooks/session-start.js execution — writeSetIssue is wired and writes the title.
+# Runs the actual hook with piped stdin {"session_id","transcript_path"} so the title-write
+# block is exercised end-to-end. Catches: hook syntax errors, broken require/wiring of
+# writeSetIssue, and a missing intent.md → title resolution. (Review C1 (ii)(iii).)
 # ===========================================================================
-run_t18() {
-  local tmp_bash="$TMPDIR_BASE/t18"
+run_t18a() {
+  local tmp_bash="$TMPDIR_BASE/t18a"
   local plans_bash="$tmp_bash/plans"
   local transcript_bash="$tmp_bash/transcript"
   local workflow_bash="$tmp_bash/workflow"
-  local sid="t18-session-abc"
+  local sid="t18a-session-abc"
   local tmp_node
   tmp_node=$(to_node_path "$tmp_bash")
   local plans_node
@@ -33,36 +37,84 @@ run_t18() {
 
 - #11: Session start integration test
 "
-  # Pre-create the JSONL file
+  # Pre-create the (empty) fixture JSONL — transcript_path points here.
   touch "$jsonl_bash"
 
-  # Simulate the session-start.js title-write block exactly as Step 3 specifies:
-  # "After the existing writeState block, add writeSetIssue call"
+  # Run the REAL hook. transcript_path → CLAUDE_SESSION_JSONL_PATH inside the hook →
+  # _getJsonlPath resolves to this fixture JSONL. Other hook side-effects
+  # (cleanupZombies, oracle spawn, additionalContext) fail-open in the fixture env.
   (
-    unset CLAUDE_CODE_CHILD_SESSION
-    CLAUDE_WORKFLOW_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
+    printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
+      CLAUDE_WORKFLOW_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
       CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
-      run_with_timeout 15 node -e "
-const sessionId = '$sid';
-const cwd = '$tmp_node';
-if (sessionId) {
-  try {
-    const { writeSetIssue } = require('$SESSION_TITLE_LIB');
-    const plansDir = process.env.WORKFLOW_PLANS_DIR;
-    writeSetIssue(sessionId, cwd, plansDir);
-  } catch (e) {
-    // fail-open
-  }
-}
-" 2>/dev/null || true
+      run_with_timeout 20 node "$SESSION_START_HOOK" >/dev/null 2>&1 || true
   )
 
   local title
   title=$(read_last_title "$jsonl_node" "$sid")
   if [ "$title" = "#11 Session start integration test" ]; then
-    pass "T18: session-start.js integration: intent.md present → title written to JSONL"
+    pass "T18a: real session-start.js → writeSetIssue wired, title written to JSONL"
   else
-    fail "T18: session-start.js integration (got: '$title', expected: '#11 Session start integration test')"
+    fail "T18a: real session-start.js (got: '$title', expected: '#11 Session start integration test')"
+  fi
+}
+
+# ===========================================================================
+# T18b: REAL hooks/session-start.js execution — writeClearWaiting is NOT called (regression).
+# Pre-seed the extension temp form "⏳<non-space>". After the real hook runs:
+#   (1) the title must be overwritten with the issue title (writeSetIssue fired), AND
+#   (2) the LAST record must NOT be the empty-string "" unset record that
+#       writeClearWaiting writes. A surviving writeClearWaiting call would append a
+#       blank-title record after writeSetIssue, leaving an empty last title.
+# Catches Review C1 (i): the hook still importing/calling writeClearWaiting.
+# ===========================================================================
+run_t18b() {
+  local tmp_bash="$TMPDIR_BASE/t18b"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local workflow_bash="$tmp_bash/workflow"
+  local sid="t18b-session-abc"
+  local tmp_node
+  tmp_node=$(to_node_path "$tmp_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+  local workflow_node
+  workflow_node=$(to_node_path "$workflow_bash")
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$tmp_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  mkdir -p "$workflow_bash"
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #11: Session start integration test
+"
+  # Pre-seed the extension temp form (⏳ glued to ai-title, no space).
+  make_jsonl_with_title "$jsonl_bash" "$sid" "⏳#11 Session start integration test"
+
+  (
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
+    printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
+      CLAUDE_WORKFLOW_DIR="$workflow_node" WORKFLOW_PLANS_DIR="$plans_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 20 node "$SESSION_START_HOOK" >/dev/null 2>&1 || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  # Assertion 1: overwrite occurred. Assertion 2: last record is not the empty
+  # unset record (would be left by a surviving writeClearWaiting call).
+  if [ -n "$title" ] && [ "$title" = "#11 Session start integration test" ]; then
+    pass "T18b: real session-start.js → overwrite occurred AND no empty writeClearWaiting record"
+  else
+    fail "T18b: real session-start.js writeClearWaiting regression (got: '$title', expected: '#11 Session start integration test', non-empty)"
   fi
 }
 
@@ -213,7 +265,8 @@ fs.utimesSync('$jsonl_a_node', t2, t2);
 
   # Call from repo-a cwd → should pick sid_a (from repo-a's transcript dir), not sid_b
   (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+    cd "$cwd_a_bash"  # cd away from worktree so WORKTREE_NOTES.md is not found; mtime scan uses cwd_a's dir
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_SESSION_ID
     CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$cwd_a_node" "$plans_node" 2>/dev/null || true
   )
@@ -275,7 +328,8 @@ fs.utimesSync('$(to_node_path "$jsonl_new_bash")', older, older);
 
   # Mtime scan picks prior_sid (newer), which has intent.md
   (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+    cd "$tmp_bash"  # cd away from worktree so WORKTREE_NOTES.md is not found by resolveSessionId step 6
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_SESSION_ID
     CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
@@ -289,7 +343,8 @@ fs.utimesSync('$(to_node_path "$jsonl_new_bash")', older, older);
   fi
 }
 
-run_t18
+run_t18a
+run_t18b
 run_t19
 run_t20
 run_t21
