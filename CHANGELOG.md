@@ -183,3 +183,7 @@ Changes: `/issue-close-finalize` now reliably closes issues: the ICF-H step was 
 ### FEATURE: PR #1144 (2026-06-27)
 Background: fix(#1137): prohibit caller re-summary after deep-research DR-3 output
 Changes: Fix /deep-research double output: calling orchestrators no longer re-summarize findings already presented by the skill (DR-3 caller-prohibition directive).
+
+### FEATURE: PR #1157 (2026-06-27)
+Background: fix(#1115,#982,#923,#838,#959): enforce-worktree false-block fixes — fd-dup redirect chaining misread, -C flag validation, worker script paths
+Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands no longer false-block `enforce-worktree.js` (#1115, #982).;`git -C <path> worktree remove/prune/add` now passes `enforce-worktree.js` from both main-worktree and linked-worktree CWDs (#923, #838).;Sanctioned worker scripts (`issue-close-stage-worker`, `commit-push-worker`, etc.) launched from the main worktree with linked-worktree path arguments no longer false-block (#959).
