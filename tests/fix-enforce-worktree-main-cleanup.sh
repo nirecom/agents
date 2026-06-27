@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/fix-enforce-worktree-main-cleanup.sh
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
-# Tags: worktree, enforce, hook, bin, git, security, interpreter-wrapper, fix-802
+# Tags: worktree, enforce, hook, bin, git, security, interpreter-wrapper, fix-802, scope:common
 # Tests for isAllowedMainWorktreeCleanup() — #297; isAllowedWorktreeCommand — #778, #802
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -130,6 +130,8 @@ assert_block "git -C \"$OTHER_N\" stash pop"  "$MAIN_CLEAN_N" "S26: -C /other bl
 assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" stash push -m tmp" "$MAIN_DIRTY_N" "S27: skill-prefixed stash push at wtCount=2 → allow (#705/#739b)"
 # S28: no-prefix stash at wtCount=2 → block (current behavior unchanged)
 assert_block "git -C \"$MAIN_DIRTY_N\" stash push -m tmp" "$MAIN_DIRTY_N" "S28: no-prefix stash push at wtCount=2 → block"
+# S27b: skill-prefixed stash pop at wtCount=2 → allow (#1024)
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" stash pop" "$MAIN_DIRTY_N" "S27b: skill-prefixed stash pop at wtCount=2 → allow (#1024)"
 # S29: skill-prefixed restore at wtCount=2 → allow after fix
 assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" restore README.md" "$MAIN_DIRTY_N" "S29: skill-prefixed restore at wtCount=2 → allow (#705)"
 # S34: skill-prefixed stash at wtCount=3 → block (cap=2 even with prefix)
