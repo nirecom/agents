@@ -34,7 +34,7 @@ const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } =
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
-const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend } = require("./enforce-worktree/main-worktree-allows");
+const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 
@@ -438,6 +438,7 @@ if (mainCheckout !== false) {
     if (isAllowedMidOperationAbort(cmd, repoRoot)) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
     if (isAllowedComposeDocAppend(cmd, repoRoot)) done();
+    if (isAllowedWorkerScriptInvocation(cmd, repoRoot)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
