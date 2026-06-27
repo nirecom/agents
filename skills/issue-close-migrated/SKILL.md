@@ -1,7 +1,7 @@
 ---
 name: issue-close-migrated
 description: Close an issue as status:migrated or status:cancelled with --reason not_planned. Applies label, posts comment, and closes.
-user-invocable: true
+user-invocable: false
 ---
 
 Close issue `<N>` as migrated (merged into another issue) or cancelled.
