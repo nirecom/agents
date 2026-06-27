@@ -15,11 +15,6 @@
 // Git Data API: bin/lib/github-git-data-write.sh). Limitations: Bash write detection
 // is pattern-based (UX guard, not a security boundary). Use ENFORCE_WORKTREE=off to
 // bypass for trivial direct-main work.
-//
-// --- BEGIN temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
-// AGENT_AUTO_BRANCH and AGENT_DEFAULT_BRANCHES are accepted with a deprecation warning.
-// Remove this block once all agents configs have been updated.
-// --- END temporary: AGENT_AUTO_BRANCH → ENFORCE_WORKTREE migration ---
 
 "use strict";
 
@@ -39,8 +34,9 @@ const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } =
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
-const { isAllowedWorktreeCommand, isAllowedNewItemDirectory, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkflowPlansDirWrite } = require("./enforce-worktree/main-worktree-allows");
+const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
+const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 
 function readStdin() {
   try {
@@ -198,7 +194,7 @@ if (toolName === "Bash") {
   const cmd = toolInput.command || "";
   if (!cmd) done();
   if (classify(cmd) !== "write") done(); // read-only command — allow
-  repoRoot = findRepoRootForBash(cmd);
+  repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
   // Allowed only when the target branch is not currently checked out in any worktree.
@@ -297,9 +293,19 @@ if (toolName === "Bash") {
     done();
   }
 
+  const sessionRoots = getSessionRepoRoots();
+
+  // Universal target-aware allow (L1, #1045): allow if all extracted write targets
+  // are outside the session scope, before shape-based predicate checks.
+  // Sequenced commands and parse failures → abstain (fail-closed, C1).
+  {
+    const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot);
+    if (_ur.verdict === "allow") done();
+  }
+
   // Bug 2 + Bug 1: non-gh Bash writes — check actual write targets.
   {
-    const sessionRoots = getSessionRepoRoots();
+    // sessionRoots is already in scope (hoisted above for universal-rule reuse)
     const excludePatterns = getExcludePatterns();
     const { targets, parseFailure } = collectBashWriteTargets(cmd);
 
@@ -426,14 +432,12 @@ if (mainCheckout !== false) {
   if (toolName === "Bash") {
     const cmd = toolInput.command || "";
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
-    if (isAllowedNewItemDirectory(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMidOperationAbort(cmd, repoRoot)) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
     if (isAllowedComposeDocAppend(cmd, repoRoot)) done();
-    if (isAllowedWorkflowPlansDirWrite(cmd, repoRoot)) done();
   }
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";

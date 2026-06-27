@@ -2,17 +2,17 @@
 # G20-G28: #912 + #914 + #903 — L2 retry threshold, AskUserQuestion gate,
 # WORKTREE_OFF proposal trigger (C3 branch). Verbatim from original entrypoint.
 
-# Probes whether the writer module exposes incrementL2RetryCount (i.e. l2_retry_count
+# Probes whether the writer module exposes incrementAlertRetryCount (i.e. l2_retry_count
 # infrastructure has been implemented). Used to skip cleanly until source lands.
 require_increment_l2_retry() {
     local label="$1"
     local probe
     probe=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-process.stdout.write(typeof w.incrementL2RetryCount === 'function' ? 'yes' : 'no');
+process.stdout.write(typeof w.incrementAlertRetryCount === 'function' ? 'yes' : 'no');
 " 2>/dev/null)
     if [ "$probe" != "yes" ]; then
-        skip "$label (incrementL2RetryCount not implemented yet)"; return 1
+        skip "$label (incrementAlertRetryCount not implemented yet)"; return 1
     fi
     return 0
 }
@@ -40,7 +40,7 @@ const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = Object.assign({}, $layer2_json, { l2_retry_count: $retry_count });
+st.alert = Object.assign({}, $layer2_json, { alert_retry_count: $retry_count });
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
@@ -52,7 +52,7 @@ run_g20() {
     require_increment_l2_retry "G20: branch(2) cumSev=error + retry at threshold -> no block, exit 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state_with_retry "$tmp" "g20-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }" 2
+    seed_state_with_retry "$tmp" "g20-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }" 2
     out=$(echo '{"stop_hook_active":false,"session_id":"g20-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -70,7 +70,7 @@ run_g21() {
     require_increment_l2_retry "G21: branch(3) l2_armed_at + retry at threshold -> no block, exit 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state_with_retry "$tmp" "g21-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }" 2
+    seed_state_with_retry "$tmp" "g21-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }" 2
     out=$(echo '{"stop_hook_active":false,"session_id":"g21-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -88,7 +88,7 @@ run_g22() {
     require_increment_l2_retry "G22: branch(3) first->block, second->cross threshold no block" || return
     local tmp out1 rc1 out2 rc2
     tmp="$(mktemp -d)"
-    seed_state_with_retry "$tmp" "g22-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }" 0
+    seed_state_with_retry "$tmp" "g22-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }" 0
     out1=$(echo '{"stop_hook_active":false,"session_id":"g22-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc1=$?
@@ -113,7 +113,7 @@ run_g23() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"AskUserQuestion","input":{"question":"?"}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state "$tmp" "g23-sid" "{ l2_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: 'error', findings: [] }"
+    seed_state "$tmp" "g23-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g23-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -134,7 +134,7 @@ run_g24() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state "$tmp" "g24-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
+    seed_state "$tmp" "g24-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g24-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -156,7 +156,7 @@ run_g25() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: temporary>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state "$tmp" "g25-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "g25-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g25-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -178,7 +178,7 @@ run_g26() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: t>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_with_retry "$tmp" "g26-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }" 2
+    seed_state_with_retry "$tmp" "g26-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }" 2
     out=$(printf '{"stop_hook_active":false,"session_id":"g26-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -199,7 +199,7 @@ run_g27() {
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"q"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: t>>\""}},{"type":"tool_use","id":"tu2","name":"AskUserQuestion","input":{"question":"?"}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state "$tmp" "g27-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
+    seed_state "$tmp" "g27-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g27-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -217,7 +217,7 @@ run_g28() {
     require_recipe_block_format "G28: branch(2) block reason includes stateFilePath" || return
     local tmp out rc state_path
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "g28-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
+    seed_state "$tmp" "g28-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: 'error', findings: [{\"categories\":[\"workflow\"],\"severity\":\"error\",\"detail\":\"d\",\"timestamp\":\"2026-06-06T12:00:00.000Z\"}] }"
     # Resolve what stateFilePath value the guard should be using
     state_path=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
@@ -243,7 +243,7 @@ run_g29() {
     # Plain transcript: only Bash with a regular command, no WORKTREE_OFF
     tp="$(node_path "$tmp/t.jsonl")"
     printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo hello"}}]}}' > "$tmp/t.jsonl"
-    seed_state "$tmp" "g29-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_retry_count: 0 }"
+    seed_state "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_retry_count: 0 }"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"g29-sid\",\"transcript_path\":\"$tp\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
@@ -266,7 +266,7 @@ run_g30() {
         '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"<<WORKFLOW_ENFORCE_WORKTREE_OFF: test>>"}]}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo hello"}}]}}' \
         > "$tmp/t.jsonl"
-    seed_state "$tmp" "g30-sid" "{ l2_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], l2_phase: null, l2_retry_count: 0 }"
+    seed_state "$tmp" "g30-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null, alert_retry_count: 0 }"
     out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"g30-sid\",\"transcript_path\":\"$tp\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?

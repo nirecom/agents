@@ -1,0 +1,59 @@
+#!/usr/bin/env node
+"use strict";
+
+const path = require("path");
+const { spawnSync } = require("child_process");
+const { AUDIT_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
+
+const USAGE = "Usage: node bin/supervisor-write-audit-verdict <CONTINUE|WARN|BLOCK> <cause> [--session-id <sid>]";
+
+function fail(msg) {
+  console.error(`[supervisor-write-audit-verdict] ERROR: ${msg}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
+const argv = process.argv.slice(2);
+const verdict = argv[0];
+const cause = argv[1];
+
+if (!verdict || verdict.startsWith("--")) {
+  fail(`verdict must be one of ${AUDIT_VERDICT_VALUES.join("|")}`);
+}
+if (!AUDIT_VERDICT_VALUES.includes(verdict)) {
+  fail(`verdict must be one of ${AUDIT_VERDICT_VALUES.join("|")}`);
+}
+if (!cause || cause.startsWith("--")) {
+  fail("cause is required");
+}
+
+// Parse optional --session-id <sid> from remaining argv (after argv[1]).
+let sessionId = null;
+for (let i = 2; i < argv.length; i++) {
+  const tok = argv[i];
+  if (tok === "--session-id") {
+    if (i + 1 >= argv.length) fail("--session-id requires a value");
+    sessionId = argv[i + 1];
+    i++;
+    continue;
+  }
+  fail(`unknown flag: ${tok}`);
+}
+
+const writerPath = path.resolve(__dirname, "..", "bin", "supervisor-write-audit");
+const childArgs = [
+  writerPath,
+  "--set-audit-phase", "done",
+  "--set-audit-verdict", verdict,
+  "--audit-cause", cause,
+];
+if (sessionId) {
+  childArgs.push("--session-id", sessionId);
+}
+
+const result = spawnSync(process.execPath, childArgs, { stdio: "inherit" });
+if (result.error) {
+  console.error(`[supervisor-write-audit-verdict] ERROR: ${result.error.message}`);
+  process.exit(1);
+}
+process.exit(result.status == null ? 1 : result.status);

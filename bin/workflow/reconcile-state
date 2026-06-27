@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+"use strict";
+
+// reconcile-state: repair stale workflow state JSON.
+//
+// For each evidence-backed step (clarify_intent, docs, write_tests), if completion
+// evidence exists on disk but the step is still `pending` in state, mark it complete.
+// With --dry-run, only logs what would change without writing state.
+//
+// Usage: node bin/workflow/reconcile-state --session <sid> [--dry-run]
+
+const {
+  readState,
+  markStep,
+  hasCompletionEvidence,
+  describeEvidence,
+} = require("../../hooks/lib/workflow-state");
+
+const EVIDENCE_STEPS = ["clarify_intent", "docs", "write_tests"];
+
+function printUsage() {
+  process.stdout.write(
+    "Usage: reconcile-state --session <sid> [--dry-run]\n" +
+    "\n" +
+    "Repair stale workflow state: mark evidence-backed steps (clarify_intent,\n" +
+    "docs, write_tests) complete when completion evidence exists but state is still pending.\n" +
+    "\n" +
+    "Options:\n" +
+    "  --session <sid>   Session id whose state to reconcile (required).\n" +
+    "  --dry-run         Report changes without writing state.\n" +
+    "  -h, --help        Show this help.\n"
+  );
+}
+
+function parseArgs(argv) {
+  const out = { session: undefined, dryRun: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--help" || a === "-h") {
+      printUsage();
+      process.exit(0);
+    } else if (a === "--dry-run") {
+      out.dryRun = true;
+    } else if (a === "--session") {
+      if (i + 1 >= argv.length) {
+        process.stderr.write("reconcile-state: --session requires an argument\n");
+        process.exit(1);
+      }
+      out.session = argv[i + 1];
+      i++;
+    } else {
+      process.stderr.write("reconcile-state: unknown option: " + a + "\n");
+      process.exit(1);
+    }
+  }
+  return out;
+}
+
+function resolveRepoDir() {
+  if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
+  try {
+    return require("child_process").execSync(
+      "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+    ).trim();
+  } catch (e) {
+    return process.cwd();
+  }
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args.session || !/^[A-Za-z0-9_-]+$/.test(args.session)) {
+    process.stderr.write("reconcile-state: --session is required and must match [A-Za-z0-9_-]+\n");
+    process.exit(1);
+  }
+
+  const sid = args.session;
+  const state = readState(sid);
+  if (!state || typeof state.steps !== "object" || !state.steps) {
+    process.stderr.write("reconcile-state: no readable workflow state for session " + sid + "\n");
+    process.exit(1);
+  }
+
+  const repoDir = resolveRepoDir();
+  let updated = 0;
+
+  for (const step of EVIDENCE_STEPS) {
+    const status = (state.steps[step] || {}).status || "pending";
+    if (status !== "pending") {
+      process.stdout.write("reconcile-state: " + step + ": " + status + " (no change)\n");
+      continue;
+    }
+    const hasEvidence = hasCompletionEvidence(step, sid, { repoDir });
+    if (!hasEvidence) {
+      process.stdout.write("reconcile-state: " + step + ": pending (no evidence)\n");
+      continue;
+    }
+    const reason = describeEvidence(step).join("; ");
+    if (args.dryRun) {
+      process.stdout.write(
+        "reconcile-state: " + step + ": pending -> complete (would update; evidence: " + reason + ")\n"
+      );
+    } else {
+      markStep(sid, step, "complete");
+      process.stdout.write(
+        "reconcile-state: " + step + ": pending -> complete (evidence: " + reason + ")\n"
+      );
+    }
+    updated++;
+  }
+
+  if (args.dryRun) {
+    process.stdout.write("reconcile-state: " + updated + " step(s) would be updated.\n");
+  } else {
+    process.stdout.write("reconcile-state: " + updated + " step(s) updated.\n");
+  }
+  process.exit(0);
+}
+
+main();

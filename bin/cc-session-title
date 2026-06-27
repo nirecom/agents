@@ -1,0 +1,90 @@
+#!/usr/bin/env node
+// bin/cc-session-title — VS Code session title CLI
+// Subcommands:
+//   set-issue <cwd> <plansDir>      → writeSetIssue
+//   add-pr <cwd> <prNumber>         → writeAddPr
+//   mark-complete <cwd>             → writeMarkComplete
+//
+// Session ID is resolved via the shared resolveSessionId() (hooks/lib/workflow-state/
+// session-id.js) — single source of truth for the resolution chain, which reads
+// CLAUDE_CODE_SESSION_ID before the JSONL mtime scan (#1082).
+//
+// All errors are silently swallowed. Exit code always 0.
+
+"use strict";
+
+const path = require("path");
+
+try {
+  const agentsDir = path.join(__dirname, "..");
+  const { writeSetIssue, writeAddPr, writeMarkComplete, writeWaiting, writeClearWaiting } = require(
+    path.join(agentsDir, "hooks", "lib", "session-title")
+  );
+  const { resolveSessionId } = require(
+    path.join(agentsDir, "hooks", "lib", "workflow-state", "session-id")
+  );
+
+  // When invoked from Claude Code's Bash tool, CLAUDE_CODE_CHILD_SESSION=1 is
+  // inherited, causing _isChildSession() in session-title.js to suppress all
+  // writes. Unset it here so the CLI operates as a top-level caller.
+  delete process.env.CLAUDE_CODE_CHILD_SESSION;
+
+  const [, , subcmd, ...args] = process.argv;
+
+  if (!subcmd) process.exit(0);
+
+  switch (subcmd) {
+    case "set-issue": {
+      const [cwd, plansDir] = args;
+      if (!cwd || !plansDir) process.exit(0);
+      const sessionId = resolveSessionId();
+      if (sessionId) {
+        writeSetIssue(sessionId, cwd, plansDir);
+      }
+      break;
+    }
+    case "add-pr": {
+      const [cwd, prNumber] = args;
+      if (!cwd || !prNumber) process.exit(0);
+      const sessionId = resolveSessionId();
+      if (sessionId) {
+        writeAddPr(sessionId, cwd, String(prNumber));
+      }
+      break;
+    }
+    case "mark-complete": {
+      const [cwd] = args;
+      if (!cwd) process.exit(0);
+      const sessionId = resolveSessionId();
+      if (sessionId) {
+        writeMarkComplete(sessionId, cwd);
+      }
+      break;
+    }
+    case "write-waiting": {
+      const [cwd] = args;
+      if (!cwd) process.exit(0);
+      const sessionId = resolveSessionId();
+      if (sessionId) {
+        writeWaiting(sessionId, cwd);
+      }
+      break;
+    }
+    case "clear-waiting": {
+      const [cwd] = args;
+      if (!cwd) process.exit(0);
+      const sessionId = resolveSessionId();
+      if (sessionId) {
+        writeClearWaiting(sessionId, cwd);
+      }
+      break;
+    }
+    default:
+      // Unknown subcommand — exit 0 (fail-open)
+      break;
+  }
+} catch (_) {
+  // Fail-open: any error is silently swallowed
+}
+
+process.exit(0);

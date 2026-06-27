@@ -25,7 +25,7 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 Regex `#\d+`:
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **>=2** → `ISSUES=(<all found numbers, in the order found>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
+- **>=2** → Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/filter-primary-candidates.sh" <all found numbers>`. Set `ISSUES=(<stdout lines, in emission order>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
 
 ### Step WI-4 — Session ID + fetch issues
 
@@ -35,7 +35,7 @@ Regex `#\d+`:
 
 Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh" "${ISSUES[@]}"`. Output classifies and routes:
 - `ALL_SAME <wip>` → continue (this session already owns WIP on every issue).
-- `ALL_NONE` → `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/wip-set-resume.sh" "${ISSUES[@]}"`. Exit 0 (`ALL_SET`): WIP set for all eligible N's. Exit 1 (`NEEDS_CLARIFY <N,...>`): set `FORCE_PATH_B=1`; skip WIP — clarify-intent Completion sets WIP on all N. Exit 2 (`RC2 <N>`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed). How to proceed?" → "Continue (skip WIP, acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N>>>"` + stop.
+- `ALL_NONE` → `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/wip-set-resume.sh" "${ISSUES[@]}"`. Exit 0 (`ALL_SET`): WIP set for all eligible N's. Exit 1 (`NEEDS_CLARIFY <N,...>`): set `FORCE_PATH_B=1`; early-claim WIP for each OPEN non-meta N (best-effort; RC2 escalates with exit 2). clarify-intent Completion re-confirms WIP idempotently on all N. Exit 2 (`RC2 <N>`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed). How to proceed?" → "Continue (skip WIP, acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N>>>"` + stop.
 - `MIXED_SAME_NONE` → for each N where `WIP == none`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" "${SID_PASS[@]}" set <N>` (best-effort) to bring related issues up to parity.
 - `ANY_OTHER <N,...>` → let `CONFLICTED=<list>`. Single `AskUserQuestion` "Issue(s) #<CONFLICTED> may be in progress in another session. Continue?" options Continue (recommended) / Abort. On Continue: for each N in `ISSUES`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" "${SID_PASS[@]}" set <N>` (override for `other` N; claim for `none` N; `same` N idempotent; best-effort per-N). On Abort: emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #<CONFLICTED>>>"` and stop.
 - `ERROR <N,...>` → `AskUserQuestion` "WIP check failed for #<N,...> (transient auth/gh error or session-id resolution failure — check $CLAUDE_ENV_FILE or $CLAUDE_SESSION_ID). How to proceed?" with two options: "Continue without WIP tracking (acknowledge risk)" → warn `[workflow-init: wip-state check failed for #<N> — proceeding as 'none' for that issue]` and treat each as `none` and continue; "Abort session" → emit `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #<N,...>>>"` and stop.
@@ -53,6 +53,8 @@ On "Reopen and continue": `gh issue reopen <N>` is executed. Downstream in WI-12
 For each N in `ISSUES[@]`, extract `labels[].name` from its `gh issue view` JSON. Retain per-N label sets for the route decision in WI-8.
 
 ### Step WI-8 — Route
+
+If ALL issues in `ISSUES[@]` carry the `meta` label → **Path META** (WI-12 Path META). If any issue carries `meta` but not all → warn "mixed meta/non-meta issues — falling through to Path A/B" and continue with standard routing below.
 
 If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) OR any N in `ISSUES[@]` lacks the `intent:clarified` label → Path B. Only when every N carries `intent:clarified` → Path A. Path B is the default.
 
@@ -75,8 +77,15 @@ Apply `skills/_shared/survey-artifact-valid.md` to each artifact. On invalid: em
 
 ### Step WI-12 — Path-specific steps
 
+#### Path META — meta label issue
+- PM1. `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call, before any sentinel).
+- PM2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
+- PM3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
+- PM4. Invoke `make-outline-plan`. (The oracle auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)
+
 #### Path A — intent:clarified
 - A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+- A1a. Set session title: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"`
 - A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
 - A3. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #<N> has intent:clarified label>>"`.
 - A4. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.

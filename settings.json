@@ -104,6 +104,7 @@
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")",
       "Bash(doc-append *)",
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",
@@ -205,6 +206,7 @@
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_DETAIL: *>>\")",
@@ -255,11 +257,6 @@
       {
         "matcher": "",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-cleanup-reminder.js\"",
-            "timeout": 5
-          },
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-confirm-plan-guard.js\"",
@@ -393,6 +390,16 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-memory-direct.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Edit|Write|MultiEdit",
         "hooks": [
           {
@@ -418,6 +425,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/enforce-system-ops.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-subagent-sentinels.js\"",
             "timeout": 5
           }
         ]

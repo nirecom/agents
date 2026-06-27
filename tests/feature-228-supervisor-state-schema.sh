@@ -51,13 +51,13 @@ run_s1() {
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-s1');
-const req = ['version','session_id','created_at','last_updated','layer1','layer2','layer3'];
+const req = ['version','session_id','created_at','last_updated','layer1','alert','audit'];
 for (const k of req) {
   if (!(k in st)) { console.error('MISSING:'+k); process.exit(2); }
 }
 if (!Array.isArray(st.layer1.findings)) { console.error('layer1.findings not array'); process.exit(3); }
-if (typeof st.layer2 !== 'object' || st.layer2 === null) { console.error('layer2 not object'); process.exit(4); }
-if (typeof st.layer3 !== 'object' || st.layer3 === null) { console.error('layer3 not object'); process.exit(5); }
+if (typeof st.alert !== 'object' || st.alert === null) { console.error('alert not object'); process.exit(4); }
+if (typeof st.audit !== 'object' || st.audit === null) { console.error('audit not object'); process.exit(5); }
 console.log('OK');
 " 2>&1)
     rc=$?
@@ -170,22 +170,22 @@ console.log('OK');
 
 # --- S7 ----------------------------------------------------------------------
 run_s7() {
-    require_source "$SCHEMA_MODULE" "S7: layer2/layer3 additionalProperties allowed" || return
+    require_source "$SCHEMA_MODULE" "S7: alert/audit additionalProperties allowed" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 const st = s.createEmptyState('sid-s7');
-st.layer2 = { customField: 42 };
-st.layer3 = { foo: 'bar' };
+st.alert = { customField: 42 };
+st.audit = { foo: 'bar' };
 const r = s.validate(st);
 if (r.ok !== true) { console.error('expected ok=true: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S7: layer2/layer3 additionalProperties allowed"
+        pass "S7: alert/audit additionalProperties allowed"
     else
-        fail "S7: layer2/layer3 additionalProperties allowed (rc=$rc, out=$out)"
+        fail "S7: alert/audit additionalProperties allowed (rc=$rc, out=$out)"
     fi
 }
 
@@ -212,6 +212,24 @@ console.log('OK');
     fi
 }
 
+# --- S9 ----------------------------------------------------------------------
+run_s9() {
+    require_source "$SCHEMA_MODULE" "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'error'" || return
+    local out rc
+    out=$(run_with_timeout 5 node -e "
+const s = require('$SCHEMA_MODULE_NODE');
+if (typeof s.AUDIT_SEVERITY_THRESHOLD === 'undefined') { console.error('AUDIT_SEVERITY_THRESHOLD not exported'); process.exit(2); }
+if (s.AUDIT_SEVERITY_THRESHOLD !== 'error') { console.error('expected error, got '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(3); }
+console.log('OK');
+" 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
+        pass "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'error'"
+    else
+        fail "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'error' (rc=$rc, out=$out)"
+    fi
+}
+
 run_s1
 run_s2
 run_s3
@@ -220,6 +238,7 @@ run_s5
 run_s6
 run_s7
 run_s8
+run_s9
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

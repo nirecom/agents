@@ -30,7 +30,22 @@ function getWorkflowDir() {
   return path.join(os.homedir(), ".claude", "projects", "workflow");
 }
 
+// SSOT for sessionId validation (defense-in-depth against path traversal).
+// Real session IDs — UUIDs (hex+hyphen), YYYYMMDD-HHMMSS fallbacks (digit+hyphen),
+// and test sids ("test-sid-bash-9", "20260509-bundle-a") — all match this regex,
+// so legitimate use is never broken. Rejects path separators, "..", and the like.
+const SESSION_ID_VALID_RE = /^[A-Za-z0-9_-]+$/;
+
+// Throws on an invalid sessionId. Used by path-building callers where an
+// unvalidated sessionId is a caller bug (path traversal), not a recoverable state.
+function assertValidSessionId(sessionId) {
+  if (typeof sessionId !== "string" || !SESSION_ID_VALID_RE.test(sessionId)) {
+    throw new Error(`Invalid sessionId: ${JSON.stringify(sessionId)}`);
+  }
+}
+
 function getStatePath(sessionId) {
+  assertValidSessionId(sessionId);
   return path.join(getWorkflowDir(), sessionId + ".json");
 }
 
@@ -87,6 +102,13 @@ function readState(sessionId) {
       if (!state.steps.cleanup) {
         state.steps.cleanup = { status: "pending", updated_at: null };
       }
+      if (!state.workflow_type) {
+        state.workflow_type = "wf-code";
+      }
+      // migration: wf-plan → wf-meta rename
+      if (state.workflow_type === "wf-plan") {
+        state.workflow_type = "wf-meta";
+      }
     }
     return state;
   } catch (e) {
@@ -118,6 +140,7 @@ function createInitialState(sessionId, ctx) {
     if (typeof ctx.cwd === "string") state.cwd = ctx.cwd;
     state.git_branch = ctx.git_branch ?? null;
   }
+  state.workflow_type = "wf-code";
   return state;
 }
 
@@ -240,7 +263,7 @@ function cleanupZombies(maxAgeDays = 7) {
       continue;
     }
 
-    if (file.endsWith(".workflow-off") || file.endsWith(".worktree-off")) {
+    if (file.endsWith(".workflow-off") || file.endsWith(".worktree-off") || file.endsWith(".issue-close-verified")) {
       try {
         const st = fs.statSync(filePath);
         if (st.mtimeMs < cutoff) fs.unlinkSync(filePath);
@@ -273,41 +296,6 @@ function cleanupZombies(maxAgeDays = 7) {
   }
 }
 
-const STEP_HINT = {
-  workflow_init:      "Invoke `workflow-init` via the Skill tool. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".",
-  clarify_intent:     "Invoke `clarify-intent` via the Skill tool (or skip: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\").",
-  research:           "Invoke `survey-code` AND `survey-history` in parallel (premise verification), and/or `deep-research` (external knowledge). Skip: echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>\". Then invoke `make-outline-plan`.",
-  outline:            "Invoke `make-outline-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>\").",
-  detail:             "Invoke `make-detail-plan` via the Skill tool (or skip: echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>\").",
-  branching_complete: "Consult rules/branch.md + rules/worktree.md, then echo \"<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>\".",
-  write_tests:        "Invoke `write-tests` (or skip: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>\").",
-  review_tests:       "Invoke /review-tests skill (emits <<WORKFLOW_MARK_STEP_review_tests_complete>> on pass, <<WORKFLOW_REVIEW_TESTS_WARNINGS: reason>> on gaps). Skip symmetrically via WORKFLOW_WRITE_TESTS_NOT_NEEDED (waives both write_tests and review_tests).",
-  run_tests:          "Invoke `run-tests` skill via the Skill tool (or run tests directly via Bash).",
-  review_security:    "Invoke `review-code-security` (or skip: echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>\").",
-  docs:               "Invoke `update-docs`.",
-  user_verification:  "Wait for user confirmation, then echo \"<<WORKFLOW_USER_VERIFIED: <reason>>>\" (reason: >=3 non-space chars, no '>', not a placeholder), then invoke `commit-push`.",
-  cleanup:            "Run `/worktree-end` (worktree), or delete the branch after PR merge (branch), or skip (main): echo \"<<WORKFLOW_MARK_STEP_cleanup_skipped>>\".",
-};
-
-function nextStepHint(stepName) {
-  const nextStep = VALID_STEPS[VALID_STEPS.indexOf(stepName) + 1];
-  const hint = nextStep && STEP_HINT[nextStep];
-  return hint ? `[workflow] ${hint}` : null;
-}
-
-const CONFIRM_NEXT_STEP_HINT = {
-  intent:
-    "CONFIRM_INTENT approved. Run GitHub reconciliation then invoke `make-outline-plan` via Skill tool.",
-  outline:
-    "CONFIRM_OUTLINE approved. Invoke `make-detail-plan` via Skill tool.",
-  detail:
-    "CONFIRM_DETAIL approved. Emit <<WORKFLOW_BRANCHING_COMPLETE: ...>> if not yet done, then invoke `write-tests` via Skill tool.",
-};
-
-function confirmNextStepHint(stage) {
-  const hint = CONFIRM_NEXT_STEP_HINT[stage];
-  return hint ? `[workflow] ${hint}` : null;
-}
 
 function setLastPushedSha(sessionId, sha) {
   const state = readState(sessionId);
@@ -329,12 +317,10 @@ module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   VALID_STATUSES,
-  STEP_HINT,
-  nextStepHint,
-  CONFIRM_NEXT_STEP_HINT,
-  confirmNextStepHint,
   getWorkflowDir,
   getStatePath,
+  assertValidSessionId,
+  SESSION_ID_VALID_RE,
   readState,
   writeState,
   createInitialState,

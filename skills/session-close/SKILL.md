@@ -49,8 +49,8 @@ test -f "<PLANS_DIR>/<session-id>-final-report-env.json" \
   || { echo "ERROR: env JSON missing — /worktree-end must run first" >&2; exit 1; }
 ```
 
-Then write the late-finding L2 eligibility flag (#997):
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-eligible-phase post_final_report_window
+Then write the late-finding alert eligibility flag (#997):
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Proceed to SC-3.
 
 ## Step SC-2B — Branch/main path: build minimal env JSON
@@ -59,8 +59,8 @@ Proceed to SC-3.
 node "$AGENTS_CONFIG_DIR/bin/session-close-build-env.js" "<PLANS_DIR>/<session-id>-final-report-env.json"
 ```
 
-Exit 0 → write the late-finding L2 eligibility flag (#997):
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-eligible-phase post_final_report_window
+Exit 0 → write the late-finding alert eligibility flag (#997):
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Then proceed to SC-3. Non-zero → abort (PR unresolvable).
 
 ## Step SC-3 — Non-GitHub pre-flight + issue close dispatch
@@ -104,34 +104,22 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
   "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
 ```
 
-## Step SC-4 — Retrospective pass (write-only)
+## Steps SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
-Before rendering the Final Report, scan the session for any unreported observations (fallback paths taken, sanctioned-command false-blocks, step degradations). For each one, run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "<observation>" --reporter session-close` (session-id auto-resolves). Findings are written to `layer1.findings` for the audit trail only. The final-report-env.json anchor (established at Step 2A) prevents these findings from arming a new L2 cycle for this session.
+Invoke `session-close-worker` via Task tool with resolved absolute paths:
+- `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
+- `plans_dir`: `<PLANS_DIR>` (resolved in SC-0)
+- `agents_config_dir`: absolute path resolved from `$AGENTS_CONFIG_DIR`
+- `artifact_dir`: `$AGENTS_CONFIG_DIR/artifacts/` (create temp dir if needed)
+- `outcome_json_path`: absolute path to `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
 
-## Step SC-5 — Pre-Final-Report L2 gate
+On `status: failed`: emit `supervisor-report` warning and **STOP**. Do NOT proceed to SC-6. User must manually re-run `/session-close`. This path is fail-closed — SC-6 never runs on worker failure.
 
-Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool) and check `layer2.l2_phase`:
-
-- `"pending"` and `l2_armed_at !== null`: check `last_run_at`:
-  - `last_run_at !== null` (#961 heuristic: L2 ran but `--set-l2-phase done` was not committed):
-    1. Repair state: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase done --clear-l2-armed-at`
-    2. Record audit finding: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "#961 heuristic: l2_phase=pending with last_run_at set — repaired to done" --reporter session-close`
-    3. Proceed to SC-6.
-  - `last_run_at === null`:
-    - If `Date.parse(l2_armed_at)` is NaN **or** `(now_ms - Date.parse(l2_armed_at)) > 600000` (10 minutes, the **L2_TIMEOUT_MS** threshold): L2 never fired — elapsed-time fallback. Run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "SC-5 elapsed-time fallback: l2_phase=pending, l2_armed_at=<value>, last_run_at=null, elapsed >10 min (or l2_armed_at unparseable)" --reporter session-close` and proceed to SC-6.
-    - Otherwise: L2 not yet run. Emit the gate sentinel and yield — do not emit the Final Report this turn:
-    `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`
-    The next Stop fires `supervisor-guard.js`, which runs L2. The supervisor writes `--set-l2-phase done`. When the session resumes, this gate detects `done` and proceeds to SC-6.
-    Note: the state-writer guard in `ensureLayer2Scheduled` prevents findings written during Step SC-4 from re-arming `next_check_at` after the final-report-env.json anchor is established (Step SC-2A). This gate therefore reads a stable value.
-
-- `"pending"` and `l2_armed_at === null` (anomalous state — writer set `l2_phase=pending` without `l2_armed_at`, indicating an interrupted write or upstream writer bug): record an **error** finding via `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity error --detail "SC-5 anomalous state: l2_phase=pending, l2_armed_at=null; supervisor-state snapshot: <one-line JSON of layer2 object>" --reporter session-close` and proceed to SC-6.
-  **No L2 review is promised by this branch.** Because the final-report-env.json anchor (Step SC-2A) has already been written, `ensureLayer2Scheduled` is a no-op (frozen schedule). The finding is recorded for audit trail only.
-
-- `"done"` or `null`: proceed to SC-6. (`null` = L2 was never scheduled this session.)
-
-- `"frozen"`: proceed to SC-6. (Final Report re-emit scenario; idempotent.)
-
-- State file absent: treat as `null` and proceed to SC-6.
+On `status: complete`:
+1. Read `gate_action` from `artifact_path` (gate JSON).
+2. **Always** emit `echo "<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>"`.
+3. `gate_action: yield` → **STOP** after sentinel. SC-6 does not run. Supervisor review runs later.
+4. `gate_action: proceed` → continue to SC-6.
 
 ## Step SC-6 — Emit Final Report directly into assistant text
 
@@ -140,6 +128,7 @@ Read four input files via the Read tool:
 - `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
 - `<PLANS_DIR>/<session-id>-intent.md`
 - The WORKTREE_NOTES.md backup path from the `NOTES_BACKUP_PATH` field in the env JSON
+- `<PLANS_DIR>/<session-id>-supervisor-state.json` (optional — absent → treat as no supervisor run)
 
 Generate the skeleton (run this Bash command):
   node -e "process.stdout.write(require(process.env.AGENTS_CONFIG_DIR + '/hooks/lib/final-report-schema').renderSkeleton('<session-id>'))"
@@ -155,27 +144,32 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 - `<INSTALLER_RERUN_REQUIRED_DECISION>` → same pattern using `INSTALLER_RERUN_REQUIRED` / `INSTALLER_RERUN_REASON`
 - `<OS_REBOOT_REQUIRED_DECISION>` → same pattern using `OS_REBOOT_REQUIRED` / `OS_REBOOT_REASON`
 - `<BUGS_FOUND>`, `<RELATED_TASKS>`, `<NEXT_TASKS>` → extract the matching `##` section content from WORKTREE_NOTES.md backup; or `- (none)` when file absent
+- `<SUPERVISOR_ALERT_SUMMARY>` → from supervisor state: `phase: <alert.alert_phase|none>, severity: <alert.cumulative_severity|none>, findings: <count>`; or `(not run)` when state absent
+- `<SUPERVISOR_AUDIT_SUMMARY>` → from supervisor state: `phase: <audit.audit_phase|none>, verdict: <audit.audit_verdict|none>, cause: <audit.audit_cause|none>`; or `(not run)` when state absent
+- `<SUPERVISOR_FINDINGS_DETAIL>` → when `alert.findings` is non-empty, call `formatLayer2Findings(alert.findings, { sessionId, workflowSessionId, supervisorPath, stateFilePath, forFinalReport: true })` and expand its result as literal text; when state absent, `alert.findings` empty, or render is null, expand to `(no findings)`
 
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 
+SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
+
 After emitting, mark completion:
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --set-l2-phase frozen
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase frozen
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
-`stop-final-report-guard.js` validates completion by checking all 10 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
+`stop-final-report-guard.js` validates completion by checking all 13 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
 
-## Step SC-7 — Surface Layer 2 findings (post-Final-Report)
+## Step SC-7 — Surface alert findings (post-Final-Report)
 
-Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `layer2.findings` is empty, or `layer2.findings_surfaced_at` is already set, skip to the sentinel and return.
+Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
 
 Compute the render:
 
-  node -e "const r=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/supervisor-findings-render');const s=require('fs');const st=JSON.parse(s.readFileSync('<PLANS_DIR>/<session-id>-supervisor-state.json','utf8'));const out=r.formatLayer2Findings(st.layer2.findings||[],{sessionId:'<session-id>',workflowSessionId:process.env.CLAUDE_SESSION_ID||null,supervisorPath:process.env.AGENTS_CONFIG_DIR+'/agents/supervisor.md',stateFilePath:'<PLANS_DIR>/<session-id>-supervisor-state.json'});if(out)process.stdout.write(out+'\n');"
+  node -e "const r=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/supervisor-findings-render');const s=require('fs');const st=JSON.parse(s.readFileSync('<PLANS_DIR>/<session-id>-supervisor-state.json','utf8'));const out=r.formatLayer2Findings(st.alert.findings||[],{sessionId:'<session-id>',workflowSessionId:process.env.CLAUDE_SESSION_ID||null,supervisorPath:process.env.AGENTS_CONFIG_DIR+'/agents/supervisor.md',stateFilePath:'<PLANS_DIR>/<session-id>-supervisor-state.json'});if(out)process.stdout.write(out+'\n');"
 
 When the render is non-empty: emit the text verbatim into the assistant reply (no preamble, no wrapping).
 
 Mark surfaced and complete:
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-layer2" --session-id "<session-id>" --mark-findings-surfaced
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --mark-findings-surfaced
   echo "<<WORKFLOW_MARK_STEP_l2_findings_surfaced_complete>>"
 
 ## Rules
@@ -184,7 +178,7 @@ Mark surfaced and complete:
 - `/issue-close-finalize` is invoked via the Skill tool only (never `bash`/`spawnSync`).
 - Non-GitHub remotes never invoke `/issue-close-finalize`; outcomes written by SC-3.
 - Empty `closes_issues` → skip `/issue-close-finalize`, write `{"issues":[]}`, emit Final Report.
-- Fail-open: `/issue-close-finalize` failures surface in outcome JSON; renderer still runs.
+- `/issue-close-finalize` failures surface in outcome JSON; renderer still runs (non-blocking).
 - Every Bash call is self-contained — no shell variable crosses call boundaries.
 - On fallback or step degradation (synthetic outcome fallback, non-GitHub skip path): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter session-close` (session-id auto-resolves).
 - Report observations per rules/supervisor-reporting.md.

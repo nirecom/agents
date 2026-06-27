@@ -3,6 +3,7 @@
 # Tests: hooks/lib/supervisor-findings-render.js
 # Tags: supervisor, em-supervisor, l2-findings, scope:issue-specific
 # Tests for issue #1027 — formatLayer2Findings renderer (NEW module).
+# Extended by issue #1114 — forFinalReport option (R8-R11).
 #
 # # L3 gap
 # Pure unit module — no host dependencies. L3 not required.
@@ -207,6 +208,136 @@ process.stdout.write(v);
     fi
 }
 
+# --- R8: default mode (forFinalReport=false) includes reporter= in output ---
+# RED: fails until supervisor-findings-render.js adds reporter field to finding lines.
+run_r8() {
+    require_source "$RENDER_SRC" "R8: default mode includes reporter= field" || return
+    local out rc
+    out="$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'warning', detail:'wd8', reporter:'agent-r8' },
+];
+const v = r.formatLayer2Findings(findings, $OPTS_JS);
+if (typeof v !== 'string') process.exit(2);
+process.stdout.write(v);
+" 2>/dev/null)"
+    rc=$?
+    if [ "$rc" = "0" ] && echo "$out" | grep -qF "reporter=agent-r8"; then
+        pass "R8: default mode includes reporter=agent-r8 in finding line"
+    else
+        fail "R8: reporter= field missing from default-mode output (rc=$rc, out=$out)"
+    fi
+}
+
+# --- R9: forFinalReport:true -> full detail shown, no truncation ---------------
+run_r9() {
+    require_source "$RENDER_SRC" "R9: forFinalReport:true shows full detail without truncation" || return
+    local out rc
+    # Construct a detail string > 120 chars with no special chars.
+    local long_detail="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_END"
+    out="$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'warning', detail:'$long_detail', reporter:'r9' },
+];
+const v = r.formatLayer2Findings(findings, { forFinalReport: true });
+if (v === null || typeof v !== 'string') process.exit(2);
+process.stdout.write(v);
+" 2>/dev/null)"
+    rc=$?
+    # Full detail must appear including '_END'; no truncation ellipsis.
+    if [ "$rc" = "0" ] && \
+       echo "$out" | grep -qF "_END" && \
+       ! echo "$out" | grep -qF "…"; then
+        pass "R9: forFinalReport:true shows full detail (no truncation, _END present)"
+    else
+        fail "R9: detail truncated or missing in forFinalReport mode (rc=$rc, out=$out)"
+    fi
+}
+
+# --- R10: forFinalReport:true -> '<' escaped to '‹' (U+2039) ----------------
+# RED: fails until forFinalReport option is implemented.
+run_r10() {
+    require_source "$RENDER_SRC" "R10: forFinalReport:true escapes '<' to '‹'" || return
+    local out rc
+    out="$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'warning', detail:'see <PR_NUMBER> for context', reporter:'r10' },
+];
+const v = r.formatLayer2Findings(findings, { forFinalReport: true });
+if (v === null || typeof v !== 'string') process.exit(2);
+process.stdout.write(v);
+" 2>/dev/null)"
+    rc=$?
+    # Must contain escaped form '‹PR_NUMBER>' and NOT contain raw '<PR_NUMBER>'.
+    if [ "$rc" = "0" ] && \
+       echo "$out" | grep -qF "‹PR_NUMBER>" && \
+       ! echo "$out" | grep -qF "<PR_NUMBER>"; then
+        pass "R10: forFinalReport:true escapes '<' to '‹' — <PR_NUMBER> becomes ‹PR_NUMBER>"
+    else
+        fail "R10: '<' escaping not working (rc=$rc, out=$out)"
+    fi
+}
+
+# --- R11: forFinalReport:false (default) -> no truncation, no escaping -------
+# Regression guard: SC-7/stop-l2-findings-display.js uses default mode,
+# which must NOT alter detail content.
+# RED: may fail until source refactor separates modes (if default changes break).
+# Actually tests that the non-forFinalReport path is unaffected after new option lands.
+run_r11() {
+    require_source "$RENDER_SRC" "R11: forFinalReport:false (default) does not truncate or escape" || return
+    local out rc
+    local long_detail="BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB_TAIL"
+    out="$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'warning', detail:'$long_detail has <TOKEN_LITERAL> inside', reporter:'r11' },
+];
+// Explicitly pass forFinalReport: false to verify no-op mode.
+const v = r.formatLayer2Findings(findings, { forFinalReport: false });
+if (v === null || typeof v !== 'string') process.exit(2);
+process.stdout.write(v);
+" 2>/dev/null)"
+    rc=$?
+    # Must contain the full _TAIL (no truncation) and must contain raw '<TOKEN_LITERAL>'
+    # (no escaping), and must NOT contain '…'.
+    if [ "$rc" = "0" ] && \
+       echo "$out" | grep -qF "_TAIL" && \
+       echo "$out" | grep -qF "<TOKEN_LITERAL>" && \
+       ! echo "$out" | grep -qF "…"; then
+        pass "R11: forFinalReport:false (default) — detail not truncated, '<' not escaped"
+    else
+        fail "R11: default mode altered detail content (rc=$rc, out=$out)"
+    fi
+}
+
+# --- R12: forFinalReport:true -> footer suppressed (no Session ID / audit trail / Recommended action) ---
+run_r12() {
+    require_source "$RENDER_SRC" "R12: forFinalReport:true suppresses footer" || return
+    local out rc
+    out="$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+  { categories:['code'], severity:'warning', detail:'wd12', reporter:'r12' },
+];
+const v = r.formatLayer2Findings(findings, { forFinalReport: true });
+if (v === null || typeof v !== 'string') process.exit(2);
+process.stdout.write(v);
+" 2>/dev/null)"
+    rc=$?
+    if [ "$rc" = "0" ] && \
+       ! echo "$out" | grep -qF "Session ID:" && \
+       ! echo "$out" | grep -qF "Full audit trail:" && \
+       ! echo "$out" | grep -qF "Recommended action:" && \
+       echo "$out" | grep -qF "wd12"; then
+        pass "R12: forFinalReport:true suppresses Session ID / audit trail / Recommended action footer"
+    else
+        fail "R12: footer not suppressed in forFinalReport mode (rc=$rc, out=$out)"
+    fi
+}
+
 run_r1
 run_r2
 run_r3
@@ -214,6 +345,11 @@ run_r4
 run_r5
 run_r6
 run_r7
+run_r8
+run_r9
+run_r10
+run_r11
+run_r12
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

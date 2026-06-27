@@ -37,6 +37,7 @@ export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 # Unset VS Code detection vars by default.
 unset TERM_PROGRAM 2>/dev/null || true
 unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+unset VSCODE_CRASH_REPORTER_PROCESS_TYPE 2>/dev/null || true
 unset CONFIRM_INTENT CONFIRM_OUTLINE CONFIRM_DETAIL 2>/dev/null || true
 
 run_hook_capture_spawn() {

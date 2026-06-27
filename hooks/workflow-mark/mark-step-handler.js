@@ -4,7 +4,7 @@
 // (user_verification, write_tests, docs) that must be emitted via their own paths.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, markStep, nextStepHint } = require("../lib/workflow-state");
+const { VALID_STEPS, markStep, readState, writeState } = require("../lib/workflow-state");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal } = ctx;
@@ -77,15 +77,32 @@ function handle(ctx) {
 
     try {
       markStep(sessionId, stepName, status);
-      if (status === "complete" || status === "skipped") {
-        const hint = nextStepHint(stepName);
-        if (hint) pushMessage(hint);
-      }
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
       );
     }
+
+    // workflow_init completing signals a new workflow run on this session UUID.
+    // Reset all downstream steps to pending so stale state from a prior run
+    // cannot trigger the oracle's inconsistency abort (#1068).
+    if (stepName === "workflow_init" && status === "complete") {
+      try {
+        const st = readState(sessionId);
+        if (st) {
+          for (const s of VALID_STEPS) {
+            if (s !== "workflow_init") {
+              st.steps[s] = { status: "pending", updated_at: null };
+            }
+          }
+          // workflow_type is a top-level field, not inside steps[], so the reset loop above does not overwrite it.
+          writeState(sessionId, st);
+        }
+      } catch (e) {
+        pushMessage(`workflow-mark: failed to reset downstream steps after workflow_init — ${e.message}`);
+      }
+    }
+
     return true;
   }
 

@@ -28,6 +28,13 @@ See `docs/security-policy.md` for the full pattern list.
 - `block-dotenv.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit`) — blocks `.env` file access (read and write).
   Sanitizes git commit messages (`git commit` and `git -C <path> commit`) to avoid false positives
 - `block-credentials.js` (PreToolUse, matcher: `Bash|Read|Grep|Glob|Edit|Write|MultiEdit|editFiles|runInTerminal|runCommands`) — blocks Read/Edit/Write/Grep/Glob/Bash access to 22 credential-path families (24 protected roots; Terraform spans 3 roots): SSH keys, GnuPG, AWS, Azure, gh CLI config, git credentials, Docker config, kube, npm, PyPI, gem, netrc, pgpass, MySQL, curl, Maven, Gradle, Terraform, gcloud SDK, HashiCorp Vault, Cargo, 1Password CLI. Supersedes `block-ssh-private-key.js` (issue #254). WORKFLOW_OFF does NOT bypass. Path table: `CREDENTIALS_TABLE` in `hooks/block-credentials.js`. Recognizes `~`, `$HOME`, `${HOME}`, `$USERPROFILE`, `${USERPROFILE}`, and dot-segment forms; additionally recognizes the corresponding `/root/<tail>` sibling of every `~/`-rooted family (same path with `~/` stripped; see `CREDENTIALS_TABLE` in `hooks/block-credentials.js`). `..` traversal resolved by `path.posix.normalize`.
+- `block-subagent-sentinels.js` (PreToolUse, matcher: `Bash|runInTerminal|runCommands`) — blocks
+  `WORKFLOW_*` sentinel echoes issued from subagents. Sentinels are reserved for the orchestrator
+  (main conversation); subagents cannot drive the workflow state machine. Detection uses the
+  `isStrictSentinel`, `CHAIN_BOUNDARY_SENTINEL_DQ_RE`, and `CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE`
+  patterns from `hooks/lib/sentinel-patterns.js`. Subagent identification via `agent_id` presence
+  (see `hooks/lib/subagent-detect.js`). Fail-open: approves on malformed stdin or absent `agent_id`.
+  Defense-in-depth with the `workflow-mark.js` PostToolUse backstop (C2).
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
@@ -42,10 +49,10 @@ See `docs/security-policy.md` for the full pattern list.
   Replaces `check-docs-updated.js` and `check-tests-updated.js`
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_step>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
-  sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). After each
-  successful step completion, appends a `[workflow]` next-step hint to `additionalContext` via
-  `nextStepHint()` (defined in `hooks/lib/workflow-state.js`) to guide Claude toward the next skill
-- `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode`) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises window and opens file atomically, eliminating the two-spawn timing race — #546 Gap 3). `normalizeCwd()` is applied at the entry of `workspaceFolderUriFrom` to convert Unix-style Git Bash paths (e.g. `/c/git/agents`) to `C:/git/agents` before URI construction, fixing multi-window routing on Windows. URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r` (no folder-uri). Folder URI path segments are percent-encoded via `encodeURIComponent` for spaces / `#` / `%` / non-ASCII / UNC support (#492). Windows uses `cmd.exe /d /s /c code ...` per spawn (CVE-2024-27980 mitigation). VS Code 1.121 regression: when `--folder-uri` and a file path are passed together, the file-open arg is silently dropped; fixed in 1.122+. Users on 1.121 must click the breadcrumb manually — no fallback provided (#546). Fail-open: spawn errors do not abort the hook.
+  sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
+  is oracle-driven: the model queries `bin/workflow/next-step` after each completion rather than
+  receiving a static prose hint
+- `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode` (excluded when `VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost`)) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises window and opens file atomically, eliminating the two-spawn timing race — #546 Gap 3). `normalizeCwd()` is applied at the entry of `workspaceFolderUriFrom` to convert Unix-style Git Bash paths (e.g. `/c/git/agents`) to `C:/git/agents` before URI construction, fixing multi-window routing on Windows. URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r` (no folder-uri). Folder URI path segments are percent-encoded via `encodeURIComponent` for spaces / `#` / `%` / non-ASCII / UNC support (#492). Windows uses `cmd.exe /d /s /c code ...` per spawn (CVE-2024-27980 mitigation). VS Code 1.121 regression: when `--folder-uri` and a file path are passed together, the file-open arg is silently dropped; fixed in 1.122+. Users on 1.121 must click the breadcrumb manually — no fallback provided (#546). Fail-open: spawn errors do not abort the hook.
 - `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
@@ -56,14 +63,8 @@ See `docs/security-policy.md` for the full pattern list.
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
-  `additionalContext` containing session_id, all 10 step statuses, and a `NEXT ACTION:` line
-  pointing to the next pending skill; runs zombie cleanup
-- `stop-cleanup-reminder.js` (Stop) — fires after every Claude response turn; if
-  `user_verification` is complete and `cleanup` is still pending, outputs
-  `{"decision":"block","reason":"..."}` (exit 2) to remind Claude about step 10 (worktree-end
-  or branch deletion). Silent (exit 0) for main path or when cleanup is already done.
-  Reads `session_id` from stdin (provided by Claude Code) as fallback when `CLAUDE_ENV_FILE`
-  is unavailable. Guards against infinite loops via `stop_hook_active` check.
+  `additionalContext` containing session_id, all 14 step statuses, and a `NEXT ACTION:` line
+  from the oracle (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
 - `check-cross-platform.js` (PreToolUse, matcher: `Bash`) — blocks `git commit` when

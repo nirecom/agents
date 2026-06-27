@@ -41,16 +41,26 @@ function _readSessionIdFromWorktreeNotes(notesPath) {
 /**
  * Resolve the current session ID with the following priority chain:
  *   1. ctx.sessionIdFromInput — non-empty string from hook input.session_id
- *   2. CLAUDE_ENV_FILE — KEY=VALUE file written by session-start.js
- *   3. CLAUDE_SESSION_ID env var — best-effort (Anthropic bug #27987)
- *   4. ctx.transcriptPath basename
- *   5. WORKTREE_NOTES.md (CWD, then git common-dir parent)
- *   6. JSONL mtime scan — last resort
+ *   2. CLAUDE_CODE_SESSION_ID env var — CC-native, per-session-distinct,
+ *      reliably present in the Bash-tool subprocess where CLAUDE_ENV_FILE is
+ *      not propagated (#1082, Anthropic bug #27987)
+ *   3. CLAUDE_ENV_FILE — KEY=VALUE file written by session-start.js
+ *   4. CLAUDE_SESSION_ID env var — best-effort (Anthropic bug #27987)
+ *   5. ctx.transcriptPath basename
+ *   6. WORKTREE_NOTES.md (CWD, then git common-dir parent)
+ *   7. JSONL mtime scan — last resort
  */
 function resolveSessionId(ctx = {}) {
   if (typeof ctx.sessionIdFromInput === "string" && ctx.sessionIdFromInput.length > 0) {
     return ctx.sessionIdFromInput;
   }
+  // CC-native session id, set directly in tool and hook subprocesses. Reliably
+  // present where the manufactured CLAUDE_SESSION_ID relay (read below) is not —
+  // the Bash-tool path, where CLAUDE_ENV_FILE is not propagated. Without this,
+  // resolution falls through to the JSONL mtime scan, which returns the most
+  // recently active OTHER session in a concurrent environment (#1082).
+  const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
+  if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) return codeSid.trim();
   const envFile = process.env.CLAUDE_ENV_FILE;
   if (envFile) {
     try {

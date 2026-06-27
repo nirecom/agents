@@ -9,14 +9,15 @@ const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   readState,
+  markStep,
+  hasCompletionEvidence,
 } = require("./lib/workflow-state");
 
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 
 // Steps tracked by the workflow but not enforced at commit time.
-// The NEXT-hint mechanism (nextStepHint) handles guidance for these steps.
-const NON_GATE_STEPS = ["research"];
+const NON_GATE_STEPS = ["research", "pre_final_report_gate"];
 const { parseGitConfigValues } = require("./lib/parse-git-args");
 
 const { normalizeForWindows } = require("./workflow-gate/path-normalize");
@@ -109,7 +110,7 @@ if (require.main === module) {
   // Fail-open precedence (do NOT reorder):
   //   1. No sessionId → fall through (cannot enforce)
   //   2. readState() returns null → fall through (no state to check)
-  //   3. plans-path Write allowlist → fall through (skill output path)
+  //   3. plans-path Write/Edit/MultiEdit allowlist → fall through (skill output path)
   //   4. Tier 1 not clear → block (references /workflow-init)
   //   5. Tier 2 not clear → block (references /clarify-intent)
   //   6. Both clear → fall through (gate dormant)
@@ -126,12 +127,12 @@ if (require.main === module) {
   if (sessionId && EARLY_GATE_TOOLS.has(toolName)) {
     const earlyState = readState(sessionId);
     if (earlyState) {
-      // Plans-path allowlist: Write tool only, to ~/.workflow-plans/**
+      // Plans-path allowlist: Write/Edit/MultiEdit tools, targeting ~/.workflow-plans/**
       // (skill writes intent/outline/detail .md here while workflow_init is still pending).
       // Resolve the path so traversal sequences like "../" can't smuggle the write outside.
       const filePath = toolInput.file_path || toolInput.path || "";
       let isPlansAllowed = false;
-      if (toolName === "Write" && filePath) {
+      if ((toolName === "Write" || toolName === "Edit" || toolName === "MultiEdit") && filePath) {
         try {
           const resolved = path.resolve(filePath);
           const plansRoot = path.resolve(getWorkflowPlansDir()) + path.sep;
@@ -157,6 +158,12 @@ if (require.main === module) {
         const ci = earlyState.steps && earlyState.steps.clarify_intent;
         const ciStatus = ci ? ci.status : "pending";
         if (ciStatus !== "complete" && ciStatus !== "skipped") {
+          // Evidence-based self-repair (#1094): if intent.md already exists,
+          // mark clarify_intent complete and fall through (gate clears) instead
+          // of hard-blocking. fail-open: markStep error leaves the gate dormant.
+          if (hasCompletionEvidence("clarify_intent", sessionId)) {
+            try { markStep(sessionId, "clarify_intent", "complete"); } catch (e) { /* fail-open */ }
+          } else {
           block(
             "workflow-gate: clarify_intent has not been completed for this session.\n" +
             "Tool \"" + toolName + "\" is blocked until intent is locked in.\n\n" +
@@ -167,6 +174,7 @@ if (require.main === module) {
             "For docs-only edits: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: docs-only edit>>\"\n\n" +
             "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent>>\""
           );
+          }
         }
       }
     }

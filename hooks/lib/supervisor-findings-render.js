@@ -1,5 +1,9 @@
 "use strict";
 
+function escapeTokens(str) {
+  return typeof str === "string" ? str.replace(/</g, "‹") : str;
+}
+
 function aggregateCategories(findings) {
   const seen = new Set();
   const out = [];
@@ -13,20 +17,22 @@ function aggregateCategories(findings) {
 }
 
 /**
- * Format L2 findings for display after the Final Report.
+ * Format alert findings for display after the Final Report.
  * Returns a string when there is content to show, null when nothing to surface.
  *
- * @param {Array} findings - layer2.findings array from supervisor state
+ * @param {Array} findings - alert.findings array from supervisor state
  * @param {Object} opts
  * @param {string} opts.sessionId
  * @param {string|null} [opts.workflowSessionId]
  * @param {string} opts.supervisorPath
  * @param {string} opts.stateFilePath
+ * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039, normalize newlines, and suppress footer
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
 
   const { sessionId, workflowSessionId, supervisorPath, stateFilePath } = opts;
+  const forFinalReport = opts.forFinalReport === true;
   const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
 
   const warningOrErrorFindings = findings.filter(f => f && (f.severity === "error" || f.severity === "warning"));
@@ -34,30 +40,43 @@ function formatLayer2Findings(findings, opts) {
 
   if (warningOrErrorFindings.length === 0 && noticeFindings.length === 0) return null;
 
-  const allCats = aggregateCategories(findings);
+  const allCatsRaw = aggregateCategories(findings);
+  const allCats = forFinalReport ? allCatsRaw.map(escapeTokens) : allCatsRaw;
   const lines = [];
 
-  lines.push(`[EM Supervisor] Layer 2 findings (post-completion review):`);
+  lines.push(`[EM Supervisor] Alert mode findings (post-completion review):`);
   lines.push(`Categories: ${allCats.length > 0 ? allCats.join(", ") : "(none)"}`);
 
   if (warningOrErrorFindings.length > 0) {
     lines.push(`Findings (severity >= warning):`);
     for (let i = 0; i < warningOrErrorFindings.length; i++) {
       const f = warningOrErrorFindings[i];
-      const cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
-      const detail = typeof f.detail === "string" ? f.detail : "(no detail)";
-      lines.push(`  [${i + 1}] categories=${cats} severity=${f.severity || "(none)"} detail=${detail}`);
+      let cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
+      let detail = typeof f.detail === "string" ? f.detail : "(no detail)";
+      let reporterValue = typeof f.reporter === "string" && f.reporter ? f.reporter : "(none)";
+      if (forFinalReport) {
+        detail = detail.replace(/[\r\n]+/g, " ");
+        cats = escapeTokens(cats);
+        detail = escapeTokens(detail);
+        reporterValue = escapeTokens(reporterValue);
+      }
+      lines.push(`  [${i + 1}] categories=${cats} severity=${f.severity || "(none)"} reporter=${reporterValue} detail=${detail}`);
     }
   }
 
   if (noticeFindings.length > 0) {
-    lines.push(`Notices: ${noticeFindings.length} additional notice-severity finding(s) recorded — not shown (consult ${stateFilePath} for the full audit trail).`);
+    const noticeRef = forFinalReport
+      ? "see supervisor state for full audit trail"
+      : `consult ${stateFilePath} for the full audit trail`;
+    lines.push(`Notices: ${noticeFindings.length} additional notice-severity finding(s) recorded — not shown (${noticeRef}).`);
   }
 
-  lines.push(`Session ID: ${sessionId}`);
-  lines.push(`Workflow session ID: ${wsidLabel}`);
-  lines.push(`Full audit trail: ${stateFilePath}`);
-  lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
+  if (!forFinalReport) {
+    lines.push(`Session ID: ${sessionId}`);
+    lines.push(`Workflow session ID: ${wsidLabel}`);
+    lines.push(`Full audit trail: ${stateFilePath}`);
+    lines.push(`Recommended action: review and address per agents/supervisor.md (${supervisorPath}).`);
+  }
 
   return lines.join("\n");
 }

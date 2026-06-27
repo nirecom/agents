@@ -2,6 +2,7 @@
 name: survey-code
 description: Explore the codebase to understand existing patterns, constraints, and relevant files before planning.
 model: sonnet
+user-invocable: false
 ---
 
 Investigate the codebase related to the given task.
@@ -87,13 +88,7 @@ SVC-7. Present findings for user review before proceeding to plan.
 
 ## Completion
 
-After completing this skill:
-1. Invoke `make-outline-plan` via the Skill tool.
-   Note: when invoked as a parallel Agent subagent by workflow-init, skip this step —
-   Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.
-
 Skip this skill when the change target is already known (single file/function).
 
 If research is genuinely not needed for this task (typo fix, docs-only change):
 1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')
-2. Invoke `make-outline-plan` via the Skill tool.

@@ -21,6 +21,7 @@ SPLIT_GROUPS=(
     "a-series.sh"
     "b-series.sh"
     "c-d-series.sh"
+    "fc-series.sh"
 )
 
 TOTAL_PASS=0

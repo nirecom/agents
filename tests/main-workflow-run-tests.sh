@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-run-tests.js
 # Tags: workflow, tests, runner, hook, bin
-# TDD tests for claude-global/hooks/workflow-run-tests.js
+# Tests for hooks/workflow-run-tests.js
 # This hook is a PostToolUse handler that auto-marks run_tests based on Bash command + exit code.
-# NOTE: workflow-run-tests.js does NOT exist yet. All tests are expected to FAIL (TDD).
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-RUN_TESTS_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-run-tests.js"
+RUN_TESTS_HOOK="$DOTFILES_DIR/hooks/workflow-run-tests.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -227,15 +226,93 @@ else
     fail "ED7. sentinel echo + exit=0 → expected absent, got run_tests=$STATUS"
 fi
 
-# ED8: ls tests/ && pytest tests/ + exit=0 → state absent/unchanged
-# (compound command: first token is ls, not a test runner)
+# ED8: ls tests/ && pytest tests/ + exit=0 → run_tests: complete
+# (compound command: segment 2 `pytest tests/` is a real runner → per-segment
+#  detection marks complete; segment 1 `ls tests/` is excluded read-only)
 SID="ed8-$$-$RANDOM"
 run_run_tests_hook "ls tests/ && pytest tests/" 0 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" = "complete" ]; then
+    pass "ED8. ls tests/ && pytest tests/ + exit=0 → run_tests=complete (compound: real runner segment)"
+else
+    fail "ED8. ls tests/ && pytest tests/ + exit=0 → expected complete (real runner segment), got: $STATUS"
+fi
+
+# ED9: git -C /some/path add tests/foo.sh + exit=0 → state absent (bare git -C false-positive guard)
+SID="ed9-$$-$RANDOM"
+run_run_tests_hook "git -C /some/path add tests/foo.sh" 0 "$SID"
 if check_state_file_absent "$SID"; then
-    pass "ED8. ls tests/ && pytest tests/ + exit=0 → state absent/unchanged (compound: first token ls)"
+    pass "ED9. git -C <path> add tests/foo.sh + exit=0 → state absent/unchanged (bare git -C excluded)"
 else
     STATUS=$(get_run_tests_status "$SID")
-    fail "ED8. ls tests/ && pytest tests/ + exit=0 → expected absent (compound cmd), got run_tests=$STATUS"
+    fail "ED9. git -C <path> add tests/foo.sh + exit=0 → expected absent (bare git -C), got run_tests=$STATUS"
+fi
+
+# ED10: git -C "path with spaces" add tests/foo.sh + exit=0 → state absent (quoted -C path guard)
+SID="ed10-$$-$RANDOM"
+run_run_tests_hook 'git -C "path with spaces" add tests/foo.sh' 0 "$SID"
+if check_state_file_absent "$SID"; then
+    pass "ED10. git -C \"path with spaces\" add tests/foo.sh + exit=0 → state absent/unchanged (quoted -C excluded)"
+else
+    STATUS=$(get_run_tests_status "$SID")
+    fail "ED10. git -C \"path with spaces\" add tests/foo.sh + exit=0 → expected absent (quoted -C), got run_tests=$STATUS"
+fi
+
+# ED11: node script.js && wc -l tests/foo.sh + exit=0 → state absent
+# (compound: no segment is a test runner; tests/ appears only in a read-only wc segment)
+SID="ed11-$$-$RANDOM"
+run_run_tests_hook "node script.js && wc -l tests/foo.sh" 0 "$SID"
+if check_state_file_absent "$SID"; then
+    pass "ED11. node script.js && wc -l tests/foo.sh + exit=0 → state absent (no runner segment)"
+else
+    STATUS=$(get_run_tests_status "$SID")
+    fail "ED11. node script.js && wc -l tests/foo.sh + exit=0 → expected absent (non-runner segment refs tests/), got run_tests=$STATUS"
+fi
+
+# ED12: cd repo && pytest tests/ + exit=0 → run_tests: complete
+# (compound false-negative guard: a real runner segment must still mark complete)
+SID="ed12-$$-$RANDOM"
+run_run_tests_hook "cd repo && pytest tests/" 0 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" = "complete" ]; then
+    pass "ED12. cd repo && pytest tests/ + exit=0 → run_tests=complete (real runner in compound)"
+else
+    fail "ED12. cd repo && pytest tests/ + exit=0 → expected complete (real runner segment), got: $STATUS"
+fi
+
+# ED13: echo "a && pytest tests/" + exit=0 → state absent (quote-aware split regression)
+# (the && is inside double quotes — must NOT split; whole command is a read-only echo)
+SID="ed13-$$-$RANDOM"
+run_run_tests_hook 'echo "a && pytest tests/"' 0 "$SID"
+if check_state_file_absent "$SID"; then
+    pass "ED13. echo \"a && pytest tests/\" + exit=0 → state absent (quote-aware: no split inside quotes)"
+else
+    STATUS=$(get_run_tests_status "$SID")
+    fail "ED13. echo \"a && pytest tests/\" + exit=0 → expected absent (quoted && must not split), got run_tests=$STATUS"
+fi
+
+# ED14: node x.js || wc -l tests/foo.sh + exit=0 → state absent (|| operator false-positive guard)
+# (segment 1 `node x.js` is not a test runner; segment 2 `wc -l tests/foo.sh` is read-only excluded;
+#  splitting on || must prevent bare tests/ mention from triggering complete)
+SID="ed14-$$-$RANDOM"
+run_run_tests_hook "node x.js || wc -l tests/foo.sh" 0 "$SID"
+if check_state_file_absent "$SID"; then
+    pass "ED14. node x.js || wc -l tests/foo.sh + exit=0 → state absent (|| operator: non-runner segment refs tests/)"
+else
+    STATUS=$(get_run_tests_status "$SID")
+    fail "ED14. node x.js || wc -l tests/foo.sh + exit=0 → expected absent (|| split: non-runner + read-only), got run_tests=$STATUS"
+fi
+
+# ED15: node gen.js | grep tests/foo.sh + exit=0 → state absent (| pipe operator false-positive guard)
+# (segment 1 `node gen.js` has no test indicator; segment 2 `grep tests/foo.sh` is read-only excluded;
+#  splitting on | must prevent false complete)
+SID="ed15-$$-$RANDOM"
+run_run_tests_hook "node gen.js | grep tests/foo.sh" 0 "$SID"
+if check_state_file_absent "$SID"; then
+    pass "ED15. node gen.js | grep tests/foo.sh + exit=0 → state absent (| pipe: read-only segment refs tests/)"
+else
+    STATUS=$(get_run_tests_status "$SID")
+    fail "ED15. node gen.js | grep tests/foo.sh + exit=0 → expected absent (| pipe: non-runner + read-only), got run_tests=$STATUS"
 fi
 
 # ---------------------------------------------------------------------------

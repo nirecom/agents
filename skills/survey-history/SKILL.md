@@ -2,6 +2,7 @@
 name: survey-history
 description: Investigate git history, docs/history.md, and GitHub issue/PR timeline since the relevant issue opened, to surface changes that may invalidate the issue's premises.
 model: sonnet
+user-invocable: false
 ---
 
 Investigate the project's git history and GitHub issue/PR timeline to detect changes
@@ -122,11 +123,6 @@ SH-6. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
 - gh CLI failures are non-fatal: log them in the artifact and continue
 
 ## Completion
-
-After completing this skill:
-1. Invoke `make-outline-plan` via the Skill tool.
-   Note: when invoked as a parallel Agent subagent by workflow-init, skip this step —
-   Do NOT invoke make-outline-plan. workflow-init orchestrates the next stage.
 
 ## Skip conditions
 

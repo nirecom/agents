@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+"use strict";
+
+const { writeAuditState, incrementAuditRetryCount } = require("../hooks/lib/supervisor-state-writer");
+const { AUDIT_PHASE_VALUES, AUDIT_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
+const { resolveSessionId } = require("../hooks/lib/workflow-state");
+const { resolveWorkflowSessionId } = require("../hooks/lib/resolve-workflow-session-id");
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+const KNOWN_VALUE_FLAGS = new Set([
+  "--session-id",
+  "--mirror-session-id",
+  "--audit-armed-at",
+  "--last-run-at",
+  "--set-audit-phase",
+  "--set-audit-verdict",
+  "--audit-cause",
+]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-audit-armed-at", "--increment-audit-retry-count"]);
+
+function usage(msg) {
+  if (msg) console.error(`[supervisor-write-audit] ERROR: ${msg}`);
+  console.error(
+    "Usage: node bin/supervisor-write-audit [--session-id <sid>] [--mirror-session-id <sid>]" +
+    " [--audit-armed-at <iso>] [--clear-audit-armed-at]" +
+    " [--last-run-at <iso>]" +
+    " [--set-audit-phase <pending|in_progress|done|frozen>]" +
+    " [--set-audit-verdict <CONTINUE|WARN|BLOCK>]" +
+    " [--audit-cause <text>]" +
+    " [--increment-audit-retry-count]"
+  );
+  process.exit(1);
+}
+
+const args = {};
+const flags = new Set();
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  const tok = argv[i];
+  if (KNOWN_BOOL_FLAGS.has(tok)) { flags.add(tok); continue; }
+  if (KNOWN_VALUE_FLAGS.has(tok)) {
+    if (i + 1 >= argv.length) usage(`${tok} requires a value`);
+    args[tok.slice(2)] = argv[i + 1];
+    i++;
+    continue;
+  }
+  usage(`unknown flag: ${tok}`);
+}
+
+// Session-ID resolution: ordered fallback chain.
+// Track source so MIRROR_RESOLVERS can find the "other" identity automatically.
+// NOTE: no WORKTREE_NOTES.md / plans-dir scan — callers without env or flag must error out.
+const SID_SOURCES = [
+  { source: "explicit", get: () => args["session-id"] },
+  { source: "wsid",     get: () => process.env.WORKFLOW_SESSION_ID },
+  { source: "ccuuid",   get: () => process.env.CLAUDE_SESSION_ID },
+];
+let rawSid, rawSidSource;
+for (const src of SID_SOURCES) {
+  const val = src.get();
+  if (val && SESSION_ID_RE.test(val)) { rawSid = val; rawSidSource = src.source; break; }
+}
+if (!rawSid) {
+  console.error("Error: --session-id required (could not auto-resolve)");
+  process.exit(1);
+}
+
+const FLAG_SPECS = {
+  "audit-armed-at":       { kind: "value", patch: (v) => ({ audit_armed_at: v }),        mutexGroup: "armed-at" },
+  "clear-audit-armed-at": { kind: "bool",  patch: ()  => ({ audit_armed_at: null }),      mutexGroup: "armed-at" },
+  "last-run-at":          { kind: "value", patch: (v) => ({ audit_last_run_at: v }) },
+  "audit-cause":          { kind: "value", patch: (v) => ({ audit_cause: v }) },
+  "set-audit-phase": {
+    kind: "value",
+    validate(v) {
+      const allowed = AUDIT_PHASE_VALUES.filter((x) => x !== null);
+      if (!allowed.includes(v)) usage(`--set-audit-phase must be one of ${allowed.join("|")}`);
+    },
+    patch(v, ctx) {
+      const p = { audit_phase: v };
+      if (v === "done") {
+        p.audit_retry_count = 0;
+        if (!ctx.activeFlags.has("last-run-at")) p.audit_last_run_at = new Date().toISOString();
+      }
+      return p;
+    },
+  },
+  "set-audit-verdict": {
+    kind: "value",
+    validate(v) {
+      if (!AUDIT_VERDICT_VALUES.includes(v)) usage(`--set-audit-verdict must be one of ${AUDIT_VERDICT_VALUES.join("|")}`);
+    },
+    patch: (v) => ({ audit_verdict: v }),
+  },
+};
+
+// #1052: Identity-agnostic dual-store mirror-write.
+// Mirror only when rawSidSource is auto-resolved OR explicit --mirror-session-id supplied;
+// explicit --session-id without --mirror-session-id writes only to the named store.
+const MIRROR_RESOLVERS = {
+  explicit: () => null,
+  wsid: () => {
+    const envCc = process.env.CLAUDE_SESSION_ID;
+    if (envCc && envCc !== rawSid && SESSION_ID_RE.test(envCc)) return envCc;
+    try {
+      const ccId = resolveSessionId({ sessionIdFromInput: null, transcriptPath: null });
+      if (ccId && ccId !== rawSid && SESSION_ID_RE.test(ccId)) return ccId;
+    } catch (_) {}
+    return null;
+  },
+  ccuuid: () => {
+    const envWs = process.env.WORKFLOW_SESSION_ID;
+    if (envWs && envWs !== rawSid && SESSION_ID_RE.test(envWs)) return envWs;
+    try {
+      const ws = resolveWorkflowSessionId({});
+      if (ws && ws !== rawSid && SESSION_ID_RE.test(ws)) return ws;
+    } catch (_) {}
+    return null;
+  },
+};
+
+// Detect active flags
+const activeFlags = new Set();
+for (const flag of Object.keys(FLAG_SPECS)) {
+  const spec = FLAG_SPECS[flag];
+  if (spec.kind === "bool" ? flags.has(`--${flag}`) : (flag in args)) activeFlags.add(flag);
+}
+
+// Mutex group check
+const groupCounts = {};
+for (const flag of activeFlags) {
+  const grp = FLAG_SPECS[flag].mutexGroup;
+  if (grp) groupCounts[grp] = (groupCounts[grp] || 0) + 1;
+}
+for (const [grp, count] of Object.entries(groupCounts)) {
+  if (count > 1) usage(`flags in group "${grp}" are mutually exclusive`);
+}
+
+// --increment-audit-retry-count: orthogonal terminal path (no FLAG_SPEC — handled separately)
+if (flags.has("--increment-audit-retry-count")) {
+  if (activeFlags.size > 0) usage("--increment-audit-retry-count is mutually exclusive with other mutating flags");
+  const result = incrementAuditRetryCount(rawSid);
+  console.log(JSON.stringify(result));
+  process.exit(0);
+}
+
+if (activeFlags.size === 0) usage("at least one mutating flag required");
+
+// Build patch via FLAG_SPECS table
+const ctx = { activeFlags };
+const patch = {};
+for (const flag of activeFlags) {
+  const spec = FLAG_SPECS[flag];
+  const value = spec.kind === "bool" ? true : args[flag];
+  if (spec.validate) spec.validate(value);
+  Object.assign(patch, spec.patch(value, ctx));
+}
+
+const ok = writeAuditState(rawSid, patch);
+if (!ok) {
+  console.error("[supervisor-write-audit] ERROR: writeAuditState failed (invalid fields or unexpected error)");
+  process.exit(1);
+}
+
+// Mirror-write via MIRROR_RESOLVERS table
+let mirrorSid = args["mirror-session-id"];
+if (!mirrorSid) mirrorSid = MIRROR_RESOLVERS[rawSidSource]();
+if (mirrorSid && mirrorSid !== rawSid && SESSION_ID_RE.test(mirrorSid)) {
+  const mirrorOk = writeAuditState(mirrorSid, patch);
+  if (!mirrorOk) console.error(`[supervisor-write-audit] WARN: mirror-write to ${mirrorSid} failed`);
+}
+
+process.exit(0);

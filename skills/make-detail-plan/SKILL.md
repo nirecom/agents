@@ -3,6 +3,7 @@ name: make-detail-plan
 description: Stage 3 of three-stage planning pipeline. Produce a file-level implementation plan via detail-planner/detail-reviewer loop, then get user approval. Inputs are confirmed intent (<session-id>-intent.md) and outline (<session-id>-outline.md) from prior stages.
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Produce a detailed implementation plan via a planner/reviewer discussion loop.
 Read intent.md + outline.md before drafting.
@@ -60,6 +61,8 @@ Research/malformed-retry cap escalation: see `bash "$AGENTS_CONFIG_DIR/skills/ma
 
 ### Step MDP-7 — Assemble + confirm
 
+Before composing the summary or confirm-plan prose, run: `CONV_LANG=$(bash -c 'cd "$AGENTS_CONFIG_DIR" && bin/get-config-var CONV_LANG 2>/dev/null || true')`. If CONV_LANG is non-empty, produce the one-paragraph summary (OFF path) and the one-line summary inside `<<WORKFLOW_CONFIRM_DETAIL: ...>>` (ON path) in that language.
+
 On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the shared helper. Helper carries the 3 mandatory sections (`## Issues`, `## Class members`, `## Accepted Tradeoffs`) verbatim from outline.md; planner draft is the body source.
 
 Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
@@ -67,7 +70,7 @@ Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind out
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol Step 3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol Step 2).
-- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: <one-line summary>>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per Completion Step 2) or the `write-tests` Skill invocation (per Completion Step 3). Do NOT end the response on the CONFIRM echo.
+- `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_DETAIL: <one-line summary>>>"`, also include either `echo "<<WORKFLOW_BRANCHING_COMPLETE: ...>>"` (per Completion Step 2) or the `write-tests` Skill invocation. Do NOT end the response on the CONFIRM echo.
 
 ## Research Escalation
 

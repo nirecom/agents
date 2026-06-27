@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// PostToolUse hook (Bash matcher): EM Supervisor Layer 2 finding-presence gate.
-// - If command is a C2 escape-hatch (ENFORCE_*_OFF sentinel) and l2_armed_at
-//   is not already set, set l2_armed_at = now (trigger L2 review at Stop).
+// PostToolUse hook (Bash matcher): EM Supervisor alert mode finding-presence gate.
+// - If command is a C2 escape-hatch (ENFORCE_*_OFF sentinel) and alert_armed_at
+//   is not already set, set alert_armed_at = now (trigger alert review at Stop).
 // - Emit an additionalContext advisory when cumulative_severity is set.
 // - Fail-open everywhere; never exit 2 (PostToolUse must not block).
 "use strict";
@@ -40,13 +40,13 @@ if (require.main === module) {
 
   if (!input.tool_name || input.tool_name !== "Bash") done();
 
-  let resolveSessionId, isWorkflowOff, readState, writeLayer2State;
+  let resolveSessionId, isWorkflowOff, readState, writeAlertState;
   let ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE;
   let ENFORCE_WORKTREE_OFF_RE_DQ, ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
-    ({ readState, writeLayer2State } = require("./lib/supervisor-state-writer"));
+    ({ readState, writeAlertState } = require("./lib/supervisor-state-writer"));
     ({
       ENFORCE_WORKFLOW_OFF_RE_DQ,
       ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
@@ -88,26 +88,26 @@ if (require.main === module) {
     ENFORCE_WORKTREE_OFF_RE_DQ.test(command) ||
     ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(command);
 
-  const layer2 = (state && state.layer2) || {};
-  const l2ArmedAt = layer2.l2_armed_at == null ? null : layer2.l2_armed_at;
-  const cumSev = layer2.cumulative_severity == null ? null : layer2.cumulative_severity;
-  const findings = Array.isArray(layer2.findings) ? layer2.findings : [];
+  const alert = (state && state.alert) || {};
+  const alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
+  const cumSev = alert.cumulative_severity == null ? null : alert.cumulative_severity;
+  const findings = Array.isArray(alert.findings) ? alert.findings : [];
   const findingCount = findings.length;
 
   const layer1Findings = (state && state.layer1 && Array.isArray(state.layer1.findings)) ? state.layer1.findings : [];
   const hasBlockingFinding = layer1Findings.some(f => f && f.severity && f.severity !== "notice");
 
-  if (isEscapeHatch && !l2ArmedAt && hasBlockingFinding) {
+  if (isEscapeHatch && !alertArmedAt && hasBlockingFinding) {
     try {
-      writeLayer2State(sessionId, { l2_armed_at: new Date().toISOString() });
+      writeAlertState(sessionId, { alert_armed_at: new Date().toISOString() });
     } catch (_) {}
   }
 
   let advisory = null;
   if (cumSev === "error") {
-    advisory = `[EM Supervisor] Layer 2 has flagged a blocking concern (${findingCount} finding(s)). Review the next Stop turn — supervisor-guard.js will block.`;
+    advisory = `[EM Supervisor] Alert mode has flagged a blocking concern (${findingCount} finding(s)). Review the next Stop turn — supervisor-guard.js will block.`;
   } else if (cumSev === "warning" || cumSev === "notice") {
-    advisory = `[EM Supervisor] Layer 2 advisory (${cumSev}): ${findingCount} finding(s) recorded. See agents/supervisor.md for context.`;
+    advisory = `[EM Supervisor] Alert mode advisory (${cumSev}): ${findingCount} finding(s) recorded. See agents/supervisor.md for context.`;
   }
 
   done(advisory);

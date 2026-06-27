@@ -324,9 +324,12 @@ test_K1_skeleton_has_h2_and_nine_h3() {
     echo "$out" | grep -q "^### Bugs Found$"               || ok=0
     echo "$out" | grep -q "^### Related Tasks$"            || ok=0
     echo "$out" | grep -q "^### Next Tasks$"               || ok=0
+    echo "$out" | grep -q "^### Supervisor Alert$"         || ok=0
+    echo "$out" | grep -q "^### Supervisor Audit$"         || ok=0
+    echo "$out" | grep -q "^### Supervisor Findings$"      || ok=0
 
     if [ "$ok" = "1" ]; then
-        pass "K1: renderSkeleton contains H2 and all 9 ### headings"
+        pass "K1: renderSkeleton contains H2 and all 12 ### headings"
     else
         fail "K1: at least one heading missing from skeleton output
 --- output ---
@@ -373,7 +376,9 @@ test_K3_skeleton_has_block_placeholders() {
 
     local ok=1
     for tok in "<CLOSED_ISSUES_LIST>" "<CLOSED_ISSUE_OUTCOMES>" \
-               "<BUGS_FOUND>" "<RELATED_TASKS>" "<NEXT_TASKS>"; do
+               "<BUGS_FOUND>" "<RELATED_TASKS>" "<NEXT_TASKS>" \
+               "<SUPERVISOR_ALERT_SUMMARY>" "<SUPERVISOR_AUDIT_SUMMARY>" \
+               "<SUPERVISOR_FINDINGS_DETAIL>"; do
         if ! echo "$out" | grep -qF "$tok"; then
             ok=0
             echo "  K3 missing token: $tok"
@@ -381,7 +386,7 @@ test_K3_skeleton_has_block_placeholders() {
     done
 
     if [ "$ok" = "1" ]; then
-        pass "K3: skeleton has block placeholders (CLOSED_ISSUES_LIST/CLOSED_ISSUE_OUTCOMES/BUGS_FOUND/RELATED_TASKS/NEXT_TASKS)"
+        pass "K3: skeleton has block placeholders (CLOSED_ISSUES_LIST/CLOSED_ISSUE_OUTCOMES/BUGS_FOUND/RELATED_TASKS/NEXT_TASKS/SUPERVISOR_ALERT_SUMMARY/SUPERVISOR_AUDIT_SUMMARY/SUPERVISOR_FINDINGS_DETAIL)"
     else
         fail "K3: missing one or more block placeholders
 --- output ---
@@ -429,6 +434,88 @@ test_K6_skill_md_notes_absent_fallback() {
         pass "K6: session-close SKILL.md references '- (none)' notes-absent fallback"
     else
         fail "K6: SKILL.md missing '- (none)' notes-absent fallback marker"
+    fi
+}
+
+# K7: formatLayer2Findings({forFinalReport:true}) used in SC-6 substitution.
+# Tests that the function (once implemented) produces output that:
+# 1. Contains per-finding lines with categories/severity/reporter visible
+# 2. Truncates long detail at ~120 chars with '…'
+# 3. Escapes '<' to '‹' (U+2039) so stop-final-report-guard.js won't block
+# 4. Leaves no unescaped <UPPERCASE_TOKEN> patterns that would trigger the guard
+#
+# RED test: fails until supervisor-findings-render.js implements forFinalReport option.
+test_K7_format_layer2_findings_for_final_report() {
+    require_schema "K7_format_layer2_findings_for_final_report" || return
+    local render_src="${AGENTS_DIR}/hooks/lib/supervisor-findings-render.js"
+    if [ ! -f "$render_src" ]; then
+        skip "K7: hooks/lib/supervisor-findings-render.js not found"
+        return
+    fi
+
+    local render_node
+    if command -v cygpath >/dev/null 2>&1; then
+        render_node="$(cygpath -m "$render_src")"
+    else
+        render_node="$render_src"
+    fi
+
+    # Finding with a detail longer than 120 chars and a '<' character (e.g. <PR_NUMBER>).
+    local long_detail="This detail mentions <PR_NUMBER> and is intentionally very long to exceed the one-hundred-twenty character truncation threshold for the forFinalReport mode."
+
+    local out rc
+    out="$(run_with_timeout 120 node -e "
+const r = require('$render_node');
+const findings = [
+  {
+    categories: ['code', 'workflow'],
+    severity: 'warning',
+    detail: '$long_detail',
+    reporter: 'write-code'
+  },
+  {
+    categories: ['test'],
+    severity: 'error',
+    detail: 'Short detail with <TOKEN_LIKE> text.',
+    reporter: 'review-tests'
+  }
+];
+const out = r.formatLayer2Findings(findings, { forFinalReport: true });
+if (out === null) { console.error('got null'); process.exit(2); }
+process.stdout.write(out);
+" 2>/dev/null)"
+    rc=$?
+
+    if [ "$rc" != "0" ] || [ -z "$out" ]; then
+        fail "K7: formatLayer2Findings({forFinalReport:true}) returned null or errored (rc=$rc) — pending source implementation"
+        return
+    fi
+
+    local ok=1
+
+    # 1. reporter field visible in output
+    echo "$out" | grep -qF "reporter=write-code" || ok=0
+    echo "$out" | grep -qF "reporter=review-tests" || ok=0
+
+    # 2. long detail truncated with '…' (ellipsis U+2026)
+    echo "$out" | grep -qF "…" || ok=0
+
+    # 3. '<' escaped to '‹' (U+2039) — PR_NUMBER in detail becomes ‹PR_NUMBER>
+    echo "$out" | grep -qF "‹PR_NUMBER>" || ok=0
+    echo "$out" | grep -qF "‹TOKEN_LIKE>" || ok=0
+
+    # 4. No unescaped <UPPERCASE_TOKEN> pattern that would block stop-final-report-guard.js
+    if echo "$out" | grep -qE '<[A-Z][A-Z0-9_]+>'; then
+        ok=0
+        echo "  K7: found unescaped <TOKEN> in output (would block stop-final-report-guard.js)"
+    fi
+
+    if [ "$ok" = "1" ]; then
+        pass "K7: formatLayer2Findings({forFinalReport:true}) truncates, escapes '<', includes reporter"
+    else
+        fail "K7: one or more forFinalReport assertions failed
+--- output ---
+$out"
     fi
 }
 
@@ -611,6 +698,7 @@ test_K3_skeleton_has_block_placeholders
 test_K4_skeleton_post_merge_categories
 test_K5_skill_md_outcome_absent_fallback
 test_K6_skill_md_notes_absent_fallback
+test_K7_format_layer2_findings_for_final_report
 
 test_I3_skill_md_grep_invariant
 test_I4_skill_md_has_step_5_5

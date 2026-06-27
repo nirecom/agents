@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Tests: hooks/supervisor-guard.js (branch 2 cumSev=error l2_phase guard)
+# Tests: hooks/supervisor-guard.js (branch 2 cumSev=error alert_phase guard)
 # Tags: supervisor, em-supervisor, layer2, hook, stop, fix-955, scope:issue-specific
 # RED for issue #955.
 #
 # Validates: supervisor-guard.js branch (2) (cumulative_severity=error) must
-# NOT block when l2_phase is "frozen" or "done" — those are terminal states and
+# NOT block when alert_phase is "frozen" or "done" — those are terminal states and
 # the session would otherwise be permanently stuck. Adds the
 # `&& l2Phase !== "done" && l2Phase !== "frozen"` guard symmetric with
 # branch (3) already at line 311.
 #
 # Out of scope (triage: NA per class members):
 # - Branch (C3) WORKTREE_OFF proposal detection (line 289): already correctly handled by
-#   tryIncrementFrozen() returning frozen:true for l2_phase=frozen. l2_phase=done is a
+#   tryIncrementFrozen() returning frozen:true for alert_phase=frozen. alert_phase=done is a
 #   separate orthogonality concern not in this fix's scope.
 #
 # L3 gap (what this test does NOT catch):
@@ -51,7 +51,7 @@ require_source() {
     return 0
 }
 
-# Seed state with explicit l2_phase value.
+# Seed state with explicit alert_phase value.
 # phase_literal: pass "null" for null, or 'pending' / 'frozen' / 'done' (with single quotes for strings).
 seed_state_phase() {
     local tmp="$1" sid="$2" phase_literal="$3" cum_sev_literal="$4"
@@ -60,14 +60,14 @@ const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
 const fs = require('fs');
 const st = s.createEmptyState('$sid');
-st.layer2 = {
-  l2_armed_at: null,
+st.alert = {
+  alert_armed_at: null,
   last_run_at: null,
   cumulative_severity: $cum_sev_literal,
   findings: [],
-  l2_phase: $phase_literal,
-  l2_cause: null,
-  l2_retry_count: 0
+  alert_phase: $phase_literal,
+  alert_cause: null,
+  alert_retry_count: 0
 };
 fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
@@ -80,9 +80,9 @@ run_guard() {
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null
 }
 
-# F1: l2_phase=null, cumulative_severity=error -> SHOULD block (normal case)
+# F1: alert_phase=null, cumulative_severity=error -> SHOULD block (normal case)
 run_f1() {
-    require_source "$HOOK" "F1: l2_phase=null + cumSev=error -> decision=block, exit 2" || return
+    require_source "$HOOK" "F1: alert_phase=null + cumSev=error -> decision=block, exit 2" || return
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state_phase "$tmp" "f1-sid" "null" "'error'"
@@ -90,54 +90,59 @@ run_f1() {
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
-        pass "F1: l2_phase=null + cumSev=error -> decision=block, exit 2"
+        pass "F1: alert_phase=null + cumSev=error -> decision=block, exit 2"
     else
-        fail "F1: l2_phase=null + cumSev=error -> decision=block, exit 2 (rc=$rc, out=$out)"
+        fail "F1: alert_phase=null + cumSev=error -> decision=block, exit 2 (rc=$rc, out=$out)"
     fi
 }
 
-# F2: l2_phase=frozen, cumulative_severity=error -> SHOULD NOT block (bug fix)
-# Also asserts that l2_retry_count is NOT incremented (the branch should be skipped entirely,
-# not bailed via tryIncrementFrozen).
+# F2: alert_phase=frozen, cumulative_severity=error -> L3 arm, exit 2 (#1044: shouldSkipForSeverity removed)
 run_f2() {
-    require_source "$HOOK" "F2: l2_phase=frozen + cumSev=error -> no block, exit 0" || return
-    local tmp out rc retry_after
+    require_source "$HOOK" "F2: alert_phase=frozen + cumSev=error -> L3 arm, exit 2" || return
+    local tmp out rc audit_phase_after
     tmp="$(mktemp -d)"
     seed_state_phase "$tmp" "f2-sid" "'frozen'" "'error'"
     out=$(run_guard "$tmp" "f2-sid")
     rc=$?
-    retry_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const st = w.readState('f2-sid');
-process.stdout.write(String(st && st.layer2 ? st.layer2.l2_retry_count : -1));
+if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
+process.stdout.write(String(st.audit.audit_phase));
 " 2>/dev/null)
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi '"decision":"block"' ) && [ "$retry_after" = "0" ]; then
-        pass "F2: l2_phase=frozen + cumSev=error -> no block, exit 0"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi 'Audit mode strategic review triggered' ) && [ "$audit_phase_after" = "pending" ]; then
+        pass "F2: alert_phase=frozen + cumSev=error -> L3 arm, exit 2"
     else
-        fail "F2: l2_phase=frozen + cumSev=error -> no block, exit 0 (rc=$rc, retry_count=$retry_after, out=$out)"
+        fail "F2: alert_phase=frozen + cumSev=error -> L3 arm, exit 2 (rc=$rc, audit_phase=$audit_phase_after, out=$out)"
     fi
 }
 
-# F3: l2_phase=done, cumulative_severity=error -> SHOULD NOT block (symmetric)
+# F3: alert_phase=done, cumulative_severity=error -> L3 arm, exit 2 (symmetric with F2)
 run_f3() {
-    require_source "$HOOK" "F3: l2_phase=done + cumSev=error -> no block, exit 0" || return
-    local tmp out rc
+    require_source "$HOOK" "F3: alert_phase=done + cumSev=error -> L3 arm, exit 2" || return
+    local tmp out rc audit_phase_after
     tmp="$(mktemp -d)"
     seed_state_phase "$tmp" "f3-sid" "'done'" "'error'"
     out=$(run_guard "$tmp" "f3-sid")
     rc=$?
+    audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const st = w.readState('f3-sid');
+if (!st || !st.audit) { process.stdout.write('MISSING'); process.exit(0); }
+process.stdout.write(String(st.audit.audit_phase));
+" 2>/dev/null)
     rm -rf "$tmp"
-    if [ $rc -eq 0 ] && ! ( echo "$out" | grep -qi '"decision":"block"' ); then
-        pass "F3: l2_phase=done + cumSev=error -> no block, exit 0"
+    if [ $rc -eq 2 ] && ( echo "$out" | grep -qi 'Audit mode strategic review triggered' ) && [ "$audit_phase_after" = "pending" ]; then
+        pass "F3: alert_phase=done + cumSev=error -> L3 arm, exit 2"
     else
-        fail "F3: l2_phase=done + cumSev=error -> no block, exit 0 (rc=$rc, out=$out)"
+        fail "F3: alert_phase=done + cumSev=error -> L3 arm, exit 2 (rc=$rc, audit_phase=$audit_phase_after, out=$out)"
     fi
 }
 
-# F4: l2_phase=pending, cumulative_severity=error -> SHOULD block (L2 in progress)
+# F4: alert_phase=pending, cumulative_severity=error -> SHOULD block (L2 in progress)
 run_f4() {
-    require_source "$HOOK" "F4: l2_phase=pending + cumSev=error -> decision=block, exit 2" || return
+    require_source "$HOOK" "F4: alert_phase=pending + cumSev=error -> decision=block, exit 2" || return
     local tmp out rc
     tmp="$(mktemp -d)"
     seed_state_phase "$tmp" "f4-sid" "'pending'" "'error'"
@@ -145,9 +150,9 @@ run_f4() {
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi "block" ); then
-        pass "F4: l2_phase=pending + cumSev=error -> decision=block, exit 2"
+        pass "F4: alert_phase=pending + cumSev=error -> decision=block, exit 2"
     else
-        fail "F4: l2_phase=pending + cumSev=error -> decision=block, exit 2 (rc=$rc, out=$out)"
+        fail "F4: alert_phase=pending + cumSev=error -> decision=block, exit 2 (rc=$rc, out=$out)"
     fi
 }
 

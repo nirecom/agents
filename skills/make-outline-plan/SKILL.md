@@ -3,6 +3,7 @@ name: make-outline-plan
 description: Propose 2-3 mutually-exclusive high-level approaches via outline-planner + outline-reviewer, then get user sign-off. Stage 2 of the three-stage planning pipeline. Outputs <session-id>-outline.md.
 model: sonnet
 ---
+<!-- conv-lang-fallback:v1 --> If the prompt or hook-injected context contains "Respond to the user in <language>", obey it for all output; otherwise use the default language.
 
 Propose high-level approaches and get user sign-off before detailed planning.
 
@@ -93,6 +94,7 @@ MOP-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
    Override: `rc==0` + user picks `adjust` → halt and re-run `/clarify-intent` (not generic user-escalation). AUTO_EXTEND / `extend` → loop back into MOP-5.
 
 MOP-7. On `APPROVED`:
+   Before outputting the prose rationale summary and before composing the AskUserQuestion, run: `CONV_LANG=$(bash -c 'cd "$AGENTS_CONFIG_DIR" && bin/get-config-var CONV_LANG 2>/dev/null || true')`. If CONV_LANG is non-empty, produce the prose preamble and all AskUserQuestion fields (question, option labels, option descriptions) in that language. EXCEPTION: the bypass option's label MUST stay in English: "Pass all approaches to make-detail-plan without selecting" — AskUserQuestion returns the selected label as the answer; localizing it breaks the MOP-8 comparison.
    Output a prose rationale summary in main conversation — one paragraph per approach (rationale + trade-offs + delivery plan). Do NOT write this preamble to outline.md.
 
    Decide the chosen approach and record it as `CHOSEN_APPROACH`. Check via Bash:
@@ -103,7 +105,7 @@ MOP-7. On `APPROVED`:
    MOP-8 handles the file write — do NOT write here.
 
 MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
-   - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting"): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
+   - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting" (compare CHOSEN_APPROACH against the option's value field — always the stable English key regardless of display label)): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
    - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: <one-line summary>>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
@@ -140,4 +142,3 @@ The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`)
 ## Completion
 
 MOP-C1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
-MOP-C2. Invoke `make-detail-plan` via the Skill tool.

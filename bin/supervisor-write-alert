@@ -1,0 +1,226 @@
+#!/usr/bin/env node
+"use strict";
+
+const { writeAlertState, confirmFinding, dropFindings, incrementAlertRetryCount } = require("../hooks/lib/supervisor-state-writer");
+const { SEVERITY_VALUES, ALERT_PHASE_VALUES, ALERT_ELIGIBLE_PHASE_VALUES } = require("../hooks/lib/supervisor-state-schema");
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+const KNOWN_VALUE_FLAGS = new Set([
+  "--session-id",
+  "--alert-armed-at",
+  "--last-run-at",
+  "--cumulative-severity",
+  "--finding-categories",
+  "--finding-severity",
+  "--finding-detail",
+  "--finding-reporter",
+  "--finding-status",
+  "--confirm-finding-ids",
+  "--drop-finding-ids",
+  "--set-alert-phase",
+  "--set-alert-eligible-phase",
+]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-alert-armed-at", "--increment-alert-retry-count", "--mark-findings-surfaced"]);
+
+function usage(msg) {
+  if (msg) console.error(`[supervisor-write-alert] ERROR: ${msg}`);
+  console.error(
+    "Usage: node bin/supervisor-write-alert --session-id <sid>" +
+    " [--alert-armed-at <iso>] [--clear-alert-armed-at]" +
+    " [--last-run-at <iso>] [--cumulative-severity <error|warning|notice|null>]" +
+    " [--finding-categories <csv> --finding-severity <s>" +
+    " --finding-detail <text> --finding-reporter <name>" +
+    " [--finding-status <draft|confirmed>]]" +
+    " [--confirm-finding-ids <csv>] [--drop-finding-ids <csv>]" +
+    " [--set-alert-phase <pending|done|frozen>]" +
+    " [--mark-findings-surfaced] [--set-alert-eligible-phase <post_final_report_window|null>]"
+  );
+  process.exit(1);
+}
+
+const args = {};
+const flags = new Set();
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  const tok = argv[i];
+  if (KNOWN_BOOL_FLAGS.has(tok)) {
+    flags.add(tok);
+    continue;
+  }
+  if (KNOWN_VALUE_FLAGS.has(tok)) {
+    if (i + 1 >= argv.length) usage(`${tok} requires a value`);
+    args[tok.slice(2)] = argv[i + 1];
+    i++;
+    continue;
+  }
+  usage(`unknown flag: ${tok}`);
+}
+
+const sid = args["session-id"];
+if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
+
+const hasAlertArmedAt = "alert-armed-at" in args;
+const hasClearAlertArmedAt = flags.has("--clear-alert-armed-at");
+const hasLastRunAt = "last-run-at" in args;
+const hasCumulativeSeverity = "cumulative-severity" in args;
+const hasSetAlertPhase = "set-alert-phase" in args;
+const hasFindingStatus = "finding-status" in args;
+const hasConfirmIds = "confirm-finding-ids" in args;
+const hasDropIds = "drop-finding-ids" in args;
+const hasMarkFindingsSurfaced = flags.has("--mark-findings-surfaced");
+const hasSetAlertEligiblePhase = "set-alert-eligible-phase" in args;
+
+const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
+const findingPresent = findingKeys.filter((k) => k in args);
+const hasAnyFinding = findingPresent.length > 0;
+const hasAllFindings = findingPresent.length === findingKeys.length;
+
+if (hasAlertArmedAt && hasClearAlertArmedAt) {
+  usage("--alert-armed-at and --clear-alert-armed-at are mutually exclusive");
+}
+
+if (hasSetAlertPhase && args["set-alert-phase"] === "frozen" && hasAlertArmedAt) {
+  usage("--set-alert-phase frozen and --alert-armed-at are mutually exclusive");
+}
+
+if (hasAnyFinding && !hasAllFindings) {
+  usage("--finding-categories, --finding-severity, --finding-detail, --finding-reporter must all be provided together");
+}
+
+if (hasFindingStatus && !hasAllFindings) {
+  usage("--finding-status requires --finding-* flags");
+}
+
+if (hasFindingStatus && !["draft", "confirmed"].includes(args["finding-status"])) {
+  usage("--finding-status must be one of draft|confirmed");
+}
+
+function parseIdCsv(raw, flag) {
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const ids = [];
+  for (const p of parts) {
+    const n = Number(p);
+    if (!Number.isInteger(n)) usage(`${flag} contains non-integer: ${p}`);
+    ids.push(n);
+  }
+  if (ids.length === 0) usage(`${flag} must be non-empty`);
+  return ids;
+}
+
+const hasIncrementRetry = flags.has("--increment-alert-retry-count");
+
+if (hasIncrementRetry) {
+  const hasOtherMutating = hasAlertArmedAt || hasClearAlertArmedAt || hasLastRunAt || hasCumulativeSeverity ||
+    hasSetAlertPhase || hasAnyFinding || hasConfirmIds || hasDropIds || hasMarkFindingsSurfaced || hasSetAlertEligiblePhase;
+  if (hasOtherMutating) {
+    usage("--increment-alert-retry-count is mutually exclusive with other mutating flags");
+  }
+  const result = incrementAlertRetryCount(sid);
+  console.log(JSON.stringify(result));
+  process.exit(0);
+}
+
+if (!hasAlertArmedAt && !hasClearAlertArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetAlertPhase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetAlertEligiblePhase) {
+  usage("at least one mutating flag required");
+}
+
+const patch = {};
+
+if (hasAlertArmedAt) patch.alert_armed_at = args["alert-armed-at"];
+if (hasClearAlertArmedAt) patch.alert_armed_at = null;
+if (hasLastRunAt) patch.last_run_at = args["last-run-at"];
+
+if (hasCumulativeSeverity) {
+  const raw = args["cumulative-severity"];
+  if (raw === "null") {
+    patch.cumulative_severity = null;
+  } else if (SEVERITY_VALUES.includes(raw)) {
+    patch.cumulative_severity = raw;
+  } else {
+    usage(`--cumulative-severity must be one of ${SEVERITY_VALUES.join("|")}|null`);
+  }
+}
+
+if (hasSetAlertPhase) {
+  const raw = args["set-alert-phase"];
+  if (!["pending", "done", "frozen"].includes(raw)) usage("--set-alert-phase must be one of pending|done|frozen");
+  patch.alert_phase = raw;
+  if (patch.alert_phase === "done") patch.alert_retry_count = 0;
+}
+
+if (hasMarkFindingsSurfaced) patch.findings_surfaced_at = new Date().toISOString();
+
+if (hasSetAlertEligiblePhase) {
+  const raw = args["set-alert-eligible-phase"];
+  if (raw === "null") {
+    patch.alert_eligible_phase = null;
+  } else if (ALERT_ELIGIBLE_PHASE_VALUES.includes(raw)) {
+    patch.alert_eligible_phase = raw;
+  } else {
+    usage(`--set-alert-eligible-phase must be one of ${ALERT_ELIGIBLE_PHASE_VALUES.filter(v => v !== null).join("|")}|null`);
+  }
+}
+
+if (hasAllFindings) {
+  const categories = args["finding-categories"].split(",").map((s) => s.trim()).filter(Boolean);
+  if (categories.length === 0) usage("--finding-categories must be non-empty");
+  const finding = {
+    categories,
+    severity: args["finding-severity"],
+    detail: args["finding-detail"],
+    reporter: args["finding-reporter"],
+  };
+  if (hasFindingStatus && args["finding-status"] === "draft") {
+    finding.status = "draft";
+  } else if (hasFindingStatus && args["finding-status"] === "confirmed") {
+    finding.status = "confirmed";
+  }
+  patch.findings = [finding];
+}
+
+// Order of operations:
+//   1. writeAlertState without alert_phase (append + scalars except phase)
+//   2. confirmFinding for each --confirm-finding-ids
+//   3. dropFindings for --drop-finding-ids
+//   4. writeAlertState with only alert_phase (committed last)
+const phasePatch = ("alert_phase" in patch) ? { alert_phase: patch.alert_phase } : null;
+if (phasePatch) delete patch.alert_phase;
+
+const hasAnyPrePhase =
+  Object.keys(patch).length > 0;
+
+if (hasAnyPrePhase) {
+  const ok = writeAlertState(sid, patch);
+  if (!ok) {
+    console.error("[supervisor-write-alert] ERROR: writeAlertState failed (invalid fields or unexpected error)");
+    process.exit(1);
+  }
+}
+
+if (hasConfirmIds) {
+  const ids = parseIdCsv(args["confirm-finding-ids"], "--confirm-finding-ids");
+  for (const idx of ids) {
+    if (!confirmFinding(sid, idx)) {
+      console.error("[supervisor-write-alert] ERROR: confirmFinding failed");
+      process.exit(1);
+    }
+  }
+}
+
+if (hasDropIds) {
+  const ids = parseIdCsv(args["drop-finding-ids"], "--drop-finding-ids");
+  if (!dropFindings(sid, ids)) {
+    console.error("[supervisor-write-alert] ERROR: dropFindings failed");
+    process.exit(1);
+  }
+}
+
+if (phasePatch) {
+  const ok = writeAlertState(sid, phasePatch);
+  if (!ok) {
+    console.error("[supervisor-write-alert] ERROR: writeAlertState (phase) failed");
+    process.exit(1);
+  }
+}
+process.exit(0);
