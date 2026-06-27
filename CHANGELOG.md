@@ -199,3 +199,7 @@ Changes: The workflow oracle (`next-step`) now suggests skipping the outline/det
 ### FEATURE: PR #1167 (2026-06-27)
 Background: fix(#299): clarify-intent Path B set-issue + remove dead ⏳ code
 Changes: Session title now shows issue number and title (`#N <title>`) in sessions that start via `clarify-intent` (Path B); previously only `workflow-init` sessions updated the title.;Removed defunct ⏳ waiting-lifecycle hook files left on disk after PR #1142; `⏳` can no longer reappear from these code paths.
+
+### FEATURE: PR #1171 (2026-06-27)
+Background: fix(supervisor-guard): symmetric C3 done/frozen guard + scope detectOffProposal to Bash tool_use
+Changes: Fixed supervisor adjudication being dropped in rounds 2+ when a bypass-proposal review was already completed (alert_phase=done) (#1163); fixed self-reinforcing C3 false-positive loop triggered when supervisor prose mentioned bypass-keyword strings (#1162).
