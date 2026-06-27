@@ -203,3 +203,7 @@ Changes: Session title now shows issue number and title (`#N <title>`) in sessio
 ### FEATURE: PR #1171 (2026-06-27)
 Background: fix(supervisor-guard): symmetric C3 done/frozen guard + scope detectOffProposal to Bash tool_use
 Changes: Fixed supervisor adjudication being dropped in rounds 2+ when a bypass-proposal review was already completed (alert_phase=done) (#1163); fixed self-reinforcing C3 false-positive loop triggered when supervisor prose mentioned bypass-keyword strings (#1162).
+
+### FEATURE: PR #1173 (2026-06-27)
+Background: feat(#1155): bulk-sub-of verdict for /issue-create + --skip-survey flag + WF-META PM4 mandate
+Changes: `/issue-create` now supports a `bulk-sub-of` verdict: pass a TSV manifest to create and attach multiple sub-issues under a meta parent in one pass, with partial-failure recovery and per-child URL output.;New `--skip-survey` flag bypasses the per-issue dedupe survey for callers that have already pre-screened candidates (e.g. WF-META bulk creation workflows).
