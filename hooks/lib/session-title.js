@@ -220,55 +220,10 @@ function writeMarkComplete(sessionId, cwd) {
   _writeTitle(sessionId, cwd, base ? `✓ ${base}` : "✓");
 }
 
-/**
- * writeWaiting(sessionId, cwd)
- *
- * Prepends "⏳ " to the current title when Claude stops and waits for user input.
- * Skip if: already starts with "⏳", or starts with "✓" (session complete).
- * Idempotent: second call is a no-op.
- */
-function writeWaiting(sessionId, cwd) {
-  if (_isChildSession()) return;
-  if (!sessionId) return;
-
-  const current = _readCurrentTitle(sessionId, cwd);
-  if (current === null) {
-    _writeTitle(sessionId, cwd, "⏳");  // no prior title — use sentinel
-    return;
-  }
-  if (current.startsWith("✓")) return; // session complete — preserve
-  if (current.startsWith("⏳")) return; // already waiting — idempotent
-
-  _writeTitle(sessionId, cwd, `⏳ ${current}`);
-}
-
-/**
- * writeClearWaiting(sessionId, cwd)
- *
- * Removes "⏳ " prefix from the current title when the user resumes the session.
- * Idempotent — no-op when no "⏳ " prefix is present.
- */
-function writeClearWaiting(sessionId, cwd) {
-  if (_isChildSession()) return;
-  if (!sessionId) return;
-
-  const current = _readCurrentTitle(sessionId, cwd);
-  if (current === null) return;
-  if (current === "⏳") {
-    _writeTitle(sessionId, cwd, "");  // unset custom-title → extension falls back to ai-title
-    return;
-  }
-  if (!current.startsWith("⏳ ")) return;
-
-  _writeTitle(sessionId, cwd, current.slice("⏳ ".length));
-}
-
 module.exports = {
   writeSetIssue,
   writeAddPr,
   writeMarkComplete,
-  writeWaiting,
-  writeClearWaiting,
   // Exported for testing
   _readCurrentTitle,
   _writeTitle,
