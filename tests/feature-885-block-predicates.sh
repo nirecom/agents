@@ -1,16 +1,10 @@
 #!/bin/bash
 # tests/feature-885-block-predicates.sh
 # Tests: hooks/lib/block-predicates.js
-# Tags: block-predicates, inline-skill-re, ssot, feature-885, scope:issue-specific
+# Tags: block-predicates, inline-skill-re, ssot, feature-885
 # Original tests for #885 verified INLINE_SKILL_RE was exported as SSOT.
 # After #927 the export is REMOVED — block-predicates.js no longer carries it.
 # This file is reduced to a single absence assertion.
-#
-# L3 gap (what this test does NOT catch):
-# - hook registration in settings.json Stop hooks — if enforce-issue-close.js is not wired
-#   and block-predicates.js is never required, these tests still pass via direct module import
-# - Closest-to-action mitigation: hook-registration category in bin/check-verification-gate.sh
-#   fires at WORKFLOW_USER_VERIFIED preflight when settings.json changes are staged
 
 set -u
 

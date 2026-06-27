@@ -1,10 +1,11 @@
 #!/bin/bash
-# Tests: hooks/enforce-issue-close.js, hooks/lib/block-predicates.js, rules/github-issues.md
-# Tags: enforce-issue-close, block-predicates, inline-skill-re, scope:issue-specific
+# Tests: hooks/enforce-issue-close.js, hooks/lib/block-predicates.js, rules/github-issues.md, bin/github-issues/close-completed.sh, agents/issue-close-finalize-worker.md
+# Tags: enforce-issue-close, block-predicates, inline-skill-re, close-completed, icf-worker, scope:issue-specific
 # Tests for issue #927 — INLINE_SKILL_RE removal. After the change, the ONLY
 # bypass for a direct Bash-tool `gh issue close` is the env-export form
 # (ISSUE_CLOSE_SKILL=1 in process.env). The inline prefix shape
 # `ISSUE_CLOSE_SKILL=1 gh issue close N --reason completed` is now BLOCKED.
+# F13-F20 cover the close-completed.sh script and ICF-H change.
 #
 # L3 gap (what this test does NOT catch):
 # - Whether the hook registration in settings.json actually fires in a real Claude Code session
@@ -25,6 +26,8 @@ HOOK="$AGENTS_DIR/hooks/enforce-issue-close.js"
 PREDICATES="$AGENTS_DIR/hooks/lib/block-predicates.js"
 PREDICATES_NODE="$_AGENTS_DIR_NODE/hooks/lib/block-predicates.js"
 RULES="$AGENTS_DIR/rules/github-issues.md"
+CLOSE_COMPLETED="$AGENTS_DIR/bin/github-issues/close-completed.sh"
+ICF_WORKER="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
 
 PASS=0
 FAIL=0
@@ -202,6 +205,97 @@ if [ "$RC" -eq 0 ]; then
     pass "F12: non-Bash tool (Read) is approved (exit 0)"
 else
     fail "F12: expected exit 0 for Read tool (rc=$RC stderr=$ERR)"
+fi
+
+# ============================================================================
+# F13: close-completed.sh exists and is executable
+# TDD red phase — will FAIL until bin/github-issues/close-completed.sh is created.
+# ============================================================================
+if [ -f "$CLOSE_COMPLETED" ] && [ -x "$CLOSE_COMPLETED" ]; then
+    pass "F13: close-completed.sh exists and is executable"
+else
+    fail "F13: close-completed.sh missing or not executable (path=$CLOSE_COMPLETED)"
+fi
+
+# ============================================================================
+# F14: close-completed.sh contains --repo flag handling
+# TDD red phase — will FAIL until the file is created with --repo support.
+# ============================================================================
+if [ ! -f "$CLOSE_COMPLETED" ]; then
+    fail "F14: close-completed.sh missing — cannot check --repo flag handling"
+elif grep -q "\-\-repo" "$CLOSE_COMPLETED" 2>/dev/null; then
+    pass "F14: close-completed.sh contains --repo flag handling"
+else
+    fail "F14: close-completed.sh does not contain --repo flag handling"
+fi
+
+# ============================================================================
+# F15: bash .../close-completed.sh N is NOT blocked by enforce-issue-close.js
+# The command head is 'bash', not 'gh', so the hook passes it through.
+# This should PASS regardless of whether close-completed.sh exists.
+# ============================================================================
+run_hook_no_env "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash $CLOSE_COMPLETED 123\"}}"
+if [ "$RC" -eq 0 ] || [ "$RC" -eq 1 ]; then
+    pass "F15: 'bash close-completed.sh 123' is NOT blocked by enforce-issue-close.js (rc=$RC)"
+else
+    fail "F15: expected rc 0 or 1 (not 2) for bash-headed command (rc=$RC stderr=$ERR)"
+fi
+
+# ============================================================================
+# F16: raw 'gh issue close N' is still blocked (regression guard)
+# ============================================================================
+run_hook_no_env '{"tool_name":"Bash","tool_input":{"command":"gh issue close 999"}}'
+if [ "$RC" -eq 2 ]; then
+    pass "F16: raw 'gh issue close 999' is still blocked (regression guard)"
+else
+    fail "F16: expected exit 2 for raw gh issue close (rc=$RC stderr=$ERR)"
+fi
+
+# ============================================================================
+# F17: issue-close-finalize-worker.md ICF-H calls close-completed.sh with --repo
+# TDD red phase — will FAIL until ICF-H is updated to use close-completed.sh.
+# ============================================================================
+if [ ! -f "$ICF_WORKER" ]; then
+    skip "F17: agents/issue-close-finalize-worker.md not present"
+elif grep -q "close-completed.sh" "$ICF_WORKER" 2>/dev/null && grep -q "\-\-repo" "$ICF_WORKER" 2>/dev/null; then
+    pass "F17: ICF-H calls close-completed.sh with --repo argument"
+else
+    fail "F17: ICF-H does not call close-completed.sh with --repo (file may still use ISSUE_CLOSE_SKILL=1 gh issue close)"
+fi
+
+# ============================================================================
+# F18: issue-close-finalize-worker.md ICF-H does NOT contain ISSUE_CLOSE_SKILL=1 gh issue close
+# TDD red phase — will FAIL until ICF-H is updated.
+# ============================================================================
+if [ ! -f "$ICF_WORKER" ]; then
+    skip "F18: agents/issue-close-finalize-worker.md not present"
+elif grep -q "ISSUE_CLOSE_SKILL=1 gh issue close" "$ICF_WORKER" 2>/dev/null; then
+    fail "F18: ICF-H still contains 'ISSUE_CLOSE_SKILL=1 gh issue close'"
+else
+    pass "F18: ICF-H does NOT contain 'ISSUE_CLOSE_SKILL=1 gh issue close'"
+fi
+
+# ============================================================================
+# F19: rules/github-issues.md no longer describes env-export as "sole sanctioned bypass form"
+# TDD red phase — will FAIL until rules/github-issues.md is updated.
+# ============================================================================
+if [ ! -f "$RULES" ]; then
+    skip "F19: rules/github-issues.md not present"
+elif grep -q "Sole sanctioned bypass form" "$RULES" 2>/dev/null; then
+    fail "F19: rules/github-issues.md still says 'Sole sanctioned bypass form'"
+else
+    pass "F19: rules/github-issues.md no longer says 'Sole sanctioned bypass form'"
+fi
+
+# ============================================================================
+# F20: hooks/enforce-issue-close.js header no longer claims /issue-close-finalize
+#      sets ISSUE_CLOSE_SKILL=1
+# TDD red phase — will FAIL until the header comment is updated.
+# ============================================================================
+if grep -q "sets ISSUE_CLOSE_SKILL=1" "$HOOK" 2>/dev/null; then
+    fail "F20: enforce-issue-close.js header still claims '/issue-close-finalize sets ISSUE_CLOSE_SKILL=1'"
+else
+    pass "F20: enforce-issue-close.js header no longer claims 'sets ISSUE_CLOSE_SKILL=1'"
 fi
 
 echo ""
