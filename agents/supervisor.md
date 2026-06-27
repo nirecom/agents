@@ -33,6 +33,14 @@ Read these inputs:
 - Recent transcript turns
 - Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>`.
 
+### Terminated-session detection
+
+- Parse `closes_issues` from `<wsid>-intent.md`.
+- Empty list → active-session path.
+- For each N: `gh issue view <N> --json state --jq .state`.
+- All CLOSED → terminated session; skip outline/detail; fall through to UNAVAILABLE (transcript-only).
+- Any OPEN or any call fails → active-session path.
+
 ### UNAVAILABLE fallback
 
 When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
