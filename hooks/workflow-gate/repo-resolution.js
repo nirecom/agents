@@ -5,11 +5,11 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { spawnSync } = require("child_process");
 const { normalizeForWindows } = require("./path-normalize");
 const { isLinkedWorktree } = require("./worktree-context");
 const { hasStagedChanges } = require("./staged-evidence");
 const { parseGitCArg, parseCdCommand } = require("../lib/parse-git-args");
+const { getGitCommonDir } = require("../lib/git-common-dir");
 
 // Read additionalDirectories from the assembled ~/.claude/settings.json, falling back
 // to agents/settings.json so the hook works before the first install run.
@@ -67,23 +67,6 @@ function resolveRepoDir(command, input) {
     if (hasStagedChanges(dir)) return dir;
   }
   return primary;
-}
-
-// Returns the resolved absolute path of the git common dir for repoDir, or null
-// on failure. The common-dir path is the same for the main worktree and all its
-// linked worktrees (they all share .git/).
-function getGitCommonDir(repoDir) {
-  try {
-    const r = spawnSync("git", ["-C", repoDir, "rev-parse", "--git-common-dir"], {
-      encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (r.status !== 0) return null;
-    const raw = (r.stdout || "").trim();
-    if (!raw) return null;
-    return path.resolve(repoDir, raw);
-  } catch (_) {
-    return null;
-  }
 }
 
 // True when repoDir is (or is a linked worktree of) the agents session repo.
