@@ -1,9 +1,18 @@
-# VS Code lib tests (T-VSCODE-LIB-1~3).
+# VS Code lib tests (T-VSCODE-LIB-1~3, SPL-V, SPL-P).
 # Sourced by ../feature-show-plan-link.sh — inherits all vars and functions.
 #
 # T-VSCODE-LIB: vscode-open.js extraction (#741-confirm-plan-ux)
 # Verifies hooks/lib/vscode-open.js exposes the expected functions and
 # show-plan-link.js still re-exports workspaceFolderUriFrom for backward compat.
+#
+# SPL-V: When isVsCode=true, systemMessage contains vscode://file/ markdown link.
+# SPL-P: When isVsCode=false, systemMessage contains plain absolute path (no vscode://file/).
+#
+# L3 gap (what this test does NOT catch):
+# - Whether vscode://file/ URIs actually render as clickable links in VS Code extension chat webview
+# - Whether systemMessage markdown is rendered or displayed as plain text in the extension
+# Closest-to-action mitigation: user tests clicking the link after implementation (WORKFLOW_USER_VERIFIED preflight)
+# via bin/check-verification-gate.sh category: hook-registration
 
 # Use Windows-form (pwd -W) for paths embedded inside `node -e` string literals.
 # AGENTS_DIR (declared earlier) uses plain `pwd` and works for `node "$HOOK"` args
@@ -20,7 +29,7 @@ if [ ! -f "$VSCODE_LIB" ]; then
 else
   T_VL1_RESULT=$(run_with_timeout node -e "
     const v = require('$VSCODE_LIB');
-    const required = ['isVsCode','shouldOpenInVsCode','workspaceFolderUriFrom','resolveWorkspaceFolderUri','spawnCode','openInVsCode'];
+    const required = ['isVsCode','shouldOpenInVsCode','workspaceFolderUriFrom','resolveWorkspaceFolderUri','spawnCode','openInVsCode','toVsCodeFileUri'];
     const missing = required.filter(n => typeof v[n] !== 'function');
     if (missing.length) {
       process.stdout.write('MISSING:' + missing.join(','));
@@ -71,4 +80,45 @@ else
   if [ "$T_VL3_FAIL" -eq 0 ]; then
     pass "T-VSCODE-LIB-3 show-plan-link.js uses vscode-open.js (no inline helper defs)"
   fi
+fi
+
+# ── SPL-V: isVsCode=true → systemMessage contains vscode://file/ markdown link ──
+# When CLAUDE_CODE_ENTRYPOINT=claude-vscode (isVsCode returns true), show-plan-link.js
+# should include a vscode://file/ URI in the systemMessage for quick navigation.
+echo "=== SPL-V: isVsCode=true — systemMessage contains vscode://file/ ==="
+SPL_V_RESULT=$(
+  unset TERM_PROGRAM 2>/dev/null || true
+  export CLAUDE_CODE_ENTRYPOINT=claude-vscode
+  unset VSCODE_CRASH_REPORTER_PROCESS_TYPE 2>/dev/null || true
+  echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
+    | run_with_timeout node "$HOOK" 2>/dev/null
+)
+SPL_V_MSG=$(echo "$SPL_V_RESULT" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+if echo "$SPL_V_MSG" | grep -qF "vscode://file/"; then
+  pass "SPL-V isVsCode=true — systemMessage contains vscode://file/ markdown link"
+else
+  fail "SPL-V isVsCode=true — systemMessage missing vscode://file/: $SPL_V_MSG"
+fi
+
+# ── SPL-P: isVsCode=false → systemMessage contains plain path (no vscode://file/) ──
+# When neither TERM_PROGRAM nor CLAUDE_CODE_ENTRYPOINT signals VS Code, the
+# systemMessage must contain the absolute file path without a vscode:// URI.
+echo "=== SPL-P: isVsCode=false — systemMessage plain path (no vscode://file/) ==="
+SPL_P_RESULT=$(
+  unset TERM_PROGRAM 2>/dev/null || true
+  unset CLAUDE_CODE_ENTRYPOINT 2>/dev/null || true
+  echo "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$PLANS_DIR/abc-detail.md\"},\"tool_response\":{\"success\":true}}" \
+    | run_with_timeout node "$HOOK" 2>/dev/null
+)
+SPL_P_MSG=$(echo "$SPL_P_RESULT" | run_with_timeout node -e "
+  let d; try { d = JSON.parse(require('fs').readFileSync(0,'utf8')); } catch(e) { process.exit(1); }
+  process.stdout.write(d.systemMessage || '');
+" 2>/dev/null)
+if echo "$SPL_P_MSG" | grep -qF "Plan file written:" && ! echo "$SPL_P_MSG" | grep -qF "vscode://file/"; then
+  pass "SPL-P isVsCode=false — systemMessage has plain path, no vscode://file/ URI"
+else
+  fail "SPL-P isVsCode=false — unexpected systemMessage: $SPL_P_MSG"
 fi

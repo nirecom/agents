@@ -19,7 +19,7 @@ const path = require("path");
 const { normalizeSlashes } = require("./lib/path-match");
 const { getSuffix, isConfirmOff } = require("./lib/plan-confirm-flag");
 const { extractAssembleDest } = require("./lib/assemble-cmd-parse");
-const { shouldOpenInVsCode, workspaceFolderUriFrom, resolveWorkspaceFolderUri, openInVsCode } = require("./lib/vscode-open");
+const { isVsCode, shouldOpenInVsCode, toVsCodeFileUri, workspaceFolderUriFrom, resolveWorkspaceFolderUri, openInVsCode } = require("./lib/vscode-open");
 
 function readStdin() {
   const chunks = [];
@@ -75,7 +75,10 @@ function emitForArtifact(filePath, input) {
       });
     }
   } catch (_) { /* fail-open */ }
-  process.stdout.write(JSON.stringify({ systemMessage: `Plan file written: ${absPath}` }));
+  const msg = isVsCode()
+    ? `Plan file written: [${path.basename(absPath)}](${toVsCodeFileUri(absPath)})`
+    : `Plan file written: ${absPath}`;
+  process.stdout.write(JSON.stringify({ systemMessage: msg }));
   process.exit(0);
 }
 
