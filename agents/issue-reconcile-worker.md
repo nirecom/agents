@@ -15,7 +15,7 @@ Receive a JSON object with:
 - `history_md_path`: absolute path to `docs/history.md`
 - `history_dir_path`: absolute path to `docs/history/` directory (for archive lookups)
 - `agents_config_dir`: absolute path to agents config dir
-- `artifact_dir`: 呼び出し元が `bin/workflow-plans-dir` で解決した `PLANS_DIR` の絶対パス。全出力ファイルをここに書く
+- `artifact_dir`: absolute path to `PLANS_DIR` resolved by the caller via `bin/workflow-plans-dir`; write all output files here
 
 ## Procedure
 
