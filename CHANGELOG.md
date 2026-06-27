@@ -211,3 +211,7 @@ Changes: `/issue-create` now supports a `bulk-sub-of` verdict: pass a TSV manife
 ### FEATURE: PR #1178 (2026-06-27)
 Background: fix(#1108): unify artifact_dir to PLANS_DIR across issue-create, issue-reconcile, worktree-start, session-close
 Changes: Worker artifacts from `/issue-create`, `/issue-reconcile`, `/worktree-start`, and `/session-close` are now written under `PLANS_DIR` (same directory as session plan files) and are therefore automatically swept by `/sweep-plans`; previously they landed in `artifacts/` and were never auto-cleaned
+
+### FEATURE: PR #1179 (2026-06-27)
+Background: fix(#1109,#983,#1025,#1040): allow heredoc and env-var-expanded writes to WORKFLOW_PLANS_DIR
+Changes: fix: enforce-worktree no longer false-blocks writes to `~/.workflow-plans/` from the main worktree when the command uses heredoc bodies with shell sequencing (`cat <<'EOF' > "$WORKFLOW_PLANS_DIR/file"`), variable-expanded redirect targets (`echo x > "$STATE_PATH"`), or `mv` with plans-dir variables (`mv "$PLANS_DIR/foo.tmp" "$PLANS_DIR/foo"`).
