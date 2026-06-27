@@ -179,10 +179,13 @@ run_g_b6() {
     fi
 }
 
-# G-B5 — audit done + WARN + C3 worktreeOffProposal present -> rc=2 block (C3 wins),
-# audit_phase still cleared.
+# G-B5 — audit done + WARN + C3 OFF proposal present, but alert_phase=done.
+# Post #1163 the C3 branch is guarded by `alertPhase !== "done"`, so C3 is SKIPPED.
+# The hook falls through to Phase B audit WARN surfacing: rc=0 + additionalContext,
+# audit_phase cleared. No decision:block.
+# Tags: scope:issue-specific
 run_g_b5() {
-    local label="G-B5: audit done+WARN + C3 OFF proposal -> block (C3 wins), audit_phase cleared"
+    local label="G-B5: audit done+WARN + C3 OFF proposal but alert_phase=done -> C3 skipped (done-guard), audit WARN surfaced"
     require_source "$HOOK" "$label" || return
     require_phase_b_arbitrate "$label" || return
     local tmp out rc tp audit_phase_after
@@ -199,7 +202,7 @@ run_g_b5() {
     rc=$?
     audit_phase_after=$(read_audit_field "$tmp" "g-b5-sid" "audit_phase")
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && ( echo "$out" | grep -q '"decision":"block"' ) && [ "$audit_phase_after" = "null" ]; then
+    if [ $rc -eq 0 ] && ( echo "$out" | grep -q '"additionalContext"' ) && ! ( echo "$out" | grep -q '"decision":"block"' ) && [ "$audit_phase_after" = "null" ]; then
         pass "$label"
     else
         fail "$label (rc=$rc, audit_phase_after=$audit_phase_after, out=$out)"
