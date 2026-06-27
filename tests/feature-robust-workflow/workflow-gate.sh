@@ -24,7 +24,8 @@ write_state "test-session" '{
     "review_security":   {"status": "complete",  "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete",  "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete",  "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete",  "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete",  "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }'
 expect_approve_gate "2. research skipped, rest complete → approve" "$REPO" "$COMMIT_JSON"
@@ -44,7 +45,8 @@ write_state "test-session" '{
     "review_security":   {"status": "complete",  "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete",  "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete",  "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete",  "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete",  "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete",  "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }'
 expect_approve_gate "3. outline+detail skipped, rest complete → approve" "$REPO" "$COMMIT_JSON"
@@ -63,25 +65,29 @@ expect_block_gate "4. git -C /path commit → intercepted (block when state miss
 echo ""
 echo "=== workflow-gate: Error/block cases ==="
 
-# Test 5: research pending → block, message contains "research"
+# Test 5: detail pending (a gated step) → block, message contains "detail"
+# NOTE: `research` is a NON_GATE_STEP (not enforced at commit time), so a pending
+# `research` no longer blocks. This case uses `detail` — a genuinely gated step —
+# to exercise the "pending gated step → block" path.
 REPO=$(setup_repo)
 write_state "test-session" '{
   "version": 1,
   "session_id": "test-session",
   "created_at": "2026-04-11T10:00:00.000Z",
   "steps": {
-    "research":          {"status": "pending",  "updated_at": null},
+    "research":          {"status": "complete", "updated_at": "2026-04-11T10:01:00.000Z"},
     "outline":           {"status": "complete", "updated_at": "2026-04-11T10:02:00.000Z"},
-    "detail":            {"status": "complete", "updated_at": "2026-04-11T10:02:30.000Z"},
+    "detail":            {"status": "pending",  "updated_at": null},
     "write_tests":       {"status": "complete", "updated_at": "2026-04-11T10:03:00.000Z"},
     "review_tests":      {"status": "skipped", "updated_at": "2026-04-11T10:03:30.000Z"},
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete", "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }'
-expect_block_gate_contains "5. research pending → block with 'research' in message" "$REPO" "$COMMIT_JSON" "research"
+expect_block_gate_contains "5. detail pending (gated step) → block with 'detail' in message" "$REPO" "$COMMIT_JSON" "detail"
 
 # Test 6: Multiple steps pending (detail, write_tests) → block, message contains both
 REPO=$(setup_repo)
@@ -98,7 +104,8 @@ write_state "test-session" '{
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete", "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }'
 RESULT=$(run_gate "$REPO" "$COMMIT_JSON")
@@ -123,7 +130,8 @@ write_state "test-session" '{
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "skipped",  "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete", "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }'
 expect_block_gate "7. run_tests skipped (non-skippable) → block" "$REPO" "$COMMIT_JSON"
@@ -143,7 +151,8 @@ write_state "test-session" '{
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "skipped",  "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "skipped",  "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete", "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }'
 expect_block_gate "8. user_verification skipped → block" "$REPO" "$COMMIT_JSON"
