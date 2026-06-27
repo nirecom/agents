@@ -80,6 +80,7 @@ test_G3_empty_env_object_no_header() {
     local sid="g3-sid"
     local envfile="$plans_dir/${sid}-final-report-env.json"
     printf '{}' > "$envfile"
+    printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
     local transcript="$TMPDIR_BASE/g3-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "no header here"
@@ -93,7 +94,7 @@ test_G3_empty_env_object_no_header() {
     code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
 
     if [ "$code" = "0" ]; then
-        pass "G3: empty env-file {} + no header in transcript → exit 0 (guard not applicable)"
+        pass "G3: empty env-file {} + gate_action:yield + no header → exit 0 (yield bypass)"
     else
         fail "G3: expected exit 0, got $code"
     fi
