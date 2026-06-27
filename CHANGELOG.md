@@ -187,3 +187,7 @@ Changes: Fix /deep-research double output: calling orchestrators no longer re-su
 ### FEATURE: PR #1157 (2026-06-27)
 Background: fix(#1115,#982,#923,#838,#959): enforce-worktree false-block fixes — fd-dup redirect chaining misread, -C flag validation, worker script paths
 Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands no longer false-block `enforce-worktree.js` (#1115, #982).;`git -C <path> worktree remove/prune/add` now passes `enforce-worktree.js` from both main-worktree and linked-worktree CWDs (#923, #838).;Sanctioned worker scripts (`issue-close-stage-worker`, `commit-push-worker`, etc.) launched from the main worktree with linked-worktree path arguments no longer false-block (#959).
+
+### FEATURE: PR #1159 (2026-06-27)
+Background: fix(#1120): return null from resolveWorkflowSessionId when no ccBucket=0 owner identified among same-day candidates
+Changes: Fixed: supervisor C2 scheduled review no longer reports findings from unrelated parallel sessions when the active session cannot be identified from context files.
