@@ -321,7 +321,7 @@ if (require.main === module) {
   // No early exit on missing state — C1 transcript scan (path 3) runs regardless.
 
   const alert = (state && state.alert) || {};
-  const alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
+  let alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
   const cumSev = alert.cumulative_severity == null ? null : alert.cumulative_severity;
   const findings = Array.isArray(alert.findings) ? alert.findings : [];
   const alertPhase = alert.alert_phase === undefined ? null : alert.alert_phase;
@@ -370,6 +370,16 @@ if (require.main === module) {
       verdict: auditVerdict || "CONTINUE",
       reason: auditCause || `Audit mode strategic review: ${auditVerdict || "CONTINUE"} verdict.`,
     };
+    // Clear alert_armed_at before alertWouldFire so a C2-only alert doesn't build a BLOCK
+    // candidate that would beat the audit WARN in arbitration.
+    // The in-memory clear propagates to branch (3) below; the file write is the mirror-clear fix.
+    alertArmedAt = null;
+    try { writeAlertState(effectiveSupervisorStateSessionId, { alert_armed_at: null }); } catch (_) {}
+    const alertArmedClearMirrorSid =
+      effectiveSupervisorStateSessionId === sessionId ? workflowSessionId : sessionId;
+    if (alertArmedClearMirrorSid && alertArmedClearMirrorSid !== effectiveSupervisorStateSessionId) {
+      try { writeAlertState(alertArmedClearMirrorSid, { alert_armed_at: null }); } catch (_) {}
+    }
     // Build alert candidate only when an alert branch would also fire this cycle.
     let alertCandidate = null;
     const alertWouldFire = !askUserQuestionTurn &&

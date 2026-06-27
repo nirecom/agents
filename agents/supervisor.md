@@ -27,6 +27,9 @@ Three distinct identifiers appear in the block-reason:
 
 Read these inputs:
 - `<plans-dir>/<wsid>-intent.md`
+
+After reading `<wsid>-intent.md`, extract each issue number from the `closes_issues` list. If the list is empty, continue with the active-session path. For each number `<N>`, run `gh issue view <N> --json state --jq .state`. If every issue returns `CLOSED`, treat this wsid as a terminated session: skip the outline/detail reads and fall through to the UNAVAILABLE fallback (transcript-only review). If any issue is `OPEN`, or if any `gh issue view` call fails, continue with the active-session path.
+
 - `<plans-dir>/<wsid>-outline.md`
 - `<plans-dir>/<wsid>-detail.md`
 - `<plans-dir>/<effective-state-sid>-supervisor-state.json` (Layer 1 findings — advisory only)
