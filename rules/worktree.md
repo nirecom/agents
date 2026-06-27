@@ -40,21 +40,8 @@ in the next session, since the marker is keyed on the current session ID.
 
 Worktrees follow a two-level layout: `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`.
 
-- **WORKTREE_BASE_DIR** defaults to `~/git/worktrees`.
-  Set it in your agents config (`.env`) to customize:
-  ```
-  # Windows example
-  WORKTREE_BASE_DIR=C:\git\worktrees
-  # POSIX example
-  WORKTREE_BASE_DIR=/home/user/worktrees
-  ```
+- **WORKTREE_BASE_DIR** defaults to `~/git/worktrees`. Set it in your agents config (`.env`) to customize (e.g. `WORKTREE_BASE_DIR=C:\git\worktrees` on Windows, `WORKTREE_BASE_DIR=/home/user/worktrees` on POSIX).
 - **task-name**: short identifier for the work (`[a-zA-Z0-9_-]+`), shared across repos.
 - **repo-name**: the repository name (e.g. `agents`, `dotfiles`).
 
-Example with two repos in the same task:
-```
-C:\git\worktrees\
-  my-feature\
-    agents\          ← git worktree for agents repo
-    dotfiles\        ← git worktree for dotfiles repo (if needed)
-```
+Worktrees use a two-level path: `<WORKTREE_BASE_DIR>/<task-name>/<repo-name>`. Example: a task `my-feature` in two repos uses `worktrees/my-feature/agents/` and `worktrees/my-feature/dotfiles/`.

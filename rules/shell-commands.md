@@ -59,8 +59,4 @@ Do NOT suggest `curl` → `wget` → Python as a fallback chain. Go straight to 
 
 ## Docker Restart Caveat
 
-`docker restart` does not reload `.env`, config files, or compose changes.
-Use `docker compose up -d <service>` instead when any of these have changed.
-
-For when to use `--build` vs `up -d` only, and the rule to always state the docker
-command after every implementation, see `rules/claude-config-source.md`.
+For Docker restart behavior, see `rules/claude-config-source.md`.

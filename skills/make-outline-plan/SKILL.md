@@ -110,7 +110,7 @@ MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per th
 
 ## Output Schema (`<session-id>-outline.md`)
 
-The file (per `rules/language.md` and `PLAN_LANG` in `.env`; see `.env.example`) contains:
+The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 - **Title** (H1): "Confirmed Approach" + `<session-id>`
 - **Mandatory sections** (assembled by `skills/_shared/assemble-mandatory.sh` from intent.md, not authored by planner):

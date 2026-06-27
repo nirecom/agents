@@ -12,11 +12,9 @@ For parallel sessions, use `/worktree-start` to create the worktree — see `wor
 
 ## How to Start
 
-```
-git switch -c <branch>
-```
+Run `git switch -c <branch>`.
 
-Branch names must be ASCII (`[a-zA-Z0-9]` + `-`, `_`, `/`) — see `language.md`.
+Branch names must be ASCII (`[a-zA-Z0-9]` + `-`, `_`, `/`).
 
 ## How to Finish
 

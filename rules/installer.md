@@ -1,3 +1,7 @@
+---
+globs: install/**,**/*.ps1,**/*.nsi,**/*.iss
+---
+
 # Installer & System Configuration
 
 ## System Configuration Principles
