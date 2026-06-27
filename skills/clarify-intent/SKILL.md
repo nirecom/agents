@@ -169,6 +169,7 @@ CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures
      Options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>` manually, then re-run guard; counter unchanged) / "Abort session" (`rm -f "$COUNTER_FILE"`, emit `<<WORKFLOW_RESET_FROM_clarify_intent>>`).
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
+CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written; `<PLANS_DIR>` resolved from `WORKFLOW_PLANS_DIR` or the same source as CI-4).
 CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
 CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:

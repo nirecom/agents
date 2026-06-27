@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/cc-session-title
+# Tests: bin/cc-session-title, hooks/lib/session-title.js, skills/clarify-intent/SKILL.md, hooks/stop-session-title-waiting.js, hooks/user-prompt-clear-waiting.js, hooks/pre-askuserquestion-clear-waiting.js
 # Tags: scope:issue-specific
 # T12-T17: CLI smoke tests, session ID resolution, CLAUDE_PROJECT_DIR
 
@@ -261,9 +261,127 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   fi
 }
 
+# ===========================================================================
+# T-new2: Static contract — skills/clarify-intent/SKILL.md contains a call to
+#         cc-session-title set-issue (CI-C1a step). Fails before write-code adds it.
+# ===========================================================================
+run_tnew2() {
+  local skill_md="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
+  if [ ! -f "$skill_md" ]; then
+    fail "T-new2: skills/clarify-intent/SKILL.md not found at $skill_md"
+    return
+  fi
+  if grep -q "cc-session-title set-issue" "$skill_md" 2>/dev/null; then
+    pass "T-new2: SKILL.md contains 'cc-session-title set-issue' call (CI-C1a present)"
+  else
+    fail "T-new2: SKILL.md missing 'cc-session-title set-issue' (CI-C1a not yet added by write-code)"
+  fi
+}
+
+# ===========================================================================
+# T-new3: Static contract — NON_GITHUB guard appears near the set-issue call
+#         in SKILL.md. The guard must prevent the call on non-GitHub repos,
+#         mirroring the Path A (workflow-init A1a) guard already in place.
+#         Verifies that "NON_GITHUB" is mentioned within the context of the
+#         cc-session-title set-issue call (within 20 lines of it).
+# ===========================================================================
+run_tnew3() {
+  local skill_md="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
+  if [ ! -f "$skill_md" ]; then
+    fail "T-new3: skills/clarify-intent/SKILL.md not found"
+    return
+  fi
+  # Find the line number of "cc-session-title set-issue" in SKILL.md
+  local line_num
+  line_num=$(grep -n "cc-session-title set-issue" "$skill_md" 2>/dev/null | head -1 | cut -d: -f1 || true)
+  if [ -z "$line_num" ]; then
+    fail "T-new3: 'cc-session-title set-issue' not found in SKILL.md — cannot check NON_GITHUB guard context"
+    return
+  fi
+  # Extract 20 lines before and after the set-issue call and check for NON_GITHUB
+  local start=$(( line_num - 20 ))
+  [ "$start" -lt 1 ] && start=1
+  local end=$(( line_num + 20 ))
+  if sed -n "${start},${end}p" "$skill_md" 2>/dev/null | grep -q "NON_GITHUB" 2>/dev/null; then
+    pass "T-new3: NON_GITHUB guard found within 20 lines of 'cc-session-title set-issue' in SKILL.md"
+  else
+    fail "T-new3: NON_GITHUB guard NOT found near 'cc-session-title set-issue' in SKILL.md (write-code must add the guard)"
+  fi
+}
+
+# ===========================================================================
+# T-new4: Static absence — writeWaiting and writeClearWaiting functions are
+#         removed from hooks/lib/session-title.js. These were for the retired
+#         ⏳ waiting-indicator lifecycle that couldn't work in the CC hook model.
+# ===========================================================================
+run_tnew4() {
+  local session_title_js="$AGENTS_DIR/hooks/lib/session-title.js"
+  if [ ! -f "$session_title_js" ]; then
+    fail "T-new4: hooks/lib/session-title.js not found"
+    return
+  fi
+  if grep -qE "writeWaiting|writeClearWaiting" "$session_title_js" 2>/dev/null; then
+    local count
+    count=$(grep -E "writeWaiting|writeClearWaiting" "$session_title_js" 2>/dev/null | wc -l)
+    fail "T-new4: writeWaiting/writeClearWaiting still present in hooks/lib/session-title.js ($count occurrences — write-code must remove them)"
+  else
+    pass "T-new4: writeWaiting and writeClearWaiting NOT present in hooks/lib/session-title.js (removed by write-code)"
+  fi
+}
+
+# ===========================================================================
+# T-new5: Static absence — write-waiting and clear-waiting CLI subcommands are
+#         removed from bin/cc-session-title. These depended on the removed
+#         writeWaiting/writeClearWaiting functions.
+# ===========================================================================
+run_tnew5() {
+  local cc_bin="$AGENTS_DIR/bin/cc-session-title"
+  if [ ! -f "$cc_bin" ]; then
+    fail "T-new5: bin/cc-session-title not found"
+    return
+  fi
+  if grep -qE "write-waiting|clear-waiting" "$cc_bin" 2>/dev/null; then
+    local count
+    count=$(grep -E "write-waiting|clear-waiting" "$cc_bin" 2>/dev/null | wc -l)
+    fail "T-new5: write-waiting/clear-waiting still present in bin/cc-session-title ($count occurrences — write-code must remove them)"
+  else
+    pass "T-new5: write-waiting and clear-waiting NOT present in bin/cc-session-title (removed by write-code)"
+  fi
+}
+
+# ===========================================================================
+# T-new6: Static absence — 3 orphan hook files that depended on the retired
+#         writeWaiting/writeClearWaiting functions must NOT exist on disk.
+#         write-code deletes them as part of the cleanup.
+# ===========================================================================
+run_tnew6() {
+  local existing_files=""
+
+  for hook_file in \
+    "$AGENTS_DIR/hooks/stop-session-title-waiting.js" \
+    "$AGENTS_DIR/hooks/user-prompt-clear-waiting.js" \
+    "$AGENTS_DIR/hooks/pre-askuserquestion-clear-waiting.js"
+  do
+    if [ -e "$hook_file" ]; then
+      existing_files="$existing_files $(basename "$hook_file")"
+    fi
+  done
+
+  if [ -z "$existing_files" ]; then
+    pass "T-new6: All 3 orphan hook files absent (stop-session-title-waiting.js, user-prompt-clear-waiting.js, pre-askuserquestion-clear-waiting.js)"
+  else
+    fail "T-new6: Orphan hook files still exist (write-code must delete them):$existing_files"
+  fi
+}
+
 run_t12
 run_t13
 run_t14
 run_t15
 run_t16
 run_t17
+run_tnew2
+run_tnew3
+run_tnew4
+run_tnew5
+run_tnew6
