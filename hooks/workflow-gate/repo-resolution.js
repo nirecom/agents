@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { spawnSync } = require("child_process");
 const { normalizeForWindows } = require("./path-normalize");
 const { isLinkedWorktree } = require("./worktree-context");
 const { hasStagedChanges } = require("./staged-evidence");
@@ -68,4 +69,39 @@ function resolveRepoDir(command, input) {
   return primary;
 }
 
-module.exports = { findAdditionalDirectories, resolveRepoDir };
+// Returns the resolved absolute path of the git common dir for repoDir, or null
+// on failure. The common-dir path is the same for the main worktree and all its
+// linked worktrees (they all share .git/).
+function getGitCommonDir(repoDir) {
+  try {
+    const r = spawnSync("git", ["-C", repoDir, "rev-parse", "--git-common-dir"], {
+      encoding: "utf8", timeout: 2000, stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (r.status !== 0) return null;
+    const raw = (r.stdout || "").trim();
+    if (!raw) return null;
+    return path.resolve(repoDir, raw);
+  } catch (_) {
+    return null;
+  }
+}
+
+// True when repoDir is (or is a linked worktree of) the agents session repo.
+// Fail-closed: returns true on any error so gate enforcement is never skipped
+// due to a transient git failure. Returns false only when git confirms the two
+// repos have different common-dirs.
+function isAgentsSessionRepo(repoDir) {
+  if (!repoDir) return true;
+  try {
+    const agentsRoot = process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, "..", "..");
+    const targetCommonDir = getGitCommonDir(repoDir);
+    const agentsCommonDir = getGitCommonDir(agentsRoot);
+    if (!targetCommonDir || !agentsCommonDir) return true;
+    const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
+    return norm(targetCommonDir) === norm(agentsCommonDir);
+  } catch (_) {
+    return true;
+  }
+}
+
+module.exports = { findAdditionalDirectories, resolveRepoDir, isAgentsSessionRepo };

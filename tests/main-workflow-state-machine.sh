@@ -150,8 +150,11 @@ EOF
 
 run_gate() {
     local repo="$1" json="$2"
+    # Unconditionally set AGENTS_CONFIG_DIR="$repo" so isAgentsSessionRepo() (#1138)
+    # treats the target repo as the agents session repo — enforcement always applies.
+    # Cross-repo tests that need a different agents dir must use an inline node call.
     echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
-        node "$GATE_HOOK" 2>/dev/null || true
+        AGENTS_CONFIG_DIR="$repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
 expect_approve_gate() {
@@ -398,8 +401,15 @@ write_state "$SID_2B" "$(cat <<EOF
 EOF
 )"
 L2B_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2B\"}"
-expect_block_gate_contains "L2-b. repoA write_tests=pending, git -C repoA → block (write_tests)" \
-    "$REPO_B" "$L2B_JSON" "write_tests"
+# Inline call: CLAUDE_PROJECT_DIR=REPO_B (invoking session), AGENTS_CONFIG_DIR=REPO_A
+# (agents session repo), git -C REPO_A targets REPO_A → same git dir → enforce.
+L2B_RESULT=$(echo "$L2B_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    AGENTS_CONFIG_DIR="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
+if echo "$L2B_RESULT" | grep -q '"block"' && echo "$L2B_RESULT" | grep -qi "write_tests"; then
+    pass "L2-b. repoA write_tests=pending, git -C repoA → block (write_tests)"
+else
+    fail "L2-b. repoA write_tests=pending, git -C repoA → block (write_tests) — got: $L2B_RESULT"
+fi
 
 # L2-c: repoA docs-only staged, git -C repoA → docs-only message (user_verification needed)
 SID_2C="l2c-$(printf '%04x%04x' $RANDOM $RANDOM)"
@@ -426,7 +436,7 @@ echo "change" > "$REPO_A/docs/todo.md"
 git -C "$REPO_A" add docs/todo.md
 L2C_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $REPO_A commit -m test\"},\"session_id\":\"$SID_2C\"}"
 L2C_RESULT=$(echo "$L2C_JSON" | CLAUDE_PROJECT_DIR="$REPO_B" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
-    node "$GATE_HOOK" 2>/dev/null || true)
+    AGENTS_CONFIG_DIR="$REPO_A" node "$GATE_HOOK" 2>/dev/null || true)
 git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
 git -C "$REPO_A" clean -fdq 2>/dev/null || true
 if echo "$L2C_RESULT" | grep -q '"block"' && echo "$L2C_RESULT" | grep -qi "docs-only"; then
@@ -479,7 +489,7 @@ git -C "$REPO_A" reset HEAD -- . 2>/dev/null || true
 rm -f "$REPO_A/CLAUDE.md"
 if echo "$L2C4_RESULT" | grep -q '"block"' \
    && ! echo "$L2C4_RESULT" | grep -qi "docs-only" \
-   && echo "$L2C4_RESULT" | grep -q "research"; then
+   && echo "$L2C4_RESULT" | grep -q "outline"; then
     pass "L2-c4. root CLAUDE.md only staged → full gate (behavior code)"
 else
     fail "L2-c4. root CLAUDE.md only staged → full gate (behavior code) — got: $L2C4_RESULT"
