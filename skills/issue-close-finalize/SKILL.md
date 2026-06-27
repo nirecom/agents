@@ -21,7 +21,7 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 
 <!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
 Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
-Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); Step ICF-I posts ICF-I-2 sentinel only.
+Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). When the `closes_issues` entry has a `repo` field (`issue_repo`), pass `--repo "$issue_repo"` to `find-pr-by-marker.sh`; `issue_repo` flows through the delegation JSON to the worker. Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); Step ICF-I posts ICF-I-2 sentinel only.
 
 Resolve `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` and `STATE_FILE="$PLANS_DIR/<session-id>-finalize-state-<N>.json"`.
 
@@ -30,7 +30,8 @@ Delegate Steps ICF-A, ICF-B, ICF-C, ICF-D, ICF-E to `issue-close-finalize-worker
 Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
   phase: "initial", issue_number: N, agents_config_dir: AGENTS_CONFIG_DIR,
   main_worktree_path: MAIN_ROOT, state_file_path: STATE_FILE,
-  root_issue_number: N, owner_repo: OWNER_REPO, artifact_dir: PLANS_DIR
+  root_issue_number: N, owner_repo: OWNER_REPO, artifact_dir: PLANS_DIR,
+  issue_repo: ISSUE_REPO  // omit when undefined (current-repo issues)
 }) })
 ```
 On `failed` status: surface summary + artifact_path and stop.

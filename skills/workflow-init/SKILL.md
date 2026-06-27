@@ -22,10 +22,10 @@ Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip S
 
 ### Step WI-3 — Detect `#N`
 
-Regex `#\d+`:
+Regex `(?:[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)?#\d+` (detects all three forms: `#N`, `repo#N`, `owner/repo#N`):
 - **0** → Path C.
 - **1** → WI-4 with `ISSUES=(<N>)`.
-- **>=2** → Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/filter-primary-candidates.sh" <all found numbers>`. Set `ISSUES=(<stdout lines, in emission order>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
+- **>=2** → Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/filter-primary-candidates.sh" <all found integer parts>`. When a cross-repo token (`repo#N` or `owner/repo#N`) is detected, pass only the integer part (`${token##*#}`) to `filter-primary-candidates.sh` — do NOT pass the full `repo#N` token. Set `ISSUES=(<stdout lines, in emission order>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
 
 ### Step WI-4 — Session ID + fetch issues
 

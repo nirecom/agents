@@ -18,7 +18,7 @@ below. Reuse across all subsequent steps — do not re-resolve.
 
 CI-1. Read the user's request; identify the root question that unlocks all downstream decisions.
 
-CI-1a. **closes_issues auto-detect**: Scan for `#\d+`. Pre-fill file (CI-1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all in insertion order (`closes_issues: [N1, N2, ...]`). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
+CI-1a. **closes_issues auto-detect**: Scan for `(?:[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)?#\d+` (detects all three forms: `#N`, `repo#N`, `owner/repo#N`). Pre-fill file (CI-1b) auto-satisfies this when it sets the issue number. Single unambiguous match → `closes_issues: [N]`. Multiple matches → record all in insertion order (`closes_issues: [N1, N2, ...]`). None → `closes_issues: []`. See `rules/github-issues.md` "Session model" for the canonical N-issue relation.
 
 CI-1b. **Pre-fill detection**: Check `<PLANS_DIR>/<session-id>-issue-prefill.md` (written by `/workflow-init` Path B). If present: read it; treat body as Background/Scope seed and proceed to CI-2 (CONFIRM_OUTLINE check) normally. During the interview in CI-3, the background question is auto-skipped since the prefill body serves as the background. No AskUserQuestion — users who want to discard the issue framing say so via free text during the interview.
 
@@ -64,8 +64,8 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `C
    When no candidates were detected: write `- (none detected)` (no triage field).
 
    **`## Issues` section rules** (immediately after H1, before Background/Motivation — mandatory; this is the single SSOT, no separate `## closes_issues` section is written):
-   - One `- #<N>: <title>` line per issue in `closes_issues`, in the order found.
-   - **Path B** (issue known via auto-detect): read the first entry's title from `context.md ## Issue metadata - title:`; for any additional issues, fetch via `gh issue view <N> --json title --jq .title`. If a fetch fails, write `- #<N>: (title unavailable)`.
+   - One entry line per issue in `closes_issues`, in the order found. Current-repo issues use `- #<N>: <title>`. Cross-repo issues use `- repo#<N>: <title>` (short form) or `- owner/repo#<N>: <title>` (full form, preferred when owner is known).
+   - **Path B** (issue known via auto-detect): read the first entry's title from `context.md ## Issue metadata - title:`; for any additional issues, fetch via `gh issue view <N> --json title --jq .title`. If a fetch fails, write `- #<N>: (title unavailable)`. For cross-repo entries, pass `--repo <owner/repo>` to the fetch.
    - **Path C** (no issue yet — empty `closes_issues`): write an EMPTY `## Issues` section as placeholder:
      ```
      ## Issues

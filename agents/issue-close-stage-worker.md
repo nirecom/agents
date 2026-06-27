@@ -16,6 +16,7 @@ Receive a JSON object with:
 - `owner_repo`: `"owner/repo"` string
 - `agents_config_dir`: resolved `$AGENTS_CONFIG_DIR` value
 - `artifact_dir`: directory to write log to
+- `issue_repo`: string (optional) — `<owner/repo>` or `<repo>`; omit for current-repo issues. NOTE: stage-worker does NOT propagate `issue_repo` to `gh` calls in Steps D/F/G — those target the current-repo PR/worktree. Cross-repo Phase 1 support is future scope.
 
 ## Procedure
 
