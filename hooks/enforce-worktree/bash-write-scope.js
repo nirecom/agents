@@ -5,6 +5,7 @@ const { isExcluded } = require("./shared-cmd-utils");
 const { findRepoRoot, normalizeForCompare } = require("./git-repo-detection");
 const { WRITE_PATTERNS, classify } = require("../lib/bash-write-patterns");
 const { splitShellCommands } = require("../lib/shell-segments");
+const { expandStaticShellTokens } = require("../lib/bash-write-targets/redirect");
 const {
   extractRedirectTargets, extractTeeTargets,
   extractPwshWriteTargets, extractCpMvDestination,
@@ -79,7 +80,13 @@ function areAllBashTargetsUnderPlansDir(targets) {
     const normPlans = nodePath.resolve(plansDir).toLowerCase();
     const isUnder = (t) => {
       const raw = t.replace(/^["']|["']$/g, ""); // strip surrounding quotes
-      const n = nodePath.resolve(raw).toLowerCase();
+      let resolved = raw;
+      if (raw.includes("$") || raw.includes("~")) {
+        const expanded = expandStaticShellTokens(raw, { fromQuotedContext: "unquoted" });
+        if (expanded === null) return false; // fail-closed: unresolvable $VAR
+        resolved = expanded;
+      }
+      const n = nodePath.resolve(resolved).toLowerCase();
       return n === normPlans ||
         n.startsWith(normPlans + nodePath.sep) ||
         n.startsWith(normPlans + "/");
