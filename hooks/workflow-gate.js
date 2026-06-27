@@ -38,6 +38,7 @@ const {
 const {
   findAdditionalDirectories,
   resolveRepoDir,
+  isAgentsSessionRepo,
 } = require("./workflow-gate/repo-resolution");
 
 function readStdin() {
@@ -318,6 +319,12 @@ if (require.main === module) {
   const repoDir = resolveRepoDir(command, input);
   // Axis A (#885): record git_root_resolved for late-block extras.
   _gateReportCtx.repoResolved = !!repoDir;
+
+  // Cross-repo bypass (#1138): skip agents workflow-state enforcement when the
+  // commit targets a repo that is NOT the agents session repo. Fail-closed:
+  // isAgentsSessionRepo() returns true on error, keeping enforcement in place.
+  if (!isAgentsSessionRepo(repoDir)) approve();
+
   const docsOnly = isDocsOnlyStaged(repoDir);
   // WIP signal: `git -c workflow.wip=1 commit ...` skips ONLY user_verification.
   // run_tests, review_security, docs still fire. See docs/architecture/claude-code/workflow.md.
@@ -408,6 +415,9 @@ if (require.main === module) {
     // at gh pr merge / git push :main instead (see merge gate above).
     if (step === "user_verification" && isWorktreeContext(repoDir)) continue;
     if (step === "user_verification" && isWip) continue;
+    // #1112: defer cleanup to /worktree-end boundary; intermediate worktree
+    // commits must not be blocked by a pending cleanup step.
+    if (step === "cleanup" && isWorktreeContext(repoDir)) continue;
     // Evidence-based overrides: staged files are proof of completion
     if (step === "write_tests" && hasStagedTestChanges(repoDir)) {
       writeTestsEvidenceBypassed = true;
