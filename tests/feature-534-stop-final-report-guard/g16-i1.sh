@@ -259,6 +259,7 @@ test_G20_header_absent_no_block() {
     local sid="g20-sid"
     local envfile="$plans_dir/${sid}-final-report-env.json"
     write_default_env_file "$envfile"
+    printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
     local transcript="$TMPDIR_BASE/g20-transcript.jsonl"
     write_transcript_with_assistant "$transcript" "I am still working on the task. No final report yet."
@@ -272,7 +273,7 @@ test_G20_header_absent_no_block() {
     code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
 
     if [ "$code" = "0" ]; then
-        pass "G20: env-file + no Final Report header in transcript → exit 0 (guard not applicable)"
+        pass "G20: env-file + gate_action:yield + no FR heading → exit 0 (supervisor yield bypass)"
     else
         fail "G20: expected exit 0 (header absent), got $code"
     fi

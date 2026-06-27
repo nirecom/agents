@@ -136,6 +136,7 @@ test_G23b_no_fr_anywhere_exit0() {
     local sid="g23b-sid"
     local envfile="$plans_dir/${sid}-final-report-env.json"
     write_default_env_file "$envfile"
+    printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
 
     local transcript="$TMPDIR_BASE/g23b-transcript.jsonl"
     write_transcript_with_assistant "$transcript" \
@@ -149,8 +150,9 @@ test_G23b_no_fr_anywhere_exit0() {
     local code
     code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
 
+    # gate_action:yield → yield bypass → exit 0.
     if [ "$code" = "0" ]; then
-        pass "G23b: no FR heading in transcript → exit 0 (guard not applicable)"
+        pass "G23b: no FR heading anywhere + gate_action:yield → exit 0 (yield bypass)"
     else
         fail "G23b: expected exit 0 (no FR heading), got $code"
     fi
@@ -404,5 +406,121 @@ test_G29_transcript_path_absent_exit0() {
         pass "G29: transcript_path absent from stdin → exit 0 (fail-open)"
     else
         fail "G29: expected exit 0 for absent transcript_path, got $code"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G30: env-file present + no gate file + FR heading absent → exit 2 + decision:block
+# (primary fail-close test)
+# ---------------------------------------------------------------------------
+test_G30_envfile_no_gate_no_header_blocks() {
+    require_hook "G30_envfile_no_gate_no_header_blocks" || return
+
+    local plans_dir="$TMPDIR_BASE/g30-plans"
+    mkdir -p "$plans_dir"
+    local sid="g30-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+    # No gate file — fail-close path should trigger
+
+    local transcript="$TMPDIR_BASE/g30-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "Working on the task. No final report yet."
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            if (obj.decision !== 'block') process.exit(1);
+            if (!obj.reason || !obj.reason.includes('[final-report]')) process.exit(1);
+            process.exit(0);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G30: env-file + no gate + no FR heading → exit 2 + block (fail-close)"
+    else
+        fail "G30: expected exit 2 + decision:block with [final-report] in reason, got code=$code out=$(printf '%s' "$out" | head -c 200)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G31: env-file present + gate_action:yield + FR heading absent → exit 0
+# (supervisor yield bypass)
+# ---------------------------------------------------------------------------
+test_G31_envfile_gate_yield_no_header_exit0() {
+    require_hook "G31_envfile_gate_yield_no_header_exit0" || return
+
+    local plans_dir="$TMPDIR_BASE/g31-plans"
+    mkdir -p "$plans_dir"
+    local sid="g31-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+    printf '{"gate_action":"yield"}' > "$plans_dir/${sid}-session-close-gate.json"
+
+    local transcript="$TMPDIR_BASE/g31-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "Supervisor review pending. No final report."
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local code
+    code="$(run_hook_exit "$stdin_json" "$(node_path "$plans_dir")")"
+
+    if [ "$code" = "0" ]; then
+        pass "G31: env-file + gate_action:yield + no FR heading → exit 0 (supervisor yield bypass)"
+    else
+        fail "G31: expected exit 0 (yield bypass), got $code"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# G32: env-file present + gate_action:proceed + FR heading absent → exit 2 + block
+# (proceed gate does not bypass fail-close)
+# ---------------------------------------------------------------------------
+test_G32_envfile_gate_proceed_no_header_blocks() {
+    require_hook "G32_envfile_gate_proceed_no_header_blocks" || return
+
+    local plans_dir="$TMPDIR_BASE/g32-plans"
+    mkdir -p "$plans_dir"
+    local sid="g32-sid"
+    local envfile="$plans_dir/${sid}-final-report-env.json"
+    write_default_env_file "$envfile"
+    printf '{"gate_action":"proceed"}' > "$plans_dir/${sid}-session-close-gate.json"
+
+    local transcript="$TMPDIR_BASE/g32-transcript.jsonl"
+    write_transcript_with_assistant "$transcript" "Gate says proceed but no final report emitted."
+    local transcript_node; transcript_node="$(node_path "$transcript")"
+
+    local stdin_json
+    stdin_json="$(printf '{"session_id":"%s","transcript_path":"%s"}' \
+        "$sid" "$transcript_node")"
+
+    local plans_dir_node; plans_dir_node="$(node_path "$plans_dir")"
+    local out
+    out="$(WORKFLOW_PLANS_DIR="$plans_dir_node" run_with_timeout 120 \
+        node "$HOOK_JS" <<< "$stdin_json" 2>/dev/null)"
+    local code=$?
+
+    if [ "$code" = "2" ] && printf '%s' "$out" | node -e "
+        let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{
+          try {
+            const obj=JSON.parse(s.trim());
+            process.exit(obj.decision==='block'?0:1);
+          } catch(e){ process.exit(1); }
+        });" 2>/dev/null; then
+        pass "G32: env-file + gate_action:proceed + no FR heading → exit 2 + block (proceed doesn't bypass)"
+    else
+        fail "G32: expected exit 2 + decision:block, got code=$code out=$(printf '%s' "$out" | head -c 200)"
     fi
 }
