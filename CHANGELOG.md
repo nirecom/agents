@@ -219,3 +219,7 @@ Changes: fix: enforce-worktree no longer false-blocks writes to `~/.workflow-pla
 ### FEATURE: PR #1183 (2026-06-27)
 Background: fix(#1176): restore VS Code auto-open + add clickable vscode:// breadcrumb links in plan confirmation flow
 Changes: Fixed: plan confirmation flow (intent/outline/detail) now auto-opens in VS Code and shows a clickable file link in extension chat — regression from PR #1136 extensionHost guard; use SHOW_PLAN_LINK_NO_AUTO_OPEN=1 to opt out
+
+### FEATURE: PR #1182 (2026-06-28)
+Background: fix(#1099): guard resolveSessionId P7 against cross-repo CWD
+Changes: Fixed: in multi-repo setups running concurrent sessions, the workflow's last-resort session-id fallback could occasionally attribute state to another session when invoked from a different repository's directory. It now skips foreign repositories, keeping each session's workflow state correctly attributed.
