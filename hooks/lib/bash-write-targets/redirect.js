@@ -158,4 +158,4 @@ function extractRedirectTargets(cmd) {
   return targets;
 }
 
-module.exports = { extractRedirectTargets };
+module.exports = { extractRedirectTargets, expandStaticShellTokens };

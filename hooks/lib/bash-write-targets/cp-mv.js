@@ -82,8 +82,24 @@ function extractCpMvDestination(cmd) {
         resolved = stripped;
       } else {
         const substituted = substituteEnvPrefix(stripped);
-        if (isUnresolvableToken(substituted)) return null;
-        resolved = substituted;
+        if (isUnresolvableToken(substituted)) {
+          // env-prefix substitution left an unresolved $VAR — try process.env
+          // constrained to plans-dir (mirrors tee.js:48-65 pattern).
+          const genericVarRe = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/;
+          const gm = genericVarRe.exec(substituted);
+          if (gm) {
+            const varName = gm[1] || gm[2];
+            const remainder = substituted.slice(gm[0].length);
+            if (!remainder.includes("$") && !remainder.includes("`")) {
+              const { tryResolveEnvUnderPlansDir } = require("./helpers");
+              const r = tryResolveEnvUnderPlansDir(varName, remainder);
+              if (r !== null) { resolved = r; }
+              else return null;
+            } else { return null; }
+          } else { return null; }
+        } else {
+          resolved = substituted;
+        }
       }
     } else {
       // No $ — still strip outer quotes for consistency.
