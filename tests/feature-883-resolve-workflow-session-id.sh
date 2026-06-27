@@ -159,21 +159,22 @@ run_r1() {
 }
 
 run_r2() {
-    require_function "resolveWorkflowSessionId" "R2: env present but no intent.md -> context.md scan" || return
+    require_function "resolveWorkflowSessionId" "R2: env present but no intent.md, 2 stubs (no ccBucket=0) -> NULL" || return
     local tmp out envfile
     tmp="$(mktemp -d)"
     envfile="$tmp/claude.env"
     echo "CLAUDE_SESSION_ID=cc-uuid" > "$envfile"
     # NOTE: no cc-uuid-intent.md — force fallthrough to mtime scan.
+    # Both stubs have ccBucket=1 (cc-uuid not in context.md content); gate fires → NULL.
     : > "$tmp/${TODAY}-early-context.md"
     : > "$tmp/${TODAY}-later-context.md"
     set_mtimes "$tmp/${TODAY}-early-context.md" -4 "$tmp/${TODAY}-later-context.md" -2
     out=$(call_resolve "$tmp" "$envfile")
     rm -rf "$tmp"
-    if [ "$out" = "${TODAY}-later" ]; then
-        pass "R2: env present but no intent.md -> context.md scan"
+    if [ "$out" = "NULL" ]; then
+        pass "R2: env present but no intent.md, 2 stubs (no ccBucket=0) -> NULL"
     else
-        fail "R2: env present but no intent.md -> context.md scan (out=$out)"
+        fail "R2: env present but no intent.md, 2 stubs (no ccBucket=0) -> NULL (out=$out)"
     fi
 }
 
@@ -192,23 +193,23 @@ run_r3() {
 }
 
 run_r4() {
-    require_function "resolveWorkflowSessionId" "R4: multiple same-day by mtime" || return
+    require_function "resolveWorkflowSessionId" "R4: 3 same-day stubs, no env (no ccBucket=0) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
     : > "$tmp/${TODAY}-a-context.md"
     : > "$tmp/${TODAY}-b-context.md"
     : > "$tmp/${TODAY}-c-context.md"
-    # b is newest (T-2); a is T-6; c is T-4.
+    # b is newest (T-2); a is T-6; c is T-4. All ccBucket=1 (no env). Gate fires → NULL.
     set_mtimes \
         "$tmp/${TODAY}-a-context.md" -6 \
         "$tmp/${TODAY}-b-context.md" -2 \
         "$tmp/${TODAY}-c-context.md" -4
     out=$(call_resolve "$tmp")
     rm -rf "$tmp"
-    if [ "$out" = "${TODAY}-b" ]; then
-        pass "R4: multiple same-day by mtime"
+    if [ "$out" = "NULL" ]; then
+        pass "R4: 3 same-day stubs, no env (no ccBucket=0) -> NULL"
     else
-        fail "R4: multiple same-day by mtime (out=$out)"
+        fail "R4: 3 same-day stubs, no env (no ccBucket=0) -> NULL (out=$out)"
     fi
 }
 
@@ -262,24 +263,23 @@ run_r7() {
 }
 
 run_r8() {
-    require_function "resolveWorkflowSessionId" "R8: date-sanity guard excludes yesterday file" || return
+    require_function "resolveWorkflowSessionId" "R8: date-sanity excludes yesterday; 2 today stubs (no ccBucket=0) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
     : > "$tmp/${TODAY}-090000-context.md"
     : > "$tmp/${TODAY}-100000-context.md"
     : > "$tmp/${YESTERDAY}-235959-context.md"
-    # Yesterday file has the newest mtime (most recent), but date-sanity must exclude it.
-    # Within today's files, 100000 wins on mtime (T-4 > T-6).
+    # Yesterday file excluded by date-sanity guard. 2 today stubs remain; both ccBucket=1 (no env). Gate fires → NULL.
     set_mtimes \
         "$tmp/${TODAY}-090000-context.md" -6 \
         "$tmp/${TODAY}-100000-context.md" -4 \
         "$tmp/${YESTERDAY}-235959-context.md" -2
     out=$(call_resolve "$tmp")
     rm -rf "$tmp"
-    if [ "$out" = "${TODAY}-100000" ]; then
-        pass "R8: date-sanity guard excludes yesterday file"
+    if [ "$out" = "NULL" ]; then
+        pass "R8: date-sanity excludes yesterday; 2 today stubs (no ccBucket=0) -> NULL"
     else
-        fail "R8: date-sanity guard excludes yesterday file (out=$out)"
+        fail "R8: date-sanity excludes yesterday; 2 today stubs (no ccBucket=0) -> NULL (out=$out)"
     fi
 }
 
@@ -291,7 +291,7 @@ run_r8() {
 # ---------------------------------------------------------------------------
 
 run_r9() {
-    require_function "resolveWorkflowSessionId" "R9: depth-score beats mtime (detail vs stub)" || return
+    require_function "resolveWorkflowSessionId" "R9: active+stub, no env (both ccBucket=1) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
     # 'active' has context+intent+detail (depth=2), older mtime T-10.
@@ -300,6 +300,7 @@ run_r9() {
     : > "$tmp/${TODAY}-active-detail.md"
     # 'stub' has context.md only (depth=0), newer mtime T-2.
     : > "$tmp/${TODAY}-stub-context.md"
+    # Both ccBucket=1 (no env): gate fires → NULL.
     set_mtimes \
         "$tmp/${TODAY}-active-context.md" -10 \
         "$tmp/${TODAY}-active-intent.md" -10 \
@@ -307,15 +308,15 @@ run_r9() {
         "$tmp/${TODAY}-stub-context.md" -2
     out=$(call_resolve "$tmp")
     rm -rf "$tmp"
-    if [ "$out" = "${TODAY}-active" ]; then
-        pass "R9: depth-score beats mtime (detail vs stub)"
+    if [ "$out" = "NULL" ]; then
+        pass "R9: active+stub, no env (both ccBucket=1) -> NULL"
     else
-        fail "R9: depth-score beats mtime (detail vs stub) (out=$out)"
+        fail "R9: active+stub, no env (both ccBucket=1) -> NULL (out=$out)"
     fi
 }
 
 run_r10() {
-    require_function "resolveWorkflowSessionId" "R10: depth-score beats mtime (intent vs stub)" || return
+    require_function "resolveWorkflowSessionId" "R10: intonly+stub, no env (both ccBucket=1) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
     # 'intonly' has context+intent (depth=1), older mtime T-8.
@@ -323,16 +324,17 @@ run_r10() {
     : > "$tmp/${TODAY}-intonly-intent.md"
     # 'stub' has context.md only (depth=0), newer mtime T-2.
     : > "$tmp/${TODAY}-stub-context.md"
+    # Both ccBucket=1 (no env): gate fires → NULL.
     set_mtimes \
         "$tmp/${TODAY}-intonly-context.md" -8 \
         "$tmp/${TODAY}-intonly-intent.md" -8 \
         "$tmp/${TODAY}-stub-context.md" -2
     out=$(call_resolve "$tmp")
     rm -rf "$tmp"
-    if [ "$out" = "${TODAY}-intonly" ]; then
-        pass "R10: depth-score beats mtime (intent vs stub)"
+    if [ "$out" = "NULL" ]; then
+        pass "R10: intonly+stub, no env (both ccBucket=1) -> NULL"
     else
-        fail "R10: depth-score beats mtime (intent vs stub) (out=$out)"
+        fail "R10: intonly+stub, no env (both ccBucket=1) -> NULL (out=$out)"
     fi
 }
 
@@ -401,11 +403,10 @@ run_r12() {
 }
 
 run_r13() {
-    require_function "resolveWorkflowSessionId" "R13: lexicographic sid tie-break when depth and mtime are equal" || return
+    require_function "resolveWorkflowSessionId" "R13: 2 stubs identical mtime, no env (both ccBucket=1) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
-    # Two context.md stubs with depth=0. We set their mtimes to the same value
-    # so the tie-break falls to lexicographic (sid asc) order.
+    # Two context.md stubs with depth=0, identical mtime. Both ccBucket=1 (no env). Gate fires → NULL.
     : > "$tmp/${TODAY}r13b-context.md"
     : > "$tmp/${TODAY}r13a-context.md"
     # Set both to the same timestamp (now - 5 seconds).
@@ -417,11 +418,10 @@ fs.utimesSync(process.argv[2],t,t);
 " -- "$tmp/${TODAY}r13b-context.md" "$tmp/${TODAY}r13a-context.md" 2>/dev/null
     out=$(call_resolve "$tmp")
     rm -rf "$tmp"
-    # r13a < r13b lexicographically, so r13a should win the tie-break.
-    if [ "$out" = "${TODAY}r13a" ]; then
-        pass "R13: lexicographic sid tie-break when depth and mtime are equal (r13a wins)"
+    if [ "$out" = "NULL" ]; then
+        pass "R13: 2 stubs identical mtime, no env (both ccBucket=1) -> NULL"
     else
-        fail "R13: lexicographic sid tie-break when depth and mtime are equal (out=$out, expected ${TODAY}r13a)"
+        fail "R13: 2 stubs identical mtime, no env (both ccBucket=1) -> NULL (out=$out)"
     fi
 }
 
@@ -444,10 +444,11 @@ run_r14() {
 }
 
 run_r15() {
-    require_function "resolveWorkflowSessionId" "R15: two depth=2 sessions secondary mtime sort" || return
+    require_function "resolveWorkflowSessionId" "R15: 2 depth=2 sessions, no env (both ccBucket=1) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
     # Both sessions have depth=2 (detail.md present); mtime differs on context.md.
+    # Both ccBucket=1 (no env): gate fires → NULL.
     : > "$tmp/${TODAY}r15early-context.md"
     : > "$tmp/${TODAY}r15early-detail.md"
     : > "$tmp/${TODAY}r15later-context.md"
@@ -462,10 +463,10 @@ fs.utimesSync(base+'/${TODAY}r15later-context.md',later,later);
 " -- "$tmp" 2>/dev/null
     out=$(call_resolve "$tmp")
     rm -rf "$tmp"
-    if [ "$out" = "${TODAY}r15later" ]; then
-        pass "R15: two depth=2 sessions: newer mtime wins within same depth bucket"
+    if [ "$out" = "NULL" ]; then
+        pass "R15: 2 depth=2 sessions, no env (both ccBucket=1) -> NULL"
     else
-        fail "R15: two depth=2 sessions mtime sort (out=$out, expected ${TODAY}r15later)"
+        fail "R15: 2 depth=2 sessions, no env (both ccBucket=1) -> NULL (out=$out)"
     fi
 }
 
@@ -570,29 +571,109 @@ run_r18() {
 # ---------------------------------------------------------------------------
 
 run_r19() {
-    require_function "resolveWorkflowSessionId" "R19: CLAUDE_CODE_SESSION_ID unset → P3 depth-scan no regression" || return
+    require_function "resolveWorkflowSessionId" "R19: CLAUDE_CODE_SESSION_ID unset, active+stub, no env (both ccBucket=1) -> NULL" || return
     local tmp out
     tmp="$(mktemp -d)"
     : > "$tmp/${TODAY}-r19active-context.md"
     : > "$tmp/${TODAY}-r19active-intent.md"
     : > "$tmp/${TODAY}-r19stub-context.md"
+    # CLAUDE_CODE_SESSION_ID unset, no env. Both ccBucket=1: gate fires → NULL.
     set_mtimes \
         "$tmp/${TODAY}-r19active-context.md" -8 \
         "$tmp/${TODAY}-r19active-intent.md" -8 \
         "$tmp/${TODAY}-r19stub-context.md" -2
     out=$(call_resolve "$tmp" "" "$tmp")
     rm -rf "$tmp"
-    # depth-score: active wins over stub even with older mtime.
-    if [ "$out" = "${TODAY}-r19active" ]; then
-        pass "R19: CLAUDE_CODE_SESSION_ID unset → P3 depth-scan no regression (active beats stub)"
+    if [ "$out" = "NULL" ]; then
+        pass "R19: CLAUDE_CODE_SESSION_ID unset, active+stub, no env (both ccBucket=1) -> NULL"
     else
-        fail "R19: CLAUDE_CODE_SESSION_ID unset fallback (out=$out, expected ${TODAY}-r19active)"
+        fail "R19: CLAUDE_CODE_SESSION_ID unset, both ccBucket=1 -> NULL (out=$out)"
     fi
 }
 
 run_r17
 run_r18
 run_r19
+
+# ---------------------------------------------------------------------------
+# R20: primary gate demonstration — multiple candidates, no ccBucket=0 → NULL.
+# Two empty context.md stubs, no env: ccBucket=1 for both → gate fires → NULL.
+# ---------------------------------------------------------------------------
+
+run_r20() {
+    require_function "resolveWorkflowSessionId" "R20: multiple candidates, no ccBucket=0 -> gate fires -> NULL" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Two empty stubs; no env → ccUuid="" → ccBucket=1 for all candidates. Gate fires → NULL.
+    : > "$tmp/${TODAY}-r20alpha-context.md"
+    : > "$tmp/${TODAY}-r20beta-context.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r20alpha-context.md" -6 \
+        "$tmp/${TODAY}-r20beta-context.md" -2
+    out=$(call_resolve "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "NULL" ]; then
+        pass "R20: multiple candidates, no ccBucket=0 -> gate fires -> NULL"
+    else
+        fail "R20: multiple candidates, no ccBucket=0 -> gate fires -> NULL (out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# R21: single candidate, no env → gate skipped → returns sid.
+# Gate condition is: !candidates.some(c=>c.ccBucket===0) && candidates.length > 1.
+# With exactly 1 candidate, candidates.length > 1 is false → gate does NOT fire.
+# ---------------------------------------------------------------------------
+
+run_r21() {
+    require_function "resolveWorkflowSessionId" "R21: single candidate, no env -> gate skipped -> returns sid" || return
+    local tmp out
+    tmp="$(mktemp -d)"
+    # Exactly one candidate; no env → ccBucket=1, but candidates.length=1 → gate skipped.
+    : > "$tmp/${TODAY}-r21solo-context.md"
+    out=$(call_resolve "$tmp")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-r21solo" ]; then
+        pass "R21: single candidate, no env -> gate skipped -> returns sid"
+    else
+        fail "R21: single candidate, no env -> gate skipped -> returns sid (out=$out)"
+    fi
+}
+
+run_r20
+run_r21
+
+# ---------------------------------------------------------------------------
+# R22: multiple candidates, one ccBucket=0 -> gate NOT fired -> ccBucket=0 wins.
+# Gate: !candidates.some(c=>c.ccBucket===0) && candidates.length > 1.
+# When owner context.md has CC UUID, ccBucket=0 -> !some() is FALSE -> dormant.
+# Validates gate does NOT over-fire when ccBucket=0 is present.
+# ---------------------------------------------------------------------------
+
+run_r22() {
+    require_function "resolveWorkflowSessionId" "R22: multiple candidates, one ccBucket=0 -> gate dormant -> ccBucket=0 wins" || return
+    local tmp out envfile ccuuid
+    tmp="$(mktemp -d)"
+    envfile="$tmp/claude.env"
+    ccuuid="r22-ccuuid"
+    echo "CLAUDE_SESSION_ID=$ccuuid" > "$envfile"
+    # Owner: context.md has CC UUID -> ccBucket=0.
+    printf "Session-ID: %s\n%s\n" "${TODAY}-r22owner" "$ccuuid" > "$tmp/${TODAY}-r22owner-context.md"
+    # Foreign: empty context.md -> ccBucket=1; newer mtime still loses ccBucket sort.
+    : > "$tmp/${TODAY}-r22foreign-context.md"
+    set_mtimes \
+        "$tmp/${TODAY}-r22owner-context.md" -10 \
+        "$tmp/${TODAY}-r22foreign-context.md" -2
+    out=$(call_resolve "$tmp" "$envfile")
+    rm -rf "$tmp"
+    if [ "$out" = "${TODAY}-r22owner" ]; then
+        pass "R22: multiple candidates, one ccBucket=0 -> gate dormant -> ccBucket=0 wins"
+    else
+        fail "R22: multiple candidates, one ccBucket=0 -> gate dormant -> ccBucket=0 wins (out=$out, expected ${TODAY}-r22owner)"
+    fi
+}
+
+run_r22
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
