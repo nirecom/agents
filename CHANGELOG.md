@@ -227,3 +227,7 @@ Changes: Fixed: in multi-repo setups running concurrent sessions, the workflow's
 ### FEATURE: PR #1189 (2026-06-28)
 Background: fix(#1181): guard WI-8 against WF-META when meta issue has open sub-issues (#1189)
 Changes: `/workflow-init` given a meta issue that already has open sub-issues now presents those sub-issues as candidates to work on, instead of silently entering WF-META and risking duplicate sub-issue creation.
+
+### FEATURE: PR #1194 (2026-06-28)
+Background: feat(#1100,#1101): cross-repo wire format + parse-closes-issues.js extension + close flow --repo support
+Changes: Cross-repo issue references now supported in session intent files: use `- repo#N: title` or `- owner/repo#N: title` in the `## Issues` section alongside the existing `- #N: title` form;Issue close flow (`/issue-close-stage`, `/issue-close-finalize`) correctly handles issues from foreign repositories — no more 404 errors when closing cross-repo sessions
