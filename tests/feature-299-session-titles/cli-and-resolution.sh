@@ -31,7 +31,7 @@ run_t12() {
 "
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
@@ -65,7 +65,7 @@ run_t13() {
   make_jsonl_with_title "$jsonl_bash" "$sid" "#88 some issue"
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" add-pr "$tmp_node" "999" 2>/dev/null || true
   )
@@ -99,7 +99,7 @@ run_t14() {
   make_jsonl_with_title "$jsonl_bash" "$sid" "#55 completed task PR #101"
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" mark-complete "$tmp_node" 2>/dev/null || true
   )
@@ -146,7 +146,7 @@ run_t15() {
   printf "CLAUDE_SESSION_ID=%s\n" "$sid" > "$env_file_bash"
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
     CLAUDE_ENV_FILE="$env_file_node" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
@@ -191,7 +191,8 @@ run_t16() {
   touch "$jsonl_bash"
 
   (
-    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID
+    cd "$tmp_bash"  # cd away from worktree so WORKTREE_NOTES.md is not found by resolveSessionId step 6
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_SESSION_ID
     CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
       run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
   )
