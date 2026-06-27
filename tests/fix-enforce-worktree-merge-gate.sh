@@ -101,6 +101,22 @@ assert_ff "regression: git pull --ff-only (post-#820)"               'git pull -
 assert_ff "regression: git merge --ff-only main (post-#820)"         'git merge --ff-only main'        "allow"
 assert_ff "regression: git pull --ff-only origin main (post-#820)"   'git pull --ff-only origin main'  "allow"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Class 1 — fd-dup I/O redirect fix (#1115, #982)
+# POSIX I/O fd-dup redirects (2>&1, 1>&2, >&2) contain an unquoted `&` that
+# hasShellChaining's `[|;&]` regex matches, so the chaining guard fires before
+# the ff-only allow can apply. These are RED before the shared-cmd-utils.js fix
+# sanitizes /\d*>&\d+|\d*>&-/g before the chaining test. &> / &>> (redirect-both)
+# must NOT be sanitized — they remain blocked.
+# ─────────────────────────────────────────────────────────────────────────────
+assert_ff "merge --ff-only 2>&1 (fix #1115 — fd-dup must not block)" 'git merge --ff-only origin/main 2>&1' "allow"
+assert_ff "pull --ff-only 2>&1 (fix #1115 — fd-dup must not block)" 'git pull --ff-only 2>&1' "allow"
+assert_ff "merge --ff-only 1>&2 (fix #1115 — reverse fd-dup)" 'git merge --ff-only 1>&2' "allow"
+assert_ff "merge --ff-only >&2 (fix #1115 — fd-dup form >&N)" 'git merge --ff-only >&2' "allow"
+# Security regression pins — chaining and &> must remain blocked after the fix
+assert_ff "merge --ff-only && push 2>&1 (chaining still blocked)" 'git merge --ff-only && git push 2>&1' "reject"
+assert_ff "merge --ff-only &> /tmp/log (&> not sanitized, still blocked)" 'git merge --ff-only &> /tmp/log' "reject"
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 exit $FAIL
