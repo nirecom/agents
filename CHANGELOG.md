@@ -207,3 +207,7 @@ Changes: Fixed supervisor adjudication being dropped in rounds 2+ when a bypass-
 ### FEATURE: PR #1173 (2026-06-27)
 Background: feat(#1155): bulk-sub-of verdict for /issue-create + --skip-survey flag + WF-META PM4 mandate
 Changes: `/issue-create` now supports a `bulk-sub-of` verdict: pass a TSV manifest to create and attach multiple sub-issues under a meta parent in one pass, with partial-failure recovery and per-child URL output.;New `--skip-survey` flag bypasses the per-issue dedupe survey for callers that have already pre-screened candidates (e.g. WF-META bulk creation workflows).
+
+### FEATURE: PR #1178 (2026-06-27)
+Background: fix(#1108): unify artifact_dir to PLANS_DIR across issue-create, issue-reconcile, worktree-start, session-close
+Changes: Worker artifacts from `/issue-create`, `/issue-reconcile`, `/worktree-start`, and `/session-close` are now written under `PLANS_DIR` (same directory as session plan files) and are therefore automatically swept by `/sweep-plans`; previously they landed in `artifacts/` and were never auto-cleaned
