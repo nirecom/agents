@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Claude Code PreToolUse hook: block raw `gh issue close` invocations through
 // the Bash tool. Forces routing via /issue-close-finalize (Phase 2), which
-// sets ISSUE_CLOSE_SKILL=1 to bypass this guard. Phase 1 (/issue-close-stage)
-// does not call `gh issue close` and therefore is not affected by this hook.
+// calls bin/github-issues/close-completed.sh (subprocess of bash — invisible
+// to this hook). Phase 1 (/issue-close-stage) does not call `gh issue close`
+// and therefore is not affected by this hook.
 //
 // Scope: Claude Code Bash tool only. Web UI, mobile, gh from another shell —
 // all bypass this hook. Use /issue-reconcile to recover from those.
