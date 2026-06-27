@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# ensure-board-card.sh <N>
+# ensure-board-card.sh [--repo <owner/repo|repo>] <N>
 # Idempotent: ensures issue #N has a Projects v2 board card with Content Date.
 # Standalone: derives its own paths via BASH_SOURCE (no AGENTS_CONFIG_DIR dependency).
 # Best-effort: warns and exits 0 on non-fatal gh failures.
 # Exit codes: 0 success/non-fatal warn; 2 usage error.
+#
+# --repo: optional repository slug (short form "repo" or full "owner/repo").
+#         Short form is normalized via `gh repo view` to full owner/repo.
+#         Propagated to both `gh issue view` calls (URL and createdAt fetches).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,7 +18,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
     cat >&2 <<'EOF'
-Usage: ensure-board-card.sh <N>
+Usage: ensure-board-card.sh [--repo <owner/repo|repo>] <N>
+  --repo: optional repository slug (short or full form).
   <N>: positive integer issue number.
 Idempotent: when the issue already has a board card with Content Date set,
 re-running is a no-op. Best-effort — warns and exits 0 on gh failures.
@@ -22,9 +27,40 @@ EOF
     exit 2
 }
 
+REPO_ARG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --repo)
+            [ $# -lt 2 ] && { echo "Error: --repo requires a value" >&2; exit 2; }
+            REPO_ARG="$2"; shift 2
+            ;;
+        --repo=*)
+            REPO_ARG="${1#--repo=}"; shift
+            ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+
 N="${1:-}"
 [[ -z "$N" ]] && usage
 [[ "$N" =~ ^[0-9]+$ ]] || usage
+
+# Validate --repo format before any use (prevents flag-injection into gh).
+if [[ -n "$REPO_ARG" ]]; then
+    if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+        echo "Error: invalid --repo value: $REPO_ARG" >&2
+        exit 2
+    fi
+fi
+
+# Normalize short-form repo (no slash) to full owner/repo (fail-closed).
+if [[ -n "$REPO_ARG" ]] && [[ "$REPO_ARG" != *"/"* ]]; then
+    REPO_ARG=$(gh repo view "$REPO_ARG" --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null) || {
+        echo "Error: failed to resolve short-form repo '$REPO_ARG'" >&2
+        exit 2
+    }
+fi
 
 # Soft gh auth project-scope warn (mirror issue-create.sh).
 if command -v gh >/dev/null 2>&1; then
@@ -54,7 +90,7 @@ FIELD_ID="$RESOLVED_CONTENT_DATE_FIELD_ID"
 # resolve_item_id reads $PROJECT_ID from caller scope — set above before use.
 
 # 1. Resolve URL.
-if ! URL=$(gh issue view "$N" --json url --jq '.url' 2>/dev/null); then
+if ! URL=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json url --jq '.url' 2>/dev/null); then
     echo "warn: gh issue view #$N failed — skipping (exit 0)" >&2
     exit 0
 fi
@@ -118,7 +154,7 @@ fi
 #    in this project. Some projects intentionally lack the field; that is not
 #    an error.
 if [[ -n "$FIELD_ID" ]]; then
-    if ! CREATED_DATE=$(gh issue view "$N" --json createdAt --jq '.createdAt[:10]' 2>/dev/null); then
+    if ! CREATED_DATE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json createdAt --jq '.createdAt[:10]' 2>/dev/null); then
         echo "warn: ensure-board-card: gh issue view createdAt failed for #$N — Content Date not set (exit 0)" >&2
         exit 0
     fi
