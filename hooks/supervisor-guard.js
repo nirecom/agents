@@ -186,30 +186,14 @@ function detectOffProposal(transcriptPath) {
         : [];
     for (const item of content) {
       if (!item) continue;
-      let text = "";
-      let isTextItem = false;
-      if (item.type === "tool_use" && item.name === "Bash") {
-        text = (item.input && item.input.command) || "";
-      } else if (item.type === "text") {
-        text = item.text || "";
-        isTextItem = true;
-      } else {
-        continue;
-      }
+      if (item.type !== "tool_use" || item.name !== "Bash") continue;
+      const text = (item.input && item.input.command) || "";
       if (!text) continue;
       cmdOrder++;
-      if (isTextItem) {
-        // Text content: use broad substring match (sentinel may not be in echo "..." form).
-        if (text.includes("WORKFLOW_ENFORCE_WORKTREE_OFF")) lastWorktreeOffIdx = cmdOrder;
-        if (text.includes("WORKFLOW_ENFORCE_WORKTREE_ON")) lastWorktreeOnIdx = cmdOrder;
-        if (text.includes("WORKFLOW_ENFORCE_WORKFLOW_OFF")) lastWorkflowOffIdx = cmdOrder;
-        if (text.includes("WORKFLOW_ENFORCE_WORKFLOW_ON")) lastWorkflowOnIdx = cmdOrder;
-      } else {
-        if (WORKTREE_OFF_DQ.test(text) || WORKTREE_OFF_LL.test(text)) lastWorktreeOffIdx = cmdOrder;
-        if (WORKTREE_ON_DQ.test(text) || WORKTREE_ON_LL.test(text)) lastWorktreeOnIdx = cmdOrder;
-        if (WORKFLOW_OFF_DQ.test(text) || WORKFLOW_OFF_LL.test(text)) lastWorkflowOffIdx = cmdOrder;
-        if (WORKFLOW_ON_DQ.test(text) || WORKFLOW_ON_LL.test(text)) lastWorkflowOnIdx = cmdOrder;
-      }
+      if (WORKTREE_OFF_DQ.test(text) || WORKTREE_OFF_LL.test(text)) lastWorktreeOffIdx = cmdOrder;
+      if (WORKTREE_ON_DQ.test(text) || WORKTREE_ON_LL.test(text)) lastWorktreeOnIdx = cmdOrder;
+      if (WORKFLOW_OFF_DQ.test(text) || WORKFLOW_OFF_LL.test(text)) lastWorkflowOffIdx = cmdOrder;
+      if (WORKFLOW_ON_DQ.test(text) || WORKFLOW_ON_LL.test(text)) lastWorkflowOnIdx = cmdOrder;
     }
   }
   const worktreeDetected = lastWorktreeOffIdx >= 0 && (lastWorktreeOnIdx < 0 || lastWorktreeOffIdx > lastWorktreeOnIdx);
@@ -426,7 +410,7 @@ if (require.main === module) {
   }
 
   // (C3) OFF proposal pre-detection
-  if (!askUserQuestionTurn && offProposal.detected) {
+  if (!askUserQuestionTurn && offProposal.detected && alertPhase !== "done" && alertPhase !== "frozen") {
     if (tryIncrementFrozen()) process.exit(0);
     const causeLabel = offProposal.kind === "workflow-off"
       ? "C3 workflow-off proposal"
