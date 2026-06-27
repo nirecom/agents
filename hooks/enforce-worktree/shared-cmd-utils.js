@@ -3,7 +3,7 @@
 const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("../lib/glob-match");
-const { stripQuotedArgs } = require("../lib/strip-quoted-args");
+const { stripQuotedArgs, stripHeredocBody } = require("../lib/strip-quoted-args");
 
 // Built-in exclude patterns: always merged with ENFORCE_WORKTREE_EXCLUDE. Users
 // cannot disable these — set ENFORCE_WORKTREE=off session-scoped if needed.
@@ -87,6 +87,13 @@ function hasCommandSequencing(cmd) {
   return /;|&&|\|\|/.test(stripped);
 }
 
+// True when cmd has sequencing operators (; && ||) OUTSIDE the heredoc body.
+// Strips the heredoc body before the sequencing test so body-internal operators
+// (e.g. shell fragments in a cat <<'EOF' write) are not treated as real sequencing.
+function hasCommandSequencingOutsideHeredoc(cmd) {
+  return hasCommandSequencing(stripHeredocBody(cmd));
+}
+
 /**
  * True when targetPath resolves to a location OUTSIDE repoRoot.
  * Relative paths are resolved against process.cwd() (the main worktree when
@@ -142,6 +149,7 @@ module.exports = {
   hasShellChaining,
   findFirstUnquotedAnd,
   hasCommandSequencing,
+  hasCommandSequencingOutsideHeredoc,
   isPathOutsideRepo,
   isExcluded,
   getExcludePatterns,
