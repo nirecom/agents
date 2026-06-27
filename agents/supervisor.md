@@ -39,6 +39,7 @@ When `Workflow session ID: UNAVAILABLE` appears in the block-reason:
 - Skip all plan-artifact reads (`<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md`).
 - Emit a `category=env, severity=warning` finding via `bin/supervisor-write-alert` recording the missing wsid.
 - Run the JD checklist against transcript turns only.
+- When `resolveWorkflowSessionId()` returns null (including via the ccBucket ambiguity gate), the block-reason reads `Workflow session ID: UNAVAILABLE`.
 
 ## Alert mode pre-processing
 
