@@ -11,8 +11,11 @@
 #   sub-of       --parent N                  New issue, attached as sub-issue of #N
 #   make-parent  --children N,M,...          New issue becomes parent of comma-separated children
 #   sibling      --related N,M,...           New issue with "Related to #N" appended to body
+#   bulk-sub-of  --parent N --manifest FILE   Create N new sub-issues under #N from manifest
 #
-# Stdout: final issue URL (one line, last line of stdout).
+# Stdout: final issue URL(s).
+#   single verdicts (none/reopen/sub-of/make-parent/sibling): one URL (last line of stdout).
+#   bulk-sub-of: N URLs in manifest order (one per line, end of stdout; progress on stderr only).
 #   reopen: URL of the reopened issue; all other verdicts: URL of the new issue.
 # Exit: 0 on success; 2 on usage error; 1 on structural failure.
 
@@ -23,10 +26,11 @@ TARGET=""
 PARENT=""
 CHILDREN=""
 RELATED=""
+MANIFEST=""
 PASSTHROUGH=()
 
 usage() {
-    sed -n '2,17p' "$0" >&2
+    sed -n '2,20p' "$0" >&2
     exit 2
 }
 
@@ -61,6 +65,7 @@ while [ $# -gt 0 ]; do
         --parent)    PARENT="${2:?--parent requires value}";    shift 2 ;;
         --children)  CHILDREN="${2:?--children requires value}"; shift 2 ;;
         --related)   RELATED="${2:?--related requires value}";  shift 2 ;;
+        --manifest)  MANIFEST="${2:?--manifest requires value}"; shift 2 ;;
         --)          shift; PASSTHROUGH=("$@"); break ;;
         -h|--help)   usage ;;
         *) echo "Error: unknown argument before --: $1" >&2; exit 2 ;;
@@ -68,7 +73,7 @@ while [ $# -gt 0 ]; do
 done
 
 case "$VERDICT" in
-    none|reopen|sub-of|make-parent|sibling) ;;
+    none|reopen|sub-of|make-parent|sibling|bulk-sub-of) ;;
     "")  echo "Error: --verdict required" >&2; exit 2 ;;
     *)   echo "Error: unknown verdict: $VERDICT" >&2; exit 2 ;;
 esac
@@ -78,6 +83,14 @@ esac
 [ -n "$PARENT" ]   && validate_numeric "--parent" "$PARENT"
 [ -n "$CHILDREN" ] && validate_numeric_list "--children" "$CHILDREN"
 [ -n "$RELATED" ]  && validate_numeric_list "--related" "$RELATED"
+
+if [[ "$VERDICT" == "bulk-sub-of" ]]; then
+    [[ -n "$PARENT" ]] || { echo "Error: --parent required for --verdict bulk-sub-of" >&2; exit 2; }
+    validate_numeric "--parent" "$PARENT"
+    [[ -n "$MANIFEST" ]] || { echo "Error: --manifest required for --verdict bulk-sub-of" >&2; exit 2; }
+    [[ -f "$MANIFEST" ]] || { echo "Error: --manifest file not found: $MANIFEST" >&2; exit 2; }
+    [[ -s "$MANIFEST" ]] || { echo "Error: --manifest file is empty" >&2; exit 2; }
+fi
 
 if ! command -v gh >/dev/null 2>&1; then
     echo "Error: gh CLI not found" >&2; exit 1
@@ -241,5 +254,60 @@ case "$VERDICT" in
             exit 1
         fi
         echo "$url"
+        ;;
+
+    bulk-sub-of)
+        # Manifest: TSV file with one "title<TAB>body" row per child.
+        # Body may contain \n escape sequences for embedded newlines.
+        # Title must not contain literal TAB characters.
+        # Stdout: one URL per successfully created child, in manifest order.
+        slug="$(get_repo_slug)"
+        created_urls=()
+        failed=()
+        while IFS=$'\t' read -r title body_raw || [[ -n "$title" ]]; do
+            [[ -z "$title" ]] && continue
+            body="${body_raw//\\n/$'\n'}"
+            child_url=""
+            if ! child_url="$(create_via_issue_create \
+                    --title "$title" --body "$body" "${PASSTHROUGH[@]}")"; then
+                failed+=("create:$(printf '%s' "$title" | cut -c1-40)")
+                continue
+            fi
+            child_number="$(extract_issue_number "$child_url")"
+            child_database_id=""
+            if ! child_database_id="$(get_child_database_id "$child_number")"; then
+                failed+=("dbid:#${child_number}")
+                # Record orphaned URL: child was created but cannot be attached.
+                created_urls+=("$child_url")
+                continue
+            fi
+            if ! attach_subissue "$PARENT" "$child_database_id"; then
+                failed+=("attach:#${child_number}")
+                # Still record URL so caller can log the orphaned child.
+                created_urls+=("$child_url")
+                continue
+            fi
+            created_urls+=("$child_url")
+        done < "$MANIFEST"
+        # Reopen parent ancestor when at least one child was attached (mirrors sub-of).
+        if [[ ${#created_urls[@]} -gt 0 ]]; then
+            if ! bash "$(dirname "${BASH_SOURCE[0]}")/parent-ancestor-reopen.sh" "$slug" \
+                    "$(extract_issue_number "${created_urls[0]}")"; then
+                echo "WARN: ancestor reopen had failures for parent #${PARENT} — see above" >&2
+            fi
+        fi
+        # Emit all successfully created URLs (manifest order) to stdout first.
+        for url in "${created_urls[@]}"; do
+            echo "$url"
+        done
+        if [[ ${#failed[@]} -gt 0 ]]; then
+            echo "Error: ${#failed[@]} operation(s) failed for bulk-sub-of under #${PARENT}:" >&2
+            for f in "${failed[@]}"; do
+                echo "  $f" >&2
+            done
+            echo "Successfully created: ${#created_urls[@]} issue(s)." >&2
+            echo "Retry attach failures: gh api -X POST repos/${slug}/issues/${PARENT}/sub_issues -F sub_issue_id=<integer databaseId of child>" >&2
+            exit 1
+        fi
         ;;
 esac
