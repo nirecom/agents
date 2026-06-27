@@ -223,3 +223,7 @@ Changes: Fixed: plan confirmation flow (intent/outline/detail) now auto-opens in
 ### FEATURE: PR #1182 (2026-06-28)
 Background: fix(#1099): guard resolveSessionId P7 against cross-repo CWD
 Changes: Fixed: in multi-repo setups running concurrent sessions, the workflow's last-resort session-id fallback could occasionally attribute state to another session when invoked from a different repository's directory. It now skips foreign repositories, keeping each session's workflow state correctly attributed.
+
+### FEATURE: PR #1189 (2026-06-28)
+Background: fix(#1181): guard WI-8 against WF-META when meta issue has open sub-issues (#1189)
+Changes: `/workflow-init` given a meta issue that already has open sub-issues now presents those sub-issues as candidates to work on, instead of silently entering WF-META and risking duplicate sub-issue creation.
