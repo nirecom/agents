@@ -257,3 +257,15 @@ elif grep -qE "bulk|sub-issue|全件" "$WORKFLOW_INIT_MD"; then
 else
     fail "WF-META-DOC1: workflow-init SKILL.md missing sub-issue creation mandate — RED until implementation"
 fi
+
+# ---------------------------------------------------------------------------
+# WF-META-DOC2: skills/workflow-init/SKILL.md contains WI-8 open sub-issue
+#               guard referencing list-open-sub-issues script
+# ---------------------------------------------------------------------------
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "WF-META-DOC2: skills/workflow-init/SKILL.md missing"
+elif grep -q "list-open-sub-issues" "$WORKFLOW_INIT_MD"; then
+    pass "WF-META-DOC2: workflow-init SKILL.md WI-8 references list-open-sub-issues guard"
+else
+    fail "WF-META-DOC2: workflow-init SKILL.md missing list-open-sub-issues reference — RED until implementation"
+fi
