@@ -132,6 +132,11 @@ Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToo
 git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   reads session_id from hook stdin JSON
   WORKFLOW_OFF → approve (early-return; all checks bypassed for this session)
+  cross-repo bypass (#1138): resolves the target repo from `git -C <path>` in the command;
+    compares git common-dir of the target repo against the agents session repo
+    (identified via AGENTS_CONFIG_DIR env or __dirname/../..); if they differ,
+    the commit is to a foreign repo — approve without checking agents workflow state.
+    Fail-closed: any git error or missing path → treat as same repo → enforce.
   Gate 1 (unstaged-tracked, #269): blocks when tracked files have unstaged working-tree
     modifications. Skipped on `git -c workflow.wip=1` or WORKTREE_OFF marker.
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
@@ -142,6 +147,9 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     only user_verification is checked; all other steps are bypassed
   for write_tests: also checks staged tests/ files (evidence override)
   for docs: also checks staged docs/*.md / *.md files (evidence override)
+  cleanup step (#1112): skipped in linked-worktree context (isWorktreeContext → true);
+    cleanup is deferred to /worktree-end boundary, not enforced on intermediate commits.
+    In main-worktree context (ENFORCE_WORKTREE=off sessions), cleanup blocks until marked.
   approves if all steps complete/skipped; blocks with remediation message otherwise
 ```
 
