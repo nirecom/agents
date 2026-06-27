@@ -97,7 +97,8 @@ function printUsage() {
     "\n" +
     "Deterministic workflow oracle. Reads session state and emits the next\n" +
     "workflow step as four KEY=value lines on stdout (ACTION, NEXT_SKILL,\n" +
-    "NEXT_HINT, REASON). Always exits 0.\n" +
+    "NEXT_HINT, REASON), plus an optional advisory SKIP_HINT line at the\n" +
+    "outline/detail steps. Always exits 0.\n" +
     "\n" +
     "Options:\n" +
     "  --session <sid>   Use the given session id instead of resolving one.\n" +
@@ -131,13 +132,19 @@ function parseArgs(argv) {
   return out;
 }
 
-function emit(action, skill, hint, reason) {
-  process.stdout.write(
+function emit(action, skill, hint, reason, skipHint) {
+  let out =
     "ACTION=" + action + "\n" +
     "NEXT_SKILL=" + (skill || "") + "\n" +
     "NEXT_HINT='" + (hint || "") + "'\n" +
-    "REASON='" + (reason || "") + "'\n"
-  );
+    "REASON='" + (reason || "") + "'\n";
+  // #485: optional advisory SKIP_HINT line — appended ONLY when non-empty, so the
+  // 4-line contract is byte-identical on every other step. Value is a fixed
+  // sentinel literal (no quotes/whitespace) → unquoted SKIP_HINT=<value> form.
+  if (skipHint) {
+    out += "SKIP_HINT=" + skipHint + "\n";
+  }
+  process.stdout.write(out);
   process.exit(0);
 }
 
@@ -340,7 +347,24 @@ function computeVerdict(rawSid, _didAutoRepair) {
     ? ("Run /" + skill + " via the Skill tool.")
     : (STEP_HINT[currentStep] || currentStep);
 
-  emit("invoke", skill, hint, currentStep);
+  // #485: advisory plan-skip hint at outline/detail only. isTrivial reads
+  // intent.md (fail-open to false). The oracle only ever sees one current step,
+  // and outline precedes detail, so a detail hint surfaces only after outline is
+  // complete/skipped — automatically satisfying "emit only WORKFLOW_OUTLINE_NOT_NEEDED
+  // when both are skippable". Purely advisory: does not change the verdict.
+  let skipHint = "";
+  if (currentStep === "outline" || currentStep === "detail") {
+    try {
+      const { isTrivial } = require("../../hooks/lib/workflow-state/skip-signal-resolver");
+      if (isTrivial(sid)) {
+        skipHint = currentStep === "outline"
+          ? "WORKFLOW_OUTLINE_NOT_NEEDED"
+          : "WORKFLOW_DETAIL_NOT_NEEDED";
+      }
+    } catch (e) { /* fail-open: no hint */ }
+  }
+
+  emit("invoke", skill, hint, currentStep, skipHint);
 }
 
 // ---- Main -----------------------------------------------------------------
