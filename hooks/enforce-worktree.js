@@ -32,7 +32,7 @@ const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch } = require(
 const { isMainCheckout, parseGitCPath, findRepoRootForBash, normalizeForCompare, findRepoRoot } = require("./enforce-worktree/git-repo-detection");
 const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } = require("./enforce-worktree/session-scope");
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
-const { findFirstUnquotedAnd, hasCommandSequencing, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
+const { findFirstUnquotedAnd, hasCommandSequencing, hasCommandSequencingOutsideHeredoc, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
@@ -327,6 +327,12 @@ if (toolName === "Bash") {
             isWriteTargetAllExcluded(cmd, targets, repoRoot, excludePatterns)) {
           done();
         }
+      } else if (!hasCommandSequencingOutsideHeredoc(cmd) &&
+                 areAllBashTargetsUnderPlansDir(targets)) {
+        // #1109: sequencing operators appear ONLY inside a heredoc body (e.g.
+        // shell fragments written by `cat <<'EOF' > plans-dir/file.md`).
+        // The actual write target is under plans-dir — allow.
+        done();
       } else if (excludePatterns.length > 0 &&
                  isEverySegmentExcluded(cmd, repoRoot, excludePatterns)) {
         // #739: sequenced commands where every write segment's targets are all
