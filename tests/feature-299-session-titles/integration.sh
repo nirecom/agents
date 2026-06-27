@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Tests: hooks/session-start.js, hooks/lib/session-title.js
+# Tests: hooks/session-start.js, hooks/lib/session-title.js, skills/clarify-intent/SKILL.md
 # Tags: scope:issue-specific
+# L3 gap (what this test does NOT catch):
+# - Whether cc-session-title set-issue is actually invoked at runtime during a real clarify-intent session
+# - Whether NON_GITHUB and closes_issues guards work correctly in a live Claude session
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: skill-orchestration
 # T18a/T18b: real session-start.js hook execution (writeSetIssue wired; writeClearWaiting NOT called)
 # T19-T22: skip guard, cwd-constrained mtime fallback
 
@@ -343,9 +348,61 @@ fs.utimesSync('$(to_node_path "$jsonl_new_bash")', older, older);
   fi
 }
 
+# ===========================================================================
+# T-new1: Path B regression — CLI set-issue writes "#N title" when no prior
+#         custom-title exists (null case). Validates the core Path B fix:
+#         SKILL.md CI-C1a calling cc-session-title set-issue at the end of
+#         clarify-intent ensures the title is written even when session-start.js
+#         fired before intent.md was populated.
+# ===========================================================================
+run_tnew1() {
+  local tmp_bash="$TMPDIR_BASE/tnew1"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="tnew1-session-abc"
+  local tmp_node
+  tmp_node=$(to_node_path "$tmp_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$tmp_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #299: Path B null regression
+"
+  # No pre-seed — the Path B scenario: intent.md wasn't ready when session-start.js
+  # ran, so no custom-title was written by session-start.js. After CI-4 writes
+  # intent.md, SKILL.md CI-C1a (cc-session-title set-issue) must now write the
+  # issue title for the first time.
+  touch "$jsonl_bash"
+
+  (
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
+    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$tmp_node" "$plans_node" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "#299 Path B null regression" ]; then
+    pass "T-new1: Path B null regression — CLI set-issue writes '#N title' when no prior custom-title"
+  else
+    fail "T-new1: Path B null regression (got: '$title', expected: '#299 Path B null regression')"
+  fi
+}
+
 run_t18a
 run_t18b
 run_t19
 run_t20
 run_t21
 run_t22
+run_tnew1

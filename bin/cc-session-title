@@ -17,7 +17,7 @@ const path = require("path");
 
 try {
   const agentsDir = path.join(__dirname, "..");
-  const { writeSetIssue, writeAddPr, writeMarkComplete, writeWaiting, writeClearWaiting } = require(
+  const { writeSetIssue, writeAddPr, writeMarkComplete } = require(
     path.join(agentsDir, "hooks", "lib", "session-title")
   );
   const { resolveSessionId } = require(
@@ -58,24 +58,6 @@ try {
       const sessionId = resolveSessionId();
       if (sessionId) {
         writeMarkComplete(sessionId, cwd);
-      }
-      break;
-    }
-    case "write-waiting": {
-      const [cwd] = args;
-      if (!cwd) process.exit(0);
-      const sessionId = resolveSessionId();
-      if (sessionId) {
-        writeWaiting(sessionId, cwd);
-      }
-      break;
-    }
-    case "clear-waiting": {
-      const [cwd] = args;
-      if (!cwd) process.exit(0);
-      const sessionId = resolveSessionId();
-      if (sessionId) {
-        writeClearWaiting(sessionId, cwd);
       }
       break;
     }
