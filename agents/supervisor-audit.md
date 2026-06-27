@@ -34,6 +34,12 @@ Read these inputs before deciding:
 - The session plan artifacts under `<plans-dir>/` — `<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md` when present. Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>` and `hooks/lib/resolve-workflow-session-id.js` to resolve `<wsid>`.
 - Recent assistant transcript turns relevant to the stage boundary that fired.
 
+### UNAVAILABLE fallback
+
+When `wsid` is `UNAVAILABLE`, skip all plan-artifact reads (`<wsid>-intent.md`, `<wsid>-outline.md`, `<wsid>-detail.md`).
+Record a finding via `bin/supervisor-report` with `category=env, severity=notice`.
+Apply decision criteria to the transcript and state-file history only.
+
 ## Decision criteria
 
 Assess on three axes; any single failure justifies WARN, repeated or compounding failures justify BLOCK:
