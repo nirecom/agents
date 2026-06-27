@@ -6,6 +6,10 @@
 
 const LINE_RE = /^(\w+)=(?:'([^']*)'|(.*))$/;
 const REQUIRED_KEYS = ["ACTION", "NEXT_SKILL", "NEXT_HINT", "REASON"];
+// Optional keys (#485): present only when the oracle emits them. SKIP_HINT is an
+// advisory plan-skip hint at the outline/detail steps; absent on every other
+// step. Kept out of REQUIRED_KEYS so the legacy 4-line oracle output still parses.
+const OPTIONAL_KEYS = ["SKIP_HINT"];
 
 function parseOracleOutput(stdout) {
   const result = {};
@@ -34,11 +38,12 @@ function parseOracleOutput(stdout) {
     NEXT_SKILL: result.NEXT_SKILL,
     NEXT_HINT: result.NEXT_HINT,
     REASON: result.REASON,
+    SKIP_HINT: result.SKIP_HINT !== undefined ? result.SKIP_HINT : "",
   };
 }
 
 function malformed() {
-  return { ACTION: "abort", NEXT_SKILL: "", NEXT_HINT: "", REASON: "oracle-output-malformed" };
+  return { ACTION: "abort", NEXT_SKILL: "", NEXT_HINT: "", REASON: "oracle-output-malformed", SKIP_HINT: "" };
 }
 
-module.exports = { parseOracleOutput };
+module.exports = { parseOracleOutput, REQUIRED_KEYS, OPTIONAL_KEYS };
