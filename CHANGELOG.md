@@ -179,3 +179,7 @@ Changes: `workflow-gate.js` no longer blocks `git -C <foreign-repo> commit` when
 ### FEATURE: PR #1140 (2026-06-27)
 Background: fix(#927): replace ISSUE_CLOSE_SKILL=1 inline form with close-completed.sh subprocess in ICF-H
 Changes: `/issue-close-finalize` now reliably closes issues: the ICF-H step was silently blocked by `enforce-issue-close.js` because `ISSUE_CLOSE_SKILL=1` set in a Bash subprocess cannot reach the hook's process environment. Closes no longer fail silently when run via the finalize skill.
+
+### FEATURE: PR #1144 (2026-06-27)
+Background: fix(#1137): prohibit caller re-summary after deep-research DR-3 output
+Changes: Fix /deep-research double output: calling orchestrators no longer re-summarize findings already presented by the skill (DR-3 caller-prohibition directive).
