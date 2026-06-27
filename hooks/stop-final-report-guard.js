@@ -141,7 +141,26 @@ if (require.main === module) {
   } catch (_) {
     process.exit(0);
   }
-  if (!headingFound) process.exit(0);
+  if (!headingFound) {
+    const gateFilePath = path.join(plansDir, `${sid}-session-close-gate.json`);
+    let gateYielded = false;
+    try {
+      const gateRaw = fs.readFileSync(gateFilePath, "utf8");
+      const gate = JSON.parse(gateRaw);
+      if (gate && gate.gate_action === "yield") gateYielded = true;
+    } catch (_) { /* absent or malformed = no gate = proceed to block */ }
+    if (gateYielded) process.exit(0);
+    const { getConvLangInjection } = require("./lib/conv-lang");
+    let reason =
+      `[final-report] ${h2Header} was not found in your output. ` +
+      `Run /session-close to emit it now. (Hook: stop-final-report-guard.js)`;
+    try {
+      const convLang = getConvLangInjection();
+      if (convLang) reason += `\n\n${convLang}`;
+    } catch (_) { /* fail-open on CONV_LANG errors */ }
+    process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+    process.exit(2);
+  }
 
   const remainingHeadings = headings.filter((h) => h !== h2Header);
   const missing = remainingHeadings.filter((h) => !finalReportBody.includes(h));
