@@ -53,6 +53,10 @@ See that module for the full priority chain. The git hook context is notable:
   returns the session ID without JSONL scanning.
 - When absent, `resolveSessionId()` falls back to a JSONL scan of
   `~/.claude/projects/<encoded-cwd>/` by modification time.
+- That scan now skips any candidate directory (`CLAUDE_PROJECT_DIR`, cwd, realpath) whose
+  git common-dir differs from the agents config repo's, so a foreign-repo working directory
+  cannot surface another session's transcript id (#1099). The check fails open when git is
+  unavailable, preserving headless/CI behavior.
 
 ## Multi-session heuristic
 
