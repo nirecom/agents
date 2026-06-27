@@ -192,6 +192,9 @@ function resolveWorkflowSessionId(_ctx = {}) {
       b.mtimeMs - a.mtimeMs ||
       a.sid.localeCompare(b.sid)
   );
+  if (!candidates.some(c => c.ccBucket === 0) && candidates.length > 1) {
+    return null;
+  }
   return candidates[0].sid;
 }
 
