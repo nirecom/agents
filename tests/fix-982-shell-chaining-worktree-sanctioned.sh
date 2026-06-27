@@ -70,13 +70,16 @@ test_worktree_chaining() {
         'true'
 
     # git -C path worktree prune followed by `&& cd <path>` → allowed (NEW).
-    assert_fn_result '"git -C /main worktree prune && cd /main" → true' \
-        "$(call_worktree_cmd 'git -C /main worktree prune && cd /main' '/main')" \
+    # Use _AGENTS_DIR_NODE so the path is consistent across shell and node argv
+    # (POSIX fake paths like /main get Git Bash-converted when passed as shell args
+    # to node.exe on Windows, causing a path-mismatch in the -C validation).
+    assert_fn_result '"git -C <repo> worktree prune && cd <repo>" → true (with -C)' \
+        "$(call_worktree_cmd "git -C ${_AGENTS_DIR_NODE} worktree prune && cd ${_AGENTS_DIR_NODE}" "${_AGENTS_DIR_NODE}")" \
         'true'
 
     # git -C path worktree remove followed by `&& cd <path>` → allowed (NEW).
-    assert_fn_result '"git -C /main worktree remove /tmp/old && cd /main" → true' \
-        "$(call_worktree_cmd 'git -C /main worktree remove /tmp/old && cd /main' '/main')" \
+    assert_fn_result '"git -C <repo> worktree remove /tmp/old && cd <repo>" → true (with -C)' \
+        "$(call_worktree_cmd "git -C ${_AGENTS_DIR_NODE} worktree remove /tmp/old && cd ${_AGENTS_DIR_NODE}" "${_AGENTS_DIR_NODE}")" \
         'true'
 
     # FAIL-CLOSED: dangerous tail (rm -rf) after sanctioned command → false.

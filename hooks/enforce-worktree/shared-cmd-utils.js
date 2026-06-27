@@ -16,10 +16,15 @@ const BUILTIN_EXCLUDE_PATTERNS = Object.freeze(["**/.worktree-backup/**"]);
  *  shell that runs the inner command, which is effectively chaining for
  *  exemption-allowance purposes. Without this, `git merge --ff-only $(rm -rf
  *  /)` would slip past the chaining guard.
+ *  POSIX fd-dup redirects (`2>&1`, `1>&2`, `>&2`, `N>&-`, `>&-`) are stripped
+ *  before the chaining test — their `&` is a file-descriptor duplication, not a
+ *  chaining operator. `&>` / `&>>` (redirect-both-to-file) are intentionally
+ *  NOT stripped: they are file write targets that collectBashWriteTargets must
+ *  see (the leading bare `&` is preserved so it still trips the guard).
  *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
  *  so `& git.exe worktree add` is conservatively rejected. */
 function hasShellChaining(cmd) {
-  const stripped = stripQuotedArgs(cmd);
+  const stripped = stripQuotedArgs(cmd).replace(/\d*>&\d+|\d*>&-/g, " ");
   return /[|;&]|\$\(|`/.test(stripped);
 }
 
@@ -47,8 +52,9 @@ function rejectInterpreterAndChaining(cmd) {
     `(?:^|[;|&\\n])\\s*(?:/[^\\s]*/|\\\\\\\\[^\\s\\\\]+\\\\(?:[^\\s\\\\]+\\\\)*)(?:${INTERP_NAMES})\\b`
   );
   if (sepPathRe.test(cmd)) return true;
-  // Belt-and-braces stripped-gate: operator detection after SQ body collapse
-  const stripped = stripQuotedArgs(cmd);
+  // Belt-and-braces stripped-gate: operator detection after SQ body collapse.
+  // fd-dup redirects (2>&1 etc.) stripped first — their `&` is not chaining.
+  const stripped = stripQuotedArgs(cmd).replace(/\d*>&\d+|\d*>&-/g, " ");
   if (/[|;&\n]|\$\(|`|<\(|>\(/.test(stripped)) return true;
   return false;
 }
