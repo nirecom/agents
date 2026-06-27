@@ -20,67 +20,20 @@ Receive a JSON object with:
 
 ## Procedure
 
-Run all commands from `worktree_path`. Prefix `gh issue comment` and `gh api` PATCH calls with `ISSUE_CLOSE_SKILL=1`.
+Run from `worktree_path`. All commands run in that directory.
 
-### Step A: triage
-
-```bash
-eval "$(bash "$agents_config_dir/bin/github-issues/issue-close-stage-triage.sh" "$issue_number")"
-```
-
-Sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
-- `ACTION=phase1_done` → exit with `status: phase1_done`, `summary: "Phase 1 already complete for #N"`.
-- Error `ACTION` variant → exit with `status: error`.
-- Otherwise execute steps listed in `NEXT_STEPS` (comma-separated, in order).
-
-### Step B: sub-issue gate
+Run the stage chain:
 
 ```bash
-bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"
+cd "$worktree_path"
+eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
+  bash "$agents_config_dir/skills/issue-close-stage/scripts/run-stage-chain.sh" \
+  "$issue_number" "$owner_repo")"
 ```
 
-Non-zero → exit with `status: blocked_sub_issue`, `summary: "sub-issue gate blocked #N"`.
-
-### Step D: post `pending` sentinel
-
-```bash
-COMMENT_URL=$(ISSUE_CLOSE_SKILL=1 gh issue comment "$issue_number" \
-    --body "<!-- issue-close-sentinel: pending -->" 2>/dev/null | tail -n 1)
-COMMENT_ID=$(printf '%s' "$COMMENT_URL" | grep -oE '[0-9]+$')
-```
-
-If `COMMENT_ID` is empty: emit `status: error`, `summary: "Step D: failed to extract comment ID"`, `artifact_path: "<log path or (none)>"` and stop.
-
-The sentinel body is the hardcoded literal above — never interpolate variables or add metadata.
-
-### Step F: promote sentinel to `appended`
-
-```bash
-ISSUE_CLOSE_SKILL=1 gh api -X PATCH \
-    "repos/$owner_repo/issues/comments/$COMMENT_ID" \
-    -f body="<!-- issue-close-sentinel: appended -->"
-```
-
-Non-zero exit: emit `status: error`, `summary: "Step F: PATCH failed (comment $COMMENT_ID)"`, `artifact_path: "<log path or (none)>"` and stop.
-
-When resuming from triage `ACTION=resume_g`, re-fetch `COMMENT_ID` first:
-
-```bash
-COMMENT_ID=$(gh issue view "$issue_number" --json comments \
-    --jq '[.comments[] | select(.body | test("^<!-- issue-close-sentinel:"))] | first | .url' \
-    | grep -oE '[0-9]+$')
-```
-
-### Step G: parent body update
-
-```bash
-bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"
-```
-
-Non-zero exit: log warning but continue — parent body update failure is non-fatal.
-No-op when the issue has no parent.
-
-### Log
+- `STATUS=phase1_done` → proceed to Log step.
+- `STATUS=blocked_sub_issue` → emit `status: blocked_sub_issue`, `summary: "$SUMMARY"` and stop.
+- `STATUS=error` → emit `status: error`, `summary: "$SUMMARY"`, `artifact_path: "<log path or (none)>"` and stop.
 
 Write all stdout+stderr to `$artifact_dir/<timestamp>-issue-close-stage-worker-<N>.log`.
 

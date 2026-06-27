@@ -75,56 +75,78 @@ Accept only `schema_version: 3`. Reject other versions.
 
 ## Procedure
 
+Run all commands from `main_worktree_path`.
+
 ### phase=initial
 
-Run all commands from `main_worktree_path` with `ISSUE_CLOSE_SKILL=1` where needed.
+```bash
+cd "$main_worktree_path"
+eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
+  FINALIZE_SCRIPTS_DIR="$finalize_scripts_dir" \
+  MAIN_WORKTREE_PATH="$main_worktree_path" \
+  bash "$finalize_scripts_dir/run-initial.sh" \
+  "$issue_number" "$root_issue_number" "${issue_repo:-}")"
+```
 
-1. Pre-flight: `eval "$(bash "$finalize_scripts_dir/pre-flight.sh")"` — sets `OWNER_REPO`. Non-zero → emit `status: failed`, `summary: "pre-flight failed"` and stop.
-2. Step ICF-A (triage): run the finalize triage script from `$agents_config_dir/bin/github-issues/` for `$issue_number` — sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`. (Script: `finalize-triage.sh` in that dir.) Non-zero → emit `status: failed`, `summary: "triage failed for #N"` and stop.
-3. Step ICF-B (PR/SHA resolution): only when `J` is in NEXT_STEPS AND `$ACTION != admin_close_path`. Run `eval "$(bash "$agents_config_dir/bin/github-issues/find-pr-by-marker.sh" ${issue_repo:+--repo "$issue_repo"} "$issue_number")"` — sets `PR_NUMBER`, `MERGE_COMMIT`. Pass `--repo "$issue_repo"` only when `issue_repo` is non-empty. Non-zero → emit `status: failed`, `summary: "PR marker lookup failed for #N"` and stop. When skipped (admin_close_path): `PR_NUMBER` / `MERGE_COMMIT` remain unset; Step ICF-I calls `post-close-sentinels.sh` without hash (ICF-I-1 skipped, ICF-I-2 posts).
-4. Step ICF-C (sub-issue gate when B in NEXT_STEPS): `bash "$agents_config_dir/bin/issue-close-gate.sh" "$owner_repo" "$issue_number"` — non-zero → emit `status: failed`, `summary: "sub-issue gate blocked #N"` and stop.
-5. Step ICF-D (parent body update when G in NEXT_STEPS): `bash "$agents_config_dir/bin/github-issues/parent-body-update.sh" "$owner_repo" "$issue_number"`. Non-zero → log warning; continue (non-fatal).
-6. Step ICF-E (prepare proposal when G in NEXT_STEPS): `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$issue_number")"` — sets `PROPOSAL_STATUS`, `PROPOSAL_PARENT`. Non-zero → emit `status: failed`, `summary: "ICF-E prepare failed for #N"` and stop.
-7. Write initial state file (atomic: `.tmp` → `mv`). Persist `triage_action` from Step ICF-A's `$ACTION` and `issue_repo` from the input (omit field when empty/absent) so `phase=finalize_terminal` can route Step ICF-K's `historyEntry`. When `triage_action=meta_pending_subs`: NEXT_STEPS is empty so ICF-B..E are all skipped; `g5_history` is absent in state — main reads this triage_action and returns early before the loop phase, so `phase=loop_step` and `phase=finalize_terminal` are never called for this issue. If mv fails: emit `status: failed`, `summary: "state file write failed"` and stop. Set `phase=init_done`.
-8. Write stdout+stderr to `$artifact_dir/<timestamp>-issue-close-finalize-worker-<N>.log`. If log write fails: use `artifact_path: (none)` in output.
+`STATUS=failed` → emit `status: failed`, `summary: "$SUMMARY"` and stop.
+`STATUS=init_done` → write state file (atomic: `.tmp` → `mv`) using fields from eval output.
+
+State file JSON to write (use values from eval):
+```json
+{
+  "schema_version": 3,
+  "root_issue_number": <root_issue_number>,
+  "current_issue_number": <issue_number>,
+  "issue_repo": "<issue_repo — omit field if empty>",
+  "owner_repo": "$OWNER_REPO",
+  "agents_config_dir": "<agents_config_dir>",
+  "main_worktree_path": "<main_worktree_path>",
+  "merge_commit": "$MERGE_COMMIT",
+  "phase": "init_done",
+  "triage_action": "$TRIAGE_ACTION",
+  "g5_loop_iteration": 0,
+  "g5_history": [
+    {
+      "iteration": 1,
+      "issue_number": "<issue_number>",
+      "proposal_status": "$PROPOSAL_STATUS",
+      "proposal_parent": <PROPOSAL_PARENT or null>,
+      "user_decision": null,
+      "g5_3a_completed": false,
+      "recursion_completed": false
+    }
+  ],
+  "proposal_counters": { "accepted": 0, "declined": 0, "skipped": 0 }
+}
+```
+
+When `TRIAGE_ACTION=meta_pending_subs`: omit `g5_history` field; main context returns early.
+
+Write log and emit `status: init_done`.
 
 ### phase=loop_step
 
-Read state file. Validate `schema_version: 3`.
+```bash
+cd "$main_worktree_path"
+eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
+  FINALIZE_SCRIPTS_DIR="$finalize_scripts_dir" \
+  node "$finalize_scripts_dir/run-loop-step.js" \
+  "$state_file_path" "$g5_decision")"
+```
 
-**`g5_decision=decline` or `g5_decision=llm_declined`**:
-- Update `g5_history[-1].user_decision` to the decision value.
-- Increment `proposal_counters.declined`.
-- Set `phase=terminal`. Write state (atomic).
-
-**`g5_decision=accept`**:
-- Idempotency guard: if `g5_history[-1].g5_3a_completed == true`, skip G.5-3a (already done).
-- Otherwise: run G.5-3a (parent prep, non-recursive mutations only) via `bash "$finalize_scripts_dir/step-g5-loop.sh" execute "$proposal_parent" accept` — non-recursive parent prep only; abort if the script attempts recursive skill invocation.
-- Set `g5_history[-1].g5_3a_completed = true`. Set `phase=awaiting_recursion`. Write state (atomic).
-
-**`g5_decision=recurse_done`**:
-- Set `g5_history[-1].recursion_completed = true`. Increment `proposal_counters.accepted`.
-- Set `current_issue_number = g5_history[-1].proposal_parent`.
-- Run G.5-1 for new `current_issue_number`: `eval "$(bash "$finalize_scripts_dir/step-g5-loop.sh" prepare "$current_issue_number")"`.
-- Append new entry to `g5_history`. Set `phase=init_done`. Write state (atomic).
+Emit output status: `$STATUS`. `STATUS=failed` → emit `status: failed`.
 
 ### phase=finalize_terminal
 
-Read state file. If missing or invalid schema_version: emit `status: failed`, `summary: "state file missing or schema mismatch"` and stop. Validate `schema_version: 3`.
+```bash
+cd "$main_worktree_path"
+eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
+  bash "$finalize_scripts_dir/run-finalize-terminal.sh" \
+  "$state_file_path" "$session_id" "$outcome_file_path")"
+```
 
-Run Steps H, J, K, L for `current_issue_number`:
-
-- Step ICF-H: `bash "$agents_config_dir/bin/github-issues/close-completed.sh" --repo "$owner_repo" "$current_issue_number"`. Non-zero → emit `status: failed`, `summary: "Step ICF-H: gh issue close failed for #N"` and stop.
-- Step ICF-I: `bash "$agents_config_dir/bin/github-issues/post-close-sentinels.sh" "$current_issue_number" "$merge_commit"` (merge_commit from state). Non-zero → log warning; continue (non-fatal).
-- Step ICF-J: `bash "$agents_config_dir/bin/github-issues/wip-state.sh" clear "$current_issue_number"`. Non-zero → log warning; continue (non-fatal).
-- Step ICF-K: read `triage_action` from state. Determine `history_entry_status`:
-  `"skipped_no_history_notes"` when `triage_action == auto_close_path` (PR used `closes #N` keyword; no WORKTREE_NOTES.md generated this session);
-  `"skipped_admin_close"` when `triage_action == admin_close_path` (no worktree, no WORKTREE_NOTES.md ever existed; meta umbrella close requires no history entry);
-  `"written_by_step_6h"` otherwise (normal worktree path: `/worktree-end` Step WE-21 is the canonical writer of `docs/history.md`, #690).
-  Then: `node "$agents_config_dir/bin/issue-close-write-outcome.js" --session-id "$session_id" --out-file "$outcome_file_path" "$current_issue_number" "succeeded" "$history_entry_status" "succeeded" "$j_status" "$k_status"`. Non-zero → log warning; continue (non-fatal).
-  (`state`="succeeded" — reached Step ICF-K; `historyEntry`=`$history_entry_status`; `issueClosed`="succeeded" — Step ICF-H; `sentinelsPosted`=`$j_status`; `wipCleared`=`$k_status`)
-
-Set `phase=terminal`. Write state (atomic). If atomic write fails: emit `status: failed`, `summary: "terminal state write failed"` and stop.
+`STATUS=failed` → emit `status: failed`, `summary: "$SUMMARY"` and stop.
+`STATUS=terminal` → write log, emit `status: complete`, `summary: "Phase 2 terminal for #N"`.
 
 ## Rules
 
