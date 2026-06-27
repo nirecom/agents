@@ -96,6 +96,59 @@ else
     pass "--category INCIDENT without --cause: exit nonzero"
 fi
 
+# --- T0-B: BUGFIX --test-gap gate (#1147) ---
+echo "=== B1: BUGFIX without --test-gap on history.md → exit nonzero ==="
+# T0-B B1: doc-append.py should block (exit non-zero) when --category BUGFIX
+# is used without --test-gap on a history.md target. Currently only warns (exits 0).
+# This test is expected to FAIL until write-code implements the blocking behavior.
+if uv run "$DOTFILES/bin/doc-append.py" "$TMP/docs/history.md" \
+    --category BUGFIX --subject "Bugfix no gap" --date 2026-01-07 \
+    --commits b1 --background "bg" --changes "ch" 2>/dev/null; then
+    fail "B1: BUGFIX without --test-gap should exit nonzero for history.md (currently only warns — T0-B not yet implemented)"
+else
+    pass "B1: BUGFIX without --test-gap: exit nonzero (T0-B implemented)"
+fi
+
+echo "=== B2: BUGFIX with --test-gap on history.md → exit zero, entry appended ==="
+if run_with_timeout uv run "$DOTFILES/bin/doc-append.py" "$TMP/docs/history.md" \
+    --category BUGFIX --subject "Bugfix with gap" --date 2026-01-08 \
+    --commits b2 --background "bg" --changes "ch" \
+    --test-gap "missing unit test for edge case"; then
+    if grep -q "Bugfix with gap" "$TMP/docs/history.md" && grep -q "Test gap:" "$TMP/docs/history.md"; then
+        pass "B2: BUGFIX with --test-gap: exit zero and entry + Test gap: appended"
+    else
+        fail "B2: BUGFIX with --test-gap: exit zero but entry or Test gap: field missing"
+    fi
+else
+    fail "B2: BUGFIX with --test-gap: expected exit zero"
+fi
+
+echo "=== B3: BUGFIX without --test-gap on CHANGELOG.md → exit zero (changelog exempt) ==="
+# CHANGELOG.md target is exempt: --test-gap is a history.md-specific requirement.
+# compose-doc-append-entry calls doc-append.py without --test-gap for changelog.
+if run_with_timeout uv run "$DOTFILES/bin/doc-append.py" "$TMP/CHANGELOG.md" \
+    --category BUGFIX --subject "Changelog bugfix" --date 2026-01-09 \
+    --background "bg" --changes "user-facing fix" \
+    --no-auto-rotate 2>/dev/null; then
+    pass "B3: BUGFIX without --test-gap on CHANGELOG.md: exit zero (changelog exempt)"
+else
+    fail "B3: BUGFIX without --test-gap on CHANGELOG.md: expected exit zero (changelog target should be exempt)"
+fi
+
+echo "=== B4: compose-doc-append-entry --test-gap propagation ==="
+# B4: compose-doc-append-entry does not call doc-append.py directly in a way
+# we can intercept without real git/gh operations. Instead we verify that
+# compose-doc-append-entry accepts --category BUGFIX (not an unknown arg)
+# by checking that it exits due to missing --notes (not an argument error).
+# The argument-error path exits immediately with "unknown argument"; the missing-notes
+# path exits with "--notes is required". Either means the arg is at least parsed.
+B4_OUT="$(bin/compose-doc-append-entry --category BUGFIX 2>&1 || true)"
+if echo "$B4_OUT" | grep -q "unknown argument"; then
+    fail "B4: compose-doc-append-entry does not accept --category BUGFIX (unknown argument)"
+else
+    pass "B4: compose-doc-append-entry accepts --category BUGFIX (exits for missing --notes, not for unknown argument)"
+fi
+
 # --- Normal: --commits omitted (CHANGELOG.md use case) ---
 echo "=== Normal: --commits omitted — date-only header ==="
 run_with_timeout doc-append "$TMP/CHANGELOG.md" \

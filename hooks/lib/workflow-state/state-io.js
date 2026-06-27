@@ -139,6 +139,9 @@ function createInitialState(sessionId, ctx) {
   if (ctx && typeof ctx === "object") {
     if (typeof ctx.cwd === "string") state.cwd = ctx.cwd;
     state.git_branch = ctx.git_branch ?? null;
+    // Lazy require avoids circular dependency: is-bugfix-session → state-io → is-bugfix-session.
+    const { isBugfixBranch } = require("./is-bugfix-session");
+    state.is_bugfix = isBugfixBranch(state.git_branch);
   }
   state.workflow_type = "wf-code";
   return state;
@@ -313,6 +316,19 @@ function clearLastPushedSha(sessionId) {
   return true;
 }
 
+// Returns the effective skippable steps for the given session.
+// BUGFIX sessions exclude write_tests and review_tests (T0-A gate).
+// Lazy require avoids circular dependency with is-bugfix-session.js.
+function getSkippableSteps(sessionId) {
+  try {
+    const { isBugfixSession } = require("./is-bugfix-session");
+    if (isBugfixSession({ sessionId })) {
+      return SKIPPABLE_STEPS.filter(s => s !== "write_tests" && s !== "review_tests");
+    }
+  } catch (_) {}
+  return SKIPPABLE_STEPS;
+}
+
 module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
@@ -332,4 +348,5 @@ module.exports = {
   cleanupZombies,
   setLastPushedSha,
   clearLastPushedSha,
+  getSkippableSteps,
 };
