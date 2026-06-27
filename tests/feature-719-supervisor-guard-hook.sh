@@ -69,6 +69,8 @@ run_g_t5_3
 run_g_c3a
 run_g_c3b
 run_g_c3c
+run_g_c3d
+run_g_c3_text_neg
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
