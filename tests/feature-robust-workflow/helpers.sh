@@ -49,7 +49,8 @@ ALL_COMPLETE_JSON() {
     "review_security":   {"status": "complete", "updated_at": "2026-04-11T10:04:30.000Z"},
     "run_tests":         {"status": "complete", "updated_at": "2026-04-11T10:05:00.000Z"},
     "docs":              {"status": "complete", "updated_at": "2026-04-11T10:06:00.000Z"},
-    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"}
+    "user_verification": {"status": "complete", "updated_at": "2026-04-11T10:07:00.000Z"},
+    "cleanup":           {"status": "complete", "updated_at": "2026-04-11T10:08:00.000Z"}
   }
 }
 EOF
@@ -71,7 +72,8 @@ ALL_PENDING_JSON() {
     "review_security":   {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "pending", "updated_at": null},
     "docs":              {"status": "pending", "updated_at": null},
-    "user_verification": {"status": "pending", "updated_at": null}
+    "user_verification": {"status": "pending", "updated_at": null},
+    "cleanup":           {"status": "pending", "updated_at": null}
   }
 }
 EOF
@@ -85,7 +87,20 @@ COMMIT_JSON='{"tool_name":"Bash","tool_input":{"command":"git commit -m \"test\"
 
 run_gate() {
     local repo="$1" json="$2"
-    echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null || true
+    # AGENTS_CONFIG_DIR="$repo" so isAgentsSessionRepo() (issue #1138) treats the
+    # commit target as the agents session repo — i.e. the gate enforces workflow
+    # state, matching the historical single-repo behavior these tests assume.
+    echo "$json" | CLAUDE_PROJECT_DIR="$repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$repo" node "$GATE_HOOK" 2>/dev/null || true
+}
+
+# Cross-repo variant (issue #1138): the agents session lives in $agents_repo but
+# the commit targets $target_repo. When $target_repo is NOT the agents session
+# repo, the gate must skip workflow-state enforcement (approve / bypass).
+# $json should carry a `git -C <target_repo> commit ...` command so resolveRepoDir
+# points at the foreign repo.
+run_gate_cross_repo() {
+    local agents_repo="$1" target_repo="$2" json="$3"
+    echo "$json" | CLAUDE_PROJECT_DIR="$target_repo" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$agents_repo" node "$GATE_HOOK" 2>/dev/null || true
 }
 
 expect_approve_gate() {
