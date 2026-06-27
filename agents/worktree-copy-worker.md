@@ -16,7 +16,7 @@ Receive a JSON object with:
 - `branch`: branch name (`<type>/<task-name>`)
 - `session_id`: current session ID (empty string if unknown)
 - `agents_config_dir`: absolute path to agents config dir (injected by caller; do NOT use `$AGENTS_CONFIG_DIR`)
-- `artifact_dir`: directory for log output
+- `artifact_dir`: absolute path to `PLANS_DIR` resolved by the caller via `bin/workflow-plans-dir`; write log files here
 
 ## Procedure
 

@@ -81,7 +81,7 @@ If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and suppl
 
 Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — proceed to Phase 3 with `verdict: none`.
 
-2a. Pre-resolve in main: `session_id` (from `$CLAUDE_SESSION_ID` or env), `agents_config_dir` (absolute), `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
+2a. Pre-resolve in main: `session_id` (from `$CLAUDE_SESSION_ID` or env), `agents_config_dir` (absolute), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from IC-1).
 2b. Invoke `issue-create-survey-worker` via Task tool with `title`, `background`, `changes` from Phase 1 input.
 2c. `status: failed` → stop and report error.
 2d. `status: no_candidates` → `verdict: none` (proceed to Phase 3 directly).
@@ -107,7 +107,7 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
     [--label "<extra-label>" ...] [--assignee "<user>"] [--milestone "<name>"]
 ```
 
-For `bulk-sub-of`: write a TSV manifest (one `title<TAB>body` row per child; `\n`-escaped body) to a temp path under `$AGENTS_CONFIG_DIR/artifacts/` or via `mktemp`, then invoke `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" --verdict bulk-sub-of --parent N --manifest <path> -- [--label ... --assignee ... --milestone ...]`.
+For `bulk-sub-of`: write a TSV manifest (one `title<TAB>body` row per child; `\n`-escaped body) to a path under `PLANS_DIR` (resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly here), then invoke `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" --verdict bulk-sub-of --parent N --manifest <path> -- [--label ... --assignee ... --milestone ...]`.
 
 **Stdout contract**: single verdicts (`none|reopen|sub-of|make-parent|sibling`) emit exactly one URL line on success (last line of stdout); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers extract the issue number with `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
