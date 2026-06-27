@@ -132,6 +132,11 @@ Edit/Write/MultiEdit/editFiles/NotebookEdit attempt → workflow-gate.js (PreToo
 git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
   reads session_id from hook stdin JSON
   WORKFLOW_OFF → approve (early-return; all checks bypassed for this session)
+  cross-repo bypass (#1138): resolves the target repo from `git -C <path>` in the command;
+    compares git common-dir of the target repo against the agents session repo
+    (identified via AGENTS_CONFIG_DIR env or __dirname/../..); if they differ,
+    the commit is to a foreign repo — approve without checking agents workflow state.
+    Fail-closed: any git error or missing path → treat as same repo → enforce.
   Gate 1 (unstaged-tracked, #269): blocks when tracked files have unstaged working-tree
     modifications. Skipped on `git -c workflow.wip=1` or WORKTREE_OFF marker.
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
@@ -142,6 +147,9 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     only user_verification is checked; all other steps are bypassed
   for write_tests: also checks staged tests/ files (evidence override)
   for docs: also checks staged docs/*.md / *.md files (evidence override)
+  cleanup step (#1112): skipped in linked-worktree context (isWorktreeContext → true);
+    cleanup is deferred to /worktree-end boundary, not enforced on intermediate commits.
+    In main-worktree context (ENFORCE_WORKTREE=off sessions), cleanup blocks until marked.
   approves if all steps complete/skipped; blocks with remediation message otherwise
 ```
 
@@ -172,6 +180,8 @@ node bin/workflow/next-step --session $CLAUDE_SESSION_ID
 ```
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
+
+At the `outline` and `detail` steps only, the oracle appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). It is advisory only — a suggestion that the model may emit the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by `hooks/lib/workflow-state/skip-signal-resolver.js` (`isTrivial`), which fails closed to "not trivial" on any uncertainty.
 
 `--list` mode renders the full 14-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 

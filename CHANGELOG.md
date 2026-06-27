@@ -171,3 +171,27 @@ Changes: wip-set-resume now claims WIP before exiting in the NEEDS_CLARIFY branc
 ### BUGFIX: PR #1136 (2026-06-27)
 Background: fix(#1123): exclude extensionHost from isVsCode() CLAUDE_CODE_ENTRYPOINT clause
 Changes: Fixed: VS Code extension (extensionHost) users no longer receive unexpected plan-file auto-open popups when plans are written
+
+### FEATURE: PR #1143 (2026-06-27)
+Background: fix(#1138,#1112): cross-repo bypass and cleanup exemption in workflow-gate
+Changes: `workflow-gate.js` no longer blocks `git -C <foreign-repo> commit` when the target repo is not the agents session repo (cross-repo bypass for #1138).;`workflow-gate.js` no longer blocks on a pending `cleanup` step during worktree-based sessions; cleanup is deferred to `/worktree-end` (fix for #1112).
+
+### FEATURE: PR #1140 (2026-06-27)
+Background: fix(#927): replace ISSUE_CLOSE_SKILL=1 inline form with close-completed.sh subprocess in ICF-H
+Changes: `/issue-close-finalize` now reliably closes issues: the ICF-H step was silently blocked by `enforce-issue-close.js` because `ISSUE_CLOSE_SKILL=1` set in a Bash subprocess cannot reach the hook's process environment. Closes no longer fail silently when run via the finalize skill.
+
+### FEATURE: PR #1144 (2026-06-27)
+Background: fix(#1137): prohibit caller re-summary after deep-research DR-3 output
+Changes: Fix /deep-research double output: calling orchestrators no longer re-summarize findings already presented by the skill (DR-3 caller-prohibition directive).
+
+### FEATURE: PR #1157 (2026-06-27)
+Background: fix(#1115,#982,#923,#838,#959): enforce-worktree false-block fixes — fd-dup redirect chaining misread, -C flag validation, worker script paths
+Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands no longer false-block `enforce-worktree.js` (#1115, #982).;`git -C <path> worktree remove/prune/add` now passes `enforce-worktree.js` from both main-worktree and linked-worktree CWDs (#923, #838).;Sanctioned worker scripts (`issue-close-stage-worker`, `commit-push-worker`, etc.) launched from the main worktree with linked-worktree path arguments no longer false-block (#959).
+
+### FEATURE: PR #1159 (2026-06-27)
+Background: fix(#1120): return null from resolveWorkflowSessionId when no ccBucket=0 owner identified among same-day candidates
+Changes: Fixed: supervisor C2 scheduled review no longer reports findings from unrelated parallel sessions when the active session cannot be identified from context files.
+
+### FEATURE: PR #1158 (2026-06-27)
+Background: feat(#485): advisory plan-skip hints (SKIP_HINT) at outline/detail for trivial changes
+Changes: The workflow oracle (`next-step`) now suggests skipping the outline/detail planning stages for trivial changes (advisory only; you still confirm the skip).

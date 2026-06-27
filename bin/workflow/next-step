@@ -8,6 +8,7 @@ const {
   readState,
   getStatePath,
   resolveSessionId,
+  markStep,
 } = require("../../hooks/lib/workflow-state");
 
 // ---- Lookup tables --------------------------------------------------------
@@ -97,18 +98,20 @@ function printUsage() {
     "\n" +
     "Deterministic workflow oracle. Reads session state and emits the next\n" +
     "workflow step as four KEY=value lines on stdout (ACTION, NEXT_SKILL,\n" +
-    "NEXT_HINT, REASON). Always exits 0.\n" +
+    "NEXT_HINT, REASON), plus an optional advisory SKIP_HINT line at the\n" +
+    "outline/detail steps. Always exits 0 in oracle mode; --reset exits nonzero on invalid input.\n" +
     "\n" +
     "Options:\n" +
     "  --session <sid>   Use the given session id instead of resolving one.\n" +
     "  --list            Print the 14-step workflow plan, with status markers\n" +
     "                    when --session is provided.\n" +
+    "  --reset <step>    Reset a workflow step to pending (recovery tool).\n" +
     "  -h, --help        Show this help.\n"
   );
 }
 
 function parseArgs(argv) {
-  const out = { list: false, session: undefined };
+  const out = { list: false, session: undefined, reset: undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") {
@@ -116,6 +119,18 @@ function parseArgs(argv) {
       process.exit(0);
     } else if (a === "--list") {
       out.list = true;
+    } else if (a === "--reset") {
+      if (i + 1 >= argv.length) {
+        process.stderr.write("next-step: --reset requires a step argument\n");
+        process.exit(1);
+      }
+      const stepName = argv[i + 1];
+      if (VALID_STEPS.indexOf(stepName) === -1) {
+        process.stderr.write("next-step: invalid step for --reset: " + stepName + "\n");
+        process.exit(1);
+      }
+      out.reset = stepName;
+      i++;
     } else if (a === "--session") {
       if (i + 1 >= argv.length) {
         process.stderr.write("next-step: --session requires an argument\n");
@@ -131,13 +146,19 @@ function parseArgs(argv) {
   return out;
 }
 
-function emit(action, skill, hint, reason) {
-  process.stdout.write(
+function emit(action, skill, hint, reason, skipHint) {
+  let out =
     "ACTION=" + action + "\n" +
     "NEXT_SKILL=" + (skill || "") + "\n" +
     "NEXT_HINT='" + (hint || "") + "'\n" +
-    "REASON='" + (reason || "") + "'\n"
-  );
+    "REASON='" + (reason || "") + "'\n";
+  // #485: optional advisory SKIP_HINT line — appended ONLY when non-empty, so the
+  // 4-line contract is byte-identical on every other step. Value is a fixed
+  // sentinel literal (no quotes/whitespace) → unquoted SKIP_HINT=<value> form.
+  if (skipHint) {
+    out += "SKIP_HINT=" + skipHint + "\n";
+  }
+  process.stdout.write(out);
   process.exit(0);
 }
 
@@ -285,6 +306,19 @@ function computeVerdict(rawSid, _didAutoRepair) {
       return;
     }
     if (i > currentIdx && status === "complete") {
+      if (step === "run_tests" && currentStep === "write_tests") {
+        // Scoped recovery: run_tests auto-completed ahead of write_tests.
+        // Point at the --reset tool instead of a full /workflow-init reset.
+        // No single quotes — emit() wraps NEXT_HINT/REASON in single quotes.
+        emit(
+          "abort",
+          "",
+          "run_tests is complete but write_tests is not. Recovery: node " + __filename +
+            " --reset run_tests (state is session-global; no worktree cd needed). Then re-run /write-tests.",
+          "inconsistent: " + step + " is complete but " + currentStep + " is pending"
+        );
+        return;
+      }
       emit(
         "abort",
         "",
@@ -340,7 +374,24 @@ function computeVerdict(rawSid, _didAutoRepair) {
     ? ("Run /" + skill + " via the Skill tool.")
     : (STEP_HINT[currentStep] || currentStep);
 
-  emit("invoke", skill, hint, currentStep);
+  // #485: advisory plan-skip hint at outline/detail only. isTrivial reads
+  // intent.md (fail-open to false). The oracle only ever sees one current step,
+  // and outline precedes detail, so a detail hint surfaces only after outline is
+  // complete/skipped — automatically satisfying "emit only WORKFLOW_OUTLINE_NOT_NEEDED
+  // when both are skippable". Purely advisory: does not change the verdict.
+  let skipHint = "";
+  if (currentStep === "outline" || currentStep === "detail") {
+    try {
+      const { isTrivial } = require("../../hooks/lib/workflow-state/skip-signal-resolver");
+      if (isTrivial(sid)) {
+        skipHint = currentStep === "outline"
+          ? "WORKFLOW_OUTLINE_NOT_NEEDED"
+          : "WORKFLOW_DETAIL_NOT_NEEDED";
+      }
+    } catch (e) { /* fail-open: no hint */ }
+  }
+
+  emit("invoke", skill, hint, currentStep, skipHint);
 }
 
 // ---- Main -----------------------------------------------------------------
@@ -357,6 +408,16 @@ function main() {
     } else {
       process.stdout.write(renderListPlain());
     }
+    process.exit(0);
+  }
+  if (args.reset !== undefined) {
+    const sid = resolveSessionId({ sessionIdFromInput: args.session });
+    if (!sid) {
+      process.stderr.write("next-step: could not resolve session id\n");
+      process.exit(1);
+    }
+    markStep(sid, args.reset, "pending");
+    process.stdout.write("RESET=" + args.reset + " status=pending\n");
     process.exit(0);
   }
   computeVerdict(args.session);

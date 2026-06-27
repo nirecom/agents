@@ -9,7 +9,7 @@
 // Sentinel echo commands and read-only commands are excluded.
 
 const fs = require("fs");
-const { resolveSessionId, markStep } = require("./lib/workflow-state");
+const { resolveSessionId, markStep, readState } = require("./lib/workflow-state");
 
 function readStdin() {
   const chunks = [];
@@ -149,7 +149,17 @@ if (!sessionId) done();
 
 try {
   if (exitCode === 0) {
-    markStep(sessionId, "run_tests", "complete");
+    // Guard: only mark run_tests complete when write_tests is already
+    // complete or skipped. If write_tests is pending/in_progress/absent — or
+    // readState returns null/throws — fail-open and do NOT mark complete, so a
+    // stale run_tests=complete cannot leapfrog an unfinished write_tests step.
+    const state = readState(sessionId);
+    const writeTestsStatus = state && state.steps && state.steps.write_tests
+      ? state.steps.write_tests.status
+      : undefined;
+    if (writeTestsStatus === "complete" || writeTestsStatus === "skipped") {
+      markStep(sessionId, "run_tests", "complete");
+    }
   } else {
     markStep(sessionId, "run_tests", "pending", {
       last_run_failed: true,
