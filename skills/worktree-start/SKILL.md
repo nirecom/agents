@@ -54,7 +54,7 @@ WS-6. Create the worktree (isolated command — same chaining caveat as step WS-
    git worktree add <path> -b <type>/<task-name>
    ```
 
-WS-7. Invoke `worktree-copy-worker` via Task tool. Build input JSON with Node to avoid quoting issues, passing: `main_root` (resolve via `git rev-parse --show-toplevel`), `worktree_path` (Step WS-3 path), `branch` (`<type>/<task-name>`), `session_id` (current session, empty string if unknown), `agents_config_dir` (resolve absolute path from `$AGENTS_CONFIG_DIR`), `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
+WS-7. Invoke `worktree-copy-worker` via Task tool. Build input JSON with Node to avoid quoting issues, passing: `main_root` (resolve via `git rev-parse --show-toplevel`), `worktree_path` (Step WS-3 path), `branch` (`<type>/<task-name>`), `session_id` (current session, empty string if unknown), `agents_config_dir` (resolve absolute path from `$AGENTS_CONFIG_DIR`), `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite).
 
    Check `CONFIRM_WORKTREE` via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_WORKTREE on'`
    In non-interactive mode (`--task-name` + `--branch-type` provided), treat `CONFIRM_WORKTREE` as OFF — `AskUserQuestion` cannot be called in subagent contexts.

@@ -15,7 +15,7 @@ Receive a JSON object with:
 - `background`: issue background text
 - `changes`: description of changes
 - `agents_config_dir`: absolute path to agents config dir
-- `artifact_dir`: directory for output files
+- `artifact_dir`: absolute path to `PLANS_DIR` resolved by the caller via `bin/workflow-plans-dir`; write all output files here
 
 ## Procedure
 

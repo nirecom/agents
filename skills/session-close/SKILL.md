@@ -110,7 +110,7 @@ Invoke `session-close-worker` via Task tool with resolved absolute paths:
 - `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
 - `plans_dir`: `<PLANS_DIR>` (resolved in SC-0)
 - `agents_config_dir`: absolute path resolved from `$AGENTS_CONFIG_DIR`
-- `artifact_dir`: `$AGENTS_CONFIG_DIR/artifacts/` (create temp dir if needed)
+- `artifact_dir`: `PLANS_DIR` (resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly here — do NOT reuse the `<PLANS_DIR>` literal from SC-0, which was resolved with a fallback)
 - `outcome_json_path`: absolute path to `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
 
 On `status: failed`: emit `supervisor-report` warning and **STOP**. Do NOT proceed to SC-6. User must manually re-run `/session-close`. This path is fail-closed — SC-6 never runs on worker failure.
