@@ -121,8 +121,8 @@ function _parseIssuesWithTitles(intentContent) {
  * Reads <plansDir>/<sessionId>-intent.md, parses ## Issues section,
  * builds the title, and writes a custom-title JSONL record.
  *
- * Skip guard: if _readCurrentTitle returns non-null → return immediately
- * (preserves any existing PR # / ✓ suffix).
+ * Skip guard: overwrites null, bare "⏳", and /^⏳\S/ (VS Code extension temp form).
+ * Preserves any other existing title (PR # suffix, ✓ prefix, real issue title).
  *
  * Fail-open: missing intent.md, no issues found → no write.
  */
@@ -131,9 +131,13 @@ function writeSetIssue(sessionId, cwd, plansDir) {
   if (!sessionId) return;
 
   // Skip guard: if a real title already exists, don't overwrite.
-  // "⏳" alone is the no-prior-title sentinel — allow writing the issue title over it.
+  // "⏳" alone is our no-prior-title sentinel — allow writing the issue title over it.
+  // /^⏳\S/ matches the VS Code extension's temp form "⏳<ai-title>" (no space after ⏳):
+  // the extension rewrites our bare "⏳" into "⏳<ai-title>", which the old guard treated as
+  // a real title, causing the issue # title to never appear. Overwrite that form too.
   const existing = _readCurrentTitle(sessionId, cwd);
-  if (existing !== null && existing !== "⏳") return;
+  const isOverwriteable = existing === null || existing === "⏳" || /^⏳\S/.test(existing);
+  if (!isOverwriteable) return;
 
   const intentPath = path.join(plansDir, sessionId + "-intent.md");
   let intentContent;
