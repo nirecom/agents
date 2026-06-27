@@ -77,6 +77,8 @@ When the user-provided body is missing one or both required fields, use `AskUser
 
 ### Phase 2 — Survey
 
+If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and supplies an explicit `--verdict bulk-sub-of --parent N --manifest FILE`): skip Phase 2 entirely and proceed to Phase 3 with the caller-supplied verdict.
+
 Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote) — proceed to Phase 3 with `verdict: none`.
 
 2a. Pre-resolve in main: `session_id` (from `$CLAUDE_SESSION_ID` or env), `agents_config_dir` (absolute), `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
@@ -87,7 +89,7 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 
 ### Phase 3 — Confirm
 
-Use `AskUserQuestion` to confirm before acting on `reopen` (mutating — reopens a closed issue) and `make-parent` (mutating — reclassifies existing issues). `reopen` required confirm; `make-parent` required confirm. `sub-of` and `sibling` proceed without confirmation; `none` proceeds without confirmation.
+Confirm (AskUserQuestion) for `reopen` and `make-parent` only — both mutate existing state. `sub-of`, `sibling`, `bulk-sub-of`, and `none` proceed without confirmation. Note: `sub-of` and `bulk-sub-of` may trigger ancestor reopen when the parent chain contains closed issues.
 
 After a `reopen`: continue the workflow using the existing issue number. Follow
 the same routing as `/workflow-init`:
@@ -105,13 +107,16 @@ bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" \
     [--label "<extra-label>" ...] [--assignee "<user>"] [--milestone "<name>"]
 ```
 
-**Stdout contract**: Phase 4 emits exactly one line to stdout on success: the issue URL (`https://github.com/<owner>/<repo>/issues/<N>`). All other output goes to stderr. Callers extract the issue number with: `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
+For `bulk-sub-of`: write a TSV manifest (one `title<TAB>body` row per child; `\n`-escaped body) to a temp path under `$AGENTS_CONFIG_DIR/artifacts/` or via `mktemp`, then invoke `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-dispatch.sh" --verdict bulk-sub-of --parent N --manifest <path> -- [--label ... --assignee ... --milestone ...]`.
+
+**Stdout contract**: single verdicts (`none|reopen|sub-of|make-parent|sibling`) emit exactly one URL line on success (last line of stdout); `bulk-sub-of` emits N URL lines (one per child, manifest order, end of stdout). All other output goes to stderr. Single-verdict callers extract the issue number with `echo "$OUTPUT" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$'`; `bulk-sub-of` callers loop over all trailing URL lines. Enforced by `bin/github-issues/issue-create-dispatch.sh`.
 
 Issues created here may be added to an existing session's `closes_issues` list (see `rules/github-issues.md` "Session model").
 
 ### Phase 5 — Record to WORKTREE_NOTES.md (primary-path capture)
 
-Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling).
+Runs for all Phase 4 verdicts (none|reopen|sub-of|make-parent|sibling|bulk-sub-of).
+For `bulk-sub-of`: loop over every output URL line (not just `tail -n 1`); for each URL extract the issue number and read the matching title from the same TSV manifest, then call `worktree-notes-append.js` once per child (non-fatal per child; idempotent re-runs are safe).
 After Phase 4 emits the issue URL, extract the issue number and invoke the helper:
 
     N=$(echo "$URL" | tail -n 1 | tr -d '\r' | grep -oE '[0-9]+$')
@@ -137,5 +142,6 @@ atomic write internally.
 - **Content Date field**: when the resolved project has a field named "Content Date" of type `DATE`, the script sets it to the issue's creation date (`YYYY-MM-DD`). The field id is discovered alongside the project node — no env var override needed. Projects without a Content Date field skip the step silently.
 - **Sub-issue API**: dispatcher uses `POST /repos/{owner}/{repo}/issues/{N}/sub_issues` with `sub_issue_id` = child's integer databaseId (fetched via `gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { databaseId } } }' --jq '.data.repository.issue.databaseId'`), passed via `-F` (integer type).
 - **make-parent partial failure**: if a child attach fails mid-loop, the parent is created but `make-parent` exits non-zero with retry instructions on stderr. No atomic semantics (GitHub has no transactions).
+- **bulk-sub-of partial failure**: if any child create or attach fails, successfully created URLs are still output and recorded; the dispatcher writes retry info to stderr and exits non-zero. No atomic semantics (GitHub has no transactions).
 - **Untrusted content**: title/body are passed as separate `gh` arguments — no shell expansion. Do not interpolate unvalidated input into `--title`.
 - **Schema enforcement (#443)**: `bin/github-issues/issue-create.sh` exits 3 when `Background` or `Changes` is missing. `ISSUE_CREATE_SKIP_SCHEMA=1` is an emergency escape hatch only — the sanctioned path is to add the missing fields. Incident issues (`type:incident`) bypass this skill entirely per Scope.
