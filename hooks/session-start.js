@@ -95,15 +95,14 @@ if (sessionId) {
   }
 }
 
-// Resume/fresh path: clear ⏳ waiting indicator, then set VS Code title
+// Set VS Code session title from intent.md issue #.
 // Delete CLAUDE_CODE_CHILD_SESSION so session-title.js write functions are
 // not silently suppressed (hooks may inherit this env var from Claude Code).
 delete process.env.CLAUDE_CODE_CHILD_SESSION;
 if (sessionId) {
   try {
-    const { writeClearWaiting, writeSetIssue } = require("./lib/session-title");
+    const { writeSetIssue } = require("./lib/session-title");
     const plansDir = require("./lib/workflow-plans-dir").getWorkflowPlansDir();
-    writeClearWaiting(sessionId, process.cwd());
     writeSetIssue(sessionId, process.cwd(), plansDir);
   } catch (e) { /* fail-open */ }
 }
