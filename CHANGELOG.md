@@ -195,3 +195,7 @@ Changes: Fixed: supervisor C2 scheduled review no longer reports findings from u
 ### FEATURE: PR #1158 (2026-06-27)
 Background: feat(#485): advisory plan-skip hints (SKIP_HINT) at outline/detail for trivial changes
 Changes: The workflow oracle (`next-step`) now suggests skipping the outline/detail planning stages for trivial changes (advisory only; you still confirm the skip).
+
+### FEATURE: PR #1167 (2026-06-27)
+Background: fix(#299): clarify-intent Path B set-issue + remove dead ⏳ code
+Changes: Session title now shows issue number and title (`#N <title>`) in sessions that start via `clarify-intent` (Path B); previously only `workflow-init` sessions updated the title.;Removed defunct ⏳ waiting-lifecycle hook files left on disk after PR #1142; `⏳` can no longer reappear from these code paths.
