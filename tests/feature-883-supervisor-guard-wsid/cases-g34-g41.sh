@@ -336,27 +336,27 @@ run_g48() {
 }
 
 run_g49() {
-    require_source "$HOOK" "G49: resolveWorkflowSessionId Priority 3 — depth-score wins highest-depth candidate" || return
-    require_wsid "G49: resolveWorkflowSessionId Priority 3 — depth-score wins highest-depth candidate" || return
+    require_source "$HOOK" "G49: multiple candidates no ccBucket=0 — resolver null, guard uses CC UUID, rc=0" || return
+    require_wsid "G49: multiple candidates no ccBucket=0 — resolver null, guard uses CC UUID, rc=0" || return
     local tmp out rc sid wsid_low wsid_high TODAY
     tmp="$(mktemp -d)"
     sid="g49-cc-uuid"
     TODAY=$(node -e "const d=new Date(); process.stdout.write(d.getFullYear().toString()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'));" 2>/dev/null)
     wsid_low="${TODAY}-100000-g49low"
     wsid_high="${TODAY}-090000-g49high"
-    # wsid_low: depth=1 (context.md + intent.md only); wsid_high: depth=2 (+ detail.md).
+    # Two same-day candidates, no CLAUDE_ENV_FILE -> all ccBucket=1 -> ambiguity gate fires -> resolver null.
     touch "$tmp/${wsid_low}-context.md" "$tmp/${wsid_low}-intent.md"
     touch "$tmp/${wsid_high}-context.md" "$tmp/${wsid_high}-intent.md" "$tmp/${wsid_high}-detail.md"
-    # State only under wsid_high — guard fires only if depth-sort selects it.
+    # State under wsid_high only; resolver returns null -> guard uses CC UUID (g49-cc-uuid) -> no state -> rc=0.
     seed_state "$tmp" "$wsid_high" "{ alert_armed_at: '2026-01-01T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
-    if [ $rc -eq 2 ] && echo "$out" | grep -q "Workflow session ID: $wsid_high"; then
-        pass "G49: resolveWorkflowSessionId Priority 3 — depth-score wins highest-depth candidate"
+    if [ $rc -eq 0 ]; then
+        pass "G49: multiple candidates no ccBucket=0 — resolver null, guard uses CC UUID, rc=0"
     else
-        fail "G49: resolveWorkflowSessionId Priority 3 — depth-score wins highest-depth candidate (rc=$rc, out=$out)"
+        fail "G49: multiple candidates no ccBucket=0 — resolver null, guard uses CC UUID, rc=0 (rc=$rc, out=$out)"
     fi
 }
 
