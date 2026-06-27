@@ -1,5 +1,5 @@
 #!/bin/bash
-# find-pr-by-marker.sh <N>
+# find-pr-by-marker.sh [--repo <owner/repo|repo>] <N>
 #
 # Resolve issue #<N> → (PR_NUMBER, MERGE_COMMIT) using two strategies:
 #
@@ -14,12 +14,27 @@
 #              the mergeCommit.oid). When multiple merged PRs match, also picks
 #              by `sort_by(.mergedAt) | last`.
 #
+# --repo: optional repository slug (short form "repo" or full "owner/repo").
+#         Short form is normalized via `gh repo view` to full owner/repo.
+#         Propagated to `gh issue view` calls (primary strategy only).
+#         The fallback `gh pr list` always searches the current repo.
+#
 # Output on success (stdout):
 #     PR_NUMBER=<n>
 #     MERGE_COMMIT=<sha>
 # Exit 1 on failure with a diagnostic on stderr.
 
 set -uo pipefail
+
+REPO_ARG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --repo) REPO_ARG="$2"; shift 2 ;;
+        --repo=*) REPO_ARG="${1#--repo=}"; shift ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
 
 if [ $# -lt 1 ]; then
     echo "Error: issue number required" >&2
@@ -33,13 +48,29 @@ if ! printf '%s' "$N" | grep -qE '^[0-9]+$'; then
     exit 1
 fi
 
+# Validate --repo format before any use (prevents flag-injection into gh).
+if [[ -n "$REPO_ARG" ]]; then
+    if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+        echo "Error: invalid --repo value: $REPO_ARG" >&2
+        exit 2
+    fi
+fi
+
+# Normalize short-form repo (no slash) to full owner/repo (fail-closed).
+if [[ -n "$REPO_ARG" ]] && [[ "$REPO_ARG" != *"/"* ]]; then
+    REPO_ARG=$(gh repo view "$REPO_ARG" --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null) || {
+        echo "Error: failed to resolve short-form repo '$REPO_ARG'" >&2
+        exit 2
+    }
+fi
+
 # Primary: closedByPullRequestsReferences (GitHub SSOT — #418 fix).
 # Only meaningful when CLOSED. Pre-jq'd output: `<number>\t<sha>`.
 PR_NUM=""
 MERGE_SHA=""
-STATE=$(gh issue view "$N" --json state --jq '.state' 2>/dev/null) || STATE=""
+STATE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json state --jq '.state' 2>/dev/null) || STATE=""
 if [ "$STATE" = "CLOSED" ]; then
-    PRIMARY_LINE=$(gh issue view "$N" --json closedByPullRequestsReferences \
+    PRIMARY_LINE=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json closedByPullRequestsReferences \
         --jq '[.closedByPullRequestsReferences[]] | sort_by(.mergedAt) | last | "\(.number)\t\(.mergeCommit.oid // "")"' \
         2>/dev/null) || PRIMARY_LINE=""
     if [ -n "$PRIMARY_LINE" ]; then

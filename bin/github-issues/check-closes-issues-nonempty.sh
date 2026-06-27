@@ -46,7 +46,8 @@ fi
 
 ISSUE_NUMS=$(node -e '
   const { parseClosesIssues } = require(process.env.AGENTS_CONFIG_DIR + "/hooks/lib/parse-closes-issues.js");
-  console.log(parseClosesIssues(process.argv[1]).join(" "));
+  const entries = parseClosesIssues(process.argv[1]);
+  console.log(entries.map(e => e.repo ? e.repo + "#" + e.number : String(e.number)).join(" "));
 ' "$INTENT_PATH") || { echo "Error: parser invocation failed" >&2; exit 1; }
 
 if [ -z "$ISSUE_NUMS" ]; then
@@ -57,19 +58,25 @@ fi
 # CLOSED-state check (fail-open per N — gh failures warn and continue)
 SCRIPT_DIR="$(dirname "$0")"
 HAS_CLOSED=0
-for N in $ISSUE_NUMS; do
-    if STATE=$(bash "$SCRIPT_DIR/issue-state-check.sh" "$N" 2>/dev/null); then
+for ENTRY in $ISSUE_NUMS; do
+    ISSUE_N="$ENTRY"
+    REPO_PART=""
+    if [[ "$ENTRY" == *"#"* ]]; then
+        REPO_PART="${ENTRY%#*}"
+        ISSUE_N="${ENTRY##*#}"
+    fi
+    if STATE=$(bash "$SCRIPT_DIR/issue-state-check.sh" ${REPO_PART:+--repo "$REPO_PART"} "$ISSUE_N" 2>/dev/null); then
         :
     else
         STATE=error
     fi
     case "$STATE" in
         closed)
-            echo "[check-closes-issues-nonempty] Issue #$N is CLOSED — cannot proceed." >&2
+            echo "[check-closes-issues-nonempty] Issue #$ISSUE_N is CLOSED — cannot proceed." >&2
             HAS_CLOSED=1
             ;;
         error)
-            echo "[check-closes-issues-nonempty] state check failed for #$N — continuing" >&2
+            echo "[check-closes-issues-nonempty] state check failed for #$ISSUE_N — continuing" >&2
             ;;
     esac
 done

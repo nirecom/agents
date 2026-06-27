@@ -71,9 +71,11 @@ if (args[0] === "--non-github") {
     process.exit(1);
   }
   const bag = readBag(outFile);
-  for (const n of issues) {
+  for (const entry of issues) {
+    const issueNumber = typeof entry === "number" ? entry : entry.number;
+    const issueRepo = (typeof entry === "object" && entry.repo) ? entry.repo : undefined;
     upsertEntry(bag, {
-      issueNumber: n, state: "skipped-non-github",
+      issueNumber, issueRepo, state: "skipped-non-github",
       historyEntry: "skipped", issueClosed: "skipped",
       sentinelsPosted: "skipped", wipCleared: "skipped",
     });
@@ -98,9 +100,11 @@ if (args[0] === "--fallback") {
     process.stderr.write("[issue-close-write-outcome] WARN: could not parse closes_issues: " + e.message + "\n");
   }
   const bag = readBag(outFile);
-  for (const n of issues) {
+  for (const entry of issues) {
+    const issueNumber = typeof entry === "number" ? entry : entry.number;
+    const issueRepo = (typeof entry === "object" && entry.repo) ? entry.repo : undefined;
     upsertEntry(bag, {
-      issueNumber: n, state: "failed",
+      issueNumber, issueRepo, state: "failed",
       historyEntry: "failed", issueClosed: "failed",
       sentinelsPosted: "failed", wipCleared: "failed",
     });
