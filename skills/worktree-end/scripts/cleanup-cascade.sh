@@ -25,7 +25,7 @@ If WE-15 (git worktree remove) exits non-zero (EPERM, busy, not-empty, any error
 `git -C <main> fetch --prune origin`
 `git -C <main> pull --ff-only`
 Pre-pull stash (if pull --ff-only blocked by pre-existing uncommitted changes): `WORKTREE_END_SKILL=1 git -C <main> stash push`, then `git -C <main> pull --ff-only`, then `WORKTREE_END_SKILL=1 git -C <main> stash pop`.
-Note: `isAllowedMainWorktreeCleanup` accepts exactly the `WORKTREE_END_SKILL=1 git -C <main> stash push` shape — a single command with no `&&`-chaining.
+Note: `isAllowedMainWorktreeCleanup` accepts `WORKTREE_END_SKILL=1 git -C <main> stash <push|pop|drop>` shapes — single command, no `&&`-chaining.
 
 ## WE-21 — Compose doc-append
 Main worktree; only when NOTES_BACKUP_PATH is non-empty. Single canonical writer of both docs/history.md and CHANGELOG.md from WORKTREE_NOTES.md ## History Notes / ## Changelog Notes bullets (Approach C, #690). Phase 2 of issue-close no longer writes history.md.
