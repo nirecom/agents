@@ -89,7 +89,7 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 
 ### Phase 3 — Confirm
 
-Use `AskUserQuestion` to confirm before acting on `reopen` (mutating — reopens a closed issue) and `make-parent` (mutating — reclassifies existing issues). `reopen` required confirm; `make-parent` required confirm. `sub-of`, `sibling`, and `bulk-sub-of` proceed without confirmation (non-destructive — create new children and attach; no reclassification; note `sub-of` and `bulk-sub-of` may trigger ancestor reopen for closed parents, same as the `reopen` verdict but scoped to ancestor chain); `none` proceeds without confirmation.
+Confirm (AskUserQuestion) for `reopen` and `make-parent` only — both mutate existing state. `sub-of`, `sibling`, `bulk-sub-of`, and `none` proceed without confirmation. Note: `sub-of` and `bulk-sub-of` may trigger ancestor reopen when the parent chain contains closed issues.
 
 After a `reopen`: continue the workflow using the existing issue number. Follow
 the same routing as `/workflow-init`:
