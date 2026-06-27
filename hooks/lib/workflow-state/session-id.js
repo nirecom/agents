@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
+const { isSameGitRepo } = require("../git-common-dir");
 
 function _listJsonlByMtime(transcriptDir) {
   try {
@@ -106,7 +107,10 @@ function resolveSessionId(ctx = {}) {
     } catch (e) {
       // realpath unavailable
     }
+    const agentsRootForP7 =
+      process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, "..", "..", "..");
     for (const raw of rawCandidates) {
+      if (!isSameGitRepo(path.resolve(raw), agentsRootForP7)) continue;
       const encoded = path
         .resolve(raw)
         .toLowerCase()
