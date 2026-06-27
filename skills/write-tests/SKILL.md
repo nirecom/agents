@@ -51,11 +51,11 @@ WT-7. Present the final test file content to the user for review — gated by **
 After completing this skill:
 1. Stage the test files: `git add tests/`
    The commit gate detects staged tests/ changes as evidence of completion.
-2. Run tests.
+2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
 If tests are genuinely not needed for this change:
 1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
-2. Run tests.
+2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
 ## Rules
 

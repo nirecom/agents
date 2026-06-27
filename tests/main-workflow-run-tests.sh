@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-run-tests.js
-# Tags: workflow, tests, runner, hook, bin
+# Tags: workflow, tests, runner, hook, bin, scope:common
+# L3 gap (what this test does NOT catch):
+# - Real Claude Code session where PostToolUse fires after a live bash test run
+# - Actual hook registration and event delivery via settings.json
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: hook-registration
 # Tests for hooks/workflow-run-tests.js
 # This hook is a PostToolUse handler that auto-marks run_tests based on Bash command + exit code.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Windows-compatible path for require() inside node -e scripts:
+# Git Bash /c/... paths fail in require() on Windows (Node maps /c/ to C:\c\ not C:\).
+DOTFILES_WIN="$(cygpath -m "$DOTFILES_DIR" 2>/dev/null || echo "$DOTFILES_DIR")"
 RUN_TESTS_HOOK="$DOTFILES_DIR/hooks/workflow-run-tests.js"
 ERRORS=0
 
@@ -72,6 +80,31 @@ check_state_file_absent() {
     [ "$status" = "absent" ]
 }
 
+# seed_write_tests <session_id> <status>
+# Seeds the session state file with write_tests at the given status by calling
+# markStep directly. markStep creates a full step skeleton (all other steps
+# pending) and is preserved by subsequent hook runs against the same sid.
+# The run_tests guard (#1139) reads write_tests status before marking complete.
+seed_write_tests() {
+    local sid="$1" status="$2"
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+      const m = require('$DOTFILES_WIN/hooks/lib/workflow-state');
+      m.markStep(process.argv[1], 'write_tests', process.argv[2]);
+    " "$sid" "$status" >/dev/null 2>&1 || true
+}
+
+# get_write_tests_status <session_id>
+# Reads write_tests.status from the workflow state file. Prints status or "absent".
+get_write_tests_status() {
+    local sid="$1"
+    node -e "
+try {
+  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+  console.log(s.steps && s.steps.write_tests ? s.steps.write_tests.status : 'absent');
+} catch(e) { console.log('absent'); }
+" "$WORKFLOW_DIR/$sid.json" 2>/dev/null || echo "absent"
+}
+
 # ---------------------------------------------------------------------------
 # === Normal cases ===
 # ---------------------------------------------------------------------------
@@ -79,7 +112,9 @@ check_state_file_absent() {
 echo "=== workflow-run-tests: Normal cases ==="
 
 # N1: pytest tests/ + exit=0 → run_tests: complete
+# (#1139 guard: seed write_tests=complete so the guard permits the mark)
 SID="n1-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "pytest tests/" 0 "$SID"
 STATUS=$(get_run_tests_status "$SID")
 if [ "$STATUS" = "complete" ]; then
@@ -89,7 +124,9 @@ else
 fi
 
 # N2: bash tests/feature-foo.sh + exit=0 → run_tests: complete
+# (#1139 guard: seed write_tests=complete so the guard permits the mark)
 SID="n2-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "bash tests/feature-foo.sh" 0 "$SID"
 STATUS=$(get_run_tests_status "$SID")
 if [ "$STATUS" = "complete" ]; then
@@ -99,13 +136,95 @@ else
 fi
 
 # N3: timeout 120 bash tests/bar.sh + exit=0 → run_tests: complete
+# (#1139 guard: seed write_tests=complete so the guard permits the mark)
 SID="n3-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "timeout 120 bash tests/bar.sh" 0 "$SID"
 STATUS=$(get_run_tests_status "$SID")
 if [ "$STATUS" = "complete" ]; then
     pass "N3. timeout 120 bash tests/bar.sh + exit=0 → run_tests=complete"
 else
     fail "N3. timeout 120 bash tests/bar.sh + exit=0 → expected run_tests=complete, got: $STATUS"
+fi
+
+# ---------------------------------------------------------------------------
+# === write_tests guard cases (#1139) ===
+# The hook must only mark run_tests=complete when write_tests is complete or
+# skipped. If write_tests is pending/absent, the exit=0 mark is suppressed so a
+# write-tests subagent running the suite cannot prematurely satisfy run_tests.
+# Fail-open: the exit≠0 (pending) branch is unaffected by the guard.
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== workflow-run-tests: write_tests guard cases (#1139) ==="
+
+# G1: write_tests=complete + bash tests/foo.sh exit=0 → run_tests=complete (guard passes)
+SID="g1-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
+run_run_tests_hook "bash tests/foo.sh" 0 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" = "complete" ]; then
+    pass "G1. write_tests=complete + exit=0 → run_tests=complete (guard passes)"
+else
+    fail "G1. write_tests=complete + exit=0 → expected run_tests=complete, got: $STATUS"
+fi
+
+# G2: write_tests=skipped + pytest tests/ exit=0 → run_tests=complete (skipped counts)
+SID="g2-$$-$RANDOM"
+seed_write_tests "$SID" "skipped"
+run_run_tests_hook "pytest tests/" 0 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" = "complete" ]; then
+    pass "G2. write_tests=skipped + exit=0 → run_tests=complete (skipped counts as satisfied)"
+else
+    fail "G2. write_tests=skipped + exit=0 → expected run_tests=complete, got: $STATUS"
+fi
+
+# G3: write_tests=pending + bash tests/foo.sh exit=0 → run_tests NOT complete (guard blocks)
+SID="g3-$$-$RANDOM"
+seed_write_tests "$SID" "pending"
+run_run_tests_hook "bash tests/foo.sh" 0 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" != "complete" ]; then
+    pass "G3. write_tests=pending + exit=0 → run_tests NOT complete (guard blocks), got: $STATUS"
+else
+    fail "G3. write_tests=pending + exit=0 → expected NOT complete (guard blocks), got: $STATUS"
+fi
+
+# G4: no state file at all + pytest tests/ exit=0 → run_tests NOT complete
+# (write_tests absent = not complete/skipped → guard blocks; readState fail-open)
+SID="g4-$$-$RANDOM"
+# Intentionally no seed — no state file exists for this sid.
+run_run_tests_hook "pytest tests/" 0 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" != "complete" ]; then
+    pass "G4. no state file + exit=0 → run_tests NOT complete (write_tests absent), got: $STATUS"
+else
+    fail "G4. no state file + exit=0 → expected NOT complete (write_tests absent), got: $STATUS"
+fi
+
+# G5: write_tests=pending + bash tests/foo.sh exit=1 → run_tests=pending + last_run_failed
+# (exit≠0 branch is unaffected by the guard — failures must still be recorded)
+SID="g5-$$-$RANDOM"
+seed_write_tests "$SID" "pending"
+run_run_tests_hook "bash tests/foo.sh" 1 "$SID"
+STATUS=$(get_run_tests_status "$SID")
+if [ "$STATUS" = "pending" ]; then
+    pass "G5. write_tests=pending + exit=1 → run_tests=pending (guard does not affect failure branch)"
+else
+    fail "G5. write_tests=pending + exit=1 → expected run_tests=pending, got: $STATUS"
+fi
+G5_FAILED=$(node -e "
+try {
+  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+  const rt = s.steps && s.steps.run_tests;
+  console.log(rt && rt.last_run_failed === true ? 'yes' : 'no');
+} catch(e) { console.log('no'); }
+" "$WORKFLOW_DIR/$SID.json" 2>/dev/null || echo "no")
+if [ "$G5_FAILED" = "yes" ]; then
+    pass "G5b. write_tests=pending + exit=1 → last_run_failed=true (failure branch intact)"
+else
+    fail "G5b. write_tests=pending + exit=1 → expected last_run_failed=true, got: $G5_FAILED"
 fi
 
 # ---------------------------------------------------------------------------
@@ -229,7 +348,9 @@ fi
 # ED8: ls tests/ && pytest tests/ + exit=0 → run_tests: complete
 # (compound command: segment 2 `pytest tests/` is a real runner → per-segment
 #  detection marks complete; segment 1 `ls tests/` is excluded read-only)
+# (#1139 guard: seed write_tests=complete so the guard permits the mark)
 SID="ed8-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "ls tests/ && pytest tests/" 0 "$SID"
 STATUS=$(get_run_tests_status "$SID")
 if [ "$STATUS" = "complete" ]; then
@@ -271,7 +392,9 @@ fi
 
 # ED12: cd repo && pytest tests/ + exit=0 → run_tests: complete
 # (compound false-negative guard: a real runner segment must still mark complete)
+# (#1139 guard: seed write_tests=complete so the guard permits the mark)
 SID="ed12-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "cd repo && pytest tests/" 0 "$SID"
 STATUS=$(get_run_tests_status "$SID")
 if [ "$STATUS" = "complete" ]; then
@@ -323,7 +446,9 @@ echo ""
 echo "=== workflow-run-tests: Idempotency cases ==="
 
 # I1: run exit=0 twice → still complete
+# (#1139 guard: seed write_tests=complete so the guard permits the mark)
 SID="i1-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "pytest tests/" 0 "$SID"
 run_run_tests_hook "pytest tests/" 0 "$SID"
 STATUS=$(get_run_tests_status "$SID")
@@ -334,7 +459,10 @@ else
 fi
 
 # I2: run exit=0 then exit=1 → reverts to pending (last-run-wins)
+# (#1139 guard: seed write_tests=complete so the first exit=0 correctly marks
+#  complete before the exit=1 reverts it to pending — exits the guard branch)
 SID="i2-$$-$RANDOM"
+seed_write_tests "$SID" "complete"
 run_run_tests_hook "pytest tests/" 0 "$SID"
 run_run_tests_hook "pytest tests/" 1 "$SID"
 STATUS=$(get_run_tests_status "$SID")
