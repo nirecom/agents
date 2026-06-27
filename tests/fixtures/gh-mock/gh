@@ -4,6 +4,25 @@
 
 SCENARIO="${GH_MOCK_SCENARIO:-default}"
 
+# Strip --repo <value> pairs so existing tests remain transparent
+# when callers pass --repo for cross-repo operations (forward-compat).
+_FILTERED_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --repo)
+            shift 2  # skip flag and its value
+            ;;
+        --repo=*)
+            shift    # skip --repo=value form
+            ;;
+        *)
+            _FILTERED_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${_FILTERED_ARGS[@]+"${_FILTERED_ARGS[@]}"}"
+
 # Join all args for matching
 ARGS="$*"
 
@@ -106,6 +125,14 @@ case "$ARGS" in
         echo "false"
         ;;
     esac
+    exit 0
+    ;;
+  # Short-form repo resolution: gh repo view <slug> --json owner,name --jq '.owner.login + "/" + .name'
+  # Used by find-pr-by-marker.sh, wip-set-single.sh, issue-state-check.sh, ensure-board-card.sh
+  # to resolve a short repo name to owner/repo format.
+  # The mock always returns "nirecom/dotfiles-private" for any slug (test fixture).
+  "repo view "*"--json owner,name --jq"*)
+    echo "nirecom/dotfiles-private"
     exit 0
     ;;
   # Repo slug lookup: the meta-cascade probe needs OWNER/REPO to call

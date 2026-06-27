@@ -1,8 +1,12 @@
 #!/bin/bash
 # bin/github-issues/wip-set-single.sh — probe meta label + set WIP for one issue.
 #
-# Usage: wip-set-single.sh <issue-number>
+# Usage: wip-set-single.sh [--repo <owner/repo|repo>] [--session-id <SID>] <issue-number>
 # Env:   AGENTS_CONFIG_DIR (required)
+#
+# --repo: optional repository slug (short form "repo" or full "owner/repo").
+#         Propagated to `gh issue view` for the label probe only.
+#         NOT passed to wip-state.sh (it works on session files, not GitHub API).
 #
 # Exit 0 + stdout "META_SKIP" : meta label detected, WIP set skipped
 # Exit 0 + stdout "SET_OK"    : WIP set successfully
@@ -18,8 +22,16 @@ set -uo pipefail
 N=""
 SID_ARG=""
 SID_SET=0
+REPO_ARG=""
 while [ $# -gt 0 ]; do
     case "$1" in
+        --repo)
+            [ $# -lt 2 ] && { echo "Error: --repo requires a value" >&2; exit 2; }
+            REPO_ARG="$2"; shift 2
+            ;;
+        --repo=*)
+            REPO_ARG="${1#--repo=}"; shift
+            ;;
         --session-id)
             [ $# -lt 2 ] && { echo "Error: --session-id requires a value" >&2; exit 2; }
             SID_ARG="$2"; SID_SET=1; shift 2
@@ -39,15 +51,31 @@ while [ $# -gt 0 ]; do
             ;;
     esac
 done
-[ -n "$N" ] || { echo "usage: wip-set-single.sh [--session-id <SID>] <issue-number>" >&2; exit 2; }
+[ -n "$N" ] || { echo "usage: wip-set-single.sh [--repo <owner/repo|repo>] [--session-id <SID>] <issue-number>" >&2; exit 2; }
 
 if [ "$SID_SET" -eq 1 ] && [ -z "$SID_ARG" ]; then
     echo "Error: --session-id received an empty value" >&2; exit 2
 fi
 
+# Validate --repo format before any use (prevents flag-injection into gh).
+if [[ -n "$REPO_ARG" ]]; then
+    if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+        echo "Error: invalid --repo value: $REPO_ARG" >&2
+        exit 2
+    fi
+fi
+
+# Normalize short-form repo (no slash) to full owner/repo (fail-closed).
+if [[ -n "$REPO_ARG" ]] && [[ "$REPO_ARG" != *"/"* ]]; then
+    REPO_ARG=$(gh repo view "$REPO_ARG" --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null) || {
+        echo "Error: failed to resolve short-form repo '$REPO_ARG'" >&2
+        exit 2
+    }
+fi
+
 WIP_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh"
 
-LABELS_JSON=$(gh issue view "$N" --json labels --jq '[.labels[].name]' 2>/dev/null) || LABELS_JSON=""
+LABELS_JSON=$(gh issue view "$N" ${REPO_ARG:+--repo "$REPO_ARG"} --json labels --jq '[.labels[].name]' 2>/dev/null) || LABELS_JSON=""
 
 if [ -n "$LABELS_JSON" ] && printf '%s' "$LABELS_JSON" | grep -q '"meta"'; then
     echo "META_SKIP"

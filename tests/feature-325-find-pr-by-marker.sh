@@ -174,6 +174,51 @@ else
 fi
 teardown_tmp_find
 
+# ============================================================================
+# Cross-repo tests (RED until find-pr-by-marker.sh accepts --repo)
+# Issue #1100/#1101: script must accept --repo <slug> and route gh calls
+# ============================================================================
+
+# Helper for cross-repo: run find-pr-by-marker.sh with a --repo flag.
+run_find_repo() {
+    local repo="$1" n="${2:-42}"
+    local out rc
+    out=$(run_with_timeout 15 bash "$FIND_SCRIPT" --repo "$repo" "$n" 2>/tmp/find_repo_err.$$)
+    rc=$?
+    FIND_ERR=$(cat /tmp/find_repo_err.$$ 2>/dev/null)
+    rm -f /tmp/find_repo_err.$$
+    FIND_OUT="$out"
+    unset PR_NUMBER MERGE_COMMIT
+    eval "$out" 2>/dev/null
+    FIND_PR_NUMBER="${PR_NUMBER:-}"
+    FIND_MERGE_COMMIT="${MERGE_COMMIT:-}"
+    return $rc
+}
+
+# --- F9: --repo <short-name> routes gh calls to the correct repo (short form)
+# RED: current find-pr-by-marker.sh does not accept --repo, so exit 1.
+setup_tmp_find
+GH_MOCK_MARKER_PR_RESULT="77	bbb9999" GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find_repo "dotfiles-private" 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "77" ] && [ "$FIND_MERGE_COMMIT" = "bbb9999" ]; then
+    pass "F9: --repo dotfiles-private (short form) → PR 77 bbb9999"
+else
+    fail "F9: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR (expected --repo short-form support)"
+fi
+teardown_tmp_find
+
+# --- F10: --repo <owner/repo> routes gh calls to the correct repo (full form)
+# RED: current find-pr-by-marker.sh does not accept --repo, so exit 1.
+setup_tmp_find
+GH_MOCK_MARKER_PR_RESULT="88	ccc1111" GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find_repo "nirecom/dotfiles-private" 42; RC=$?
+if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "88" ] && [ "$FIND_MERGE_COMMIT" = "ccc1111" ]; then
+    pass "F10: --repo nirecom/dotfiles-private (full form) → PR 88 ccc1111"
+else
+    fail "F10: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR (expected --repo full-form support)"
+fi
+teardown_tmp_find
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
