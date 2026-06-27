@@ -83,7 +83,9 @@ run_t923_2() {
 run_t923_3() {
     require_source "$ALLOWS" "T923-3: 'git -C /path/to/main worktree remove /wt' -> true" || return
     local out rc
-    out=$(TEST_CMD='git -C /path/to/main worktree remove /path/to/wt' call_is_allowed)
+    # repoRoot must match the -C path after the Class 2 fix adds -C validation.
+    # call_is_allowed_for passes the matching root so the predicate allows the command.
+    out=$(TEST_CMD='git -C /path/to/main worktree remove /path/to/wt' call_is_allowed_for "/path/to/main")
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "true" ]; then
         pass "T923-3: 'git -C /path/to/main worktree remove /wt' -> true"
@@ -95,7 +97,8 @@ run_t923_3() {
 run_t923_4() {
     require_source "$ALLOWS" "T923-4: 'git -C /path/to/main worktree prune' -> true" || return
     local out rc
-    out=$(TEST_CMD='git -C /path/to/main worktree prune' call_is_allowed)
+    # repoRoot must match the -C path after the Class 2 fix adds -C validation.
+    out=$(TEST_CMD='git -C /path/to/main worktree prune' call_is_allowed_for "/path/to/main")
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "true" ]; then
         pass "T923-4: 'git -C /path/to/main worktree prune' -> true"
@@ -104,10 +107,67 @@ run_t923_4() {
     fi
 }
 
+# Helper: call isAllowedWorktreeCommand with a custom repoRoot arg.
+# Reads cmd from TEST_CMD env var; repoRoot is embedded directly in the node
+# script string (same pattern as call_is_allowed/$REPO_ROOT) to avoid Git Bash
+# POSIX-to-Windows path conversion that corrupts argv and env-var values when
+# passed to Windows executables like node.exe.
+call_is_allowed_for() {
+    local custom_root="$1"
+    run_with_timeout 5 node -e "
+const {isAllowedWorktreeCommand} = require('$ALLOWS_NODE');
+const cmd = process.env.TEST_CMD;
+process.stdout.write(String(isAllowedWorktreeCommand(cmd, '$custom_root')));
+" 2>/dev/null
+    return $?
+}
+
+# T923-5 (pin): -C path matches repoRoot → true (green before and after Class 2 fix)
+run_t923_5() {
+    require_source "$ALLOWS" "T923-5: 'git -C <repoRoot> worktree remove /wt' with matching repoRoot → true" || return
+    local out rc
+    out=$(TEST_CMD='git -C /some/repo worktree remove /path/to/wt' call_is_allowed_for "/some/repo")
+    rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = "true" ]; then
+        pass "T923-5: 'git -C <repoRoot> worktree remove /wt' (matching) → true (pin)"
+    else
+        fail "T923-5: expected 'true', got '$out' (rc=$rc) — should be green before and after fix"
+    fi
+}
+
+# T923-6: non-repoRoot -C → false (RED before Class 2 fix — no -C validation yet)
+run_t923_6() {
+    require_source "$ALLOWS" "T923-6: 'git -C /unrelated worktree remove /wt' → false" || return
+    local out rc
+    out=$(TEST_CMD='git -C /unrelated/path worktree remove /path/to/wt' call_is_allowed_for "/some/repo")
+    rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = "false" ]; then
+        pass "T923-6: 'git -C /unrelated/path worktree remove /wt' (non-repoRoot) → false"
+    else
+        fail "T923-6: expected 'false', got '$out' (rc=$rc) — RED until Class 2 fix"
+    fi
+}
+
+# T923-7: multiple -C → false (RED before Class 2 fix — no multi-C rejection yet)
+run_t923_7() {
+    require_source "$ALLOWS" "T923-7: multiple -C flags → false" || return
+    local out rc
+    out=$(TEST_CMD='git -C /some/repo -C /some/repo worktree remove /path/to/wt' call_is_allowed_for "/some/repo")
+    rc=$?
+    if [ $rc -eq 0 ] && [ "$out" = "false" ]; then
+        pass "T923-7: 'git -C a -C b worktree remove' (multiple -C) → false"
+    else
+        fail "T923-7: expected 'false', got '$out' (rc=$rc) — RED until Class 2 fix"
+    fi
+}
+
 run_t923_1
 run_t923_2
 run_t923_3
 run_t923_4
+run_t923_5
+run_t923_6
+run_t923_7
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
