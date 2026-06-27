@@ -171,3 +171,7 @@ Changes: wip-set-resume now claims WIP before exiting in the NEEDS_CLARIFY branc
 ### BUGFIX: PR #1136 (2026-06-27)
 Background: fix(#1123): exclude extensionHost from isVsCode() CLAUDE_CODE_ENTRYPOINT clause
 Changes: Fixed: VS Code extension (extensionHost) users no longer receive unexpected plan-file auto-open popups when plans are written
+
+### FEATURE: PR #1143 (2026-06-27)
+Background: fix(#1138,#1112): cross-repo bypass and cleanup exemption in workflow-gate
+Changes: `workflow-gate.js` no longer blocks `git -C <foreign-repo> commit` when the target repo is not the agents session repo (cross-repo bypass for #1138).;`workflow-gate.js` no longer blocks on a pending `cleanup` step during worktree-based sessions; cleanup is deferred to `/worktree-end` (fix for #1112).
