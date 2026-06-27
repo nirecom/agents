@@ -23,7 +23,7 @@ Resolve in main: `OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login
 
 ## Step 2: scan via worker
 
-Invoke `issue-reconcile-worker` via Task tool with `owner_repo`, `history_md_path`, `history_dir_path`, `agents_config_dir`, and `artifact_dir` (use `$AGENTS_CONFIG_DIR/artifacts/` or a temp dir).
+Invoke `issue-reconcile-worker` via Task tool with `owner_repo`, `history_md_path`, `history_dir_path`, `agents_config_dir`, and `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from earlier steps).
 
 On `status: failed`: stop and report. On `status: complete`: read JSONL artifact — issues with `classification: needs-reconcile` feed Step 3.
 

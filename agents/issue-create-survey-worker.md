@@ -15,7 +15,7 @@ Receive a JSON object with:
 - `background`: issue background text
 - `changes`: description of changes
 - `agents_config_dir`: absolute path to agents config dir
-- `artifact_dir`: directory for output files
+- `artifact_dir`: 呼び出し元が `bin/workflow-plans-dir` で解決した `PLANS_DIR` の絶対パス。全出力ファイルをここに書く
 
 ## Procedure
 

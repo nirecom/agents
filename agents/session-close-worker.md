@@ -14,7 +14,7 @@ Receive a JSON object with:
 - `session_id`: current session ID
 - `plans_dir`: absolute path to the workflow plans directory
 - `agents_config_dir`: absolute path to agents config dir (injected by caller; do NOT use `$AGENTS_CONFIG_DIR`)
-- `artifact_dir`: directory to write gate JSON and log
+- `artifact_dir`: 呼び出し元が `bin/workflow-plans-dir` で解決した `PLANS_DIR` の絶対パス。ゲート JSON とログをここに書く
 - `outcome_json_path`: absolute path to the SC-3a issue-close outcome JSON
 
 ## Procedure
