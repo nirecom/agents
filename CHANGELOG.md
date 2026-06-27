@@ -191,3 +191,7 @@ Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands
 ### FEATURE: PR #1159 (2026-06-27)
 Background: fix(#1120): return null from resolveWorkflowSessionId when no ccBucket=0 owner identified among same-day candidates
 Changes: Fixed: supervisor C2 scheduled review no longer reports findings from unrelated parallel sessions when the active session cannot be identified from context files.
+
+### FEATURE: PR #1158 (2026-06-27)
+Background: feat(#485): advisory plan-skip hints (SKIP_HINT) at outline/detail for trivial changes
+Changes: The workflow oracle (`next-step`) now suggests skipping the outline/detail planning stages for trivial changes (advisory only; you still confirm the skip).
