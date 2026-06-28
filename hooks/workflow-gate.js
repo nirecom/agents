@@ -11,6 +11,7 @@ const {
   readState,
   markStep,
   hasCompletionEvidence,
+  getSkippableSteps,
 } = require("./lib/workflow-state");
 
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
@@ -389,6 +390,8 @@ if (require.main === module) {
   // gate evaluation. Used to allow symmetric review_tests bypass (issue #833):
   // when write_tests itself needs evidence, review_tests should share it.
   let writeTestsEvidenceBypassed = false;
+  // Session-specific skippable steps: BUGFIX sessions exclude write_tests/review_tests (#1147).
+  const skippable = getSkippableSteps(sessionId);
   for (const step of VALID_STEPS) {
     if (NON_GATE_STEPS.includes(step)) continue;
     const stepState = state.steps && state.steps[step];
@@ -397,7 +400,7 @@ if (require.main === module) {
     // --- review_tests special-case (delegated to review-tests-checker.js) ---
     if (step === "review_tests") {
       const { checkReviewTests } = require("./workflow-gate/review-tests-checker");
-      const rt = checkReviewTests(step, stepState, { docsOnly, writeTestsEvidenceBypassed, repoDir });
+      const rt = checkReviewTests(step, stepState, { docsOnly, writeTestsEvidenceBypassed, repoDir, sessionId });
       if (rt.action === "skip") continue;
       if (rt.action === "block") {
         if (rt.reason) incompleteReasons[step] = rt.reason;
@@ -407,7 +410,7 @@ if (require.main === module) {
     }
 
     if (status === "complete") continue;
-    if (status === "skipped" && SKIPPABLE_STEPS.includes(step)) continue;
+    if (status === "skipped" && skippable.includes(step)) continue;
     // docs-only short-circuit: skip all steps except user_verification
     if (docsOnly && step !== "user_verification") continue;
     // Worktree context: defer user_verification to merge-time gate.

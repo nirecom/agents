@@ -153,6 +153,17 @@ function handle(ctx) {
       );
       return true;
     }
+    // D1 defense (#1147 T0-A): BUGFIX sessions must write tests — skip is not allowed.
+    try {
+      const { isBugfixSession } = require("../lib/workflow-state/is-bugfix-session");
+      if (isBugfixSession({ sessionId })) {
+        pushMessage(
+          `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — BUGFIX sessions require ` +
+            `tests (fail-before-fix policy). Run /write-tests instead.`
+        );
+        return true;
+      }
+    } catch (_) {}
     try {
       markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason });
       // Symmetric skip propagation (issue #833): review_tests is paired with

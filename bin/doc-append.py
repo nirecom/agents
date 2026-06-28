@@ -198,12 +198,18 @@ def main():
         print("Error: --test-gap cannot be combined with --category INCIDENT", file=sys.stderr)
         sys.exit(1)
 
-    if args.category == "BUGFIX" and args.test_gap is None:
+    if (
+        args.category == "BUGFIX"
+        and args.test_gap is None
+        and Path(args.path).name == "history.md"
+    ):
         print(
-            "WARNING: BUGFIX entry without --test-gap. Required for fix-of-fix entries"
-            " (see rules/docs/history.md).\nProceeding without Test gap: field.",
+            "Error: BUGFIX entry to history.md requires --test-gap "
+            "(see rules/docs/history.md). Provide a one-line description of the "
+            "test that was missing.",
             file=sys.stderr,
         )
+        sys.exit(1)
 
     path = Path(args.path)
     if not path.parent.exists():
