@@ -33,15 +33,17 @@ if [[ "$rc" -ne 0 ]]; then
     exit 0
 fi
 
-# Step ICF-H: close issue
-rc=0
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/close-completed.sh" \
-    --repo "$OWNER_REPO" "$CURRENT_ISSUE_NUMBER" || rc=$?
-if [[ "$rc" -ne 0 ]]; then
-    printf 'STATUS=failed\nSUMMARY=Step ICF-H: gh issue close failed for #%s\n' "$CURRENT_ISSUE_NUMBER"
-    exit 0
-fi
+# Step ICF-H: close issue (skipped when triage_action=resume_j — issue already closed)
 ICF_H_STATUS=succeeded
+if [[ "$TRIAGE_ACTION" != "resume_j" ]]; then
+    rc=0
+    bash "$AGENTS_CONFIG_DIR/bin/github-issues/close-completed.sh" \
+        --repo "$OWNER_REPO" "$CURRENT_ISSUE_NUMBER" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        printf 'STATUS=failed\nSUMMARY=Step ICF-H: gh issue close failed for #%s\n' "$CURRENT_ISSUE_NUMBER"
+        exit 0
+    fi
+fi
 
 # Step ICF-I: post-close sentinels (non-fatal)
 bash "$AGENTS_CONFIG_DIR/bin/github-issues/post-close-sentinels.sh" \
