@@ -231,3 +231,7 @@ Changes: `/workflow-init` given a meta issue that already has open sub-issues no
 ### FEATURE: PR #1194 (2026-06-28)
 Background: feat(#1100,#1101): cross-repo wire format + parse-closes-issues.js extension + close flow --repo support
 Changes: Cross-repo issue references now supported in session intent files: use `- repo#N: title` or `- owner/repo#N: title` in the `## Issues` section alongside the existing `- #N: title` form;Issue close flow (`/issue-close-stage`, `/issue-close-finalize`) correctly handles issues from foreign repositories — no more 404 errors when closing cross-repo sessions
+
+### FEATURE: PR #1193 (2026-06-28)
+Background: fix(#1192): fail-close stop-final-report-guard when worktree done; SC-6 CONV_LANG
+Changes: BUGFIX: Stop hook now blocks session close when worktree cleanup is done but Final Report is absent — previously the hook passed silently; it now prompts `/session-close` with a language-aware message (follows `CONV_LANG`)
