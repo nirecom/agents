@@ -24,6 +24,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 SUPERVISOR_MD="$AGENTS_DIR/agents/supervisor.md"
+BIN_CHECK_SESSION="$AGENTS_DIR/bin/supervisor-check-session-active"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -36,59 +37,40 @@ require_source() {
     return 0
 }
 
-# S1: agents/supervisor.md contains a gh issue view call for checking issue state,
-# specifically for the closed-issue detection logic (not the Phase 4 dispatch detection).
-# The fix adds issue-state querying logic near the "Inputs to read" section.
-# We look for the combination of gh issue view AND state check AND closes_issues context.
+# S1: agents/supervisor.md references bin/supervisor-check-session-active CLI
+# (extracted from inline procedure by #1195; the closed-session guard now lives in the script).
 run_s1() {
-    require_source "$SUPERVISOR_MD" "S1: supervisor.md contains gh issue view state check for closes_issues" || return
-    # The fix will add a directive referencing closes_issues + gh issue view state check
-    # near the Inputs to read section. Look for the specific combination.
-    local has_closes_issues has_issue_view_state
-    has_closes_issues=0; has_issue_view_state=0
-    grep -q "closes_issues" "$SUPERVISOR_MD" && has_closes_issues=1
-    # The fix adds gh issue view <N> --json state (or similar) for state checking.
-    # This must appear near closes_issues context, not just the Phase 4 dispatch section.
-    # We check for the presence of both jq and state extraction near gh issue view.
-    ( grep -q "\-\-json state\|jq.*\.state\|\.state.*jq" "$SUPERVISOR_MD" ) && has_issue_view_state=1
-    if [ "$has_closes_issues" = "1" ] && [ "$has_issue_view_state" = "1" ]; then
-        pass "S1: supervisor.md contains gh issue view state check for closes_issues"
+    require_source "$SUPERVISOR_MD" "S1: supervisor.md references supervisor-check-session-active" || return
+    if grep -q "supervisor-check-session-active" "$SUPERVISOR_MD"; then
+        pass "S1: supervisor.md references supervisor-check-session-active CLI"
     else
-        fail "S1: supervisor.md missing closes_issues + gh issue view state check (has_closes_issues=$has_closes_issues, has_issue_view_state=$has_issue_view_state; fix #1160 not yet applied)"
+        fail "S1: supervisor.md missing supervisor-check-session-active reference (fix #1160/#1195 not applied)"
     fi
 }
 
-# S2: agents/supervisor.md contains CLOSED check that leads to UNAVAILABLE fallback.
-# The directive must say: if ALL issues CLOSED -> treat wsid as UNAVAILABLE.
-# Note: UNAVAILABLE already exists in the file (for missing wsid); the fix adds a CLOSED
-# variant that also triggers the UNAVAILABLE fallback path.
+# S2: agents/supervisor.md ties Exit 1 (terminated session) to the UNAVAILABLE fallback.
+# After #1195 extraction, the directive reads "Exit 1 → terminated session: ... UNAVAILABLE fallback".
 run_s2() {
-    require_source "$SUPERVISOR_MD" "S2: supervisor.md contains all-CLOSED -> UNAVAILABLE directive" || return
-    local has_closed has_unavailable_fallback
-    has_closed=0; has_unavailable_fallback=0
-    grep -qi "CLOSED" "$SUPERVISOR_MD" && has_closed=1
-    # The fix must add a directive that explicitly ties CLOSED issues to UNAVAILABLE fallback.
-    # Check for the specific pairing: CLOSED state + UNAVAILABLE (or skip) path.
-    # We require CLOSED to appear — it does NOT currently appear (UNAVAILABLE already does).
-    grep -qi "UNAVAILABLE" "$SUPERVISOR_MD" && has_unavailable_fallback=1
-    if [ "$has_closed" = "1" ] && [ "$has_unavailable_fallback" = "1" ]; then
-        pass "S2: supervisor.md contains all-CLOSED -> UNAVAILABLE directive"
+    require_source "$SUPERVISOR_MD" "S2: supervisor.md ties Exit 1 to UNAVAILABLE fallback" || return
+    local has_exit1 has_unavailable
+    has_exit1=0; has_unavailable=0
+    grep -q "Exit 1" "$SUPERVISOR_MD" && has_exit1=1
+    grep -q "UNAVAILABLE" "$SUPERVISOR_MD" && has_unavailable=1
+    if [ "$has_exit1" = "1" ] && [ "$has_unavailable" = "1" ]; then
+        pass "S2: supervisor.md ties Exit 1 (terminated) to UNAVAILABLE fallback"
     else
-        fail "S2: supervisor.md missing CLOSED->UNAVAILABLE directive (has_closed=$has_closed, has_unavailable_fallback=$has_unavailable_fallback; fix #1160 not yet applied)"
+        fail "S2: supervisor.md missing Exit 1->UNAVAILABLE directive (has_exit1=$has_exit1, has_unavailable=$has_unavailable; fix #1160/#1195 not applied)"
     fi
 }
 
-# S3: The gh issue view invocation pattern includes --json state --jq .state (or equivalent)
-# in a closes_issues context — distinct from the Phase 4 dispatch detection section.
-# This validates the specific command shape mandated by the fix spec.
+# S3: bin/supervisor-check-session-active contains the gh issue view state check
+# (extracted from supervisor.md; must use --json state or jq .state).
 run_s3() {
-    require_source "$SUPERVISOR_MD" "S3: supervisor.md closes_issues section contains jq .state extraction" || return
-    # The fix adds a jq .state (or --jq .state) pattern for reading issue state from gh output.
-    # The Phase 4 section uses --json but not for state extraction. We check the new pattern.
-    if grep -q "jq.*\.state\|--json state\|\.state.*jq" "$SUPERVISOR_MD"; then
-        pass "S3: supervisor.md closes_issues section contains jq .state extraction"
+    require_source "$BIN_CHECK_SESSION" "S3: bin/supervisor-check-session-active exists" || return
+    if grep -q "\-\-json state\|jq.*\.state\|\.state.*jq" "$BIN_CHECK_SESSION"; then
+        pass "S3: bin/supervisor-check-session-active contains gh issue view state check"
     else
-        fail "S3: supervisor.md missing jq .state extraction for closed-issue check (fix #1160 not yet applied)"
+        fail "S3: bin/supervisor-check-session-active missing --json state / jq .state (fix #1160 not implemented)"
     fi
 }
 

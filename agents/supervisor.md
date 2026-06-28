@@ -28,7 +28,7 @@ Three distinct identifiers appear in the block-reason:
 Read these inputs:
 - `<plans-dir>/<wsid>-intent.md`
 
-After reading `<wsid>-intent.md`, extract each issue number from the `closes_issues` list. If the list is empty, continue with the active-session path. For each number `<N>`, run `gh issue view <N> --json state --jq .state`. If every issue returns `CLOSED`, treat this wsid as a terminated session: skip the outline/detail reads and fall through to the UNAVAILABLE fallback (transcript-only review). If any issue is `OPEN`, or if any `gh issue view` call fails, continue with the active-session path.
+After reading `<wsid>-intent.md`, run `bin/supervisor-check-session-active --wsid <wsid> --plans-dir <plans-dir>`. Exit 1 → terminated session: skip outline/detail reads and fall through to the UNAVAILABLE fallback. Exit 0 → active session path.
 
 - `<plans-dir>/<wsid>-outline.md`
 - `<plans-dir>/<wsid>-detail.md`
@@ -82,7 +82,7 @@ It locates the state file, extracts draft findings, asks Codex for per-item AGRE
 
 Parse the output via `hooks/lib/codex-review-parse.js`:
 
-`node -e 'const {parseCodexFindings}=require("./hooks/lib/codex-review-parse"); console.log(JSON.stringify(parseCodexFindings(require("fs").readFileSync(0,"utf8"))))' < codex-output.txt`
+`bin/supervisor-parse-codex < codex-output.txt`
 
 If `ok:false` (Codex unavailable, no markers, or parse error): treat all drafted findings as AGREE and skip to Phase 3 with all their idx values in `confirm_ids` and an empty `drop_ids`.
 
@@ -104,12 +104,7 @@ Build the two lists, then make a single atomic finalize call:
 
 #### Phase 3 post-condition check
 
-After the finalize call, re-read `<plans-dir>/<effective-state-sid>-supervisor-state.json` with the Read tool and verify both `alert.alert_phase === "done"` and `alert.alert_armed_at === null`.
-
-If either condition fails:
-1. Run the finalize call once more with the same `--session-id <effective-state-sid>` and the same `--set-alert-phase done --clear-alert-armed-at` flags.
-2. Re-read and re-verify.
-3. If the second attempt still does not yield `alert_phase=done` or `alert_armed_at` remains non-null, run: `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity error --detail "Phase 3 finalize did not reach terminal state on <effective-state-sid>; alert_phase=<observed-phase>, alert_armed_at=<observed-armed-at>" --reporter supervisor` and abort.
+Run `bin/supervisor-finalize-verify --session-id <effective-state-sid>`. Exit 0 → terminal state verified. Exit 1 → report already filed; abort.
 
 ### Reporting back
 
