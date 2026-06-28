@@ -147,11 +147,9 @@ switch ($Action) {
         git -C $ProjectsDir reset --hard origin/main
         # Restore mtime from JSONL timestamps (git doesn't preserve mtime)
         Get-ChildItem -Path $ProjectsDir -Recurse -Filter "*.jsonl" | Where-Object { $_.Name -ne ".history.jsonl" } | ForEach-Object {
-            $last = Get-Content $_.FullName -Tail 1 -ErrorAction SilentlyContinue
-            if (-not ($last -match '"timestamp":"([^"]+)"')) {
-                $last = Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue
-            }
-            if ($last -match '"timestamp":"([^"]+)"') {
+            $tsLine = Get-Content $_.FullName -ErrorAction SilentlyContinue |
+                Where-Object { $_ -match '"timestamp":"([^"]+)"' } | Select-Object -Last 1
+            if ($tsLine -match '"timestamp":"([^"]+)"') {
                 try { $_.LastWriteTime = [datetime]::Parse($Matches[1]).ToLocalTime() } catch {}
             }
         }
