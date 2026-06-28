@@ -179,3 +179,27 @@ still fail on a macOS-native or Linux-native install. Always verify on a true
 native environment before declaring an E2E test green. See
 [`rules/test/claude-e2e.md`](../rules/test/claude-e2e.md) for the full
 precaution list and acceptance criteria.
+
+## VS Code 再起動後のセッション順序修復
+
+VS Code 再起動後、Claude Code 拡張が直近セッションの JSONL ファイルにタイムスタンプなしのメタデータ（`ai-title`、`mode`、`pr-link` 等）を追記する。このとき mtime が再起動時刻に一括更新され、セッション一覧の順序が崩れることがある。
+
+### bash 環境
+
+```sh
+cc-session-mtime --dry-run        # 対象ファイルと適用予定 mtime を確認
+cc-session-mtime                  # 実際に mtime を復元
+```
+
+`--claude-dir <dir>` を指定すると `~/.claude` 以外のディレクトリを対象にできる。
+
+### PowerShell 環境
+
+```powershell
+cc-session-mtime.ps1 -DryRun      # 確認
+cc-session-mtime.ps1              # 実際に mtime を復元
+```
+
+### `session-sync reset` との使い分け
+
+git リポジトリと同期しながら mtime も復元したい場合は `session-sync reset` を使う。mtime のみ修復したい（git sync 不要）場合は `cc-session-mtime` が適切。

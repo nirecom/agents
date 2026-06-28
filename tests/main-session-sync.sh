@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/nonexistent, bin/session-sync.sh
-# Tags: bin, install, git, tests
+# Tags: bin, install, git, tests, scope:common
 # Tests for bin/session-sync.sh and install/linux/session-sync-init.sh
 # Run: bash tests/main-session-sync.sh
 
@@ -382,6 +382,24 @@ if [ $exit_code -eq 0 ] && echo "$output" | grep -qi "reset to remote"; then
     pass "reset succeeds with .jsonl missing timestamp field"
 else
     fail "reset failed with no-timestamp .jsonl (exit=$exit_code, output: $output)"
+fi
+
+# --- Edge: reset restores mtime from last timestamp row when tail is metadata-only ---
+echo "[reset] reset restores mtime from last timestamp row when tail is metadata-only"
+# Create a .jsonl with: T1 line, T2 line (most recent real entry), then metadata-only tail
+echo '{"timestamp":"2024-01-01T10:00:00.000Z","type":"user","text":"hello"}' > "$RESET_PROJECTS/has-metadata-tail.jsonl"
+echo '{"timestamp":"2024-01-01T12:30:00.000Z","type":"assistant","text":"world"}' >> "$RESET_PROJECTS/has-metadata-tail.jsonl"
+echo '{"ai-title":"test session","mode":"auto"}' >> "$RESET_PROJECTS/has-metadata-tail.jsonl"
+git -C "$RESET_PROJECTS" add has-metadata-tail.jsonl >/dev/null 2>&1
+git -C "$RESET_PROJECTS" commit -m "add has-metadata-tail session" >/dev/null 2>&1
+git -C "$RESET_PROJECTS" push >/dev/null 2>&1
+output=$("$DOTFILES_DIR/bin/session-sync.sh" reset --claude-dir "$RESET_CLAUDE" 2>&1) || true
+actual_mtime=$(stat -c %Y "$RESET_PROJECTS/has-metadata-tail.jsonl" 2>/dev/null || stat -f %m "$RESET_PROJECTS/has-metadata-tail.jsonl" 2>/dev/null || echo "0")
+expected_mtime=$(date -d "2024-01-01T12:30:00.000Z" +%s 2>/dev/null || echo "")
+if [ -n "$expected_mtime" ] && [ "$actual_mtime" -eq "$expected_mtime" ]; then
+    pass "reset restores mtime from last timestamp row when tail is metadata-only"
+else
+    fail "reset mtime wrong: expected epoch $expected_mtime (2024-01-01T12:30:00.000Z), got $actual_mtime (should not be from head-1 or metadata line)"
 fi
 
 # --- Edge: Reset discards diverged local commits ---
