@@ -155,6 +155,10 @@ SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-tit
 
 After emitting, mark completion:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase frozen
+  WSID=$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "<NOTES_BACKUP_PATH>" 2>/dev/null || true)
+  if [ -n "$WSID" ] && [ "$WSID" != "<session-id>" ]; then
+    node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$WSID" --set-alert-phase frozen --clear-alert-armed-at
+  fi
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
 `stop-final-report-guard.js` validates completion by checking all 13 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
