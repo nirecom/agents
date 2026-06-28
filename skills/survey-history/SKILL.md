@@ -66,7 +66,7 @@ SH-4. Run the following three investigations in parallel:
    a. **Git log since issue opened:**
       `git log --since=<openedAt> --pretty=format:"%h %ad %s" --date=short`
 
-   b. **History docs entries since issue opened** (follow progressive disclosure per `rules/file-investigation.md`):
+   b. **History docs entries since issue opened** (follow progressive disclosure per `skills/_shared/file-investigation.md`):
       - Grep `docs/history.md` for date strings ≥ openedAt (format `YYYY-MM-DD`).
         Read the surrounding context (±5 lines) for each match.
       - If `docs/history/index.md` exists, grep it for the same date range to find archived

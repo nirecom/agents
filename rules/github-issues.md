@@ -91,4 +91,4 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 - `AGENTS_CONFIG_DIR` must be set for `/issue-close-stage` and `/issue-close-finalize` (skills abort with clear error if unset).
 - `gh issue close` from bash scripts (`close-completed.sh`, `close-not-planned.sh`) is invisible to `enforce-issue-close.js` — PreToolUse fires on the Bash-tool command head only, not subprocesses.
 - `ISSUE_CLOSE_SKILL=1` is effective only in the hook's Node.js process (set at session launch). Bash-tool inline or `export` forms do not reach the hook process.
-- `history.md` entries: English regardless of repo visibility (see `rules/language.md`). Issue body language is author's choice.
+- `history.md` entries: English regardless of repo visibility. Issue body language is author's choice.
