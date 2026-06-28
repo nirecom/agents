@@ -106,12 +106,13 @@ function printUsage() {
     "  --list            Print the 14-step workflow plan, with status markers\n" +
     "                    when --session is provided.\n" +
     "  --reset <step>    Reset a workflow step to pending (recovery tool).\n" +
+    "  --mark <step> complete   Mark a workflow step as complete (recovery tool).\n" +
     "  -h, --help        Show this help.\n"
   );
 }
 
 function parseArgs(argv) {
-  const out = { list: false, session: undefined, reset: undefined };
+  const out = { list: false, session: undefined, reset: undefined, mark: undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") {
@@ -131,6 +132,23 @@ function parseArgs(argv) {
       }
       out.reset = stepName;
       i++;
+    } else if (a === "--mark") {
+      if (i + 2 >= argv.length) {
+        process.stderr.write("next-step: --mark requires <step> and <status> arguments\n");
+        process.exit(1);
+      }
+      const stepName = argv[i + 1];
+      if (VALID_STEPS.indexOf(stepName) === -1) {
+        process.stderr.write("next-step: invalid step for --mark: " + stepName + "\n");
+        process.exit(1);
+      }
+      const statusToken = argv[i + 2];
+      if (statusToken !== "complete") {
+        process.stderr.write("next-step: --mark status must be 'complete'\n");
+        process.exit(1);
+      }
+      out.mark = stepName;
+      i += 2;
     } else if (a === "--session") {
       if (i + 1 >= argv.length) {
         process.stderr.write("next-step: --session requires an argument\n");
@@ -293,6 +311,30 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
+  // Evidence-based auto-complete for outline (#1133): outline.md exists →
+  // mark complete and recompute. MUST run BEFORE the inconsistency scan.
+  if (currentStep === "outline" && !_didAutoRepair &&
+      (state.steps.outline || {}).status === "pending") {
+    const { hasCompletionEvidence: hce1133o } = require("../../hooks/lib/workflow-state/evidence-resolver");
+    if (hce1133o("outline", sid)) {
+      const { markStep: ms1133o } = require("../../hooks/lib/workflow-state");
+      try { ms1133o(sid, "outline", "complete"); } catch (e) { /* fail-open */ }
+      return computeVerdict(rawSid, true);
+    }
+  }
+
+  // Evidence-based auto-complete for detail (#1133): detail.md exists →
+  // mark complete and recompute. MUST run BEFORE the inconsistency scan.
+  if (currentStep === "detail" && !_didAutoRepair &&
+      (state.steps.detail || {}).status === "pending") {
+    const { hasCompletionEvidence: hce1133d } = require("../../hooks/lib/workflow-state/evidence-resolver");
+    if (hce1133d("detail", sid)) {
+      const { markStep: ms1133d } = require("../../hooks/lib/workflow-state");
+      try { ms1133d(sid, "detail", "complete"); } catch (e) { /* fail-open */ }
+      return computeVerdict(rawSid, true);
+    }
+  }
+
   // Inconsistency: later step is complete OR invalid status anywhere.
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
@@ -319,10 +361,36 @@ function computeVerdict(rawSid, _didAutoRepair) {
         );
         return;
       }
+      if (step === "detail" && currentStep === "outline") {
+        emit(
+          "abort",
+          "",
+          "detail is complete but outline is pending (compaction gap). Recovery: node " + __filename +
+            " --mark outline complete (session-global; no cd needed). Then re-run next-step.",
+          "inconsistent: " + step + " is complete but " + currentStep + " is pending"
+        );
+        return;
+      }
+      const { hasCompletionEvidence: hceGeneric } = require("../../hooks/lib/workflow-state/evidence-resolver");
+      let genericRepoDir = process.env.CLAUDE_PROJECT_DIR || null;
+      if (!genericRepoDir) {
+        try {
+          genericRepoDir = require("child_process").execSync(
+            "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+          ).trim();
+        } catch (e) { genericRepoDir = null; }
+      }
+      const hasEvidence = hceGeneric(currentStep, sid, genericRepoDir ? { repoDir: genericRepoDir } : {});
+      const genericHint = hasEvidence
+        ? "Compaction gap: " + step + " is complete but " + currentStep + " is pending. " +
+          "Artifact for " + currentStep + " exists. Recovery: node " + __filename +
+          " --mark " + currentStep + " complete (session-global; no cd needed)."
+        : "Stale state from a prior workflow run or cross-task contamination detected. " +
+          "Re-run /workflow-init to reset (it clears downstream steps automatically).";
       emit(
         "abort",
         "",
-        "Stale state from a prior workflow run detected. Re-run /workflow-init to reset (it clears downstream steps automatically).",
+        genericHint,
         "inconsistent: " + step + " is complete but " + currentStep + " is pending"
       );
       return;
@@ -418,6 +486,20 @@ function main() {
     }
     markStep(sid, args.reset, "pending");
     process.stdout.write("RESET=" + args.reset + " status=pending\n");
+    process.exit(0);
+  }
+  if (args.mark !== undefined) {
+    if (!args.session || !/^[A-Za-z0-9_-]+$/.test(args.session)) {
+      process.stderr.write("next-step: --mark requires a valid --session value\n");
+      process.exit(1);
+    }
+    const sid = resolveSessionId({ sessionIdFromInput: args.session });
+    if (!sid) {
+      process.stderr.write("next-step: could not resolve session id\n");
+      process.exit(1);
+    }
+    markStep(sid, args.mark, "complete");
+    process.stdout.write("MARK=" + args.mark + " status=complete\n");
     process.exit(0);
   }
   computeVerdict(args.session);
