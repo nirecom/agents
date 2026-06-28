@@ -247,3 +247,7 @@ Changes: `session-sync reset` now restores session order correctly after VS Code
 ### FEATURE: PR #1213 (2026-06-29)
 Background: fix(#1133): oracle --mark CLI + outline/detail evidence auto-repair + scoped hint
 Changes: When context compaction leaves outline or detail planning steps in an inconsistent state, the workflow oracle now auto-repairs from on-disk artifacts and continues — no manual recovery needed. When auto-repair is not possible, the oracle gives an actionable `node bin/workflow/next-step --mark <step> complete` command instead of a generic error.
+
+### BUGFIX: Workflow continues automatically between steps; fewer spurious confirmation prompts (2026-06-29)
+Background: Stop-at-every-stage and premature worktree-side verification prompts.
+Changes: After a workflow skill finishes, Claude now continues to the next step automatically instead of pausing to ask 'the next step is /X — proceed?' at every stage boundary; confirmation prompts are reserved for real decision points. The documentation-update step no longer asks for final verification on the worktree side before a PR exists.
