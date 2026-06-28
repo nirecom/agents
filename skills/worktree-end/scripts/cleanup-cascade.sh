@@ -35,6 +35,8 @@ Delegate to doc-append-worker:
 `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "compose", notes_path: NOTES_BACKUP_PATH, branch: BRANCH, pr_number: PR_NUMBER, merge_commit: MERGE_SHA, pr_title: PR_TITLE, closes_issues_count: CLOSES_ISSUES_COUNT, cwd: MAIN_ROOT, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
 On `failed` status: surface `artifact_path`; WE-22 still runs. Recovery: `bash "$AGENTS_CONFIG_DIR/bin/compose-doc-append-entry" --notes <path> --branch <b> --pr <N> --closes-issues-count <K> ...` — CLI writes via GitHub Contents/Git Data API (#672), no local git push required. CLI idempotency (per-PR markers in ~/.workflow-plans/markers/) prevents duplicates on retry.
 
+Sibling repo fanout: parse `SIBLING_REPOS_JSON` from the env JSON (field added by capture-env.sh). For each entry where `pr_number` and `merge_sha` are non-empty, invoke doc-append-worker once with `cwd: entry.worktree_path` so compose-doc-append-entry resolves `docs/history.md` relative to that repo root — all other fields (`notes_path`, `branch`, `pr_title`, `closes_issues_count`, `agents_config_dir`, `artifact_dir`) are shared from the session. Skip entries where `pr_number` or `merge_sha` is empty (capture-env.sh already emitted WARN). On `failed` status for any sibling: log the `artifact_path` and continue to the next sibling; WE-22 still runs.
+
 ## WE-22 — Verify cleanup
 `git -C <main> worktree list` — confirm no stale entries.
 TEMPLATE
