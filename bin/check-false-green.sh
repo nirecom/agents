@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # bin/check-false-green.sh
-# T1-F: false-green テスト検出。
-# assert_eq の want と got が同じリテラルのパターンを検出する（HARD）。
-# 行頭近傍の bare pass は WARN として報告する（SOFT）。
+# T1-F: false-green test detection.
+# Detects patterns where want and got of assert_eq are the same literal (HARD).
+# Reports bare pass near line start as WARN (SOFT).
 #
-# 使用法: check-false-green.sh <test-file> [test-file ...]
+# Usage: check-false-green.sh <test-file> [test-file ...]
 #
-# 終了コード:
-#   0 = false-green パターンなし（WARN のみは 0）
-#   1 = false-green パターン検出（FALSE-GREEN）
-#   2 = 使用エラー
+# Exit codes:
+#   0 = no false-green patterns (WARN-only is still 0)
+#   1 = false-green pattern detected (FALSE-GREEN)
+#   2 = usage error
 
 set -uo pipefail
 

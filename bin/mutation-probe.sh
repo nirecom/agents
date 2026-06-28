@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # bin/mutation-probe.sh
-# T1-E1: 軽量 mutation probe — 単一行 const NAME = /regex/; 形式の正規表現定数を
-# 1つずつ /(?!)/ に差し替えてテストが FAIL することを確認する。
+# T1-E1: lightweight mutation probe — replaces single-line const NAME = /regex/;
+# declarations one at a time with /(?!)/ and verifies the test suite FAILs.
 #
-# 使用法: mutation-probe.sh [options] <target-js-file>
-#   --help        このヘルプを表示して終了する
-#   --test-cmd    テスト実行コマンドを指定する（デフォルト: 自動検出）
-#   --threshold   合格閾値 % を指定する（デフォルト: 80）
+# Usage: mutation-probe.sh [options] <target-js-file>
+#   --help        Show help and exit
+#   --test-cmd    Test command to run (default: auto-detect)
+#   --threshold   Pass threshold in % (default: 80)
 #
-# 終了コード:
-#   0 = mutation score が閾値以上
-#   1 = mutation score が閾値未満（カバレッジギャップ）または定数未検出
-#   2 = 使用エラーまたはファイル未検出
+# Exit codes:
+#   0 = mutation score meets threshold
+#   1 = mutation score below threshold (coverage gap) or no constants found
+#   2 = usage error or file not found
 
 set -uo pipefail
 
@@ -93,13 +93,13 @@ basename_target="$(basename "$TARGET")"
 # Emit partial coverage warnings for known files
 case "$basename_target" in
     sentinel-patterns.js)
-        echo "WARNING: sentinel-patterns.js には2行形式の定数が多数含まれます。" >&2
-        echo "         単一行形式のみを対象とします（partial coverage）。" >&2
-        echo "         完全なカバレッジは T1-E2（Stryker）で対応予定。" >&2
+        echo "WARNING: sentinel-patterns.js has many multi-line constant forms." >&2
+        echo "         Only single-line const forms are probed (partial coverage)." >&2
+        echo "         Full coverage is planned for T1-E2 (Stryker)." >&2
         ;;
     bash-write-patterns.js)
-        echo "WARNING: bash-write-patterns.js の WRITE_PATTERNS 配列内の regex フィールドは" >&2
-        echo "         対象外です（partial coverage）。単一行 const 形式のみを対象とします。" >&2
+        echo "WARNING: regex fields inside WRITE_PATTERNS array in bash-write-patterns.js" >&2
+        echo "         are excluded (partial coverage). Only single-line const forms are probed." >&2
         ;;
 esac
 

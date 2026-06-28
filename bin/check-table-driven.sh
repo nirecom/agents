@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # bin/check-table-driven.sh
-# T1-D 強制: パーサ/正規表現/allowlist ソースファイルのテストファイルに
-# table-driven パターンがあるかを確認する。
+# T1-D enforcement: checks that test files for parser/regex/allowlist source files
+# have a table-driven pattern.
 #
-# 使用法: check-table-driven.sh [--staged] [file ...]
-#   --staged: git diff --cached --name-only からステージ済み変更ファイルを読み込む
-#   file ...: 直接指定するファイルリスト（テストファイルまたはソースファイル）
+# Usage: check-table-driven.sh [--staged] [file ...]
+#   --staged: read staged files from git diff --cached --name-only
+#   file ...: explicit file list (test files or source files)
 #
-# 終了コード:
-#   0 = 全準拠（またはパーサ対象なし）
-#   1 = table-driven 構造が欠如しているテストファイルあり
-#   2 = 使用エラー
+# Exit codes:
+#   0 = all compliant (or no parser targets found)
+#   1 = test file(s) missing table-driven structure
+#   2 = usage error
 
 set -euo pipefail
 
