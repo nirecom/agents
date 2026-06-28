@@ -78,6 +78,13 @@ the following — unit tests are structurally blind to these failure modes:
 5. **Regression for a bug that slipped past unit tests** — the regression test
    must live at the layer that would have caught it.
 
+### Fail-before-fix (BUGFIX sessions only, mandatory)
+
+For BUGFIX sessions (`fix/*` branch), tests must be written and run BEFORE the implementation:
+- Write tests that target the broken behavior → confirm they fail.
+- Write the fix → confirm tests now pass.
+- This fail-before-fix evidence is enforced by the workflow gate: `write_tests` and `review_tests` cannot be skipped in BUGFIX sessions.
+
 ### L2 fallback — required gap documentation
 
 When you choose L2 over L3, you MUST add a `# L3 gap` block to the test file header documenting what L3 would additionally verify. Template:
