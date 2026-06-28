@@ -243,3 +243,7 @@ Changes: BUGFIX sessions (fix/* branches) now enforce fail-before-fix: write_tes
 ### FEATURE: PR #1211 (2026-06-28)
 Background: fix(#1205): session-sync reset mtime wrong when JSONL tail is metadata-only
 Changes: `session-sync reset` now restores session order correctly after VS Code restart — was reading wrong timestamp (session-start instead of last real exchange) when metadata-only lines (ai-title, pr-link) followed the final JSONL entry;New `cc-session-mtime` / `cc-session-mtime.ps1` commands repair session list ordering without a full git sync (`--dry-run` for preview)
+
+### FEATURE: PR #1213 (2026-06-29)
+Background: fix(#1133): oracle --mark CLI + outline/detail evidence auto-repair + scoped hint
+Changes: When context compaction leaves outline or detail planning steps in an inconsistent state, the workflow oracle now auto-repairs from on-disk artifacts and continues — no manual recovery needed. When auto-repair is not possible, the oracle gives an actionable `node bin/workflow/next-step --mark <step> complete` command instead of a generic error.
