@@ -16,14 +16,14 @@ const {
   describeEvidence,
 } = require("../../hooks/lib/workflow-state");
 
-const EVIDENCE_STEPS = ["clarify_intent", "docs", "write_tests"];
+const EVIDENCE_STEPS = ["clarify_intent", "outline", "detail", "write_tests", "docs"];
 
 function printUsage() {
   process.stdout.write(
     "Usage: reconcile-state --session <sid> [--dry-run]\n" +
     "\n" +
     "Repair stale workflow state: mark evidence-backed steps (clarify_intent,\n" +
-    "docs, write_tests) complete when completion evidence exists but state is still pending.\n" +
+    "outline, detail, write_tests, docs) complete when completion evidence exists but state is still pending.\n" +
     "\n" +
     "Options:\n" +
     "  --session <sid>   Session id whose state to reconcile (required).\n" +
