@@ -12,11 +12,22 @@ const { computeStagedTestsToken } = require("./review-tests-evidence");
 function checkReviewTests(step, stepState, opts) {
   if (step !== "review_tests") return { action: "not_handled" };
 
-  const { docsOnly, writeTestsEvidenceBypassed, repoDir } = opts;
+  const { docsOnly, writeTestsEvidenceBypassed, repoDir, sessionId } = opts;
   const status = stepState ? stepState.status : "pending";
 
-  if (status === "skipped") return { action: "skip" };
+  // docs-only short-circuit must come before BUGFIX check so that a docs-only
+  // BUGFIX session is not mis-blocked on review_tests (no tests expected).
   if (docsOnly) return { action: "skip" };
+  // D2 defense (#1147 T0-A): BUGFIX sessions must complete review_tests — skip is not allowed.
+  if (status === "skipped") {
+    try {
+      const { isBugfixSession } = require("../lib/workflow-state/is-bugfix-session");
+      if (isBugfixSession({ sessionId })) {
+        return { action: "block", reason: null };
+      }
+    } catch (_) {}
+    return { action: "skip" };
+  }
   if (status !== "complete") {
     // Symmetric evidence bypass: when write_tests itself was bypassed by
     // staged tests/, review_tests shares the same evidence (issue #833).
