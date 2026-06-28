@@ -11,13 +11,7 @@
 
 ## Migration Code Blocks
 
-Temporary migration code must be wrapped with `BEGIN/END temporary` markers:
-
-```
-# --- BEGIN temporary: <old> → <new> migration ---
-...migration logic...
-# --- END temporary: <old> → <new> migration ---
-```
+Temporary migration code must be wrapped with `# --- BEGIN temporary: <old> → <new> migration ---` / `# --- END temporary: ... ---` markers.
 
 - Description format: `<old path/name> → <new path/name> migration`
 - Grep-friendly: `grep -r "BEGIN temporary"` finds all migration blocks for cleanup

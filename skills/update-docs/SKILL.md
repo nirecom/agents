@@ -28,7 +28,7 @@ UD-3. **Identify gaps**: Compare git log against each document's content. Look f
    - Progress updates
    - `README.md`: Update when a user-visible feature is added or changed, install/usage steps shift, or an existing bullet no longer accurately reflects real behavior.
 UD-4. **Propose updates**: For each file that needs updating, present:
-   - Before drafting History/Changelog bullets: read the `docs-lang` block in `rules/language.md` and apply the configured language (`DOCS_LANG_HISTORY_PUBLIC` / `DOCS_LANG_HISTORY_PRIVATE` for history, `DOCS_LANG_CHANGELOG_PUBLIC` / `DOCS_LANG_CHANGELOG_PRIVATE` for changelog; routed by repo visibility)
+   - Before drafting History/Changelog bullets: apply the language configured by `DOCS_LANG_HISTORY_PUBLIC` / `DOCS_LANG_HISTORY_PRIVATE` for history, `DOCS_LANG_CHANGELOG_PUBLIC` / `DOCS_LANG_CHANGELOG_PRIVATE` for changelog; routed by repo visibility
    - Which sections need changes and why
    - Specific additions or modifications
 UD-5. **CONFIRM_DOCS gate** — check via Bash:
@@ -42,7 +42,7 @@ UD-7. **Commit separately**: If docs are in a separate repo, commit each repo in
 ## Rules
 
 - Follow the structure and content rules defined in `rules/docs.md`
-- Follow language configuration in `rules/language.md` (`docs-lang` block) for History/Changelog entry language
+- Follow `DOCS_LANG_HISTORY_*` / `DOCS_LANG_CHANGELOG_*` settings in `.env` for History/Changelog entry language
 - Follow the gather → propose → confirm → apply cycle; the confirmation step is gated by `CONFIRM_DOCS` — when `off`, the proposal is shown but no AskUserQuestion is raised
 - Compare git log against current docs to identify gaps
 
