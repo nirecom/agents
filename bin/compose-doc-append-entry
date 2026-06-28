@@ -25,6 +25,7 @@ BOOTSTRAP=0
 REPO_OVERRIDE=""
 HISTORY_ONLY=0
 CHANGELOG_ONLY=0
+TEST_GAP=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -34,6 +35,7 @@ while [[ $# -gt 0 ]]; do
         --merge-commit) MERGE_COMMIT="$2"; shift 2 ;;
         --background)  BACKGROUND="$2";   shift 2 ;;
         --category)    CATEGORY="$2";     shift 2 ;;
+        --test-gap)    TEST_GAP="$2";      shift 2 ;;
         --dry-run)     DRY_RUN=1;         shift ;;
         --bootstrap)   BOOTSTRAP=1;       shift ;;
         --closes-issues-count) CLOSES_ISSUES_COUNT="$2"; shift 2 ;;
@@ -351,7 +353,8 @@ if [[ "$WANT_HISTORY" -eq 1 ]]; then
             --date "$TODAY" \
             --commits "$COMMITS_ARG" \
             --background "$BG" \
-            --changes "$CHANGES_WITH_SENTINEL"; then
+            --changes "$CHANGES_WITH_SENTINEL" \
+            ${TEST_GAP:+--test-gap "$TEST_GAP"}; then
         echo "compose-doc-append-entry: doc-append.py failed for history staging" >&2
         exit 1
     fi
