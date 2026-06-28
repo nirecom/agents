@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+
+CLAUDE_DIR="${HOME}/.claude"
+DRY_RUN=0
+
+usage() {
+    echo "Usage: $(basename "$0") [--dry-run] [--claude-dir <dir>]" >&2
+    echo "Restore mtime of Claude Code session JSONL files from their last timestamp entry." >&2
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY_RUN=1; shift ;;
+        --claude-dir) CLAUDE_DIR="${2:?--claude-dir requires a value}"; shift 2 ;;
+        -h|--help) usage ;;
+        *) echo "Unknown option: $1" >&2; usage ;;
+    esac
+done
+
+PROJECTS_DIR="${CLAUDE_DIR}/projects"
+if [[ ! -d "$PROJECTS_DIR" ]]; then
+    echo "warn: projects dir not found: $PROJECTS_DIR" >&2
+    exit 0
+fi
+
+find "$PROJECTS_DIR" -name "*.jsonl" ! -name ".history.jsonl" | while read -r f; do
+    ts=$(grep -o '"timestamp":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4) || true
+    if [[ -z "$ts" ]]; then
+        echo "warn: no timestamp in $f" >&2
+        continue
+    fi
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "would touch -d $ts $f"
+    else
+        touch -d "$ts" "$f" 2>/dev/null || true
+    fi
+done

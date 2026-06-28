@@ -1,3 +1,5 @@
+# Tests: bin/session-sync.ps1, install/win/session-sync-init.ps1
+# Tags: bin, install, git, pwsh-required, scope:common
 # Test: session-sync-init.ps1 and session-sync.ps1
 # Uses temp directories to avoid touching real ~/.claude
 # Git root is at ~/.claude/projects/ (not ~/.claude/)
@@ -248,6 +250,30 @@ Describe "session-sync.ps1 reset" {
         git -C $projDir commit -m "diverged local commit" 2>&1 | Out-Null
         & $SyncScript -Action reset -ClaudeDir $script:TestDir
         Test-Path (Join-Path $projDir "diverged.jsonl") | Should -BeFalse -Because "diverged file should be discarded"
+    }
+
+    It "reset sets mtime from last timestamp line when tail is metadata-only" {
+        # Add a multi-line JSONL with metadata-only tail to the remote
+        $extraSeedDir = Join-Path $env:TEMP "session-sync-extraseed-$(Get-Random)"
+        git clone $script:RemoteDir $extraSeedDir 2>&1 | Out-Null
+        $lines = @(
+            '{"timestamp":"2024-01-01T10:00:00.000Z","type":"user","text":"hello"}',
+            '{"timestamp":"2024-01-01T12:30:00.000Z","type":"assistant","text":"world"}',
+            '{"ai-title":"test session","mode":"auto"}'
+        )
+        Set-Content -Path (Join-Path $extraSeedDir "has-metadata-tail.jsonl") -Value $lines
+        git -C $extraSeedDir add . 2>&1 | Out-Null
+        git -C $extraSeedDir commit -m "add has-metadata-tail session" 2>&1 | Out-Null
+        git -C $extraSeedDir push 2>&1 | Out-Null
+        Remove-Item -Recurse -Force $extraSeedDir -ErrorAction SilentlyContinue
+        # Run reset — should restore mtime from T2, not T1 and not metadata-only line
+        & $SyncScript -Action reset -ClaudeDir $script:TestDir
+        $projDir = Join-Path $script:TestDir "projects"
+        $f = Get-Item (Join-Path $projDir "has-metadata-tail.jsonl")
+        $expectedTs = [datetime]::Parse("2024-01-01T12:30:00.000Z").ToLocalTime()
+        # Allow 2-second tolerance for filesystem rounding
+        $diff = [math]::Abs(($f.LastWriteTime - $expectedTs).TotalSeconds)
+        $diff | Should -BeLessThan 2 -Because "mtime should match last timestamp line T2, not T1 or metadata line"
     }
 }
 

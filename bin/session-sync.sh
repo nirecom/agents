@@ -157,8 +157,7 @@ case "$ACTION" in
         git -C "$PROJECTS_DIR" reset --hard origin/main
         # Restore mtime from JSONL timestamps (git doesn't preserve mtime)
         find "$PROJECTS_DIR" -name "*.jsonl" ! -name ".history.jsonl" | while read -r f; do
-            ts=$(tail -1 "$f" 2>/dev/null | grep -o '"timestamp":"[^"]*"' | head -1 | cut -d'"' -f4) || true
-            [ -z "$ts" ] && ts=$(head -1 "$f" 2>/dev/null | grep -o '"timestamp":"[^"]*"' | head -1 | cut -d'"' -f4) || true
+            ts=$(grep -o '"timestamp":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4) || true
             [ -n "$ts" ] && touch -d "$ts" "$f" 2>/dev/null || true
         done
         # Merge remote history with local (dedup, preserve order)
