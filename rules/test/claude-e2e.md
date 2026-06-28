@@ -40,3 +40,7 @@ When writing tests that spawn `claude -p`, three precautions are required:
 
 Reference: `tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh` (real `claude -p` E2E currently gated on `RUN_E2E`).
 
+## Hook Coverage Map
+
+Per-hook E2E coverage status and implementation order: `docs/architecture/claude-code/e2e-testing.md`.
+
