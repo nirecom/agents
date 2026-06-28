@@ -235,3 +235,7 @@ Changes: Cross-repo issue references now supported in session intent files: use 
 ### FEATURE: PR #1193 (2026-06-28)
 Background: fix(#1192): fail-close stop-final-report-guard when worktree done; SC-6 CONV_LANG
 Changes: BUGFIX: Stop hook now blocks session close when worktree cleanup is done but Final Report is absent — previously the hook passed silently; it now prompts `/session-close` with a language-aware message (follows `CONV_LANG`)
+
+### FEATURE: PR #1186 (2026-06-28)
+Background: feat(#1147 T0): BUGFIX session gate — fail-before-fix enforcement
+Changes: BUGFIX sessions (fix/* branches) now enforce fail-before-fix: write_tests and review_tests cannot be skipped, WRITE_TESTS_NOT_NEEDED is rejected, and doc-append entries to history.md require --test-gap
