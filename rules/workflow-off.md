@@ -40,11 +40,7 @@ Setting WORKFLOW_OFF / WORKTREE_OFF to unblock a single command disables enforce
 
 ## Restoring enforcement
 
-```
-echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>"
-```
-
-This is auto-allowed (no approval needed). Enforcement also restores automatically in the next session — markers are session-scoped.
+Run `echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>"` to restore enforcement. This is auto-allowed (no approval needed). Enforcement also restores automatically in the next session — markers are session-scoped.
 
 ## Scope
 

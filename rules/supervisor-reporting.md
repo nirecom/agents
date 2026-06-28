@@ -11,23 +11,9 @@ Report when you observe any of the following during skill or agent execution:
 
 ## How to Report
 
-```
-node "$AGENTS_CONFIG_DIR/bin/supervisor-report" \
-  --categories <cat1,cat2> \
-  --severity <error|warning|notice> \
-  --detail "<description>" \
-  --reporter "<skill-or-agent-name>" \
-  --session-id "$SID"
-```
+Run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories <cats> --severity <sev> --detail "<text>" --reporter "<name>" --session-id "$SID"`.
 
-Resolve `$SID` from `WORKTREE_NOTES.md` before calling:
-
-```bash
-SID="$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' \
-  "$WORKTREE_PATH/WORKTREE_NOTES.md" 2>/dev/null || true)"
-```
-
-Do not rely on `$CLAUDE_SESSION_ID` propagation (Anthropic bug #27987).
+Resolve `$SID` from `WORKTREE_NOTES.md` (field `Session-ID:`) before calling. Do not rely on `$CLAUDE_SESSION_ID` propagation (Anthropic bug #27987).
 
 ## Fields
 
@@ -64,11 +50,4 @@ Do not rely on `$CLAUDE_SESSION_ID` propagation (Anthropic bug #27987).
 
 ## Example
 
-```bash
-node "$AGENTS_CONFIG_DIR/bin/supervisor-report" \
-  --categories intent,code \
-  --severity warning \
-  --detail "changes touch declared non-goal: async LLM calls" \
-  --reporter "write-code" \
-  --session-id "$SID"
-```
+Example: `--categories intent,code --severity warning --detail "changes touch declared non-goal: async LLM calls" --reporter "write-code"`
