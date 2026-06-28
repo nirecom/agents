@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# supervisor-check-session-active — Check whether a workflow session is still active.
+#
+# Parses closes_issues from <wsid>-intent.md and queries GitHub to determine
+# if the session is still active (any issue OPEN) or terminated (all CLOSED).
+#
+# Usage: bin/supervisor-check-session-active [--wsid] <wsid> [--plans-dir <dir>]
+#        bin/supervisor-check-session-active --wsid <wsid> [--plans-dir <dir>]
+#
+# Exit 0 = active session (any OPEN, empty closes_issues, intent.md not found, or gh failure)
+# Exit 1 = terminated session (all issues CLOSED)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+WSID=""
+PLANS_DIR=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --wsid)
+      WSID="${2:?--wsid requires a value}"
+      shift 2
+      ;;
+    --plans-dir)
+      PLANS_DIR="${2:?--plans-dir requires a value}"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [[ -z "$WSID" ]]; then
+        WSID="$1"
+        shift
+      else
+        echo "ERROR: unexpected argument: $1" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "$WSID" ]]; then
+  echo "ERROR: wsid required (use --wsid <wsid> or pass as positional arg)" >&2
+  exit 1
+fi
+
+if [[ -z "$PLANS_DIR" ]]; then
+  if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
+    PLANS_DIR="$(bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir")"
+  else
+    PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
+  fi
+fi
+
+INTENT_MD="${PLANS_DIR}/${WSID}-intent.md"
+
+# If intent.md not found → active session (cannot determine terminated)
+if [[ ! -f "$INTENT_MD" ]]; then
+  exit 0
+fi
+
+# Parse closes_issues via canonical parser
+ISSUES="$(node "${SCRIPT_DIR}/parse-closes-issues" "$INTENT_MD" 2>/dev/null || echo "[]")"
+
+# If empty array → active session
+if [[ "$ISSUES" == "[]" ]]; then
+  exit 0
+fi
+
+# Strip brackets and split on comma
+IFS=',' read -ra NUMS <<< "$(echo "$ISSUES" | tr -d '[]')"
+
+# Check each issue state
+for NUM in "${NUMS[@]}"; do
+  # Skip empty elements
+  [[ -z "$NUM" ]] && continue
+
+  STATE="$(gh issue view "$NUM" --json state --jq .state 2>/dev/null || echo "UNKNOWN")"
+
+  # Any non-CLOSED state (or gh failure) → active session
+  if [[ "$STATE" != "CLOSED" ]]; then
+    exit 0
+  fi
+done
+
+# All issues CLOSED → terminated session
+exit 1
