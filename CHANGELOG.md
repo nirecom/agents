@@ -239,3 +239,7 @@ Changes: BUGFIX: Stop hook now blocks session close when worktree cleanup is don
 ### FEATURE: PR #1186 (2026-06-28)
 Background: feat(#1147 T0): BUGFIX session gate — fail-before-fix enforcement
 Changes: BUGFIX sessions (fix/* branches) now enforce fail-before-fix: write_tests and review_tests cannot be skipped, WRITE_TESTS_NOT_NEEDED is rejected, and doc-append entries to history.md require --test-gap
+
+### FEATURE: PR #1211 (2026-06-28)
+Background: fix(#1205): session-sync reset mtime wrong when JSONL tail is metadata-only
+Changes: `session-sync reset` now restores session order correctly after VS Code restart — was reading wrong timestamp (session-start instead of last real exchange) when metadata-only lines (ai-title, pr-link) followed the final JSONL entry;New `cc-session-mtime` / `cc-session-mtime.ps1` commands repair session list ordering without a full git sync (`--dry-run` for preview)
