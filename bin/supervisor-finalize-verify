@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# supervisor-finalize-verify — Verify supervisor state reaches terminal state after Phase 3 finalize.
+#
+# Checks that alert_phase=done and alert_armed_at=null in the state file.
+# Retries once via supervisor-write-alert if the first check fails.
+# Files a supervisor-report on second failure.
+#
+# Usage: bin/supervisor-finalize-verify [--session-id] <sid> [--plans-dir <dir>]
+#        bin/supervisor-finalize-verify --session-id <sid> [--plans-dir <dir>]
+#
+# Exit 0 = terminal state verified
+# Exit 1 = failed to reach terminal state (supervisor-report already filed)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Append SCRIPT_DIR to PATH so sibling bin/ scripts (supervisor-write-alert, supervisor-report)
+# are discoverable as a fallback; tests can override by prepending fake-bin entries to PATH.
+export PATH="${PATH}:${SCRIPT_DIR}"
+
+SESSION_ID=""
+PLANS_DIR=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-id)
+      SESSION_ID="${2:?--session-id requires a value}"
+      shift 2
+      ;;
+    --plans-dir)
+      PLANS_DIR="${2:?--plans-dir requires a value}"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [[ -z "$SESSION_ID" ]]; then
+        SESSION_ID="$1"
+        shift
+      else
+        echo "ERROR: unexpected argument: $1" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "$SESSION_ID" ]]; then
+  echo "ERROR: session-id required (use --session-id <sid> or pass as positional arg)" >&2
+  exit 1
+fi
+
+if [[ -z "$PLANS_DIR" ]]; then
+  if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
+    PLANS_DIR="$(bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir")"
+  else
+    PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
+  fi
+fi
+
+STATE_FILE="${PLANS_DIR}/${SESSION_ID}-supervisor-state.json"
+
+# If state file does not exist → no state to verify, treat as no-op
+if [[ ! -f "$STATE_FILE" ]]; then
+  exit 0
+fi
+
+check_state() {
+  node -e "const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const a=s.alert||{};process.exit((a.alert_phase==='done'&&a.alert_armed_at==null)?0:1);" "$STATE_FILE" 2>/dev/null
+}
+
+# First check
+if check_state; then
+  exit 0
+fi
+
+# Retry: write terminal state (found via PATH — tests can mock with a fake-bin entry)
+supervisor-write-alert --session-id "$SESSION_ID" --set-alert-phase done --clear-alert-armed-at
+
+# Re-check
+if check_state; then
+  exit 0
+fi
+
+# Second failure: read observed values and file supervisor-report
+OBSERVED="$(node -e "const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const a=s.alert||{};console.log('alert_phase='+(a.alert_phase||'null')+', alert_armed_at='+(a.alert_armed_at||'null'));" "$STATE_FILE" 2>/dev/null || echo "unreadable")"
+
+supervisor-report \
+  --categories workflow \
+  --severity error \
+  --detail "Phase 3 finalize did not reach terminal state on ${SESSION_ID}; ${OBSERVED}" \
+  --reporter supervisor
+
+exit 1

@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+'use strict';
+const { parseCodexFindings } = require(require('path').join(__dirname, '../hooks/lib/codex-review-parse'));
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { input += chunk; });
+process.stdin.on('end', () => {
+  const result = parseCodexFindings(input);
+  process.stdout.write(JSON.stringify(result) + '\n');
+});
