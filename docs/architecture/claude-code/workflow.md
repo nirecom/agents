@@ -68,6 +68,8 @@ bypassing the state file entry for those steps. The state file still contains th
 (created by `session-start.js` with status `pending`); the evidence override happens only in
 the gate, not in the file.
 
+`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **oracle-level auto-repair**: when `next-step` finds one of these steps `pending`, it calls `hasCompletionEvidence()` from `evidence-resolver.js` and, if evidence is found (intent/outline/detail plan artifact exists, or test files are staged), auto-marks the step `complete` and re-evaluates the verdict — capped at one auto-repair per oracle call. This resolves compaction gaps where the step completed but the marker was lost.
+
 `research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
 their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>"`)
 when CLAUDE.md skip conditions are met.
@@ -200,8 +202,10 @@ echo "<<WORKFLOW_RESET_FROM_<step>>>"
 Priority order for recovery:
 1. **Session resume**: `session-start.js` re-injects oracle verdict automatically — no action needed.
 2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID` for an in-session verdict.
-3. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
-4. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
+3. **Auto-repair**: oracle calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
+4. **`--mark <step> complete`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step> complete` marks one step complete without touching others (session-global; run from any directory). Use when the oracle's scoped hint names a specific step to mark.
+5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
+6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
 
 ## Exemptions
 

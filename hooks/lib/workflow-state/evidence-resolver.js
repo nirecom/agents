@@ -58,7 +58,19 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       if (!repoDir) return false;
       return hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir);
     }
-    if (step === "write_tests") {
+    if (step === "outline") {
+      if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
+      const fs = require("fs");
+      const plansDir = getWorkflowPlansDir();
+      return fs.existsSync(path.join(plansDir, sessionId + "-outline.md"));
+    }
+    if (step === "detail") {
+      if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
+      const fs = require("fs");
+      const plansDir = getWorkflowPlansDir();
+      return fs.existsSync(path.join(plansDir, sessionId + "-detail.md"));
+    }
+    if (step === "write_tests" || step === "run_tests") {
       const repoDir = resolveRepoDir(opts);
       if (!repoDir) return false;
       return hasStagedTestChanges(repoDir);
@@ -83,6 +95,12 @@ function describeEvidence(step) {
       "a staged file is under docs/ or matches *.md (any name/location, case-insensitive)",
       "in a linked worktree: WORKTREE_NOTES.md ## History Notes / ## Changelog Notes has a non-'(none)' bullet",
     ];
+  }
+  if (step === "outline") {
+    return ["<PLANS_DIR>/<sessionId>-outline.md exists"];
+  }
+  if (step === "detail") {
+    return ["<PLANS_DIR>/<sessionId>-detail.md exists"];
   }
   if (step === "write_tests") {
     return ["a staged file is under tests/ or test/ (per hasStagedTestChanges)"];
