@@ -1,3 +1,7 @@
+---
+globs: "**/*.js,**/*.ts,**/*.py,**/*.sh,rules/**/*.md,skills/**/SKILL.md,agents/**/*.md"
+---
+
 # File Split Rule
 
 Keep all prompt and code files compact. Split at the thresholds below.

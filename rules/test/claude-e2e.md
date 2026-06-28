@@ -40,27 +40,7 @@ When writing tests that spawn `claude -p`, three precautions are required:
 
 Reference: `tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh` (real `claude -p` E2E currently gated on `RUN_E2E`).
 
-## Hook Audit (in scope for #943)
+## Hook Coverage Map
 
-| Hook | Current L2 | Priority | Rationale |
-|---|---|---|---|
-| `hooks/workflow-mark.js` | partial (`tests/feature-robust-workflow/settings-e2e.sh` — RUN_E2E-gated, extracted in PR #964) | **P1 — extract** | E2E exists but is gated by RUN_E2E in a dedicated file; #943 to make it the default coverage path. |
-| `hooks/stop-confirm-plan-guard.js` | none | **P1 — add** | Stop-hook sentinel-order validation is unreachable from unit tests; the hook reads the live transcript. |
-| `hooks/stop-final-report-guard.js` | extensive (`tests/feature-534-stop-final-report-guard.sh`, 20+ L2 cases) | **P2 — add E2E** | L2 is thorough but cannot exercise the real Stop-event path; one E2E case validates registration. |
-| `hooks/session-start.js` | partial (`tests/feature-772-session-start-cleanup-inherit.sh` covers env-file write) | **P2 — add E2E** | env-file write covered at L2; need E2E for actual CONV_LANG injection into a live session. |
-| `hooks/subagent-start.js` | none | **P3 — add** | Sub-agent context injection requires a real Task tool call — only reachable via `claude -p`. |
-| `hooks/post-compact.js` | none | **P3 — add** | PostCompact event is not reproducible at L2 (requires real compaction trigger). |
-| `hooks/stop-askuserquestion-required.js` | L2 in `tests/feature-stop-guard-layer2.sh` (coverage scope to verify at implementation) | **P2 — add E2E** | Stop hook requiring AskUserQuestion pre-fire is only observable in a live session; sentinel-order validation mirrors stop-confirm-plan-guard.js. |
-| `hooks/stop-enforce-worktree-on-warn.js` | none (advisory; WORKTREE_OFF solo-use Stop context injection) | **P3 — add** | Advisory output only; actual context-injection is only confirmable in a live session. |
-| `hooks/supervisor-guard.js` | L2-only (`tests/feature-719-supervisor-guard-hook.sh`, `tests/feature-883-supervisor-guard-wsid.sh`) | **OUT — defer** | Supervisor hang detection has no observable user-facing signal under `claude -p --output-format json`; E2E adds no signal beyond L2. Re-evaluate after #937 phase 2. |
+Per-hook E2E coverage status and implementation order: `docs/architecture/claude-code/e2e-testing.md`.
 
-## #943 Priority Order
-
-1. `workflow-mark.js` — extract the existing embedded E2E to a dedicated file.
-2. `stop-confirm-plan-guard.js` — write fresh E2E.
-3. `stop-final-report-guard.js` — write fresh E2E (paired with existing L2 file; both kept).
-4. `stop-askuserquestion-required.js` — write fresh E2E (Stop-hook AskUserQuestion pre-fire gating).
-5. `session-start.js` — write fresh E2E (paired with `feature-772-session-start-cleanup-inherit.sh`).
-6. `subagent-start.js` — write fresh E2E.
-7. `post-compact.js` — write fresh E2E.
-8. `stop-enforce-worktree-on-warn.js` — write fresh E2E (advisory context-injection in live session).
