@@ -46,6 +46,17 @@ if (copiedRaw.trim().length > 0) {
   }
 }
 
+const siblingRaw = process.env.SIBLING_WORKTREES_JSON || "";
+let siblingWorktrees = [];
+if (siblingRaw.trim().length > 0) {
+  try {
+    const parsed = JSON.parse(siblingRaw);
+    if (Array.isArray(parsed)) siblingWorktrees = parsed;
+  } catch (_) {
+    process.stderr.write("WARN: SIBLING_WORKTREES_JSON is not valid JSON; proceeding without sibling worktrees\n");
+  }
+}
+
 const mainRoot = normalizePath(mainRootRaw);
 const worktreePath = normalizePath(worktreePathRaw);
 const baseDir =
@@ -66,6 +77,7 @@ try {
     copiedFiles,
     excludePattern: "WORKTREE_NOTES.md",
     sessionId,
+    siblingWorktrees,
   });
 } catch (e) {
   die(`Unexpected error: ${e.message}`);
