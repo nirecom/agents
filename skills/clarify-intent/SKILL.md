@@ -32,7 +32,7 @@ CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recom
 
    **Class members proposal (when candidates ≥ 1):** run `reference/class-members-proposal.md`.
 
-CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing intent.md):
+CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing intent.md and CI-3b):
    - Read `skills/_shared/judge-decomposition.md` to load the signal table.
    - Evaluate all D1–D5 signals against the agreed scope. Do not short-circuit on the first match.
    - Emit in Claude text output: `VERDICT: wf-meta | <signal IDs>` or `VERDICT: wf-code | none`
@@ -49,7 +49,18 @@ CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing i
        - After CI-5 confirm-plan, route to `make-outline-plan` as normal; the oracle will auto-skip the 9 non-applicable WF-CODE steps (includes `detail`).
      - **If user chooses WF-CODE**: proceed silently to CI-4.
 
-CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
+   - Skip silently when `closes_issues` contains no cross-repo references (no `owner/repo#N` or bare `repo#N` form). Proceed to CI-4.
+   - Determine primary repo: run `git remote get-url origin` and normalize to `owner/repo` format.
+   - Collect all cross-repo entries from `closes_issues`; normalize bare `repo#N` to `owner/repo#N` using the primary owner; deduplicate by insertion order.
+   - For each unique sibling `owner/repo` (i.e. not the primary repo): call `AskUserQuestion` once: "セッションに `<owner/repo>` のイシューが含まれています。このセッションで使用するそのリポジトリのリンク worktree の絶対パスを入力してください（スキップする場合は空白のままにしてください）。"
+   - Non-empty answer → record as `{repo: "<owner/repo>", worktree_path: "<answer>"}`.
+   - Empty / skipped → record `<owner/repo> の sibling worktree 不在` under `## Constraints` in intent.md.
+   - After all probes: CI-4 writes a `## worktrees` section with the collected results.
+
+CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`), `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
+
+   **`## worktrees` schema (optional section):** written by CI-4 when CI-3b collected at least one non-empty worktree path. Omit entirely for single-repo sessions. Format per entry: one `- repo: <owner/repo>` line followed by `  worktree_path: <absolute path>` (2-space indent) on the next line.
 
    **`## Class members` schema (mandatory section):** appears immediately before
    `## Accepted Tradeoffs`. Format per member:

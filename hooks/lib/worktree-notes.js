@@ -20,6 +20,39 @@ function hasNewline(s) {
   return typeof s === "string" && (s.includes("\n") || s.includes("\r"));
 }
 
+function hasShellMetachar(s) {
+  return /[;|&`$]/.test(s);
+}
+
+function validateSiblings(siblingWorktrees) {
+  if (!Array.isArray(siblingWorktrees)) return;
+  for (const entry of siblingWorktrees) {
+    if (entry === null || typeof entry !== "object") {
+      throw new Error("invalid sibling entry: must be a non-null object");
+    }
+    const repo = entry.repo;
+    const worktree_path = entry.worktree_path;
+    if (repo == null || repo === "") {
+      throw new Error("invalid sibling entry: repo is empty or null");
+    }
+    if (worktree_path == null || worktree_path === "") {
+      throw new Error("invalid sibling entry: worktree_path is empty or null");
+    }
+    if (hasNewline(repo) || hasNewline(worktree_path)) {
+      throw new Error("invalid sibling entry: newline in field");
+    }
+    if (hasTraversal(worktree_path)) {
+      throw new Error("invalid sibling entry: path traversal in worktree_path");
+    }
+    if (hasShellMetachar(repo) || hasShellMetachar(worktree_path)) {
+      throw new Error("invalid sibling entry: shell metacharacter in field");
+    }
+    if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) {
+      throw new Error("invalid sibling entry: repo must match owner/name (alphanumeric, ., -, _ only)");
+    }
+  }
+}
+
 function formatBaseDir(baseDir) {
   if (baseDir === undefined || baseDir === null || baseDir === "") {
     return "(default)";
@@ -27,7 +60,7 @@ function formatBaseDir(baseDir) {
   return String(baseDir);
 }
 
-function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId } = {}) {
+function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees } = {}) {
   const normalizedMainRoot = mainRoot ? normalizePath(mainRoot) : "";
   const lines = [
     "# Worktree Notes",
@@ -69,14 +102,44 @@ function buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, 
     "",
     "## Changelog Notes",
     "- (none)",
+    "",
+    "## SiblingWorktrees",
   );
+
+  const validSiblings = [];
+  if (Array.isArray(siblingWorktrees)) {
+    for (const entry of siblingWorktrees) {
+      if (entry == null) continue;
+      const repo = entry.repo;
+      const worktree_path = entry.worktree_path;
+      if (repo == null || repo === "" || worktree_path == null || worktree_path === "") continue;
+      if (hasNewline(repo) || hasNewline(worktree_path)) {
+        throw new Error("invalid sibling entry: newline in field");
+      }
+      if (hasTraversal(worktree_path)) {
+        throw new Error("invalid sibling entry: path traversal in worktree_path");
+      }
+      if (hasShellMetachar(repo) || hasShellMetachar(worktree_path)) {
+        throw new Error("invalid sibling entry: shell metacharacter in field");
+      }
+      validSiblings.push({ repo, worktree_path });
+    }
+  }
+
+  if (validSiblings.length === 0) {
+    lines.push("- (none)");
+  } else {
+    for (const s of validSiblings) {
+      lines.push(`- repo: ${s.repo}, path: ${normalizePath(s.worktree_path)}`);
+    }
+  }
 
   return lines.join("\n") + "\n";
 }
 
-function writeNotes({ worktreePath, branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId }) {
+function writeNotes({ worktreePath, branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees }) {
   const notesPath = path.join(worktreePath, "WORKTREE_NOTES.md");
-  const body = buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId });
+  const body = buildNotesBody({ branch, createdDate, resolvedPath, mainRoot, baseDir, copiedFiles, sessionId, siblingWorktrees });
   fs.writeFileSync(notesPath, body, { encoding: "utf8" });
   return { notesPath, notesWritten: true };
 }
@@ -160,6 +223,7 @@ function run(input) {
     copiedFiles,
     excludePattern,
     sessionId,
+    siblingWorktrees,
   } = input;
 
   if (hasTraversal(mainRoot)) {
@@ -217,6 +281,8 @@ function run(input) {
     }
   }
 
+  validateSiblings(siblingWorktrees);
+
   const result = {
     notesPath: null,
     notesWritten: false,
@@ -236,6 +302,7 @@ function run(input) {
       baseDir,
       copiedFiles,
       sessionId,
+      siblingWorktrees,
     });
     result.notesPath = w.notesPath;
     result.notesWritten = true;
@@ -258,4 +325,4 @@ function run(input) {
   return result;
 }
 
-module.exports = { buildNotesBody, writeNotes, appendExclude, run, hasTraversal, normalizePath };
+module.exports = { buildNotesBody, writeNotes, appendExclude, run, hasTraversal, hasNewline, hasShellMetachar, validateSiblings, normalizePath };
