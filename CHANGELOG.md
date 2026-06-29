@@ -259,3 +259,7 @@ Changes: New test quality enforcement for parser/regex changes: table-driven tes
 ### FEATURE: PR #1227 (2026-06-30)
 Background: fix(#1225): profile-snippet.sh fetch guards + idempotency
 Changes: Session sync fetch at iTerm startup no longer suspends the zsh job or corrupts the prompt/PATH when SSH passphrase is not cached. `profile-snippet.sh` is now truly idempotent when sourced from both `.profile_common` and `.zshrc`.
+
+### FEATURE: PR #1227 (2026-06-30)
+Background: fix(#1225): profile-snippet.sh fetch guards + idempotency
+Changes: Session sync fetch at iTerm startup no longer suspends the zsh job or corrupts the prompt/PATH when SSH passphrase is not cached. `profile-snippet.sh` is now truly idempotent when sourced from both `.profile_common` and `.zshrc`.
