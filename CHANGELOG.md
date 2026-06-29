@@ -251,3 +251,7 @@ Changes: When context compaction leaves outline or detail planning steps in an i
 ### BUGFIX: Workflow continues automatically between steps; fewer spurious confirmation prompts (2026-06-29)
 Background: Stop-at-every-stage and premature worktree-side verification prompts.
 Changes: After a workflow skill finishes, Claude now continues to the next step automatically instead of pausing to ask 'the next step is /X — proceed?' at every stage boundary; confirmation prompts are reserved for real decision points. The documentation-update step no longer asks for final verification on the worktree side before a PR exists.
+
+### FEATURE: PR #1220 (2026-06-29)
+Background: feat(#1149,#1001,#1208): T1 test quality — table-driven mandatory, mutation probe, false-green detection
+Changes: New test quality enforcement for parser/regex changes: table-driven tests are now required when editing parser, regex, or allowlist files (`bin/check-table-driven.sh`); same-literal false-green assertions are detected and blocked (`bin/check-false-green.sh`); a lightweight mutation probe (`bin/mutation-probe.sh`) verifies that regex constants are actually exercised by tests (mutation score ≥80% threshold)
