@@ -19,6 +19,8 @@ RT-2. **Launch Explore subagent**: Spawn an Explore subagent with the following 
    - Read `skills/_shared/test-design.md` for the Test Case Categories checklist
    - Evaluate test coverage against every category and sub-category in the checklist
    - For each category, report what IS covered, what is MISSING, and what is N/A (with reason)
+   - パーサ/正規表現/allowlist ソースファイルが対象の場合: bash テストは `while IFS='|' read -r` ループを、JS テストは `cases.forEach(` または `for (const ` を table-driven 相当として確認する（`skills/_shared/test-design.md § Table-Driven Tests` 参照）。欠如は MISSING として報告する。
+   - false-green パターン（want と got が同一リテラルのアサーション、アサーション呼び出しのないテスト関数/ブロック）を確認する。発見した場合は MISSING としてカバレッジ整合性の問題として報告する。
    - For missing cases, suggest specific test descriptions
 
 RT-3. **Present results**: Show the subagent's findings to the user.
