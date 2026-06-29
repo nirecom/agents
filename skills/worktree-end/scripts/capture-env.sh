@@ -170,8 +170,10 @@ if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
     }
   ' "$WORKTREE/WORKTREE_NOTES.md")"
 
-  sibling_json="["
-  first=1
+  # Resolve each sibling's PR/SHA, accumulate as TAB-separated tuples, then
+  # serialize via sibling-repos-json.js (JSON.stringify does the escaping —
+  # never hand-build JSON from shell strings; #1102 security Finding 2).
+  sibling_tsv=""
   while IFS='|' read -r sibling_repo sibling_wt_path; do
     [[ -z "$sibling_repo" ]] && continue
     sibling_branch="$(git -C "$sibling_wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
@@ -195,12 +197,9 @@ if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
       printf 'WARN: sibling %s PR/SHA unresolved (branch=%s pr=%s); doc-append skipped for this repo\n' \
         "$sibling_repo" "$sibling_branch" "$sibling_pr" >&2
     fi
-    entry="{\"repo\":\"$sibling_repo\",\"worktree_path\":\"$sibling_wt_path\",\"pr_number\":\"$sibling_pr\",\"merge_sha\":\"$sibling_merge_sha\"}"
-    if [[ "$first" == "1" ]]; then first=0; else sibling_json="$sibling_json,"; fi
-    sibling_json="$sibling_json$entry"
+    sibling_tsv+="$(printf '%s\t%s\t%s\t%s' "$sibling_repo" "$sibling_wt_path" "$sibling_pr" "$sibling_merge_sha")"$'\n'
   done <<< "$sibling_entries"
-  sibling_json="${sibling_json}]"
-  SIBLING_REPOS_JSON="$sibling_json"
+  SIBLING_REPOS_JSON="$(printf '%s' "$sibling_tsv" | node "$LIB_DIR/sibling-repos-json.js")"
 fi
 
 # Step 3: Restart detection (four categories).

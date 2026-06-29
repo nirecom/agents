@@ -1,11 +1,11 @@
-#!/bin/bash
-# Cleanup cascade for worktree-end Steps WE-15..WE-22.
-# This script is documentation only — emits the spec the orchestrator follows.
-# The actual git/gh/node operations are issued by the orchestrator one at a
-# time (auditability + permission dialogs); this file is the canonical SSOT
-# for what those operations are.
-set -euo pipefail
-cat <<'TEMPLATE'
+<!--
+Cleanup cascade spec for worktree-end Steps WE-15..WE-22.
+This file is a documentation spec, not an executable script: the orchestrator
+Reads it and issues each git/gh/node operation one at a time (auditability +
+permission dialogs). It is the canonical SSOT for what those operations are.
+Read it (do not `bash` it) — same Read-as-spec pattern as skills/_shared/*.md.
+-->
+
 ## WE-15 — git worktree remove
 `git -C <main> worktree remove <path>` (never `--force`).
 
@@ -39,4 +39,3 @@ Sibling repo fanout: parse `SIBLING_REPOS_JSON` from the env JSON (field added b
 
 ## WE-22 — Verify cleanup
 `git -C <main> worktree list` — confirm no stale entries.
-TEMPLATE

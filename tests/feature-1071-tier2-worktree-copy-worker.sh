@@ -170,6 +170,201 @@ test_ws_references_worker
 test_ws_confirm_worktree_ask
 test_ws_inline_copy_replaced
 
+# ── Tests 9-10: worktree-copy-include.js argv form + legacy stdin backward-compat ──
+# Added for #1102: bin/worktree-copy-include.js gained a new argv form
+# (--main-root / --worktree-path / --include-file) while keeping legacy stdin JSON.
+# Both forms must produce a JSON object with {copied, skipped, denied, errors}.
+
+COPY_INCLUDE_SCRIPT="${AGENTS_DIR}/bin/worktree-copy-include.js"
+
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+    else
+        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    fi
+}
+
+_TMPDIR_1071="$(mktemp -d)"
+trap 'rm -rf "$_TMPDIR_1071"' EXIT
+
+# Create a minimal git-repo fixture (main worktree) with a .worktreeinclude file
+# and a gitignored file that should be copied.
+_MAIN_ROOT="$_TMPDIR_1071/main"
+_WORKTREE_PATH="$_TMPDIR_1071/wt"
+mkdir -p "$_MAIN_ROOT" "$_WORKTREE_PATH"
+git -C "$_MAIN_ROOT" -c init.defaultBranch=main init --quiet
+git -C "$_MAIN_ROOT" config user.email "test@example.com"
+git -C "$_MAIN_ROOT" config user.name "Test"
+git -C "$_MAIN_ROOT" config core.hooksPath /dev/null
+# Track a source file.
+printf 'tracked\n' > "$_MAIN_ROOT/tracked.md"
+git -C "$_MAIN_ROOT" add tracked.md
+git -C "$_MAIN_ROOT" commit --quiet -m "init"
+# Create a gitignored file by adding it to .gitignore.
+printf '*.secret\n' > "$_MAIN_ROOT/.gitignore"
+printf 'secret content\n' > "$_MAIN_ROOT/config.secret"
+git -C "$_MAIN_ROOT" add .gitignore
+git -C "$_MAIN_ROOT" commit --quiet -m "add gitignore"
+# Write .worktreeinclude to include *.secret files.
+printf '*.secret\n' > "$_MAIN_ROOT/.worktreeinclude"
+
+# Helper: check JSON output has the four expected keys.
+_has_result_keys() {
+    node -e "
+      try {
+        const o = JSON.parse(process.argv[1]);
+        const ok = ['copied','skipped','denied','errors'].every(k => Array.isArray(o[k]));
+        process.stdout.write(ok ? 'yes' : 'no');
+      } catch(e) { process.stdout.write('no: ' + e.message); }
+    " "$1" 2>/dev/null
+}
+
+# ── Test 9: argv form runs and produces expected output ───────────────────────
+test_argv_form() {
+    if [ ! -f "$COPY_INCLUDE_SCRIPT" ]; then
+        fail "9: bin/worktree-copy-include.js missing"
+        return
+    fi
+    local out rc
+    out=$(run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
+        --main-root "$_MAIN_ROOT" \
+        --worktree-path "$_WORKTREE_PATH" 2>/dev/null)
+    rc=$?
+    local has_keys
+    has_keys=$(_has_result_keys "$out")
+    # config.secret should be in copied[] (matched by .worktreeinclude, gitignored).
+    local copied
+    copied=$(node -e "
+      try {
+        const o = JSON.parse(process.argv[1]);
+        process.stdout.write(JSON.stringify(o.copied));
+      } catch(e) { process.stdout.write('[]'); }
+    " "$out" 2>/dev/null)
+    # Content assertion (anti-false-green): config.secret (gitignored, matched by
+    # .worktreeinclude) MUST appear in copied[]. A silently-broken copy that emits
+    # an empty copied[] now FAILS instead of passing on key-presence alone.
+    local has_secret
+    has_secret=$(node -e "
+      try {
+        const o = JSON.parse(process.argv[1]);
+        const found = Array.isArray(o.copied) &&
+          o.copied.some(p => /(^|[\\\\/])config\.secret$/.test(String(p)));
+        process.stdout.write(found ? 'yes' : 'no');
+      } catch(e) { process.stdout.write('no'); }
+    " "$out" 2>/dev/null)
+    if [ "$rc" -eq 0 ] && [ "$has_keys" = "yes" ] && [ "$has_secret" = "yes" ]; then
+        pass "9: argv form copies gitignored config.secret into copied[] (rc=0, has_keys=yes, copied=$copied)"
+    else
+        fail "9: argv form" "rc=$rc has_keys=$has_keys has_secret=$has_secret out='$out'"
+    fi
+}
+
+# ── Test 10: legacy stdin JSON form still works (backward-compat) ─────────────
+test_legacy_stdin_form() {
+    if [ ! -f "$COPY_INCLUDE_SCRIPT" ]; then
+        fail "10: bin/worktree-copy-include.js missing"
+        return
+    fi
+    # Use a fresh destination to avoid interference from test 9.
+    local wt2="$_TMPDIR_1071/wt2"
+    mkdir -p "$wt2"
+    local json_input
+    json_input=$(node -e "process.stdout.write(JSON.stringify({mainRoot: process.argv[1], worktreePath: process.argv[2], includeFile: null}))" \
+        "$_MAIN_ROOT" "$wt2" 2>/dev/null)
+    local out rc
+    out=$(printf '%s' "$json_input" | run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" 2>/dev/null)
+    rc=$?
+    local has_keys
+    has_keys=$(_has_result_keys "$out")
+    # Content assertion (anti-false-green): same as T9 — config.secret must be copied.
+    local has_secret
+    has_secret=$(node -e "
+      try {
+        const o = JSON.parse(process.argv[1]);
+        const found = Array.isArray(o.copied) &&
+          o.copied.some(p => /(^|[\\\\/])config\.secret$/.test(String(p)));
+        process.stdout.write(found ? 'yes' : 'no');
+      } catch(e) { process.stdout.write('no'); }
+    " "$out" 2>/dev/null)
+    if [ "$rc" -eq 0 ] && [ "$has_keys" = "yes" ] && [ "$has_secret" = "yes" ]; then
+        pass "10: legacy stdin JSON form copies gitignored config.secret into copied[] (backward-compat)"
+    else
+        fail "10: legacy stdin form" "rc=$rc has_keys=$has_keys has_secret=$has_secret out='$out'"
+    fi
+}
+
+test_argv_form
+test_legacy_stdin_form
+
+# ── Tests 11-13: SECURITY — CWE-22 path-traversal guard (hasTraversal gate) ───
+# bin/worktree-copy-include.js rejects any path field whose normalized form
+# contains a `..` segment (lines: hasTraversal + exit 1). Each test supplies a
+# `..` segment in one field and asserts rc != 0. The argv branch is only taken
+# when --main-root is present, so the worktree-path and include-file cases keep a
+# valid --main-root and inject the traversal into the field under test.
+
+# ── Test 11: --main-root with `..` traversal → exit non-zero ──────────────────
+test_traversal_main_root() {
+    if [ ! -f "$COPY_INCLUDE_SCRIPT" ]; then
+        fail "11: bin/worktree-copy-include.js missing"
+        return
+    fi
+    local rc
+    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
+        --main-root "$_TMPDIR_1071/../etc/passwd" \
+        --worktree-path "$_WORKTREE_PATH" >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        pass "11: SECURITY — --main-root with '..' traversal → rc=$rc (non-zero)"
+    else
+        fail "11: traversal main-root not rejected" "rc=$rc (expected non-zero)"
+    fi
+}
+
+# ── Test 12: --worktree-path with `..` traversal → exit non-zero ──────────────
+test_traversal_worktree_path() {
+    if [ ! -f "$COPY_INCLUDE_SCRIPT" ]; then
+        fail "12: bin/worktree-copy-include.js missing"
+        return
+    fi
+    local rc
+    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
+        --main-root "$_MAIN_ROOT" \
+        --worktree-path "$_TMPDIR_1071/../evil/wt" >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        pass "12: SECURITY — --worktree-path with '..' traversal → rc=$rc (non-zero)"
+    else
+        fail "12: traversal worktree-path not rejected" "rc=$rc (expected non-zero)"
+    fi
+}
+
+# ── Test 13: --include-file with `..` traversal → exit non-zero ───────────────
+# Source guards includeFile too: `if (input.includeFile && hasTraversal(...))`.
+test_traversal_include_file() {
+    if [ ! -f "$COPY_INCLUDE_SCRIPT" ]; then
+        fail "13: bin/worktree-copy-include.js missing"
+        return
+    fi
+    local rc
+    run_with_timeout 30 node "$COPY_INCLUDE_SCRIPT" \
+        --main-root "$_MAIN_ROOT" \
+        --worktree-path "$_WORKTREE_PATH" \
+        --include-file "$_TMPDIR_1071/../evil/.worktreeinclude" >/dev/null 2>&1
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        pass "13: SECURITY — --include-file with '..' traversal → rc=$rc (non-zero)"
+    else
+        fail "13: traversal include-file not rejected" "rc=$rc (expected non-zero)"
+    fi
+}
+
+test_traversal_main_root
+test_traversal_worktree_path
+test_traversal_include_file
+
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
 exit $FAIL

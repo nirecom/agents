@@ -29,18 +29,14 @@ Receive a JSON object with:
    - Recommended: `.env.local`, `.env.development`, dev credentials, development configs.
    - Prohibited: `.env.production`, cloud credentials, deploy keys, prod tokens, customer data access keys.
 
-3. Run the copy script using a temp file for `COPIED_JSON` to avoid `'` quoting issues with filenames.
-   Write the input JSON with Node, pipe to the copy script, capture stdout to a temp file:
-   `node -e "process.stdout.write(JSON.stringify({mainRoot:'<main_root>',worktreePath:'<worktree_path>',includeFile:null}))" | node "$agents_config_dir/bin/worktree-copy-include.js" > "$tmpfile"`
+3. Run the copy via the include CLI's argv form (no inline JSON), capturing stdout to a temp file:
+   `node "$agents_config_dir/bin/worktree-copy-include.js" --main-root "$main_root" --worktree-path "$worktree_path" > "$tmpfile"`
    Read `COPIED_JSON` from the temp file: `COPIED_JSON="$(cat "$tmpfile")"`
    Copy errors are non-fatal (partial); record them in the log.
 
-3b. Read sibling repos from intent.md.
-   Resolve `PLANS_DIR` by running `bash "$agents_config_dir/bin/workflow-plans-dir"`.
-   Read `$PLANS_DIR/$session_id-intent.md`. If the file is missing or has no `## worktrees` section, set `SIBLING_WORKTREES_JSON='[]'` and continue to Step 4.
-   Otherwise parse the `## worktrees` section: for each `- repo: <r>` line followed by `  worktree_path: <p>` line, extract the pair using `awk '/^## worktrees/{found=1;next} found && /^## /{exit} found && /^- repo: /{repo=substr($0,9)} found && /^  worktree_path: /{print repo "|" substr($0,17); repo=""}'`.
-   Build a JSON array from the extracted pairs: `[{"repo":"<r>","worktree_path":"<p>"}]`. Use `node -e` to assemble: read lines from the awk output, split on `|`, construct and `JSON.stringify` the array.
-   Assign the result to `SIBLING_WORKTREES_JSON`.
+3b. Read sibling repos from intent.md via the canonical parser:
+   `SIBLING_WORKTREES_JSON="$(node "$agents_config_dir/bin/parse-worktrees" "$(bash "$agents_config_dir/bin/workflow-plans-dir")/$session_id-intent.md")"`
+   The CLI emits `[]` when the file is missing or has no `## worktrees` section (canonical parser: `hooks/lib/parse-worktrees.js`).
 
 4. Write WORKTREE_NOTES.md via:
    `COPIED_JSON="$COPIED_JSON" SIBLING_WORKTREES_JSON="$SIBLING_WORKTREES_JSON" node "$agents_config_dir/bin/worktree-write-notes.js" "$main_root" "$worktree_path" "$branch" "" "$session_id"`
