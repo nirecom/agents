@@ -135,3 +135,139 @@ Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` cont
 New test files follow `<area>-<issue-or-feature>-<topic>.sh` where `<area>` is one of `feature`, `fix`, `refactor`, `unit`, `main`.
 
 Existing files are NOT renamed — `git blame` continuity is preserved. Frontmatter handles semantic grouping via `# Tags:`.
+
+## Table-Driven Tests (パーサ/正規表現/allowlist 変更時必須)
+
+パーサ、正規表現定数、または allowlist を変更する場合（例: sentinel-patterns.js,
+bash-write-patterns.js, command-parser.js, scan-outbound.sh など）は、対応するテスト
+ファイルで table-driven パターンを使用すること。
+
+### bash テストの標準パターン
+
+while IFS='|' read -r name input want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    name="${name//[[:space:]]/}"
+    want="${want//[[:space:]]/}"
+    got=$(eval_subject "$input")
+    assert_eq "$name" "$want" "$got"
+done <<'TABLE'
+case-name-1 | input value 1 | expected-1
+case-name-2 | input value 2 | expected-2
+TABLE
+
+assert_eq() を各テストファイルにインラインで定義する（共有ライブラリは使用しない）:
+
+assert_eq() {
+    local name="$1" want="$2" got="$3"
+    if [ "$want" = "$got" ]; then echo "PASS: $name"; PASS=$((PASS + 1))
+    else echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1)); fi
+}
+
+- 第1カラム name は全アサーションメッセージに注入する（Go の t.Run(name) 相当）
+- IFS='|' によりフィールド内のスペースをクォートなしで許容。read -r でバックスラッシュ展開を防ぐ
+- heredoc 内の空行・# コメント行はスキップする
+
+### JS テストの同等パターン
+
+JS テストでは以下を table-driven と見なす:
+- cases.forEach() による反復
+- for (const {name, input, want} of cases) による反復
+- 各反復内で name をアサーションメッセージに含む
+
+### このルールの適用条件
+
+以下のいずれかに該当する場合:
+- パターンファイルの正規表現定数を追加または変更する場合
+- 同一関数を異なる入力でテストするケースが2件以上ある場合
+- パーサ/regex/allowlist 対象の既存テストファイルに論理パスあたり2件未満のケースしかない場合
+
+## Mutation Probe (軽量正規表現 kill 確認)
+
+パーサ/正規表現ファイルに対して以下の場合に mutation probe を実行すること:
+- 新しい正規表現定数を追加する場合（その定数を削除したときにテストが FAIL することを確認）
+- 正規表現バグを修正する場合（未修正状態でリグレッションテストが FAIL することを確認）
+
+### プローブ実行
+
+bin/mutation-probe.sh <target-js-file>
+
+プローブスクリプトの動作:
+1. 対象ファイルの正規表現定数（単一行の const NAME = /regex/; 形式）を特定する
+2. 各定数を /(?!)/ (never-match) に差し替えた一時コピーでテストを実行する
+3. PASS および FAIL を記録する
+4. mutation スコア = FAIL 数 / 総数 × 100% を算出して報告する
+
+必須閾値: プローブ対象の正規表現定数の 80% 以上でテストが FAIL すること。
+
+### 既知の制限 (Partial Coverage)
+
+bin/mutation-probe.sh は単一行形式（const NAME = /regex/;）のみを対象とする。
+以下は現バージョンではカバーされない:
+- 2行形式（const NAME =\n  /regex/;）: sentinel-patterns.js に多数存在
+- オブジェクトリテラル内のパターン（WRITE_PATTERNS 配列の regex フィールド）: bash-write-patterns.js
+
+これらのファイルに対してプローブを実行した場合、スクリプトは検出済み定数数と
+「partial coverage」警告を出力する。完全なカバレッジは T1-E2（Stryker）で対応予定。
+
+### table-driven との関係
+
+- table-driven: 入出力ケースをパラメトリックにカバーする
+- mutation probe: 各正規表現定数が実際にテストで使われているか（dead code でないか）を確認する
+
+パーサ/正規表現ファイルに追記する場合は両方を実行すること。
+
+## False-Green 検出
+
+false-green テスト（コードの状態によらず常に pass するテスト）は禁止。
+以下のパターンは bin/check-false-green.sh によって検出される。
+
+### 禁止パターン
+
+1. アサーション不在の空テスト関数/ブロック
+2. want と got が同じリテラルのアサーション: assert_eq name "x" "x"（両辺ハードコード）
+3. exit コードを確認せずに pass "..." を呼ぶパターン（アンチェック）
+
+### bin/check-false-green.sh のスコープ
+
+grep ベース検出。パターン2をハード検出（FALSE-GREEN、終了コード 1）、行頭近傍の bare
+pass を WARN 出力（終了コード 0）。パターン1・3（AST 解析が必要）は将来課題。
+
+bare pass の WARN は誤検知（pass() 関数定義行）を含むため、CI でハード失敗させない。
+
+### 背景
+
+PR #865 で事後修正が必要になった 11 件の dead assertion が動機。
+false-green 検出器を作成時点で適用することで再発を防ぐ。
+
+## セキュリティ・保護系 Fix のテストパターン (#1001)
+
+保護系 fix（セキュリティ境界、入力サニタイズ、アクセス制御強制）のテストでは
+以下の3パターンをすべて適用すること。いずれか1つでも欠けると構造的カバレッジギャップになる。
+
+### パターン1 — Negative アサーション
+
+拒否された入力に対して、保護対象リソースが変更されていないことを directly アサートする。
+exit コードやエラーメッセージのアサーションだけでは不十分。
+
+例: symlink フォロー防止の修正では、コマンドが非ゼロで終了したことに加えて
+リンク先ファイルが変更されていないことをアサートする。
+
+### パターン2 — 攻撃シナリオ構造
+
+bugfix テストは未修正コードで FAIL するように構造化する:
+1. 修正前の脆弱な状態を再現する前提条件をセットアップする
+2. テスト対象のアクションを実行する
+3. 攻撃がブロックされた（保護対象リソースが未変更）ことをアサートする
+
+この構造により、ワークフローレベルの fail-before-fix gate を補完するテスト層の証拠が得られる。
+
+### パターン3 — Paired gap (Skipped-Because)
+
+現レイヤーで実装できないシナリオ（fault インジェクションが必要、CI で再現不可など）は
+削除せず以下の形式で残す:
+
+# SKIPPED: <シナリオ説明>
+# Because: <理由 — 例: "実 root アクセスが必要", "L2 では fault injection 不可">
+# L3 gap: <実環境のみが検出できること>
+
+1 シナリオにつき 1 つの Skipped-Because コメント。対象テストコードに隣接して配置する。
