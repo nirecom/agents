@@ -255,3 +255,7 @@ Changes: After a workflow skill finishes, Claude now continues to the next step 
 ### FEATURE: PR #1220 (2026-06-29)
 Background: feat(#1149,#1001,#1208): T1 test quality — table-driven mandatory, mutation probe, false-green detection
 Changes: New test quality enforcement for parser/regex changes: table-driven tests are now required when editing parser, regex, or allowlist files (`bin/check-table-driven.sh`); same-literal false-green assertions are detected and blocked (`bin/check-false-green.sh`); a lightweight mutation probe (`bin/mutation-probe.sh`) verifies that regex constants are actually exercised by tests (mutation score ≥80% threshold)
+
+### FEATURE: PR #1227 (2026-06-30)
+Background: fix(#1225): profile-snippet.sh fetch guards + idempotency
+Changes: Session sync fetch at iTerm startup no longer suspends the zsh job or corrupts the prompt/PATH when SSH passphrase is not cached. `profile-snippet.sh` is now truly idempotent when sourced from both `.profile_common` and `.zshrc`.
