@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+'use strict';
+// CLI wrapper for hooks/lib/parse-worktrees.js. Emits the intent.md
+// `## worktrees` section as a JSON array of {repo, worktree_path}.
+// Missing file / absent section → "[]". Never aborts (fail-open like
+// bin/parse-closes-issues): a parse error prints "[]" and exits 0.
+const path = require('path');
+const filePath = process.argv[2];
+if (!filePath) { console.log('[]'); process.exit(0); }
+try {
+  const { parseWorktrees } = require(
+    path.join(path.dirname(__dirname), 'hooks', 'lib', 'parse-worktrees.js')
+  );
+  console.log(JSON.stringify(parseWorktrees(filePath)));
+} catch (e) {
+  process.stderr.write('[parse-worktrees] ' + e.message + '\n');
+  console.log('[]');
+  process.exit(0);
+}

@@ -31,6 +31,7 @@ const FIELDS = [
   'OS_REBOOT_REASON',
   'BOOTSTRAP_MODE',
   'BOOTSTRAP_COMMIT_SHA',
+  'SIBLING_REPOS_JSON',
 ];
 
 const outPath = process.argv[2];

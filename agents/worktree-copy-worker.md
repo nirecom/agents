@@ -29,14 +29,17 @@ Receive a JSON object with:
    - Recommended: `.env.local`, `.env.development`, dev credentials, development configs.
    - Prohibited: `.env.production`, cloud credentials, deploy keys, prod tokens, customer data access keys.
 
-3. Run the copy script using a temp file for `COPIED_JSON` to avoid `'` quoting issues with filenames.
-   Write the input JSON with Node, pipe to the copy script, capture stdout to a temp file:
-   `node -e "process.stdout.write(JSON.stringify({mainRoot:'<main_root>',worktreePath:'<worktree_path>',includeFile:null}))" | node "$agents_config_dir/bin/worktree-copy-include.js" > "$tmpfile"`
+3. Run the copy via the include CLI's argv form (no inline JSON), capturing stdout to a temp file:
+   `node "$agents_config_dir/bin/worktree-copy-include.js" --main-root "$main_root" --worktree-path "$worktree_path" > "$tmpfile"`
    Read `COPIED_JSON` from the temp file: `COPIED_JSON="$(cat "$tmpfile")"`
    Copy errors are non-fatal (partial); record them in the log.
 
+3b. Read sibling repos from intent.md via the canonical parser:
+   `SIBLING_WORKTREES_JSON="$(node "$agents_config_dir/bin/parse-worktrees" "$(bash "$agents_config_dir/bin/workflow-plans-dir")/$session_id-intent.md")"`
+   The CLI emits `[]` when the file is missing or has no `## worktrees` section (canonical parser: `hooks/lib/parse-worktrees.js`).
+
 4. Write WORKTREE_NOTES.md via:
-   `COPIED_JSON="$COPIED_JSON" node "$agents_config_dir/bin/worktree-write-notes.js" "$main_root" "$worktree_path" "$branch" "" "$session_id"`
+   `COPIED_JSON="$COPIED_JSON" SIBLING_WORKTREES_JSON="$SIBLING_WORKTREES_JSON" node "$agents_config_dir/bin/worktree-write-notes.js" "$main_root" "$worktree_path" "$branch" "" "$session_id"`
    Non-zero exit → emit `status: failed`, `summary: "WORKTREE_NOTES.md write failed: <stderr>"`, `artifact_path: (none)` and stop.
 
 5. Write stdout+stderr log to `$artifact_dir/<timestamp>-worktree-copy-worker.log`.
