@@ -106,6 +106,8 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
 
     ENV_FILE="$PLANS_DIR/${SESSION_ID}-final-report-env.json"
 
+    SIBLING_REPOS_JSON="[]"
+
     PR_NUMBER="$PR_NUMBER" PR_TITLE="$PR_TITLE" PR_URL="$PR_URL" PR_STATE="$PR_STATE" \
     BRANCH="$BRANCH" WORKTREE_PATH="$WORKTREE_PATH" CREATED_DATE="$CREATED_DATE" \
     BACKUP_MANIFEST_PATH="$BACKUP_MANIFEST_PATH" NOTES_BACKUP_PATH="$NOTES_BACKUP_PATH" \
@@ -116,6 +118,7 @@ if [[ "$BOOTSTRAP_MODE" == "1" ]]; then
     INSTALLER_RERUN_REQUIRED="$INSTALLER_RERUN_REQUIRED" INSTALLER_RERUN_REASON="$INSTALLER_RERUN_REASON" \
     OS_REBOOT_REQUIRED="$OS_REBOOT_REQUIRED" OS_REBOOT_REASON="$OS_REBOOT_REASON" \
     BOOTSTRAP_MODE="$BOOTSTRAP_MODE" BOOTSTRAP_COMMIT_SHA="$BOOTSTRAP_COMMIT_SHA" \
+    SIBLING_REPOS_JSON="$SIBLING_REPOS_JSON" \
         node "$LIB_DIR/write-env-json.js" "$ENV_FILE"
 
     echo "env JSON written (bootstrap mode): $ENV_FILE"
@@ -151,6 +154,52 @@ fi
 if [[ -z "$MERGE_SHA" ]]; then
   printf "ERROR: MERGE_SHA unresolved — 'gh -R %s pr view %s --json mergeCommit' returned no oid after retry. PR may not be merged yet, or gh lacks repo scope.\n" "$REPO" "$PR_NUMBER" >&2
   exit 1
+fi
+
+# Step 2b: resolve sibling repo PRs from WORKTREE_NOTES.md ## SiblingWorktrees
+SIBLING_REPOS_JSON="[]"
+if [[ -f "$WORKTREE/WORKTREE_NOTES.md" ]]; then
+  sibling_entries="$(awk '
+    /^## SiblingWorktrees/{found=1; next}
+    found && /^## /{exit}
+    found && /^- repo: /{
+      line=$0
+      repo=line; sub(/^- repo: /, "", repo); sub(/, path: .*$/, "", repo)
+      wt=line; sub(/^.*,[ ]*path: /, "", wt)
+      if (repo != "") print repo "|" wt
+    }
+  ' "$WORKTREE/WORKTREE_NOTES.md")"
+
+  # Resolve each sibling's PR/SHA, accumulate as TAB-separated tuples, then
+  # serialize via sibling-repos-json.js (JSON.stringify does the escaping —
+  # never hand-build JSON from shell strings; #1102 security Finding 2).
+  sibling_tsv=""
+  while IFS='|' read -r sibling_repo sibling_wt_path; do
+    [[ -z "$sibling_repo" ]] && continue
+    sibling_branch="$(git -C "$sibling_wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+    sibling_pr=""
+    sibling_merge_sha=""
+    if [[ -n "$sibling_branch" ]]; then
+      sibling_pr="$(gh -R "$sibling_repo" pr list \
+        --head "$sibling_branch" --state all --limit 1 \
+        --json number --jq '.[0].number' 2>/dev/null || echo "")"
+    fi
+    if [[ -n "$sibling_pr" ]]; then
+      sibling_merge_sha="$(gh -R "$sibling_repo" pr view "$sibling_pr" \
+        --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
+      if [[ -z "$sibling_merge_sha" ]]; then
+        sleep 2
+        sibling_merge_sha="$(gh -R "$sibling_repo" pr view "$sibling_pr" \
+          --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null || echo "")"
+      fi
+    fi
+    if [[ -z "$sibling_pr" || -z "$sibling_merge_sha" ]]; then
+      printf 'WARN: sibling %s PR/SHA unresolved (branch=%s pr=%s); doc-append skipped for this repo\n' \
+        "$sibling_repo" "$sibling_branch" "$sibling_pr" >&2
+    fi
+    sibling_tsv+="$(printf '%s\t%s\t%s\t%s' "$sibling_repo" "$sibling_wt_path" "$sibling_pr" "$sibling_merge_sha")"$'\n'
+  done <<< "$sibling_entries"
+  SIBLING_REPOS_JSON="$(printf '%s' "$sibling_tsv" | node "$LIB_DIR/sibling-repos-json.js")"
 fi
 
 # Step 3: Restart detection (four categories).
@@ -227,6 +276,7 @@ VSCODE_RELOAD_REQUIRED="$VSCODE_RELOAD_REQUIRED" VSCODE_RELOAD_REASON="$VSCODE_R
 INSTALLER_RERUN_REQUIRED="$INSTALLER_RERUN_REQUIRED" INSTALLER_RERUN_REASON="$INSTALLER_RERUN_REASON" \
 OS_REBOOT_REQUIRED="$OS_REBOOT_REQUIRED" OS_REBOOT_REASON="$OS_REBOOT_REASON" \
 BOOTSTRAP_MODE="$BOOTSTRAP_MODE" BOOTSTRAP_COMMIT_SHA="$BOOTSTRAP_COMMIT_SHA" \
+SIBLING_REPOS_JSON="$SIBLING_REPOS_JSON" \
   node "$LIB_DIR/write-env-json.js" "$ENV_FILE"
 
 echo "env JSON written: $ENV_FILE"

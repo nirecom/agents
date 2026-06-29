@@ -69,7 +69,7 @@ Run: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$SID" -
 Resolve main root from the worktree's `.git` file. `cd "<main-worktree-root>"` as its own Bash call (releases Windows CWD lock).
 
 ### Steps WE-15..WE-22 — Cleanup cascade
-`bash "$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.sh"` — orchestrator issues each command separately. Run only after confirmed merge and inventory.
+Read `$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after confirmed merge and inventory.
 
 ## Rules
 - Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.
