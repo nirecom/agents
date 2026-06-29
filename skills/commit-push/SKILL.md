@@ -59,7 +59,8 @@ CP-1. **Stage changes with `git add`** — explicitly add each file you intend t
 
 After `gh pr create` succeeds, the `pr-created-open.js` PostToolUse hook automatically opens the PR URL in your browser — no explicit `open`/`xdg-open` call is needed.
 
-CP-2. **Delegate commit/push/PR to commit-push-worker**:
+CP-2. **Delegate commit/push/PR to commit-push-worker.**
+   Sibling pre-check (non-blocking): `bash "$AGENTS_CONFIG_DIR/bin/check-sibling-uncommitted.sh" "$(git rev-parse --show-toplevel)/WORKTREE_NOTES.md"` — warns when a sibling worktree in `## SiblingWorktrees` has uncommitted/unpushed work.
    Resolve `PLANS_DIR` and `ENFORCE_WORKTREE` before delegating.
    ```
    Agent({ subagent_type: "commit-push-worker", prompt: JSON.stringify({

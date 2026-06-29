@@ -76,12 +76,12 @@ check_absent() {
 # R3: "WI-11" in workflow-init/SKILL.md (post-#968 renumber: WI-11 = post-check)
 check_literal "R3" "WI-11" "skills/workflow-init/SKILL.md"
 
-# R4: "WE-20" in worktree-end/scripts/cleanup-cascade.sh (canonical spec for WE-15..WE-22)
-check_literal "R4" "WE-20" "skills/worktree-end/scripts/cleanup-cascade.sh"
+# R4: "WE-20" in worktree-end/scripts/cleanup-cascade.md (canonical spec for WE-15..WE-22)
+check_literal "R4" "WE-20" "skills/worktree-end/scripts/cleanup-cascade.md"
 
-# R4a: WE-15 and WE-22 both present in cleanup-cascade.sh (renumber boundary check)
-check_literal "R4a" "WE-15" "skills/worktree-end/scripts/cleanup-cascade.sh"
-check_literal "R4b" "WE-22" "skills/worktree-end/scripts/cleanup-cascade.sh"
+# R4a: WE-15 and WE-22 both present in cleanup-cascade.md (renumber boundary check)
+check_literal "R4a" "WE-15" "skills/worktree-end/scripts/cleanup-cascade.md"
+check_literal "R4b" "WE-22" "skills/worktree-end/scripts/cleanup-cascade.md"
 
 # R5: "ICF-A" in issue-close-finalize/SKILL.md
 check_literal "R5" "ICF-A" "skills/issue-close-finalize/SKILL.md"
