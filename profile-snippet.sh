@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Sourced from dotfiles' .profile_common (sibling-detected) or directly from ~/.bashrc.
 # Idempotent — safe to source twice.
+[ -n "${_AGENTS_PROFILE_LOADED-}" ] && return 0 2>/dev/null
+_AGENTS_PROFILE_LOADED=1
 if [ -n "${ZSH_VERSION-}" ]; then
     _agents_root="$(cd "$(dirname "${(%):-%x}")" && pwd)"
 else
@@ -30,17 +32,22 @@ fi
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
 _session_dir="$HOME/.claude/projects"
 if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
-    echo "git fetch Claude session sync ..."
-    ( git -C "$_session_dir" fetch ) &
-    _pid_ss=$!
-    _ss_deadline=$(( $(date +%s) + 3 ))
-    while kill -0 "$_pid_ss" 2>/dev/null; do
-        if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null; break; fi
-        sleep 0.2
-    done
-    wait "$_pid_ss" 2>/dev/null
-    _rc_ss=$?
-    [ "$_rc_ss" -eq 0 ] && git -C "$_session_dir" merge --ff-only FETCH_HEAD 2>/dev/null
+    _session_sync_fetch() {
+        [ -n "${ZSH_VERSION-}" ] && setopt LOCAL_OPTIONS NO_MONITOR
+        echo "git fetch Claude session sync ..."
+        ( GIT_TERMINAL_PROMPT=0 git -C "$_session_dir" fetch 2>/dev/null ) &
+        _pid_ss=$!
+        _ss_deadline=$(( $(date +%s) + 3 ))
+        while kill -0 "$_pid_ss" 2>/dev/null; do
+            if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null; break; fi
+            sleep 0.2
+        done
+        wait "$_pid_ss" 2>/dev/null
+        _rc_ss=$?
+    }
+    _session_sync_fetch
+    unset -f _session_sync_fetch 2>/dev/null
+    [ "${_rc_ss:-1}" -eq 0 ] && git -C "$_session_dir" merge --ff-only FETCH_HEAD 2>/dev/null
     unset _pid_ss _ss_deadline _rc_ss
 fi
 unset _session_dir
