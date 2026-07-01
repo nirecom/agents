@@ -44,6 +44,24 @@ esac
 
 REPO_DIR="$(cd "$REPO_DIR" && pwd)"
 
+# Self-repo identity guard (#1234): detect REPO_DIR == AGENTS_CONFIG_DIR.
+_cfg_dir="$(cd "$AGENTS_CONFIG_DIR" && pwd)"
+if [ "$REPO_DIR" = "$_cfg_dir" ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "WARNING: SELF_REPO_DETECTED: target repo equals AGENTS_CONFIG_DIR (dry-run)."
+    echo "         Continuing dry-run; sentinels still emitted below."
+  elif [ "${MIGRATE_ACK_EXISTING_ISSUES:-0}" = "1" ]; then
+    echo "WARNING: SELF_REPO_DETECTED: target repo equals AGENTS_CONFIG_DIR (agents-repo self-migration)."
+    echo "         MIGRATE_ACK_EXISTING_ISSUES=1 set — proceeding."
+  else
+    echo "ERROR: REPO_DIR equals AGENTS_CONFIG_DIR ($AGENTS_CONFIG_DIR)." >&2
+    echo "       Refusing live migration into the agents repo itself." >&2
+    echo "       This is likely a misidentification (取り違えの可能性)." >&2
+    echo "       Re-run via the /migrate-repo skill (sets MIGRATE_ACK_EXISTING_ISSUES=1) if this is an intentional Phase 3 self-migration." >&2
+    exit 1
+  fi
+fi
+
 echo "=== /migrate-repo orchestrator ==="
 echo "Repo:      $REPO_DIR"
 echo "From-step: $FROM_STEP"
@@ -161,6 +179,8 @@ if [ "$_existing_n" -gt 0 ]; then
   echo "         Migration issues will NOT get early issue numbers — they will"
   echo "         land at #${_existing_n}+1 onwards. The chronological"
   echo "         'early numbers = history' invariant cannot be preserved post-hoc."
+  echo "         Confirm REPO_DIR is the correct migration target"
+  echo "         (misidentification possible — 取り違えの可能性)."
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry-run] proceeding despite existing issues"
   elif [ "${MIGRATE_ACK_EXISTING_ISSUES:-0}" != "1" ]; then
