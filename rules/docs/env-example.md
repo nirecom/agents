@@ -26,6 +26,10 @@ Each variable's comment block must be 1–5 lines (excluding the `VAR=value` lin
 
 Group related variables into `# --- <Category name> ---` heading comments. Consecutive members of a category must be contiguous.
 
+## OS-conditional markers
+
+Lines matching `#@if <os>` or `#@endif` are exempt from all comment-block rules — they are not counted toward the 1–5 line limit and are not checked for prohibited content.
+
 ## Enforcement
 
 Checked by `bin/review-env-example` (HARD = regex-decidable; WARN = judgment-required). Target globs and detection patterns are hardcoded in the script. Update both files in the same diff.
