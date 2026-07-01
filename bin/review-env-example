@@ -94,6 +94,12 @@ check_file() {
       continue
     fi
 
+    # OS-conditional block markers — do not accumulate, do not count toward
+    # the per-variable comment-line limit.
+    if [[ "$line" =~ ^[[:space:]]*#@(if|endif) ]]; then
+      continue
+    fi
+
     # Comment line
     if [[ "$line" =~ ^[[:space:]]*# ]]; then
       comment_lines+=("$line")
