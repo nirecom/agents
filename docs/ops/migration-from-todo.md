@@ -28,6 +28,11 @@ bash bin/github-issues/migration/preview-history.sh <repo_dir>                  
 bash bin/github-issues/migration/orchestrate.sh <repo_dir> --dry-run                      # final check, no API calls
 bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-1
 #   → inspect GitHub. Confirm with user.
+```
+
+> Note: the `/migrate-repo` skill invokes canary-1 with `--from-step 1` (not `--from-step 2`) so the idempotent Step 1 label sync runs before issue creation, guaranteeing labels exist. This ops document is for manual recovery and assumes Step 1 was already completed separately.
+
+```bash
 bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage canary-2
 #   → inspect GitHub. Confirm with user.
 bash bin/github-issues/migration/orchestrate.sh <repo_dir> --from-step 2 --stage full
