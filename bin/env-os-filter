@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# env-os-filter — route an envfile through filterOsBlocks (hooks/lib/load-env.js).
+#
+# Usage:
+#   env-os-filter <envfile>   # filter file; empty stdout + exit 0 if unreadable
+#   env-os-filter             # read from stdin (writes to temp file first)
+#
+# On success: filtered text to stdout, exit 0.
+# Fallback (node/load-env.js unavailable or node fails): raw file contents to
+#   stdout, one-line warning to stderr, exit 0.
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Resolve the load-env.js path.
+# Primary: script-relative (follow symlinks on BASH_SOURCE[0]).
+# Fallback: $AGENTS_CONFIG_DIR/hooks/lib/load-env.js.
+# Script-relative is preferred so this script always uses the same load-env.js
+# version as itself (important in worktrees and symlinked installs).
+# ---------------------------------------------------------------------------
+_SCRIPT="${BASH_SOURCE[0]}"
+_target="$(readlink "$_SCRIPT" 2>/dev/null || true)"
+while [[ -n "$_target" ]]; do
+    case "$_target" in
+        /*) _SCRIPT="$_target" ;;
+        *)  _SCRIPT="$(cd "$(dirname "$_SCRIPT")" && pwd)/$_target" ;;
+    esac
+    _target="$(readlink "$_SCRIPT" 2>/dev/null || true)"
+done
+_SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT")" && pwd -P)"
+_LOADENV="$_SCRIPT_DIR/../hooks/lib/load-env.js"
+if [[ ! -f "$_LOADENV" ]] && [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -f "$AGENTS_CONFIG_DIR/hooks/lib/load-env.js" ]]; then
+    _LOADENV="$AGENTS_CONFIG_DIR/hooks/lib/load-env.js"
+fi
+
+# ---------------------------------------------------------------------------
+# Resolve input file (arg or stdin via temp file).
+# ---------------------------------------------------------------------------
+_TMPFILE=""
+_cleanup() {
+    [[ -n "$_TMPFILE" ]] && rm -f "$_TMPFILE"
+    return 0
+}
+trap _cleanup EXIT
+
+if [[ $# -ge 1 ]]; then
+    _INPUT="$1"
+else
+    # Read stdin into a temp file so node can receive a path.
+    _TMPFILE="$(mktemp)"
+    cat > "$_TMPFILE"
+    _INPUT="$_TMPFILE"
+fi
+
+# Non-existent or unreadable path → empty stdout, exit 0 (mirrors [ -r ] guard).
+if [[ ! -r "$_INPUT" ]]; then
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Decide: filter via node, or fall back to raw passthrough.
+# ---------------------------------------------------------------------------
+_raw_passthrough() {
+    printf '%s\n' "env-os-filter: node/load-env.js unavailable — passing .env through unfiltered" >&2
+    cat "$_INPUT"
+}
+
+# Check prerequisites before running the filter.
+if ! command -v node >/dev/null 2>&1 || [[ ! -f "$_LOADENV" ]]; then
+    _raw_passthrough
+    exit 0
+fi
+
+# Run the filter; capture stdout to avoid partial-write-then-fallback issue.
+_FILTERED=""
+_NODE_RC=0
+_FILTERED="$(ENVOSF_LOADENV="$_LOADENV" ENVOSF_INPUT="$_INPUT" node -e \
+    'process.stdout.write(require(process.env.ENVOSF_LOADENV).filterOsBlocks(require("fs").readFileSync(process.env.ENVOSF_INPUT, "utf8"), process.platform))' \
+    2>/dev/null)" || _NODE_RC=$?
+
+if [[ "$_NODE_RC" -ne 0 ]]; then
+    _raw_passthrough
+    exit 0
+fi
+
+printf '%s' "$_FILTERED"
