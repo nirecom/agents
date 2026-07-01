@@ -9,10 +9,58 @@
 // quotes are stripped. Lines starting with `#` or empty lines are skipped.
 // No multi-line values, no variable interpolation, no `export` prefix.
 //
+// OS-conditional blocks: marker lines (#@if <os> / #@endif) delimit sections
+// that apply only to a specific OS. On win32, blocks tagged `#@if windows` are
+// retained; on all other platforms, blocks tagged `#@if posix` are retained.
+// Marker lines themselves are always stripped from the parsed output. A flat
+// file with no markers is parsed identically — no-op, fully backward compatible.
+//
 // Fail-safe: missing or unreadable .env is a silent no-op.
 
 const fs = require("fs");
 const path = require("path");
+
+// filterOsBlocks strips lines inside #@if <token> / #@endif blocks that do not
+// match the current platform, and removes all marker lines from the output.
+// Future extension: update activeTokens resolver below to add a repo-axis token.
+function filterOsBlocks(text, platform) {
+  const activeTokens = platform === "win32" ? new Set(["windows"]) : new Set(["posix"]);
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  let suppressing = false;
+  let depth = 0;
+  let suppressDepth = 0;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+
+    if (trimmed.startsWith("#@if ")) {
+      const token = trimmed.slice(5).trim();
+      depth++;
+      if (!suppressing && !activeTokens.has(token)) {
+        suppressing = true;
+        suppressDepth = depth;
+      }
+      // Drop the marker line — never push to output.
+    } else if (trimmed === "#@endif") {
+      if (depth > 0) {
+        if (suppressing && depth === suppressDepth) {
+          suppressing = false;
+        }
+        depth--;
+      }
+      // Drop the marker line — never push to output.
+    } else if (trimmed.startsWith("#@")) {
+      // Unknown marker — drop silently for forward-compat.
+    } else {
+      if (!suppressing) {
+        out.push(rawLine);
+      }
+    }
+  }
+
+  return out.join("\n");
+}
 
 function loadEnv(envPath) {
   if (!envPath) return false;
@@ -22,6 +70,7 @@ function loadEnv(envPath) {
   } catch {
     return false; // missing or unreadable — silent no-op
   }
+  content = filterOsBlocks(content, process.platform);
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -70,4 +119,4 @@ function loadDefaultEnv() {
   return false;
 }
 
-module.exports = { loadEnv, loadDefaultEnv };
+module.exports = { loadEnv, loadDefaultEnv, filterOsBlocks };
