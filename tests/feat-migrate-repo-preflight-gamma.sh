@@ -388,6 +388,132 @@ else
 fi
 teardown_fixture
 
+# ---------------------------------------------------------------------------
+# PF13: self-repo dry-run (#1234 identity guard).
+#       When REPO == AGENTS_CONFIG_DIR, dry-run must detect the self-repo
+#       condition (emit SELF_REPO_DETECTED) yet still complete (rc==0) and
+#       emit the dry-run highest-issue sentinel.
+#       FAIL-BEFORE-FIX: guard not implemented → no SELF_REPO_DETECTED.
+# ---------------------------------------------------------------------------
+setup_fixture
+unset MOCK_HAS_ISSUES
+SELF="$TMP/selfrepo"
+mkdir -p "$SELF/docs"
+cat > "$SELF/docs/history.md" <<'EOF'
+### Entry 1 (2024-01-01)
+Background: test entry 1
+Changes: change 1
+EOF
+SELF="$(cd "$SELF" && pwd)"
+export AGENTS_CONFIG_DIR="$SELF"
+OUT_PF13=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$SELF" --dry-run 2>&1)
+RC_PF13=$?
+HAS_SELF_PF13=$(echo "$OUT_PF13" | grep -c "SELF_REPO_DETECTED" 2>/dev/null) || HAS_SELF_PF13=0
+HAS_HIGHEST_PF13=$(echo "$OUT_PF13" | grep -c "MIGRATE_DRY_RUN_HIGHEST_ISSUE_N=" 2>/dev/null) || HAS_HIGHEST_PF13=0
+if [ "$RC_PF13" -eq 0 ] && [ "$HAS_SELF_PF13" -gt 0 ] && [ "$HAS_HIGHEST_PF13" -gt 0 ]; then
+    pass "PF13: self-repo dry-run detects SELF_REPO_DETECTED and emits highest sentinel"
+else
+    fail "PF13: rc=$RC_PF13 self_detected=$HAS_SELF_PF13 highest=$HAS_HIGHEST_PF13 (expected rc=0, self_detected>0, highest>0)"
+fi
+teardown_fixture
+
+# ---------------------------------------------------------------------------
+# PF14: self-repo live --from-step 1 (#1234 identity guard).
+#       Live migration targeting AGENTS_CONFIG_DIR itself must abort because
+#       it would corrupt the agents repo's own issues (misidentification).
+#       FAIL-BEFORE-FIX: guard absent → no abort referencing the self-repo.
+# ---------------------------------------------------------------------------
+setup_fixture
+unset MOCK_HAS_ISSUES MIGRATE_ACK_EXISTING_ISSUES
+SELF="$TMP/selfrepo"
+mkdir -p "$SELF/docs"
+cat > "$SELF/docs/history.md" <<'EOF'
+### Entry 1 (2024-01-01)
+Background: test entry 1
+Changes: change 1
+EOF
+SELF="$(cd "$SELF" && pwd)"
+export AGENTS_CONFIG_DIR="$SELF"
+OUT_PF14=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$SELF" --from-step 1 2>&1)
+RC_PF14=$?
+HAS_SELF_MSG_PF14=$(echo "$OUT_PF14" | grep -c "AGENTS_CONFIG_DIR\|取り違え\|misidentification" 2>/dev/null) || HAS_SELF_MSG_PF14=0
+if [ "$RC_PF14" -ne 0 ] && [ "$HAS_SELF_MSG_PF14" -gt 0 ]; then
+    pass "PF14: self-repo live invocation aborts with misidentification guard"
+else
+    fail "PF14: rc=$RC_PF14 self_msg=$HAS_SELF_MSG_PF14 (expected rc!=0, self_msg>0)"
+fi
+teardown_fixture
+
+# ---------------------------------------------------------------------------
+# PF14b: self-repo live --from-step 1 with full ack (#1234 identity guard —
+#        CHARACTERIZATION test, inverse direction from PF14).
+#        Approved design: MIGRATE_ACK_EXISTING_ISSUES=1 is the deliberate gate
+#        for legitimate Phase 3 self-migration. When the full ack env is present
+#        and Layer P/C are satisfied, a self-repo live invocation must NOT be
+#        blocked by the identity guard — it should proceed to Step 1.
+#        This pins the approved behaviour so a future change that makes the
+#        identity guard unconditional (blocking even with ACK=1) would break here.
+#        PASS both before and after the fix (pure characterization).
+# ---------------------------------------------------------------------------
+setup_fixture
+SELF="$TMP/selfrepo"
+mkdir -p "$SELF/docs"
+cat > "$SELF/docs/history.md" <<'EOF'
+### Entry 1 (2024-01-01)
+Background: test entry 1
+Changes: change 1
+EOF
+SELF="$(cd "$SELF" && pwd)"
+export AGENTS_CONFIG_DIR="$SELF"
+export MOCK_HAS_ISSUES=1
+# MOCK_HIGHEST_ISSUE_N defaults to 5 in the mock when unset.
+# Layer P/C: MIGRATE_ACK_UP_TO_ISSUE_N=5 matches the mock's highest issue N;
+# MIGRATE_ACK_SELF_COUNT_AT_ACK=0 means self_delta=0, expected_max=5+0=5,
+# existing_n=5 <= 5, so Layer C passes.
+OUT_PF14B=$(MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N=5 MIGRATE_ACK_SELF_COUNT_AT_ACK=0 \
+    run_with_timeout 30 bash "$ORCH_SCRIPT" "$SELF" --from-step 1 --stage canary-1 2>&1)
+RC_PF14B=$?
+# Assert NOT blocked by the self-repo identity guard (abort-specific phrase only).
+# The broad vocabulary (AGENTS_CONFIG_DIR / 取り違え / misidentification) also appears in two
+# approved non-abort WARNINGs present in this run: the self-repo ack-proceed WARNING and the
+# strengthened existing-issues WARNING (MOCK_HAS_ISSUES=1). "Refusing live migration" is emitted
+# exclusively by the guard's exit 1 path in orchestrate.sh — never by WARNINGs — so it is the
+# precise signal that the abort fired.
+HAS_SELFGUARD_PF14B=$(echo "$OUT_PF14B" | grep -c "Refusing live migration" 2>/dev/null) || HAS_SELFGUARD_PF14B=0
+# Also assert NOT blocked by the base live-mode-requires abort (would fire if ACK were absent).
+HAS_LIVEMODE_PF14B=$(echo "$OUT_PF14B" | grep -c "live mode requires" 2>/dev/null) || HAS_LIVEMODE_PF14B=0
+# Primary assertion: guard abort absent AND rc==0 (run proceeds).
+# If rc!=0 for an unrelated reason (e.g. canary sub-step), the guard-absent check alone suffices.
+if [ "$HAS_SELFGUARD_PF14B" -eq 0 ] && [ "$HAS_LIVEMODE_PF14B" -eq 0 ] && [ "$RC_PF14B" -eq 0 ]; then
+    pass "PF14b: self-repo + full ack NOT blocked by identity guard (approved Phase 3 self-migration path)"
+elif [ "$HAS_SELFGUARD_PF14B" -eq 0 ] && [ "$HAS_LIVEMODE_PF14B" -eq 0 ]; then
+    # rc!=0 for a reason unrelated to the identity guard — characterization still holds.
+    pass "PF14b: self-repo + full ack NOT blocked by identity guard (rc=$RC_PF14B, unrelated failure — guard absent)"
+else
+    fail "PF14b: rc=$RC_PF14B selfguard=$HAS_SELFGUARD_PF14B livemode=$HAS_LIVEMODE_PF14B (expected guard absent)"
+fi
+unset MOCK_HAS_ISSUES
+teardown_fixture
+
+# ---------------------------------------------------------------------------
+# PF15: normal fixture repo (NOT self) --from-step 1 --stage canary-1 (#1232).
+#       Characterization test: Step 1 (label sync) must be invoked and the
+#       run must succeed on a non-self repo. Limitation: gh-mock does not model
+#       label-not-found, so this asserts Step 1 is invoked (option b), not that
+#       a label-less canary fails-then-succeeds.
+# ---------------------------------------------------------------------------
+setup_fixture
+unset MOCK_HAS_ISSUES
+OUT_PF15=$(run_with_timeout 30 bash "$ORCH_SCRIPT" "$REPO" --from-step 1 --stage canary-1 2>&1)
+RC_PF15=$?
+HAS_STEP1_PF15=$(echo "$OUT_PF15" | grep -c "Step 1: label sync" 2>/dev/null) || HAS_STEP1_PF15=0
+if [ "$HAS_STEP1_PF15" -gt 0 ] && [ "$RC_PF15" -eq 0 ]; then
+    pass "PF15: non-self repo invokes Step 1 label sync (rc=0)"
+else
+    fail "PF15: rc=$RC_PF15 step1=$HAS_STEP1_PF15 (expected rc=0, step1>0)"
+fi
+teardown_fixture
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -4,55 +4,73 @@ description: Migrate a repo from docs/history.md + docs/todo.md to GitHub Issues
 user-invocable: true
 ---
 
-Always run --dry-run first.
+Always run `--dry-run` first.
 
 ## Irreversibility hard rule
 
-`gh issue create` consumes monotonically increasing global issue numbers.
-Numbers cannot be reused, freed, or reassigned. Every canary stage is
-irreversible. The orchestrator is structured so each canary stage runs in a
-separate process: never chain stages, never pipe `yes` into the orchestrator,
-never run two stages in one command.
-`AskUserQuestion` is tool-enforced — never invoke orchestrate.sh inside a pipeline that supplies stdin.
+- `gh issue create` consumes monotonically increasing global issue numbers; they can never be reused, freed, or reassigned. Every canary stage is irreversible.
+- Each stage MUST run as its own process: never chain stages, never pipe `yes` into the orchestrator, never run two stages in one command.
+- `AskUserQuestion` is the only gate between stages — never invoke `orchestrate.sh` inside a pipeline that supplies stdin.
 
 ## Pre-flight
 
-- `gh auth status` — verify `project` scope is active
-- `AGENTS_CONFIG_DIR` must be set
-- Step 1 label setup delegates to `bin/github-issues/bootstrap-labels.sh`.
+- `gh auth status` — confirm `project` scope is active.
+- `AGENTS_CONFIG_DIR` must be set.
+- Step 1 label setup is delegated to `bin/github-issues/bootstrap-labels.sh`.
 
 ## Procedure
 
-MR-1. Get target repo path from user.
-MR-2. Preview + capture snapshot: `eval "$(bash "$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh" "$REPO_PATH")"`. Runs dry-run, mirrors output to stderr, and exports `MIGRATE_ACK_UP_TO_ISSUE_N` + `MIGRATE_ACK_SELF_COUNT_AT_ACK`.
-MR-3. AskUserQuestion: "Dry-run output reviewed (if WARNING about existing issues was shown, migration issues will permanently lose the 'early issue numbers = history chronology' invariant). Proceed to history canary 1, or abort migration?" Options: "proceed" / "abort". On proceed: run the canary-1 command shown in the next step. On abort: stop the skill before any irreversible mutation.
-MR-4. **History canary 1**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 2 --stage canary-1`
-   AskUserQuestion: "History canary 1 issues created at the printed URL — proceed to canary 2, or abort migration?" Options: "proceed" / "abort". On proceed: run the canary-2 command shown in the next step. On abort: stop the skill; resume later via the documented `--from-step N --stage S` path from a new session.
-MR-5. **History canary 2**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 2 --stage canary-2`
-   AskUserQuestion: "History canary 2 issues created at the printed URL — proceed to full, or abort?" Options: "proceed" / "abort". On proceed: run the full command shown in the next step. On abort: stop the skill; resume later via the documented `--from-step N --stage S` path from a new session.
-MR-6. **History full**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 2 --stage full`
-MR-7. **Todo canary 1**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage canary-1`
-   AskUserQuestion: "Todo canary 1 issues created at the printed URL — proceed to canary 2, or abort?" Options: "proceed" / "abort". On proceed: run the canary-2 command shown in the next step. On abort: stop the skill; resume later via the documented `--from-step N --stage S` path from a new session.
-MR-8. **Todo canary 2**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage canary-2`
-   AskUserQuestion: "Todo canary 2 issues created at the printed URL — proceed to full, or abort?" Options: "proceed" / "abort". On proceed: run the full command shown in the next step. On abort: stop the skill; resume later via the documented `--from-step N --stage S` path from a new session.
-MR-9. **Todo full**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 3 --stage full`
-MR-10. **Step 4 + 5 + 6**: `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK" bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH" --from-step 4` (continuous; no `--stage`). Step 6 stages the allowlist (`.github/labels.yml`, `.github/ISSUE_TEMPLATE/`, `.gitignore`, `docs/todo.md`), commits with `chore(migration): apply /migrate-repo Step 1/3 artifacts`, and pushes to `origin`.
+MR-1. Get the migration target path from the user.
+   - Never infer `REPO_PATH` from a path mentioned only as documentation / reference / context — accept only the path the user explicitly designates as the target.
+   - Resolve `REPO_PATH` to an absolute path, then **AskUserQuestion**: "Migration target = `<abs path>` — correct? (confirm this is NOT the agents repo itself)"
+     - "Yes, proceed with this path" → MR-2
+     - "No, re-enter the correct path" → re-collect `REPO_PATH`, repeat MR-1
 
-On failure at Step N, resume in a new session: re-run Step 2 (`preview-and-capture.sh`) to capture a fresh snapshot pair (`MIGRATE_ACK_UP_TO_ISSUE_N`, `MIGRATE_ACK_SELF_COUNT_AT_ACK`) — accounts for issues already self-migrated. Then re-run Step N's command with `MIGRATE_ACK_EXISTING_ISSUES=1` + both snapshot env vars prefixed. Re-dry-run is mandatory on resume; the Layer C gate fires on every live step.
+MR-2. Preview + capture the snapshot.
+   - Run: `eval "$(bash "$AGENTS_CONFIG_DIR/skills/migrate-repo/scripts/preview-and-capture.sh" "$REPO_PATH")"` — runs the dry-run, mirrors it to stderr, and exports `MIGRATE_ACK_UP_TO_ISSUE_N` + `MIGRATE_ACK_SELF_COUNT_AT_ACK`.
+   - Inspect `MIGRATE_SELF_REPO_DETECTED`:
+     - `=1` → **AskUserQuestion**: "WARNING: target (`<REPO_PATH>`) is the agents repo itself. Proceed ONLY for an intentional agents-repo Phase 3 self-migration."
+       - "Proceed as agents-repo Phase 3" → MR-3
+       - "Abort and fix the path" → stop the skill
+     - `=0` → MR-3
 
-### When archive files need explicit ordering
+MR-3. Dry-run review gate. **AskUserQuestion**: "Dry-run reviewed — proceed to History canary 1, or abort?"
+   - Note in the question: if an existing-issues WARNING was shown, migrated issues permanently lose the "early issue numbers = history chronology" invariant.
+   - "proceed" → MR-4
+   - "abort" → stop the skill (no irreversible mutation yet)
 
-If the target repo's `docs/history/` filenames sort alphabetically in the wrong
-chronological order (e.g. `legacy-*.md` mixed with `2026-*.md`), pass the explicit
-order via `--history-files`:
+### Live stages (MR-4 … MR-10)
 
-```bash
-orchestrate.sh "$REPO_PATH" --dry-run \
-  --history-files "legacy.md,legacy-agents.md,2026-agents.md,2026.md"
-```
+Each stage below runs as its own command, formed as `<ACK> <BASE> <stage args>`:
+- `<ACK>` = `MIGRATE_ACK_EXISTING_ISSUES=1 MIGRATE_ACK_UP_TO_ISSUE_N="$MIGRATE_ACK_UP_TO_ISSUE_N" MIGRATE_ACK_SELF_COUNT_AT_ACK="$MIGRATE_ACK_SELF_COUNT_AT_ACK"`
+- `<BASE>` = `bash "$AGENTS_CONFIG_DIR/bin/github-issues/migration/orchestrate.sh" "$REPO_PATH"`
 
-Filenames are relative to `docs/history/` in the target repo. The current
-`docs/history.md` can be included as `../history.md`.
+**Gate** (only where the table says "gate"): after the stage's issues appear at the printed URL, **AskUserQuestion** "proceed / abort".
+- "proceed" → run the next stage's command.
+- "abort" → stop the skill; resume later (see Resume) from a new session.
+
+| Step | Stage | `<stage args>` | After stage |
+|------|-------|----------------|-------------|
+| MR-4 | History canary 1 | `--from-step 1 --stage canary-1` | gate → MR-5 |
+| MR-5 | History canary 2 | `--from-step 2 --stage canary-2` | gate → MR-6 |
+| MR-6 | History full | `--from-step 2 --stage full` | → MR-7 (no gate) |
+| MR-7 | Todo canary 1 | `--from-step 3 --stage canary-1` | gate → MR-8 |
+| MR-8 | Todo canary 2 | `--from-step 3 --stage canary-2` | gate → MR-9 |
+| MR-9 | Todo full | `--from-step 3 --stage full` | → MR-10 (no gate) |
+| MR-10 | Steps 4–6 | `--from-step 4` (continuous; no `--stage`) | done |
+
+MR-10 note: Step 6 stages the allowlist (`.github/labels.yml`, `.github/ISSUE_TEMPLATE/`, `.gitignore`, `docs/todo.md`), commits `chore(migration): apply /migrate-repo Step 1/3 artifacts`, and pushes to `origin`.
+
+## Resume (after failure or abort at stage N)
+
+Resume in a new session:
+- Re-run MR-2 (`preview-and-capture.sh`) for a fresh snapshot pair — accounts for issues already migrated.
+- Re-run stage N's command (`<ACK> <BASE> <stage args>`) with the freshly captured snapshot vars.
+- Re-dry-run is mandatory on resume; the Layer C gate fires on every live step.
+
+## When archive files need explicit ordering
+
+If `docs/history/` filenames sort in the wrong chronological order (e.g. `legacy-*.md` mixed with `2026-*.md`), pass the order explicitly with `--history-files` — comma-separated, relative to `docs/history/`; include the current `docs/history.md` as `../history.md`. Example: `orchestrate.sh "$REPO_PATH" --dry-run --history-files "legacy.md,legacy-agents.md,2026-agents.md,2026.md"`.
 
 ## agents repo (Phase 3)
 
