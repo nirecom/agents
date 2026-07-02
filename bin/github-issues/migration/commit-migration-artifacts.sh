@@ -43,6 +43,27 @@ ALLOWLIST=(
   "docs/todo.md"
 )
 
+# resolve_external_docs_repo: detects when docs/ is a symlink to a separate git root.
+# Sets DOCS_REPO_DIR (absolute path to docs-repo root) and DOCS_PREFIX (relative path
+# from docs-repo root to the symlink target, with trailing slash).
+# Returns 0 when an external docs-repo is detected, 1 otherwise.
+resolve_external_docs_repo() {
+  DOCS_REPO_DIR=""
+  DOCS_PREFIX=""
+  local docs_link="$REPO_DIR/docs"
+  [ -L "$docs_link" ] || return 1
+  local docs_target
+  docs_target=$(cd "$docs_link" && git rev-parse --show-toplevel 2>/dev/null) || return 1
+  local primary_top
+  primary_top=$(git -C "$REPO_DIR" rev-parse --show-toplevel 2>/dev/null) || return 1
+  [ "$docs_target" != "$primary_top" ] || return 1
+  DOCS_REPO_DIR="$docs_target"
+  local prefix
+  prefix=$(cd "$docs_link" && git rev-parse --show-prefix 2>/dev/null) || return 1
+  DOCS_PREFIX="$prefix"   # e.g. "projects/engineering/repo-name/"
+  return 0
+}
+
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] would stage:"
   for p in "${ALLOWLIST[@]}"; do
@@ -50,11 +71,29 @@ if [ "$DRY_RUN" -eq 1 ]; then
   done
   echo "[dry-run] would commit: $COMMIT_MSG_SUBJECT"
   echo "[dry-run] would push: origin $(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '<branch>')"
+  if resolve_external_docs_repo; then
+    echo "[dry-run] docs/ is an external symlink → would also commit docs entries to: $DOCS_REPO_DIR"
+  fi
   exit 0
+fi
+
+DOCS_REPO_DIR=""
+DOCS_PREFIX=""
+if resolve_external_docs_repo; then
+  HAS_EXTERNAL_DOCS=1
+else
+  HAS_EXTERNAL_DOCS=0
 fi
 
 for entry in "${ALLOWLIST[@]}"; do
   if [ -e "$REPO_DIR/$entry" ]; then
+    case "$entry" in
+      docs/*)
+        if [ "$HAS_EXTERNAL_DOCS" -eq 1 ]; then
+          continue   # handled separately below
+        fi
+        ;;
+    esac
     git -C "$REPO_DIR" -c core.autocrlf=false add -- "$entry"
   fi
 done
@@ -122,6 +161,33 @@ $issue_range_line"
 fi
 
 git -C "$REPO_DIR" commit -m "$COMMIT_MSG_SUBJECT" -m "$body_buf"
+
+# If docs/ is a symlink to an external git repo, commit docs/ entries there separately.
+if [ "$HAS_EXTERNAL_DOCS" -eq 1 ]; then
+  DOCS_STAGED=0
+  for entry in "${ALLOWLIST[@]}"; do
+    case "$entry" in
+      docs/*)
+        local_path="$REPO_DIR/$entry"
+        if [ -e "$local_path" ]; then
+          rel="${entry#docs/}"
+          docs_path="${DOCS_PREFIX}${rel}"
+          git -C "$DOCS_REPO_DIR" -c core.autocrlf=false add -- "$docs_path" || true
+          DOCS_STAGED=1
+        fi
+        ;;
+    esac
+  done
+  if [ "$DOCS_STAGED" -eq 1 ] && ! git -C "$DOCS_REPO_DIR" diff --cached --quiet 2>/dev/null; then
+    git -C "$DOCS_REPO_DIR" commit -m "$COMMIT_MSG_SUBJECT" -m "$body_buf"
+    if [ "$NO_PUSH" -eq 1 ]; then
+      echo "commit-migration-artifacts: --no-push specified, skipping push for docs-repo"
+    else
+      docs_branch=$(git -C "$DOCS_REPO_DIR" rev-parse --abbrev-ref HEAD)
+      git -C "$DOCS_REPO_DIR" push origin "$docs_branch"
+    fi
+  fi
+fi
 
 if [ "$NO_PUSH" -eq 1 ]; then
   echo "commit-migration-artifacts: --no-push specified, skipping push"
