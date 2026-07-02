@@ -1,8 +1,8 @@
 #!/bin/bash
-# Tests: bin/workflow/lib/parse-oracle-output.js
+# Tests: bin/workflow/lib/parse-next-step-output.js
 # Tags: L1, workflow, skip-signal, scope:issue-specific
 #
-# Issue #485 — parse-oracle-output.js gains an optional SKIP_HINT key.
+# Issue #485 — parse-next-step-output.js gains an optional SKIP_HINT key.
 #   - 4-line input (no SKIP_HINT)  → parsed; SKIP_HINT defaults to ""
 #   - 5-line input with SKIP_HINT  → parsed; SKIP_HINT field carries the value
 #   - malformed input              → abort object with SKIP_HINT: ""
@@ -17,11 +17,11 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PARSER="$AGENTS_DIR/bin/workflow/lib/parse-oracle-output.js"
+PARSER="$AGENTS_DIR/bin/workflow/lib/parse-next-step-output.js"
 PARSER="$(cygpath -m "$PARSER" 2>/dev/null || echo "$PARSER")"
 
-[ -f "$AGENTS_DIR/bin/workflow/lib/parse-oracle-output.js" ] || {
-  echo "SKIP: parse-oracle-output.js not found"
+[ -f "$AGENTS_DIR/bin/workflow/lib/parse-next-step-output.js" ] || {
+  echo "SKIP: parse-next-step-output.js not found"
   exit 0
 }
 
@@ -47,13 +47,13 @@ check() {
   fi
 }
 
-# Parse a here-stringed oracle stdout and print one parsed field.
+# Parse a here-stringed next-step stdout and print one parsed field.
 # $1 = JS string literal for stdout, $2 = field name.
 parse_field() {
   local stdin_js="$1" field="$2"
   run_with_timeout node -e "
-    const { parseOracleOutput } = require('$PARSER');
-    const r = parseOracleOutput($stdin_js);
+    const { parseNextStepOutput } = require('$PARSER');
+    const r = parseNextStepOutput($stdin_js);
     const v = r['$field'];
     console.log(v === undefined ? '<undefined>' : String(v));
   " 2>/dev/null
