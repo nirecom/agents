@@ -154,7 +154,9 @@ Two checkpoints prevent private data from reaching public repositories: a `git p
 hook and a Claude Code PreToolUse hook. Both detect RFC 1918 addresses, email addresses,
 MAC addresses, absolute local paths, hard-coded secrets (AWS, Anthropic, OpenAI, GitHub,
 Slack, and others), PEM private keys, and Trojan Source hidden Unicode characters.
-Repositories identified as private via `gh api` are skipped automatically.
+Repositories identified as private via `gh api` are skipped automatically. For `gh issue`/`pr`
+writes, visibility is resolved from the **target** repository (not just the current directory),
+and writes to public repositories are additionally checked for private-repo name leaks.
 A companion offensive-content filter (`bin/scan-offensive`) checks all `gh issue`/`pr`
 writes for hate speech, slurs, harassment, and profanity — active for all repos (public
 and private). Copy `.offensive-content-blocklist.example` to `.offensive-content-blocklist`

@@ -1,7 +1,7 @@
 // Shared module: dynamically check if a git repo is private via GitHub API
 // Returns true if repo is private, false otherwise (fail-open on any error)
 
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const path = require("path");
 const { parseGitCArg } = require("./parse-git-args");
 
@@ -86,4 +86,44 @@ function resolveRepoDir(command) {
   return toNativePath(raw);
 }
 
-module.exports = { isPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost };
+// Check whether a forge-write target repo should be scanned as PUBLIC.
+// Fail-CLOSED: unknown/error/empty → return true (scan as public).
+// ownerRepo: "owner/repo" string from --repo flag.
+function shouldScanAsPublicTarget(ownerRepo) {
+  try {
+    if (!ownerRepo || typeof ownerRepo !== "string") return true;
+    // SECURITY: ownerRepo passed as array element — never shell-interpolated.
+    const result = spawnSync("gh", ["api", "repos/" + ownerRepo, "--jq", ".private"], {
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    if (result.error || result.status !== 0) return true; // fail-closed
+    const out = (result.stdout || "").trim();
+    if (out === "true") return false;  // confirmed private → skip public scan
+    if (out === "false") return true;  // confirmed public → scan
+    return true; // empty/garbage → fail-closed
+  } catch (e) {
+    return true;
+  }
+}
+
+// List owner/repo strings for all private repos visible to the user.
+// Fail-OPEN: error → []. Always queries gh fresh.
+function listPrivateRepoNames() {
+  try {
+    const result = spawnSync(
+      "gh",
+      ["repo", "list", "--limit", "1000", "--visibility", "private", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
+      { encoding: "utf8", timeout: 10000 }
+    );
+    if (result.error || result.status !== 0) return []; // fail-open
+    return (result.stdout || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+}
+
+module.exports = { isPrivateRepo, resolveRepoDir, toNativePath, extractRepoDirFromCommand, extractRepoId, extractHost, shouldScanAsPublicTarget, listPrivateRepoNames };

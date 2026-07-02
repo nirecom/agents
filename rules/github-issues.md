@@ -92,3 +92,9 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 - `gh issue close` from bash scripts (`close-completed.sh`, `close-not-planned.sh`) is invisible to `enforce-issue-close.js` — PreToolUse fires on the Bash-tool command head only, not subprocesses.
 - `ISSUE_CLOSE_SKILL=1` is effective only in the hook's Node.js process (set at session launch). Bash-tool inline or `export` forms do not reach the hook process.
 - `history.md` entries: English regardless of repo visibility. Issue body language is author's choice.
+
+## Multi-repo leak prevention
+
+When creating, editing, or commenting on issues or PRs in a PUBLIC repository, do not include names of or cross-references to PRIVATE repositories.
+Do not paste private-repo issue or PR URLs, or `owner/private-repo#N` references, into any public outbound content.
+Treat every public forge-write as potentially world-visible; omit private repo identifiers entirely.
