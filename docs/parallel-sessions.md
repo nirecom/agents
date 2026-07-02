@@ -139,6 +139,14 @@ Set in agents config (`.env`):
 ENFORCE_WORKTREE=off   # trivial one-liner; re-enable immediately after
 ```
 
+**Per-repo exclusion** — `ENFORCE_WORKTREE_EXCLUDE_REPOS` exempts specific repo root paths from
+enforcement (edit/commit directly from any branch) without turning the guard off globally; all
+other repos stay enforced. Semicolon-separated absolute paths; honored by both `enforce-worktree.js`
+and `pre-commit`:
+```
+ENFORCE_WORKTREE_EXCLUDE_REPOS=C:\git\repo-a;C:\git\repo-b   # POSIX: /home/user/repo-a;/home/user/repo-b
+```
+
 > **Note:** The merge gate (`user_verification` block on `gh pr merge` and protected-branch push)
 > fires in **both** modes. It is enforced by `workflow-gate.js` independently of the worktree guard.
 
