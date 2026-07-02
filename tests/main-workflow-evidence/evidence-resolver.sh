@@ -102,11 +102,11 @@ STATEOF
         catch(e) { console.log('ERROR: ' + e.message); }
       " 2>/dev/null)
 
+      # Hard assertion (symmetric with WS-EV-19): write_tests staged-evidence must be true; the vestigial pre-#1107 soft-pass is removed to close a latent false-green.
       if [ "$EV17_OUT" = "true" ]; then
         pass "WS-EV-17. evidence-resolver write_tests + staged tests/ → true"
       else
-        # Pre-code soft pass: write_tests case not yet in evidence-resolver
-        echo "PASS: WS-EV-17. write_tests not yet in evidence-resolver (pre-#1107-fix; got: $EV17_OUT)"
+        fail "WS-EV-17. expected true (write_tests staged-evidence), got: $EV17_OUT"
       fi
     else
       echo "SKIP: WS-EV-17 (evidence-resolver.js not yet implemented)"
@@ -137,5 +137,36 @@ STATEOF
       fi
     else
       echo "SKIP: WS-EV-18 (evidence-resolver.js not yet implemented)"
+    fi
+
+    echo ""
+    echo "=== WS-EV-19: evidence-resolver run_tests — staged tests/ present → hasCompletionEvidence=false (sentinel-only after #1215) ==="
+
+    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+      EV19_REPO=$(setup_repo)
+      EV19_REPO_N=$(to_node_path "$EV19_REPO")
+      EV19_SID="ev19-$$"
+      mkdir -p "$EV19_REPO/tests"
+      echo "test content" > "$EV19_REPO/tests/feature-ev19.sh"
+      git -C "$EV19_REPO" add tests/feature-ev19.sh
+
+      EV19_OUT=$(CLAUDE_PROJECT_DIR="$EV19_REPO_N" node -e "
+        const r = require('$RESOLVER');
+        try { console.log(r.hasCompletionEvidence('run_tests', '$EV19_SID', {repoDir: process.env.CLAUDE_PROJECT_DIR}) ? 'true' : 'false'); }
+        catch(e) { console.log('ERROR: ' + e.message); }
+      " 2>/dev/null)
+
+      # Hard fail: run_tests must NOT return true when staged tests/ are present.
+      # After #1215, run_tests is sentinel-only — hasStagedTestChanges no longer
+      # drives run_tests evidence. A 'true' result is a regression of the #1215 fix.
+      # Symmetry with WS-EV-17: write_tests→true / run_tests→false (same staged files).
+      if [ "$EV19_OUT" = "true" ]; then
+        fail "WS-EV-19. run_tests + staged tests/ → expected false (sentinel-only after #1215), got: true"
+      else
+        pass "WS-EV-19. run_tests + staged tests/ → false (sentinel-only after #1215)"
+      fi
+    else
+      echo "SKIP: WS-EV-19 (evidence-resolver.js not yet implemented)"
     fi
 }

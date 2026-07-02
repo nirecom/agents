@@ -70,11 +70,14 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       const plansDir = getWorkflowPlansDir();
       return fs.existsSync(path.join(plansDir, sessionId + "-detail.md"));
     }
-    if (step === "write_tests" || step === "run_tests") {
+    if (step === "write_tests") {
       const repoDir = resolveRepoDir(opts);
       if (!repoDir) return false;
       return hasStagedTestChanges(repoDir);
     }
+    // run_tests: sentinel-only — no evidence-based predicate here.
+    // Completion is owned by workflow-run-tests.js (run-all.sh contract-trust)
+    // or the run_tests sentinel — never by staged-test evidence.
     return false;
   } catch (e) {
     return false;

@@ -32,17 +32,25 @@ check_not_contains "H2. outline=pending + detail=complete scoped hint does NOT c
 # === B1-B2: Generic hint bifurcation by hasCompletionEvidence ===
 # ===========================================================================
 # Uses REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING fixture (non-outline/detail pair)
-# to test hint bifurcation via hasStagedTestChanges:
-#   B1: staged test file → hasCompletionEvidence("run_tests")=true → --mark hint
+# to test hint bifurcation for run_tests.
+#
+# After #1215 fix: run_tests is sentinel-only; hasStagedTestChanges applies ONLY to
+# write_tests. B1 verifies that staged tests/ present STILL yields run_tests
+# evidence=false (the core #1215 regression). The staged-test setup is KEPT so B1
+# records: "staged tests/ exist, yet run_tests evidence is false" — removing setup
+# would reduce B1 to a no-repo state identical to B2, losing the regression value.
+#   B1: staged test file → hasCompletionEvidence("run_tests")=false → /workflow-init hint (NOT --mark)
 #   B2: no staged tests → hasCompletionEvidence("run_tests")=false → /workflow-init hint
 
 echo ""
-echo "=== B1: non-scoped pair + hasCompletionEvidence=true → hint has --mark ==="
+echo "=== B1: non-scoped pair + staged tests + run_tests evidence=false → hint has /workflow-init not --mark ==="
 
 SID="b1-$$"
 write_state "$SID" "$(REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING $SID)"
 REPO_B1=$(setup_repo)
-# Stage a test file so hasStagedTestChanges() returns true for run_tests evidence.
+# Stage a test file. After #1215 fix, hasStagedTestChanges no longer drives
+# run_tests evidence; run_tests is sentinel-only. This setup is kept intentionally
+# to confirm that staged tests/ do NOT produce run_tests evidence=true.
 mkdir -p "$REPO_B1/tests"
 echo "# test" > "$REPO_B1/tests/dummy.sh"
 git -C "$REPO_B1" add "tests/dummy.sh"
@@ -54,7 +62,9 @@ eval "$OUT" 2>/dev/null || true
 
 check "B1. review_security=complete + run_tests=pending + staged tests → ACTION=abort" \
   "abort" "${ACTION:-}"
-check_contains "B1b. hint with evidence → contains --mark" \
+check_contains "B1b. staged tests present BUT run_tests evidence=false → hint contains /workflow-init" \
+  "/workflow-init" "${NEXT_HINT:-}"
+check_not_contains "B1c. staged tests present BUT run_tests evidence=false → hint does NOT contain --mark" \
   "--mark" "${NEXT_HINT:-}"
 
 echo ""
