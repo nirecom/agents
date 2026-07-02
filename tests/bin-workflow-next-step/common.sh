@@ -54,8 +54,8 @@ write_state() {
   printf '%s' "$json" > "$TMPDIR_WT/${sid}.json"
 }
 
-run_oracle() {
-  run_with_timeout node "$ORACLE_AGENTS_DIR/bin/workflow/next-step" "$@"
+run_next_step() {
+  run_with_timeout node "$NEXT_STEP_AGENTS_DIR/bin/workflow/next-step" "$@"
 }
 
 # All-pending fixture (closes_issues populated so clarify_intent isn't blocked).
@@ -100,7 +100,7 @@ JSON_MISSING_STEP='{"steps":{"workflow_init":{"status":"complete"},"clarify_inte
 
 # Empty steps object: all steps absent. readState() migration synthesizes workflow_init,
 # clarify_intent, and branching_complete as complete — creating an inconsistency with the
-# absent research step (idx 2). Oracle returns ACTION=abort, not ACTION=invoke.
+# absent research step (idx 2). next-step returns ACTION=abort, not ACTION=invoke.
 JSON_EMPTY_STEPS='{"steps":{},"closes_issues":[1053]}'
 
 # Non-skill step fixtures: branching_complete and user_verification should emit NEXT_SKILL="" + NEXT_HINT non-empty.

@@ -146,28 +146,28 @@ function buildWorkflowStatus(sessionId) {
     }
   }
 
-  // Call oracle for next-action hint (fail-open).
+  // Call next-step for next-action hint (fail-open).
   if (sessionId) {
     try {
-      const oracleBin = path.join(__dirname, "..", "bin", "workflow", "next-step");
-      if (fs.existsSync(oracleBin)) {
-        const r = spawnSync(process.execPath, [oracleBin, "--session", sessionId], {
+      const nextStepBin = path.join(__dirname, "..", "bin", "workflow", "next-step");
+      if (fs.existsSync(nextStepBin)) {
+        const r = spawnSync(process.execPath, [nextStepBin, "--session", sessionId], {
           encoding: "utf8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"],
         });
         if (r.status === 0 && r.stdout) {
-          let oracleAction = "";
-          let oracleHint = "";
+          let nextStepAction = "";
+          let nextStepHint = "";
           for (const line of r.stdout.split("\n")) {
             const m = line.match(/^(\w+)=(?:'([^']*)'|(.*))$/);
             if (m) {
-              if (m[1] === "ACTION") oracleAction = m[2] !== undefined ? m[2] : (m[3] || "");
-              if (m[1] === "NEXT_HINT") oracleHint = m[2] !== undefined ? m[2] : (m[3] || "");
+              if (m[1] === "ACTION") nextStepAction = m[2] !== undefined ? m[2] : (m[3] || "");
+              if (m[1] === "NEXT_HINT") nextStepHint = m[2] !== undefined ? m[2] : (m[3] || "");
             }
           }
-          if (oracleAction === "done") {
+          if (nextStepAction === "done") {
             nextAction = "All steps complete. Run /session-close.";
-          } else if (oracleHint) {
-            nextAction = oracleHint;
+          } else if (nextStepHint) {
+            nextAction = nextStepHint;
           }
         }
       }

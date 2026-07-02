@@ -46,7 +46,7 @@ CI-3a. **Decomposition probe** (run after CI-3 scope is agreed, before writing i
        - Read `$CLAUDE_ENV_FILE` to resolve `SESSION_ID` (same value as used in CI-4).
        - Run `bin/workflow/set-workflow-type "$SESSION_ID" "wf-meta"` (separate Bash call).
        - Proceed to CI-4 (write intent.md as normal — scope is already agreed).
-       - After CI-5 confirm-plan, route to `make-outline-plan` as normal; the oracle will auto-skip the 9 non-applicable WF-CODE steps (includes `detail`).
+       - After CI-5 confirm-plan, route to `make-outline-plan` as normal; next-step will auto-skip the 9 non-applicable WF-CODE steps (includes `detail`).
      - **If user chooses WF-CODE**: proceed silently to CI-4.
 
 CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
