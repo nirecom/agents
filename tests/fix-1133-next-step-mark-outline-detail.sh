@@ -1,13 +1,13 @@
 #!/bin/bash
 # Tests: hooks/lib/workflow-state/evidence-resolver.js, bin/workflow/next-step, bin/workflow/reconcile-state
-# Tags: workflow, oracle, mark, outline, detail, auto-repair, scope:issue-specific
+# Tags: workflow, next-step, mark, outline, detail, auto-repair, scope:issue-specific
 # L3 gap (what this test does NOT catch):
-# - Real Claude Code session where PostCompact fires and oracle is consulted
+# - Real Claude Code session where PostCompact fires and next-step is consulted
 # - Actual hook event chain registration
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 #
-# Covers #1133 (oracle --mark CLI, outline/detail auto-repair, scoped hints):
+# Covers #1133 (next-step --mark CLI, outline/detail auto-repair, scoped hints):
 #   --mark <step> <status> flag (M1-M6), outline/detail evidence auto-repair (A1-A2),
 #   scoped abort hint when outline=pending+detail=complete (H1-H2),
 #   generic hint bifurcation by hasCompletionEvidence (B1-B2),
@@ -22,7 +22,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORACLE="$AGENTS_DIR/bin/workflow/next-step"
+NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
 RECONCILE="$AGENTS_DIR/bin/workflow/reconcile-state"
 
 TMPDIR_BASE="$(mktemp -d)"
@@ -109,19 +109,19 @@ read_state_status() {
   " "$state_file" 2>/dev/null || echo "MISSING"
 }
 
-# Run the oracle for verdict output (always exits 0; KEY=value lines on stdout).
-run_oracle() {
+# Run next-step for verdict output (always exits 0; KEY=value lines on stdout).
+run_next_step() {
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$ORACLE" "$@" 2>/dev/null || true
+    run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
-# Run the oracle capturing exit code + stderr.
+# Run next-step capturing exit code + stderr.
 # Sets globals: RC, STDERR.
-run_oracle_rc() {
+run_next_step_rc() {
   local err_file="$TMPDIR_BASE/stderr.$RANDOM"
   set +e
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$ORACLE" "$@" >/dev/null 2>"$err_file"
+    run_with_timeout node "$NEXT_STEP" "$@" >/dev/null 2>"$err_file"
   RC=$?
   set -e
   STDERR="$(cat "$err_file" 2>/dev/null || true)"
@@ -287,7 +287,7 @@ setup_repo() {
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SUB_DIR="$SCRIPT_DIR/fix-1133-oracle-mark-outline-detail"
+SUB_DIR="$SCRIPT_DIR/fix-1133-next-step-mark-outline-detail"
 
 # shellcheck source=/dev/null
 . "$SUB_DIR/mark.sh"

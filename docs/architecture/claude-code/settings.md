@@ -50,7 +50,7 @@ See `docs/security-policy.md` for the full pattern list.
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
   `echo "<<WORKFLOW_RESET_FROM_step>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
-  is oracle-driven: the model queries `bin/workflow/next-step` after each completion rather than
+  is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
 - `show-plan-link.js` — PostToolUse on Write. Always emits a `Plan file written: <path>` breadcrumb when a final plan artifact (intent/outline/detail.md matching `*-(intent|outline|detail).md` directly under `~/.workflow-plans/`) is written. When `CONFIRM_<STEP>=on` (default) AND a VS Code session is detected (`TERM_PROGRAM=vscode` or `CLAUDE_CODE_ENTRYPOINT=claude-vscode` (excluded when `VSCODE_CRASH_REPORTER_PROCESS_TYPE=extensionHost`)) AND `SHOW_PLAN_LINK_NO_AUTO_OPEN` is unset, additionally spawns a single `code --folder-uri <uri> <filePath>` invocation (raises window and opens file atomically, eliminating the two-spawn timing race — #546 Gap 3). `normalizeCwd()` is applied at the entry of `workspaceFolderUriFrom` to convert Unix-style Git Bash paths (e.g. `/c/git/agents`) to `C:/git/agents` before URI construction, fixing multi-window routing on Windows. URI source ladder: `input.cwd` → `process.cwd()` → bare `code -r` (no folder-uri). Folder URI path segments are percent-encoded via `encodeURIComponent` for spaces / `#` / `%` / non-ASCII / UNC support (#492). Windows uses `cmd.exe /d /s /c code ...` per spawn (CVE-2024-27980 mitigation). VS Code 1.121 regression: when `--folder-uri` and a file path are passed together, the file-open arg is silently dropped; fixed in 1.122+. Users on 1.121 must click the breadcrumb manually — no fallback provided (#546). Fail-open: spawn errors do not abort the hook.
 - `show-diff.js` (PreToolUse, matcher: `Write`) — shows an inline diff in chat for any final
@@ -64,7 +64,7 @@ See `docs/security-policy.md` for the full pattern list.
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
   `additionalContext` containing session_id, all 14 step statuses, and a `NEXT ACTION:` line
-  from the oracle (`bin/workflow/next-step`); runs zombie cleanup
+  from next-step (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
 - `check-cross-platform.js` (PreToolUse, matcher: `Bash`) — blocks `git commit` when

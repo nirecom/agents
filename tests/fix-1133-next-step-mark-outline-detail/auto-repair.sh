@@ -10,7 +10,7 @@ write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
 # Create the outline.md artifact in PLANS_DIR to trigger evidence-based auto-repair.
 touch "$PLANS_DIR/${SID}-outline.md"
 
-OUT=$(run_oracle --session "$SID")
+OUT=$(run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""
 eval "$OUT" 2>/dev/null || true
 
@@ -33,7 +33,7 @@ write_state "$SID" "$(DETAIL_PENDING_BRANCHING_COMPLETE $SID)"
 # Create the detail.md artifact in PLANS_DIR to trigger evidence-based auto-repair.
 touch "$PLANS_DIR/${SID}-detail.md"
 
-OUT=$(run_oracle --session "$SID")
+OUT=$(run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""
 eval "$OUT" 2>/dev/null || true
 
