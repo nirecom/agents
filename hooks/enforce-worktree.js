@@ -28,7 +28,7 @@ const { resolveSessionId } = require("./lib/workflow-state");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { classify } = require("./lib/bash-write-patterns");
 const { parseCdCommand } = require("./lib/parse-git-args");
-const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch } = require("./enforce-worktree/config");
+const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch, isCommandRepoExcluded } = require("./enforce-worktree/config");
 const { isMainCheckout, parseGitCPath, findRepoRootForBash, normalizeForCompare, findRepoRoot } = require("./enforce-worktree/git-repo-detection");
 const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } = require("./enforce-worktree/session-scope");
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
@@ -94,6 +94,10 @@ try {
 }
 
 if (!isEnforceWorktreeOn()) done();
+
+// ENFORCE_WORKTREE_EXCLUDE_REPOS: if the target repo is explicitly excluded,
+// skip enforcement for this write without disabling enforcement globally.
+if (isCommandRepoExcluded(input, process.cwd())) done();
 
 // Session-scoped WORKFLOW override (broader than WORKTREE; bypasses everything
 // except enforce-system-ops). Placed BEFORE the worktree-off check because
