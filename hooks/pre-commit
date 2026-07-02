@@ -95,6 +95,48 @@ if _is_enforce_worktree_on; then
         fi
     fi
 
+    # ENFORCE_WORKTREE_EXCLUDE_REPOS: if the current repo root is in the exclusion list,
+    # skip the main-checkout and protected-branch gate (same semantics as the JS hook).
+    if [ "$_enforce_skip" = "0" ] && [ -n "${ENFORCE_WORKTREE_EXCLUDE_REPOS:-}" ]; then
+        _cur_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+        if [ -n "$_cur_root" ]; then
+            # Normalize both paths to a canonical form for comparison.
+            # Strategy: resolve each path via cd+pwd to canonicalize (resolves /tmp symlinks,
+            # drive-letter differences, etc.), then normalize separators. Case-fold only on
+            # Windows (case-insensitive FS) to match config.js isRepoExcluded
+            # (process.platform === 'win32'); POSIX filesystems are case-sensitive.
+            case "$(uname -s 2>/dev/null)" in
+                MINGW*|MSYS*|CYGWIN*) _excl_win=1 ;;
+                *) _excl_win=0 ;;
+            esac
+            _cur_root_norm="$(cd "$_cur_root" 2>/dev/null && pwd -P || printf '%s' "$_cur_root")"
+            [ "$_excl_win" = "1" ] && _cur_root_norm="${_cur_root_norm,,}"
+            _cur_root_norm="${_cur_root_norm//\\//}"
+            _old_ifs="$IFS"
+            IFS=';' read -ra _excl_entries <<< "${ENFORCE_WORKTREE_EXCLUDE_REPOS}"
+            IFS="$_old_ifs"
+            for _excl_entry in "${_excl_entries[@]}"; do
+                # Trim whitespace
+                _excl_entry="${_excl_entry#"${_excl_entry%%[![:space:]]*}"}"
+                _excl_entry="${_excl_entry%"${_excl_entry##*[![:space:]]}"}"
+                [ -z "$_excl_entry" ] && continue
+                # Resolve entry to the same canonical form
+                if [ -d "$_excl_entry" ]; then
+                    _excl_norm="$(cd "$_excl_entry" 2>/dev/null && pwd -P || printf '%s' "$_excl_entry")"
+                else
+                    _excl_norm="$_excl_entry"
+                fi
+                [ "$_excl_win" = "1" ] && _excl_norm="${_excl_norm,,}"
+                _excl_norm="${_excl_norm//\\//}"
+                if [ "$_cur_root_norm" = "$_excl_norm" ] || \
+                   [[ "$_cur_root_norm" == "${_excl_norm}/"* ]]; then
+                    _enforce_skip=1
+                    break
+                fi
+            done
+        fi
+    fi
+
     # WORKFLOW_OFF / WORKTREE_OFF session-marker bypass: mirror enforce-worktree.js.
     # Resolves session id via hooks/lib/workflow-state.js#resolveSessionId() and
     # checks both .workflow-off and .worktree-off markers via hooks/lib/session-markers.js.
