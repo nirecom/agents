@@ -16,7 +16,7 @@ Codex CLI and Gemini CLI are both supported (install with `-Develop`).
 ### Hook-enforced end-to-end workflow
 
 Most agent frameworks rely on the model to remember process steps. This framework encodes
-the dev workflow as a deterministic oracle-driven state machine. After each skill completes,
+the dev workflow as a deterministic next-step-driven state machine. After each skill completes,
 the model queries `bin/workflow/next-step` for the next step; a PreToolUse hook physically
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
 

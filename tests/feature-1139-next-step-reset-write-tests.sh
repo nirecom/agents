@@ -1,8 +1,8 @@
 #!/bin/bash
 # Tests: bin/workflow/next-step
-# Tags: workflow, oracle, reset, write_tests, scope:issue-specific
+# Tags: workflow, next-step, reset, write_tests, scope:issue-specific
 # L3 gap (what this test does NOT catch):
-# - Real Claude Code session where the hook fires and the oracle is consulted interactively
+# - Real Claude Code session where the hook fires and next-step is consulted interactively
 # - Actual PostToolUse hook registration and event chain
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
@@ -19,7 +19,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORACLE="$AGENTS_DIR/bin/workflow/next-step"
+NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -106,19 +106,19 @@ read_state_status() {
   " "$state_file" 2>/dev/null || echo "MISSING"
 }
 
-# Run the oracle for verdict output (always exits 0; KEY=value lines on stdout).
-run_oracle() {
+# Run next-step for verdict output (always exits 0; KEY=value lines on stdout).
+run_next_step() {
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$ORACLE" "$@" 2>/dev/null || true
+    run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
-# Run the oracle capturing exit code + stderr (for --reset validation cases).
+# Run next-step capturing exit code + stderr (for --reset validation cases).
 # Sets globals: RC, STDERR.
-run_oracle_rc() {
+run_next_step_rc() {
   local err_file="$TMPDIR_BASE/stderr.$RANDOM"
   set +e
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$ORACLE" "$@" >/dev/null 2>"$err_file"
+    run_with_timeout node "$NEXT_STEP" "$@" >/dev/null 2>"$err_file"
   RC=$?
   set -e
   STDERR="$(cat "$err_file" 2>/dev/null || true)"
@@ -245,7 +245,7 @@ echo "=== R1: --reset run_tests with run_tests=complete → exit 0 + run_tests=p
 
 SID="r1-$$"
 write_state "$SID" "$(RUN_TESTS_COMPLETE_WRITE_TESTS_PENDING $SID)"
-run_oracle_rc --session "$SID" --reset run_tests
+run_next_step_rc --session "$SID" --reset run_tests
 check "R1. --reset run_tests → exit 0" "0" "$RC"
 check "R1b. --reset run_tests → state shows run_tests=pending" "pending" "$(read_state_status "$SID" "run_tests")"
 
@@ -254,7 +254,7 @@ echo "=== R2: --reset bogus_step (invalid step name) → nonzero exit + stderr e
 
 SID="r2-$$"
 write_state "$SID" "$(RUN_TESTS_COMPLETE_WRITE_TESTS_PENDING $SID)"
-run_oracle_rc --session "$SID" --reset bogus_step
+run_next_step_rc --session "$SID" --reset bogus_step
 check_nonzero "R2. --reset bogus_step → nonzero exit" "$RC"
 if [ -n "${STDERR:-}" ]; then
   echo "PASS: R2b. --reset bogus_step → stderr error message emitted"
@@ -269,7 +269,7 @@ echo "=== R3: --reset with no step argument → nonzero exit ==="
 
 SID="r3-$$"
 write_state "$SID" "$(RUN_TESTS_COMPLETE_WRITE_TESTS_PENDING $SID)"
-run_oracle_rc --session "$SID" --reset
+run_next_step_rc --session "$SID" --reset
 check_nonzero "R3. --reset (no step argument) → nonzero exit" "$RC"
 
 # ===========================================================================
@@ -286,7 +286,7 @@ REPO_N=$(to_node_path "$REPO")
 # No staged tests → write_tests auto-repair (#1107) does not fire → inconsistency
 # scan sees run_tests (later) complete while write_tests (current) pending.
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 
@@ -309,7 +309,7 @@ write_state "$SID" "$(REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING $SID)"
 REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 
@@ -325,7 +325,7 @@ REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")
 # No staged tests → no auto-repair → invoke write-tests.
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 

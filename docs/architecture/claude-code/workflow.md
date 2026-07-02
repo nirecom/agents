@@ -68,7 +68,7 @@ bypassing the state file entry for those steps. The state file still contains th
 (created by `session-start.js` with status `pending`); the evidence override happens only in
 the gate, not in the file.
 
-`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **oracle-level auto-repair**: when `next-step` finds one of these steps `pending`, it calls `hasCompletionEvidence()` from `evidence-resolver.js` and, if evidence is found (intent/outline/detail plan artifact exists, or test files are staged), auto-marks the step `complete` and re-evaluates the verdict — capped at one auto-repair per oracle call. This resolves compaction gaps where the step completed but the marker was lost.
+`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending`, it calls `hasCompletionEvidence()` from `evidence-resolver.js` and, if evidence is found (intent/outline/detail plan artifact exists, or test files are staged), auto-marks the step `complete` and re-evaluates the verdict — capped at one auto-repair per next-step call. This resolves compaction gaps where the step completed but the marker was lost.
 
 `research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
 their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>"`)
@@ -107,8 +107,8 @@ Session start → session-start.js (SessionStart hook)
       else: copies matching session's steps (state inheritance)
     if no match found in any transcript: creates fresh state with all steps pending
   writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
-  calls bin/workflow/next-step --session <sid> (oracle) → injects all 14 step statuses
-    + "NEXT ACTION: <oracle NEXT_HINT>" into additionalContext (fail-open)
+  calls bin/workflow/next-step --session <sid> → injects all 14 step statuses
+    + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
     (→ recorded in transcript for future sessions to find via the scan above)
   runs zombie cleanup (deletes state files older than 7 days)
@@ -173,9 +173,9 @@ recent session_id in any given JSONL file.
 | Step `pending` or `in_progress` | block |
 | Non-skippable step marked `skipped` | block |
 
-## Oracle-driven sequencing
+## next-step-driven sequencing
 
-Step ordering is owned by `bin/workflow/next-step` (the workflow oracle). After each skill completes, the model queries the oracle with:
+Step ordering is owned by `bin/workflow/next-step`. After each skill completes, the model queries next-step with:
 
 ```
 node bin/workflow/next-step --session $CLAUDE_SESSION_ID
@@ -183,11 +183,11 @@ node bin/workflow/next-step --session $CLAUDE_SESSION_ID
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
 
-At the `outline` and `detail` steps only, the oracle appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). It is advisory only — a suggestion that the model may emit the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by `hooks/lib/workflow-state/skip-signal-resolver.js` (`isTrivial`), which fails closed to "not trivial" on any uncertainty.
+At the `outline` and `detail` steps only, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). It is advisory only — a suggestion that the model may emit the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by `hooks/lib/workflow-state/skip-signal-resolver.js` (`isTrivial`), which fails closed to "not trivial" on any uncertainty.
 
 `--list` mode renders the full 14-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
-`session-start.js` also calls the oracle on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
+`session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
 
 ## Reset and emergency resume
 
@@ -197,13 +197,13 @@ To roll back to a specific step (e.g. after a crash or to redo a phase):
 echo "<<WORKFLOW_RESET_FROM_<step>>>"
 ```
 
-`reset-handler.js` (PostToolUse, via `workflow-mark.js`) marks all prior steps `complete` and resets the target step and all subsequent steps to `pending`. The resulting state is consistent and immediately queryable by the oracle. Use `--list` to verify before proceeding.
+`reset-handler.js` (PostToolUse, via `workflow-mark.js`) marks all prior steps `complete` and resets the target step and all subsequent steps to `pending`. The resulting state is consistent and immediately queryable by next-step. Use `--list` to verify before proceeding.
 
 Priority order for recovery:
-1. **Session resume**: `session-start.js` re-injects oracle verdict automatically — no action needed.
+1. **Session resume**: `session-start.js` re-injects next-step verdict automatically — no action needed.
 2. **Orientation check**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID` for an in-session verdict.
-3. **Auto-repair**: oracle calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
-4. **`--mark <step> complete`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step> complete` marks one step complete without touching others (session-global; run from any directory). Use when the oracle's scoped hint names a specific step to mark.
+3. **Auto-repair**: next-step calls `hasCompletionEvidence()` for evidence-backed steps and self-corrects — no action needed.
+4. **`--mark <step> complete`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step> complete` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
 5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
 6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
 
