@@ -2,6 +2,8 @@
 // Extract scannable text from `gh` forge-write commands (issue/pr create|edit|close|comment|review).
 // Deliberately narrower than GH_GROUP_A_REGEX — excludes `gh repo` and `gh api`.
 
+const { stripQuotedArgs, stripInlineBodyArg } = require("./strip-quoted-args");
+
 const FORGE_SCAN_TARGET_REGEX =
   /\bgh\b\s+(?:pr\s+(?:create|edit|close|comment|review)|issue\s+(?:create|edit|close|comment))\b/;
 
@@ -73,4 +75,56 @@ function extractTexts(command) {
   return { inline, filePaths };
 }
 
-module.exports = { isForgeScanTarget, extractTexts };
+// Validate owner/repo shape: alphanumeric/dot/dash/underscore on both sides of /
+const REPO_SHAPE_RE = /^[\w.-]+\/[\w.-]+$/;
+
+// Extract the --repo / -R flag value from a gh command.
+// Returns owner/repo string or null if absent/invalid.
+// Uses extractFlagQuoted/extractFlagUnquoted for --repo (long form only).
+// For -R short form: uses stripQuotedArgs to avoid false positives from quoted body content.
+function extractRepoFlag(command) {
+  if (typeof command !== "string" || command.length === 0) return null;
+
+  // Long form: --repo "val", --repo=val, --repo val
+  // Strip only --body/--title argument VALUES (where untrusted smuggling lands, e.g.
+  // --body "see --repo attacker/evil"), leaving a real --repo flag value intact — so a
+  // smuggled --repo inside a body/title is neutralized but a legitimate quoted --repo
+  // "owner/repo" still extracts correctly. (stripQuotedArgs would also blank the real value.)
+  {
+    const stripped = stripInlineBodyArg(command);
+    const candidates = [];
+    extractFlagQuoted(stripped, "repo", candidates);
+    extractFlagUnquoted(stripped, "repo", candidates);
+    for (const c of candidates) {
+      const v = c.trim();
+      if (REPO_SHAPE_RE.test(v)) return v;
+    }
+  }
+
+  // Short form: -R (not handled by extractFlagQuoted/extractFlagUnquoted since those prefix --)
+  // Use stripQuotedArgs to neutralize quoted content so we only match real -R flags.
+  {
+    const stripped = stripQuotedArgs(command);
+    // Check if -R or -R= appears in the stripped command (outside quotes)
+    const hasShortFlag = /(?:^|[\s;|&])-R(?:[\s=]|$)/.test(stripped);
+    if (hasShortFlag) {
+      // -R=owner/repo (equals form, no space)
+      const eqMatch = command.match(/(?:^|[\s;|&])-R=(\S+)/);
+      if (eqMatch) {
+        const v = eqMatch[1].replace(/^["']|["']$/g, "");
+        if (REPO_SHAPE_RE.test(v)) return v;
+      }
+      // -R "owner/repo" or -R owner/repo (space form — search original command)
+      // Find -R followed by a value in the original command string
+      const spaceMatch = command.match(/(?:^|[\s;|&])-R\s+(["']?)([^\s"']+)\1/);
+      if (spaceMatch) {
+        const v = spaceMatch[2];
+        if (REPO_SHAPE_RE.test(v)) return v;
+      }
+    }
+  }
+
+  return null;
+}
+
+module.exports = { isForgeScanTarget, extractTexts, extractRepoFlag };
