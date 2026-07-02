@@ -21,7 +21,7 @@ run_skip_hint_tests() {
   local OUT line_count
 
   # SKIP_HINT depends on the skip-signal resolver; skip the group if absent.
-  if [ ! -f "$ORACLE_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" ]; then
+  if [ ! -f "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" ]; then
     echo "SKIP: 40-45: SKIP_HINT (skip-signal-resolver.js not yet implemented)"
     PASS=$((PASS + 7))
     return 0
@@ -35,28 +35,28 @@ run_skip_hint_tests() {
   # ---- Case 40: outline current + trivial intent.md → SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED ----
   write_state "case40" "$JSON_AT_OUTLINE"
   printf 'Fix typo in the helper name.\n' > "$PLANS_DIR_SH/case40-intent.md"
-  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_oracle --session "case40" 2>/dev/null || true)"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case40" 2>/dev/null || true)"
   check_contains "40: outline+trivial → SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED" \
     "SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED" "$OUT"
 
   # ---- Case 41: detail current + trivial intent.md → SKIP_HINT=WORKFLOW_DETAIL_NOT_NEEDED ----
   write_state "case41" "$JSON_AT_DETAIL"
   printf 'Fix typo in the helper name.\n' > "$PLANS_DIR_SH/case41-intent.md"
-  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_oracle --session "case41" 2>/dev/null || true)"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case41" 2>/dev/null || true)"
   check_contains "41: detail+trivial → SKIP_HINT=WORKFLOW_DETAIL_NOT_NEEDED" \
     "SKIP_HINT=WORKFLOW_DETAIL_NOT_NEEDED" "$OUT"
 
   # ---- Case 42: outline current + NON-trivial intent.md → no SKIP_HINT line ----
   write_state "case42" "$JSON_AT_OUTLINE"
   printf 'Redesign the parser entirely with a new interface.\n' > "$PLANS_DIR_SH/case42-intent.md"
-  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_oracle --session "case42" 2>/dev/null || true)"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case42" 2>/dev/null || true)"
   check_not_contains "42: outline+non-trivial → no SKIP_HINT line" "SKIP_HINT=" "$OUT"
 
   # ---- Case 43: write_tests current (post-planning) + trivial → no SKIP_HINT line ----
   # SKIP_HINT applies only to planning steps (outline/detail), never afterward.
   write_state "case43" "$JSON_AT_WRITE_TESTS"
   printf 'Fix typo in the helper name.\n' > "$PLANS_DIR_SH/case43-intent.md"
-  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_oracle --session "case43" 2>/dev/null || true)"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case43" 2>/dev/null || true)"
   check_not_contains "43: write_tests+trivial → no SKIP_HINT line" "SKIP_HINT=" "$OUT"
 
   # ---- Case 44: no SKIP_HINT → exactly 4 output lines (4-line contract preserved) ----
@@ -65,7 +65,7 @@ run_skip_hint_tests() {
   # case42's OUT was overwritten by case43; recompute from a clean non-trivial run.
   write_state "case44" "$JSON_AT_OUTLINE"
   printf 'Redesign the parser entirely with a new interface.\n' > "$PLANS_DIR_SH/case44-intent.md"
-  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_oracle --session "case44" 2>/dev/null || true)"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case44" 2>/dev/null || true)"
   line_count="$(printf '%s\n' "$OUT" | grep -cE '^(ACTION|NEXT_SKILL|NEXT_HINT|REASON|SKIP_HINT)=' || true)"
   check "44: no SKIP_HINT → exactly 4 KEY=value lines" "4" "$line_count"
 
@@ -74,7 +74,7 @@ run_skip_hint_tests() {
   # and the plain 4-line contract is preserved.
   write_state "case45" "$JSON_AT_OUTLINE"
   # Deliberately do NOT create case45-intent.md.
-  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_oracle --session "case45" 2>/dev/null || true)"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case45" 2>/dev/null || true)"
   check_not_contains "45: outline+missing intent.md → no SKIP_HINT line" "SKIP_HINT=" "$OUT"
   line_count="$(printf '%s\n' "$OUT" | grep -cE '^(ACTION|NEXT_SKILL|NEXT_HINT|REASON|SKIP_HINT)=' || true)"
   check "45: missing intent.md → exactly 4 KEY=value lines" "4" "$line_count"

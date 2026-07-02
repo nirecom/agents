@@ -2,7 +2,7 @@
 # Tests: bin/workflow/next-step
 # Tags: L2, workflow, wf-meta, scope:common
 #
-# L2 test of the workflow oracle's state-transition resolver and --list renderer.
+# L2 test of the workflow next-step's state-transition resolver and --list renderer.
 # Source under test does NOT yet exist (TDD phase A — RED state expected).
 #
 # Dispatcher: shared helpers/fixtures live in bin-workflow-next-step/common.sh;
@@ -10,7 +10,7 @@
 #
 # L3 gap (what this test does NOT catch):
 # - Real CLAUDE_SESSION_ID environment propagation from a live claude -p session
-# - Actual workflow-mark.js sentinel dispatch triggering oracle consumption
+# - Actual workflow-mark.js sentinel dispatch triggering next-step consumption
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 
@@ -27,9 +27,9 @@ TMPDIR_WT="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_WT"' EXIT
 export CLAUDE_WORKFLOW_DIR="$TMPDIR_WT"
 
-# Derive oracle path from the test file's own location so worktree runs
-# test the worktree's oracle rather than the one in $AGENTS_CONFIG_DIR.
-ORACLE_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Derive next-step path from the test file's own location so worktree runs
+# test the worktree's next-step rather than the one in $AGENTS_CONFIG_DIR.
+NEXT_STEP_AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-workflow-next-step"
 
@@ -44,7 +44,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-workflow-next-step
 # shellcheck source=./bin-workflow-next-step/skip-hint.sh
 . "$SCRIPT_DIR/skip-hint.sh"
 
-# run_with_timeout wraps each individual `node` invocation inside run_oracle
+# run_with_timeout wraps each individual `node` invocation inside run_next_step
 # (timeout/perl-exec cannot wrap shell functions directly, so per-call bounding
 # is the portable shape — matches tests/feature-1027-state-schema-eligible-phase.sh).
 run_transitions_tests

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/workflow/next-step
-# Tags: L2, workflow, oracle, write_tests, evidence, scope:issue-specific
+# Tags: L2, workflow, next-step, write_tests, evidence, scope:issue-specific
 
 # L3 gap (what this test does NOT catch):
 # - real hook PreToolUse event in live claude session
@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (oracle not yet evidence-aware)"; exit 0; }
+[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (next-step not yet evidence-aware)"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -17,7 +17,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORACLE="$AGENTS_DIR/bin/workflow/next-step"
+NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -91,9 +91,9 @@ read_state_status() {
   " "$state_file" 2>/dev/null || echo "MISSING"
 }
 
-run_oracle() {
+run_next_step() {
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$ORACLE" "$@" 2>/dev/null || true
+    run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
 setup_repo() {
@@ -174,7 +174,7 @@ EOF
 }
 
 echo ""
-echo "=== OWTE-1: staged tests/ present + write_tests=pending → oracle auto-repairs ==="
+echo "=== OWTE-1: staged tests/ present + write_tests=pending → next-step auto-repairs ==="
 
 SID="owte1-$$"
 write_state "$SID" "$(WRITE_TESTS_PENDING_STATE $SID)"
@@ -184,7 +184,7 @@ mkdir -p "$REPO/tests"
 echo "test content" > "$REPO/tests/feature-owte1.sh"
 git -C "$REPO" add tests/feature-owte1.sh
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""
 eval "$OUT" 2>/dev/null || true
 
@@ -206,14 +206,14 @@ else
 fi
 
 echo ""
-echo "=== OWTE-2: no staged tests + write_tests=pending → oracle returns invoke write-tests ==="
+echo "=== OWTE-2: no staged tests + write_tests=pending → next-step returns invoke write-tests ==="
 
 SID="owte2-$$"
 write_state "$SID" "$(WRITE_TESTS_PENDING_STATE $SID)"
 REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""
 eval "$OUT" 2>/dev/null || true
 
@@ -221,7 +221,7 @@ check "OWTE-2. no staged tests + write_tests=pending → ACTION=invoke" "invoke"
 check "OWTE-2b. no staged tests + write_tests=pending → NEXT_SKILL=write-tests" "write-tests" "${NEXT_SKILL:-}"
 
 echo ""
-echo "=== OWTE-3: _didAutoRepair prevents infinite recursion (2 oracle runs without hang) ==="
+echo "=== OWTE-3: _didAutoRepair prevents infinite recursion (2 next-step runs without hang) ==="
 
 SID="owte3-$$"
 write_state "$SID" "$(WRITE_TESTS_PENDING_STATE $SID)"
@@ -231,14 +231,14 @@ mkdir -p "$REPO/tests"
 echo "content" > "$REPO/tests/feature-owte3.sh"
 git -C "$REPO" add tests/feature-owte3.sh
 
-OUT1=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID" 2>/dev/null || true)
-OUT2=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID" 2>/dev/null || true)
+OUT1=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID" 2>/dev/null || true)
+OUT2=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID" 2>/dev/null || true)
 
 if [ -n "$OUT1" ] && [ -n "$OUT2" ]; then
-  echo "PASS: OWTE-3. oracle runs twice without infinite recursion"
+  echo "PASS: OWTE-3. next-step runs twice without infinite recursion"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: OWTE-3. oracle produced empty output on repeated run"
+  echo "FAIL: OWTE-3. next-step produced empty output on repeated run"
   FAIL=$((FAIL + 1))
 fi
 
@@ -253,7 +253,7 @@ mkdir -p "$REPO/tests"
 echo "content" > "$REPO/tests/feature-owte4.sh"
 git -C "$REPO" add tests/feature-owte4.sh
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""
 eval "$OUT" 2>/dev/null || true
 
@@ -277,7 +277,7 @@ REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")
 # No tests staged
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 
