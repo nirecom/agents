@@ -267,3 +267,11 @@ Changes: Session sync fetch at iTerm startup no longer suspends the zsh job or c
 ### FEATURE: PR #1221 (2026-06-30)
 Background: feat(#1102,#1104): multi-repo worktree sessions — sibling intent schema + worktree-end fan-out
 Changes: Multi-repo worktree sessions: `clarify-intent` now detects cross-repo issue refs and prompts for sibling worktree paths; `worktree-end` writes history/changelog entries to each sibling repo automatically
+
+### FEATURE: PR #1238 (2026-07-02)
+Background: feat(#1226): OS-conditional .env blocks (#@if windows/posix) across all 3 loaders
+Changes: `.env` now supports OS-conditional blocks. Wrap OS-specific lines in `#@if windows` / `#@if posix` / `#@endif` markers: Windows keeps the `#@if windows` blocks, macOS/Linux keeps the `#@if posix` blocks, and the marker lines are stripped when the file is read. This lets one shared `.env` keep a single source of truth for cross-platform settings (API keys, IDs) while path-format settings (e.g. `WORKTREE_BASE_DIR`) carry per-OS values — fixing Windows drive-letter/backslash paths being silently dropped on macOS.;A flat `.env` with no markers keeps working exactly as before — no migration is required unless you want per-OS path values.;Migration (only if you want per-OS path values in a shared `.env`): manually wrap your OS-specific path settings in `#@if windows` / `#@if posix` / `#@endif` blocks, using the updated `.env.example` as the template. Your real `.env` is never auto-edited (it holds secrets and is git-ignored), so this step is yours to apply.
+
+### FEATURE: PR #1239 (2026-07-02)
+Background: fix(#1234,#1232): /migrate-repo self-repo identity guard + canary-1 label sync
+Changes: /migrate-repo now confirms the migration target repository explicitly and refuses to migrate the agents repo into itself unless intentionally acknowledged, preventing accidental migration when a repo path is mentioned only as a reference.;Fixed /migrate-repo failing with "label not found" on a fresh repository: the first history migration step now syncs labels before creating any issue.

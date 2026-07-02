@@ -2,7 +2,7 @@
 // Evidence-based completion resolver (SSOT for step → evidence predicate).
 //
 // Read-only module: never mutates workflow state. Callers (workflow-gate,
-// the next-step oracle, reconcile-state CLI, and the WORKFLOW_ON handler)
+// the next-step script, reconcile-state CLI, and the WORKFLOW_ON handler)
 // consult hasCompletionEvidence() to decide whether a step that is still
 // `pending` in state JSON can be treated as complete based on on-disk
 // artifacts. fail-open contract: any error or missing file yields false

@@ -78,9 +78,15 @@ load_env_file() {
     [ -z "${AGENTS_CONFIG_DIR:-}" ] && return 0
     local envfile="$AGENTS_CONFIG_DIR/.env"
     [ ! -r "$envfile" ] && return 0
+    ENV_OS_FILTER="$AGENTS_CONFIG_DIR/bin/env-os-filter"
     set -a
-    # shellcheck disable=SC1090
-    . "$envfile" 2>/dev/null || echo "warn: failed to source $envfile (continuing)" >&2
+    if [ -x "$ENV_OS_FILTER" ]; then
+        # shellcheck disable=SC1090,SC1091
+        . <("$ENV_OS_FILTER" "$envfile") 2>/dev/null || echo "warn: failed to source $envfile (continuing)" >&2
+    else
+        # shellcheck disable=SC1090
+        . "$envfile" 2>/dev/null || echo "warn: failed to source $envfile (continuing)" >&2
+    fi
     set +a
     return 0
 }

@@ -89,7 +89,7 @@ WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before
 - PM2. `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` (separate Bash call).
 - PM3. `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: meta issue — WF-META type; intent confirmed from issue body>>"`.
 - PM4. Use `/issue-create --skip-survey` with `--verdict bulk-sub-of --parent <meta-N> --manifest <file>` to create all planned sub-issues under the meta parent in a single bulk pass.
-- PM5. Invoke `make-outline-plan`. (The oracle auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)
+- PM5. Invoke `make-outline-plan`. (next-step auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)
 
 #### Path A — intent:clarified
 - A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
