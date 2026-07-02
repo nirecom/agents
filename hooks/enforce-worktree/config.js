@@ -1,6 +1,8 @@
 "use strict";
 
 const { spawnSync } = require("child_process");
+const path = require("path");
+const { parseGitCPath, findRepoRoot } = require("./git-repo-detection");
 
 function isEnforceWorktreeOn() {
   const raw = process.env.ENFORCE_WORKTREE;
@@ -58,4 +60,41 @@ function getCurrentBranch(repoCwd) {
   }
 }
 
-module.exports = { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch };
+// Check if a repo directory is excluded from worktree enforcement.
+// Reads ENFORCE_WORKTREE_EXCLUDE_REPOS (semicolon-separated absolute paths).
+// Path-boundary match: prevents ai-specs-old from matching an ai-specs entry.
+// Case-insensitive on Windows (case-insensitive FS); case-sensitive on POSIX.
+const isWin = process.platform === "win32";
+
+function isRepoExcluded(repoDir) {
+  const raw = (process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS || "").trim();
+  if (!raw) return false;
+  const resolved = path.resolve(repoDir);
+  const normalizedDir = isWin ? resolved.toLowerCase() : resolved;
+  const entries = raw.split(";");
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const resolvedEntry = path.resolve(trimmed);
+    const normalizedEntry = isWin ? resolvedEntry.toLowerCase() : resolvedEntry;
+    if (
+      normalizedDir === normalizedEntry ||
+      normalizedDir.startsWith(normalizedEntry + path.sep) ||
+      normalizedDir.startsWith(normalizedEntry + "/")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check whether the repo implied by a tool input (via git -C path or CWD) is excluded.
+// Returns true if excluded, false otherwise.
+function isCommandRepoExcluded(input, cwd) {
+  const cmd = (input && input.tool_input && input.tool_input.command) || "";
+  const cPath = cmd ? parseGitCPath(cmd) : null;
+  const repoRoot = cPath ? cPath : findRepoRoot(cwd);
+  return !!(repoRoot && isRepoExcluded(repoRoot));
+}
+
+module.exports = { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch, isRepoExcluded, isCommandRepoExcluded };

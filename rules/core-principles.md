@@ -31,3 +31,9 @@ Look beyond the task assigned to you and consider the whole pipeline — the ups
 ## 6. Name Reflects Substance
 
 Every name must convey what it contains — precisely, without colliding with another name's scope, discoverable at the right time, and following the surrounding naming convention.
+
+## 7. Universality First
+
+Prefer the general solution over the special case; a fix must hold for the whole input domain and all environments, not just the observed case.
+When a special case is unavoidable, isolate it explicitly — name the exception, give it a clear boundary, and do not let it bleed into the general path.
+Never branch implicitly on environment-specific assumptions; make them visible.
