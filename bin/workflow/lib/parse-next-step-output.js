@@ -1,17 +1,17 @@
 "use strict";
 
-// parseOracleOutput(stdout) -> { ACTION, NEXT_SKILL, NEXT_HINT, REASON }
+// parseNextStepOutput(stdout) -> { ACTION, NEXT_SKILL, NEXT_HINT, REASON }
 // Handles both KEY='value' and KEY=value forms.
-// Oracle invariant: no single-quote chars in values -> safe single-quote parse.
+// next-step invariant: no single-quote chars in values -> safe single-quote parse.
 
 const LINE_RE = /^(\w+)=(?:'([^']*)'|(.*))$/;
 const REQUIRED_KEYS = ["ACTION", "NEXT_SKILL", "NEXT_HINT", "REASON"];
-// Optional keys (#485): present only when the oracle emits them. SKIP_HINT is an
+// Optional keys (#485): present only when next-step emits them. SKIP_HINT is an
 // advisory plan-skip hint at the outline/detail steps; absent on every other
-// step. Kept out of REQUIRED_KEYS so the legacy 4-line oracle output still parses.
+// step. Kept out of REQUIRED_KEYS so the legacy 4-line next-step output still parses.
 const OPTIONAL_KEYS = ["SKIP_HINT"];
 
-function parseOracleOutput(stdout) {
+function parseNextStepOutput(stdout) {
   const result = {};
   if (typeof stdout !== "string") {
     return malformed();
@@ -43,7 +43,7 @@ function parseOracleOutput(stdout) {
 }
 
 function malformed() {
-  return { ACTION: "abort", NEXT_SKILL: "", NEXT_HINT: "", REASON: "oracle-output-malformed", SKIP_HINT: "" };
+  return { ACTION: "abort", NEXT_SKILL: "", NEXT_HINT: "", REASON: "next-step-output-malformed", SKIP_HINT: "" };
 }
 
-module.exports = { parseOracleOutput, REQUIRED_KEYS, OPTIONAL_KEYS };
+module.exports = { parseNextStepOutput, REQUIRED_KEYS, OPTIONAL_KEYS };

@@ -9,7 +9,7 @@ SID="h1-$$"
 write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
 # No outline.md → no evidence → auto-repair does not fire → inconsistency scan fires.
 
-OUT=$(run_oracle --session "$SID")
+OUT=$(run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 
@@ -21,7 +21,7 @@ check_contains "H1b. scoped hint contains --mark outline complete" \
 echo ""
 echo "=== H2: H1 hint does NOT contain /workflow-init ==="
 
-OUT=$(run_oracle --session "$SID")
+OUT=$(run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 
@@ -48,7 +48,7 @@ echo "# test" > "$REPO_B1/tests/dummy.sh"
 git -C "$REPO_B1" add "tests/dummy.sh"
 REPO_B1_N=$(to_node_path "$REPO_B1")
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_B1_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_B1_N" run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 
@@ -66,7 +66,7 @@ REPO_B2=$(setup_repo)
 # No staged test files → hasStagedTestChanges() = false.
 REPO_B2_N=$(to_node_path "$REPO_B2")
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_B2_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_B2_N" run_next_step --session "$SID")
 ACTION=""; NEXT_HINT=""
 eval "$OUT" 2>/dev/null || true
 

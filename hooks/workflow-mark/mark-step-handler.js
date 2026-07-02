@@ -85,7 +85,7 @@ function handle(ctx) {
 
     // workflow_init completing signals a new workflow run on this session UUID.
     // Reset all downstream steps to pending so stale state from a prior run
-    // cannot trigger the oracle's inconsistency abort (#1068).
+    // cannot trigger next-step's inconsistency abort (#1068).
     if (stepName === "workflow_init" && status === "complete") {
       try {
         const st = readState(sessionId);

@@ -47,7 +47,7 @@ run_t18a() {
 
   # Run the REAL hook. transcript_path → CLAUDE_SESSION_JSONL_PATH inside the hook →
   # _getJsonlPath resolves to this fixture JSONL. Other hook side-effects
-  # (cleanupZombies, oracle spawn, additionalContext) fail-open in the fixture env.
+  # (cleanupZombies, next-step spawn, additionalContext) fail-open in the fixture env.
   (
     unset CLAUDE_CODE_CHILD_SESSION CLAUDE_ENV_FILE CLAUDE_SESSION_ID CLAUDE_PROJECT_DIR
     printf '%s' "{\"session_id\":\"$sid\",\"transcript_path\":\"$jsonl_node\"}" | \
