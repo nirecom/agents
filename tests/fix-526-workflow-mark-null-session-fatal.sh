@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/fix-526-workflow-mark-null-session-fatal.sh
 # Tests: hooks/workflow-mark.js, hooks/workflow-mark/*.js
-# Tags: workflow-mark, null-session, signalFatal, exit-2, issue-526
+# Tags: workflow-mark, null-session, signalFatal, exit-2, issue-526, scope:issue-specific
 #
 # After fix (#526), MUST handlers (MARK_STEP, NOT_NEEDED, USER_VERIFIED,
 # BRANCHING_COMPLETE, CLARIFY_INTENT_COMPLETE) must use signalFatal when
@@ -198,7 +198,7 @@ test_t2_7_with_session_id
 # T2.8: RESET_FROM — OPTIONAL handler — must remain exit 0 even after fix.
 assert_optional_nonfatal \
   "T2.8 RESET_FROM (optional)" \
-  'echo "<<WORKFLOW_RESET_FROM_write_code>>"'
+  'echo "<<WORKFLOW_RESET_FROM_write_code: test reason>>"'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Runner summary

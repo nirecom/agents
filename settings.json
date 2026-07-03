@@ -203,7 +203,7 @@
       "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: *>>\")",
-      "Bash(echo \"<<WORKFLOW_RESET_FROM_*>>\")",
+      "Bash(echo \"<<WORKFLOW_RESET_FROM_*: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED: *>>\")",
