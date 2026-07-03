@@ -129,3 +129,80 @@ companion_pass_c() {
         | jq -r '.[] | select(.state=="open") | .number' 2>/dev/null || true)
     PASS_C_SIBLINGS=$(printf '%s\n' "$sibs" | awk -v p="$primary" '$1 != p && $1 != "" {print}' | sort -u)
 }
+
+# companion_pass_file_overlap <primary_N> <candidate_N>
+# Outputs (stdout) newline-separated file:<basename> tags when both bodies share
+# a code-file path basename. Code files: .js .ts .sh .py .md .json .yaml .yml .go .rb
+# Uses gh 2>/dev/null || return 0 to preserve caller's set -euo pipefail.
+companion_pass_file_overlap() {
+    local primary="$1" candidate="$2"
+    local primary_raw candidate_raw primary_body candidate_body
+    primary_raw=$(gh issue view "$primary" --json body,comments 2>/dev/null) || return 0
+    primary_body=$(jq -r '(.body // "") + "\n" + ((.comments // []) | map(.body) | join("\n"))' <<< "$primary_raw" 2>/dev/null) || return 0
+    candidate_raw=$(gh issue view "$candidate" --json body,comments 2>/dev/null) || return 0
+    candidate_body=$(jq -r '(.body // "") + "\n" + ((.comments // []) | map(.body) | join("\n"))' <<< "$candidate_raw" 2>/dev/null) || return 0
+
+    local -A candidate_bn
+    local f bn
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        bn=$(basename "$f")
+        candidate_bn["$bn"]=1
+    done < <(grep -oE '[A-Za-z0-9_./-]+\.(js|ts|sh|py|md|json|yaml|yml|go|rb)' <<< "$candidate_body" 2>/dev/null | sort -u)
+
+    [[ -z "${candidate_bn[*]:-}" ]] && return 0
+
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        bn=$(basename "$f")
+        if [[ -n "${candidate_bn[$bn]:-}" ]]; then
+            printf 'file:%s\n' "$bn"
+        fi
+    done < <(grep -oE '[A-Za-z0-9_./-]+\.(js|ts|sh|py|md|json|yaml|yml|go|rb)' <<< "$primary_body" 2>/dev/null | sort -u) | sort -u
+}
+
+# companion_pass_keyword_density <primary_title> <candidate_title>
+# Outputs (stdout) kw:<n> tag when n>=2 non-identifier title-keyword overlap.
+# Keywords: tokens >=4 chars, non-purely-numeric, NOT present in IDENTIFIER_SET.
+# Call after companion_pass_b_identifiers to have IDENTIFIER_SET populated.
+companion_pass_keyword_density() {
+    local primary_title="$1" candidate_title="$2"
+    local tok in_ident n=0
+    local -A p_tokens c_tokens
+
+    # Tokenize primary title (>=4 chars, non-numeric, not in IDENTIFIER_SET)
+    while IFS= read -r tok; do
+        [[ -z "$tok" ]] && continue
+        [[ "${#tok}" -lt 4 ]] && continue
+        [[ "$tok" =~ ^[0-9]+$ ]] && continue
+        in_ident=0
+        while IFS= read -r id; do
+            [[ "$id" = "$tok" ]] && { in_ident=1; break; }
+        done <<< "$IDENTIFIER_SET"
+        [[ "$in_ident" -eq 1 ]] && continue
+        p_tokens["$tok"]=1
+    done < <(_title_tokens "$primary_title")
+
+    [[ -z "${p_tokens[*]:-}" ]] && return 0
+
+    # Tokenize candidate title
+    while IFS= read -r tok; do
+        [[ -z "$tok" ]] && continue
+        [[ "${#tok}" -lt 4 ]] && continue
+        [[ "$tok" =~ ^[0-9]+$ ]] && continue
+        in_ident=0
+        while IFS= read -r id; do
+            [[ "$id" = "$tok" ]] && { in_ident=1; break; }
+        done <<< "$IDENTIFIER_SET"
+        [[ "$in_ident" -eq 1 ]] && continue
+        c_tokens["$tok"]=1
+    done < <(_title_tokens "$candidate_title")
+
+    # Count overlap
+    for tok in "${!p_tokens[@]}"; do
+        [[ -n "${c_tokens[$tok]:-}" ]] && n=$(( n + 1 ))
+    done
+
+    [[ "$n" -ge 2 ]] && printf 'kw:%d\n' "$n"
+    return 0
+}
