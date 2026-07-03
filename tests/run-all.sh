@@ -61,4 +61,6 @@ fi
 
 echo ""
 echo "Results: PASS=$PASS  FAIL=$FAIL  SKIP=$SKIP"
+EXECUTED=$((PASS + FAIL + SKIP))
+echo "RUN_CONTRACT: PASS=$PASS FAIL=$FAIL SKIP=$SKIP EXECUTED=$EXECUTED"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1
