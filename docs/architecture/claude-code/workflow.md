@@ -49,16 +49,16 @@ The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io.
 |---|---|
 | `workflow_init` | `/workflow-init` skill (emits `WORKFLOW_MARK_STEP_workflow_init_complete`) |
 | `clarify_intent` | `/clarify-intent` skill (emits `WORKFLOW_CLARIFY_INTENT_COMPLETE`) |
-| `research` | `/survey-code` or `/deep-research` (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` |
-| `outline` | `/make-outline-plan` (emits `WORKFLOW_MARK_STEP_outline_complete`) **or** skipped via `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>"` |
-| `detail` | `/make-detail-plan` (emits `WORKFLOW_MARK_STEP_detail_complete`) **or** skipped via `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <reason>>"` |
-| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: <name>|worktree: <path>|main>>"` after consulting `rules/branch.md` + `rules/worktree.md` |
-| `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>` |
+| `research` | `/survey-code` or `/deep-research` (emits `WORKFLOW_MARK_STEP` marker) **or** skipped via `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"` |
+| `outline` | `/make-outline-plan` (emits `WORKFLOW_MARK_STEP_outline_complete`) **or** skipped via `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` |
+| `detail` | `/make-detail-plan` (emits `WORKFLOW_MARK_STEP_detail_complete`) **or** skipped via `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>"` |
+| `branching_complete` | `echo "<<WORKFLOW_BRANCHING_COMPLETE: branch: {name}|worktree: {path}|main>>"` after consulting `rules/branch.md` + `rules/worktree.md` |
+| `write_tests` | `/write-tests` skill (emits marker) **or** staged `tests/` / `test/` files detected by `workflow-gate.js` **or** skipped via `<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>` |
 | `review_tests` | `/review-tests` skill (emits `WORKFLOW_MARK_STEP_review_tests_complete`) — waived by the same `WORKFLOW_WRITE_TESTS_NOT_NEEDED` sentinel as `write_tests` |
 | `run_tests` | `/run-tests` skill (emits sentinel automatically). Direct Bash: `workflow-run-tests.js` PostToolUse hook marks `complete` only from the `RUN_CONTRACT` line that `tests/run-all.sh` emits (provenance + exactly-one contract + `executed>0`, `fail==0`); any other test command demotes `run_tests` to `pending`. Manual: `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` |
-| `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <reason>>"` |
+| `review_security` | `/review-code-security` skill (emits marker) **or** skipped via `echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {reason}>>"` |
 | `docs` | `/update-docs` skill (emits marker) **or** staged `docs/*.md` / `*.md` files detected by `workflow-gate.js` |
-| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"` — triggers `ask` permission dialog; reason mandatory |
+| `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory |
 | `cleanup` | `/worktree-end` skill (worktree path), branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
 | `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
 
@@ -71,7 +71,7 @@ the gate, not in the file.
 `clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending`, it calls `hasCompletionEvidence()` from `evidence-resolver.js` and, if evidence is found (intent/outline/detail plan artifact exists, or test files are staged), auto-marks the step `complete` and re-evaluates the verdict — capped at one auto-repair per next-step call. This resolves compaction gaps where the step completed but the marker was lost.
 
 `research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
-their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: reason>>"`)
+their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
 when CLAUDE.md skip conditions are met.
 
 Each skill's `## Completion` section runs `echo "<<WORKFLOW_MARK_STEP_<step>_complete>>"` as
@@ -84,7 +84,7 @@ Note: marker format uses `_` as separator (not `:`). Claude Code's permission gl
 treats `:` as a named-parameter separator inside `Bash(...)` rules, causing silent match
 failure (anthropics/claude-code#33601). Using `_` avoids this.
 
-`user_verification` uses a dedicated marker `echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"`
+`user_verification` uses a dedicated marker `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"`
 (DQ only, single space, no SQ variant; reason mandatory per #404). This command is in the
 `ask` permission category — Claude must request user approval via dialog before the echo
 runs. Reason quality is soft-validated: `validateSkipReason` warns but still applies the

@@ -6,6 +6,8 @@ const SKIP_REASON_DUDS = new Set([
   "none", "n/a", "na", "nope", "no", "nothing",
   "skip", "skipped", "not needed", "not required", "nil",
   "スキップ", "スキップする", "省略する", "特になし", "無し",
+  "{reason}", "{step}", "{one-line summary}", "{decision}",
+  "<reason>", "<step>", "<one-line summary>",
 ]);
 
 function validateSkipReason(raw) {

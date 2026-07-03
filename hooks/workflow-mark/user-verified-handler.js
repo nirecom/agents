@@ -28,7 +28,7 @@ function handle(ctx) {
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
+          `Re-run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" ` +
           `(reason: >=3 non-space chars, no '>', not a placeholder; ask dialog will re-trigger)`
       );
       return true;

@@ -36,4 +36,4 @@ After completing this skill:
 Skip this skill when no external knowledge is needed (e.g., the task is purely internal to the codebase).
 
 If research is genuinely not needed for this task:
-1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')
+1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')
