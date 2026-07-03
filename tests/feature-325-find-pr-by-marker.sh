@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/find-pr-by-marker.sh
-# Tags: issue-close, workflow, pr, marker, github
+# Tags: issue-close, workflow, pr, marker, github, scope:issue-specific
 # Tests for issue #325 — bin/github-issues/find-pr-by-marker.sh
 #
 # Maps issue N → (PR_NUMBER, MERGE_COMMIT) using:
@@ -175,8 +175,11 @@ fi
 teardown_tmp_find
 
 # ============================================================================
-# Cross-repo tests (RED until find-pr-by-marker.sh accepts --repo)
-# Issue #1100/#1101: script must accept --repo <slug> and route gh calls
+# Cross-repo tests — --repo routing (#1100/#1101) + fallback-skip (#1204)
+# F9/F10 exercise the PRIMARY path (closedByPullRequestsReferences) with a
+# --repo slug (short + full form). F11 asserts that when --repo is set and the
+# primary returns empty, the marker fallback is SKIPPED (never searches the
+# current repo — #1204: a cross-repo PR is definitively in the named repo).
 # ============================================================================
 
 # Helper for cross-repo: run find-pr-by-marker.sh with a --repo flag.
@@ -195,27 +198,46 @@ run_find_repo() {
     return $rc
 }
 
-# --- F9: --repo <short-name> routes gh calls to the correct repo (short form)
-# RED: current find-pr-by-marker.sh does not accept --repo, so exit 1.
+# --- F9: --repo <short-name> (short form) routes the PRIMARY lookup to the
+# named repo. closedByPullRequestsReferences resolves PR 77/bbb9999; no fallback.
 setup_tmp_find
-GH_MOCK_MARKER_PR_RESULT="77	bbb9999" GH_MOCK_SCENARIO=closed_no_sentinel \
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=77 \
+GH_MOCK_PR_MERGE_SHA_FOR_77=bbb9999 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
     run_find_repo "dotfiles-private" 42; RC=$?
 if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "77" ] && [ "$FIND_MERGE_COMMIT" = "bbb9999" ]; then
-    pass "F9: --repo dotfiles-private (short form) → PR 77 bbb9999"
+    pass "F9: --repo dotfiles-private (short form) primary → PR 77 bbb9999"
 else
-    fail "F9: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR (expected --repo short-form support)"
+    fail "F9: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR (expected --repo short-form primary)"
 fi
 teardown_tmp_find
 
-# --- F10: --repo <owner/repo> routes gh calls to the correct repo (full form)
-# RED: current find-pr-by-marker.sh does not accept --repo, so exit 1.
+# --- F10: --repo <owner/repo> (full form) routes the PRIMARY lookup to the
+# named repo. closedByPullRequestsReferences resolves PR 88/ccc1111; no fallback.
 setup_tmp_find
-GH_MOCK_MARKER_PR_RESULT="88	ccc1111" GH_MOCK_SCENARIO=closed_no_sentinel \
+GH_MOCK_CLOSED_BY_PR_NUM_FOR_42=88 \
+GH_MOCK_PR_MERGE_SHA_FOR_88=ccc1111 \
+GH_MOCK_SCENARIO=closed_no_sentinel \
     run_find_repo "nirecom/dotfiles-private" 42; RC=$?
 if [ "$RC" -eq 0 ] && [ "$FIND_PR_NUMBER" = "88" ] && [ "$FIND_MERGE_COMMIT" = "ccc1111" ]; then
-    pass "F10: --repo nirecom/dotfiles-private (full form) → PR 88 ccc1111"
+    pass "F10: --repo nirecom/dotfiles-private (full form) primary → PR 88 ccc1111"
 else
-    fail "F10: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR (expected --repo full-form support)"
+    fail "F10: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT err=$FIND_ERR (expected --repo full-form primary)"
+fi
+teardown_tmp_find
+
+# --- F11 (#1204): --repo set + primary empty → fallback SKIPPED → exit 1.
+# GH_MOCK_MARKER_PR_RESULT is deliberately set (66/dddeadbe). If the fallback
+# `gh pr list` fired against the current repo it would find this marker PR and
+# return rc=0. The #1204 fix skips the fallback whenever --repo is set, so the
+# script must exit non-zero with no PR found — proving the fallback did NOT run.
+setup_tmp_find
+GH_MOCK_MARKER_PR_RESULT="66	dddeadbe" GH_MOCK_SCENARIO=closed_no_sentinel \
+    run_find_repo "dotfiles-private" 42; RC=$?
+if [ "$RC" -ne 0 ] && [ -z "$FIND_PR_NUMBER" ]; then
+    pass "F11: --repo set + primary empty → fallback skipped (exit 1, no PR)"
+else
+    fail "F11: rc=$RC pr=$FIND_PR_NUMBER sha=$FIND_MERGE_COMMIT (fallback should be skipped when --repo set)"
 fi
 teardown_tmp_find
 
