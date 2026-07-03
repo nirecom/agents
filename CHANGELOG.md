@@ -303,3 +303,7 @@ Changes: Session-id resolution is now consistent across all workflow tooling: ev
 ### FEATURE: PR #1281 (2026-07-03)
 Background: refactor(#1275): split 3 oversized test files into dispatcher + fragments
 Changes: Refactored 3 oversized test files (>500 lines) into dispatcher + fragment structure; no test behavior changed.
+
+### FEATURE: PR #1282 (2026-07-03)
+Background: feat(#513,#1198,#1048,#1237,#1096): companion pre-check rework + guard CLIs
+Changes: clarify-intent now runs all companion checks (file overlap, keyword density, decomposition impact) before asking — presenting a single filtered batch instead of per-candidate prompts.;Companion reason tags now include `file:<basename>` and `kw:<n>` signals for richer accept/skip decisions.;Decomposition impact is shown in the main conversation alongside companion candidates, not buried in a confirmation dialog.
