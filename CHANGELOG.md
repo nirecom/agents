@@ -287,3 +287,7 @@ Changes: `/migrate-repo` Step 6 now works correctly when `docs/` is a symlink to
 ### FEATURE: PR #1258 (2026-07-03)
 Background: refactor(#1243): rename workflow "oracle" concept to next-step
 Changes: Workflow docs now refer to the deterministic next-step advisory consistently by its script name, `next-step`; the informal "oracle" label has been retired across all current documentation.
+
+### FEATURE: PR #1276 (2026-07-03)
+Background: feat(#1263): require mandatory reason on WORKFLOW_RESET_FROM sentinel
+Changes: The emergency workflow reset sentinel now requires a reason: use `<<WORKFLOW_RESET_FROM_{step}: {reason}>>` (example: `echo "<<WORKFLOW_RESET_FROM_write_tests: user requested re-plan>>"`). The bare form without a reason is rejected with guidance (reason must be at least 3 non-space characters, contain no `>`, and not be a placeholder like "none"). After updating, regenerate `~/.claude/settings.json` with `node install/assemble-settings.js` and restart Claude Code to activate the new permission rule.
