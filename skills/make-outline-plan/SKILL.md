@@ -82,16 +82,15 @@ MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
 
    The per-stage wrapper script maintains a `ROUND_NUMBER` counter on disk at `<PLANS_DIR>/<session-id>-outline-plan-round-number.txt`, independent of `EXTENSIONS_USED`. It increments on each wrapper invocation and is passed as `--round "$ROUND_NUMBER"` to `bin/run-codex-review-loop`. The counter is cleared on APPROVED (exit 0) or ESCALATE (exit 2), and persists on CONTINUE (exit 1). See `skills/_shared/codex-review-loop.md ## Round Counter (ROUND_NUMBER)` for the full contract.
 
-MOP-6. **Cap-reach dispatch.** Apply `skills/_shared/cap-menu-dispatch.md` with:
-   - LABEL: `"Outline Plan Review"`
-   - RAW_FILE: `<PLANS_DIR>/<session-id>-outline-codex-round-<round_number-1>-raw.md`
-     - `<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-outline-plan-round-number.txt) - 1 ))`. Rationale: the cap-reach round's RAW_FILE is never written (codex-review-loop.md §d.1 persists only on exit 1); the most recent on-disk RAW_FILE is the prior round's. When ROUND_NUMBER==1 the resulting path does not exist — the helper's degraded RAW mode applies (documented expected outcome for first-round cap-reach).
-   - LEDGER_FILE: `<PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt`
-   - MAX_EXTENSIONS: 1
+MOP-6. **Cap outcome dispatch.**
 
-   Step c.5 of the dispatch protocol prints the concern summary block to chat before AskUserQuestion fires.
+   Apply only when the per-stage wrapper script (Step MOP-5) returns a non-zero non-one exit code:
 
-   Override: `rc==0` + user picks `adjust` → halt and re-run `/clarify-intent` (not generic user-escalation). AUTO_EXTEND / `extend` → loop back into MOP-5.
+   **Exit 5 (AUTO_EXTEND):** Increment `EXTENSIONS_USED` by 1, then loop back to MOP-5 (no user confirmation). `EXTENSIONS_USED` tracking is the caller's responsibility (see `skills/_shared/codex-review-loop.md`).
+
+   **Exit 2 (ESCALATE):** Run `"$AGENTS_CONFIG_DIR/bin/review-loop-summarize-concerns" --ledger <PLANS_DIR>/<session-id>-outline-plan-concern-ledger-cap-snapshot.txt --raw <RAW_FILE>` and present the output to the user. Then stop the loop and re-run `/clarify-intent` (outline-specific override: `adjust` path means scope needs revision).
+
+   `<RAW_FILE>` = `<PLANS_DIR>/<session-id>-outline-codex-round-<round_number-1>-raw.md`; `<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-outline-plan-round-number.txt) - 1 ))`.
 
 MOP-7. On `APPROVED`:
    Before outputting the prose rationale summary and before composing the AskUserQuestion, run: `CONV_LANG=$(bash -c 'cd "$AGENTS_CONFIG_DIR" && bin/get-config-var CONV_LANG 2>/dev/null || true')`. If CONV_LANG is non-empty, produce the prose preamble and all AskUserQuestion fields (question, option labels, option descriptions) in that language. EXCEPTION: the bypass option's label MUST stay in English: "Pass all approaches to make-detail-plan without selecting" — AskUserQuestion returns the selected label as the answer; localizing it breaks the MOP-8 comparison.
@@ -130,7 +129,7 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
   (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
   (c) the prose rationale preamble emitted in MOP-7 before `AskUserQuestion`
-  (d) the concern summary block rendered by step c.5 of cap-menu-dispatch.md when MOP-6 fires — exactly one block per cap-reach event.
+  (d) the concern summary block rendered by the MOP-6 ESCALATE path when exit 2 fires — exactly one block per cap-reach event.
   No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state).

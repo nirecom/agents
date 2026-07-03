@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Tests: bin/review-loop-verdict
 # Tags: worktree, bin, env, config, loop
-# L1 unit tests for bin/review-loop-verdict (issue #673)
-# Verdict matrix + argument validation.
+# L1 unit tests for bin/review-loop-verdict (issue #673, extended #1248)
+# Verdict matrix + argument validation + budget/risk-signal flags.
 set -uo pipefail
 
 AGENTS_WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -47,7 +47,7 @@ run_verdict() {
     pass "$label"
 }
 
-# Args interpretation: <round> <high> <medium> <low>
+# Args interpretation: <round> <high> <medium> <low> [--budget-remaining N] [--risk-signal <val>]
 
 # ---------------------------------------------------------------------------
 # Normal verdict matrix
@@ -58,29 +58,62 @@ run_verdict "CONTINUE" 1 "3: round=1 high=1 medium=0 low=0 → CONTINUE" 1 1 0 0
 run_verdict "CONTINUE" 1 "4: round=1 high=1 medium=1 low=1 → CONTINUE" 1 1 1 1
 run_verdict "APPROVED" 0 "5: round=2 high=0 medium=0 low=1 → APPROVED" 2 0 0 1
 run_verdict "APPROVED" 0 "6: round=2 high=0 medium=1 low=0 → APPROVED" 2 0 1 0
-run_verdict "ESCALATE" 2 "7: round=2 high=1 medium=0 low=0 → ESCALATE" 2 1 0 0
-run_verdict "ESCALATE" 2 "8: round=2 high=1 medium=1 low=1 → ESCALATE" 2 1 1 1
+run_verdict "LAND" 3 "7: round=2 high=1 medium=0 low=0 → LAND (no budget info)" 2 1 0 0
+run_verdict "LAND" 3 "8: round=2 high=1 medium=1 low=1 → LAND (no budget info)" 2 1 1 1
 run_verdict "APPROVED" 0 "9: round=3 high=0 medium=0 low=0 → APPROVED" 3 0 0 0
-run_verdict "ESCALATE" 2 "10: round=3 high=1 medium=0 low=0 → ESCALATE" 3 1 0 0
+run_verdict "LAND" 3 "10: round=3 high=1 medium=0 low=0 → LAND (no budget info)" 3 1 0 0
 run_verdict "APPROVED" 0 "11: round=3 high=0 medium=1 low=0 → APPROVED" 3 0 1 0
 
-# Extra: round=4 high>0 → ESCALATE
-run_verdict "ESCALATE" 2 "11b: round=4 high=2 medium=0 low=0 → ESCALATE" 4 2 0 0
+# Extra: round=4 high>0 → LAND (no budget info → conservative ceiling)
+run_verdict "LAND" 3 "11b: round=4 high=2 medium=0 low=0 → LAND (no budget info)" 4 2 0 0
 # round=2 high=0 medium=0 low=0 → APPROVED (all zero)
 run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 
 # ---------------------------------------------------------------------------
-# Arg validation (exit 3)
+# Budget / risk-signal flag cases (issue #1248)
+# ---------------------------------------------------------------------------
+
+# A: budget-remaining=1 (budget>0) → AUTO_EXTEND (exit 5)
+run_verdict "AUTO_EXTEND" 5 "A: round=2 high=1 --budget-remaining 1 → AUTO_EXTEND" 2 1 0 0 --budget-remaining 1
+
+# B: budget-remaining=0 (exhausted), no risk-signal → LAND (exit 3)
+run_verdict "LAND" 3 "B: round=2 high=1 --budget-remaining 0 → LAND" 2 1 0 0 --budget-remaining 0
+
+# C: budget-remaining=0 WITH risk-signal → ESCALATE (exit 2)
+run_verdict "ESCALATE" 2 "C: round=2 high=1 --budget-remaining 0 --risk-signal → ESCALATE" 2 1 0 0 --budget-remaining 0 --risk-signal "security concern"
+
+# D: round=3 high=1 budget=0 no risk → LAND (exit 3)
+run_verdict "LAND" 3 "D: round=3 high=1 --budget-remaining 0 → LAND" 3 1 0 0 --budget-remaining 0
+
+# E: no flags at all (budget unknown = ceiling conservative) → LAND (exit 3)
+run_verdict "LAND" 3 "E: round=2 high=1 no flags → LAND (budget unknown=ceiling)" 2 1 0 0
+
+# F: risk-signal present but no budget flag → ESCALATE (exit 2, risk overrides unknown budget)
+run_verdict "ESCALATE" 2 "F: round=2 high=1 --risk-signal no budget → ESCALATE" 2 1 0 0 --risk-signal "x"
+
+# G: flag before positionals → arg error (exit 4, positional-first enforced)
+{
+    rc=0
+    OUT=$(run_with_timeout bash "$SCRIPT" --budget-remaining 1 2 1 0 0 2>/dev/null) || rc=$?
+    if [[ $rc -eq 4 ]]; then
+        pass "G: flag before positional → exit 4 (positional-first enforced)"
+    else
+        fail "G: expected exit 4, got $rc (stdout='$OUT')"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Arg validation (exit 4)
 # ---------------------------------------------------------------------------
 
 # 12. Missing args (only 3 of 4)
 {
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" 1 0 0 2>/dev/null) || rc=$?
-    if [[ $rc -eq 3 ]]; then
-        pass "12: missing arg (3 of 4) → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "12: missing arg (3 of 4) → exit 4"
     else
-        fail "12: missing arg (3 of 4) → expected exit 3, got $rc"
+        fail "12: missing arg (3 of 4) → expected exit 4, got $rc"
     fi
 }
 
@@ -88,10 +121,10 @@ run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 {
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" 2>/dev/null) || rc=$?
-    if [[ $rc -eq 3 ]]; then
-        pass "12b: no args → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "12b: no args → exit 4"
     else
-        fail "12b: no args → expected exit 3, got $rc"
+        fail "12b: no args → expected exit 4, got $rc"
     fi
 }
 
@@ -99,10 +132,10 @@ run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 {
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" 1 abc 0 0 2>/dev/null) || rc=$?
-    if [[ $rc -eq 3 ]]; then
-        pass "13: non-integer high='abc' → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "13: non-integer high='abc' → exit 4"
     else
-        fail "13: non-integer high='abc' → expected exit 3, got $rc"
+        fail "13: non-integer high='abc' → expected exit 4, got $rc"
     fi
 }
 
@@ -110,10 +143,10 @@ run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 {
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" foo 0 0 0 2>/dev/null) || rc=$?
-    if [[ $rc -eq 3 ]]; then
-        pass "13b: non-integer round='foo' → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "13b: non-integer round='foo' → exit 4"
     else
-        fail "13b: non-integer round='foo' → expected exit 3, got $rc"
+        fail "13b: non-integer round='foo' → expected exit 4, got $rc"
     fi
 }
 
@@ -122,14 +155,14 @@ run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" 1 -- -1 0 0 2>/dev/null) || rc=$?
     # Try direct (some shells will treat -1 as a flag)
-    if [[ $rc -ne 3 ]]; then
+    if [[ $rc -ne 4 ]]; then
         rc=0
         OUT=$(run_with_timeout bash "$SCRIPT" 1 -1 0 0 2>/dev/null) || rc=$?
     fi
-    if [[ $rc -eq 3 ]]; then
-        pass "14: negative count (high=-1) → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "14: negative count (high=-1) → exit 4"
     else
-        fail "14: negative count (high=-1) → expected exit 3, got $rc"
+        fail "14: negative count (high=-1) → expected exit 4, got $rc"
     fi
 }
 
@@ -137,21 +170,21 @@ run_verdict "APPROVED" 0 "11c: round=2 all zero → APPROVED" 2 0 0 0
 {
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" 0 0 0 0 2>/dev/null) || rc=$?
-    if [[ $rc -eq 3 ]]; then
-        pass "15: round=0 → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "15: round=0 → exit 4"
     else
-        fail "15: round=0 → expected exit 3, got $rc"
+        fail "15: round=0 → expected exit 4, got $rc"
     fi
 }
 
-# 15b. Extra args (5 instead of 4)
+# 15b. Extra args (5 instead of 4, no optional flags)
 {
     rc=0
     OUT=$(run_with_timeout bash "$SCRIPT" 1 0 0 0 0 2>/dev/null) || rc=$?
-    if [[ $rc -eq 3 ]]; then
-        pass "15b: extra arg (5 of 4) → exit 3"
+    if [[ $rc -eq 4 ]]; then
+        pass "15b: extra arg (5 of 4) → exit 4"
     else
-        fail "15b: extra arg → expected exit 3, got $rc"
+        fail "15b: extra arg → expected exit 4, got $rc"
     fi
 }
 

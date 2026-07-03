@@ -140,8 +140,7 @@ invoke() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Round 2, HIGH persists → ESCALATE (per spec verdict matrix:
-#    round>=2 with HIGH > 0 → ESCALATE, regardless of CAP)
+# 3. Round 2, HIGH persists with budget=2 remaining → AUTO_EXTEND (exit 5)
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -155,15 +154,83 @@ C1: unresolved — still big"
   invoke "$MOCK" --format detail-plan --session-id i3 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 2 ]]; then
-    pass "3: round 2 HIGH persists → ESCALATE (exit 2)"
+  if [[ $rc -eq 5 ]]; then
+    pass "3: round 2 HIGH with budget=2 remaining → AUTO_EXTEND (exit 5)"
   else
-    fail "3: round 2 HIGH persists → expected exit 2, got $rc"
+    fail "3: round 2 HIGH with budget=2 → expected AUTO_EXTEND (exit 5), got $rc"
   fi
 }
 
 # ---------------------------------------------------------------------------
-# 4. Round 3, HIGH persists → ESCALATE (exit 2)
+# 3b. Round 2, HIGH persists, budget=0, no --risk-signal → silent LAND (exit 0)
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  LEDGER="$TMP/ledger.txt"
+  printf 'C1|HIGH|big issue\n' > "$LEDGER"
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+C1: unresolved — still big"
+  rc=0
+  invoke "$MOCK" --format detail-plan --session-id i3b --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 1 --extensions-used 1 \
+    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    pass "3b: round 2 HIGH budget=0 no risk → silent LAND (exit 0)"
+  else
+    fail "3b: round 2 HIGH budget=0 no risk → expected silent LAND (exit 0), got $rc"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 3c. Round 2, HIGH persists, budget=0, WITH --risk-signal → ESCALATE (exit 2)
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  LEDGER="$TMP/ledger.txt"
+  printf 'C1|HIGH|big issue\n' > "$LEDGER"
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+C1: unresolved — still big"
+  rc=0
+  invoke "$MOCK" --format detail-plan --session-id i3c --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 1 --extensions-used 1 \
+    --accepted-tradeoffs "$PLANS/outline.md" --round 2 --ledger "$LEDGER" \
+    --risk-signal "intent-unachievable" >/dev/null 2>&1 || rc=$?
+  if [[ $rc -eq 2 ]]; then
+    pass "3c: round 2 HIGH budget=0 risk-signal → ESCALATE (exit 2)"
+  else
+    fail "3c: round 2 HIGH budget=0 risk-signal → expected ESCALATE (exit 2), got $rc"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 3d. --risk-signal accepted by run-codex-review-loop arg parser (no exit 4)
+# ---------------------------------------------------------------------------
+{
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
+  MOCK=$(setup_mock_env "$TMP")
+  PLANS=$(setup_plans_dir "$TMP")
+  LEDGER="$TMP/ledger.txt"
+  make_review_codex_mock "$MOCK" "NEEDS_REVISION
+1. [LOW] nit one
+2. [LOW] nit two"
+  rc=0
+  invoke "$MOCK" --format detail-plan --session-id i3d --plans-dir "$PLANS" \
+    --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
+    --accepted-tradeoffs "$PLANS/outline.md" --round 1 --ledger "$LEDGER" \
+    --risk-signal "x" >/dev/null 2>&1 || rc=$?
+  if [[ $rc -eq 0 ]] && [[ $rc -ne 4 ]]; then
+    pass "3d: --risk-signal accepted by arg parser (no exit 4)"
+  else
+    fail "3d: --risk-signal accepted by arg parser → expected exit 0, got $rc (exit 4 means flag not yet supported)"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 4. Round 3, HIGH persists with budget=2 remaining → AUTO_EXTEND (exit 5)
 # ---------------------------------------------------------------------------
 {
   TMP=$(mktemp -d); trap 'rm -rf "$TMP"' RETURN
@@ -177,10 +244,10 @@ C1: unresolved — still big"
   invoke "$MOCK" --format detail-plan --session-id i4 --plans-dir "$PLANS" \
     --draft-file "$PLANS/draft.md" --cap 3 --max-extensions 2 --extensions-used 0 \
     --accepted-tradeoffs "$PLANS/outline.md" --round 3 --ledger "$LEDGER" >/dev/null 2>&1 || rc=$?
-  if [[ $rc -eq 2 ]]; then
-    pass "4: round 3 HIGH persists → ESCALATE (exit 2)"
+  if [[ $rc -eq 5 ]]; then
+    pass "4: round 3 HIGH with budget=2 remaining → AUTO_EXTEND (exit 5)"
   else
-    fail "4: round 3 HIGH persists → expected exit 2, got $rc"
+    fail "4: round 3 HIGH with budget=2 → expected AUTO_EXTEND (exit 5), got $rc"
   fi
 }
 
