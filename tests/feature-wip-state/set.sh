@@ -68,11 +68,19 @@ teardown_mock
 
 # ===========================================================================
 # Test 5: set <N> with missing/unextractable CLAUDE_SESSION_ID exits 2
+# #1251: resolution goes through the script-relative bridge, which also tries
+# CLAUDE_CODE_SESSION_ID (P2), WORKTREE_NOTES.md (P6 — the worktree root HAS
+# one), and the JSONL scan (P7). Fully isolate all SID sources: unset env SIDs,
+# empty transcript base, and run from a non-git temp CWD.
 # ===========================================================================
 setup_mock
 echo "" > "$CLAUDE_ENV_FILE"  # no CLAUDE_SESSION_ID
-run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
+unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/empty-transcripts"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR" "$TMP/nongit-cwd"
+(cd "$TMP/nongit-cwd" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1)
 RC=$?
+unset CLAUDE_TRANSCRIPT_BASE_DIR 2>/dev/null || true
 if [ "$RC" -eq 2 ]; then
     pass "T5: set <N> with missing CLAUDE_SESSION_ID → exit 2"
 else
