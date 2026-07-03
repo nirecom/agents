@@ -33,7 +33,7 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: BRANCHING_COMPLETE rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: <decision>>"`
+          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: {decision}>>"`
       );
       return true;
     }
