@@ -16,7 +16,7 @@ Codex CLI and Gemini CLI are both supported (install with `-Develop`).
 ### Hook-enforced end-to-end workflow
 
 Most agent frameworks rely on the model to remember process steps. This framework encodes
-the dev workflow as a deterministic oracle-driven state machine. After each skill completes,
+the dev workflow as a deterministic next-step-driven state machine. After each skill completes,
 the model queries `bin/workflow/next-step` for the next step; a PreToolUse hook physically
 blocks `git commit` until every required step completes or is explicitly skipped with a reason.
 
@@ -154,7 +154,9 @@ Two checkpoints prevent private data from reaching public repositories: a `git p
 hook and a Claude Code PreToolUse hook. Both detect RFC 1918 addresses, email addresses,
 MAC addresses, absolute local paths, hard-coded secrets (AWS, Anthropic, OpenAI, GitHub,
 Slack, and others), PEM private keys, and Trojan Source hidden Unicode characters.
-Repositories identified as private via `gh api` are skipped automatically.
+Repositories identified as private via `gh api` are skipped automatically. For `gh issue`/`pr`
+writes, visibility is resolved from the **target** repository (not just the current directory),
+and writes to public repositories are additionally checked for private-repo name leaks.
 A companion offensive-content filter (`bin/scan-offensive`) checks all `gh issue`/`pr`
 writes for hate speech, slurs, harassment, and profanity — active for all repos (public
 and private). Copy `.offensive-content-blocklist.example` to `.offensive-content-blocklist`
