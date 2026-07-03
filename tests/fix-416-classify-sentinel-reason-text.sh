@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/fix-416-classify-sentinel-reason-text.sh
 # Tests: hooks/lib/bash-write-patterns.js classify()
-# Tags: classify, strip-kinds, sentinel-echo, isSentinelEchoSafe, issue-416, unsafe-reason-chars
+# Tags: classify, strip-kinds, sentinel-echo, isSentinelEchoSafe, issue-416, unsafe-reason-chars, scope:issue-specific
 #
 # After fix (#416):
 #   1. STRIP_KINDS gains "pkg-mgr" and "gh" → quoted pkg-mgr/gh verbs in grep/echo
@@ -203,10 +203,10 @@ assert_classify \
   'echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"' \
   "read"
 
-# T3.13c: RESET_FROM sentinel (no reason field) → read
+# T3.13c: RESET_FROM sentinel (with reason field) → read
 assert_classify \
-  "T3.13c sentinel RESET_FROM research (no reason)" \
-  'echo "<<WORKFLOW_RESET_FROM_research>>"' \
+  "T3.13c sentinel RESET_FROM research (with reason)" \
+  'echo "<<WORKFLOW_RESET_FROM_research: test reason>>"' \
   "read"
 
 echo ""
