@@ -215,7 +215,9 @@ export GH_MOCK_ISSUE_100='{"parent":null}'
 export GH_MOCK_CAND_201='{"number":201,"title":"X","labels":[],"state":"OPEN"}'
 export GH_MOCK_CAND_202='{"number":202,"title":"Y","labels":[],"state":"OPEN"}'
 if [ -x "$FIND_SCRIPT" ]; then
-    OUT=$(run_with_timeout 10 bash "$FIND_SCRIPT" --primary 100 2>/dev/null)
+    # 30s (not 10s): full Pass A/B/C over 2 retained candidates spawns many
+    # gh/jq processes; Windows process-spawn cost sits near the old 10s edge.
+    OUT=$(run_with_timeout 30 bash "$FIND_SCRIPT" --primary 100 2>/dev/null)
     RC=$?
     FIRST_NUM=$(printf '%s\n' "$OUT" | head -1 | awk -F'\t' '{print $1}')
     if [ "$RC" -eq 0 ] && [ "$FIRST_NUM" = "201" ]; then
@@ -287,7 +289,9 @@ export GH_MOCK_ISSUE_100='{"parent":null}'
 export GH_MOCK_CAND_201='{"number":201,"title":"X","labels":[],"state":"OPEN"}'
 export GH_MOCK_CAND_202='{"number":202,"title":"Y","labels":[],"state":"OPEN"}'
 if [ -x "$FIND_SCRIPT" ]; then
-    OUT=$(run_with_timeout 10 bash "$FIND_SCRIPT" --primary 100 --max-candidates 1 2>/dev/null)
+    # 30s (not 10s): full Pass A/B/C over 2 retained candidates spawns many
+    # gh/jq processes; Windows process-spawn cost sits near the old 10s edge.
+    OUT=$(run_with_timeout 30 bash "$FIND_SCRIPT" --primary 100 --max-candidates 1 2>/dev/null)
     RC=$?
     LINE_COUNT=$(printf '%s\n' "$OUT" | grep -cE '^[0-9]+' || true)
     if [ "$RC" -eq 0 ] && [ "$LINE_COUNT" -eq 1 ]; then

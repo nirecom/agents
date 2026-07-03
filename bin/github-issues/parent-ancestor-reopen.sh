@@ -9,6 +9,8 @@
 
 set -uo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/lib/parent-number.sh"
+
 if [ $# -lt 2 ]; then
     echo "Error: usage: parent-ancestor-reopen.sh <owner/repo> <N>" >&2
     exit 1
@@ -37,7 +39,7 @@ while true; do
         break
     fi
 
-    PARENT_NUM=$(gh api "repos/$REPO/issues/$CURRENT" --jq '.parent.number // empty' 2>/dev/null)
+    PARENT_NUM=$(github_parent_number "$REPO" "$CURRENT")
     if [ -z "$PARENT_NUM" ]; then
         break
     fi

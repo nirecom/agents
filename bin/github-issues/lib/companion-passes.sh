@@ -3,6 +3,8 @@
 #           companion_pass_b_candidates / companion_pass_b / companion_pass_c
 # All gh calls use 2>/dev/null and || return 0 to preserve caller's set -euo pipefail.
 
+. "$(dirname "${BASH_SOURCE[0]}")/parent-number.sh"
+
 _FIND_PRINTF_OK=0
 find . -maxdepth 0 -printf '' >/dev/null 2>&1 && _FIND_PRINTF_OK=1
 
@@ -110,7 +112,7 @@ companion_pass_b() {
 # PASS_C_SIBLINGS (newline-separated sibling numbers, primary excluded).
 companion_pass_c() {
     local primary="$1" repo parent_n sibs
-    local repo_json issue_json sibs_json
+    local repo_json sibs_json
     PASS_C_PARENT_N=""
     PASS_C_SIBLINGS=""
     repo_json=$(gh repo view --json nameWithOwner 2>/dev/null) || return 0
@@ -118,8 +120,7 @@ companion_pass_c() {
     [ -z "$repo" ] && return 0
     # Validate repo format before URL interpolation.
     [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 0
-    issue_json=$(gh api "repos/$repo/issues/$primary" 2>/dev/null) || return 0
-    parent_n=$(printf '%s' "$issue_json" | jq -r '.parent.number // empty' 2>/dev/null || true)
+    parent_n=$(github_parent_number "$repo" "$primary")
     [ -z "$parent_n" ] && return 0
     # Validate parent_n is numeric before URL interpolation.
     [[ "$parent_n" =~ ^[0-9]+$ ]] || return 0
