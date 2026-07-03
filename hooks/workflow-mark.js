@@ -5,7 +5,7 @@
 // may be chained with ` && ` in a single Bash command — each part is evaluated
 // independently):
 //   echo "<<WORKFLOW_MARK_STEP_<step>_<status>>>"   — mark a step
-//   echo "<<WORKFLOW_RESET_FROM_<step>>>"            — reset state from a step
+//   echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>" — reset state from a step (reason mandatory)
 //   echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"      — record user verification (reason mandatory)
 //   echo "<<WORKFLOW_{RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED: <reason>>"
 //

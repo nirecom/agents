@@ -35,7 +35,9 @@ const MARKER_RE_DQ =
   /^echo\s+"<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>"$/;
 const MARKER_RE_SQ =
   /^echo\s+'<<WORKFLOW_MARK_STEP_([a-z_]+)_(complete|skipped|pending|in_progress)>>'$/;
-const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+)>>"$/;
+const RESET_FROM_RE_DQ = /^echo\s+"<<WORKFLOW_RESET_FROM_([a-z_]+): ([^>]+)>>"$/;
+// LOOKSLIKE fallback: catches bare/malformed RESET_FROM forms for isSentinel() only.
+const RESET_FROM_LOOKSLIKE_RE = /^echo\s+"<<WORKFLOW_RESET_FROM_[a-z_]+([: ].*)?>>"$/;
 // USER_VERIFIED/ENFORCE_WORKTREE_OFF/ON: reason mandatory; bare form falls through to LOOKSLIKE rejection. Aligns with `_NOT_NEEDED_*` family.
 const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED: ([^>]+)>>"$/;
 const USER_VERIFIED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_USER_VERIFIED([: ].*)?>>"$/;
@@ -119,6 +121,7 @@ function isSentinel(cmd) {
     MARKER_RE_DQ.test(cmd) ||
     MARKER_RE_SQ.test(cmd) ||
     RESET_FROM_RE_DQ.test(cmd) ||
+    RESET_FROM_LOOKSLIKE_RE.test(cmd) ||
     USER_VERIFIED_RE_DQ.test(cmd) ||
     USER_VERIFIED_LOOKSLIKE_RE.test(cmd) ||
     RESEARCH_NOT_NEEDED_RE_DQ.test(cmd) ||
@@ -242,7 +245,7 @@ module.exports = {
   isStrictSentinel,
   CHAIN_BOUNDARY_SENTINEL_DQ_RE,
   CHAIN_BOUNDARY_SENTINEL_SQ_MARKER_RE,
-  MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, USER_VERIFIED_RE_DQ,
+  MARKER_RE_DQ, MARKER_RE_SQ, RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE, USER_VERIFIED_RE_DQ,
   USER_VERIFIED_LOOKSLIKE_RE,
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,

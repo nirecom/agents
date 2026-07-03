@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-gate.js
-# Tags: workflow, gate, hook, sentinel, bin
+# Tags: workflow, gate, hook, sentinel, bin, scope:common
 # Tests for:
 #  Feature: Sentinel chain guard in hooks/workflow-gate.js
 #    - Blocks `echo "<<WORKFLOW_*>>" && <non-sentinel>` chains that would
@@ -146,7 +146,7 @@ expect_block "SG-4c" "echo '<<WORKFLOW_MARK_STEP_docs_complete>>' && rm /tmp/x"
 # accept lowercase + underscore.
 expect_block "SG-4d" 'echo "<<WORKFLOW_MARK_STEP_docs_complete>>" && rm /tmp/x'
 # DQ RESET_FROM with lowercase suffix.
-expect_block "SG-4e" 'echo "<<WORKFLOW_RESET_FROM_research>>" && rm /tmp/x'
+expect_block "SG-4e" 'echo "<<WORKFLOW_RESET_FROM_research: test reason>>" && rm /tmp/x'
 
 # ===========================================================================
 # SG-STATIC-1: rules/git.md states the chain prohibition

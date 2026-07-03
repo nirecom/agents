@@ -172,12 +172,12 @@ CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures
      Options:
      - **"Retry `/issue-create` once more"** — invoke `/issue-create` again, then re-run this guard (counter stays at 2; next failure re-asks).
      - **"Manual recovery"** — instruct the user to run `gh issue create` manually and edit `## Issues` in `intent.md` directly. When the user confirms completion, re-run the guard (which on success unlinks the counter file).
-     - **"Abort workflow"** — `rm -f "$COUNTER_FILE"`, emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent>>"`, and exit the skill.
+     - **"Abort workflow"** — `rm -f "$COUNTER_FILE"`, emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent: {reason}>>"`, and exit the skill.
 
      Note (§4 Orthogonality): no new sentinel is introduced here. Existing workflow sentinels are binary (`*_COMPLETE` = stage finished, `*_NOT_NEEDED` = stage skipped); a `BLOCKED` third axis would break the workflow-sentinel class invariant. Retry-exhaustion is treated as an interactive recovery prompt, not a workflow state transition.
    - **`GUARD_RC == 2`** (CLOSED entry detected) → STOP. Do NOT emit the completion sentinel. The issue exists; we must NOT create a duplicate.
      `AskUserQuestion`: "Tracking-issue guard detected a CLOSED entry in `closes_issues`. The issue exists but is closed. How should we recover?"
-     Options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>` manually, then re-run guard; counter unchanged) / "Abort session" (`rm -f "$COUNTER_FILE"`, emit `<<WORKFLOW_RESET_FROM_clarify_intent>>`).
+     Options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>` manually, then re-run guard; counter unchanged) / "Abort session" (`rm -f "$COUNTER_FILE"`, emit `<<WORKFLOW_RESET_FROM_clarify_intent: {reason}>>`).
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written; `<PLANS_DIR>` resolved from `WORKFLOW_PLANS_DIR` or the same source as CI-4).
