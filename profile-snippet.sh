@@ -35,7 +35,7 @@ if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
     _session_sync_fetch() {
         [ -n "${ZSH_VERSION-}" ] && setopt LOCAL_OPTIONS NO_MONITOR
         echo "git fetch Claude session sync ..."
-        ( GIT_TERMINAL_PROMPT=0 git -C "$_session_dir" fetch 2>/dev/null ) &
+        ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch 2>/dev/null ) &
         _pid_ss=$!
         _ss_deadline=$(( $(date +%s) + 3 ))
         while kill -0 "$_pid_ss" 2>/dev/null; do
