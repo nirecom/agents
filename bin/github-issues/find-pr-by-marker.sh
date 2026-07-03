@@ -17,7 +17,7 @@
 # --repo: optional repository slug (short form "repo" or full "owner/repo").
 #         Short form is normalized via `gh repo view` to full owner/repo.
 #         Propagated to `gh issue view` calls (primary strategy only).
-#         The fallback `gh pr list` always searches the current repo.
+#         When --repo is set, fallback is skipped — the cross-repo PR is in the named repo.
 #
 # Output on success (stdout):
 #     PR_NUMBER=<n>
@@ -87,11 +87,15 @@ fi
 # Fallback: marker-based PR search across merged PRs. Pre-jq'd output:
 # `<number>\t<sha>`. When there are multiple matches, `sort_by(.mergedAt) | last`
 # keeps the most recent merge.
-PR_LINE=$(gh pr list \
-    --search "in:body \"<!-- issue-close-pr-of: ${N} -->\"" \
-    --state merged --json number,mergedAt,mergeCommit \
-    --jq '[.[]] | sort_by(.mergedAt) | last | "\(.number)\t\(.mergeCommit.oid // "")"' \
-    2>/dev/null) || PR_LINE=""
+# When --repo is set, fallback is skipped — the cross-repo PR is in the named repo.
+PR_LINE=""
+if [ -z "$REPO_ARG" ]; then
+  PR_LINE=$(gh pr list \
+      --search "in:body \"<!-- issue-close-pr-of: ${N} -->\"" \
+      --state merged --json number,mergedAt,mergeCommit \
+      --jq '[.[]] | sort_by(.mergedAt) | last | "\(.number)\t\(.mergeCommit.oid // "")"' \
+      2>/dev/null) || PR_LINE=""
+fi
 
 if [ -n "$PR_LINE" ] && [ "$(printf '%s' "$PR_LINE" | cut -f2)" != "" ]; then
     PR_NUM=$(printf '%s' "$PR_LINE" | cut -f1)

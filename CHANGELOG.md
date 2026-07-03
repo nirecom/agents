@@ -275,3 +275,15 @@ Changes: `.env` now supports OS-conditional blocks. Wrap OS-specific lines in `#
 ### FEATURE: PR #1239 (2026-07-02)
 Background: fix(#1234,#1232): /migrate-repo self-repo identity guard + canary-1 label sync
 Changes: /migrate-repo now confirms the migration target repository explicitly and refuses to migrate the agents repo into itself unless intentionally acknowledged, preventing accidental migration when a repo path is mentioned only as a reference.;Fixed /migrate-repo failing with "label not found" on a fresh repository: the first history migration step now syncs labels before creating any issue.
+
+### FEATURE: PR #1260 (2026-07-03)
+Background: feat(#1236,#457,#1235): target-visibility leak guard + Universality First + exclude-repos
+Changes: Content pushed to a public repository (issue/PR titles and bodies) is now scanned for private-repository name leaks based on the destination repository's visibility, not just your current directory — reducing the risk of a private repo name slipping into a public issue or pull request.;New `ENFORCE_WORKTREE_EXCLUDE_REPOS` setting: list specific repository root paths (semicolon-separated absolute paths) to exempt them from worktree enforcement so you can edit and commit them directly from any branch. It does not disable enforcement globally — only the listed paths are exempt.
+
+### FEATURE: PR #1266 (2026-07-03)
+Background: fix(#1231,#1204): migrate-repo symlink docs/ cross-repo commit + find-pr-by-marker --repo fallback
+Changes: `/migrate-repo` Step 6 now works correctly when `docs/` is a symlink to a shared docs repo (e.g. my-specs-repo). Previously the step aborted with "pathspec beyond a symbolic link"; it now commits docs artifacts to the symlink-target repo in a separate commit and push.;Issue-close finalize: the fallback PR lookup no longer risks matching a PR from the wrong repository when `--repo` is specified, fixing a potential integrity error in "Resolved by commit" comments for cross-repo issues.
+
+### FEATURE: PR #1258 (2026-07-03)
+Background: refactor(#1243): rename workflow "oracle" concept to next-step
+Changes: Workflow docs now refer to the deterministic next-step advisory consistently by its script name, `next-step`; the informal "oracle" label has been retired across all current documentation.

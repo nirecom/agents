@@ -96,10 +96,10 @@ function printUsage() {
   process.stdout.write(
     "Usage: next-step [--session <sid>] [--list]\n" +
     "\n" +
-    "Deterministic workflow oracle. Reads session state and emits the next\n" +
+    "Deterministic workflow next-step advisor. Reads session state and emits the next\n" +
     "workflow step as four KEY=value lines on stdout (ACTION, NEXT_SKILL,\n" +
     "NEXT_HINT, REASON), plus an optional advisory SKIP_HINT line at the\n" +
-    "outline/detail steps. Always exits 0 in oracle mode; --reset exits nonzero on invalid input.\n" +
+    "outline/detail steps. Always exits 0 in next-step mode; --reset exits nonzero on invalid input.\n" +
     "\n" +
     "Options:\n" +
     "  --session <sid>   Use the given session id instead of resolving one.\n" +
@@ -443,7 +443,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     : (STEP_HINT[currentStep] || currentStep);
 
   // #485: advisory plan-skip hint at outline/detail only. isTrivial reads
-  // intent.md (fail-open to false). The oracle only ever sees one current step,
+  // intent.md (fail-open to false). next-step only ever sees one current step,
   // and outline precedes detail, so a detail hint surfaces only after outline is
   // complete/skipped — automatically satisfying "emit only WORKFLOW_OUTLINE_NOT_NEEDED
   // when both are skippable". Purely advisory: does not change the verdict.

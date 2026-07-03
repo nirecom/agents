@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/workflow/next-step
-# Tags: L2, workflow, oracle, docs, evidence, scope:issue-specific
+# Tags: L2, workflow, next-step, docs, evidence, scope:issue-specific
 
 # L3 gap (what this test does NOT catch):
 # - real hook PreToolUse event in live claude session
@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (oracle not yet evidence-aware)"; exit 0; }
+[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (next-step not yet evidence-aware)"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -17,7 +17,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORACLE="$AGENTS_DIR/bin/workflow/next-step"
+NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -91,9 +91,9 @@ read_state_status() {
   " "$state_file" 2>/dev/null || echo "MISSING"
 }
 
-run_oracle() {
+run_next_step() {
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_PLANS_DIR="$PLANS_DIR" \
-    run_with_timeout node "$ORACLE" "$@" 2>/dev/null || true
+    run_with_timeout node "$NEXT_STEP" "$@" 2>/dev/null || true
 }
 
 setup_repo() {
@@ -145,7 +145,7 @@ EOF
 }
 
 echo ""
-echo "=== ODE-1: staged docs present + docs=pending → oracle auto-repairs + NEXT not update-docs ==="
+echo "=== ODE-1: staged docs present + docs=pending → next-step auto-repairs + NEXT not update-docs ==="
 
 SID="ode1-$$"
 write_state "$SID" "$(DOCS_PENDING_STATE $SID)"
@@ -155,9 +155,9 @@ mkdir -p "$REPO/docs"
 echo "history content" > "$REPO/docs/history.md"
 git -C "$REPO" add docs/history.md
 
-# Pass repoDir context via env (if oracle supports it) or via state
-# The oracle may use CLAUDE_PROJECT_DIR to detect repoDir
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+# Pass repoDir context via env (if next-step supports it) or via state
+# next-step may use CLAUDE_PROJECT_DIR to detect repoDir
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 eval "$OUT" 2>/dev/null || true
 
 # If docs was auto-repaired to complete, the next step should NOT be update-docs
@@ -174,21 +174,21 @@ if [ "$DOCS_STATUS" = "complete" ]; then
     FAIL=$((FAIL + 1))
   fi
 else
-  # Acceptable: oracle may not yet support evidence-based auto-repair for docs
+  # Acceptable: next-step may not yet support evidence-based auto-repair for docs
   echo "PASS: ODE-1. docs auto-repair not yet implemented (SKIP sub-checks)"
   PASS=$((PASS + 1))
   PASS=$((PASS + 1))
 fi
 
 echo ""
-echo "=== ODE-2: no staged docs + docs=pending → oracle returns invoke update-docs ==="
+echo "=== ODE-2: no staged docs + docs=pending → next-step returns invoke update-docs ==="
 
 SID="ode2-$$"
 write_state "$SID" "$(DOCS_PENDING_STATE $SID)"
 REPO=$(setup_repo)
 REPO_N=$(to_node_path "$REPO")
 
-OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID")
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
 ACTION=""; NEXT_SKILL=""
 eval "$OUT" 2>/dev/null || true
 
@@ -206,16 +206,16 @@ mkdir -p "$REPO/docs"
 echo "content" > "$REPO/docs/history.md"
 git -C "$REPO" add docs/history.md
 
-# Run oracle twice — should not loop infinitely
-OUT1=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID" 2>/dev/null || true)
-OUT2=$(CLAUDE_PROJECT_DIR="$REPO_N" run_oracle --session "$SID" 2>/dev/null || true)
+# Run next-step twice — should not loop infinitely
+OUT1=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID" 2>/dev/null || true)
+OUT2=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID" 2>/dev/null || true)
 
 # Both runs should complete without hanging or erroring
 if [ -n "$OUT1" ] && [ -n "$OUT2" ]; then
-  echo "PASS: ODE-3. oracle runs twice without infinite recursion"
+  echo "PASS: ODE-3. next-step runs twice without infinite recursion"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: ODE-3. oracle produced empty output on repeated run"
+  echo "FAIL: ODE-3. next-step produced empty output on repeated run"
   FAIL=$((FAIL + 1))
 fi
 
