@@ -86,11 +86,11 @@ scan_file() {
         HARD_HIT=1
       fi
     fi
-    # Pattern 2: 2-bracket miscount — sentinel frame ending with >>" or >>> followed by no >
-    # Looks for <<WORKFLOW_...: payload>>" (only 2 closing >) instead of >>>
+    # Pattern 2: 3-bracket overcorrection — sentinel frame ending with >>>" (3 closing >) instead of >>"
+    # Looks for <<WORKFLOW_...: payload>>>" (one extra > beyond the correct >>")
     # Uses ERE (grep -E) for portability — no PCRE (-P) needed
-    if printf '%s\n' "$line" | grep -qE '<<WORKFLOW_[A-Z_{}]+:[^>]*>>"'; then
-      echo "HARD: $file:$lineno — 2-bracket miscount in sentinel: $(printf '%s\n' "$line" | head -c 120)"
+    if printf '%s\n' "$line" | grep -qE '<<WORKFLOW_[A-Z_{}]+:[^>]*>>>"'; then
+      echo "HARD: $file:$lineno — 3-bracket overcorrection in sentinel (should be >> not >>>): $(printf '%s\n' "$line" | head -c 120)"
       HARD_HIT=1
     fi
   done < "$file"

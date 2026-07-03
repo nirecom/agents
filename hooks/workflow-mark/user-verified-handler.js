@@ -17,7 +17,7 @@ function handle(ctx) {
   if (!userVerifiedMatch && USER_VERIFIED_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       `workflow-mark: malformed USER_VERIFIED — ` +
-        `expected: echo "<<WORKFLOW_USER_VERIFIED: REASON>>>" ` +
+        `expected: echo "<<WORKFLOW_USER_VERIFIED: REASON>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;
@@ -28,7 +28,7 @@ function handle(ctx) {
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — user_verification NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>>" ` +
+          `Re-run: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>" ` +
           `(reason: >=3 non-space chars, no '>', not a placeholder; ask dialog will re-trigger)`
       );
       return true;

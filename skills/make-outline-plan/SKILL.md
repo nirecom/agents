@@ -7,7 +7,7 @@ model: sonnet
 
 Propose high-level approaches and get user sign-off before detailed planning.
 
-Skip this stage via `<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>>` when a single obvious approach exists. To skip both this stage AND detail, emit `WORKFLOW_OUTLINE_NOT_NEEDED` and `WORKFLOW_DETAIL_NOT_NEEDED` in sequence.
+Skip this stage via `<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>` when a single obvious approach exists. To skip both this stage AND detail, emit `WORKFLOW_OUTLINE_NOT_NEEDED` and `WORKFLOW_DETAIL_NOT_NEEDED` in sequence.
 When `outline-planner` returns `SINGLE_APPROACH_JUSTIFIED`, skip the review/sign-off loop and proceed directly to `make-detail-plan`.
 
 ## Inputs
@@ -106,7 +106,7 @@ MOP-7. On `APPROVED`:
 
 MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
    - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting" (compare CHOSEN_APPROACH against the option's value field — always the stable English key regardless of display label)): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 

@@ -129,4 +129,4 @@ SH-6. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
 - `closes_issues` absent or empty and no context.md → emit `WORKFLOW_RESEARCH_NOT_NEEDED`
 - No issue number available → use keyword-only mode (Step SH-3); do NOT skip entirely
 - docs-only or typo task with no behavioral claims → emit
-  `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only task — history check not applicable>>>"`
+  `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: docs-only task — history check not applicable>>"`

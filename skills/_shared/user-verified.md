@@ -45,7 +45,7 @@ Compatibility with PR #818: this gate runs after `check-unstaged-tracked.sh` (WE
 
 **Emit the sentinel directly** as its own Bash call — no narrative prelude, no PR URL restated in chat:
 
-    echo "<<WORKFLOW_USER_VERIFIED: {reason}>>>"
+    echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"
 
 The `: <reason>` is mandatory — describe what the user is approving
 (e.g. `"PR #314 — approving merge to main"`). Set the Bash `description` to the

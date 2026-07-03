@@ -124,13 +124,13 @@ assert_eq "T3 exit 1 (brace name, angle payload)" "1" "$EXIT"
 assert_contains "T3 HARD line" "$OUTPUT" "HARD:"
 
 # ===========================================================================
-# T4: both brace form → no HARD (false-positive guard)
-#     <<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>>
+# T4: both brace form, correct bracket count → no HARD (false-positive guard)
+#     <<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>
 # ===========================================================================
 REPO=$(make_git_repo)
 git -C "$REPO" checkout -q -b feat
 mkdir -p "$REPO/rules"
-echo 'echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>>"' > "$REPO/rules/c.md"
+echo 'echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>"' > "$REPO/rules/c.md"
 git -C "$REPO" add rules/c.md
 git -C "$REPO" commit -q -m "add both-brace form"
 run_in "$REPO" --base HEAD~1
@@ -139,16 +139,16 @@ assert_contains "T4 PERFORMED header" "$OUTPUT" "## Sentinel Template Review: PE
 assert_not_contains "T4 no HARD" "$OUTPUT" "HARD:"
 
 # ===========================================================================
-# T5: 2-bracket miscount with angle: <<WORKFLOW_FOO_BAR: {reason}>" → HARD, exit 1
+# T5: 3-bracket overcorrection: <<WORKFLOW_FOO_BAR: {reason}>>>" → HARD, exit 1
 # ===========================================================================
 REPO=$(make_git_repo)
 git -C "$REPO" checkout -q -b feat
 mkdir -p "$REPO/skills/foo"
-echo 'echo "<<WORKFLOW_FOO_BAR: {reason}>>"' > "$REPO/skills/foo/SKILL.md"
+echo 'echo "<<WORKFLOW_FOO_BAR: {reason}>>>"' > "$REPO/skills/foo/SKILL.md"
 git -C "$REPO" add skills/foo/SKILL.md
-git -C "$REPO" commit -q -m "add bracket miscount"
+git -C "$REPO" commit -q -m "add bracket overcorrection"
 run_in "$REPO" --base HEAD~1
-assert_eq "T5 exit 1 (bracket miscount)" "1" "$EXIT"
+assert_eq "T5 exit 1 (3-bracket overcorrection)" "1" "$EXIT"
 assert_contains "T5 HARD line" "$OUTPUT" "HARD:"
 
 # ===========================================================================
@@ -156,9 +156,9 @@ assert_contains "T5 HARD line" "$OUTPUT" "HARD:"
 # ===========================================================================
 ALLDIR="$TMPDIR_BASE/allscan"
 mkdir -p "$ALLDIR/rules" "$ALLDIR/skills/foo" "$ALLDIR/agents"
-echo 'echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>>"' > "$ALLDIR/rules/valid.md"
-echo 'echo "<<WORKFLOW_USER_VERIFIED: {reason}>>>"' > "$ALLDIR/skills/foo/SKILL.md"
-echo 'echo "<<WORKFLOW_FOO_BAR: {reason}>>>"' > "$ALLDIR/agents/valid.md"
+echo 'echo "<<WORKFLOW_CONFIRM_{STAGE}: {one-line summary}>>"' > "$ALLDIR/rules/valid.md"
+echo 'echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"' > "$ALLDIR/skills/foo/SKILL.md"
+echo 'echo "<<WORKFLOW_FOO_BAR: {reason}>>"' > "$ALLDIR/agents/valid.md"
 run_in "$ALLDIR" --all
 assert_eq "T6 exit 0 (--all valid)" "0" "$EXIT"
 assert_contains "T6 PERFORMED header" "$OUTPUT" "## Sentinel Template Review: PERFORMED"
@@ -170,7 +170,7 @@ assert_not_contains "T6 no HARD" "$OUTPUT" "HARD:"
 REPO=$(make_git_repo)
 git -C "$REPO" checkout -q -b feat
 mkdir -p "$REPO/agents"
-echo 'echo "<<WORKFLOW_FOO_BAR: {reason}>>>"' > "$REPO/agents/d.md"
+echo 'echo "<<WORKFLOW_FOO_BAR: {reason}>>"' > "$REPO/agents/d.md"
 git -C "$REPO" add agents/d.md
 git -C "$REPO" commit -q -m "add valid sentinel"
 run_in "$REPO" --base HEAD~1
@@ -192,17 +192,17 @@ run_in "$REPO" --base does-not-exist-ref
 assert_contains "T9 SKIPPED (bad base ref)" "$OUTPUT" "## Sentinel Template Review: SKIPPED"
 
 # ===========================================================================
-# T10: pure 2-bracket miscount, no angle bracket → HARD (C4 guard)
-#      reason>>"  — line has only 2 '>' before the closing quote
+# T10: pure 3-bracket overcorrection, no angle bracket → HARD (C4 guard)
+#      reason>>>"  — line has 3 '>' before the closing quote (should be 2)
 # ===========================================================================
 REPO=$(make_git_repo)
 git -C "$REPO" checkout -q -b feat
 mkdir -p "$REPO/rules"
-echo 'echo "<<WORKFLOW_FOO_BAR: reason>>"' > "$REPO/rules/e.md"
+echo 'echo "<<WORKFLOW_FOO_BAR: reason>>>"' > "$REPO/rules/e.md"
 git -C "$REPO" add rules/e.md
-git -C "$REPO" commit -q -m "add pure miscount"
+git -C "$REPO" commit -q -m "add pure overcorrection"
 run_in "$REPO" --base HEAD~1
-assert_eq "T10 exit 1 (pure miscount)" "1" "$EXIT"
+assert_eq "T10 exit 1 (pure overcorrection)" "1" "$EXIT"
 assert_contains "T10 HARD line" "$OUTPUT" "HARD:"
 
 # ===========================================================================

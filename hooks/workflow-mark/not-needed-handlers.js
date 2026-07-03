@@ -35,7 +35,7 @@ function handle(ctx) {
   if (researchNotNeededLooksLike) {
     pushMessage(
       `workflow-mark: malformed RESEARCH_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: REASON>>>" ` +
+        `expected: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: REASON>>" ` +
         `(reason must be >=3 non-space chars, no '>')`
     );
     return true;
@@ -45,14 +45,14 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: RESEARCH_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {better reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — research NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ${v.reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ${v.reason}>>"`
       );
       return true;
     }
@@ -73,7 +73,7 @@ function handle(ctx) {
   if (outlineNotNeededLooksLike) {
     pushMessage(
       `workflow-mark: malformed OUTLINE_NOT_NEEDED — ` +
-      `expected: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: REASON>>>" ` +
+      `expected: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: REASON>>" ` +
       `(reason must be >=3 non-space chars, no '>')`);
     return true;
   }
@@ -81,12 +81,12 @@ function handle(ctx) {
     const v = validateSkipReason(outlineNotNeededMatch[1]);
     if (!v.ok) {
       pushMessage(`workflow-mark: OUTLINE_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {better reason}>>>"`);
+        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {better reason}>>"`);
       return true;
     }
     if (!sessionId) {
       signalFatal(`workflow-mark: could not resolve session_id — outline NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ${v.reason}>>>"`);
+        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ${v.reason}>>"`);
       return true;
     }
     try {
@@ -104,7 +104,7 @@ function handle(ctx) {
   if (detailNotNeededLooksLike) {
     pushMessage(
       `workflow-mark: malformed DETAIL_NOT_NEEDED — ` +
-      `expected: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: REASON>>>" ` +
+      `expected: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: REASON>>" ` +
       `(reason must be >=3 non-space chars, no '>')`);
     return true;
   }
@@ -112,12 +112,12 @@ function handle(ctx) {
     const v = validateSkipReason(detailNotNeededMatch[1]);
     if (!v.ok) {
       pushMessage(`workflow-mark: DETAIL_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {better reason}>>>"`);
+        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {better reason}>>"`);
       return true;
     }
     if (!sessionId) {
       signalFatal(`workflow-mark: could not resolve session_id — detail NOT recorded. ` +
-        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ${v.reason}>>>"`);
+        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ${v.reason}>>"`);
       return true;
     }
     try {
@@ -132,7 +132,7 @@ function handle(ctx) {
   if (writeTestsNotNeededLooksLike) {
     pushMessage(
       `workflow-mark: malformed WRITE_TESTS_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: REASON>>>" ` +
+        `expected: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: REASON>>" ` +
         `(reason must be >=3 non-space chars, no '>')`
     );
     return true;
@@ -142,14 +142,14 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {better reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — write_tests NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ${v.reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: ${v.reason}>>"`
       );
       return true;
     }
@@ -183,7 +183,7 @@ function handle(ctx) {
   if (reviewSecurityNotNeededLooksLike) {
     pushMessage(
       `workflow-mark: malformed REVIEW_SECURITY_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: REASON>>>" ` +
+        `expected: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: REASON>>" ` +
         `(reason must be >=3 non-space chars, no '>')`
     );
     return true;
@@ -193,14 +193,14 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: REVIEW_SECURITY_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {better reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — review_security NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ${v.reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: ${v.reason}>>"`
       );
       return true;
     }
@@ -227,7 +227,7 @@ function handle(ctx) {
   if (clarifyIntentNotNeededLooksLike) {
     pushMessage(
       `workflow-mark: malformed CLARIFY_INTENT_NOT_NEEDED — ` +
-        `expected: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: REASON>>>" ` +
+        `expected: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: REASON>>" ` +
         `(reason must be >=3 non-space chars, no '>')`
     );
     return true;
@@ -237,14 +237,14 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: CLARIFY_INTENT_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: {better reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — clarify_intent NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ${v.reason}>>>"`
+          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: ${v.reason}>>"`
       );
       return true;
     }

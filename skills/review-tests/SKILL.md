@@ -29,8 +29,8 @@ RT-3. **Present results**: Show the subagent's findings to the user.
 
 RT-4. **Emit workflow sentinel** — two separate Bash calls, not chained:
    RT-4a. Compute staged-tests token: `TOKEN=$(node "$AGENTS_CONFIG_DIR/bin/compute-staged-tests-token.js")`
-   RT-4b. If coverage adequate: `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>>"`
-   RT-4c. If gaps or warnings: `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} {one-line summary}>>>"`
+   RT-4b. If coverage adequate: `echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${TOKEN}>>"`
+   RT-4c. If gaps or warnings: `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token=${TOKEN} {one-line summary}>>"`
    RT-4d. Skip when WORKFLOW_WRITE_TESTS_NOT_NEEDED was emitted (propagated skip).
 
 ## Rules

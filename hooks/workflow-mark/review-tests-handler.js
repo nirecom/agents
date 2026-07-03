@@ -1,10 +1,10 @@
 "use strict";
 // Issue #833 — handles WORKFLOW_REVIEW_TESTS_COMPLETE / WORKFLOW_REVIEW_TESTS_WARNINGS sentinels.
 //
-// COMPLETE form  : echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex} [optional meta]>>>"
+// COMPLETE form  : echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex} [optional meta]>>"
 //   Skill computes staged-tests fingerprint via computeStagedTestsToken and embeds it.
 //   Handler extracts token from payload and records review_tests=complete.
-// WARNINGS form  : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token={hex} [warnings=N ...]>>>"
+// WARNINGS form  : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS: token={hex} [warnings=N ...]>>"
 //   Records review_tests=complete with warnings_summary so the gate can block until
 //   warnings are resolved (gate checks warnings_summary field — C2 enforcement at gate layer).
 // LOOKSLIKE form : echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS>>" (malformed — advisory only)
@@ -40,14 +40,14 @@ function handle(ctx) {
     if (!token) {
       pushMessage(
         "workflow-mark: REVIEW_TESTS_COMPLETE rejected — missing token={hex} in payload. " +
-          "Re-emit: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>>>\""
+          "Re-emit: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>>\""
       );
       return true;
     }
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — review_tests NOT recorded. ` +
-          `Re-emit: echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${token}>>>"`
+          `Re-emit: echo "<<WORKFLOW_REVIEW_TESTS_COMPLETE: token=${token}>>"`
       );
       return true;
     }
@@ -92,7 +92,7 @@ function handle(ctx) {
   if (REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       "workflow-mark: malformed WORKFLOW_REVIEW_TESTS_COMPLETE — " +
-        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>>>\""
+        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_COMPLETE: token={hex}>>\""
     );
     return true;
   }
@@ -101,7 +101,7 @@ function handle(ctx) {
   if (REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       "workflow-mark: malformed WORKFLOW_REVIEW_TESTS_WARNINGS — " +
-        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: token={hex} warnings=N>>>\""
+        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS: token={hex} warnings=N>>\""
     );
     return true;
   }
