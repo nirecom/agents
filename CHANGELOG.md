@@ -283,3 +283,7 @@ Changes: Content pushed to a public repository (issue/PR titles and bodies) is n
 ### FEATURE: PR #1266 (2026-07-03)
 Background: fix(#1231,#1204): migrate-repo symlink docs/ cross-repo commit + find-pr-by-marker --repo fallback
 Changes: `/migrate-repo` Step 6 now works correctly when `docs/` is a symlink to a shared docs repo (e.g. my-specs-repo). Previously the step aborted with "pathspec beyond a symbolic link"; it now commits docs artifacts to the symlink-target repo in a separate commit and push.;Issue-close finalize: the fallback PR lookup no longer risks matching a PR from the wrong repository when `--repo` is specified, fixing a potential integrity error in "Resolved by commit" comments for cross-repo issues.
+
+### FEATURE: PR #1258 (2026-07-03)
+Background: refactor(#1243): rename workflow "oracle" concept to next-step
+Changes: Workflow docs now refer to the deterministic next-step advisory consistently by its script name, `next-step`; the informal "oracle" label has been retired across all current documentation.
