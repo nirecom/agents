@@ -34,7 +34,7 @@ function workflowOffNoticeText(hookName, sid) {
   return (
     "[" + hookName + "] ENFORCE_WORKFLOW is OFF for this session (sid=" + sid + "). " +
     "Marker: " + markerPath + ". " +
-    "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>\""
+    "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\""
   );
 }
 
@@ -94,7 +94,7 @@ function issueCloseVerifiedNoticeText(hookName, sid) {
   return (
     "[" + hookName + "] ISSUE_CLOSE_VERIFIED is active for this session (sid=" + sid + "). " +
     "Marker: " + markerPath + ". " +
-    "End with: echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: <reason>>>\""
+    "End with: echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: {reason}>>\""
   );
 }
 

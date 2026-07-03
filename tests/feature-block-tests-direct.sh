@@ -356,7 +356,7 @@ assert_block "E26" 'tests/$(rm -rf /).sh + pending → block (no shell execution
     '{"tool_name":"Write","tool_input":{"file_path":"tests/$(rm -rf /).sh"},"session_id":"sess-e26","agent_id":""}'
 
 # E27: DENY_MESSAGE drift check — hook must export DENY_MESSAGE matching expected string
-EXPECTED_DENY_MESSAGE="write_tests step is still pending. Run /write-tests first — it spawns a subagent that writes tests/ autonomously. If tests are genuinely not needed, mark the step skipped with: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>\""
+EXPECTED_DENY_MESSAGE="write_tests step is still pending. Run /write-tests first — it spawns a subagent that writes tests/ autonomously. If tests are genuinely not needed, mark the step skipped with: echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>\""
 HOOK_ABS="$(cd "$(dirname "$HOOK")" && pwd)/$(basename "$HOOK")"
 e27_result=$(node -e "
 var hookPath = process.argv[1];
