@@ -299,3 +299,7 @@ Changes: `run_tests` now completes only from `bash tests/run-all.sh` (which emit
 ### FEATURE: PR #1272 (2026-07-03)
 Background: refactor(#1251): consolidate session-id resolvers into canonical chain + bin/resolve-session-id bridge
 Changes: Session-id resolution is now consistent across all workflow tooling: every bash and Node CLI entry point delegates to the same canonical 7-step resolver via the new `bin/resolve-session-id` bridge. `CLAUDE_CODE_SESSION_ID` now takes precedence over `CLAUDE_ENV_FILE` / `CLAUDE_SESSION_ID` everywhere, fixing a class of wrong-session attribution when multiple Claude Code sessions run concurrently.
+
+### FEATURE: PR #1281 (2026-07-03)
+Background: refactor(#1275): split 3 oversized test files into dispatcher + fragments
+Changes: Refactored 3 oversized test files (>500 lines) into dispatcher + fragment structure; no test behavior changed.
