@@ -80,11 +80,19 @@ teardown_mock
 
 # ===========================================================================
 # Test 19: check <N> with missing session-id → exit 2.
+# #1251: resolution goes through the script-relative bridge, which also tries
+# CLAUDE_CODE_SESSION_ID (P2), WORKTREE_NOTES.md (P6 — the worktree root HAS
+# one), and the JSONL scan (P7). Fully isolate all SID sources: unset env SIDs,
+# empty transcript base, and run from a non-git temp CWD.
 # ===========================================================================
 setup_mock
 echo "" > "$CLAUDE_ENV_FILE"
-OUT=$(run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
+unset CLAUDE_CODE_SESSION_ID CLAUDE_SESSION_ID 2>/dev/null || true
+export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/empty-transcripts"
+mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR" "$TMP/nongit-cwd"
+OUT=$(cd "$TMP/nongit-cwd" && run_with_timeout 60 bash "$TARGET" check 42 2>/dev/null)
 RC=$?
+unset CLAUDE_TRANSCRIPT_BASE_DIR 2>/dev/null || true
 if [ "$RC" -eq 2 ]; then
     pass "T19: check <N> with missing CLAUDE_SESSION_ID → exit 2"
 else

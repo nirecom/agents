@@ -6,7 +6,8 @@
 //   node issue-close-write-outcome.js --non-github <issues-json-array> <outcome-file>
 //   node issue-close-write-outcome.js --fallback <intent-md> <outcome-file>
 //
-// Normal mode: resolves PLANS_DIR and SESSION_ID internally; reads CLAUDE_ENV_FILE.
+// Normal mode: resolves PLANS_DIR internally and SESSION_ID via the canonical
+// workflow-state resolver (7-step chain, #1251).
 // --non-github: writes skipped-non-github entries for all issues in the JSON array.
 // --fallback: writes failed entries for all issues parsed from intent.md.
 //
@@ -33,13 +34,12 @@ function resolvePlansDir() {
 
 function resolveSessionId() {
   try {
-    const envFile = process.env.CLAUDE_ENV_FILE || "";
-    if (envFile) {
-      const e = JSON.parse(fs.readFileSync(envFile, "utf8"));
-      if (e && e.CLAUDE_SESSION_ID) return e.CLAUDE_SESSION_ID;
-    }
-  } catch (_) {}
-  return process.env.CLAUDE_SESSION_ID || "";
+    return require(path.join(__dirname, "..", "hooks", "lib", "workflow-state")).resolveSessionId() || "";
+  } catch (_) {
+    const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
+    if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) return codeSid.trim();
+    return process.env.CLAUDE_SESSION_ID || "";
+  }
 }
 
 function readBag(p) {
