@@ -163,6 +163,21 @@ never inherited — the JSONL is skipped entirely so the new session starts fres
 entries take priority because they are appended after SessionStart and reflect the most
 recent session_id in any given JSONL file.
 
+### Bash/CLI-side resolution
+
+Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
+no such channel. They all resolve through one canonical implementation:
+`hooks/lib/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
+`CLAUDE_CODE_SESSION_ID` → `CLAUDE_ENV_FILE` → `CLAUDE_SESSION_ID` → `ctx.transcriptPath` →
+`WORKTREE_NOTES.md` → JSONL mtime scan (gated by an `isSameGitRepo` cross-repo guard). Bash
+callers reach it via the `bin/resolve-session-id` bridge (stdout = sid, exit 2 when
+unresolvable); Node CLIs `require()` it directly. Callers locate the bridge relative to their
+own file (`BASH_SOURCE` / `__dirname`), never via `$AGENTS_CONFIG_DIR`, so every checkout uses
+its own resolver even when that env var points at a different checkout. Why one SSOT: eight
+independent resolver implementations diverged over time and produced concurrent-session
+misattribution (#1082); consolidation (#1251) removes the divergence class instead of patching
+members one at a time.
+
 ## Fail-safe behavior
 
 | Condition | Result |
@@ -194,8 +209,10 @@ At the `outline` and `detail` steps only, next-step appends an optional fifth li
 To roll back to a specific step (e.g. after a crash or to redo a phase):
 
 ```
-echo "<<WORKFLOW_RESET_FROM_<step>>>"
+echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"
 ```
+
+Example: `echo "<<WORKFLOW_RESET_FROM_write_tests: user requested re-plan>>"`
 
 `reset-handler.js` (PostToolUse, via `workflow-mark.js`) marks all prior steps `complete` and resets the target step and all subsequent steps to `pending`. The resulting state is consistent and immediately queryable by next-step. Use `--list` to verify before proceeding.
 
@@ -206,6 +223,21 @@ Priority order for recovery:
 4. **`--mark <step> complete`**: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID --mark <step> complete` marks one step complete without touching others (session-global; run from any directory). Use when next-step's scoped hint names a specific step to mark.
 5. **RESET_FROM**: when the session needs to redo a phase or state became inconsistent.
 6. **Direct JSON edit** (`~/.claude/projects/workflow/<sid>.json`): last resort for surgical per-step changes (e.g. setting one step to `skipped` without affecting others).
+
+## Sentinel notation
+
+The `<< >>` frame has no strong positive rationale — it was an implementation choice when
+echo-based markers replaced the `mark-step.js` CLI (2026-04-13, Anthropic bug #27987 workaround).
+The functional requirements it satisfies are: (1) a fixed literal matchable by `settings.json`
+permission globs, (2) distinctive enough not to collide with unrelated `echo` commands, and
+(3) parseable by an anchored strict regex in the PostToolUse hook. Any frame meeting these
+would work; changing it now is not worth the migration cost across regexes, permission rules,
+and docs. The original `:` field separator was replaced by `_` because the permission glob
+parser treats `:` specially (claude-code#33601).
+
+Placeholder notation in sentinel templates uses braces — `{step}`, `{reason}` — never
+`<angle brackets>`: a `<reason>` placeholder followed by the `>>` frame closer produces a
+`>>>` run whose bracket count is routinely miscopied.
 
 ## Exemptions
 
