@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pure helper: compute the cap-menu JSON for the orchestrator (make-outline-plan,
 # make-detail-plan, CLAUDE.md Step 6). Never reads or writes state.
-echo "review-loop-cap-menu: RETIRED (issue #1248) — cap 判断は bin/review-loop-verdict が担当します。" >&2
+echo "review-loop-cap-menu: RETIRED (issue #1248) — use bin/review-loop-verdict instead." >&2
 exit 2
 #
 # Usage:
