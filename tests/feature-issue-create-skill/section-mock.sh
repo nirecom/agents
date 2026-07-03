@@ -62,6 +62,18 @@ case "$ARGS" in
         exit 1
     fi
     exit 0 ;;
+  api\ graphql\ *issue\(number:\ *parent\ \{\ number\ \}*)
+    # parent-ancestor-reopen.sh GraphQL parent detection
+    # (bin/github-issues/lib/parent-number.sh): extract N from
+    # `issue(number: N)` and read the SAME env vars as the REST arm.
+    INUM=$(echo "$ARGS" | sed -n 's/.*issue(number: \([0-9]*\)).*/\1/p')
+    eval "ABSENT=\${GH_MOCK_PARENT_ABSENT_${INUM}:-0}"
+    if [ "$ABSENT" = "1" ]; then
+        echo ""; exit 0
+    fi
+    eval "PNUM=\${GH_MOCK_PARENT_NUM_${INUM}:-}"
+    echo "$PNUM"
+    exit 0 ;;
   api\ repos/*/issues/*\ --jq*)
     # parent-ancestor-reopen.sh: api repos/<owner>/<repo>/issues/<N> --jq .parent.number // empty
     INUM=$(echo "$ARGS" | awk '{print $2}' | awk -F/ '{print $NF}')
