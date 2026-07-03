@@ -126,6 +126,27 @@ if [ "$sub1" = "issue" ] && [ "$sub2" = "list" ]; then
     exit 0
 fi
 
+# --- gh api graphql ... issue(number: N) { parent { number } } ---
+# Parent detection moved from REST to GraphQL
+# (bin/github-issues/lib/parent-number.sh). Extract N from the query, read the
+# SAME GH_MOCK_ISSUE_<N> fixture the REST path used, and emit the bare parent
+# number the helper's `--jq .data.repository.issue.parent.number // empty` wants.
+if [ "$sub1" = "api" ] && [ "$sub2" = "graphql" ]; then
+    ALL_ARGS="$*"
+    case "$ALL_ARGS" in
+        *"issue(number: "*"parent { number }"*)
+            GQL_N=$(printf '%s' "$ALL_ARGS" | sed -n 's/.*issue(number: \([0-9]*\)).*/\1/p')
+            VARNAME="GH_MOCK_ISSUE_${GQL_N}"
+            VAL="${!VARNAME:-}"
+            [ -z "$VAL" ] && VAL='{"parent":null}'
+            printf '%s' "$VAL" | jq -r '.parent.number // empty' 2>/dev/null || true
+            exit 0
+            ;;
+    esac
+    echo '{"data":{}}'
+    exit 0
+fi
+
 # --- gh api repos/.../issues/<N> | issues/<N>/sub_issues ---
 if [ "$sub1" = "api" ]; then
     API_PATH="${2:-}"
