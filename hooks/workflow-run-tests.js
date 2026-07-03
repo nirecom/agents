@@ -1,12 +1,17 @@
 #!/usr/bin/env node
-// Claude Code PostToolUse hook: auto-mark run_tests based on Bash exit code.
+// Claude Code PostToolUse hook: mark run_tests from the run-all.sh contract.
 //
-// Fires on every Bash tool call. Detects test-runner commands (commands that
-// reference tests/ paths or known test runners) and updates run_tests state:
-//   exit 0  → run_tests: complete
-//   exit ≠ 0 → run_tests: pending  (last-run-wins — reverts to pending on failure)
+// Fires on every Bash tool call. Trust model (#1242, Approach C′): completion
+// is driven ONLY by the machine-readable RUN_CONTRACT line that tests/run-all.sh
+// emits — never inferred from a raw exit code. For a detected test command:
+//   non-zero exit                          → run_tests: pending (fail-safe)
+//   run-all.sh provenance + exactly one
+//     valid RUN_CONTRACT (executed>0,
+//     fail==0)                             → run_tests: complete (if write_tests satisfied)
+//   any other test command / no contract   → run_tests: pending (active demotion)
 //
-// Sentinel echo commands and read-only commands are excluded.
+// The run_tests sentinel (WORKFLOW_MARK_STEP_run_tests_complete) is the other
+// completion authority. Sentinel echo commands and read-only commands are excluded.
 
 const fs = require("fs");
 const { resolveSessionId, markStep, readState } = require("./lib/workflow-state");
@@ -124,6 +129,43 @@ function isTestCommand(command) {
   return false;
 }
 
+// True iff the command string invokes run-all.sh (the only authorised contract
+// emitter). Provenance-only check — does not analyse pipe/compound structure.
+// Matches: tests/run-all.sh, ./tests/run-all.sh, bash tests/run-all.sh, etc.
+const RUN_ALL_SH_RE = /(?:^|[\s;|&])(?:[./\w-]*\/)?tests\/run-all\.sh\b/;
+function isRunAllSh(command) {
+  return RUN_ALL_SH_RE.test(command);
+}
+
+// Count and parse RUN_CONTRACT lines in tool_response.stdout.
+// Returns null in all non-success cases:
+//   - stdout absent or not a string
+//   - zero well-formed contract lines (absent)
+//   - two or more well-formed contract lines (ambiguous: forged append or fixture collision)
+//   - any field is NaN (malformed integer in the single line)
+// Contract format is fixed: PASS FAIL SKIP EXECUTED (in this order). Extension
+// via #1241 requires lockstep changes to both run-all.sh and this parser.
+function parseContract(toolResponse) {
+  const stdout = (toolResponse && typeof toolResponse.stdout === "string")
+    ? toolResponse.stdout : "";
+  if (!stdout) return null;
+
+  const CONTRACT_LINE_RE =
+    /^RUN_CONTRACT: PASS=(\d+) FAIL=(\d+) SKIP=(\d+) EXECUTED=(\d+)/gm;
+  const matches = [...stdout.matchAll(CONTRACT_LINE_RE)];
+
+  // Exactly-one rule: zero → absent, two or more → ambiguous. Both → null.
+  if (matches.length !== 1) return null;
+
+  const m = matches[0];
+  const p = parseInt(m[1], 10);
+  const f = parseInt(m[2], 10);
+  const s = parseInt(m[3], 10);
+  const e = parseInt(m[4], 10);
+  if ([p, f, s, e].some((n) => isNaN(n))) return null;
+  return { pass: p, fail: f, skip: s, executed: e };
+}
+
 let input;
 try {
   input = JSON.parse(readStdin());
@@ -148,24 +190,51 @@ const sessionId = input.session_id || resolveSessionId();
 if (!sessionId) done();
 
 try {
-  if (exitCode === 0) {
-    // Guard: only mark run_tests complete when write_tests is already
-    // complete or skipped. If write_tests is pending/in_progress/absent — or
-    // readState returns null/throws — fail-open and do NOT mark complete, so a
-    // stale run_tests=complete cannot leapfrog an unfinished write_tests step.
-    const state = readState(sessionId);
-    const writeTestsStatus = state && state.steps && state.steps.write_tests
-      ? state.steps.write_tests.status
-      : undefined;
-    if (writeTestsStatus === "complete" || writeTestsStatus === "skipped") {
-      markStep(sessionId, "run_tests", "complete");
-    }
-  } else {
+  // Fast path: non-zero exit code always reverts to pending regardless of contract.
+  if (exitCode !== 0) {
     markStep(sessionId, "run_tests", "pending", {
       last_run_failed: true,
       last_exit_code: exitCode,
     });
+    done();
   }
+
+  // C′ contract-trust model with provenance gating and exactly-one rule.
+  // Trust conditions (all must hold):
+  //   (a) provenance: command contains a run-all.sh invocation (isRunAllSh)
+  //   (b) stdout has exactly one well-formed RUN_CONTRACT: line (parseContract)
+  //       — zero → absent; >=2 → ambiguous (forged append or fixture collision)
+  //   (c) validity: executed>0, (PASS+FAIL)>0, FAIL==0
+  // Any failure → ACTIVE DEMOTION to pending (clears a stale complete).
+  const hasProvenance = isRunAllSh(command);
+  const contract = hasProvenance ? parseContract(toolResponse) : null;
+
+  const contractValid = contract !== null
+    && contract.executed > 0
+    && (contract.pass + contract.fail) > 0  // all-SKIP guard
+    && contract.fail === 0;
+
+  if (!contractValid) {
+    // ACTIVE DEMOTION: a test command ran but no trusted valid contract arrived.
+    // Covers: ad-hoc commands, piped run-all.sh, no-match (executed=0),
+    // all-skip, FAIL>0, compound-forge (>=2 contract lines), fixture collision.
+    markStep(sessionId, "run_tests", "pending", {
+      last_run_failed: false,
+      contract_absent: !hasProvenance || contract === null,
+    });
+    done();
+  }
+
+  // Contract is valid. Preserve the PR #1165 write_tests guard: only mark
+  // run_tests complete when write_tests is already complete or skipped.
+  const state = readState(sessionId);
+  const writeTestsStatus = state && state.steps && state.steps.write_tests
+    ? state.steps.write_tests.status
+    : undefined;
+  if (writeTestsStatus === "complete" || writeTestsStatus === "skipped") {
+    markStep(sessionId, "run_tests", "complete");
+  }
+  // else: write_tests not yet satisfied → fail-open (do not mark complete).
 } catch (e) {
   // fail-open — gate will block on next commit if state was not written
 }
