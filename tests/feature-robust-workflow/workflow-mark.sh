@@ -203,7 +203,7 @@ echo "=== workflow-mark: RESET_FROM marker — Normal cases ==="
 #          user_verification=pending
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-R1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests>>"')
+R1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"')
 run_mark_hook "$REPO" "$R1_JSON" >/dev/null
 expect_state_step "R1a. RESET_FROM:write_tests → research=complete"        "test-session" "research"        "complete"
 expect_state_step "R1b. RESET_FROM:write_tests → outline=complete"         "test-session" "outline"         "complete"
@@ -217,7 +217,7 @@ expect_state_step "R1g. RESET_FROM:write_tests → user_verification=pending" "t
 # Test R2: RESET_FROM_research → all steps pending (nothing before research)
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-R2_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_research>>"')
+R2_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_research: test reason>>"')
 run_mark_hook "$REPO" "$R2_JSON" >/dev/null
 expect_state_step "R2a. RESET_FROM:research → research=pending"             "test-session" "research"          "pending"
 expect_state_step "R2b. RESET_FROM:research → outline=pending"              "test-session" "outline"           "pending"
@@ -231,7 +231,7 @@ expect_state_step "R2g. RESET_FROM:research → user_verification=pending"    "t
 # Test R3: RESET_FROM_user_verification → all steps before it complete, user_verification=pending
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_PENDING_JSON test-session)"
-R3_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_user_verification>>"')
+R3_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_user_verification: test reason>>"')
 run_mark_hook "$REPO" "$R3_JSON" >/dev/null
 expect_state_step "R3a. RESET_FROM:user_verification → research=complete"        "test-session" "research"          "complete"
 expect_state_step "R3b. RESET_FROM:user_verification → outline=complete"         "test-session" "outline"           "complete"
@@ -245,7 +245,7 @@ expect_state_step "R3g. RESET_FROM:user_verification → user_verification=pendi
 # Test R4: single-quote variant → NOT processed (SQ RESET_FROM removed from source)
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-R4_JSON=$(build_reset_json "echo '<<WORKFLOW_RESET_FROM_write_tests>>'")
+R4_JSON=$(build_reset_json "echo '<<WORKFLOW_RESET_FROM_write_tests: test reason>>'")
 run_mark_hook "$REPO" "$R4_JSON" >/dev/null
 expect_no_state_change "R4a. single-quote RESET_FROM → research unchanged (complete)"    "test-session" "research"    "complete"
 expect_no_state_change "R4b. single-quote RESET_FROM → outline unchanged (complete)"     "test-session" "outline"     "complete"
@@ -259,21 +259,21 @@ echo "=== workflow-mark: RESET_FROM marker — Must-NOT-match cases ==="
 # Test RF1: echo "<<WORKFLOW_RESET_FROM_write_tests>>" | tee /tmp/log → state unchanged
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RF1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests>>" | tee /tmp/log')
+RF1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>" | tee /tmp/log')
 run_mark_hook "$REPO" "$RF1_JSON" >/dev/null
 expect_no_state_change "RF1. echo \"<<...>>\" | tee /tmp/log → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
 
 # Test RF2: cd /tmp && echo "<<WORKFLOW_RESET_FROM_write_tests>>" → state unchanged
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RF2_JSON=$(build_reset_json 'cd /tmp && echo "<<WORKFLOW_RESET_FROM_write_tests>>"')
+RF2_JSON=$(build_reset_json 'cd /tmp && echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"')
 run_mark_hook "$REPO" "$RF2_JSON" >/dev/null
 expect_no_state_change "RF2. cd && echo \"<<...>>\" (prefix chain) → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
 
 # Test RF3: printf "<<WORKFLOW_RESET_FROM_write_tests>>" → state unchanged
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RF3_JSON=$(build_reset_json 'printf "<<WORKFLOW_RESET_FROM_write_tests>>"')
+RF3_JSON=$(build_reset_json 'printf "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"')
 run_mark_hook "$REPO" "$RF3_JSON" >/dev/null
 expect_no_state_change "RF3. printf \"<<...>>\" (not echo) → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
 
@@ -283,7 +283,7 @@ echo "=== workflow-mark: RESET_FROM marker — Error / edge cases ==="
 # Test RE1: unknown step "foo" → state unchanged, hook exit 0; error message should name valid steps
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RE1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_foo>>"')
+RE1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_foo: test reason>>"')
 RE1_OUT=$(run_mark_hook "$REPO" "$RE1_JSON")
 expect_no_state_change "RE1. unknown step 'foo' → research unchanged (complete)" "test-session" "research" "complete"
 # RE1b: error message should list valid steps (#1083 fix)
@@ -297,7 +297,7 @@ fi
 # Test RE2: missing session_id → state unchanged, hook exit 0, stdout has additionalContext
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RE2_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests>>"'
+RE2_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"'
 RE2_ESC=${RE2_CMD//\"/\\\"}
 RE2_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"%s\\n","stderr":""}}' "$RE2_ESC" "$RE2_ESC")
 RE2_OUT=$(echo "$RE2_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" env -u CLAUDE_ENV_FILE node "$MARK_HOOK" 2>/dev/null || true)
@@ -317,7 +317,7 @@ fi
 # Test RE3: exit_code=1 → state unchanged
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RE3_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests>>"'
+RE3_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"'
 RE3_ESC=${RE3_CMD//\"/\\\"}
 RE3_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":1,"stdout":"","stderr":"oops"},"session_id":"test-session"}' "$RE3_ESC")
 run_mark_hook "$REPO" "$RE3_JSON" >/dev/null
@@ -329,9 +329,70 @@ echo "=== workflow-mark: RESET_FROM marker — Idempotency ==="
 # Test RI1: apply R1 twice → same final state (no crash, write_tests still pending)
 REPO=$(setup_repo)
 write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
-RI1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests>>"')
+RI1_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"')
 run_mark_hook "$REPO" "$RI1_JSON" >/dev/null
 run_mark_hook "$REPO" "$RI1_JSON" >/dev/null
 expect_state_step "RI1a. RESET_FROM applied twice → research=complete (idempotent)"    "test-session" "research"    "complete"
 expect_state_step "RI1b. RESET_FROM applied twice → write_tests=pending (idempotent)"  "test-session" "write_tests"  "pending"
 expect_state_step "RI1c. RESET_FROM applied twice → run_tests=pending (idempotent)"    "test-session" "run_tests"    "pending"
+
+echo ""
+echo "=== workflow-mark: RESET_FROM marker — Validation error cases ==="
+
+# Table-driven: RE4a–RE4e + RE4g–RE4j (all rejection cases).
+# Columns: case_id | sentinel_cmd | expect_msg
+# expect_msg is a fixed-string fragment checked in hook additionalContext output.
+# State assertion: write_tests must remain "complete" after each rejected sentinel.
+# RE4f (boundary accept, state changes) is kept standalone below — mixing polarities
+# into a single table loop would obscure the positive-case intent.
+#
+# Rejection branches exercised:
+#   LOOKSLIKE path  → "malformed RESET_FROM"  (RE4a, RE4e)
+#   DUD placeholder → "RESET_FROM rejected"   (RE4b none, RE4g skip, RE4h n/a, RE4i スキップ)
+#   too-short       → "RESET_FROM rejected"   (RE4c 2-char, RE4d whitespace-only)
+#   repeated-char   → "RESET_FROM rejected"   (RE4j aaa — >=3 chars, but /^(.)\1+$/u matches)
+#
+# SKIPPED: writeState failure path (catch → "reset-from failed") — requires unwritable state dir; not portable on Windows
+
+while IFS='|' read -r _case_id _cmd _expect_msg; do
+    [[ -z "$_case_id" || "$_case_id" =~ ^[[:space:]]*# ]] && continue
+    # Strip leading/trailing whitespace only (not internal spaces — expect_msg contains spaces)
+    _case_id="${_case_id#"${_case_id%%[! ]*}"}"
+    _case_id="${_case_id%"${_case_id##*[! ]}"}"
+    _cmd="${_cmd#"${_cmd%%[! ]*}"}"
+    _cmd="${_cmd%"${_cmd##*[! ]}"}"
+    _expect_msg="${_expect_msg#"${_expect_msg%%[! ]*}"}"
+    _expect_msg="${_expect_msg%"${_expect_msg##*[! ]}"}"
+    REPO=$(setup_repo)
+    write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
+    _json=$(build_reset_json "$_cmd")
+    _out=$(run_mark_hook "$REPO" "$_json")
+    expect_no_state_change "${_case_id}. ${_cmd} → write_tests unchanged (complete)" "test-session" "write_tests" "complete"
+    if echo "$_out" | grep -qF "$_expect_msg"; then
+        pass "${_case_id}(msg). → additionalContext contains '${_expect_msg}'"
+    else
+        fail "${_case_id}(msg). → expected '${_expect_msg}' in output, got: $_out"
+    fi
+done <<'TABLE'
+# case_id | sentinel_cmd                                                      | expect_msg
+RE4a      | echo "<<WORKFLOW_RESET_FROM_write_tests>>"                        | malformed RESET_FROM
+RE4b      | echo "<<WORKFLOW_RESET_FROM_write_tests: none>>"                  | RESET_FROM rejected
+RE4c      | echo "<<WORKFLOW_RESET_FROM_write_tests: ab>>"                    | RESET_FROM rejected
+RE4d      | echo "<<WORKFLOW_RESET_FROM_write_tests:    >>"                   | RESET_FROM rejected
+RE4e      | echo "<<WORKFLOW_RESET_FROM_write_tests: bad>reason>>"            | malformed RESET_FROM
+RE4g      | echo "<<WORKFLOW_RESET_FROM_write_tests: skip>>"                  | RESET_FROM rejected
+RE4h      | echo "<<WORKFLOW_RESET_FROM_write_tests: n/a>>"                   | RESET_FROM rejected
+RE4i      | echo "<<WORKFLOW_RESET_FROM_write_tests: スキップ>>"              | RESET_FROM rejected
+RE4j      | echo "<<WORKFLOW_RESET_FROM_write_tests: aaa>>"                   | RESET_FROM rejected
+TABLE
+
+# Test RE4f (boundary pass): exactly-3-char reason accepted → write_tests becomes pending (3-char minimum boundary)
+REPO=$(setup_repo)
+write_state "test-session" "$(ALL_COMPLETE_JSON test-session)"
+RE4F_JSON=$(build_reset_json 'echo "<<WORKFLOW_RESET_FROM_write_tests: abc>>"')
+run_mark_hook "$REPO" "$RE4F_JSON" >/dev/null
+expect_state_step "RE4f. 3-char reason 'abc' → write_tests=pending (boundary accepts)" "test-session" "write_tests" "pending"
+
+# SKIPPED: reason field carrying $(cmd) / backtick command substitution
+# Because: hook matches the command string via regex; no eval path exists in workflow-mark
+# L3 gap: shell metachars in model-emitted reason reaching a real Claude Code session's Bash tool
