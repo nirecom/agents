@@ -78,6 +78,24 @@ mock_sentinel_for_scenario() {
   esac
 }
 
+# Helper: emit the bare parent issue number for the given sub-issue <N>, per
+# scenario — the value `--jq '.data.repository.issue.parent.number // empty'`
+# would yield. Empty string == "no parent". Mirrors what each scenario's REST
+# `--jq .parent.number` arm used to return before parent detection moved to
+# GraphQL (bin/github-issues/lib/parent-number.sh). SSOT for both forms.
+mock_parent_number_for_scenario() {
+  local n="$1"
+  case "$SCENARIO" in
+    parent_42)
+      # parent-body-update.sh: sub-issue 42 has parent 99; others none.
+      [ "$n" = "42" ] && echo "99"
+      ;;
+    *)
+      : # every other scenario simulated "no parent" (empty REST output)
+      ;;
+  esac
+}
+
 # Helper: emit the resolved-by comment for the given hash, when present.
 mock_resolved_by_for_scenario() {
   local hash="$1"
@@ -95,6 +113,17 @@ mock_resolved_by_for_scenario() {
 
 # Cross-scenario dispatch: any --jq invocation we recognize is handled here.
 case "$ARGS" in
+  # Parent-issue detection via GraphQL (bin/github-issues/lib/parent-number.sh):
+  # `gh api graphql -f query="{ ... issue(number: N) { parent { number } } }"
+  #  --jq .data.repository.issue.parent.number // empty`
+  # Extract N from the query and defer to the same per-scenario logic the old
+  # REST `--jq .parent.number` arms used. Handled cross-scenario so every
+  # scenario answers the GraphQL form (nothing escapes to the network).
+  "api graphql "*"issue(number: "*"parent { number }"*)
+    GQL_N=$(printf '%s' "$ARGS" | sed -n 's/.*issue(number: \([0-9]*\)).*/\1/p')
+    mock_parent_number_for_scenario "$GQL_N"
+    exit 0
+    ;;
   # parent-body-update.sh meta-label guard (issue #708):
   # `gh api repos/OWNER/REPO/issues/PARENT --jq 'any(.labels[].name; . == "meta")'`
   # Controlled by GH_META_LABEL:

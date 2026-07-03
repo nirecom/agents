@@ -59,6 +59,18 @@ case "$ARGS" in
   auth\ status*)
     echo "Token scopes: 'gist', 'project', 'read:org', 'repo'"
     exit 0 ;;
+  api\ graphql\ *issue\(number:\ *parent\ \{\ number\ \}*)
+    # GraphQL parent detection (bin/github-issues/lib/parent-number.sh):
+    # extract N from `issue(number: N)` and read the SAME env vars as the REST arm.
+    INUM=$(echo "$ARGS" | sed -n 's/.*issue(number: \([0-9]*\)).*/\1/p')
+    eval "ABSENT=\${GH_MOCK_PARENT_ABSENT_${INUM}:-0}"
+    if [ "$ABSENT" = "1" ]; then
+        echo ""
+        exit 0
+    fi
+    eval "PNUM=\${GH_MOCK_PARENT_NUM_${INUM}:-}"
+    echo "$PNUM"
+    exit 0 ;;
   api\ repos/*/issues/*\ --jq*)
     # api repos/<owner>/<repo>/issues/<N> --jq .parent.number // empty
     # Extract N from the second arg's last path component.
@@ -274,7 +286,9 @@ done
 export GH_MOCK_PARENT_NUM_950=949
 # GH_MOCK_STATE_949 intentionally unset — depth limit must fire before reaching it.
 STDERR_OUT="$TMP/ar9-stderr.txt"
-run_with_timeout 30 bash "$TARGET" nirecom/agents 1000 >/dev/null 2>"$STDERR_OUT"
+# 51-deep chain spawns gh ~3x/level; on Windows process-spawn cost pushes the
+# full traversal past 30s. Allow 90s (still under the 120s suite harness cap).
+run_with_timeout 90 bash "$TARGET" nirecom/agents 1000 >/dev/null 2>"$STDERR_OUT"
 RC=$?
 if [ "$RC" -eq 0 ] && grep -qi "depth limit" "$STDERR_OUT" 2>/dev/null; then
     pass "AR9: depth limit → WARN on stderr, fail-open exit 0"

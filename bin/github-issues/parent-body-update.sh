@@ -16,6 +16,8 @@
 
 set -uo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/lib/parent-number.sh"
+
 if [ $# -lt 2 ]; then
     echo "Error: usage: parent-body-update.sh <owner/repo> <N>" >&2
     exit 1
@@ -29,7 +31,7 @@ if ! printf '%s' "$N" | grep -qE '^[0-9]+$'; then
     exit 1
 fi
 
-PARENT=$(gh api "repos/${REPO}/issues/${N}" --jq '.parent.number // empty')
+PARENT=$(github_parent_number "$REPO" "$N")
 if [ -z "$PARENT" ]; then
     exit 0
 fi

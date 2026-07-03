@@ -10,6 +10,8 @@
 
 set -uo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/lib/parent-number.sh"
+
 if [ $# -lt 2 ]; then
     echo "Error: usage: parent-close-proposal-prepare.sh <owner/repo> <N>" >&2
     exit 2
@@ -28,7 +30,7 @@ if ! printf '%s' "$N" | grep -qE '^[0-9]+$'; then
     exit 2
 fi
 
-PARENT=$(gh api "repos/$REPO/issues/$N" --jq '.parent.number // empty' 2>/dev/null)
+PARENT=$(github_parent_number "$REPO" "$N")
 if [ -z "$PARENT" ]; then
     exit 1
 fi
