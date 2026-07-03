@@ -17,6 +17,7 @@ cleanup_counter() {
   local rc=$1
   case "$rc" in
     0|2|4) rm -f "$ROUND_FILE" ;;
+    # exit 1 and 5: keep ROUND_FILE — loop continues
   esac
   return "$rc"
 }
@@ -36,6 +37,10 @@ for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
   p="${!v:-}"
   if [[ -n "$p" && -s "$p" ]]; then args+=(--context "$p"); fi
 done
+RISK_FILE="$PLANS_DIR/$SESSION_ID-outline-risk-signal.txt"
+if [[ -s "$RISK_FILE" ]]; then
+  args+=(--risk-signal "$(head -n1 "$RISK_FILE")")
+fi
 RC=0
 "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
 cleanup_counter "$RC" || true

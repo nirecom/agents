@@ -4,15 +4,16 @@
 # + step d (verdict parse) of skills/_shared/codex-review-loop.md.
 #
 # Exit codes (see skills/_shared/codex-review-loop.md for SSOT table):
-#   0 — APPROVED
+#   0 — APPROVED (or silent LAND absorbed as approved)
 #   1 — NON_APPROVED_VERDICT (NEEDS_REVISION / MISSING_ALTERNATIVE:)
-#   2 — FAILED — round cap reached
+#   2 — ESCALATE (risk signal present at budget ceiling)
 #   3 — codex CLI unusable (SKIPPED / FAILED-other / verdict malformed)
 #       -> caller silently falls back to REVIEWER_AGENT subagent
 #   4 — wrapper / config / parser failure (unset AGENTS_CONFIG_DIR,
 #       missing core-principles.md, missing arg, missing option value,
 #       missing binaries, unrecognized status header, etc.)
 #       -> caller MUST halt with blocking error; do NOT fall back.
+#   5 — AUTO_EXTEND (budget available; caller increments EXTENSIONS_USED and re-enters)
 set -uo pipefail
 
 die() {
@@ -49,6 +50,7 @@ ROUND=""
 LEDGER_OVERRIDE=""
 EXTRA_CTX=()
 REPO_ROOT_ARG=""
+RISK_SIGNAL=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -89,6 +91,9 @@ while [[ $# -gt 0 ]]; do
     --repo-root)
       require_value "--repo-root" "${2:-}"
       REPO_ROOT_ARG="$2"; shift 2 ;;
+    --risk-signal)
+      require_value "--risk-signal" "${2:-}"
+      RISK_SIGNAL="$2"; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -373,7 +378,10 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
     echo "run-codex-review-loop: review-loop-verdict not found or not executable: $VERDICT_BIN" >&2
     exit 4
   }
-  VERDICT_DECISION=$("$VERDICT_BIN" "$ROUND" "$HIGH_N" "$MED_N" "$LOW_N")
+  BUDGET_REMAINING=$(( MAX_EXT - EXT_USED ))
+  VERDICT_ARGS=("$ROUND" "$HIGH_N" "$MED_N" "$LOW_N" "--budget-remaining" "$BUDGET_REMAINING")
+  [[ -n "$RISK_SIGNAL" ]] && VERDICT_ARGS+=("--risk-signal" "$RISK_SIGNAL")
+  VERDICT_DECISION=$("$VERDICT_BIN" "${VERDICT_ARGS[@]}")
   VERDICT_RC=$?
   : "${VERDICT_DECISION:=}"
 
@@ -402,8 +410,17 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]]) ]]; then
       FINAL_EXIT=2
       ;;
     3)
+      # LAND: silent land — absorbed as approved
+      rm -f "$LEDGER"
+      FINAL_EXIT=0
+      ;;
+    4)
       echo "run-codex-review-loop: review-loop-verdict argument error (round=$ROUND high=$HIGH_N med=$MED_N low=$LOW_N)" >&2
       exit 4
+      ;;
+    5)
+      # AUTO_EXTEND: keep ledger — loop continues
+      FINAL_EXIT=5
       ;;
     *)
       echo "run-codex-review-loop: review-loop-verdict unexpected exit: $VERDICT_RC" >&2
