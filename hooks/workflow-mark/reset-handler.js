@@ -1,5 +1,5 @@
 "use strict";
-// Handles RESET_FROM_<step> sentinels, which roll back workflow state to a
+// Handles RESET_FROM_{step} sentinels, which roll back workflow state to a
 // specified step (marking that step and all subsequent steps as pending).
 
 const { validateSkipReason } = require("./skip-reason");
@@ -15,7 +15,7 @@ function handle(ctx) {
   if (!resetMatch && RESET_FROM_LOOKSLIKE_RE.test(cmd)) {
     pushMessage(
       `workflow-mark: malformed RESET_FROM — ` +
-        `expected: echo "<<WORKFLOW_RESET_FROM_<step>: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>" ` +
         `(reason must be >=3 non-space chars, no '>')`
     );
     return true;
@@ -29,7 +29,7 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: RESET_FROM rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: <better reason>>>"`
+          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: {better reason}>>"`
       );
       return true;
     }
@@ -46,7 +46,7 @@ function handle(ctx) {
     if (!sessionId) {
       pushMessage(
         `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
-          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: <reason>>>"`
+          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: {reason}>>"`
       );
       return true;
     }

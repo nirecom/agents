@@ -48,7 +48,7 @@ See `docs/security-policy.md` for the full pattern list.
   `docs/history.md`, or refresh the user-visible description in root `README.md`.
   Replaces `check-docs-updated.js` and `check-tests-updated.js`
 - `workflow-mark.js` (PostToolUse) — intercepts `echo "<<WORKFLOW_MARK_STEP_step_status>>"` and
-  `echo "<<WORKFLOW_RESET_FROM_step: reason>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
+  `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` via strict regex on `tool_input.command`. Supports `&&`-chained
   sentinel commands (all-or-nothing: any non-sentinel part rejects the whole command). Step sequencing
   is next-step-driven: the model queries `bin/workflow/next-step` after each completion rather than
   receiving a static prose hint
