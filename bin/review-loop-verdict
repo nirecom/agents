@@ -1,28 +1,47 @@
 #!/usr/bin/env bash
 # bin/review-loop-verdict
-# Computes the verdict decision (APPROVED / CONTINUE / ESCALATE) for the
-# planner-reviewer loop based on round number and per-severity residual counts.
+# Computes the verdict decision for the planner-reviewer loop based on round
+# number, per-severity residual counts, budget, and optional risk signal.
 #
 # Usage: review-loop-verdict <round> <high> <medium> <low>
+#                            [--budget-remaining N] [--risk-signal <value>]
 #
-# Exit codes:
+# Exit codes (internal — consumed by run-codex-review-loop):
 #   0 — APPROVED
 #   1 — CONTINUE
 #   2 — ESCALATE
-#   3 — argument error
+#   3 — LAND (silent land; run-codex-review-loop maps this to public exit 0)
+#   4 — argument error
+#   5 — AUTO_EXTEND
 set -euo pipefail
 
 die() {
   echo "review-loop-verdict: $1" >&2
-  exit 3
+  exit 4
 }
 
-[[ $# -eq 4 ]] || die "expected 4 args (round high medium low), got $#"
+[[ $# -ge 4 ]] || die "expected at least 4 args (round high medium low), got $#"
 
 ROUND="$1"
 HIGH="$2"
 MED="$3"
 LOW="$4"
+shift 4
+
+BUDGET_REMAINING=""
+RISK_SIGNAL=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --budget-remaining)
+      [[ $# -ge 2 ]] || die "--budget-remaining requires a value"
+      BUDGET_REMAINING="$2"; shift 2 ;;
+    --risk-signal)
+      [[ $# -ge 2 ]] || die "--risk-signal requires a value"
+      RISK_SIGNAL="$2"; shift 2 ;;
+    *) die "unknown flag: $1" ;;
+  esac
+done
 
 is_nonneg_int() { [[ "$1" =~ ^(0|[1-9][0-9]*)$ ]]; }
 
@@ -34,10 +53,14 @@ is_nonneg_int "$LOW"   || die "low must be a non-negative integer: $LOW"
 [[ "$ROUND" -ge 1 ]] || die "round must be >= 1: $ROUND"
 
 # Verdict matrix (priority order):
-#   high == 0 && medium == 0          -> APPROVED   (LOW alone never blocks)
-#   round < 2 && (high>0 || med>0)    -> CONTINUE
-#   round >= 2 && high > 0            -> ESCALATE
-#   round >= 2 && high == 0 && med>0  -> APPROVED   (MEDIUM downgrades at cap)
+#   1. high == 0 && medium == 0          -> APPROVED   (LOW alone never blocks)
+#   2. round < 2 && (high>0 || med>0)    -> CONTINUE
+#   3. round >= 2 && high > 0 && budget > 0 -> AUTO_EXTEND
+#   4. round >= 2 && high > 0 && budget == 0 || budget empty:
+#        risk signal present             -> ESCALATE
+#        no risk signal                  -> LAND
+#   5. round >= 2 && high == 0 && med>0  -> APPROVED   (MEDIUM downgrades at cap)
+
 if [[ "$HIGH" -eq 0 && "$MED" -eq 0 ]]; then
   printf 'APPROVED\n'
   exit 0
@@ -50,8 +73,17 @@ fi
 
 # round >= 2
 if [[ "$HIGH" -gt 0 ]]; then
-  printf 'ESCALATE\n'
-  exit 2
+  if [[ "$BUDGET_REMAINING" =~ ^[0-9]+$ && "$BUDGET_REMAINING" -gt 0 ]]; then
+    printf 'AUTO_EXTEND\n'
+    exit 5
+  fi
+  # budget == 0 or empty (conservative ceiling)
+  if [[ -n "$RISK_SIGNAL" ]]; then
+    printf 'ESCALATE\n'
+    exit 2
+  fi
+  printf 'LAND\n'
+  exit 3
 fi
 
 # round >= 2 && high == 0 && med > 0
