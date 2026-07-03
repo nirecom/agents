@@ -57,9 +57,13 @@ See `docs/security-policy.md` for the full pattern list.
   plan artifact written under `~/.workflow-plans/` (non-draft direct children:
   `*-(intent|outline|detail).md`). When the corresponding `CONFIRM_<STEP>` flag is off, the
   diff is suppressed (#445). Draft artifacts (`drafts/` subdirectory) are always suppressed.
-- `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — auto-marks `run_tests` based on Bash exit
-  code. Detects test runner commands by path pattern (`tests/`) and known runner names. exit 0 →
-  `complete`; exit ≠ 0 → `pending` (last-run-wins). Sentinel echoes and read-only commands excluded
+- `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
+  `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
+  Detects test runner commands by path pattern (`tests/`) and known runner names. `complete` requires all
+  of: run-all.sh provenance, exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and
+  `write_tests` already satisfied). exit ≠ 0, or any test command lacking a valid contract (ad-hoc runner,
+  piped/compound run-all.sh, no-match), demotes `run_tests` to `pending`. Sentinel echoes and read-only
+  commands excluded
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
