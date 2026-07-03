@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Sentinel template placeholder and bracket-count review.
+# Usage: review-sentinel-templates [--base <ref>] [--all]
+#
+# Always emits one of:
+#   ## Sentinel Template Review: PERFORMED
+#   ## Sentinel Template Review: PERFORMED (all-scan mode)
+#   ## Sentinel Template Review: SKIPPED — <reason>
+#
+# Exits 1 when any HARD finding exists in diff mode. --all mode always exits 0.
+
+set -uo pipefail
+
+HARD_HIT=0
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Sentinel Template Review: SKIPPED (--base requires an argument)"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Sentinel Template Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+TARGET_GLOBS=(
+  "rules/*.md"
+  "skills/**/*.md"
+  "skills/**/*.sh"
+  "agents/*.md"
+  "hooks/**/*.js"
+  "docs/architecture/**/*.md"
+  "CLAUDE.md"
+)
+
+collect_all_targets() {
+  find rules -maxdepth 1 -name "*.md" 2>/dev/null || true
+  find skills -name "*.md" 2>/dev/null || true
+  find skills -name "*.sh" 2>/dev/null || true
+  find agents -maxdepth 1 -name "*.md" 2>/dev/null || true
+  find hooks -name "*.js" 2>/dev/null || true
+  find docs/architecture -name "*.md" 2>/dev/null || true
+  [ -f "CLAUDE.md" ] && echo "CLAUDE.md" || true
+}
+
+matches_target_globs() {
+  local f="$1"
+  case "$f" in
+    rules/*.md) return 0 ;;
+    skills/*.md|skills/**/*.md) return 0 ;;
+    skills/*.sh|skills/**/*.sh) return 0 ;;
+    agents/*.md) return 0 ;;
+    hooks/*.js|hooks/**/*.js) return 0 ;;
+    docs/architecture/*.md|docs/architecture/**/*.md) return 0 ;;
+    CLAUDE.md) return 0 ;;
+  esac
+  # extended pattern matching for nested paths
+  if [[ "$f" == skills/* && ( "$f" == *.md || "$f" == *.sh ) ]]; then return 0; fi
+  if [[ "$f" == hooks/* && "$f" == *.js ]]; then return 0; fi
+  if [[ "$f" == docs/architecture/* && "$f" == *.md ]]; then return 0; fi
+  return 1
+}
+
+scan_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return
+  local lineno=0
+  while IFS= read -r line; do
+    lineno=$(( lineno + 1 ))
+    # Pattern 1: angle-bracket placeholder in sentinel payload
+    # Check if line contains a sentinel frame (<<WORKFLOW_...:)
+    if printf '%s\n' "$line" | grep -qE '<<[A-Z_{}]+:'; then
+      # Extract payload after the ':'
+      payload=$(printf '%s\n' "$line" | sed 's/^.*<<[A-Z_{}]* *://')
+      # Check if payload contains <word> pattern (angle-bracket placeholder)
+      if echo "$payload" | grep -qE '<[a-zA-Z0-9_ '"'"'-]+>'; then
+        echo "HARD: $file:$lineno — angle-bracket placeholder in sentinel payload: $(printf '%s\n' "$line" | head -c 120)"
+        HARD_HIT=1
+      fi
+    fi
+    # Pattern 2: 2-bracket miscount — sentinel frame ending with >>" or >>> followed by no >
+    # Looks for <<WORKFLOW_...: payload>>" (only 2 closing >) instead of >>>
+    # Uses ERE (grep -E) for portability — no PCRE (-P) needed
+    if printf '%s\n' "$line" | grep -qE '<<WORKFLOW_[A-Z_{}]+:[^>]*>>"'; then
+      echo "HARD: $file:$lineno — 2-bracket miscount in sentinel: $(printf '%s\n' "$line" | head -c 120)"
+      HARD_HIT=1
+    fi
+  done < "$file"
+}
+
+report_findings() {
+  local targets="$1"
+  local count
+  count=$(printf '%s\n' "$targets" | grep -c '[^[:space:]]' || echo 0)
+  echo ""
+  echo "Files scanned: $count"
+  echo ""
+  local found_any=0
+  while IFS= read -r file; do
+    [[ -z "$file" || ! -f "$file" ]] && continue
+    local before=$HARD_HIT
+    scan_file "$file"
+    if [[ $HARD_HIT -gt $before ]]; then
+      found_any=1
+    fi
+  done <<< "$targets"
+  if [[ $found_any -eq 0 ]]; then
+    echo "No findings."
+  fi
+  echo ""
+}
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  TARGETS=$(collect_all_targets | sort -u | grep -v '^$' || true)
+  if [[ -z "$TARGETS" ]]; then
+    echo "## Sentinel Template Review: SKIPPED — no sentinel template files found"; exit 0
+  fi
+  echo "## Sentinel Template Review: PERFORMED (all-scan mode)"
+  report_findings "$TARGETS"
+  exit 0
+fi
+
+# Diff mode
+BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+  echo "## Sentinel Template Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+}
+
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+if [[ -s "$ERR" ]]; then
+  echo "## Sentinel Template Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+ALL_CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
+
+TARGETS=""
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  if matches_target_globs "$f"; then
+    TARGETS=$(printf '%s\n%s' "$TARGETS" "$f")
+  fi
+done <<< "$ALL_CHANGED"
+TARGETS=$(printf '%s\n' "$TARGETS" | grep -v '^$' | sort -u || true)
+
+if [[ -z "$TARGETS" ]]; then
+  echo "## Sentinel Template Review: SKIPPED — no sentinel template files changed"; exit 0
+fi
+
+echo "## Sentinel Template Review: PERFORMED"
+report_findings "$TARGETS"
+
+[[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0

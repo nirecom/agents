@@ -26,7 +26,7 @@ function handle(ctx) {
   if (enforceOffLooksLike) {
     pushMessage(
       `workflow-mark: malformed ENFORCE_WORKTREE_OFF — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: REASON>>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;
@@ -87,7 +87,7 @@ function handle(ctx) {
   if (enforceOnLooksLike) {
     pushMessage(
       `workflow-mark: malformed ENFORCE_WORKTREE_ON — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: REASON>>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;
@@ -138,7 +138,7 @@ function handle(ctx) {
   if (workflowOffLooksLike) {
     pushMessage(
       `workflow-mark: malformed ENFORCE_WORKFLOW_OFF — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: REASON>>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;
@@ -181,7 +181,7 @@ function handle(ctx) {
       } catch (_) { /* fail-open */ }
       pushMessage(
         `workflow-mark: ENFORCE_WORKFLOW session override applied (marker: ${markerPath}). ` +
-          `Restore with: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>"`
+          `Restore with: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>>"`
       );
     } catch (e) {
       signalFatal(
@@ -198,7 +198,7 @@ function handle(ctx) {
   if (workflowOnLooksLike) {
     pushMessage(
       `workflow-mark: malformed ENFORCE_WORKFLOW_ON — ` +
-        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: REASON>>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;
@@ -284,7 +284,7 @@ function handle(ctx) {
   if (issueCloseVerifiedLooksLike) {
     pushMessage(
       `workflow-mark: malformed ISSUE_CLOSE_VERIFIED — ` +
-        `expected: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED: REASON>>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;
@@ -323,7 +323,7 @@ function handle(ctx) {
       fs.renameSync(tmp, markerPath);
       pushMessage(
         `workflow-mark: ISSUE_CLOSE_VERIFIED session override applied (marker: ${markerPath}). ` +
-          `End with: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: <reason>>>"`
+          `End with: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: {reason}>>>"`
       );
     } catch (e) {
       signalFatal(
@@ -340,7 +340,7 @@ function handle(ctx) {
   if (issueCloseVerifiedEndLooksLike) {
     pushMessage(
       `workflow-mark: malformed ISSUE_CLOSE_VERIFIED_END — ` +
-        `expected: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: REASON>>" ` +
+        `expected: echo "<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: REASON>>>" ` +
         `(reason: >=3 non-space chars, no '>', not a placeholder)`
     );
     return true;

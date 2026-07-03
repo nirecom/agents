@@ -6,10 +6,10 @@ Session-scoped escape hatch that suspends workflow enforcement for the current C
 
 | Sentinel | Permission | Effect |
 |---|---|---|
-| `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>` | **ask** (requires user approval) | Creates `${sid}.workflow-off` marker; suspends enforcement |
-| `<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>` | **allow** (auto-approved) | Removes marker; restores enforcement |
+| `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>>` | **ask** (requires user approval) | Creates `${sid}.workflow-off` marker; suspends enforcement |
+| `<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>>` | **allow** (auto-approved) | Removes marker; restores enforcement |
 
-The `<reason>` field is mandatory and non-empty. Bare sentinel form (no `: <reason>`) is rejected.
+The `{reason}` field is mandatory and non-empty. Bare sentinel form (no `: {reason}`) is rejected.
 
 ## What is bypassed when WORKFLOW_OFF is active
 
@@ -40,7 +40,7 @@ Setting WORKFLOW_OFF / WORKTREE_OFF to unblock a single command disables enforce
 
 ## Restoring enforcement
 
-Run `echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>"` to restore enforcement. This is auto-allowed (no approval needed). Enforcement also restores automatically in the next session — markers are session-scoped.
+Run `echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: done>>>"` to restore enforcement. This is auto-allowed (no approval needed). Enforcement also restores automatically in the next session — markers are session-scoped.
 
 ## Scope
 

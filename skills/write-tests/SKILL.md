@@ -57,7 +57,7 @@ After completing this skill:
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
 If tests are genuinely not needed for this change:
-1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"`
+1. Run: `echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>>"`
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
 ## Rules

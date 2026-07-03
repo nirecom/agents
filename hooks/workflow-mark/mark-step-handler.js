@@ -19,7 +19,7 @@ function handle(ctx) {
     if (stepName === "user_verification") {
       pushMessage(
         `workflow-mark: user_verification NOT recorded — MARK_STEP sentinel is rejected for this step. ` +
-          `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: <reason>>>" ` +
+          `Ask the user for commit approval via: echo "<<WORKFLOW_USER_VERIFIED: {reason}>>>" ` +
           `(reason: >=3 non-space chars, no '>', not a placeholder)`
       );
       return true;
@@ -32,7 +32,7 @@ function handle(ctx) {
       pushMessage(
         `workflow-mark: review_tests NOT recorded — MARK_STEP not accepted for this step. ` +
           `Invoke /review-tests skill (which auto-computes the staged-tests token) ` +
-          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>"`
+          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>>"`
       );
       return true;
     }
@@ -42,7 +42,7 @@ function handle(ctx) {
       pushMessage(
         `workflow-mark: write_tests NOT recorded — MARK_STEP not accepted for this step. ` +
           `Stage tests/ changes (run /write-tests then git add tests/) ` +
-          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>"` +
+          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>>"` +
           ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
       );
       return true;

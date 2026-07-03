@@ -8,7 +8,7 @@ IMPORTANT: Interactive session required. Hard-fail (hard-fail with a diagnostic 
 
 ## Skip Conditions
 
-Emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: reason>>"` when a prior `*-intent.md` covers the request, or the task is self-contained and unambiguous.
+Emit `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: {reason}>>>"` when a prior `*-intent.md` covers the request, or the task is self-contained and unambiguous.
 
 ## Procedure
 
@@ -76,7 +76,7 @@ CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS
      Completion backfills `- #<N>: <title>` after a successful `gh issue create`. The empty placeholder satisfies `assemble-mandatory.sh`'s "heading must be present" invariant.
    - **context.md missing or title line absent**: write `- #<N>: (title unavailable)`.
 
-CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: <one-line summary>>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
+CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
 
 CI-6. This step exits exclusively via the Completion section below — the skill terminates only after CI-C1 emits the completion sentinel.
 

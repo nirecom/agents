@@ -23,7 +23,7 @@ function handle(ctx) {
   if (branchingDecidedLooksLike) {
     pushMessage(
       `workflow-mark: malformed BRANCHING_COMPLETE — ` +
-        `expected: echo "<<WORKFLOW_BRANCHING_COMPLETE: DECISION>>" ` +
+        `expected: echo "<<WORKFLOW_BRANCHING_COMPLETE: DECISION>>>" ` +
         `(decision must be >=3 non-space chars, no '>')`
     );
     return true;
@@ -33,14 +33,14 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: BRANCHING_COMPLETE rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: <decision>>"`
+          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: {decision}>>>"`
       );
       return true;
     }
     if (!sessionId) {
       signalFatal(
         `workflow-mark: could not resolve session_id — branching_complete NOT recorded. ` +
-          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: ${v.reason}>>"`
+          `Re-run: echo "<<WORKFLOW_BRANCHING_COMPLETE: ${v.reason}>>>"`
       );
       return true;
     }

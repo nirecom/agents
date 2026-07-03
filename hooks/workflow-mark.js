@@ -6,14 +6,14 @@
 // independently):
 //   echo "<<WORKFLOW_MARK_STEP_<step>_<status>>>"   — mark a step
 //   echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>" — reset state from a step (reason mandatory)
-//   echo "<<WORKFLOW_USER_VERIFIED: <reason>>>"      — record user verification (reason mandatory)
-//   echo "<<WORKFLOW_{RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED: <reason>>"
+//   echo "<<WORKFLOW_USER_VERIFIED: {reason}>>>"      — record user verification (reason mandatory)
+//   echo "<<WORKFLOW_{RESEARCH,OUTLINE,DETAIL,WRITE_TESTS}_NOT_NEEDED: {reason}>>>"
 //
 // Bypasses CLAUDE_ENV_FILE propagation issue in Bash subprocesses (Anthropic bug #27987).
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: <reason>>>"  — session-scoped ENFORCE_WORKTREE bypass (reason mandatory)
-//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
-//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: <reason>>>"  — session-scoped ENFORCE_WORKFLOW bypass (reason mandatory)
-//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: <reason>>>"   — restore enforcement (delete marker; reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: {reason}>>>"  — session-scoped ENFORCE_WORKTREE bypass (reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKTREE_ON: {reason}>>>"   — restore enforcement (delete marker; reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: {reason}>>>"  — session-scoped ENFORCE_WORKFLOW bypass (reason mandatory)
+//   echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>>"   — restore enforcement (delete marker; reason mandatory)
 //
 // Dispatch implementation is split across sibling modules under hooks/workflow-mark/:
 //   skip-reason / not-needed-handlers / clarify-intent-complete-handler /

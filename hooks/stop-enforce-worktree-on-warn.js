@@ -78,7 +78,7 @@ if (require.main === module) {
 
   if (lastOffIdx >= 0 && (lastOnIdx < 0 || lastOffIdx > lastOnIdx)) {
     const advisory =
-      "[Workflow] ENFORCE_WORKTREE_OFF was proposed but the matching ENFORCE_WORKTREE_ON sentinel was not Bash-emitted before session stop. Run: echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: <reason>>>\" to restore enforcement explicitly, or let the next session restore it automatically.";
+      "[Workflow] ENFORCE_WORKTREE_OFF was proposed but the matching ENFORCE_WORKTREE_ON sentinel was not Bash-emitted before session stop. Run: echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: {reason}>>>\" to restore enforcement explicitly, or let the next session restore it automatically.";
     try {
       process.stdout.write(JSON.stringify({ additionalContext: advisory }) + "\n");
     } catch (_) {}

@@ -10,7 +10,7 @@ const { getPathSegments } = require("./lib/path-match");
 const DENY_MESSAGE =
   "write_tests step is still pending. Run /write-tests first — it spawns a subagent that writes tests/ autonomously. " +
   "If tests are genuinely not needed, mark the step skipped with: " +
-  'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <reason>>>"';
+  'echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>>"';
 
 module.exports = { DENY_MESSAGE };
 

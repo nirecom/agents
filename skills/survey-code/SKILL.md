@@ -91,4 +91,4 @@ SVC-7. Present findings for user review before proceeding to plan.
 Skip this skill when the change target is already known (single file/function).
 
 If research is genuinely not needed for this task (typo fix, docs-only change):
-1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <reason>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')
+1. Run: `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>>"` (reason must be ≥3 non-space chars, not a placeholder like "none"/"skip", and contain no '>')

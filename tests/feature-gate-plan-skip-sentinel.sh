@@ -4,7 +4,7 @@
 # Tests for hooks/gate-plan-skip-sentinel.js (PreToolUse hook).
 #
 # Behavior contract:
-#   When CONFIRM_OUTLINE=off, echo of <<WORKFLOW_OUTLINE_NOT_NEEDED: <reason>>>
+#   When CONFIRM_OUTLINE=off, echo of <<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>>
 #   is auto-approved via permissionDecision=allow. Same for CONFIRM_DETAIL/
 #   DETAIL_NOT_NEEDED and CONFIRM_TESTS/WRITE_TESTS_NOT_NEEDED.
 #   All other inputs pass through (empty JSON output → no decision).
