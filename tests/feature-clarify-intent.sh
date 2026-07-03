@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
-# Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md
+# tests/feature-clarify-intent.sh
+# Tests: agents/lib/triage-legacy-compat.md, skills/clarify-intent/SKILL.md, skills/clarify-intent/reference/aggregate-class-members.md, skills/clarify-intent/reference/class-members-proposal.md, skills/_shared/judge-decomposition.md, skills/clarify-intent/scripts/precheck-companions.sh
 # Tags: workflow, clarify-intent, planning, intent, plans, scope:common
 # L3 gap (what this test does NOT catch):
-# - None: these are static SKILL.md content assertions; no real claude -p session needed.
-# Closest-to-action mitigation: N/A (content assertion; no risk category applies).
-# Contract tests for clarify-intent skill (Stage 1: interactive user interview)
-# Target files (expected to FAIL until implementation is complete):
-#   $HOME/.claude/skills/clarify-intent/SKILL.md
+# - Whether clarify-intent behaves correctly in a live claude -p session
+#   (static content assertions + mocked script behavior only).
+# Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
+# bin/check-verification-gate.sh category: skill-orchestration.
+#
+# Dispatch + aggregate entrypoint for the feature-clarify-intent split suite.
+# All logic lives in tests/feature-clarify-intent/ per rules/coding/file-split.md
+# Pattern A (file crossed the 500-line HARD cap when the #1048 companion
+# precheck contracts were added). Each split group also runs standalone.
+#
+#   static-series.sh            — SKILL.md static contracts (N/W/G/E/Ed/M/P)
+#   companion-precheck-series.sh — #1048 companion precheck + rework contracts
+#
 # Exit 0 always — this is a contract test, not a CI gate yet.
 
 # Timeout guard: if running without the sentinel, re-exec under timeout
-if [ -z "$_TIMEOUT_WRAPPED" ]; then
+if [ -z "${_TIMEOUT_WRAPPED:-}" ]; then
     export _TIMEOUT_WRAPPED=1
     if command -v timeout >/dev/null 2>&1; then
         exec timeout 120 bash "$0" "$@"
@@ -19,349 +28,47 @@ if [ -z "$_TIMEOUT_WRAPPED" ]; then
     fi
 fi
 
-SKILL_MD="$HOME/.claude/skills/clarify-intent/SKILL.md"
-# Note: $HOME/.claude/skills/ is the *skill code* location and is unaffected
-# by the workflow-plans-dir migration. Only planning artifact output paths
-# (formerly ~/.claude/plans/) move to ~/.workflow-plans/.
+set -uo pipefail
 
-PASS=0
-FAIL=0
+SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-clarify-intent"
 
-pass() {
-    echo "PASS: $1"
-    PASS=$((PASS + 1))
-}
+SPLIT_GROUPS=(
+    "static-series.sh"
+    "companion-precheck-series.sh"
+)
 
-fail() {
-    echo "FAIL: $1"
-    FAIL=$((FAIL + 1))
-}
+TOTAL_PASS=0
+TOTAL_FAIL=0
 
-# assert_contains FILE PATTERN DESCRIPTION
-# Greps FILE for PATTERN (extended regex). Prints PASS/FAIL.
-assert_contains() {
-    local file="$1"
-    local pattern="$2"
-    local desc="$3"
-
-    if [ ! -f "$file" ]; then
-        fail "$desc (file not found: $file)"
-        return 1
+for group in "${SPLIT_GROUPS[@]}"; do
+    script="$SPLIT_DIR/$group"
+    if [ ! -f "$script" ]; then
+        echo "FAIL: split group missing: $script"
+        TOTAL_FAIL=$((TOTAL_FAIL + 1))
+        continue
     fi
 
-    if grep -qE "$pattern" "$file"; then
-        pass "$desc"
-        return 0
+    echo ""
+    echo "═══ $group ═══"
+    out_file="$(mktemp)"
+    bash "$script" 2>&1 | tee "$out_file"
+    rc=${PIPESTATUS[0]}
+
+    results_line="$(grep -E '^Results: [0-9]+ passed, [0-9]+ failed' "$out_file" | tail -1)"
+    if [ -n "$results_line" ]; then
+        g_pass="$(printf '%s' "$results_line" | sed -E 's/^Results: ([0-9]+) passed.*/\1/')"
+        g_fail="$(printf '%s' "$results_line" | sed -E 's/.* ([0-9]+) failed.*/\1/')"
+        TOTAL_PASS=$((TOTAL_PASS + g_pass))
+        TOTAL_FAIL=$((TOTAL_FAIL + g_fail))
     else
-        fail "$desc (pattern not found: $pattern)"
-        return 1
+        echo "WARN: $group emitted no Results line (exit=$rc); counting as 1 failure"
+        TOTAL_FAIL=$((TOTAL_FAIL + 1))
     fi
-}
-
-# assert_absent FILE PATTERN DESCRIPTION
-# Asserts FILE does NOT contain PATTERN. Prints PASS/FAIL.
-assert_absent() {
-    local file="$1"
-    local pattern="$2"
-    local desc="$3"
-
-    if [ ! -f "$file" ]; then
-        fail "$desc (file not found: $file)"
-        return 1
-    fi
-
-    if grep -qE "$pattern" "$file"; then
-        fail "$desc (pattern unexpectedly found: $pattern)"
-        return 1
-    else
-        pass "$desc"
-        return 0
-    fi
-}
-
-echo "=== clarify-intent contract tests ==="
-echo ""
-
-# ---------------------------------------------------------------------------
-# Normal cases
-# ---------------------------------------------------------------------------
-echo "--- Normal ---"
-
-# N1: frontmatter contains name: clarify-intent
-assert_contains "$SKILL_MD" "name:[[:space:]]*clarify-intent" \
-    "N1: frontmatter contains 'name: clarify-intent'"
-
-# N2: interactive or AskUserQuestion appears (interactive context requirement)
-assert_contains "$SKILL_MD" "interactive|AskUserQuestion" \
-    "N2: 'interactive' or 'AskUserQuestion' appears (interactive context requirement)"
-
-# N3: output path ~/.workflow-plans/ or $HOME/.workflow-plans/ mentioned
-assert_contains "$SKILL_MD" '~/.workflow-plans/|\$HOME/.workflow-plans/' \
-    "N3: output path ~/.workflow-plans/ or \$HOME/.workflow-plans/ mentioned"
-
-# N4: <session-id>-intent.md output filename mentioned
-assert_contains "$SKILL_MD" "session.id.*intent\.md|intent\.md" \
-    "N4: session-id intent.md output filename mentioned"
-
-# N5: recommended answer instruction mentioned
-assert_contains "$SKILL_MD" '推奨|recommended|\(推奨\)' \
-    "N5: recommended answer instruction mentioned (推奨 or recommended)"
-
-# N6: 5-round cap mentioned
-assert_contains "$SKILL_MD" "5.*round|round.*5|上限.*5|5.*上限" \
-    "N6: 5-round cap mentioned"
-
-# N7: skip sentinel (WORKFLOW_CLARIFY_INTENT_NOT_NEEDED) referenced
-# plan-skip.md was removed; skip conditions are now inline in the skill.
-assert_contains "$SKILL_MD" "WORKFLOW_CLARIFY_INTENT_NOT_NEEDED" \
-    "N7: skip sentinel WORKFLOW_CLARIFY_INTENT_NOT_NEEDED referenced"
-
-# N8: grill-me / Matt Pocock attribution mentioned
-assert_contains "$SKILL_MD" "grill.me|Matt Pocock|mattpocock" \
-    "N8: grill-me / Matt Pocock attribution mentioned"
-
-# N9: intent.md mentioned in output context
-assert_contains "$SKILL_MD" "intent\.md" \
-    "N9: intent.md mentioned in output context"
-
-echo ""
-# ---------------------------------------------------------------------------
-# WIP-state hookpoint (issue #362)
-# W tests use LOCAL_SKILL_MD (worktree-relative) because $SKILL_MD points to
-# $HOME/.claude/ (deployed/main) which won't have the changes until the PR merges.
-# The feature-workflow-init-routing.sh convention is followed here.
-# ---------------------------------------------------------------------------
-echo "--- WIP-state (issue #362) ---"
-
-LOCAL_SKILL_MD="$(cd "$(dirname "$0")/.." && pwd)/skills/clarify-intent/SKILL.md"
-
-# W1: Completion section references wip-state.sh set for all closes_issues (per-N loop).
-assert_contains "$LOCAL_SKILL_MD" "WIP set for all entries|for each issue N in \`closes_issues\`|wip-state\.sh.*set" \
-    "W1: Completion section references wip-state.sh set for all closes_issues (per-N loop)"
-
-# W2: The wip-state.sh set call appears after the `intent:clarified` add-label
-# instruction (i.e. ordering: label first, then WIP set). Check linearly: the
-# line number of the first 'wip-state.sh' mention must be greater than the
-# first 'intent:clarified' mention.
-if [ ! -f "$LOCAL_SKILL_MD" ]; then
-    fail "W2: ordering check (file not found)"
-else
-    LBL_LN=$(grep -n "intent:clarified" "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
-    WIP_LN=$(grep -n "wip-state\.sh" "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
-    if [ -n "$LBL_LN" ] && [ -n "$WIP_LN" ] && [ "$WIP_LN" -gt "$LBL_LN" ]; then
-        pass "W2: wip-state.sh set follows the intent:clarified add-label step"
-    else
-        fail "W2: wip-state.sh set must come after intent:clarified add-label (lbl_ln=$LBL_LN wip_ln=$WIP_LN)"
-    fi
-fi
-
-# W3: Path C (empty / new issue) also invokes wip-state set <N>.
-# The Path C section must mention wip-state set for the freshly created N.
-if [ ! -f "$LOCAL_SKILL_MD" ]; then
-    fail "W3: Path C wip-state coverage (file not found)"
-else
-    # Two-step check: there must be a "Path C" anchor and a wip-state set
-    # mention; the simplest contract is that the file mentions both "Path C"
-    # and "wip-state.sh set" (in either order).
-    if grep -q "Path C" "$LOCAL_SKILL_MD" && grep -q "wip-state\.sh.*set" "$LOCAL_SKILL_MD"; then
-        pass "W3: Path C (no issue) section + wip-state set both present"
-    else
-        fail "W3: Path C bullet or wip-state set call missing"
-    fi
-fi
-
-# W4: Failure-handling text mentions per-N wip-state failure modes.
-assert_contains "$LOCAL_SKILL_MD" "wip-state set failed for #|wip-state.*setup" \
-    "W4: Completion section documents per-N wip-state failure handling (failed for #<N> / setup hint)"
-
-# W11: Completion WIP loop documents best-effort per-N error policy.
-assert_contains "$LOCAL_SKILL_MD" "best-effort per-N|continue with the remaining entries" \
-    "W11: Completion WIP loop documents best-effort per-N policy"
-
-echo ""
-# ---------------------------------------------------------------------------
-# Guard wiring (issue #449)
-# G tests use LOCAL_SKILL_MD (worktree-relative) — not yet deployed.
-# ---------------------------------------------------------------------------
-echo "--- Guard wiring (issue #449) ---"
-
-# G1: dual invocation eliminated — only 1 'invoke' verb line for make-outline-plan
-# Regex anchored on invocation verb to avoid false-positives from comments/links.
-if [ -f "$LOCAL_SKILL_MD" ]; then
-    COUNT=$(grep -cE '^[[:space:]]*(- )?[Tt]hen invoke (the )?`/?make-outline-plan`' "$LOCAL_SKILL_MD" || true)
-    if [ "$COUNT" -eq 1 ]; then
-        pass "G1: exactly 1 'invoke make-outline-plan' directive (dual invocation eliminated)"
-    else
-        fail "G1: expected 1 invoke directive, got $COUNT (dual invocation present or missing)"
-    fi
-else
-    fail "G1: LOCAL_SKILL_MD not found"
-fi
-
-# G2: the remaining invocation lives below ## Completion (not in Procedure)
-if [ -f "$LOCAL_SKILL_MD" ]; then
-    COMPLETION_LN=$(grep -n '^## Completion' "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
-    INVOKE_LN=$(grep -nE '^[[:space:]]*(- )?[Tt]hen invoke (the )?`/?make-outline-plan`' "$LOCAL_SKILL_MD" | head -1 | cut -d: -f1)
-    if [ -n "$COMPLETION_LN" ] && [ -n "$INVOKE_LN" ] && [ "$INVOKE_LN" -gt "$COMPLETION_LN" ]; then
-        pass "G2: invoke directive is below ## Completion (ln $INVOKE_LN > $COMPLETION_LN)"
-    else
-        fail "G2: invoke directive not found below Completion (completion_ln=$COMPLETION_LN invoke_ln=${INVOKE_LN:-missing})"
-    fi
-else
-    fail "G2: LOCAL_SKILL_MD not found"
-fi
-
-# G3: guard script reference present in SKILL.md
-assert_contains "$LOCAL_SKILL_MD" "check-closes-issues-nonempty\.sh" \
-    "G3: check-closes-issues-nonempty.sh referenced in SKILL.md"
-
-# G4: SSOT pointer (parse-closes-issues.js) present in SKILL.md
-assert_contains "$LOCAL_SKILL_MD" "parse-closes-issues\.js" \
-    "G4: parse-closes-issues.js SSOT pointer present in SKILL.md"
-
-# G5: terminal-only directive in Procedure Step 6
-assert_contains "$LOCAL_SKILL_MD" "exits exclusively via the Completion" \
-    "G5: Procedure Step 6 contains terminal-only directive"
-
-echo ""
-# ---------------------------------------------------------------------------
-# Error cases
-# ---------------------------------------------------------------------------
-echo "--- Error ---"
-
-# E1: hard-fail on non-interactive
-assert_contains "$SKILL_MD" "hard.fail|hard_fail|診断|diagnostic" \
-    "E1: hard-fail on non-interactive mentioned"
-
-# E2: 'do not silently proceed' or '暗黙' prohibition mentioned
-assert_contains "$SKILL_MD" "[Dd]o not silently proceed|暗黙" \
-    "E2: 'do not silently proceed' or '暗黙' prohibition mentioned"
-
-echo ""
-# ---------------------------------------------------------------------------
-# Edge cases
-# ---------------------------------------------------------------------------
-echo "--- Edge ---"
-
-# Ed1: session-id appears in output path context (parameterized output)
-assert_contains "$SKILL_MD" "session.id|session_id" \
-    "Ed1: session-id appears in output path context (parameterized output)"
-
-# Ed2: round limit is specifically 5 — check both "5" and "round" present in file
-if [ ! -f "$SKILL_MD" ]; then
-    fail "Ed2: round limit is specifically 5 (file not found: $SKILL_MD)"
-elif grep -qE "5" "$SKILL_MD" && grep -qE "round" "$SKILL_MD"; then
-    pass "Ed2: round limit is specifically 5 (both '5' and 'round' present in file)"
-else
-    fail "Ed2: round limit is specifically 5 (need both '5' and 'round' in file)"
-fi
-
-echo ""
-# ---------------------------------------------------------------------------
-# Issue #462: Class members — disposition schema and interview design
-# ---------------------------------------------------------------------------
-echo "--- Issue #462: Class members ---"
-
-# Reuse LOCAL_SKILL_MD (worktree-relative path) — N10-N13 target unmerged changes.
-# LOCAL_SKILL_MD is already defined earlier in this file.
-LOCAL_REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-
-# N10: ## Class members mandatory section in intent.md schema
-assert_contains "$LOCAL_SKILL_MD" "Class members" \
-    "N10: '## Class members' mandatory section referenced in clarify-intent SKILL.md"
-
-# N11: multiSelect removed; Accept/Modify 2-choice lib pointer present
-assert_absent "$LOCAL_SKILL_MD" "multiSelect: true" \
-    "N11a: multiSelect:true removed (Class members no longer uses multiSelect UI)"
-assert_contains "$LOCAL_SKILL_MD" "class-members-proposal.md" \
-    "N11b: SKILL.md references class-members-proposal.md lib file"
-
-# N12: triage enum values (MUST, OPTIONAL, NA) replace disposition enum
-assert_contains "$LOCAL_SKILL_MD" "triage: MUST" "N12a: triage: MUST literal present in schema enum"
-assert_contains "$LOCAL_SKILL_MD" "triage: OPTIONAL" "N12b: triage: OPTIONAL literal present in schema enum"
-assert_contains "$LOCAL_SKILL_MD" 'triage: <MUST | OPTIONAL | NA>' "N12c: schema line shows full enum"
-assert_contains "$LOCAL_SKILL_MD" "triage: NA" "N12d: triage: NA literal present in schema enum"
-
-# N13: no cap別枠 wording (class members question is inside the 5-round cap, not extra)
-assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*cap" \
-    "N13: no 'cap別枠' wording — class members question counts within 5-round cap"
-
-# N14–N16: triage schema additions (#555/#556/#557/#582)
-# LOCAL_REPO_ROOT defined above (before N10).
-
-# N15: aggregation procedure in lib file
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/aggregate-class-members.md" \
-    "Deduplicate by" \
-    "N15: aggregate-class-members.md contains dedup step"
-
-# N16: shared triage compat reference exists (SSOT for legacy disposition mapping)
-assert_contains "$LOCAL_REPO_ROOT/agents/lib/triage-legacy-compat.md" \
-    "fix in scope" \
-    "N16: triage-legacy-compat.md documents legacy disposition mapping"
-
-# N17: Phase B / Phase C / Accept proposal / Round budget removed from class-members-proposal.md (#832)
-assert_absent "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \
-    "Accept proposal as-is|Phase B|Phase C|Round budget" \
-    "N17: class-members-proposal.md no longer contains Phase B/C or Accept/Round budget text"
-
-# N18: MUST→OPTIONAL→NA sort directive present in class-members-proposal.md (#832)
-assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/class-members-proposal.md" \
-    "MUST.*OPTIONAL.*NA" \
-    "N18: class-members-proposal.md contains MUST→OPTIONAL→NA sort directive"
-
-# N19: Phase C reference removed from SKILL.md (#832)
-assert_absent "$LOCAL_SKILL_MD" \
-    "Phase C" \
-    "N19: SKILL.md no longer references Phase C"
-
-echo ""
-# ---------------------------------------------------------------------------
-# Issue #444: N issues per session
-# Tests M1-M6 are pre-implementation assertions — FAIL until source changes land.
-# ---------------------------------------------------------------------------
-echo "--- Issue #444: N issues per session ---"
-
-# M1: LOCAL_SKILL_MD contains `For each issue N` (N-iteration in Completion).
-assert_contains "$LOCAL_SKILL_MD" "For each issue N" \
-    "M1: clarify-intent Completion contains 'For each issue N' (N-iteration)"
-
-# M2: clarify-intent SKILL.md no longer contains the specific AskUserQuestion or confirm-primary.sh mechanism.
-assert_absent "$LOCAL_SKILL_MD" "Which is the primary|confirm-primary\.sh" \
-    "M2: clarify-intent SKILL.md no longer contains 'Which is the primary' AskUserQuestion or confirm-primary.sh reference"
-
-# M3: Doctrine line 'One issue per session' must be removed.
-assert_absent "$LOCAL_SKILL_MD" "One issue per session" \
-    "M3: 'One issue per session' doctrine line removed"
-
-# M4: Blocker '**Multiple**: abort' must be removed.
-assert_absent "$LOCAL_SKILL_MD" '\*\*Multiple\*\*: abort' \
-    "M4: '**Multiple**: abort' blocker removed"
-
-# M5: SSOT reference to either rules/github-issues.md or 'Session model'.
-assert_contains "$LOCAL_SKILL_MD" "rules/github-issues\.md|Session model" \
-    "M5: SSOT reference to rules/github-issues.md or 'Session model' present"
-
-# M6: 'Which is the primary' AskUserQuestion block removed from Completion section.
-assert_absent "$LOCAL_SKILL_MD" "Which is the primary" \
-    "M6: clarify-intent SKILL.md no longer contains 'Which is the primary' primary confirmation block"
-
-echo ""
-echo "--- Issue: clarify-intent Step 1b framing AskUserQuestion removal ---"
-
-# P1: Step 1b must NOT contain 'Approve framing' (AskUserQuestion removed)
-assert_absent "$LOCAL_SKILL_MD" "Approve framing" \
-    "P1: Step 1b removes 'Approve framing' AskUserQuestion option"
-
-# P2: Step 1b must NOT contain 'Start over' (escape eliminated)
-assert_absent "$LOCAL_SKILL_MD" "Start over" \
-    "P2: Step 1b removes 'Start over' escape option"
-
-# P3: Step 1b must contain 'auto-skipped' (background question auto-skip wording)
-assert_contains "$LOCAL_SKILL_MD" "auto-skipped" \
-    "P3: Step 1b contains background-question auto-skip wording"
+    rm -f "$out_file"
+done
 
 echo ""
 echo "=== Summary ==="
-echo "PASS: $PASS  FAIL: $FAIL"
+echo "PASS: $TOTAL_PASS  FAIL: $TOTAL_FAIL"
 
 exit 0
