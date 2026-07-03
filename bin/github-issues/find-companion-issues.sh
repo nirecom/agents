@@ -145,6 +145,16 @@ for n in "${CANDIDATES[@]}"; do
        printf '%s\n' "$PASS_C_SIBLINGS" | grep -qx "$n"; then
         reasons="${reasons:+$reasons,}sibling-of:#${PASS_C_PARENT_N}"
     fi
+    # file overlap pass (#1048)
+    while IFS= read -r file_tag; do
+        [[ -z "$file_tag" ]] && continue
+        reasons="${reasons:+$reasons,}$file_tag"
+    done < <(companion_pass_file_overlap "$PRIMARY" "$n")
+    # keyword density pass (#1048)
+    kw_tag=$(companion_pass_keyword_density "$PRIMARY_TITLE" "$cand_title")
+    if [ -n "$kw_tag" ]; then
+        reasons="${reasons:+$reasons,}$kw_tag"
+    fi
 
     [ -z "$reasons" ] && continue
     tag_count=$(( $(printf '%s' "$reasons" | tr -cd , | wc -c) + 1 ))
