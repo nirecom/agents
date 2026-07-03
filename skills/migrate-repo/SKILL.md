@@ -59,7 +59,7 @@ Each stage below runs as its own command, formed as `<ACK> <BASE> <stage args>`:
 | MR-9 | Todo full | `--from-step 3 --stage full` | → MR-10 (no gate) |
 | MR-10 | Steps 4–6 | `--from-step 4` (continuous; no `--stage`) | done |
 
-MR-10 note: Step 6 stages the allowlist (`.github/labels.yml`, `.github/ISSUE_TEMPLATE/`, `.gitignore`, `docs/todo.md`), commits `chore(migration): apply /migrate-repo Step 1/3 artifacts`, and pushes to `origin`.
+MR-10 note: Step 6 stages the allowlist (`.github/labels.yml`, `.github/ISSUE_TEMPLATE/`, `.gitignore`, `docs/todo.md`), commits `chore(migration): apply /migrate-repo Step 1/3 artifacts`, and pushes to `origin`. When `docs/` is a symlink to an external git repo, the docs entries are committed to the symlink-target repo in a separate commit.
 
 ## Resume (after failure or abort at stage N)
 
