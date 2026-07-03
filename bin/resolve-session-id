@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if command -v cygpath >/dev/null 2>&1; then
+  NODE_DIR="$(cygpath -m "$SCRIPT_DIR")"
+else
+  NODE_DIR="$SCRIPT_DIR"
+fi
+# Path travels via env, not string interpolation — apostrophes/metachars in the
+# checkout path cannot break or alter the evaluated program.
+BRIDGE_DIR="$NODE_DIR" node -e '
+  const path = require("path");
+  try {
+    const r = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "lib", "workflow-state")).resolveSessionId();
+    if (!r) { process.stderr.write("resolve-session-id: session id unresolvable\n"); process.exit(2); }
+    process.stdout.write(r);
+  } catch (e) {
+    process.stderr.write("resolve-session-id: " + e.message + "\n");
+    process.exit(2);
+  }
+'

@@ -14,19 +14,19 @@ codex_core_init() {
   START_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   START_EPOCH=$(date +%s)
   BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-  # shellcheck source=resolve-session-id.sh
-  . "$(dirname "${BASH_SOURCE[0]}")/resolve-session-id.sh"
-  local _jsonl_sid
-  # CLAUDE_CODE_SESSION_ID is CC-native and per-session-distinct, reliably present
-  # in the Bash-tool subprocess where CLAUDE_SESSION_ID is not. Without it, the
-  # chain falls through to the JSONL mtime scan, which returns the most recently
-  # active OTHER session in a concurrent environment (#1082).
-  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
-    SESSION_ID="$CLAUDE_CODE_SESSION_ID"
-  elif [ -n "${CLAUDE_SESSION_ID:-}" ]; then
-    SESSION_ID="$CLAUDE_SESSION_ID"
-  elif _jsonl_sid=$(resolve_session_id_from_jsonl 2>/dev/null); then
-    SESSION_ID="$_jsonl_sid"
+  # Resolve the session-id via the canonical JS resolver (bin/resolve-session-id
+  # bridge; issue #1251): 7-step chain + isSameGitRepo cross-repo guard. Falls
+  # back to a timestamp when the bridge is unavailable or cannot resolve.
+  local _dir _bridge_path _bridge _bridge_rc
+  _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  _bridge_path="$_dir/../resolve-session-id"
+  _bridge=""
+  _bridge_rc=0
+  if [ -f "$_bridge_path" ]; then
+    _bridge=$(bash "$_bridge_path" 2>/dev/null) || _bridge_rc=$?
+  fi
+  if [ -n "$_bridge" ] && [ "$_bridge_rc" -eq 0 ]; then
+    SESSION_ID="$_bridge"
   else
     SESSION_ID="$(date +%Y%m%d_%H%M%S)"
   fi
