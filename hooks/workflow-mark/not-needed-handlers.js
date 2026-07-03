@@ -45,7 +45,7 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: RESEARCH_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: <better reason>>"`
+          `Re-run: echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
@@ -81,7 +81,7 @@ function handle(ctx) {
     const v = validateSkipReason(outlineNotNeededMatch[1]);
     if (!v.ok) {
       pushMessage(`workflow-mark: OUTLINE_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: <better reason>>"`);
+        `Re-run: echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {better reason}>>"`);
       return true;
     }
     if (!sessionId) {
@@ -112,7 +112,7 @@ function handle(ctx) {
     const v = validateSkipReason(detailNotNeededMatch[1]);
     if (!v.ok) {
       pushMessage(`workflow-mark: DETAIL_NOT_NEEDED rejected — ${v.msg} ` +
-        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: <better reason>>"`);
+        `Re-run: echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {better reason}>>"`);
       return true;
     }
     if (!sessionId) {
@@ -142,7 +142,7 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: <better reason>>"`
+          `Re-run: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
@@ -193,7 +193,7 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: REVIEW_SECURITY_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: <better reason>>"`
+          `Re-run: echo "<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
@@ -237,7 +237,7 @@ function handle(ctx) {
     if (!v.ok) {
       pushMessage(
         `workflow-mark: CLARIFY_INTENT_NOT_NEEDED rejected — ${v.msg} ` +
-          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <better reason>>"`
+          `Re-run: echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: {better reason}>>"`
       );
       return true;
     }
