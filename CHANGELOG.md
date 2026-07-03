@@ -295,3 +295,7 @@ Changes: The emergency workflow reset sentinel now requires a reason: use `<<WOR
 ### FEATURE: PR #1265 (2026-07-03)
 Background: fix(#1215,#1242): run_tests evidence split + contract-trust completion
 Changes: `run_tests` now completes only from `bash tests/run-all.sh` (which emits the trusted `RUN_CONTRACT` line) or the `/run-tests` skill sentinel. Ad-hoc or direct test commands (e.g. `pytest tests/`) no longer auto-complete the step — they demote it to `pending`. This closes false-green cases where a masked failing test run let the commit gate wrongly unblock.
+
+### FEATURE: PR #1272 (2026-07-03)
+Background: refactor(#1251): consolidate session-id resolvers into canonical chain + bin/resolve-session-id bridge
+Changes: Session-id resolution is now consistent across all workflow tooling: every bash and Node CLI entry point delegates to the same canonical 7-step resolver via the new `bin/resolve-session-id` bridge. `CLAUDE_CODE_SESSION_ID` now takes precedence over `CLAUDE_ENV_FILE` / `CLAUDE_SESSION_ID` everywhere, fixing a class of wrong-session attribution when multiple Claude Code sessions run concurrently.
