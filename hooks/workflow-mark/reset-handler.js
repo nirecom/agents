@@ -1,8 +1,9 @@
 "use strict";
-// Handles RESET_FROM_<step> sentinels, which roll back workflow state to a
+// Handles RESET_FROM_{step} sentinels, which roll back workflow state to a
 // specified step (marking that step and all subsequent steps as pending).
 
-const { RESET_FROM_RE_DQ } = require("../lib/sentinel-patterns");
+const { validateSkipReason } = require("./skip-reason");
+const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow-state");
 
 function handle(ctx) {
@@ -10,9 +11,28 @@ function handle(ctx) {
 
   const resetMatch = cmd.match(RESET_FROM_RE_DQ);
 
+  // --- LOOKSLIKE early intercept: catches bare/malformed RESET_FROM forms ---
+  if (!resetMatch && RESET_FROM_LOOKSLIKE_RE.test(cmd)) {
+    pushMessage(
+      `workflow-mark: malformed RESET_FROM — ` +
+        `expected: echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>" ` +
+        `(reason must be >=3 non-space chars, no '>')`
+    );
+    return true;
+  }
+
   // --- RESET_FROM handler ---
   if (resetMatch) {
-    const [, fromStep] = resetMatch;
+    const [, fromStep, rawReason] = resetMatch;
+
+    const v = validateSkipReason(rawReason);
+    if (!v.ok) {
+      pushMessage(
+        `workflow-mark: RESET_FROM rejected — ${v.msg} ` +
+          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: {better reason}>>"`
+      );
+      return true;
+    }
 
     if (!VALID_STEPS.includes(fromStep)) {
       pushMessage(
@@ -26,7 +46,7 @@ function handle(ctx) {
     if (!sessionId) {
       pushMessage(
         `workflow-mark: could not resolve session_id — reset-from "${fromStep}" NOT applied. ` +
-          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}>>"`
+          `Re-run: echo "<<WORKFLOW_RESET_FROM_${fromStep}: {reason}>>"`
       );
       return true;
     }

@@ -153,7 +153,7 @@ if (require.main === module) {
             "  1. Invoke the `workflow-init` skill via the Skill tool, OR\n" +
             "  2. For docs-only edits: echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\".\n\n" +
             "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.\n\n" +
-            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_workflow_init>>\""
+            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_workflow_init: {reason}>>\""
           );
         }
         // Tier 2: clarify_intent (only reached once workflow_init has cleared)
@@ -174,7 +174,7 @@ if (require.main === module) {
             "  2. If intent is already clear: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: <reason>>\".\n\n" +
             "Note: Read, Grep, Glob, Bash, and AskUserQuestion remain available.\n" +
             "For docs-only edits: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: docs-only edit>>\"\n\n" +
-            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent>>\""
+            "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent: {reason}>>\""
           );
           }
         }
@@ -367,7 +367,7 @@ if (require.main === module) {
       "workflow-gate: session_id not found in hook input.\n" +
         "Cannot verify workflow state. Commit blocked (fail-safe).\n" +
         "To reset workflow state, run:\n" +
-        '  echo "<<WORKFLOW_RESET_FROM_research>>"'
+        '  echo "<<WORKFLOW_RESET_FROM_research: {reason}>>"'
     );
   }
 
@@ -377,7 +377,7 @@ if (require.main === module) {
     block(
       `workflow-gate: no workflow state found for session ${sessionId}.\n` +
         "Commit blocked (fail-safe). To initialize workflow state, run:\n" +
-        '  echo "<<WORKFLOW_RESET_FROM_research>>"'
+        '  echo "<<WORKFLOW_RESET_FROM_research: {reason}>>"'
     );
   }
 

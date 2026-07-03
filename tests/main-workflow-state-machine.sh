@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
-# Tags: workflow, gate, hook, settings, config
+# Tags: workflow, gate, hook, settings, config, scope:common
 # Integration regression tests for the Workflow State Machine.
 # Covers: state inheritance, cross-repo commits, RESET_FROM, USER_VERIFIED,
 # branch isolation, and structure smoke tests.
@@ -767,7 +767,7 @@ REPO_3=$(setup_repo)
 # L3-a: RESET_FROM_write_tests → steps before write_tests=complete, from write_tests=pending
 SID_3A="l3a-$(printf '%04x%04x' $RANDOM $RANDOM)"
 write_state "$SID_3A" "$(ALL_COMPLETE_JSON "$SID_3A")"
-run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_write_tests>>"' "$SID_3A")" >/dev/null
+run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"' "$SID_3A")" >/dev/null
 expect_state_step "L3-a(research). RESET_FROM_write_tests → research=complete" \
     "$SID_3A" "research" "complete"
 expect_state_step "L3-a(outline). RESET_FROM_write_tests → outline=complete" \
@@ -782,7 +782,7 @@ expect_state_step "L3-a(user_verification). RESET_FROM_write_tests → user_veri
 # L3-b: RESET_FROM_research → all steps=pending
 SID_3B="l3b-$(printf '%04x%04x' $RANDOM $RANDOM)"
 write_state "$SID_3B" "$(ALL_COMPLETE_JSON "$SID_3B")"
-run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_research>>"' "$SID_3B")" >/dev/null
+run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_research: test reason>>"' "$SID_3B")" >/dev/null
 expect_state_step "L3-b(research). RESET_FROM_research → research=pending" \
     "$SID_3B" "research" "pending"
 expect_state_step "L3-b(user_verification). RESET_FROM_research → user_verification=pending" \
@@ -791,14 +791,14 @@ expect_state_step "L3-b(user_verification). RESET_FROM_research → user_verific
 # L3-c: RESET_FROM_foo (unknown step) → state unchanged, ignored
 SID_3C="l3c-$(printf '%04x%04x' $RANDOM $RANDOM)"
 write_state "$SID_3C" "$(ALL_COMPLETE_JSON "$SID_3C")"
-run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_foo>>"' "$SID_3C")" >/dev/null
+run_mark_hook "$REPO_3" "$(build_mark_json 'echo "<<WORKFLOW_RESET_FROM_foo: test reason>>"' "$SID_3C")" >/dev/null
 expect_state_step "L3-c. RESET_FROM_foo (unknown) → research stays complete" \
     "$SID_3C" "research" "complete"
 
 # L3-d: session_id missing → state unchanged, exit 0, additionalContext warning
 SID_3D="l3d-$(printf '%04x%04x' $RANDOM $RANDOM)"
 write_state "$SID_3D" "$(ALL_COMPLETE_JSON "$SID_3D")"
-L3D_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests>>"'
+L3D_CMD='echo "<<WORKFLOW_RESET_FROM_write_tests: test reason>>"'
 L3D_ESC=${L3D_CMD//\"/\\\"}
 L3D_JSON=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"exit_code":0,"stdout":"","stderr":""}}' "$L3D_ESC")
 L3D_EXIT=0
