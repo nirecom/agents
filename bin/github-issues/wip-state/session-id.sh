@@ -3,57 +3,26 @@
 # Sourced by ../wip-state.sh; not executable standalone.
 # Globals consumed: CLAUDE_CODE_SESSION_ID, CLAUDE_ENV_FILE, CLAUDE_SESSION_ID, SID_SET, INJECTED_SID.
 
-# Resolution order:
-#   1. ${CLAUDE_CODE_SESSION_ID:-} non-empty → use directly. CC-native,
-#      per-session-distinct, and reliably present in the Bash subprocess where
-#      $CLAUDE_ENV_FILE is not propagated. Without it, resolution falls through
-#      to the JSONL scan, which returns the most recently active OTHER session
-#      in a concurrent environment (#1082).
-#   2. $CLAUDE_ENV_FILE (readable) → grep CLAUDE_SESSION_ID — keeps native CLI
-#      behavior where the env file is the canonical source.
-#   3. ${CLAUDE_SESSION_ID:-} non-empty → use directly. VS Code Claude Code
-#      does not propagate $CLAUDE_ENV_FILE to Bash subprocesses but does
-#      propagate $CLAUDE_SESSION_ID, so this fallback restores WIP signaling
-#      in that environment (#440). This convention is already established in
-#      skills/issue-close-finalize/SKILL.md (--from-session uses the same
-#      "file first, env fallback" order).
-#   4. JSONL scan: mtime-newest ~/.claude/projects/<encoded-cwd>/*.jsonl basename.
-#   5. None available → rc=2.
+# Resolution is delegated in full to the canonical JS resolver via the
+# bin/resolve-session-id bridge (7-step chain + isSameGitRepo cross-repo guard;
+# issue #1251). The bridge writes the resolved session-id to stdout (no trailing
+# newline) and exits 0 on success, or exits 2 when unresolvable. This wrapper
+# preserves the historical rc=2 contract by propagating the bridge's exit code.
 resolve_session_id() {
-    local sid
-    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
-        sid=$(printf '%s' "${CLAUDE_CODE_SESSION_ID:-}" | tr -d '\r"')
-        if [ -n "$sid" ]; then
-            printf '%s' "$sid"
-            return 0
-        fi
+    local sid rc _dir bridge
+    _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+    bridge="$_dir/../../resolve-session-id"
+    sid=$(bash "$bridge" 2>/dev/null) || {
+        rc=$?
+        echo "Error: session id not resolvable (bin/resolve-session-id exhausted the chain: CLAUDE_CODE_SESSION_ID, CLAUDE_ENV_FILE, CLAUDE_SESSION_ID, WORKTREE_NOTES.md, JSONL scan)" >&2
+        return "$rc"
+    }
+    if [ -z "$sid" ]; then
+        echo "Error: session id not resolvable (bin/resolve-session-id exhausted the chain: CLAUDE_CODE_SESSION_ID, CLAUDE_ENV_FILE, CLAUDE_SESSION_ID, WORKTREE_NOTES.md, JSONL scan)" >&2
+        return 2
     fi
-    if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -r "${CLAUDE_ENV_FILE}" ]; then
-        sid=$(grep -E '^CLAUDE_SESSION_ID=' "$CLAUDE_ENV_FILE" 2>/dev/null \
-                | head -1 | cut -d= -f2- | tr -d '\r"' )
-        if [ -n "$sid" ]; then
-            printf '%s' "$sid"
-            return 0
-        fi
-    fi
-    if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
-        sid=$(printf '%s' "${CLAUDE_SESSION_ID:-}" | tr -d '\r"')
-        if [ -n "$sid" ]; then
-            printf '%s' "$sid"
-            return 0
-        fi
-    fi
-    # 3. JSONL scan fallback — VS Code Claude Code does not export CLAUDE_SESSION_ID
-    #    nor reliably propagate CLAUDE_ENV_FILE to Bash subprocesses (#519).
-    if sid=$(resolve_session_id_from_jsonl); then
-        sid=$(printf '%s' "$sid" | tr -d '\r"')
-        if [ -n "$sid" ]; then
-            printf '%s' "$sid"
-            return 0
-        fi
-    fi
-    echo "Error: CLAUDE_SESSION_ID not resolvable (neither \$CLAUDE_ENV_FILE nor \$CLAUDE_SESSION_ID is usable)" >&2
-    return 2
+    printf '%s' "$sid"
+    return 0
 }
 
 validate_injected_sid() {

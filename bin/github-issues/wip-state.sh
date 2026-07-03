@@ -92,9 +92,6 @@ load_env_file() {
 }
 load_env_file
 
-# shellcheck source=../lib/resolve-session-id.sh
-. "$(dirname "${BASH_SOURCE[0]}")/../lib/resolve-session-id.sh"
-
 # shellcheck source=lib/board-card.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/board-card.sh"
 

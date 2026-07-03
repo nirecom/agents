@@ -7,6 +7,9 @@ set -uo pipefail
 
 WIP_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh"
 
+_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+BRIDGE="$_dir/../../../bin/resolve-session-id"
+
 SID_ARG=""
 SID_SET=0
 ISSUES=()
@@ -29,15 +32,13 @@ if [ "$SID_SET" -eq 1 ] && [ -z "$SID_ARG" ]; then
     echo "Error: --session-id received an empty value" >&2; exit 2
 fi
 
-if [ "$SID_SET" -eq 0 ]; then
-    if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -r "${CLAUDE_ENV_FILE}" ]; then
-        CANDIDATE=$(grep -E '^CLAUDE_SESSION_ID=' "$CLAUDE_ENV_FILE" 2>/dev/null \
-                    | head -1 | cut -d= -f2- | tr -d '\r"')
-        if [ -n "$CANDIDATE" ]; then SID_ARG="$CANDIDATE"; SID_SET=1; fi
-    fi
-    if [ "$SID_SET" -eq 0 ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
-        SID_ARG=$(printf '%s' "$CLAUDE_SESSION_ID" | tr -d '\r"')
-        [ -n "$SID_ARG" ] && SID_SET=1
+# No injected --session-id → resolve via the canonical JS resolver bridge
+# (issue #1251). On any failure leave SID_SET=0 and continue; never abort.
+if [ "$SID_SET" -eq 0 ] && [ -f "$BRIDGE" ]; then
+    BRIDGE_RC=0
+    CANDIDATE=$(bash "$BRIDGE" 2>/dev/null) || BRIDGE_RC=$?
+    if [ "$BRIDGE_RC" -eq 0 ] && [ -n "$CANDIDATE" ]; then
+        SID_ARG="$CANDIDATE"; SID_SET=1
     fi
 fi
 
