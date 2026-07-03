@@ -35,6 +35,16 @@ If <2 signals:
 VERDICT: wf-code | none
 ```
 
+## Provenance Annotations
+
+When evaluating a scope that includes companion issues, annotate each scope item's origin:
+- Seed issues (original `closes_issues`): mark `[origin: seed]`
+- Companion-added issues: mark `[origin: companion #<N>]`
+
+When a signal fires exclusively on companion-sourced items: mark the signal ID with `(companion-driven)`.
+
+Routing rule for companion-driven verdicts: when ≥2 signals triggered but all triggered signals are `(companion-driven)` (seed-only scope produces <2 signals), the verdict is still `wf-meta`, but the presentation must note "decomposition impact is companion-driven — removing the companion candidate(s) would return to wf-code."
+
 ## Rules
 
 - Evaluate ALL signals before emitting the verdict — do not short-circuit on the first match

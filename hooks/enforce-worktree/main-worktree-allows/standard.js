@@ -518,6 +518,47 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   } catch (e) { return false; }
 }
 
+/**
+ * True when cmd is the canonical clarify-guard-loop invocation:
+ *   bash "<AGENTS_CONFIG_DIR>/bin/github-issues/clarify-guard-loop.sh" [args...]
+ * (double-quoted script path only). Rejects: shell chaining, command substitution,
+ * redirects, single-quoted path, wrong interpreter, wrong script path.
+ * The guard script writes the GUARD_ATTEMPT counter internally (no redirect visible
+ * to the hook), so collectBashWriteTargets returns 0 targets → allow.
+ */
+function isAllowedClarifyGuardLoop(cmd, repoRoot) {
+  if (!cmd || typeof cmd !== "string") return false;
+  const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
+  if (!acd) return false;
+
+  // Must start with: bash "<double-quoted-path>" [args...]
+  const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
+  if (!m) return false;
+  const scriptPath = m[1];
+  const argTail    = m[2] || "";
+
+  // Identity: script path must match AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh
+  let normScript, normTarget;
+  try {
+    const expectedTarget = path.join(acd, "bin", "github-issues", "clarify-guard-loop.sh");
+    normScript = path.resolve(normalizeCwd(scriptPath) || scriptPath);
+    normTarget = path.resolve(normalizeCwd(expectedTarget) || expectedTarget);
+  } catch (e) { return false; }
+  if (normScript.toLowerCase() !== normTarget.toLowerCase()) return false;
+
+  // Raw argTail scan: reject chaining, substitution, redirects, bare &
+  if (/[|;&><\n]|\$\(|`/.test(argTail)) return false;
+  // Reject bare & (background operator); &> / &>> are not present in valid args
+  if (/&/.test(argTail)) return false;
+
+  // Fail-closed: any write targets in the command → reject
+  const { targets } = collectBashWriteTargets(cmd);
+  if (targets && targets.length > 0) return false;
+
+  void repoRoot;
+  return true;
+}
+
 module.exports = {
   isAllowedWorktreeCommand,
   isAllowedFastForwardMerge,
@@ -527,4 +568,5 @@ module.exports = {
   isAllowedMainWorktreeCleanup,
   isAllowedComposeDocAppend,
   isAllowedWorkerScriptInvocation,
+  isAllowedClarifyGuardLoop,
 };
