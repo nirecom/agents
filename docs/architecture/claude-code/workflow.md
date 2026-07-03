@@ -194,7 +194,7 @@ At the `outline` and `detail` steps only, next-step appends an optional fifth li
 To roll back to a specific step (e.g. after a crash or to redo a phase):
 
 ```
-echo "<<WORKFLOW_RESET_FROM_<step>>>"
+echo "<<WORKFLOW_RESET_FROM_<step>: <reason>>>"
 ```
 
 `reset-handler.js` (PostToolUse, via `workflow-mark.js`) marks all prior steps `complete` and resets the target step and all subsequent steps to `pending`. The resulting state is consistent and immediately queryable by next-step. Use `--list` to verify before proceeding.
