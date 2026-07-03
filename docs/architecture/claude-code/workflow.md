@@ -163,6 +163,21 @@ never inherited — the JSONL is skipped entirely so the new session starts fres
 entries take priority because they are appended after SessionStart and reflect the most
 recent session_id in any given JSONL file.
 
+### Bash/CLI-side resolution
+
+Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
+no such channel. They all resolve through one canonical implementation:
+`hooks/lib/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
+`CLAUDE_CODE_SESSION_ID` → `CLAUDE_ENV_FILE` → `CLAUDE_SESSION_ID` → `ctx.transcriptPath` →
+`WORKTREE_NOTES.md` → JSONL mtime scan (gated by an `isSameGitRepo` cross-repo guard). Bash
+callers reach it via the `bin/resolve-session-id` bridge (stdout = sid, exit 2 when
+unresolvable); Node CLIs `require()` it directly. Callers locate the bridge relative to their
+own file (`BASH_SOURCE` / `__dirname`), never via `$AGENTS_CONFIG_DIR`, so every checkout uses
+its own resolver even when that env var points at a different checkout. Why one SSOT: eight
+independent resolver implementations diverged over time and produced concurrent-session
+misattribution (#1082); consolidation (#1251) removes the divergence class instead of patching
+members one at a time.
+
 ## Fail-safe behavior
 
 | Condition | Result |
