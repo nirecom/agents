@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/.env, bin/github-issues, bin/github-issues/migration/commit-migration-artifacts.sh, bin/github-issues/migration/orchestrate.sh, bin/github-issues/sync-labels.sh
-# Tags: migration, repo, github, issues, labels
+# Tags: migration, repo, github, issues, labels, scope:issue-specific
 # Tests for feat/migrate-repo-commit-446 — commit + push migration artifacts.
 # Tests commit-migration-artifacts.sh and orchestrator Step 6.
 # RED: existence gate fails while commit-migration-artifacts.sh is missing.
@@ -324,6 +324,126 @@ if [ "$RC" -ne 0 ] && [ "$state_present" = "1" ]; then
     pass "C12: child failure → orchestrator exits non-zero, state preserved"
 else
     fail "C12: rc=$RC state_present=$state_present"
+fi
+
+# ----------------------------------------------------------------------------
+# C13 (#1231): regression guard — docs/ is a symlink into a SEPARATE git repo.
+#
+# Per docs convention, docs/ may be a symlink managed by another repo. When
+# commit-migration-artifacts.sh runs `git -C <repo> add -- docs/todo.md`, git
+# rejects the pathspec ("beyond a symbolic link") and Step 6 aborts (exit 128).
+#
+# The #1231 fix must detect the docs/ symlink, resolve the destination repo, and
+# commit docs/todo.md into THAT repo at its show-prefix path (subdir case):
+#   primary_repo/docs -> docs_repo/projects/engineering/mynewrepo
+# so the file lands at docs_repo:projects/engineering/mynewrepo/todo.md.
+#
+# EXPECTED-FAIL until the source fix lands: this test describes the desired
+# post-fix 2-repo commit behavior. It is RED against the current source.
+#
+# Uses its own fixture (two repos + symlink) — NOT make_fixture/teardown_fixture.
+
+# c13_symln — create a REAL symlink to an existing directory, cross-platform.
+# On Git-for-Windows MSYS, a bare `ln -s` to a cross-tree target silently copies
+# the directory instead of linking; MSYS=winsymlinks:nativestrict forces a true
+# symlink (requires developer mode / elevated shell). The `test -L` in the guard
+# below confirms a real link was produced, so a directory-copy fallback SKIPs
+# rather than passing a test that never crosses a symlink boundary.
+c13_symln() {
+    local target="$1" link="$2"
+    MSYS="winsymlinks:nativestrict" ln -sfn "$target" "$link" 2>/dev/null \
+        || ln -sfn "$target" "$link" 2>/dev/null || true
+}
+
+# JUNCTION_OK guard: skip when real symlink creation is unavailable (Windows
+# without developer mode / elevated shell). Probe an EXISTING directory target.
+C13_SYMTGT="$TMP/c13-symtgt"
+C13_SYMLNK="$TMP/c13-symlnk"
+mkdir -p "$C13_SYMTGT"
+C13_JUNCTION_OK=0
+c13_symln "$C13_SYMTGT" "$C13_SYMLNK"
+[ -L "$C13_SYMLNK" ] && C13_JUNCTION_OK=1
+rm -f "$C13_SYMLNK" 2>/dev/null || true
+rm -rf "$C13_SYMTGT" 2>/dev/null || true
+
+if [ "$C13_JUNCTION_OK" != "1" ]; then
+    echo "SKIP C13: symlinks not available (Windows without developer mode)"
+else
+    C13_PRIMARY="$TMP/c13-primary"
+    C13_DOCS="$TMP/c13-docs"
+
+    # --- docs_repo: a standalone git repo with the subdir the symlink targets.
+    mkdir -p "$C13_DOCS/projects/engineering/mynewrepo"
+    git -C "$C13_DOCS" init -b main >/dev/null 2>&1
+    git -C "$C13_DOCS" config user.email "test@example.com"
+    git -C "$C13_DOCS" config user.name "Test"
+    echo "# docs root" > "$C13_DOCS/README.md"
+    # Track the symlink-target subdir via a .keep sentinel — but NOT todo.md, so
+    # that todo.md appearing in docs_repo's HEAD is proof the fix committed it
+    # there (Assert 3 cannot false-pass off a pre-seeded todo.md).
+    echo "" > "$C13_DOCS/projects/engineering/mynewrepo/.keep"
+    git -C "$C13_DOCS" -c core.autocrlf=false add -A >/dev/null 2>&1
+    ENFORCE_WORKTREE=off git -C "$C13_DOCS" commit -m "init docs" >/dev/null 2>&1
+
+    # --- primary_repo: the migrate-repo target repo, docs/ symlinked into docs_repo.
+    mkdir -p "$C13_PRIMARY"
+    git -C "$C13_PRIMARY" init -b main >/dev/null 2>&1
+    git -C "$C13_PRIMARY" config user.email "test@example.com"
+    git -C "$C13_PRIMARY" config user.name "Test"
+    echo "init" > "$C13_PRIMARY/README.md"
+    git -C "$C13_PRIMARY" add README.md >/dev/null 2>&1
+    ENFORCE_WORKTREE=off git -C "$C13_PRIMARY" commit -m "init" >/dev/null 2>&1
+
+    # Non-docs allowlist artifacts (must land in primary_repo commit).
+    mkdir -p "$C13_PRIMARY/.github/ISSUE_TEMPLATE"
+    cat > "$C13_PRIMARY/.github/labels.yml" <<'EOF'
+- name: type:task
+  color: "0e8a16"
+EOF
+    echo ".migration-state.json" > "$C13_PRIMARY/.gitignore"
+
+    # docs/ is a REAL SYMLINK into the docs_repo subdir (the subdir case).
+    c13_symln "$C13_DOCS/projects/engineering/mynewrepo" "$C13_PRIMARY/docs"
+    # Guard: only proceed if a true symlink was produced (not a directory copy),
+    # so the test genuinely exercises the git symlink-boundary the #1231 bug hits.
+    if [ ! -L "$C13_PRIMARY/docs" ]; then
+        echo "SKIP C13: docs/ did not materialize as a real symlink (directory-copy fallback)"
+    else
+    # Modify the todo.md thin index through the symlink so Step 6 has a diff to commit.
+    echo "# Todo (updated by migration)" > "$C13_PRIMARY/docs/todo.md"
+
+    C13_PRIMARY_SHA_BEFORE=$(git -C "$C13_PRIMARY" rev-parse HEAD 2>/dev/null)
+    C13_DOCS_SHA_BEFORE=$(git -C "$C13_DOCS" rev-parse HEAD 2>/dev/null)
+
+    C13_OUT=$(run_with_timeout 30 bash "$COMMIT_SCRIPT" "$C13_PRIMARY" --no-push 2>&1)
+    C13_RC=$?
+
+    C13_PRIMARY_SHA_AFTER=$(git -C "$C13_PRIMARY" rev-parse HEAD 2>/dev/null)
+    C13_DOCS_SHA_AFTER=$(git -C "$C13_DOCS" rev-parse HEAD 2>/dev/null)
+
+    # Assert 1: primary_repo advanced (non-docs allowlist files committed there).
+    primary_advanced=0
+    [ -n "$C13_PRIMARY_SHA_AFTER" ] && [ "$C13_PRIMARY_SHA_BEFORE" != "$C13_PRIMARY_SHA_AFTER" ] && primary_advanced=1
+    primary_has_labels=0
+    git -C "$C13_PRIMARY" show --name-only --format= HEAD 2>/dev/null \
+        | grep -Fxq ".github/labels.yml" && primary_has_labels=1
+
+    # Assert 2: docs_repo advanced (docs/todo.md committed into the symlink target repo).
+    docs_advanced=0
+    [ -n "$C13_DOCS_SHA_AFTER" ] && [ "$C13_DOCS_SHA_BEFORE" != "$C13_DOCS_SHA_AFTER" ] && docs_advanced=1
+
+    # Assert 3: the docs commit path uses the show-prefix (subdir-relative path in docs_repo).
+    docs_path_ok=0
+    git -C "$C13_DOCS" show --name-only --format= HEAD 2>/dev/null \
+        | grep -Fxq "projects/engineering/mynewrepo/todo.md" && docs_path_ok=1
+
+    if [ "$C13_RC" -eq 0 ] && [ "$primary_advanced" = "1" ] && [ "$primary_has_labels" = "1" ] \
+       && [ "$docs_advanced" = "1" ] && [ "$docs_path_ok" = "1" ]; then
+        pass "C13: symlink docs/ → separate repo, 2-repo commit at show-prefix path"
+    else
+        fail "C13: rc=$C13_RC primary_adv=$primary_advanced labels=$primary_has_labels docs_adv=$docs_advanced docs_path=$docs_path_ok out='$C13_OUT' (EXPECTED-FAIL until #1231 source fix)"
+    fi
+    fi  # end real-symlink guard
 fi
 
 # ----------------------------------------------------------------------------
