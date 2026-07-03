@@ -279,3 +279,7 @@ Changes: /migrate-repo now confirms the migration target repository explicitly a
 ### FEATURE: PR #1260 (2026-07-03)
 Background: feat(#1236,#457,#1235): target-visibility leak guard + Universality First + exclude-repos
 Changes: Content pushed to a public repository (issue/PR titles and bodies) is now scanned for private-repository name leaks based on the destination repository's visibility, not just your current directory — reducing the risk of a private repo name slipping into a public issue or pull request.;New `ENFORCE_WORKTREE_EXCLUDE_REPOS` setting: list specific repository root paths (semicolon-separated absolute paths) to exempt them from worktree enforcement so you can edit and commit them directly from any branch. It does not disable enforcement globally — only the listed paths are exempt.
+
+### FEATURE: PR #1266 (2026-07-03)
+Background: fix(#1231,#1204): migrate-repo symlink docs/ cross-repo commit + find-pr-by-marker --repo fallback
+Changes: `/migrate-repo` Step 6 now works correctly when `docs/` is a symlink to a shared docs repo (e.g. my-specs-repo). Previously the step aborted with "pathspec beyond a symbolic link"; it now commits docs artifacts to the symlink-target repo in a separate commit and push.;Issue-close finalize: the fallback PR lookup no longer risks matching a PR from the wrong repository when `--repo` is specified, fixing a potential integrity error in "Resolved by commit" comments for cross-repo issues.
