@@ -43,7 +43,6 @@ const USER_VERIFIED_RE_DQ = /^echo "<<WORKFLOW_USER_VERIFIED: ([^>]+)>>"$/;
 const USER_VERIFIED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_USER_VERIFIED([: ].*)?>>"$/;
 const RESEARCH_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ([^>]+)>>"$/;
 const RESEARCH_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_RESEARCH_NOT_NEEDED([: ].*)?>>"$/;
-// reason field [^>]+  absorbs judgment=true:{reason} format (#1259 judgment gate)
 const OUTLINE_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: ([^>]+)>>"$/;
 const OUTLINE_NOT_NEEDED_LOOKSLIKE_RE = /^echo "<<WORKFLOW_OUTLINE_NOT_NEEDED([: ].*)?>>"$/;
 const DETAIL_NOT_NEEDED_RE_DQ = /^echo "<<WORKFLOW_DETAIL_NOT_NEEDED: ([^>]+)>>"$/;

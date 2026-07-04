@@ -32,19 +32,19 @@ run_skip_hint_tests() {
   local PLANS_DIR_SH_N
   PLANS_DIR_SH_N="$(cygpath -m "$PLANS_DIR_SH" 2>/dev/null || echo "$PLANS_DIR_SH")"
 
-  # ---- Case 40: outline current → ACTION=judgment_needed (#1259: supersedes SKIP_HINT advisory) ----
+  # ---- Case 40: outline current + trivial intent.md → SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED ----
   write_state "case40" "$JSON_AT_OUTLINE"
   printf 'Fix typo in the helper name.\n' > "$PLANS_DIR_SH/case40-intent.md"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case40" 2>/dev/null || true)"
-  check_contains "40: outline current → ACTION=judgment_needed" \
-    "ACTION=judgment_needed" "$OUT"
+  check_contains "40: outline+trivial → SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED" \
+    "SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED" "$OUT"
 
-  # ---- Case 41: detail current → ACTION=judgment_needed (#1259: supersedes SKIP_HINT advisory) ----
+  # ---- Case 41: detail current + trivial intent.md → SKIP_HINT=WORKFLOW_DETAIL_NOT_NEEDED ----
   write_state "case41" "$JSON_AT_DETAIL"
   printf 'Fix typo in the helper name.\n' > "$PLANS_DIR_SH/case41-intent.md"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case41" 2>/dev/null || true)"
-  check_contains "41: detail current → ACTION=judgment_needed" \
-    "ACTION=judgment_needed" "$OUT"
+  check_contains "41: detail+trivial → SKIP_HINT=WORKFLOW_DETAIL_NOT_NEEDED" \
+    "SKIP_HINT=WORKFLOW_DETAIL_NOT_NEEDED" "$OUT"
 
   # ---- Case 42: outline current + NON-trivial intent.md → no SKIP_HINT line ----
   write_state "case42" "$JSON_AT_OUTLINE"

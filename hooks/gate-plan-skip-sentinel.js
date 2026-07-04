@@ -44,10 +44,6 @@ if (!input || input.tool_name !== "Bash") passThrough();
 const cmd = ((input.tool_input && input.tool_input.command) || "").trim();
 if (!cmd) passThrough();
 
-if (OUTLINE_NOT_NEEDED_RE_DQ.test(cmd) && cmd.indexOf("judgment=true") !== -1)
-  allow("judgment gate fired — outline skip auto-approved.");
-if (DETAIL_NOT_NEEDED_RE_DQ.test(cmd) && cmd.indexOf("judgment=true") !== -1)
-  allow("judgment gate fired — detail skip auto-approved.");
 if (OUTLINE_NOT_NEEDED_RE_DQ.test(cmd) && isOff("CONFIRM_OUTLINE"))
   allow("CONFIRM_OUTLINE=off — outline skip auto-approved.");
 if (DETAIL_NOT_NEEDED_RE_DQ.test(cmd) && isOff("CONFIRM_DETAIL"))
