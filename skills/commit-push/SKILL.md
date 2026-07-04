@@ -88,8 +88,9 @@ CP-3. **Merge prompt:**
    Check `ENFORCE_WORKTREE`:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'`
 
-   **(a) stdout `ON` or `ERROR` (ENFORCE_WORKTREE=on):** Output `PR #<N> is open: [<url>](<url>)` and stop.
-   `/worktree-end` owns the merge prompt and sentinel for worktree mode.
+   **(a) stdout `ON` or `ERROR` (ENFORCE_WORKTREE=on):**
+   - Output `PR #<N> is open: [<url>](<url>)`.
+   - Run `/worktree-end`.
 
    **(b) stdout `OFF` (ENFORCE_WORKTREE=off):** Output `PR #<N> is open: [<url>](<url>)`,
    then `AskUserQuestion`: "PR #<N> — merge, wait, or abort?"
