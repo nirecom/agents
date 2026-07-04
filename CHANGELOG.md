@@ -315,3 +315,7 @@ Changes: The orchestrator now judges whether to skip outline and detail planning
 ### FEATURE: PR #1299 (2026-07-04)
 Background: docs(#1297): add agents terminology glossary (docs/glossary.md)
 Changes: Added a terminology glossary (docs/glossary.md) that indexes workflow stage names and abbreviations, grouped by category and each linking to its canonical definition.
+
+### FEATURE: PR #1304 (2026-07-04)
+Background: feat(#1257): add SC-2C path for WF-META session-close
+Changes: WF-META (planning-only) sessions now complete `/session-close` successfully. Final Report shows associated issues as "kept open (planning session)" instead of "failed".
