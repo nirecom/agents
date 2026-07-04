@@ -46,16 +46,16 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
    - Skip silently when `closes_issues` contains no cross-repo references (no `owner/repo#N` or bare `repo#N` form). Proceed to Layer 2.
    - Determine primary repo: run `git remote get-url origin` and normalize to `owner/repo` format.
    - Collect all cross-repo entries from `closes_issues`; normalize bare `repo#N` to `owner/repo#N` using the primary owner; deduplicate by insertion order.
-   - For each unique sibling `owner/repo` (i.e. not the primary repo): call `AskUserQuestion` once: "セッションに `<owner/repo>` のイシューが含まれています。このセッションで使用するそのリポジトリのリンク worktree の絶対パスを入力してください（スキップする場合は空白のままにしてください）。"
+   - For each unique sibling `owner/repo` (i.e. not the primary repo): call `AskUserQuestion` once: "The session contains an issue from `<owner/repo>`. Enter the absolute path to the linked worktree for that repository (leave blank to skip)."
    - Non-empty answer → record as `{repo: "<owner/repo>", worktree_path: "<answer>"}`.
-   - Empty / skipped → record `<owner/repo> の sibling worktree 不在` under `## Constraints` in intent.md.
+   - Empty / skipped → record `<owner/repo> sibling worktree absent` under `## Constraints` in intent.md.
 
    **Layer 2 — prose detection for additional cross-repo issue references:**
    - From context.md `## User initial prompt` and `## Issue body`, extract candidate strings that look like `repo#N` or `owner/repo#N` tokens (broad prefilter: any word containing `#` followed by digits).
    - Pipe candidate strings to `node "$AGENTS_CONFIG_DIR/bin/parse-issue-tokens" <candidates...>` — Node handles `#` splitting (C2: shell must not parse).
    - Filter for entries with `repo` field set AND not already in `closes_issues`.
    - For each candidate: normalize short-form repo via `gh repo view "<repo>" --json owner,name --jq '.owner.login + "/" + .name'`; on failure, skip.
-   - Propose each via `AskUserQuestion` (confirm/skip): "コンテキストに `<owner/repo>#<N>` への参照が見つかりました。このイシューを closes_issues に追加しますか？"
+   - Propose each via `AskUserQuestion` (confirm/skip): "A reference to `<owner/repo>#<N>` was found in the context. Add this issue to closes_issues?"
    - Add confirmed ones to `closes_issues` in intent.md as `- owner/repo#N` format.
 
    After all probes: CI-4 writes a `## worktrees` section with the collected results.
