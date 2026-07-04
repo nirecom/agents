@@ -3,8 +3,9 @@
 const { getSessionRepoRoots } = require("./session-scope");
 const { isExcluded } = require("./shared-cmd-utils");
 const { findRepoRoot, normalizeForCompare } = require("./git-repo-detection");
-const { WRITE_PATTERNS, classify } = require("../lib/bash-write-patterns");
+const { classify, isGhWriteIR } = require("../lib/bash-write-patterns");
 const { splitShellCommands } = require("../lib/shell-segments");
+const { parse } = require("../lib/command-ir");
 const { expandStaticShellTokens } = require("../lib/bash-write-targets/redirect");
 const {
   extractRedirectTargets, extractTeeTargets,
@@ -19,33 +20,47 @@ function isInSessionScope(repoRoot, sessionRoots) {
 }
 
 // Collect write targets from all applicable extractors (redirect, tee, PS cmdlets).
+// Accepts an IR object (post-#1294) or a raw command string (backward compat).
 // Any extractor returning null → parseFailure = true (fail-closed).
-function collectBashWriteTargets(cmd) {
+function collectBashWriteTargets(ir) {
+  // Backward compat: accept raw string — parse it into IR.
+  if (typeof ir === "string") ir = parse(ir);
+
+  // Fail-closed: malformed IR → no targets.
+  if (!ir || ir.parseFailure === true) return { targets: null, parseFailure: true };
+
+  const cmd = ir.rawText;
   const targets = [];
   let parseFailure = false;
 
-  if (/(?:^|[\s;|&])(?:\d*)(?:&>>?|>>?)(?!>|\d)/.test(cmd)) {
+  // Resolve effective command name: for env-prefix form (VAR=val cmd args...),
+  // cmd0 is the assignment and the actual command is argv[0].
+  const effectiveCmd0 = (s) => {
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(s.cmd0) && s.argv && s.argv.length > 0) return s.argv[0];
+    return s.cmd0;
+  };
+
+  if (ir.segments.some((s) => s.redirects && s.redirects.some((r) => r.op !== "<" && r.op !== "<<<"))) {
     const r = extractRedirectTargets(cmd);
     if (r === null) parseFailure = true;
     else targets.push(...r);
   }
-  if (/(?:^|[\s;|&])tee\b/.test(cmd)) {
+  if (ir.segments.some((s) => effectiveCmd0(s) === "tee")) {
     const t = extractTeeTargets(cmd);
     if (t === null) parseFailure = true;
     else targets.push(...t);
   }
-  if (/\b(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Move-Item|Copy-Item)\b/i.test(cmd)
-      || /(?:^|[\s;|&])(?:sc|ac|ni|ri|mi|ci)\b/.test(cmd)) {
+  if (ir.segments.some((s) => /^(?:set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|sc|ac|ni|ri|mi|ci)$/i.test(effectiveCmd0(s)))) {
     const p = extractPwshWriteTargets(cmd);
     if (p === null) parseFailure = true;
     else targets.push(...p);
   }
-  if (/(?:^|[\s;|&])(?:cp|mv)\b/.test(cmd)) {
+  if (ir.segments.some((s) => effectiveCmd0(s) === "cp" || effectiveCmd0(s) === "mv")) {
     const d = extractCpMvDestination(cmd);
     if (d === null) parseFailure = true;
     else targets.push(d);
   }
-  if (/(?:^|[\s;|&])rm\b/.test(cmd)) {
+  if (ir.segments.some((s) => effectiveCmd0(s) === "rm")) {
     const r = extractRmTargets(cmd);
     if (r === null) parseFailure = true;
     else targets.push(...r);
@@ -115,36 +130,37 @@ function isWriteTargetAllExcluded(cmd, targets, repoRoot, patterns) {
   return isGitCommit || (targets !== null && targets.length > 0);
 }
 
-// True if cmd matches any kind:"gh" entry in WRITE_PATTERNS (= Group B gh writes).
-function isGhWriteCommand(cmd) {
-  if (!cmd || typeof cmd !== "string") return false;
-  for (const p of WRITE_PATTERNS) {
-    if (p.kind === "gh" && p.regex.test(cmd)) return true;
-  }
-  return false;
+// True if cmd/ir is a Group B gh write. Accepts IR object or raw string (backward compat).
+function isGhWriteCommand(ir) {
+  if (typeof ir === "string") ir = parse(ir);
+  return isGhWriteIR(ir);
 }
 
 // Per-segment EXCLUDE check for sequenced commands (#739).
-// Splits cmd on ; && || (quote-aware), then for each segment:
+// Accepts an IR object (post-#1294) or a raw command string (backward compat).
+// For each segment:
 //   - "read" → transparent (continue)
 //   - "write" → require all write targets to be EXCLUDE-matched
 // Returns true ONLY when ≥1 write segment was verified excluded AND no write
 // segment produced parseFailure / null targets / a non-excluded target.
 // Fail-closed: any unresolvable segment returns false.
-function isEverySegmentExcluded(cmd, repoRoot, patterns) {
-  if (!cmd || typeof cmd !== "string") return false;
+function isEverySegmentExcluded(ir, repoRoot, patterns) {
+  // Backward compat: accept raw string.
+  if (typeof ir === "string") ir = parse(ir);
+
+  if (!ir || ir.parseFailure === true) return false;
   if (!patterns || patterns.length === 0) return false;
-  if (cmd.includes("\r") || cmd.includes("\n")) return false;
-  const segments = splitShellCommands(cmd);
-  if (segments.length === 0) return false;
+  if (ir.rawText.includes("\r") || ir.rawText.includes("\n")) return false;
+  if (!ir.segments || ir.segments.length === 0) return false;
 
   let hasWriteSegment = false;
-  for (const segment of segments) {
-    const kind = classify(segment);
+  for (const seg of ir.segments) {
+    const segIr = { rawText: seg.rawText, segments: [seg], parseFailure: false, cmd0: seg.cmd0, argv: seg.argv, redirects: seg.redirects, kind: seg.kind, separators: [] };
+    const kind = classify(segIr);
     if (kind === "read") continue;
     // write segment
     hasWriteSegment = true;
-    const result = collectBashWriteTargets(segment);
+    const result = collectBashWriteTargets(segIr);
     if (result.parseFailure === true) return false;
     if (result.targets === null || result.targets.length === 0) return false;
     for (const target of result.targets) {
