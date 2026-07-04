@@ -57,9 +57,15 @@ function isQuotedWriteCommandWord(cmd) {
  * the body is a multi-line string (not file I/O) and the command is "read".
  * Returns "read" if no pattern matches or input is not a string.
  * Never throws.
+ * @param {string|import('../command-ir').IR} cmdOrIr
  */
 function classify(cmd) {
   try {
+    // IR shim: if an IR object is passed, use it directly; re-parse skipped.
+    if (cmd !== null && typeof cmd === "object" && "rawText" in cmd) {
+      if (cmd.parseFailure === true) return "write";
+      cmd = cmd.rawText;
+    }
     if (!cmd || typeof cmd !== "string") return "read";
     const trimmed = cmd.trim();
     if (isStrictSentinel(trimmed)) {
