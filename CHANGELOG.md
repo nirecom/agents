@@ -335,3 +335,7 @@ Changes: Your configured conversation language (CONV_LANG) is now re-applied on 
 ### FEATURE: PR #1302 (2026-07-04)
 Background: feat: authoritative recorded-verdict skip for outline/detail stages
 Changes: Outline/detail planning stages now auto-skip only when the orchestrator's recorded skip judgment passes full rubric validation and is stored as an auditable verdict; a partial or malformed judgment no longer skips planning (fail-safe). Refines the auto-skip introduced in #1298.
+
+### FEATURE: PR #1322 (2026-07-04)
+Background: feat(#1293): canary-2 — splitSegments fd-dup fix + shared-cmd-utils IR migration
+Changes: POSIX fd-dup redirects (2>&1, 1>&2, >&2, N>&-, >&-) no longer cause false-block errors on worktree commands such as git merge 2>&1 or git pull --ff-only 2>&1. The enforce-worktree hook now recognizes these as redirect operators rather than shell-chaining operators at the parser level, permanently eliminating a class of false positives that recurred three times (#982, #838, #959).
