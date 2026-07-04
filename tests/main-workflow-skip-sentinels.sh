@@ -28,15 +28,29 @@ mkdir -p "$WORKFLOW_DIR"
 export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Clear Claude Code session env vars so that resolveSessionId() in the mark/gate
+# hooks does not inherit the outer Claude Code session (Priority 1 = JSON field,
+# Priority 2 = CLAUDE_CODE_SESSION_ID). Tests that need a session_id supply it
+# explicitly via the JSON payload. Tests that test the "no session_id" path
+# (WS-SK-NO-SID-*) rely on resolution returning null — this unset ensures that
+# fallback is not short-circuited by inherited session state from the runner.
+unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+unset CLAUDE_SESSION_ID 2>/dev/null || true
+
 setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"
     mkdir -p "$repo"
     git -C "$repo" init -q
+    # Disable git-native hooks for this throwaway temp repo so that any global
+    # core.hooksPath (e.g. pointing at the agents repo hooks dir) does not
+    # block the initial commit. The test exercises workflow-gate.js (a Claude
+    # Code PreToolUse hook fed via stdin), not git-native hooks.
+    git -C "$repo" config core.hooksPath /dev/null
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
     echo "init" > "$repo/README.md"
     git -C "$repo" add README.md
-    git -C "$repo" commit -q -m "initial"
+    git -C "$repo" commit -q --no-verify -m "initial"
     echo "$repo"
 }
 
@@ -165,7 +179,24 @@ to_node_path() {
 
 run_gate() {
     local json="$1"
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null
+    # Extract the -C <repo-path> from the gate command so that AGENTS_CONFIG_DIR
+    # points at the same repo. isAgentsSessionRepo() compares the git common-dirs
+    # of the target repo and AGENTS_CONFIG_DIR; when they match (same temp repo),
+    # the gate enforces workflow state rather than short-circuiting via the
+    # cross-repo bypass (#1138). This is correct: the test exercises the gate
+    # logic itself, not which physical repo the commit targets.
+    local gate_repo
+    gate_repo=$(echo "$json" | node -e "
+      const s = JSON.parse(require('fs').readFileSync(0,'utf8'));
+      const cmd = (s.tool_input && s.tool_input.command) || '';
+      const m = cmd.match(/git -C ([^ ]+) commit/);
+      console.log(m ? m[1] : '');
+    " 2>/dev/null || true)
+    if [ -n "$gate_repo" ]; then
+        echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" AGENTS_CONFIG_DIR="$gate_repo" node "$GATE_HOOK" 2>/dev/null
+    else
+        echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null
+    fi
 }
 
 run_mark() {

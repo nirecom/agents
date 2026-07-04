@@ -28,9 +28,9 @@ Read `skills/_shared/judge-task-complexity.md`; evaluate all signals against tas
 
 Delegate to **planner** (Agent tool, `subagent_type: detail-planner`, `model: <from MDP-3>`). Pass task context + intent/outline contents.
 
-### Step MDP-4a — Sentinel detection (adaptive skip)
+### Step MDP-4a — Sentinel detection (fallback notice)
 
-If planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`: invoke MDP-5 with `MAX_EXTENSIONS=0` (one round, no extensions). APPROVED → MDP-7. HIGH/MEDIUM residual → ESCALATE with concerns + draft. Sentinel absent → MDP-5 unchanged.
+If planner draft's first line contains `<<DETAIL_SKIPPABLE_BY_PLANNER:`, this is a fallback notice indicating no pre-flight recorded verdict existed when the session was planned. Do NOT set MAX_EXTENSIONS=0. Proceed to MDP-5 normally. Sentinel absent → MDP-5 unchanged.
 
 ### Step MDP-5 — Codex review loop
 
