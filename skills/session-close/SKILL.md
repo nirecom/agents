@@ -4,7 +4,7 @@ description: Orchestrate session close — Phase 2 issue close + Final Report. R
 user-invocable: true
 ---
 
-Session close orchestrator. Drives `/issue-close-finalize` (when applicable),
+Session close orchestrator. Drives `issue-close-finalize` (when applicable),
 collects the outcome JSON written by Step L, and emits the Final Report by
 substituting the skeleton from `hooks/lib/final-report-schema.renderSkeleton`.
 Replaces the legacy "Step 7" emit inside `/worktree-end` so the Final Report
@@ -34,7 +34,15 @@ fallback chain used by `--from-session`. If unresolvable, abort:
 `<PLANS_DIR>` and `<session-id>` are **LLM-substituted literals** — shell variables
 do not persist between Bash tool calls.
 
-## Step SC-1 — Detect ENFORCE_WORKTREE mode
+## Step SC-1a — Detect WF-META session
+
+Run:
+  node -e "try{const s=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/workflow-state').readState('<session-id>');process.stdout.write(s&&s.workflow_type==='wf-meta'?'yes':'no')}catch(_){process.stdout.write('no')}"
+
+- stdout `yes` → WF-META session. Record `IS_WF_META=yes` as an LLM-tracked state literal (not a shell variable — every Bash call is self-contained). Proceed to SC-2C.
+- stdout `no` → proceed to SC-1b (ENFORCE_WORKTREE detection).
+
+## Step SC-1b — Detect ENFORCE_WORKTREE mode
 
 Check via Bash:
 `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" ENFORCE_WORKTREE on'`
@@ -63,7 +71,29 @@ Exit 0 → write the late-finding alert eligibility flag (#997):
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
 Then proceed to SC-3. Non-zero → abort (PR unresolvable).
 
+## Step SC-2C — WF-META path: write PR-less env JSON
+
+  node "$AGENTS_CONFIG_DIR"/bin/session-close-build-env.js --wf-meta "<PLANS_DIR>/<session-id>-final-report-env.json"
+
+Exit 0 → write the late-finding alert eligibility flag:
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-eligible-phase post_final_report_window
+
+Record supervisor notice:
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity notice --detail "WF-META session: SC-2C path taken — env JSON written with empty PR fields" --reporter session-close
+
+Retain `IS_WF_META=yes` and proceed to SC-3.
+
 ## Step SC-3 — Non-GitHub pre-flight + issue close dispatch
+
+If `IS_WF_META=yes` (set in SC-2C): write `skipped_wf_meta` outcomes directly:
+
+  node "$AGENTS_CONFIG_DIR"/bin/issue-close-write-outcome.js --wf-meta '<ISSUES_JSON_ARRAY>' "<PLANS_DIR>/<session-id>-issue-close-outcome.json"
+
+`<ISSUES_JSON_ARRAY>` is the JSON number array the LLM parses from intent.md via `hooks/lib/parse-closes-issues.js`, inlined as a literal. When intent.md is absent, use `'[]'`.
+
+Then skip directly to SC-6. WF-META skips `is-github-dotcom-remote` and never invokes `/issue-close-finalize` — `skipped_wf_meta` is written regardless of remote type.
+
+If `IS_WF_META` is unset or `no`: proceed with the `is-github-dotcom-remote` check below.
 
 ```bash
 bash "$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; echo "NON_GITHUB_RC=$?"
@@ -139,6 +169,7 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 - `<BRANCH>`, `<WORKTREE_PATH>`, `<CREATED_DATE>`, `<BACKUP_MANIFEST_PATH>`, `<BRANCH_DELETED>` → env JSON fields (use `(none)` when empty)
 - `<CLOSED_ISSUES_LIST>` → parse `closes_issues` from intent.md; render as `- #N` lines or `- (none)`
 - `<CLOSED_ISSUE_OUTCOMES>` → one line per issue from outcome JSON `issues[]`: `- #N: <state> (history: <historyEntry>, closed: <issueClosed>, sentinels: <sentinelsPosted>, wip: <wipCleared>)`; when outcome JSON missing or `issues` empty: `- (outcome data not found — investigate)`
+  - `state: "skipped_wf_meta"` → display as `kept open (planning session)`; other subfields remain as-is.
 - `<CC_RESTART_REQUIRED_DECISION>` → `required (<CC_RESTART_REASON>)` when `CC_RESTART_REQUIRED` is `required`, otherwise `not_required`
 - `<VSCODE_RELOAD_REQUIRED_DECISION>` → same pattern using `VSCODE_RELOAD_REQUIRED` / `VSCODE_RELOAD_REASON`
 - `<INSTALLER_RERUN_REQUIRED_DECISION>` → same pattern using `INSTALLER_RERUN_REQUIRED` / `INSTALLER_RERUN_REASON`
@@ -187,3 +218,4 @@ Mark surfaced and complete:
 - Every Bash call is self-contained — no shell variable crosses call boundaries.
 - On fallback or step degradation (synthetic outcome fallback, non-GitHub skip path): run `node "$AGENTS_CONFIG_DIR/bin/supervisor-report" --categories workflow --severity warning --detail "<describe fallback>" --reporter session-close` (session-id auto-resolves).
 - Report observations per rules/supervisor-reporting.md.
+- WF-META session (`workflow_type: wf-meta`) → never invoke `/issue-close-finalize`; SC-3 writes `skipped_wf_meta` outcome directly and skips to SC-6.
