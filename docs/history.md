@@ -278,4 +278,8 @@ Changes: #513: Extracted CI-C0 tracking-issue guard and GH reconcile from clarif
 
 ### FEATURE: PR #1288 — feature/1248-cap-auto-extend (2026-07-04, 339daff1365f75470113fa45ab02cdf8805bea1f, #1288)
 Background: feat(#1248): collapse review-cap decisions into review-loop-verdict
-Changes: FEATURE: Collapse planner-review cap decisions into review-loop-verdict (#1248, 339daff) <!-- compose-doc-append-sentinel: branch=feature/1248-cap-auto-extend pr=#1288 -->
+Changes: FEATURE: Collapse planner-review cap decisions into review-loop-verdict (#1248, 339daff) <!-- compose-doc-append-sentinel: branch=feature/1248-cap-auto-extend pr=#1288 -->
+
+### FEATURE: PR #1291 — feature/1287-outline-planner-intent-lock (2026-07-04, 674f769a454ab70ed7dd368d19b4dd8f29bd87ec, #1291)
+Background: feat(#1287): outline-planner detects intent-lock in Accepted Tradeoffs and emits SINGLE_APPROACH_JUSTIFIED
+Changes: Added intent-lock collapse rule to outline-planner: detects non-empty `## Accepted Tradeoffs` locking a design direction and emits `SINGLE_APPROACH_JUSTIFIED` instead of fabricating straw alternatives; outline-reviewer updated to not flag missing alternatives when direction is locked via accepted tradeoffs <!-- compose-doc-append-sentinel: branch=feature/1287-outline-planner-intent-lock pr=#1291 -->
