@@ -323,3 +323,7 @@ Changes: WF-META (planning-only) sessions now complete `/session-close` successf
 ### FEATURE: PR #1312 (2026-07-04)
 Background: feat(#1292): add command-ir.js IR + classify() false-positive fixes (#876, #1223)
 Changes: Fixed: `pwsh script.ps1 --out-file result.txt` and similar commands using `--out-file` as a CLI flag were incorrectly blocked by the worktree write guard; they now classify as read (#876).;Fixed: `git log path/to/reset/file.js`, `git diff -- src/reset/config.ts`, and similar commands where "reset" appears in a path argument were incorrectly blocked as git-reset operations; they now classify as read (#1223).
+
+### FEATURE: PR #1313 (2026-07-04)
+Background: feat(#1306): add cross-repo issue routing to workflow-init (L1 explicit tokens + L2 prose detection)
+Changes: Cross-repo issue routing: `workflow-init` now handles issues from multiple repos in a single session — explicit `repo#N` or `owner/repo#N` tokens route all `gh` calls (WIP state, board card, label, closed-state check) to the correct repo for each issue.
