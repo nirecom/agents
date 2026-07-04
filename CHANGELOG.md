@@ -331,3 +331,7 @@ Changes: Cross-repo issue routing: `workflow-init` now handles issues from multi
 ### FEATURE: PR #1314 (2026-07-04)
 Background: feat(#1303): proactive language-directive injection
 Changes: Your configured conversation language (CONV_LANG) is now re-applied on every turn, so long sessions no longer drift back to English partway through.;While a plan is being written, the plan-artifact language (PLAN_LANG) is now steered proactively rather than only corrected after the plan is already written.
+
+### FEATURE: PR #1302 (2026-07-04)
+Background: feat: authoritative recorded-verdict skip for outline/detail stages
+Changes: Outline/detail planning stages now auto-skip only when the orchestrator's recorded skip judgment passes full rubric validation and is stored as an auditable verdict; a partial or malformed judgment no longer skips planning (fail-safe). Refines the auto-skip introduced in #1298.
