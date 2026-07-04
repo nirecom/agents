@@ -242,9 +242,6 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram${C_RESET}\n"
 ln -sf "$AGENTS_ROOT/bin/draw-diagram-gemini" ~/.local/bin/draw-diagram-gemini
 printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram-gemini${C_RESET}\n"
 
-# --- ~/.local/bin/review-loop-cap-menu symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-loop-cap-menu" ~/.local/bin/review-loop-cap-menu
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-loop-cap-menu${C_RESET}\n"
 
 # --- ~/.local/bin/extract-accepted-tradeoffs symlink ---
 ln -sf "$AGENTS_ROOT/bin/extract-accepted-tradeoffs" ~/.local/bin/extract-accepted-tradeoffs

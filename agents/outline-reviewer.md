@@ -90,9 +90,9 @@ C2: unresolved — <reason>
 - On Round 2+, introducing a new concern is prohibited; the orchestrator will discard it and emit a stderr warning. Reference prior IDs only.
 - Symmetry with Research Escalation: `skills/make-detail-plan/SKILL.md` establishes
   "Approve further research / provide answer / adjust scope" on research cap. The
-  revision-rounds cap is the symmetric pair. Both caps now route through
-  `bin/review-loop-cap-menu`. Do NOT propose alternative escalation flows that bypass
-  this helper.
+  revision-rounds cap is the symmetric pair. Both caps route through
+  `bin/review-loop-verdict` (exit 2 = ESCALATE, exit 5 = AUTO_EXTEND). Do NOT propose
+  alternative escalation flows that bypass this helper.
 - **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` §4):**
   outline.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
   verbatim from intent.md. If any required section is absent or modified relative to
