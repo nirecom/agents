@@ -1,6 +1,6 @@
 #!/bin/bash
 # Aggregate WIP check for workflow-init Step WI-5 (formerly Step 3(a)).
-# Usage: aggregate-wip-check.sh [--session-id <SID>] <N1> [N2 ...]
+# Usage: aggregate-wip-check.sh [--session-id <SID>] [--repo-map IDX:owner/repo ...] <N1> [N2 ...]
 # Outputs one of: ALL_SAME <wip> | ALL_NONE | MIXED_SAME_NONE | ANY_OTHER <N,...> | ERROR <N,...>
 set -uo pipefail
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
@@ -12,6 +12,7 @@ BRIDGE="$_dir/../../../bin/resolve-session-id"
 
 SID_ARG=""
 SID_SET=0
+declare -A REPO_OF
 ISSUES=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -21,6 +22,13 @@ while [ $# -gt 0 ]; do
             ;;
         --session-id=*)
             SID_ARG="${1#--session-id=}"; SID_SET=1; shift
+            ;;
+        --repo-map)
+            [ $# -lt 2 ] && { echo "Error: --repo-map requires a value" >&2; exit 2; }
+            KEY="${2%%:*}"; VAL="${2#*:}"; REPO_OF["$KEY"]="$VAL"; shift 2
+            ;;
+        --repo-map=*)
+            PAIR="${1#--repo-map=}"; KEY="${PAIR%%:*}"; VAL="${PAIR#*:}"; REPO_OF["$KEY"]="$VAL"; shift
             ;;
         --) shift; while [ $# -gt 0 ]; do ISSUES+=("$1"); shift; done ;;
         -*) echo "Error: unknown option: $1" >&2; exit 2 ;;
@@ -50,10 +58,14 @@ all_same=1
 all_none=1
 any_other=0
 
-for N in ${ISSUES[@]:+"${ISSUES[@]}"}; do
+for i in "${!ISSUES[@]}"; do
+    N="${ISSUES[$i]}"
     CHECK_ARGS=(check "$N")
     if [ "$SID_SET" -eq 1 ]; then
         CHECK_ARGS+=(--session-id "$SID_ARG")
+    fi
+    if [ -n "${REPO_OF[$i]:-}" ]; then
+        CHECK_ARGS+=(--repo "${REPO_OF[$i]}")
     fi
     WIP_RC=0
     WIP_OUT=$(bash "$WIP_SCRIPT" "${CHECK_ARGS[@]}" 2>/dev/null) || WIP_RC=$?

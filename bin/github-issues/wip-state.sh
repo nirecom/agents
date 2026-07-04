@@ -23,6 +23,7 @@ CMD=""
 N=""
 INJECTED_SID=""
 SID_SET=0
+REPO_OVERRIDE=""
 
 usage() {
     sed -n '2,18p' "$0" >&2
@@ -42,6 +43,17 @@ while [ $# -gt 0 ]; do
         --session-id=*)
             INJECTED_SID="${1#--session-id=}"
             SID_SET=1
+            shift
+            ;;
+        --repo)
+            if [ $# -lt 2 ]; then
+                echo "Error: --repo requires a value" >&2; exit 2
+            fi
+            REPO_OVERRIDE="$2"
+            shift 2
+            ;;
+        --repo=*)
+            REPO_OVERRIDE="${1#--repo=}"
             shift
             ;;
         -h|--help) usage 0 ;;
@@ -69,6 +81,13 @@ if [ "$CMD" = "clear" ] && [ "$SID_SET" -eq 1 ]; then
     exit 2
 fi
 
+if [[ -n "$REPO_OVERRIDE" ]]; then
+    if ! [[ "$REPO_OVERRIDE" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+        echo "Error: invalid --repo value: $REPO_OVERRIDE" >&2
+        exit 2
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # .env auto-source. Claude Code's Bash subprocess shell does not propagate
 # .env automatically, so a `setup`-written WIP_STATE_*_ID would still be
@@ -91,6 +110,9 @@ load_env_file() {
     return 0
 }
 load_env_file
+
+BOARD_CARD_REPO_OVERRIDE="${REPO_OVERRIDE:-}"
+export BOARD_CARD_REPO_OVERRIDE
 
 # shellcheck source=lib/board-card.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/board-card.sh"
