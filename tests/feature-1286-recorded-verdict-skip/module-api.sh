@@ -149,3 +149,69 @@ rv19d|detail|{ sd_c1: false, sd_c2: true, sd_c3: true }|false
 rv19e|detail|{ sd_c1: true, sd_c2: true, sd_c3: false }|false
 rv19f|detail|{ sd_c1: true, sd_c2: true, sd_c3: true }|true
 TABLE
+
+# ---------------------------------------------------------------------------
+# RV-20..RV-31: hardening #2 (plan RV-20..RV-31) — hasValidSkipJudgment
+# per-target condition-key schema validation (table-driven).
+#
+# Strategy: plant a FULLY-FORMED envelope via write_state (not recordSkipJudgment)
+# with all_conditions_met:true, judgment_source:"orchestrator", valid recorded_at —
+# and vary ONLY the `conditions` object per case. This isolates the schema check
+# from the all_conditions_met check already tested in RV-1..RV-5/RV-19.
+# Mirror the envelope shape used in next-step.sh RV-REC-1.
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== RV-20..RV-31: hardening #2 — per-target condition-key schema (table-driven) ==="
+
+# assert_eq already defined above.
+# Helper: build a fully-formed skip_judgment envelope for a given target step,
+# piping the appropriate base JSON via stdin (avoids env-var quoting issues).
+# Usage: build_schema_fixture <sid> <target> <conditions-js-literal>
+build_schema_fixture() {
+  local bsf_sid="$1" bsf_target="$2" bsf_cond="$3"
+  # Choose base fixture with the target step present.
+  local bsf_base
+  if [ "$bsf_target" = "outline" ]; then bsf_base="$JSON_AT_OUTLINE"
+  else bsf_base="$JSON_AT_DETAIL"; fi
+  local bsf_json
+  bsf_json="$(printf '%s' "$bsf_base" | run_with_timeout node -e "
+    let d=''; process.stdin.on('data',c=>d+=c);
+    process.stdin.on('end',()=>{
+      const s=JSON.parse(d);
+      s.steps['$bsf_target'].skip_judgment={
+        recorded_at:'2026-01-01T00:00:00.000Z',
+        judgment_source:'orchestrator',
+        conditions:$bsf_cond,
+        all_conditions_met:true
+      };
+      process.stdout.write(JSON.stringify(s));
+    });
+  " 2>/dev/null)"
+  write_state "$bsf_sid" "$bsf_json"
+}
+
+# Table: rv_sid | target | conditions-json | expected-valid (true|false) | case-label
+while IFS='|' read -r h2_sid h2_target h2_cond h2_want h2_label; do
+  [ -z "$h2_sid" ] && continue
+  build_schema_fixture "$h2_sid" "$h2_target" "$h2_cond"
+  H2_OUT="$(resolver_eval "
+    if (typeof r.hasValidSkipJudgment !== 'function') { console.log('NOT_FUNCTION'); process.exit(0); }
+    const result = r.hasValidSkipJudgment('$h2_sid', '$h2_target');
+    console.log(result ? 'true' : 'false');
+  ")"
+  h2_got="$(printf '%s' "$H2_OUT" | grep -E '^(true|false)$' | head -1)"
+  assert_eq "$h2_label" "$h2_want" "$h2_got"
+done <<'SCHEMA_TABLE'
+rv20|outline|{so_c1:true,so_c2:true}|true|RV-20: outline {so_c1:true,so_c2:true} → valid=true (baseline)
+rv21|outline|{so_c1:true}|false|RV-21: outline {so_c1:true} → valid=false (so_c2 missing)
+rv22|outline|{"so_c1":true,"so_c2":"true"}|false|RV-22: outline {so_c1:true,so_c2:"true"} → valid=false (string non-boolean-true)
+rv23|outline|{"so_c1":true,"so_c2":1}|false|RV-23: outline {so_c1:true,so_c2:1} → valid=false (number)
+rv24|outline|{"so_c1":true,"so_c2":false}|false|RV-24: outline {so_c1:true,so_c2:false} → valid=false (false)
+rv25|outline|{"sd_c1":true,"sd_c2":true,"sd_c3":true}|false|RV-25: outline {sd_c1:*} → valid=false (wrong-target keys)
+rv26|outline|{"so_c1":true,"so_c2":true,"extra":true}|false|RV-26: outline {so_c1:true,so_c2:true,extra:true} → valid=false (excess key)
+rv27|detail|{"sd_c1":true,"sd_c2":true,"sd_c3":true}|true|RV-27: detail {sd_c1:true,sd_c2:true,sd_c3:true} → valid=true (baseline)
+rv28|detail|{"sd_c1":true,"sd_c2":true}|false|RV-28: detail {sd_c1:true,sd_c2:true} → valid=false (sd_c3 missing)
+rv29|detail|{"sd_c1":true,"sd_c2":true,"sd_c3":"true"}|false|RV-29: detail {sd_c1:true,sd_c2:true,sd_c3:"true"} → valid=false (string)
+rv30|detail|{"so_c1":true,"so_c2":true}|false|RV-30: detail {so_c1:*,so_c2:*} → valid=false (step/target mismatch)
+rv31|detail|{"sd_c1":true,"sd_c2":true,"sd_c3":true,"sd_c4":true}|false|RV-31: detail {sd_c1..sd_c4} → valid=false (excess key)
+SCHEMA_TABLE

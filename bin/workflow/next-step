@@ -442,31 +442,38 @@ function computeVerdict(rawSid, _didAutoRepair) {
     ? ("Run /" + skill + " via the Skill tool.")
     : (STEP_HINT[currentStep] || currentStep);
 
-  // #1286: authoritative recorded-verdict skip. When a valid skip_judgment
-  // (judgment_source=orchestrator, all_conditions_met=true) is present, mark the
-  // step skipped and recurse — advancing past it without user confirmation.
-  // This runs BEFORE the advisory isTrivial hint block below.
-  if (currentStep === "outline") {
+  // #1286 + #1300 hardening #3/#7: authoritative recorded-verdict skip.
+  // applyRecordedVerdictSkip reads skip_judgment exactly once (EXPORTED read),
+  // validates it, and passes the same object into markStep so the audit record survives.
+  // Returns null on any failure/invalid/absent path (caller falls through, no recursion).
+  function applyRecordedVerdictSkip(sid, rawSid, stepName, skipReason) {
     try {
-      const { hasValidSkipJudgment: hvsj1286o } = require("../../hooks/lib/workflow-state");
-      if (hvsj1286o(sid, "outline")) {
-        try {
-          markStep(sid, "outline", "skipped", { skip_reason: "recorded-verdict: so_c1+so_c2 met" });
-          return computeVerdict(rawSid, true);
-        } catch (_) { /* markStep failed to persist — fall through to normal emit; do NOT recurse (prevents unbounded re-entry when the skip mark cannot be written) */ }
+      const wfState = require("../../hooks/lib/workflow-state");
+      const hvsj = wfState.hasValidSkipJudgment;
+      const rsjFn = wfState.readSkipJudgment;
+      const irvFn = wfState.isRecordedVerdictValid;
+      if (typeof hvsj !== "function" || typeof rsjFn !== "function") return null;
+      if (!hvsj(sid, stepName)) return null;   // local UNCOUNTED gate read
+      const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
+      if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
+      try {
+        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj });
+        return computeVerdict(rawSid, true);
+      } catch (_) {
+        return null;   // markStep/verdict failed — fall through, NO recursion
       }
-    } catch (_) { /* fail-open */ }
+    } catch (_) {
+      return null;   // fail-open
+    }
+  }
+
+  if (currentStep === "outline") {
+    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", "recorded-verdict: so_c1+so_c2 met");
+    if (v !== null) return v;
   }
   if (currentStep === "detail") {
-    try {
-      const { hasValidSkipJudgment: hvsj1286d } = require("../../hooks/lib/workflow-state");
-      if (hvsj1286d(sid, "detail")) {
-        try {
-          markStep(sid, "detail", "skipped", { skip_reason: "recorded-verdict: sd_c1+sd_c2+sd_c3 met" });
-          return computeVerdict(rawSid, true);
-        } catch (_) { /* markStep failed to persist — fall through to normal emit; do NOT recurse */ }
-      }
-    } catch (_) { /* fail-open */ }
+    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", "recorded-verdict: sd_c1+sd_c2+sd_c3 met");
+    if (v !== null) return v;
   }
 
   // #485: advisory plan-skip hint at outline/detail only. isTrivial reads

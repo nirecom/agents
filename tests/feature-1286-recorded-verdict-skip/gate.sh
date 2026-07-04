@@ -80,3 +80,26 @@ INPUT="$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: no session>>"')"
 OUT="$(unset CONFIRM_OUTLINE WORKFLOW_SESSION_ID 2>/dev/null || true
   AGENTS_CONFIG_DIR="$EMPTY_CONFIG_DIR" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_gate "$INPUT")"
 assert_passthrough_gate "RV-17: no session-id + no CONFIRM_OUTLINE → pass-through (fail-open)" "$OUT"
+
+# ---------------------------------------------------------------------------
+# RV-32: hardening #5 (plan RV-18) — gate resolves session_id from hook input
+# JSON's top-level session_id field, not only WORKFLOW_SESSION_ID env.
+#
+# Build a gate input JSON that includes both tool_input.command (the
+# OUTLINE_NOT_NEEDED echo) AND a top-level "session_id":"rv32". Plant a valid
+# outline record for rv32. Run the gate with WORKFLOW_SESSION_ID UNSET.
+# The gate must read input.session_id and resolve the record → allow.
+# RED until hardening #5 changes resolveSessionId({}) to
+# resolveSessionId({ sessionIdFromInput: input.session_id }).
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== RV-32: hardening #5 — gate resolves session_id from input JSON (not only env) ==="
+plant_record "rv32" "outline" "{ so_c1: true, so_c2: true }"
+# Build input JSON with both the sentinel command AND top-level session_id.
+RV32_CMD='echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: recorded judgment>>"'
+RV32_CMD_ESC="${RV32_CMD//\\/\\\\}"
+RV32_CMD_ESC="${RV32_CMD_ESC//\"/\\\"}"
+RV32_INPUT="$(printf '{"tool_name":"Bash","session_id":"rv32","tool_input":{"command":"%s"}}' "$RV32_CMD_ESC")"
+OUT="$(unset WORKFLOW_SESSION_ID 2>/dev/null || true
+  AGENTS_CONFIG_DIR="$EMPTY_CONFIG_DIR" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_gate "$RV32_INPUT")"
+assert_allow_gate "RV-32: gate resolves session_id from input JSON → allow (no WORKFLOW_SESSION_ID env)" "$OUT"

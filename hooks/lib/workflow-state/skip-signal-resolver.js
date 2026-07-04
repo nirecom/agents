@@ -78,6 +78,33 @@ function isTrivial(sessionId, plansDir) {
   }
 }
 
+// ---- Per-target condition schemas (#1300 hardening #2) ---------------------
+
+const CONDITION_SCHEMAS = Object.freeze({
+  outline: Object.freeze(["so_c1", "so_c2"]),
+  detail: Object.freeze(["sd_c1", "sd_c2", "sd_c3"]),
+});
+
+function isRecordedVerdictValid(sj, targetStep) {
+  try {
+    if (!sj || typeof sj !== "object" || Array.isArray(sj)) return false;
+    if (sj.judgment_source !== "orchestrator") return false;
+    if (sj.all_conditions_met !== true) return false;
+    const expectedKeys = CONDITION_SCHEMAS[targetStep];
+    if (!expectedKeys) return false;
+    const cond = sj.conditions;
+    if (!cond || typeof cond !== "object" || Array.isArray(cond)) return false;
+    const actualKeys = Object.keys(cond);
+    if (actualKeys.length !== expectedKeys.length) return false;
+    for (const k of expectedKeys) {
+      if (cond[k] !== true) return false;
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 // ---- Recorded-verdict API (#1286) -----------------------------------------
 
 // recordSkipJudgment(sessionId, targetStep, conditions, source):
@@ -123,13 +150,14 @@ function readSkipJudgment(sessionId, targetStep) {
 
 // hasValidSkipJudgment(sessionId, targetStep):
 // Returns true iff readSkipJudgment returns a non-null object AND
-// judgment_source === "orchestrator" AND all_conditions_met === true.
+// judgment_source === "orchestrator" AND all_conditions_met === true AND
+// conditions matches the per-target schema exactly (hardening #2, #1300).
 // Never throws (fail to false).
 function hasValidSkipJudgment(sessionId, targetStep) {
   try {
     const sj = readSkipJudgment(sessionId, targetStep);
     if (!sj) return false;
-    return sj.judgment_source === "orchestrator" && sj.all_conditions_met === true;
+    return isRecordedVerdictValid(sj, targetStep);
   } catch (_) {
     return false;
   }
@@ -157,6 +185,8 @@ module.exports = {
   MECHANICAL_RE,
   BROAD_RE,
   NEW_API_RE,
+  CONDITION_SCHEMAS,
+  isRecordedVerdictValid,
   recordSkipJudgment,
   readSkipJudgment,
   hasValidSkipJudgment,

@@ -18,9 +18,24 @@
 // Exits 0 on success, 1 on bad args.
 
 const path = require("path");
-const { recordSkipJudgment } = require(
+const { recordSkipJudgment, readSkipJudgment } = require(
   path.join(__dirname, "..", "..", "hooks", "lib", "workflow-state")
 );
+
+function verifyWrite(sj, conditions, allMet) {
+  if (!sj || typeof sj !== "object" || Array.isArray(sj)) return false;
+  if (sj.judgment_source !== "orchestrator") return false;
+  if (sj.all_conditions_met !== allMet) return false;
+  const rc = sj.conditions;
+  if (!rc || typeof rc !== "object" || Array.isArray(rc)) return false;
+  const expectedKeys = Object.keys(conditions);
+  const actualKeys = Object.keys(rc);
+  if (actualKeys.length !== expectedKeys.length) return false;
+  for (const k of expectedKeys) {
+    if (rc[k] !== conditions[k]) return false;
+  }
+  return true;
+}
 
 // Parse a boolean-flag value. Returns { value: bool, consumed: 0|1 }.
 // consumed=1 means the next token was consumed as the value.
@@ -102,6 +117,15 @@ function main() {
   }
 
   recordSkipJudgment(args.session.trim(), args.target, conditions, "orchestrator");
+
+  // Hardening #1 (#1300): recordSkipJudgment is fail-open/silent. Read the record
+  // back and confirm it matches EXACTLY what this invocation wrote — a failed write
+  // or a stale prior record must not be reported as success.
+  const __readBack = readSkipJudgment(args.session.trim(), args.target);
+  if (!verifyWrite(__readBack, conditions, allMet)) {
+    process.stderr.write("record-skip-judgment: write verification failed for target " + args.target + "\n");
+    process.exit(1);
+  }
 
   process.stdout.write("RECORDED=" + args.target + " all_conditions_met=" + allMet + "\n");
   process.exit(0);

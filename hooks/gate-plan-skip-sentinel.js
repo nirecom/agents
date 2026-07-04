@@ -59,7 +59,7 @@ try {
   if (wsid && /^[A-Za-z0-9_-]+$/.test(wsid.trim())) {
     resolvedSessionId = wsid.trim();
   } else if (typeof resolveSessionId === "function") {
-    resolvedSessionId = resolveSessionId({}) || null;
+    resolvedSessionId = resolveSessionId({ sessionIdFromInput: input.session_id }) || null;
   }
 } catch (_) { resolvedSessionId = null; }
 

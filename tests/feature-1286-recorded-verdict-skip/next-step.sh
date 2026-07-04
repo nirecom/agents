@@ -147,6 +147,48 @@ check_not_contains "RV-REC-1d: must not have advanced past outline to detail" \
 rm -rf "$RVREC1_TMP_DIR"
 
 # ---------------------------------------------------------------------------
+# RV-35: hardening #3/#7 (plan RV-17) — skip_judgment audit trail preserved.
+# After next-step skips outline, the outline step's state must retain the
+# original skip_judgment object (same judgment_source, conditions,
+# all_conditions_met) — proving markStep extraFields carries it through.
+# RED until hardening #3/#7 passes skip_judgment into markStep extraFields.
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== RV-35: hardening #3/#7 — skip_judgment audit field preserved after outline skip ==="
+write_state "rv35" "$JSON_AT_OUTLINE"
+plant_record "rv35" "outline" "{ so_c1: true, so_c2: true }"
+# Capture the planted record BEFORE running next-step.
+RV35_BEFORE="$(read_skip_judgment_raw rv35 outline)"
+# Run next-step to trigger the outline skip.
+RV35_OUT="$(run_next rv35)"
+# Capture the skip_judgment stored in state AFTER next-step ran.
+RV35_AFTER="$(read_skip_judgment_raw rv35 outline)"
+# The skip_judgment field must still be present (not null) after the skip.
+if [ "$RV35_AFTER" = "null" ]; then
+  fail "RV-35a: skip_judgment removed from outline step after skip (should be preserved)"
+else
+  pass "RV-35a: skip_judgment present in outline step after skip"
+fi
+# judgment_source must equal "orchestrator" in the stored field.
+RV35_SRC="$(printf '%s' "$RV35_AFTER" | run_with_timeout node -e "
+  let d=''; process.stdin.on('data',c=>d+=c);
+  process.stdin.on('end',()=>{
+    try { const o=JSON.parse(d); console.log(o&&o.judgment_source||'missing'); }
+    catch(e){ console.log('PARSE_ERR'); }
+  });
+" 2>/dev/null || echo "READ_ERR")"
+check "RV-35b: stored skip_judgment.judgment_source=orchestrator" "orchestrator" "$RV35_SRC"
+# all_conditions_met must be true in the stored field.
+RV35_ACM="$(printf '%s' "$RV35_AFTER" | run_with_timeout node -e "
+  let d=''; process.stdin.on('data',c=>d+=c);
+  process.stdin.on('end',()=>{
+    try { const o=JSON.parse(d); console.log(o&&o.all_conditions_met===true?'true':'false'); }
+    catch(e){ console.log('PARSE_ERR'); }
+  });
+" 2>/dev/null || echo "READ_ERR")"
+check "RV-35c: stored skip_judgment.all_conditions_met=true" "true" "$RV35_ACM"
+
+# ---------------------------------------------------------------------------
 # RV-REC-2: same defect in the detail skip block.
 # ---------------------------------------------------------------------------
 echo ""
@@ -199,3 +241,76 @@ check_contains "RV-REC-2c: fell through to normal detail handling — NEXT_SKILL
   "NEXT_SKILL=make-detail-plan" "$RVREC2_OUT"
 
 rm -rf "$RVREC2_TMP_DIR"
+
+# ---------------------------------------------------------------------------
+# RV-36: hardening #3/#7 (plan RV-17b) — single-read: applyRecordedVerdictSkip
+# reads skip_judgment exactly once per outline-skip invocation.
+#
+# Uses a new preload read-skip-judgment-counter.js that wraps readSkipJudgment
+# in skip-signal-resolver.js and counts calls. Writes count to RSJ_COUNTER_FILE.
+# Assert count == 1 (no double-read race).
+#
+# The preload wraps resolverModule.readSkipJudgment (the function exported by
+# skip-signal-resolver.js). After hardening #3/#7, next-step reads it once inside
+# applyRecordedVerdictSkip. Wrapping the resolver export is observed because
+# --require runs before next-step loads, so the module is already patched in cache
+# when next-step's require() calls resolve.
+#
+# Sanity-guard: hasValidSkipJudgment must be TRUE for the fixture so the skip
+# branch is actually entered; otherwise count==0 would be a false green.
+# RED if the helper reads readSkipJudgment zero times (skip branch not entered)
+# or more than once (double-read race).
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== RV-36: hardening #3/#7 — applyRecordedVerdictSkip reads skip_judgment exactly once ==="
+
+RSJ_COUNTER_PRELOAD_N="$(cygpath -m "$AGENTS_DIR/tests/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js" 2>/dev/null || echo "$AGENTS_DIR/tests/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js")"
+
+# Build fixture: valid outline record for rv36.
+RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
+  let d=''; process.stdin.on('data',c=>d+=c);
+  process.stdin.on('end',()=>{
+    const s=JSON.parse(d);
+    s.steps.outline.skip_judgment={
+      recorded_at:'2026-01-01T00:00:00.000Z',
+      judgment_source:'orchestrator',
+      conditions:{so_c1:true,so_c2:true},
+      all_conditions_met:true
+    };
+    console.log(JSON.stringify(s));
+  });
+")"
+write_state "rv36" "$RV36_JSON"
+
+# Sanity-guard: hasValidSkipJudgment must be TRUE for this fixture.
+RV36_HVSJ="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" node -e "
+  const r = require('$RESOLVER_N');
+  if (typeof r.hasValidSkipJudgment !== 'function') { console.log('NOT_FUNCTION'); process.exit(0); }
+  const result = r.hasValidSkipJudgment('rv36', 'outline');
+  console.log(result ? 'TRUE' : 'FALSE');
+" 2>&1)"
+if [ "$RV36_HVSJ" = "NOT_FUNCTION" ]; then
+  fail "RV-36 sanity: hasValidSkipJudgment is not a function — skip branch will not be entered"
+elif [ "$RV36_HVSJ" != "TRUE" ]; then
+  fail "RV-36 sanity: hasValidSkipJudgment returned [$RV36_HVSJ] for rv36/outline fixture — expected TRUE; skip branch will not be entered"
+else
+  pass "RV-36 sanity: hasValidSkipJudgment is TRUE for rv36 outline fixture"
+fi
+
+# Counter file.
+RV36_CTR_FILE="$WORKFLOW_DIR/rv36-rsj-counter.txt"
+RV36_CTR_FILE_N="$(cygpath -m "$RV36_CTR_FILE" 2>/dev/null || echo "$RV36_CTR_FILE")"
+
+# Run next-step with the readSkipJudgment counter preload.
+RV36_OUT="$(RSJ_COUNTER_FILE="$RV36_CTR_FILE_N" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" bash "$AGENTS_DIR/bin/run-with-timeout.sh" 20 node --require "$RSJ_COUNTER_PRELOAD_N" "$NEXT_STEP_N" --session rv36 2>&1)"; RV36_RC=$?
+
+RV36_CTR="$(cat "$RV36_CTR_FILE" 2>/dev/null || echo "0")"
+
+# RV-36a: must complete without timeout/crash.
+check "RV-36a: exit code is 0 (no timeout, no crash)" "0" "$RV36_RC"
+
+# RV-36b: readSkipJudgment called exactly once (single-read, no double-read race).
+check "RV-36b: readSkipJudgment called exactly once — no double-read race (unfixed or no-skip-branch: !=1)" "1" "$RV36_CTR"
+
+# RV-36c: outline was actually skipped (skip branch was entered, not just bypassed).
+check_contains "RV-36c: outline skipped → NEXT_SKILL=make-detail-plan" "NEXT_SKILL=make-detail-plan" "$RV36_OUT"
