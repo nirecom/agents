@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # clarify-commit-scope.sh — GH reconcile extraction for clarify-intent (#513)
-# Args: --session-id <sid> --plans-dir <dir> --issues <csv> [--non-github] [--repo <slug>]
+# Args: --session-id <sid> --plans-dir <dir> --issues <csv>
+#       [--repo-map IDX:owner/repo ...] [--non-github] [--repo <slug>]
 # stdout: CREATED:<N> | CLOSED:<N> | RC2
 # exit: 0 success, 1 gh failure, 2 CLOSED entry or WIP RC2, 2 bad plans-dir
 #
@@ -8,6 +9,8 @@
 #   then per-N: gh issue edit --add-label → wip-set-single.sh → ensure-board-card.sh.
 # Path C (empty --issues): gh issue create --label intent:clarified → CREATED:<N>.
 # --non-github: skip all gh calls, exit 0.
+# --repo-map IDX:owner/repo: per-issue repo routing for Path B (repeatable).
+# --repo <slug>: repo for Path C gh issue create (backward compat).
 set -uo pipefail
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
@@ -18,6 +21,7 @@ ISSUES_CSV=""
 ISSUES_SET=0
 NON_GITHUB=0
 REPO_SLUG=""
+declare -A REPO_OF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -26,6 +30,13 @@ while [[ $# -gt 0 ]]; do
         --issues)      ISSUES_CSV="${2:-}"; ISSUES_SET=1; shift 2 ;;
         --non-github)  NON_GITHUB=1; shift ;;
         --repo)        REPO_SLUG="${2:-}"; shift 2 ;;
+        --repo-map)
+            [ $# -lt 2 ] && { echo "[clarify-commit-scope] --repo-map requires a value" >&2; exit 2; }
+            KEY="${2%%:*}"; VAL="${2#*:}"; REPO_OF["$KEY"]="$VAL"; shift 2
+            ;;
+        --repo-map=*)
+            PAIR="${1#--repo-map=}"; KEY="${PAIR%%:*}"; VAL="${PAIR#*:}"; REPO_OF["$KEY"]="$VAL"; shift
+            ;;
         *) echo "[clarify-commit-scope] unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -76,14 +87,20 @@ fi
 # Split CSV into array
 IFS=',' read -ra ISSUE_LIST <<< "$ISSUES_CSV"
 
-# CLOSED pre-scan FIRST — before any side effects
+# Build clean array (trim spaces, skip blanks)
+CLEAN_ISSUES=()
 for N in "${ISSUE_LIST[@]}"; do
     N="${N// /}"
     [[ -z "$N" ]] && continue
-    # issue-state-check.sh accepts [--repo slug] <N>; found via PATH or AGENTS_CONFIG_DIR
+    CLEAN_ISSUES+=("$N")
+done
+
+# CLOSED pre-scan FIRST — before any side effects
+for i in "${!CLEAN_ISSUES[@]}"; do
+    N="${CLEAN_ISSUES[$i]}"
     STATE_OUT=""
     STATE_RC=0
-    STATE_OUT=$(issue-state-check.sh "${REPO_ARGS[@]}" "$N" 2>/dev/null) || STATE_RC=$?
+    STATE_OUT=$(issue-state-check.sh ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} "$N" 2>/dev/null) || STATE_RC=$?
     if [[ "$STATE_OUT" = "closed" ]]; then
         echo "CLOSED:${N}"
         exit 2
@@ -91,17 +108,21 @@ for N in "${ISSUE_LIST[@]}"; do
 done
 
 # Per-N side effects: label → wip → board
-for N in "${ISSUE_LIST[@]}"; do
-    N="${N// /}"
-    [[ -z "$N" ]] && continue
-    gh issue edit "$N" --add-label "intent:clarified" "${REPO_ARGS[@]}" 2>/dev/null || true
+for i in "${!CLEAN_ISSUES[@]}"; do
+    N="${CLEAN_ISSUES[$i]}"
+    ISSUE_REPO_ARGS=()
+    if [ -n "${REPO_OF[$i]:-}" ]; then
+        ISSUE_REPO_ARGS+=(--repo "${REPO_OF[$i]}")
+    fi
+    gh issue edit "$N" --add-label "intent:clarified" "${ISSUE_REPO_ARGS[@]}" 2>/dev/null || true
     WIP_RC=0
-    WIP_OUT=$(wip-set-single.sh set "$N" 2>/dev/null) || WIP_RC=$?
+    # C4 fix: wip-set-single.sh does not accept "set" as a positional verb
+    WIP_OUT=$(wip-set-single.sh "${ISSUE_REPO_ARGS[@]}" "$N" 2>/dev/null) || WIP_RC=$?
     if [[ "$WIP_RC" -eq 2 ]]; then
         echo "RC2"
         exit 2
     fi
-    ensure-board-card.sh "$N" 2>/dev/null || true
+    ensure-board-card.sh "${ISSUE_REPO_ARGS[@]}" "$N" 2>/dev/null || true
 done
 
 exit 0

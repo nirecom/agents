@@ -41,13 +41,24 @@ CI-3a. **Decomposition impact** — computed non-interactively by `precheck-comp
      - **WF-CODE**: proceed silently to CI-4. Never auto-switch to wf-meta without this confirmation.
 
 CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
-   - Skip silently when `closes_issues` contains no cross-repo references (no `owner/repo#N` or bare `repo#N` form). Proceed to CI-4.
+
+   **Layer 1 — existing closes_issues cross-repo references:**
+   - Skip silently when `closes_issues` contains no cross-repo references (no `owner/repo#N` or bare `repo#N` form). Proceed to Layer 2.
    - Determine primary repo: run `git remote get-url origin` and normalize to `owner/repo` format.
    - Collect all cross-repo entries from `closes_issues`; normalize bare `repo#N` to `owner/repo#N` using the primary owner; deduplicate by insertion order.
-   - For each unique sibling `owner/repo` (i.e. not the primary repo): call `AskUserQuestion` once: "セッションに `<owner/repo>` のイシューが含まれています。このセッションで使用するそのリポジトリのリンク worktree の絶対パスを入力してください（スキップする場合は空白のままにしてください）。"
+   - For each unique sibling `owner/repo` (i.e. not the primary repo): call `AskUserQuestion` once: "The session contains an issue from `<owner/repo>`. Enter the absolute path to the linked worktree for that repository (leave blank to skip)."
    - Non-empty answer → record as `{repo: "<owner/repo>", worktree_path: "<answer>"}`.
-   - Empty / skipped → record `<owner/repo> の sibling worktree 不在` under `## Constraints` in intent.md.
-   - After all probes: CI-4 writes a `## worktrees` section with the collected results.
+   - Empty / skipped → record `<owner/repo> sibling worktree absent` under `## Constraints` in intent.md.
+
+   **Layer 2 — prose detection for additional cross-repo issue references:**
+   - From context.md `## User initial prompt` and `## Issue body`, extract candidate strings that look like `repo#N` or `owner/repo#N` tokens (broad prefilter: any word containing `#` followed by digits).
+   - Pipe candidate strings to `node "$AGENTS_CONFIG_DIR/bin/parse-issue-tokens" <candidates...>` — Node handles `#` splitting (C2: shell must not parse).
+   - Filter for entries with `repo` field set AND not already in `closes_issues`.
+   - For each candidate: normalize short-form repo via `gh repo view "<repo>" --json owner,name --jq '.owner.login + "/" + .name'`; on failure, skip.
+   - Propose each via `AskUserQuestion` (confirm/skip): "A reference to `<owner/repo>#<N>` was found in the context. Add this issue to closes_issues?"
+   - Add confirmed ones to `closes_issues` in intent.md as `- owner/repo#N` format.
+
+   After all probes: CI-4 writes a `## worktrees` section with the collected results.
 
 CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`), `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews.
 
@@ -88,8 +99,12 @@ Run the non-GitHub gate: `"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"`. rc=
 
 Read `closes_issues` from intent.md (canonical parser: `hooks/lib/parse-closes-issues.js`). This is the confirmed post-CI-5 SSOT.
 
+Build `REPO_MAP_ARGS` from the parsed entries: for each entry at index `i` with `repo` field set, add `--repo-map i:<repo>`. Pass bare integers as `--issues` CSV.
+
 **Reconcile side effects** (label / WIP set / board-card parity for all entries, or Path-C issue creation when empty):
-`bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-commit-scope.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>" --issues "$(IFS=,; echo "${closes_issues[*]}")" [--non-github]`.
+`bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-commit-scope.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>" --issues "$(IFS=,; echo "${closes_numbers[*]}")" "${REPO_MAP_ARGS[@]}" [--non-github]`.
+
+(`closes_numbers` is the bare-integer CSV extracted from the parsed `closes_issues` array.)
 
 The CLI runs the per-entry order For each issue N in `closes_issues`:
 1. `intent:clarified` add-label,
