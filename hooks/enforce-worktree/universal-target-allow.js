@@ -7,6 +7,7 @@
 
 const { collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir } = require("./bash-write-scope");
 const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc } = require("./shared-cmd-utils");
+const { parse } = require("../lib/command-ir");
 
 /**
  * Check whether a Bash command's write targets are all outside the session scope.
@@ -32,9 +33,10 @@ const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc } = require("./
  * @param {object} toolInput  The tool_input object from the hook payload.
  * @param {Set<string>} sessionRoots  Set of repo roots considered in-session (from getSessionRepoRoots()).
  * @param {string|null|undefined} repoRoot  Resolved repo root for the Bash command's CWD, or null/undefined.
+ * @param {import('../lib/command-ir').IR} [ir]  Optional pre-parsed IR; if omitted, cmd is parsed internally.
  * @returns {{ verdict: 'allow' | 'abstain', reason?: string }}
  */
-function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot) {
+function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir) {
   try {
     // Only applies to Bash commands; Edit/Write/MultiEdit are handled by
     // isInSessionScope in the caller (line ~387 of enforce-worktree.js).
@@ -48,6 +50,8 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot) 
     const cmd = (toolInput && typeof toolInput.command === "string") ? toolInput.command : "";
     if (!cmd) return { verdict: "abstain" };
 
+    const irToUse = ir || parse(cmd);
+
     // Guard 2 (C1 fail-closed): sequenced commands may contain repo-internal write
     // segments invisible to any single extractor. Abstain immediately — UNLESS the
     // sequencing operators appear only inside a heredoc body (#1109) AND all targets
@@ -55,13 +59,13 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot) 
     if (hasCommandSequencing(cmd)) {
       if (hasCommandSequencingOutsideHeredoc(cmd)) return { verdict: "abstain" };
       // Sequencing is heredoc-body-only: check targets now; allow if all under plans-dir.
-      const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(cmd);
+      const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(irToUse);
       if (hPf || !areAllBashTargetsUnderPlansDir(hTargets)) return { verdict: "abstain" };
       return { verdict: "allow", reason: "heredoc-body-only sequencing; all write targets under plans-dir" };
     }
 
     // Extract write targets from all applicable extractors.
-    const { targets, parseFailure } = collectBashWriteTargets(cmd);
+    const { targets, parseFailure } = collectBashWriteTargets(irToUse);
 
     // Guard 3: parse failure from any extractor → abstain (fail-closed).
     if (parseFailure) return { verdict: "abstain" };
