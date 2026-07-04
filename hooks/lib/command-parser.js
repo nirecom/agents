@@ -265,4 +265,5 @@ module.exports = {
   stripSubstitutions,
   extractSubstitutionContents,
   REDIRECT_RE,
+  ATTACHED_REDIRECT_RE,
 };
