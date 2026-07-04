@@ -6,7 +6,13 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
 
 Steps use prefix `WF-<TYPE>-N`; `WF-CODE-N` = standard implementation. `WF-META-N` = planning-only (meta issues, no worktree).
 
-After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID`. Follow `ACTION` / `NEXT_SKILL` / `NEXT_HINT` output — `invoke` means run the named skill immediately without pausing to ask the user (reserve confirmation for `CONFIRM_*` gates, the `USER_VERIFIED` sentinel, and in-skill `AskUserQuestion`), `done` means proceed to session close, `blocked`/`abort` means see `NEXT_HINT` for recovery. Run `bin/workflow/next-step --list` for the full 14-step plan. Emergency partial reset: `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` (reason mandatory; marks prior steps complete, resets target step and after to pending).
+After each skill completes, run: `node bin/workflow/next-step --session $CLAUDE_SESSION_ID`. Follow `ACTION` / `NEXT_SKILL` / `NEXT_HINT` output:
+- `invoke`: run `NEXT_SKILL` immediately without pausing (reserve confirmation for `CONFIRM_*` gates, the `USER_VERIFIED` sentinel, and in-skill `AskUserQuestion`)
+- `judgment_needed`: follow `NEXT_HINT` instructions
+- `done`: proceed to session close
+- `blocked`/`abort`: see `NEXT_HINT` for recovery
+
+Run `bin/workflow/next-step --list` for the full 14-step plan. Emergency partial reset: `echo "<<WORKFLOW_RESET_FROM_{step}: {reason}>>"` (reason mandatory; marks prior steps complete, resets target step and after to pending).
 
 ## Notes
 
