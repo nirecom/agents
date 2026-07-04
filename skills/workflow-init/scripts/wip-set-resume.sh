@@ -7,7 +7,7 @@
 # early-claim WIP via wip-set-single.sh for each OPEN non-meta N so a
 # concurrent session cannot grab the issue during the clarify window.
 #
-# Usage: wip-set-resume.sh [--session-id <SID>] [N...]
+# Usage: wip-set-resume.sh [--session-id <SID>] [--repo-map IDX:owner/repo ...] [N...]
 # Env:   AGENTS_CONFIG_DIR (required)
 #
 # Stdout tokens:
@@ -28,11 +28,11 @@ set -uo pipefail
 WIP_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh"
 SINGLE_SCRIPT="$AGENTS_CONFIG_DIR/bin/github-issues/wip-set-single.sh"
 
-_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-BRIDGE="$_dir/../../../bin/resolve-session-id"
+BRIDGE="$AGENTS_CONFIG_DIR/bin/resolve-session-id"
 
 SID_ARG=""
 SID_SET=0
+declare -A REPO_OF
 ISSUES=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -42,6 +42,13 @@ while [ $# -gt 0 ]; do
             ;;
         --session-id=*)
             SID_ARG="${1#--session-id=}"; SID_SET=1; shift
+            ;;
+        --repo-map)
+            [ $# -lt 2 ] && { echo "Error: --repo-map requires a value" >&2; exit 2; }
+            KEY="${2%%:*}"; VAL="${2#*:}"; REPO_OF["$KEY"]="$VAL"; shift 2
+            ;;
+        --repo-map=*)
+            PAIR="${1#--repo-map=}"; KEY="${PAIR%%:*}"; VAL="${PAIR#*:}"; REPO_OF["$KEY"]="$VAL"; shift
             ;;
         --) shift; while [ $# -gt 0 ]; do ISSUES+=("$1"); shift; done ;;
         -*) echo "Error: unknown option: $1" >&2; exit 2 ;;
@@ -68,9 +75,10 @@ trap 'rm -f "$TMPFILE" 2>/dev/null' EXIT
 
 ALL_CLARIFIED=1
 
-# Pass 1: fetch labels + state for each N, cache to temp file as N\tLABELS_JSON\tSTATE.
-for N in ${ISSUES[@]:+"${ISSUES[@]}"}; do
-    RAW=$(gh issue view "$N" --json labels,state 2>/dev/null) || RAW=""
+# Pass 1: fetch labels + state for each N, cache to temp file as IDX\tN\tLABELS_JSON\tSTATE.
+for i in "${!ISSUES[@]}"; do
+    N="${ISSUES[$i]}"
+    RAW=$(gh issue view "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --json labels,state 2>/dev/null) || RAW=""
     if [ -z "$RAW" ]; then
         LABELS_JSON=""; STATE=""
     else
@@ -80,19 +88,19 @@ for N in ${ISSUES[@]:+"${ISSUES[@]}"}; do
     if [ -z "$LABELS_JSON" ]; then
         echo "warn: label probe for #$N failed — treating as intent:clarified absent" >&2
         ALL_CLARIFIED=0
-        printf '%s\t%s\t%s\n' "$N" "" "" >> "$TMPFILE"
+        printf '%s\t%s\t%s\t%s\n' "$i" "$N" "" "" >> "$TMPFILE"
         continue
     fi
     if ! printf '%s' "$LABELS_JSON" | grep -q '"intent:clarified"'; then
         ALL_CLARIFIED=0
     fi
-    printf '%s\t%s\t%s\n' "$N" "$LABELS_JSON" "$STATE" >> "$TMPFILE"
+    printf '%s\t%s\t%s\t%s\n' "$i" "$N" "$LABELS_JSON" "$STATE" >> "$TMPFILE"
 done
 
 # If not all clarified, emit NEEDS_CLARIFY with the list of unlabeled N's.
 if [ "$ALL_CLARIFIED" -eq 0 ]; then
     NOT_CLARIFIED_CSV=""
-    while IFS=$'\t' read -r N LABELS_JSON STATE; do
+    while IFS=$'\t' read -r IDX N LABELS_JSON STATE; do
         if [ -z "$LABELS_JSON" ] || ! printf '%s' "$LABELS_JSON" | grep -q '"intent:clarified"'; then
             if [ -z "$NOT_CLARIFIED_CSV" ]; then
                 NOT_CLARIFIED_CSV="$N"
@@ -104,18 +112,21 @@ if [ "$ALL_CLARIFIED" -eq 0 ]; then
     echo "NEEDS_CLARIFY $NOT_CLARIFIED_CSV"
 
     # Early WIP claim for each OPEN non-meta N (claim early, resolve label later).
-    while IFS=$'\t' read -r N LABELS_JSON STATE; do
+    while IFS=$'\t' read -r IDX N LABELS_JSON STATE; do
         # Fail-safe: if state probe failed (empty STATE) or CLOSED, do not claim.
         [ -z "$STATE" ] && continue
         [ "$STATE" != "OPEN" ] && continue
         # meta issues never get WIP.
         if printf '%s' "$LABELS_JSON" | grep -q '"meta"'; then continue; fi
-        CLAIM_RC=0
+        CLAIM_ARGS=()
         if [ "$SID_SET" -eq 1 ]; then
-            bash "$SINGLE_SCRIPT" --session-id "$SID_ARG" "$N" >/dev/null 2>&1 || CLAIM_RC=$?
-        else
-            bash "$SINGLE_SCRIPT" "$N" >/dev/null 2>&1 || CLAIM_RC=$?
+            CLAIM_ARGS+=(--session-id "$SID_ARG")
         fi
+        if [ -n "${REPO_OF[$IDX]:-}" ]; then
+            CLAIM_ARGS+=(--repo "${REPO_OF[$IDX]}")
+        fi
+        CLAIM_RC=0
+        bash "$SINGLE_SCRIPT" "${CLAIM_ARGS[@]}" "$N" >/dev/null 2>&1 || CLAIM_RC=$?
         case "$CLAIM_RC" in
             0) echo "early-claim: SET_OK $N" >&2 ;;
             2)
@@ -129,7 +140,7 @@ if [ "$ALL_CLARIFIED" -eq 0 ]; then
 fi
 
 # Pass 2: all clarified — set WIP per non-meta N.
-while IFS=$'\t' read -r N LABELS_JSON STATE; do
+while IFS=$'\t' read -r IDX N LABELS_JSON STATE; do
     if printf '%s' "$LABELS_JSON" | grep -q '"meta"'; then
         echo "META_SKIP $N"
         continue
@@ -137,6 +148,9 @@ while IFS=$'\t' read -r N LABELS_JSON STATE; do
     WIP_ARGS=(set "$N")
     if [ "$SID_SET" -eq 1 ]; then
         WIP_ARGS+=(--session-id "$SID_ARG")
+    fi
+    if [ -n "${REPO_OF[$IDX]:-}" ]; then
+        WIP_ARGS+=(--repo "${REPO_OF[$IDX]}")
     fi
     RC=0
     bash "$WIP_SCRIPT" "${WIP_ARGS[@]}" || RC=$?
