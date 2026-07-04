@@ -145,4 +145,4 @@ try {
 " "$raw" 2>/dev/null
 }
 
-EXPECTED_JA='Respond to the user in japanese.'
+EXPECTED_JA='Respond to the user in japanese. This applies to all text you write, including narration between tool calls.'
