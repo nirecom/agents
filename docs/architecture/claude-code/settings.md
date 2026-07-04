@@ -112,6 +112,14 @@ See `docs/security-policy.md` for the full pattern list.
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and
   clears `last_pushed_sha`. Forces fresh branch/worktree creation for the next task.
+- `lang-inject.js` (UserPromptSubmit) — per-turn re-injection of the `CONV_LANG`
+  directive to counter language drift in long sessions (lost-in-the-middle); additionally
+  injects the `PLAN_LANG` directive when `isPlanning()` is true (any of
+  `clarify_intent`/`outline`/`detail` not complete/skipped) so plan artifacts are steered
+  before they are written. Directive text is the shared SSOT from `getConvLangInjection`
+  / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
+  source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
+  planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
 
 **Permission glob matching**: Permissions are matched against the entire command string.
 `&&` does not split into subcommands. `Bash(git commit *)` does not match
