@@ -442,11 +442,39 @@ function computeVerdict(rawSid, _didAutoRepair) {
     ? ("Run /" + skill + " via the Skill tool.")
     : (STEP_HINT[currentStep] || currentStep);
 
+  // #1286: authoritative recorded-verdict skip. When a valid skip_judgment
+  // (judgment_source=orchestrator, all_conditions_met=true) is present, mark the
+  // step skipped and recurse — advancing past it without user confirmation.
+  // This runs BEFORE the advisory isTrivial hint block below.
+  if (currentStep === "outline") {
+    try {
+      const { hasValidSkipJudgment: hvsj1286o } = require("../../hooks/lib/workflow-state");
+      if (hvsj1286o(sid, "outline")) {
+        try {
+          markStep(sid, "outline", "skipped", { skip_reason: "recorded-verdict: so_c1+so_c2 met" });
+          return computeVerdict(rawSid, true);
+        } catch (_) { /* markStep failed to persist — fall through to normal emit; do NOT recurse (prevents unbounded re-entry when the skip mark cannot be written) */ }
+      }
+    } catch (_) { /* fail-open */ }
+  }
+  if (currentStep === "detail") {
+    try {
+      const { hasValidSkipJudgment: hvsj1286d } = require("../../hooks/lib/workflow-state");
+      if (hvsj1286d(sid, "detail")) {
+        try {
+          markStep(sid, "detail", "skipped", { skip_reason: "recorded-verdict: sd_c1+sd_c2+sd_c3 met" });
+          return computeVerdict(rawSid, true);
+        } catch (_) { /* markStep failed to persist — fall through to normal emit; do NOT recurse */ }
+      }
+    } catch (_) { /* fail-open */ }
+  }
+
   // #485: advisory plan-skip hint at outline/detail only. isTrivial reads
   // intent.md (fail-open to false). next-step only ever sees one current step,
   // and outline precedes detail, so a detail hint surfaces only after outline is
   // complete/skipped — automatically satisfying "emit only WORKFLOW_OUTLINE_NOT_NEEDED
   // when both are skippable". Purely advisory: does not change the verdict.
+  // isTrivial is now a WEAK SUPPLEMENTARY hint (demoted from sole gate by #1286).
   let skipHint = "";
   if (currentStep === "outline" || currentStep === "detail") {
     try {

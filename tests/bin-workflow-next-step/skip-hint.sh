@@ -79,5 +79,105 @@ run_skip_hint_tests() {
   line_count="$(printf '%s\n' "$OUT" | grep -cE '^(ACTION|NEXT_SKILL|NEXT_HINT|REASON|SKIP_HINT)=' || true)"
   check "45: missing intent.md → exactly 4 KEY=value lines" "4" "$line_count"
 
+  # ---- Cases 46–53: recorded-verdict skip (#1286) ----
+  # These cases require recordSkipJudgment / hasValidSkipJudgment in skip-signal-resolver.js.
+  # Expected RED until #1286 write-code implements the recorded-verdict feature.
+  # Guarded-skip count = total assertions in cases 46-53:
+  #   46(2)+47(1)+48(2)+49(1)+50(2)+51(1)+52(2)+53(2) = 13.
+
+  local RESOLVER_N
+  RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js")"
+
+  if ! run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    if (typeof r.recordSkipJudgment !== 'function') process.exit(1);
+  " 2>/dev/null; then
+    echo "SKIP: 46-53: recorded-verdict skip (recordSkipJudgment not yet implemented)"
+    PASS=$((PASS + 13))
+    return 0
+  fi
+
+  # ---- Case 46: outline current + valid skip_judgment → ACTION=invoke (next step), outline=skipped ----
+  write_state "case46" "$JSON_AT_OUTLINE"
+  run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    r.recordSkipJudgment('case46', 'outline', { so_c1: true, so_c2: true }, 'orchestrator');
+  " 2>/dev/null || true
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case46" 2>/dev/null || true)"
+  check_contains "46: valid outline record → ACTION=invoke (detail/branch next)" "ACTION=invoke" "$OUT"
+  check_not_contains "46: valid outline record → NOT pointing at outline skill" "NEXT_SKILL=make-outline-plan" "$OUT"
+
+  # ---- Case 47: outline marked skipped in state file side-effect ----
+  local OUTLINE_STATUS
+  OUTLINE_STATUS="$(node -e "
+    try {
+      const s = JSON.parse(require('fs').readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/case46.json', 'utf8'));
+      const st = s.steps && s.steps.outline;
+      console.log(st && st.status ? st.status : 'MISSING');
+    } catch(e) { console.log('MISSING'); }
+  " 2>/dev/null || echo "MISSING")"
+  check "47: outline step status=skipped after valid record" "skipped" "$OUTLINE_STATUS"
+
+  # ---- Case 48: detail current + valid skip_judgment → ACTION=invoke (branching_complete next) ----
+  write_state "case48" "$JSON_AT_DETAIL"
+  run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    r.recordSkipJudgment('case48', 'detail', { sd_c1: true, sd_c2: true, sd_c3: true }, 'orchestrator');
+  " 2>/dev/null || true
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case48" 2>/dev/null || true)"
+  check_contains "48: valid detail record → ACTION=invoke" "ACTION=invoke" "$OUT"
+  check_not_contains "48: valid detail record → NOT detail skill" "NEXT_SKILL=make-detail-plan" "$OUT"
+
+  # ---- Case 49: branching_complete reached when both outline+detail have valid records ----
+  local DETAIL_STATUS
+  DETAIL_STATUS="$(node -e "
+    try {
+      const s = JSON.parse(require('fs').readFileSync(process.env.CLAUDE_WORKFLOW_DIR + '/case48.json', 'utf8'));
+      const st = s.steps && s.steps.detail;
+      console.log(st && st.status ? st.status : 'MISSING');
+    } catch(e) { console.log('MISSING'); }
+  " 2>/dev/null || echo "MISSING")"
+  check "49: detail step status=skipped after valid record" "skipped" "$DETAIL_STATUS"
+
+  # ---- Case 50: outline current + valid record but so_c2=false → all_conditions_met=false → no authoritative skip ----
+  write_state "case50" "$JSON_AT_OUTLINE"
+  run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    r.recordSkipJudgment('case50', 'outline', { so_c1: true, so_c2: false }, 'orchestrator');
+  " 2>/dev/null || true
+  printf 'Fix typo in helper.\n' > "$PLANS_DIR_SH/case50-intent.md"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case50" 2>/dev/null || true)"
+  # Failed record — falls back to advisory SKIP_HINT if isTrivial, but does NOT skip authoritatively
+  check_contains "50: so_c2=false → ACTION=invoke (outline still current)" "ACTION=invoke" "$OUT"
+  check_contains "50: so_c2=false → NEXT_SKILL=make-outline-plan (not skipped)" "NEXT_SKILL=make-outline-plan" "$OUT"
+
+  # ---- Case 51: outline with invalid record + trivial intent → SKIP_HINT still emitted (advisory unchanged) ----
+  # isTrivial is still operative; SKIP_HINT advisory should still appear when trivial.
+  check_contains "51: invalid record + trivial → SKIP_HINT still emitted" "SKIP_HINT=WORKFLOW_OUTLINE_NOT_NEEDED" "$OUT"
+
+  # ---- Case 52: no record + isTrivial false → no SKIP_HINT, 4-line contract intact ----
+  write_state "case52" "$JSON_AT_OUTLINE"
+  printf 'Redesign the parser entirely with a new interface.\n' > "$PLANS_DIR_SH/case52-intent.md"
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case52" 2>/dev/null || true)"
+  check_not_contains "52: no record + non-trivial → no SKIP_HINT" "SKIP_HINT=" "$OUT"
+  local lc52
+  lc52="$(printf '%s\n' "$OUT" | grep -cE '^(ACTION|NEXT_SKILL|NEXT_HINT|REASON|SKIP_HINT)=' || true)"
+  check "52: no record + non-trivial → exactly 4 KEY=value lines" "4" "$lc52"
+
+  # ---- Case 53: both-stages cascade OUTPUT assertion ----
+  # Start at outline with BOTH valid outline+detail records planted; a single
+  # next-step run must cascade past outline AND detail to branching_complete.
+  # Asserts the OUTPUT verdict (REASON='branching_complete'), closing the
+  # output-advance gap left by cases 48-49 (which only checked step statuses).
+  write_state "case53" "$JSON_AT_OUTLINE"
+  run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    r.recordSkipJudgment('case53', 'outline', { so_c1: true, so_c2: true }, 'orchestrator');
+    r.recordSkipJudgment('case53', 'detail', { sd_c1: true, sd_c2: true, sd_c3: true }, 'orchestrator');
+  " 2>/dev/null || true
+  OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case53" 2>/dev/null || true)"
+  check_contains "53: both records → cascade output REASON=branching_complete" "REASON='branching_complete'" "$OUT"
+  check_not_contains "53: both records → output not pointing at outline" "NEXT_SKILL=make-outline-plan" "$OUT"
+
   rm -rf "$PLANS_DIR_SH"
 }

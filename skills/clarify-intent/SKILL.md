@@ -123,6 +123,7 @@ CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).
+CI-C1b. **Both-stage skip record**: only when intent.md satisfies ALL of so_c1 (single obvious approach), so_c2 (change locations uniquely identified), sd_c1 (all files listed by path), sd_c2 (each edit content clear), sd_c3 (no unresolved design decisions) — perform 4 SEPARATE Bash calls in order: (1) `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true`; (2) `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --c1 true --c2 true --c3 true`; (3) `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` ; (4) `echo "<<WORKFLOW_DETAIL_NOT_NEEDED: {reason}>>"`. No chaining. If conditions not all met, skip this step.
 CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
 CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
