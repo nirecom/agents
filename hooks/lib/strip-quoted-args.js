@@ -173,7 +173,7 @@ function stripInlineBodyArg(str) {
 
 // Strip values of shell variable assignments: IDENTIFIER='...' and IDENTIFIER="...".
 // Anchored to line-start or after whitespace/command-separator to avoid partial matches.
-// keep in sync with bash-write-patterns.js classify() Group A re-strip block
+// keep in sync with classify() Group A re-strip in bash-write-patterns/classify.js
 function stripShellVarAssignment(str) {
   if (!str || typeof str !== "string") return str;
   try {
