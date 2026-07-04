@@ -223,12 +223,6 @@ Write-Launcher "$LocalBin\draw-diagram-gemini.cmd" $ddgCmdContent "draw-diagram-
 $ddgShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/draw-diagram-gemini`" `"`$@`"`n"
 Write-Launcher "$LocalBin\draw-diagram-gemini" $ddgShimContent "draw-diagram-gemini (bash shim)"
 
-# --- ~/.local/bin/review-loop-cap-menu launchers (cmd + bash shim) ---
-$rlcmCmdContent = "@echo off`r`nwsl bash -c ""review-loop-cap-menu %*""`r`n"
-Write-Launcher "$LocalBin\review-loop-cap-menu.cmd" $rlcmCmdContent "review-loop-cap-menu.cmd"
-$rlcmShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-loop-cap-menu`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-loop-cap-menu" $rlcmShimContent "review-loop-cap-menu (bash shim)"
-
 # --- ~/.local/bin/extract-accepted-tradeoffs launchers (cmd + bash shim) ---
 $eatCmdContent = "@echo off`r`nwsl bash -c ""extract-accepted-tradeoffs %*""`r`n"
 Write-Launcher "$LocalBin\extract-accepted-tradeoffs.cmd" $eatCmdContent "extract-accepted-tradeoffs.cmd"
