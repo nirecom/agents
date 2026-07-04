@@ -1,10 +1,23 @@
 "use strict";
-// Skip-signal resolver (#485): advisory predicate that suggests when planning
-// steps can be skipped for a trivial change. Read-only module: never mutates
-// workflow state; never throws.
+// Skip-signal resolver (#485 + #1286): advisory predicate (isTrivial) and
+// recorded-verdict judgment (recordSkipJudgment / hasValidSkipJudgment).
 //
-// isTrivial fails-open to FALSE (uncertain ⇒ run full workflow).
-// Mirrors the read-only / fail-open shape of evidence-resolver.js.
+// isTrivial: WEAK SUPPLEMENTARY hint only (demoted from sole gate by #1286).
+//   Fails-open to FALSE (uncertain ⇒ run full workflow).
+//   Mirrors the read-only / fail-open shape of evidence-resolver.js.
+//
+// Recorded-verdict API (#1286):
+//   skip_judgment schema — stored at state.steps[targetStep].skip_judgment:
+//     recorded_at:        ISO timestamp string (new Date().toISOString())
+//     judgment_source:    string; only "orchestrator" is a valid authoritative value
+//     conditions:         gate-specific boolean object:
+//                           outline: { so_c1, so_c2 }  (so = skip-outline)
+//                           detail:  { sd_c1, sd_c2, sd_c3 }  (sd = skip-detail)
+//     all_conditions_met: boolean = AND of all condition booleans in conditions
+//
+// recordSkipJudgment: records judgment without changing step status (fail-open/silent).
+// readSkipJudgment:   returns skip_judgment object or null (fail-open).
+// hasValidSkipJudgment: returns true iff source=orchestrator AND all_conditions_met=true.
 
 const fs = require("fs");
 const path = require("path");
@@ -65,6 +78,91 @@ function isTrivial(sessionId, plansDir) {
   }
 }
 
+// ---- Per-target condition schemas (#1300 hardening #2) ---------------------
+
+const CONDITION_SCHEMAS = Object.freeze({
+  outline: Object.freeze(["so_c1", "so_c2"]),
+  detail: Object.freeze(["sd_c1", "sd_c2", "sd_c3"]),
+});
+
+function isRecordedVerdictValid(sj, targetStep) {
+  try {
+    if (!sj || typeof sj !== "object" || Array.isArray(sj)) return false;
+    if (sj.judgment_source !== "orchestrator") return false;
+    if (sj.all_conditions_met !== true) return false;
+    const expectedKeys = CONDITION_SCHEMAS[targetStep];
+    if (!expectedKeys) return false;
+    const cond = sj.conditions;
+    if (!cond || typeof cond !== "object" || Array.isArray(cond)) return false;
+    const actualKeys = Object.keys(cond);
+    if (actualKeys.length !== expectedKeys.length) return false;
+    for (const k of expectedKeys) {
+      if (cond[k] !== true) return false;
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// ---- Recorded-verdict API (#1286) -----------------------------------------
+
+// recordSkipJudgment(sessionId, targetStep, conditions, source):
+// Attaches a skip_judgment record to state.steps[targetStep] WITHOUT changing
+// the step's status. Fail-open: any error → silent return.
+function recordSkipJudgment(sessionId, targetStep, conditions, source) {
+  try {
+    if (targetStep !== "outline" && targetStep !== "detail") return;
+    const { readState, markStep } = require("./state-io");
+    const state = readState(sessionId);
+    const currentStatus = (state && state.steps && state.steps[targetStep] && state.steps[targetStep].status) || "pending";
+    const condVals = Object.values(conditions || {});
+    const all_conditions_met = condVals.length > 0 && condVals.every((v) => v === true);
+    const skip_judgment = {
+      recorded_at: new Date().toISOString(),
+      judgment_source: source,
+      conditions: conditions || {},
+      all_conditions_met,
+    };
+    markStep(sessionId, targetStep, currentStatus, { skip_judgment });
+  } catch (_) {
+    // fail-open: silent
+  }
+}
+
+// readSkipJudgment(sessionId, targetStep):
+// Returns state.steps[targetStep].skip_judgment if present and a valid object
+// with all required fields; else null. Fail-open: any exception → null.
+function readSkipJudgment(sessionId, targetStep) {
+  try {
+    const { readState } = require("./state-io");
+    const state = readState(sessionId);
+    if (!state || !state.steps || !state.steps[targetStep]) return null;
+    const sj = state.steps[targetStep].skip_judgment;
+    if (!sj || typeof sj !== "object" || Array.isArray(sj)) return null;
+    // Require the essential fields to be present (partial objects → null).
+    if (!("judgment_source" in sj) || !("all_conditions_met" in sj) || !("conditions" in sj)) return null;
+    return sj;
+  } catch (_) {
+    return null;
+  }
+}
+
+// hasValidSkipJudgment(sessionId, targetStep):
+// Returns true iff readSkipJudgment returns a non-null object AND
+// judgment_source === "orchestrator" AND all_conditions_met === true AND
+// conditions matches the per-target schema exactly (hardening #2, #1300).
+// Never throws (fail to false).
+function hasValidSkipJudgment(sessionId, targetStep) {
+  try {
+    const sj = readSkipJudgment(sessionId, targetStep);
+    if (!sj) return false;
+    return isRecordedVerdictValid(sj, targetStep);
+  } catch (_) {
+    return false;
+  }
+}
+
 // describeSkipSignal(predicate): human-readable description of what a predicate
 // checks (mirrors evidence-resolver.js describeEvidence, but returns a single
 // joined string). For diagnostics/tests.
@@ -87,4 +185,9 @@ module.exports = {
   MECHANICAL_RE,
   BROAD_RE,
   NEW_API_RE,
+  CONDITION_SCHEMAS,
+  isRecordedVerdictValid,
+  recordSkipJudgment,
+  readSkipJudgment,
+  hasValidSkipJudgment,
 };
