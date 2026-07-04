@@ -311,3 +311,7 @@ Changes: clarify-intent now runs all companion checks (file overlap, keyword den
 ### FEATURE: PR #1298 (2026-07-04)
 Background: feat(#1259): replace outline/detail isTrivial regex with orchestrator judgment
 Changes: The orchestrator now judges whether to skip outline and detail planning stages by semantically reading intent.md / outline.md, replacing keyword-matching heuristics. Sessions with a single obvious approach skip planning automatically.
+
+### FEATURE: PR #1299 (2026-07-04)
+Background: docs(#1297): add agents terminology glossary (docs/glossary.md)
+Changes: Added a terminology glossary (docs/glossary.md) that indexes workflow stage names and abbreviations, grouped by category and each linking to its canonical definition.
