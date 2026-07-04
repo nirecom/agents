@@ -9,7 +9,6 @@ const REQUIRED_KEYS = ["ACTION", "NEXT_SKILL", "NEXT_HINT", "REASON"];
 // Optional keys (#485): present only when next-step emits them. SKIP_HINT is an
 // advisory plan-skip hint at the outline/detail steps; absent on every other
 // step. Kept out of REQUIRED_KEYS so the legacy 4-line next-step output still parses.
-// Valid ACTION values: invoke | judgment_needed | done | blocked | abort
 const OPTIONAL_KEYS = ["SKIP_HINT"];
 
 function parseNextStepOutput(stdout) {
