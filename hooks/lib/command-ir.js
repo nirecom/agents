@@ -6,7 +6,7 @@
 // and other callers can query without re-parsing. parseFailure===true forces "write"
 // (fail-closed). isOsTempPath(target) is the SSOT predicate for OS temp-path detection.
 
-const { tokenizeSegment, splitSegments, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
+const { tokenizeSegment, splitSegmentsWithSeparators, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
 
 // Extract the file descriptor string from a redirect operator.
 // Returns "1" for plain >, "1" for 1>, "2" for 2>, "&" for &>, etc.
@@ -98,6 +98,11 @@ function buildSegmentIR(segStr, isSubshell) {
  *   redirects: RedirectIR[], // redirects from first segment only: {op, fd, target}
  *   kind: string,            // "simple"|"pipeline"|"subshell"|"empty"
  *   rawText: string,         // ALWAYS the original cmd string, even on parseFailure
+ *   separators: string[],    // separator tokens between segments; recorded
+ *                            //   unconditionally at each split point (leading/
+ *                            //   trailing separators also recorded). May differ
+ *                            //   in length from segments.length - 1 (intentional
+ *                            //   for fail-closed behavior).
  *   parseFailure: boolean    // true when tokenization throws
  * }
  *
@@ -108,31 +113,19 @@ function parse(cmd) {
 
   try {
     if (!cmd || typeof cmd !== "string" || cmd.trim() === "") {
-      return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, parseFailure: false };
+      return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, separators: [], parseFailure: false };
     }
 
     // Fail-closed: unclosed quotes indicate malformed input
     if (hasUnclosedQuote(cmd)) {
-      return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, parseFailure: true };
+      return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, separators: [], parseFailure: true };
     }
 
     const trimmed = cmd.trim();
 
-    // Determine kind
-    let kind;
     const isSubshell = trimmed.startsWith("(");
-    if (isSubshell) {
-      kind = "subshell";
-    } else {
-      const segStrings = splitSegments(cmd);
-      if (segStrings.length > 1) {
-        kind = "pipeline";
-      } else {
-        kind = "simple";
-      }
-    }
-
-    const segStrings = splitSegments(cmd);
+    const { segs: segStrings, seps } = splitSegmentsWithSeparators(cmd);
+    const kind = isSubshell ? "subshell" : segStrings.length > 1 ? "pipeline" : "simple";
     const segments = segStrings.map((s) => buildSegmentIR(s, isSubshell));
 
     // Top-level IR comes from first segment
@@ -140,6 +133,7 @@ function parse(cmd) {
 
     return {
       segments,
+      separators: seps,
       cmd0: first.cmd0,
       argv: first.argv.slice(),
       redirects: first.redirects,
@@ -148,7 +142,7 @@ function parse(cmd) {
       parseFailure: false,
     };
   } catch (e) {
-    return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, parseFailure: true };
+    return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, separators: [], parseFailure: true };
   }
 }
 
