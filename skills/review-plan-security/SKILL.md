@@ -1,71 +1,27 @@
 ---
 name: review-plan-security
-description: Review architecture security across three axes before implementation.
+description: Codex-primary single-round security review of the implementation plan across three axes before implementation.
 model: opus
 effort: medium
 context: fork
 ---
 
-Review security implications of the current task across three axes.
-
-## Rules
-
-- **TodoWrite is mandatory.** Do not evaluate inline without it.
-- Evaluate all three axes — do not skip axes that seem irrelevant (report N/A instead).
-- Reference specific OWASP/CWE identifiers when reporting risks.
-- This checklist is for architecture/planning review — code-level pattern scanning is covered by `/review-code-security`.
-- Sibling sweep: enumerate functions, logic, or patterns the change touches that belong to a class; flag siblings as MUST / OPTIONAL / NA for same treatment.
+Review security implications of the implementation plan via Codex (single round, no re-loop).
 
 ## Procedure
 
-RPS-1. Read the implementation plan or task description.
-RPS-2. Register all checklist items from the three axes into TodoWrite
-   (one task per item, prefixed with axis name, e.g. "Leakage: secrets not hardcoded").
-RPS-3. Evaluate each item sequentially — set `in_progress`, evaluate, then `completed` with: PASS / RISK (+ mitigation) / N/A (+ reason).
-RPS-4. Present a summary table. If any RISK items exist, propose mitigations before implementation proceeds.
+RPS-1. Resolve `<PLANS_DIR>` via `skills/_shared/resolve-plans-dir.md`. Identify `<PLANS_DIR>/<session-id>-detail.md`. Initialize `EXTENSIONS_USED=0`.
+RPS-2. Invoke `"$AGENTS_CONFIG_DIR/skills/review-plan-security/scripts/run-codex-review-loop.sh"` (Bash), exporting `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`. Pass `CTX_SURVEY_CODE`, `CTX_SURVEY_HISTORY`, `CTX_CONCERNS_LOG` as env vars when available. Exit-code handling (SSOT: `skills/_shared/codex-review-loop.md`; exit 1 is TERMINAL):
+- exit 0 APPROVED → RPS-4 (no RISK items).
+- exit 1 NEEDS_REVISION → terminal; save stdout to `<PLANS_DIR>/<session-id>-security-plan-codex-round-1-raw.md`; present concerns with per-axis severity; propose mitigations; stop (no re-loop) → RPS-3.
+- exit 2 ESCALATE → run `review-loop-summarize-concerns`; present summary; stop → RPS-3.
+- exit 3 → silently launch `plan-security-reviewer` subagent; use its verdict for RPS-4.
+- exit 4 → HALT with blocking error; surface wrapper stderr; do NOT launch fallback agent.
+- exit 5 → does not occur (MAX_EXTENSIONS=0); treat as exit 4 HALT if received.
+RPS-3. Present concerns with per-axis severity and proposed mitigations before implementation proceeds.
+RPS-4. Summary — APPROVED: report no RISK items; NEEDS_REVISION: summarize mitigations.
 
-## Security Axes
+## Notes
 
-### Axis 1: Information Leakage
-Source: OWASP ASVS V8 (Data Protection), V6 (Stored Cryptography)
-
-- Secrets (API keys, tokens, passwords) are not hardcoded — use env vars or secret managers
-- Sensitive data is not logged, included in error messages, or exposed in stack traces
-- `.env` files are gitignored; `.env.example` contains only placeholder values
-- PII is not stored in plain text where encryption is feasible
-- Build artifacts and temp files do not contain embedded secrets
-
-For concrete detection patterns, see `/review-code-security` Axis 1.
-
-### Axis 2: Third-Party Access
-Source: OWASP MCP Top 10 (MCP03 Excessive Permissions, MCP04 Tool Poisoning), LLM Top 10 (LLM03 Supply Chain)
-
-- MCP servers and tools request only minimum necessary permissions
-- Third-party dependencies are pinned to specific versions (not `latest`)
-- LLM/agent outputs that trigger actions are validated before execution
-- Tool descriptions and return values from untrusted MCP servers are treated as untrusted input
-- Supply chain: new dependencies are from reputable sources with active maintenance
-- MCP tool descriptions are reviewed for embedded instruction overrides (MCP04 Tool Poisoning)
-- MCP servers are sourced from trusted, auditable publishers; behavioral changes after initial approval are treated as re-review triggers (Rug Pull, MCP09)
-- Tool return values are validated before acted on; injected instructions in tool results do not propagate (Return Value Injection, MCP05)
-
-For concrete detection patterns, see `/review-code-security` Axis 2.
-
-### Axis 3: External Access
-Source: OWASP WSTG (Input Validation), CWE Top 25 #2 (CWE-79 XSS), #3 (CWE-89 SQL Injection)
-
-- All external input is validated and sanitized at system boundaries
-- Shell commands do not interpolate unsanitized input (CWE-78 OS Command Injection)
-- File paths from external input are validated against traversal (CWE-22 Path Traversal)
-- SQL queries use parameterized statements, not string concatenation (CWE-89)
-- URLs and redirects are validated against allowlists (CWE-601 Open Redirect)
-- Instruction-override phrases in untrusted input (e.g. `ignore previous instructions`, `system:`) are flagged and not forwarded to the LLM as trusted context (OWASP LLM Top 10 LLM01)
-- Base64-encoded strings in untrusted input are not auto-decoded and fed to LLM/shell without explicit validation
-
-For concrete detection patterns, see `/review-code-security` Axis 3.
-
-## Source Integrity
-
-Source files must not contain Unicode characters that diverge display from execution (Trojan Source, CVE-2021-42574). Hidden/invisible chars (zero-width, Bidi overrides) are auto-detected by `scan-outbound.sh` at pre-commit; see `/review-code-security` Axis 1 automated coverage.
-
-For PostToolUse-level prompt-injection defense on tool results (e.g. `WebFetch` output), see planned Phase 5 hook (`docs/todo.md`).
+The three security axes (Information Leakage / Third-Party Access / External Access) and their OWASP/CWE references live in the Codex prompt (`bin/review-plan-codex`) and the `plan-security-reviewer` fallback agent.
+For code-level pattern scanning after implementation, use `/review-code-security`.
