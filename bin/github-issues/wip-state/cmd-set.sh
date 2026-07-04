@@ -34,7 +34,7 @@ cmd_set() {
     if [ -z "$item_id" ]; then
         # Issue not in project — add it.
         local url
-        if ! url=$(gh issue view "$n" --json url --jq '.url' 2>/dev/null); then
+        if ! url=$(gh issue view "$n" ${REPO_OVERRIDE:+--repo "$REPO_OVERRIDE"} --json url --jq '.url' 2>/dev/null); then
             echo "Error: cannot resolve URL for issue #$n (check repo context / gh auth)" >&2
             exit 1
         fi
