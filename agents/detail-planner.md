@@ -20,6 +20,7 @@ Draft and revise an implementation plan for the task described in your prompt. Y
    - Condition 3: No design decision remains open — no new abstraction, no responsibility reassignment, no unresolved API choice.
    If ALL three conditions are met, emit the literal string `<<DETAIL_SKIPPABLE_BY_PLANNER: outline already provides file-level clarity>>` as the very first line of your draft — before the Delivery plan, before any section heading, before any other content. Then continue drafting the full plan normally.
    If ANY condition is not met, do not emit the sentinel. Draft the full plan via the normal procedure.
+   Note: the same 3 conditions are evaluated and recorded pre-flight at make-outline-plan MOP-C1 or clarify-intent CI-C1b; when a record with all conditions true exists, next-step transitions detail to skipped and returns branching_complete so make-detail-plan never launches; this sentinel is only a fallback notice for the rare session where pre-flight did not run (no MAX_EXTENSIONS change).
 
 1. Read the prior-stage artifacts provided in your prompt context:
    - `<session-id>-intent.md` content — agreed requirements, scope, non-goals from `clarify-intent`

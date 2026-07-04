@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/record-skip-judgment
+// CLI wrapper for recordSkipJudgment(). Used by SKILL.md Bash calls.
+//
+// Usage:
+//   record-skip-judgment --session <sid> --target <outline|detail>
+//                        --c1 [true|false] --c2 [true|false]
+//                        [--c3 [true|false]]
+//
+// --c1/--c2/--c3 accept an optional value:
+//   bare flag (--c1)         → true
+//   --c1 true / --c1 false   → boolean
+//   --c1 <next-flag>         → true (next-flag consumed separately)
+//
+// --c3 is required when --target=detail; ignored for outline.
+// Prints to stdout: RECORDED=<target> all_conditions_met=<true|false>
+// Exits 0 on success, 1 on bad args.
+
+const path = require("path");
+const { recordSkipJudgment } = require(
+  path.join(__dirname, "..", "..", "hooks", "lib", "workflow-state")
+);
+
+// Parse a boolean-flag value. Returns { value: bool, consumed: 0|1 }.
+// consumed=1 means the next token was consumed as the value.
+function parseFlagBool(argv, i, flagName) {
+  const next = argv[i + 1];
+  if (next !== undefined && next !== null && !next.startsWith("--")) {
+    const v = next.trim().toLowerCase();
+    if (v === "true") return { value: true, consumed: 1 };
+    if (v === "false") return { value: false, consumed: 1 };
+    process.stderr.write("record-skip-judgment: invalid boolean for " + flagName + ": " + next + "\n");
+    process.exit(1);
+  }
+  // bare flag → true
+  return { value: true, consumed: 0 };
+}
+
+function parseArgs(argv) {
+  const out = { session: null, target: null, c1: null, c2: null, c3: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--session") {
+      out.session = argv[++i] || null;
+    } else if (a === "--target") {
+      out.target = argv[++i] || null;
+    } else if (a === "--c1") {
+      const r = parseFlagBool(argv, i, "--c1");
+      out.c1 = r.value;
+      i += r.consumed;
+    } else if (a === "--c2") {
+      const r = parseFlagBool(argv, i, "--c2");
+      out.c2 = r.value;
+      i += r.consumed;
+    } else if (a === "--c3") {
+      const r = parseFlagBool(argv, i, "--c3");
+      out.c3 = r.value;
+      i += r.consumed;
+    } else {
+      process.stderr.write("record-skip-judgment: unknown argument: " + a + "\n");
+      process.exit(1);
+    }
+  }
+  return out;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!args.session || !args.session.trim()) {
+    process.stderr.write("record-skip-judgment: --session is required\n");
+    process.exit(1);
+  }
+  if (args.target !== "outline" && args.target !== "detail") {
+    process.stderr.write("record-skip-judgment: --target must be outline or detail\n");
+    process.exit(1);
+  }
+  if (args.c1 === null || args.c1 === undefined) {
+    process.stderr.write("record-skip-judgment: --c1 is required\n");
+    process.exit(1);
+  }
+  if (args.c2 === null || args.c2 === undefined) {
+    process.stderr.write("record-skip-judgment: --c2 is required\n");
+    process.exit(1);
+  }
+
+  let conditions;
+  let allMet;
+
+  if (args.target === "outline") {
+    conditions = { so_c1: args.c1, so_c2: args.c2 };
+    allMet = args.c1 === true && args.c2 === true;
+  } else {
+    // detail: --c3 required
+    if (args.c3 === null || args.c3 === undefined) {
+      process.stderr.write("record-skip-judgment: --c3 is required when --target=detail\n");
+      process.exit(1);
+    }
+    conditions = { sd_c1: args.c1, sd_c2: args.c2, sd_c3: args.c3 };
+    allMet = args.c1 === true && args.c2 === true && args.c3 === true;
+  }
+
+  recordSkipJudgment(args.session.trim(), args.target, conditions, "orchestrator");
+
+  process.stdout.write("RECORDED=" + args.target + " all_conditions_met=" + allMet + "\n");
+  process.exit(0);
+}
+
+main();
