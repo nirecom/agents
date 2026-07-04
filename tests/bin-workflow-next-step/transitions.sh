@@ -44,7 +44,7 @@ run_transitions_tests() {
   write_state "case5" "$JSON_RESEARCH_SKIPPED"
   OUT="$(run_next_step --session "case5" 2>/dev/null || true)"
   eval "$OUT" 2>/dev/null || true
-  check "5: research-skipped ACTION=judgment_needed" "judgment_needed" "${ACTION:-}"
+  check "5: research-skipped ACTION=invoke" "invoke" "${ACTION:-}"
   check "5: research-skipped NEXT_SKILL=make-outline-plan" "make-outline-plan" "${NEXT_SKILL:-}"
 
   # ---- Case 6: write_tests + review_tests skipped --------------------------

@@ -2,7 +2,6 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 const {
   VALID_STEPS,
   VALID_STATUSES,
@@ -11,7 +10,6 @@ const {
   resolveSessionId,
   markStep,
 } = require("../../hooks/lib/workflow-state");
-const { getWorkflowPlansDir } = require("../../hooks/lib/workflow-plans-dir");
 
 // ---- Lookup tables --------------------------------------------------------
 
@@ -444,11 +442,46 @@ function computeVerdict(rawSid, _didAutoRepair) {
     ? ("Run /" + skill + " via the Skill tool.")
     : (STEP_HINT[currentStep] || currentStep);
 
+  // #1286 + #1300 hardening #3/#7: authoritative recorded-verdict skip.
+  // applyRecordedVerdictSkip reads skip_judgment exactly once (EXPORTED read),
+  // validates it, and passes the same object into markStep so the audit record survives.
+  // Returns null on any failure/invalid/absent path (caller falls through, no recursion).
+  function applyRecordedVerdictSkip(sid, rawSid, stepName, skipReason) {
+    try {
+      const wfState = require("../../hooks/lib/workflow-state");
+      const hvsj = wfState.hasValidSkipJudgment;
+      const rsjFn = wfState.readSkipJudgment;
+      const irvFn = wfState.isRecordedVerdictValid;
+      if (typeof hvsj !== "function" || typeof rsjFn !== "function") return null;
+      if (!hvsj(sid, stepName)) return null;   // local UNCOUNTED gate read
+      const sj = rsjFn(sid, stepName);          // EXPORTED COUNTED read (+1) — exactly once
+      if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
+      try {
+        markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj });
+        return computeVerdict(rawSid, true);
+      } catch (_) {
+        return null;   // markStep/verdict failed — fall through, NO recursion
+      }
+    } catch (_) {
+      return null;   // fail-open
+    }
+  }
+
+  if (currentStep === "outline") {
+    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", "recorded-verdict: so_c1+so_c2 met");
+    if (v !== null) return v;
+  }
+  if (currentStep === "detail") {
+    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", "recorded-verdict: sd_c1+sd_c2+sd_c3 met");
+    if (v !== null) return v;
+  }
+
   // #485: advisory plan-skip hint at outline/detail only. isTrivial reads
   // intent.md (fail-open to false). next-step only ever sees one current step,
   // and outline precedes detail, so a detail hint surfaces only after outline is
   // complete/skipped — automatically satisfying "emit only WORKFLOW_OUTLINE_NOT_NEEDED
   // when both are skippable". Purely advisory: does not change the verdict.
+  // isTrivial is now a WEAK SUPPLEMENTARY hint (demoted from sole gate by #1286).
   let skipHint = "";
   if (currentStep === "outline" || currentStep === "detail") {
     try {
@@ -459,24 +492,6 @@ function computeVerdict(rawSid, _didAutoRepair) {
           : "WORKFLOW_DETAIL_NOT_NEEDED";
       }
     } catch (e) { /* fail-open: no hint */ }
-
-    // judgment_needed: emit opportunity for orchestrator semantic skip judgment
-    let judgeHint;
-    if (currentStep === "outline") {
-      const plansDir = getWorkflowPlansDir();
-      const intentPath = path.join(plansDir, sid + "-intent.md");
-      judgeHint = "Read " + intentPath + " and judge: single approach with no design questions -> emit <<WORKFLOW_OUTLINE_NOT_NEEDED: judgment=true: {reason}>>; otherwise launch make-outline-plan";
-    } else {
-      // detail: use outline.md when outline completed; else fallback to intent.md (C1 path)
-      const plansDir = getWorkflowPlansDir();
-      const outlineStatus = (state.steps.outline || {}).status;
-      const outlinePath = path.join(plansDir, sid + "-outline.md");
-      const refFile = outlineStatus === "complete" ? outlinePath : path.join(plansDir, sid + "-intent.md");
-      judgeHint = "Read " + refFile + " and judge: all files enumerated, one implementation path, no design unknowns -> emit <<WORKFLOW_DETAIL_NOT_NEEDED: judgment=true: {reason}>>; otherwise launch make-detail-plan";
-    }
-    judgeHint = judgeHint.replace(/'/g, "");
-    emit("judgment_needed", skill, judgeHint, currentStep, skipHint);
-    return;
   }
 
   emit("invoke", skill, hint, currentStep, skipHint);
