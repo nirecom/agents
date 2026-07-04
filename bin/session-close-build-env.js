@@ -12,6 +12,29 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
+// --wf-meta <env-file-path>: write env JSON with all empty-string fields (no PR needed)
+if (process.argv[2] === "--wf-meta") {
+  const outFile = process.argv[3];
+  if (!outFile) {
+    process.stderr.write("Usage: session-close-build-env.js --wf-meta <env-file-path>\n");
+    process.exit(1);
+  }
+  const data = {
+    PR_NUMBER: "", PR_TITLE: "", PR_URL: "", PR_STATE: "",
+    BRANCH: "", WORKTREE_PATH: "", CREATED_DATE: "",
+    BACKUP_MANIFEST_PATH: "", NOTES_BACKUP_PATH: "",
+    CLAUDE_CODE_RESTART_REQUIRED: "",
+    CC_RESTART_REQUIRED: "", CC_RESTART_REASON: "",
+    VSCODE_RELOAD_REQUIRED: "", VSCODE_RELOAD_REASON: "",
+    INSTALLER_RERUN_REQUIRED: "", INSTALLER_RERUN_REASON: "",
+    OS_REBOOT_REQUIRED: "", OS_REBOOT_REASON: "",
+  };
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  fs.writeFileSync(outFile, JSON.stringify(data, null, 2));
+  process.stdout.write("ENV_FILE=" + outFile + "\n");
+  process.exit(0);
+}
+
 const outFile = process.argv[2];
 if (!outFile) {
   process.stderr.write("Usage: session-close-build-env.js <env-file-path>\n");
