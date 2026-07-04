@@ -319,3 +319,7 @@ Changes: Added a terminology glossary (docs/glossary.md) that indexes workflow s
 ### FEATURE: PR #1304 (2026-07-04)
 Background: feat(#1257): add SC-2C path for WF-META session-close
 Changes: WF-META (planning-only) sessions now complete `/session-close` successfully. Final Report shows associated issues as "kept open (planning session)" instead of "failed".
+
+### FEATURE: PR #1312 (2026-07-04)
+Background: feat(#1292): add command-ir.js IR + classify() false-positive fixes (#876, #1223)
+Changes: Fixed: `pwsh script.ps1 --out-file result.txt` and similar commands using `--out-file` as a CLI flag were incorrectly blocked by the worktree write guard; they now classify as read (#876).;Fixed: `git log path/to/reset/file.js`, `git diff -- src/reset/config.ts`, and similar commands where "reset" appears in a path argument were incorrectly blocked as git-reset operations; they now classify as read (#1223).
