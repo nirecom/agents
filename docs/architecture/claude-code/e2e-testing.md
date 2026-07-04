@@ -11,7 +11,8 @@ L2 tests cannot exercise real Stop-event, SubagentStop, or PostCompact paths.
 | `hooks/stop-confirm-plan-guard.js` | none | **P1 — add** | Stop-hook sentinel-order validation is unreachable from unit tests; the hook reads the live transcript. |
 | `hooks/stop-final-report-guard.js` | extensive (`tests/feature-534-stop-final-report-guard.sh`, 20+ L2 cases) | **P2 — add E2E** | L2 is thorough but cannot exercise the real Stop-event path; one E2E case validates registration. |
 | `hooks/session-start.js` | partial (`tests/feature-772-session-start-cleanup-inherit.sh` covers env-file write) | **P2 — add E2E** | env-file write covered at L2; need E2E for actual CONV_LANG injection into a live session. |
-| `hooks/subagent-start.js` | none | **P3 — add** | Sub-agent context injection requires a real Task tool call — only reachable via `claude -p`. |
+| `hooks/subagent-start.js` | partial (`tests/feature-1303-lang-hooks/group2-subagent-start.sh` covers the `PLAN_LANG` planner/reviewer whitelist via real spawn) | **P3 — add E2E** | `PLAN_LANG` whitelist covered at L2; real Task-tool sub-agent context injection only reachable via `claude -p`. |
+| `hooks/lang-inject.js` | L2 (`tests/feature-1303-lang-hooks/group1-lang-inject.sh` — real spawn: CONV_LANG per-turn, PLAN_LANG when planning, fail-open) | **P3 — add E2E** | hook-registration gap: real UserPromptSubmit firing and `additionalContext` surfacing into a live session are unverifiable at L2. |
 | `hooks/post-compact.js` | none | **P3 — add** | PostCompact event is not reproducible at L2 (requires real compaction trigger). |
 | `hooks/stop-askuserquestion-required.js` | L2 in `tests/feature-stop-guard-layer2.sh` | **P2 — add E2E** | Stop hook requiring AskUserQuestion pre-fire is only observable in a live session. |
 | `hooks/stop-enforce-worktree-on-warn.js` | none (advisory) | **P3 — add** | Advisory context-injection is only confirmable in a live session. |

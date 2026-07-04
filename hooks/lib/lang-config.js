@@ -62,4 +62,15 @@ function loadLangConfig(surface, options) {
   return "any";
 }
 
-module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES };
+// Proactive PLAN_LANG directive for planning contexts. SSOT for the plan-artifact
+// language instruction consumed by the UserPromptSubmit hook and subagent-start.
+// Distinct from conv-lang's "Respond to the user..." — targets plan files, not the
+// conversation reply. Returns null when PLAN_LANG is noop (unset/""/any/control-char).
+// Note the asymmetry with CONV_LANG: "english" is a valid directive here (not null).
+function getPlanLangInjection() {
+  const lang = loadLangConfig("plan");
+  if (classifyPolicy(lang) === "noop") return null;
+  return `Write planning artifacts (files under the plans directory) in ${lang}.`;
+}
+
+module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, getPlanLangInjection };

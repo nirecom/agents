@@ -3,6 +3,16 @@
 
 const fs = require("fs");
 const { getConvLangInjection } = require("./lib/conv-lang");
+const { getPlanLangInjection } = require("./lib/lang-config");
+
+// Planner/reviewer agents that write plan artifacts. Only these receive the
+// proactive PLAN_LANG directive; other subagents (workers) do not.
+const PLAN_AGENTS = new Set([
+  "outline-planner",
+  "outline-reviewer",
+  "detail-planner",
+  "detail-reviewer",
+]);
 
 function readStdin() {
   const chunks = [];
@@ -17,16 +27,27 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+let agentType;
 try {
-  JSON.parse(readStdin());
+  const parsed = JSON.parse(readStdin());
+  agentType = parsed && parsed.agent_type;
 } catch (e) {
-  // fail-open: treat parse errors as {}
+  // fail-open: treat parse errors as {} (agentType stays undefined)
 }
 
 const lines = [];
 try {
   const convLang = getConvLangInjection();
   if (convLang) lines.push(convLang);
+} catch (_e) { /* fail-open */ }
+
+// PLAN_LANG only for whitelisted planner/reviewer agents (fail-open: skip on
+// unknown/absent agent_type — backstop is check-plan-lang.js PostToolUse).
+try {
+  if (PLAN_AGENTS.has(agentType)) {
+    const planLang = getPlanLangInjection();
+    if (planLang) lines.push(planLang);
+  }
 } catch (_e) { /* fail-open */ }
 
 if (lines.length === 0) {

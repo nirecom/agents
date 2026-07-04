@@ -117,7 +117,7 @@ if [ ! -f "$CONV_LANG_LIB" ]; then
     skip "T17: $CONV_LANG_LIB does not exist yet (pre-implementation)"
 else
     METACHAR_VAL='$(echo injected)'
-    EXPECTED_META="\"Respond to the user in \$(echo injected).\""
+    EXPECTED_META="\"Respond to the user in \$(echo injected). This applies to all text you write, including narration between tool calls.\""
     OUT=$(call_helper set "$METACHAR_VAL")
     if [ "$OUT" = "$EXPECTED_META" ]; then
         pass "T17: CONV_LANG with shell metachar passes through as plain text: $OUT"
