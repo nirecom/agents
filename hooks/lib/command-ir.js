@@ -1,4 +1,10 @@
 "use strict";
+// command-ir.js — Bash command Intermediate Representation (IR).
+//
+// parse(cmd) → IR: tokenises a raw command string once into a structured object
+// {segments, cmd0, argv, redirects, kind, rawText, parseFailure} that classify()
+// and other callers can query without re-parsing. parseFailure===true forces "write"
+// (fail-closed). isOsTempPath(target) is the SSOT predicate for OS temp-path detection.
 
 const { tokenizeSegment, splitSegments, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
 
