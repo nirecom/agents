@@ -12,7 +12,12 @@
 # Resolve owner/repo from the current working directory (gh uses cwd-based
 # repo resolution for all `gh issue`/`gh repo` calls). Return non-zero on
 # failure so callers can propagate read errors distinctly from empty results.
+# If BOARD_CARD_REPO_OVERRIDE is set, it is returned directly (no gh call).
 resolve_owner_repo() {
+    if [[ -n "${BOARD_CARD_REPO_OVERRIDE:-}" ]]; then
+        echo "$BOARD_CARD_REPO_OVERRIDE"
+        return 0
+    fi
     local out
     if ! out=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name' 2>/dev/null); then
         return 1

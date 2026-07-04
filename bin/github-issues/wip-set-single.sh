@@ -5,8 +5,8 @@
 # Env:   AGENTS_CONFIG_DIR (required)
 #
 # --repo: optional repository slug (short form "repo" or full "owner/repo").
-#         Propagated to `gh issue view` for the label probe only.
-#         NOT passed to wip-state.sh (it works on session files, not GitHub API).
+#         Propagated to `gh issue view` for the label probe AND to wip-state.sh
+#         for the board-card repo override (BOARD_CARD_REPO_OVERRIDE).
 #
 # Exit 0 + stdout "META_SKIP" : meta label detected, WIP set skipped
 # Exit 0 + stdout "SET_OK"    : WIP set successfully
@@ -85,6 +85,9 @@ fi
 WIP_ARGS=(set "$N")
 if [ "$SID_SET" -eq 1 ]; then
     WIP_ARGS+=(--session-id "$SID_ARG")
+fi
+if [[ -n "$REPO_ARG" ]]; then
+    WIP_ARGS+=(--repo "$REPO_ARG")
 fi
 RC=0
 bash "$WIP_SCRIPT" "${WIP_ARGS[@]}" || RC=$?
