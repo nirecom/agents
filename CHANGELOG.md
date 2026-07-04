@@ -327,3 +327,7 @@ Changes: Fixed: `pwsh script.ps1 --out-file result.txt` and similar commands usi
 ### FEATURE: PR #1313 (2026-07-04)
 Background: feat(#1306): add cross-repo issue routing to workflow-init (L1 explicit tokens + L2 prose detection)
 Changes: Cross-repo issue routing: `workflow-init` now handles issues from multiple repos in a single session — explicit `repo#N` or `owner/repo#N` tokens route all `gh` calls (WIP state, board card, label, closed-state check) to the correct repo for each issue.
+
+### FEATURE: PR #1314 (2026-07-04)
+Background: feat(#1303): proactive language-directive injection
+Changes: Your configured conversation language (CONV_LANG) is now re-applied on every turn, so long sessions no longer drift back to English partway through.;While a plan is being written, the plan-artifact language (PLAN_LANG) is now steered proactively rather than only corrected after the plan is already written.
