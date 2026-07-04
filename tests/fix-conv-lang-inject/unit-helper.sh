@@ -71,7 +71,7 @@ else
 
     # T8 [Edge] CONV_LANG=traditional-chinese → injected as-is
     OUT=$(call_helper set "traditional-chinese")
-    EXPECTED_TC='"Respond to the user in traditional-chinese."'
+    EXPECTED_TC='"Respond to the user in traditional-chinese. This applies to all text you write, including narration between tool calls."'
     if [ "$OUT" = "$EXPECTED_TC" ]; then
         pass "T8: CONV_LANG=traditional-chinese → multi-word injection"
     else

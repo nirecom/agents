@@ -21,7 +21,7 @@ AGENT_FILES=(
     "$AGENTS_DIR/agents/outline-reviewer.md"
 )
 
-EXPECTED_JA='Respond to the user in japanese.'
+EXPECTED_JA='Respond to the user in japanese. This applies to all text you write, including narration between tool calls.'
 
 PASS=0
 FAIL=0

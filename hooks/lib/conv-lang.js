@@ -8,7 +8,7 @@ function getConvLangInjection() {
   const normalized = raw.trim().toLowerCase();
   if (normalized.length === 0 || normalized === "english") return null;
   if (/[\x00-\x1f]/.test(normalized)) return null;
-  return `Respond to the user in ${normalized}.`;
+  return `Respond to the user in ${normalized}. This applies to all text you write, including narration between tool calls.`;
 }
 
 module.exports = { getConvLangInjection };
