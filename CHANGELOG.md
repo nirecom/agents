@@ -343,3 +343,7 @@ Changes: POSIX fd-dup redirects (2>&1, 1>&2, >&2, N>&-, >&-) no longer cause fal
 ### FEATURE: PR #1320 (2026-07-04)
 Background: feat(#1308): make review-plan-security and review-tests Codex-primary
 Changes: Security-plan and test-coverage reviews are now performed by Codex as the primary reviewer (with an automatic Claude Code fallback when Codex is unavailable), giving an independent second perspective on plan security and test completeness.
+
+### FEATURE: PR #1326 (2026-07-05)
+Background: feat(#1294): canary-3 — bash-write-scope.js IR consumption + dispatch parse-once
+Changes: Hook layer now parses each Bash command once per tool call (IR threading). No user-visible behavior change — internal refactor for the #1253 IR migration series.
