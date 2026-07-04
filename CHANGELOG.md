@@ -339,3 +339,7 @@ Changes: Outline/detail planning stages now auto-skip only when the orchestrator
 ### FEATURE: PR #1322 (2026-07-04)
 Background: feat(#1293): canary-2 — splitSegments fd-dup fix + shared-cmd-utils IR migration
 Changes: POSIX fd-dup redirects (2>&1, 1>&2, >&2, N>&-, >&-) no longer cause false-block errors on worktree commands such as git merge 2>&1 or git pull --ff-only 2>&1. The enforce-worktree hook now recognizes these as redirect operators rather than shell-chaining operators at the parser level, permanently eliminating a class of false positives that recurred three times (#982, #838, #959).
+
+### FEATURE: PR #1320 (2026-07-04)
+Background: feat(#1308): make review-plan-security and review-tests Codex-primary
+Changes: Security-plan and test-coverage reviews are now performed by Codex as the primary reviewer (with an automatic Claude Code fallback when Codex is unavailable), giving an independent second perspective on plan security and test completeness.
