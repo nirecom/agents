@@ -33,6 +33,7 @@ MOP-1. Locate the intent file:
    a. `<session-id>-intent.md` exists → use it.
    b. Otherwise list `<PLANS_DIR>/*-intent.md`. Exactly one → inform the user and use it; multiple → `AskUserQuestion` to select one; none → abort with "clarify-intent must run before make-outline-plan. Run /clarify-intent first."
    c. Extract session-id from the chosen file's name; use it for all subsequent output paths.
+   d. Evaluate the skip-outline 2-condition checklist (so_c1: a single obvious approach exists; so_c2: change files/locations are uniquely identified). Record via a SEPARATE Bash call: `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 <true|false> --c2 <true|false>`. When both conditions are true, emit `<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>` in a SEPARATE Bash call and skip to Completion. Record call and sentinel MUST be separate Bash calls — never chained.
 
 MOP-2. Delegate to **outline-planner** subagent (`subagent_type: outline-planner`). Pass full contents of `<session-id>-intent.md` and task context.
 
@@ -140,4 +141,5 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 
 ## Completion
 
-MOP-C1. `echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
+MOP-C1. Evaluate the skip-detail 3-condition checklist against outline.md (sd_c1: all changed files are listed by path; sd_c2: each file's edit content is clear; sd_c3: no unresolved multi-layer design decisions). Record via a SEPARATE Bash call BEFORE the outline-complete sentinel: `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target detail --c1 <true|false> --c2 <true|false> --c3 <true|false>`. Then:
+`echo "<<WORKFLOW_MARK_STEP_outline_complete>>"` (marks the outline step in workflow state; must be the ENTIRE Bash command — no pipes, no && chaining, no redirection)
