@@ -115,3 +115,4 @@ C2: unresolved — <reason>
   as `triage: NA`. (Full mapping: see `lib/triage-legacy-compat.md`.)
 
 - Apply `skills/_shared/priority-hierarchy.md` before emitting any concern. At outline stage only `intent.md` is upstream-approved; concerns that would require reopening an approved intent decision must be suppressed (or downgraded to LOW under `## Accepted Tradeoffs`).
+- **Locked-direction variant coverage:** when `## Accepted Tradeoffs` records a locked design direction and the proposed approaches are all implementation variants within that constraint, do not raise concerns about the absence of alternatives for the locked dimension — that dimension was already resolved by the approved intent. All other review criteria (mandatory section carry-forward, MUST class-member coverage, structural validity) remain fully active.
