@@ -100,8 +100,8 @@ teardown_mock() {
     for v in $(env | grep -oE '^GH_MOCK_PARENT_[0-9]+' || true); do unset "$v"; done
 }
 
-emitted() {  # args: OUT N → 0 if N present as a stdout line
-    printf '%s\n' "$1" | grep -qx "$2"
+emitted() {  # args: OUT N → 0 if token for N present as a stdout line
+    printf '%s\n' "$1" | grep -qxE "(#|[^ ]+#)?$2"
 }
 
 # FP-1: all OPEN candidates, no parent relationships → all pass through.
@@ -184,7 +184,7 @@ export MOCK_STATE_303=closed
 if require_sut "FP-6"; then
     OUT=$(run_with_timeout 10 bash "$SUT" 301 302 303 2>/dev/null)
     RC=$?
-    COUNT=$(printf '%s\n' "$OUT" | grep -cE '^[0-9]+$' || true)
+    COUNT=$(printf '%s\n' "$OUT" | grep -oE '[0-9]+$' | wc -l | tr -d ' ')
     if [ "$RC" -eq 0 ] && [ "$COUNT" -eq 1 ] && emitted "$OUT" 301; then
         pass "FP-6: exactly 1 survivor → stdout is only #301"
     else
@@ -232,7 +232,7 @@ setup_mock
 if require_sut "FP-9"; then
     OUT=$(run_with_timeout 10 bash "$SUT" 303 301 302 2>/dev/null)
     RC=$?
-    ORDER=$(printf '%s\n' "$OUT" | grep -E '^[0-9]+$' | tr '\n' ' ' | sed 's/ *$//')
+    ORDER=$(printf '%s\n' "$OUT" | grep -oE '[0-9]+$' | tr '\n' ' ' | sed 's/ *$//')
     if [ "$RC" -eq 0 ] && [ "$ORDER" = "303 301 302" ]; then
         pass "FP-9: output preserves input order (303 301 302)"
     else

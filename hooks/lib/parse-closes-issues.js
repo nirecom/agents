@@ -4,6 +4,7 @@
 // Falls back to legacy ## closes_issues only when ## Issues heading is wholly absent.
 // Code-level consumers (require this module):
 //   - bin/parse-closes-issues (CLI wrapper)
+//   - bin/parse-issue-tokens (CLI wrapper for token parsing)
 // Prose/prompt references (pointer comments only — no require):
 //   - skills/commit-push, issue-close-stage, issue-close-finalize
 //
@@ -15,6 +16,12 @@
 // call site via `gh repo view` when needed.
 
 const fs = require("fs");
+
+// Shared token-body regex. Matches the issue-reference body (without list prefix).
+// Group 1: repo slug (e.g. "owner/repo" or "repo"), or undefined for local issues.
+// Group 2: issue number digits.
+// Accepts: #N, repo#N, owner/repo#N, N (bare legacy), and optional ": <title>" suffix.
+const ISSUE_TOKEN_BODY_RE = /^(?:([a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)#|#)?(\d+)(?:.*)?$/;
 
 function collectEntries(lines, headingRe) {
   let inSection = false;
@@ -35,12 +42,10 @@ function collectEntries(lines, headingRe) {
       //   "- owner/repo#123"           → cross-repo (full)
       //   "- owner/repo#123: <title>"  → cross-repo (full) with title
       //
-      // Regex breakdown:
-      //   (?:([a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)#|#)?
-      //     Either "repo#" (with group 1 capture) or bare "#", or nothing (bare number)
-      //   (\d+)  — group 2: issue number
-      const m = line.match(/^-\s+(?:([a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)#|#)?(\d+)(?::.*)?\s*$/);
-      if (m) {
+      // Strip the "- " list prefix, then apply shared ISSUE_TOKEN_BODY_RE.
+      const stripped = line.replace(/^-\s+/, "").trimEnd();
+      const m = stripped.match(ISSUE_TOKEN_BODY_RE);
+      if (m && m[2]) {
         const entry = { number: Number(m[2]) };
         if (m[1]) entry.repo = m[1];
         entries.push(entry);
@@ -48,6 +53,17 @@ function collectEntries(lines, headingRe) {
     }
   }
   return entries;
+}
+
+// Parse a single issue token string (e.g. "#123", "repo#123", "owner/repo#123", "123").
+// Returns {number: N, repo?: string} on match, null if not a valid token.
+function parseIssueToken(token) {
+  const t = (token || "").trim();
+  const m = t.match(ISSUE_TOKEN_BODY_RE);
+  if (!m || !m[2]) return null;
+  const result = { number: parseInt(m[2], 10) };
+  if (m[1]) result.repo = m[1];
+  return result;
 }
 
 function parseClosesIssues(intentMdPath) {
@@ -65,4 +81,4 @@ function parseClosesIssues(intentMdPath) {
   return collectEntries(lines, /^## closes_issues\s*$/);
 }
 
-module.exports = { parseClosesIssues };
+module.exports = { parseClosesIssues, parseIssueToken };
