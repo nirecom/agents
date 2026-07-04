@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Tests: skills/review-code-security/SKILL.md, skills/review-plan-security/SKILL.md
-# Tags: frontmatter, tests, security, plan, review
-# Structural tests for claude-global/skills/review-plan-security/SKILL.md
+# Tests: skills/review-plan-security/SKILL.md, skills/review-code-security/SKILL.md
+# Tags: frontmatter, tests, security, plan, review, scope:common
+# Structural tests for skills/review-plan-security/SKILL.md
 set -euo pipefail
 
 PASS=0
@@ -9,9 +9,9 @@ FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SKILL="$DOTFILES_DIR/claude-global/skills/review-plan-security/SKILL.md"
-CODE_SKILL="$DOTFILES_DIR/claude-global/skills/review-code-security/SKILL.md"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SKILL="$ROOT/skills/review-plan-security/SKILL.md"
+CODE_SKILL="$ROOT/skills/review-code-security/SKILL.md"
 
 echo "=== review-plan-security skill structural tests ==="
 
@@ -38,59 +38,65 @@ else
     fail "name is not 'review-plan-security'"
 fi
 
-# --- Normal case 4: has ## Procedure and ## Rules sections ---
-for section in Procedure Rules; do
-    if [ -f "$SKILL" ] && grep -qE "^## ${section}" "$SKILL" 2>/dev/null; then
-        pass "has ## $section section"
-    else
-        fail "missing ## $section section"
-    fi
-done
-
-# --- Normal case 5: has the 3 axis headers (same as review-code-security) ---
-for axis in "Axis 1: Information Leakage" "Axis 2: Third-Party Access" "Axis 3: External Access"; do
-    if [ -f "$SKILL" ] && grep -qF "### $axis" "$SKILL" 2>/dev/null; then
-        pass "has '### $axis' header"
-    else
-        fail "missing '### $axis' header"
-    fi
-done
-
-# --- Normal case 6: contains OWASP or CWE- citations ---
-if [ -f "$SKILL" ] && grep -qE '(OWASP|CWE-)' "$SKILL" 2>/dev/null; then
-    pass "contains OWASP/CWE citations"
+# --- Normal case 4: model is opus ---
+if [ -f "$SKILL" ] && grep -qE '^model: opus$' "$SKILL" 2>/dev/null; then
+    pass "frontmatter model is 'opus'"
 else
-    fail "missing OWASP/CWE citations"
+    fail "frontmatter model is not 'opus'"
 fi
 
-# --- Normal case 7: cross-references /review-code-security ---
+# --- Normal case 5: effort is medium ---
+if [ -f "$SKILL" ] && grep -qE '^effort: medium$' "$SKILL" 2>/dev/null; then
+    pass "frontmatter effort is 'medium'"
+else
+    fail "frontmatter effort is not 'medium'"
+fi
+
+# --- Normal case 6: has ## Procedure section ---
+if [ -f "$SKILL" ] && grep -qE '^## Procedure' "$SKILL" 2>/dev/null; then
+    pass "has ## Procedure section"
+else
+    fail "missing ## Procedure section"
+fi
+
+# --- Normal case 7: step labels RPS-1 through RPS-4 present ---
+for label in RPS-1 RPS-2 RPS-3 RPS-4; do
+    if [ -f "$SKILL" ] && grep -qF "$label" "$SKILL" 2>/dev/null; then
+        pass "step label '$label' present"
+    else
+        fail "step label '$label' missing"
+    fi
+done
+
+# --- Normal case 8: drives Codex via run-codex-review-loop.sh ---
+if [ -f "$SKILL" ] && grep -qF 'run-codex-review-loop.sh' "$SKILL" 2>/dev/null; then
+    pass "SKILL.md references run-codex-review-loop.sh"
+else
+    fail "SKILL.md does not reference run-codex-review-loop.sh"
+fi
+
+# --- Normal case 9: cross-references /review-code-security ---
 if [ -f "$SKILL" ] && grep -qF '/review-code-security' "$SKILL" 2>/dev/null; then
     pass "cross-references /review-code-security"
 else
     fail "does not cross-reference /review-code-security"
 fi
 
-# --- Consistency case 8: identical Axis headers between plan and code skills ---
-if [ -f "$SKILL" ] && [ -f "$CODE_SKILL" ]; then
-    plan_axes=$(grep -E '^### Axis [0-9]+:' "$SKILL" 2>/dev/null | sort || true)
-    code_axes=$(grep -E '^### Axis [0-9]+:' "$CODE_SKILL" 2>/dev/null | sort || true)
-    if [ "$plan_axes" = "$code_axes" ] && [ -n "$plan_axes" ]; then
-        pass "Axis headers match between review-plan-security and review-code-security"
-    else
-        fail "Axis headers differ between review-plan-security and review-code-security"
-    fi
+# --- Normal case 10: names plan-security-reviewer fallback agent ---
+if [ -f "$SKILL" ] && grep -qF 'plan-security-reviewer' "$SKILL" 2>/dev/null; then
+    pass "names 'plan-security-reviewer' fallback agent"
 else
-    pass "one or both SKILL.md files absent — axis-header consistency check skipped"
+    fail "does not name 'plan-security-reviewer' fallback agent"
 fi
 
-# --- Edge case 10: no absolute paths (public repo leak check) ---
+# --- Edge case 11: no absolute paths (public repo leak check) ---
 if [ -f "$SKILL" ] && grep -qiE '(^|[^a-zA-Z])(c:/|/home/|/Users/)' "$SKILL" 2>/dev/null; then
     fail "absolute path found in SKILL.md (public repo leak)"
 else
     pass "no absolute paths in SKILL.md"
 fi
 
-# --- Edge case 11: no references to dotfiles-private/ ---
+# --- Edge case 12: no references to dotfiles-private/ ---
 if [ -f "$SKILL" ] && grep -qF 'dotfiles-private/' "$SKILL" 2>/dev/null; then
     fail "SKILL.md references dotfiles-private/ (private repo leak)"
 else
