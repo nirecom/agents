@@ -7,6 +7,7 @@
 3. [settings.json Design](claude-code/settings.md) — allow/deny rules, hook inventory
 4. [Marker Bypass Contract](claude-code/marker-bypass-contract.md) — `WORKFLOW_OFF` / `WORKTREE_OFF` session markers, cross-hook honoring contract, exit-code semantics
 5. [settings.json Drift Prevention](#6-settingsjson-drift-prevention) — layered defense: git hooks + session-start backstop
+6. [Codex Review Reviewer](#7-codex-review-reviewer) — Codex-primary reviewer with Claude Code fallback, shared across four skills
 
 ## 5. EM Supervisor (alert/audit two-mode design)
 
@@ -156,3 +157,29 @@ root to fire only inside the agents repo (not in every repo on the machine that 
 **Source of truth:** The assembler always reads from the agents **main worktree**'s
 `settings.json` (`__dirname`-relative from `hooks/lib/`). Linked worktrees are not used
 as assembler input.
+
+
+## 7. Codex Review Reviewer
+
+Four skills use **Codex as the review reviewer**: `make-outline-plan`, `make-detail-plan`
+(plan-quality review), and `review-plan-security`, `review-tests` (security / test-coverage
+review). Each drives a generator (planner) against Codex as an independent critic.
+
+**Provider selection:** When Codex is authenticated and reachable, Codex is the reviewer.
+When it is unavailable (not installed, not authenticated, or unreachable — signalled by
+exit 3), the skill falls back to a Claude Code reviewer subagent for the same review. The
+result format is identical either way, so the calling skill is agnostic to which provider ran.
+
+**Shared invocation path:** All four skills share the same call chain. Only the thin
+per-skill wrapper differs (it selects the `--format` and the draft file to review); the loop
+control, verdict parsing, and Codex CLI invocation are common code:
+
+```
+per-skill wrapper (skills/*/scripts/run-codex-review-loop.sh)
+   └→ bin/run-codex-review-loop   ← shared: loop control, verdict parsing, exit codes
+        └→ bin/review-plan-codex   ← shared: the actual Codex CLI invocation
+```
+
+Adding a new review format is therefore an allowlist + prompt-body change in the two shared
+binaries, not a new Codex integration. `security-plan` / `test-review` are single-round
+terminal formats (CAP=1, no extensions); `outline-plan` / `detail-plan` allow revision rounds.

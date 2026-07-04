@@ -1,6 +1,6 @@
 # Codex Review Loop — Shared Protocol
 
-Used by `make-outline-plan` MOP-5 and `make-detail-plan` MDP-5. The mechanical
+Used by `make-outline-plan` MOP-5, `make-detail-plan` MDP-5, `review-plan-security` RPS-2, and `review-tests` RT-3. The mechanical
 parts (context build → codex invocation → verdict parse) are enforced by the
 `bin/run-codex-review-loop` wrapper.
 
@@ -20,6 +20,31 @@ parts (context build → codex invocation → verdict parse) are enforced by the
 | REVIEWER_AGENT | `outline-reviewer` | `detail-reviewer` |
 | ACCEPTED_TRADEOFFS_FILE | `<PLANS_DIR>/<session-id>-intent.md` | `<PLANS_DIR>/<session-id>-outline.md` |
 | NON_APPROVED_VERDICT | `MISSING_ALTERNATIVE:` | `NEEDS_REVISION` |
+
+## Parameters (review-only formats)
+
+| Parameter | security-plan | test-review |
+|---|---|---|
+| FORMAT | `security-plan` | `test-review` |
+| RAW_FILE | `<PLANS_DIR>/<session-id>-security-plan-codex-round-<N>-raw.md` | `<PLANS_DIR>/<session-id>-test-review-codex-round-<N>-raw.md` |
+| CONCERNS_LOG | `<PLANS_DIR>/<session-id>-security-plan-concerns-log.md` | `<PLANS_DIR>/<session-id>-test-review-concerns-log.md` |
+| DEBUG_LOG | `<PLANS_DIR>/<session-id>-security-plan-debug.log` | `<PLANS_DIR>/<session-id>-test-review-debug.log` |
+| CAP | 1 | 1 |
+| MAX_EXTENSIONS | 0 | 0 |
+| PLANNER_AGENT | (none — review-only) | (none — review-only) |
+| REVIEWER_AGENT | `plan-security-reviewer` | `test-reviewer` |
+| ACCEPTED_TRADEOFFS_FILE | `<PLANS_DIR>/<session-id>-outline.md` | `<PLANS_DIR>/<session-id>-outline.md` |
+| NON_APPROVED_VERDICT | `NEEDS_REVISION` | `NEEDS_REVISION` |
+
+## Single-round review-only formats
+
+`security-plan` and `test-review` have no PLANNER_AGENT.
+CAP=1 / MAX_EXTENSIONS=0 — single round only; no extension budget.
+A NON_APPROVED_VERDICT (exit 1) is TERMINAL — the caller presents concerns and stops; no re-delegation to a planner.
+`review-tests` fires `WORKFLOW_REVIEW_TESTS_WARNINGS` on exit 1; `review-plan-security` presents concerns and proposes mitigations.
+Exit 0 = APPROVED (review-tests fires `WORKFLOW_REVIEW_TESTS_COMPLETE`).
+Exit 3 = codex CLI unusable → caller silently launches CC REVIEWER_AGENT fallback.
+Exit 4 = HALT — same as Contract B; no fallback.
 
 ## Round Counter (ROUND_NUMBER)
 
@@ -59,6 +84,8 @@ The planner writes its output to `<PLANS_DIR>/<session-id>-{outline,detail}.md` 
 Each caller skill invokes its own per-skill extraction script (Bash tool):
 - `skills/make-detail-plan/scripts/run-codex-review-loop.sh` (detail stage)
 - `skills/make-outline-plan/scripts/run-codex-review-loop.sh` (outline stage)
+- `skills/review-plan-security/scripts/run-codex-review-loop.sh` (security-plan stage)
+- `skills/review-tests/scripts/run-codex-review-loop.sh` (test-review stage)
 
 Each script reads from the environment:
 - Required: `AGENTS_CONFIG_DIR`, `SESSION_ID`, `PLANS_DIR`, `EXTENSIONS_USED`
