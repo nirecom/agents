@@ -228,7 +228,7 @@ skills/            — slash commands (/clarify-intent, /make-outline-plan, /mak
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-cap-menu, review-skill-size, extract-accepted-tradeoffs, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-skill-size, extract-accepted-tradeoffs, and other tools
 bin/lib/           — shared bash libraries (codex-core.sh)
 install/
   win/             — Windows-specific install subscripts
@@ -250,7 +250,7 @@ tests/             — test suite for hooks, skills, and framework behaviors
 | Node.js | All Claude Code hooks in `settings.json` run via `node hooks/*.js` |
 | PowerShell 5+ (Windows) | `install.ps1`, symlink creation, session-sync wrapper |
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | The framework targets Claude Code; without it, hooks/skills have no host |
-| `jq` (≥1.6) | `bin/review-plan-codex`, `bin/review-loop-cap-menu` — round-log JSON encoding and cap-menu output (hard prerequisite; missing jq → early-exit FAILED with install guidance) |
+| `jq` (≥1.6) | `bin/review-plan-codex` — round-log JSON encoding (hard prerequisite; missing jq → early-exit FAILED with install guidance) |
 
 > Windows: symlink creation requires Developer Mode (Settings → System → For developers) or Administrator privileges.
 
