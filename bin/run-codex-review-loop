@@ -109,8 +109,8 @@ done
 [[ "$ROUND" =~ ^[1-9][0-9]*$ ]] || { echo "run-codex-review-loop: --round must be a positive integer" >&2; exit 4; }
 
 case "$FORMAT" in
-  detail-plan|outline-plan) ;;
-  *) die "--format must be detail-plan or outline-plan" ;;
+  detail-plan|outline-plan|security-plan|test-review) ;;
+  *) die "--format must be detail-plan, outline-plan, security-plan, or test-review" ;;
 esac
 
 [[ -f "$DRAFT" ]]     || die "draft file does not exist: $DRAFT"
@@ -240,6 +240,11 @@ if [[ ! "$VERDICT" =~ ^APPROVED($|[[:space:]].+$) ]]; then
       } ;;
     outline-plan)
       [[ "$VERDICT" =~ ^MISSING_ALTERNATIVE: ]] || {
+        echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
+        exit 3
+      } ;;
+    security-plan|test-review)
+      [[ "$VERDICT" == "NEEDS_REVISION" ]] || {
         echo "run-codex-review-loop: codex unavailable or verdict malformed (header=$HEADER, verdict=$VERDICT)" >&2
         exit 3
       } ;;
