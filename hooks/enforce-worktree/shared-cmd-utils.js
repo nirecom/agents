@@ -4,6 +4,7 @@ const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
 const { parseExcludePatterns, matchesAnyExcludePattern } = require("../lib/glob-match");
 const { stripQuotedArgs, stripHeredocBody } = require("../lib/strip-quoted-args");
+const { parse } = require("../lib/command-ir");
 
 // Built-in exclude patterns: always merged with ENFORCE_WORKTREE_EXCLUDE. Users
 // cannot disable these — set ENFORCE_WORKTREE=off session-scoped if needed.
@@ -16,16 +17,20 @@ const BUILTIN_EXCLUDE_PATTERNS = Object.freeze(["**/.worktree-backup/**"]);
  *  shell that runs the inner command, which is effectively chaining for
  *  exemption-allowance purposes. Without this, `git merge --ff-only $(rm -rf
  *  /)` would slip past the chaining guard.
- *  POSIX fd-dup redirects (`2>&1`, `1>&2`, `>&2`, `N>&-`, `>&-`) are stripped
- *  before the chaining test — their `&` is a file-descriptor duplication, not a
- *  chaining operator. `&>` / `&>>` (redirect-both-to-file) are intentionally
- *  NOT stripped: they are file write targets that collectBashWriteTargets must
- *  see (the leading bare `&` is preserved so it still trips the guard).
+ *  POSIX fd-dup redirects (`2>&1`, `1>&2`, `>&2`, `N>&-`, `>&-`) are handled
+ *  by the IR parser's fd-dup lookahead — they never produce a segment split.
+ *  `&>` / `&>>` (redirect-both-to-file) are intentionally left as bare `&`
+ *  in the IR, so they still produce a split and trip this guard.
  *  Note: bare `&` also matches PowerShell's call operator (& git.exe ...),
  *  so `& git.exe worktree add` is conservatively rejected. */
 function hasShellChaining(cmd) {
-  const stripped = stripQuotedArgs(cmd).replace(/\d*>&\d+|\d*>&-/g, " ");
-  return /[|;&]|\$\(|`/.test(stripped);
+  if (!cmd || typeof cmd !== "string") return false;
+  const ir = parse(cmd);
+  if (ir.parseFailure) return true; // fail-closed
+  // Use separators (not segment count) so leading/trailing operators are caught:
+  // `& git.exe status` and `git pull &` each produce 1 segment but 1 separator.
+  if (ir.separators.length > 0) return true;
+  return /\$\(|`/.test(stripQuotedArgs(cmd));
 }
 
 function rejectRceGitFlags(cmd) {
@@ -52,10 +57,14 @@ function rejectInterpreterAndChaining(cmd) {
     `(?:^|[;|&\\n])\\s*(?:/[^\\s]*/|\\\\\\\\[^\\s\\\\]+\\\\(?:[^\\s\\\\]+\\\\)*)(?:${INTERP_NAMES})\\b`
   );
   if (sepPathRe.test(cmd)) return true;
-  // Belt-and-braces stripped-gate: operator detection after SQ body collapse.
-  // fd-dup redirects (2>&1 etc.) stripped first — their `&` is not chaining.
-  const stripped = stripQuotedArgs(cmd).replace(/\d*>&\d+|\d*>&-/g, " ");
-  if (/[|;&\n]|\$\(|`|<\(|>\(/.test(stripped)) return true;
+  // IR-based chaining gate: newlines and substitutions checked first, then IR segment count.
+  if (/\n/.test(cmd)) return true;
+  const stripped = stripQuotedArgs(cmd);
+  if (/\$\(|`|<\(|>\(/.test(stripped)) return true;
+  const ir = parse(cmd);
+  if (ir.parseFailure) return true; // fail-closed
+  // Use separators (not segment count) so leading/trailing operators are caught.
+  if (ir.separators.length > 0) return true;
   return false;
 }
 
@@ -78,13 +87,15 @@ function findFirstUnquotedAnd(cmd) {
 }
 
 // True when cmd contains command-sequencing operators (;, &&, ||) outside quotes.
-// Single | (pipe) is excluded — needed for `cmd | tee file`. &> (redirect) is
-// not matched because the regex requires two & characters for &&.
+// Single | (pipe) is excluded — needed for `cmd | tee file`. Uses IR separators
+// so fd-dup redirects (2>&1 etc.) are never misclassified as chaining.
 // Commands with sequencing must not be fast-pathed through the session-scope
 // allow: the un-extracted portion may contain in-scope writes (e.g. rm, mv).
 function hasCommandSequencing(cmd) {
-  const stripped = stripQuotedArgs(cmd);
-  return /;|&&|\|\|/.test(stripped);
+  if (!cmd || typeof cmd !== "string") return false;
+  const ir = parse(cmd);
+  if (ir.parseFailure) return true; // fail-closed
+  return ir.separators.some((s) => s === ";" || s === "&&" || s === "||");
 }
 
 // True when cmd has sequencing operators (; && ||) OUTSIDE the heredoc body.

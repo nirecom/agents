@@ -71,8 +71,11 @@ function tokenizeSegment(seg) {
 }
 
 // Split cmd on UNQUOTED shell separators: && || ; | & ( )
-function splitSegments(cmd) {
+// Returns { segs: string[], seps: string[] } where seps records the separator
+// token at each split point (unconditionally, including leading/trailing).
+function splitSegmentsWithSeparators(cmd) {
   const segs = [];
+  const seps = [];
   let cur = "";
   let i = 0;
   const n = cmd.length;
@@ -98,18 +101,61 @@ function splitSegments(cmd) {
       }
       if (i < n) { cur += cmd[i]; i++; }
     } else if ((ch === "&" && cmd[i + 1] === "&") || (ch === "|" && cmd[i + 1] === "|")) {
+      seps.push(ch === "&" ? "&&" : "||");
       flush(); i += 2;
     } else if (ch === ";" || ch === "|" || ch === "&" || ch === "(" || ch === ")") {
+      // fd-dup lookahead: N>&M, N>&-  — digit-prefixed forms
+      // NOTE: &&/|| are handled ABOVE this branch, so bare & here is safe to check.
+      // But digits come here; check for N>&M pattern before treating as separator.
+      // (This branch is entered for ; | & ( ) — digits don't match any of those.)
+      // The digit-prefixed fd-dup lookahead is placed BEFORE this else-if in the
+      // main character dispatch below. See the `else` branch for digit handling.
       // ( ) split also isolates process-substitution bodies <(cmd) / >(cmd):
       // the inner cmd becomes its own segment and is tokenized normally, so
       // path-position checks still fire on its arguments.
+      const sepStr = ch === ";" ? ";" : ch === "|" ? "|" : ch === "&" ? "&" : ch === "(" ? "(" : ")";
+      seps.push(sepStr);
       flush(); i += 1;
+    } else if (/\d/.test(ch)) {
+      // fd-dup lookahead: N>&M or N>&-  — consume without splitting
+      let j = i;
+      while (j < n && /\d/.test(cmd[j])) j++;
+      if (cmd[j] === ">" && cmd[j + 1] === "&" && j + 2 < n && (/\d/.test(cmd[j + 2]) || cmd[j + 2] === "-")) {
+        let k = j + 2;
+        if (cmd[k] === "-") {
+          k++;
+        } else {
+          while (k < n && /\d/.test(cmd[k])) k++;
+        }
+        cur += cmd.slice(i, k);
+        i = k;
+      } else {
+        // Not a fd-dup — normal character accumulation
+        cur += ch;
+        i++;
+      }
+    } else if (ch === ">" && cmd[i + 1] === "&" && i + 2 < n && (/\d/.test(cmd[i + 2]) || cmd[i + 2] === "-")) {
+      // >&M, >&-  — no-digit-prefix fd-dup form, consume without splitting
+      let k = i + 2;
+      if (cmd[k] === "-") {
+        k++;
+      } else {
+        while (k < n && /\d/.test(cmd[k])) k++;
+      }
+      cur += cmd.slice(i, k);
+      i = k;
     } else {
       cur += ch; i++;
     }
   }
   flush();
-  return segs;
+  return { segs, seps };
+}
+
+// Split cmd on UNQUOTED shell separators: && || ; | & ( )
+// Delegation wrapper around splitSegmentsWithSeparators for backward compatibility.
+function splitSegments(cmd) {
+  return splitSegmentsWithSeparators(cmd).segs;
 }
 
 // Extract bodies of $(...) and `...` command substitutions for recursive
@@ -262,6 +308,7 @@ module.exports = {
   checkBashCommand,
   tokenizeSegment,
   splitSegments,
+  splitSegmentsWithSeparators,
   stripSubstitutions,
   extractSubstitutionContents,
   REDIRECT_RE,
