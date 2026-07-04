@@ -2,6 +2,7 @@
 "use strict";
 
 const fs = require("fs");
+const path = require("path");
 const {
   VALID_STEPS,
   VALID_STATUSES,
@@ -10,6 +11,7 @@ const {
   resolveSessionId,
   markStep,
 } = require("../../hooks/lib/workflow-state");
+const { getWorkflowPlansDir } = require("../../hooks/lib/workflow-plans-dir");
 
 // ---- Lookup tables --------------------------------------------------------
 
@@ -457,6 +459,24 @@ function computeVerdict(rawSid, _didAutoRepair) {
           : "WORKFLOW_DETAIL_NOT_NEEDED";
       }
     } catch (e) { /* fail-open: no hint */ }
+
+    // judgment_needed: emit opportunity for orchestrator semantic skip judgment
+    let judgeHint;
+    if (currentStep === "outline") {
+      const plansDir = getWorkflowPlansDir();
+      const intentPath = path.join(plansDir, sid + "-intent.md");
+      judgeHint = "Read " + intentPath + " and judge: single approach with no design questions -> emit <<WORKFLOW_OUTLINE_NOT_NEEDED: judgment=true: {reason}>>; otherwise launch make-outline-plan";
+    } else {
+      // detail: use outline.md when outline completed; else fallback to intent.md (C1 path)
+      const plansDir = getWorkflowPlansDir();
+      const outlineStatus = (state.steps.outline || {}).status;
+      const outlinePath = path.join(plansDir, sid + "-outline.md");
+      const refFile = outlineStatus === "complete" ? outlinePath : path.join(plansDir, sid + "-intent.md");
+      judgeHint = "Read " + refFile + " and judge: all files enumerated, one implementation path, no design unknowns -> emit <<WORKFLOW_DETAIL_NOT_NEEDED: judgment=true: {reason}>>; otherwise launch make-detail-plan";
+    }
+    judgeHint = judgeHint.replace(/'/g, "");
+    emit("judgment_needed", skill, judgeHint, currentStep, skipHint);
+    return;
   }
 
   emit("invoke", skill, hint, currentStep, skipHint);

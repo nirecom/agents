@@ -177,6 +177,30 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# T17-T19: judgment=true prefix — auto-approved unconditionally (#1259)
+# ---------------------------------------------------------------------------
+
+echo "=== T17: OUTLINE_NOT_NEEDED judgment=true + CONFIRM_OUTLINE=on → allow (judgment unconditional) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: judgment=true: single approach>>"')
+CONFIRM_OUTLINE=on assert_allow \
+    "T17. judgment=true: OUTLINE_NOT_NEEDED + CONFIRM_OUTLINE=on → allow" "$INPUT"
+
+echo "=== T18: DETAIL_NOT_NEEDED judgment=true + CONFIRM_DETAIL=on → allow (judgment unconditional) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: judgment=true: files enumerated>>"')
+CONFIRM_DETAIL=on assert_allow \
+    "T18. judgment=true: DETAIL_NOT_NEEDED + CONFIRM_DETAIL=on → allow" "$INPUT"
+
+echo "=== T19: OUTLINE_NOT_NEEDED judgment=true chained with && → pass-through (safety regression) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: judgment=true: x>>" && rm /tmp/x')
+CONFIRM_OUTLINE=on assert_passthrough \
+    "T19. judgment=true chained command must NOT be auto-allowed" "$INPUT"
+
+echo "=== T20: DETAIL_NOT_NEEDED judgment=true chained with && → pass-through (symmetry with T19) ==="
+INPUT=$(build_bash_input 'echo "<<WORKFLOW_DETAIL_NOT_NEEDED: judgment=true: x>>" && rm /tmp/x')
+CONFIRM_DETAIL=on assert_passthrough \
+    "T20. judgment=true detail chained command must NOT be auto-allowed" "$INPUT"
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 echo ""

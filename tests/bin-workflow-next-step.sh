@@ -43,6 +43,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin-workflow-next-step
 . "$SCRIPT_DIR/wf-meta-evidence.sh"
 # shellcheck source=./bin-workflow-next-step/skip-hint.sh
 . "$SCRIPT_DIR/skip-hint.sh"
+# shellcheck source=./bin-workflow-next-step/judgment-needed.sh
+. "$SCRIPT_DIR/judgment-needed.sh"
 
 # run_with_timeout wraps each individual `node` invocation inside run_next_step
 # (timeout/perl-exec cannot wrap shell functions directly, so per-call bounding
@@ -51,6 +53,7 @@ run_transitions_tests
 run_list_render_tests
 run_wf_meta_evidence_tests
 run_skip_hint_tests
+run_judgment_needed_tests
 
 echo "Total: $PASS passed, $FAIL failed"
 exit "$FAIL"
