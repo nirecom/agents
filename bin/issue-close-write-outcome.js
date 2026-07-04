@@ -84,6 +84,33 @@ if (args[0] === "--non-github") {
   process.exit(0);
 }
 
+// --wf-meta <issues-json-array> <outcome-file>
+if (args[0] === "--wf-meta") {
+  const issuesJson = args[1];
+  const outFile = args[2];
+  if (!issuesJson || !outFile) {
+    process.stderr.write("issue-close-write-outcome: --wf-meta requires <issues-json> <outcome-file>\n");
+    process.exit(1);
+  }
+  let issues;
+  try { issues = JSON.parse(issuesJson); } catch (e) {
+    process.stderr.write("issue-close-write-outcome: invalid JSON array: " + e.message + "\n");
+    process.exit(1);
+  }
+  const bag = readBag(outFile);
+  for (const entry of issues) {
+    const issueNumber = typeof entry === "number" ? entry : entry.number;
+    const issueRepo = (typeof entry === "object" && entry.repo) ? entry.repo : undefined;
+    upsertEntry(bag, {
+      issueNumber, issueRepo, state: "skipped_wf_meta",
+      historyEntry: "skipped", issueClosed: "skipped",
+      sentinelsPosted: "skipped", wipCleared: "skipped",
+    });
+  }
+  fs.writeFileSync(outFile, JSON.stringify(bag, null, 2));
+  process.exit(0);
+}
+
 // --fallback <intent-md> <outcome-file>
 if (args[0] === "--fallback") {
   const intentMd = args[1];
