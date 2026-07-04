@@ -45,6 +45,8 @@ const WRITE_PATTERNS = [
   { name: "ac-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ac\b/ },
   { name: "ni-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ni\b/ },
   { name: "ri-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ri\b/ },
+  { name: "mi-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])mi\b/ },
+  { name: "ci-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ci\b/ },
   // PowerShell encoded / bypass
   { name: "encoded-command", kind: "pwsh-encoded", regex: /-EncodedCommand\b|-enc\b/i },
   { name: "ps-stop-parsing", kind: "pwsh-encoded", regex: /(?:^|[\s;|&])--%/ },
@@ -215,4 +217,69 @@ const QUOTED_COMMAND_WORD_WRITE_NAMES = new Set([
 // (e.g. C:\path>>) is also safe — \ before > is not a bash escape sequence.
 const UNSAFE_REASON_CHARS = /[$`"]/;
 
-module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS };
+// isGhWriteIR: IR-owned version of the kind:"gh" WRITE_PATTERNS group.
+// During canary-5 (#1296), the kind:"gh" group will be removed from WRITE_PATTERNS
+// and this becomes the sole SSOT for gh write detection.
+function isGhWriteIR(ir) {
+  if (!ir || ir.parseFailure === true) return false;
+  if (!ir.segments || ir.segments.length === 0) return false;
+
+  // Find the first gh segment (direct, env-prefix `env VAR=val gh ...`, or VAR=val-prefix `VAR=val gh ...`).
+  // argv in IR excludes cmd0 — it starts with the first argument after the command name.
+  let ghArgv = null;
+  for (const seg of ir.segments) {
+    if (seg.cmd0 === "gh") {
+      ghArgv = seg.argv; // argv already excludes cmd0
+      break;
+    }
+    // `env VARNAME=val gh ...` form
+    if (seg.cmd0 === "env" && Array.isArray(seg.argv)) {
+      const ghIdx = seg.argv.indexOf("gh");
+      if (ghIdx !== -1) {
+        ghArgv = seg.argv.slice(ghIdx + 1); // args after "gh"
+        break;
+      }
+    }
+    // `VAR=val gh ...` form (inline env assignment as cmd0)
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv) && seg.argv.length > 0) {
+      // argv[0] may be another VAR=val or the actual command (gh)
+      const firstNonAssign = seg.argv.findIndex((a) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a));
+      if (firstNonAssign !== -1 && seg.argv[firstNonAssign] === "gh") {
+        ghArgv = seg.argv.slice(firstNonAssign + 1);
+        break;
+      }
+    }
+  }
+  if (!ghArgv || ghArgv.length === 0) return false;
+
+  const sub0 = ghArgv[0];
+  const sub1 = ghArgv[1];
+  const sub2 = ghArgv[2];
+
+  if (sub0 === "pr" && sub1 === "merge") return true;
+  if (sub0 === "issue" && sub1 === "delete") return true;
+  if (sub0 === "repo" && sub1 === "delete") return true;
+  if (sub0 === "release" && sub1 != null && /^(?:create|delete|edit|upload)$/.test(sub1)) return true;
+  if (sub0 === "issue" && sub1 === "create") return true;
+
+  if (sub0 === "api") {
+    // gh api -X METHOD / --method METHOD
+    for (let i = 1; i < ghArgv.length; i++) {
+      const tok = ghArgv[i];
+      if (tok === "-X" || tok === "--method") {
+        const method = ghArgv[i + 1];
+        if (method && /^(?:POST|PUT|PATCH|DELETE)$/i.test(method)) return true;
+      } else if (/^-X(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
+        return true;
+      }
+    }
+    // gh api PUT repos/.../contents/...
+    if (sub1 === "PUT" && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/contents\//.test(sub2)) return true;
+    // gh api POST|PATCH repos/.../git/{blobs,trees,commits,refs}
+    if ((sub1 === "POST" || sub1 === "PATCH") && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/git\/(?:blobs|trees|commits|refs)/.test(sub2)) return true;
+  }
+
+  return false;
+}
+
+module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR };

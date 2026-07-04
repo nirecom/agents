@@ -27,6 +27,7 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 const { resolveSessionId } = require("./lib/workflow-state");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { classify } = require("./lib/bash-write-patterns");
+const { parse } = require("./lib/command-ir");
 const { parseCdCommand } = require("./lib/parse-git-args");
 const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch, isCommandRepoExcluded } = require("./enforce-worktree/config");
 const { isMainCheckout, parseGitCPath, findRepoRootForBash, normalizeForCompare, findRepoRoot } = require("./enforce-worktree/git-repo-detection");
@@ -197,7 +198,8 @@ let repoRoot = null;
 if (toolName === "Bash") {
   const cmd = toolInput.command || "";
   if (!cmd) done();
-  if (classify(cmd) !== "write") done(); // read-only command — allow
+  const ir = parse(cmd);
+  if (classify(ir) !== "write") done(); // read-only command — allow
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
@@ -241,7 +243,7 @@ if (toolName === "Bash") {
   // repos this session manages; gh writes outside the set are blocked even
   // from a worktree, on the principle that out-of-session repos are not the
   // current task's concern.
-  if (isGhWriteCommand(cmd)) {
+  if (isGhWriteCommand(ir)) {
     // --- #713: gh issue create skill-context gate ---
     // Stage A: determine main worktree vs linked worktree.
     // Stage B (main only): require ISSUE_CREATE_SKILL=1 inline prefix to enforce
@@ -303,7 +305,7 @@ if (toolName === "Bash") {
   // are outside the session scope, before shape-based predicate checks.
   // Sequenced commands and parse failures → abstain (fail-closed, C1).
   {
-    const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot);
+    const _ur = checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, ir);
     if (_ur.verdict === "allow") done();
   }
 
@@ -311,7 +313,7 @@ if (toolName === "Bash") {
   {
     // sessionRoots is already in scope (hoisted above for universal-rule reuse)
     const excludePatterns = getExcludePatterns();
-    const { targets, parseFailure } = collectBashWriteTargets(cmd);
+    const { targets, parseFailure } = collectBashWriteTargets(ir);
 
     if (!parseFailure) {
       // Commands with sequencing operators (;, &&, ||) may contain un-extracted
@@ -338,7 +340,7 @@ if (toolName === "Bash") {
         // The actual write target is under plans-dir — allow.
         done();
       } else if (excludePatterns.length > 0 &&
-                 isEverySegmentExcluded(cmd, repoRoot, excludePatterns)) {
+                 isEverySegmentExcluded(ir, repoRoot, excludePatterns)) {
         // #739: sequenced commands where every write segment's targets are all
         // covered by EXCLUDE → allow (e.g. `mkdir -p .worktree-backup/x && cp src .worktree-backup/x/f`).
         done();
