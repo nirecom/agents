@@ -307,3 +307,7 @@ Changes: Refactored 3 oversized test files (>500 lines) into dispatcher + fragme
 ### FEATURE: PR #1282 (2026-07-03)
 Background: feat(#513,#1198,#1048,#1237,#1096): companion pre-check rework + guard CLIs
 Changes: clarify-intent now runs all companion checks (file overlap, keyword density, decomposition impact) before asking — presenting a single filtered batch instead of per-candidate prompts.;Companion reason tags now include `file:<basename>` and `kw:<n>` signals for richer accept/skip decisions.;Decomposition impact is shown in the main conversation alongside companion candidates, not buried in a confirmation dialog.
+
+### FEATURE: PR #1298 (2026-07-04)
+Background: feat(#1259): replace outline/detail isTrivial regex with orchestrator judgment
+Changes: The orchestrator now judges whether to skip outline and detail planning stages by semantically reading intent.md / outline.md, replacing keyword-matching heuristics. Sessions with a single obvious approach skip planning automatically.
