@@ -35,7 +35,7 @@ assert_passthrough_gate() {
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-7: valid outline record → OUTLINE_NOT_NEEDED allowed w/o CONFIRM_OUTLINE ==="
-plant_record "rv7" "outline" "{ so_c1: true, so_c2: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv7" "outline" "{ so_c1: true, so_c2: true }"
 INPUT="$(build_bash_input 'echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: recorded judgment>>"')"
 OUT="$(unset CONFIRM_OUTLINE 2>/dev/null || true
   AGENTS_CONFIG_DIR="$EMPTY_CONFIG_DIR" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" WORKFLOW_SESSION_ID="rv7" run_gate "$INPUT")"
@@ -94,7 +94,7 @@ assert_passthrough_gate "RV-17: no session-id + no CONFIRM_OUTLINE → pass-thro
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-32: hardening #5 — gate resolves session_id from input JSON (not only env) ==="
-plant_record "rv32" "outline" "{ so_c1: true, so_c2: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv32" "outline" "{ so_c1: true, so_c2: true }"
 # Build input JSON with both the sentinel command AND top-level session_id.
 RV32_CMD='echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: recorded judgment>>"'
 RV32_CMD_ESC="${RV32_CMD//\\/\\\\}"

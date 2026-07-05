@@ -24,6 +24,10 @@ NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
 
 RESOLVER_N="$(cygpath -m "$SKIP_RESOLVER" 2>/dev/null || echo "$SKIP_RESOLVER")"
 RECORD_CLI_N="$(cygpath -m "$RECORD_CLI" 2>/dev/null || echo "$RECORD_CLI")"
+SKIP_JUDGMENT_RESOLVER_N="$RESOLVER_N"
+
+# shellcheck source=../lib/skip-judgment.sh
+. "$AGENTS_DIR/tests/lib/skip-judgment.sh"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -33,6 +37,12 @@ mkdir -p "$WORKFLOW_DIR"
 # Windows-native path so Node.js can read/write via CLAUDE_WORKFLOW_DIR.
 WORKFLOW_DIR_N="$(cygpath -m "$WORKFLOW_DIR" 2>/dev/null || echo "$WORKFLOW_DIR")"
 export CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N"
+
+# Plans dir for hasValidSkipJudgment artifact lookups (stale-guard requires this).
+PLANS_GLOBAL_DIR="$TMPDIR_BASE/plans-global"
+mkdir -p "$PLANS_GLOBAL_DIR"
+PLANS_GLOBAL_DIR_N="$(cygpath -m "$PLANS_GLOBAL_DIR" 2>/dev/null || echo "$PLANS_GLOBAL_DIR")"
+export WORKFLOW_PLANS_DIR="$PLANS_GLOBAL_DIR_N"
 
 # Empty config dir so the gate hook's load-env.js finds no .env — CONFIRM_* env
 # vars then reflect only what the test explicitly sets (load-env.js treats the
