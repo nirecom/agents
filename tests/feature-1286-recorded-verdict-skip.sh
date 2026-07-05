@@ -42,6 +42,8 @@ TESTS_SUBDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1286-recorde
 . "$TESTS_SUBDIR/gate.sh"
 # shellcheck source=./feature-1286-recorded-verdict-skip/next-step.sh
 . "$TESTS_SUBDIR/next-step.sh"
+# shellcheck source=./feature-1286-recorded-verdict-skip/stale-guard.sh
+. "$TESTS_SUBDIR/stale-guard.sh"
 
 echo ""
 echo "=== Results ==="
