@@ -22,6 +22,7 @@
 //       only. PowerShell null-sink uses Out-Null/> $null and is handled by pwsh-specific patterns.
 
 "use strict";
+const { resolveEffectiveCommand, resolveEffectiveArgv } = require("./segment-utils");
 
 const WRITE_PATTERNS = [
   // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
@@ -232,20 +233,18 @@ function isGhWriteIR(ir) {
       ghArgv = seg.argv; // argv already excludes cmd0
       break;
     }
-    // `env VARNAME=val gh ...` form
-    if (seg.cmd0 === "env" && Array.isArray(seg.argv)) {
-      const ghIdx = seg.argv.indexOf("gh");
-      if (ghIdx !== -1) {
-        ghArgv = seg.argv.slice(ghIdx + 1); // args after "gh"
+    // `env VARNAME=val gh ...` form — synthetic seg so resolveEffectiveCommand skips leading assignments
+    if (seg.cmd0 === "env" && Array.isArray(seg.argv) && seg.argv.length > 0) {
+      const synthSeg = { cmd0: seg.argv[0], argv: seg.argv.slice(1) };
+      if (resolveEffectiveCommand(synthSeg) === "gh") {
+        ghArgv = resolveEffectiveArgv(synthSeg);
         break;
       }
     }
     // `VAR=val gh ...` form (inline env assignment as cmd0)
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv) && seg.argv.length > 0) {
-      // argv[0] may be another VAR=val or the actual command (gh)
-      const firstNonAssign = seg.argv.findIndex((a) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a));
-      if (firstNonAssign !== -1 && seg.argv[firstNonAssign] === "gh") {
-        ghArgv = seg.argv.slice(firstNonAssign + 1);
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv)) {
+      if (resolveEffectiveCommand(seg) === "gh") {
+        ghArgv = resolveEffectiveArgv(seg);
         break;
       }
     }
