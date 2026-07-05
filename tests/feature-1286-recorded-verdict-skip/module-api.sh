@@ -51,6 +51,7 @@ check "RV-3: readSkipJudgment null on missing record" "null" "$OUT"
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-4: hasValidSkipJudgment true only when orchestrator AND all_conditions_met ==="
+: > "$PLANS_GLOBAL_DIR/rv4-intent.md"
 OUT="$(resolver_eval "
   r.recordSkipJudgment('rv4', 'outline', { so_c1: true, so_c2: true }, 'orchestrator');
   console.log('valid=' + r.hasValidSkipJudgment('rv4', 'outline'));
@@ -72,6 +73,7 @@ check_contains "RV-5b: so_c2=false → hasValidSkipJudgment false" "valid=false"
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-12: judgment_source validity — only 'orchestrator' counts ==="
+: > "$PLANS_GLOBAL_DIR/rv12o-intent.md"
 OUT="$(resolver_eval "
   r.recordSkipJudgment('rv12u', 'outline', { so_c1: true, so_c2: true }, 'user');
   console.log('user_valid=' + r.hasValidSkipJudgment('rv12u', 'outline'));
@@ -107,6 +109,7 @@ check_contains "RV-14b: non-object skip_judgment → readSkipJudgment null (no t
 # ---------------------------------------------------------------------------
 echo ""
 echo "=== RV-15: idempotency — record twice → single valid object, status unchanged ==="
+: > "$PLANS_GLOBAL_DIR/rv15-intent.md"
 write_state "rv15" "$JSON_AT_OUTLINE"
 OUT="$(resolver_eval "
   r.recordSkipJudgment('rv15', 'outline', { so_c1: true, so_c2: true }, 'orchestrator');
@@ -179,7 +182,7 @@ build_schema_fixture() {
     process.stdin.on('end',()=>{
       const s=JSON.parse(d);
       s.steps['$bsf_target'].skip_judgment={
-        recorded_at:'2026-01-01T00:00:00.000Z',
+        recorded_at:'2099-01-01T00:00:00.000Z',
         judgment_source:'orchestrator',
         conditions:$bsf_cond,
         all_conditions_met:true
@@ -188,6 +191,12 @@ build_schema_fixture() {
     });
   " 2>/dev/null)"
   write_state "$bsf_sid" "$bsf_json"
+  # Create artifact so hasValidSkipJudgment's stale-guard can resolve it.
+  if [ "$bsf_target" = "outline" ]; then
+    : > "$PLANS_GLOBAL_DIR/${bsf_sid}-intent.md"
+  else
+    : > "$PLANS_GLOBAL_DIR/${bsf_sid}-outline.md"
+  fi
 }
 
 # Table: rv_sid | target | conditions-json | expected-valid (true|false) | case-label
