@@ -166,6 +166,12 @@ if _is_enforce_worktree_on; then
         fi
     fi
 
+    # Human terminal bypass: TTY = interactive shell (not CC Bash tool pipe).
+    # CC's Bash tool is always non-TTY, so this cannot be bypassed by unsetting CLAUDECODE.
+    if [ -t 1 ] && [ -z "${CLAUDECODE:-}" ]; then
+        _enforce_skip=1
+    fi
+
     if [ "$_enforce_skip" = "0" ]; then
         # Block commits from main worktree (--git-common-dir == --git-dir)
         _git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
