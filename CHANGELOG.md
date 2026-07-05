@@ -351,3 +351,7 @@ Changes: Hook layer now parses each Bash command once per tool call (IR threadin
 ### FEATURE: PR #1334 (2026-07-05)
 Background: feat(#1310): hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime
 Changes: Recorded-verdict skip now invalidates stale judgments after planning artifacts are re-generated. If the intent or outline document was edited after a skip judgment was recorded, the recorded verdict is now correctly treated as stale and the full planning step (outline or detail) runs again. Previously a stale record could authorize a skip even after the planning context changed.
+
+### FEATURE: PR #1338 (2026-07-06)
+Background: feat(#1337): add /workflow-off /workflow-on skills and pre-commit human bypass
+Changes: `/workflow-off` and `/workflow-on` skills: suspend and restore workflow/worktree enforcement from a skill invocation.;`git commit` from a human terminal no longer blocked by `ENFORCE_WORKTREE`.
