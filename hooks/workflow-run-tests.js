@@ -15,6 +15,7 @@
 
 const fs = require("fs");
 const { resolveSessionId, markStep, readState } = require("./lib/workflow-state");
+const { classify } = require("./lib/bash-write-patterns");
 
 function readStdin() {
   const chunks = [];
@@ -114,8 +115,22 @@ function segmentExcluded(seg) {
   return false;
 }
 
+// Runner-word gate: any interpreter or test-framework word in the command.
+// classify() returns "read" for both `for f in tests/*.sh; do head "$f"; done`
+// AND `for f in tests/*.sh; do bash "$f"; done` — but only the latter contains
+// a runner word, so the gate excludes read-only for-loops while preserving
+// detection of loops that execute scripts via bash/sh/node/pytest/etc.
+// Note: bare `sh` uses `\bsh\s` (requires following whitespace) to avoid matching
+// the `.sh` file extension in globs like `tests/*.sh`.
+const RUNNER_WORD_RE = /\b(bash|node|pwsh|powershell(?:\.[a-z]+)?|pytest|jest|vitest|mocha|pester|invoke-pester)\b|\bsh\s/i;
+
 function isTestCommand(command) {
   const trimmed = command.trim();
+  // Exclude commands that are entirely read-only (classify()="read") AND contain
+  // no runner word. Controls flow constructs like `for f in tests/*.sh; do head -n 10
+  // "$f"; done` falsely matching TEST_PATH_RE via the for-loop header are excluded;
+  // `for f in tests/*.sh; do bash "$f"; done` passes (runner word "bash" present).
+  if (classify(trimmed) === "read" && !RUNNER_WORD_RE.test(trimmed)) return false;
   // Quote-aware split on top-level shell operators (&&, ||, |, ;, newline).
   // Operators inside quotes are NOT split points, so `echo "a && pytest tests/"`
   // stays one segment and is excluded by the leading `echo` (read-only).
