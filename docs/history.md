@@ -330,4 +330,8 @@ Changes: #1327: add resolveEffectiveCommand/resolveEffectiveArgv helpers to segm
 
 ### FEATURE: PR #1334 — feature/stale-guard-tests (2026-07-05, 67dc8cc9492b0a752a996f23e47027b9d07444a5, #1334)
 Background: feat(#1310): hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime
-Changes: FEATURE: hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime (#1310) <!-- compose-doc-append-sentinel: branch=feature/stale-guard-tests pr=#1334 -->
+Changes: FEATURE: hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime (#1310) <!-- compose-doc-append-sentinel: branch=feature/stale-guard-tests pr=#1334 -->
+
+### FEATURE: PR #1338 — feature/workflow-off-skill (2026-07-06, fba692f, #1338)
+Background: feat(#1337): add /workflow-off /workflow-on skills and pre-commit human bypass
+Changes: Added `/workflow-off` and `/workflow-on` skills to expose `WORKFLOW_ENFORCE_WORKFLOW_OFF` / `ON` sentinels as invocable skills. Added `user-invocable: false` to `make-outline-plan` and `make-detail-plan` frontmatter.;Added human terminal bypass to `hooks/pre-commit` ENFORCE_WORKTREE section: TTY detection (`[ -t 1 ]`) combined with `CLAUDECODE` unset check. CC Bash tool is always non-TTY so the bypass cannot be defeated by unsetting CLAUDECODE. <!-- compose-doc-append-sentinel: branch=feature/workflow-off-skill pr=#1338 -->
