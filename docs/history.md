@@ -326,4 +326,8 @@ Changes: canary-3 (#1294): migrate bash-write-scope.js and enforce-worktree.js t
 
 ### FEATURE: PR #1332 — refactor/1327-resolve-effective-command (2026-07-05, a549e55, #1332)
 Background: feat(#1327,#1328): add resolveEffectiveCommand helper; fix multi-level VAR=val + env-gh false positive
-Changes: #1327: add resolveEffectiveCommand/resolveEffectiveArgv helpers to segment-utils.js; fix multi-level VAR=val mis-resolution in bash-write-scope.js and patterns.js; fix mutation-probe.sh grep BRE→ERE; add C6 regression tests (151 pass);#1328: fix env-prefix branch in isGhWriteIR (patterns.js) to skip leading VAR=val tokens via findIndex instead of indexOf("gh"), preventing false-positive match on env EDITOR=gh vim; add C5.9b regression test <!-- compose-doc-append-sentinel: branch=refactor/1327-resolve-effective-command pr=#1332 -->
+Changes: #1327: add resolveEffectiveCommand/resolveEffectiveArgv helpers to segment-utils.js; fix multi-level VAR=val mis-resolution in bash-write-scope.js and patterns.js; fix mutation-probe.sh grep BRE→ERE; add C6 regression tests (151 pass);#1328: fix env-prefix branch in isGhWriteIR (patterns.js) to skip leading VAR=val tokens via findIndex instead of indexOf("gh"), preventing false-positive match on env EDITOR=gh vim; add C5.9b regression test <!-- compose-doc-append-sentinel: branch=refactor/1327-resolve-effective-command pr=#1332 -->
+
+### FEATURE: PR #1334 — feature/stale-guard-tests (2026-07-05, 67dc8cc9492b0a752a996f23e47027b9d07444a5, #1334)
+Background: feat(#1310): hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime
+Changes: FEATURE: hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime (#1310) <!-- compose-doc-append-sentinel: branch=feature/stale-guard-tests pr=#1334 -->
