@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/enforce-worktree.js
-# Tags: worktree, classify, ir, gh-write, pwsh-alias, canary-3, scope:issue-specific
+# Tests: hooks/lib/bash-write-patterns/classify.js, hooks/lib/bash-write-patterns/patterns.js, hooks/enforce-worktree/bash-write-scope.js, hooks/enforce-worktree/universal-target-allow.js, hooks/enforce-worktree.js, hooks/lib/bash-write-patterns/segment-utils.js
+# Tags: worktree, classify, ir, gh-write, pwsh-alias, canary-3, canary-3-followup, scope:issue-specific
 #
 # L2 broad integration test for issue #1294 (canary-3):
 #   - isGhWriteIR(ir) predicate in patterns.js
@@ -18,8 +18,10 @@
 #     (enforce-worktree.js wired to PreToolUse with actual tool input routing)
 #   - Allow-chain end-to-end: standard.js → bash-write-scope.js → session-scope
 #     check → decision with real WIP/worktree state
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED
-# preflight via bin/check-verification-gate.sh category: hook-registration
+#   - The enforce-worktree.js subprocess section below only checks valid-JSON + no-crash.
+#     Full allow/block semantics depend on live session state (real WIP/scope roots).
+# Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
+#   bin/check-verification-gate.sh category: hook-registration
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -161,6 +163,7 @@ C5.7_gh_api_PUT_contents|gh api PUT repos/o/r/contents/file.txt|true
 C5.8_gh_api_POST_git_blobs|gh api POST repos/o/r/git/blobs|true
 C5.8b_gh_api_PATCH_refs|gh api PATCH repos/o/r/git/refs/heads/main|true
 C5.9_env_prefix_gh_pr_merge|env MSYS_NO_PATHCONV=1 gh pr merge origin/main|true
+C5.9b_env_editor_gh_not_gh|env EDITOR=gh vim|false
 C5.10_gh_pr_create|gh pr create|false
 C5.11_gh_issue_comment|gh issue comment 1 -b msg|false
 C5.12_gh_pr_list|gh pr list|false
@@ -340,12 +343,15 @@ hook_no_crash() {
 
 for tc_name in "gh pr merge" "echo hello" "mi src.txt dst.txt"; do
   payload="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$tc_name\"},\"session_id\":\"test-1294\"}"
-  if hook_no_crash "$payload"; then
-    echo "PASS: dispatch no-crash ($tc_name)"; PASS=$((PASS + 1))
-  else
-    echo "FAIL: dispatch no-crash ($tc_name) — hook crashed or returned non-JSON"; FAIL=$((FAIL + 1))
-  fi
+  assert_eq "dispatch_no_crash_$(echo "$tc_name" | tr ' ' '_')" "valid_json" \
+    "$(hook_no_crash "$payload" && echo valid_json || echo crashed_or_invalid)"
 done
+
+# ---------------------------------------------------------------------------
+# Section C6 — sourced from sibling file (file-split rule: HARD >500 lines)
+# ---------------------------------------------------------------------------
+# shellcheck source=./refactor-1294-classify-ir-signature/c6-resolve-effective-command.sh
+. "$(dirname "$0")/refactor-1294-classify-ir-signature/c6-resolve-effective-command.sh"
 
 # ---------------------------------------------------------------------------
 # Summary
