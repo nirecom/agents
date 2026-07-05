@@ -87,6 +87,7 @@ run_skip_hint_tests() {
 
   local RESOLVER_N
   RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js")"
+  SKIP_JUDGMENT_RESOLVER_N="$RESOLVER_N"
 
   if ! run_with_timeout node -e "
     const r = require('$RESOLVER_N');
@@ -99,10 +100,7 @@ run_skip_hint_tests() {
 
   # ---- Case 46: outline current + valid skip_judgment → ACTION=invoke (next step), outline=skipped ----
   write_state "case46" "$JSON_AT_OUTLINE"
-  run_with_timeout node -e "
-    const r = require('$RESOLVER_N');
-    r.recordSkipJudgment('case46', 'outline', { so_c1: true, so_c2: true }, 'orchestrator');
-  " 2>/dev/null || true
+  plant_valid_skip "$PLANS_DIR_SH" "case46" "outline" "{ so_c1: true, so_c2: true }"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case46" 2>/dev/null || true)"
   check_contains "46: valid outline record → ACTION=invoke (detail/branch next)" "ACTION=invoke" "$OUT"
   check_not_contains "46: valid outline record → NOT pointing at outline skill" "NEXT_SKILL=make-outline-plan" "$OUT"
@@ -120,10 +118,7 @@ run_skip_hint_tests() {
 
   # ---- Case 48: detail current + valid skip_judgment → ACTION=invoke (branching_complete next) ----
   write_state "case48" "$JSON_AT_DETAIL"
-  run_with_timeout node -e "
-    const r = require('$RESOLVER_N');
-    r.recordSkipJudgment('case48', 'detail', { sd_c1: true, sd_c2: true, sd_c3: true }, 'orchestrator');
-  " 2>/dev/null || true
+  plant_valid_skip "$PLANS_DIR_SH" "case48" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case48" 2>/dev/null || true)"
   check_contains "48: valid detail record → ACTION=invoke" "ACTION=invoke" "$OUT"
   check_not_contains "48: valid detail record → NOT detail skill" "NEXT_SKILL=make-detail-plan" "$OUT"
@@ -170,11 +165,8 @@ run_skip_hint_tests() {
   # Asserts the OUTPUT verdict (REASON='branching_complete'), closing the
   # output-advance gap left by cases 48-49 (which only checked step statuses).
   write_state "case53" "$JSON_AT_OUTLINE"
-  run_with_timeout node -e "
-    const r = require('$RESOLVER_N');
-    r.recordSkipJudgment('case53', 'outline', { so_c1: true, so_c2: true }, 'orchestrator');
-    r.recordSkipJudgment('case53', 'detail', { sd_c1: true, sd_c2: true, sd_c3: true }, 'orchestrator');
-  " 2>/dev/null || true
+  plant_valid_skip "$PLANS_DIR_SH" "case53" "outline" "{ so_c1: true, so_c2: true }"
+  plant_valid_skip "$PLANS_DIR_SH" "case53" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }"
   OUT="$(WORKFLOW_PLANS_DIR="$PLANS_DIR_SH_N" run_next_step --session "case53" 2>/dev/null || true)"
   check_contains "53: both records → cascade output REASON=branching_complete" "REASON='branching_complete'" "$OUT"
   check_not_contains "53: both records → output not pointing at outline" "NEXT_SKILL=make-outline-plan" "$OUT"
