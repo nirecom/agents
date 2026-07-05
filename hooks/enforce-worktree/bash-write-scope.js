@@ -4,6 +4,7 @@ const { getSessionRepoRoots } = require("./session-scope");
 const { isExcluded } = require("./shared-cmd-utils");
 const { findRepoRoot, normalizeForCompare } = require("./git-repo-detection");
 const { classify, isGhWriteIR } = require("../lib/bash-write-patterns");
+const { resolveEffectiveCommand } = require("../lib/bash-write-patterns/segment-utils");
 const { splitShellCommands } = require("../lib/shell-segments");
 const { parse } = require("../lib/command-ir");
 const { expandStaticShellTokens } = require("../lib/bash-write-targets/redirect");
@@ -33,34 +34,27 @@ function collectBashWriteTargets(ir) {
   const targets = [];
   let parseFailure = false;
 
-  // Resolve effective command name: for env-prefix form (VAR=val cmd args...),
-  // cmd0 is the assignment and the actual command is argv[0].
-  const effectiveCmd0 = (s) => {
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(s.cmd0) && s.argv && s.argv.length > 0) return s.argv[0];
-    return s.cmd0;
-  };
-
   if (ir.segments.some((s) => s.redirects && s.redirects.some((r) => r.op !== "<" && r.op !== "<<<"))) {
     const r = extractRedirectTargets(cmd);
     if (r === null) parseFailure = true;
     else targets.push(...r);
   }
-  if (ir.segments.some((s) => effectiveCmd0(s) === "tee")) {
+  if (ir.segments.some((s) => resolveEffectiveCommand(s) === "tee")) {
     const t = extractTeeTargets(cmd);
     if (t === null) parseFailure = true;
     else targets.push(...t);
   }
-  if (ir.segments.some((s) => /^(?:set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|sc|ac|ni|ri|mi|ci)$/i.test(effectiveCmd0(s)))) {
+  if (ir.segments.some((s) => /^(?:set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|sc|ac|ni|ri|mi|ci)$/i.test(resolveEffectiveCommand(s)))) {
     const p = extractPwshWriteTargets(cmd);
     if (p === null) parseFailure = true;
     else targets.push(...p);
   }
-  if (ir.segments.some((s) => effectiveCmd0(s) === "cp" || effectiveCmd0(s) === "mv")) {
+  if (ir.segments.some((s) => resolveEffectiveCommand(s) === "cp" || resolveEffectiveCommand(s) === "mv")) {
     const d = extractCpMvDestination(cmd);
     if (d === null) parseFailure = true;
     else targets.push(d);
   }
-  if (ir.segments.some((s) => effectiveCmd0(s) === "rm")) {
+  if (ir.segments.some((s) => resolveEffectiveCommand(s) === "rm")) {
     const r = extractRmTargets(cmd);
     if (r === null) parseFailure = true;
     else targets.push(...r);
