@@ -22,7 +22,7 @@ run_next() {
 echo ""
 echo "=== RV-10: valid outline record → outline skipped, next step is detail ==="
 write_state "rv10" "$JSON_AT_OUTLINE"
-plant_record "rv10" "outline" "{ so_c1: true, so_c2: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv10" "outline" "{ so_c1: true, so_c2: true }"
 OUT="$(run_next rv10)"
 check_contains "RV-10a: outline skipped → next step is detail" "NEXT_SKILL=make-detail-plan" "$OUT"
 check_not_contains "RV-10b: outline skipped → not pointing at make-outline-plan" "NEXT_SKILL=make-outline-plan" "$OUT"
@@ -33,8 +33,8 @@ check "RV-10c: outline step status is skipped in state" '"skipped"' "$STATUS"
 echo ""
 echo "=== RV-11: both records → both skipped → branching_complete ==="
 write_state "rv11" "$JSON_AT_OUTLINE"
-plant_record "rv11" "outline" "{ so_c1: true, so_c2: true }"
-plant_record "rv11" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv11" "outline" "{ so_c1: true, so_c2: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv11" "detail" "{ sd_c1: true, sd_c2: true, sd_c3: true }"
 OUT="$(run_next rv11)"
 check_not_contains "RV-11a: both skipped → not pointing at outline" "NEXT_SKILL=make-outline-plan" "$OUT"
 check_not_contains "RV-11b: both skipped → not pointing at detail" "NEXT_SKILL=make-detail-plan" "$OUT"
@@ -44,7 +44,7 @@ check_contains "RV-11c: both skipped → REASON=branching_complete" "REASON='bra
 echo ""
 echo "=== RV-16: idempotency — next-step twice → outline stays skipped, no corruption ==="
 write_state "rv16" "$JSON_AT_OUTLINE"
-plant_record "rv16" "outline" "{ so_c1: true, so_c2: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv16" "outline" "{ so_c1: true, so_c2: true }"
 OUT1="$(run_next rv16)"
 STATUS1="$(read_state_field rv16 outline status)"
 OUT2="$(run_next rv16)"
@@ -86,7 +86,7 @@ RVREC1_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
   process.stdin.on('end',()=>{
     const s=JSON.parse(d);
     s.steps.outline.skip_judgment={
-      recorded_at:'2026-01-01T00:00:00.000Z',
+      recorded_at:'2099-01-01T00:00:00.000Z',
       judgment_source:'orchestrator',
       conditions:{so_c1:true,so_c2:true},
       all_conditions_met:true
@@ -94,6 +94,7 @@ RVREC1_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
     console.log(JSON.stringify(s));
   });
 ")"
+: > "$PLANS_GLOBAL_DIR/rvrec1-intent.md"
 write_state "rvrec1" "$RVREC1_JSON"
 
 # Sanity-guard: verify hasValidSkipJudgment returns true for this fixture so
@@ -156,7 +157,7 @@ rm -rf "$RVREC1_TMP_DIR"
 echo ""
 echo "=== RV-35: hardening #3/#7 — skip_judgment audit field preserved after outline skip ==="
 write_state "rv35" "$JSON_AT_OUTLINE"
-plant_record "rv35" "outline" "{ so_c1: true, so_c2: true }"
+plant_valid_skip "$PLANS_GLOBAL_DIR" "rv35" "outline" "{ so_c1: true, so_c2: true }"
 # Capture the planted record BEFORE running next-step.
 RV35_BEFORE="$(read_skip_judgment_raw rv35 outline)"
 # Run next-step to trigger the outline skip.
@@ -199,7 +200,7 @@ RVREC2_JSON="$(printf '%s' "$JSON_AT_DETAIL" | node -e "
   process.stdin.on('end',()=>{
     const s=JSON.parse(d);
     s.steps.detail.skip_judgment={
-      recorded_at:'2026-01-01T00:00:00.000Z',
+      recorded_at:'2099-01-01T00:00:00.000Z',
       judgment_source:'orchestrator',
       conditions:{sd_c1:true,sd_c2:true,sd_c3:true},
       all_conditions_met:true
@@ -207,6 +208,7 @@ RVREC2_JSON="$(printf '%s' "$JSON_AT_DETAIL" | node -e "
     console.log(JSON.stringify(s));
   });
 ")"
+: > "$PLANS_GLOBAL_DIR/rvrec2-outline.md"
 write_state "rvrec2" "$RVREC2_JSON"
 
 # Sanity-guard for the detail fixture.
@@ -272,7 +274,7 @@ RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
   process.stdin.on('end',()=>{
     const s=JSON.parse(d);
     s.steps.outline.skip_judgment={
-      recorded_at:'2026-01-01T00:00:00.000Z',
+      recorded_at:'2099-01-01T00:00:00.000Z',
       judgment_source:'orchestrator',
       conditions:{so_c1:true,so_c2:true},
       all_conditions_met:true
@@ -280,6 +282,7 @@ RV36_JSON="$(printf '%s' "$JSON_AT_OUTLINE" | node -e "
     console.log(JSON.stringify(s));
   });
 ")"
+: > "$PLANS_GLOBAL_DIR/rv36-intent.md"
 write_state "rv36" "$RV36_JSON"
 
 # Sanity-guard: hasValidSkipJudgment must be TRUE for this fixture.
