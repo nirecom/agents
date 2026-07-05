@@ -347,3 +347,7 @@ Changes: Security-plan and test-coverage reviews are now performed by Codex as t
 ### FEATURE: PR #1326 (2026-07-05)
 Background: feat(#1294): canary-3 — bash-write-scope.js IR consumption + dispatch parse-once
 Changes: Hook layer now parses each Bash command once per tool call (IR threading). No user-visible behavior change — internal refactor for the #1253 IR migration series.
+
+### FEATURE: PR #1334 (2026-07-05)
+Background: feat(#1310): hasValidSkipJudgment stale-guard — bind recorded verdict to artifact mtime
+Changes: Recorded-verdict skip now invalidates stale judgments after planning artifacts are re-generated. If the intent or outline document was edited after a skip judgment was recorded, the recorded verdict is now correctly treated as stale and the full planning step (outline or detail) runs again. Previously a stale record could authorize a skip even after the planning context changed.
