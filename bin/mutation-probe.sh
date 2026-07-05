@@ -135,7 +135,7 @@ KILLED=0
 # Pattern: const NAME = /.../ [flags];
 CONST_PATTERN='^[[:space:]]*const[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*/[^/].*[gimsuvyd]*;'
 
-mapfile -t MATCHES < <(grep -n "$CONST_PATTERN" "$TARGET_ABS" 2>/dev/null || true)
+mapfile -t MATCHES < <(grep -En "$CONST_PATTERN" "$TARGET_ABS" 2>/dev/null || true)
 
 for match in "${MATCHES[@]}"; do
     [[ -z "$match" ]] && continue
