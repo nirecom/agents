@@ -141,7 +141,7 @@ function readSkipJudgment(sessionId, targetStep) {
     const sj = state.steps[targetStep].skip_judgment;
     if (!sj || typeof sj !== "object" || Array.isArray(sj)) return null;
     // Require the essential fields to be present (partial objects → null).
-    if (!("judgment_source" in sj) || !("all_conditions_met" in sj) || !("conditions" in sj)) return null;
+    if (!("judgment_source" in sj) || !("all_conditions_met" in sj) || !("conditions" in sj) || !("recorded_at" in sj)) return null;
     return sj;
   } catch (_) {
     return null;
@@ -157,6 +157,22 @@ function hasValidSkipJudgment(sessionId, targetStep) {
   try {
     const sj = readSkipJudgment(sessionId, targetStep);
     if (!sj) return false;
+    // Artifact path mapping (intent.md scope):
+    //   outline → <PLANS_DIR>/<sid>-intent.md
+    //   detail  → <PLANS_DIR>/<sid>-outline.md
+    const artifactSuffix = targetStep === "detail" ? "-outline.md" : "-intent.md";
+    const artifactPath = path.join(getWorkflowPlansDir(), sessionId + artifactSuffix);
+    let artifactMtimeMs;
+    try {
+      artifactMtimeMs = fs.statSync(artifactPath).mtimeMs;
+    } catch (_) {
+      // ENOENT or permission error → treat as stale → false
+      return false;
+    }
+    const recordedAtMs = new Date(sj.recorded_at).getTime();
+    if (isNaN(recordedAtMs)) return false;
+    // Floor to ms precision to match toISOString() truncation on sub-ms filesystems (NTFS).
+    if (Math.floor(artifactMtimeMs) > recordedAtMs) return false;
     return isRecordedVerdictValid(sj, targetStep);
   } catch (_) {
     return false;
