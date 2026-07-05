@@ -212,4 +212,39 @@ try {
         STATUS=$(get_run_tests_status "$SID")
         fail "ED15. node gen.js | grep tests/foo.sh + exit=0 → expected absent (| pipe: non-runner + read-only), got run_tests=$STATUS"
     fi
+
+    # ED16: for-loop header with tests/ glob + read-only body + exit=0 → state absent
+    # (classify()="read"; for-loop header has tests/ but no strong runner → isTestCommand returns false)
+    SID="ed16-$$-$RANDOM"
+    run_run_tests_hook 'for f in tests/*.sh; do head -n 10 "$f"; done' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED16. for f in tests/*.sh; do head -n 10 ... + exit=0 → state absent (classify=read, no strong runner)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED16. for f in tests/*.sh; do head -n 10 ... + exit=0 → expected absent (classify=read gate), got run_tests=$STATUS"
+    fi
+
+    # ED17: for-loop header with tests/ glob + cat body + exit=0 → state absent
+    # (classify()="read"; cat is read-only, for-loop with tests/ glob not a test runner)
+    SID="ed17-$$-$RANDOM"
+    run_run_tests_hook 'for f in tests/*.sh; do cat "$f"; done' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED17. for f in tests/*.sh; do cat ... + exit=0 → state absent (classify=read, no strong runner)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED17. for f in tests/*.sh; do cat ... + exit=0 → expected absent (classify=read gate), got run_tests=$STATUS"
+    fi
+
+    # ED18: for-loop header with tests/ glob + bash body + exit=0 → run_tests: pending
+    # (classify()="read" but RUNNER_WORD_RE matches "bash" → gate bypassed → segment loop
+    #  detects tests/ in for-header → isTestCommand=true → ACTIVE DEMOTION: no contract)
+    SID="ed18-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'for f in tests/*.sh; do bash "$f"; done' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED18. for f in tests/*.sh; do bash ... + exit=0 → run_tests=pending (runner word bypasses classify gate, no contract → active demotion)"
+    else
+        fail "ED18. for f in tests/*.sh; do bash ... + exit=0 → expected pending (runner detected, active demotion), got: $STATUS"
+    fi
 }
