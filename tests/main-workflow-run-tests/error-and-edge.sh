@@ -212,4 +212,61 @@ try {
         STATUS=$(get_run_tests_status "$SID")
         fail "ED15. node gen.js | grep tests/foo.sh + exit=0 → expected absent (| pipe: non-runner + read-only), got run_tests=$STATUS"
     fi
+
+
+    # ED16: for f in tests/*.sh; do head -n 10 "$f"; done + exit=0 → run_tests: pending
+    SID="ed16-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'for f in tests/*.sh; do head -n 10 "$f"; done' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED16. for f in tests/*.sh; do head -n 10 \"\$f\"; done + exit=0 → run_tests=pending (control-structure penetration: for keyword not stripped)"
+    else
+        fail "ED16. for f in tests/*.sh; do head -n 10 \"\$f\"; done + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED17: if pytest tests/; then : ; fi + exit=0 → run_tests: pending
+    SID="ed17-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'if pytest tests/; then : ; fi' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED17. if pytest tests/; then : ; fi + exit=0 → run_tests=pending (condition header penetration: pytest detected)"
+    else
+        fail "ED17. if pytest tests/; then : ; fi + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED18: while head tests/; do : ; done + exit=0 → run_tests: pending
+    SID="ed18-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'while head tests/; do : ; done' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED18. while head tests/; do : ; done + exit=0 → run_tests=pending (condition header: while not stripped, head not at segment start)"
+    else
+        fail "ED18. while head tests/; do : ; done + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED19: FOO=1 head tests/foo.sh + exit=0 → run_tests: pending
+    SID="ed19-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'FOO=1 head tests/foo.sh' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED19. FOO=1 head tests/foo.sh + exit=0 → run_tests=pending (env-prefix not stripped: segment starts with FOO=1)"
+    else
+        fail "ED19. FOO=1 head tests/foo.sh + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED20: do FOO=1 head tests/foo.sh + exit=0 → run_tests: pending
+    SID="ed20-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'do FOO=1 head tests/foo.sh' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED20. do FOO=1 head tests/foo.sh + exit=0 → run_tests=pending (body keyword + env-prefix: neither stripped)"
+    else
+        fail "ED20. do FOO=1 head tests/foo.sh + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
 }
