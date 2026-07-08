@@ -1,5 +1,5 @@
 ---
-name: workflow-on
+name: enforce-workflow-on
 description: Restore workflow and worktree enforcement for the current session.
 user-invocable: true
 ---
