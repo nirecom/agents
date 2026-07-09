@@ -72,6 +72,13 @@ case "$ARGS" in
     exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
   repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *projectsV2*)
+    # resolve-project.sh Query A — resolve to a valid project node.
+    case "$ARGS" in
+      *"| length"*) echo "1"; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+    esac
+    ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *--single-select-option-id*) exit 0 ;;
   project\ item-edit\ *--text*)
@@ -189,6 +196,12 @@ case "$ARGS" in
   issue\ view\ *--json\ state*) echo "CLOSED"; exit 0 ;;
   auth\ status*) echo "Token scopes: 'project'"; exit 0 ;;
   repo\ view\ *) echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *projectsV2*)
+    case "$ARGS" in
+      *"| length"*) echo "1"; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+    esac
+    ;;
   api\ graphql\ *) printf '%s\n' "${GH_MOCK_PROJECT_ITEM_ID:-PVTI_existing}"; exit 0 ;;
   project\ item-edit\ *) exit 0 ;;
   *) echo "MOCK GH: no match $ARGS" >&2; exit 2 ;;
@@ -220,17 +233,23 @@ SAVED_CLAUDE_ENV_FILE="${CLAUDE_ENV_FILE:-}"
 unset CLAUDE_ENV_FILE
 unset CLAUDE_SESSION_ID
 unset CLAUDE_CODE_SESSION_ID
-unset CLAUDE_PROJECT_DIR
 export CLAUDE_TRANSCRIPT_BASE_DIR="$TMP/transcripts"
-FAKE_CWD="$TMP/fake-cwd"
-mkdir -p "$FAKE_CWD"
-ENCODED_CWD=$(printf '%s' "$FAKE_CWD" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
+# Encode via CLAUDE_PROJECT_DIR (Priority-7 primary candidate) instead of the
+# pwd. The resolver derives the transcript subdir from node's path.resolve(),
+# which on Windows/MSYS realizes an mktemp cwd to its native "C:\..." form —
+# that would not match a shell-encoded MSYS "/tmp/..." path. A synthetic
+# CLAUDE_PROJECT_DIR is realized identically by node and by the shell encoder,
+# so the fixture directory and the scan directory always agree cross-platform.
+export CLAUDE_PROJECT_DIR="C:/git/wip-jsonl-scan"
+ENCODED_CWD=$(printf '%s' "$CLAUDE_PROJECT_DIR" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g')
 mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD"
 # Create older JSONL first, then newer.
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/older-session-id.jsonl"
 touch -t 202001010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/older-session-id.jsonl"
 echo "{}" > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id.jsonl"
 touch -t 202601010000 "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENCODED_CWD/newer-session-id.jsonl"
+FAKE_CWD="$TMP/fake-cwd"
+mkdir -p "$FAKE_CWD"
 EXPECTED_FP=$(printf '%s:%s' "newer-session-id" "42" | sha256sum | cut -c1-8)
 ( cd "$FAKE_CWD" && run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1 )
 RC=$?
@@ -239,7 +258,7 @@ if [ "$RC" -eq 0 ] && grep -q -- "--text $EXPECTED_FP" "$GH_MOCK_ARGS_LOG" 2>/de
 else
     fail "T-new-9: rc=$RC expected_fp=$EXPECTED_FP log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null)"
 fi
-unset CLAUDE_TRANSCRIPT_BASE_DIR
+unset CLAUDE_TRANSCRIPT_BASE_DIR CLAUDE_PROJECT_DIR
 [ -n "$SAVED_CLAUDE_ENV_FILE" ] && export CLAUDE_ENV_FILE="$SAVED_CLAUDE_ENV_FILE"
 teardown_mock
 
