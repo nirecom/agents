@@ -267,6 +267,22 @@ const RESOLVE_CASES = [
   { label: "pytest → unchanged",         input: "pytest",          argv: ["tests/"],                      expected: { cmd0: "pytest", argv: ["tests/"] } },
   { label: "ls → unchanged",             input: "ls",              argv: ["-la"],                         expected: { cmd0: "ls", argv: ["-la"] } },
 
+  // Keyword look-alikes (C2): control-structure stripping is EXACT Set membership
+  // (.has(cmd0)), so capitalized / suffixed / hyphenated look-alikes must NOT be
+  // stripped — they are ordinary commands and pass through unchanged.
+  // Capitalized variants (Set is case-sensitive):
+  { label: "For (capitalized) → unchanged",   input: "For",         argv: ["f", "in", "tests/*"],          expected: { cmd0: "For", argv: ["f", "in", "tests/*"] } },
+  { label: "DO (uppercase) → unchanged",      input: "DO",          argv: ["head", "tests/x.sh"],          expected: { cmd0: "DO", argv: ["head", "tests/x.sh"] } },
+  { label: "Then (capitalized) → unchanged",  input: "Then",        argv: ["pytest", "tests/"],            expected: { cmd0: "Then", argv: ["pytest", "tests/"] } },
+  { label: "WHILE (uppercase) → unchanged",   input: "WHILE",       argv: ["head", "tests/"],              expected: { cmd0: "WHILE", argv: ["head", "tests/"] } },
+  // Suffixed / hyphenated variants (not exact keyword tokens):
+  { label: "thenx (suffixed) → unchanged",    input: "thenx",       argv: ["tests/foo.sh"],                expected: { cmd0: "thenx", argv: ["tests/foo.sh"] } },
+  { label: "if-test (hyphenated) → unchanged", input: "if-test",    argv: ["tests/foo.sh"],                expected: { cmd0: "if-test", argv: ["tests/foo.sh"] } },
+  { label: "done2 (suffixed) → unchanged",    input: "done2",       argv: ["tests/foo.sh"],                expected: { cmd0: "done2", argv: ["tests/foo.sh"] } },
+  { label: "casex (suffixed) → unchanged",    input: "casex",       argv: ["tests/foo.sh"],                expected: { cmd0: "casex", argv: ["tests/foo.sh"] } },
+  { label: "fi_ (suffixed) → unchanged",      input: "fi_",         argv: ["tests/foo.sh"],                expected: { cmd0: "fi_", argv: ["tests/foo.sh"] } },
+  { label: "selectx (suffixed) → unchanged",  input: "selectx",     argv: ["tests/foo.sh"],                expected: { cmd0: "selectx", argv: ["tests/foo.sh"] } },
+
   // Env-prefix stripping: VAR=val prefix stripped
   { label: "env-prefix head → cmd0=head", input: "FOO=1",         argv: ["head", "tests/"],              expected: { cmd0: "head", argv: ["tests/"] } },
   { label: "env-prefix pytest → cmd0=pytest", input: "FOO=1",    argv: ["pytest", "tests/"],            expected: { cmd0: "pytest", argv: ["tests/"] } },

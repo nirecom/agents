@@ -2,8 +2,15 @@
 # Tests: hooks/workflow-run-tests.js
 # Tags: workflow, tests, runner, hook, bin, scope:common
 # L3 gap (what this test does NOT catch):
+# - This suite exercises the hook at L2: each case pipes a hand-built PostToolUse
+#   stdin JSON payload directly into hooks/workflow-run-tests.js and asserts on the
+#   resulting workflow-state file. It does NOT run a real Claude Code session.
 # - Real Claude Code session where PostToolUse fires after a live bash test run
-# - Actual hook registration and event delivery via settings.json
+# - Actual settings.json hook registration and PostToolUse event delivery (does the
+#   harness actually invoke this hook, with this stdin shape, on a real Bash tool call?)
+# That residual registration/event-delivery verification is L3 and is DEFERRED per #942
+# (full claude -p E2E containerization is out of scope; L3 e2e is gated on RUN_E2E
+# elsewhere). No claude -p E2E test is added here — this is a documented skip record.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration
 # Tests for hooks/workflow-run-tests.js

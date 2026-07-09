@@ -409,4 +409,97 @@ try {
         STATUS=$(get_run_tests_status "$SID")
         fail "ED32. select f in tests/*.sh; do head -n 1 \"\$f\"; done + exit=0 → expected absent, got run_tests=$STATUS"
     fi
+
+    # ---------------------------------------------------------------------------
+    # === C4: special-character / quoted tests/ path coverage ===
+    # Quoted paths containing spaces, parens, brackets, and backslashes must be
+    # classified correctly for BOTH the read-only exclusion and runner-detection
+    # branches. Behavior below verified against the real hook.
+    # ---------------------------------------------------------------------------
+
+    # ED33: cat "tests/a b.sh" + exit=0 → state absent (read-only, quoted space path)
+    SID="ed33-$$-$RANDOM"
+    run_run_tests_hook 'cat "tests/a b.sh"' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED33. cat \"tests/a b.sh\" + exit=0 → state absent (read-only, quoted space path)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED33. cat \"tests/a b.sh\" + exit=0 → expected absent (read-only quoted space), got run_tests=$STATUS"
+    fi
+
+    # ED34: pytest "tests/a b.py" + exit=0 → run_tests: pending (runner, quoted space path)
+    SID="ed34-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'pytest "tests/a b.py"' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED34. pytest \"tests/a b.py\" + exit=0 → run_tests=pending (runner, quoted space path)"
+    else
+        fail "ED34. pytest \"tests/a b.py\" + exit=0 → expected pending (runner quoted space), got run_tests=$STATUS"
+    fi
+
+    # ED35: bash "tests/a (b).sh" + exit=0 → run_tests: pending (runner + parens in quoted path)
+    SID="ed35-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'bash "tests/a (b).sh"' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED35. bash \"tests/a (b).sh\" + exit=0 → run_tests=pending (runner + parens in quoted path)"
+    else
+        fail "ED35. bash \"tests/a (b).sh\" + exit=0 → expected pending (runner quoted parens), got run_tests=$STATUS"
+    fi
+
+    # ED36: bash "tests/a [b].sh" + exit=0 → run_tests: pending (runner + brackets in quoted path)
+    SID="ed36-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'bash "tests/a [b].sh"' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED36. bash \"tests/a [b].sh\" + exit=0 → run_tests=pending (runner + brackets in quoted path)"
+    else
+        fail "ED36. bash \"tests/a [b].sh\" + exit=0 → expected pending (runner quoted brackets), got run_tests=$STATUS"
+    fi
+
+    # ED37: cat "tests/a\b.sh" + exit=0 → state absent (read-only, backslash in quoted path)
+    SID="ed37-$$-$RANDOM"
+    run_run_tests_hook 'cat "tests/a\b.sh"' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED37. cat \"tests/a\\b.sh\" + exit=0 → state absent (read-only, backslash in quoted path)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED37. cat \"tests/a\\b.sh\" + exit=0 → expected absent (read-only quoted backslash), got run_tests=$STATUS"
+    fi
+
+    # ---------------------------------------------------------------------------
+    # === C3: long-string edge coverage ===
+    # Very long commands must classify the same as their short equivalents:
+    # length does not affect read-only exclusion or runner detection.
+    # Behavior below verified against the real hook.
+    # ---------------------------------------------------------------------------
+
+    # ED38: very long read-only command referencing tests/ → state absent
+    # (grep with a ~500-char pattern; whole command is read-only, tests/ is only a grep target)
+    SID="ed38-$$-$RANDOM"
+    LONG_PATTERN=$(printf 'x%.0s' {1..500})
+    run_run_tests_hook "grep $LONG_PATTERN tests/foo.sh" 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED38. grep <500-char-pattern> tests/foo.sh + exit=0 → state absent (long read-only command)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED38. grep <500-char-pattern> tests/foo.sh + exit=0 → expected absent (long read-only), got run_tests=$STATUS"
+    fi
+
+    # ED39: very long valid runner command → run_tests: pending
+    # (pytest tests/ followed by many long flags; still a real test runner)
+    SID="ed39-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    LONG_FLAGS=""
+    for i in $(seq 1 60); do LONG_FLAGS="$LONG_FLAGS --flag-number-$i=valuevaluevalue"; done
+    run_run_tests_hook "pytest tests/$LONG_FLAGS" 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED39. pytest tests/ <many long flags> + exit=0 → run_tests=pending (long valid runner command)"
+    else
+        fail "ED39. pytest tests/ <many long flags> + exit=0 → expected pending (long runner), got run_tests=$STATUS"
+    fi
 }
