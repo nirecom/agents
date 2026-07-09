@@ -46,12 +46,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/main-workflow-run-tests"
 . "$SCRIPT_DIR/contract-trust.sh"
 # shellcheck source=./main-workflow-run-tests/detection-matrix.sh
 . "$SCRIPT_DIR/detection-matrix.sh"
+# shellcheck source=./main-workflow-run-tests/robustness.sh
+. "$SCRIPT_DIR/robustness.sh"
 
 run_normal_and_guard_tests
 run_error_and_edge_tests
 run_idempotency_security_tests
 run_contract_trust_tests
 run_detection_matrix_tests
+run_robustness_tests
 
 # ---------------------------------------------------------------------------
 # Results

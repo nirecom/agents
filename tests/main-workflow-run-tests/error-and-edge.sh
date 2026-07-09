@@ -533,4 +533,22 @@ try {
         STATUS=$(get_run_tests_status "$SID")
         fail "ED41. multiline for-loop with read-only body + exit=0 → expected absent, got run_tests=$STATUS"
     fi
+
+    # ED42: for f in tests/*.sh<newline>do<newline>pytest tests/<newline>done + exit=0 → state absent
+    # Characterization of a KNOWN newline limitation. parse() does NOT split on
+    # newlines, so the whole multiline string is ONE segment with cmd0=`for` (a
+    # CONTROL_NONEXEC_HEADER → resolveEffectiveSegment returns null → skipped).
+    # The `pytest` in the loop body is therefore NOT detected: multiline loop body
+    # after for-header is NOT penetrated — accepted newline limitation
+    # (false-negative only, does not reintroduce #1330 false-positives); see
+    # detail.md risk #3. Verified against the real hook: state ABSENT (no seed, so
+    # the hook never touches state — matches sibling negative case ED41).
+    SID="ed42-$$-$RANDOM"
+    run_run_tests_hook_multiline "$(printf 'for f in tests/*.sh\ndo\npytest tests/\ndone')" 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED42. for f in tests/*.sh <newline> do <newline> pytest tests/ <newline> done + exit=0 → state absent (multiline loop-body pytest NOT penetrated: accepted newline limitation)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED42. multiline for-loop with pytest body + exit=0 → expected absent (newline limitation), got run_tests=$STATUS"
+    fi
 }
