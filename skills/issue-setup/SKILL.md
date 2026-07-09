@@ -1,6 +1,6 @@
 ---
 name: issue-setup
-description: 対象 repo の label 同期と Projects v2 ボードの作成/リンクを行い、GitHub Issues 使用準備を整える。
+description: Sync the target repo's labels and create/link its Projects v2 board to make it ready for GitHub Issues.
 user-invocable: true
 ---
 

@@ -114,7 +114,7 @@ load_env_file
 if [ -n "${WIP_STATE_STATUS_FIELD_ID:-}" ] || [ -n "${WIP_STATE_TODO_OPTION_ID:-}" ] \
    || [ -n "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] || [ -n "${WIP_STATE_DONE_OPTION_ID:-}" ] \
    || [ -n "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ]; then
-    echo "warn: .env の WIP_STATE_* 値は非推奨です (deprecated)。今セッションでは使用されますが、\$AGENTS_CONFIG_DIR/.env から削除してください。フィールド ID は resolve-project.sh が GitHub Projects からオンデマンドで取得するようになりました。" >&2
+    echo "warn: .env WIP_STATE_* values are deprecated. They are still honored for this session, but please remove them from \$AGENTS_CONFIG_DIR/.env. Field IDs are now resolved on demand from GitHub Projects by resolve-project.sh." >&2
 fi
 # --- END temporary: WIP_STATE_* .env → resolve-project.sh cache migration ---
 

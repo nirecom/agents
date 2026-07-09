@@ -132,7 +132,7 @@ OUT=$(run_with_timeout 60 bash "$TARGET" setup 2>"$STDERR_FILE")
 RC=$?
 # Deprecation warnings present; resolver-miss → no KEY=value on stdout; .env empty.
 HAS_DEPRECATION=0
-grep -q "非推奨" "$STDERR_FILE" 2>/dev/null && HAS_DEPRECATION=1
+grep -qi "deprecated" "$STDERR_FILE" 2>/dev/null && HAS_DEPRECATION=1
 STDOUT_HAS_KV=0
 printf '%s' "$OUT" | grep -q "WIP_STATE_STATUS_FIELD_ID=" && STDOUT_HAS_KV=1
 ENV_WRITTEN=0
@@ -162,7 +162,7 @@ STDERR_FILE="$TMP/r-setup-noproj-stderr.log"
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>"$STDERR_FILE"
 RC=$?
 HAS_DEPRECATION=0
-grep -q "非推奨" "$STDERR_FILE" 2>/dev/null && HAS_DEPRECATION=1
+grep -qi "deprecated" "$STDERR_FILE" 2>/dev/null && HAS_DEPRECATION=1
 ENV_WRITTEN=0
 grep -q "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null && ENV_WRITTEN=1
 if [ "$RC" -eq 0 ] && [ "$HAS_DEPRECATION" -eq 1 ] && [ "$ENV_WRITTEN" -eq 0 ]; then

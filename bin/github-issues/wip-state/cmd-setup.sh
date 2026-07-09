@@ -11,9 +11,9 @@
 #   resolver discovers (informational); it never writes .env.
 # ---------------------------------------------------------------------------
 cmd_setup() {
-    echo "warn: 'wip-state.sh setup' は非推奨です (deprecated)。" >&2
-    echo "warn: フィールド ID は resolve-project.sh がオンデマンドで解決・キャッシュするようになりました。" >&2
-    echo "warn: .env への書き込みは行いません。以下は参考情報です。" >&2
+    echo "warn: 'wip-state.sh setup' is deprecated." >&2
+    echo "warn: Field IDs are now resolved and cached on demand by resolve-project.sh." >&2
+    echo "warn: No .env write is performed. The following is informational only." >&2
 
     if ensure_resolved; then
         ensure_wip_field_ids

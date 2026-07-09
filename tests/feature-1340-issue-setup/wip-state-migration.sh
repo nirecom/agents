@@ -211,7 +211,7 @@ STDERR_FILE="$TMP/twm1-stderr.log"
 run_wip_verb check "$STDERR_FILE"
 STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null)
 HAS_DEPRECATION_WARN=0
-echo "$STDERR_CONTENT" | grep -qiE "deprecat|非推奨" && HAS_DEPRECATION_WARN=1
+echo "$STDERR_CONTENT" | grep -qiE "deprecat" && HAS_DEPRECATION_WARN=1
 if [ "$HAS_DEPRECATION_WARN" = "1" ]; then
     pass "TWM-1: .env WIP_STATE_* present → deprecation warning emitted on stderr"
 else

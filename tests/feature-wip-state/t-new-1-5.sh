@@ -24,7 +24,7 @@ MUT_COUNT=$(grep -c "createProjectV2Field" "$GH_MOCK_ARGS_LOG" 2>/dev/null | hea
 ENV_UNCHANGED=1
 [ -s "$ENV_FILE" ] && ENV_UNCHANGED=0
 WARN_DEPRECATED=0
-grep -q "非推奨" "$TMP/setup-err" 2>/dev/null && WARN_DEPRECATED=1
+grep -qi "deprecated" "$TMP/setup-err" 2>/dev/null && WARN_DEPRECATED=1
 # Resolver populates the fingerprint field id from Query C (PVTF_fp) → stdout KV.
 KV_HAS_FP=0
 printf '%s' "$OUT" | grep -q "WIP_STATE_FINGERPRINT_FIELD_ID=PVTF_fp" && KV_HAS_FP=1
