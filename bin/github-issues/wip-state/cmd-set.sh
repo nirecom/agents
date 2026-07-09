@@ -13,6 +13,7 @@
 cmd_set() {
     local n="$1"
     validate_n "$n"
+    ensure_wip_field_ids
     preflight_field_ids
 
     if ! ensure_resolved; then

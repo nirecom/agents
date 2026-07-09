@@ -17,13 +17,24 @@ delegates new-issue creation to `bin/github-issues/issue-create.sh`.
   `gh issue create --label "type:incident"` directly); issues for other repos or
   projects (use `gh issue create --repo OWNER/REPO` directly).
 
+## Phase 0b — Project preflight
+
+Runs before Pre-flight. Detects a missing Projects v2 board and offers to run `/issue-setup`. Independent of Phase 0a (label auto-repair in `issue-create.sh`) — one's result never affects the other.
+
+- Skip Phase 0b and proceed to Pre-flight when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub remote).
+- Run `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh" --check-project` (add `--repo OWNER/REPO` when targeting another repo).
+- On rc=1 (no board), AskUserQuestion:
+  - `run-issue-setup`: run `/issue-setup` against the target repo, then re-check Phase 0b.
+  - `skip-this-time`: proceed to Pre-flight; the attach step remains warn-only.
+- `skip-this-time` is NOT persisted — Phase 0b re-checks on every `issue-create` run (no suppression state file).
+
 ## Pre-flight
 
 - `AGENTS_CONFIG_DIR` must be set.
 - `gh` must be authenticated against the current repository.
 - `gh` must have the `project` scope for Projects v2 attach. Add with
   `gh auth refresh -s project`.
-- The `type:task` label must exist (run `bin/github-issues/sync-labels.sh` if missing).
+- The `type:task` label must exist. `issue-create.sh` Phase 0a auto-syncs it when missing (run `/issue-setup` to initialize a fresh repo).
 
 ## Mid-workflow gate
 

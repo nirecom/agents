@@ -1,28 +1,31 @@
 #!/bin/bash
-# tests/feature-resolve-project.sh
-# Tests: bin/github-issues/lib/resolve-project.sh
-# Tags: workflow, github, issues, plans, bin
+# tests/feature-1340-issue-setup.sh
+# Tests: bin/github-issues/sync-labels.sh, bin/github-issues/lib/resolve-project.sh, bin/github-issues/lib/ensure-project-ready.sh, bin/github-issues/issue-create-preflight.sh, bin/github-issues/issue-create.sh, bin/github-issues/wip-state.sh, skills/issue-setup/scripts/run-issue-setup.sh
+# Tags: issue-setup, sync-labels, resolve-project, ensure-project-ready, wip-state, scope:issue-specific
 #
-# Dispatch + aggregate entrypoint for the feature-resolve-project split suite.
-# All logic lives in tests/feature-resolve-project/ per rules/coding/file-split.md.
+# Dispatch + aggregate entrypoint for the feature-1340-issue-setup split suite.
+# All logic lives in tests/feature-1340-issue-setup/ per rules/coding/file-split.md.
 # Each split group also runs standalone.
 #
 # L3 gap (what this test does NOT catch):
-# - Whether resolve_project_for_repo works against a live GitHub GraphQL API
-#   with real tokens and real Projects v2 data.
-# - Whether cache persistence works across concurrent resolve calls in a real
-#   multi-session environment.
+# - Whether /issue-setup skill invokes run-issue-setup.sh correctly in a live
+#   Claude Code session, or whether AskUserQuestion fires for repo confirmation.
+# - Whether issue-create.sh Phase 0a auto-repair works against a real GitHub API.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration.
 
 set -uo pipefail
 
-SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-resolve-project"
+SPLIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1340-issue-setup"
 
 SPLIT_GROUPS=(
-    "resolver-core.sh"
-    "cache.sh"
-    "errors.sh"
+    "sync-labels-repo-flag.sh"
+    "resolve-project-schema.sh"
+    "ensure-project-ready.sh"
+    "wip-state-migration.sh"
+    "issue-create-phase0a.sh"
+    "issue-create-preflight.sh"
+    "run-issue-setup.sh"
 )
 
 TOTAL_PASS=0
