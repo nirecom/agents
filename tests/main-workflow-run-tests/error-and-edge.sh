@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# Tests: hooks/workflow-run-tests.js
+# Tags: workflow, tests, runner, hook, error-and-edge, scope:common
 # Case group: Error cases (E-group) and Edge cases (ED-group).
 # Sourced by main-workflow-run-tests.sh; relies on helpers from common.sh.
 
