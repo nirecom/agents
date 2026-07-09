@@ -359,3 +359,7 @@ Changes: `/workflow-off` and `/workflow-on` skills: suspend and restore workflow
 ### CONFIG: Rename workflow enforcement toggle commands (2026-07-09)
 Background: The /workflow-init command was hard to reach in autocomplete because the shorter /workflow-on and /workflow-off names ranked above it.
 Changes: The /workflow-on and /workflow-off commands are renamed to /enforce-workflow-on and /enforce-workflow-off. They still restore and suspend workflow/worktree enforcement exactly as before — only the command name changed, so that /workflow-init is easier to reach in slash-command autocomplete.
+
+### FEATURE: PR #1341 (2026-07-09)
+Background: feat(#1340): add /issue-setup skill + issue-create auto-init for uninitialized repos
+Changes: Added the `/issue-setup` command to initialize labels and a Projects v2 board on a new repo in one step.;`issue-create` now auto-repairs missing labels and prompts to create a missing project board when run against an uninitialized repo, instead of failing.;`sync-labels` gained a `--repo OWNER/REPO` option for cross-repository label sync.;Removed the `WIP_STATE_*` environment variables — Projects v2 field IDs are now resolved on demand per repository (delete them from your `.env`; the `wip-state setup` command is deprecated).
