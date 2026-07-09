@@ -10,11 +10,11 @@ Each section is labeled:
 - *Migration (one-time)* — bulk one-shot operation; re-running creates duplicates
 - *Migration (catch-up)* — safe to re-run (idempotent or range-scoped)
 
-## Step 1 — Label sync — *Setup*
+## Step 1 — Label + Projects v2 setup — *Setup*
 
-```bash
-bash bin/github-issues/sync-labels.sh
-```
+Run `/issue-setup` to initialize the target repo's labels and Projects v2 board. It handles label sync and project creation/linking in one pass.
+
+To sync labels manually only (e.g. when the project already exists): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"`, or add `--repo OWNER/REPO` for a different target.
 
 Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and `priority:*` labels from `.github/labels.yml`. Safe to re-run (uses `--force`).
 
