@@ -27,6 +27,7 @@ cmd_clear() {
         delete_lock_file "$n"
         exit 0
     fi
+    ensure_wip_field_ids
     preflight_field_ids
 
     # clear is non-fatal: when no project is linked, still try to remove the

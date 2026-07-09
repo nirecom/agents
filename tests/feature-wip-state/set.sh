@@ -43,10 +43,14 @@ teardown_mock
 setup_mock
 unset WIP_STATE_STATUS_FIELD_ID
 # Also ensure .env doesn't auto-source it back.
+# #1340: ensure_wip_field_ids now backfills missing IDs from the resolver, so the
+# preflight-missing path is only reachable when the resolver ALSO cannot supply
+# the value. Force the resolver to a miss (0 linked projects) to exercise it.
+export GH_MOCK_LINKED_COUNT=0
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 2 ]; then
-    pass "T3: set <N> with missing WIP_STATE_STATUS_FIELD_ID → exit 2"
+    pass "T3: set <N> with missing WIP_STATE_STATUS_FIELD_ID (resolver miss) → exit 2"
 else
     fail "T3: expected exit 2, got rc=$RC"
 fi
@@ -57,10 +61,12 @@ teardown_mock
 # ===========================================================================
 setup_mock
 unset WIP_STATE_FINGERPRINT_FIELD_ID
+# #1340: force resolver miss so the missing FINGERPRINT id cannot be backfilled.
+export GH_MOCK_LINKED_COUNT=0
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 2 ]; then
-    pass "T4: set <N> with missing WIP_STATE_FINGERPRINT_FIELD_ID → exit 2"
+    pass "T4: set <N> with missing WIP_STATE_FINGERPRINT_FIELD_ID (resolver miss) → exit 2"
 else
     fail "T4: expected exit 2, got rc=$RC"
 fi
@@ -192,6 +198,13 @@ case "$ARGS" in
     echo "Token scopes: 'project', 'repo'"; exit 0 ;;
   repo\ view\ *--json\ owner,name*|repo\ view\ *)
     echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"; exit 0 ;;
+  api\ graphql\ *projectsV2*)
+    # resolve-project.sh Query A — 1 linked project resolving to PVT_resolved.
+    case "$ARGS" in
+      *"| length"*) echo "1"; exit 0 ;;
+      *) printf '{"id":"PVT_resolved","number":1,"ownerLogin":"nirecom"}\n'; exit 0 ;;
+    esac
+    ;;
   api\ graphql\ *projectItems*)
     # Counter-driven: first call empty, second returns refetched id.
     N=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
@@ -204,6 +217,7 @@ case "$ARGS" in
     exit 0
     ;;
   api\ graphql\ *)
+    # resolve-project.sh Query B/C (field discovery) + fallback → empty.
     echo ""; exit 0 ;;
   project\ item-add\ *)
     echo "error: duplicate add race" >&2; exit 1 ;;
