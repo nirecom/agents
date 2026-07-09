@@ -88,11 +88,12 @@ if [[ -n "$REPO_OVERRIDE" ]]; then
     fi
 fi
 
-# ---------------------------------------------------------------------------
+# --- BEGIN temporary: WIP_STATE_* .env → resolve-project.sh cache migration ---
 # .env auto-source. Claude Code's Bash subprocess shell does not propagate
 # .env automatically, so a `setup`-written WIP_STATE_*_ID would still be
 # invisible to a same-session `set`/`check`/`clear`. Source defensively.
-# ---------------------------------------------------------------------------
+# Field IDs are now resolved on demand by resolve-project.sh; .env WIP_STATE_*
+# values are deprecated but still honored this session (precedence over resolver).
 load_env_file() {
     [ -z "${AGENTS_CONFIG_DIR:-}" ] && return 0
     local envfile="$AGENTS_CONFIG_DIR/.env"
@@ -110,6 +111,12 @@ load_env_file() {
     return 0
 }
 load_env_file
+if [ -n "${WIP_STATE_STATUS_FIELD_ID:-}" ] || [ -n "${WIP_STATE_TODO_OPTION_ID:-}" ] \
+   || [ -n "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] || [ -n "${WIP_STATE_DONE_OPTION_ID:-}" ] \
+   || [ -n "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ]; then
+    echo "warn: .env の WIP_STATE_* 値は非推奨です (deprecated)。今セッションでは使用されますが、\$AGENTS_CONFIG_DIR/.env から削除してください。フィールド ID は resolve-project.sh が GitHub Projects からオンデマンドで取得するようになりました。" >&2
+fi
+# --- END temporary: WIP_STATE_* .env → resolve-project.sh cache migration ---
 
 BOARD_CARD_REPO_OVERRIDE="${REPO_OVERRIDE:-}"
 export BOARD_CARD_REPO_OVERRIDE
@@ -140,6 +147,30 @@ ensure_resolved() {
         return 0
     fi
     return 1
+}
+
+# ensure_wip_field_ids
+#   Populate WIP_STATE_* field/option IDs from the resolver — but never overwrite
+#   a value already provided by the deprecated .env migration block (precedence:
+#   .env wins). Runs as a preprocessing step before preflight_field_ids in the
+#   set/check/clear verbs. Resolver failure is non-fatal here: when .env already
+#   supplied the IDs, preflight still passes; otherwise the verb's own
+#   ensure_resolved call decides the exit behavior.
+ensure_wip_field_ids() {
+    # Soft project-scope check (warn-only) — same pattern as issue-create.sh.
+    if command -v gh >/dev/null 2>&1; then
+        if ! gh auth status 2>&1 | grep -q "'project'"; then
+            echo "warn: gh auth lacks 'project' scope — field-id resolve may fail." >&2
+        fi
+    fi
+    if resolve_project_for_repo; then
+        [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && WIP_STATE_STATUS_FIELD_ID="$RESOLVED_STATUS_FIELD_ID"
+        [ -z "${WIP_STATE_TODO_OPTION_ID:-}" ]       && WIP_STATE_TODO_OPTION_ID="$RESOLVED_TODO_OPTION_ID"
+        [ -z "${WIP_STATE_IN_PROGRESS_OPTION_ID:-}" ] && WIP_STATE_IN_PROGRESS_OPTION_ID="$RESOLVED_IN_PROGRESS_OPTION_ID"
+        [ -z "${WIP_STATE_DONE_OPTION_ID:-}" ]       && WIP_STATE_DONE_OPTION_ID="$RESOLVED_DONE_OPTION_ID"
+        [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && WIP_STATE_FINGERPRINT_FIELD_ID="$RESOLVED_FINGERPRINT_FIELD_ID"
+    fi
+    return 0
 }
 
 # Per-verb preflight: only required env vars actually consumed by the verb.

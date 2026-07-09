@@ -2,10 +2,15 @@
 #
 # Sourced (not executed). Exposes `resolve_project_for_repo` which sets the
 # following caller-scope variables on success (rc=0):
-#   RESOLVED_OWNER                  project node owner.login (NOT repo owner)
-#   RESOLVED_PROJECT_NUM            project number
-#   RESOLVED_PROJECT_ID             project node id
-#   RESOLVED_CONTENT_DATE_FIELD_ID  Content Date field id (empty if not present)
+#   RESOLVED_OWNER                    project node owner.login (NOT repo owner)
+#   RESOLVED_PROJECT_NUM              project number
+#   RESOLVED_PROJECT_ID              project node id
+#   RESOLVED_CONTENT_DATE_FIELD_ID   Content Date field id (empty if not present)
+#   RESOLVED_STATUS_FIELD_ID         Status single-select field id (empty if absent)
+#   RESOLVED_TODO_OPTION_ID          Status "Todo" option id (empty if absent)
+#   RESOLVED_IN_PROGRESS_OPTION_ID   Status "In Progress" option id (empty if absent)
+#   RESOLVED_DONE_OPTION_ID          Status "Done" option id (empty if absent)
+#   RESOLVED_FINGERPRINT_FIELD_ID    session-fingerprint text field id (empty if absent)
 #
 # Returns rc=1 on:
 #   - gh not in PATH
@@ -17,11 +22,17 @@
 #   _ISSUE_CREATE_INTERNAL_OWNER, _ISSUE_CREATE_INTERNAL_PROJECT_NUM,
 #   _ISSUE_CREATE_INTERNAL_PROJECT_ID
 # are set in the environment, populate RESOLVED_* from them and skip GraphQL.
-# The optional _ISSUE_CREATE_INTERNAL_FIELD_ID is used when set.
+# The optional _ISSUE_CREATE_INTERNAL_FIELD_ID and the five field/option-id
+# overrides (_ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID, _TODO_OPTION_ID,
+# _IN_PROGRESS_OPTION_ID, _DONE_OPTION_ID, _FINGERPRINT_FIELD_ID) are used when set.
 #
 # Cache: ${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/cache/project-resolve.tsv
-# TSV: owner/repo \t project_owner \t project_num \t project_id \t content_date_field_id
+# TSV (10 cols): owner/repo \t project_owner \t project_num \t project_id \t
+#   content_date_field_id \t status_field_id \t todo_option_id \t
+#   in_progress_option_id \t done_option_id \t fingerprint_field_id
 # Cache lookup is fixed-string (awk $1==key) — no regex metachar exposure.
+# Schema guard requires exactly 10 fields — older 5/9-col rows are treated as a
+# cache miss and overwritten on refetch (self-healing).
 # Cache write uses mktemp + mv for atomicity; mv failure is non-fatal (warn,
 # return 0 with resolved values still set).
 #
@@ -40,6 +51,11 @@ resolve_project_for_repo() {
     RESOLVED_PROJECT_NUM=""
     RESOLVED_PROJECT_ID=""
     RESOLVED_CONTENT_DATE_FIELD_ID=""
+    RESOLVED_STATUS_FIELD_ID=""
+    RESOLVED_TODO_OPTION_ID=""
+    RESOLVED_IN_PROGRESS_OPTION_ID=""
+    RESOLVED_DONE_OPTION_ID=""
+    RESOLVED_FINGERPRINT_FIELD_ID=""
 
     # ---- Internal short-circuit ----
     if [ -n "${_ISSUE_CREATE_INTERNAL_OWNER:-}" ] \
@@ -49,6 +65,11 @@ resolve_project_for_repo() {
         RESOLVED_PROJECT_NUM="$_ISSUE_CREATE_INTERNAL_PROJECT_NUM"
         RESOLVED_PROJECT_ID="$_ISSUE_CREATE_INTERNAL_PROJECT_ID"
         RESOLVED_CONTENT_DATE_FIELD_ID="${_ISSUE_CREATE_INTERNAL_FIELD_ID:-}"
+        RESOLVED_STATUS_FIELD_ID="${_ISSUE_CREATE_INTERNAL_STATUS_FIELD_ID:-}"
+        RESOLVED_TODO_OPTION_ID="${_ISSUE_CREATE_INTERNAL_TODO_OPTION_ID:-}"
+        RESOLVED_IN_PROGRESS_OPTION_ID="${_ISSUE_CREATE_INTERNAL_IN_PROGRESS_OPTION_ID:-}"
+        RESOLVED_DONE_OPTION_ID="${_ISSUE_CREATE_INTERNAL_DONE_OPTION_ID:-}"
+        RESOLVED_FINGERPRINT_FIELD_ID="${_ISSUE_CREATE_INTERNAL_FINGERPRINT_FIELD_ID:-}"
         return 0
     fi
 
@@ -81,15 +102,22 @@ resolve_project_for_repo() {
     if [ -f "$cache_file" ]; then
         cache_row=$(awk -F'\t' -v key="$owner_repo" '$1==key {print; exit}' "$cache_file" 2>/dev/null || true)
         if [ -n "$cache_row" ]; then
-            # Require exactly 5 fields. NF check rejects malformed rows.
+            # Require exactly 10 fields. NF check rejects malformed rows and old
+            # 5/9-col schemas (self-healing: they fall through to refetch).
             local n_fields
             n_fields=$(printf '%s' "$cache_row" | awk -F'\t' '{print NF}')
-            if [ "$n_fields" = "5" ]; then
+            if [ "$n_fields" = "10" ]; then
                 RESOLVED_OWNER=$(printf '%s' "$cache_row"   | cut -f2)
                 RESOLVED_PROJECT_NUM=$(printf '%s' "$cache_row" | cut -f3)
                 RESOLVED_PROJECT_ID=$(printf '%s' "$cache_row"  | cut -f4)
                 RESOLVED_CONTENT_DATE_FIELD_ID=$(printf '%s' "$cache_row" | cut -f5)
+                RESOLVED_STATUS_FIELD_ID=$(printf '%s' "$cache_row" | cut -f6)
+                RESOLVED_TODO_OPTION_ID=$(printf '%s' "$cache_row" | cut -f7)
+                RESOLVED_IN_PROGRESS_OPTION_ID=$(printf '%s' "$cache_row" | cut -f8)
+                RESOLVED_DONE_OPTION_ID=$(printf '%s' "$cache_row" | cut -f9)
+                RESOLVED_FINGERPRINT_FIELD_ID=$(printf '%s' "$cache_row" | cut -f10)
                 # Sanity-check required fields: malformed row → fall through to fetch.
+                # status/fingerprint may be empty (new project — fields not yet created).
                 if [ -n "$RESOLVED_OWNER" ] && [ -n "$RESOLVED_PROJECT_NUM" ] \
                    && [ -n "$RESOLVED_PROJECT_ID" ]; then
                     return 0
@@ -98,6 +126,9 @@ resolve_project_for_repo() {
             # Malformed/incomplete row — fall through to graphql fetch.
             RESOLVED_OWNER=""; RESOLVED_PROJECT_NUM=""; RESOLVED_PROJECT_ID=""
             RESOLVED_CONTENT_DATE_FIELD_ID=""
+            RESOLVED_STATUS_FIELD_ID=""; RESOLVED_TODO_OPTION_ID=""
+            RESOLVED_IN_PROGRESS_OPTION_ID=""; RESOLVED_DONE_OPTION_ID=""
+            RESOLVED_FINGERPRINT_FIELD_ID=""
         fi
     fi
 
@@ -235,15 +266,64 @@ resolve_project_for_repo() {
         cursor="$page_cursor"
     done
 
+    # ---- Query C: Status field + options + session-fingerprint field ids ----
+    # Same query shape as wip-state/cmd-setup.sh. Failure is warn-only: a new
+    # project may not have these fields yet (create-if-missing runs elsewhere in
+    # /issue-setup). Missing ids are cached as empty columns.
+    local field_query
+    field_query='query($projectId: ID!) {
+  node(id: $projectId) {
+    ... on ProjectV2 {
+      fields(first: 50) {
+        nodes {
+          __typename
+          ... on ProjectV2FieldCommon { id name }
+          ... on ProjectV2SingleSelectField {
+            id name
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}'
+    local status_fid todo_oid inprog_oid done_oid fp_fid
+    status_fid=$(gh api graphql -F projectId="$pid" \
+        --jq '[.data.node.fields.nodes[]? | select(.__typename == "ProjectV2SingleSelectField" and .name == "Status") | .id] | first // ""' \
+        -f query="$field_query" 2>/dev/null) || status_fid=""
+    todo_oid=$(gh api graphql -F projectId="$pid" \
+        --jq '[.data.node.fields.nodes[]? | select(.name == "Status") | .options[]? | select(.name == "Todo") | .id] | first // ""' \
+        -f query="$field_query" 2>/dev/null) || todo_oid=""
+    inprog_oid=$(gh api graphql -F projectId="$pid" \
+        --jq '[.data.node.fields.nodes[]? | select(.name == "Status") | .options[]? | select(.name == "In Progress") | .id] | first // ""' \
+        -f query="$field_query" 2>/dev/null) || inprog_oid=""
+    done_oid=$(gh api graphql -F projectId="$pid" \
+        --jq '[.data.node.fields.nodes[]? | select(.name == "Status") | .options[]? | select(.name == "Done") | .id] | first // ""' \
+        -f query="$field_query" 2>/dev/null) || done_oid=""
+    fp_fid=$(gh api graphql -F projectId="$pid" \
+        --jq '[.data.node.fields.nodes[]? | select(.name == "session-fingerprint") | .id] | first // ""' \
+        -f query="$field_query" 2>/dev/null) || fp_fid=""
+    status_fid=$(printf '%s' "$status_fid" | tr -d '\r' | head -1)
+    todo_oid=$(printf '%s' "$todo_oid" | tr -d '\r' | head -1)
+    inprog_oid=$(printf '%s' "$inprog_oid" | tr -d '\r' | head -1)
+    done_oid=$(printf '%s' "$done_oid" | tr -d '\r' | head -1)
+    fp_fid=$(printf '%s' "$fp_fid" | tr -d '\r' | head -1)
+
     # ---- Populate caller-scope state ----
     RESOLVED_OWNER="$powner"
     RESOLVED_PROJECT_NUM="$pnum"
     RESOLVED_PROJECT_ID="$pid"
     RESOLVED_CONTENT_DATE_FIELD_ID="$content_date_id"
+    RESOLVED_STATUS_FIELD_ID="$status_fid"
+    RESOLVED_TODO_OPTION_ID="$todo_oid"
+    RESOLVED_IN_PROGRESS_OPTION_ID="$inprog_oid"
+    RESOLVED_DONE_OPTION_ID="$done_oid"
+    RESOLVED_FINGERPRINT_FIELD_ID="$fp_fid"
 
     # ---- Cache write (best-effort) ----
     _resolve_project_write_cache "$cache_dir" "$cache_file" "$owner_repo" \
-        "$powner" "$pnum" "$pid" "$content_date_id" || true
+        "$powner" "$pnum" "$pid" "$content_date_id" \
+        "$status_fid" "$todo_oid" "$inprog_oid" "$done_oid" "$fp_fid" || true
 
     return 0
 }
@@ -253,6 +333,8 @@ resolve_project_for_repo() {
 _resolve_project_write_cache() {
     local cache_dir="$1" cache_file="$2" key="$3"
     local p_owner="$4" p_num="$5" p_id="$6" p_field="$7"
+    local p_status_field="${8:-}" p_todo_opt="${9:-}" p_in_progress_opt="${10:-}"
+    local p_done_opt="${11:-}" p_fp_field="${12:-}"
 
     if ! mkdir -p "$cache_dir" 2>/dev/null; then
         echo "warn: resolve-project: cache write failed (mkdir $cache_dir)" >&2
@@ -268,7 +350,9 @@ _resolve_project_write_cache() {
     if [ -f "$cache_file" ]; then
         awk -F'\t' -v key="$key" 'BEGIN{OFS="\t"} $1!=key {print}' "$cache_file" > "$tmp" 2>/dev/null || true
     fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$key" "$p_owner" "$p_num" "$p_id" "$p_field" >> "$tmp"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$key" "$p_owner" "$p_num" "$p_id" "$p_field" \
+        "$p_status_field" "$p_todo_opt" "$p_in_progress_opt" "$p_done_opt" "$p_fp_field" >> "$tmp"
 
     if ! mv "$tmp" "$cache_file" 2>/dev/null; then
         echo "warn: resolve-project: cache write failed (mv)" >&2

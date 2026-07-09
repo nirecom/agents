@@ -115,7 +115,9 @@ unset WORKFLOW_PLANS_DIR
 teardown_mock
 
 # ===========================================================================
-# R-resolver-preflight-fail (#641): resolver returns 0 linked → setup fails with hint.
+# R-resolver-preflight-fail (#1340): setup is deprecated → warn + exit 0 even on
+# resolver miss. It does NOT fail, does NOT write .env, and (since the resolver
+# missed) prints no informational KEY=value block on stdout.
 # ===========================================================================
 setup_mock
 unset ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER 2>/dev/null
@@ -123,21 +125,30 @@ mint_resolver_mock
 export GH_MOCK_LINKED_COUNT=0
 export WORKFLOW_PLANS_DIR="$TMP/resolver-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
+ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+: > "$ENV_FILE"
 STDERR_FILE="$TMP/r-preflight-stderr.log"
-run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>"$STDERR_FILE"
+OUT=$(run_with_timeout 60 bash "$TARGET" setup 2>"$STDERR_FILE")
 RC=$?
-HAS_HINT=0
-grep -qiE "linked|Projects v2|PROJECT_ID" "$STDERR_FILE" 2>/dev/null && HAS_HINT=1
-if [ "$RC" -ne 0 ] && [ "$HAS_HINT" -eq 1 ]; then
-    pass "R-resolver-preflight-fail: 0 linked → setup exits non-zero + hint on stderr"
+# Deprecation warnings present; resolver-miss → no KEY=value on stdout; .env empty.
+HAS_DEPRECATION=0
+grep -q "非推奨" "$STDERR_FILE" 2>/dev/null && HAS_DEPRECATION=1
+STDOUT_HAS_KV=0
+printf '%s' "$OUT" | grep -q "WIP_STATE_STATUS_FIELD_ID=" && STDOUT_HAS_KV=1
+ENV_WRITTEN=0
+grep -q "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null && ENV_WRITTEN=1
+if [ "$RC" -eq 0 ] && [ "$HAS_DEPRECATION" -eq 1 ] && [ "$STDOUT_HAS_KV" -eq 0 ] \
+        && [ "$ENV_WRITTEN" -eq 0 ]; then
+    pass "R-resolver-preflight-fail: deprecated setup on resolver miss → exit 0, warn, no .env write, no KV"
 else
-    fail "R-resolver-preflight-fail: rc=$RC hint=$HAS_HINT stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fail "R-resolver-preflight-fail: rc=$RC deprecation=$HAS_DEPRECATION kv=$STDOUT_HAS_KV env_written=$ENV_WRITTEN stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
 fi
 unset WORKFLOW_PLANS_DIR GH_MOCK_LINKED_COUNT
 teardown_mock
 
 # ===========================================================================
-# R-setup-no-project (#641): alias for above — explicit "setup fails on resolver miss".
+# R-setup-no-project (#1340): explicit — deprecated setup on resolver miss warns
+# + exits 0 and never writes .env.
 # ===========================================================================
 setup_mock
 unset ISSUE_CREATE_PROJECT_ID ISSUE_CREATE_PROJECT_NUM ISSUE_CREATE_OWNER 2>/dev/null
@@ -145,13 +156,19 @@ mint_resolver_mock
 export GH_MOCK_LINKED_COUNT=0
 export WORKFLOW_PLANS_DIR="$TMP/resolver-plans"
 mkdir -p "$WORKFLOW_PLANS_DIR"
+ENV_FILE="$AGENTS_CONFIG_DIR/.env"
+: > "$ENV_FILE"
 STDERR_FILE="$TMP/r-setup-noproj-stderr.log"
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>"$STDERR_FILE"
 RC=$?
-if [ "$RC" -ne 0 ] && [ -s "$STDERR_FILE" ]; then
-    pass "R-setup-no-project: setup fails when resolver finds no linked project"
+HAS_DEPRECATION=0
+grep -q "非推奨" "$STDERR_FILE" 2>/dev/null && HAS_DEPRECATION=1
+ENV_WRITTEN=0
+grep -q "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null && ENV_WRITTEN=1
+if [ "$RC" -eq 0 ] && [ "$HAS_DEPRECATION" -eq 1 ] && [ "$ENV_WRITTEN" -eq 0 ]; then
+    pass "R-setup-no-project: deprecated setup + resolver miss → exit 0, warn, no .env write"
 else
-    fail "R-setup-no-project: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fail "R-setup-no-project: rc=$RC deprecation=$HAS_DEPRECATION env_written=$ENV_WRITTEN stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
 fi
 unset WORKFLOW_PLANS_DIR GH_MOCK_LINKED_COUNT
 teardown_mock
