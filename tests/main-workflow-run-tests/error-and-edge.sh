@@ -502,4 +502,35 @@ try {
     else
         fail "ED39. pytest tests/ <many long flags> + exit=0 → expected pending (long runner), got run_tests=$STATUS"
     fi
+
+    # ---------------------------------------------------------------------------
+    # === C2: multiline command coverage ===
+    # Real Bash tool commands can span multiple lines. run_run_tests_hook()'s
+    # manual escaping does NOT encode literal newlines (invalid JSON), so these
+    # cases use run_run_tests_hook_multiline() which builds the payload via
+    # node JSON.stringify. Behavior below verified against the real hook.
+    # ---------------------------------------------------------------------------
+
+    # ED40: cd repo<newline>pytest tests/ + exit=0 → run_tests: pending
+    # (multiline positive: 2nd line `pytest tests/` is a bare runner → active demotion)
+    SID="ed40-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook_multiline "$(printf 'cd repo\npytest tests/')" 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED40. cd repo <newline> pytest tests/ + exit=0 → run_tests=pending (multiline positive: pytest detected)"
+    else
+        fail "ED40. cd repo <newline> pytest tests/ + exit=0 → expected pending (multiline runner), got run_tests=$STATUS"
+    fi
+
+    # ED41: for f in tests/*.sh<newline>do<newline>head -n 1 "$f"<newline>done + exit=0 → state absent
+    # (multiline negative: loop over tests/ but body cmd `head` is read-only)
+    SID="ed41-$$-$RANDOM"
+    run_run_tests_hook_multiline "$(printf 'for f in tests/*.sh\ndo\nhead -n 1 "$f"\ndone')" 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED41. for f in tests/*.sh <newline> do <newline> head ... <newline> done + exit=0 → state absent (multiline negative: head is read-only)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED41. multiline for-loop with read-only body + exit=0 → expected absent, got run_tests=$STATUS"
+    fi
 }
