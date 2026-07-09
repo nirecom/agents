@@ -373,4 +373,38 @@ try {
     else
         fail "ED29. pytest \"tests/ (unclosed quote) + seeded run_tests=complete → expected complete (no demotion), got run_tests=$STATUS"
     fi
+
+    # ED30: if false; then :; else cat tests/foo.sh; fi + exit=0 → state absent
+    # (else body keyword stripped: effective cmd0=cat is read-only)
+    SID="ed30-$$-$RANDOM"
+    run_run_tests_hook 'if false; then :; else cat tests/foo.sh; fi' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED30. if false; then :; else cat tests/foo.sh; fi + exit=0 → state absent (else body keyword: cat is read-only)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED30. if false; then :; else cat tests/foo.sh; fi + exit=0 → expected absent, got run_tests=$STATUS"
+    fi
+
+    # ED31: if false; then :; else pytest tests/; fi + exit=0 → run_tests: pending
+    # (else body keyword stripped: effective cmd0=pytest is a test runner → detected)
+    SID="ed31-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'if false; then :; else pytest tests/; fi' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED31. if false; then :; else pytest tests/; fi + exit=0 → run_tests=pending (else body: pytest detected)"
+    else
+        fail "ED31. if false; then :; else pytest tests/; fi + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED32: select f in tests/*.sh; do head -n 1 "$f"; done + exit=0 → state absent
+    # (select is a non-exec header → null; do head is read-only)
+    SID="ed32-$$-$RANDOM"
+    run_run_tests_hook 'select f in tests/*.sh; do head -n 1 "$f"; done' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED32. select f in tests/*.sh; do head -n 1 \"\$f\"; done + exit=0 → state absent (select non-exec header + read-only head)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED32. select f in tests/*.sh; do head -n 1 \"\$f\"; done + exit=0 → expected absent, got run_tests=$STATUS"
+    fi
 }
