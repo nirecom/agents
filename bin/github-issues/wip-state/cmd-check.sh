@@ -13,6 +13,7 @@
 cmd_check() {
     local n="$1"
     validate_n "$n"
+    ensure_wip_field_ids
     preflight_field_ids
 
     # check is non-fatal: a missing project resolves to "none" (no signal).

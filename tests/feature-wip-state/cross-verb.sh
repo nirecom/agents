@@ -1,20 +1,28 @@
 
 # ===========================================================================
-# Test 24: setup parses mock graphql, appends env vars; second invocation doesn't duplicate.
+# Test 24: setup is DEPRECATED (#1340): warn + exit 0 + informational KEY=value
+# on stdout when the resolver succeeds; it NEVER writes .env. Idempotent — the
+# .env stays empty across repeated invocations.
 # ===========================================================================
 setup_mock
 ENV_FILE="$AGENTS_CONFIG_DIR/.env"
 : > "$ENV_FILE"
-run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>&1
+OUT1=$(run_with_timeout 60 bash "$TARGET" setup 2>/dev/null)
 RC1=$?
-COUNT1=$(grep -c "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null || echo 0)
+COUNT1=$(grep -c "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null; true)
+[ -z "$COUNT1" ] && COUNT1=0
 run_with_timeout 60 bash "$TARGET" setup >/dev/null 2>&1
 RC2=$?
-COUNT2=$(grep -c "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null || echo 0)
-if [ "$RC1" -eq 0 ] && [ "$RC2" -eq 0 ] && [ "$COUNT1" -ge 1 ] && [ "$COUNT2" -eq "$COUNT1" ]; then
-    pass "T24: setup writes env vars + second invocation does not duplicate (count stable at $COUNT1)"
+COUNT2=$(grep -c "WIP_STATE_STATUS_FIELD_ID" "$ENV_FILE" 2>/dev/null; true)
+[ -z "$COUNT2" ] && COUNT2=0
+# Resolver succeeds → informational KEY=value block on stdout; .env untouched.
+STDOUT_HAS_KV=0
+printf '%s' "$OUT1" | grep -q "WIP_STATE_STATUS_FIELD_ID=" && STDOUT_HAS_KV=1
+if [ "$RC1" -eq 0 ] && [ "$RC2" -eq 0 ] && [ "$COUNT1" -eq 0 ] && [ "$COUNT2" -eq 0 ] \
+        && [ "$STDOUT_HAS_KV" -eq 1 ]; then
+    pass "T24: setup deprecated → exit 0, informational KV on stdout, .env never written"
 else
-    fail "T24: rc1=$RC1 rc2=$RC2 count1=$COUNT1 count2=$COUNT2"
+    fail "T24: rc1=$RC1 rc2=$RC2 count1=$COUNT1 count2=$COUNT2 kv=$STDOUT_HAS_KV"
 fi
 teardown_mock
 
@@ -95,10 +103,13 @@ setup_mock
 # Wipe required env var; ensure no .env exists.
 unset WIP_STATE_STATUS_FIELD_ID
 rm -f "$AGENTS_CONFIG_DIR/.env" 2>/dev/null || true
+# #1340: force resolver miss so the missing STATUS id cannot be backfilled and
+# the preflight-missing path is exercised.
+export GH_MOCK_LINKED_COUNT=0
 run_with_timeout 60 bash "$TARGET" set 42 >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 2 ]; then
-    pass "T28: .env missing → preflight exit 2 (no spurious pre-preflight error)"
+    pass "T28: .env missing + resolver miss → preflight exit 2 (no spurious pre-preflight error)"
 else
     fail "T28: expected exit 2, got rc=$RC"
 fi

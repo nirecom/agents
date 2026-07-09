@@ -1,14 +1,55 @@
 #!/bin/bash
 # Apply .github/labels.yml to the current repository via `gh label create`.
 #
-# Usage: bin/github-issues/sync-labels.sh [path-to-labels.yml]
+# Usage: bin/github-issues/sync-labels.sh [--repo OWNER/REPO] [path-to-labels.yml]
 #
 # Three-way diff: labels not on remote are created (no --force), labels that
 # differ are updated (--force), labels that already match are skipped entirely.
+#
+# --repo OWNER/REPO targets a repo other than the CWD repo (cross-repo sync).
+# Threaded into every gh label list/create call. Without it, gh resolves the
+# repo from the current working directory (backward compatible).
 
 set -uo pipefail
 
-LABELS_FILE="${1:-.github/labels.yml}"
+REPO_FLAG=""
+REPO_FLAG_SET=0
+LABELS_FILE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --repo)
+            if [ $# -lt 2 ]; then
+                echo "Error: --repo requires a value" >&2; exit 2
+            fi
+            REPO_FLAG="$2"
+            REPO_FLAG_SET=1
+            shift 2
+            ;;
+        --repo=*)
+            REPO_FLAG="${1#--repo=}"
+            REPO_FLAG_SET=1
+            shift
+            ;;
+        *)
+            if [ -z "$LABELS_FILE" ]; then LABELS_FILE="$1"
+            else echo "Error: extra positional argument: $1" >&2; exit 2
+            fi
+            shift
+            ;;
+    esac
+done
+
+# When --repo is supplied, its value must be a strict OWNER/REPO. `[[ =~ ]]`
+# anchors on the whole string (unlike line-oriented grep), rejecting embedded
+# newlines and other injection payloads. An empty value is invalid too.
+if [ "$REPO_FLAG_SET" -eq 1 ]; then
+    if ! [[ "$REPO_FLAG" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+        echo "Error: invalid --repo value: $REPO_FLAG" >&2; exit 2
+    fi
+fi
+
+[ -z "$LABELS_FILE" ] && LABELS_FILE=".github/labels.yml"
 
 if [ ! -f "$LABELS_FILE" ]; then
     echo "Error: labels file not found: $LABELS_FILE" >&2
@@ -45,7 +86,7 @@ parse_and_apply() {
     ' "$LABELS_FILE"
 }
 
-if ! EXISTING=$(gh label list --json name,color,description --limit 1000 \
+if ! EXISTING=$(gh label list ${REPO_FLAG:+--repo "$REPO_FLAG"} --json name,color,description --limit 1000 \
                   --jq '.[] | [.name, .color, .description] | @tsv'); then
     echo "error: gh label list failed; cannot determine existing labels" >&2
     exit 1
@@ -61,7 +102,7 @@ while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
     case "$ACTION" in
         CREATE)
             printf '%b%s (created)%b\n' "$C_GREEN" "$NAME" "$C_RESET"
-            if ! gh label create "$NAME" --color "$COLOR" --description "$DESC"; then
+            if ! gh label create ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --color "$COLOR" --description "$DESC"; then
                 echo "  Failed to create $NAME" >&2
                 FAIL=$((FAIL + 1))
             else
@@ -70,7 +111,7 @@ while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
             ;;
         UPDATE)
             printf '%b%s (updated)%b\n' "$C_YELLOW" "$NAME" "$C_RESET"
-            if ! gh label create "$NAME" --color "$COLOR" --description "$DESC" --force; then
+            if ! gh label create ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --color "$COLOR" --description "$DESC" --force; then
                 echo "  Failed to update $NAME" >&2
                 FAIL=$((FAIL + 1))
             else
