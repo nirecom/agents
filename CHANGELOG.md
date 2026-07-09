@@ -355,3 +355,7 @@ Changes: Recorded-verdict skip now invalidates stale judgments after planning ar
 ### FEATURE: PR #1338 (2026-07-06)
 Background: feat(#1337): add /workflow-off /workflow-on skills and pre-commit human bypass
 Changes: `/workflow-off` and `/workflow-on` skills: suspend and restore workflow/worktree enforcement from a skill invocation.;`git commit` from a human terminal no longer blocked by `ENFORCE_WORKTREE`.
+
+### CONFIG: Rename workflow enforcement toggle commands (2026-07-09)
+Background: The /workflow-init command was hard to reach in autocomplete because the shorter /workflow-on and /workflow-off names ranked above it.
+Changes: The /workflow-on and /workflow-off commands are renamed to /enforce-workflow-on and /enforce-workflow-off. They still restore and suspend workflow/worktree enforcement exactly as before — only the command name changed, so that /workflow-init is easier to reach in slash-command autocomplete.
