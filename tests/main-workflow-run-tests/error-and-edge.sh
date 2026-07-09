@@ -213,16 +213,14 @@ try {
         fail "ED15. node gen.js | grep tests/foo.sh + exit=0 → expected absent (| pipe: non-runner + read-only), got run_tests=$STATUS"
     fi
 
-
-    # ED16: for f in tests/*.sh; do head -n 10 "$f"; done + exit=0 → run_tests: pending
+    # ED16: for f in tests/*.sh; do head -n 10 "$f"; done + exit=0 → state absent
     SID="ed16-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
     run_run_tests_hook 'for f in tests/*.sh; do head -n 10 "$f"; done' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED16. for f in tests/*.sh; do head -n 10 \"\$f\"; done + exit=0 → run_tests=pending (control-structure penetration: for keyword not stripped)"
+    if check_state_file_absent "$SID"; then
+        pass "ED16. for f in tests/*.sh; do head -n 10 \"\$f\"; done + exit=0 → state absent/unchanged (control-structure penetration)"
     else
-        fail "ED16. for f in tests/*.sh; do head -n 10 \"\$f\"; done + exit=0 → expected pending, got run_tests=$STATUS"
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED16. for f in tests/*.sh; do head -n 10 \"\$f\"; done + exit=0 → expected absent, got run_tests=$STATUS"
     fi
 
     # ED17: if pytest tests/; then : ; fi + exit=0 → run_tests: pending
@@ -236,37 +234,143 @@ try {
         fail "ED17. if pytest tests/; then : ; fi + exit=0 → expected pending, got run_tests=$STATUS"
     fi
 
-    # ED18: while head tests/; do : ; done + exit=0 → run_tests: pending
+    # ED18: while head tests/; do : ; done + exit=0 → state absent
     SID="ed18-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
     run_run_tests_hook 'while head tests/; do : ; done' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED18. while head tests/; do : ; done + exit=0 → run_tests=pending (condition header: while not stripped, head not at segment start)"
+    if check_state_file_absent "$SID"; then
+        pass "ED18. while head tests/; do : ; done + exit=0 → state absent (condition header penetration: head is read-only)"
     else
-        fail "ED18. while head tests/; do : ; done + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED18. while head tests/; do : ; done + exit=0 → expected absent, got run_tests=$STATUS"
     fi
 
-    # ED19: FOO=1 head tests/foo.sh + exit=0 → run_tests: pending
+    # ED19: FOO=1 head tests/foo.sh + exit=0 → state absent
     SID="ed19-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
     run_run_tests_hook 'FOO=1 head tests/foo.sh' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED19. FOO=1 head tests/foo.sh + exit=0 → run_tests=pending (env-prefix not stripped: segment starts with FOO=1)"
+    if check_state_file_absent "$SID"; then
+        pass "ED19. FOO=1 head tests/foo.sh + exit=0 → state absent (env-prefix stripped: head is read-only)"
     else
-        fail "ED19. FOO=1 head tests/foo.sh + exit=0 → expected pending, got run_tests=$STATUS"
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED19. FOO=1 head tests/foo.sh + exit=0 → expected absent, got run_tests=$STATUS"
     fi
 
-    # ED20: do FOO=1 head tests/foo.sh + exit=0 → run_tests: pending
+    # ED20: do FOO=1 head tests/foo.sh + exit=0 → state absent
     SID="ed20-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
     run_run_tests_hook 'do FOO=1 head tests/foo.sh' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED20. do FOO=1 head tests/foo.sh + exit=0 → run_tests=pending (body keyword + env-prefix: neither stripped)"
+    if check_state_file_absent "$SID"; then
+        pass "ED20. do FOO=1 head tests/foo.sh + exit=0 → state absent (body keyword + env-prefix: head is read-only)"
     else
-        fail "ED20. do FOO=1 head tests/foo.sh + exit=0 → expected pending, got run_tests=$STATUS"
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED20. do FOO=1 head tests/foo.sh + exit=0 → expected absent, got run_tests=$STATUS"
     fi
 
+    # ED21: for f in tests/*.sh; do pytest tests/; done + exit=0 → run_tests: pending
+    # (positive loop-body detection: pytest in do body IS a test command)
+    SID="ed21-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'for f in tests/*.sh; do pytest tests/; done' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED21. for f in tests/*.sh; do pytest tests/; done + exit=0 → run_tests=pending (loop-body detection: pytest detected)"
+    else
+        fail "ED21. for f in tests/*.sh; do pytest tests/; done + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED22: FOO=1 pytest tests/ + exit=0 → run_tests: pending
+    # (env-prefix stripped: 'FOO=1' resolved to 'pytest', which is a test runner)
+    SID="ed22-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'FOO=1 pytest tests/' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED22. FOO=1 pytest tests/ + exit=0 → run_tests=pending (env-prefix stripped: pytest detected)"
+    else
+        fail "ED22. FOO=1 pytest tests/ + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED23: if false; then pytest tests/; fi + exit=0 → run_tests: pending
+    # (then body keyword stripped: pytest in then body IS a test command)
+    SID="ed23-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'if false; then pytest tests/; fi' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED23. if false; then pytest tests/; fi + exit=0 → run_tests=pending (then-body detection: pytest detected)"
+    else
+        fail "ED23. if false; then pytest tests/; fi + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED24: until pytest tests/; do : ; done + exit=0 → run_tests: pending
+    # (until condition header stripped: pytest in condition IS a test command)
+    SID="ed24-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'until pytest tests/; do : ; done' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED24. until pytest tests/; do : ; done + exit=0 → run_tests=pending (until condition: pytest detected)"
+    else
+        fail "ED24. until pytest tests/; do : ; done + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED25: elif pytest tests/; then : ; fi + exit=0 → run_tests: pending
+    # (elif condition header stripped: pytest in condition IS a test command)
+    SID="ed25-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'elif pytest tests/; then : ; fi' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED25. elif pytest tests/; then : ; fi + exit=0 → run_tests=pending (elif condition: pytest detected)"
+    else
+        fail "ED25. elif pytest tests/; then : ; fi + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED26: case "$f" in tests/*) head -n 1 "$f" ;; esac + exit=0 → state absent
+    # (case is non-exec header, esac is terminator: head is read-only)
+    SID="ed26-$$-$RANDOM"
+    run_run_tests_hook 'case "$f" in tests/*) head -n 1 "$f" ;; esac' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED26. case \"\$f\" in tests/*) head -n 1 \"\$f\" ;; esac + exit=0 → state absent (case/esac: head is read-only)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED26. case \"\$f\" in tests/*) head -n 1 \"\$f\" ;; esac + exit=0 → expected absent, got run_tests=$STATUS"
+    fi
+
+    # ED27: case "$f" in *) pytest tests/ ;; esac + exit=0 → run_tests: pending
+    # (pytest in case body IS a test command)
+    SID="ed27-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'case "$f" in *) pytest tests/ ;; esac' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED27. case \"\$f\" in *) pytest tests/ ;; esac + exit=0 → run_tests=pending (case body: pytest detected)"
+    else
+        fail "ED27. case \"\$f\" in *) pytest tests/ ;; esac + exit=0 → expected pending, got run_tests=$STATUS"
+    fi
+
+    # ED28: pytest "unterminated + exit=0 → state absent (parseFailure: unclosed quote)
+    # No seed: parseFailure makes isTestCommand return false, so the hook never
+    # touches state. Seeding via markStep would default run_tests=pending and
+    # defeat check_state_file_absent (matches sibling state-absent cases ED16/ED26).
+    SID="ed28-$$-$RANDOM"
+    run_run_tests_hook 'pytest "unterminated' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED28. pytest \"unterminated + exit=0 → state absent (parseFailure: unclosed quote)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED28. pytest \"unterminated + exit=0 → expected absent (parseFailure), got run_tests=$STATUS"
+    fi
+
+    # ED29: seeded run_tests=complete + unclosed-quote test-looking command → complete preserved
+    # (parseFailure → isTestCommand=false → hook early-returns before reading/writing state;
+    #  proves a malformed test-looking command does NOT demote an existing complete. Sibling of
+    #  ED28: ED28 proves the fresh-state no-op, ED29 proves the no-demotion property.)
+    SID="ed29-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    seed_run_tests "$SID" "complete"
+    run_run_tests_hook 'pytest "tests/' 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "complete" ]; then
+        pass "ED29. pytest \"tests/ (unclosed quote) + seeded run_tests=complete → complete preserved (parseFailure early-return, no demotion)"
+    else
+        fail "ED29. pytest \"tests/ (unclosed quote) + seeded run_tests=complete → expected complete (no demotion), got run_tests=$STATUS"
+    fi
 }

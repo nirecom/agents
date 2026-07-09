@@ -166,4 +166,68 @@ function isOsTempPath(target) {
   return false;
 }
 
-module.exports = { parse, isOsTempPath };
+const CONTROL_COND_HEADERS = new Set(["if", "elif", "while", "until"]);
+const CONTROL_BODY_KEYWORDS = new Set(["do", "then", "else"]);
+const CONTROL_NONEXEC_HEADERS = new Set(["for", "select", "case"]);
+const CONTROL_TERMINATORS = new Set(["done", "fi", "esac"]);
+
+/**
+ * Strip env-prefix assignments (VAR=val) from the front of a segment IR.
+ * Mirrors resolveEffectiveCommand() from segment-utils.js but returns a
+ * full segmentIR rather than just the cmd0 string.
+ *
+ * Returns null when every token is an assignment (no real command).
+ */
+function stripEnvPrefix(seg) {
+  const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+  if (!ASSIGN_RE.test(seg.cmd0)) return seg;
+  const idx = seg.argv.findIndex((a) => !ASSIGN_RE.test(a));
+  if (idx === -1) return null;
+  return { ...seg, cmd0: seg.argv[idx], argv: seg.argv.slice(idx + 1) };
+}
+
+/**
+ * Resolve the effective command from a segment IR, penetrating control-structure
+ * keywords (for/do/done/while/until/if/then/else/elif/fi/case/esac/select).
+ *
+ * Three categories:
+ *   - Condition headers (if, elif, while, until): strip keyword, condition argv
+ *     IS the effective command (the condition runs as a real command in shell).
+ *   - Body keywords (do, then, else): strip keyword, body command is effective.
+ *   - Non-executable headers (for, select, case) and terminators (done, fi, esac):
+ *     return null — they are not real executable commands.
+ *
+ * After control-keyword stripping, env-prefix assignments (VAR=val) are also
+ * stripped so the caller gets the true effective cmd0 (e.g. FOO=1 head -> head).
+ * Non-control segments pass through unchanged (still subject to env-prefix strip).
+ *
+ * @param {object} segmentIR - A SegmentIR from parse() output
+ * @returns {object|null} - Effective SegmentIR, or null for headers/terminators
+ */
+function resolveEffectiveSegment(segmentIR) {
+  const cmd0 = segmentIR.cmd0;
+  if (cmd0 === "") return null;
+
+  // Non-executable headers and terminators: skip entirely
+  if (CONTROL_NONEXEC_HEADERS.has(cmd0) || CONTROL_TERMINATORS.has(cmd0)) {
+    return null;
+  }
+
+  // Condition headers (if/elif/while/until) and body keywords (do/then/else):
+  // strip the keyword, the remaining argv is the effective command.
+  if (CONTROL_COND_HEADERS.has(cmd0) || CONTROL_BODY_KEYWORDS.has(cmd0)) {
+    if (segmentIR.argv.length === 0) return null;
+    let effective = {
+      ...segmentIR,
+      cmd0: segmentIR.argv[0],
+      argv: segmentIR.argv.slice(1)
+    };
+    // Compose with env-prefix stripping
+    return stripEnvPrefix(effective);
+  }
+
+  // Non-control command: apply env-assignment stripping directly
+  return stripEnvPrefix(segmentIR);
+}
+
+module.exports = { parse, isOsTempPath, resolveEffectiveSegment };
