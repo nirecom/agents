@@ -3,17 +3,19 @@
 # Tests: hooks/enforce-worktree/config.js, hooks/pre-commit, hooks/enforce-worktree.js
 # Tags: enforce-worktree, hook, git, pre-commit, security, scope:issue-specific, pwsh-not-required
 #
-# Three-part test suite for ENFORCE_WORKTREE_EXCLUDE_REPOS path-based exclusion.
+# Four-part test suite for ENFORCE_WORKTREE_EXCLUDE repo-level exclusion.
 #
-# Part A: isRepoExcluded(repoDir) unit (table-driven, node driver)
+# Part A: isRepoExcluded(repoDir) unit (table-driven, node driver) using ENFORCE_WORKTREE_EXCLUDE
 # Part B: hooks/pre-commit integration (temp git repo, direct hook invocation)
+#   B-1: EXCLUDE matches repo → allowed (RED until config.js updated)
+#   B-2: EXCLUDE unset → blocked (GREEN now)
+#   B-3: sibling-prefix false positive → blocked (GREEN now)
+#   B-4: deprecated EXCLUDE_REPOS alias → allowed + stderr 'is deprecated' (RED until pre-commit updated)
 # Part C: hooks/enforce-worktree.js integration (JSON stdin → allow/block)
-#
-# Security pattern 2 (attack scenario): the EXCLUDE_REPOS gate, once implemented,
-# must allow excluded repos and block non-excluded repos. Tests targeting the
-# "allow excluded repo" path FAIL against unimplemented code (RED) because the
-# function does not exist yet. Tests targeting the "block non-excluded" path may
-# already PASS (existing enforcement is intact).
+#   C-1: baseline → blocked (GREEN now)
+#   C-2: EXCLUDE=<mainWt> → allowed (RED until config.js updated)
+#   C-4: deprecated EXCLUDE_REPOS alias → allowed + stderr 'is deprecated' (RED until hook updated)
+# Part D: JS/Bash parity — same inputs through both paths, assert equal verdicts
 #
 # L3 gap (what this test does NOT catch):
 # - real Claude Code Bash tool session with live enforce-worktree hook registration
@@ -53,10 +55,10 @@ TMPBASE="$(mktemp -d)"
 trap 'rm -rf "$TMPBASE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PART A — isRepoExcluded unit (table-driven, node driver)
+# PART A — isRepoExcluded unit (table-driven, node driver, ENFORCE_WORKTREE_EXCLUDE)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-echo "=== Part A: isRepoExcluded unit (table-driven) ==="
+echo "=== Part A: isRepoExcluded unit (table-driven, ENFORCE_WORKTREE_EXCLUDE) ==="
 
 DRIVER_A="$TMPBASE/driver-a.js"
 cat > "$DRIVER_A" <<'NODE'
@@ -67,7 +69,7 @@ const AGENTS_NODE  = process.argv[2];
 const EXCLUDE_ENV  = process.argv[3] || "";
 const DIR          = process.argv[4] || "";
 
-process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS = EXCLUDE_ENV;
+process.env.ENFORCE_WORKTREE_EXCLUDE = EXCLUDE_ENV;
 
 let mod;
 try {
@@ -105,7 +107,7 @@ assert_excluded() {
     local out got
     out="$(call_excluded "$exclude_env" "$dir")"
     if echo "$out" | grep -q '"missing":true'; then
-        fail "$name — isRepoExcluded not yet implemented"
+        fail "$name — isRepoExcluded not yet wired to ENFORCE_WORKTREE_EXCLUDE (expected red)"
         return
     fi
     if ! echo "$out" | grep -q '"ok":true'; then
@@ -124,9 +126,7 @@ assert_excluded() {
 build_test_paths() {
     node -e "
 const path=require('path');
-const sep=process.platform==='win32'?'\\\\':'/';
 const base=path.resolve(process.env.TMPBASE || '/tmp');
-// Output JSON of {exact, sub, sibling, other, multi1, multi2}
 const exact=path.join(base,'a','b','repo');
 const sub=path.join(exact,'sub');
 const sibling=path.join(base,'a','b','ai-specs-old');
@@ -153,19 +153,14 @@ P_MULTI2="$(get_path multi2)"
 P_UPPER="$(get_path upper)"
 P_LOWER="$(get_path lower)"
 
-# Table-driven cases — IFS='|' loop per test-design.md
+# Table-driven cases — IFS='|' loop
 while IFS='|' read -r name exclude_key dir_key want; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
-    name="${name#"${name%%[![:space:]]*}"}"
-    name="${name%"${name##*[![:space:]]}"}"
-    want="${want#"${want%%[![:space:]]*}"}"
-    want="${want%"${want##*[![:space:]]}"}"
-    exclude_key="${exclude_key#"${exclude_key%%[![:space:]]*}"}"
-    exclude_key="${exclude_key%"${exclude_key##*[![:space:]]}"}"
-    dir_key="${dir_key#"${dir_key%%[![:space:]]*}"}"
-    dir_key="${dir_key%"${dir_key##*[![:space:]]}"}"
+    name="${name#"${name%%[![:space:]]*}"}"; name="${name%"${name##*[![:space:]]}"}"
+    want="${want#"${want%%[![:space:]]*}"}"; want="${want%"${want##*[![:space:]]}"}"
+    exclude_key="${exclude_key#"${exclude_key%%[![:space:]]*}"}"; exclude_key="${exclude_key%"${exclude_key##*[![:space:]]}"}"
+    dir_key="${dir_key#"${dir_key%%[![:space:]]*}"}"; dir_key="${dir_key%"${dir_key##*[![:space:]]}"}"
 
-    # Resolve paths from keys
     case "$exclude_key" in
         EXACT)   excl="$P_EXACT" ;;
         ENTRY)   excl="$P_ENTRY" ;;
@@ -224,7 +219,6 @@ setup_repo() {
     git -C "$repo" init -q -b main 2>/dev/null || git -C "$repo" init -q
     git -C "$repo" config user.email "test@example.com"
     git -C "$repo" config user.name "Test"
-    # Bootstrap commit bypassing the hook
     echo "init" > "$repo/README.md"
     AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
         git -C "$repo" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
@@ -240,54 +234,41 @@ stage_file() {
     git -C "$repo" -c core.hooksPath=/dev/null add "$rel" >/dev/null 2>&1
 }
 
-# Part B-1: EXCLUDE_REPOS matches repo → commit allowed (RED until implemented)
-# Pattern 2 (attack scenario): without the exclusion the hook blocks; with
-# EXCLUDE_REPOS set to the repo, the hook must allow.
+# Part B baseline: without EXCLUDE → blocked (sanity)
 REPO_B1="$(setup_repo "b1-exclude-match")"
 stage_file "$REPO_B1" "src/x.txt" "clean content"
-
-# Confirm baseline: without exclusion the hook blocks (sanity check — should PASS now)
 if run_pre_commit "$REPO_B1" ENFORCE_WORKTREE=on; then
     fail "Part B baseline: main-worktree commit without EXCLUDE should block but didn't"
 else
     pass "Part B baseline: main-worktree commit blocked without EXCLUDE (sanity)"
 fi
 
-# Now test with EXCLUDE_REPOS — should allow (RED until implemented)
+# Part B-1: ENFORCE_WORKTREE_EXCLUDE=<repo> → allow (RED until config.js updated)
 if run_pre_commit "$REPO_B1" ENFORCE_WORKTREE=on \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$REPO_B1"; then
-    # Negative assertion (Pattern 1): confirm the output does NOT contain the
-    # "commits from main worktree are blocked" message
+    "ENFORCE_WORKTREE_EXCLUDE=$REPO_B1"; then
     if echo "$RUN_OUT" | grep -qi "commits from main worktree are blocked\|protected branch"; then
-        fail "Part B-1: EXCLUDE_REPOS matches repo but block message still present — not yet implemented"
+        fail "Part B-1: EXCLUDE matches repo but block message still present — not yet implemented"
     else
-        pass "Part B-1: EXCLUDE_REPOS matches repo → pre-commit exits 0 (enforce gate bypassed)"
+        pass "Part B-1: ENFORCE_WORKTREE_EXCLUDE matches repo → pre-commit exits 0"
     fi
 else
-    fail "Part B-1: EXCLUDE_REPOS matches repo → expected exit 0 (not yet implemented)"
+    fail "Part B-1: ENFORCE_WORKTREE_EXCLUDE matches repo → expected exit 0 (not yet implemented)"
 fi
 
-# Part B-2: EXCLUDE_REPOS unset → existing enforcement fires (should PASS now)
+# Part B-2: ENFORCE_WORKTREE_EXCLUDE unset → blocked (GREEN now)
 REPO_B2="$(setup_repo "b2-no-exclude")"
 stage_file "$REPO_B2" "src/y.txt" "content"
 if run_pre_commit "$REPO_B2" ENFORCE_WORKTREE=on; then
-    fail "Part B-2: EXCLUDE_REPOS unset → pre-commit should block but didn't"
+    fail "Part B-2: EXCLUDE unset → pre-commit should block but didn't"
 else
-    if echo "$RUN_OUT" | grep -qi "commits from main worktree are blocked\|protected branch"; then
-        pass "Part B-2: EXCLUDE_REPOS unset → pre-commit blocks with expected message"
-    else
-        pass "Part B-2: EXCLUDE_REPOS unset → pre-commit blocked (message may vary)"
-    fi
+    pass "Part B-2: EXCLUDE unset → pre-commit blocks (existing enforcement)"
 fi
 
 # Part B-3: SIBLING-PREFIX false positive
-# EXCLUDE_REPOS=<parent>/ai-specs, repo is <parent>/ai-specs-old → must BLOCK
 PARENT_B3="$TMPBASE/b3-parent"
 REPO_B3_ENTRY="$PARENT_B3/ai-specs"
 REPO_B3="$PARENT_B3/ai-specs-old"
 mkdir -p "$REPO_B3_ENTRY" "$REPO_B3"
-# We don't need a real repo at ENTRY — just set EXCLUDE_REPOS to point there
-# Then test that the actual repo (ai-specs-old) is NOT excluded
 git -C "$REPO_B3" init -q -b main 2>/dev/null || git -C "$REPO_B3" init -q
 git -C "$REPO_B3" config user.email "test@example.com"
 git -C "$REPO_B3" config user.name "Test"
@@ -297,22 +278,36 @@ AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
 AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
     git -C "$REPO_B3" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
 stage_file "$REPO_B3" "src/z.txt" "content"
-
 if run_pre_commit "$REPO_B3" ENFORCE_WORKTREE=on \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$REPO_B3_ENTRY"; then
+    "ENFORCE_WORKTREE_EXCLUDE=$REPO_B3_ENTRY"; then
     fail "Part B-3: SIBLING-PREFIX — ai-specs-old should not be excluded by ai-specs entry (boundary bug)"
 else
-    pass "Part B-3: SIBLING-PREFIX — ai-specs-old correctly blocked despite sibling ai-specs in EXCLUDE_REPOS"
+    pass "Part B-3: SIBLING-PREFIX — ai-specs-old correctly blocked despite sibling ai-specs in EXCLUDE"
+fi
+
+# Part B-4: deprecated ENFORCE_WORKTREE_EXCLUDE_REPOS alias → allow + 'is deprecated' in stderr
+REPO_B4="$(setup_repo "b4-deprecated-alias")"
+stage_file "$REPO_B4" "src/w.txt" "content"
+STDERR_B4="$TMPBASE/b4-stderr.txt"
+RC_B4=0
+RUN_OUT_B4="$(cd "$REPO_B4" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+    run_with_timeout 30 env ENFORCE_WORKTREE=on \
+    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$REPO_B4" \
+    bash "$PRE_COMMIT" 2>"$STDERR_B4")" || RC_B4=$?
+if [ "$RC_B4" = "0" ]; then
+    if grep -q "is deprecated" "$STDERR_B4" 2>/dev/null; then
+        pass "Part B-4: EXCLUDE_REPOS deprecated alias works AND stderr shows 'is deprecated'"
+    else
+        fail "Part B-4: EXCLUDE_REPOS alias allowed but no 'is deprecated' in stderr (expected red)"
+    fi
+else
+    fail "Part B-4: EXCLUDE_REPOS deprecated alias should allow (rc=$RC_B4) (expected red)"
 fi
 
 fi # pre-commit present
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PART C — hooks/enforce-worktree.js integration (JSON stdin)
-# Strategy: use a Bash `git -C <mainWt> commit -m test` payload, which
-# findRepoRootForBash() resolves to the actual main worktree path.
-# This reliably blocks without session-scope concerns (Bash git write is always
-# classified as "write" and the repo root resolves correctly when the path exists).
 # ═══════════════════════════════════════════════════════════════════════════════
 
 echo ""
@@ -322,7 +317,6 @@ if [ ! -f "$HOOK_JS" ]; then
     skip "Part C — hooks/enforce-worktree.js not present"
 else
 
-# Discover the real main worktree (always the first entry of worktree list)
 _MAIN_WT="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{sub(/^worktree[[:space:]]+/, ""); print; exit}')"
 if command -v cygpath >/dev/null 2>&1; then
     _MAIN_WT_NODE="$(cygpath -m "$_MAIN_WT" 2>/dev/null || echo "$_MAIN_WT")"
@@ -342,37 +336,145 @@ run_hook() {
     echo "$out"
 }
 
+run_hook_with_stderr() {
+    local json="$1" stderr_file="$2"; shift 2
+    local out
+    out="$(echo "$json" | run_with_timeout 15 env AGENTS_CONFIG_DIR="$AGENTS_DIR" "$@" \
+        node "$HOOK_JS" 2>"$stderr_file")" || true
+    echo "$out"
+}
+
 is_allow() { echo "$1" | node -e "try{const j=JSON.parse(require('fs').readFileSync(0,'utf8'));process.exit(Object.keys(j).length===0?0:1);}catch(e){process.exit(1);}" 2>/dev/null; }
 is_block() { echo "$1" | grep -q '"block"'; }
 
-# Part C-1: Baseline — Bash git commit to real main worktree → hook blocks (sanity)
-# Using git -C <mainWt> commit: findRepoRootForBash resolves mainWt, isMainCheckout → true → block
+# Part C-1: Baseline — git commit to main worktree → blocks (GREEN now)
 JSON_C1='{"tool_name":"Bash","tool_input":{"command":"git -C \"'"$_MAIN_WT_NODE"'\" commit -m test","cwd":"'"$_MAIN_WT_NODE"'"},"session_id":"test-c1-$$"}'
 OUT_C1="$(run_hook "$JSON_C1" ENFORCE_WORKTREE=on)"
 if is_block "$OUT_C1"; then
-    pass "Part C baseline: git commit to main worktree → hook blocks"
+    pass "Part C-1 baseline: git commit to main worktree → hook blocks"
 else
-    fail "Part C baseline: expected block for main-worktree git commit, got: $OUT_C1"
+    fail "Part C-1 baseline: expected block for main-worktree git commit, got: $OUT_C1"
 fi
 
-# Part C-2: EXCLUDE_REPOS=<mainWt> → hook allows (RED until implemented)
-# Pattern 2 (attack scenario): the same git commit command that blocks in C-1 should
-# be allowed when mainWt is in EXCLUDE_REPOS. This FAILS until isRepoExcluded is
-# integrated into the hook dispatch.
+# Part C-2: ENFORCE_WORKTREE_EXCLUDE=<mainWt> → allow (RED until config.js updated)
 JSON_C2='{"tool_name":"Bash","tool_input":{"command":"git -C \"'"$_MAIN_WT_NODE"'\" commit -m test","cwd":"'"$_MAIN_WT_NODE"'"},"session_id":"test-c2-$$"}'
 OUT_C2="$(run_hook "$JSON_C2" ENFORCE_WORKTREE=on \
-    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$_MAIN_WT_NODE")"
+    "ENFORCE_WORKTREE_EXCLUDE=$_MAIN_WT_NODE")"
 if is_allow "$OUT_C2"; then
-    pass "Part C-2: EXCLUDE_REPOS=<mainWt> → hook allows ({})"
+    pass "Part C-2: ENFORCE_WORKTREE_EXCLUDE=<mainWt> → hook allows ({})"
 elif is_block "$OUT_C2"; then
-    # Negative assertion (Pattern 1): the excluded repo must NOT produce a block message
-    fail "Part C-2: EXCLUDE_REPOS=<mainWt> → expected allow, got block — isRepoExcluded not yet implemented in hook dispatch"
+    fail "Part C-2: ENFORCE_WORKTREE_EXCLUDE=<mainWt> → expected allow, got block (not yet implemented)"
 else
-    fail "Part C-2: unexpected hook output: $OUT_C2 — not yet implemented"
+    fail "Part C-2: unexpected hook output: $OUT_C2 (not yet implemented)"
+fi
+
+# Part C-4: deprecated ENFORCE_WORKTREE_EXCLUDE_REPOS alias → allow + 'is deprecated' in stderr
+STDERR_C4="$TMPBASE/c4-stderr.txt"
+JSON_C4='{"tool_name":"Bash","tool_input":{"command":"git -C \"'"$_MAIN_WT_NODE"'\" commit -m test","cwd":"'"$_MAIN_WT_NODE"'"},"session_id":"test-c4-$$"}'
+OUT_C4="$(run_hook_with_stderr "$JSON_C4" "$STDERR_C4" ENFORCE_WORKTREE=on \
+    "ENFORCE_WORKTREE_EXCLUDE_REPOS=$_MAIN_WT_NODE")"
+if is_allow "$OUT_C4"; then
+    if grep -q "is deprecated" "$STDERR_C4" 2>/dev/null; then
+        pass "Part C-4: EXCLUDE_REPOS deprecated alias → allows + 'is deprecated' in stderr"
+    else
+        fail "Part C-4: EXCLUDE_REPOS alias allowed but no 'is deprecated' in stderr (expected red)"
+    fi
+elif is_block "$OUT_C4"; then
+    fail "Part C-4: EXCLUDE_REPOS deprecated alias → expected allow, got block (expected red)"
+else
+    fail "Part C-4: unexpected hook output: $OUT_C4 (expected red)"
 fi
 
 fi # _MAIN_WT available
 fi # hook present
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PART D — JS/Bash parity (same inputs through both paths, assert equal verdicts)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "=== Part D: JS/Bash parity (precommit-exclude-check vs pre-commit) ==="
+
+if [ ! -f "$PRE_COMMIT" ]; then
+    skip "Part D — hooks/pre-commit not present"
+else
+
+PARITY_MODULE="$_AGENTS_NODE/hooks/lib/precommit-exclude-check.js"
+PARITY_MODULE_MISSING=0
+if node -e "require('$PARITY_MODULE')" 2>&1 | grep -q "MODULE_NOT_FOUND\|Cannot find"; then
+    PARITY_MODULE_MISSING=1
+fi
+
+setup_repo() {
+    local name="$1"
+    local repo="$TMPBASE/$name"
+    mkdir -p "$repo"
+    git -C "$repo" init -q -b main 2>/dev/null || git -C "$repo" init -q
+    git -C "$repo" config user.email "test@example.com"
+    git -C "$repo" config user.name "Test"
+    echo "init" > "$repo/README.md"
+    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+        git -C "$repo" -c core.hooksPath=/dev/null add README.md >/dev/null 2>&1
+    AGENTS_CONFIG_DIR="$AGENTS_DIR" ENFORCE_WORKTREE=off \
+        git -C "$repo" -c core.hooksPath=/dev/null commit -q -m "initial" >/dev/null 2>&1
+    echo "$repo"
+}
+
+# Parity: JS matcher (precommit-exclude-check.js) vs Bash pre-commit must agree.
+# Each case uses a FRESH isolated repo so staged files never accumulate across
+# cases. The Bash pre-commit runs in a subshell so CWD never leaks. The exclude
+# entry EXCLUDE_KEY==SELF means "use this case's own repo top as the prefix entry".
+run_parity_check() {
+    local casedir="$1" staged="$2" exclude_key="$3" name="$4"
+    if [ "$PARITY_MODULE_MISSING" = "1" ]; then
+        skip "$name — precommit-exclude-check.js not yet created"
+        return
+    fi
+    local repo; repo="$(setup_repo "$casedir")"
+    [ -z "$repo" ] || [ ! -d "$repo" ] && { fail "$name — could not set up parity repo"; return; }
+    local repo_node="$repo"
+    if command -v cygpath >/dev/null 2>&1; then repo_node="$(cygpath -m "$repo")"; fi
+    local exclude; [ "$exclude_key" = "SELF" ] && exclude="$repo_node" || exclude="$exclude_key"
+
+    # JS path. NOTE: `env "$@" run_with_timeout` does NOT work — env execs a real
+    # binary, not a bash function. run_with_timeout must wrap env (which execs
+    # node). MSYS conv disabled so POSIX-style globs/paths survive Git-Bash mangling.
+    local js_rc=0
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+    run_with_timeout 10 env "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
+        "_PRECOMMIT_REPO_TOP=$repo_node" \
+        "_PRECOMMIT_STAGED=$staged" \
+        "ENFORCE_WORKTREE_EXCLUDE=$exclude" \
+        node "$PARITY_MODULE" >/dev/null 2>/dev/null || js_rc=$?
+    local js_verdict; [ "$js_rc" = "0" ] && js_verdict="allow" || js_verdict="block"
+
+    # Bash path: stage the file(s) and run pre-commit from a subshell (no CWD leak).
+    local f
+    for f in $staged; do
+        stage_file "$repo" "$f" "parity content" 2>/dev/null || true
+    done
+    local bash_rc=0
+    ( cd "$repo" && AGENTS_CONFIG_DIR="$AGENTS_DIR" \
+        run_with_timeout 30 env ENFORCE_WORKTREE=on \
+        "ENFORCE_WORKTREE_EXCLUDE=$exclude" \
+        bash "$PRE_COMMIT" >/dev/null 2>/dev/null ) || bash_rc=$?
+    local bash_verdict; [ "$bash_rc" = "0" ] && bash_verdict="allow" || bash_verdict="block"
+
+    if [ "$js_verdict" = "$bash_verdict" ]; then
+        pass "$name — JS=$js_verdict Bash=$bash_verdict (parity)"
+    else
+        fail "$name — JS=$js_verdict vs Bash=$bash_verdict (parity mismatch)"
+    fi
+}
+
+# D-1: prefix entry covering all staged → both allow
+run_parity_check "d1-parity" "docs/readme.md" "SELF" "D-1: prefix-entry all-covered"
+# D-2: glob entry → both allow
+run_parity_check "d2-parity" "todo.md" "**/todo.md" "D-2: glob-entry covered"
+# D-3: no-match → both block
+run_parity_check "d3-parity" "src/main.py" "**/todo.md" "D-3: no-match both block"
+
+fi # pre-commit present for Part D
 
 echo ""
 echo "================================"
