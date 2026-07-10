@@ -1,6 +1,7 @@
 "use strict";
 
 const path = require("path");
+const { getConvLangInjection } = require("./conv-lang");
 
 // Pure-function formatter for EM Supervisor alert/audit block reasons.
 // Used by hooks/supervisor-guard.js branches (2) cumSev=error and
@@ -32,7 +33,7 @@ function aggregateCategories(findings) {
 function recipeBlock(stateSessionId, stateFilePath) {
   return [
     "Fallback (if the supervisor subagent invocation fails with an API error):",
-    `  Run: bin/supervisor-write-alert --clear-alert-armed-at --set-alert-phase frozen --session-id ${stateSessionId}`,
+    `  Run: bin/supervisor-write-alert --clear-l2-armed-at --set-l2-phase frozen --session-id ${stateSessionId}`,
     "  This freezes the alert review for this session so the loop terminates. alert_phase=frozen is terminal.",
     `  State file: ${stateFilePath}`,
   ];
@@ -41,6 +42,8 @@ function recipeBlock(stateSessionId, stateFilePath) {
 function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, stateSessionId) {
   const sk = stateSessionId == null ? sessionId : stateSessionId;
   const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
   lines.push("[EM Supervisor] Alert mode: cumulative_severity=error.");
 
   if (!Array.isArray(findings) || findings.length === 0) {
@@ -58,18 +61,21 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
   const allCats = aggregateCategories(findings);
   lines.push(`Categories: ${allCats.length > 0 ? allCats.join(", ") : "(none)"}`);
 
-  lines.push("Findings:");
-  for (let i = 0; i < findings.length; i++) {
-    const f = findings[i];
+  // Summarized findings: compute highest severity and last detail.
+  const SRANK = { error: 2, warning: 1, notice: 0 };
+  let highestSev = null;
+  let lastDetail = null;
+  for (const f of findings) {
     if (!f) continue;
-    const cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
-    const detail = typeof f.detail === "string" ? f.detail : "(no detail)";
-    lines.push(`  [${i + 1}] categories=${cats} severity=${f.severity || "(none)"} detail=${detail}`);
+    const s = f.severity;
+    if (typeof s === "string" && SRANK[s] !== undefined) {
+      if (highestSev === null || SRANK[s] > SRANK[highestSev]) highestSev = s;
+    }
+    if (f.detail != null) lastDetail = f.detail;
   }
+  lines.push(`Findings: ${findings.length}, highest severity: ${highestSev !== null ? highestSev : "(none)"}. Full detail in state file (shown on request only).`);
+  if (lastDetail === null) lines.push("Detail: (no detail)");
 
-  const last = findings[findings.length - 1];
-  const lastDetail = last && typeof last.detail === "string" ? last.detail : "(no detail)";
-  lines.push(`Detail: ${lastDetail}`);
   lines.push(`Session ID: ${sessionId}`);
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
@@ -82,6 +88,8 @@ function formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervi
 function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath, stateSessionId) {
   const sk = stateSessionId == null ? sessionId : stateSessionId;
   const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
   const isC1 = typeof cause === "string" && cause.indexOf("C1") === 0;
   const isC3 = typeof cause === "string" && cause.indexOf("C3") === 0;
   const causeLabel = isC1
@@ -117,6 +125,8 @@ function formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath
 function formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath, stateSessionId) {
   const sk = stateSessionId == null ? sessionId : stateSessionId;
   const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
   lines.push("[EM Supervisor] C3: OFF proposal pre-detected.");
   lines.push(`Action: invoke agents/supervisor.md (${supervisorPath}) as a subagent to review the off-proposal.`);
   for (const l of recipeBlock(sk, stateFilePath)) lines.push(l);
@@ -124,6 +134,28 @@ function formatWorktreeOffProposalReason(sessionId, workflowSessionId, superviso
   lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   lines.push(`Effective state session ID: ${sk}`);
   lines.push(`Action: pass --session-id ${sk} to every bin/supervisor-write-alert call.`);
+  return lines.join("\n");
+}
+
+// Pre-merge block reason: arms audit and redirects to supervisor-audit.md.
+// cause is "warning-flush" or "scope-drift:pre-merge".
+function formatPreMergeBlockReason(cause, sessionId, workflowSessionId, auditAgentPath, stateFilePath, stateSessionId) {
+  const lines = [];
+  const convLang = getConvLangInjection();
+  if (convLang) lines.push(convLang);
+  lines.push("[EM Supervisor] Pre-merge audit required.");
+  if (cause === "warning-flush") {
+    lines.push("Reason: Active supervisor findings exist (warning severity or above).");
+  } else if (cause === "scope-drift:pre-merge") {
+    lines.push("Reason: Branch diff contains files not declared in detail.md (scope drift).");
+  } else {
+    lines.push(`Reason: ${cause}`);
+  }
+  lines.push("Action: Run agents/supervisor-audit.md as a subagent.");
+  lines.push("Re-run the merge after the audit completes.");
+  if (stateSessionId) lines.push(`Effective state session ID: ${stateSessionId}`);
+  if (sessionId) lines.push(`Session ID: ${sessionId}`);
+  if (workflowSessionId) lines.push(`Workflow session ID: ${wsidLabel(workflowSessionId)}`);
   return lines.join("\n");
 }
 
@@ -150,4 +182,4 @@ function formatL3SeverityThresholdReason(cumSev, verdict, sessionId, stateFilePa
   return lines.join("\n");
 }
 
-module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason, formatL3StageBoundaryReason, formatL3SeverityThresholdReason };
+module.exports = { formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason, formatPreMergeBlockReason, formatL3StageBoundaryReason, formatL3SeverityThresholdReason };

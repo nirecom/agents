@@ -24,7 +24,7 @@ const AUDIT_PHASE_VALUES = [null, "pending", "in_progress", "done", "frozen"];
 const AUDIT_VERDICT_VALUES = ["CONTINUE", "WARN", "BLOCK"];
 const AUDIT_RETRY_THRESHOLD = 2;
 // Cumulative severity threshold (using SEVERITY_RANK comparison) that triggers audit arming.
-const AUDIT_SEVERITY_THRESHOLD = "error";
+const AUDIT_SEVERITY_THRESHOLD = "warning";
 
 function createEmptyState(sessionId) {
   const now = new Date().toISOString();
