@@ -85,12 +85,13 @@ See `docs/security-policy.md` for the full pattern list.
   add/remove/prune` lifecycle commands, PowerShell `New-Item -ItemType Directory`.
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
-  `ENFORCE_WORKTREE_EXCLUDE`: semicolon-separated glob patterns. When ALL staged files
-  match at least one pattern, the main-checkout and protected-branch gates in `pre-commit`
-  are skipped (the private-info scanner still runs). Patterns are absolute paths with `**`
-  (any path segments, including zero) and `*` (any non-separator chars). Matching is
-  case-insensitive on Windows. Implementation: `hooks/lib/glob-match.js`.
-  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;C:\LLM\ai-specs\**\todo.md`
+  `ENFORCE_WORKTREE_EXCLUDE`: unified path-coverage list. When ALL staged files are covered,
+  the main-checkout and protected-branch gates in `pre-commit` are skipped (the private-info
+  scanner still runs). An entry containing `*` matches file paths via glob (`**` = any path
+  segments, `*` = any non-separator chars, case-insensitive on Windows); a plain path entry
+  matches via path-boundary prefix (the target equals the entry or is under its subtree).
+  Honored by both `enforce-worktree.js` (repo-granularity) and `pre-commit` (file-granularity).
+  Example: `ENFORCE_WORKTREE_EXCLUDE=C:\git\**\todo.md;C:\git\repo-a`
   Built-in (non-overridable): `.worktree-backup/**` is always excluded so `/worktree-end` Step 5 can copy gitignored files to `.worktree-backup/` even when Bash CWD has reset to the main worktree.
   **gh command classification** — Bash write-detection uses `hooks/lib/bash-write-patterns.js`:
   - **Classified "write" (session-scope check applies)**: `gh pr merge`, `gh issue create/delete`,
@@ -98,13 +99,13 @@ See `docs/security-policy.md` for the full pattern list.
     POST/PUT/PATCH/DELETE in any flag form (`-X`, `-XVERB`, `-X=VERB`, `--method`,
     `--method=`), GitHub Contents API PUT (`repos/.../contents/...`), Git Data API
     POST/PATCH (`repos/.../git/{blobs,trees,commits,refs}`). Write commands verify that
-    the detected repo root is in-scope (CWD repo + `ENFORCE_WORKTREE_EXTRA_REPOS`).
+    the detected repo root is in-scope (CWD repo + `ENFORCE_WORKTREE_ADDITIONAL_REPOS`).
     `gh issue create` is sanctioned only via the `/issue-create` skill — bare invocation
     from the main worktree is blocked (#672).
   - **Classified "read" (guard never fires)**: `gh pr create/edit/close/comment/review`,
     `gh issue edit/close/comment`, `gh repo create/edit/rename/archive` — metadata-only,
     never changes tracked repo content.
-  `ENFORCE_WORKTREE_EXTRA_REPOS`: semicolon-separated list of additional repo roots
+  `ENFORCE_WORKTREE_ADDITIONAL_REPOS`: semicolon-separated list of additional repo roots
   or parent directories treated as in-scope for gh write scope checks. If an entry
   is not itself a git repo, its immediate subdirectories are scanned (depth 1)
   and any git repos found are added. The CWD repo is always included.

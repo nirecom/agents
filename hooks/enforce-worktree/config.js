@@ -3,6 +3,9 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
 const { parseGitCPath, findRepoRoot } = require("./git-repo-detection");
+const { isCoveredByEntryList } = require("../lib/path-coverage-match");
+
+const _warnedDeprecated = new Set();
 
 function isEnforceWorktreeOn() {
   const raw = process.env.ENFORCE_WORKTREE;
@@ -61,31 +64,27 @@ function getCurrentBranch(repoCwd) {
 }
 
 // Check if a repo directory is excluded from worktree enforcement.
-// Reads ENFORCE_WORKTREE_EXCLUDE_REPOS (semicolon-separated absolute paths).
-// Path-boundary match: prevents ai-specs-old from matching an ai-specs entry.
-// Case-insensitive on Windows (case-insensitive FS); case-sensitive on POSIX.
-const isWin = process.platform === "win32";
-
+// Reads the unified ENFORCE_WORKTREE_EXCLUDE (path-coverage). A plain path entry
+// covers that repo root and its subtree; glob entries match file paths.
+// ENFORCE_WORKTREE_EXCLUDE_REPOS is a deprecated alias, merged in once per process.
 function isRepoExcluded(repoDir) {
-  const raw = (process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS || "").trim();
-  if (!raw) return false;
-  const resolved = path.resolve(repoDir);
-  const normalizedDir = isWin ? resolved.toLowerCase() : resolved;
-  const entries = raw.split(";");
-  for (const entry of entries) {
-    const trimmed = entry.trim();
-    if (!trimmed) continue;
-    const resolvedEntry = path.resolve(trimmed);
-    const normalizedEntry = isWin ? resolvedEntry.toLowerCase() : resolvedEntry;
-    if (
-      normalizedDir === normalizedEntry ||
-      normalizedDir.startsWith(normalizedEntry + path.sep) ||
-      normalizedDir.startsWith(normalizedEntry + "/")
-    ) {
-      return true;
+  // --- BEGIN temporary: ENFORCE_WORKTREE_EXCLUDE_REPOS → ENFORCE_WORKTREE_EXCLUDE migration ---
+  if (process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS && !process.env._EXCL_REPOS_MIGRATED) {
+    if (!_warnedDeprecated.has("ENFORCE_WORKTREE_EXCLUDE_REPOS")) {
+      process.stderr.write(
+        "enforce-worktree: ENFORCE_WORKTREE_EXCLUDE_REPOS is deprecated; " +
+        "migrate entries to ENFORCE_WORKTREE_EXCLUDE in your .env\n"
+      );
+      _warnedDeprecated.add("ENFORCE_WORKTREE_EXCLUDE_REPOS");
     }
+    const existing = process.env.ENFORCE_WORKTREE_EXCLUDE || "";
+    const extra = process.env.ENFORCE_WORKTREE_EXCLUDE_REPOS;
+    process.env.ENFORCE_WORKTREE_EXCLUDE = existing ? existing + ";" + extra : extra;
+    process.env._EXCL_REPOS_MIGRATED = "1";
   }
-  return false;
+  // --- END temporary: ENFORCE_WORKTREE_EXCLUDE_REPOS → ENFORCE_WORKTREE_EXCLUDE migration ---
+  const resolved = path.resolve(repoDir);
+  return isCoveredByEntryList(process.env.ENFORCE_WORKTREE_EXCLUDE || "", resolved);
 }
 
 // Check whether the repo implied by a tool input (via git -C path or CWD) is excluded.
