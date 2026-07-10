@@ -82,6 +82,8 @@ The orchestrator will run `deep-research` and re-prompt you with the findings.
 
 ## Consuming `## Class members`
 
+Before reading Class members, count `## Issues` entries and `## Class members` entries in the provided outline.md. When issues_count > 0 and members_count < issues_count, note this gap explicitly in the plan's `## Risks & edge cases` section.
+
 Before drafting, read `## Class members` from the outline.md provided to you.
 - Members with `triage: MUST`: your plan MUST explicitly address each one in
   `## Steps`, `## Files to modify`, or a dedicated named section. Coverage at
