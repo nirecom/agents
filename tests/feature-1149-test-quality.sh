@@ -152,6 +152,46 @@ if require_sut "MP-1" "$SUT_MP"; then
     fi
 fi
 
+# --- MP-2: mutation-probe.sh detects const regex in fixture (CONST_PATTERN uses -E) ---
+# Regression guard: if -E flag is ever reverted to BRE, CONST_PATTERN yields 0 matches,
+# the TOTAL==0 guard fires, the "no single-line const regex found" string appears, MP-2 fails.
+TMP=$(mktemp)
+cat > "$TMP" <<'EOF'
+const FOO_RE = /foo+/;
+EOF
+if require_sut "MP-2" "$SUT_MP"; then
+    MP2_STDERR=""
+    MP2_RC=0
+    MP2_STDERR="$(run_with_timeout 30 bash "$SUT_MP" --test-cmd 'true' "$TMP" 2>&1 >/dev/null)" || MP2_RC=$?
+    if echo "$MP2_STDERR" | grep -q "no single-line const regex found"; then
+        fail "MP-2: CONST_PATTERN matched 0 regexes — -E flag regression (probe output: $MP2_STDERR)"
+    else
+        pass "MP-2: CONST_PATTERN detected const regex in fixture (no TOTAL==0 guard triggered)"
+    fi
+fi
+rm -f "$TMP"
+
+# --- MP-3: mutation-probe.sh emits TOTAL==0 guard when no const regex in fixture ---
+# Complementary control for MP-2: when the fixture has NO single-line const regex,
+# the probe must print "no single-line const regex found" to stderr and exit 1.
+# Without this, a broken guard that never fires would leave MP-2 falsely green.
+TMP=$(mktemp)
+cat > "$TMP" <<'EOF'
+const x = 5;
+function f() { return x; }
+EOF
+if require_sut "MP-3" "$SUT_MP"; then
+    MP3_STDERR=""
+    MP3_RC=0
+    MP3_STDERR="$(run_with_timeout 30 bash "$SUT_MP" --test-cmd 'true' "$TMP" 2>&1 >/dev/null)" || MP3_RC=$?
+    if [ "$MP3_RC" -eq 1 ] && echo "$MP3_STDERR" | grep -q "no single-line const regex found"; then
+        pass "MP-3: TOTAL==0 guard fires correctly for fixture with no const regex (exit 1 + guard message)"
+    else
+        fail "MP-3: expected exit 1 + 'no single-line const regex found' in stderr; got exit $MP3_RC, stderr: $MP3_STDERR"
+    fi
+fi
+rm -f "$TMP"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
