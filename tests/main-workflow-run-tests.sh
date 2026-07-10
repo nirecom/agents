@@ -18,7 +18,7 @@
 #
 # Dispatcher: shared helpers/fixtures live in main-workflow-run-tests/common.sh;
 # case groups live in normal-and-guard.sh, error-and-edge.sh,
-# idempotency-security.sh, contract-trust.sh.
+# error-and-edge-control.sh, idempotency-security.sh, contract-trust.sh.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -40,6 +40,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/main-workflow-run-tests"
 . "$SCRIPT_DIR/normal-and-guard.sh"
 # shellcheck source=./main-workflow-run-tests/error-and-edge.sh
 . "$SCRIPT_DIR/error-and-edge.sh"
+# shellcheck source=./main-workflow-run-tests/error-and-edge-control.sh
+. "$SCRIPT_DIR/error-and-edge-control.sh"
 # shellcheck source=./main-workflow-run-tests/idempotency-security.sh
 . "$SCRIPT_DIR/idempotency-security.sh"
 # shellcheck source=./main-workflow-run-tests/contract-trust.sh
@@ -51,6 +53,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/main-workflow-run-tests"
 
 run_normal_and_guard_tests
 run_error_and_edge_tests
+run_error_and_edge_control_tests
 run_idempotency_security_tests
 run_contract_trust_tests
 run_detection_matrix_tests

@@ -287,6 +287,9 @@ const RESOLVE_CASES = [
   { label: "env-prefix head → cmd0=head", input: "FOO=1",         argv: ["head", "tests/"],              expected: { cmd0: "head", argv: ["tests/"] } },
   { label: "env-prefix pytest → cmd0=pytest", input: "FOO=1",    argv: ["pytest", "tests/"],            expected: { cmd0: "pytest", argv: ["tests/"] } },
 
+  // Multi-chained env-prefix stripping: ALL leading VAR=val assignments stripped
+  { label: "multi-env-prefix (FOO=1 BAR=2 pytest) → cmd0=pytest", input: "FOO=1", argv: ["BAR=2", "pytest", "tests/"], expected: { cmd0: "pytest", argv: ["tests/"] } },
+
   // All-tokens-are-assignments: return null
   { label: "all-assignments → null",     input: "FOO=1",           argv: ["BAR=2"],                       expected: null },
 
@@ -368,6 +371,38 @@ for (const { label, cmd, expectedSegments, effectiveCmd0s } of INTEGRATION_CASES
   const r1 = resolveEffectiveSegment(s1);
   if (r1 === null) pass("resolveEffectiveSegment: select header → null");
   else fail("resolveEffectiveSegment: select header", "null", r1);
+}
+
+// --- resolveEffectiveSegment: DEFENSIVENESS cases (FIX 3, #1330) ---
+// resolveEffectiveSegment must return null (never throw) for malformed input,
+// mirroring the sibling resolveEffectiveCommand guard in
+// hooks/lib/bash-write-patterns/segment-utils.js. Null/undefined seg, cmd0==null,
+// control cond/body keyword with non-array argv, and assignment cmd0 with
+// non-array argv (stripEnvPrefix guard) all fail closed to null.
+{
+  check("resolveEffectiveSegment defensiveness: null → null", resolveEffectiveSegment(null), null);
+  check("resolveEffectiveSegment defensiveness: undefined → null", resolveEffectiveSegment(undefined), null);
+  check("resolveEffectiveSegment defensiveness: {cmd0:null} → null", resolveEffectiveSegment({ cmd0: null }), null);
+  check(
+    "resolveEffectiveSegment defensiveness: {cmd0:'if', argv:undefined} → null (cond header, argv not array)",
+    resolveEffectiveSegment({ cmd0: "if", argv: undefined }),
+    null
+  );
+  check(
+    "resolveEffectiveSegment defensiveness: {cmd0:'do'} → null (body keyword, missing argv)",
+    resolveEffectiveSegment({ cmd0: "do" }),
+    null
+  );
+  check(
+    "resolveEffectiveSegment defensiveness: {cmd0:'FOO=1', argv:undefined} → null (assignment cmd0, argv not array → stripEnvPrefix null)",
+    resolveEffectiveSegment({ cmd0: "FOO=1", argv: undefined }),
+    null
+  );
+  // Positive control: a well-formed read-only segment still resolves.
+  {
+    const r = resolveEffectiveSegment({ cmd0: "head", argv: ["x"] });
+    check("resolveEffectiveSegment defensiveness: {cmd0:'head', argv:['x']} → cmd0='head' (positive control)", r && r.cmd0, "head");
+  }
 }
 
 console.log("");

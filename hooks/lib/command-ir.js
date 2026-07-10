@@ -180,7 +180,9 @@ const CONTROL_TERMINATORS = new Set(["done", "fi", "esac"]);
  */
 function stripEnvPrefix(seg) {
   const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+  if (!seg || seg.cmd0 == null) return null;
   if (!ASSIGN_RE.test(seg.cmd0)) return seg;
+  if (!Array.isArray(seg.argv)) return null;
   const idx = seg.argv.findIndex((a) => !ASSIGN_RE.test(a));
   if (idx === -1) return null;
   return { ...seg, cmd0: seg.argv[idx], argv: seg.argv.slice(idx + 1) };
@@ -205,6 +207,7 @@ function stripEnvPrefix(seg) {
  * @returns {object|null} - Effective SegmentIR, or null for headers/terminators
  */
 function resolveEffectiveSegment(segmentIR) {
+  if (!segmentIR || segmentIR.cmd0 == null) return null;
   const cmd0 = segmentIR.cmd0;
   if (cmd0 === "") return null;
 
@@ -216,7 +219,7 @@ function resolveEffectiveSegment(segmentIR) {
   // Condition headers (if/elif/while/until) and body keywords (do/then/else):
   // strip the keyword, the remaining argv is the effective command.
   if (CONTROL_COND_HEADERS.has(cmd0) || CONTROL_BODY_KEYWORDS.has(cmd0)) {
-    if (segmentIR.argv.length === 0) return null;
+    if (!Array.isArray(segmentIR.argv) || segmentIR.argv.length === 0) return null;
     let effective = {
       ...segmentIR,
       cmd0: segmentIR.argv[0],

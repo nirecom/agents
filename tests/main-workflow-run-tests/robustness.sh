@@ -77,6 +77,63 @@ run_robustness_tests() {
         fail "C3-4. missing command → expected {}/exit0/no-state, got stdout='$LAST_HOOK_STDOUT' exit=$LAST_HOOK_EXIT run_tests=$STATUS"
     fi
 
+    # C3-5: tool_input.command is a number (123) → {} , exit 0, no state.
+    # Non-string command is coerced to "" via `typeof rawCommand === "string" ? rawCommand : ""`.
+    SID="c3-numcmd-$$-$RANDOM"
+    JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:123},tool_response:{exit_code:0},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$JSON"
+    if [ "$LAST_HOOK_STDOUT" = "{}" ] && [ "$LAST_HOOK_EXIT" -eq 0 ] && check_state_file_absent "$SID"; then
+        pass "C3-5. command:123 (number) → {} + exit 0 + no state (fail-open: non-string coerced to empty)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "C3-5. command:123 (number) → expected {}/exit0/no-state, got stdout='$LAST_HOOK_STDOUT' exit=$LAST_HOOK_EXIT run_tests=$STATUS"
+    fi
+
+    # C3-6: tool_input.command is an object ({}) → {} , exit 0, no state.
+    SID="c3-objcmd-$$-$RANDOM"
+    JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:{}},tool_response:{exit_code:0},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$JSON"
+    if [ "$LAST_HOOK_STDOUT" = "{}" ] && [ "$LAST_HOOK_EXIT" -eq 0 ] && check_state_file_absent "$SID"; then
+        pass "C3-6. command:{} (object) → {} + exit 0 + no state (fail-open: non-string coerced to empty)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "C3-6. command:{} (object) → expected {}/exit0/no-state, got stdout='$LAST_HOOK_STDOUT' exit=$LAST_HOOK_EXIT run_tests=$STATUS"
+    fi
+
+    # C3-7: tool_input.command is null → {} , exit 0, no state.
+    SID="c3-nullcmd-$$-$RANDOM"
+    JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:null},tool_response:{exit_code:0},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$JSON"
+    if [ "$LAST_HOOK_STDOUT" = "{}" ] && [ "$LAST_HOOK_EXIT" -eq 0 ] && check_state_file_absent "$SID"; then
+        pass "C3-7. command:null → {} + exit 0 + no state (fail-open: non-string coerced to empty)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "C3-7. command:null → expected {}/exit0/no-state, got stdout='$LAST_HOOK_STDOUT' exit=$LAST_HOOK_EXIT run_tests=$STATUS"
+    fi
+
+    # C3-8: state-write failure (CLAUDE_WORKFLOW_DIR points at a regular file) → {} , exit 0, no stack trace.
+    # Seeds write_tests=complete first (real WORKFLOW_DIR) so the hook reaches the markStep path,
+    # then re-runs with CLAUDE_WORKFLOW_DIR redirected to a regular file so the state write throws.
+    # The hook's top-level try/catch must absorb the error and fail open.
+    SID="c3-stfail-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    REGFILE="${TMPDIR:-/tmp}/rt-c3-regfile-$$-$RANDOM"
+    touch "$REGFILE"
+    JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/foo.py"},tool_response:{exit_code:0},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    C38_STDERR_FILE="${TMPDIR:-/tmp}/rt-c3-stderr-$$-$RANDOM"
+    C38_STDOUT=$(printf '%s' "$JSON" | CLAUDE_WORKFLOW_DIR="$REGFILE" node "$RUN_TESTS_HOOK" 2>"$C38_STDERR_FILE")
+    C38_EXIT=$?
+    C38_TYPEERR=$(grep -c "TypeError" "$C38_STDERR_FILE" 2>/dev/null || true)
+    C38_ATOBJ=$(grep -c "at Object" "$C38_STDERR_FILE" 2>/dev/null || true)
+    C38_TYPEERR=${C38_TYPEERR:-0}
+    C38_ATOBJ=${C38_ATOBJ:-0}
+    rm -f "$REGFILE" "$C38_STDERR_FILE"
+    if [ "$C38_STDOUT" = "{}" ] && [ "$C38_EXIT" -eq 0 ] && [ "$C38_TYPEERR" -eq 0 ] && [ "$C38_ATOBJ" -eq 0 ]; then
+        pass "C3-8. state-write failure (CLAUDE_WORKFLOW_DIR=regular-file) → {} + exit 0 + no stack trace (fail-open bottom catch)"
+    else
+        fail "C3-8. state-write failure → expected {}/exit0/no-stack-trace, got stdout='$C38_STDOUT' exit=$C38_EXIT TypeError=$C38_TYPEERR at-Object=$C38_ATOBJ"
+    fi
+
     # -----------------------------------------------------------------------
     # === C4: security no-leak ===
     # A fake secret injected into BOTH tool_input.command and tool_response.stdout

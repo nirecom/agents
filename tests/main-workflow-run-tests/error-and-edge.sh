@@ -277,278 +277,197 @@ try {
         fail "ED21. for f in tests/*.sh; do pytest tests/; done + exit=0 → expected pending, got run_tests=$STATUS"
     fi
 
-    # ED22: FOO=1 pytest tests/ + exit=0 → run_tests: pending
-    # (env-prefix stripped: 'FOO=1' resolved to 'pytest', which is a test runner)
-    SID="ed22-$$-$RANDOM"
+    # ---------------------------------------------------------------------------
+    # === Exit-code resolution edge cases (Gap C1) ===
+    # These cases exercise the exit_code resolution ladder in the hook:
+    #   const exitCode = toolResponse.exit_code ?? toolResponse.exitCode
+    #                    ?? (toolResponse.success === false ? 1 : 0);
+    # All cases use a detected test command ("pytest tests/") so the hook reaches
+    # the exit-code branch. Cases with non-zero exit trigger the fast path
+    # (run_tests: pending via last_run_failed). The missing-tool_response case
+    # resolves to exit 0 but no run-all.sh contract → active demotion → pending.
+    # Payloads are built via node JSON.stringify (run_raw_stdin_hook) so we can
+    # control tool_response fields precisely without run_run_tests_hook's forced
+    # exit_code field.
+    # ---------------------------------------------------------------------------
+
+    # ED54: tool_response: {exitCode: 5} (camelCase fallback, no exit_code) → run_tests: pending
+    # exit_code is undefined → falls through to exitCode ?? ... → exitCode=5 (non-zero) → pending
+    SID="ed54-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'FOO=1 pytest tests/' 0 "$SID"
+    ED54_JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/"},tool_response:{exitCode:5},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$ED54_JSON"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED22. FOO=1 pytest tests/ + exit=0 → run_tests=pending (env-prefix stripped: pytest detected)"
+        pass "ED54. tool_response:{exitCode:5} (camelCase, no exit_code) → run_tests=pending (exitCode fallback: non-zero fast path)"
     else
-        fail "ED22. FOO=1 pytest tests/ + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED54. tool_response:{exitCode:5} → expected pending (camelCase fallback), got: $STATUS"
     fi
 
-    # ED23: if false; then pytest tests/; fi + exit=0 → run_tests: pending
-    # (then body keyword stripped: pytest in then body IS a test command)
-    SID="ed23-$$-$RANDOM"
+    # ED55: tool_response: {success: false} (no exit_code/exitCode) → run_tests: pending
+    # exit_code undefined, exitCode undefined → success===false → exitCode=1 (non-zero) → pending
+    SID="ed55-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'if false; then pytest tests/; fi' 0 "$SID"
+    ED55_JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/"},tool_response:{success:false},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$ED55_JSON"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED23. if false; then pytest tests/; fi + exit=0 → run_tests=pending (then-body detection: pytest detected)"
+        pass "ED55. tool_response:{success:false} (no exit_code/exitCode) → run_tests=pending (success===false coerced to 1: non-zero fast path)"
     else
-        fail "ED23. if false; then pytest tests/; fi + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED55. tool_response:{success:false} → expected pending (success coercion), got: $STATUS"
     fi
 
-    # ED24: until pytest tests/; do : ; done + exit=0 → run_tests: pending
-    # (until condition header stripped: pytest in condition IS a test command)
-    SID="ed24-$$-$RANDOM"
+    # ED56: tool_response MISSING entirely (only tool_name/tool_input/session_id) → run_tests: pending
+    # input.tool_response is undefined → toolResponse={} → all three ladder fields absent
+    # → exitCode=0 (default) → detected test command, no run-all.sh contract → active demotion
+    SID="ed56-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'until pytest tests/; do : ; done' 0 "$SID"
+    ED56_JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/"},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$ED56_JSON"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED24. until pytest tests/; do : ; done + exit=0 → run_tests=pending (until condition: pytest detected)"
+        pass "ED56. tool_response missing entirely → run_tests=pending (exit resolves to 0, no contract → active demotion)"
     else
-        fail "ED24. until pytest tests/; do : ; done + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED56. tool_response missing → expected pending (exit=0 active demotion), got: $STATUS"
     fi
 
-    # ED25: elif pytest tests/; then : ; fi + exit=0 → run_tests: pending
-    # (elif condition header stripped: pytest in condition IS a test command)
-    SID="ed25-$$-$RANDOM"
+    # ED57: tool_response: {exit_code: -1} (negative) → run_tests: pending
+    # exit_code=-1 is non-zero → fast path → pending
+    SID="ed57-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'elif pytest tests/; then : ; fi' 0 "$SID"
+    ED57_JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/"},tool_response:{exit_code:-1},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$ED57_JSON"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED25. elif pytest tests/; then : ; fi + exit=0 → run_tests=pending (elif condition: pytest detected)"
+        pass "ED57. tool_response:{exit_code:-1} (negative) → run_tests=pending (non-zero fast path)"
     else
-        fail "ED25. elif pytest tests/; then : ; fi + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED57. tool_response:{exit_code:-1} → expected pending (negative exit non-zero), got: $STATUS"
     fi
 
-    # ED26: case "$f" in tests/*) head -n 1 "$f" ;; esac + exit=0 → state absent
-    # (case is non-exec header, esac is terminator: head is read-only)
-    SID="ed26-$$-$RANDOM"
-    run_run_tests_hook 'case "$f" in tests/*) head -n 1 "$f" ;; esac' 0 "$SID"
+    # ED58: tool_response: {exit_code: 999} (very large) → run_tests: pending
+    # exit_code=999 is non-zero → fast path → pending
+    SID="ed58-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    ED58_JSON=$(node -e 'process.stdout.write(JSON.stringify({tool_name:"Bash",tool_input:{command:"pytest tests/"},tool_response:{exit_code:999},session_id:process.argv[1]}))' "$SID" 2>/dev/null)
+    run_raw_stdin_hook "$ED58_JSON"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED58. tool_response:{exit_code:999} (very large) → run_tests=pending (non-zero fast path)"
+    else
+        fail "ED58. tool_response:{exit_code:999} → expected pending (large exit non-zero), got: $STATUS"
+    fi
+
+    # ED60: FOO=1 BAR=2 pytest tests/ + write_tests=complete + exit=0 → run_tests: pending
+    # stripEnvPrefix strips ALL leading VAR=val assignments (not just one);
+    # effective cmd0 resolves past both FOO=1 and BAR=2 to "pytest" → detected → active demotion.
+    SID="ed60-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook "FOO=1 BAR=2 pytest tests/" 0 "$SID"
+    STATUS=$(get_run_tests_status "$SID")
+    if [ "$STATUS" = "pending" ]; then
+        pass "ED60. FOO=1 BAR=2 pytest tests/ + exit=0 → run_tests=pending (multi-env-prefix stripped → pytest detected → active demotion)"
+    else
+        fail "ED60. FOO=1 BAR=2 pytest tests/ + exit=0 → expected pending (multi-env-prefix → active demotion), got: $STATUS"
+    fi
+
+    # ED61: git -C (trailing value-option overshoot) + exit=0 → state absent
+    # resolveGitSubcommand: -C is value-taking; with no following token i+=2 overshoots
+    # argv length, loop exits, returns "". "" is not a non-exec subcommand and the
+    # command has no test path/runner, so NOT detected → state absent (no throw, no misclassification).
+    SID="ed61-$$-$RANDOM"
+    run_run_tests_hook "git -C" 0 "$SID"
     if check_state_file_absent "$SID"; then
-        pass "ED26. case \"\$f\" in tests/*) head -n 1 \"\$f\" ;; esac + exit=0 → state absent (case/esac: head is read-only)"
+        pass "ED61. git -C (trailing value-option, no path/subcommand) + exit=0 → state absent (overshoot boundary: safe)"
     else
         STATUS=$(get_run_tests_status "$SID")
-        fail "ED26. case \"\$f\" in tests/*) head -n 1 \"\$f\" ;; esac + exit=0 → expected absent, got run_tests=$STATUS"
+        fail "ED61. git -C + exit=0 → expected absent (overshoot boundary), got run_tests=$STATUS"
     fi
 
-    # ED27: case "$f" in *) pytest tests/ ;; esac + exit=0 → run_tests: pending
-    # (pytest in case body IS a test command)
-    SID="ed27-$$-$RANDOM"
+    # ---------------------------------------------------------------------------
+    # === C3: idempotency — two runs, same session, stable state ===
+    # Invoking the hook twice with the same detected test command and no contract
+    # must produce run_tests=pending after both runs with no stale/accumulated
+    # metadata. The second run must yield the same status as the first.
+    # ---------------------------------------------------------------------------
+
+    # ED62: invoke hook TWICE with the same session id and detected test command
+    # (pytest tests/, no run-all.sh contract) → run_tests=pending after both runs,
+    # stable state (second run produces identical status, no accumulated metadata).
+    SID="ed62-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'case "$f" in *) pytest tests/ ;; esac' 0 "$SID"
+    run_run_tests_hook "pytest tests/" 0 "$SID" >/dev/null
+    STATUS_AFTER_1=$(get_run_tests_status "$SID")
+    run_run_tests_hook "pytest tests/" 0 "$SID" >/dev/null
+    STATUS_AFTER_2=$(get_run_tests_status "$SID")
+    if [ "$STATUS_AFTER_1" = "pending" ] && [ "$STATUS_AFTER_2" = "pending" ]; then
+        pass "ED62. pytest tests/ x2 (same SID, no contract) → run_tests=pending after both runs (idempotent: stable state)"
+    else
+        fail "ED62. pytest tests/ x2 (same SID) → expected pending/pending, got after-run1=$STATUS_AFTER_1 after-run2=$STATUS_AFTER_2"
+    fi
+
+    # ---------------------------------------------------------------------------
+    # === Control-structure then/else body-keyword penetration cases ===
+    # ---------------------------------------------------------------------------
+
+    # ED63: if true; then head tests/foo.sh; fi + exit=0 → state absent
+    # then body-keyword penetrated → effective cmd0 is `head` (read-only) → not detected → no state write.
+    SID="ed63-$$-$RANDOM"
+    run_run_tests_hook 'if true; then head tests/foo.sh; fi' 0 "$SID"
+    if check_state_file_absent "$SID"; then
+        pass "ED63. if true; then head tests/foo.sh; fi + exit=0 → state absent (then body-keyword penetration + read-only head → not detected)"
+    else
+        STATUS=$(get_run_tests_status "$SID")
+        fail "ED63. if true; then head tests/foo.sh; fi + exit=0 → expected absent, got run_tests=$STATUS"
+    fi
+
+    # ED64: if true; then pytest tests/; fi + exit=0 → run_tests: pending
+    # then body-keyword penetrated → effective cmd0 is `pytest` → runner detected → active demotion.
+    SID="ed64-$$-$RANDOM"
+    seed_write_tests "$SID" "complete"
+    run_run_tests_hook 'if true; then pytest tests/; fi' 0 "$SID"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED27. case \"\$f\" in *) pytest tests/ ;; esac + exit=0 → run_tests=pending (case body: pytest detected)"
+        pass "ED64. if true; then pytest tests/; fi + exit=0 → run_tests=pending (then body-keyword penetration + pytest runner → active demotion)"
     else
-        fail "ED27. case \"\$f\" in *) pytest tests/ ;; esac + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED64. if true; then pytest tests/; fi + exit=0 → expected pending, got run_tests=$STATUS"
     fi
 
-    # ED28: pytest "unterminated + exit=0 → state absent (parseFailure: unclosed quote)
-    # No seed: parseFailure makes isTestCommand return false, so the hook never
-    # touches state. Seeding via markStep would default run_tests=pending and
-    # defeat check_state_file_absent (matches sibling state-absent cases ED16/ED26).
-    SID="ed28-$$-$RANDOM"
-    run_run_tests_hook 'pytest "unterminated' 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED28. pytest \"unterminated + exit=0 → state absent (parseFailure: unclosed quote)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED28. pytest \"unterminated + exit=0 → expected absent (parseFailure), got run_tests=$STATUS"
-    fi
-
-    # ED29: seeded run_tests=complete + unclosed-quote test-looking command → complete preserved
-    # (parseFailure → isTestCommand=false → hook early-returns before reading/writing state;
-    #  proves a malformed test-looking command does NOT demote an existing complete. Sibling of
-    #  ED28: ED28 proves the fresh-state no-op, ED29 proves the no-demotion property.)
-    SID="ed29-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
-    seed_run_tests "$SID" "complete"
-    run_run_tests_hook 'pytest "tests/' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "complete" ]; then
-        pass "ED29. pytest \"tests/ (unclosed quote) + seeded run_tests=complete → complete preserved (parseFailure early-return, no demotion)"
-    else
-        fail "ED29. pytest \"tests/ (unclosed quote) + seeded run_tests=complete → expected complete (no demotion), got run_tests=$STATUS"
-    fi
-
-    # ED30: if false; then :; else cat tests/foo.sh; fi + exit=0 → state absent
-    # (else body keyword stripped: effective cmd0=cat is read-only)
-    SID="ed30-$$-$RANDOM"
-    run_run_tests_hook 'if false; then :; else cat tests/foo.sh; fi' 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED30. if false; then :; else cat tests/foo.sh; fi + exit=0 → state absent (else body keyword: cat is read-only)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED30. if false; then :; else cat tests/foo.sh; fi + exit=0 → expected absent, got run_tests=$STATUS"
-    fi
-
-    # ED31: if false; then :; else pytest tests/; fi + exit=0 → run_tests: pending
-    # (else body keyword stripped: effective cmd0=pytest is a test runner → detected)
-    SID="ed31-$$-$RANDOM"
+    # ED65: if false; then :; else pytest tests/; fi + exit=0 → run_tests: pending
+    # else body-keyword penetrated → effective cmd0 is `pytest` → runner detected → active demotion.
+    SID="ed65-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
     run_run_tests_hook 'if false; then :; else pytest tests/; fi' 0 "$SID"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED31. if false; then :; else pytest tests/; fi + exit=0 → run_tests=pending (else body: pytest detected)"
+        pass "ED65. if false; then :; else pytest tests/; fi + exit=0 → run_tests=pending (else body-keyword penetration + pytest → active demotion)"
     else
-        fail "ED31. if false; then :; else pytest tests/; fi + exit=0 → expected pending, got run_tests=$STATUS"
+        fail "ED65. if false; then :; else pytest tests/; fi + exit=0 → expected pending, got run_tests=$STATUS"
     fi
 
-    # ED32: select f in tests/*.sh; do head -n 1 "$f"; done + exit=0 → state absent
-    # (select is a non-exec header → null; do head is read-only)
-    SID="ed32-$$-$RANDOM"
-    run_run_tests_hook 'select f in tests/*.sh; do head -n 1 "$f"; done' 0 "$SID"
+    # ED66: pytest "unterminated + exit=0 → state absent
+    # Unbalanced double-quote causes parse() to set parseFailure=true → isTestCommand returns false
+    # → hook no-ops cleanly (fail-closed contract).
+    SID="ed66-$$-$RANDOM"
+    run_run_tests_hook 'pytest "unterminated' 0 "$SID"
     if check_state_file_absent "$SID"; then
-        pass "ED32. select f in tests/*.sh; do head -n 1 \"\$f\"; done + exit=0 → state absent (select non-exec header + read-only head)"
+        pass "ED66. pytest \"unterminated + exit=0 → state absent (parseFailure fail-closed: hook no-ops on malformed command)"
     else
         STATUS=$(get_run_tests_status "$SID")
-        fail "ED32. select f in tests/*.sh; do head -n 1 \"\$f\"; done + exit=0 → expected absent, got run_tests=$STATUS"
+        fail "ED66. pytest \"unterminated + exit=0 → expected absent (parseFailure fail-closed), got run_tests=$STATUS"
     fi
 
-    # ---------------------------------------------------------------------------
-    # === C4: special-character / quoted tests/ path coverage ===
-    # Quoted paths containing spaces, parens, brackets, and backslashes must be
-    # classified correctly for BOTH the read-only exclusion and runner-detection
-    # branches. Behavior below verified against the real hook.
-    # ---------------------------------------------------------------------------
-
-    # ED33: cat "tests/a b.sh" + exit=0 → state absent (read-only, quoted space path)
-    SID="ed33-$$-$RANDOM"
-    run_run_tests_hook 'cat "tests/a b.sh"' 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED33. cat \"tests/a b.sh\" + exit=0 → state absent (read-only, quoted space path)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED33. cat \"tests/a b.sh\" + exit=0 → expected absent (read-only quoted space), got run_tests=$STATUS"
-    fi
-
-    # ED34: pytest "tests/a b.py" + exit=0 → run_tests: pending (runner, quoted space path)
-    SID="ed34-$$-$RANDOM"
+    # ED67: git archive tests/ + write_tests=complete + exit=0 + no RUN_CONTRACT → run_tests: pending
+    # `archive` is NOT in GIT_NON_EXEC_SUBCMDS → resolveGitSubcommand returns "archive" (executable
+    # git subcommand); isTestCommand sees a test-path reference in an executable command → detected.
+    # With write_tests seeded complete and no run-all.sh contract, the hook actively demotes
+    # run_tests to pending (C′ demotion path).
+    SID="ed67-$$-$RANDOM"
     seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'pytest "tests/a b.py"' 0 "$SID"
+    run_run_tests_hook "git archive tests/" 0 "$SID"
     STATUS=$(get_run_tests_status "$SID")
     if [ "$STATUS" = "pending" ]; then
-        pass "ED34. pytest \"tests/a b.py\" + exit=0 → run_tests=pending (runner, quoted space path)"
+        pass "ED67. git archive tests/ + exit=0 + no contract → run_tests=pending (archive not in non-exec allowlist → executable subcommand → active demotion)"
     else
-        fail "ED34. pytest \"tests/a b.py\" + exit=0 → expected pending (runner quoted space), got run_tests=$STATUS"
-    fi
-
-    # ED35: bash "tests/a (b).sh" + exit=0 → run_tests: pending (runner + parens in quoted path)
-    SID="ed35-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'bash "tests/a (b).sh"' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED35. bash \"tests/a (b).sh\" + exit=0 → run_tests=pending (runner + parens in quoted path)"
-    else
-        fail "ED35. bash \"tests/a (b).sh\" + exit=0 → expected pending (runner quoted parens), got run_tests=$STATUS"
-    fi
-
-    # ED36: bash "tests/a [b].sh" + exit=0 → run_tests: pending (runner + brackets in quoted path)
-    SID="ed36-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
-    run_run_tests_hook 'bash "tests/a [b].sh"' 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED36. bash \"tests/a [b].sh\" + exit=0 → run_tests=pending (runner + brackets in quoted path)"
-    else
-        fail "ED36. bash \"tests/a [b].sh\" + exit=0 → expected pending (runner quoted brackets), got run_tests=$STATUS"
-    fi
-
-    # ED37: cat "tests/a\b.sh" + exit=0 → state absent (read-only, backslash in quoted path)
-    SID="ed37-$$-$RANDOM"
-    run_run_tests_hook 'cat "tests/a\b.sh"' 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED37. cat \"tests/a\\b.sh\" + exit=0 → state absent (read-only, backslash in quoted path)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED37. cat \"tests/a\\b.sh\" + exit=0 → expected absent (read-only quoted backslash), got run_tests=$STATUS"
-    fi
-
-    # ---------------------------------------------------------------------------
-    # === C3: long-string edge coverage ===
-    # Very long commands must classify the same as their short equivalents:
-    # length does not affect read-only exclusion or runner detection.
-    # Behavior below verified against the real hook.
-    # ---------------------------------------------------------------------------
-
-    # ED38: very long read-only command referencing tests/ → state absent
-    # (grep with a ~500-char pattern; whole command is read-only, tests/ is only a grep target)
-    SID="ed38-$$-$RANDOM"
-    LONG_PATTERN=$(printf 'x%.0s' {1..500})
-    run_run_tests_hook "grep $LONG_PATTERN tests/foo.sh" 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED38. grep <500-char-pattern> tests/foo.sh + exit=0 → state absent (long read-only command)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED38. grep <500-char-pattern> tests/foo.sh + exit=0 → expected absent (long read-only), got run_tests=$STATUS"
-    fi
-
-    # ED39: very long valid runner command → run_tests: pending
-    # (pytest tests/ followed by many long flags; still a real test runner)
-    SID="ed39-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
-    LONG_FLAGS=""
-    for i in $(seq 1 60); do LONG_FLAGS="$LONG_FLAGS --flag-number-$i=valuevaluevalue"; done
-    run_run_tests_hook "pytest tests/$LONG_FLAGS" 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED39. pytest tests/ <many long flags> + exit=0 → run_tests=pending (long valid runner command)"
-    else
-        fail "ED39. pytest tests/ <many long flags> + exit=0 → expected pending (long runner), got run_tests=$STATUS"
-    fi
-
-    # ---------------------------------------------------------------------------
-    # === C2: multiline command coverage ===
-    # Real Bash tool commands can span multiple lines. run_run_tests_hook()'s
-    # manual escaping does NOT encode literal newlines (invalid JSON), so these
-    # cases use run_run_tests_hook_multiline() which builds the payload via
-    # node JSON.stringify. Behavior below verified against the real hook.
-    # ---------------------------------------------------------------------------
-
-    # ED40: cd repo<newline>pytest tests/ + exit=0 → run_tests: pending
-    # (multiline positive: 2nd line `pytest tests/` is a bare runner → active demotion)
-    SID="ed40-$$-$RANDOM"
-    seed_write_tests "$SID" "complete"
-    run_run_tests_hook_multiline "$(printf 'cd repo\npytest tests/')" 0 "$SID"
-    STATUS=$(get_run_tests_status "$SID")
-    if [ "$STATUS" = "pending" ]; then
-        pass "ED40. cd repo <newline> pytest tests/ + exit=0 → run_tests=pending (multiline positive: pytest detected)"
-    else
-        fail "ED40. cd repo <newline> pytest tests/ + exit=0 → expected pending (multiline runner), got run_tests=$STATUS"
-    fi
-
-    # ED41: for f in tests/*.sh<newline>do<newline>head -n 1 "$f"<newline>done + exit=0 → state absent
-    # (multiline negative: loop over tests/ but body cmd `head` is read-only)
-    SID="ed41-$$-$RANDOM"
-    run_run_tests_hook_multiline "$(printf 'for f in tests/*.sh\ndo\nhead -n 1 "$f"\ndone')" 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED41. for f in tests/*.sh <newline> do <newline> head ... <newline> done + exit=0 → state absent (multiline negative: head is read-only)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED41. multiline for-loop with read-only body + exit=0 → expected absent, got run_tests=$STATUS"
-    fi
-
-    # ED42: for f in tests/*.sh<newline>do<newline>pytest tests/<newline>done + exit=0 → state absent
-    # Characterization of a KNOWN newline limitation. parse() does NOT split on
-    # newlines, so the whole multiline string is ONE segment with cmd0=`for` (a
-    # CONTROL_NONEXEC_HEADER → resolveEffectiveSegment returns null → skipped).
-    # The `pytest` in the loop body is therefore NOT detected: multiline loop body
-    # after for-header is NOT penetrated — accepted newline limitation
-    # (false-negative only, does not reintroduce #1330 false-positives); see
-    # detail.md risk #3. Verified against the real hook: state ABSENT (no seed, so
-    # the hook never touches state — matches sibling negative case ED41).
-    SID="ed42-$$-$RANDOM"
-    run_run_tests_hook_multiline "$(printf 'for f in tests/*.sh\ndo\npytest tests/\ndone')" 0 "$SID"
-    if check_state_file_absent "$SID"; then
-        pass "ED42. for f in tests/*.sh <newline> do <newline> pytest tests/ <newline> done + exit=0 → state absent (multiline loop-body pytest NOT penetrated: accepted newline limitation)"
-    else
-        STATUS=$(get_run_tests_status "$SID")
-        fail "ED42. multiline for-loop with pytest body + exit=0 → expected absent (newline limitation), got run_tests=$STATUS"
+        fail "ED67. git archive tests/ + exit=0 + no contract → expected pending (archive executable subcommand → active demotion), got: $STATUS"
     fi
 }

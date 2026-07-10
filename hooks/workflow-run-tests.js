@@ -11,7 +11,8 @@
 //   any other test command / no contract   → run_tests: pending (active demotion)
 //
 // The run_tests sentinel (WORKFLOW_MARK_STEP_run_tests_complete) is the other
-// completion authority. Sentinel echo commands and read-only commands are excluded.
+// completion authority. Read-only commands are excluded (echo is a member, so
+// workflow sentinel echoes are excluded via that rule).
 
 const fs = require("fs");
 const { resolveSessionId, markStep, readState } = require("./lib/workflow-state");
@@ -42,12 +43,37 @@ const READ_ONLY_CMDS = new Set([
   "echo", "printf", "which", "type", "pwd"
 ]);
 
-// Git subcommands that do not execute tests.
+// Git subcommands that do not execute tests. `grep` is included: `git grep
+// tests/foo` is a read-only search that merely references a test path and must
+// not demote run_tests (the same read-only-mention class this hook guards).
 const GIT_NON_EXEC_SUBCMDS = new Set([
   "diff", "log", "show", "status", "blame", "ls-files", "ls-tree",
   "cat-file", "rev-parse", "fetch", "remote", "add", "commit", "push",
-  "merge", "rebase", "pull", "stash", "tag"
+  "merge", "rebase", "pull", "stash", "tag", "grep"
 ]);
+
+// Git global options that consume the following token as their value
+// (e.g. `git -C <path> ...`, `git -c <name>=<value> ...`).
+const GIT_VALUE_OPTS = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--namespace",
+  "--exec-path", "--super-prefix"
+]);
+
+// Resolve the git subcommand, skipping any leading global options
+// (e.g. `git -C path --no-pager diff` -> "diff"). Value-taking options
+// consume their following token; `--opt=value` and bare flags are single tokens.
+function resolveGitSubcommand(argv) {
+  let i = 0;
+  while (i < argv.length) {
+    const tok = argv[i];
+    if (tok.startsWith("-")) {
+      i += GIT_VALUE_OPTS.has(tok) ? 2 : 1;
+      continue;
+    }
+    return tok;
+  }
+  return "";
+}
 
 function isTestCommand(command) {
   const trimmed = command.trim();
@@ -61,22 +87,20 @@ function isTestCommand(command) {
     if (effective === null) continue;
     if (effective.cmd0 === "") continue;
 
-    // Sentinel echo exclusion — check original segment raw text
-    if (seg.rawText.startsWith('echo "<<') || seg.rawText.startsWith("echo '<<'")) continue;
-
-    // Read-only command exclusion — check resolved effective cmd0
+    // Read-only command exclusion — check resolved effective cmd0. `echo` is a
+    // member, so workflow sentinel echoes (`echo "<<...`) are excluded here too;
+    // this also covers env-prefixed forms (`FOO=1 echo "<<...`) that a raw-text
+    // prefix match would miss, since cmd0 is resolved past the assignment.
     if (READ_ONLY_CMDS.has(effective.cmd0)) continue;
 
-    // Git non-exec command exclusion
+    // Git non-exec command exclusion — resolve the subcommand past any
+    // leading global options (-C <path>, -c <k=v>, --no-pager, --git-dir=…).
     if (effective.cmd0 === "git") {
-      const gitSub = effective.argv.length > 0 ? effective.argv[0] : "";
-      // Handle -C <path> prefix: git -C /some/path <subcommand>
-      if (gitSub === "-C" && effective.argv.length >= 3) {
-        const realSub = effective.argv[2];
-        if (GIT_NON_EXEC_SUBCMDS.has(realSub)) continue;
-      } else if (GIT_NON_EXEC_SUBCMDS.has(gitSub)) {
-        continue;
-      }
+      // Empty subcommand (only global options, e.g. `git -C tests/` or bare
+      // `git`) executes nothing — treat as non-exec so a bare test-path
+      // reference in the global-option value cannot demote run_tests.
+      const gitSub = resolveGitSubcommand(effective.argv);
+      if (gitSub === "" || GIT_NON_EXEC_SUBCMDS.has(gitSub)) continue;
     }
 
     // Test detection — check effective segment (cmd0 + argv joined)
@@ -140,7 +164,8 @@ try {
 
 if (!input || input.tool_name !== "Bash") done();
 
-const command = ((input.tool_input && input.tool_input.command) || "").trim();
+const rawCommand = input.tool_input && input.tool_input.command;
+const command = (typeof rawCommand === "string" ? rawCommand : "").trim();
 if (!command) done();
 
 if (!isTestCommand(command)) done();

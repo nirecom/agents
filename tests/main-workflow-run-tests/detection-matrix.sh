@@ -91,6 +91,9 @@ git-rebase     | git rebase tests/foo.sh     | absent
 git-pull       | git pull tests/foo.sh       | absent
 git-stash      | git stash tests/foo.sh      | absent
 git-tag        | git tag tests/foo.sh        | absent
+git-gitdir-sep   | git --git-dir .git diff tests/foo.sh | absent
+git-C-nosub      | git -C tests/                       | absent
+git-worktree-nosub | git --work-tree tests/             | absent
 # --- Test-runner branches (each regex branch; runner detected -> pending) ---
 run-pytest        | pytest tests/                 | pending
 run-jest          | jest tests/                   | pending
@@ -103,7 +106,28 @@ run-bash          | bash tests/foo.sh             | pending
 run-sh            | sh tests/foo.sh               | pending
 run-node          | node tests/foo.js             | pending
 run-pwsh          | pwsh tests/foo.ps1            | pending
-run-powershell    | powershell tests/foo.ps1     | pending
-run-tests-ps1     | x.Tests.ps1                    | pending
+run-powershell     | powershell tests/foo.ps1     | pending
+run-powershell-exe | powershell.exe tests/foo.ps1 | pending
+run-tests-ps1      | x.Tests.ps1                  | pending
+# --- C1: singular test/ directory (regex tests?/ covers both singular and plural) ---
+c1-cat-test        | cat test/foo.sh                | absent
+c1-bash-test       | bash test/foo.sh               | pending
+c1-pytest-test     | pytest test/                   | pending
+# --- C2: word-boundary false-positive (tests substring inside another word) ---
+c2-node-contest    | node script.js contest/foo.sh  | absent
+c2-cat-contest     | cat src/contest/foo.sh         | absent
+# --- C-subshell: subshell parens (parser strips leading `(`) ---
+subshell-cat    | (cat tests/foo.sh)  | absent
+subshell-pytest | (pytest tests/)     | pending
+subshell-bash   | (bash tests/foo.sh) | pending
+# --- C4: git grep (now in GIT_NON_EXEC_SUBCMDS) ---
+c4-git-grep-path   | git grep tests/foo             | absent
+c4-git-grep-runner | git grep pytest tests/         | absent
+# --- C5: inline --opt=value git global options (single token; next token NOT consumed) ---
+git-inline-worktree  | git --work-tree=/x diff tests/foo.sh   | absent
+git-inline-namespace | git --namespace=ns log tests/           | absent
+git-inline-execpath  | git --exec-path=/p status tests/        | absent
+git-inline-superpfx  | git --super-prefix=pre/ diff tests/     | absent
+git-archive-tests    | git archive tests/                      | pending
 TABLE
 }
