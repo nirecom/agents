@@ -44,9 +44,9 @@ function collectAuditCandidates(transcript, state) {
     return { shouldArm: true, cause: `stage-boundary:CONFIRM_${stageMatch[1]}` };
   }
 
-  // Trigger (b): cumulative severity threshold.
+  // (b) On Stop, arm for error only — warning is delegated to the pre-merge audit arm.
   const cumSev = state && state.alert && state.alert.cumulative_severity;
-  if (cumSev && SEVERITY_RANK[cumSev] >= SEVERITY_RANK[AUDIT_SEVERITY_THRESHOLD]) {
+  if (cumSev && SEVERITY_RANK[cumSev] > SEVERITY_RANK["warning"]) {
     return { shouldArm: true, cause: `severity-threshold:${cumSev}` };
   }
 
