@@ -10,6 +10,19 @@
 
 set -euo pipefail
 
+# Parse --generate flag.
+GENERATE_MODE=0
+for arg in "$@"; do
+  if [[ "$arg" == "--generate" ]]; then
+    GENERATE_MODE=1
+  fi
+done
+
+# --generate with codex unavailable: emit empty stdout, exit 0 immediately (before any node call).
+if [[ "$GENERATE_MODE" -eq 1 ]] && ! command -v codex >/dev/null 2>&1; then
+  exit 0
+fi
+
 if [[ -z "${AGENTS_CONFIG_DIR:-}" ]]; then
   echo "ERROR: AGENTS_CONFIG_DIR not set" >&2
   exit 1
@@ -130,4 +143,34 @@ fi
 if [[ $rc -ne 0 ]]; then
   exit "$rc"
 fi
+
+# --generate mode: emit JSONL findings to stdout from codex output.
+if [[ "$GENERATE_MODE" -eq 1 ]]; then
+  # Parse codex output markers and emit JSONL findings with reporter=supervisor.
+  node -e '
+"use strict";
+const fs = require("fs");
+const text = fs.readFileSync("/dev/stdin", "utf8");
+// Extract content between codex output markers.
+const match = text.match(/<!--\s*begin-codex-output[^>]*-->([\s\S]*?)<!--\s*end-codex-output\s*-->/);
+if (!match) process.exit(0);
+const block = match[1];
+const lines = block.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+for (const line of lines) {
+  try {
+    const obj = JSON.parse(line);
+    if (obj && Array.isArray(obj.categories) && obj.severity && obj.detail) {
+      const finding = {
+        categories: obj.categories,
+        severity: obj.severity,
+        detail: obj.detail,
+        reporter: "supervisor",
+      };
+      process.stdout.write(JSON.stringify(finding) + "\n");
+    }
+  } catch (e) { /* skip malformed lines */ }
+}
+' || true
+fi
+
 exit 0

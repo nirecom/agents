@@ -27,12 +27,25 @@ function aggregateCategories(findings) {
  * @param {string} opts.supervisorPath
  * @param {string} opts.stateFilePath
  * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039, normalize newlines, and suppress footer
+ * @param {boolean} [opts.summaryOnly] - when true, return a 1-line summary instead of the full list
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
 
   const { sessionId, workflowSessionId, supervisorPath, stateFilePath } = opts;
   const forFinalReport = opts.forFinalReport === true;
+  const summaryOnly = opts.summaryOnly === true;
+
+  if (summaryOnly) {
+    const SRANK = { error: 2, warning: 1, notice: 0 };
+    let highestSev = "notice";
+    for (const f of findings) {
+      if (!f) continue;
+      const s = f.severity;
+      if (typeof s === "string" && (SRANK[s] !== undefined ? SRANK[s] : -1) > (SRANK[highestSev] !== undefined ? SRANK[highestSev] : -1)) highestSev = s;
+    }
+    return `[EM Supervisor] ${findings.length} finding(s), highest severity: ${highestSev}.`;
+  }
   const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
 
   const warningOrErrorFindings = findings.filter(f => f && (f.severity === "error" || f.severity === "warning"));

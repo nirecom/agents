@@ -40,19 +40,11 @@ if (require.main === module) {
 
   if (!input.tool_name || input.tool_name !== "Bash") done();
 
-  let resolveSessionId, isWorkflowOff, readState, writeAlertState;
-  let ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE;
-  let ENFORCE_WORKTREE_OFF_RE_DQ, ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE;
+  let resolveSessionId, isWorkflowOff, readState;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
-    ({ readState, writeAlertState } = require("./lib/supervisor-state-writer"));
-    ({
-      ENFORCE_WORKFLOW_OFF_RE_DQ,
-      ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
-      ENFORCE_WORKTREE_OFF_RE_DQ,
-      ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE,
-    } = require("./lib/sentinel-patterns"));
+    ({ readState } = require("./lib/supervisor-state-writer"));
   } catch (_) {
     done();
   }
@@ -81,33 +73,14 @@ if (require.main === module) {
     state = null;
   }
 
-  const command = (input.tool_input && input.tool_input.command) || "";
-  const isEscapeHatch =
-    ENFORCE_WORKFLOW_OFF_RE_DQ.test(command) ||
-    ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE.test(command) ||
-    ENFORCE_WORKTREE_OFF_RE_DQ.test(command) ||
-    ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE.test(command);
-
   const alert = (state && state.alert) || {};
-  const alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
   const cumSev = alert.cumulative_severity == null ? null : alert.cumulative_severity;
   const findings = Array.isArray(alert.findings) ? alert.findings : [];
   const findingCount = findings.length;
 
-  const layer1Findings = (state && state.layer1 && Array.isArray(state.layer1.findings)) ? state.layer1.findings : [];
-  const hasBlockingFinding = layer1Findings.some(f => f && f.severity && f.severity !== "notice");
-
-  if (isEscapeHatch && !alertArmedAt && hasBlockingFinding) {
-    try {
-      writeAlertState(sessionId, { alert_armed_at: new Date().toISOString() });
-    } catch (_) {}
-  }
-
   let advisory = null;
   if (cumSev === "error") {
     advisory = `[EM Supervisor] Alert mode has flagged a blocking concern (${findingCount} finding(s)). Review the next Stop turn — supervisor-guard.js will block.`;
-  } else if (cumSev === "warning" || cumSev === "notice") {
-    advisory = `[EM Supervisor] Alert mode advisory (${cumSev}): ${findingCount} finding(s) recorded. See agents/supervisor.md for context.`;
   }
 
   done(advisory);

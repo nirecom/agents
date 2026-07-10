@@ -3,22 +3,21 @@
 // Branch dispatch (evaluated in order):
 //   (1) stop_hook_active=true                    -> exit 0 immediately
 //   (audit-B) audit_phase=done                   -> surface audit verdict; if BLOCK -> exit 2; else fall through
-//   (C3) OFF proposal pre-detected               -> increment-retry; if frozen exit 0; else block, exit 2
 //   (2) cumulative_severity=error                -> increment-retry; if frozen exit 0; else block, exit 2
 //   (3) detectSentinelHang || alertArmedAt       -> increment-retry; if frozen exit 0; else block, exit 2
-//   (4) cumulative_severity warning/notice       -> additionalContext advisory, exit 0
+//   (4) legacy layer2 state + cumSev=warning/notice -> advisory additionalContext; exit 0 (new alert format skips)
 //   (audit-A) CONFIRM_* sentinel or cumSev>=error -> arm audit (write pending); block with agent invocation msg; exit 2
 //   (5) all-null                                 -> exit 0 silently
 //
 // AskUserQuestion gate (#903): when the last assistant turn ends with an
-// AskUserQuestion tool_use, branches (C3), (2), (3) are suppressed — the
+// AskUserQuestion tool_use, branches (2), (3) are suppressed — the
 // user is already mid-dialog and the guard must not block on top.
 // Fail-open on any error.
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
-const { detectSentinelHang, detectAskUserQuestionTurn, parseTranscriptForAudit, detectOffProposal } = require('./supervisor-guard/detect');
+const { detectSentinelHang, detectAskUserQuestionTurn, parseTranscriptForAudit } = require('./supervisor-guard/detect');
 
 function readStdin() {
   const chunks = [];
@@ -54,7 +53,7 @@ if (require.main === module) {
     ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState } = require("./lib/supervisor-state-writer"));
-    ({ formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason } = require("./lib/supervisor-report-format"));
+    ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
     ({ arbitrate } = require("./lib/supervisor-guard/arbitrate"));
     ({ formatIntegratedReason } = require("./lib/supervisor-guard/format-integrated"));
   } catch (_) {
@@ -150,7 +149,12 @@ if (require.main === module) {
   }
   // No early exit on missing state — C1 transcript scan (path 3) runs regardless.
 
-  const alert = (state && state.alert) || {};
+  const alertRaw = (state && state.alert) || {};
+  // Compat: old state format wrote to state.layer2; fall back when alert has no meaningful signal.
+  const alertHasData = alertRaw.cumulative_severity != null || alertRaw.alert_armed_at != null ||
+    (Array.isArray(alertRaw.findings) && alertRaw.findings.length > 0);
+  const alert = alertHasData ? alertRaw : ((state && state.layer2) || alertRaw);
+  const isLegacyLayer2State = !alertHasData && !!(state && state.layer2);
   let alertArmedAt = alert.alert_armed_at == null ? null : alert.alert_armed_at;
   const cumSev = alert.cumulative_severity == null ? null : alert.cumulative_severity;
   const findings = Array.isArray(alert.findings) ? alert.findings : [];
@@ -162,7 +166,6 @@ if (require.main === module) {
     : "agents/supervisor.md";
 
   const askUserQuestionTurn = detectAskUserQuestionTurn(input.transcript_path || "");
-  const offProposal = detectOffProposal(input.transcript_path || "");
   const hangDetected = detectSentinelHang(input.transcript_path || "");
 
   let stateFilePath = "";
@@ -249,22 +252,6 @@ if (require.main === module) {
     // decision === "allow" or unrecognized: fall through to existing branches.
   }
 
-  // (C3) OFF proposal pre-detection
-  if (!askUserQuestionTurn && offProposal.detected && alertPhase !== "done" && alertPhase !== "frozen") {
-    if (tryIncrementFrozen()) process.exit(0);
-    const causeLabel = offProposal.kind === "workflow-off"
-      ? "C3 workflow-off proposal"
-      : "C3 worktree-off proposal";
-    try {
-      writeAlertState(effectiveSupervisorStateSessionId, { alert_cause: causeLabel, alert_phase: "pending" });
-    } catch (_) {}
-    const reason = formatWorktreeOffProposalReason(sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
-    try {
-      process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
-    } catch (_) {}
-    process.exit(2);
-  }
-
   // (2)
   if (!askUserQuestionTurn && cumSev === "error" && alertPhase !== "done" && alertPhase !== "frozen") {
     if (tryIncrementFrozen()) process.exit(0);
@@ -297,13 +284,12 @@ if (require.main === module) {
     process.exit(0);
   }
 
-  // (4)
-  if (cumSev === "warning" || cumSev === "notice") {
-    const advisory =
-      `[EM Supervisor] alert mode advisory (${cumSev}): ${findings.length} finding(s). ` +
-      `Review agents/supervisor.md for the full checklist and resolution path.`;
+  // (4) advisory for cumSev=warning or cumSev=notice — legacy layer2 backward-compat only.
+  // New alert-format state (state.alert) skips this branch; only old layer2 state files trigger it.
+  if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && alertPhase !== "done" && alertPhase !== "frozen" && isLegacyLayer2State) {
+    const additionalContext = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
-      process.stdout.write(JSON.stringify({ additionalContext: advisory }) + "\n");
+      process.stdout.write(JSON.stringify({ additionalContext }) + "\n");
     } catch (_) {}
     process.exit(0);
   }
