@@ -375,3 +375,7 @@ Changes: **`ENFORCE_WORKTREE_EXCLUDE`** now accepts both glob patterns (`*`, `**
 ### FEATURE: PR #1355 (2026-07-10)
 Background: feat(#1180,#1278): add CODE_LANG commit-time language policy check + tests
 Changes: New `CODE_LANG` setting: set to `english` or `japanese` to block commits containing staged text files that violate the language policy. Leave unset or set to `any` to disable (default, noop). See `.env.example` for details.
+
+### FEATURE: PR #1359 (2026-07-11)
+Background: feat(#1113,#1058): add Issues→Class-members coverage gate + structural detail existence gate
+Changes: New structural gate blocks outline and detail plan assembly when `## Issues` has more entries than `## Class members`, or when a detail plan covers issues but contains no `## Steps` or `## Files to modify` section. The gate fires automatically — no configuration required — and re-prompts the planner once before halting.
