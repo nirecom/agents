@@ -229,6 +229,49 @@ if git diff --cached --name-only | grep -qx "$SETTINGS"; then
     fi
 fi
 
+# Language check: block commits with non-permitted language (CODE_LANG).
+# Off by default: skip entirely when CODE_LANG is unset/empty so the common case
+# spawns no node process and emits no output. classifyPolicy() in
+# hooks/lib/lang-config.js remains the SSOT for what each non-empty value means;
+# this guard only short-circuits the trivially-unset case.
+if [ -n "${CODE_LANG:-}" ]; then
+    _lang_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
+    if command -v cygpath >/dev/null 2>&1; then
+        _lang_cfg_dir="$(cygpath -m "$_lang_cfg_dir")"
+    fi
+    _lang_node_rc=0
+    AGENTS_CONFIG_DIR="$_lang_cfg_dir" \
+    node -e '
+      try {
+        var cfg = process.env.AGENTS_CONFIG_DIR;
+        var m = require(cfg + "/hooks/lib/lint-commit-lang");
+        var r = m.check();
+        if (r.violations && r.violations.length > 0) {
+          r.violations.slice(0, 10).forEach(function(v) {
+            process.stderr.write("  " + v.file + ":" + v.lineNumber + ": " + v.line.slice(0,80) + "\n");
+          });
+          process.exit(1);
+        }
+        if (r.hints && r.hints.length > 0) {
+          r.hints.slice(0, 5).forEach(function(h) {
+            process.stderr.write("  hint: " + h.file + ":" + h.lineNumber + ": " + h.line.slice(0,80) + "\n");
+          });
+        }
+      } catch (e) {
+        // Fail open: a missing module or runtime error must never block a commit;
+        // the language policy is advisory infrastructure, not a hard gate.
+        process.stderr.write("pre-commit: lint-commit-lang skipped (" + e.message + ")\n");
+        process.exit(0);
+      }
+    ' 2>&1 || _lang_node_rc=$?
+    if [ "$_lang_node_rc" != "0" ]; then
+        echo ""
+        echo "Commit blocked: CODE_LANG policy violation in staged files."
+        echo "Fix the issues above, or add 'lang-check: ignore' anywhere in the file to bypass."
+        exit 1
+    fi
+fi
+
 # Check execute permission on staged .sh files
 SH_NO_EXEC=""
 while IFS= read -r f; do
