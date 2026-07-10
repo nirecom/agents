@@ -68,6 +68,8 @@ On reviewer `APPROVED`: assemble `<PLANS_DIR>/<session-id>-detail.md` via the sh
 
 Run `"$AGENTS_CONFIG_DIR/skills/_shared/assemble-mandatory.sh" --source-kind outline "$PLANS_DIR/$SESSION_ID-outline.md" "$PLANS_DIR/$SESSION_ID-detail.md" "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Do NOT instruct planner to author the 3 mandatory sections — helper strips planner-authored copies. Helper exit non-zero → re-prompt planner once + re-assemble; second failure → halt. `--source-kind outline` hard-fails when outline.md lacks `## Class members`.
 
+After assemble-mandatory.sh succeeds, run `"$AGENTS_CONFIG_DIR/bin/check-issues-class-coverage" --mode detail "$PLANS_DIR/$SESSION_ID-detail.md"` (Bash). Exit non-zero → re-prompt planner once with the stderr output as revision feedback; second failure → halt. This gate fires before the CONFIRM_DETAIL check — blocks even on the OFF (auto-approval) path.
+
 Apply confirm-plan protocol (`skills/_shared/confirm-plan.md`) with `CONFIRM_DETAIL` flag and `<session-id>-detail.md` artifact.
 - **Revise** (skill-specific): ask what to change, send feedback to planner as new revision request, loop to MDP-5 (re-draft → re-review → re-confirm). Each revision consumes `revision_rounds`.
 - `OFF` path: emit `<<WORKFLOW_MARK_STEP_detail_complete>>` after one-paragraph summary (protocol Step 3). DO NOT present any path — `show-plan-link.js`'s `Plan file written:` line is the sole breadcrumb (protocol Step 2).
