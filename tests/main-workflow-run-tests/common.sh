@@ -16,6 +16,13 @@ run_with_timeout() {
     fi
 }
 
+# LAST_HOOK_STDOUT / LAST_HOOK_EXIT — populated by every hook-invocation helper
+# below so callers (notably check_state_file_absent) can assert the hook cleanly
+# no-op'd (exit 0 + valid JSON) rather than crashed. A crash also writes no state,
+# so the state-file check alone cannot distinguish "clean no-op" from "crashed".
+LAST_HOOK_STDOUT=""
+LAST_HOOK_EXIT=0
+
 # run_run_tests_hook <command> <exit_code> <session_id>
 # Builds the PostToolUse stdin JSON and pipes it to the hook.
 # Escapes command for JSON embedding.
@@ -25,7 +32,34 @@ run_run_tests_hook() {
     local esc=${command//\\/\\\\}
     esc=${esc//\"/\\\"}
     local json="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$esc\"},\"tool_response\":{\"exit_code\":$exit_code},\"session_id\":\"$sid\"}"
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null || true
+    # Capture stdout + exit code instead of swallowing with `|| true`. The `local`
+    # declaration is split from the assignment so `set -e` cannot abort here and
+    # $? reflects the hook's real exit (a `local x=$(...)` would mask the code).
+    LAST_HOOK_STDOUT=$(echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_EXIT=$?
+    printf '%s' "$LAST_HOOK_STDOUT"
+}
+
+# run_run_tests_hook_multiline <command> <exit_code> <session_id>
+# Newline-safe variant of run_run_tests_hook. Builds the stdin JSON via node
+# JSON.stringify so embedded literal newlines in <command> are encoded as \n
+# (the manual bash escaping in run_run_tests_hook only handles quotes/backslashes,
+# not newlines, and would emit invalid JSON for a multiline command).
+run_run_tests_hook_multiline() {
+    local command="$1" exit_code="$2" sid="$3"
+    local json
+    json=$(node -e "
+const payload = {
+  tool_name: 'Bash',
+  tool_input: { command: process.argv[1] },
+  tool_response: { exit_code: parseInt(process.argv[2], 10) },
+  session_id: process.argv[3]
+};
+process.stdout.write(JSON.stringify(payload));
+" "$command" "$exit_code" "$sid" 2>/dev/null)
+    LAST_HOOK_STDOUT=$(echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_EXIT=$?
+    printf '%s' "$LAST_HOOK_STDOUT"
 }
 
 # run_run_tests_hook_with_stdout <command> <exit_code> <session_id> <stdout_content>
@@ -46,7 +80,9 @@ const payload = {
 };
 process.stdout.write(JSON.stringify(payload));
 " "$command" "$exit_code" "$stdout_content" "$sid" 2>/dev/null)
-    echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null || true
+    LAST_HOOK_STDOUT=$(echo "$json" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$RUN_TESTS_HOOK" 2>/dev/null)
+    LAST_HOOK_EXIT=$?
+    printf '%s' "$LAST_HOOK_STDOUT"
 }
 
 # get_run_tests_status <session_id>
@@ -63,10 +99,23 @@ try {
 }
 
 # check_state_file_absent <session_id>
-# Returns 0 (true) if no state file exists for sid, or if run_tests key is absent.
+# Returns 0 (true) only when the hook cleanly no-op'd: exit 0 + valid-JSON stdout
+# AND no run_tests state was written. A crash / non-JSON stdout also writes no
+# state, so the state-file check alone would falsely pass; the exit+JSON guard
+# distinguishes a clean no-op from a crash. Must be called after a helper that
+# populated LAST_HOOK_EXIT / LAST_HOOK_STDOUT (all run_run_tests_hook* variants).
 check_state_file_absent() {
     local sid="$1"
     local state_file="$WORKFLOW_DIR/$sid.json"
+    # Hook must have exited 0 (a crash exits non-zero and also writes no state).
+    if [ "${LAST_HOOK_EXIT:-1}" -ne 0 ]; then
+        return 1
+    fi
+    # Hook stdout must be valid JSON (a clean no-op prints `{}`; empty is treated
+    # as `{}`). A crash may print a partial/garbage payload — reject it.
+    if ! printf '%s' "${LAST_HOOK_STDOUT:-}" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{JSON.parse(d||"{}")}catch(e){process.exit(1)}})' 2>/dev/null; then
+        return 1
+    fi
     if [ ! -f "$state_file" ]; then
         return 0  # absent — ok
     fi

@@ -40,7 +40,7 @@ function checkTruthy(label, actual) {
   else fail(label, "truthy", actual);
 }
 
-const { parse, isOsTempPath } = ir;
+const { parse, isOsTempPath, resolveEffectiveSegment } = ir;
 
 // --- parse: simple command ---
 {
@@ -232,6 +232,177 @@ for (const { label, input, want } of [
   { label: "C:\\\\tmp\\\\valid (real temp)",          input: "C:\\tmp\\valid",                  want: true  },
 ]) {
   check("isOsTempPath: " + label, isOsTempPath(input), want);
+}
+
+// --- resolveEffectiveSegment: table-driven tests ---
+const RESOLVE_CASES = [
+  // Non-executable headers: return null
+  { label: "for header → null",          input: "for",              argv: ["var", "in", "list"],          expected: null },
+  { label: "select header → null",       input: "select",           argv: ["var", "in", "list"],          expected: null },
+  { label: "case header → null",         input: "case",             argv: ["tests/foo.sh", "in", "*"],    expected: null },
+
+  // Terminators: return null
+  { label: "done → null",                input: "done",             argv: [],                              expected: null },
+  { label: "fi → null",                  input: "fi",               argv: [],                              expected: null },
+  { label: "esac → null",               input: "esac",             argv: [],                              expected: null },
+
+  // Condition headers: strip keyword, argv is effective command
+  { label: "if → argv[0] is cmd0",       input: "if",              argv: ["pytest", "tests/"],           expected: { cmd0: "pytest", argv: ["tests/"] } },
+  { label: "elif → argv[0] is cmd0",     input: "elif",            argv: ["pytest", "tests/"],           expected: { cmd0: "pytest", argv: ["tests/"] } },
+  { label: "while → argv[0] is cmd0",    input: "while",           argv: ["head", "tests/"],             expected: { cmd0: "head", argv: ["tests/"] } },
+  { label: "until → argv[0] is cmd0",    input: "until",           argv: ["pytest", "tests/"],           expected: { cmd0: "pytest", argv: ["tests/"] } },
+
+  // Body keywords: strip keyword, argv becomes effective command
+  { label: "do → argv[0] is cmd0",       input: "do",              argv: ["head", "-n", "10"],           expected: { cmd0: "head", argv: ["-n", "10"] } },
+  { label: "then → argv[0] is cmd0",     input: "then",            argv: ["pytest", "tests/"],           expected: { cmd0: "pytest", argv: ["tests/"] } },
+  { label: "else → argv[0] is cmd0",     input: "else",            argv: ["cat", "tests/x.sh"],          expected: { cmd0: "cat", argv: ["tests/x.sh"] } },
+
+  // Body/condition keyword with no argv: return null
+  { label: "do alone → null",            input: "do",              argv: [],                              expected: null },
+  { label: "then alone → null",          input: "then",            argv: [],                              expected: null },
+  { label: "if alone → null",            input: "if",              argv: [],                              expected: null },
+
+  // Normal commands: pass through unchanged
+  { label: "echo → unchanged",           input: "echo",            argv: ["hello"],                       expected: { cmd0: "echo", argv: ["hello"] } },
+  { label: "pytest → unchanged",         input: "pytest",          argv: ["tests/"],                      expected: { cmd0: "pytest", argv: ["tests/"] } },
+  { label: "ls → unchanged",             input: "ls",              argv: ["-la"],                         expected: { cmd0: "ls", argv: ["-la"] } },
+
+  // Keyword look-alikes (C2): control-structure stripping is EXACT Set membership
+  // (.has(cmd0)), so capitalized / suffixed / hyphenated look-alikes must NOT be
+  // stripped — they are ordinary commands and pass through unchanged.
+  // Capitalized variants (Set is case-sensitive):
+  { label: "For (capitalized) → unchanged",   input: "For",         argv: ["f", "in", "tests/*"],          expected: { cmd0: "For", argv: ["f", "in", "tests/*"] } },
+  { label: "DO (uppercase) → unchanged",      input: "DO",          argv: ["head", "tests/x.sh"],          expected: { cmd0: "DO", argv: ["head", "tests/x.sh"] } },
+  { label: "Then (capitalized) → unchanged",  input: "Then",        argv: ["pytest", "tests/"],            expected: { cmd0: "Then", argv: ["pytest", "tests/"] } },
+  { label: "WHILE (uppercase) → unchanged",   input: "WHILE",       argv: ["head", "tests/"],              expected: { cmd0: "WHILE", argv: ["head", "tests/"] } },
+  // Suffixed / hyphenated variants (not exact keyword tokens):
+  { label: "thenx (suffixed) → unchanged",    input: "thenx",       argv: ["tests/foo.sh"],                expected: { cmd0: "thenx", argv: ["tests/foo.sh"] } },
+  { label: "if-test (hyphenated) → unchanged", input: "if-test",    argv: ["tests/foo.sh"],                expected: { cmd0: "if-test", argv: ["tests/foo.sh"] } },
+  { label: "done2 (suffixed) → unchanged",    input: "done2",       argv: ["tests/foo.sh"],                expected: { cmd0: "done2", argv: ["tests/foo.sh"] } },
+  { label: "casex (suffixed) → unchanged",    input: "casex",       argv: ["tests/foo.sh"],                expected: { cmd0: "casex", argv: ["tests/foo.sh"] } },
+  { label: "fi_ (suffixed) → unchanged",      input: "fi_",         argv: ["tests/foo.sh"],                expected: { cmd0: "fi_", argv: ["tests/foo.sh"] } },
+  { label: "selectx (suffixed) → unchanged",  input: "selectx",     argv: ["tests/foo.sh"],                expected: { cmd0: "selectx", argv: ["tests/foo.sh"] } },
+
+  // Env-prefix stripping: VAR=val prefix stripped
+  { label: "env-prefix head → cmd0=head", input: "FOO=1",         argv: ["head", "tests/"],              expected: { cmd0: "head", argv: ["tests/"] } },
+  { label: "env-prefix pytest → cmd0=pytest", input: "FOO=1",    argv: ["pytest", "tests/"],            expected: { cmd0: "pytest", argv: ["tests/"] } },
+
+  // Multi-chained env-prefix stripping: ALL leading VAR=val assignments stripped
+  { label: "multi-env-prefix (FOO=1 BAR=2 pytest) → cmd0=pytest", input: "FOO=1", argv: ["BAR=2", "pytest", "tests/"], expected: { cmd0: "pytest", argv: ["tests/"] } },
+
+  // All-tokens-are-assignments: return null
+  { label: "all-assignments → null",     input: "FOO=1",           argv: ["BAR=2"],                       expected: null },
+
+  // Empty cmd0: return null
+  { label: "empty cmd0 → null",          input: "",                argv: [],                              expected: null },
+];
+
+for (const { label, input, argv, expected } of RESOLVE_CASES) {
+  const segmentIR = { cmd0: input, argv };
+  const result = resolveEffectiveSegment(segmentIR);
+  if (expected === null) {
+    if (result === null) pass("resolveEffectiveSegment: " + label);
+    else fail("resolveEffectiveSegment: " + label + " — expected null, got " + JSON.stringify(result), null, result);
+  } else {
+    if (result && result.cmd0 === expected.cmd0 && JSON.stringify(result.argv) === JSON.stringify(expected.argv))
+      pass("resolveEffectiveSegment: " + label);
+    else
+      fail("resolveEffectiveSegment: " + label, JSON.stringify(expected), JSON.stringify(result));
+  }
+}
+
+// --- resolveEffectiveSegment: case/esac edge cases ---
+{
+  // case header with argv (pattern matching): return null
+  const seg1 = { cmd0: "case", argv: ["\"$f\"", "in", "tests/*"] };
+  const r1 = resolveEffectiveSegment(seg1);
+  if (r1 === null) pass("resolveEffectiveSegment: case header → null");
+  else fail("resolveEffectiveSegment: case header", "null", r1);
+
+  // esac terminator: return null
+  const seg2 = { cmd0: "esac", argv: [] };
+  const r2 = resolveEffectiveSegment(seg2);
+  if (r2 === null) pass("resolveEffectiveSegment: esac terminator → null");
+  else fail("resolveEffectiveSegment: esac terminator", "null", r2);
+}
+
+// --- resolveEffectiveSegment: parse-integrated tests ---
+// Verify that parse() + resolveEffectiveSegment work together on real command strings.
+const INTEGRATION_CASES = [
+  { label: "for...do head (read-only)", cmd: "for f in tests/*.sh; do head -n 10 \"$f\"; done",
+    expectedSegments: 3, effectiveCmd0s: [null, "head", null] },
+  { label: "if pytest (condition)", cmd: "if pytest tests/; then : ; fi",
+    expectedSegments: 3, effectiveCmd0s: ["pytest", ":", null] },
+  { label: "FOO=1 head (env-prefix)", cmd: "FOO=1 head tests/foo.sh",
+    expectedSegments: 1, effectiveCmd0s: ["head"] },
+  { label: "do FOO=1 head (body+env)", cmd: "do FOO=1 head tests/foo.sh",
+    expectedSegments: 1, effectiveCmd0s: ["head"] },
+  { label: "while head (cond+read-only)", cmd: "while head tests/; do : ; done",
+    expectedSegments: 3, effectiveCmd0s: ["head", ":", null] },
+  { label: "until pytest (cond+runner)", cmd: "until pytest tests/; do : ; done",
+    expectedSegments: 3, effectiveCmd0s: ["pytest", ":", null] },
+  { label: "elif pytest (elif+runner)", cmd: "elif pytest tests/; then : ; fi",
+    expectedSegments: 3, effectiveCmd0s: ["pytest", ":", null] },
+  { label: "case head (case+read-only)", cmd: "case \"$f\" in tests/*) head -n 1 \"$f\" ;; esac",
+    expectedSegments: 3, effectiveCmd0s: [null, "head", null] },
+];
+for (const { label, cmd, expectedSegments, effectiveCmd0s } of INTEGRATION_CASES) {
+  const ir = parse(cmd);
+  if (ir.segments.length === expectedSegments) pass("parse+resolve " + label + ": segment count");
+  else fail("parse+resolve " + label + ": segment count", expectedSegments, ir.segments.length);
+  for (let i = 0; i < effectiveCmd0s.length; i++) {
+    const eff = resolveEffectiveSegment(ir.segments[i]);
+    const expected = effectiveCmd0s[i];
+    if (eff === null) {
+      if (expected === "null" || expected === null) pass("parse+resolve " + label + ": seg " + i + " → null");
+      else fail("parse+resolve " + label + ": seg " + i, "effective cmd0=" + expected, "null");
+    } else if (eff.cmd0 === expected) {
+      pass("parse+resolve " + label + ": seg " + i + " cmd0=" + expected);
+    } else {
+      fail("parse+resolve " + label + ": seg " + i, expected, eff.cmd0);
+    }
+  }
+}
+
+// --- resolveEffectiveSegment: edge cases ---
+{
+  // select header: return null
+  const s1 = { cmd0: "select", argv: ["var", "in", "list"] };
+  const r1 = resolveEffectiveSegment(s1);
+  if (r1 === null) pass("resolveEffectiveSegment: select header → null");
+  else fail("resolveEffectiveSegment: select header", "null", r1);
+}
+
+// --- resolveEffectiveSegment: DEFENSIVENESS cases (FIX 3, #1330) ---
+// resolveEffectiveSegment must return null (never throw) for malformed input,
+// mirroring the sibling resolveEffectiveCommand guard in
+// hooks/lib/bash-write-patterns/segment-utils.js. Null/undefined seg, cmd0==null,
+// control cond/body keyword with non-array argv, and assignment cmd0 with
+// non-array argv (stripEnvPrefix guard) all fail closed to null.
+{
+  check("resolveEffectiveSegment defensiveness: null → null", resolveEffectiveSegment(null), null);
+  check("resolveEffectiveSegment defensiveness: undefined → null", resolveEffectiveSegment(undefined), null);
+  check("resolveEffectiveSegment defensiveness: {cmd0:null} → null", resolveEffectiveSegment({ cmd0: null }), null);
+  check(
+    "resolveEffectiveSegment defensiveness: {cmd0:'if', argv:undefined} → null (cond header, argv not array)",
+    resolveEffectiveSegment({ cmd0: "if", argv: undefined }),
+    null
+  );
+  check(
+    "resolveEffectiveSegment defensiveness: {cmd0:'do'} → null (body keyword, missing argv)",
+    resolveEffectiveSegment({ cmd0: "do" }),
+    null
+  );
+  check(
+    "resolveEffectiveSegment defensiveness: {cmd0:'FOO=1', argv:undefined} → null (assignment cmd0, argv not array → stripEnvPrefix null)",
+    resolveEffectiveSegment({ cmd0: "FOO=1", argv: undefined }),
+    null
+  );
+  // Positive control: a well-formed read-only segment still resolves.
+  {
+    const r = resolveEffectiveSegment({ cmd0: "head", argv: ["x"] });
+    check("resolveEffectiveSegment defensiveness: {cmd0:'head', argv:['x']} → cmd0='head' (positive control)", r && r.cmd0, "head");
+  }
 }
 
 console.log("");

@@ -59,11 +59,15 @@ See `docs/security-policy.md` for the full pattern list.
   diff is suppressed (#445). Draft artifacts (`drafts/` subdirectory) are always suppressed.
 - `workflow-run-tests.js` (PostToolUse, matcher: `Bash`) — marks `run_tests` from the machine-readable
   `RUN_CONTRACT` line emitted by `tests/run-all.sh`, never from a raw exit code (#1242, contract-trust).
-  Detects test runner commands by path pattern (`tests/`) and known runner names. `complete` requires all
-  of: run-all.sh provenance, exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and
+  Detects test runner commands over the shared command IR (`hooks/lib/command-ir.js` `parse()` +
+  `resolveEffectiveSegment()`), which resolves each segment's effective command through control-structure
+  keywords and env-prefix assignments before matching path pattern (`tests/`) and known runner names — so a
+  read-only command that merely names a test path inside a loop/condition header (e.g.
+  `for f in tests/*.sh; do head "$f"; done`) is no longer mis-detected (#1330). `complete` requires all of:
+  run-all.sh provenance, exactly one well-formed `RUN_CONTRACT` line, `executed>0` and `fail==0` (and
   `write_tests` already satisfied). exit ≠ 0, or any test command lacking a valid contract (ad-hoc runner,
-  piped/compound run-all.sh, no-match), demotes `run_tests` to `pending`. Sentinel echoes and read-only
-  commands excluded
+  piped/compound run-all.sh, no-match), demotes `run_tests` to `pending`. Sentinel echoes, read-only
+  commands, and git non-exec subcommands (resolved past leading global options) excluded
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
