@@ -371,3 +371,7 @@ Changes: Fixed a bug where read-only commands that merely mention a test path in
 ### FEATURE: PR #1356 (2026-07-10)
 Background: refactor(#1343): unify ENFORCE_WORKTREE_EXCLUDE into path-coverage model; rename EXTRA_REPOS→ADDITIONAL_REPOS
 Changes: **`ENFORCE_WORKTREE_EXCLUDE`** now accepts both glob patterns (`*`, `**`) and plain path prefixes (covering a path and its whole subtree) in a single semicolon-separated list — `ENFORCE_WORKTREE_EXCLUDE_REPOS` is deprecated (a one-time warning guides migration).;**`ENFORCE_WORKTREE_EXTRA_REPOS`** renamed to **`ENFORCE_WORKTREE_ADDITIONAL_REPOS`** — old name still works with a deprecation warning.
+
+### FEATURE: PR #1355 (2026-07-10)
+Background: feat(#1180,#1278): add CODE_LANG commit-time language policy check + tests
+Changes: New `CODE_LANG` setting: set to `english` or `japanese` to block commits containing staged text files that violate the language policy. Leave unset or set to `any` to disable (default, noop). See `.env.example` for details.
