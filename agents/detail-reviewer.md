@@ -42,6 +42,7 @@ Critically review the plan produced by the **planner**. Be thorough — flag min
   A `triage: OPTIONAL` member that is neither addressed nor explicitly in
   `## Out of scope` → `NEEDS_REVISION` with severity `[MED]`.
   Skip when `## Class members` contains `(none detected)` or is absent.
+- **Issues → Steps/Files existence gap [HIGH] (existence-level only):** Count entries in `## Issues` (excluding `(none detected)`). When issues_count > 0 and BOTH `## Steps` and `## Files to modify` are absent from the plan body, return `NEEDS_REVISION` with: `[HIGH] ## Issues has N closes_issues entries but the plan body contains neither a ## Steps nor a ## Files to modify section.` Do NOT flag missing per-issue → per-Step links; that semantic mapping is out of scope per Accepted Tradeoffs.
 
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
