@@ -207,7 +207,7 @@ run_t16() {
 }
 
 # ===========================================================================
-# T17: CLAUDE_PROJECT_DIR set → JSONL in correct encoded dir
+# T17: cwd arg wins over CLAUDE_PROJECT_DIR — JSONL goes to encoded(other_cwd)
 # ===========================================================================
 run_t17() {
   local tmp_bash="$TMPDIR_BASE/t17"
@@ -225,12 +225,17 @@ run_t17() {
   local transcript_node
   transcript_node=$(to_node_path "$transcript_bash")
 
-  # The JSONL should be at transcript/<encoded(project_dir)>/<sid>.jsonl
+  # The JSONL should be at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
   local tdir_bash
-  tdir_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
   local jsonl_bash="$tdir_bash/${sid}.jsonl"
   local jsonl_node
   jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # The JSONL must NOT be at the project_dir-encoded location
+  local tdir_project_bash
+  tdir_project_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  local jsonl_project_bash="$tdir_project_bash/${sid}.jsonl"
 
   make_intent "$plans_bash" "$sid" "# Intent
 
@@ -241,7 +246,7 @@ run_t17() {
   mkdir -p "$project_dir_bash"
   mkdir -p "$other_cwd_bash"
 
-  # Pass other_cwd as cwd but CLAUDE_PROJECT_DIR overrides encoding
+  # cwd arg wins over CLAUDE_PROJECT_DIR for encoding
   (
     unset CLAUDE_CODE_CHILD_SESSION
     CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
@@ -255,9 +260,172 @@ m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
   local title
   title=$(read_last_title "$jsonl_node" "$sid")
   if [ "$title" = "#66 Project dir encoding test" ]; then
-    pass "T17: CLAUDE_PROJECT_DIR set → JSONL in correct encoded dir"
+    pass "T17: CLAUDE_PROJECT_DIR ignored → JSONL in cwd-arg encoded dir"
   else
-    fail "T17: CLAUDE_PROJECT_DIR encoding (got: '$title' in $jsonl_bash, expected: '#66 Project dir encoding test')"
+    fail "T17: cwd-arg encoding (got: '$title' in $jsonl_bash, expected: '#66 Project dir encoding test')"
+  fi
+
+  # Negative assertion: JSONL must NOT exist in the project_dir-encoded location
+  if [ ! -f "$jsonl_project_bash" ]; then
+    pass "T17: JSONL absent from project_dir-encoded location (cwd arg wins)"
+  else
+    fail "T17: JSONL unexpectedly found in project_dir-encoded location ($jsonl_project_bash)"
+  fi
+}
+
+# ===========================================================================
+# T17b: writeAddPr — CLAUDE_PROJECT_DIR ignored, PR# appended to cwd-encoded JSONL
+# ===========================================================================
+run_t17b() {
+  local tmp_bash="$TMPDIR_BASE/t17b"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17b-session-abc"
+  local project_dir_bash="$tmp_bash/project"
+  local other_cwd_bash="$tmp_bash/other-cwd"
+  local project_dir_node
+  project_dir_node=$(to_node_path "$project_dir_bash")
+  local other_cwd_node
+  other_cwd_node=$(to_node_path "$other_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # The JSONL should be at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # The JSONL must NOT be at the project_dir-encoded location
+  local tdir_project_bash
+  tdir_project_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  local jsonl_project_bash="$tdir_project_bash/${sid}.jsonl"
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #66: Project dir encoding test
+"
+  mkdir -p "$project_dir_bash"
+  mkdir -p "$other_cwd_bash"
+
+  # Seed title using writeSetIssue so JSONL exists at other_cwd-encoded path
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
+" 2>/dev/null || true
+  )
+
+  # Now call writeAddPr — cwd arg wins, PR# appended to cwd-encoded JSONL
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeAddPr('$sid', '$other_cwd_node', 99);
+" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "#66 Project dir encoding test PR #99" ]; then
+    pass "T17b: writeAddPr — CLAUDE_PROJECT_DIR ignored → PR# appended to cwd-encoded JSONL"
+  else
+    fail "T17b: writeAddPr cwd-arg encoding (got: '$title', expected: '#66 Project dir encoding test PR #99')"
+  fi
+
+  # Negative assertion: JSONL must NOT exist in the project_dir-encoded location
+  if [ ! -f "$jsonl_project_bash" ]; then
+    pass "T17b: writeAddPr — JSONL absent from project_dir-encoded location (cwd arg wins)"
+  else
+    fail "T17b: writeAddPr — JSONL unexpectedly found in project_dir-encoded location ($jsonl_project_bash)"
+  fi
+}
+
+# ===========================================================================
+# T17c: writeMarkComplete — CLAUDE_PROJECT_DIR ignored, ✓ prefix written to cwd-encoded JSONL
+# ===========================================================================
+run_t17c() {
+  local tmp_bash="$TMPDIR_BASE/t17c"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17c-session-abc"
+  local project_dir_bash="$tmp_bash/project"
+  local other_cwd_bash="$tmp_bash/other-cwd"
+  local project_dir_node
+  project_dir_node=$(to_node_path "$project_dir_bash")
+  local other_cwd_node
+  other_cwd_node=$(to_node_path "$other_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # The JSONL should be at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # The JSONL must NOT be at the project_dir-encoded location
+  local tdir_project_bash
+  tdir_project_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  local jsonl_project_bash="$tdir_project_bash/${sid}.jsonl"
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #66: Project dir encoding test
+"
+  mkdir -p "$project_dir_bash"
+  mkdir -p "$other_cwd_bash"
+
+  # Seed title using writeSetIssue so JSONL exists at other_cwd-encoded path
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
+" 2>/dev/null || true
+  )
+
+  # Now call writeMarkComplete — cwd arg wins, ✓ prefix written to cwd-encoded JSONL
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeMarkComplete('$sid', '$other_cwd_node');
+" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "✓ #66 Project dir encoding test" ]; then
+    pass "T17c: writeMarkComplete — CLAUDE_PROJECT_DIR ignored → ✓ prefix written to cwd-encoded JSONL"
+  else
+    fail "T17c: writeMarkComplete cwd-arg encoding (got: '$title', expected: '✓ #66 Project dir encoding test')"
+  fi
+
+  # Negative assertion: JSONL must NOT exist in the project_dir-encoded location
+  if [ ! -f "$jsonl_project_bash" ]; then
+    pass "T17c: writeMarkComplete — JSONL absent from project_dir-encoded location (cwd arg wins)"
+  else
+    fail "T17c: writeMarkComplete — JSONL unexpectedly found in project_dir-encoded location ($jsonl_project_bash)"
   fi
 }
 
@@ -374,12 +542,405 @@ run_tnew6() {
   fi
 }
 
+# ===========================================================================
+# T17-cli: set-issue via CLI — CLAUDE_PROJECT_DIR ignored at CLI boundary
+# ===========================================================================
+run_t17_cli() {
+  local tmp_bash="$TMPDIR_BASE/t17-cli"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17cli-session-abc"
+  local project_dir_bash="$tmp_bash/project"
+  local other_cwd_bash="$tmp_bash/other-cwd"
+  local project_dir_node
+  project_dir_node=$(to_node_path "$project_dir_bash")
+  local other_cwd_node
+  other_cwd_node=$(to_node_path "$other_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # The JSONL should be at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # The JSONL must NOT be at the project_dir-encoded location
+  local tdir_project_bash
+  tdir_project_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  local jsonl_project_bash="$tdir_project_bash/${sid}.jsonl"
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #66: Project dir encoding test
+"
+  mkdir -p "$project_dir_bash"
+  mkdir -p "$other_cwd_bash"
+
+  (
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" set-issue "$other_cwd_node" "$plans_node" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "#66 Project dir encoding test" ]; then
+    pass "T17-cli: set-issue via CLI — CLAUDE_PROJECT_DIR ignored → JSONL in cwd-arg encoded dir"
+  else
+    fail "T17-cli: set-issue via CLI (got: '$title', expected: '#66 Project dir encoding test')"
+  fi
+
+  # Negative assertion: JSONL must NOT exist in the project_dir-encoded location
+  if [ ! -f "$jsonl_project_bash" ]; then
+    pass "T17-cli: set-issue via CLI — JSONL absent from project_dir-encoded location (cwd arg wins)"
+  else
+    fail "T17-cli: set-issue via CLI — JSONL unexpectedly found in project_dir-encoded location ($jsonl_project_bash)"
+  fi
+}
+
+# ===========================================================================
+# T17b-cli: add-pr via CLI — CLAUDE_PROJECT_DIR ignored at CLI boundary
+# ===========================================================================
+run_t17b_cli() {
+  local tmp_bash="$TMPDIR_BASE/t17b-cli"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17bcli-session-abc"
+  local project_dir_bash="$tmp_bash/project"
+  local other_cwd_bash="$tmp_bash/other-cwd"
+  local project_dir_node
+  project_dir_node=$(to_node_path "$project_dir_bash")
+  local other_cwd_node
+  other_cwd_node=$(to_node_path "$other_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # The JSONL should be at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # The JSONL must NOT be at the project_dir-encoded location
+  local tdir_project_bash
+  tdir_project_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  local jsonl_project_bash="$tdir_project_bash/${sid}.jsonl"
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #66: Project dir encoding test
+"
+  mkdir -p "$project_dir_bash"
+  mkdir -p "$other_cwd_bash"
+
+  # Pre-seed the JSONL at other_cwd-encoded location using the library directly
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
+" 2>/dev/null || true
+  )
+
+  # Call add-pr via CLI — CLAUDE_PROJECT_DIR must be ignored
+  (
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" add-pr "$other_cwd_node" 99 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "#66 Project dir encoding test PR #99" ]; then
+    pass "T17b-cli: add-pr via CLI — CLAUDE_PROJECT_DIR ignored → PR# appended to cwd-encoded JSONL"
+  else
+    fail "T17b-cli: add-pr via CLI (got: '$title', expected: '#66 Project dir encoding test PR #99')"
+  fi
+
+  # Negative assertion: JSONL must NOT exist in the project_dir-encoded location
+  if [ ! -f "$jsonl_project_bash" ]; then
+    pass "T17b-cli: add-pr via CLI — JSONL absent from project_dir-encoded location (cwd arg wins)"
+  else
+    fail "T17b-cli: add-pr via CLI — JSONL unexpectedly found in project_dir-encoded location ($jsonl_project_bash)"
+  fi
+}
+
+# ===========================================================================
+# T17c-cli: mark-complete via CLI — CLAUDE_PROJECT_DIR ignored at CLI boundary
+# ===========================================================================
+run_t17c_cli() {
+  local tmp_bash="$TMPDIR_BASE/t17c-cli"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17ccli-session-abc"
+  local project_dir_bash="$tmp_bash/project"
+  local other_cwd_bash="$tmp_bash/other-cwd"
+  local project_dir_node
+  project_dir_node=$(to_node_path "$project_dir_bash")
+  local other_cwd_node
+  other_cwd_node=$(to_node_path "$other_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # The JSONL should be at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # The JSONL must NOT be at the project_dir-encoded location
+  local tdir_project_bash
+  tdir_project_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_node")
+  local jsonl_project_bash="$tdir_project_bash/${sid}.jsonl"
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #66: Project dir encoding test
+"
+  mkdir -p "$project_dir_bash"
+  mkdir -p "$other_cwd_bash"
+
+  # Pre-seed the JSONL at other_cwd-encoded location using the library directly
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
+" 2>/dev/null || true
+  )
+
+  # Call mark-complete via CLI — CLAUDE_PROJECT_DIR must be ignored
+  (
+    unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node "$BIN_CC_SESSION_TITLE" mark-complete "$other_cwd_node" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "✓ #66 Project dir encoding test" ]; then
+    pass "T17c-cli: mark-complete via CLI — CLAUDE_PROJECT_DIR ignored → ✓ prefix written to cwd-encoded JSONL"
+  else
+    fail "T17c-cli: mark-complete via CLI (got: '$title', expected: '✓ #66 Project dir encoding test')"
+  fi
+
+  # Negative assertion: JSONL must NOT exist in the project_dir-encoded location
+  if [ ! -f "$jsonl_project_bash" ]; then
+    pass "T17c-cli: mark-complete via CLI — JSONL absent from project_dir-encoded location (cwd arg wins)"
+  else
+    fail "T17c-cli: mark-complete via CLI — JSONL unexpectedly found in project_dir-encoded location ($jsonl_project_bash)"
+  fi
+}
+
+# ===========================================================================
+# T17-idempotency: writeAddPr called twice with DIFFERENT CLAUDE_PROJECT_DIR
+#   values each time — idempotency logic must use cwd-encoded path, not
+#   CLAUDE_PROJECT_DIR-encoded path, so both calls operate on the same JSONL.
+# ===========================================================================
+run_t17_idempotency() {
+  local tmp_bash="$TMPDIR_BASE/t17-idempotency"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17idem-session-abc"
+  local project_dir_a_bash="$tmp_bash/project-a"
+  local project_dir_b_bash="$tmp_bash/project-b"
+  local other_cwd_bash="$tmp_bash/other-cwd"
+  local project_dir_a_node
+  project_dir_a_node=$(to_node_path "$project_dir_a_bash")
+  local project_dir_b_node
+  project_dir_b_node=$(to_node_path "$project_dir_b_bash")
+  local other_cwd_node
+  other_cwd_node=$(to_node_path "$other_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # The canonical JSONL is at transcript/<encoded(other_cwd)>/<sid>.jsonl (cwd arg wins)
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$other_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  # JSONL must NOT exist at either project_dir-encoded location
+  local tdir_a_bash
+  tdir_a_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_a_node")
+  local jsonl_a_bash="$tdir_a_bash/${sid}.jsonl"
+  local tdir_b_bash
+  tdir_b_bash=$(make_transcript_dir "$transcript_bash" "$project_dir_b_node")
+  local jsonl_b_bash="$tdir_b_bash/${sid}.jsonl"
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #66: Project dir encoding test
+"
+  mkdir -p "$project_dir_a_bash"
+  mkdir -p "$project_dir_b_bash"
+  mkdir -p "$other_cwd_bash"
+
+  # Step 1: Seed JSONL via writeSetIssue with CLAUDE_PROJECT_DIR=project_dir_A
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_a_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeSetIssue('$sid', '$other_cwd_node', '$plans_node');
+" 2>/dev/null || true
+  )
+
+  # Step 2: Call writeAddPr with CLAUDE_PROJECT_DIR=project_dir_B (different from step 1)
+  #   Should read existing title from cwd-encoded path and append " PR #42"
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_b_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeAddPr('$sid', '$other_cwd_node', 42);
+" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "#66 Project dir encoding test PR #42" ]; then
+    pass "T17-idempotency: writeAddPr with different CLAUDE_PROJECT_DIR → PR# appended to cwd-encoded JSONL"
+  else
+    fail "T17-idempotency: writeAddPr first call (got: '$title', expected: '#66 Project dir encoding test PR #42')"
+  fi
+
+  # Negative assertions: JSONL must NOT exist at either project_dir-encoded location
+  if [ ! -f "$jsonl_a_bash" ]; then
+    pass "T17-idempotency: JSONL absent from project_dir_A-encoded location (cwd arg wins)"
+  else
+    fail "T17-idempotency: JSONL unexpectedly found in project_dir_A-encoded location ($jsonl_a_bash)"
+  fi
+  if [ ! -f "$jsonl_b_bash" ]; then
+    pass "T17-idempotency: JSONL absent from project_dir_B-encoded location (cwd arg wins)"
+  else
+    fail "T17-idempotency: JSONL unexpectedly found in project_dir_B-encoded location ($jsonl_b_bash)"
+  fi
+
+  # Step 3: Call writeAddPr again (idempotency) — should be a no-op, no duplicate " PR #42"
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_PROJECT_DIR="$project_dir_b_node" \
+      CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeAddPr('$sid', '$other_cwd_node', 42);
+" 2>/dev/null || true
+  )
+
+  title=$(read_last_title "$jsonl_node" "$sid")
+  if [ "$title" = "#66 Project dir encoding test PR #42" ]; then
+    pass "T17-idempotency: writeAddPr second call is a no-op (idempotent, no duplicate PR#)"
+  else
+    fail "T17-idempotency: writeAddPr idempotency (got: '$title', expected: '#66 Project dir encoding test PR #42')"
+  fi
+}
+
+# ===========================================================================
+# T17-special-chars: _encodeCwd with special characters in cwd path
+# ===========================================================================
+run_t17_special_chars() {
+  local tmp_bash="$TMPDIR_BASE/t17-special-chars"
+  local plans_bash="$tmp_bash/plans"
+  local transcript_bash="$tmp_bash/transcript"
+  local sid="t17special-session-abc"
+  # Path component with mixed case and a space — toLowerCase() turns uppercase to lower;
+  # replace(/[^a-zA-Z0-9]/g, '-') turns space and separator chars to '-'
+  local special_cwd_bash="$tmp_bash/My Project-Dir"
+  local special_cwd_node
+  special_cwd_node=$(to_node_path "$special_cwd_bash")
+  local plans_node
+  plans_node=$(to_node_path "$plans_bash")
+  local transcript_node
+  transcript_node=$(to_node_path "$transcript_bash")
+
+  # Compute the expected encoded dir using the same encode_cwd_node helper
+  local tdir_bash
+  tdir_bash=$(make_transcript_dir "$transcript_bash" "$special_cwd_node")
+  local jsonl_bash="$tdir_bash/${sid}.jsonl"
+  local jsonl_node
+  jsonl_node=$(to_node_path "$jsonl_bash")
+
+  make_intent "$plans_bash" "$sid" "# Intent
+
+## Issues
+
+- #55: Special chars encoding test
+"
+  mkdir -p "$special_cwd_bash"
+
+  # Use library directly — cwd has special characters (space, mixed case)
+  (
+    unset CLAUDE_CODE_CHILD_SESSION
+    CLAUDE_SESSION_ID="$sid" CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_node" \
+      run_with_timeout 10 node -e "
+const m = require('$SESSION_TITLE_LIB');
+m.writeSetIssue('$sid', '$special_cwd_node', '$plans_node');
+" 2>/dev/null || true
+  )
+
+  local title
+  title=$(read_last_title "$jsonl_node" "$sid")
+  # Verify the encoded dir name has only lowercase alphanumeric + hyphens
+  local encoded_dir
+  encoded_dir=$(basename "$tdir_bash")
+  local has_upper
+  has_upper=$(echo "$encoded_dir" | grep -E '[A-Z ]' || true)
+  if [ "$title" = "#55 Special chars encoding test" ]; then
+    pass "T17-special-chars: writeSetIssue — JSONL written at _encodeCwd path (title correct)"
+  else
+    fail "T17-special-chars: writeSetIssue special chars (got: '$title', expected: '#55 Special chars encoding test')"
+  fi
+  if [ -z "$has_upper" ]; then
+    pass "T17-special-chars: encoded dir '$encoded_dir' contains only lowercase/digits/hyphens (toLowerCase + replace working)"
+  else
+    fail "T17-special-chars: encoded dir '$encoded_dir' contains uppercase or spaces (encoding not applied)"
+  fi
+}
+
 run_t12
 run_t13
 run_t14
 run_t15
 run_t16
 run_t17
+run_t17b
+run_t17c
+run_t17_cli
+run_t17b_cli
+run_t17c_cli
+run_t17_idempotency
+run_t17_special_chars
 run_tnew2
 run_tnew3
 run_tnew4
