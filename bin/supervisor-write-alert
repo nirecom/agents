@@ -19,9 +19,11 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--confirm-finding-ids",
   "--drop-finding-ids",
   "--set-alert-phase",
+  "--set-l2-phase",
   "--set-alert-eligible-phase",
+  "--ingest-generated-jsonl",
 ]);
-const KNOWN_BOOL_FLAGS = new Set(["--clear-alert-armed-at", "--increment-alert-retry-count", "--mark-findings-surfaced"]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-alert-armed-at", "--clear-l2-armed-at", "--increment-alert-retry-count", "--mark-findings-surfaced"]);
 
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-alert] ERROR: ${msg}`);
@@ -57,6 +59,10 @@ for (let i = 0; i < argv.length; i++) {
   usage(`unknown flag: ${tok}`);
 }
 
+// Alias resolution: old flag names → canonical names.
+if (flags.has("--clear-l2-armed-at")) flags.add("--clear-alert-armed-at");
+if ("set-l2-phase" in args && !("set-alert-phase" in args)) args["set-alert-phase"] = args["set-l2-phase"];
+
 const sid = args["session-id"];
 if (!sid || !SESSION_ID_RE.test(sid)) usage("--session-id required (valid alphanumeric/dash/underscore)");
 
@@ -70,11 +76,52 @@ const hasConfirmIds = "confirm-finding-ids" in args;
 const hasDropIds = "drop-finding-ids" in args;
 const hasMarkFindingsSurfaced = flags.has("--mark-findings-surfaced");
 const hasSetAlertEligiblePhase = "set-alert-eligible-phase" in args;
+const hasIngestJsonl = "ingest-generated-jsonl" in args;
 
 const findingKeys = ["finding-categories", "finding-severity", "finding-detail", "finding-reporter"];
 const findingPresent = findingKeys.filter((k) => k in args);
 const hasAnyFinding = findingPresent.length > 0;
 const hasAllFindings = findingPresent.length === findingKeys.length;
+
+if (hasIngestJsonl && (hasConfirmIds || hasDropIds)) {
+  usage("--ingest-generated-jsonl is mutually exclusive with --confirm-finding-ids and --drop-finding-ids");
+}
+
+if (hasIngestJsonl) {
+  const { CATEGORIES, SEVERITY_VALUES } = require("../hooks/lib/supervisor-state-schema");
+  const jsonlPath = args["ingest-generated-jsonl"];
+  let raw;
+  try { raw = require("fs").readFileSync(jsonlPath, "utf8"); } catch (e) {
+    console.error(`[supervisor-write-alert] ERROR: cannot read --ingest-generated-jsonl file: ${jsonlPath}`);
+    process.exit(1);
+  }
+  const lines = raw.split(/\r?\n/).filter(Boolean);
+  if (lines.length === 0) {
+    // Zero-record guard: no-op.
+    process.exit(0);
+  }
+  let ingested = 0;
+  for (const line of lines) {
+    let obj;
+    try { obj = JSON.parse(line); } catch (e) { continue; /* fail-open per line */ }
+    if (!obj || !Array.isArray(obj.categories) || !obj.severity || typeof obj.detail !== "string") continue;
+    const cats = obj.categories.filter(c => typeof c === "string" && CATEGORIES.includes(c));
+    if (cats.length === 0) continue;
+    if (!SEVERITY_VALUES.includes(obj.severity)) continue;
+    const reporter = typeof obj.reporter === "string" ? obj.reporter : "supervisor";
+    const finding = { categories: cats, severity: obj.severity, detail: obj.detail, reporter };
+    const ok = writeAlertState(sid, { findings: [finding] });
+    if (!ok) {
+      console.error("[supervisor-write-alert] ERROR: writeAlertState failed during --ingest-generated-jsonl");
+      process.exit(1);
+    }
+    ingested++;
+  }
+  if (ingested === 0) {
+    // No parseable findings — no-op.
+  }
+  process.exit(0);
+}
 
 if (hasAlertArmedAt && hasClearAlertArmedAt) {
   usage("--alert-armed-at and --clear-alert-armed-at are mutually exclusive");
@@ -121,7 +168,7 @@ if (hasIncrementRetry) {
   process.exit(0);
 }
 
-if (!hasAlertArmedAt && !hasClearAlertArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetAlertPhase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetAlertEligiblePhase) {
+if (!hasAlertArmedAt && !hasClearAlertArmedAt && !hasLastRunAt && !hasCumulativeSeverity && !hasAnyFinding && !hasSetAlertPhase && !hasConfirmIds && !hasDropIds && !hasMarkFindingsSurfaced && !hasSetAlertEligiblePhase && !hasIngestJsonl) {
   usage("at least one mutating flag required");
 }
 
