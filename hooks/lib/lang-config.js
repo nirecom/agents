@@ -54,6 +54,7 @@ function classifyPolicy(policy) {
 function loadLangConfig(surface, options) {
   loadDefaultEnv();
   if (surface === "plan") return normalizeValue(process.env.PLAN_LANG);
+  if (surface === "code") return normalizeValue(process.env.CODE_LANG);
   if (surface === "history") {
     const cfg = loadDocsLangConfig();
     const isPriv = options && options.isPrivateRepo === true;
