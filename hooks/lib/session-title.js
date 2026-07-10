@@ -11,10 +11,8 @@ function _isChildSession() {
 }
 
 // Encode cwd for JSONL directory name
-// CLAUDE_PROJECT_DIR takes precedence over cwd per design
 function _encodeCwd(cwd) {
-  const raw = process.env.CLAUDE_PROJECT_DIR || path.resolve(cwd);
-  return path.resolve(raw).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
+  return path.resolve(cwd).toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
 }
 
 function _getTranscriptBase() {
