@@ -11,10 +11,12 @@
 //   any other test command / no contract   → run_tests: pending (active demotion)
 //
 // The run_tests sentinel (WORKFLOW_MARK_STEP_run_tests_complete) is the other
-// completion authority. Sentinel echo commands and read-only commands are excluded.
+// completion authority. Read-only commands are excluded (echo is a member, so
+// workflow sentinel echoes are excluded via that rule).
 
 const fs = require("fs");
 const { resolveSessionId, markStep, readState } = require("./lib/workflow-state");
+const { parse, resolveEffectiveSegment } = require("./lib/command-ir");
 
 function readStdin() {
   const chunks = [];
@@ -34,97 +36,84 @@ function done() {
   process.exit(0);
 }
 
-// Read-only / non-execution command prefixes — exclude from test detection.
-// Also excludes all git subcommands except those that could actually run tests.
-const READ_ONLY_RE = /^(ls|cat|head|tail|grep|rg|find|wc|file|stat|echo|printf|which|type|pwd)\b/;
-const GIT_NON_EXEC_RE = /^git\s+(?:-C\s+(?:"[^"]+"|'[^']+'|\S+)\s+)?(diff|log|show|status|blame|ls-files|ls-tree|cat-file|rev-parse|fetch|remote|add|commit|push|merge|rebase|pull|stash|tag)\b/;
+// Read-only command set — commands that read files but don't run tests.
+// These are excluded from test detection regardless of path references.
+const READ_ONLY_CMDS = new Set([
+  "ls", "cat", "head", "tail", "grep", "rg", "find", "wc", "file", "stat",
+  "echo", "printf", "which", "type", "pwd"
+]);
 
-// Test runner / test path patterns.
-const TEST_PATH_RE = /\btests?\//;
-const TEST_RUNNER_RE = /\b(pytest|jest|vitest|mocha|pester|invoke-pester)\b/i;
-const TEST_RUNNER_UV_RE = /\buv\s+run\s+pytest\b/;
-const TEST_BASH_RE = /\b(bash|sh|node|pwsh|powershell(?:\.[a-z]+)?)\s+\S*tests?\//i;
-const PESTER_RE = /\.Tests\.ps1\b/i;
+// Git subcommands that do not execute tests. `grep` is included: `git grep
+// tests/foo` is a read-only search that merely references a test path and must
+// not demote run_tests (the same read-only-mention class this hook guards).
+const GIT_NON_EXEC_SUBCMDS = new Set([
+  "diff", "log", "show", "status", "blame", "ls-files", "ls-tree",
+  "cat-file", "rev-parse", "fetch", "remote", "add", "commit", "push",
+  "merge", "rebase", "pull", "stash", "tag", "grep"
+]);
 
-// Split a command into segments at top-level (unquoted) occurrences of
-// && || | ; and newline. Operators inside single or double quotes do NOT
-// split, so `echo "a && b"` stays a single segment. Pure string scan,
-// never throws — fail-open friendly. Backslash escapes the next char.
-function splitTopLevelSegments(command) {
-  const segments = [];
-  let current = "";
-  let quote = null; // null | '\'' | '"'
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
-    if (quote) {
-      // Inside quotes: only a matching close-quote (or backslash escape) is special.
-      if (ch === "\\" && i + 1 < command.length) {
-        current += ch + command[i + 1];
-        i++;
-        continue;
-      }
-      if (ch === quote) quote = null;
-      current += ch;
+// Git global options that consume the following token as their value
+// (e.g. `git -C <path> ...`, `git -c <name>=<value> ...`).
+const GIT_VALUE_OPTS = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--namespace",
+  "--exec-path", "--super-prefix"
+]);
+
+// Resolve the git subcommand, skipping any leading global options
+// (e.g. `git -C path --no-pager diff` -> "diff"). Value-taking options
+// consume their following token; `--opt=value` and bare flags are single tokens.
+function resolveGitSubcommand(argv) {
+  let i = 0;
+  while (i < argv.length) {
+    const tok = argv[i];
+    if (tok.startsWith("-")) {
+      i += GIT_VALUE_OPTS.has(tok) ? 2 : 1;
       continue;
     }
-    if (ch === "'" || ch === '"') {
-      quote = ch;
-      current += ch;
-      continue;
-    }
-    if (ch === "\\" && i + 1 < command.length) {
-      current += ch + command[i + 1];
-      i++;
-      continue;
-    }
-    // Top-level operators: && || (two chars) and | ; \n (one char).
-    if ((ch === "&" && command[i + 1] === "&") || (ch === "|" && command[i + 1] === "|")) {
-      segments.push(current);
-      current = "";
-      i++; // consume the second operator char
-      continue;
-    }
-    if (ch === "|" || ch === ";" || ch === "\n") {
-      segments.push(current);
-      current = "";
-      continue;
-    }
-    current += ch;
+    return tok;
   }
-  segments.push(current);
-  return segments;
-}
-
-// True iff a single command segment matches a test-detection pattern.
-function segmentMatchesDetection(seg) {
-  return (
-    TEST_PATH_RE.test(seg) ||
-    TEST_RUNNER_RE.test(seg) ||
-    TEST_RUNNER_UV_RE.test(seg) ||
-    TEST_BASH_RE.test(seg) ||
-    PESTER_RE.test(seg)
-  );
-}
-
-// True iff a single segment is excluded (sentinel echo / read-only / git non-exec).
-function segmentExcluded(seg) {
-  if (seg.startsWith('echo "<<') || seg.startsWith("echo '<<")) return true;
-  if (READ_ONLY_RE.test(seg)) return true;
-  if (GIT_NON_EXEC_RE.test(seg)) return true;
-  return false;
+  return "";
 }
 
 function isTestCommand(command) {
   const trimmed = command.trim();
-  // Quote-aware split on top-level shell operators (&&, ||, |, ;, newline).
-  // Operators inside quotes are NOT split points, so `echo "a && pytest tests/"`
-  // stays one segment and is excluded by the leading `echo` (read-only).
-  const segments = splitTopLevelSegments(trimmed);
-  for (const raw of segments) {
-    const seg = raw.trim();
-    if (!seg) continue;
-    if (segmentExcluded(seg)) continue;
-    if (segmentMatchesDetection(seg)) return true;
+  if (!trimmed) return false;
+
+  const ir = parse(trimmed);
+  if (ir.parseFailure) return false;
+
+  for (const seg of ir.segments) {
+    const effective = resolveEffectiveSegment(seg);
+    if (effective === null) continue;
+    if (effective.cmd0 === "") continue;
+
+    // Read-only command exclusion — check resolved effective cmd0. `echo` is a
+    // member, so workflow sentinel echoes (`echo "<<...`) are excluded here too;
+    // this also covers env-prefixed forms (`FOO=1 echo "<<...`) that a raw-text
+    // prefix match would miss, since cmd0 is resolved past the assignment.
+    if (READ_ONLY_CMDS.has(effective.cmd0)) continue;
+
+    // Git non-exec command exclusion — resolve the subcommand past any
+    // leading global options (-C <path>, -c <k=v>, --no-pager, --git-dir=…).
+    if (effective.cmd0 === "git") {
+      // Empty subcommand (only global options, e.g. `git -C tests/` or bare
+      // `git`) executes nothing — treat as non-exec so a bare test-path
+      // reference in the global-option value cannot demote run_tests.
+      const gitSub = resolveGitSubcommand(effective.argv);
+      if (gitSub === "" || GIT_NON_EXEC_SUBCMDS.has(gitSub)) continue;
+    }
+
+    // Test detection — check effective segment (cmd0 + argv joined)
+    const effectiveText = effective.cmd0 + " " + effective.argv.join(" ");
+
+    // Test path reference: tests/ or test/ anywhere in the segment
+    if (/\btests?\//.test(effectiveText)) return true;
+
+    // Test runner commands
+    if (/\b(pytest|jest|vitest|mocha|pester|invoke-pester)\b/i.test(effectiveText)) return true;
+    if (/\buv\s+run\s+pytest\b/.test(effectiveText)) return true;
+    if (/\b(bash|sh|node|pwsh|powershell(?:\.[a-z]+)?)\s+\S*tests?\//i.test(effectiveText)) return true;
+    if (/\.Tests\.ps1\b/i.test(effectiveText)) return true;
   }
   return false;
 }
@@ -175,7 +164,8 @@ try {
 
 if (!input || input.tool_name !== "Bash") done();
 
-const command = ((input.tool_input && input.tool_input.command) || "").trim();
+const rawCommand = input.tool_input && input.tool_input.command;
+const command = (typeof rawCommand === "string" ? rawCommand : "").trim();
 if (!command) done();
 
 if (!isTestCommand(command)) done();
