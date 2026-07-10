@@ -67,52 +67,19 @@ When findings share a `co_blocked_by` link or fall in the same 60-second cluster
 5. **Perspective (§3/§4/§5)** — is the change solved at the class level (§3), applied across symmetric siblings (§4), and integrity-preserving end-to-end (§5)? For cascade failures, trace the causality chain to the single most-upstream root cause; file one root-cause finding and have downstream findings reference it rather than duplicating the cause.
 6. **WORKTREE_OFF / WORKFLOW_OFF proposal validity** — when the block reason is a C3 off-proposal trigger: was a sanctioned-command false-block the cause (see `rules/workflow-off.md` "Sanctioned-command false-block recovery"), or was the proposal an improvised bypass? If sanctioned, recommend filing a fix issue for the underlying enforce-worktree regression; if improvised, recommend reverting and using the proper escape hatch.
 7. **`/issue-create` Phase 4 dispatch detection** — when transcript shows `ISSUE_CREATE_SKILL=1 ... issue-create-dispatch.sh`, verify the preceding transcript contains ALL THREE of: (a) `gh issue list --state all --search "<keyword tokens>"` (duplicate-search phase), (b) at least one additional symptom-token `gh issue list` search, (c) `gh issue view <N> --json` (candidate inspection). All three present → legitimate Phase 4 dispatch. Any absent → may be Phase 1–3 bypass.
+8. **Scope-drift pre-merge recognition** — when a merge is blocked with `audit_cause: scope-drift:pre-merge`, confirm that detail.md's `## Files to modify` declaration matches the actual changed-file set (branch diff) before approving the merge.
 
 ## Output protocol
 
-Findings flow through three phases: Draft → Adversarial review (Codex) → Adjudicate. No rewrite loop — Codex gives one verdict per finding; alert mode supervisor adjudicates.
+Codex-primary single pass: generate findings via `bin/supervisor-review-codex --generate`, ingest, then finalize.
 
-### Phase 1 — Draft
-
-For each observation, append a draft finding (keep `alert_phase=pending`; do NOT set `done` yet):
-
-`bin/supervisor-write-alert --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --finding-status draft --session-id <effective-state-sid>`
-
-Each invocation appends one finding and auto-assigns its `idx`. Multiple invocations are allowed.
-
-### Phase 2 — Adversarial review
-
-After all draft findings are written, run:
-
-`bin/supervisor-review-codex`
-
-It locates the state file, extracts draft findings, asks Codex for per-item AGREE/DISAGREE verdicts as JSON Lines, and prints them between `<!-- begin-codex-output ... -->` / `<!-- end-codex-output -->` markers.
-
-Parse the output via `hooks/lib/codex-review-parse.js`:
-
-`bin/supervisor-parse-codex < codex-output.txt`
-
-If `ok:false` (Codex unavailable, no markers, or parse error): treat all drafted findings as AGREE and skip to Phase 3 with all their idx values in `confirm_ids` and an empty `drop_ids`.
-
-### Phase 3 — Adjudicate and finalize
-
-For each Codex verdict:
-- **AGREE** → confirm the finding (it will be retained).
-- **DISAGREE** → read the Codex `reason`, then decide:
-  - Accept the criticism → drop the finding (`drop_ids`). If the finding still has merit in amended form, replace it: drop the original idx and append a new draft confirming the amendment in `detail`.
-  - Reject the criticism → confirm as-is (`confirm_ids`).
-
-Build the two lists, then make a single atomic finalize call:
-
-`bin/supervisor-write-alert --confirm-finding-ids <csv> --drop-finding-ids <csv> --last-run-at <now-iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done --session-id <effective-state-sid>`
-
-`--set-alert-phase done` MUST be included in every finalize call; omitting it leaves the session in stale-pending state that SC-5 must repair via heuristic (#961).
-
-`cumulative_severity` is computed from confirmed findings only (after drops).
-
-#### Phase 3 post-condition check
-
-Run `bin/supervisor-finalize-verify --session-id <effective-state-sid>`. Exit 0 → terminal state verified. Exit 1 → report already filed; abort.
+1. Run `bin/supervisor-review-codex --generate > /tmp/sup-codex-out-<effective-state-sid>.jsonl`.
+2. If the file is empty (Codex unavailable) → **fallback path**: apply the JD checklist manually and record each finding via `bin/supervisor-write-alert --finding-categories <cats> --finding-severity <sev> --finding-detail "<text>" --finding-reporter supervisor --session-id <effective-state-sid>`.
+3. If the file is non-empty → `bin/supervisor-write-alert --ingest-generated-jsonl /tmp/sup-codex-out-<effective-state-sid>.jsonl --session-id <effective-state-sid>`. Claude does NOT add findings independently.
+4. Finalize: `bin/supervisor-write-alert --last-run-at <now-iso> --cumulative-severity <verdict> --clear-alert-armed-at --set-alert-phase done --session-id <effective-state-sid>`.
+   - `--set-alert-phase done` MUST be included; omitting it leaves the session in stale-pending state (#961).
+   - `cumulative_severity` is computed from confirmed findings only.
+5. Run `bin/supervisor-finalize-verify --session-id <effective-state-sid>`. Exit 0 → terminal state verified. Exit 1 → report already filed; abort.
 
 ### Reporting back
 
