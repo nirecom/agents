@@ -15,7 +15,7 @@ const { parse } = require("../lib/command-ir");
  * Returns { verdict: 'abstain' } in all other cases (fail-closed):
  *   - non-Bash tool
  *   - sessionRoots is empty (non-git CWD with no extra repos configured)
- *   - repoRoot is null (non-git CWD — even when EXTRA_REPOS is configured,
+ *   - repoRoot is null (non-git CWD — even when ADDITIONAL_REPOS is configured,
  *     a non-git CWD cannot be evaluated)
  *   - command contains sequencing operators (C1)
  *   - no write targets extracted (unknown write destination)
@@ -43,8 +43,8 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
     if (toolName !== "Bash") return { verdict: "abstain" };
 
     // Guard 1: no session scope to compare against, or non-git/out-of-session CWD — abstain.
-    // Covers: empty sessionRoots (no ENFORCE_WORKTREE_EXTRA_REPOS), non-git CWD regardless
-    // of EXTRA_REPOS config, out-of-session CWD, and any misconfiguration.
+    // Covers: empty sessionRoots (no ENFORCE_WORKTREE_ADDITIONAL_REPOS), non-git CWD regardless
+    // of ADDITIONAL_REPOS config, out-of-session CWD, and any misconfiguration.
     if (!sessionRoots || sessionRoots.size === 0 || !repoRoot) return { verdict: "abstain" };
 
     const cmd = (toolInput && typeof toolInput.command === "string") ? toolInput.command : "";

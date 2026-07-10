@@ -295,7 +295,7 @@ test_group_b_other_writes_scope_matrix() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ENFORCE_WORKTREE_EXTRA_REPOS handling
+# ENFORCE_WORKTREE_ADDITIONAL_REPOS handling
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_extra_repos_includes_repo_in_scope() {
@@ -308,7 +308,7 @@ test_extra_repos_includes_repo_in_scope() {
     local extra_norm; extra_norm="$(norm_path "$main_extra")"
     local out
     out="$(run_bash_guard "gh pr merge 1" "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extra_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extra_norm")"
     # CWD is session worktree which is itself a feature branch — should allow.
     if guard_decision "$out"; then
         pass "EXTRA_REPOS: cwd in session, extra registered, gh write allows"
@@ -317,7 +317,7 @@ test_extra_repos_includes_repo_in_scope() {
     fi
     # Now invoke from EXTRA repo's worktree → should allow too (extra repo in scope).
     out="$(run_bash_guard "gh pr merge 1" "$wt_extra" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extra_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extra_norm")"
     if guard_decision "$out"; then
         pass "EXTRA_REPOS: cwd is extra repo, gh write allows (in scope)"
     else
@@ -351,7 +351,7 @@ test_extra_repos_consulted_via_git_C_indirection() {
 
     # With EXTRA_REPOS=<wt_target>: now in session → allow.
     out="$(run_bash_guard "git -C $wt_target rev-parse HEAD && gh pr merge 1" "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$target_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$target_norm")"
     if guard_decision "$out"; then
         pass "EXTRA_REPOS includes target: git -C target allows (in scope)"
     else
@@ -366,7 +366,7 @@ test_extra_repos_empty_only_cwd_in_scope() {
     local out
     # CWD = session → allow
     out="$(run_bash_guard "gh pr merge 1" "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=")"
     if guard_decision "$out"; then
         pass "EXTRA_REPOS='': cwd repo allows"
     else
@@ -387,14 +387,14 @@ test_extra_repos_whitespace_padded_trimmed() {
     local extras=" $a_norm ; $b_norm "
     local out
     out="$(run_bash_guard "gh pr merge 1" "$wt_a" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "EXTRA_REPOS whitespace: trimmed, repo A in scope"
     else
         fail "EXTRA_REPOS whitespace: repo A should be in scope ($out)"
     fi
     out="$(run_bash_guard "gh pr merge 1" "$wt_b" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "EXTRA_REPOS whitespace: trimmed, repo B in scope"
     else
@@ -409,7 +409,7 @@ test_extra_repos_nonexistent_silently_skipped() {
     local valid_norm; valid_norm="$(norm_path "$main")"
     local extras="/totally/nonexistent/path;$valid_norm"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "EXTRA_REPOS: nonexistent silent-skipped, valid still works"
     else
@@ -422,7 +422,7 @@ test_extra_repos_only_separators_no_error() {
     local pair; pair="$(setup_linked_worktree "E-seps")"
     local wt="${pair#*|}"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=;;;")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=;;;")"
     # Must not crash; cwd is in session so allow.
     if echo "$out" | grep -qE '"decision":"(allow|block)"|^\{\}$|^$'; then
         pass "EXTRA_REPOS=';;;': handled without crash"
@@ -512,7 +512,7 @@ test_extra_repos_metacharacters_safe() {
     for p in "${payloads[@]}"; do
         rm -rf "$sentinel" 2>/dev/null
         out="$(run_bash_guard "gh pr merge 1" "$wt" \
-            ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$p" 2>/dev/null)"
+            ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$p" 2>/dev/null)"
         if [ -d "$sentinel" ] || [ -e "$sentinel" ]; then
             fail "SECURITY: EXTRA_REPOS metachar '$p' executed"
             rm -rf "$sentinel" 2>/dev/null
@@ -565,7 +565,7 @@ test_win_path_case_insensitive_scope() {
       console.log(out);
     " -- "$main_norm" 2>/dev/null)"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$mixed")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$mixed")"
     # cwd is the session worktree (already in scope); the case test is for
     # the EXTRA_REPOS membership normalization. cwd path repo == extra path
     # repo (different case) should be recognized as same scope entry.

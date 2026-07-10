@@ -13,7 +13,7 @@
 # Abstain → falls through to downstream main-worktree-allows chain → BLOCK.
 # This test PASSES post-Tighten.
 #
-# Injection: ENFORCE_WORKTREE_EXTRA_REPOS=<repoB> (semicolon-separated list per session-scope.js).
+# Injection: ENFORCE_WORKTREE_ADDITIONAL_REPOS=<repoB> (semicolon-separated list per session-scope.js).
 # The hook's getSessionRepoRoots() includes repoA (CWD root) and repoB (from EXTRA_REPOS).
 
 # ============================================================================
@@ -30,11 +30,11 @@ test_r20_session_scope_cross_repo_block() {
     # Write target is a file inside repoB — outside repoA but inside session scope.
     local target_inside_b="$repo_b/some-file-r20"
 
-    # CWD = repoA main worktree; ENFORCE_WORKTREE_EXTRA_REPOS injects repoB into session scope.
+    # CWD = repoA main worktree; ENFORCE_WORKTREE_ADDITIONAL_REPOS injects repoB into session scope.
     local out
     out="$(run_bash_guard "echo x > $target_inside_b" "$repo_a" \
         ENFORCE_WORKTREE=on \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$repo_b")"
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_b")"
 
     # Expected: BLOCK (universal rule abstains because target is inside repoB which
     # is in session scope; downstream main-worktree block fires).
