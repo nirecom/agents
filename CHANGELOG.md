@@ -379,3 +379,7 @@ Changes: New `CODE_LANG` setting: set to `english` or `japanese` to block commit
 ### FEATURE: PR #1359 (2026-07-11)
 Background: feat(#1113,#1058): add Issues→Class-members coverage gate + structural detail existence gate
 Changes: New structural gate blocks outline and detail plan assembly when `## Issues` has more entries than `## Class members`, or when a detail plan covers issues but contains no `## Steps` or `## Files to modify` section. The gate fires automatically — no configuration required — and re-prompts the planner once before halting.
+
+### FEATURE: PR #1360 (2026-07-11)
+Background: refactor(supervisor): compact output, CONV_LANG, alert pre-catch, Codex audit
+Changes: EM Supervisor is quieter: `warning`/`notice` findings no longer produce per-tool advisories; advisories only appear for `error`-severity cumulative findings.;Supervisor block-reason text now follows `CONV_LANG` — if your session language is Japanese, supervisor output appears in Japanese.;New PreToolUse shim intercepts OFF-sentinel emit commands (WORKFLOW_OFF / WORKTREE_OFF) before execution and blocks them when the supervisor has active findings.;Scope-drift check added at the pre-merge stage: intent violations accumulated during the write-code phase are now reported before a PR is created, not only at Stop boundaries.;Audit mode now triggers on `warning`-severity cumulative findings (previously required `error`), catching potential scope drift sooner.
