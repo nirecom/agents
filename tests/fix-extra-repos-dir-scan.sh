@@ -7,9 +7,9 @@
 # (enforce-worktree.js).
 #
 # New behaviour under test:
-#   If an ENFORCE_WORKTREE_EXTRA_REPOS entry is NOT itself a git repo root, scan
+#   If an ENFORCE_WORKTREE_ADDITIONAL_REPOS entry is NOT itself a git repo root, scan
 #   its immediate subdirectories (depth 1 only) for git repos and add those.
-#   This lets users write ENFORCE_WORKTREE_EXTRA_REPOS=C:\git instead of listing
+#   This lets users write ENFORCE_WORKTREE_ADDITIONAL_REPOS=C:\git instead of listing
 #   every individual repo.
 #
 # Tests labelled [NEW] exercise the new dir-scan path and are EXPECTED TO FAIL
@@ -172,7 +172,7 @@ test_N1_parent_dir_two_repos_allowed() {
     out="$(run_bash_guard \
         "git -C \"$repoA_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$parent_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$parent_norm")"
     if guard_decision "$out"; then
         pass "N1: parent dir scan — repoA reachable via git -C, gh write allows [NEW]"
     else
@@ -182,7 +182,7 @@ test_N1_parent_dir_two_repos_allowed() {
     out="$(run_bash_guard \
         "git -C \"$repoB_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$parent_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$parent_norm")"
     if guard_decision "$out"; then
         pass "N1: parent dir scan — repoB reachable via git -C, gh write allows [NEW]"
     else
@@ -218,7 +218,7 @@ test_N2_mixed_individual_and_parent() {
     out="$(run_bash_guard \
         "git -C \"$individual_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "N2: mixed — individual repo (direct entry) in scope, allows [NEW]"
     else
@@ -229,7 +229,7 @@ test_N2_mixed_individual_and_parent() {
     out="$(run_bash_guard \
         "git -C \"$child_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "N2: mixed — child-via-parent scan in scope, allows [NEW]"
     else
@@ -263,7 +263,7 @@ test_N3_space_after_comma_trimmed() {
     out="$(run_bash_guard \
         "git -C \"$child_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "N3: space-after-comma trimmed — child-via-parent in scope [NEW]"
     else
@@ -273,7 +273,7 @@ test_N3_space_after_comma_trimmed() {
     out="$(run_bash_guard \
         "git -C \"$a_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "N3: space-after-comma trimmed — repoA (direct) still in scope [NEW]"
     else
@@ -298,7 +298,7 @@ test_N4_parent_with_no_git_repos_noop() {
 
     # Guard must still function — session wt is in scope → allow.
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$parent_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$parent_norm")"
     if guard_decision "$out"; then
         pass "N4: parent with no git repos — no-op, session wt still allowed [NEW]"
     else
@@ -328,7 +328,7 @@ test_N5_parent_mixed_git_and_nongit() {
     local out; out="$(run_bash_guard \
         "git -C \"$gitrepo_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$parent_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$parent_norm")"
     if guard_decision "$out"; then
         pass "N5: mixed parent — git repo subdir in scope [NEW]"
     else
@@ -337,7 +337,7 @@ test_N5_parent_mixed_git_and_nongit() {
 
     # Guard must not crash due to plain dirs in the parent.
     local crash_check; crash_check="$(run_bash_guard "gh pr merge 1" "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$parent_norm" 2>&1)"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$parent_norm" 2>&1)"
     if echo "$crash_check" | grep -qiE 'unhandled|throw|Error:|TypeError'; then
         fail "N5: mixed parent — guard threw an error ($crash_check) [NEW]"
     else
@@ -357,7 +357,7 @@ test_E1_nonexistent_path_silently_skipped() {
 
     local extras="/totally/nonexistent/path/$$;$valid_norm"
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     if guard_decision "$out"; then
         pass "E1: nonexistent path silently skipped, valid entry still works [EXISTING]"
     else
@@ -376,7 +376,7 @@ test_E2_extra_repos_unset_only_cwd() {
 
     # With EXTRA_REPOS empty — CWD is the session wt, which IS a worktree → allow.
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=")"
     if guard_decision "$out"; then
         pass "E2: EXTRA_REPOS='', cwd session wt allows [EXISTING]"
     else
@@ -410,7 +410,7 @@ test_E3_file_path_silently_skipped() {
     # would cd to the file itself which may or may not fail — either way, the
     # feature wt (CWD) is always in scope via CWD root, so guard should allow.
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$file_norm;$main_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$file_norm;$main_norm")"
     if guard_decision "$out"; then
         pass "E3: file path in EXTRA_REPOS skipped, valid entry still works [EXISTING]"
     else
@@ -434,7 +434,7 @@ test_E4_empty_dir_no_repos_no_error() {
 
     # With an empty dir as EXTRA_REPOS: no repos discovered. CWD is session wt → allow.
     local out; out="$(run_bash_guard "gh pr merge 1" "$wt" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$empty_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$empty_norm")"
     if guard_decision "$out"; then
         pass "E4: empty dir in EXTRA_REPOS — no error, session wt still allows [EXISTING]"
     else
@@ -464,11 +464,11 @@ test_IDEM1_duplicate_parent_deduped() {
     out1="$(run_bash_guard \
         "git -C \"$repo1_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
     out2="$(run_bash_guard \
         "git -C \"$repo1_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$extras")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$extras")"
 
     if [ "$out1" = "$out2" ]; then
         pass "IDEM1: duplicate parent — identical output (Set dedup, idempotent) [NEW]"
@@ -504,7 +504,7 @@ test_SEC1_metacharacters_not_shell_executed() {
     for p in "${payloads[@]}"; do
         rm -rf "$sentinel" 2>/dev/null
         out="$(run_bash_guard "gh pr merge 1" "$wt" \
-            ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$p" 2>/dev/null)"
+            ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$p" 2>/dev/null)"
         if [ -d "$sentinel" ] || [ -e "$sentinel" ]; then
             fail "SEC1: metachar '$p' was shell-executed [EXISTING]"
             rm -rf "$sentinel" 2>/dev/null
@@ -539,7 +539,7 @@ test_INT1_extra_repos_parent_gh_merge_allowed() {
     local out; out="$(run_bash_guard \
         "git -C \"$target_norm\" rev-parse HEAD && gh pr merge 1" \
         "$wt_session" \
-        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXTRA_REPOS=$parent_norm")"
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$parent_norm")"
     if guard_decision "$out"; then
         pass "INT1: EXTRA_REPOS=parent, gh pr merge targeting subdir repo allows [NEW]"
     else
@@ -574,6 +574,49 @@ test_INT2_no_extra_repos_git_C_different_repo_blocked() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ALIAS1 [NEW] — ENFORCE_WORKTREE_EXTRA_REPOS (deprecated alias) → warned + honored.
+# The new source reads ENFORCE_WORKTREE_ADDITIONAL_REPOS; the old EXTRA_REPOS name
+# must still be honored (when ADDITIONAL unset) AND emit an "is deprecated" warning
+# on stderr. Expected RED until session-scope.js adds the alias handling.
+# This case DELIBERATELY keeps the old ENFORCE_WORKTREE_EXTRA_REPOS spelling.
+# ─────────────────────────────────────────────────────────────────────────────
+test_ALIAS1_extra_repos_deprecated_alias() {
+    require_guard "ALIAS1" || return
+
+    local pair; pair="$(setup_linked_worktree "ALIAS1-session")"
+    local main="${pair%|*}"; local wt="${pair#*|}"
+    local main_norm; main_norm="$(norm_path "$main")"
+
+    local stderr_tmp="$TMPDIR_BASE/alias1-stderr-$$"
+    local payload
+    payload="$(node -e "
+      const j = { session_id:'test-alias1', tool_name:'Bash', tool_input:{ command: 'gh pr merge 1' } };
+      console.log(JSON.stringify(j));
+    " 2>/dev/null)"
+
+    local out
+    out="$(cd "$wt" && echo "$payload" | run_with_timeout 30 env \
+        ENFORCE_WORKTREE=on \
+        "ENFORCE_WORKTREE_EXTRA_REPOS=$main_norm" \
+        node "$GUARD_JS" 2>"$stderr_tmp")" || true
+
+    # 1. Alias honored: session wt is in scope via CWD → gh write allows.
+    if guard_decision "$out"; then
+        pass "ALIAS1: EXTRA_REPOS deprecated alias — gh write still allows [NEW]"
+    else
+        fail "ALIAS1: EXTRA_REPOS deprecated alias — gh write should allow ($out) [NEW]"
+    fi
+
+    # 2. Deprecation warning visible on stderr [expected RED until session-scope.js updated].
+    if grep -q "is deprecated" "$stderr_tmp" 2>/dev/null; then
+        pass "ALIAS1: EXTRA_REPOS deprecated alias — 'is deprecated' warning on stderr [NEW]"
+    else
+        fail "ALIAS1: EXTRA_REPOS deprecated alias — missing 'is deprecated' warning on stderr (expected red) [NEW]"
+    fi
+    rm -f "$stderr_tmp"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -599,6 +642,9 @@ test_SEC1_metacharacters_not_shell_executed
 # Integration (INT1 new, INT2 existing)
 test_INT1_extra_repos_parent_gh_merge_allowed
 test_INT2_no_extra_repos_git_C_different_repo_blocked
+
+# Deprecated-alias warning (new — expected RED until session-scope.js updated)
+test_ALIAS1_extra_repos_deprecated_alias
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"

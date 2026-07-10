@@ -230,7 +230,7 @@ test_G_enforce_worktree_notice_regression() {
         "ENFORCE_WORKTREE=on" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "CLAUDE_ENV_FILE=$envfile" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$repo" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         node "$AGENTS_DIR/hooks/enforce-worktree.js" 2>&1)" || rc=$?
 
     local ok=1
