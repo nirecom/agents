@@ -2,7 +2,8 @@
 
 const path = require("path");
 const { normalizeCwd } = require("../lib/path-normalize");
-const { parseExcludePatterns, matchesAnyExcludePattern } = require("../lib/glob-match");
+const { parseExcludePatterns } = require("../lib/glob-match");
+const { isCoveredByEntryList } = require("../lib/path-coverage-match");
 const { stripQuotedArgs, stripHeredocBody } = require("../lib/strip-quoted-args");
 const { parse } = require("../lib/command-ir");
 
@@ -147,12 +148,16 @@ function isExcluded(filePath, patterns) {
   try {
     const norm = normalizeCwd(filePath) || filePath;
     const abs = path.resolve(norm);
-    // Full-path match (patterns containing '/' or '**').
-    if (matchesAnyExcludePattern(abs, patterns)) return true;
-    // Gitignore semantics: patterns without '/' also match against basename.
-    const basenamePatterns = patterns.filter((p) => !p.includes("/"));
-    if (basenamePatterns.length === 0) return false;
-    return matchesAnyExcludePattern(path.basename(abs), basenamePatterns);
+    // Delegate each entry to the unified path-coverage matcher. getExcludePatterns()
+    // returns a string[] (BUILTIN + user); pass each entry as a single-element list
+    // so per-entry glob/prefix dispatch is preserved and the array interface is kept.
+    for (const entry of patterns) {
+      if (!entry) continue;
+      if (isCoveredByEntryList(entry, abs)) return true;
+      // Gitignore basename semantics: an entry without '/' also matches the basename.
+      if (!entry.includes("/") && isCoveredByEntryList(entry, path.basename(abs))) return true;
+    }
+    return false;
   } catch (e) { return false; }
 }
 
