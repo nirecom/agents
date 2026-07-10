@@ -367,3 +367,7 @@ Changes: Added the `/issue-setup` command to initialize labels and a Projects v2
 ### FEATURE: PR #1348 (2026-07-10)
 Background: fix(#1330): shared-IR test detection + harden git non-exec + review coverage
 Changes: Fixed a bug where read-only commands that merely mention a test path inside a compound shell structure (e.g. `for f in tests/*.sh; do head "$f"; done`) could wrongly reset the workflow `run_tests` step to pending. Test-command detection now understands control structures and only reacts to real test runs.
+
+### FEATURE: PR #1356 (2026-07-10)
+Background: refactor(#1343): unify ENFORCE_WORKTREE_EXCLUDE into path-coverage model; rename EXTRA_REPOS→ADDITIONAL_REPOS
+Changes: **`ENFORCE_WORKTREE_EXCLUDE`** now accepts both glob patterns (`*`, `**`) and plain path prefixes (covering a path and its whole subtree) in a single semicolon-separated list — `ENFORCE_WORKTREE_EXCLUDE_REPOS` is deprecated (a one-time warning guides migration).;**`ENFORCE_WORKTREE_EXTRA_REPOS`** renamed to **`ENFORCE_WORKTREE_ADDITIONAL_REPOS`** — old name still works with a deprecation warning.
