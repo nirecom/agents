@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-enforce-worktree-session-override.sh
 # Tests: hooks/enforce-worktree.js, hooks/workflow-mark.js
-# Tags: worktree, enforce, hook, workflow, bin
+# Tags: worktree, enforce, hook, workflow, bin, scope:issue-specific
 #
 # Integration tests for the session-scoped ENFORCE_WORKTREE escape hatch.
 #
@@ -137,7 +137,7 @@ GUARD_RC=0
 # Tests must distinguish "intentionally allowed" from "crashed but no block
 # string in output" — codex review HIGH#2.
 #
-# <repo-in-scope> is the temp repo to register via ENFORCE_WORKTREE_EXTRA_REPOS
+# <repo-in-scope> is the temp repo to register via ENFORCE_WORKTREE_ADDITIONAL_REPOS
 # so the guard's session-scope check sees the temp repo and falls through to
 # the main-checkout block (otherwise the temp repo is "out of session scope"
 # and the guard short-circuits to allow).
@@ -150,7 +150,7 @@ run_enforce_worktree() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$repo_scope" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "$@" \
         node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
@@ -661,7 +661,7 @@ test_B5_input_session_id_wins_over_env_file() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$repo" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$GUARD_JS" 2>&1)" || true
@@ -824,7 +824,7 @@ test_SEC3_env_file_traversal_blocked() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$repo" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         "CLAUDE_ENV_FILE=$envfile" \
         node "$GUARD_JS" 2>&1)" || rc=$?

@@ -96,7 +96,7 @@ run_guard() {
         -C "$main_wt" \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$main_wt" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
         "$@" \
         node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
     if [ "$GUARD_RC" -ne 0 ]; then
@@ -119,7 +119,7 @@ if ! env -C "$TMPDIR_BASE" true 2>/dev/null; then
             env -u CLAUDE_ENV_FILE \
             "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
             "ENFORCE_WORKTREE=on" \
-            "ENFORCE_WORKTREE_EXTRA_REPOS=$main_wt" \
+            "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
             "$@" \
             node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
         if [ "$GUARD_RC" -ne 0 ]; then
@@ -434,10 +434,10 @@ test_E_WT_CFLAG_2_from_linked_cwd_allow() {
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
     # Drive from linked CWD to reproduce #838. run_guard hardcodes
-    # ENFORCE_WORKTREE_EXTRA_REPOS=<main_wt arg> (here = linked); pass an explicit
+    # ENFORCE_WORKTREE_ADDITIONAL_REPOS=<main_wt arg> (here = linked); pass an explicit
     # override as the trailing $@ env arg so the registry still includes the real
     # main worktree. Later env assignments win in `env`.
-    run_guard "$payload" "$linked" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo" || rc=$?
+    run_guard "$payload" "$linked" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo" || rc=$?
     assert_allow "E-WT-CFLAG-2: git -C <main> worktree remove <linked> from linked CWD → ALLOW (fix #838)" "$rc"
 }
 

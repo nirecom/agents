@@ -87,7 +87,7 @@ run_guard() {
         env -u CLAUDE_ENV_FILE \
         -C "$main_wt" \
         "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$main_wt" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
         "$@" \
         node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
     if [ "$GUARD_RC" -ne 0 ]; then
@@ -108,7 +108,7 @@ if ! env -C "$TMPDIR_BASE" true 2>/dev/null; then
         GUARD_OUT="$(cd "$main_wt" && printf '%s' "$payload" | run_with_timeout 30 \
             env -u CLAUDE_ENV_FILE \
             "ENFORCE_WORKTREE=on" \
-            "ENFORCE_WORKTREE_EXTRA_REPOS=$main_wt" \
+            "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$main_wt" \
             "$@" \
             node "$GUARD_JS" 2>&1)" || GUARD_RC=$?
         if [ "$GUARD_RC" -ne 0 ]; then
@@ -199,7 +199,7 @@ setup_fake_acd() {
 # F959 series — isAllowedWorkerScriptInvocation (Class 3)
 #
 # Setup contract: every case registers BOTH the main worktree and the linked
-# worktree in session scope (ENFORCE_WORKTREE_EXTRA_REPOS="$repo;$linked"). This
+# worktree in session scope (ENFORCE_WORKTREE_ADDITIONAL_REPOS="$repo;$linked"). This
 # is what reproduces the #959 false-block: with the linked worktree in scope, a
 # log-redirect target inside it resolves in-scope, and because the command runs
 # from the main-worktree CWD the main-checkout guard fires. Without the linked
@@ -218,7 +218,7 @@ test_F959_1_allow_sanctioned_linked_log() {
     local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F959-1: sanctioned script + linked-wt log → ALLOW (fix #959 Class 3)" "$rc"
 }
 
@@ -233,7 +233,7 @@ test_F959_2_allow_sanctioned_no_redirect() {
     local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_allow "F959-2: sanctioned script + no redirect (targets=null) → ALLOW (fix #959 Class 3)" "$rc"
 }
 
@@ -249,7 +249,7 @@ test_F959_3_block_sanctioned_main_log() {
     local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-3: sanctioned script + main-wt log → BLOCK (main-wt write target, Class 3 fail-closed)" "$rc"
 }
 
@@ -267,7 +267,7 @@ test_F959_4_block_unregistered_log() {
     local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-4: sanctioned script + unregistered .wt/ghost log → BLOCK (registry mismatch, Class 3 fail-closed)" "$rc"
 }
 
@@ -284,7 +284,7 @@ test_F959_5_block_non_sanctioned_script() {
     local cmd; cmd="bash \"$fake_acd/bin/some-other.sh\" \"$repo\" &> \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-5: non-sanctioned script + linked-wt log → BLOCK (identity gate rejects, Class 3)" "$rc"
 }
 
@@ -299,7 +299,7 @@ test_F959_6_block_log_basename_only() {
     local cmd="echo done > \"$log_path\""
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-6: echo to *-worker.log (no bash identity) → BLOCK (identity anchor test, Class 3)" "$rc"
 }
 
@@ -314,7 +314,7 @@ test_F959_7_block_trailing_chaining() {
     local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\" &> \"$log_path\" && rm -rf /"
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-7: sanctioned script + linked-wt log + && chaining → BLOCK (argTail chaining gate, Class 3)" "$rc"
 }
 
@@ -336,7 +336,7 @@ test_F959_8_block_bare_ampersand_background() {
     local cmd; cmd="bash \"$fake_acd/bin/check-unstaged-tracked.sh\" \"$repo\" & git push origin main"
     local payload; payload="$(build_bash_payload "$cmd")"
     local rc=0
-    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_EXTRA_REPOS=$repo;$linked" || rc=$?
+    run_guard "$payload" "$repo" "AGENTS_CONFIG_DIR=$fake_acd" "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo;$linked" || rc=$?
     assert_block "F959-8: sanctioned script + bare & git push → BLOCK (bare-& security pin, Class 3)" "$rc"
 }
 

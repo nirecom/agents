@@ -444,7 +444,7 @@ test_push_no_upstream_blocks() {
 # evaluate B's outgoing range against ENFORCE_WORKTREE_EXCLUDE, the same way it
 # does for same-repo pushes.
 #
-# IMPORTANT: All cross-repo tests set ENFORCE_WORKTREE_EXTRA_REPOS=<B-path>.
+# IMPORTANT: All cross-repo tests set ENFORCE_WORKTREE_ADDITIONAL_REPOS=<B-path>.
 # Without that, B is outside sessionRoots and the hook early-allows at the
 # `git -C` scope check — BLOCK tests would then pass for the wrong reason.
 
@@ -459,7 +459,7 @@ test_cross_repo_push_docs_only_bare_allows() {
     local trace="$TMPDIR_BASE/xr-bare.trace"
     local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push" "$a" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$b")"
     if guard_decision "$out"; then
         pass "Fix 1 (cross-repo): 'git -C <B> push' docs-only allows"
     else
@@ -478,7 +478,7 @@ test_cross_repo_push_docs_only_explicit_allows() {
     local trace="$TMPDIR_BASE/xr-explicit.trace"
     local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push origin main" "$a" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$b")"
     if guard_decision "$out"; then
         pass "Fix 1 (cross-repo): 'git -C <B> push origin main' docs-only allows"
     else
@@ -500,7 +500,7 @@ test_cross_repo_push_mixed_blocks() {
     local trace="$TMPDIR_BASE/xr-mixed.trace"
     local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push" "$a" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$b")"
     if guard_decision "$out"; then
         fail "Fix 1 (cross-repo): mixed docs+src commits should block ($out)"
     else
@@ -530,7 +530,7 @@ test_cross_repo_push_no_upstream_blocks() {
     local trace="$TMPDIR_BASE/xr-noup.trace"
     local out; out="$(run_bash_guard_with_trace "$trace" "git -C \"$b\" push" "$a" \
         ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=**/docs/**" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$b")"
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$b")"
     if guard_decision "$out"; then
         fail "Fix 1 (cross-repo): no-upstream push should block ($out)"
     else

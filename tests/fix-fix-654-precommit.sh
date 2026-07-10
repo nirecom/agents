@@ -30,8 +30,8 @@ fi
 # updated. If either marker is missing, the integration cases would fail in
 # uninformative ways — skip cleanly so the runner doesn't conflate red phase
 # with a regression.
-if ! grep -q 'getExcludePatterns\|BUILTIN_EXCLUDE_PATTERNS' "$PRE_COMMIT" 2>/dev/null; then
-    echo "SKIP: hooks/pre-commit not yet wired to getExcludePatterns / BUILTIN_EXCLUDE_PATTERNS (pre-implementation red phase)"
+if ! grep -q 'precommit-exclude-check\|ENFORCE_WORKTREE_EXCLUDE' "$PRE_COMMIT" 2>/dev/null; then
+    echo "SKIP: hooks/pre-commit not yet wired to precommit-exclude-check / ENFORCE_WORKTREE_EXCLUDE (pre-implementation red phase)"
     exit 0
 fi
 if ! grep -q 'BUILTIN_EXCLUDE_PATTERNS' "$SHARED_JS" 2>/dev/null; then

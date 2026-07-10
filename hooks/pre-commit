@@ -58,82 +58,28 @@ _is_enforce_worktree_on() {
 }
 
 if _is_enforce_worktree_on; then
-    # ENFORCE_WORKTREE_EXCLUDE: when ALL staged files match the exclude patterns,
-    # skip the main-checkout and protected-branch gate below. The private-info
-    # scanner further down still runs. Patterns and paths are passed via env
-    # (never as shell-interpolated args) to prevent metacharacter injection.
+    # ENFORCE_WORKTREE_EXCLUDE: unified path-coverage check via a committed Node
+    # helper. Exit 0 → all staged files covered → skip the enforcement gate below.
+    # Exit 2 → not all covered → run the gate. Env vars only (no shell path
+    # interpolation). stderr from the helper (deprecation warnings) is preserved
+    # intentionally — do NOT add 2>/dev/null here.
     _enforce_skip=0
     _staged="$(git diff --cached --name-only 2>/dev/null || true)"
     _repo_top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     if [ -n "$_staged" ] && [ -n "$_repo_top" ]; then
         _node_rc=0
         ENFORCE_WORKTREE_EXCLUDE="${ENFORCE_WORKTREE_EXCLUDE:-}" \
+        ENFORCE_WORKTREE_EXCLUDE_REPOS="${ENFORCE_WORKTREE_EXCLUDE_REPOS:-}" \
         AGENTS_CONFIG_DIR="${AGENTS_CONFIG_DIR:-$_cfg_dir}" \
         _PRECOMMIT_REPO_TOP="$_repo_top" \
         _PRECOMMIT_STAGED="$_staged" \
-        node -e '
-          const cfg = process.env.AGENTS_CONFIG_DIR;
-          if (!cfg) process.exit(2);
-          const { getExcludePatterns, isExcluded } =
-            require(cfg + "/hooks/enforce-worktree/shared-cmd-utils");
-          const patterns = getExcludePatterns();
-          const files = process.env._PRECOMMIT_STAGED.split(/\r?\n/).filter(Boolean);
-          if (patterns.length === 0) process.exit(2);
-          for (const rel of files) {
-            if (!isExcluded(rel, patterns)) process.exit(2);
-          }
-          process.exit(0);
-        ' 2>/dev/null || _node_rc=$?
+        node "${AGENTS_CONFIG_DIR:-$_cfg_dir}/hooks/lib/precommit-exclude-check.js" || _node_rc=$?
         if [ "$_node_rc" = "0" ]; then
             _enforce_skip=1
         elif [ "$_node_rc" != "2" ]; then
-            # rc=2 is the documented "patterns did not all match" path.
-            # Other non-zero rc indicates a problem (missing node, broken
-            # glob-match.js, etc.). Surface it so users know their EXCLUDE
-            # config was silently bypassed by an error, not by the gate.
-            echo "pre-commit: ENFORCE_WORKTREE_EXCLUDE matcher failed (rc=$_node_rc); falling back to enforce-worktree gate." >&2
-        fi
-    fi
-
-    # ENFORCE_WORKTREE_EXCLUDE_REPOS: if the current repo root is in the exclusion list,
-    # skip the main-checkout and protected-branch gate (same semantics as the JS hook).
-    if [ "$_enforce_skip" = "0" ] && [ -n "${ENFORCE_WORKTREE_EXCLUDE_REPOS:-}" ]; then
-        _cur_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-        if [ -n "$_cur_root" ]; then
-            # Normalize both paths to a canonical form for comparison.
-            # Strategy: resolve each path via cd+pwd to canonicalize (resolves /tmp symlinks,
-            # drive-letter differences, etc.), then normalize separators. Case-fold only on
-            # Windows (case-insensitive FS) to match config.js isRepoExcluded
-            # (process.platform === 'win32'); POSIX filesystems are case-sensitive.
-            case "$(uname -s 2>/dev/null)" in
-                MINGW*|MSYS*|CYGWIN*) _excl_win=1 ;;
-                *) _excl_win=0 ;;
-            esac
-            _cur_root_norm="$(cd "$_cur_root" 2>/dev/null && pwd -P || printf '%s' "$_cur_root")"
-            [ "$_excl_win" = "1" ] && _cur_root_norm="${_cur_root_norm,,}"
-            _cur_root_norm="${_cur_root_norm//\\//}"
-            _old_ifs="$IFS"
-            IFS=';' read -ra _excl_entries <<< "${ENFORCE_WORKTREE_EXCLUDE_REPOS}"
-            IFS="$_old_ifs"
-            for _excl_entry in "${_excl_entries[@]}"; do
-                # Trim whitespace
-                _excl_entry="${_excl_entry#"${_excl_entry%%[![:space:]]*}"}"
-                _excl_entry="${_excl_entry%"${_excl_entry##*[![:space:]]}"}"
-                [ -z "$_excl_entry" ] && continue
-                # Resolve entry to the same canonical form
-                if [ -d "$_excl_entry" ]; then
-                    _excl_norm="$(cd "$_excl_entry" 2>/dev/null && pwd -P || printf '%s' "$_excl_entry")"
-                else
-                    _excl_norm="$_excl_entry"
-                fi
-                [ "$_excl_win" = "1" ] && _excl_norm="${_excl_norm,,}"
-                _excl_norm="${_excl_norm//\\//}"
-                if [ "$_cur_root_norm" = "$_excl_norm" ] || \
-                   [[ "$_cur_root_norm" == "${_excl_norm}/"* ]]; then
-                    _enforce_skip=1
-                    break
-                fi
-            done
+            # rc=2 is the normal "not all covered" path. Other non-zero rc means a
+            # problem (missing node, broken module, etc.) — surface it.
+            echo "pre-commit: exclude-check failed (rc=$_node_rc); falling back to enforce-worktree gate." >&2
         fi
     fi
 
