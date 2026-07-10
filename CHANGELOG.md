@@ -383,3 +383,7 @@ Changes: New structural gate blocks outline and detail plan assembly when `## Is
 ### FEATURE: PR #1360 (2026-07-11)
 Background: refactor(supervisor): compact output, CONV_LANG, alert pre-catch, Codex audit
 Changes: EM Supervisor is quieter: `warning`/`notice` findings no longer produce per-tool advisories; advisories only appear for `error`-severity cumulative findings.;Supervisor block-reason text now follows `CONV_LANG` — if your session language is Japanese, supervisor output appears in Japanese.;New PreToolUse shim intercepts OFF-sentinel emit commands (WORKFLOW_OFF / WORKTREE_OFF) before execution and blocks them when the supervisor has active findings.;Scope-drift check added at the pre-merge stage: intent violations accumulated during the write-code phase are now reported before a PR is created, not only at Stop boundaries.;Audit mode now triggers on `warning`-severity cumulative findings (previously required `error`), catching potential scope drift sooner.
+
+### FEATURE: PR #1362 (2026-07-11)
+Background: fix(#1358): _encodeCwd ignores CLAUDE_PROJECT_DIR, uses cwd argument only
+Changes: Fixed: sessions from another workspace no longer appear in the current workspace's CC sessions list when multiple Claude Code sessions run concurrently (caused by `_encodeCwd` incorrectly preferring `CLAUDE_PROJECT_DIR` over the explicit cwd argument).
