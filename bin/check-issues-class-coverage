@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# bin/check-issues-class-coverage
+# Tests: tests/feature-1113-1058-check-issues-class-coverage.sh
+# Tags: plan-coverage-gate, outline, detail
+#
+# Gate CLI for plan coverage checks. Two modes:
+#   --mode outline <file>  Count gate: issues_count <= members_count required
+#   --mode detail  <file>  Existence gate: ## Steps or ## Files to modify required when issues exist
+#
+# Issues count: bin/parse-closes-issues (canonical parser -- handles #N, repo#N, owner/repo#N)
+# Members count: raw list lines excluding (none detected) variants (no dedicated parser)
+# This asymmetry is intentional: parse-closes-issues only covers ## Issues heading content.
+#
+# Exit codes:
+#   0 -- PASS
+#   1 -- GATE FAIL (undercoverage or missing Steps/Files section)
+#   2 -- usage error (missing or invalid arguments)
+#   3 -- internal error (file not found)
+set -uo pipefail
+
+if [[ -n "${AGENTS_CONFIG_DIR:-}" ]]; then
+  AGENTS_ROOT="$AGENTS_CONFIG_DIR"
+else
+  AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
+PARSE_ISSUES="$AGENTS_ROOT/bin/parse-closes-issues"
+EXTRACT="$AGENTS_ROOT/bin/extract-mandatory-sections"
+
+MODE=""
+FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mode)
+      [[ $# -ge 2 ]] || { echo "check-issues-class-coverage: --mode requires an argument" >&2; exit 2; }
+      MODE="$2"
+      shift 2
+      ;;
+    -*)
+      echo "check-issues-class-coverage: unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      if [[ -z "$FILE" ]]; then
+        FILE="$1"
+        shift
+      else
+        echo "check-issues-class-coverage: unexpected argument: $1" >&2
+        exit 2
+      fi
+      ;;
+  esac
+done
+
+[[ -n "$MODE" ]] || { echo "check-issues-class-coverage: --mode is required (outline|detail)" >&2; exit 2; }
+[[ -n "$FILE" ]] || { echo "check-issues-class-coverage: <file> argument is required" >&2; exit 2; }
+
+if [[ "$MODE" != "outline" && "$MODE" != "detail" ]]; then
+  echo "check-issues-class-coverage: unknown mode '$MODE' (expected: outline|detail)" >&2
+  exit 2
+fi
+
+if [[ ! -f "$FILE" ]]; then
+  echo "check-issues-class-coverage: error: file not found: $FILE" >&2
+  exit 3
+fi
+
+# Count issues via the canonical parser; returns JSON array
+count_issues() {
+  local file="$1"
+  local issues_json
+  issues_json=$(node "$PARSE_ISSUES" "$file" 2>/dev/null) || issues_json="[]"
+  # Count objects in the array by counting "number" keys (each entry has exactly one)
+  local n
+  n=$(echo "$issues_json" | grep -o '"number"' | wc -l | tr -d ' ') || n=0
+  echo "${n:-0}"
+}
+
+if [[ "$MODE" == "outline" ]]; then
+  issues_count=$(count_issues "$FILE")
+
+  if [[ "${issues_count:-0}" -eq 0 ]]; then
+    exit 0
+  fi
+
+  # Extract ## Class members section and count real (non-placeholder) bullet lines
+  members_body=$("$EXTRACT" "$FILE" --section "Class members" 2>/dev/null || true)
+  # Total bullet lines
+  members_total=$(echo "$members_body" | grep -c '^-' || true)
+  # Placeholder lines: (none detected) in any spacing variant
+  none_count=$(echo "$members_body" | grep -cE '^\-[[:space:]]+\([[:space:]]*none[[:space:]]+detected[[:space:]]*\)' || true)
+  members_count=$(( ${members_total:-0} - ${none_count:-0} ))
+
+  if [[ "$members_count" -lt "$issues_count" ]]; then
+    echo "check-issues-class-coverage: GATE FAIL [outline]: ## Issues has ${issues_count} entries but ## Class members has ${members_count} entries (expected >= ${issues_count}). Every closes_issues entry must have >= 1 Class members entry." >&2
+    exit 1
+  fi
+
+elif [[ "$MODE" == "detail" ]]; then
+  issues_count=$(count_issues "$FILE")
+
+  if [[ "${issues_count:-0}" -eq 0 ]]; then
+    exit 0
+  fi
+
+  # Existence gate: at least one of ## Steps or ## Files to modify must be present
+  steps_body=$("$EXTRACT" "$FILE" --section "Steps" 2>/dev/null || true)
+  files_body=$("$EXTRACT" "$FILE" --section "Files to modify" 2>/dev/null || true)
+
+  if [[ -z "$steps_body" && -z "$files_body" ]]; then
+    echo "check-issues-class-coverage: GATE FAIL [detail]: detail.md has ${issues_count} closes_issues entries but neither ## Steps nor ## Files to modify section exists in the plan body." >&2
+    exit 1
+  fi
+fi
+
+exit 0

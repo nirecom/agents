@@ -271,4 +271,14 @@ for section in "Class members" "Accepted Tradeoffs"; do
   fi
 done
 
+# --- Gate: outline coverage check (fires whenever OUT is an outline artifact) ---
+if [[ "$OUT" == *-outline.md ]]; then
+  GATE="$AGENTS_ROOT/bin/check-issues-class-coverage"
+  if [[ -x "$GATE" ]]; then
+    if ! "$GATE" --mode outline "$SOURCE"; then
+      verify_fail "Issues→Class-members coverage gate failed (see stderr above)"
+    fi
+  fi
+fi
+
 exit 0
