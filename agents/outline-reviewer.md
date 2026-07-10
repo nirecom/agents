@@ -109,6 +109,7 @@ C2: unresolved — <reason>
   A `triage: OPTIONAL` member that is neither addressed nor explicitly deferred →
   `MISSING_ALTERNATIVE` with severity `[MED]`.
   Members with `triage: NA`, `(none detected)`, or absent — skip.
+- **Issues → Class members count gap [HIGH]:** Count list entries in `## Issues` (excluding `(none detected)`) and in `## Class members` (excluding `(none detected)`). When issues_count > 0 and members_count < issues_count, return `MISSING_ALTERNATIVE` with: `[HIGH] ## Issues has N entries but ## Class members has only M entries. Every closes_issues entry must have >= 1 Class members entry.`
 
   **Backward compatibility:** legacy intent.md may use `disposition:` instead of `triage:`.
   Treat `disposition: fix in scope` as `triage: MUST` and `disposition: track separately`
