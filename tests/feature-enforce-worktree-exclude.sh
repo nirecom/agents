@@ -1,16 +1,21 @@
 #!/bin/bash
 # tests/feature-enforce-worktree-exclude.sh
 # Tests: hooks/lib/glob-match.js, hooks/pre-commit
-# Tags: worktree, enforce, hook, git, pre-commit
+# Tags: worktree, enforce, hook, git, pre-commit, scope:issue-specific
 #
 # Integration tests for hooks/pre-commit ENFORCE_WORKTREE_EXCLUDE bypass.
 #
 # Each test sets up a throwaway main worktree with `core.hooksPath` pointing
-# at the agents-repo `hooks/` directory, stages files, and runs `git commit`
-# (or invokes `hooks/pre-commit` directly) with various EXCLUDE values.
+# at the agents-repo `hooks/` directory, stages files, and invokes
+# hooks/pre-commit directly (L2 — not a real git commit hook registration
+# test; the hook binary is called as a subprocess, not via `git commit`).
 #
 # Skips gracefully when the EXCLUDE feature is not yet implemented in
 # hooks/pre-commit (detected by grepping for ENFORCE_WORKTREE_EXCLUDE).
+#
+# L3 gap: real git commit hook-registration (hooks/ wired into a live `git
+# commit` invocation) is not tested at L2. The closest-to-action verification
+# is bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -29,13 +34,13 @@ if [ ! -f "$PRE_COMMIT" ]; then
 fi
 
 if ! grep -q 'ENFORCE_WORKTREE_EXCLUDE' "$PRE_COMMIT" 2>/dev/null; then
-    echo "SKIP: ENFORCE_WORKTREE_EXCLUDE not yet implemented in hooks/pre-commit"
-    exit 0
+    echo "FAIL: ENFORCE_WORKTREE_EXCLUDE missing from hooks/pre-commit (required surface)"
+    exit 1
 fi
 
 if [ ! -f "$GLOB_JS" ]; then
-    echo "SKIP: hooks/lib/glob-match.js not yet implemented"
-    exit 0
+    echo "FAIL: hooks/lib/glob-match.js missing (required surface)"
+    exit 1
 fi
 
 PASS=0
@@ -364,10 +369,77 @@ test_idempotency_same_inputs_same_outcome() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Regression: glob EXCLUDE pattern still allows via the committed-helper path
+# After the pre-commit refactor (precommit-exclude-check.js), ** glob coverage
+# must still let a covered file commit from the main worktree.
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_regression_glob_via_committed_helper() {
+    local repo; repo="$(setup_main_checkout "ex-glob-helper")"
+    stage_file "$repo" "docs/todo.md" "todo entry"
+    local pat
+    if command -v cygpath >/dev/null 2>&1; then
+        pat="$(cygpath -m "$repo")/**/*.md"
+    else
+        pat="$repo/**/*.md"
+    fi
+    if run_pre_commit "$repo" \
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=$pat"; then
+        pass "regression: ** glob EXCLUDE still allows via committed-helper pre-commit path"
+    else
+        fail "regression: ** glob EXCLUDE must still allow via committed-helper path (out: $RUN_OUT)"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C1: Static structural check — pre-commit calls precommit-exclude-check.js
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_c1_precommit_calls_exclude_check_js() {
+    if grep -q 'precommit-exclude-check' "$PRE_COMMIT" 2>/dev/null; then
+        pass "precommit-calls-exclude-check-js: hooks/pre-commit wires precommit-exclude-check"
+    else
+        fail "precommit-calls-exclude-check-js: string 'precommit-exclude-check' not found in hooks/pre-commit (wiring removed)"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C1: Behavioral — EXCLUDE_REPOS set to a subdirectory of repo covers staged
+#     file under that subdirectory (path-coverage covers subtree)
+#
+# L3 gap (C1): real git commit hook-registration tested via
+# bin/check-verification-gate.sh category: hook-registration.
+# Multi-file staged with space in filename is covered at unit level in
+# unit-precommit-exclude-check.sh case space-in-staged-covered.
+# ─────────────────────────────────────────────────────────────────────────────
+
+test_c1_precommit_subdir_path_in_exclude_repos() {
+    local repo; repo="$(setup_main_checkout "c1-subdir")"
+    stage_file "$repo" "docs/readme.md" "content"
+    # ENFORCE_WORKTREE_EXCLUDE set to the docs/ subdirectory (NOT the repo root).
+    # path-coverage: a plain path entry covers the path and its subtree, so
+    # docs/readme.md is covered by <repo>/docs.
+    local excl_path
+    if command -v cygpath >/dev/null 2>&1; then
+        excl_path="$(cygpath -m "$repo/docs")"
+    else
+        excl_path="$repo/docs"
+    fi
+    if run_pre_commit "$repo" \
+        ENFORCE_WORKTREE=on "ENFORCE_WORKTREE_EXCLUDE=$excl_path"; then
+        pass "precommit-subdir-path-in-exclude-repos: subdir EXCLUDE entry covers files under it"
+    else
+        fail "precommit-subdir-path-in-exclude-repos: subdir EXCLUDE entry must cover staged file (out: $RUN_OUT)"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all (overall timeout 120s)
 # ─────────────────────────────────────────────────────────────────────────────
 
 run_all() {
+    test_c1_precommit_calls_exclude_check_js
+    test_c1_precommit_subdir_path_in_exclude_repos
     test_normal_exclude_matches_all_allows_from_main
     test_normal_globstar_covers_subdirs
     test_error_partial_match_blocks
@@ -377,6 +449,7 @@ run_all() {
     test_edge_node_missing_fail_safe
     test_security_metacharacters_not_exec
     test_idempotency_same_inputs_same_outcome
+    test_regression_glob_via_committed_helper
 }
 
 if command -v timeout >/dev/null 2>&1; then

@@ -10,6 +10,8 @@ const { resolveRepoRoot } = require("./git-repo-detection");
 // process). Issue #321 — payload-derived repo resolution.
 let _payloadDerivedPaths = [];
 
+const _warnedDeprecated = new Set();
+
 function setPayloadDerivedPaths(paths) {
   _payloadDerivedPaths = (paths || []).filter(Boolean);
 }
@@ -19,7 +21,7 @@ function _getPayloadDerivedPaths() { return _payloadDerivedPaths.slice(); }
 // Returns the set of repo roots considered "in session scope" for gh write commands.
 // Composition:
 //   - process.cwd() repo root (always included if it resolves to a repo)
-//   - Each path listed in ENFORCE_WORKTREE_EXTRA_REPOS (semicolon-separated)
+//   - Each path listed in ENFORCE_WORKTREE_ADDITIONAL_REPOS (semicolon-separated)
 // Behaviour:
 //   - Whitespace around entries is trimmed; empty entries are skipped.
 //   - Nonexistent paths are silently skipped (not an error).
@@ -37,7 +39,19 @@ function getSessionRepoRoots() {
     const r = resolveRepoRoot(p);
     if (r) roots.add(r);
   }
-  const extra = (process.env.ENFORCE_WORKTREE_EXTRA_REPOS || "")
+  // --- BEGIN temporary: ENFORCE_WORKTREE_EXTRA_REPOS → ENFORCE_WORKTREE_ADDITIONAL_REPOS migration ---
+  if (process.env.ENFORCE_WORKTREE_EXTRA_REPOS && !process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS) {
+    if (!_warnedDeprecated.has("ENFORCE_WORKTREE_EXTRA_REPOS")) {
+      process.stderr.write(
+        "enforce-worktree: ENFORCE_WORKTREE_EXTRA_REPOS is deprecated; " +
+        "rename to ENFORCE_WORKTREE_ADDITIONAL_REPOS in your .env\n"
+      );
+      _warnedDeprecated.add("ENFORCE_WORKTREE_EXTRA_REPOS");
+    }
+    process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS = process.env.ENFORCE_WORKTREE_EXTRA_REPOS;
+  }
+  // --- END temporary: ENFORCE_WORKTREE_EXTRA_REPOS → ENFORCE_WORKTREE_ADDITIONAL_REPOS migration ---
+  const extra = (process.env.ENFORCE_WORKTREE_ADDITIONAL_REPOS || "")
     .split(";").map((s) => s.trim()).filter(Boolean);
   for (const dir of extra) {
     let resolved;
