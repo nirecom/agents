@@ -139,13 +139,20 @@ Set in agents config (`.env`):
 ENFORCE_WORKTREE=off   # trivial one-liner; re-enable immediately after
 ```
 
-**Per-repo exclusion** — `ENFORCE_WORKTREE_EXCLUDE_REPOS` exempts specific repo root paths from
-enforcement (edit/commit directly from any branch) without turning the guard off globally; all
-other repos stay enforced. Semicolon-separated absolute paths; honored by both `enforce-worktree.js`
-and `pre-commit`:
+**Path exclusion (path-coverage)** — `ENFORCE_WORKTREE_EXCLUDE` exempts the given paths from
+enforcement. An entry with a glob metachar (`*` / `**`) matches file paths via glob; a plain
+path entry matches via path-boundary prefix (covering that path and its whole subtree). Both
+`enforce-worktree.js` and `pre-commit` honor it. Glob and plain entries may be mixed:
 ```
-ENFORCE_WORKTREE_EXCLUDE_REPOS=C:\git\repo-a;C:\git\repo-b   # POSIX: /home/user/repo-a;/home/user/repo-b
+ENFORCE_WORKTREE_EXCLUDE=C:\git\repo-a;C:\git\**\todo.md   # POSIX: /home/user/repo-a;/home/user/agents/docs/**/*.md
 ```
+
+> **Migration:** `ENFORCE_WORKTREE_EXCLUDE_REPOS` is deprecated. Move the same entries to
+> `ENFORCE_WORKTREE_EXCLUDE` (a one-time deprecation warning is printed until you do).
+
+**Additional session-scope repos** — `ENFORCE_WORKTREE_ADDITIONAL_REPOS` (formerly
+`ENFORCE_WORKTREE_EXTRA_REPOS`) lists extra repo roots recognized as targets for `gh` write
+commands. The CWD repo is always included.
 
 > **Note:** The merge gate (`user_verification` block on `gh pr merge` and protected-branch push)
 > fires in **both** modes. It is enforced by `workflow-gate.js` independently of the worktree guard.

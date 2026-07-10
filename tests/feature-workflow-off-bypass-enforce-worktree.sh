@@ -114,7 +114,7 @@ run_guard() {
         env -u CLAUDE_ENV_FILE \
         "AGENTS_CONFIG_DIR=$AGENTS_DIR" \
         "ENFORCE_WORKTREE=on" \
-        "ENFORCE_WORKTREE_EXTRA_REPOS=$repo_scope" \
+        "ENFORCE_WORKTREE_ADDITIONAL_REPOS=$repo_scope" \
         "CLAUDE_WORKFLOW_DIR=$wfdir" \
         node "$HOOK_JS" 2>&1)" || GUARD_RC=$?
 }

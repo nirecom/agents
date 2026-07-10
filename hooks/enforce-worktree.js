@@ -96,7 +96,7 @@ try {
 
 if (!isEnforceWorktreeOn()) done();
 
-// ENFORCE_WORKTREE_EXCLUDE_REPOS: if the target repo is explicitly excluded,
+// ENFORCE_WORKTREE_EXCLUDE: if the target repo is explicitly excluded (path-coverage),
 // skip enforcement for this write without disabling enforcement globally.
 if (isCommandRepoExcluded(input, process.cwd())) done();
 
@@ -291,7 +291,7 @@ if (toolName === "Bash") {
         block: true,
         reason:
           `ENFORCE_WORKTREE: gh write blocked. Reason: target repo (${repoRoot}) is not in session scope.\n` +
-          "Add this repo to ENFORCE_WORKTREE_EXTRA_REPOS in agents config, or run from a session repo.\n" +
+          "Add this repo to ENFORCE_WORKTREE_ADDITIONAL_REPOS in agents config, or run from a session repo.\n" +
           "Or set ENFORCE_WORKTREE=off to bypass.",
       });
     }
