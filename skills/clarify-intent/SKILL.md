@@ -134,7 +134,7 @@ CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures
      - **"Abort workflow"** — emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>"` and exit the skill.
    - **`CLOSED_ENTRY`** → STOP. Do NOT emit the completion sentinel. The issue exists but is closed — do NOT create a duplicate. `AskUserQuestion`: "Tracking-issue guard detected a CLOSED entry. How should we recover?" — options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>`, then re-run guard) / "Abort session" (emit `<<WORKFLOW_RESET_FROM_clarify_intent: closed tracking entry>>`).
 
-   Note (§4 Orthogonality): no new workflow sentinel is introduced. Retry-exhaustion is an interactive recovery prompt, not a workflow state transition.
+   Note (CPR-5 Orthogonality): no new workflow sentinel is introduced. Retry-exhaustion is an interactive recovery prompt, not a workflow state transition.
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).
