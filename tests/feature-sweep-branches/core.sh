@@ -2,7 +2,8 @@
 # tests/feature-sweep-branches/core.sh
 # Core sweep tests: local-branch lifecycle, age gate, JSON shape, JS unit,
 # env-var validation. Remote-branch behaviors live in remote.sh.
-# Tests: T1, T3, T4, T7, T8, T10, T11, T17
+# Tests: bin/sweep-branches.sh, hooks/enforce-worktree/branch-delete-guard.js, hooks/lib/command-parser.js
+# Tags: sweep, branch, maintenance, bin, git, branch-delete, redirect, scope:common
 #
 # Sourced helpers come from _lib.sh. Runnable standalone:
 #   bash tests/feature-sweep-branches/core.sh
@@ -306,6 +307,67 @@ T11_isSweepBranchesSkillForceDelete_unit() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T12 — isSweepBranchesSkillForceDelete tolerates Bash-appended trailing
+#       redirects (#1380/#1172 CPR-5 symmetric pair). bin/sweep-branches.sh
+#       callsites emit `2>/dev/null`, so the predicate must strip the suffix.
+#   a) "...branch -D feature/x 2>/dev/null" → true (RED before fix)
+#   b) "...branch -D feature/x 2>&1"        → true (RED before fix)
+#   c) "...branch -D main 2>/dev/null"      → false (protected branch — negative)
+#   d) "...branch -D feature/x; rm -rf / 2>/dev/null" → false (layer-A guard:
+#        hasShellChaining(ORIGINAL cmd) detects `;` before the helper strips
+#        the trailing `2>/dev/null`; attack-scenario proof the chain is NOT
+#        authorized after redirect stripping).
+# FAIL-BEFORE-FIX: the `[ \t]*$` anchor rejects the redirect suffix → the
+# want=true rows FAIL until the source fix lands. The want=false rows already
+# return false → GREEN now and must stay GREEN (fail-closed must not regress).
+#
+# Table-driven per test-design.md (branch-delete-guard.js + command-parser.js
+# are regex/predicate files). Each stripped suffix has an independent row so a
+# never-match mutation of any new stripTrailingRedirects const kills at least
+# one row (mutation-probe kill coverage). AFTER the source fix lands, run
+# `bin/mutation-probe.sh hooks/lib/command-parser.js` and confirm the ≥80%
+# threshold (executed at the run-tests stage, not here).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Call isSweepBranchesSkillForceDelete('$1') → 'true' | 'false' | 'MISSING_FN'.
+call_isSweepForceDelete() {
+    cd "$AGENTS_DIR" && node -e \
+        "const g=require('./hooks/enforce-worktree/branch-delete-guard.js');const fn=typeof g.isSweepBranchesSkillForceDelete==='function'?g.isSweepBranchesSkillForceDelete:null;if(!fn){console.log('MISSING_FN');process.exit(0);}console.log(fn(process.argv[1])===true?'true':'false');" \
+        -- "$1" 2>/dev/null
+}
+
+T12_isSweepBranchesSkillForceDelete_redirect_suffix() {
+    if [ ! -f "$GUARD_JS" ]; then
+        fail "T12 isSweepBranchesSkillForceDelete_redirect_suffix: $GUARD_JS not found"
+        return
+    fi
+
+    # Inline table-driven assert (no shared lib); name injected into every msg.
+    local t12_assert_eq
+    t12_assert_eq() {
+        local name="$1" want="$2" got="$3"
+        if [ "$want" = "$got" ]; then echo "PASS: $name"; PASS=$((PASS + 1))
+        else echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1)); fi
+    }
+
+    local name input want got
+    while IFS='|' read -r name input want; do
+        [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+        name="$(printf '%s' "$name" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        input="$(printf '%s' "$input" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        want="$(printf '%s' "$want" | sed -E 's/[[:space:]]//g')"
+        got="$(call_isSweepForceDelete "$input")"
+        t12_assert_eq "T12/$name" "$want" "$got"
+    done <<'TABLE'
+suffix-2devnull   | SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D feature/x 2>/dev/null           | true
+suffix-2and1      | SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D feature/x 2>&1                  | true
+fd-dup-close-2    | SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D feature/x 2>&-                  | true
+protected-main    | SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D main 2>/dev/null                | false
+attack-chain-rmrf | SWEEP_BRANCHES_SKILL=1 git -C /fake branch -D feature/x; rm -rf / 2>/dev/null | false
+TABLE
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # T17 — SWEEP_AGE_DAYS=0 env var → exit non-zero, validation error on stderr
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -347,6 +409,7 @@ T7_ci_mode_json_shape
 T8_fresh_commit_skipped_young
 T10_age_gate_fresh_vs_stale
 T11_isSweepBranchesSkillForceDelete_unit
+T12_isSweepBranchesSkillForceDelete_redirect_suffix
 T17_sweep_age_days_zero_rejected
 
 echo ""
