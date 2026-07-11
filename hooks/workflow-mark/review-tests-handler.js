@@ -17,9 +17,12 @@ const {
   REVIEW_TESTS_COMPLETE_LOOKSLIKE_RE,
   REVIEW_TESTS_WARNINGS_RE_DQ,
   REVIEW_TESTS_WARNINGS_LOOKSLIKE_RE,
+  REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ,
+  REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
 const {
   markReviewTestsComplete,
+  clearReviewTestsWarnings,
 } = require("../lib/workflow-state");
 
 function extractToken(payload) {
@@ -85,6 +88,46 @@ function handle(ctx) {
         `workflow-mark: failed to write state — ${e.message}. review_tests WARNINGS NOT recorded.`
       );
     }
+    return true;
+  }
+
+  // --- WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED handler ---
+  // Clears warnings_summary (preserving token/wsid) so the gate unblocks /write-code.
+  const acceptedMatch = cmd.match(REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ);
+  if (acceptedMatch) {
+    const reason = acceptedMatch[1];
+    if (reason.replace(/\s/g, "").length < 3) {
+      pushMessage(
+        "workflow-mark: REVIEW_TESTS_WARNINGS_ACCEPTED rejected — reason too short. " +
+          "Re-emit: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>\""
+      );
+      return true;
+    }
+    if (!sessionId) {
+      signalFatal(
+        "workflow-mark: could not resolve session_id — REVIEW_TESTS_WARNINGS_ACCEPTED NOT recorded."
+      );
+      return true;
+    }
+    try {
+      clearReviewTestsWarnings(sessionId, reason);
+      pushMessage(
+        "[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: warnings cleared — /write-code unblocked."
+      );
+    } catch (e) {
+      pushMessage(
+        `workflow-mark: failed to write state — ${e.message}. warnings NOT cleared.`
+      );
+    }
+    return true;
+  }
+
+  // --- LOOKSLIKE (malformed WARNINGS_ACCEPTED) — advisory only ---
+  if (REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE.test(cmd)) {
+    pushMessage(
+      "workflow-mark: malformed WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED — " +
+        "expected: echo \"<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>\""
+    );
     return true;
   }
 

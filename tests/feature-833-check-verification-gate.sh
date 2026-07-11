@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/check-verification-gate.sh
-# Tags: verification-gate, risk-category, user-verified, pwsh-required
+# Tags: verification-gate, risk-category, user-verified, pwsh-required, scope:issue-specific
 # Tests for issue #833 — bin/check-verification-gate.sh
 # Verifies risk-category classifier interface before source implementation (TDD).
 # RED: this suite fails clean while bin/check-verification-gate.sh is missing.
@@ -360,6 +360,218 @@ if [ "$GATE_RC" -eq 0 ] && ! echo "$tokens" | grep -q "pwsh-required"; then
 else
     fail "22: rc=$GATE_RC tokens=[$tokens] stderr=$GATE_STDERR"
 fi
+teardown_tmp
+
+# ============================================================================
+# WE-8 path: branch-commit fallback when staged is empty (cases 23-24)
+# Issue #1316 — check-verification-gate.sh auto mode must fall back to
+# `git diff $(git merge-base HEAD <default-branch>)...HEAD --name-only`
+# when `git diff --cached --name-only` is empty (nothing staged yet, e.g.
+# at the WE-8 pre-final-report gate before the final commit).
+#
+# EXPECTED: cases 23-24 FAIL until the WE-8 fallback is implemented in
+#           bin/check-verification-gate.sh auto mode.
+# ============================================================================
+
+setup_wt_repo() {
+    # Build a git repo on a feature branch with a committed hooks/foo.js.
+    local repo="$1"
+    mkdir -p "$repo/hooks"
+    (
+        cd "$repo"
+        # Use explicit -b main so the default branch is deterministic regardless
+        # of host git config (avoids ambiguity between main/master).
+        git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }
+        git config user.email test@example.com
+        git config user.name Test
+        git config commit.gpgsign false
+        echo "initial" > README.md
+        git -c core.hooksPath="" add README.md
+        git -c core.hooksPath="" commit -q -m initial
+        # Switch to feature branch.
+        git -c core.hooksPath="" switch -q -c feature/test-wt
+        # Commit hooks/foo.js on the feature branch.
+        echo "// registered hook" > hooks/foo.js
+        git -c core.hooksPath="" add hooks/foo.js
+        git -c core.hooksPath="" commit -q -m "add hooks/foo.js"
+    )
+}
+
+# --- 23: WE-8 path: staged empty + branch has hooks/foo.js committed
+#         → auto mode returns hook-registration.
+# Requires: auto mode falls back to `git diff <merge-base>...HEAD --name-only`.
+setup_tmp
+wt_repo="$TMP/wt-repo"
+setup_wt_repo "$wt_repo"
+# Build a temp settings file that registers foo.
+tmp_settings="$TMP/settings-with-foo.json"
+cp "$SETTINGS_WITH_FOO" "$tmp_settings"
+# Run check-verification-gate.sh in auto mode from within the feature branch repo.
+# Staged index is empty (no git add done after the commit above).
+out_file23="$(mktemp)"; err_file23="$(mktemp)"
+rc23=0
+(
+    cd "$wt_repo"
+    SETTINGS_PATH="$tmp_settings" \
+    run_with_timeout 15 bash "$CHECK_SCRIPT" --settings-path "$tmp_settings" \
+        >"$out_file23" 2>"$err_file23"
+) || rc23=$?
+GATE_RC=$rc23
+GATE_STDOUT="$(cat "$out_file23")"
+tokens23="$(printf '%s\n' "$GATE_STDOUT" | sed -n 's/^CATEGORY: \([^	]*\)	.*/\1/p' | tr '\n' ' ')"
+if [ "$rc23" -eq 0 ] && echo "$tokens23" | grep -q "hook-registration"; then
+    pass "23: WE-8 path (staged empty, branch has hooks/foo.js) → hook-registration via fallback"
+else
+    fail "23: rc=$rc23 expected hook-registration from branch-commit fallback, got tokens=[$tokens23] stderr=[$(head -2 "$err_file23")]"
+fi
+rm -f "$out_file23" "$err_file23"
+teardown_tmp
+
+# --- 24: Non-regression — existing staged-file path still works after WE-8 patch.
+#         hooks/foo.js staged (not committed) → hook-registration (original case 16).
+setup_tmp
+hook_foo24="$TMP/hooks/foo.js"
+mkdir -p "$(dirname "$hook_foo24")"
+echo "// registered hook" > "$hook_foo24"
+run_gate --files "$hook_foo24" --settings-path "$SETTINGS_WITH_FOO"
+tokens24="$(gate_tokens | tr '\n' ' ')"
+if [ "$GATE_RC" -eq 0 ] && echo "$tokens24" | grep -q "hook-registration"; then
+    pass "24: non-regression — staged hooks/foo.js + registered → hook-registration (unchanged)"
+else
+    fail "24: rc=$GATE_RC tokens=[$tokens24] stderr=$GATE_STDERR"
+fi
+teardown_tmp
+
+# --- 25 (C6): WE-8 path — second category: staged empty + branch has skills/foo.md
+#         committed → skill-orchestration (not just hook-registration).
+#         Verifies the WE-8 fallback applies to all categories, not just hooks.
+# EXPECTED: FAIL until the WE-8 fallback is implemented.
+setup_wt_repo_skills() {
+    local repo="$1"
+    mkdir -p "$repo/skills/my-skill"
+    (
+        cd "$repo"
+        git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }
+        git config user.email test@example.com
+        git config user.name Test
+        git config commit.gpgsign false
+        echo "initial" > README.md
+        git -c core.hooksPath="" add README.md
+        git -c core.hooksPath="" commit -q -m initial
+        git -c core.hooksPath="" switch -q -c feature/skill-test
+        echo "# My skill" > skills/my-skill/SKILL.md
+        git -c core.hooksPath="" add skills/my-skill/SKILL.md
+        git -c core.hooksPath="" commit -q -m "add skill"
+    )
+}
+setup_tmp
+skills_repo="$TMP/skills-repo"
+setup_wt_repo_skills "$skills_repo"
+out_file25="$(mktemp)"; err_file25="$(mktemp)"
+GATE_RC25=0
+(
+    cd "$skills_repo"
+    run_with_timeout 15 bash "$CHECK_SCRIPT" >"$out_file25" 2>"$err_file25"
+) || GATE_RC25=$?
+GATE_STDOUT25="$(cat "$out_file25")"
+tokens25="$(printf '%s\n' "$GATE_STDOUT25" | sed -n 's/^CATEGORY: \([^	]*\)	.*/\1/p' | tr '\n' ' ')"
+if [ "$GATE_RC25" -eq 0 ] && echo "$tokens25" | grep -q "skill-orchestration"; then
+    pass "25: WE-8 path (staged empty, branch has skills/foo.md) → skill-orchestration via fallback"
+else
+    fail "25: rc=$GATE_RC25 expected skill-orchestration from branch-commit fallback, got tokens=[$tokens25] stderr=[$(head -2 "$err_file25")]"
+fi
+rm -f "$out_file25" "$err_file25"
+teardown_tmp
+
+# --- 26 (C6): WE-8 error case — no git remote / no merge-base available.
+#         When the branch has no upstream and git merge-base fails, auto mode
+#         must fall back gracefully (exit 0, not crash) — possibly to empty output.
+# EXPECTED: PASS both before and after fix (error case must not crash).
+setup_tmp
+orphan_repo="$TMP/orphan-repo"
+mkdir -p "$orphan_repo"
+(
+    cd "$orphan_repo"
+    git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }
+    git config user.email test@example.com
+    git config user.name Test
+    git config commit.gpgsign false
+    echo "initial" > README.md
+    git -c core.hooksPath="" add README.md
+    git -c core.hooksPath="" commit -q -m initial
+    # Branch with NO main/master parent — no merge-base available.
+    git -c core.hooksPath="" switch -q -c feature/orphan-no-base
+    echo "code" > app.js
+    git -c core.hooksPath="" add app.js
+    git -c core.hooksPath="" commit -q -m "app"
+)
+out_file26="$(mktemp)"; err_file26="$(mktemp)"
+(
+    cd "$orphan_repo"
+    run_with_timeout 15 bash "$CHECK_SCRIPT" >"$out_file26" 2>"$err_file26"
+) || rc26=$?
+rc26=${rc26:-0}
+if [[ "$rc26" -eq 0 || "$rc26" -eq 2 || "$rc26" -eq 3 ]]; then
+    pass "26: no merge-base available → auto mode exits cleanly (rc=$rc26, no crash)"
+else
+    fail "26: unexpected exit code $rc26 when no merge-base available"
+fi
+rm -f "$out_file26" "$err_file26"
+teardown_tmp
+
+# --- 27 (C6): staged files exist AND branch has hook changes → staged path takes priority.
+#         When git diff --cached returns files, auto mode must use those (the staged set),
+#         NOT fall back to the branch-commit diff. This prevents double-counting and
+#         ensures staged-path semantics dominate WE-8 fallback semantics.
+#
+#         Setup: repo on feature/test-wt with hooks/foo.js COMMITTED (branch diff would
+#         return hook-registration) but ALSO skills/my-skill/SKILL.md STAGED (index path
+#         would return skill-orchestration). After fix, auto mode must see the staged file
+#         and return skill-orchestration — NOT fall back to hook-registration from branch.
+#
+# EXPECTED: FAIL before the WE-8 fallback is implemented with the staged-path priority
+#           guard; PASS once the guard is in place (staged non-empty → skip branch diff).
+setup_tmp
+hybrid_repo="$TMP/hybrid-repo"
+mkdir -p "$hybrid_repo/hooks" "$hybrid_repo/skills/my-skill"
+(
+    cd "$hybrid_repo"
+    git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }
+    git config user.email test@example.com
+    git config user.name Test
+    git config commit.gpgsign false
+    echo "initial" > README.md
+    git -c core.hooksPath="" add README.md
+    git -c core.hooksPath="" commit -q -m initial
+    # Feature branch: commit hooks/foo.js (branch diff = hook-registration).
+    git -c core.hooksPath="" switch -q -c feature/hybrid-test
+    echo "// registered hook" > hooks/foo.js
+    git -c core.hooksPath="" add hooks/foo.js
+    git -c core.hooksPath="" commit -q -m "add hooks/foo.js"
+    # Now stage skills/my-skill/SKILL.md without committing (staged path = skill-orchestration).
+    echo "# My skill" > skills/my-skill/SKILL.md
+    git -c core.hooksPath="" add skills/my-skill/SKILL.md
+)
+hybrid_settings="$TMP/hybrid-settings.json"
+cp "$SETTINGS_WITH_FOO" "$hybrid_settings"
+out_file27="$(mktemp)"; err_file27="$(mktemp)"
+(
+    cd "$hybrid_repo"
+    run_with_timeout 15 bash "$CHECK_SCRIPT" --settings-path "$hybrid_settings" \
+        >"$out_file27" 2>"$err_file27"
+) || true
+GATE_STDOUT27="$(cat "$out_file27")"
+tokens27="$(printf '%s\n' "$GATE_STDOUT27" | sed -n 's/^CATEGORY: \([^	]*\)	.*/\1/p' | tr '\n' ' ')"
+# Staged path took priority → only staged file (SKILL.md) was evaluated.
+# Must see skill-orchestration and must NOT fall back and also add hook-registration from branch.
+if echo "$tokens27" | grep -q "skill-orchestration" && ! echo "$tokens27" | grep -q "hook-registration"; then
+    pass "27: staged non-empty + branch has hooks → staged takes priority (skill-orchestration only, no hook-registration)"
+elif echo "$tokens27" | grep -q "skill-orchestration"; then
+    fail "27: staged took priority for skill but also emitted hook-registration from branch diff (fallback not suppressed)"
+else
+    fail "27: expected skill-orchestration from staged SKILL.md, got tokens=[$tokens27] stderr=[$(head -2 "$err_file27")]"
+fi
+rm -f "$out_file27" "$err_file27"
 teardown_tmp
 
 echo ""
