@@ -1,0 +1,48 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/read-complexity-evaluation
+// CLI wrapper for readComplexityEvaluation(). Used by SKILL.md Bash calls.
+//
+// Usage:
+//   read-complexity-evaluation --session <sid>
+//
+// On a valid record prints:
+//   verdict=<v>
+//   signals=<csv>
+// On no record prints: NONE
+// Exits 0 in both cases; exits 1 on bad args.
+
+const path = require("path");
+const { readComplexityEvaluation } = require(
+  path.join(__dirname, "..", "..", "hooks", "lib", "workflow-state")
+);
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function main() {
+  const argv = process.argv.slice(2);
+  let session = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--session") {
+      session = argv[++i] || null;
+    } else {
+      process.stderr.write("read-complexity-evaluation: unknown argument: " + argv[i] + "\n");
+      process.exit(1);
+    }
+  }
+
+  if (!session || !SESSION_ID_RE.test(session)) {
+    process.stderr.write("read-complexity-evaluation: --session is required and must match /^[A-Za-z0-9_-]+$/\n");
+    process.exit(1);
+  }
+
+  const ce = readComplexityEvaluation(session);
+  if (ce) {
+    process.stdout.write("verdict=" + ce.verdict + "\nsignals=" + ce.signals.join(",") + "\n");
+    process.exit(0);
+  }
+  process.stdout.write("NONE\n");
+  process.exit(0);
+}
+
+main();
