@@ -1,0 +1,71 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/record-complexity-evaluation
+// CLI wrapper for recordComplexityEvaluation(). Used by SKILL.md Bash calls.
+//
+// Usage:
+//   record-complexity-evaluation --session <sid> --verdict <opus|sonnet> [--signals <csv>]
+//
+// --signals is optional; comma-separated → array; empty/missing → [].
+// On success prints: RECORDED_COMPLEXITY verdict=<v> signals=<csv>
+// Exits 0 on success, 1 on bad args or write-verification failure.
+
+const path = require("path");
+const { recordComplexityEvaluation, readComplexityEvaluation } = require(
+  path.join(__dirname, "..", "..", "hooks", "lib", "workflow-state")
+);
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function usage(msg) {
+  if (msg) process.stderr.write("record-complexity-evaluation: " + msg + "\n");
+  process.stderr.write("usage: record-complexity-evaluation --session <sid> --verdict <opus|sonnet> [--signals <csv>]\n");
+  process.exit(1);
+}
+
+function parseArgs(argv) {
+  const out = { session: null, verdict: null, signals: [] };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--session") {
+      out.session = argv[++i] || null;
+    } else if (a === "--verdict") {
+      out.verdict = argv[++i] || null;
+    } else if (a === "--signals") {
+      const raw = argv[++i];
+      out.signals = (typeof raw === "string" && raw.trim().length)
+        ? raw.split(",").map((s) => s.trim()).filter((s) => s.length)
+        : [];
+    } else {
+      usage("unknown argument: " + a);
+    }
+  }
+  return out;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!args.session || !SESSION_ID_RE.test(args.session)) {
+    usage("--session is required and must match /^[A-Za-z0-9_-]+$/");
+  }
+  if (args.verdict !== "opus" && args.verdict !== "sonnet") {
+    usage("--verdict must be opus or sonnet");
+  }
+
+  recordComplexityEvaluation(args.session, args.verdict, args.signals);
+
+  // Read-back hardening: confirm the record matches EXACTLY what was written.
+  const ce = readComplexityEvaluation(args.session);
+  if (!ce || ce.verdict !== args.verdict ||
+      ce.signals.length !== args.signals.length ||
+      !ce.signals.every((s, idx) => s === args.signals[idx])) {
+    process.stderr.write("record-complexity-evaluation: write verification failed\n");
+    process.exit(1);
+  }
+
+  process.stdout.write("RECORDED_COMPLEXITY verdict=" + args.verdict + " signals=" + args.signals.join(",") + "\n");
+  process.exit(0);
+}
+
+main();
