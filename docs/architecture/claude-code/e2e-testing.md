@@ -14,7 +14,6 @@ L2 tests cannot exercise real Stop-event, SubagentStop, or PostCompact paths.
 | `hooks/subagent-start.js` | partial (`tests/feature-1303-lang-hooks/group2-subagent-start.sh` covers the `PLAN_LANG` planner/reviewer whitelist via real spawn) | **P3 — add E2E** | `PLAN_LANG` whitelist covered at L2; real Task-tool sub-agent context injection only reachable via `claude -p`. |
 | `hooks/lang-inject.js` | L2 (`tests/feature-1303-lang-hooks/group1-lang-inject.sh` — real spawn: CONV_LANG per-turn, PLAN_LANG when planning, fail-open) | **P3 — add E2E** | hook-registration gap: real UserPromptSubmit firing and `additionalContext` surfacing into a live session are unverifiable at L2. |
 | `hooks/post-compact.js` | none | **P3 — add** | PostCompact event is not reproducible at L2 (requires real compaction trigger). |
-| `hooks/stop-askuserquestion-required.js` | L2 in `tests/feature-stop-guard-layer2.sh` | **P2 — add E2E** | Stop hook requiring AskUserQuestion pre-fire is only observable in a live session. |
 | `hooks/stop-enforce-worktree-on-warn.js` | none (advisory) | **P3 — add** | Advisory context-injection is only confirmable in a live session. |
 | `hooks/supervisor-guard.js` | L2-only (`tests/feature-719-supervisor-guard-hook.sh`, `tests/feature-883-supervisor-guard-wsid.sh`) | **OUT — defer** | No observable signal under `claude -p --output-format json`; re-evaluate after #937 phase 2. |
 
@@ -23,8 +22,7 @@ L2 tests cannot exercise real Stop-event, SubagentStop, or PostCompact paths.
 1. `workflow-mark.js` — extract existing embedded E2E to a dedicated file.
 2. `stop-confirm-plan-guard.js` — write fresh E2E.
 3. `stop-final-report-guard.js` — write fresh E2E (paired with existing L2; both kept).
-4. `stop-askuserquestion-required.js` — write fresh E2E.
-5. `session-start.js` — write fresh E2E (paired with `feature-772-session-start-cleanup-inherit.sh`).
-6. `subagent-start.js` — write fresh E2E.
-7. `post-compact.js` — write fresh E2E.
-8. `stop-enforce-worktree-on-warn.js` — write fresh E2E.
+4. `session-start.js` — write fresh E2E (paired with `feature-772-session-start-cleanup-inherit.sh`).
+5. `subagent-start.js` — write fresh E2E.
+6. `post-compact.js` — write fresh E2E.
+7. `stop-enforce-worktree-on-warn.js` — write fresh E2E.
