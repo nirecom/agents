@@ -268,10 +268,10 @@ test_B2_elevate_perspective_header() {
         fail "B2: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 3. Elevate Perspective" "$f"; then
-        pass "B2: '## 3. Elevate Perspective' header present"
+    if grep -qF "## CPR-4 Elevate Perspective" "$f"; then
+        pass "B2: '## CPR-4 Elevate Perspective' header present"
     else
-        fail "B2: '## 3. Elevate Perspective' header NOT found in rules/core-principles.md"
+        fail "B2: '## CPR-4 Elevate Perspective' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -281,10 +281,10 @@ test_B3_orthogonality_header() {
         fail "B3: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 4. Orthogonality" "$f"; then
-        pass "B3: '## 4. Orthogonality' header present"
+    if grep -qF "## CPR-5 Orthogonality" "$f"; then
+        pass "B3: '## CPR-5 Orthogonality' header present"
     else
-        fail "B3: '## 4. Orthogonality' header NOT found in rules/core-principles.md"
+        fail "B3: '## CPR-5 Orthogonality' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -294,10 +294,10 @@ test_B4_name_reflects_substance_header() {
         fail "B4: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 6. Name Reflects Substance" "$f"; then
-        pass "B4: '## 6. Name Reflects Substance' header present"
+    if grep -qF "## CPR-7 Name Reflects Substance" "$f"; then
+        pass "B4: '## CPR-7 Name Reflects Substance' header present"
     else
-        fail "B4: '## 6. Name Reflects Substance' header NOT found in rules/core-principles.md"
+        fail "B4: '## CPR-7 Name Reflects Substance' header NOT found in rules/core-principles.md"
     fi
 }
 
@@ -355,10 +355,10 @@ test_B9_ssot_section_header() {
         fail "B9: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 2. Single Source of Truth" "$f"; then
-        pass "B9: '## 2. Single Source of Truth' header present"
+    if grep -qF "## CPR-2 Single Source of Truth" "$f"; then
+        pass "B9: '## CPR-2 Single Source of Truth' header present"
     else
-        fail "B9: '## 2. Single Source of Truth' header NOT found"
+        fail "B9: '## CPR-2 Single Source of Truth' header NOT found"
     fi
 }
 
@@ -369,9 +369,9 @@ test_B10_elevate_perspective_per_class_wording() {
         return
     fi
     if grep -qF "merged, replaced, or restructured" "$f"; then
-        pass "B10: §3 contains class-level alternative wording"
+        pass "B10: CPR-4 contains class-level alternative wording"
     else
-        fail "B10: §3 does NOT contain class-level alternative wording"
+        fail "B10: CPR-4 does NOT contain class-level alternative wording"
     fi
 }
 
@@ -416,10 +416,69 @@ test_B14_user_centric_behavior_header() {
         fail "B14: rules/core-principles.md not found (prerequisite)"
         return
     fi
-    if grep -qF "## 1. User-Centric Behavior" "$f"; then
-        pass "B14: '## 1. User-Centric Behavior' header present"
+    if grep -qF "## CPR-1 User-Centric Behavior" "$f"; then
+        pass "B14: '## CPR-1 User-Centric Behavior' header present"
     else
-        fail "B14: '## 1. User-Centric Behavior' header NOT found in rules/core-principles.md"
+        fail "B14: '## CPR-1 User-Centric Behavior' header NOT found in rules/core-principles.md"
+    fi
+}
+
+test_B15_separate_concerns_header() {
+    local f="$AGENTS_DIR/rules/core-principles.md"
+    if [ ! -f "$f" ]; then
+        fail "B15: rules/core-principles.md not found (prerequisite)"
+        return
+    fi
+    if grep -qF "## CPR-3 Separate the Concerns" "$f"; then
+        pass "B15: '## CPR-3 Separate the Concerns' header present"
+    else
+        fail "B15: '## CPR-3 Separate the Concerns' header NOT found"
+    fi
+}
+
+test_B16_all_cpr_headers_present() {
+    local f="$AGENTS_DIR/rules/core-principles.md"
+    if [ ! -f "$f" ]; then
+        fail "B16: rules/core-principles.md not found (prerequisite)"
+        return
+    fi
+    local missing=""
+    local h
+    for h in \
+        "## CPR-1 User-Centric Behavior" \
+        "## CPR-2 Single Source of Truth" \
+        "## CPR-3 Separate the Concerns" \
+        "## CPR-4 Elevate Perspective" \
+        "## CPR-5 Orthogonality" \
+        "## CPR-6 End-to-End Integrity" \
+        "## CPR-7 Name Reflects Substance" \
+        "## CPR-8 Universality First"; do
+        grep -qF "$h" "$f" || missing="$missing; $h"
+    done
+    if [ -z "$missing" ]; then
+        pass "B16: all 8 CPR headers present"
+    else
+        fail "B16: missing CPR headers:$missing"
+    fi
+}
+
+test_B17_no_legacy_numbered_headers() {
+    local f="$AGENTS_DIR/rules/core-principles.md"
+    if [ ! -f "$f" ]; then
+        fail "B17: rules/core-principles.md not found (prerequisite)"
+        return
+    fi
+    local ok=1
+    if grep -nE '^## [1-9]\. ' "$f" >/dev/null 2>&1; then
+        ok=0; echo "  found legacy numbered header(s)"
+    fi
+    if grep -nE '§[1-9]' "$f" >/dev/null 2>&1; then
+        ok=0; echo "  found legacy §N reference(s)"
+    fi
+    if [ $ok -eq 1 ]; then
+        pass "B17: no legacy numbered headers or §N references"
+    else
+        fail "B17: legacy numbered headers or §N references present"
     fi
 }
 
@@ -444,6 +503,9 @@ run_all() {
     test_B8_no_residual_plan_principles_references
     test_B9_ssot_section_header
     test_B14_user_centric_behavior_header
+    test_B15_separate_concerns_header
+    test_B16_all_cpr_headers_present
+    test_B17_no_legacy_numbered_headers
     test_B10_elevate_perspective_per_class_wording
     test_B11_outline_reviewer_references_core_principles
     test_B12_detail_reviewer_references_core_principles
