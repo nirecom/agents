@@ -148,13 +148,13 @@ New test files follow `<area>-<issue-or-feature>-<topic>.sh` where `<area>` is o
 
 Existing files are NOT renamed — `git blame` continuity is preserved. Frontmatter handles semantic grouping via `# Tags:`.
 
-## Table-Driven Tests (パーサ/正規表現/allowlist 変更時必須)
+## Table-Driven Tests (required when changing parsers, regex constants, or allowlists)
 
-パーサ、正規表現定数、または allowlist を変更する場合（例: sentinel-patterns.js,
-bash-write-patterns.js, command-parser.js, scan-outbound.sh など）は、対応するテスト
-ファイルで table-driven パターンを使用すること。
+When modifying parsers, regex constants, or allowlists (e.g. sentinel-patterns.js,
+bash-write-patterns.js, command-parser.js, scan-outbound.sh), use table-driven patterns
+in the corresponding test file.
 
-### bash テストの標準パターン
+### Standard bash pattern
 
 while IFS='|' read -r name input want; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
@@ -167,7 +167,7 @@ case-name-1 | input value 1 | expected-1
 case-name-2 | input value 2 | expected-2
 TABLE
 
-assert_eq() を各テストファイルにインラインで定義する（共有ライブラリは使用しない）:
+Define assert_eq inline in each test file (no shared library):
 
 assert_eq() {
     local name="$1" want="$2" got="$3"
@@ -175,111 +175,114 @@ assert_eq() {
     else echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1)); fi
 }
 
-- 第1カラム name は全アサーションメッセージに注入する（Go の t.Run(name) 相当）
-- IFS='|' によりフィールド内のスペースをクォートなしで許容。read -r でバックスラッシュ展開を防ぐ
-- heredoc 内の空行・# コメント行はスキップする
+- The first column `name` is injected into every assertion message (equivalent to Go's `t.Run(name)`).
+- `IFS='|'` allows spaces inside fields without quoting. `read -r` prevents backslash expansion.
+- Blank lines and `#` comment lines in the heredoc are skipped.
 
-### JS テストの同等パターン
+### Equivalent JS pattern
 
-JS テストでは以下を table-driven と見なす:
-- cases.forEach() による反復
-- for (const {name, input, want} of cases) による反復
-- 各反復内で name をアサーションメッセージに含む
+A JS test is considered table-driven when it uses:
+- `cases.forEach()` iteration, or
+- `for (const {name, input, want} of cases)` iteration,
+- with `name` included in the assertion message inside each iteration.
 
-### このルールの適用条件
+### When this rule applies
 
-以下のいずれかに該当する場合:
-- パターンファイルの正規表現定数を追加または変更する場合
-- 同一関数を異なる入力でテストするケースが2件以上ある場合
-- パーサ/regex/allowlist 対象の既存テストファイルに論理パスあたり2件未満のケースしかない場合
+Apply when any of the following is true:
+- Adding or modifying regex constants in a pattern file.
+- Testing the same function with 2 or more different inputs.
+- An existing test file for a parser/regex/allowlist target has fewer than 2 cases per logical path.
 
-## Mutation Probe (軽量正規表現 kill 確認)
+## Mutation Probe (lightweight regex kill verification)
 
-パーサ/正規表現ファイルに対して以下の場合に mutation probe を実行すること:
-- 新しい正規表現定数を追加する場合（その定数を削除したときにテストが FAIL することを確認）
-- 正規表現バグを修正する場合（未修正状態でリグレッションテストが FAIL することを確認）
+Run a mutation probe against parser/regex files when:
+- Adding a new regex constant (verify the test FAILs when that constant is removed).
+- Fixing a regex bug (verify the regression test FAILs against the unpatched code).
 
-### プローブ実行
+### Running the probe
 
 bin/mutation-probe.sh <target-js-file>
 
-プローブスクリプトの動作:
-1. 対象ファイルの正規表現定数（単一行の const NAME = /regex/; 形式）を特定する
-2. 各定数を /(?!)/ (never-match) に差し替えた一時コピーでテストを実行する
-3. PASS および FAIL を記録する
-4. mutation スコア = FAIL 数 / 総数 × 100% を算出して報告する
+Probe behavior:
+1. Identifies regex constants in the target file (single-line `const NAME = /regex/;` form).
+2. Replaces each constant with `/(?!)/` (never-match) in a temporary copy and runs the tests.
+3. Records PASS and FAIL counts.
+4. Computes mutation score = (FAIL count / total) × 100% and reports it.
 
-必須閾値: プローブ対象の正規表現定数の 80% 以上でテストが FAIL すること。
+Required threshold: at least 80% of probed regex constants must cause a test FAIL.
 
-### 既知の制限 (Partial Coverage)
+### Known limitation (partial coverage)
 
-bin/mutation-probe.sh は単一行形式（const NAME = /regex/;）のみを対象とする。
-以下は現バージョンではカバーされない:
-- 2行形式（const NAME =\n  /regex/;）: sentinel-patterns.js に多数存在
-- オブジェクトリテラル内のパターン（WRITE_PATTERNS 配列の regex フィールド）: bash-write-patterns.js
+`bin/mutation-probe.sh` targets single-line form (`const NAME = /regex/;`) only.
+Not covered in the current version:
+- Two-line form (`const NAME =\n  /regex/;`): common in sentinel-patterns.js.
+- Patterns inside object literals (`regex` field of `WRITE_PATTERNS` array): bash-write-patterns.js.
 
-これらのファイルに対してプローブを実行した場合、スクリプトは検出済み定数数と
-「partial coverage」警告を出力する。完全なカバレッジは T1-E2（Stryker）で対応予定。
+When the probe runs against these files it prints the detected constant count and a
+"partial coverage" warning. Full coverage is planned for T1-E2 (Stryker).
 
-### table-driven との関係
+### Relationship to table-driven tests
 
-- table-driven: 入出力ケースをパラメトリックにカバーする
-- mutation probe: 各正規表現定数が実際にテストで使われているか（dead code でないか）を確認する
+- Table-driven: parametrically covers input/output cases.
+- Mutation probe: verifies that each regex constant is actually exercised by tests (not dead code).
 
-パーサ/正規表現ファイルに追記する場合は両方を実行すること。
+Run both when adding to a parser/regex file.
 
-## False-Green 検出
+## False-Green Detection
 
-false-green テスト（コードの状態によらず常に pass するテスト）は禁止。
-以下のパターンは bin/check-false-green.sh によって検出される。
+False-green tests (tests that always pass regardless of code state) are forbidden.
+The following patterns are detected by `bin/check-false-green.sh`.
 
-### 禁止パターン
+### Forbidden patterns
 
-1. アサーション不在の空テスト関数/ブロック
-2. want と got が同じリテラルのアサーション: assert_eq name "x" "x"（両辺ハードコード）
-3. exit コードを確認せずに pass "..." を呼ぶパターン（アンチェック）
+1. Empty test function/block with no assertions.
+2. Assertion where `want` and `got` are the same literal: `assert_eq name "x" "x"` (both sides hardcoded).
+3. Calling `pass "..."` without checking an exit code (unchecked pass).
 
-### bin/check-false-green.sh のスコープ
+### Scope of bin/check-false-green.sh
 
-grep ベース検出。パターン2をハード検出（FALSE-GREEN、終了コード 1）、行頭近傍の bare
-pass を WARN 出力（終了コード 0）。パターン1・3（AST 解析が必要）は将来課題。
+Grep-based detection. Pattern 2 is a hard failure (FALSE-GREEN, exit code 1). Bare `pass`
+near the start of a line is a WARN (exit code 0). Patterns 1 and 3 (requiring AST analysis)
+are future work.
 
-bare pass の WARN は誤検知（pass() 関数定義行）を含むため、CI でハード失敗させない。
+The bare-pass WARN includes false positives (e.g. the `pass()` function definition line),
+so it is not a hard CI failure.
 
-### 背景
+### Background
 
-PR #865 で事後修正が必要になった 11 件の dead assertion が動機。
-false-green 検出器を作成時点で適用することで再発を防ぐ。
+Motivated by 11 dead assertions found and fixed after the fact in PR #865.
+Applying the false-green detector at authoring time prevents recurrence.
 
-## セキュリティ・保護系 Fix のテストパターン (#1001)
+## Security / Protection Fix Test Patterns (#1001)
 
-保護系 fix（セキュリティ境界、入力サニタイズ、アクセス制御強制）のテストでは
-以下の3パターンをすべて適用すること。いずれか1つでも欠けると構造的カバレッジギャップになる。
+Tests for protection fixes (security boundaries, input sanitization, access-control
+enforcement) must apply all three patterns below. Omitting any one creates a structural
+coverage gap.
 
-### パターン1 — Negative アサーション
+### Pattern 1 — Negative assertion
 
-拒否された入力に対して、保護対象リソースが変更されていないことを directly アサートする。
-exit コードやエラーメッセージのアサーションだけでは不十分。
+For rejected input, directly assert that the protected resource was NOT modified.
+Asserting only exit code or error message is insufficient.
 
-例: symlink フォロー防止の修正では、コマンドが非ゼロで終了したことに加えて
-リンク先ファイルが変更されていないことをアサートする。
+Example: for a fix that prevents symlink following, assert both that the command exited
+non-zero AND that the link target file remains unchanged.
 
-### パターン2 — 攻撃シナリオ構造
+### Pattern 2 — Attack scenario structure
 
-bugfix テストは未修正コードで FAIL するように構造化する:
-1. 修正前の脆弱な状態を再現する前提条件をセットアップする
-2. テスト対象のアクションを実行する
-3. 攻撃がブロックされた（保護対象リソースが未変更）ことをアサートする
+Structure the bugfix test so it FAILs against the unpatched code:
+1. Set up preconditions that reproduce the vulnerable state before the fix.
+2. Execute the action under test.
+3. Assert that the attack was blocked (protected resource unchanged).
 
-この構造により、ワークフローレベルの fail-before-fix gate を補完するテスト層の証拠が得られる。
+This provides test-layer evidence that complements the workflow-level fail-before-fix gate.
 
-### パターン3 — Paired gap (Skipped-Because)
+### Pattern 3 — Paired gap (Skipped-Because)
 
-現レイヤーで実装できないシナリオ（fault インジェクションが必要、CI で再現不可など）は
-削除せず以下の形式で残す:
+Scenarios not implementable at the current layer (require fault injection, cannot
+reproduce in CI, etc.) must be left as comments rather than deleted:
 
-# SKIPPED: <シナリオ説明>
-# Because: <理由 — 例: "実 root アクセスが必要", "L2 では fault injection 不可">
-# L3 gap: <実環境のみが検出できること>
+# SKIPPED: <scenario description>
+# Because: <reason — e.g. "requires real root access", "fault injection not possible at L2">
+# L3 gap: <what only the real environment would catch>
 
-1 シナリオにつき 1 つの Skipped-Because コメント。対象テストコードに隣接して配置する。
+One Skipped-Because comment per scenario, placed adjacent to the relevant test code.
