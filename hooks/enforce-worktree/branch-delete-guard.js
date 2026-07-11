@@ -2,6 +2,7 @@
 
 const { spawnSync } = require("child_process");
 const { stripQuotedArgs } = require("../lib/strip-quoted-args");
+const { stripTrailingRedirects } = require("../lib/command-parser");
 const { hasShellChaining } = require("./shared-cmd-utils");
 
 // True if cmd is `git [opts] [-C path] branch -d|-D <branch> [...]`.
@@ -21,7 +22,10 @@ function isBranchDeleteCommand(cmd) {
 function parseBranchDeleteTarget(cmd) {
   if (!isBranchDeleteCommand(cmd)) return null;
   // After the `branch -d|-D` flag, the next non-flag positional token is the branch.
-  const m = cmd.match(/\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*branch\b([^|;&]*)/);
+  // A pre-`branch` flag value may be a quoted string containing spaces
+  // (e.g. `-C "/path with space"`) — accept quoted or bare value tokens so the
+  // matcher reaches `branch` even when the -C path has spaces (#1172).
+  const m = cmd.match(/\bgit\s+(?:-\S+(?:\s+(?:"[^"]*"|'[^']*'|[^-|;&\s"']\S*))?\s+)*branch\b([^|;&]*)/);
   if (!m) return null;
   const tokens = [];
   const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
@@ -112,7 +116,12 @@ function hasForceDeleteFlag(cmd) {
 // `master`, `release/v2.0`, or any non-typed branch are rejected even with
 // the inline prefix — defense-in-depth against bypass misuse.
 function isWorktreeEndSkillForceDelete(cmd) {
-  const m = cmd.match(
+  // Defense-in-depth symmetric with isSweepBranchesSkillForceDelete (CPR-5):
+  // reject shell chaining on the ORIGINAL cmd before the anchored match, so a
+  // future widening of stripTrailingRedirects cannot let a chained command
+  // reach the `^...$` predicate. hasShellChaining is evaluated on the raw cmd.
+  if (hasShellChaining(cmd)) return false;
+  const m = stripTrailingRedirects(cmd).match(
     /^WORKTREE_END_SKILL=1[ \t]+git[ \t]+-C[ \t]+(?:"[^"]+"|'[^']+'|\S+)[ \t]+branch[ \t]+-D[ \t]+(?:"([^"]+)"|'([^']+)'|(\S+))[ \t]*$/
   );
   if (!m) return false;
@@ -128,7 +137,7 @@ function isWorktreeEndSkillForceDelete(cmd) {
 // the sweep-branches script.
 function isSweepBranchesSkillForceDelete(cmd) {
   if (hasShellChaining(cmd)) return false;
-  const m = cmd.match(
+  const m = stripTrailingRedirects(cmd).match(
     /^SWEEP_BRANCHES_SKILL=1[ \t]+git[ \t]+-C[ \t]+(?:"[^"]+"|'[^']+'|\S+)[ \t]+branch[ \t]+-D[ \t]+(?:"([^"]+)"|'([^']+)'|(\S+))[ \t]*$/
   );
   if (!m) return false;
