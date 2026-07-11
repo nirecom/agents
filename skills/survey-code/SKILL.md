@@ -65,7 +65,7 @@ SVC-6. Write findings to `<PLANS_DIR>/<session-id>-survey-code.md`. The file mus
      proposed triage: <MUST | OPTIONAL | NA> — <one-line rationale>
    ```
    List sibling members of the class being changed (per `rules/core-principles.md`
-   §3 Elevate Perspective). Each member is two lines: (a) name + role + primary
+   CPR-4 Elevate Perspective). Each member is two lines: (a) name + role + primary
    file:line reference; (b) `proposed triage:` value and 1-line rationale grounded
    in the survey evidence. Triage values:
    - `proposed triage: MUST` — symmetric to the user-requested change; failing to fix it leaves the class inconsistent.
