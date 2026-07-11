@@ -376,6 +376,7 @@ ${PLAN_CONTENT}
     CONTEXT_BLOCK=""
     if [[ -n "$CONTEXT_CONTENT" ]]; then
       CONTEXT_BLOCK="The context below ([CONTEXT START] / [CONTEXT END]) contains the Test Case Categories checklist (test-design.md) plus supporting material. Evaluate coverage against every category and sub-category in it.
+Report only coverage gaps for files listed under 'Changed files in this PR (scan scope)' in the context. Do NOT report gaps for pre-existing files outside that list.
 
 [CONTEXT START]
 ${CONTEXT_CONTENT}

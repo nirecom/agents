@@ -109,6 +109,32 @@ elif [[ "$MODE" == "auto" ]]; then
         echo "Error: git diff --cached failed" >&2
         exit 3
     fi
+    if [[ -z "$staged" ]]; then
+        # Fallback: staged is empty (e.g., ENFORCE_WORKTREE=on, commit already landed).
+        # Use branch-vs-main diff to classify.
+        default_branch="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || true)"
+        if [[ -z "$default_branch" ]]; then
+            for b in main master; do
+                if git show-ref --verify --quiet "refs/remotes/origin/$b" 2>/dev/null; then
+                    default_branch="$b"; break
+                fi
+            done
+        fi
+        if [[ -z "$default_branch" ]]; then
+            # No remote: try local main/master as the base branch.
+            for b in main master; do
+                if git show-ref --verify --quiet "refs/heads/$b" 2>/dev/null; then
+                    default_branch="$b"; break
+                fi
+            done
+        fi
+        if [[ -n "$default_branch" ]]; then
+            merge_base="$(git merge-base HEAD "origin/$default_branch" 2>/dev/null || git merge-base HEAD "$default_branch" 2>/dev/null || true)"
+            if [[ -n "$merge_base" ]]; then
+                staged="$(git diff "${merge_base}...HEAD" --name-only 2>/dev/null || true)"
+            fi
+        fi
+    fi
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         FILES+=("$line")
