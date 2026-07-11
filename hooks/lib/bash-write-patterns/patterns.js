@@ -207,16 +207,15 @@ const QUOTED_COMMAND_WORD_WRITE_NAMES = new Set([
   "unzip", "gunzip", "bunzip2", "sc", "ac", "ni", "ri",
 ]);
 
-// Reason-text guard: reject only the 3 chars that carry expansion semantics
-// inside a bash double-quoted string — $ (variable/command expansion), ` (command
-// substitution), and " (quote termination). All other chars (|, ;, &, (, ), <, >,
-// \) are literal inside "..." and are safe to pass through.
+// Reason-text guard: reject expansion triggers inside a bash double-quoted string.
+// Dangerous: $(  command substitution; ${  parameter expansion (brace form); $[  arithmetic expansion;
+//            `   command substitution; "  quote termination.
+// Safe (now allowed): bare $WORD / $IDENTIFIER — shell does expand these in DQ context,
+//   but the echo output is just the variable's value; not a write operation.
 //
-// Bare \ is safe: it is only a bash escape when immediately followed by one of
-// { $ ` " \ newline }. Those second chars are already in this 3-char set, so any
-// dangerous \-sequence is caught by its second character. Trailing \ before >>"
-// (e.g. C:\path>>) is also safe — \ before > is not a bash escape sequence.
-const UNSAFE_REASON_CHARS = /[$`"]/;
+// Bare \ is safe: only a bash escape when immediately followed by one of
+// { $ ` " \ newline }. Those second chars are already covered above.
+const UNSAFE_REASON_CHARS = /\$[({[]|[`"]/;
 
 // isGhWriteIR: IR-owned version of the kind:"gh" WRITE_PATTERNS group.
 // During canary-5 (#1296), the kind:"gh" group will be removed from WRITE_PATTERNS
