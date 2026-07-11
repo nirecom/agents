@@ -392,6 +392,6 @@ Changes: Fixed: sessions from another workspace no longer appear in the current 
 Background: feat(#1336): add wip-state abandon verb + issue-state-check.sh
 Changes: `wip-state.sh abandon <N>`: new verb for session abandonment — resets board Status to Todo and clears fingerprint; OPEN-only guard refuses to run on CLOSED issues (use `clear` for closed)
 
-### FEATURE: PR #1369 (2026-07-11)
-Background: refactor(#1295,#1069): migrate bash-write-targets/ to IR; fix piped-cmd detection
-Changes: Write-target detection now scans all pipeline segments (previously only the first verb was checked), closing a protection gap in piped commands like `echo x | tee ~/.bashrc`.;Single-quoted paths (e.g. `'$HOME/foo'`) are now treated as literals in all extractors, preserving the fix-793 Case 5 invariant across the IR migration.
+### FEATURE: PR #1370 (2026-07-11)
+Background: feat(#1350): complexity evaluation SSOT — evaluate once at CI-C1b, persist to state.complexity_evaluation, read in MDP-3/WCD-3/WT-5
+Changes: Model complexity routing (opus vs sonnet) is now evaluated once per session at intent-clarification time and reused consistently across all planning and coding stages, eliminating redundant re-evaluations that could produce inconsistent model selection.
