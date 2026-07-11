@@ -18,7 +18,8 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
    - stdout `OFF`: proceed to step WCD-3.
    - stdout `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-WCD-3. Read `skills/_shared/judge-task-complexity.md`. Emit in Claude text output (NOT Bash echo):
+WCD-3. Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored verdict and signals directly (parse `verdict=<v>` and `signals=<csv>`).
+   If `NONE` (fail-open): read `skills/_shared/judge-task-complexity.md` and evaluate directly. Emit in Claude text output (NOT Bash echo):
    > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
 WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, model = verdict from step WCD-3) with a prompt containing:
