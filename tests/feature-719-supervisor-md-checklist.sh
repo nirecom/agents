@@ -47,8 +47,8 @@ run_m2() {
     contains_i "scope" || { ok=0; echo "  missing: scope"; }
     contains_i "non-goal" || { ok=0; echo "  missing: non-goal"; }
     contains_i "tacit knowledge" || { ok=0; echo "  missing: tacit knowledge"; }
-    if ! contains_i "perspective" && ! grep -q "§3\|§4\|§5" "$SUPERVISOR_MD"; then
-        ok=0; echo "  missing: perspective or §3/§4/§5"
+    if ! contains_i "perspective" && ! grep -q "CPR-4\|CPR-5\|CPR-6" "$SUPERVISOR_MD"; then
+        ok=0; echo "  missing: perspective or CPR-4/CPR-5/CPR-6"
     fi
     if [ $ok -eq 1 ]; then
         pass "M2: contains alert mode + JD/checklist + 5 axes"

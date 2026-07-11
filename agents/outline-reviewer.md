@@ -93,7 +93,7 @@ C2: unresolved — <reason>
   revision-rounds cap is the symmetric pair. Both caps route through
   `bin/review-loop-verdict` (exit 2 = ESCALATE, exit 5 = AUTO_EXTEND). Do NOT propose
   alternative escalation flows that bypass this helper.
-- **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` §4):**
+- **Mandatory section carry-forward (structural — 3-section orthogonal check per `rules/core-principles.md` CPR-5):**
   outline.md MUST contain `## Issues`, `## Class members`, and `## Accepted Tradeoffs`,
   verbatim from intent.md. If any required section is absent or modified relative to
   intent.md, return `MISSING_ALTERNATIVE` with a `[HIGH]` concern naming the absent or
