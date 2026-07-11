@@ -144,6 +144,7 @@ function createInitialState(sessionId, ctx) {
     state.is_bugfix = isBugfixBranch(state.git_branch);
   }
   state.workflow_type = "wf-code";
+  state.complexity_evaluation = null;
   return state;
 }
 
@@ -221,6 +222,25 @@ function markStep(sessionId, stepName, status, extraFields = {}) {
     state = createInitialState(sessionId);
   }
   state.steps[stepName] = { status, updated_at: new Date().toISOString(), ...extraFields };
+  writeState(sessionId, state);
+}
+
+// recordComplexityEvaluation(sessionId, verdict, signals):
+// Top-level field writer (does NOT go through markStep). Read-modify-write.
+// Write path — no fail-open: an invalid verdict throws.
+function recordComplexityEvaluation(sessionId, verdict, signals) {
+  let state = readState(sessionId);
+  if (!state) {
+    state = createInitialState(sessionId);
+  }
+  if (verdict !== "opus" && verdict !== "sonnet") {
+    throw new Error(`recordComplexityEvaluation: verdict must be "opus" or "sonnet", got ${JSON.stringify(verdict)}`);
+  }
+  state.complexity_evaluation = {
+    recorded_at: new Date().toISOString(),
+    verdict,
+    signals: Array.isArray(signals) ? signals : [],
+  };
   writeState(sessionId, state);
 }
 
@@ -343,6 +363,7 @@ module.exports = {
   getCurrentContext,
   findLatestStateForContext,
   markStep,
+  recordComplexityEvaluation,
   markReviewTestsComplete,
   invalidateReviewTests,
   cleanupZombies,
