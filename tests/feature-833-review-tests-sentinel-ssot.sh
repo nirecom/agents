@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: hooks/lib/sentinel-patterns.js, hooks/workflow-gate/review-tests-evidence.js
-# Tags: workflow, sentinel, ssot, review-tests, token
+# Tags: workflow, sentinel, ssot, review-tests, token, scope:issue-specific
 #
 # SSOT tests for the review_tests sentinel family (issue #833).
 #
@@ -265,6 +265,211 @@ if [ "$TOKEN_NON_GIT" = "NULL" ]; then
 else
     fail "T12. expected NULL for non-git dir, got: $TOKEN_NON_GIT"
 fi
+
+# ---------------------------------------------------------------------------
+# Section 3 — WARNINGS_ACCEPTED sentinel table-driven tests (cases 12-17)
+# Issue #1207 — new sentinel for clearing warnings after user review.
+# DQ strict form: echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: reason>>"
+# LOOKSLIKE form: <<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED...>> (no strict DQ)
+#
+# EXPECTED: cases 12-17 FAIL until REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ and
+#           REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE are added to
+#           hooks/lib/sentinel-patterns.js (and isSentinel/isStrictSentinel updated).
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Section 3: REVIEW_TESTS_WARNINGS_ACCEPTED sentinel (table-driven) ==="
+
+# Evaluates a sentinel command for the named regex and returns MATCH or NO_MATCH.
+eval_sentinel_regex() {
+    local regex_name="$1" cmd="$2"
+    run_with_timeout node -e "
+        try {
+            const sp = require(process.argv[1]);
+            const re = sp[process.argv[2]];
+            if (!re) { process.stdout.write('NOT_EXPORTED'); process.exit(0); }
+            if (!(re instanceof RegExp)) { process.stdout.write('NOT_REGEX'); process.exit(0); }
+            process.stdout.write(re.test(process.argv[3]) ? 'MATCH' : 'NO_MATCH');
+        } catch (e) { process.stdout.write('ERROR:' + e.message); }
+    " -- "$SENTINEL_PATTERNS" "$regex_name" "$cmd" 2>/dev/null || echo "ERROR"
+}
+
+eval_is_sentinel() {
+    local cmd="$1"
+    run_with_timeout node -e "
+        try {
+            const sp = require(process.argv[1]);
+            process.stdout.write(sp.isSentinel(process.argv[2]) ? 'YES' : 'NO');
+        } catch (e) { process.stdout.write('ERROR:' + e.message); }
+    " -- "$SENTINEL_PATTERNS" "$cmd" 2>/dev/null || echo "ERROR"
+}
+
+eval_is_strict() {
+    local cmd="$1"
+    run_with_timeout node -e "
+        try {
+            const sp = require(process.argv[1]);
+            if (typeof sp.isStrictSentinel !== 'function') {
+                process.stdout.write('NOT_EXPORTED'); process.exit(0);
+            }
+            process.stdout.write(sp.isStrictSentinel(process.argv[2]) ? 'YES' : 'NO');
+        } catch (e) { process.stdout.write('ERROR:' + e.message); }
+    " -- "$SENTINEL_PATTERNS" "$cmd" 2>/dev/null || echo "ERROR"
+}
+
+assert_eq() {
+    local name="$1" want="$2" got="$3"
+    if [ "$want" = "$got" ]; then
+        echo "PASS: $name"; PASS=$((PASS + 1))
+    else
+        echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1))
+    fi
+}
+
+# Table-driven: name | input command | want (MATCH or NO_MATCH)
+# Tests REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ (strict double-quote form).
+DQ_RE="REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ"
+
+while IFS='|' read -r name input want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    name="${name//[[:space:]]/}"
+    want="${want//[[:space:]]/}"
+    input="${input#"${input%%[! ]*}"}"
+    input="${input%"${input##*[! ]}"}"
+    got=$(eval_sentinel_regex "$DQ_RE" "$input")
+    assert_eq "T${name}.DQ_RE" "$want" "$got"
+done <<'DQ_TABLE'
+12  | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: all warnings reviewed>>" | MATCH
+13b | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED>>"                         | NO_MATCH
+14  | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: >>"                       | NO_MATCH
+15  | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: reason>>ignored"          | NO_MATCH
+16a | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: r>>" && rm -f /tmp/x      | NO_MATCH
+DQ_TABLE
+
+# Table-driven: LOOKSLIKE form (broader match for advisory rejection).
+LL_RE="REVIEW_TESTS_WARNINGS_ACCEPTED_LOOKSLIKE_RE"
+
+while IFS='|' read -r name input want; do
+    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
+    name="${name//[[:space:]]/}"
+    want="${want//[[:space:]]/}"
+    input="${input#"${input%%[! ]*}"}"
+    input="${input%"${input##*[! ]}"}"
+    got=$(eval_sentinel_regex "$LL_RE" "$input")
+    assert_eq "T${name}.LL_RE" "$want" "$got"
+done <<'LL_TABLE'
+13  | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED>>"          | MATCH
+14b | echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: reason>>"  | MATCH
+LL_TABLE
+
+# Case 12 isSentinel — DQ form accepted by isSentinel().
+cmd12='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: all warnings reviewed>>"'
+got12_is="$(eval_is_sentinel "$cmd12")"
+assert_eq "T12.isSentinel" "YES" "$got12_is"
+
+# Case 12 isStrictSentinel — DQ form accepted by isStrictSentinel().
+got12_strict="$(eval_is_strict "$cmd12")"
+assert_eq "T12.isStrictSentinel" "YES" "$got12_strict"
+
+# Case 13 isSentinel — bare form (no reason) IS recognized by isSentinel (LOOKSLIKE fallthrough).
+cmd13='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED>>"'
+got13_is="$(eval_is_sentinel "$cmd13")"
+assert_eq "T13.isSentinel(bare-lookslike)" "YES" "$got13_is"
+
+# Case 13 isStrictSentinel — bare form NOT a strict sentinel.
+got13_strict="$(eval_is_strict "$cmd13")"
+assert_eq "T13.isStrictSentinel(bare-NOT-strict)" "NO" "$got13_strict"
+
+# Case 16 — reason containing > must NOT be a strict sentinel (reason text contains >).
+cmd15='echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: r>x>>"'
+got15_strict="$(eval_is_strict "$cmd15")"
+assert_eq "T15.isStrictSentinel(reason-with->)" "NO" "$got15_strict"
+
+# Case 17 — mutation probe: bin/mutation-probe.sh verifies the regex is not trivially green.
+#
+# SKIPPED-Because: sentinel-patterns.js uses multi-line const forms:
+#   const REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ =
+#     /^echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: ([^>]+)>>"$/;
+# bin/mutation-probe.sh only instruments single-line `const NAME = /regex/;` forms.
+# Full mutation coverage is planned for T1-E2 (Stryker integration).
+#
+# L3 gap (mutation probe): the [^>]+ constraint (blocks redirect/> injection) is
+# verified by table-driven Section 3 cases (T15, T16a) rather than automated mutation.
+# A surviving mutant that replaces [^>]+ with .+ would be caught by T15 (reason-with->).
+#
+# Run via bin/run-with-timeout.sh (the repo's portable wrapper, not the local function).
+MUTATION_PROBE="$AGENTS_DIR/bin/mutation-probe.sh"
+RWT17="$AGENTS_DIR/bin/run-with-timeout.sh"
+if [[ -f "$MUTATION_PROBE" ]]; then
+    probe_out=""
+    probe_rc=0
+    probe_out=$(bash "$RWT17" 60 bash "$MUTATION_PROBE" "$SENTINEL_PATTERNS" 2>&1) || probe_rc=$?
+    if [[ "$probe_rc" -eq 0 ]]; then
+        pass "T17.mutation-probe: sentinel-patterns.js passed mutation probe"
+    elif echo "$probe_out" | grep -q "no single-line const regex found\|multi-line constant forms"; then
+        echo "SKIP: T17.mutation-probe — sentinel-patterns.js uses multi-line const forms; probe has nothing to mutate (T1-E2/Stryker planned for full coverage)"
+    else
+        fail "T17.mutation-probe: sentinel-patterns.js failed mutation probe (rc=$probe_rc): $(echo "$probe_out" | head -3)"
+    fi
+else
+    echo "SKIP: T17.mutation-probe — bin/mutation-probe.sh not found"
+fi
+
+# ---------------------------------------------------------------------------
+# Section 4 — Sentinel injection guard cases (C3)
+# Verifies that WARNINGS_ACCEPTED_RE_DQ rejects dangerous reason payloads.
+# The [^>]+ constraint blocks `>` which blocks redirects, $() substitution, etc.
+# The anchored form `^echo "..."$` blocks command chaining.
+# EXPECTED: FAIL for NOT_EXPORTED cases until regex constants are added.
+#           PASS for NO_MATCH cases (NOT_EXPORTED also fails the match → safe).
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Section 4: REVIEW_TESTS_WARNINGS_ACCEPTED injection guard cases ==="
+
+# For injection guards we assert NO_MATCH on DQ_RE AND not isStrictSentinel.
+# Helper: assert the command is neither a DQ match nor a strict sentinel.
+assert_injection_blocked() {
+    local desc="$1" cmd="$2"
+    local dq_got strict_got
+    dq_got=$(eval_sentinel_regex "REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ" "$cmd")
+    strict_got=$(eval_is_strict "$cmd")
+    # NOT_EXPORTED means the regex constant is missing — the injection guard is untestable.
+    # Treat as a test failure so the false-green is surfaced explicitly.
+    if [[ "$dq_got" == "NOT_EXPORTED" ]]; then
+        fail "assert_injection_blocked: REVIEW_TESTS_WARNINGS_ACCEPTED_RE_DQ not exported — cannot test; fix the test (add constant to sentinel-patterns.js) [desc: $desc]"
+        return
+    fi
+    if [[ "$strict_got" == "NOT_EXPORTED" ]]; then
+        fail "assert_injection_blocked: isStrictSentinel not exported — cannot test; fix the test [desc: $desc]"
+        return
+    fi
+    if [[ "$dq_got" == "NO_MATCH" ]] && [[ "$strict_got" == "NO" ]]; then
+        pass "$desc"
+    else
+        fail "$desc — DQ_RE=[$dq_got] isStrictSentinel=[$strict_got] for: $cmd"
+    fi
+}
+
+# Command-substitution injection: $() in reason text.
+# [^>]+ already blocks $ before > but $() has no > → could theoretically slip.
+# Anchored DQ form prevents: outer form must be exactly echo "<<...: reason>>"
+# A $() inside the reason string would still match [^>]+, but the strict anchor
+# requires the command to be ONLY the echo — any subshell invocation that changes
+# the actual echoed text makes the outer command something different.
+# We test the raw forms that attackers would try.
+assert_injection_blocked "C3.subshell-dollar-paren" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: $(evil)>>"'
+assert_injection_blocked "C3.subshell-backtick" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: `evil`>>"'
+assert_injection_blocked "C3.semicolon-in-reason" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo; rm -f bar>>"'
+assert_injection_blocked "C3.redirect-in-reason" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo > /tmp/x>>"'
+assert_injection_blocked "C3.pipe-in-reason" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo | cat>>"'
+assert_injection_blocked "C3.and-chain-in-reason" \
+    'echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: foo && bar>>"'
 
 # ---------------------------------------------------------------------------
 # Results
