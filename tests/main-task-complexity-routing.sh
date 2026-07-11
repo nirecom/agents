@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/judge-task-complexity.md, skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md
-# Tags: detail, planning, skill, bin, env
+# Tags: detail, planning, skill, bin, env, scope:issue-specific
 # Structural tests for judge-task-complexity routing implementation.
 # Grep-only — no LLM calls.
 
@@ -44,8 +44,8 @@ check "judge: signal S3-security" "S3-security" "$JUDGE"
 check "judge: signal S4-installer" "S4-installer" "$JUDGE"
 check "judge: signal S5-breaking" "S5-breaking" "$JUDGE"
 check "judge: signal S6-long-plan" "S6-long-plan" "$JUDGE"
-check "judge: output format opus" "VERDICT: opus |" "$JUDGE"
-check "judge: output format sonnet" "VERDICT: sonnet | none" "$JUDGE"
+check "judge: output format high" "LEVEL: high |" "$JUDGE"
+check "judge: output format low" "LEVEL: low | none" "$JUDGE"
 check "judge: parse failure → opus" "err toward higher capability" "$JUDGE"
 check "judge: S3 covers docs-only" "regardless of whether the change is code-only, docs-only" "$JUDGE"
 
