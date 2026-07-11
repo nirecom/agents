@@ -19,7 +19,8 @@
 #
 # After UNSAFE_REASON_CHARS narrowing (this PR):
 #   Group B2 (T3.13d–h): FAIL until write-code narrows UNSAFE_REASON_CHARS to 3-char set.
-#   Group D2 (T3.37–41): PASS now (3-char set: $ ` " still blocks all DQ expansion).
+#   Group D2 (T3.37–42): T3.37/T3.38/T3.42 FAIL until source allows bare $VAR (#1323);
+#                         T3.39–41 PASS (backtick/dquote/dollar-brace still blocked).
 #   T3.24/T3.34/T3.35:   Flipped write→read (| and ; are literal in DQ; safe).
 #   Group E (T3.0a–c, T3.13i, T3.50): Edge inputs and dispatch guard.
 #
