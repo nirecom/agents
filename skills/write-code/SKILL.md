@@ -18,11 +18,11 @@ WCD-2. **CONFIRM_CODE gate** — enumerate planned edits (one line per file: pat
    - stdout `OFF`: proceed to step WCD-3.
    - stdout `ON` or `ERROR`: present the planned edits via `AskUserQuestion` and wait for approval before continuing.
 
-WCD-3. Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored verdict and signals directly (parse `verdict=<v>` and `signals=<csv>`).
-   If `NONE` (fail-open): read `skills/_shared/judge-task-complexity.md` and evaluate directly. Emit in Claude text output (NOT Bash echo):
+WCD-3. Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv>`), then derive the model: `level === "high" ? "opus" : "sonnet"`.
+   If `NONE` (fail-open): read `skills/_shared/judge-task-complexity.md` and evaluate directly → derive `high`/`low` from the routing rule, then map to model: high→opus, low→sonnet. Emit in Claude text output (NOT Bash echo):
    > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
-WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, model = verdict from step WCD-3) with a prompt containing:
+WCD-4. **Launch subagent** (`Agent` tool, `mode: "default"`, `model: <model derived from level in step WCD-3>` — the model parameter receives `"opus"` or `"sonnet"`, never `"high"` or `"low"`) with a prompt containing:
    - Target files and planned edit summary from step WCD-2.
    - A-layer language essence block (see below).
    - Directive: "Read `rules/coding/<lang>.md` before the first Edit for each language present."

@@ -183,7 +183,7 @@ function hasValidSkipJudgment(sessionId, targetStep) {
 
 // readComplexityEvaluation(sessionId):
 // Returns state.complexity_evaluation if present and a valid object with all
-// required fields (verdict:string, recorded_at:string, signals:Array); else null.
+// required fields (level:string, recorded_at:string, signals:Array); else null.
 // Fail-open: any exception → null.
 function readComplexityEvaluation(sessionId) {
   try {
@@ -191,29 +191,38 @@ function readComplexityEvaluation(sessionId) {
     const state = readState(sessionId);
     if (!state) return null;
     const ce = state.complexity_evaluation;
+    // --- BEGIN temporary: verdict(opus|sonnet) → level(high|low) migration ---
+    let level;
+    if (ce !== null && typeof ce === 'object' && !('level' in ce) && typeof ce.verdict === 'string') {
+      const LEGACY_MAP = { opus: 'high', sonnet: 'low' };
+      level = LEGACY_MAP[ce.verdict]; // undefined for unknown legacy verdicts → validation rejects → null
+    } else {
+      level = ce && ce.level;
+    }
+    // --- END temporary: verdict(opus|sonnet) → level(high|low) migration ---
     // signals MUST be an array — consumers call ce.signals.join(); a non-array
     // would throw a TypeError downstream, so reject it here.
-    if (!ce || typeof ce !== "object" || typeof ce.verdict !== "string" || typeof ce.recorded_at !== "string" || !Array.isArray(ce.signals)) return null;
-    return ce;
+    if (!ce || typeof ce !== "object" || typeof level !== "string" || typeof ce.recorded_at !== "string" || !Array.isArray(ce.signals)) return null;
+    return { level, signals: ce.signals, recorded_at: ce.recorded_at };
   } catch (_) {
     return null;
   }
 }
 
 // hasComplexityEvaluation(sessionId):
-// Returns true iff a valid evaluation exists with verdict opus|sonnet.
+// Returns true iff a valid evaluation exists with level high|low.
 // Never throws (fail-to-false). No mtime/staleness check (unlike
 // hasValidSkipJudgment): complexity is a session-lifetime fact, not tied to
-// artifact freshness — a recorded verdict stays valid for the whole session.
+// artifact freshness — a recorded level stays valid for the whole session.
 function hasComplexityEvaluation(sessionId) {
   const ce = readComplexityEvaluation(sessionId);
   if (!ce) return false;
-  return ce.verdict === "opus" || ce.verdict === "sonnet";
+  return ce.level === "high" || ce.level === "low";
 }
 
 // resolveSkipConditionsFromComplexity(sessionId, targetStep):
 // Returns a fully-populated conditions object (all keys = true) when the session
-// is provably 0-signal-sonnet (verdict=sonnet AND signals=[]), meaning planning
+// is provably 0-signal-low (level=low AND signals=[]), meaning planning
 // overhead cannot be justified. Returns null in all other cases (fail-open).
 // Used by CI-C1c and MOP-1d / MOP-C1 to auto-satisfy skip conditions.
 function resolveSkipConditionsFromComplexity(sessionId, targetStep) {
@@ -221,7 +230,7 @@ function resolveSkipConditionsFromComplexity(sessionId, targetStep) {
     if (targetStep !== "outline" && targetStep !== "detail") return null;
     const ce = readComplexityEvaluation(sessionId);
     if (!ce) return null;
-    if (ce.verdict !== "sonnet" || !Array.isArray(ce.signals) || ce.signals.length !== 0) return null;
+    if (ce.level !== "low" || !Array.isArray(ce.signals) || ce.signals.length !== 0) return null;
     const keys = CONDITION_SCHEMAS[targetStep];
     const result = {};
     for (const k of keys) result[k] = true;
