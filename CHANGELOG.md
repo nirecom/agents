@@ -387,3 +387,7 @@ Changes: EM Supervisor is quieter: `warning`/`notice` findings no longer produce
 ### FEATURE: PR #1362 (2026-07-11)
 Background: fix(#1358): _encodeCwd ignores CLAUDE_PROJECT_DIR, uses cwd argument only
 Changes: Fixed: sessions from another workspace no longer appear in the current workspace's CC sessions list when multiple Claude Code sessions run concurrently (caused by `_encodeCwd` incorrectly preferring `CLAUDE_PROJECT_DIR` over the explicit cwd argument).
+
+### FEATURE: PR #1363 (2026-07-11)
+Background: feat(#1336): add wip-state abandon verb + issue-state-check.sh
+Changes: `wip-state.sh abandon <N>`: new verb for session abandonment — resets board Status to Todo and clears fingerprint; OPEN-only guard refuses to run on CLOSED issues (use `clear` for closed)
