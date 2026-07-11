@@ -18,7 +18,10 @@ REPO_ARG=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --repo) REPO_ARG="$2"; shift 2 ;;
-        --repo=*) REPO_ARG="${1#--repo=}"; shift ;;
+        --repo=*)
+            REPO_ARG="${1#--repo=}"
+            if [[ -z "$REPO_ARG" ]]; then echo "Error: --repo requires a non-empty value" >&2; exit 2; fi
+            shift ;;
         --) shift; break ;;
         *) break ;;
     esac
@@ -34,7 +37,7 @@ N="$1"
 
 # Validate --repo format before any use (prevents flag-injection into gh).
 if [[ -n "$REPO_ARG" ]]; then
-    if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+    if ! [[ "$REPO_ARG" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)?$ ]]; then
         echo "Error: invalid --repo value: $REPO_ARG" >&2
         exit 2
     fi
