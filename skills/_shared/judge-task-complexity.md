@@ -17,9 +17,9 @@ Evaluate the task context against the signals below and emit a single-line verdi
 
 ## Routing Rule
 
-- 1 or more signals triggered → `opus`
-- 0 signals triggered → `sonnet`
-- Parse failure or ambiguous context → `opus` (err toward higher capability)
+- 1 or more signals triggered → `high`
+- 0 signals triggered → `low`
+- Parse failure or ambiguous context → `high` (err toward higher capability)
 
 ## Output Format
 
@@ -27,13 +27,13 @@ The caller emits exactly one line in its own output:
 
 If signals matched:
 ```
-VERDICT: opus | <comma-separated signal IDs>
+LEVEL: high | <comma-separated signal IDs>
 ```
-Example: `VERDICT: opus | S1-multi-file, S3-security`
+Example: `LEVEL: high | S1-multi-file, S3-security`
 
 If no signals:
 ```
-VERDICT: sonnet | none
+LEVEL: low | none
 ```
 
 No preamble, no explanation, no trailing text. The pipe (`|`) and signal list are mandatory.
@@ -42,5 +42,5 @@ No preamble, no explanation, no trailing text. The pipe (`|`) and signal list ar
 
 - Evaluate ALL signals before emitting the verdict — do not short-circuit on the first match
 - "Security documentation" counts as S3-security. The boundary applies to subject matter, not artifact type.
-- When file count cannot be precisely determined, err toward opus (S1-multi-file)
-- Never emit anything other than the single VERDICT line
+- When file count cannot be precisely determined, err toward high (S1-multi-file)
+- Never emit anything other than the single LEVEL line

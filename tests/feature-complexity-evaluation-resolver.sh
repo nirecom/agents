@@ -45,8 +45,8 @@ echo ""
 echo "=== CE-1: round-trip record+read (opus, non-empty signals) ==="
 if [ "$API_READY" = "true" ]; then
   SID="ce1-$$"
-  node_record "$SID" "opus" '["S1-multi-file","S2-architecture"]' >/dev/null
-  assert_eq "CE-1a. verdict read-back = opus" 'opus' "$(node_read_field "$SID" verdict | tr -d '\"')"
+  node_record "$SID" "high" '["S1-multi-file","S2-architecture"]' >/dev/null
+  assert_eq "CE-1a. level read-back = high" 'high' "$(node_read_field "$SID" level | tr -d '\"')"
   assert_eq "CE-1b. signals read-back preserved" '["S1-multi-file","S2-architecture"]' "$(node_read_field "$SID" signals)"
 else
   skip "CE-1 (API absent)"
@@ -59,8 +59,8 @@ echo ""
 echo "=== CE-2: round-trip record+read (sonnet, empty signals) ==="
 if [ "$API_READY" = "true" ]; then
   SID="ce2-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
-  assert_eq "CE-2a. verdict read-back = sonnet" 'sonnet' "$(node_read_field "$SID" verdict | tr -d '\"')"
+  node_record "$SID" "low" '[]' >/dev/null
+  assert_eq "CE-2a. level read-back = low" 'low' "$(node_read_field "$SID" level | tr -d '\"')"
   assert_eq "CE-2b. empty signals read-back = []" '[]' "$(node_read_field "$SID" signals)"
 else
   skip "CE-2 (API absent)"
@@ -73,10 +73,23 @@ echo ""
 echo "=== CE-3: hasComplexityEvaluation → true after record ==="
 if [ "$API_READY" = "true" ]; then
   SID="ce3-$$"
-  node_record "$SID" "opus" '["S1-multi-file"]' >/dev/null
+  node_record "$SID" "high" '["S1-multi-file"]' >/dev/null
   assert_eq "CE-3. hasComplexityEvaluation true after record" 'true' "$(node_has "$SID")"
 else
   skip "CE-3 (API absent)"
+fi
+
+# ===========
+# CE-3b: hasComplexityEvaluation → true after record (level=low)
+# ===========
+echo ""
+echo "=== CE-3b: hasComplexityEvaluation → true after record (level=low) ==="
+if [ "$API_READY" = "true" ]; then
+  SID="ce3b-$$"
+  node_record "$SID" "low" '[]' >/dev/null
+  assert_eq "CE-3b. hasComplexityEvaluation true after low record" 'true' "$(node_has "$SID")"
+else
+  skip "CE-3b (API absent)"
 fi
 
 # ==========================================================================
@@ -131,7 +144,7 @@ echo ""
 echo "=== CE-7: complexity record missing required fields → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="ce7-$$"
-  # Hand-craft a state file whose complexity_evaluation lacks the verdict field.
+  # Hand-craft a state file whose complexity_evaluation lacks the level field.
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.createInitialState('$SID');
@@ -153,7 +166,7 @@ if [ "$API_READY" = "true" ]; then
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.createInitialState('$SID');
-    s.complexity_evaluation = { verdict: 'opus', signals: 'S1-multi-file', recorded_at: new Date().toISOString() };
+    s.complexity_evaluation = { level: 'high', signals: 'S1-multi-file', recorded_at: new Date().toISOString() };
     io.writeState('$SID', s);
   " 2>/dev/null
   assert_eq "CE-8. non-array signals reads null" 'null' "$(node_read_json "$SID")"
@@ -168,9 +181,9 @@ echo ""
 echo "=== CE-9: double record → last-write-wins ==="
 if [ "$API_READY" = "true" ]; then
   SID="ce9-$$"
-  node_record "$SID" "opus" '["S1-multi-file"]' >/dev/null
-  node_record "$SID" "sonnet" '[]' >/dev/null
-  assert_eq "CE-9a. verdict = last write (sonnet)" 'sonnet' "$(node_read_field "$SID" verdict | tr -d '\"')"
+  node_record "$SID" "high" '["S1-multi-file"]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
+  assert_eq "CE-9a. level = last write (low)" 'low' "$(node_read_field "$SID" level | tr -d '\"')"
   assert_eq "CE-9b. signals = last write ([])" '[]' "$(node_read_field "$SID" signals)"
 else
   skip "CE-9 (API absent)"
@@ -183,7 +196,7 @@ echo ""
 echo "=== CE-SCHEMA-1: all S1..S6 signals round-trip ==="
 if [ "$API_READY" = "true" ]; then
   SID="ceall-$$"
-  node_record "$SID" "opus" '["S1","S2","S3","S4","S5","S6"]' >/dev/null
+  node_record "$SID" "high" '["S1","S2","S3","S4","S5","S6"]' >/dev/null
   assert_eq "CE-SCHEMA-1. all six signals preserved" '["S1","S2","S3","S4","S5","S6"]' "$(node_read_field "$SID" signals)"
 else
   skip "CE-SCHEMA-1 (API absent)"
@@ -193,7 +206,7 @@ echo ""
 echo "=== CE-SCHEMA-2: duplicate signal ids preserved verbatim (no dedup) ==="
 if [ "$API_READY" = "true" ]; then
   SID="cedup-$$"
-  node_record "$SID" "opus" '["S1","S1","S2"]' >/dev/null
+  node_record "$SID" "high" '["S1","S1","S2"]' >/dev/null
   assert_eq "CE-SCHEMA-2. duplicates stored as-is" '["S1","S1","S2"]' "$(node_read_field "$SID" signals)"
 else
   skip "CE-SCHEMA-2 (API absent)"
@@ -203,7 +216,7 @@ echo ""
 echo "=== CE-SCHEMA-3: unknown signal name stored (no value validation) ==="
 if [ "$API_READY" = "true" ]; then
   SID="ceunk-$$"
-  node_record "$SID" "opus" '["unknown-signal"]' >/dev/null
+  node_record "$SID" "high" '["unknown-signal"]' >/dev/null
   assert_eq "CE-SCHEMA-3. unknown signal accepted" '["unknown-signal"]' "$(node_read_field "$SID" signals)"
 else
   skip "CE-SCHEMA-3 (API absent)"
@@ -214,7 +227,7 @@ echo "=== CE-SCHEMA-4: very long signal string stored intact ==="
 if [ "$API_READY" = "true" ]; then
   SID="celong-$$"
   LONG="$(printf 'S%.0s' $(seq 1 300))"
-  node_record "$SID" "sonnet" "[\"$LONG\"]" >/dev/null
+  node_record "$SID" "low" "[\"$LONG\"]" >/dev/null
   assert_eq "CE-SCHEMA-4. long signal preserved" "[\"$LONG\"]" "$(node_read_field "$SID" signals)"
 else
   skip "CE-SCHEMA-4 (API absent)"
@@ -224,7 +237,7 @@ echo ""
 echo "=== CE-SCHEMA-5: recorded_at is ISO 8601 ==="
 if [ "$API_READY" = "true" ]; then
   SID="ceiso-$$"
-  node_record "$SID" "opus" '["S1"]' >/dev/null
+  node_record "$SID" "high" '["S1"]' >/dev/null
   ISO_VAL="$(node_read_field "$SID" recorded_at | tr -d '\"')"
   if printf '%s' "$ISO_VAL" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'; then
     pass "CE-SCHEMA-5. recorded_at ISO 8601 [$ISO_VAL]"
@@ -262,7 +275,7 @@ echo ""
 echo "=== CE-CORRUPT-3: recorded_at missing → null (fail-open) ==="
 if [ "$API_READY" = "true" ]; then
   SID="cenorec-$$"
-  write_raw_state "$SID" '{"session_id":"cenorec","complexity_evaluation":{"verdict":"opus","signals":["S1"]}}'
+  write_raw_state "$SID" '{"session_id":"cenorec","complexity_evaluation":{"level":"high","signals":["S1"]}}'
   assert_eq "CE-CORRUPT-3. missing recorded_at reads null" 'null' "$(node_read_json "$SID")"
 else
   skip "CE-CORRUPT-3 (API absent)"
@@ -273,7 +286,7 @@ echo "=== CE-CORRUPT-4: non-string signal element still stored (no element valid
 if [ "$API_READY" = "true" ]; then
   SID="ceelem-$$"
   # signals is a valid array; element-level type is NOT validated by the read API.
-  write_raw_state "$SID" '{"session_id":"ceelem","complexity_evaluation":{"verdict":"opus","signals":[1,2],"recorded_at":"2026-07-11T00:00:00.000Z"}}'
+  write_raw_state "$SID" '{"session_id":"ceelem","complexity_evaluation":{"level":"high","signals":[1,2],"recorded_at":"2026-07-11T00:00:00.000Z"}}'
   RES="$(node_read_json "$SID")"
   check_not_contains "CE-CORRUPT-4. array-of-numbers signals NOT rejected as null" "null" "$RES"
 else
@@ -296,9 +309,9 @@ else
   SID="ce10-$$"
   CE10_RC=0
   CE10_REC="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-    --session "$SID" --verdict opus --signals "S1-multi-file,S2-architecture" 2>/dev/null)" || CE10_RC=$?
+    --session "$SID" --verdict high --signals "S1-multi-file,S2-architecture" 2>/dev/null)" || CE10_RC=$?
   assert_eq "CE-10a. record CLI exit 0" '0' "$CE10_RC"
-  check_contains "CE-10b. record CLI stdout RECORDED_COMPLEXITY verdict=opus" "RECORDED_COMPLEXITY verdict=opus" "$CE10_REC"
+  check_contains "CE-10b. record CLI stdout RECORDED_COMPLEXITY verdict=high" "RECORDED_COMPLEXITY verdict=high" "$CE10_REC"
   # state file created under CLAUDE_WORKFLOW_DIR
   if [ -f "$WORKFLOW_DIR/${SID}.json" ]; then
     pass "CE-10c. state file created under CLAUDE_WORKFLOW_DIR"
@@ -308,7 +321,7 @@ else
   CE10R_RC=0
   CE10_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$READ_CLI_N" --session "$SID" 2>/dev/null)" || CE10R_RC=$?
   assert_eq "CE-10d. read CLI exit 0" '0' "$CE10R_RC"
-  check_contains "CE-10e. CLI read reports verdict opus" "verdict=opus" "$CE10_OUT"
+  check_contains "CE-10e. CLI read reports level high" "level=high" "$CE10_OUT"
   check_contains "CE-10f. CLI read reports signal S1-multi-file" "S1-multi-file" "$CE10_OUT"
 
   # CE-11: CLI read with no state → NONE (exit 0, not a crash).
@@ -322,10 +335,10 @@ else
   SID="ce12-$$"
   CE12_RC=0
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-    --session "$SID" --verdict sonnet --signals "" >/dev/null 2>&1 || CE12_RC=$?
+    --session "$SID" --verdict low --signals "" >/dev/null 2>&1 || CE12_RC=$?
   assert_eq "CE-12a. record CLI (empty signals) exit 0" '0' "$CE12_RC"
   CE12_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$READ_CLI_N" --session "$SID" 2>/dev/null)"
-  check_contains "CE-12b. CLI read-back verdict=sonnet" "verdict=sonnet" "$CE12_OUT"
+  check_contains "CE-12b. CLI read-back level=low" "level=low" "$CE12_OUT"
 
   # ------------------------------------------------------------------
   # C2 — CLI failure verdicts (bad args must exit non-zero)
@@ -339,13 +352,23 @@ else
 
   CEF2_RC=0
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-    --session "" --verdict opus >/dev/null 2>&1 || CEF2_RC=$?
+    --session "" --verdict high >/dev/null 2>&1 || CEF2_RC=$?
   assert_eq "CE-CLI-FAIL-2. empty session id → exit 1" '1' "$CEF2_RC"
 
   CEF3_RC=0
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-    --verdict opus >/dev/null 2>&1 || CEF3_RC=$?
+    --verdict high >/dev/null 2>&1 || CEF3_RC=$?
   assert_eq "CE-CLI-FAIL-3. missing --session → exit 1" '1' "$CEF3_RC"
+
+  CEF4_RC=0
+  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
+    --session "cef4-$$" --verdict opus >/dev/null 2>&1 || CEF4_RC=$?
+  assert_eq "CE-CLI-FAIL-4. old value --verdict opus → exit 1" '1' "$CEF4_RC"
+
+  CEF5_RC=0
+  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
+    --session "cef5-$$" --verdict sonnet >/dev/null 2>&1 || CEF5_RC=$?
+  assert_eq "CE-CLI-FAIL-5. old value --verdict sonnet → exit 1" '1' "$CEF5_RC"
 
   # ------------------------------------------------------------------
   # C3 — security / injection on --session (must reject, no stray file)
@@ -361,7 +384,7 @@ else
     local desc="$1" sid="$2"
     local rc=0
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-      --session "$sid" --verdict opus --signals "S1" >/dev/null 2>&1 || rc=$?
+      --session "$sid" --verdict high --signals "S1" >/dev/null 2>&1 || rc=$?
     if [ "$rc" -ne 0 ]; then
       pass "$desc (exit $rc)"
     else
@@ -390,6 +413,27 @@ else
   fi
 
   # ------------------------------------------------------------------
+  # C4 — read CLI: malicious --session values also rejected (CPR-5)
+  # ------------------------------------------------------------------
+  echo ""
+  echo "=== CE-READ-SEC: read CLI rejects malicious --session ==="
+  sec_reject_read() {
+    local desc="$1" sid="$2"
+    local rc=0
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$READ_CLI_N" \
+      --session "$sid" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      pass "$desc (exit $rc)"
+    else
+      fail "$desc -- expected non-zero exit, got 0"
+    fi
+  }
+  sec_reject_read "CE-READ-SEC-1. path traversal ../evil rejected"   "../evil"
+  sec_reject_read "CE-READ-SEC-2. path separator foo/bar rejected"    "foo/bar"
+  sec_reject_read "CE-READ-SEC-3. shell metachar foo;bar rejected"    "foo;bar"
+  sec_reject_read "CE-READ-SEC-4. empty string rejected"              ""
+
+  # ------------------------------------------------------------------
   # C9 — CLI-level idempotency (double record, same verdict)
   # ------------------------------------------------------------------
   echo ""
@@ -397,16 +441,133 @@ else
   SID="ceidemp-$$"
   I1_RC=0; I2_RC=0
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-    --session "$SID" --verdict opus --signals "S1" >/dev/null 2>&1 || I1_RC=$?
+    --session "$SID" --verdict high --signals "S1" >/dev/null 2>&1 || I1_RC=$?
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$RECORD_CLI_N" \
-    --session "$SID" --verdict opus --signals "S1" >/dev/null 2>&1 || I2_RC=$?
+    --session "$SID" --verdict high --signals "S1" >/dev/null 2>&1 || I2_RC=$?
   assert_eq "CE-CLI-IDEMP-1a. first record exit 0" '0' "$I1_RC"
   assert_eq "CE-CLI-IDEMP-1b. second record exit 0 (idempotent)" '0' "$I2_RC"
   IDEMP_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node "$READ_CLI_N" --session "$SID" 2>/dev/null)"
-  check_contains "CE-CLI-IDEMP-1c. read still verdict=opus" "verdict=opus" "$IDEMP_OUT"
+  check_contains "CE-CLI-IDEMP-1c. read still level=high" "level=high" "$IDEMP_OUT"
   # Exactly one state file (no duplication).
   N_FILES="$(ls -1 "$WORKFLOW_DIR/${SID}.json" 2>/dev/null | wc -l | tr -d ' ')"
   assert_eq "CE-CLI-IDEMP-1d. exactly one state file" '1' "$N_FILES"
+fi
+
+# ==========================================================================
+# SHIM-1: legacy sonnet blob → readComplexityEvaluation returns level="low"
+# ==========================================================================
+echo ""
+echo "=== SHIM-1: legacy verdict=sonnet blob → level=low ==="
+if [ "$API_READY" = "true" ]; then
+  SID="shim1-$$"
+  write_raw_state "$SID" '{"session_id":"shim1","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
+  SHIM1_LEVEL="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    const v = r.readComplexityEvaluation('$SID');
+    console.log(v === null ? 'null' : (v.level || '__NO_LEVEL__'));
+  " 2>/dev/null)"
+  assert_eq "SHIM-1. legacy sonnet blob → level=low" 'low' "$SHIM1_LEVEL"
+else
+  skip "SHIM-1 (API absent)"
+fi
+
+# ==========================================================================
+# SHIM-2: legacy opus blob → readComplexityEvaluation returns level="high"
+# ==========================================================================
+echo ""
+echo "=== SHIM-2: legacy verdict=opus blob → level=high ==="
+if [ "$API_READY" = "true" ]; then
+  SID="shim2-$$"
+  write_raw_state "$SID" '{"session_id":"shim2","complexity_evaluation":{"verdict":"opus","signals":["S1"],"recorded_at":"2026-01-01T00:00:00Z"}}'
+  SHIM2_LEVEL="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    const v = r.readComplexityEvaluation('$SID');
+    console.log(v === null ? 'null' : (v.level || '__NO_LEVEL__'));
+  " 2>/dev/null)"
+  assert_eq "SHIM-2. legacy opus blob → level=high" 'high' "$SHIM2_LEVEL"
+else
+  skip "SHIM-2 (API absent)"
+fi
+
+# ==========================================================================
+# SHIM-3: returned object must NOT have a 'verdict' key (non-destructive shim)
+# ==========================================================================
+echo ""
+echo "=== SHIM-3: returned object has no 'verdict' key (shim non-destructive) ==="
+if [ "$API_READY" = "true" ]; then
+  SID="shim3-$$"
+  write_raw_state "$SID" '{"session_id":"shim3","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
+  SHIM3_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    const v = r.readComplexityEvaluation('$SID');
+    if (v === null) { console.log('null'); }
+    else { console.log(Object.prototype.hasOwnProperty.call(v, 'verdict') ? 'HAS_VERDICT' : 'NO_VERDICT'); }
+  " 2>/dev/null)"
+  assert_eq "SHIM-3. normalized object has no 'verdict' key" 'NO_VERDICT' "$SHIM3_OUT"
+else
+  skip "SHIM-3 (API absent)"
+fi
+
+# ==========================================================================
+# SHIM-4: legacy unknown verdict → null (fail-open)
+# ==========================================================================
+echo ""
+echo "=== SHIM-4: legacy unknown verdict=gpt blob → null (fail-open) ==="
+if [ "$API_READY" = "true" ]; then
+  SID="shim4-$$"
+  write_raw_state "$SID" '{"session_id":"shim4","complexity_evaluation":{"verdict":"gpt","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
+  SHIM4_OUT="$(node_read_json "$SID")"
+  assert_eq "SHIM-4. unknown legacy verdict → null" 'null' "$SHIM4_OUT"
+else
+  skip "SHIM-4 (API absent)"
+fi
+
+# ==========================================================================
+# SHIM-5: legacy sonnet+[] → resolveSkipConditionsFromComplexity returns populated
+# (end-to-end shim: skip resolver reads through the shim and returns conditions)
+# ==========================================================================
+echo ""
+echo "=== SHIM-5: legacy sonnet+[] → resolveSkipConditionsFromComplexity populated ==="
+if [ "$API_READY" = "true" ]; then
+  SID="shim5-$$"
+  write_raw_state "$SID" '{"session_id":"shim5","complexity_evaluation":{"verdict":"sonnet","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}}'
+  SHIM5_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
+    const r = require('$RESOLVER_N');
+    const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
+    if (v === null || v === undefined) { console.log('null'); }
+    else {
+      const allTrue = Object.values(v).every(x => x === true);
+      console.log(allTrue ? 'POPULATED' : 'WRONG:' + JSON.stringify(v));
+    }
+  " 2>/dev/null)"
+  assert_eq "SHIM-5. legacy sonnet+[] → skip conditions populated (end-to-end)" 'POPULATED' "$SHIM5_OUT"
+else
+  skip "SHIM-5 (API absent)"
+fi
+
+# ==========================================================================
+# CE-LEVEL-INVALID: invalid level values → hasComplexityEvaluation false / null
+# ==========================================================================
+echo ""
+echo "=== CE-LEVEL-INVALID: invalid level values in stored blobs ==="
+if [ "$API_READY" = "true" ]; then
+  SID="ceinvalid1-$$"
+  write_raw_state "$SID" '{"session_id":"ceinvalid1","complexity_evaluation":{"level":"medium","signals":[],"recorded_at":"2026-07-11T00:00:00Z"}}'
+  assert_eq "CE-LEVEL-INVALID-1. level=medium → hasComplexityEvaluation false" 'false' "$(node_has "$SID")"
+
+  SID="ceinvalid2-$$"
+  write_raw_state "$SID" '{"session_id":"ceinvalid2","complexity_evaluation":{"level":"opus","signals":[],"recorded_at":"2026-07-11T00:00:00Z"}}'
+  assert_eq "CE-LEVEL-INVALID-2. level=opus → hasComplexityEvaluation false" 'false' "$(node_has "$SID")"
+
+  SID="ceinvalid3-$$"
+  write_raw_state "$SID" '{"session_id":"ceinvalid3","complexity_evaluation":{"level":"sonnet","signals":[],"recorded_at":"2026-07-11T00:00:00Z"}}'
+  assert_eq "CE-LEVEL-INVALID-3. level=sonnet → hasComplexityEvaluation false" 'false' "$(node_has "$SID")"
+
+  SID="ceinvalid4-$$"
+  write_raw_state "$SID" '{"session_id":"ceinvalid4","complexity_evaluation":{"level":null,"signals":[],"recorded_at":"2026-07-11T00:00:00Z"}}'
+  assert_eq "CE-LEVEL-INVALID-4. level=null → readComplexityEvaluation null" 'null' "$(node_read_json "$SID")"
+else
+  skip "CE-LEVEL-INVALID-1..4 (API absent)"
 fi
 
 echo ""

@@ -225,20 +225,20 @@ function markStep(sessionId, stepName, status, extraFields = {}) {
   writeState(sessionId, state);
 }
 
-// recordComplexityEvaluation(sessionId, verdict, signals):
+// recordComplexityEvaluation(sessionId, level, signals):
 // Top-level field writer (does NOT go through markStep). Read-modify-write.
-// Write path — no fail-open: an invalid verdict throws.
-function recordComplexityEvaluation(sessionId, verdict, signals) {
+// Write path — no fail-open: an invalid level throws.
+function recordComplexityEvaluation(sessionId, level, signals) {
   let state = readState(sessionId);
   if (!state) {
     state = createInitialState(sessionId);
   }
-  if (verdict !== "opus" && verdict !== "sonnet") {
-    throw new Error(`recordComplexityEvaluation: verdict must be "opus" or "sonnet", got ${JSON.stringify(verdict)}`);
+  if (level !== "high" && level !== "low") {
+    throw new Error(`recordComplexityEvaluation: level must be "high" or "low", got ${JSON.stringify(level)}`);
   }
   state.complexity_evaluation = {
     recorded_at: new Date().toISOString(),
-    verdict,
+    level,
     signals: Array.isArray(signals) ? signals : [],
   };
   writeState(sessionId, state);
