@@ -411,3 +411,7 @@ Changes: Sessions with no complexity signals now automatically satisfy outline a
 ### FEATURE: PR #1386 (2026-07-12)
 Background: refactor(#1382): complexity_evaluation stores level (high|low) instead of model name (opus|sonnet)
 Changes: `complexity_evaluation` now stores complexity level (`high`/`low`) instead of model names (`opus`/`sonnet`). `read-complexity-evaluation` output changes from `verdict=opus|sonnet` to `level=high|low`. Existing sessions with recorded evaluations are automatically migrated via a backward-compat shim.
+
+### FEATURE: PR #1388 (2026-07-12)
+Background: fix(#1380): strip trailing shell redirects before enforce-worktree force-delete match (#1172)
+Changes: Fixed: `/worktree-end` and `/sweep-branches` no longer fail to force-delete their feature branch when the underlying delete command carries a trailing shell redirect (e.g. `2>&1`, `>/dev/null`) or a quoted `-C` path that contains spaces.
