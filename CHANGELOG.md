@@ -399,3 +399,7 @@ Changes: Model complexity routing (opus vs sonnet) is now evaluated once per ses
 ### FEATURE: PR #1366 (2026-07-11)
 Background: refactor(#1364): rename core-principles to CPR-N scheme + add CPR-3 Separate the Concerns
 Changes: New reasoning principle CPR-3 "Separate the Concerns" added to core-principles.md — principles now use CPR-N identifiers (CPR-1 through CPR-8) for stable cross-references.;Removed outdated Stop hook that blocked merge approval when using the Bash Allow/Deny dialog flow (was enforcing a superseded AskUserQuestion-before-USER_VERIFIED design).
+
+### FEATURE: PR #1373 (2026-07-11)
+Background: fix(#1323): narrow UNSAFE_REASON_CHARS to allow bare  in sentinel reason
+Changes: Sentinel echoes whose reason field contains bare `$VAR` tokens (e.g. `<<WORKFLOW_CONFIRM_INTENT: contains $VAR token>>`) are no longer false-blocked; the worktree write guard now correctly classifies them as "read".
