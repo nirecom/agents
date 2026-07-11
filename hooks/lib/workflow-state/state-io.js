@@ -255,6 +255,26 @@ function markReviewTestsComplete(sessionId, token, extraFields = {}) {
   markStep(sessionId, "review_tests", "complete", { token, ...extraFields, wsid });
 }
 
+// Clear review_tests warnings while preserving the existing token/wsid.
+// This is the state mutation for WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED.
+// markStep does a full replace (no merge), so we must explicitly carry forward
+// the existing token and wsid to avoid stale-token blocks in the gate.
+function clearReviewTestsWarnings(sessionId, reason) {
+  assertValidSessionId(sessionId); // explicit guard: readState's try-catch swallows errors
+  const state = readState(sessionId);
+  if (!state) return; // fail-open: nothing to clear
+  const existing = (state.steps && state.steps.review_tests) || {};
+  if (!existing.warnings_summary) return; // nothing to clear
+  const token = existing.token || null;
+  const wsid = existing.wsid || null;
+  markStep(sessionId, "review_tests", "complete", {
+    token,
+    wsid,
+    warnings_summary: null,
+    warnings_accepted_reason: reason || null,
+  });
+}
+
 // re-pending the review_tests step; clears the recorded token
 function invalidateReviewTests(sessionId, reason) {
   markStep(sessionId, "review_tests", "pending", {
@@ -365,6 +385,7 @@ module.exports = {
   markStep,
   recordComplexityEvaluation,
   markReviewTestsComplete,
+  clearReviewTestsWarnings,
   invalidateReviewTests,
   cleanupZombies,
   setLastPushedSha,
