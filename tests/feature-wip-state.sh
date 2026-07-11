@@ -3,13 +3,14 @@
 # Tags: issue-create, github, workflow, issues, plans
 # Tests for bin/github-issues/wip-state.sh — Issue #362 WIP signaling helper.
 #
-# Helper has four verbs: set, check, clear, setup.
-#   - set <N>:   write fingerprint (text field) BEFORE Status=In Progress.
-#   - check <N>: print same|other|none.
-#   - clear <N>: Status=Done + fingerprint="" + delete lock file (idempotent).
-#   - setup:     one-shot ID discovery via gh api graphql; append to .env.
+# Helper has five verbs: set, check, clear, abandon, setup.
+#   - set <N>:     write fingerprint (text field) BEFORE Status=In Progress.
+#   - check <N>:   print same|other|none.
+#   - clear <N>:   Status=Done + fingerprint="" + delete lock file (idempotent).
+#   - abandon <N>: OPEN-only; Status=Todo + fingerprint="" + delete lock (HARD writes).
+#   - setup:       one-shot ID discovery via gh api graphql; append to .env.
 #
-# 30 test cases per detail.md §"tests/feature-wip-state.sh (new)".
+# 30 base cases per detail.md §"tests/feature-wip-state.sh" + 38 abandon cases.
 # Inline-gh-mock pattern from tests/feature-issue-create-skill.sh.
 #
 # RED: this suite fails clean while bin/github-issues/wip-state.sh is missing.
@@ -38,7 +39,7 @@ run_with_timeout() {
 if [ ! -f "$TARGET" ]; then
     echo "FAIL: bin/github-issues/wip-state.sh not found (implementation missing)"
     echo ""
-    echo "Results: 0 passed, 30 failed"
+    echo "Results: 0 passed, 68 failed"
     exit 1
 fi
 
@@ -52,6 +53,8 @@ SUB_DIR="$SCRIPT_DIR/feature-wip-state"
 . "$SUB_DIR/check.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/clear.sh"
+# shellcheck source=/dev/null
+. "$SUB_DIR/abandon.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/cross-verb.sh"
 # shellcheck source=/dev/null

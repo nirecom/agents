@@ -5,6 +5,7 @@
 #   set <N>:   write fingerprint THEN Status=In Progress; then write lock file.
 #   check <N>: print same|other|none on stdout.
 #   clear <N>: Status=Done + clear fingerprint + delete lock (idempotent).
+#   abandon <N>: Status=Todo + clear fingerprint + delete lock (OPEN issues only).
 #   setup:     one-shot field/option ID discovery; append to $AGENTS_CONFIG_DIR/.env.
 #
 # Fingerprint: sha256(session_id + ":" + N)[:8]. Issue-salted. Collision risk
@@ -54,6 +55,9 @@ while [ $# -gt 0 ]; do
             ;;
         --repo=*)
             REPO_OVERRIDE="${1#--repo=}"
+            if [[ -z "$REPO_OVERRIDE" ]]; then
+                echo "Error: --repo requires a non-empty value" >&2; exit 2
+            fi
             shift
             ;;
         -h|--help) usage 0 ;;
@@ -72,8 +76,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$CMD" in
-    set|check|clear|setup) ;;
-    *) echo "Error: usage: wip-state.sh {set|check|clear|setup} [<N>] [--session-id <SID>]" >&2; exit 2 ;;
+    set|check|clear|abandon|setup) ;;
+    *) echo "Error: usage: wip-state.sh {set|check|clear|abandon|setup} [<N>] [--session-id <SID>]" >&2; exit 2 ;;
 esac
 
 if [ "$CMD" = "clear" ] && [ "$SID_SET" -eq 1 ]; then
@@ -81,8 +85,13 @@ if [ "$CMD" = "clear" ] && [ "$SID_SET" -eq 1 ]; then
     exit 2
 fi
 
+if [ "$CMD" = "abandon" ] && [ "$SID_SET" -eq 1 ]; then
+    echo "Error: 'abandon' does not accept --session-id (verb does not consume session id)" >&2
+    exit 2
+fi
+
 if [[ -n "$REPO_OVERRIDE" ]]; then
-    if ! [[ "$REPO_OVERRIDE" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]]; then
+    if ! [[ "$REPO_OVERRIDE" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)?$ ]]; then
         echo "Error: invalid --repo value: $REPO_OVERRIDE" >&2
         exit 2
     fi
@@ -191,6 +200,11 @@ preflight_field_ids() {
             [ -z "${WIP_STATE_DONE_OPTION_ID:-}" ]       && missing+=("WIP_STATE_DONE_OPTION_ID")
             [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && missing+=("WIP_STATE_FINGERPRINT_FIELD_ID")
             ;;
+        abandon)
+            [ -z "${WIP_STATE_STATUS_FIELD_ID:-}" ]      && missing+=("WIP_STATE_STATUS_FIELD_ID")
+            [ -z "${WIP_STATE_TODO_OPTION_ID:-}" ]       && missing+=("WIP_STATE_TODO_OPTION_ID")
+            [ -z "${WIP_STATE_FINGERPRINT_FIELD_ID:-}" ] && missing+=("WIP_STATE_FINGERPRINT_FIELD_ID")
+            ;;
     esac
     if [ "${#missing[@]}" -gt 0 ]; then
         echo "Error: missing required env vars for '$CMD': ${missing[*]}" >&2
@@ -200,7 +214,7 @@ preflight_field_ids() {
 }
 
 validate_n() {
-    [[ "${1:-}" =~ ^[0-9]+$ ]] || { echo "Error: issue number must be a positive integer, got: '${1:-}'" >&2; exit 2; }
+    [[ "${1:-}" =~ ^[1-9][0-9]*$ ]] || { echo "Error: issue number must be a positive integer, got: '${1:-}'" >&2; exit 2; }
 }
 
 resolve_plans_dir() {
@@ -260,10 +274,13 @@ _WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/wip-state"
 . "$_WS_DIR/cmd-clear.sh"
 # shellcheck source=wip-state/cmd-setup.sh
 . "$_WS_DIR/cmd-setup.sh"
+# shellcheck source=wip-state/cmd-abandon.sh
+. "$_WS_DIR/cmd-abandon.sh"
 
 case "$CMD" in
     set)   cmd_set   "$N" ;;
     check) cmd_check "$N" ;;
     clear) cmd_clear "$N" ;;
     setup) cmd_setup ;;
+    abandon) cmd_abandon "$N" ;;
 esac
