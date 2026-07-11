@@ -14,6 +14,35 @@ const REDIRECT_RE = /^(?:\d?>>?|&>>?|<<<|<)$/;
 // Capture group is the path part after the operator.
 const ATTACHED_REDIRECT_RE = /^(?:\d?>>?|&>>?|<<<|<)(.+)$/;
 
+// Strip trailing shell-redirect suffixes off a raw command string.
+// Strips fd-dup forms (`2>&1`, `>&2`, `N>&-`) and unquoted file-redirect
+// suffixes (`>/dev/null`, `2>/dev/null`, `>>/file`, `> /dev/null`), both the
+// attached (operator glued to path) and spaced (operator + separate path
+// token) shapes. Stacked redirects (`>/dev/null 2>&1`) are peeled one group
+// per loop iteration until none remain. Quoted redirect targets (`>"my file"`)
+// are intentionally NOT stripped — the unquoted path class excludes quote chars.
+// Design basis: REDIRECT_RE / ATTACHED_REDIRECT_RE (redirect-operator forms) and
+// the fd-dup lookahead in splitSegmentsWithSeparators. This helper does NOT call
+// splitSegments; its sole responsibility is trailing-redirect-suffix recognition.
+// It strips mechanically and does not fail-closed on shell chaining — the
+// predicate layer (its `^...$` anchor and hasShellChaining) rejects chained cmds.
+function stripTrailingRedirects(cmd) {
+  if (typeof cmd !== "string") return cmd;
+  let out = cmd.replace(/\s+$/, "");
+  // fd-dup: `2>&1`, `>&2`, `1>&-`, `>&1`, `2>&-`
+  const fdDup = /\s+\d*>&[\d-]+$/;
+  // attached file-redirect: `>/dev/null`, `2>/dev/null`, `>>/file`, `&>/dev/null`
+  const attached = /\s+(?:\d*>>?|&>>?)[^\s&|;()"']+$/;
+  // separated file-redirect: `> /dev/null`, `2> /dev/null`, `>> /tmp/log`
+  const separated = /\s+(?:\d*>>?|&>>?)\s+[^\s&|;()"']+$/;
+  let prev;
+  do {
+    prev = out;
+    out = out.replace(fdDup, "").replace(attached, "").replace(separated, "");
+  } while (out !== prev);
+  return out;
+}
+
 // Strip $(...) and `...` command substitutions and `<<EOF...EOF` heredoc
 // bodies. These constructs carry message text, not paths — removing them
 // before tokenization avoids treating message content as command tokens.
@@ -358,6 +387,7 @@ module.exports = {
   splitSegmentsWithSeparators,
   stripSubstitutions,
   extractSubstitutionContents,
+  stripTrailingRedirects,
   REDIRECT_RE,
   ATTACHED_REDIRECT_RE,
 };
