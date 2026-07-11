@@ -2,8 +2,6 @@
 
 All work follows [`rules/core-principles.md`](rules/core-principles.md).
 
-When you explain a plan or diagnose a failure in the main conversation, name the CPR principle you are applying (e.g. "CPR-3 Separate the Concerns: this failure splits into ...").
-
 ## Workflow
 
 Begin file-modifying sessions with `/workflow-init`; skip for read-only investigation.

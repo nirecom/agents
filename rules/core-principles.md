@@ -20,8 +20,6 @@ One canonical location owns each fact; every other location references it, never
 
 When several phenomena, scenarios, or failure conditions are in play at once, separate them explicitly before reasoning — never treat a tangle as one undifferentiated whole. Use the 5W1H axes (who, what, when, where, why, how) to draw the cuts, and reason about each partition on its own terms.
 
-Attribute cause to the right owner: distinguish the actor whose action produced each effect before assigning a fix. Blaming the wrong partition wastes the correction.
-
 ## CPR-4 Elevate Perspective
 
 Solve from the class, not from the immediate task: identify the root/abstract parent and ask whether the class can be merged, replaced, or restructured before fixing one member. If the class remains, apply the same change to every sibling.

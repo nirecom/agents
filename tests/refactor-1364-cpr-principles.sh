@@ -72,22 +72,6 @@ test_N2_cpr3_new_principle() {
     fi
 }
 
-test_N3_claude_md_cpr_directive() {
-    local f="$AGENTS_DIR/CLAUDE.md"
-    if [ ! -f "$f" ]; then
-        fail "N3: CLAUDE.md not found (prerequisite)"
-        return
-    fi
-    local count
-    count="$(grep -cF "CPR" "$f")"
-    if [ "$count" -eq 1 ]; then
-        pass "N3: CLAUDE.md has exactly 1 CPR-referencing directive line"
-    elif [ "$count" -eq 0 ]; then
-        fail "N3: CLAUDE.md has NO line referencing CPR"
-    else
-        fail "N3: CLAUDE.md has $count CPR-referencing lines (expected exactly 1)"
-    fi
-}
 
 test_N4_supervisor_no_legacy_section_ref() {
     local f="$AGENTS_DIR/agents/supervisor.md"
@@ -220,7 +204,6 @@ test_S1_exactly_8_cpr_headers() {
 run_all() {
     test_N1_all_cpr_headers_present
     test_N2_cpr3_new_principle
-    test_N3_claude_md_cpr_directive
     test_N4_supervisor_no_legacy_section_ref
     test_N5_survey_history_no_legacy_section_ref
     test_N6_detail_planner_no_legacy_section_ref
