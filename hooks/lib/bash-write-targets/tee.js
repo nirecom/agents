@@ -1,71 +1,75 @@
 "use strict";
 
-const { isUnresolvableToken } = require("./helpers");
+const { parse } = require("../command-ir");
+const { expandRawToken, isUnresolvableToken, tryResolveEnvUnderPlansDir } = require("./helpers");
+
+const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+// Return the RAW argv tokens that follow the env-prefix (VAR=val) run and the
+// effective command. Mirrors resolveEffectiveArgv() but on the raw (pre-strip)
+// argv so downstream expansion can decide the quote context.
+function resolveRawArgvAfterEnvPrefix(seg) {
+  if (!seg || !Array.isArray(seg.argv) || !Array.isArray(seg.argvRaw)) return [];
+  const skipCmd = ASSIGN_RE.test(seg.cmd0 || "");
+  if (!skipCmd) return seg.argvRaw.slice();
+  const idx = seg.argv.findIndex((a) => !ASSIGN_RE.test(a));
+  if (idx === -1) return [];
+  return seg.argvRaw.slice(idx + 1);
+}
 
 /**
- * Extract tee write targets from a shell command string.
+ * Extract tee write targets from a SegmentIR.
  *
  * Handles: tee [flags] file1 [file2 ...]
- * Skips:   -a/--append/-i/-p flags
+ * Skips:   -a/--append/-i/-p/--ignore-interrupts flags and any other -flag.
+ * Backward-compat: a raw command string is parsed and its tee segment used.
  * Returns: string[] on success, null on parse failure.
  */
-function extractTeeTargets(cmd) {
-  if (!cmd || typeof cmd !== "string") return null;
+function extractTeeTargets(seg) {
+  // Backward compat: accept a raw command string.
+  if (typeof seg === "string") {
+    // Process substitution in tee args → fail-closed (IR decomposes >(...) into a
+    // separate subshell segment, so detect it on the raw string before parsing).
+    if (/tee\s[^;|&]*>\s*\(/.test(seg)) return null;
+    const ir = parse(seg);
+    if (!ir || ir.parseFailure) return null;
+    const { resolveEffectiveCommand } = require("../bash-write-patterns/segment-utils");
+    const s = (ir.segments || []).find((x) => resolveEffectiveCommand(x) === "tee");
+    if (!s) return [];
+    seg = s;
+  }
+  if (!seg || !Array.isArray(seg.argvRaw)) return null;
 
-  // Process substitutions in tee args → fail-closed.
-  if (/tee\s[^;|&]*>\s*\(/.test(cmd)) return null;
-
-  // Find tee invocation.
-  const RE = /(?:^|[\s;|&])tee\b(.*?)(?:$|[;|&](?:[^|&]|$))/s;
-  const m = RE.exec(cmd);
-  if (!m) return [];
-
-  const argStr = m[1];
-  // Split on whitespace, filter out flags.
-  const tokens = argStr.trim().split(/\s+/).filter(Boolean);
+  const rawArgs = resolveRawArgvAfterEnvPrefix(seg);
   const targets = [];
-  let i = 0;
-  while (i < tokens.length) {
-    const t = tokens[i];
-    if (t === "-a" || t === "--append" || t === "-i" || t === "-p" || t === "--ignore-interrupts") {
-      i++;
+  for (const rawTok of rawArgs) {
+    if (rawTok.startsWith(">(")) return null;       // process substitution
+    if (rawTok === "-a" || rawTok === "--append" || rawTok === "-i" ||
+        rawTok === "-p" || rawTok === "--ignore-interrupts") continue;
+    if (rawTok.startsWith("-")) continue;
+
+    // Simple single-quoted literal: content is verbatim (POSIX single-quote
+    // never expands $), so push as-is — bypass the unresolvable-$VAR skip.
+    if (rawTok.startsWith("'") && rawTok.endsWith("'") && rawTok.length >= 2) {
+      targets.push(rawTok.slice(1, -1));
       continue;
     }
-    if (t.startsWith("-")) {
-      i++;
-      continue;
-    }
-    // Process substitution
-    if (t.startsWith(">(")) return null;
-    // Single-quoted strings: POSIX literals — strip surrounding quotes and push as-is.
-    // $ is NOT expanded inside single quotes, so skip env-var resolution entirely.
-    if (t.startsWith("'") && t.endsWith("'")) {
-      targets.push(t.slice(1, -1));
-      i++;
-      continue;
-    }
-    // Double-quoted or unquoted tokens: attempt plans-dir-constrained env-var resolution.
-    {
-      const stripped = t.replace(/^"|"$/g, "");
-      const genericVarRe = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/;
-      const gm = genericVarRe.exec(stripped);
+
+    let expanded = expandRawToken(rawTok);
+    if (expanded === null) {
+      // Fallback: plans-dir-constrained env resolution on the stripped form.
+      const stripped = rawTok.replace(/^["']|["']$/g, "");
+      const gm = /^\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/.exec(stripped);
       if (gm) {
-        const varName = gm[1] || gm[2];
         const remainder = stripped.slice(gm[0].length);
         if (!remainder.includes("$") && !remainder.includes("`")) {
-          const { tryResolveEnvUnderPlansDir } = require("./helpers");
-          const resolved = tryResolveEnvUnderPlansDir(varName, remainder);
-          if (resolved !== null) {
-            targets.push(resolved);
-            i++;
-            continue;
-          }
+          expanded = tryResolveEnvUnderPlansDir(gm[1] || gm[2], remainder);
         }
       }
     }
-    if (isUnresolvableToken(t)) return null;
-    targets.push(t);
-    i++;
+    if (expanded === null) return null;             // fail-closed
+    if (isUnresolvableToken(expanded)) continue;
+    targets.push(expanded);
   }
   return targets;
 }
