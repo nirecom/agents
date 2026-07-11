@@ -139,6 +139,14 @@ else
   LEDGER="$PLANS_DIR/$SID-$FORMAT-concern-ledger.txt"
 fi
 
+# test-review: always rebuild context to avoid stale compacted-conversation bleed (#1376)
+if [[ "$FORMAT" == "test-review" ]]; then
+  if [[ -f "$MARKER" ]]; then
+    echo "[run-codex-review-loop] test-review: clearing stale built marker for fresh context rebuild" >&2
+  fi
+  rm -f "$MARKER"
+fi
+
 if [[ ! -f "$MARKER" ]]; then
   if ! bash "$BUILDER" --plans-dir "$PLANS_DIR" --session-id "$SID" --output "$CONTEXT_OUT"; then
     die "build-codex-context failed"

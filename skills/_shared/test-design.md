@@ -1,5 +1,17 @@
 > Shared reference for `skills/write-tests` and `skills/review-tests`. Read explicitly by each skill's Step 1/2.
 
+## Priority Tiers
+
+Classify each coverage gap by severity before reporting.
+
+- critical: missing test would hide a security breach, data loss, or silent regression. Blocks COMPLETE.
+- high: missing test would miss a primary feature-path regression. Blocks COMPLETE.
+- medium: useful but not regression-critical (error paths, secondary flows). Does not block COMPLETE.
+- low: nice-to-have (edge cases, optional behaviors, performance). Does not block COMPLETE.
+
+Only critical and high gaps must be resolved before marking review COMPLETE.
+Report medium and low gaps as advisory only.
+
 ## Test Case Categories
 
 - **Normal cases**: Expected inputs and typical usage
