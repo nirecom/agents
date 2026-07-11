@@ -395,3 +395,7 @@ Changes: `wip-state.sh abandon <N>`: new verb for session abandonment — resets
 ### FEATURE: PR #1370 (2026-07-11)
 Background: feat(#1350): complexity evaluation SSOT — evaluate once at CI-C1b, persist to state.complexity_evaluation, read in MDP-3/WCD-3/WT-5
 Changes: Model complexity routing (opus vs sonnet) is now evaluated once per session at intent-clarification time and reused consistently across all planning and coding stages, eliminating redundant re-evaluations that could produce inconsistent model selection.
+
+### FEATURE: PR #1366 (2026-07-11)
+Background: refactor(#1364): rename core-principles to CPR-N scheme + add CPR-3 Separate the Concerns
+Changes: New reasoning principle CPR-3 "Separate the Concerns" added to core-principles.md — principles now use CPR-N identifiers (CPR-1 through CPR-8) for stable cross-references.;Removed outdated Stop hook that blocked merge approval when using the Bash Allow/Deny dialog flow (was enforcing a superseded AskUserQuestion-before-USER_VERIFIED design).
