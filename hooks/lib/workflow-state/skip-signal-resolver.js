@@ -211,6 +211,26 @@ function hasComplexityEvaluation(sessionId) {
   return ce.verdict === "opus" || ce.verdict === "sonnet";
 }
 
+// resolveSkipConditionsFromComplexity(sessionId, targetStep):
+// Returns a fully-populated conditions object (all keys = true) when the session
+// is provably 0-signal-sonnet (verdict=sonnet AND signals=[]), meaning planning
+// overhead cannot be justified. Returns null in all other cases (fail-open).
+// Used by CI-C1c and MOP-1d / MOP-C1 to auto-satisfy skip conditions.
+function resolveSkipConditionsFromComplexity(sessionId, targetStep) {
+  try {
+    if (targetStep !== "outline" && targetStep !== "detail") return null;
+    const ce = readComplexityEvaluation(sessionId);
+    if (!ce) return null;
+    if (ce.verdict !== "sonnet" || !Array.isArray(ce.signals) || ce.signals.length !== 0) return null;
+    const keys = CONDITION_SCHEMAS[targetStep];
+    const result = {};
+    for (const k of keys) result[k] = true;
+    return result;
+  } catch (_) {
+    return null;
+  }
+}
+
 // describeSkipSignal(predicate): human-readable description of what a predicate
 // checks (mirrors evidence-resolver.js describeEvidence, but returns a single
 // joined string). For diagnostics/tests.
@@ -240,4 +260,5 @@ module.exports = {
   hasValidSkipJudgment,
   readComplexityEvaluation,
   hasComplexityEvaluation,
+  resolveSkipConditionsFromComplexity,
 };
