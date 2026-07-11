@@ -403,3 +403,7 @@ Changes: New reasoning principle CPR-3 "Separate the Concerns" added to core-pri
 ### FEATURE: PR #1373 (2026-07-11)
 Background: fix(#1323): narrow UNSAFE_REASON_CHARS to allow bare  in sentinel reason
 Changes: Sentinel echoes whose reason field contains bare `$VAR` tokens (e.g. `<<WORKFLOW_CONFIRM_INTENT: contains $VAR token>>`) are no longer false-blocked; the worktree write guard now correctly classifies them as "read".
+
+### FEATURE: PR #1379 (2026-07-11)
+Background: feat(#1351): add resolveSkipConditionsFromComplexity — auto-satisfy outline/detail skip conditions for 0-signal-sonnet sessions
+Changes: Sessions with no complexity signals now automatically satisfy outline and detail skip conditions — no manual orchestrator judgment required for those sessions.
