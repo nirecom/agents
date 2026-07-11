@@ -177,41 +177,54 @@ assert_classify \
   "read"
 
 echo ""
-echo "--- Group D2: isSentinelEchoSafe security — 3-char set blocks all DQ expansion triggers ---"
+echo "--- Group D2: isSentinelEchoSafe security — UNSAFE_REASON_CHARS boundary (#1323) ---"
+# Policy after #1323 fix: \$[({[] matches $( ${ $[; bare $WORD/special/$trailing → read.
+# Escaped \$(cmd) still contains $( → write (backslash doesn't suppress regex match).
+# Categories N/A: secret-leakage (no output path), idempotency (stateless), prompt-injection (LLM layer).
 
-# T3.37: $VAR in reason → dollar in 3-char set → write
-assert_classify \
-  "T3.37 sentinel with dollar-VAR in reason → write (dollar in 3-char set)" \
-  'echo "<<WORKFLOW_USER_VERIFIED: built with $HOME>>"' \
-  "write"
+_d2_classify() {
+  local input="$1"
+  # trim leading/trailing spaces introduced by IFS='|' read
+  input="${input# }"; input="${input% }"
+  classify "$input"
+}
+_d2_assert() {
+  local name="$1" want="$2" got="$3"
+  if [ "$want" = "$got" ]; then pass "$name → $want"
+  else fail "$name → expected '$want', got '$got'"; fi
+}
 
-# T3.38: \$HOME in reason → \ before $ does NOT suppress: \$ passes the $ through
-# The dollar is still present in the regex scan → write
-assert_classify \
-  "T3.38 sentinel with escaped dollar-VAR in reason → write (dollar in 3-char set)" \
-  'echo "<<WORKFLOW_USER_VERIFIED: literal \$HOME>>"' \
-  "write"
-
-# T3.39: backtick in reason → backtick in 3-char set → write
-assert_classify \
-  "T3.39 sentinel with backtick in reason → write (backtick in 3-char set)" \
-  'echo "<<WORKFLOW_USER_VERIFIED: like \`this\`>>"' \
-  "write"
-
-# T3.40: escaped double-quote in reason → " char hits 3-char set → write
-# NOTE: USER_VERIFIED_RE_DQ uses [^>]+ so \" DOES pass isStrictSentinel.
-# It is blocked by the " in UNSAFE_REASON_CHARS, not by strict-sentinel failure.
-assert_classify \
-  "T3.40 sentinel with escaped double-quote in reason → write (quote-char in 3-char set)" \
-  'echo "<<WORKFLOW_USER_VERIFIED: he said \"hi\">>"' \
-  "write"
-
-# T3.41: ${VAR} dollar-brace form in reason → dollar in 3-char set → write
-# Symmetric with T3.37 (dollar-VAR) and T3.31 (dollar-paren): all blocked by $
-assert_classify \
-  "T3.41 sentinel with dollar-brace VAR in reason → write (dollar in 3-char set)" \
-  'echo "<<WORKFLOW_USER_VERIFIED: built with ${HOME}>>"' \
-  "write"
+while IFS='|' read -r _n _i _w; do
+  [[ -z "$_n" || "$_n" =~ ^[[:space:]]*# ]] && continue
+  _n="${_n# }"; _n="${_n% }"; _w="${_w# }"; _w="${_w% }"
+  _d2_assert "$_n" "$_w" "$(_d2_classify "$_i")"
+done <<'D2TABLE'
+# --- blocked: expansion triggers $( ${ $[ (normal and escaped) --- (security cases)
+T3.39    | echo "<<WORKFLOW_USER_VERIFIED: like \`this\`>>"            | write
+T3.40    | echo "<<WORKFLOW_USER_VERIFIED: he said \"hi\">>"           | write
+T3.41    | echo "<<WORKFLOW_USER_VERIFIED: built with ${HOME}>>"       | write
+T3.43    | echo "<<WORKFLOW_USER_VERIFIED: calc $[1+1]>>"              | write
+T3.43a   | echo "<<WORKFLOW_USER_VERIFIED: run $(whoami)>>"            | write
+T3.escaped-paren    | echo "<<WORKFLOW_USER_VERIFIED: \$(cmd)>>"        | write
+T3.escaped-brace    | echo "<<WORKFLOW_USER_VERIFIED: \${HOME}>>"       | write
+T3.escaped-bracket  | echo "<<WORKFLOW_USER_VERIFIED: \$[1+1]>>"        | write
+# --- malformed/incomplete trigger prefixes (no closing delimiter) ---
+T3.incomplete-paren   | echo "<<WORKFLOW_USER_VERIFIED: open $( only>>"  | write
+T3.incomplete-brace   | echo "<<WORKFLOW_USER_VERIFIED: open ${ only>>"  | write
+T3.incomplete-bracket | echo "<<WORKFLOW_USER_VERIFIED: open $[ only>>"  | write
+# --- allowed: bare $WORD, special vars, lone $ (normal cases + regression #1323) ---
+T3.37    | echo "<<WORKFLOW_USER_VERIFIED: built with $HOME>>"         | read
+T3.38    | echo "<<WORKFLOW_USER_VERIFIED: literal \$HOME>>"           | read
+T3.42    | echo "<<WORKFLOW_CONFIRM_INTENT: contains $VAR token>>"     | read
+T3.44a   | echo "<<WORKFLOW_USER_VERIFIED: pid is $$>>"                | read
+T3.44b   | echo "<<WORKFLOW_USER_VERIFIED: rc is $?>>"                 | read
+T3.44c   | echo "<<WORKFLOW_USER_VERIFIED: arg is $1>>"                | read
+T3.45    | echo "<<WORKFLOW_USER_VERIFIED: path is C:\foo$>>"          | read
+T3.46a   | echo "<<WORKFLOW_USER_VERIFIED: $USER_NAME value>>"         | read
+T3.46b   | echo "<<WORKFLOW_USER_VERIFIED: $var123 value>>"            | read
+T3.46c   | echo "<<WORKFLOW_USER_VERIFIED: $_underscore value>>"       | read
+T3.46d   | echo "<<WORKFLOW_USER_VERIFIED: $VAR. with punctuation>>"   | read
+D2TABLE
 
 echo ""
 echo "--- Regression: feature-692 Group B assertions still pass ---"
