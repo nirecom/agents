@@ -274,6 +274,35 @@ if require_file "$WRITE_CODE_SKILL"; then
 fi
 
 # ---------------------------------------------------------------------------
+# WCD-READ-1: SKILL.md invokes read-complexity-evaluation (#1350 reader rewrite)
+# ---------------------------------------------------------------------------
+echo "=== WCD-READ-1: SKILL.md invokes read-complexity-evaluation ==="
+if require_file "$WRITE_CODE_SKILL"; then
+    if has_fixed "read-complexity-evaluation" "$WRITE_CODE_SKILL"; then
+        pass "WCD-READ-1. SKILL.md contains 'read-complexity-evaluation'"
+    else
+        fail "WCD-READ-1. SKILL.md missing 'read-complexity-evaluation'"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# WCD-READ-2: read-complexity-evaluation precedes judge-task-complexity (WCD-3
+# reads the persisted verdict before any local complexity reasoning)
+# ---------------------------------------------------------------------------
+echo "=== WCD-READ-2: read-complexity-evaluation precedes judge-task-complexity ==="
+if require_file "$WRITE_CODE_SKILL"; then
+    line_read=$(grep -n "read-complexity-evaluation" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
+    line_judge=$(grep -n "judge-task-complexity" "$WRITE_CODE_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
+    if [ -z "$line_read" ] || [ -z "$line_judge" ]; then
+        fail "WCD-READ-2. could not find both anchors (read-complexity-evaluation=$line_read, judge-task-complexity=$line_judge)"
+    elif [ "$line_read" -lt "$line_judge" ]; then
+        pass "WCD-READ-2. read-complexity-evaluation (L$line_read) precedes judge-task-complexity (L$line_judge)"
+    else
+        fail "WCD-READ-2. ordering wrong: read-complexity-evaluation=L$line_read, judge-task-complexity=L$line_judge (expected read first)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 echo
 if [ "$ERRORS" -eq 0 ]; then
     echo "All static checks passed."

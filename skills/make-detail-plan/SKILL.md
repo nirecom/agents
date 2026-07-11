@@ -23,7 +23,8 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/surface-delivery-p
 
 ### Step MDP-3 — Choose planner model
 
-Read `skills/_shared/judge-task-complexity.md`; evaluate all signals against task + intent/outline content. Rule: 1+ signals → `opus`; 0 → `sonnet`; ambiguous → `opus`. Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids or "none"])`.
+Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored verdict and signals directly (parse `verdict=<v>` and `signals=<csv>`).
+If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_shared/judge-task-complexity.md`; evaluate all signals against task + intent/outline content. Rule: 1+ signals → `opus`; 0 → `sonnet`; ambiguous → `opus`. Emit (Claude text, not Bash): `Model selected: **[opus|sonnet]** (signals: [ids or "none"])`.
 
 ### Step MDP-4 — Initial draft
 

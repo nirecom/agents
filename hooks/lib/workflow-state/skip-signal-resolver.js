@@ -179,6 +179,38 @@ function hasValidSkipJudgment(sessionId, targetStep) {
   }
 }
 
+// ---- Complexity-evaluation API (#1350) ------------------------------------
+
+// readComplexityEvaluation(sessionId):
+// Returns state.complexity_evaluation if present and a valid object with all
+// required fields (verdict:string, recorded_at:string, signals:Array); else null.
+// Fail-open: any exception → null.
+function readComplexityEvaluation(sessionId) {
+  try {
+    const { readState } = require("./state-io");
+    const state = readState(sessionId);
+    if (!state) return null;
+    const ce = state.complexity_evaluation;
+    // signals MUST be an array — consumers call ce.signals.join(); a non-array
+    // would throw a TypeError downstream, so reject it here.
+    if (!ce || typeof ce !== "object" || typeof ce.verdict !== "string" || typeof ce.recorded_at !== "string" || !Array.isArray(ce.signals)) return null;
+    return ce;
+  } catch (_) {
+    return null;
+  }
+}
+
+// hasComplexityEvaluation(sessionId):
+// Returns true iff a valid evaluation exists with verdict opus|sonnet.
+// Never throws (fail-to-false). No mtime/staleness check (unlike
+// hasValidSkipJudgment): complexity is a session-lifetime fact, not tied to
+// artifact freshness — a recorded verdict stays valid for the whole session.
+function hasComplexityEvaluation(sessionId) {
+  const ce = readComplexityEvaluation(sessionId);
+  if (!ce) return false;
+  return ce.verdict === "opus" || ce.verdict === "sonnet";
+}
+
 // describeSkipSignal(predicate): human-readable description of what a predicate
 // checks (mirrors evidence-resolver.js describeEvidence, but returns a single
 // joined string). For diagnostics/tests.
@@ -206,4 +238,6 @@ module.exports = {
   recordSkipJudgment,
   readSkipJudgment,
   hasValidSkipJudgment,
+  readComplexityEvaluation,
+  hasComplexityEvaluation,
 };
