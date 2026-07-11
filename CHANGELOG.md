@@ -407,3 +407,7 @@ Changes: Sentinel echoes whose reason field contains bare `$VAR` tokens (e.g. `<
 ### FEATURE: PR #1379 (2026-07-11)
 Background: feat(#1351): add resolveSkipConditionsFromComplexity — auto-satisfy outline/detail skip conditions for 0-signal-sonnet sessions
 Changes: Sessions with no complexity signals now automatically satisfy outline and detail skip conditions — no manual orchestrator judgment required for those sessions.
+
+### FEATURE: PR #1386 (2026-07-12)
+Background: refactor(#1382): complexity_evaluation stores level (high|low) instead of model name (opus|sonnet)
+Changes: `complexity_evaluation` now stores complexity level (`high`/`low`) instead of model names (`opus`/`sonnet`). `read-complexity-evaluation` output changes from `verdict=opus|sonnet` to `level=high|low`. Existing sessions with recorded evaluations are automatically migrated via a backward-compat shim.
