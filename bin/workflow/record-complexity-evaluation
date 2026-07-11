@@ -4,7 +4,7 @@
 // CLI wrapper for recordComplexityEvaluation(). Used by SKILL.md Bash calls.
 //
 // Usage:
-//   record-complexity-evaluation --session <sid> --verdict <opus|sonnet> [--signals <csv>]
+//   record-complexity-evaluation --session <sid> --verdict <high|low> [--signals <csv>]
 //
 // --signals is optional; comma-separated → array; empty/missing → [].
 // On success prints: RECORDED_COMPLEXITY verdict=<v> signals=<csv>
@@ -19,7 +19,7 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 function usage(msg) {
   if (msg) process.stderr.write("record-complexity-evaluation: " + msg + "\n");
-  process.stderr.write("usage: record-complexity-evaluation --session <sid> --verdict <opus|sonnet> [--signals <csv>]\n");
+  process.stderr.write("usage: record-complexity-evaluation --session <sid> --verdict <high|low> [--signals <csv>]\n");
   process.exit(1);
 }
 
@@ -49,15 +49,15 @@ function main() {
   if (!args.session || !SESSION_ID_RE.test(args.session)) {
     usage("--session is required and must match /^[A-Za-z0-9_-]+$/");
   }
-  if (args.verdict !== "opus" && args.verdict !== "sonnet") {
-    usage("--verdict must be opus or sonnet");
+  if (args.verdict !== "high" && args.verdict !== "low") {
+    usage("--verdict must be high or low");
   }
 
   recordComplexityEvaluation(args.session, args.verdict, args.signals);
 
   // Read-back hardening: confirm the record matches EXACTLY what was written.
   const ce = readComplexityEvaluation(args.session);
-  if (!ce || ce.verdict !== args.verdict ||
+  if (!ce || ce.level !== args.verdict ||
       ce.signals.length !== args.signals.length ||
       !ce.signals.every((s, idx) => s === args.signals[idx])) {
     process.stderr.write("record-complexity-evaluation: write verification failed\n");

@@ -104,13 +104,13 @@ node_resolve() {
   " 2>/dev/null
 }
 
-# Hand-craft an opus-verdict record whose signals array is empty (SC-8 boundary).
-record_opus_empty_signals() {
+# Hand-craft a high-level record whose signals array is empty (SC-8 boundary).
+record_high_empty_signals() {
   local sid="$1"
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
     const s = io.createInitialState('$sid');
-    s.complexity_evaluation = { verdict: 'opus', signals: [], recorded_at: new Date().toISOString() };
+    s.complexity_evaluation = { level: 'high', signals: [], recorded_at: new Date().toISOString() };
     io.writeState('$sid', s);
   " 2>/dev/null
 }
@@ -217,7 +217,7 @@ echo ""
 echo "=== SC-1: sonnet+[] outline → so_c1/so_c2 true ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc1-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   assert_eq "SC-1. outline conditions from 0-signal-sonnet" '{"so_c1":true,"so_c2":true}' "$(node_resolve "$SID" outline)"
 else
   skip "SC-1 (API absent)"
@@ -230,7 +230,7 @@ echo ""
 echo "=== SC-2: sonnet+[] detail → sd_c1/sd_c2/sd_c3 true ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc2-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   assert_eq "SC-2. detail conditions from 0-signal-sonnet" '{"sd_c1":true,"sd_c2":true,"sd_c3":true}' "$(node_resolve "$SID" detail)"
 else
   skip "SC-2 (API absent)"
@@ -243,7 +243,7 @@ echo ""
 echo "=== SC-3: opus+[S1] outline → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc3-$$"
-  node_record "$SID" "opus" '["S1-multi-file"]' >/dev/null
+  node_record "$SID" "high" '["S1-multi-file"]' >/dev/null
   assert_eq "SC-3. opus verdict → null (outline)" 'null' "$(node_resolve "$SID" outline)"
 else
   skip "SC-3 (API absent)"
@@ -257,7 +257,7 @@ echo ""
 echo "=== SC-4: opus+[S1] detail → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc4-$$"
-  node_record "$SID" "opus" '["S1-multi-file"]' >/dev/null
+  node_record "$SID" "high" '["S1-multi-file"]' >/dev/null
   assert_eq "SC-4. opus verdict → null (detail)" 'null' "$(node_resolve "$SID" detail)"
 else
   skip "SC-4 (API absent)"
@@ -282,7 +282,7 @@ echo ""
 echo "=== SC-6: sonnet+[] bogus step → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc6-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   assert_eq "SC-6. invalid targetStep → null" 'null' "$(node_resolve "$SID" bogus)"
 else
   skip "SC-6 (API absent)"
@@ -295,21 +295,21 @@ echo ""
 echo "=== SC-7: sonnet+[S1,S2] detail → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc7-$$"
-  node_record "$SID" "sonnet" '["S1","S2"]' >/dev/null
+  node_record "$SID" "low" '["S1","S2"]' >/dev/null
   assert_eq "SC-7. sonnet with non-empty signals → null" 'null' "$(node_resolve "$SID" detail)"
 else
   skip "SC-7 (API absent)"
 fi
 
 # ==========================================================================
-# SC-8: opus verdict + signals:[] → null (verdict guard, SC-8 load-bearing)
+# SC-8: high level + signals:[] → null (verdict guard, SC-8 load-bearing)
 # ==========================================================================
 echo ""
-echo "=== SC-8: opus verdict + empty signals → null (verdict guard) ==="
+echo "=== SC-8: high verdict + empty signals → null (verdict guard) ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc8-$$"
-  record_opus_empty_signals "$SID"
-  assert_eq "SC-8. opus+[] → null (verdict guard, not signals-only)" 'null' "$(node_resolve "$SID" outline)"
+  record_high_empty_signals "$SID"
+  assert_eq "SC-8. high+[] → null (verdict guard, not signals-only)" 'null' "$(node_resolve "$SID" outline)"
 else
   skip "SC-8 (API absent)"
 fi
@@ -334,7 +334,7 @@ echo ""
 echo "=== SC-10: detail return keys match CONDITION_SCHEMAS.detail exactly ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc10-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   SC10_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     const v = r.resolveSkipConditionsFromComplexity('$SID', 'detail');
@@ -355,7 +355,7 @@ echo ""
 echo "=== SC-11: outline values strictly === true ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc11-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   SC11_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
@@ -374,24 +374,24 @@ echo ""
 echo "=== SC-12..SC-16: malformed CE fields → null (fail-open) ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc12-$$"
-  write_ce_state "$SID" '{"verdict":"sonnet","signals":null,"recorded_at":"2026-01-01T00:00:00Z"}'
+  write_ce_state "$SID" '{"level":"low","signals":null,"recorded_at":"2026-01-01T00:00:00Z"}'
   assert_eq "SC-12. signals:null → null" 'null' "$(node_resolve "$SID" outline)"
 
   SID="sc13-$$"
-  write_ce_state "$SID" '{"verdict":"sonnet","signals":"","recorded_at":"2026-01-01T00:00:00Z"}'
+  write_ce_state "$SID" '{"level":"low","signals":"","recorded_at":"2026-01-01T00:00:00Z"}'
   assert_eq "SC-13. signals:\"\" (string) → null" 'null' "$(node_resolve "$SID" outline)"
 
   SID="sc14-$$"
-  write_ce_state "$SID" '{"verdict":"sonnet","recorded_at":"2026-01-01T00:00:00Z"}'
+  write_ce_state "$SID" '{"level":"low","recorded_at":"2026-01-01T00:00:00Z"}'
   assert_eq "SC-14. missing signals field → null" 'null' "$(node_resolve "$SID" outline)"
 
   SID="sc15-$$"
   write_ce_state "$SID" '{"signals":[],"recorded_at":"2026-01-01T00:00:00Z"}'
-  assert_eq "SC-15. missing verdict field → null" 'null' "$(node_resolve "$SID" outline)"
+  assert_eq "SC-15. missing level field → null" 'null' "$(node_resolve "$SID" outline)"
 
   SID="sc16-$$"
-  write_ce_state "$SID" '{"verdict":"","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}'
-  assert_eq "SC-16. verdict:\"\" → null" 'null' "$(node_resolve "$SID" outline)"
+  write_ce_state "$SID" '{"level":"","signals":[],"recorded_at":"2026-01-01T00:00:00Z"}'
+  assert_eq "SC-16. level:\"\" → null" 'null' "$(node_resolve "$SID" outline)"
 else
   skip "SC-12..SC-16 (API absent)"
   skip "SC-12..SC-16 (API absent)"
@@ -422,7 +422,7 @@ echo ""
 echo "=== SC-17: idempotency — two calls return identical result ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc17-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   R1="$(node_resolve "$SID" outline)"
   R2="$(node_resolve "$SID" outline)"
   assert_eq "SC-17. idempotent: second call matches first" "$R1" "$R2"
@@ -438,7 +438,7 @@ echo ""
 echo "=== SC-19: signals:[\"S1\"] (non-empty) → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc19-$$"
-  node_record "$SID" "sonnet" '["S1"]' >/dev/null
+  node_record "$SID" "low" '["S1"]' >/dev/null
   assert_eq "SC-19. single-element signals → null" 'null' "$(node_resolve "$SID" outline)"
 else
   skip "SC-19 (API absent)"
@@ -451,7 +451,7 @@ echo ""
 echo "=== SC-20: signals:[\"S1\",\"S1\"] → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc20-$$"
-  node_record "$SID" "sonnet" '["S1","S1"]' >/dev/null
+  node_record "$SID" "low" '["S1","S1"]' >/dev/null
   assert_eq "SC-20. duplicate signals → null" 'null' "$(node_resolve "$SID" outline)"
 else
   skip "SC-20 (API absent)"
@@ -465,7 +465,7 @@ echo ""
 echo "=== SC-21: outline return keys match CONDITION_SCHEMAS.outline exactly ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc21-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   SC21_OUT="$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const r = require('$RESOLVER_N');
     const v = r.resolveSkipConditionsFromComplexity('$SID', 'outline');
@@ -534,7 +534,7 @@ echo ""
 echo "=== SC-25: empty targetStep → null ==="
 if [ "$API_READY" = "true" ]; then
   SID="sc25-$$"
-  node_record "$SID" "sonnet" '[]' >/dev/null
+  node_record "$SID" "low" '[]' >/dev/null
   SC25_OUT="$(node_resolve "$SID" "" 2>/dev/null || echo "null")"
   assert_eq "SC-25. empty targetStep → null" 'null' "$SC25_OUT"
 else

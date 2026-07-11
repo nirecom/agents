@@ -7,7 +7,7 @@
 //   read-complexity-evaluation --session <sid>
 //
 // On a valid record prints:
-//   verdict=<v>
+//   level=<v>
 //   signals=<csv>
 // On no record prints: NONE
 // Exits 0 in both cases; exits 1 on bad args.
@@ -38,7 +38,7 @@ function main() {
 
   const ce = readComplexityEvaluation(session);
   if (ce) {
-    process.stdout.write("verdict=" + ce.verdict + "\nsignals=" + ce.signals.join(",") + "\n");
+    process.stdout.write("level=" + ce.level + "\nsignals=" + ce.signals.join(",") + "\n");
     process.exit(0);
   }
   process.stdout.write("NONE\n");

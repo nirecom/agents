@@ -25,8 +25,8 @@ WT-4. List all planned test cases by category (include call-path error cases fro
    - stdout `OFF`: print the planned cases and proceed to step WT-5 without approval wait.
    - stdout `ON` or `ERROR`: present the planned cases to the user — do not write code until approved (existing behavior).
 WT-5. **Determine the subagent's model**:
-   - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored verdict and signals directly (parse `verdict=<v>` and `signals=<csv>`); skip the fallback below.
-   - If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_shared/judge-task-complexity.md` to load the signal table. Evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4. Do not short-circuit on the first match. Apply the routing rule: 1+ signals → `opus`; 0 signals → `sonnet`; ambiguous → `opus`.
+   - Run `bash -c 'node "$AGENTS_CONFIG_DIR/bin/workflow/read-complexity-evaluation" --session "$SESSION_ID"'`. If output is not `NONE`, use the stored level and signals directly (parse `level=<v>` and `signals=<csv>`), then derive the model via `high→opus, low→sonnet`; skip the fallback below.
+   - If `NONE` (fail-open for sessions without persisted evaluation): read `skills/_shared/judge-task-complexity.md` to load the signal table. Evaluate all signals against the task context, source files from steps WT-2–WT-3, and the planned test cases from step WT-4. Do not short-circuit on the first match. Apply the routing rule: 1+ signals → high→opus; 0 signals → low→sonnet; ambiguous → high→opus.
    - Emit in Claude text output (NOT Bash echo):
      > Model selected: **[opus|sonnet]** (signals: [comma-separated triggered signal IDs, or "none"])
 
