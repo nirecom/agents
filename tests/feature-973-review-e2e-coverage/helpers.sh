@@ -3,9 +3,7 @@
 # EMPTY_HOOKS_DIR / EMPTY_EXCLUDES / fail / pass / run_with_timeout from scope.
 
 # Canonical Hook Audit table fixture. Mirrors the shape of rules/test/claude-e2e.md
-# closely enough for the parser, including the two newest siblings
-# (stop-askuserquestion-required.js, stop-enforce-worktree-on-warn.js) so the
-# fixture stays representative of the real rules file.
+# closely enough for the parser.
 write_hook_audit_md() {
     local path="$1"
     mkdir -p "$(dirname "$path")"
@@ -22,7 +20,6 @@ Stub fixture for review-e2e-coverage tests.
 | `hooks/stop-confirm-plan-guard.js` | none | **P1 — add** | Stop-hook sentinel-order validation. |
 | `hooks/stop-final-report-guard.js` | extensive | **P2 — add E2E** | L2 cannot exercise real Stop-event path. |
 | `hooks/session-start.js` | partial | **P2 — add E2E** | env-file write covered at L2. |
-| `hooks/stop-askuserquestion-required.js` | none | **P2 — add E2E** | Stop-hook AskUserQuestion validation. |
 | `hooks/subagent-start.js` | none | **P3 — add** | Sub-agent context injection. |
 | `hooks/post-compact.js` | none | **P3 — add** | PostCompact event not reproducible at L2. |
 | `hooks/stop-enforce-worktree-on-warn.js` | none | **P3 — add** | Worktree enforcement warning path. |

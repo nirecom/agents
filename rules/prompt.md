@@ -72,7 +72,7 @@ Omit `see issue #N` (and similar "see X.md" pointers) unless the topic requires 
 After instructing to run a skill, do not describe what the skill does. The skill name is self-documenting.
 Exception: unexpected behavior or out-of-scope cases the reader must anticipate.
 
-## 3. SSOT (specialization of `core-principles.md` §2 for prompt content)
+## 3. SSOT (specialization of `core-principles.md` CPR-2 for prompt content)
 
 ### 3.1 Reference the master — never copy
 

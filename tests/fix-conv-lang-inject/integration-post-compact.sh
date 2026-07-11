@@ -128,7 +128,7 @@ fi
 
 # ===========================================================================
 # T19 [Idempotency] post-compact called twice → injection appears exactly once
-# per call (symmetric with T18 for session-start; orthogonality §4).
+# per call (symmetric with T18 for session-start; orthogonality CPR-5).
 # ===========================================================================
 if [ ! -f "$POST_COMPACT" ]; then
     skip "T19: $POST_COMPACT does not exist yet (pre-implementation)"

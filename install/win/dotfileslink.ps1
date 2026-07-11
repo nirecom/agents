@@ -55,7 +55,7 @@ $links = @(
 )
 
 # Transactional symlink loop. Per-link failure logged + counted; loop continues to next link.
-# Symmetric to install/linux/dotfileslink.sh _link_one contract (rules/core-principles.md §4).
+# Symmetric to install/linux/dotfileslink.sh _link_one contract (rules/core-principles.md CPR-5).
 $linkFailed = 0
 $_failAfterN = if ($env:DOTFILESLINK_FAIL_AT_INDEX -match '^\d+$') { [int]$env:DOTFILESLINK_FAIL_AT_INDEX } else { -1 }
 $_linkIdx = 0
