@@ -81,10 +81,11 @@ test_rm_targets() {
     assert_fn_result 'rm: empty quote "" → []' \
         "$(call_rm 'rm ""')" '[]'
 
-    # Accepted constraint: rm "a;b.md" — outer regex truncates at `;` so
-    # the tokenizer sees an unbalanced quote → null (fail-closed).
-    assert_fn_result 'rm: "a;b.md" → null (outer regex truncates at ;)' \
-        "$(call_rm 'rm "a;b.md"')" 'null'
+    # Post-#1295 IR migration: the IR segment splitter is quote-aware, so the `;`
+    # inside "a;b.md" no longer truncates the token — the real filename a;b.md is
+    # extracted correctly (the former regex-truncation was a bug, now fixed).
+    assert_fn_result 'rm: "a;b.md" → ["a;b.md"] (quote-aware IR split)' \
+        "$(call_rm 'rm "a;b.md"')" '["a;b.md"]'
 
     # Empty string input guard.
     assert_fn_result "rm: empty string → null" \
@@ -110,9 +111,15 @@ test_rm_targets() {
     assert_fn_result 'rm: "$(pwd)/file" → null' \
         "$(call_rm 'rm "$(pwd)/file"')" 'null'
 
-    # $HOME inside double-quotes → null ($HOME token unresolvable).
-    assert_fn_result 'rm: "$HOME/.config/foo" → null' \
-        "$(call_rm 'rm "$HOME/.config/foo"')" 'null'
+    # Post-#1295 IR migration: rm resolves targets via expandRawToken, which
+    # statically expands "$HOME/..." (double-quoted) the same way redirect/tee/cp-mv
+    # do — so the concrete home path is extracted and checked (strictly more
+    # protective than the former unconditional null). Expected value computed via
+    # the SAME os.homedir()-based expansion so the assertion is environment-independent.
+    local exp_home
+    exp_home="$(node -e 'process.stdout.write(JSON.stringify([require("os").homedir().replace(/\\/g,"/")+"/.config/foo"]))')"
+    assert_fn_result 'rm: "$HOME/.config/foo" → [homedir/.config/foo] (expandRawToken)' \
+        "$(call_rm 'rm "$HOME/.config/foo"')" "$exp_home"
 
     # Double-dash end-of-flags combined with quoted path.
     assert_fn_result 'rm: -- "path with spaces" → ["path with spaces"]' \

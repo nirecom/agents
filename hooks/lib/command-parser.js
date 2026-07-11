@@ -70,6 +70,52 @@ function tokenizeSegment(seg) {
   return tokens;
 }
 
+// Quote-aware tokenizer variant that ALSO returns the pre-strip raw slice for
+// each token. Runs the identical character-level walk as tokenizeSegment but
+// returns Array<{value, raw}> where `value` is the quote-stripped token
+// (byte-identical to tokenizeSegment output) and `raw` is the original slice of
+// `seg` that produced it (outer quotes preserved). Downstream quote-context
+// resolution (expandRawToken) needs the raw form to decide single/double/unquoted.
+function tokenizeSegmentWithQuotes(seg) {
+  const tokens = [];
+  let i = 0;
+  const n = seg.length;
+  while (i < n) {
+    while (i < n && /\s/.test(seg[i])) i++;
+    if (i >= n) break;
+    const tokStart = i;
+    let tok = "";
+    while (i < n && !/\s/.test(seg[i])) {
+      const ch = seg[i];
+      if (ch === '"') {
+        i++;
+        while (i < n && seg[i] !== '"') {
+          if (seg[i] === "\\" && i + 1 < n) { tok += seg[i + 1]; i += 2; }
+          else { tok += seg[i]; i++; }
+        }
+        if (i < n) i++;
+      } else if (ch === "'") {
+        i++;
+        while (i < n && seg[i] !== "'") { tok += seg[i]; i++; }
+        if (i < n) i++;
+      } else if (ch === "$" && seg[i + 1] === "'") {
+        i += 2;
+        while (i < n && seg[i] !== "'") {
+          if (seg[i] === "\\" && i + 1 < n) { tok += seg[i + 1]; i += 2; }
+          else { tok += seg[i]; i++; }
+        }
+        if (i < n) i++;
+      } else {
+        tok += ch;
+        i++;
+      }
+    }
+    const rawTok = seg.slice(tokStart, i);
+    tokens.push({ value: tok, raw: rawTok });
+  }
+  return tokens;
+}
+
 // Split cmd on UNQUOTED shell separators: && || ; | & ( )
 // Returns { segs: string[], seps: string[] } where seps records the separator
 // token at each split point (unconditionally, including leading/trailing).
@@ -307,6 +353,7 @@ function checkBashCommand(command, opts) {
 module.exports = {
   checkBashCommand,
   tokenizeSegment,
+  tokenizeSegmentWithQuotes,
   splitSegments,
   splitSegmentsWithSeparators,
   stripSubstitutions,
