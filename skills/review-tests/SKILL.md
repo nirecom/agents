@@ -32,3 +32,6 @@ WARNINGS is BLOCKING: `hooks/workflow-gate/review-tests-checker.js` blocks `/wri
 Emit exactly one sentinel per run: COMPLETE on pass, WARNINGS on any gap or warning.
 On exit 4, emit neither sentinel and HALT.
 Invariant: RT-4 emits exactly one of COMPLETE/WARNINGS; never both, never zero (except exit 4).
+Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
+To accept documented gaps and unblock /write-code, emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
+Only critical and high tier gaps block COMPLETE. Medium and low are advisory.
