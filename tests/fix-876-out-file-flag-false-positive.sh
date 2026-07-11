@@ -18,8 +18,6 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
 WP="${_A}/hooks/lib/bash-write-patterns.js"
 PASS=0; FAIL=0
-# Cases expected to FAIL against the current (pre-fix) implementation.
-EXPECTED_FAIL_COUNT=3
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 run_with_timeout() {
@@ -57,5 +55,5 @@ TABLE
 )
 
 echo ""
-echo "Results: $PASS passed, $FAIL failed (regression evidence — $EXPECTED_FAIL_COUNT FAILs expected)"
-exit 0
+echo "Results: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ] || exit 1

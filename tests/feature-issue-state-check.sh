@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: bin/github-issues/issue-state-check.sh
-# Tags: github, issues, workflow-init, session-dedup
+# Tags: github, issues, workflow-init, session-dedup, scope:issue-specific
 # Tests for bin/github-issues/issue-state-check.sh — single-issue state probe.
 #
 # Interface contract:
