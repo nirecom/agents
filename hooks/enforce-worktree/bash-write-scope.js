@@ -4,14 +4,12 @@ const { getSessionRepoRoots } = require("./session-scope");
 const { isExcluded } = require("./shared-cmd-utils");
 const { findRepoRoot, normalizeForCompare } = require("./git-repo-detection");
 const { classify, isGhWriteIR } = require("../lib/bash-write-patterns");
-const { resolveEffectiveCommand } = require("../lib/bash-write-patterns/segment-utils");
 const { splitShellCommands } = require("../lib/shell-segments");
 const { parse } = require("../lib/command-ir");
-const { expandStaticShellTokens } = require("../lib/bash-write-targets/redirect");
+const { expandStaticShellTokens } = require("../lib/bash-write-targets/helpers");
 const {
-  extractRedirectTargets, extractTeeTargets,
-  extractPwshWriteTargets, extractCpMvDestination,
-  extractRmTargets, extractStagedFiles,
+  extractStagedFiles,
+  collectWriteTargetsFromSegments, FULL_VERB_SET,
 } = require("../lib/bash-write-targets");
 
 function isInSessionScope(repoRoot, sessionRoots) {
@@ -30,37 +28,7 @@ function collectBashWriteTargets(ir) {
   // Fail-closed: malformed IR → no targets.
   if (!ir || ir.parseFailure === true) return { targets: null, parseFailure: true };
 
-  const cmd = ir.rawText;
-  const targets = [];
-  let parseFailure = false;
-
-  if (ir.segments.some((s) => s.redirects && s.redirects.some((r) => r.op !== "<" && r.op !== "<<<"))) {
-    const r = extractRedirectTargets(cmd);
-    if (r === null) parseFailure = true;
-    else targets.push(...r);
-  }
-  if (ir.segments.some((s) => resolveEffectiveCommand(s) === "tee")) {
-    const t = extractTeeTargets(cmd);
-    if (t === null) parseFailure = true;
-    else targets.push(...t);
-  }
-  if (ir.segments.some((s) => /^(?:set-content|add-content|out-file|new-item|remove-item|move-item|copy-item|sc|ac|ni|ri|mi|ci)$/i.test(resolveEffectiveCommand(s)))) {
-    const p = extractPwshWriteTargets(cmd);
-    if (p === null) parseFailure = true;
-    else targets.push(...p);
-  }
-  if (ir.segments.some((s) => resolveEffectiveCommand(s) === "cp" || resolveEffectiveCommand(s) === "mv")) {
-    const d = extractCpMvDestination(cmd);
-    if (d === null) parseFailure = true;
-    else targets.push(d);
-  }
-  if (ir.segments.some((s) => resolveEffectiveCommand(s) === "rm")) {
-    const r = extractRmTargets(cmd);
-    if (r === null) parseFailure = true;
-    else targets.push(...r);
-  }
-
-  return { targets: targets.length > 0 ? targets : null, parseFailure };
+  return collectWriteTargetsFromSegments(ir.segments, { verbs: FULL_VERB_SET });
 }
 
 // True if all targets resolve to repos outside the session scope.
@@ -149,7 +117,7 @@ function isEverySegmentExcluded(ir, repoRoot, patterns) {
 
   let hasWriteSegment = false;
   for (const seg of ir.segments) {
-    const segIr = { rawText: seg.rawText, segments: [seg], parseFailure: false, cmd0: seg.cmd0, argv: seg.argv, redirects: seg.redirects, kind: seg.kind, separators: [] };
+    const segIr = { rawText: seg.rawText, segments: [seg], parseFailure: false, cmd0: seg.cmd0, cmd0Raw: seg.cmd0Raw || "", argv: seg.argv, argvRaw: seg.argvRaw || [], redirects: seg.redirects, kind: seg.kind, separators: [] };
     const kind = classify(segIr);
     if (kind === "read") continue;
     // write segment
