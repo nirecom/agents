@@ -6,7 +6,7 @@
 // and other callers can query without re-parsing. parseFailure===true forces "write"
 // (fail-closed). isOsTempPath(target) is the SSOT predicate for OS temp-path detection.
 
-const { tokenizeSegment, splitSegmentsWithSeparators, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
+const { tokenizeSegment, tokenizeSegmentWithQuotes, splitSegmentsWithSeparators, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
 
 // Extract the file descriptor string from a redirect operator.
 // Returns "1" for plain >, "1" for 1>, "2" for 2>, "&" for &>, etc.
@@ -45,25 +45,37 @@ function hasUnclosedQuote(str) {
 // { cmd0, argv, redirects, kind, rawText, sub }
 // sub is set to true when this segment lives inside a subshell.
 function buildSegmentIR(segStr, isSubshell) {
-  let tokens;
+  let richTokens;
   try {
-    tokens = tokenizeSegment(segStr);
+    richTokens = tokenizeSegmentWithQuotes(segStr);
   } catch (e) {
-    const seg = { cmd0: "", argv: [], redirects: [], kind: "simple", rawText: segStr };
+    const seg = { cmd0: "", cmd0Raw: "", argv: [], argvRaw: [], redirects: [], kind: "simple", rawText: segStr };
     if (isSubshell) seg.sub = true;
     return seg;
   }
 
   const argv = [];
+  const argvRaw = [];
   const redirects = [];
   let i = 0;
 
-  while (i < tokens.length) {
-    const tok = tokens[i];
+  // Push a redirect record. targetRaw is defined NON-ENUMERABLE so that
+  // JSON.stringify(redirects) stays byte-identical to the pre-migration shape
+  // ({op,fd,target}) — the additive raw field is still readable via r.targetRaw
+  // and ("targetRaw" in r) but does not perturb any redirects-snapshot pins.
+  const pushRedirect = (op, target, targetRaw) => {
+    const r = { op, fd: extractFd(op), target };
+    Object.defineProperty(r, "targetRaw", { value: targetRaw, enumerable: false, writable: true, configurable: true });
+    redirects.push(r);
+  };
+
+  while (i < richTokens.length) {
+    const tok = richTokens[i].value;
     if (REDIRECT_RE.test(tok)) {
       const op = tok;
-      const target = i + 1 < tokens.length ? tokens[i + 1] : "";
-      redirects.push({ op, fd: extractFd(op), target });
+      const target = i + 1 < richTokens.length ? richTokens[i + 1].value : "";
+      const targetRaw = i + 1 < richTokens.length ? richTokens[i + 1].raw : "";
+      pushRedirect(op, target, targetRaw);
       i += 2;
       continue;
     }
@@ -72,17 +84,21 @@ function buildSegmentIR(segStr, isSubshell) {
       // Reconstruct the operator part (everything before the captured target)
       const target = attachedMatch[1];
       const op = tok.slice(0, tok.length - target.length);
-      redirects.push({ op, fd: extractFd(op), target });
+      // Attached raw target = the raw token minus the (byte-identical) operator prefix.
+      const targetRaw = richTokens[i].raw.slice(op.length);
+      pushRedirect(op, target, targetRaw);
       i++;
       continue;
     }
     argv.push(tok);
+    argvRaw.push(richTokens[i].raw);
     i++;
   }
 
   const cmd0 = argv.length > 0 ? argv.shift() : "";
+  const cmd0Raw = argvRaw.length > 0 ? argvRaw.shift() : "";
 
-  const seg = { cmd0, argv, redirects, kind: "simple", rawText: segStr };
+  const seg = { cmd0, cmd0Raw, argv, argvRaw, redirects, kind: "simple", rawText: segStr };
   if (isSubshell) seg.sub = true;
   return seg;
 }

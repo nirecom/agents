@@ -11,10 +11,8 @@ const { isUnderPath } = require("./lib/path-match");
 const { isWorkflowOff } = require("./lib/session-markers");
 const { resolveSessionId } = require("./lib/workflow-state/session-id");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
-const {
-  extractRedirectTargets, extractTeeTargets,
-  extractPwshWriteTargets, extractCpMvDestination,
-} = require("./lib/bash-write-targets");
+const { parse } = require("./lib/command-ir");
+const { collectWriteTargetsFromSegments, SHELL_CONFIG_VERB_SET } = require("./lib/bash-write-targets");
 
 function readStdin() {
   const chunks = [];
@@ -49,24 +47,10 @@ function hitsMemory(filePath) {
 
 function bashHitsMemory(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
-  const targets = [];
-  if (/(?:^|[\s;|&])(?:\d*)(?:&>>?|>>?)(?!>|\d)/.test(cmd)) {
-    const r = extractRedirectTargets(cmd);
-    if (r) targets.push(...r);
-  }
-  if (/(?:^|[\s;|&])tee\b/.test(cmd)) {
-    const t = extractTeeTargets(cmd);
-    if (t) targets.push(...t);
-  }
-  if (/\b(?:Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Move-Item|Copy-Item)\b/i.test(cmd)
-      || /(?:^|[\s;|&])(?:sc|ac|ni|ri|mi|ci)\b/.test(cmd)) {
-    const p = extractPwshWriteTargets(cmd);
-    if (p) targets.push(...p);
-  }
-  if (/(?:^|[\s;|&])(?:cp|mv)\b/.test(cmd)) {
-    const d = extractCpMvDestination(cmd);
-    if (d) targets.push(d);
-  }
+  const ir = parse(cmd);
+  if (!ir || ir.parseFailure) return false;
+  const { targets } = collectWriteTargetsFromSegments(ir.segments, { verbs: SHELL_CONFIG_VERB_SET });
+  if (!targets) return false;
   return targets.some(t => isUnderPath(t, MEMORY_DIR));
 }
 

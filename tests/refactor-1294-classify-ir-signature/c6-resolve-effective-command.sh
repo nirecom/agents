@@ -42,8 +42,10 @@ C6.3_chained_3lvl_rm|A=1 B=2 C=3 rm file.txt|HAS_TARGETS
 C6.4_chained_2lvl_cp|A=1 B=2 cp src dst|HAS_TARGETS
 C6.4b_chained_2lvl_mv|A=1 B=2 mv src dst|HAS_TARGETS
 C6.7_all_assign_null_result|A=1 B=2|NO_TARGETS
-# C6.p: guard fires but extractor is positional (tokens[0]) -- known limitation, out of scope
-C6.p_chained_pwsh_extractor_limit|A=1 B=2 Set-Content out.txt x|NO_TARGETS
+# C6.p: post-#1295 IR migration the pwsh extractor resolves the effective command
+# (resolveEffectiveCommand) + effective argv, so a chained VAR=val prefix no longer
+# blinds it — Set-Content out.txt is extracted → HAS_TARGETS (former limitation fixed).
+C6.p_chained_pwsh_extractor_limit|A=1 B=2 Set-Content out.txt x|HAS_TARGETS
 TABLE
 
 # C6.1s: backward-compat str path (collectBashWriteTargets(rawString) internally parses to IR)
@@ -509,16 +511,20 @@ assert_eq "C6.x2_patterns_no_inline_firstNonAssign" "0" \
 assert_eq "C6.x3_patterns_calls_resolveEffectiveArgv" "1" \
   "$(grep -q 'resolveEffectiveArgv(' "$REPO/hooks/lib/bash-write-patterns/patterns.js" 2>/dev/null && echo 1 || echo 0)"
 
-# Static assertions: bash-write-scope.js must import segment-utils and remove effectiveCmd0.
-assert_eq "C6.bss1_scope_imports_segment_utils" "1" \
+# Static assertions: post-#1295 the per-segment verb routing (with its
+# resolveEffectiveCommand dependency) lives in the bash-write-targets barrel's
+# collectWriteTargetsFromSegments; bash-write-scope.js delegates to it and no
+# longer imports segment-utils directly. It must still not reference effectiveCmd0.
+assert_eq "C6.bss1_scope_imports_segment_utils" "0" \
   "$(grep -q 'require.*segment-utils' "$REPO/hooks/enforce-worktree/bash-write-scope.js" 2>/dev/null && echo 1 || echo 0)"
 assert_eq "C6.bss2_scope_no_effectiveCmd0" "0" \
   "$(grep -q 'effectiveCmd0' "$REPO/hooks/enforce-worktree/bash-write-scope.js" 2>/dev/null && echo 1 || echo 0)"
 
 # ---------------------------------------------------------------------------
-# C6.p2: proves pwsh guard fires (resolveEffectiveCommand="Set-Content") even
-# though extractPwshWriteTargets returns null (positional limitation).
-# Before fix: guard skipped → NO_PARSE_FAILURE. After fix: guard fires → PARSE_FAILURE.
+# C6.p2: post-#1295 the pwsh guard fires (resolveEffectiveCommand="Set-Content")
+# AND the extractor resolves the effective argv, so out.txt is extracted cleanly —
+# no fail-closed parseFailure. Before the IR migration the positional-tokens[0]
+# limitation forced a null → PARSE_FAILURE; the fix eliminates it.
 # ---------------------------------------------------------------------------
 get_parse_failure_ir() {
   ( cd "$REPO" && node -e '
@@ -529,7 +535,7 @@ get_parse_failure_ir() {
     process.stdout.write(result && result.parseFailure ? "PARSE_FAILURE" : "NO_PARSE_FAILURE");
   ' "$1" ) 2>/dev/null
 }
-assert_eq "C6.p2_pwsh_guard_reached_parsefailure" "PARSE_FAILURE" \
+assert_eq "C6.p2_pwsh_guard_reached_parsefailure" "NO_PARSE_FAILURE" \
   "$(get_parse_failure_ir 'A=1 B=2 Set-Content out.txt x')"
 
 # ---------------------------------------------------------------------------
