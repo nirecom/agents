@@ -108,6 +108,7 @@ worktree_removed=0
 branch_deleted=0
 skipped_eperm=0
 skipped_unmerged=0
+skipped_dirty=0
 orphan_dirs_removed=0
 orphan_dirs_skipped_has_git=0
 orphan_dirs_skipped_young=0
@@ -169,6 +170,17 @@ is_clean_wt() {
   [[ -z "$status_out" ]] && [[ -z "$untracked_out" ]]
 }
 
+# True if tracked files are clean (ignores untracked files entirely).
+is_clean_tracked_only() {
+  local wt="$1"
+  if [[ ! -d "$wt" ]]; then
+    return 0
+  fi
+  local status_out
+  status_out="$(git -C "$wt" status --porcelain --untracked-files=no 2>/dev/null || true)"
+  [[ -z "$status_out" ]]
+}
+
 # True if a PR with head exactly == branch is merged.
 is_pr_merged() {
   local branch="$1"
@@ -228,19 +240,27 @@ process_record() {
     return 0
   fi
 
-  # PR merged check.
-  if ! is_pr_merged "$branch"; then
+  # ── Freshness gate (FIRST — before merged-PR check) ──────────────────────
+  # Per #1414, is_fresh MUST be checked unconditionally so that newly created
+  # worktrees are NEVER deleted regardless of merged-PR state or clean-check
+  # relaxation. This gate runs before any other check.
+  if is_fresh "$wt_path"; then
+    return 0
+  fi
+
+  # PR merged check (cache result).
+  local merged_pr=0
+  if is_pr_merged "$branch"; then
+    merged_pr=1
+  fi
+  if [[ "$merged_pr" == "0" ]]; then
     skipped_unmerged=$((skipped_unmerged + 1)) || true
     return 0
   fi
 
-  # Clean working tree check.
-  if ! is_clean_wt "$wt_path"; then
-    return 0
-  fi
-
-  # mtime threshold check.
-  if is_fresh "$wt_path"; then
+  # Clean working tree check (tracked files only — untracked ignored).
+  if ! is_clean_tracked_only "$wt_path"; then
+    skipped_dirty=$((skipped_dirty + 1)) || true
     return 0
   fi
 
@@ -448,9 +468,9 @@ if [[ "$CI_MODE" == "1" ]]; then
     errs_json="$(printf '%s\n' "${errors[@]}" | node -e \
       'const xs=require("fs").readFileSync(0,"utf8").split(/\r?\n/).filter(Boolean);process.stdout.write(JSON.stringify(xs))')"
   fi
-  printf '{"scanned":%d,"candidates":%d,"worktree_removed":%d,"branch_deleted":%d,"skipped_eperm":%d,"skipped_unmerged":%d,"orphan_dirs_removed":%d,"orphan_dirs_skipped_has_git":%d,"orphan_dirs_skipped_young":%d,"orphan_dirs_skipped_registered":%d,"orphan_dirs_skipped_failed":%d,"orphan_dirs_skipped_has_files":%d,"orphan_dirs_skipped_repo_mismatch":%d,"empty_parents_candidates":%d,"empty_parents_removed":%d,"empty_parents_skipped_young":%d,"empty_parents_skipped_nonempty":%d,"empty_parents_skipped_registered":%d,"errors":%s}\n' \
+  printf '{"scanned":%d,"candidates":%d,"worktree_removed":%d,"branch_deleted":%d,"skipped_eperm":%d,"skipped_unmerged":%d,"skipped_dirty":%d,"orphan_dirs_removed":%d,"orphan_dirs_skipped_has_git":%d,"orphan_dirs_skipped_young":%d,"orphan_dirs_skipped_registered":%d,"orphan_dirs_skipped_failed":%d,"orphan_dirs_skipped_has_files":%d,"orphan_dirs_skipped_repo_mismatch":%d,"empty_parents_candidates":%d,"empty_parents_removed":%d,"empty_parents_skipped_young":%d,"empty_parents_skipped_nonempty":%d,"empty_parents_skipped_registered":%d,"errors":%s}\n' \
     "$scanned" "$candidates" "$worktree_removed" "$branch_deleted" \
-    "$skipped_eperm" "$skipped_unmerged" "$orphan_dirs_removed" \
+    "$skipped_eperm" "$skipped_unmerged" "$skipped_dirty" "$orphan_dirs_removed" \
     "$orphan_dirs_skipped_has_git" "$orphan_dirs_skipped_young" \
     "$orphan_dirs_skipped_registered" "$orphan_dirs_skipped_failed" \
     "$orphan_dirs_skipped_has_files" "$orphan_dirs_skipped_repo_mismatch" \
@@ -466,6 +486,7 @@ else
   printf '  branch_deleted: %d\n' "$branch_deleted"
   printf '  skipped_eperm: %d\n' "$skipped_eperm"
   printf '  skipped_unmerged: %d\n' "$skipped_unmerged"
+  printf '  skipped_dirty: %d\n' "$skipped_dirty"
   if [[ "$orphan_dirs_removed" -gt 0 ]]; then
     printf '  orphan_dirs_removed: %d\n' "$orphan_dirs_removed"
   fi
