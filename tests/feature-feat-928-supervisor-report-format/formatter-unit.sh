@@ -435,7 +435,7 @@ run_f_recipe_3() {
     out=$(format_cumsev_error "$FINDINGS_ONE" "frec3-sid" "'frec3-wsid'" "agents/supervisor.md" "/tmp/state-frec3.json")
     if echo "$out" | grep -q "bin/supervisor-write-alert" \
        && echo "$out" | grep -q "\-\-clear-l2-armed-at" \
-       && echo "$out" | grep -q "\-\-set-l2-phase frozen" \
+       && echo "$out" | grep -q "\-\-set-l2-phase paused" \
        && echo "$out" | grep -q "\-\-session-id frec3-sid" \
        && echo "$out" | grep -q "/tmp/state-frec3.json"; then
         pass "F-recipe-3: fallback recipe includes correct sid and stateFilePath substitution"

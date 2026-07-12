@@ -126,7 +126,7 @@ run_g22() {
     local out
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
-const phases = [null, 'pending', 'done', 'frozen'];
+const phases = [null, 'pending', 'done', 'paused', 'closed'];
 let failed = '';
 for (const p of phases) {
   const st = s.createEmptyState('g22-sid');
@@ -184,11 +184,11 @@ process.stdout.write(state.alert.alert_armed_at === null ? 'null' : String(state
 }
 
 run_g25() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=frozen -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)" || return
     local out
     out=$(run_with_timeout 5 node -e "
 const writerMod = require('$WRITER_NODE');
-const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen', alert_cause: null, alert_retry_count: 0 } };
+const state = { alert: { alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused', alert_cause: null, alert_retry_count: 0 } };
 if (typeof writerMod.ensureAlertScheduled !== 'function') { process.stdout.write('not_exported'); process.exit(0); }
 writerMod.ensureAlertScheduled(state);
 const armedOk = typeof state.alert.alert_armed_at === 'string' && state.alert.alert_armed_at.length > 0;
@@ -197,9 +197,9 @@ const retryOk = state.alert.alert_retry_count === 0;
 process.stdout.write((armedOk && phaseOk && retryOk) ? 'ok' : ('armed=' + state.alert.alert_armed_at + ',phase=' + state.alert.alert_phase + ',retry=' + state.alert.alert_retry_count));
 " 2>/dev/null)
     if [ "$out" = "ok" ]; then
-        pass "G25: alert_phase=frozen -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)"
+        pass "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending)"
     else
-        fail "G25: alert_phase=frozen -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending) (got: $out)"
+        fail "G25: alert_phase=paused -> ensureAlertScheduled re-arms (alert_armed_at set, alert_phase=pending) (got: $out)"
     fi
 }
 
@@ -261,10 +261,10 @@ process.stdout.write(ok ? 'ok' : 'fail');
 }
 
 run_g29() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G29: writeAlertState frozen->done -> rejected" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G29: writeAlertState paused->done -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g29-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const ok = w.writeAlertState('g29-sid', { alert_phase: 'done' });
@@ -272,9 +272,9 @@ process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ "$out" = "rejected" ]; then
-        pass "G29: writeAlertState frozen->done -> rejected"
+        pass "G29: writeAlertState paused->done -> rejected"
     else
-        fail "G29: writeAlertState frozen->done -> rejected (got: $out)"
+        fail "G29: writeAlertState paused->done -> rejected (got: $out)"
     fi
 }
 
@@ -297,58 +297,60 @@ process.stdout.write(ok ? 'accepted' : 'rejected');
 }
 
 run_g31() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G31: writeAlertState done->frozen -> accepted" || return
+    # #1166: done is a permanent terminal phase, so done->* is now rejected; the old
+    # done->frozen path no longer exists. Assert the valid non-terminal->closed transition instead.
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G31: writeAlertState pending->closed -> accepted" || return
     local tmp out phase
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g31-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'done' }"
+    seed_state_raw "$tmp" "g31-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'pending' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeAlertState('g31-sid', { alert_phase: 'frozen' });
+const ok = w.writeAlertState('g31-sid', { alert_phase: 'closed' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     phase=$(read_alert_phase "$tmp" "g31-sid")
     rm -rf "$tmp"
-    if [ "$out" = "accepted" ] && [ "$phase" = "frozen" ]; then
-        pass "G31: writeAlertState done->frozen -> accepted"
+    if [ "$out" = "accepted" ] && [ "$phase" = "closed" ]; then
+        pass "G31: writeAlertState pending->closed -> accepted"
     else
-        fail "G31: writeAlertState done->frozen -> accepted (out=$out, phase=$phase)"
+        fail "G31: writeAlertState pending->closed -> accepted (out=$out, phase=$phase)"
     fi
 }
 
 run_g32() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G32: writeAlertState frozen->frozen -> accepted (idempotent)" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G32: writeAlertState paused->paused -> accepted (idempotent)" || return
     local tmp out phase
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g32-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g32-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeAlertState('g32-sid', { alert_phase: 'frozen' });
+const ok = w.writeAlertState('g32-sid', { alert_phase: 'paused' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     phase=$(read_alert_phase "$tmp" "g32-sid")
     rm -rf "$tmp"
-    if [ "$out" = "accepted" ] && [ "$phase" = "frozen" ]; then
-        pass "G32: writeAlertState frozen->frozen -> accepted (idempotent)"
+    if [ "$out" = "accepted" ] && [ "$phase" = "paused" ]; then
+        pass "G32: writeAlertState paused->paused -> accepted (idempotent)"
     else
-        fail "G32: writeAlertState frozen->frozen -> accepted (idempotent) (out=$out, phase=$phase)"
+        fail "G32: writeAlertState paused->paused -> accepted (idempotent) (out=$out, phase=$phase)"
     fi
 }
 
 run_g33() {
-    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G33: writeAlertState frozen + alert_armed_at set -> rejected" || return
+    require_source "$AGENTS_DIR/hooks/lib/supervisor-state-writer.js" "G33: writeAlertState paused + alert_armed_at set -> rejected" || return
     local tmp out
     tmp="$(mktemp -d)"
     seed_state_raw "$tmp" "g33-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: null }"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const ok = w.writeAlertState('g33-sid', { alert_phase: 'frozen', alert_armed_at: '2026-06-06T12:00:00Z' });
+const ok = w.writeAlertState('g33-sid', { alert_phase: 'paused', alert_armed_at: '2026-06-06T12:00:00Z' });
 process.stdout.write(ok ? 'accepted' : 'rejected');
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ "$out" = "rejected" ]; then
-        pass "G33: writeAlertState frozen + alert_armed_at set -> rejected"
+        pass "G33: writeAlertState paused + alert_armed_at set -> rejected"
     else
-        fail "G33: writeAlertState frozen + alert_armed_at set -> rejected (got: $out)"
+        fail "G33: writeAlertState paused + alert_armed_at set -> rejected (got: $out)"
     fi
 }
 

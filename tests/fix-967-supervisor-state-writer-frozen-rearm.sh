@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/supervisor-state-writer.js (ensureAlertScheduled frozen re-arm; validateL2PhaseTransition)
-# Tags: supervisor, em-supervisor, layer2, writer, fix-967, scope:issue-specific
-# RED for issue #967.
+# Tests: hooks/lib/supervisor-state-writer.js (ensureAlertScheduled paused re-arm; validateAlertPhaseTransition)
+# Tags: supervisor, em-supervisor, layer2, writer, fix-967, paused, scope:issue-specific
+# RED for issue #967 (updated for #1166 frozen->paused rename).
 #
 # Validates:
-# - ensureAlertScheduled() must re-arm when phase is "frozen" (only "done"
+# - ensureAlertScheduled() must re-arm when phase is "paused" (only "done"/"closed"
 #   short-circuits). Re-arm resets alert_phase=pending, sets alert_armed_at=<now>,
 #   and resets alert_retry_count=0 so the freeze-on-retry counter starts fresh.
-# - The final-report-env.json marker must be IGNORED when phase is "frozen"
-#   (the marker only suppresses re-arm for non-frozen pre-final-report sessions).
-# - validateL2PhaseTransition must allow frozen->pending (re-arm),
-#   reject frozen->done and frozen->null, and treat frozen->frozen as a no-op.
+# - The final-report-env.json marker must be IGNORED when phase is "paused"
+#   (the marker only suppresses re-arm for non-paused pre-final-report sessions).
+# - validateAlertPhaseTransition must allow paused->pending (re-arm),
+#   reject paused->done, and reject done->pending.
 #
 # L3 gap (what this test does NOT catch):
 # - hook registration — supervisor-state-writer.js is called by other hooks (trigger,
@@ -51,15 +51,15 @@ require_writer() {
     return 0
 }
 
-require_validateL2PhaseTransition_exported() {
+require_validateAlertPhaseTransition_exported() {
     local label="$1"
     local probe
     probe=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-process.stdout.write(typeof w.validateL2PhaseTransition === 'function' ? 'yes' : 'no');
+process.stdout.write(typeof w.validateAlertPhaseTransition === 'function' ? 'yes' : 'no');
 " 2>/dev/null)
     if [ "$probe" != "yes" ]; then
-        skip "$label (validateL2PhaseTransition not exported)"; return 1
+        skip "$label (validateAlertPhaseTransition not exported)"; return 1
     fi
     return 0
 }
@@ -86,15 +86,15 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 " >/dev/null 2>&1
 }
 
-# R1: frozen phase + appendFinding -> ensureAlertScheduled re-arms (alert_phase becomes "pending")
+# R1: paused phase + appendFinding -> ensureAlertScheduled re-arms (alert_phase becomes "pending")
 run_r1() {
-    require_writer "R1: frozen + appendFinding -> alert_phase becomes pending" || return
+    require_writer "R1: paused + appendFinding -> alert_phase becomes pending" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r1-sid"
-    seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
+    seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'new finding after freeze', reporter: 'test' });
+const r = w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'new finding after pause', reporter: 'test' });
 if (r !== true) { console.error('appendFinding returned: '+r); process.exit(2); }
 const st = w.readState('$sid');
 if (!st || st.alert.alert_phase !== 'pending') { console.error('alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
@@ -103,18 +103,18 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R1: frozen + appendFinding -> alert_phase becomes pending"
+        pass "R1: paused + appendFinding -> alert_phase becomes pending"
     else
-        fail "R1: frozen + appendFinding -> alert_phase becomes pending (rc=$rc, out=$out)"
+        fail "R1: paused + appendFinding -> alert_phase becomes pending (rc=$rc, out=$out)"
     fi
 }
 
-# R2: frozen + appendFinding -> alert_armed_at is set to non-null
+# R2: paused + appendFinding -> alert_armed_at is set to non-null
 run_r2() {
-    require_writer "R2: frozen + appendFinding -> alert_armed_at non-null" || return
+    require_writer "R2: paused + appendFinding -> alert_armed_at non-null" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r2-sid"
-    seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
+    seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
@@ -125,18 +125,18 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R2: frozen + appendFinding -> alert_armed_at non-null"
+        pass "R2: paused + appendFinding -> alert_armed_at non-null"
     else
-        fail "R2: frozen + appendFinding -> alert_armed_at non-null (rc=$rc, out=$out)"
+        fail "R2: paused + appendFinding -> alert_armed_at non-null (rc=$rc, out=$out)"
     fi
 }
 
-# R3: frozen + appendFinding -> alert_retry_count reset to 0
+# R3: paused + appendFinding -> alert_retry_count reset to 0
 run_r3() {
-    require_writer "R3: frozen + appendFinding -> alert_retry_count reset to 0" || return
+    require_writer "R3: paused + appendFinding -> alert_retry_count reset to 0" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r3-sid"
-    seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
+    seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
@@ -147,9 +147,9 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R3: frozen + appendFinding -> alert_retry_count reset to 0"
+        pass "R3: paused + appendFinding -> alert_retry_count reset to 0"
     else
-        fail "R3: frozen + appendFinding -> alert_retry_count reset to 0 (rc=$rc, out=$out)"
+        fail "R3: paused + appendFinding -> alert_retry_count reset to 0 (rc=$rc, out=$out)"
     fi
 }
 
@@ -176,12 +176,12 @@ console.log('OK');
     fi
 }
 
-# R5: frozen phase + final-report-env.json marker present -> marker IGNORED, frozen still re-arms
+# R5: paused phase + final-report-env.json marker present -> marker IGNORED, paused still re-arms
 run_r5() {
-    require_writer "R5: frozen + final-report-env.json marker -> marker ignored, still re-arms" || return
+    require_writer "R5: paused + final-report-env.json marker -> marker ignored, still re-arms" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5-sid"
-    seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
+    seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     # Marker file uses sessionId-final-report-env.json (see ensureAlertScheduled line ~83).
     touch "$tmp/${sid}-final-report-env.json"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
@@ -195,15 +195,15 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R5: frozen + final-report-env.json marker -> marker ignored, still re-arms"
+        pass "R5: paused + final-report-env.json marker -> marker ignored, still re-arms"
     else
-        fail "R5: frozen + final-report-env.json marker -> marker ignored, still re-arms (rc=$rc, out=$out)"
+        fail "R5: paused + final-report-env.json marker -> marker ignored, still re-arms (rc=$rc, out=$out)"
     fi
 }
 
 # R5b: null phase + final-report-env.json marker present -> STILL SUPPRESSES re-arm (regression)
-# Validates that the frozen-bypass of the marker does not accidentally remove the marker check
-# for non-frozen phases.
+# Validates that the paused-bypass of the marker does not accidentally remove the marker check
+# for non-paused phases.
 run_r5b() {
     require_writer "R5b: null phase + marker -> suppresses re-arm (regression)" || return
     local tmp sid out rc
@@ -226,27 +226,27 @@ console.log('OK');
     fi
 }
 
-# R5c: re-frozen cycle — frozen->re-arm->pending->incrementRetry×threshold->frozen->re-arm
-# Validates that re-arm resets retry_count=0 so the freeze cycle can repeat correctly.
+# R5c: re-paused cycle — paused->re-arm->pending->incrementRetry×threshold->paused->re-arm
+# Validates that re-arm resets retry_count=0 so the pause cycle can repeat correctly.
 run_r5c() {
-    require_writer "R5c: re-frozen cycle (frozen->rearm->re-frozen->rearm)" || return
+    require_writer "R5c: re-paused cycle (paused->rearm->re-paused->rearm)" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r5c-sid"
-    seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
+    seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const s = require('$SCHEMA_NODE');
 const w = require('$WRITER_NODE');
-// Re-arm from frozen
+// Re-arm from paused
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 'd', reporter: 't' });
 let st = w.readState('$sid');
 if (!st || st.alert.alert_phase !== 'pending') { console.error('post-rearm alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(3); }
 if (st.alert.alert_retry_count !== 0) { console.error('retry_count not reset: '+st.alert.alert_retry_count); process.exit(4); }
-// Exhaust retries to re-freeze (ALERT_RETRY_THRESHOLD=2)
+// Exhaust retries to re-pause (ALERT_RETRY_THRESHOLD=2)
 const threshold = s.ALERT_RETRY_THRESHOLD;
 for (let i = 0; i < threshold; i++) { w.incrementAlertRetryCount('$sid'); }
 st = w.readState('$sid');
-if (!st || st.alert.alert_phase !== 'frozen') { console.error('post-exhaust alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(5); }
-// Re-arm again from re-frozen
+if (!st || st.alert.alert_phase !== 'paused') { console.error('post-exhaust alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(5); }
+// Re-arm again from re-paused
 w.appendFinding('$sid', { categories: ['workflow'], severity: 'error', detail: 're-arm-2', reporter: 't' });
 st = w.readState('$sid');
 if (!st || st.alert.alert_phase !== 'pending') { console.error('second rearm alert_phase='+JSON.stringify(st && st.alert.alert_phase)); process.exit(6); }
@@ -256,104 +256,104 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R5c: re-frozen cycle (frozen->rearm->re-frozen->rearm)"
+        pass "R5c: re-paused cycle (paused->rearm->re-paused->rearm)"
     else
-        fail "R5c: re-frozen cycle (frozen->rearm->re-frozen->rearm) (rc=$rc, out=$out)"
+        fail "R5c: re-paused cycle (paused->rearm->re-paused->rearm) (rc=$rc, out=$out)"
     fi
 }
 
-# R6a: validateL2PhaseTransition frozen -> pending => allowed
+# R6a: validateAlertPhaseTransition paused -> pending => allowed
 run_r6a() {
-    require_writer "R6a: validateL2PhaseTransition frozen->pending allowed" || return
-    require_validateL2PhaseTransition_exported "R6a: validateL2PhaseTransition frozen->pending allowed" || return
+    require_writer "R6a: validateAlertPhaseTransition paused->pending allowed" || return
+    require_validateAlertPhaseTransition_exported "R6a: validateAlertPhaseTransition paused->pending allowed" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.validateL2PhaseTransition('frozen', 'pending');
+const r = w.validateAlertPhaseTransition('paused', 'pending');
 if (!r || r.ok !== true) { console.error('not allowed: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R6a: validateL2PhaseTransition frozen->pending allowed"
+        pass "R6a: validateAlertPhaseTransition paused->pending allowed"
     else
-        fail "R6a: validateL2PhaseTransition frozen->pending allowed (rc=$rc, out=$out)"
+        fail "R6a: validateAlertPhaseTransition paused->pending allowed (rc=$rc, out=$out)"
     fi
 }
 
-# R6b: validateL2PhaseTransition frozen -> done => REJECTED
+# R6b: validateAlertPhaseTransition paused -> done => REJECTED
 run_r6b() {
-    require_writer "R6b: validateL2PhaseTransition frozen->done rejected" || return
-    require_validateL2PhaseTransition_exported "R6b: validateL2PhaseTransition frozen->done rejected" || return
+    require_writer "R6b: validateAlertPhaseTransition paused->done rejected" || return
+    require_validateAlertPhaseTransition_exported "R6b: validateAlertPhaseTransition paused->done rejected" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.validateL2PhaseTransition('frozen', 'done');
+const r = w.validateAlertPhaseTransition('paused', 'done');
 if (!r || r.ok !== false) { console.error('not rejected: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R6b: validateL2PhaseTransition frozen->done rejected"
+        pass "R6b: validateAlertPhaseTransition paused->done rejected"
     else
-        fail "R6b: validateL2PhaseTransition frozen->done rejected (rc=$rc, out=$out)"
+        fail "R6b: validateAlertPhaseTransition paused->done rejected (rc=$rc, out=$out)"
     fi
 }
 
-# R6c: validateL2PhaseTransition frozen -> frozen => allowed (idempotent)
+# R6c: validateAlertPhaseTransition paused -> paused => allowed (idempotent)
 run_r6c() {
-    require_writer "R6c: validateL2PhaseTransition frozen->frozen idempotent" || return
-    require_validateL2PhaseTransition_exported "R6c: validateL2PhaseTransition frozen->frozen idempotent" || return
+    require_writer "R6c: validateAlertPhaseTransition paused->paused idempotent" || return
+    require_validateAlertPhaseTransition_exported "R6c: validateAlertPhaseTransition paused->paused idempotent" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.validateL2PhaseTransition('frozen', 'frozen');
+const r = w.validateAlertPhaseTransition('paused', 'paused');
 if (!r || r.ok !== true) { console.error('not allowed: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R6c: validateL2PhaseTransition frozen->frozen idempotent"
+        pass "R6c: validateAlertPhaseTransition paused->paused idempotent"
     else
-        fail "R6c: validateL2PhaseTransition frozen->frozen idempotent (rc=$rc, out=$out)"
+        fail "R6c: validateAlertPhaseTransition paused->paused idempotent (rc=$rc, out=$out)"
     fi
 }
 
-# R6d: validateL2PhaseTransition frozen -> null => REJECTED
+# R6d: validateAlertPhaseTransition closed -> null => REJECTED (closed is permanent terminal)
 run_r6d() {
-    require_writer "R6d: validateL2PhaseTransition frozen->null rejected" || return
-    require_validateL2PhaseTransition_exported "R6d: validateL2PhaseTransition frozen->null rejected" || return
+    require_writer "R6d: validateAlertPhaseTransition closed->null rejected" || return
+    require_validateAlertPhaseTransition_exported "R6d: validateAlertPhaseTransition closed->null rejected" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.validateL2PhaseTransition('frozen', null);
+const r = w.validateAlertPhaseTransition('closed', null);
 if (!r || r.ok !== false) { console.error('not rejected: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R6d: validateL2PhaseTransition frozen->null rejected"
+        pass "R6d: validateAlertPhaseTransition closed->null rejected"
     else
-        fail "R6d: validateL2PhaseTransition frozen->null rejected (rc=$rc, out=$out)"
+        fail "R6d: validateAlertPhaseTransition closed->null rejected (rc=$rc, out=$out)"
     fi
 }
 
-# R6e: validateL2PhaseTransition done -> pending => REJECTED (pre-existing behavior, regression)
+# R6e: validateAlertPhaseTransition done -> pending => REJECTED (pre-existing behavior, regression)
 run_r6e() {
-    require_writer "R6e: validateL2PhaseTransition done->pending rejected (regression)" || return
-    require_validateL2PhaseTransition_exported "R6e: validateL2PhaseTransition done->pending rejected" || return
+    require_writer "R6e: validateAlertPhaseTransition done->pending rejected (regression)" || return
+    require_validateAlertPhaseTransition_exported "R6e: validateAlertPhaseTransition done->pending rejected" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
-const r = w.validateL2PhaseTransition('done', 'pending');
+const r = w.validateAlertPhaseTransition('done', 'pending');
 if (!r || r.ok !== false) { console.error('not rejected: '+JSON.stringify(r)); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R6e: validateL2PhaseTransition done->pending rejected (regression)"
+        pass "R6e: validateAlertPhaseTransition done->pending rejected (regression)"
     else
-        fail "R6e: validateL2PhaseTransition done->pending rejected (regression) (rc=$rc, out=$out)"
+        fail "R6e: validateAlertPhaseTransition done->pending rejected (regression) (rc=$rc, out=$out)"
     fi
 }
 
@@ -403,13 +403,13 @@ console.log('OK');
     fi
 }
 
-# R9: writeAlertState({alert_phase:'pending', alert_armed_at:<now>, alert_retry_count:0}) on frozen state -> returns true
-# Tests that writeAlertState uses validateL2PhaseTransition internally and allows frozen->pending.
+# R9: writeAlertState({alert_phase:'pending', alert_armed_at:<now>, alert_retry_count:0}) on paused state -> returns true
+# Tests that writeAlertState uses validateAlertPhaseTransition internally and allows paused->pending.
 run_r9() {
-    require_writer "R9: writeAlertState frozen->pending -> returns true" || return
+    require_writer "R9: writeAlertState paused->pending -> returns true" || return
     local tmp sid out rc
     tmp="$(mktemp -d)"; sid="r9-sid"
-    seed_state_layer2 "$tmp" "$sid" "'frozen'" "null" "2"
+    seed_state_layer2 "$tmp" "$sid" "'paused'" "null" "2"
     out=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const now = new Date().toISOString();
@@ -422,9 +422,9 @@ console.log('OK');
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "R9: writeAlertState frozen->pending -> returns true"
+        pass "R9: writeAlertState paused->pending -> returns true"
     else
-        fail "R9: writeAlertState frozen->pending -> returns true (rc=$rc, out=$out)"
+        fail "R9: writeAlertState paused->pending -> returns true (rc=$rc, out=$out)"
     fi
 }
 

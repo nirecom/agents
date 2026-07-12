@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 run_g20; run_g21; run_g22; run_g23; run_g24
 run_g25; run_g26; run_g27; run_g28; run_g29
 run_g30; run_g31; run_g32; run_g33
-run_g34; run_g35; run_g36; run_g37; run_g38
+run_g34; run_g35; run_g36; run_g36b; run_g37; run_g38
 run_g39; run_g40; run_g41
 run_g42; run_g43; run_g44
 run_g45; run_g46; run_g47
