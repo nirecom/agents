@@ -427,3 +427,7 @@ Changes: `/issue-create` now auto-classifies `severity:high` (fatal: workflow st
 ### FEATURE: PR #1406 (2026-07-12)
 Background: fix(#1391): remove classify() temp-path redirect gate; retire kind:"gh" WRITE_PATTERNS group (#1296 partial)
 Changes: Fixed an enforce-worktree guard gap where a file redirect targeting a repository located under a system temp directory (e.g. `/tmp/`) was incorrectly treated as read-only and allowed past main-worktree write enforcement.
+
+### FEATURE: PR #1409 (2026-07-12)
+Background: feat(#1405): gate verification-gate ask behind RUN_E2E (off→skip / on→unchanged)
+Changes: By default (RUN_E2E=off) the pre-commit/pre-merge verification-gate prompt — which asked whether you had verified a risk-category change in a real E2E environment — no longer appears. It was unactionable without an E2E environment set up. Set RUN_E2E=on to re-enable the prompt once you have one. When suppressed, the affected risk categories are still recorded to WORKTREE_NOTES.md ## Unverified Categories as a log-only trace.
