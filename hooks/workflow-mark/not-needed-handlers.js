@@ -4,7 +4,7 @@
 // Each family validates the skip reason, records the step as skipped, and returns next-step guidance.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep } = require("../lib/workflow-state");
+const { markStep, recordSkipVerdict } = require("../lib/workflow-state");
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
@@ -91,6 +91,8 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "outline", "skipped", { skip_reason: v.reason });
+      // A-4: attach speculative skip verdict (pending-verification)
+      recordSkipVerdict(sessionId, "outline", "pending", "sentinel");
     } catch (e) {
       pushMessage(`workflow-mark: failed to write state — ${e.message}. outline NOT recorded.`);
     }
@@ -122,6 +124,8 @@ function handle(ctx) {
     }
     try {
       markStep(sessionId, "detail", "skipped", { skip_reason: v.reason });
+      // A-4: attach speculative skip verdict (pending-verification)
+      recordSkipVerdict(sessionId, "detail", "pending", "sentinel");
     } catch (e) {
       pushMessage(`workflow-mark: failed to write state — ${e.message}. detail NOT recorded.`);
     }
