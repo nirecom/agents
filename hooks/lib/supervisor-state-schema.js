@@ -10,6 +10,8 @@ const CATEGORIES = [
 
 const SEVERITY_VALUES = ["error", "warning", "notice"];
 
+const RECORD_TYPE_VALUES = ["concern", "escape_hatch_event"];
+
 const ALERT_PHASE_VALUES = [null, "pending", "done", "paused", "closed"];
 
 const ALERT_ELIGIBLE_PHASE_VALUES = [null, "post_final_report_window"];
@@ -90,6 +92,9 @@ function validateFinding(f) {
   if (f.idx !== undefined && !Number.isInteger(f.idx)) {
     errors.push("idx must be an integer");
   }
+  if (f.record_type !== undefined && !RECORD_TYPE_VALUES.includes(f.record_type)) {
+    errors.push(`invalid record_type: ${f.record_type} (must be ${RECORD_TYPE_VALUES.join(" or ")})`);
+  }
   return { ok: errors.length === 0, errors };
 }
 
@@ -166,6 +171,7 @@ module.exports = {
   SCHEMA_VERSION,
   CATEGORIES,
   SEVERITY_VALUES,
+  RECORD_TYPE_VALUES,
   ALERT_PHASE_VALUES,
   ALERT_ELIGIBLE_PHASE_VALUES,
   SEVERITY_RANK,
