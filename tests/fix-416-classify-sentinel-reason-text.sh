@@ -35,7 +35,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMPDIR_BASE="${TMPDIR:-/tmp}/fix-416-$$"
+TMPDIR_BASE="$(mktemp -d)/fix-416-$$"
 mkdir -p "$TMPDIR_BASE"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 

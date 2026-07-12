@@ -75,12 +75,12 @@ echo ""
 echo "--- Group D: isSentinelEchoSafe security — unsafe reasons → write ---"
 echo "    WILL FAIL until write-code adds isSentinelEchoSafe"
 
-# T3.17: sentinel && rm -rf chain → isStrictSentinel=false (chain) → normal classify
-# → rm matches file-op → write (chain security maintained)
-assert_classify \
-  "T3.17 sentinel && rm -rf chain → write (chain not strict sentinel)" \
-  'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ok>>" && rm -rf /tmp' \
-  "write"
+# T3.17: sentinel && rm -rf chain → isStrictSentinel=false (chain) → normal classify.
+# Post-canary5-6git: rm retired from WRITE_PATTERNS → classify "read"; the rm write
+# is now detected via isFileOpWriteIR (chain security maintained via the new SSOT).
+assert_file_op_write \
+  "T3.17 sentinel && rm -rf chain → file-op-write (chain not strict sentinel)" \
+  'echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: ok>>" && rm -rf /tmp'
 
 # T3.18: unrelated prefix; sentinel → normal classify → no write pattern → read
 assert_classify \
@@ -154,11 +154,11 @@ assert_classify \
   'echo "<<WORKFLOW_MARK_STEP_write_code_complete>>"' \
   "read"
 
-# T3.33: sentinel && rm chain → write (chain; isStrictSentinel false)
-assert_classify \
-  "T3.33 USER_VERIFIED && rm chain → write" \
-  'echo "<<WORKFLOW_USER_VERIFIED: ok>>" && rm -rf /tmp' \
-  "write"
+# T3.33: sentinel && rm chain (isStrictSentinel false). Post-canary5-6git: rm
+# retired from WRITE_PATTERNS → classify "read"; detected via isFileOpWriteIR.
+assert_file_op_write \
+  "T3.33 USER_VERIFIED && rm chain → file-op-write" \
+  'echo "<<WORKFLOW_USER_VERIFIED: ok>>" && rm -rf /tmp'
 
 # T3.34: semicolon embedded in reason → ; is literal in DQ → read
 assert_classify \
@@ -245,12 +245,12 @@ assert_classify \
   'echo "git rebase steps"' \
   "read"
 
-assert_classify \
-  "692-B3 real git push → write" \
-  "git push origin main" \
-  "write"
+# Post-canary5-6git: git-write SSOT moved to isGitWriteIR (#1401 retire) → real
+# git writes classify "read" and are detected via isGitWriteIR === true.
+assert_git_write \
+  "692-B3 real git push → git-write" \
+  "git push origin main"
 
-assert_classify \
-  "692-B4 real git commit → write" \
-  'git commit -m "test"' \
-  "write"
+assert_git_write \
+  "692-B4 real git commit → git-write" \
+  'git commit -m "test"'
