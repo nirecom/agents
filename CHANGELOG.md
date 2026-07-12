@@ -431,3 +431,7 @@ Changes: Fixed an enforce-worktree guard gap where a file redirect targeting a r
 ### FEATURE: PR #1409 (2026-07-12)
 Background: feat(#1405): gate verification-gate ask behind RUN_E2E (off→skip / on→unchanged)
 Changes: By default (RUN_E2E=off) the pre-commit/pre-merge verification-gate prompt — which asked whether you had verified a risk-category change in a real E2E environment — no longer appears. It was unactionable without an E2E environment set up. Set RUN_E2E=on to re-enable the prompt once you have one. When suppressed, the affected risk categories are still recorded to WORKTREE_NOTES.md ## Unverified Categories as a log-only trace.
+
+### FEATURE: PR #1416 (2026-07-13)
+Background: fix(#1166): rename alert_phase frozen→paused; introduce closed as permanent terminal phase
+Changes: C2 supervisor review no longer re-fires after the Final Report is delivered — a spurious re-arm after `/session-close` set the session-close phase has been fixed.
