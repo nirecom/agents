@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if command -v cygpath >/dev/null 2>&1; then
+  NODE_DIR="$(cygpath -m "$SCRIPT_DIR")"
+else
+  NODE_DIR="$SCRIPT_DIR"
+fi
+# Path travels via env, not string interpolation — apostrophes/metachars in the
+# checkout path cannot break or alter the evaluated program.
+# Contract (mirrors compute-staged-tests-token.js):
+#   no session id           → empty stdout, exit 0
+#   session id, no state    → "NOSTATE" stdout, exit 0
+#   resolved linked wt      → path stdout, exit 0
+#   unresolvable / main wt  → empty stdout, exit 0
+BRIDGE_DIR="$NODE_DIR" node -e '
+  const path = require("path");
+  const sid = process.env.SESSION_ID || process.env.CLAUDE_SESSION_ID || "";
+  try {
+    if (!sid) { process.stdout.write(""); process.exit(0); }
+    const stateIo = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "lib", "workflow-state", "state-io"));
+    if (stateIo.readState(sid) === null) { process.stdout.write("NOSTATE"); process.exit(0); }
+    const { resolveSessionWorktreePath } = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "lib", "workflow-state", "resolve-worktree-path"));
+    const wt = resolveSessionWorktreePath(sid);
+    process.stdout.write(wt || "");
+  } catch (e) {
+    process.stdout.write("");
+  }
+  process.exit(0);
+'
