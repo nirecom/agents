@@ -435,3 +435,7 @@ Changes: By default (RUN_E2E=off) the pre-commit/pre-merge verification-gate pro
 ### FEATURE: PR #1416 (2026-07-13)
 Background: fix(#1166): rename alert_phase frozen→paused; introduce closed as permanent terminal phase
 Changes: C2 supervisor review no longer re-fires after the Final Report is delivered — a spurious re-arm after `/session-close` set the session-close phase has been fixed.
+
+### BUGFIX: PR #1417 (2026-07-13)
+Background: fix(#882): extract session-bound worktree resolution into SSOT helper; wire RT-1/RT-4a to it
+Changes: `/review-tests` now selects staged files from the session's linked worktree (not CWD) when run from the main-conversation context, fixing token mismatch at the pre-commit gate (#882).
