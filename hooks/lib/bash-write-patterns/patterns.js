@@ -121,22 +121,8 @@ const WRITE_PATTERNS = [
   // are intentionally NOT classified as write — they only touch GitHub-side
   // metadata and do not change repo content, so they require neither worktree
   // enforcement nor session-scope check.
-  { name: "gh-pr-merge", kind: "gh", regex: /\bgh\b.*\bpr\b.*\bmerge\b/ },
-  { name: "gh-issue-delete", kind: "gh", regex: /\bgh\b.*\bissue\b.*\bdelete\b/ },
-  { name: "gh-repo-delete", kind: "gh", regex: /\bgh\b.*\brepo\b.*\bdelete\b/ },
-  { name: "gh-release-write", kind: "gh", regex: /\bgh\b.*\brelease\b.*\b(?:create|delete|edit|upload)\b/ },
-  // gh api: cover all flag forms — `-X DELETE`, `-XDELETE`, `-X=DELETE`,
-  // `--method DELETE`, `--method=DELETE`.
-  { name: "gh-api-mutate", kind: "gh", regex: /\bgh\b.*\bapi\b.*(?:-X[\s=]*|--method[\s=]+)(?:POST|PUT|PATCH|DELETE)\b/i },
-  // gh issue create: sanctioned path is `/issue-create` (see skills/issue-create).
-  // Classified as write so the enforce-worktree session-scope guard applies.
-  { name: "gh-issue-create", kind: "gh", regex: /\bgh\s+issue\s+create\b/ },
-  // gh api PUT to repos/<o>/<r>/contents/... — Contents API single-file write.
-  // (Sanctioned wrapper: bin/lib/github-contents-write.sh.)
-  { name: "gh-api-contents-put", kind: "gh", regex: /\bgh\s+api\s+(?:-X\s+)?PUT\s+repos\/[^\/\s]+\/[^\/\s]+\/contents\// },
-  // gh api POST/PATCH to repos/<o>/<r>/git/{blobs,trees,commits,refs} — Git Data API.
-  // (Sanctioned wrapper: bin/lib/github-git-data-write.sh.)
-  { name: "gh-api-git-data-write", kind: "gh", regex: /\bgh\s+api\s+(?:-X\s+)?(?:POST|PATCH)\s+repos\/[^\/\s]+\/[^\/\s]+\/git\/(?:blobs|trees|commits|refs)/ },
+  // The kind:"gh" WRITE_PATTERNS group has been retired (#1296). gh write
+  // detection is now owned solely by isGhWriteIR (IR-based SSOT) below.
   // Interpreter -c / -Command: shell/interpreter invocations with inline body.
   // Tested against ORIGINAL cmd (not stripped) — the inline body is irrelevant;
   // the interpreter call itself is always a potential write.
@@ -182,22 +168,24 @@ const QUOTING_ONLY_NAMES = new Set([
 // - git (#692): git verbs inside quoted args (e.g. `grep -n "git push" file`)
 //   must not false-positive. The git-commit / git-push / git-merge / etc.
 //   regexes use `\bgit\b.*\bverb\b` which span quoted prose without stripping.
-// - "pkg-mgr" / "gh" (#416): npm/gh verbs in sentinel echo reason text
+// - "pkg-mgr" (#416): npm/pip/etc. verbs in sentinel echo reason text
 //   (e.g. echo "<<...: npm install fix>>") caused false-positive write.
 //   Stripping quoted args prevents the match.
 // - "pwsh" / "pwsh-alias" / "pwsh-encoded" (#416): defense-in-depth for pwsh
 //   verbs in reason text.
-// Accepted tradeoff (AT-DP1, #416): adding "pkg-mgr"/"gh" causes
-// stripQuotedArgs to collapse quoted write verbs (e.g. npm "install",
-// gh api -X "DELETE") into no-match → 'read' (false-negative). Claude Code
-// normally issues unquoted commands so real-world impact is minimal. To
-// recover true-positive detection for quoted writes, revert this set and use
-// a sentinel-only case-bypass instead.
+// gh: NOT in STRIP_KINDS — the kind:"gh" WRITE_PATTERNS group was retired (#1296);
+//   gh write detection is now owned solely by isGhWriteIR (IR-based SSOT below),
+//   which operates on parsed argv tokens and is unaffected by quote-stripping.
+// Accepted tradeoff (AT-DP1, #416): adding "pkg-mgr" causes stripQuotedArgs to
+// collapse quoted write verbs (e.g. npm "install") into no-match → 'read'
+// (false-negative). Claude Code normally issues unquoted commands so real-world
+// impact is minimal. To recover true-positive detection for quoted writes, revert
+// this set and use a sentinel-only case-bypass instead.
 // Other kinds (posix [here-doc/here-string], interpreter) are
 // tested against the original command. here-doc/here-string in particular MUST
 // scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
 // stripHeredocBody contract depend on it (see classify() lines 160-190).
-const STRIP_KINDS = new Set(["file-op", "posix-redir", "git", "pkg-mgr", "gh", "pwsh", "pwsh-alias", "pwsh-encoded"]);
+const STRIP_KINDS = new Set(["file-op", "posix-redir", "git", "pkg-mgr", "pwsh", "pwsh-alias", "pwsh-encoded"]);
 
 // Write command words that, when quoted at command-position, must still be
 // classified as write (#515). git/npm/gh excluded — too many false positives.
@@ -217,9 +205,45 @@ const QUOTED_COMMAND_WORD_WRITE_NAMES = new Set([
 // { $ ` " \ newline }. Those second chars are already covered above.
 const UNSAFE_REASON_CHARS = /\$[({[]|[`"]/;
 
-// isGhWriteIR: IR-owned version of the kind:"gh" WRITE_PATTERNS group.
-// During canary-5 (#1296), the kind:"gh" group will be removed from WRITE_PATTERNS
-// and this becomes the sole SSOT for gh write detection.
+// resolveGhSubArgv: skip leading gh GLOBAL FLAGS so the subcommand is read from
+// its effective position, not shifted by a preceding flag.
+//
+// #1296 retire bypass class: the retired regex `\bgh\b.*\bpr\b.*\bmerge\b` was
+// order-tolerant, so `gh -R owner/repo pr merge 123` still matched. The IR
+// replacement below uses strict positional matching (sub0/sub1), so a global
+// flag before the subcommand (e.g. `gh -R o/r pr merge`) shifted argv → sub0="-R"
+// → detection returned false → the gh mutation fast-allowed with NO session-scope
+// enforcement against an arbitrary `-R owner/repo` target. Skipping the leading
+// global flags here closes that out-of-session-repo bypass.
+//
+// Value-taking global flags consume a following token (or use the attached =value
+// form): -R/--repo (owner/repo), --hostname (host). Any other leading `-`token is
+// treated as a lone boolean flag (skip just it) — we do NOT consume a following
+// value for unknown flags, to avoid over-skipping the subcommand.
+const GH_VALUE_TAKING_GLOBAL_FLAGS = new Set(["-R", "--repo", "--hostname"]);
+function resolveGhSubArgv(ghArgv) {
+  let i = 0;
+  while (i < ghArgv.length) {
+    const tok = ghArgv[i];
+    if (typeof tok !== "string" || tok[0] !== "-") break; // first non-flag = effective subcommand
+    const eq = tok.indexOf("=");
+    const flagName = eq === -1 ? tok : tok.slice(0, eq);
+    if (eq !== -1) {
+      // attached =value form (e.g. --repo=o/r) — skip the single token
+      i += 1;
+    } else if (GH_VALUE_TAKING_GLOBAL_FLAGS.has(flagName)) {
+      // value-taking flag with separate value (e.g. -R o/r) — skip flag + value
+      i += 2;
+    } else {
+      // unknown/boolean lone flag — skip just it
+      i += 1;
+    }
+  }
+  return ghArgv.slice(i);
+}
+
+// isGhWriteIR: IR-owned gh write detector. The kind:"gh" WRITE_PATTERNS group
+// has been removed (#1296); isGhWriteIR is now the sole SSOT for gh write detection.
 function isGhWriteIR(ir) {
   if (!ir || ir.parseFailure === true) return false;
   if (!ir.segments || ir.segments.length === 0) return false;
@@ -250,9 +274,16 @@ function isGhWriteIR(ir) {
   }
   if (!ghArgv || ghArgv.length === 0) return false;
 
-  const sub0 = ghArgv[0];
-  const sub1 = ghArgv[1];
-  const sub2 = ghArgv[2];
+  // Skip leading gh global flags (and their values) so sub0/sub1 read from the
+  // effective subcommand position — closes the global-flag-before-subcommand
+  // bypass (#1296 retire; see resolveGhSubArgv). Composes with the env-prefix /
+  // VAR=val resolution above (that ran first, so subArgv starts after `gh`).
+  const subArgv = resolveGhSubArgv(ghArgv);
+  if (subArgv.length === 0) return false;
+
+  const sub0 = subArgv[0];
+  const sub1 = subArgv[1];
+  const sub2 = subArgv[2];
 
   if (sub0 === "pr" && sub1 === "merge") return true;
   if (sub0 === "issue" && sub1 === "delete") return true;
@@ -261,13 +292,16 @@ function isGhWriteIR(ir) {
   if (sub0 === "issue" && sub1 === "create") return true;
 
   if (sub0 === "api") {
-    // gh api -X METHOD / --method METHOD
-    for (let i = 1; i < ghArgv.length; i++) {
-      const tok = ghArgv[i];
+    // gh api -X METHOD / --method METHOD (loop is order-tolerant, matches the
+    // retired regex; iterate the effective subArgv so global flags before `api`
+    // are already stripped).
+    for (let i = 1; i < subArgv.length; i++) {
+      const tok = subArgv[i];
       if (tok === "-X" || tok === "--method") {
-        const method = ghArgv[i + 1];
+        const method = subArgv[i + 1];
         if (method && /^(?:POST|PUT|PATCH|DELETE)$/i.test(method)) return true;
-      } else if (/^-X(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
+      // -X=? preserves the retired gh-api-mutate regex's -X= (equals) coverage (#1296)
+      } else if (/^-X=?(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
         return true;
       }
     }
