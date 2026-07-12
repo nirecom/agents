@@ -285,6 +285,34 @@ function computeVerdict(rawSid, _didAutoRepair) {
   }
 
   if (currentStep === null) {
+    // A-4 speculative-skip gate: before declaring done, check whether any
+    // outline/detail step was skipped with an unresolved or vetoed verdict.
+    // skip_verdict absent = legacy skip = fail-open (invoke write-tests to re-confirm).
+    try {
+      const wfState = require("../../hooks/lib/workflow-state");
+      if (typeof wfState.readSkipVerdict === "function") {
+        for (const gatedStep of ["outline", "detail"]) {
+          const stepData = state.steps[gatedStep];
+          if (!stepData || stepData.status !== "skipped") continue;
+          const sv = wfState.readSkipVerdict(sid, gatedStep);
+          if (sv && sv.verdict === "pending") {
+            emit("blocked", "", gatedStep + " speculative skip is pending verification by skip-verifier. Re-run next-step after verifier completes.", "speculative-skip-pending");
+            return;
+          }
+          if (sv && sv.verdict === "veto") {
+            const resetSkill = gatedStep === "outline" ? "make-outline-plan" : "make-detail-plan";
+            emit("abort", "", "skip-verifier vetoed the " + gatedStep + " skip. Emit WORKFLOW_RESET_FROM_" + gatedStep + ": veto, then re-run /" + resetSkill + ".", "speculative-skip-vetoed");
+            return;
+          }
+          // confirm or no verdict → invoke write-tests unless write_tests was
+          // already explicitly skipped (session opted out of tests entirely).
+          const wtsEntry = state.steps["write_tests"];
+          if (wtsEntry && wtsEntry.status === "skipped") continue;
+          emit("invoke", STEP_TO_SKILL["write_tests"] || "write-tests", "Run /write-tests via the Skill tool.", "write_tests");
+          return;
+        }
+      }
+    } catch (_) { /* fail-open */ }
     emit("done", "", "", "workflow-complete");
     return;
   }
@@ -333,6 +361,18 @@ function computeVerdict(rawSid, _didAutoRepair) {
       try { ms1133d(sid, "detail", "complete"); } catch (e) { /* fail-open */ }
       return computeVerdict(rawSid, true);
     }
+  }
+
+  // A-4: authoritative recorded-verdict skip BEFORE inconsistency scan.
+  // A valid skip_judgment allows resolving outline/detail=pending BEFORE the scan
+  // fires an abort on "later step complete but current step pending".
+  if (currentStep === "outline") {
+    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", "recorded-verdict: so_c1+so_c2 met");
+    if (v !== null) return v;
+  }
+  if (currentStep === "detail") {
+    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", "recorded-verdict: sd_c1+sd_c2+sd_c3 met");
+    if (v !== null) return v;
   }
 
   // Inconsistency: later step is complete OR invalid status anywhere.
@@ -458,6 +498,14 @@ function computeVerdict(rawSid, _didAutoRepair) {
       if (typeof irvFn !== "function" || !irvFn(sj, stepName)) return null;
       try {
         markStep(sid, stepName, "skipped", { skip_reason: skipReason, skip_judgment: sj });
+        // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
+        // markStep so the read-modify-write preserves skip_reason/skip_judgment.
+        try {
+          const wfState2 = require("../../hooks/lib/workflow-state");
+          if (typeof wfState2.recordSkipVerdict === "function") {
+            wfState2.recordSkipVerdict(sid, stepName, "pending", "next-step-recorded-verdict");
+          }
+        } catch (_) { /* fail-open */ }
         return computeVerdict(rawSid, true);
       } catch (_) {
         return null;   // markStep/verdict failed — fall through, NO recursion
@@ -465,15 +513,6 @@ function computeVerdict(rawSid, _didAutoRepair) {
     } catch (_) {
       return null;   // fail-open
     }
-  }
-
-  if (currentStep === "outline") {
-    const v = applyRecordedVerdictSkip(sid, rawSid, "outline", "recorded-verdict: so_c1+so_c2 met");
-    if (v !== null) return v;
-  }
-  if (currentStep === "detail") {
-    const v = applyRecordedVerdictSkip(sid, rawSid, "detail", "recorded-verdict: sd_c1+sd_c2+sd_c3 met");
-    if (v !== null) return v;
   }
 
   // #485: advisory plan-skip hint at outline/detail only. isTrivial reads
