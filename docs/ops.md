@@ -164,6 +164,8 @@ E2E tests that spawn real `claude -p` sessions are opt-in. They are gated on the
 makes the test skip with TAP exit code 77 when the flag is off. Set
 `RUN_E2E=on` in the agents config `.env` to run them locally.
 
+When `RUN_E2E=off` the verification-gate ask is also suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the worktree-end path); set `RUN_E2E=on` to re-activate it.
+
 When `claude` is not on `PATH`, gates also exit 77
 (`command -v claude >/dev/null 2>&1 || exit 77`). This keeps CI green on hosts
 where Claude Code is unavailable.
