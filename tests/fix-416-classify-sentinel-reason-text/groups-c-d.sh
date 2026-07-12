@@ -12,17 +12,23 @@ assert_classify \
   "npm install foo" \
   "write"
 
-# T3.14e: bare gh api -X DELETE → write (real write, unquoted verb)
+# T3.14e/T3.15: gh commands are GitHub operations, not local worktree writes.
+# classify()'s contract is LOCAL-write detection (does this gate enforce-worktree?).
+# gh writes to GitHub, not the local worktree → classify returns "read" (post-#1296
+# retire of the kind:"gh" WRITE_PATTERNS group). gh write enforcement is now owned
+# solely by isGhWriteIR at the enforce-worktree gh session-scope gate.
+
+# T3.14e: gh api -X DELETE is a GitHub write, not a local write → read
 assert_classify \
   "T3.14e gh api -X DELETE repos/..." \
   "gh api -X DELETE /repos/owner/repo" \
-  "write"
+  "read"
 
-# T3.15: bare gh pr merge → write
+# T3.15: gh pr merge is a GitHub write, not a local write → read
 assert_classify \
   "T3.15 gh pr merge 123 --squash (bare)" \
   "gh pr merge 123 --squash" \
-  "write"
+  "read"
 
 # T3.16: bare pip install → write
 assert_classify \
