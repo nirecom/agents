@@ -281,6 +281,22 @@ is_fresh() {
   [[ "$ts" -ge "$threshold" ]]
 }
 
+# True (return 0) if a worktree directory is "fresh" (mtime newer than threshold).
+# Mirrors sweep-worktrees.sh is_fresh() for directory-based age check.
+# Used before WORKTREE-LOCKED emission to prevent fresh worktrees from being
+# force-removed by the hub (SW-2b). Returns 1 (not fresh) when dir is missing.
+wt_is_fresh() {
+  local dir="$1"
+  local mins=$((MIN_AGE_HOURS * 60))
+  if [[ ! -d "$dir" ]]; then
+    return 1 # missing dir is never "fresh"
+  fi
+  if find "$dir" -maxdepth 0 -mmin "-$mins" 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  return 1
+}
+
 # Resolve REPO_OWNER and REPO_NAME lazily (only when a remote candidate exists).
 resolve_repo_identity() {
   if [[ -n "$REPO_OWNER" ]]; then
@@ -410,8 +426,15 @@ for branch in "${local_candidates[@]+"${local_candidates[@]}"}"; do
       if [[ -z "$wt_path" ]]; then
         wt_path="(unknown)"
       fi
-      printf 'WORKTREE-LOCKED: branch=%s wt=%s\n' "$branch" "$wt_path"
-      skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+      # Skip fresh worktrees — hub SW-2b must not force-remove them (#1414).
+      if [[ "$wt_path" != "(unknown)" ]] && wt_is_fresh "$wt_path"; then
+        printf 'INFO: worktree %s is fresh (< %d hours); skipping WORKTREE-LOCKED\n' \
+          "$wt_path" "$MIN_AGE_HOURS" >&2
+        skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+      else
+        printf 'WORKTREE-LOCKED: branch=%s wt=%s\n' "$branch" "$wt_path"
+        skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+      fi
     else
       printf 'WARN: local branch delete failed: %s\n' "$branch" >&2
       errors+=("local:$branch")
@@ -452,8 +475,15 @@ if [[ "$APPLY" == "1" ]] && [[ "$DELETE_NO_PR" == "1" ]] && [[ "${#no_pr_branche
         if [[ -z "$wt_path" ]]; then
           wt_path="(unknown)"
         fi
-        printf 'WORKTREE-LOCKED: branch=%s wt=%s\n' "$branch" "$wt_path"
-        skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+        # Skip fresh worktrees — hub SW-2b must not force-remove them (#1414).
+        if [[ "$wt_path" != "(unknown)" ]] && wt_is_fresh "$wt_path"; then
+          printf 'INFO: worktree %s is fresh (< %d hours); skipping WORKTREE-LOCKED\n' \
+            "$wt_path" "$MIN_AGE_HOURS" >&2
+          skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+        else
+          printf 'WORKTREE-LOCKED: branch=%s wt=%s\n' "$branch" "$wt_path"
+          skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+        fi
       else
         printf 'WARN: no-PR local branch delete failed: %s\n' "$branch" >&2
         errors+=("no-pr:$branch")
