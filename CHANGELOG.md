@@ -443,3 +443,7 @@ Changes: `/review-tests` now selects staged files from the session's linked work
 ### BUGFIX: PR #1418 (2026-07-13)
 Background: PR #1418 merged on 2026-07-13.
 Changes: Fixed: WORKTREE_OFF / WORKFLOW_OFF no longer blocks itself when re-used in the same session; the first use now records an audit event that the shim correctly ignores for subsequent off-sentinel checks
+
+### FEATURE: PR #1420 (2026-07-13)
+Background: feat(#1400,#1401): WRITE_PATTERNS→IR migration — retire green-group + git, typed write-target contract, fail-closed security convergence
+Changes: Hardened main-worktree write-protection: git commands, shell redirects, PowerShell cmdlets, and file operations are now detected via IR-based analysis rather than surface-regex patterns. Exotic execution constructs (command substitution, eval, xargs, find -exec, process substitution) that attempt writes are fail-closed blocked. No change to user-visible allow/block outcomes for ordinary workflows.
