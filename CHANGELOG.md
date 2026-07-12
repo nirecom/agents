@@ -423,3 +423,7 @@ Changes: Speculative-skip verification: outline/detail skips now launch a backgr
 ### FEATURE: PR #1403 (2026-07-12)
 Background: feat(#1396): add severity/model classification labels; /issue-create auto-attaches model:* from system-prompt injection
 Changes: `/issue-create` now auto-classifies `severity:high` (fatal: workflow stops, abort, loop, security hole) or `severity:low` (cosmetic/deferrable) based on issue content; no label = normal severity;New `model:fable` / `model:opus` / `model:sonnet` / `model:ds4` / `model:others` labels auto-attached by `/issue-create` based on which model is running the current session
+
+### FEATURE: PR #1406 (2026-07-12)
+Background: fix(#1391): remove classify() temp-path redirect gate; retire kind:"gh" WRITE_PATTERNS group (#1296 partial)
+Changes: Fixed an enforce-worktree guard gap where a file redirect targeting a repository located under a system temp directory (e.g. `/tmp/`) was incorrectly treated as read-only and allowed past main-worktree write enforcement.
