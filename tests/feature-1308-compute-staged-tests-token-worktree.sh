@@ -174,15 +174,19 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 2: cwd preference — no arg, run from wtA -> expect TOKEN_A
+# Case 2: NO process.cwd() fallback (issue #882 / #1316).
+# No argv[2] and no SESSION_ID -> resolveRepoDir() returns null even when cwd=wtA
+# has staged tests. The script must NOT fall back to process.cwd(); it emits an
+# empty string. This negative test locks in that the main worktree (or any cwd)
+# is never silently selected without an explicit arg or session state.
 # ---------------------------------------------------------------------------
-case2_got="$(run_script_cwd "$WTA")"
-if [[ "$case2_got" = "$TOKEN_A" ]]; then
-  pass "Case 2 (cwd preference): got TOKEN_A='$case2_got' when cwd=wtA"
-elif [[ "$case2_got" = "$TOKEN_B" ]]; then
-  fail "Case 2 (cwd preference): got TOKEN_B instead of TOKEN_A — cwd preference not working"
+case2_got="$(SESSION_ID="" CLAUDE_SESSION_ID="" run_script_cwd "$WTA")"
+if [[ -z "$case2_got" ]]; then
+  pass "Case 2 (no cwd fallback): empty string when no arg and no SESSION_ID"
+elif [[ "$case2_got" = "$TOKEN_A" ]]; then
+  fail "Case 2 (no cwd fallback): got TOKEN_A — process.cwd() fallback still active"
 else
-  fail "Case 2 (cwd preference): got '$case2_got', expected TOKEN_A='$TOKEN_A'"
+  fail "Case 2 (no cwd fallback): got '$case2_got', expected empty string"
 fi
 
 # ---------------------------------------------------------------------------
