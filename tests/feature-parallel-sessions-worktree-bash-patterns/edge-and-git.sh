@@ -21,26 +21,38 @@ test_fd_redirect_documented_fp() {
 test_newline_injection_write() {
     local cmd
     cmd="$(printf 'echo x\nrm foo')"
-    assert_classify "newline-embedded rm" "$cmd" "write"
+    # `rm` sits on a LATER LINE. In bash a newline is a command separator, but the
+    # IR segment splitter does NOT split on newline — so `echo x\nrm foo` parses as
+    # ONE `echo` segment with `rm` as an argv token, and isFileOpWriteIR (which is
+    # per-segment/command-position) does NOT fire. isNewlineInjectedWriteIR strips
+    # heredoc bodies, splits on unquoted newlines, and re-parses each line — this
+    # restores the pre-#1296 coverage (the retired file-op regex's `[\s]` prefix
+    # matched the newline). classify=read + isNewlineInjectedWriteIR=true.
+    assert_write_ir "newline-embedded rm" "$cmd" newline
 }
 
 test_git_config_flag_commit_write() {
-    assert_classify "git -c config flag + commit" 'git -c core.safecrlf=false commit -m x' "write"
+    # Retired git write. classify=read, isGitWriteIR sees `commit` past the -c flag.
+    assert_write_ir "git -c config flag + commit" 'git -c core.safecrlf=false commit -m x' git
 }
 
 test_dev_null_compound() {
-    assert_classify "compound: read 2>/dev/null; rm foo" 'git status 2>/dev/null; rm foo' "write"
+    # Retired file-op `rm` after a null-sink read segment. classify=read, isFileOpWriteIR=true.
+    assert_write_ir "compound: read 2>/dev/null; rm foo" 'git status 2>/dev/null; rm foo' fileop
     assert_classify "compound: read 2>/dev/null && read" 'git status 2>/dev/null && git log' "read"
     assert_classify ">>/dev/null append null-sink" 'cmd >>/dev/null' "read"
-    assert_classify "redirect to /dev/null/foo (not null-sink)" 'cmd > /dev/null/foo' "write"
+    # Retired posix-redir: /dev/null/foo is a real in-scope file (not the null sink).
+    # classify=read, isPosixRedirWriteIR=true.
+    assert_write_ir "redirect to /dev/null/foo (not null-sink)" 'cmd > /dev/null/foo' posix
     assert_classify ">/dev/null 2>&1 (null-sink + FD-to-FD, read)" 'cmd >/dev/null 2>&1' "read"
 }
 
 test_git_branch_mutate_writes() {
-    assert_classify "branch -m rename" 'git branch -m main feat' "write"
-    assert_classify "branch -M force-rename" 'git branch -M old new' "write"
-    assert_classify "branch -c copy" 'git branch -c base feat' "write"
-    assert_classify "branch -C force-copy" 'git branch -C old new' "write"
+    # Retired git writes (branch rename/copy). classify=read, isGitWriteIR=true.
+    assert_write_ir "branch -m rename" 'git branch -m main feat' git
+    assert_write_ir "branch -M force-rename" 'git branch -M old new' git
+    assert_write_ir "branch -c copy" 'git branch -c base feat' git
+    assert_write_ir "branch -C force-copy" 'git branch -C old new' git
 }
 
 test_git_branch_name_no_false_positive() {
@@ -52,14 +64,15 @@ test_git_branch_name_no_false_positive() {
 }
 
 test_git_branch_delete_writes() {
-    assert_classify "branch -d soft-delete is write" \
-        'git branch -d already-merged' "write"
-    assert_classify "branch -D force-delete is write" \
-        'git branch -D fix/planner-drafts-context' "write"
-    assert_classify "git -C path branch -D is write" \
-        'git -C /path branch -D x' "write"
-    assert_classify "git -C path branch -d is write" \
-        'git -C /path branch -d x' "write"
+    # Retired git writes (branch delete). classify=read, isGitWriteIR=true.
+    assert_write_ir "branch -d soft-delete is write" \
+        'git branch -d already-merged' git
+    assert_write_ir "branch -D force-delete is write" \
+        'git branch -D fix/planner-drafts-context' git
+    assert_write_ir "git -C path branch -D is write" \
+        'git -C /path branch -D x' git
+    assert_write_ir "git -C path branch -d is write" \
+        'git -C /path branch -d x' git
 }
 
 # ============ #692: git-verb quoted-args false positive (Bug B) ============
@@ -77,34 +90,39 @@ test_git_kind_strips_quoted_args() {
     assert_classify "echo with quoted 'git commit -m test'" \
         'echo "Run git commit -m test"' "read"
 
-    assert_classify "real git commit -m" \
-        'git commit -m "test"' "write"
-    assert_classify "real git push origin main" \
-        'git push origin main' "write"
-    assert_classify "real git checkout -- file" \
-        'git checkout -- file.txt' "write"
-    assert_classify "real git stash push" \
-        'git stash push -m "wip"' "write"
-    assert_classify "real git -C path commit" \
-        'git -C /path commit -m x' "write"
+    # Real git writes: classify=read (git WRITE_PATTERNS retired), isGitWriteIR=true.
+    # The quoted-arg-strip false-positive guard above (read cases) still holds via
+    # classify; the genuine writes are now caught by the IR predicate.
+    assert_write_ir "real git commit -m" \
+        'git commit -m "test"' git
+    assert_write_ir "real git push origin main" \
+        'git push origin main' git
+    assert_write_ir "real git checkout -- file" \
+        'git checkout -- file.txt' git
+    assert_write_ir "real git stash push" \
+        'git stash push -m "wip"' git
+    assert_write_ir "real git -C path commit" \
+        'git -C /path commit -m x' git
 }
 
 test_git_update_ref_write() {
-    assert_classify "git update-ref create" \
-        'git update-ref refs/heads/feat HEAD' "write"
-    assert_classify "git update-ref delete" \
-        'git update-ref -d refs/heads/old' "write"
-    assert_classify "git -C path update-ref" \
-        'git -C /path update-ref refs/heads/feat HEAD' "write"
+    # Retired git writes (update-ref). classify=read, isGitWriteIR=true.
+    assert_write_ir "git update-ref create" \
+        'git update-ref refs/heads/feat HEAD' git
+    assert_write_ir "git update-ref delete" \
+        'git update-ref -d refs/heads/old' git
+    assert_write_ir "git -C path update-ref" \
+        'git -C /path update-ref refs/heads/feat HEAD' git
 }
 
 # ============ Bug 3: git-commit regex must require commit at subcommand position =====
 test_git_commit_subcommand_position() {
-    assert_classify "git commit -m" 'git commit -m x' "write"
-    assert_classify "git -c <kv> commit -m" \
-        'git -c core.safecrlf=false commit -m x' "write"
-    assert_classify "git --no-pager commit -m" \
-        'git --no-pager commit -m x' "write"
+    # Retired git writes at subcommand position. classify=read, isGitWriteIR=true.
+    assert_write_ir "git commit -m" 'git commit -m x' git
+    assert_write_ir "git -c <kv> commit -m" \
+        'git -c core.safecrlf=false commit -m x' git
+    assert_write_ir "git --no-pager commit -m" \
+        'git --no-pager commit -m x' git
     assert_classify "git log -- hooks/pre-commit (filename pathspec)" \
         'git log -- hooks/pre-commit' "read"
     assert_classify "git log -- pre-commit.js (filename pathspec)" \
@@ -124,19 +142,19 @@ test_git_merge_base_read() {
         'git merge-base --is-ancestor HEAD origin/main' "read"
     assert_classify "git merge-tree base branch1 branch2 → read" \
         'git merge-tree base branch1 branch2' "read"
-    assert_classify "git merge-file a.txt b.txt c.txt → write" \
-        'git merge-file a.txt b.txt c.txt' "write"
+    # merge-file writes results → retired git write: classify=read, isGitWriteIR=true.
+    assert_write_ir "git merge-file a.txt b.txt c.txt → write" \
+        'git merge-file a.txt b.txt c.txt' git
     assert_classify "git -C /path merge-base A B → read" \
         'git -C /path merge-base A B' "read"
 
-    # EXISTING BEHAVIOR (must pass now and after fix):
-    # git merge (the porcelain) is a write operation.
-    assert_classify "git merge --ff-only origin/main → write" \
-        'git merge --ff-only origin/main' "write"
-    assert_classify "git merge origin/main → write" \
-        'git merge origin/main' "write"
-    assert_classify "git -C /path merge origin/main → write" \
-        'git -C /path merge origin/main' "write"
+    # git merge (the porcelain) is a write → retired: classify=read, isGitWriteIR=true.
+    assert_write_ir "git merge --ff-only origin/main → write" \
+        'git merge --ff-only origin/main' git
+    assert_write_ir "git merge origin/main → write" \
+        'git merge origin/main' git
+    assert_write_ir "git -C /path merge origin/main → write" \
+        'git -C /path merge origin/main' git
 }
 
 # ============ #1024: git stash drop/clear (ref-only) → read; push/pop/apply → write ============
@@ -158,14 +176,14 @@ test_git_stash_reclassify() {
     assert_classify "git stash (bare) → read" \
         'git stash' "read"
 
-    # EXISTING BEHAVIOR (must pass now and after fix):
-    # push/pop/apply rewrite the working tree — write.
-    assert_classify "git stash push -m x → write" \
-        'git stash push -m x' "write"
-    assert_classify "git stash pop → write" \
-        'git stash pop' "write"
-    assert_classify "git stash apply → write" \
-        'git stash apply' "write"
-    assert_classify "git -C /some/path stash push → write" \
-        'git -C /some/path stash push' "write"
+    # push/pop/apply rewrite the working tree → retired git write:
+    # classify=read, isGitWriteIR=true.
+    assert_write_ir "git stash push -m x → write" \
+        'git stash push -m x' git
+    assert_write_ir "git stash pop → write" \
+        'git stash pop' git
+    assert_write_ir "git stash apply → write" \
+        'git stash apply' git
+    assert_write_ir "git -C /some/path stash push → write" \
+        'git -C /some/path stash push' git
 }

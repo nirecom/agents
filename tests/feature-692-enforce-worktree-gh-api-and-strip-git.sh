@@ -15,7 +15,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TMPDIR_BASE="${TMPDIR:-/tmp}/feature-692-$$"
+TMPDIR_BASE="$(mktemp -d)/feature-692-$$"
 mkdir -p "$TMPDIR_BASE"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
@@ -41,6 +41,19 @@ classify() {
     node "$CLASSIFY_HELPER" "$AGENTS_DIR" "$cmd"
 }
 
+# isGitWriteIR helper: post-canary5-6git the git-write SSOT moved OUT of
+# classify()/WRITE_PATTERNS (#1401 retire) INTO isGitWriteIR (IR-based). A real
+# git write now classifies "read"; detection is via isGitWriteIR === true.
+is_git_write() {
+    local cmd="$1"
+    node -e '
+const path = require("path");
+const { isGitWriteIR } = require(path.join(process.argv[1], "hooks", "lib", "bash-write-patterns", "patterns"));
+const { parse } = require(path.join(process.argv[1], "hooks", "lib", "command-ir"));
+process.stdout.write(String(isGitWriteIR(parse(process.argv[2]))));
+' "$AGENTS_DIR" "$cmd"
+}
+
 assert_classify() {
     local label="$1" cmd="$2" expected="$3"
     local got
@@ -49,6 +62,19 @@ assert_classify() {
         pass "B: $label → $expected"
     else
         fail "B: $label → expected '$expected', got '$got' (cmd: $cmd)"
+    fi
+}
+
+# Assert a real git write: post-retire SSOT is classify=="read" + isGitWriteIR==true.
+assert_git_write() {
+    local label="$1" cmd="$2"
+    local c g
+    c="$(classify "$cmd")"
+    g="$(is_git_write "$cmd")"
+    if [ "$c" = "read" ] && [ "$g" = "true" ]; then
+        pass "B: $label → git-write (classify=read + isGitWriteIR=true)"
+    else
+        fail "B: $label → expected classify=read+isGitWriteIR=true, got classify='$c' isGitWriteIR='$g' (cmd: $cmd)"
     fi
 }
 
@@ -64,16 +90,20 @@ test_b_grep_with_quoted_git_verbs_is_read() {
     assert_classify "printf \"git reset --hard ...\""       'printf "git reset --hard ..."' "read"
 }
 
+# Post-canary5-6git: git-write detection SSOT moved from classify()/WRITE_PATTERNS
+# to isGitWriteIR (#1401 retire). Real git writes now classify "read" and are
+# detected via isGitWriteIR === true. These rows preserve the ORIGINAL intent
+# (real git writes are still detected as writes) re-pointed to the new SSOT.
 test_b_real_git_commands_remain_write() {
-    assert_classify "real git commit -m"            'git commit -m "test"' "write"
-    assert_classify "real git push origin main"     'git push origin main' "write"
-    assert_classify "real git checkout -- file"     'git checkout -- file.txt' "write"
-    assert_classify "real git stash push"           'git stash push -m "wip"' "write"
-    assert_classify "real git -C path commit"       'git -C /path commit -m x' "write"
-    assert_classify "real git rebase main"          'git rebase main' "write"
-    assert_classify "real git merge feature"        'git merge feature' "write"
-    assert_classify "real git reset --hard HEAD"    'git reset --hard HEAD' "write"
-    assert_classify "real git update-ref"           'git update-ref refs/heads/x HEAD' "write"
+    assert_git_write "real git commit -m"            'git commit -m "test"'
+    assert_git_write "real git push origin main"     'git push origin main'
+    assert_git_write "real git checkout -- file"     'git checkout -- file.txt'
+    assert_git_write "real git stash push"           'git stash push -m "wip"'
+    assert_git_write "real git -C path commit"       'git -C /path commit -m x'
+    assert_git_write "real git rebase main"          'git rebase main'
+    assert_git_write "real git merge feature"        'git merge feature'
+    assert_git_write "real git reset --hard HEAD"    'git reset --hard HEAD'
+    assert_git_write "real git update-ref"           'git update-ref refs/heads/x HEAD'
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
