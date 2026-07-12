@@ -185,10 +185,10 @@ When `CONV_LANG` is set in `$CLAUDE_ENV_FILE` and is not `english`, write all su
 SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
 
 After emitting, mark completion:
-  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase frozen
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "<session-id>" --set-alert-phase closed
   WSID=$(awk '/^Session-ID:/{sub(/^Session-ID:[[:space:]]*/,""); sub(/\r/,""); print; exit}' "<NOTES_BACKUP_PATH>" 2>/dev/null || true)
   if [ -n "$WSID" ] && [ "$WSID" != "<session-id>" ]; then
-    node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$WSID" --set-alert-phase frozen --clear-alert-armed-at
+    node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$WSID" --set-alert-phase closed --clear-alert-armed-at
   fi
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 

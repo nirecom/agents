@@ -287,7 +287,7 @@ JSEOF
 }
 
 run_g10() {
-    local label="G10: writeAlertState pending->frozen clears alert_armed_at"
+    local label="G10: writeAlertState pending->paused clears alert_armed_at"
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
@@ -295,10 +295,10 @@ run_g10() {
 const w = require('$WRITER_NODE');
 const sid = 'g10-sid';
 w.writeAlertState(sid, { alert_armed_at: '2026-06-01T00:00:00Z', alert_phase: 'pending' });
-const ok = w.writeAlertState(sid, { alert_phase: 'frozen' });
+const ok = w.writeAlertState(sid, { alert_phase: 'paused' });
 if (!ok) { console.error('writeAlertState returned false'); process.exit(2); }
 const st = w.readState(sid);
-if (st.alert.alert_phase !== 'frozen') { console.error('alert_phase wrong: '+st.alert.alert_phase); process.exit(3); }
+if (st.alert.alert_phase !== 'paused') { console.error('alert_phase wrong: '+st.alert.alert_phase); process.exit(3); }
 if (st.alert.alert_armed_at !== null) { console.error('alert_armed_at not cleared: '+st.alert.alert_armed_at); process.exit(4); }
 console.log('OK');
 " 2>&1)
@@ -353,7 +353,7 @@ console.log('OK');
 }
 
 run_g13() {
-    local label="G13: stale frozen state re-patch clears alert_armed_at (C1 scenario)"
+    local label="G13: stale paused state re-patch clears alert_armed_at (C1 scenario)"
     if [ ! -f "$WRITER_MODULE" ]; then skip "$label (writer source not implemented yet)"; return; fi
     local tmp out rc
     tmp="$(mktemp -d)"
@@ -363,21 +363,21 @@ const fs = require('fs');
 const path = require('path');
 const sid = 'g13-sid';
 const plansDir = process.env.WORKFLOW_PLANS_DIR;
-// Simulate stale state: alert_phase=frozen but alert_armed_at non-null (old code bug)
+// Simulate stale state: alert_phase=paused but alert_armed_at non-null (old code bug)
 const stale = {
     version: 1,
     session_id: sid,
     created_at: '2026-06-01T00:00:00Z',
     last_updated: '2026-06-01T00:00:00Z',
     layer1: { findings: [] },
-    alert: { alert_armed_at: '2026-06-01T00:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' },
+    alert: { alert_armed_at: '2026-06-01T00:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' },
     audit: {}
 };
 fs.writeFileSync(path.join(plansDir, sid + '-supervisor-state.json'), JSON.stringify(stale));
-const ok = w.writeAlertState(sid, { alert_phase: 'frozen' });
+const ok = w.writeAlertState(sid, { alert_phase: 'paused' });
 if (!ok) { console.error('writeAlertState returned false'); process.exit(2); }
 const st = w.readState(sid);
-if (st.alert.alert_phase !== 'frozen') { console.error('alert_phase wrong: '+st.alert.alert_phase); process.exit(3); }
+if (st.alert.alert_phase !== 'paused') { console.error('alert_phase wrong: '+st.alert.alert_phase); process.exit(3); }
 if (st.alert.alert_armed_at !== null) { console.error('alert_armed_at not cleared: '+st.alert.alert_armed_at); process.exit(4); }
 console.log('OK');
 " 2>&1)
