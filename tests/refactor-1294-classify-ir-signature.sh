@@ -109,7 +109,9 @@ get_targets_ir() {
     const ir = parse(process.argv[1]);
     const result = collectBashWriteTargets(ir);
     if (result && Array.isArray(result.targets) && result.targets.length > 0) {
-      process.stdout.write(result.targets.join(","));
+      // Post-#1294 targets are typed {resolveVia,path}; serialize each so the
+      // assertion pins the full contract shape, not a stringified [object Object].
+      process.stdout.write(result.targets.map(t => JSON.stringify(t)).join(","));
     } else {
       process.stdout.write("NONE");
     }
@@ -202,10 +204,10 @@ assert_eq "C5.23 cp targets (str, #1065)"     "HAS_TARGETS" "$(collect_write_tar
 
 # Target path precision: mi src.txt dst.txt must list dst.txt as the write target,
 # not src.txt. Fails pre-#1294 (mi not yet in patterns).
-assert_eq "C5.24 mi → dst.txt is write target (ir)" "dst.txt" "$(get_targets_ir 'mi src.txt dst.txt')"
+assert_eq "C5.24 mi → dst.txt is write target (ir)" '{"resolveVia":"ancestor","path":"dst.txt"}' "$(get_targets_ir 'mi src.txt dst.txt')"
 
 # ci alias: same precision check as C5.24 — destination must be the write target.
-assert_eq "C5.24b ci → dst.txt is write target (ir)" "dst.txt" "$(get_targets_ir 'ci src.txt dst.txt')"
+assert_eq "C5.24b ci → dst.txt is write target (ir)" '{"resolveVia":"ancestor","path":"dst.txt"}' "$(get_targets_ir 'ci src.txt dst.txt')"
 
 # Fail-closed: malformed/unterminated cmd → parseFailure IR → must return NO_TARGETS.
 # Malformed input must never produce spurious write targets that bypass the hook.
@@ -246,12 +248,16 @@ echo ""
 echo "=== Section: classify(ir|string) shim ==="
 
 assert_eq "classify IR echo read"        "read"  "$(classify_ir 'echo hello')"
-assert_eq "classify IR rm write"         "write" "$(classify_ir 'rm -rf /tmp/x')"
+# Post-#1294/#1296: classify() returns "read" for rm — its WRITE_PATTERNS entry
+# was retired; in-scope rm write BLOCKING now covered by isFileOpWriteIR fast-allow
+# (hook-level, verified at tests/feature-canary5-6git/commit2 L2 cases).
+assert_eq "classify IR rm read"          "read"  "$(classify_ir 'rm -rf /tmp/x')"
 # parseFailure → write (fail-closed contract)
 assert_eq "classify IR parseFailure"     "write" "$(classify_ir 'echo \"unterminated')"
 # String path still works (backward compat)
 assert_eq "classify str echo read"       "read"  "$(classify_str 'echo hello')"
-assert_eq "classify str rm write"        "write" "$(classify_str 'rm -rf /tmp/x')"
+# Post-#1294/#1296: rm classify() is "read" (see IR case above).
+assert_eq "classify str rm read"         "read"  "$(classify_str 'rm -rf /tmp/x')"
 
 # mi and ci aliases must be "write" post-#1294 (currently "read" — expected failure until implemented)
 assert_eq "classify IR mi write"         "write" "$(classify_ir 'mi src.txt dst.txt')"

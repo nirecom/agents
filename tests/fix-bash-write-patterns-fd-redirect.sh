@@ -23,9 +23,15 @@ assert_write() { local got; got="$(classify "$1")"; [ "$got" != "read" ] && pass
 assert_read  "ls 2>&1"               "R1: 2>&1 → read"
 assert_read  "echo err 1>&2"         "R2: 1>&2 → read"
 assert_read  "ls 2>&1 | head"        "R3: 2>&1 in pipeline → read"
-assert_write "echo x > file.txt"     "R4: > file → write"
-assert_write "make 2>err.log"        "R5: 2>file → write"
+# Post-#1296: POSIX write redirects (>, 2>, &>) now classify() as "read" — their
+# WRITE_PATTERNS entries were retired; write-detection moved to isPosixRedirWriteIR.
+# In-scope BLOCKING of these redirect writes is enforced at the hook (IR fast-allow)
+# and verified end-to-end by tests/feature-canary5-6git/commit2-green-retire.sh L2.
+# These rows pin the new classify="read" contract; the FD-to-FD false-positive fix
+# (#243, R1/R2/R3/R5b) is unaffected — those were already "read".
+assert_read  "echo x > file.txt"     "R4: > file → read (write-detection moved to IR)"
+assert_read  "make 2>err.log"        "R5: 2>file → read (write-detection moved to IR)"
 assert_read  "git status 2>/dev/null" "R5b: 2>/dev/null → read"
-assert_write "make &> build.log"     "R5c: &> combined → write"
+assert_read  "make &> build.log"     "R5c: &> combined → read (write-detection moved to IR)"
 
 echo ""; echo "Results: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ]

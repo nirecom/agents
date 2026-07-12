@@ -499,7 +499,7 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
 
     const sep = path.sep;
     for (const target of targets) {
-      const rawTarget = target.replace(/^["']|["']$/g, ""); // strip surrounding quotes
+      const rawTarget = String(target.path).replace(/^["']|["']$/g, ""); // strip surrounding quotes
       const tNorm = normalizeForCompare(rawTarget);
       if (!tNorm) return false;
       // Linked-worktree membership is decided FIRST: a registered linked
