@@ -8,6 +8,13 @@ Triage routes to the correct subset of steps; each step is idempotent and resuma
 
 `--from-session` resolves `<N>` from `${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}/<session-id>-intent.md` `## Issues` (canonical parser: `hooks/lib/parse-closes-issues.js`). Zero → skip; one → continue; multiple → run sequentially; missing intent → one-line warn + skip. The merge commit is resolved from the PR in Step ICF-B, not from a flag.
 
+### `--from-session` per-N dispatch obligations
+
+Enumerate every N in `closes_issues` via `parse-closes-issues.js` — the `## Issues` block lists all values, including subsumed siblings. For each N in insertion order:
+- **Open sub-issue gate (#417)**: before dispatching the pipeline, if the issue is OPEN, run `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "$OWNER_REPO" <N>`. On exit 1 (open sub-issues): emit `Warning: issue #<N> has open sub-issues — skipping close pipeline. Close sub-issues first.`, write a `skipped_open_sub_issues` outcome entry via `bin/issue-close-write-outcome.js`, and skip the pipeline for this N.
+- **All-N outcome entries (#695)**: after the pipeline completes or is skipped, ensure EVERY enumerated N has an outcome entry — including subsumed siblings that never ran a pipeline. Write missing entries with the appropriate skip state before the End report.
+- **Early-return outcome entries (#827)**: at any early-return path — `meta_pending_subs` early return, or a terminal-phase early return when triage reports the issue is already in its terminal state — write an outcome entry for that N before returning (states: `skipped_meta_pending_subs`, `already_closed`, `skipped_open_sub_issues`, as fits the branch).
+
 <!-- Phase 2 renumber (remove in follow-up cleanup commit): old Step A=ICF-A, A.5=ICF-B, B=ICF-C, G=ICF-D, G.5-1=ICF-E, G.5-2=ICF-F, G.5-3=ICF-G, H=ICF-H, J=ICF-I, K=ICF-J, L=ICF-K. Step E removed in #690. Pre-flight is a gate (no ICF-letter). -->
 
 ## Procedure
