@@ -134,74 +134,74 @@ run_g36() {
 }
 
 run_g37() {
-    require_source "$CLI" "G37: CLI --set-alert-phase frozen + --l2-armed-at -> exit 1" || return
+    require_source "$CLI" "G37: CLI --set-alert-phase paused + --l2-armed-at -> exit 1" || return
     local tmp rc
     tmp="$(mktemp -d)"
-    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g37-sid --set-alert-phase frozen --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
+    WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI_NODE" --session-id g37-sid --set-alert-phase paused --l2-armed-at "2026-06-06T12:00:00Z" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 1 ]; then
-        pass "G37: CLI --set-alert-phase frozen + --l2-armed-at -> exit 1"
+        pass "G37: CLI --set-alert-phase paused + --l2-armed-at -> exit 1"
     else
-        fail "G37: CLI --set-alert-phase frozen + --l2-armed-at -> exit 1 (rc=$rc)"
+        fail "G37: CLI --set-alert-phase paused + --l2-armed-at -> exit 1 (rc=$rc)"
     fi
 }
 
 # ─── Guard tests (G38–G43) ───────────────────────────────────────────────────
 
 run_g38() {
-    require_source "$HOOK" "G38: alert_phase=frozen + alert_armed_at non-null -> exit 0 no block" || return
+    require_source "$HOOK" "G38: alert_phase=paused + alert_armed_at non-null -> exit 0 no block" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state_raw "$tmp" "g38-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g38-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(echo '{"stop_hook_active":false,"session_id":"g38-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
-        pass "G38: alert_phase=frozen + alert_armed_at non-null -> exit 0 no block"
+        pass "G38: alert_phase=paused + alert_armed_at non-null -> exit 0 no block"
     else
-        fail "G38: alert_phase=frozen + alert_armed_at non-null -> exit 0 no block (rc=$rc, out=$out)"
+        fail "G38: alert_phase=paused + alert_armed_at non-null -> exit 0 no block (rc=$rc, out=$out)"
     fi
 }
 
 run_g39() {
-    require_source "$HOOK" "G39: alert_phase=frozen + final_report sentinel as last tool_use -> exit 0" || return
+    require_source "$HOOK" "G39: alert_phase=paused + final_report sentinel as last tool_use -> exit 0" || return
     local tmp out rc tp
     tmp="$(mktemp -d)"
     make_fixture "$tmp/t.jsonl" \
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_raw "$tmp" "g39-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g39-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g39-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
-        pass "G39: alert_phase=frozen + final_report sentinel as last tool_use -> exit 0"
+        pass "G39: alert_phase=paused + final_report sentinel as last tool_use -> exit 0"
     else
-        fail "G39: alert_phase=frozen + final_report sentinel as last tool_use -> exit 0 (rc=$rc, out=$out)"
+        fail "G39: alert_phase=paused + final_report sentinel as last tool_use -> exit 0 (rc=$rc, out=$out)"
     fi
 }
 
 run_g40() {
-    require_source "$HOOK" "G40: alert_phase=frozen + write_code sentinel as last tool_use -> exit 0" || return
+    require_source "$HOOK" "G40: alert_phase=paused + write_code sentinel as last tool_use -> exit 0" || return
     local tmp out rc tp
     tmp="$(mktemp -d)"
     make_fixture "$tmp/t.jsonl" \
         '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"test"}]}}' \
         '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_write_code_complete>>\""}}]}}'
     tp="$(node_path "$tmp/t.jsonl")"
-    seed_state_raw "$tmp" "g40-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'frozen' }"
+    seed_state_raw "$tmp" "g40-sid" "{ alert_armed_at: null, last_run_at: null, cumulative_severity: null, findings: [], alert_phase: 'paused' }"
     out=$(printf '{"stop_hook_active":false,"session_id":"g40-sid","transcript_path":"%s"}' "$tp" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ( [ -z "$out" ] || [ "$out" = "{}" ] ); then
-        pass "G40: alert_phase=frozen + write_code sentinel as last tool_use -> exit 0"
+        pass "G40: alert_phase=paused + write_code sentinel as last tool_use -> exit 0"
     else
-        fail "G40: alert_phase=frozen + write_code sentinel as last tool_use -> exit 0 (rc=$rc, out=$out)"
+        fail "G40: alert_phase=paused + write_code sentinel as last tool_use -> exit 0 (rc=$rc, out=$out)"
     fi
 }
 

@@ -86,6 +86,12 @@ function migrateLegacyState(state) {
   const now = new Date().toISOString();
   if (!state.created_at) state.created_at = now;
   if (!state.last_updated) state.last_updated = now;
+  // --- BEGIN temporary: alert_phase "frozen" → "paused" migration (#1166) ---
+  if (state.alert && typeof state.alert === "object" && !Array.isArray(state.alert) &&
+      state.alert.alert_phase === "frozen") {
+    state.alert.alert_phase = "paused";
+  }
+  // --- END temporary: alert_phase "frozen" → "paused" migration (#1166) ---
   return state;
 }
 
@@ -111,9 +117,9 @@ function ensureAlertScheduled(state, sessionId, finding = null) {
 
   if (!state.alert || typeof state.alert !== "object" || Array.isArray(state.alert)) return;
   const phase = state.alert.alert_phase;
-  if (phase === "done") return;
+  if (phase === "done" || phase === "closed") return;
 
-  if (phase !== "frozen") {
+  if (phase !== "paused") {
     const plansDir = getWorkflowPlansDir();
     const candidates = new Set();
     if (sessionId && SESSION_ID_RE.test(sessionId)) candidates.add(sessionId);
@@ -135,7 +141,7 @@ function ensureAlertScheduled(state, sessionId, finding = null) {
   if (state.alert.alert_armed_at == null) {
     state.alert.alert_armed_at = new Date().toISOString();
     if (phase == null) state.alert.alert_phase = "pending";
-    if (phase === "frozen") {
+    if (phase === "paused") {
       state.alert.alert_phase = "pending";
       state.alert.alert_retry_count = 0;
     }
@@ -144,7 +150,8 @@ function ensureAlertScheduled(state, sessionId, finding = null) {
 
 function validateAlertPhaseTransition(currentPhase, nextPhase) {
   if (currentPhase === nextPhase) return { ok: true, errors: [] };
-  if (currentPhase === "frozen" && nextPhase !== "pending") return { ok: false, errors: ["cannot transition from frozen: only frozen→pending (re-arm) is allowed"] };
+  if (currentPhase === "closed") return { ok: false, errors: ["cannot transition from closed: closed is a permanent terminal state"] };
+  if (currentPhase === "paused" && nextPhase !== "pending") return { ok: false, errors: ["cannot transition from paused: only paused→pending (re-arm) is allowed"] };
   if (currentPhase === "done" && nextPhase === "pending") return { ok: false, errors: ["cannot re-schedule alert after done"] };
   if (currentPhase === "done" && nextPhase === null) return { ok: false, errors: ["cannot revert done to null"] };
   return { ok: true, errors: [] };
@@ -298,7 +305,7 @@ function writeAlertState(sessionId, patch) {
     }
   }
   const effectivePhase = ("alert_phase" in patch) ? patch.alert_phase : currentPhase;
-  if ((effectivePhase === "done" || effectivePhase === "frozen") && "alert_armed_at" in patch && patch.alert_armed_at !== null) {
+  if ((effectivePhase === "done" || effectivePhase === "paused" || effectivePhase === "closed") && "alert_armed_at" in patch && patch.alert_armed_at !== null) {
     console.error("[supervisor-state-writer] cannot set alert_armed_at while alert_phase=" + effectivePhase);
     return false;
   }
@@ -331,9 +338,10 @@ function writeAlertState(sessionId, patch) {
   if ("alert_eligible_phase" in patch) alert.alert_eligible_phase = patch.alert_eligible_phase;
 
   // #905: terminal states must never carry a stale alert_armed_at.
-  if (effectivePhase === "done" || effectivePhase === "frozen") {
+  if (effectivePhase === "done" || effectivePhase === "paused" || effectivePhase === "closed") {
     alert.alert_armed_at = null;
     alert.alert_cause = null;
+    if (effectivePhase === "closed") alert.alert_eligible_phase = null;
   }
 
   // #912 C-HIGH-3: supervisor success path resets retry counter at writer SSOT.
@@ -370,15 +378,15 @@ function writeAlertState(sessionId, patch) {
 function incrementAlertRetryCount(sessionId) {
   const state = readStateOrInit(sessionId);
   const al = state.alert || {};
-  // #912 C-HIGH-2: both done and frozen are terminal — never increment from either.
+  // #912 C-HIGH-2: paused, done, and closed are all terminal for retry — never increment from any.
   // Without the done short-circuit, a stale retry_count on a done session could be
-  // incremented into frozen via a later C3 / cumSev=error path, corrupting terminal-state semantics.
-  if (al.alert_phase === "frozen" || al.alert_phase === "done") {
-    return { count: al.alert_retry_count || 0, frozen: al.alert_phase === "frozen" };
+  // incremented into paused via a later C3 / cumSev=error path, corrupting terminal-state semantics.
+  if (al.alert_phase === "paused" || al.alert_phase === "done" || al.alert_phase === "closed") {
+    return { count: al.alert_retry_count || 0, frozen: al.alert_phase === "paused" };
   }
   const nextCount = (al.alert_retry_count || 0) + 1;
   if (nextCount >= ALERT_RETRY_THRESHOLD) {
-    writeAlertState(sessionId, { alert_retry_count: nextCount, alert_phase: "frozen" });
+    writeAlertState(sessionId, { alert_retry_count: nextCount, alert_phase: "paused" });
     return { count: nextCount, frozen: true };
   }
   writeAlertState(sessionId, { alert_retry_count: nextCount });

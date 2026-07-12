@@ -10,7 +10,7 @@ const CATEGORIES = [
 
 const SEVERITY_VALUES = ["error", "warning", "notice"];
 
-const ALERT_PHASE_VALUES = [null, "pending", "done", "frozen"];
+const ALERT_PHASE_VALUES = [null, "pending", "done", "paused", "closed"];
 
 const ALERT_ELIGIBLE_PHASE_VALUES = [null, "post_final_report_window"];
 
@@ -137,7 +137,7 @@ function validate(obj) {
         }
       }
     }
-    if ("alert_phase" in al && !ALERT_PHASE_VALUES.includes(al.alert_phase)) errors.push("alert.alert_phase must be null, pending, done, or frozen");
+    if ("alert_phase" in al && !ALERT_PHASE_VALUES.includes(al.alert_phase)) errors.push("alert.alert_phase must be null, pending, done, paused, or closed");
     if ("alert_cause" in al && al.alert_cause !== null && typeof al.alert_cause !== "string") errors.push("alert.alert_cause must be null or a string");
     if ("alert_retry_count" in al && (!Number.isInteger(al.alert_retry_count) || al.alert_retry_count < 0)) errors.push("alert.alert_retry_count must be a non-negative integer");
     if ("findings_surfaced_at" in al && al.findings_surfaced_at !== null && typeof al.findings_surfaced_at !== "string") {

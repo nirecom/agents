@@ -33,8 +33,8 @@ function aggregateCategories(findings) {
 function recipeBlock(stateSessionId, stateFilePath) {
   return [
     "Fallback (if the supervisor subagent invocation fails with an API error):",
-    `  Run: bin/supervisor-write-alert --clear-l2-armed-at --set-l2-phase frozen --session-id ${stateSessionId}`,
-    "  This freezes the alert review for this session so the loop terminates. alert_phase=frozen is terminal.",
+    `  Run: bin/supervisor-write-alert --clear-l2-armed-at --set-l2-phase paused --session-id ${stateSessionId}`,
+    "  This freezes the alert review for this session so the loop terminates. alert_phase=paused freezes the retry loop for this session.",
     `  State file: ${stateFilePath}`,
   ];
 }

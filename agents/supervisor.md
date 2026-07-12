@@ -91,10 +91,10 @@ Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
 
 ### Error acknowledgement and resume path
 
-When the user has acknowledged and resolved a blocking error (cumSev=error), the session is resumable — `alert_phase=frozen` is "resumable suspended", not terminal. Resume protocol:
-1. Set `alert_phase=frozen` to suspend the current block: `bin/supervisor-write-alert --set-alert-phase frozen --session-id <effective-state-sid>`.
-2. New findings appended afterward re-arm alert mode when severity >= warning (frozen→pending re-arm resets `alert_retry_count`).
-3. The session continues; the supervisor-guard branches for cumSev=error and alert_armed_at no longer block while `alert_phase=frozen`.
+When the user has acknowledged and resolved a blocking error (cumSev=error), the session is resumable — `alert_phase=paused` is "resumable suspended", not terminal. Resume protocol:
+1. Set `alert_phase=paused` to suspend the current block: `bin/supervisor-write-alert --set-alert-phase paused --session-id <effective-state-sid>`.
+2. New findings appended afterward re-arm alert mode when severity >= warning (paused→pending re-arm resets `alert_retry_count`).
+3. The session continues; the supervisor-guard branches for cumSev=error and alert_armed_at no longer block while `alert_phase=paused`.
 
 ## Constraints
 

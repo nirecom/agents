@@ -96,7 +96,11 @@ if (require.main === module) {
     const phase = al.alert_phase;
     const isCompleted =
       phase === "done" ||
+      phase === "paused" ||
+      phase === "closed" ||
+      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
       phase === "frozen" ||
+      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       (phase === "pending" && al.last_run_at != null);
     if (!isCompleted) process.exit(0);
 

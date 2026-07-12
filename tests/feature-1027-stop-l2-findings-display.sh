@@ -230,21 +230,21 @@ run_d9() {
     fi
 }
 
-# --- D10 (Fire D): l2_phase=frozen + warning finding -> additionalContext + marks surfaced ---
+# --- D10 (Fire D): alert_phase=paused + warning finding -> additionalContext + marks surfaced ---
 run_d10() {
-    require_source "$HOOK" "D10: frozen + warning -> additionalContext + marks surfaced" || return
+    require_source "$HOOK" "D10: paused + warning -> additionalContext + marks surfaced" || return
     local tmp out rc surfaced
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "d10-sid" "{ alert_phase: 'frozen', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'warn-frozen', reporter:'rep', timestamp:'2026-06-21T01:00:00Z' }] }"
+    seed_state "$tmp" "d10-sid" "{ alert_phase: 'paused', last_run_at: '2026-06-21T01:00:00Z', findings_surfaced_at: null, findings: [{ categories:['code'], severity:'warning', detail:'warn-paused', reporter:'rep', timestamp:'2026-06-21T01:00:00Z' }] }"
     out=$(echo '{"stop_hook_active":false,"session_id":"d10-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 10 node "$HOOK" 2>/dev/null)
     rc=$?
     surfaced="$(read_alert_field "$tmp" "d10-sid" "findings_surfaced_at")"
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && echo "$out" | grep -qi "additionalContext" && [ "$surfaced" != "NULL" ] && [ -n "$surfaced" ]; then
-        pass "D10 (Fire D): frozen + warning -> additionalContext + findings_surfaced_at set"
+        pass "D10 (Fire D): paused + warning -> additionalContext + findings_surfaced_at set"
     else
-        fail "D10: frozen+warning (rc=$rc, surfaced=$surfaced, out=$out)"
+        fail "D10: paused+warning (rc=$rc, surfaced=$surfaced, out=$out)"
     fi
 }
 
