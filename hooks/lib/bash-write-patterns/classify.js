@@ -2,7 +2,7 @@
 
 const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("../strip-quoted-args");
 const { isStrictSentinel } = require("../sentinel-patterns");
-const { parse, isOsTempPath } = require("../command-ir");
+const { parse } = require("../command-ir");
 const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS } = require("./patterns");
 
 // Returns true when cmd invokes a known dispatcher via bash/sh/zsh/dash.
@@ -92,23 +92,6 @@ function classify(cmd) {
       if (subCmd && subCmd !== "reset") suppressedPatterns.add("git-reset");
     }
 
-    // IR temp-path redirect gate: if ALL write redirects go to OS temp paths,
-    // and the command itself (ignoring redirects) has no other write signals,
-    // treat as read (temp-path redirects are non-persistent).
-    if (ir.redirects.length > 0) {
-      const writeRedirs = ir.redirects.filter((r) => r.op !== "<" && r.op !== "<<<");
-      if (writeRedirs.length > 0 && writeRedirs.every((r) => isOsTempPath(r.target))) {
-        // All write redirects go to temp paths. Check if command itself has write patterns
-        // by testing WRITE_PATTERNS (skipping the posix-redirect pattern at index 0).
-        const strippedForGate = stripQuotedArgs(cmd);
-        const hasCommandWrite = WRITE_PATTERNS.slice(1).some((p) => {
-          if (suppressedPatterns.has(p.name)) return false;
-          const scanned = STRIP_KINDS.has(p.kind) ? strippedForGate : cmd;
-          return p.regex.test(scanned);
-        });
-        if (!hasCommandWrite) return "read";
-      }
-    }
     // --- end IR-based signal suppressors ---
 
     // Existing logic (unchanged from original classify()):
