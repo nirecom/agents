@@ -1,0 +1,59 @@
+#!/usr/bin/env node
+"use strict";
+// CLI: record a skip-verifier verdict (confirm or veto) for a speculative skip.
+// Usage: record-skip-verdict --session <sid> --target <outline|detail> --verdict <confirm|veto> --reason <text>
+// Exits 0 on success, 1 on validation error.
+// stdout: RECORDED=<target> verdict=<confirm|veto>
+
+const path = require("path");
+const { parseArgs } = require("util");
+
+const { values } = parseArgs({
+  options: {
+    session:  { type: "string" },
+    target:   { type: "string" },
+    verdict:  { type: "string" },
+    reason:   { type: "string" },
+  },
+  strict: true,
+  allowPositionals: false,
+});
+
+const sid     = values.session;
+const target  = values.target;
+const verdict = values.verdict;
+const reason  = values.reason;
+
+if (!sid || !target || !verdict) {
+  process.stderr.write("record-skip-verdict: --session, --target, --verdict are required\n");
+  process.exit(1);
+}
+if (target !== "outline" && target !== "detail") {
+  process.stderr.write(`record-skip-verdict: --target must be 'outline' or 'detail', got '${target}'\n`);
+  process.exit(1);
+}
+if (verdict !== "confirm" && verdict !== "veto") {
+  process.stderr.write(`record-skip-verdict: --verdict must be 'confirm' or 'veto' (pending not allowed via CLI), got '${verdict}'\n`);
+  process.exit(1);
+}
+
+const workflowStatePath = path.join(__dirname, "../../hooks/lib/workflow-state");
+const { recordSkipVerdict } = require(workflowStatePath);
+
+try {
+  recordSkipVerdict(sid, target, verdict, `record-skip-verdict-cli:${reason || "no-reason"}`);
+} catch (e) {
+  process.stderr.write(`record-skip-verdict: failed to record: ${e.message}\n`);
+  process.exit(1);
+}
+
+// Write-back verify
+const { readSkipVerdict } = require(workflowStatePath);
+const stored = readSkipVerdict(sid, target);
+if (!stored || stored.verdict !== verdict) {
+  process.stderr.write(`record-skip-verdict: write-back verification failed: stored=${JSON.stringify(stored)}\n`);
+  process.exit(1);
+}
+
+process.stdout.write(`RECORDED=${target} verdict=${verdict}\n`);
+process.exit(0);
