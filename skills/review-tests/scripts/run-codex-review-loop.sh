@@ -33,25 +33,7 @@ args=(
   --round "$ROUND_NUMBER"
 )
 # Session-bound commit-target resolution (#1316): never trust CWD, never select main worktree.
-# Use the script's own path to locate state-io.js so tests can stub AGENTS_CONFIG_DIR freely.
-_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && { pwd -W 2>/dev/null || pwd; })"
-_REAL_AGENTS_DIR="$(cd "$_SELF_DIR/../../.." && { pwd -W 2>/dev/null || pwd; })"
-COMMIT_TARGET="$(node -e "
-try {
-  const {readState}=require(process.argv[1]);
-  const sid=process.env.SESSION_ID||process.env.CLAUDE_SESSION_ID||'';
-  if(!sid){process.stdout.write('');process.exit(0);}
-  const st=readState(sid);
-  if(st===null){process.stdout.write('NOSTATE');process.exit(0);}
-  if(!st.cwd){process.stdout.write('');process.exit(0);}
-  const{execFileSync}=require('child_process');
-  const gd=execFileSync('git',['-C',st.cwd,'rev-parse','--git-dir'],{encoding:'utf8'}).trim();
-  const gc=execFileSync('git',['-C',st.cwd,'rev-parse','--git-common-dir'],{encoding:'utf8'}).trim();
-  const p=require('path');
-  if(p.resolve(gd)===p.resolve(gc)){process.stdout.write('');process.exit(0);}
-  process.stdout.write(st.cwd);
-} catch(e){process.stdout.write('');}
-" -- "$_REAL_AGENTS_DIR/hooks/lib/workflow-state/state-io.js" 2>/dev/null)"
+COMMIT_TARGET="$("$AGENTS_CONFIG_DIR/bin/resolve-worktree-path")"
 if [[ "$COMMIT_TARGET" == "NOSTATE" ]]; then
   # No state file: test fixture or first-run scenario. Fall back to CWD.
   COMMIT_TARGET="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
