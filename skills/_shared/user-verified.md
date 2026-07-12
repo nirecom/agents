@@ -14,6 +14,15 @@ because the user is approving the merge of a specific PR, not an abstract diff.
 
 ## Preflight — risk-category gate (#833)
 
+### RUN_E2E gate (precedes all modes)
+
+Resolve E2E readiness first with the sanctioned reader `confirm-off RUN_E2E off` via the inline command: `OUT=$(bash "$AGENTS_CONFIG_DIR/bin/confirm-off" RUN_E2E off) || true`.
+
+- `OFF` (RUN_E2E off — the default; unset counts as off) → the E2E environment is not ready; do not raise any `AskUserQuestion`; run `check-verification-gate.sh` once as a classifier only and log each matched category to `WORKTREE_NOTES.md ## Unverified Categories` with the distinct annotation `skipped: RUN_E2E=off (E2E env not ready)`; then proceed to Protocol, skipping the Interactive / Non-interactive / Failure branches below.
+- In this off path, if the classifier exits 2 or 3 (classifier failed): still raise no `AskUserQuestion`; emit one stderr warning and skip the category trace (skipping the log entry); then proceed to Protocol. This keeps the off path total across every classifier exit — no ask can ever occur when RUN_E2E=off.
+- `ON` (RUN_E2E on) → the E2E environment is ready; run the preflight below unchanged.
+- `ERROR` (config read failed) → fail-safe to the on path; run the preflight below unchanged; never silence the gate on an ambiguous read.
+
 Before emitting the sentinel, run:
 
     bash "$AGENTS_CONFIG_DIR/bin/check-verification-gate.sh"
@@ -72,3 +81,4 @@ the hook is the single source of truth for the dialog's surrounding text.
   stdout (cat/grep output) do not trigger the hook.
 - Preflight runs once per emission path. /worktree-end Steps WE-4b, WE-7, and WE-8 all inherit it via this shared protocol — no per-skill duplication.
 - Unverified categories are persisted to WORKTREE_NOTES.md ## Unverified Categories so /worktree-end can show them in the final summary.
+- When `RUN_E2E=off` the preflight raises no ask and matched categories are logged with the `skipped: RUN_E2E=off` annotation; on classifier error the log is skipped and only a stderr warning is emitted.
