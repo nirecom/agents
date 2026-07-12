@@ -29,7 +29,7 @@ Audit produces a single verdict (`CONTINUE` / `WARN` / `BLOCK`) recorded in `sta
 
 **Lifecycle (two-phase):** *arm* — Stop hook detects trigger, writes `audit_phase=pending` + `audit_armed_at` + `audit_cause`, then blocks with a prompt to invoke the audit agent. *surface* — the agent runs, writes `audit_phase=done` + `audit_verdict`; the next Stop event reads the verdict, surfaces it through `arbitrate()`, then clears `audit_phase=null` so the next stage boundary can re-arm. Anti-thrash: `incrementAuditRetryCount` auto-freezes the session after `AUDIT_RETRY_THRESHOLD` (2) consecutive failures. Alert and audit freeze independently.
 
-**Why:** Layer 1 is a passive observation layer. It does not intervene in the workflow or block any action. Three reporting paths feed findings into the state file: (A) hooks auto-report block events; (B) skills self-report fallback/degradation paths; (C) session-close runs a retrospective pass before the Final Report. Alert mode is an active review: the `supervisor-guard.js` Stop hook fires a `decision:block` when findings are present and `alert_phase` is not `done`/`frozen`, invoking the alert supervisor. At most one alert review runs per session. Audit mode triggers on stage boundaries and severity-threshold, providing cross-stage strategic oversight.
+**Why:** Layer 1 is a passive observation layer. It does not intervene in the workflow or block any action. Three reporting paths feed findings into the state file: (A) hooks auto-report block events; (B) skills self-report fallback/degradation paths; (C) session-close runs a retrospective pass before the Final Report. Alert mode is an active review: the `supervisor-guard.js` Stop hook fires a `decision:block` when findings are present and `alert_phase` is not `done`/`paused`/`closed`, invoking the alert supervisor. At most one alert review runs per session. Audit mode triggers on stage boundaries and severity-threshold, providing cross-stage strategic oversight.
 
 **Supervisor vs codex differentiation:** The supervisor does NOT re-adjudicate technical correctness — codex (a different provider) handles that. The supervisor reads codex verdict as input and assesses intent/trajectory alignment using information codex does not have access to (plan artifacts, session history, rules).
 
@@ -80,12 +80,12 @@ The file is directly inspectable for debugging.
 
 | Field | Type | Description |
 |---|---|---|
-| `alert_phase` | `null`/`"pending"`/`"done"`/`"frozen"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, frozen=resumable suspended (new findings with severity >= warning re-arm alert mode from this state; `frozen→pending` re-arm resets `alert_retry_count`) |
-| `alert_armed_at` | ISO string or null | Timestamp when alert was armed; null when phase is done/frozen |
+| `alert_phase` | `null`/`"pending"`/`"done"`/`"paused"`/`"closed"` | Lifecycle SSOT: null=never scheduled, pending=armed, done=ran this session, paused=resumable suspended (new findings with severity >= warning re-arm alert mode from this state; `paused→pending` re-arm resets `alert_retry_count`), closed=permanent session-close terminal (re-arm forbidden) |
+| `alert_armed_at` | ISO string or null | Timestamp when alert was armed; null when phase is done/paused/closed |
 | `alert_cause` | string or null | Trigger label: `"C1 sentinel hang"`, `"C2 scheduled-review"`, `"C3 worktree-off proposal"`, or `"C3 workflow-off proposal"`; co-cleared when `alert_armed_at` is nulled |
 | `last_run_at` | ISO string or null | Timestamp of last alert execution |
 | `cumulative_severity` | string or null | Highest severity across alert findings |
-| `alert_retry_count` | integer | Consecutive failure count; frozen after `ALERT_RETRY_THRESHOLD` (2) |
+| `alert_retry_count` | integer | Consecutive failure count; paused after `ALERT_RETRY_THRESHOLD` (2) |
 | `findings_surfaced_at` | ISO string or null | When findings were surfaced in Final Report |
 | `alert_eligible_phase` | string or null | `"post_final_report_window"` when late-phase eligibility set (#997) |
 | `findings[]` | Finding[] | Alert findings; each finding carries an optional `status` field (`"draft"` / `"confirmed"`); `idx` is a stable integer key |
@@ -102,7 +102,7 @@ The file is directly inspectable for debugging.
 | `audit_retry_count` | integer | Consecutive failure count; frozen after `AUDIT_RETRY_THRESHOLD` (2) |
 | `findings[]` | Finding[] | Audit findings |
 
-**Alert lifecycle and gate-yield:** `writeAlertState()` refuses to set `alert_armed_at` when `alert_phase` is `done` or `frozen` (at-most-1 guarantee). `ensureAlertScheduled()` short-circuits only when `alert_phase=done` — `frozen` is a resumable suspended state and re-arms on the next finding with severity >= warning (resetting `alert_phase=pending` and `alert_retry_count=0`). When alert is pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete` and yields so the Stop hook can fire alert first.
+**Alert lifecycle and gate-yield:** `writeAlertState()` refuses to set `alert_armed_at` when `alert_phase` is `done`, `paused`, or `closed` (at-most-1 guarantee). `ensureAlertScheduled()` short-circuits when `alert_phase` is `done` or `closed` — `paused` is a resumable suspended state and re-arms on the next finding with severity >= warning (resetting `alert_phase=pending` and `alert_retry_count=0`), while `closed` is a permanent session-close terminal that never re-arms. When alert is pending and session-close reaches SC-6 (Final Report), it emits `pre_final_report_gate_complete` and yields so the Stop hook can fire alert first.
 
 **Alert three-phase output protocol (#929):**
 

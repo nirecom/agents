@@ -223,19 +223,19 @@ run_b_l2phase_done() {
     fi
 }
 
-run_b_l2phase_frozen() {
-    require_source "$HOOK" "B-l2phase-frozen: l2ArmedAt set but alert_phase=frozen exits 0" || return
+run_b_l2phase_paused() {
+    require_source "$HOOK" "B-l2phase-paused: l2ArmedAt set but alert_phase=paused exits 0" || return
     local tmp out rc
     tmp="$(mktemp -d)"
-    seed_state "$tmp" "l2frozen-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', alert_phase: 'frozen', last_run_at: null, cumulative_severity: null, findings: [] }"
-    out=$(echo '{"stop_hook_active":false,"session_id":"l2frozen-sid","transcript_path":""}' \
+    seed_state "$tmp" "l2paused-sid" "{ alert_armed_at: '2026-06-06T12:00:00Z', alert_phase: 'paused', last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(echo '{"stop_hook_active":false,"session_id":"l2paused-sid","transcript_path":""}' \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"decision":"block"'; then
-        pass "B-l2phase-frozen: l2ArmedAt set but alert_phase=frozen exits 0 (no block)"
+        pass "B-l2phase-paused: l2ArmedAt set but alert_phase=paused exits 0 (no block)"
     else
-        fail "B-l2phase-frozen: l2ArmedAt set but alert_phase=frozen exits 0 (rc=$rc, out=$out)"
+        fail "B-l2phase-paused: l2ArmedAt set but alert_phase=paused exits 0 (rc=$rc, out=$out)"
     fi
 }
 
@@ -274,7 +274,7 @@ run_b4_notice
 run_b5_null_state
 run_b1_stop_hook_active
 run_b_l2phase_done
-run_b_l2phase_frozen
+run_b_l2phase_paused
 run_b_workflow_off
 
 echo ""

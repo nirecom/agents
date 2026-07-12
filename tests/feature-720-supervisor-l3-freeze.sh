@@ -94,12 +94,12 @@ invoke_l3() {
 }
 
 run_f1() {
-    require_source "$CLI_L2" "F1: L2 retry threshold → alert_phase=frozen" || return
+    require_source "$CLI_L2" "F1: L2 retry threshold → alert_phase=paused" || return
     local tmp sid threshold val i
     tmp="$(mktemp -d)"; sid="f1sid"
     threshold=$(get_threshold l2)
     if [ -z "$threshold" ] || ! [[ "$threshold" =~ ^[0-9]+$ ]]; then
-        rm -rf "$tmp"; skip "F1: L2 retry threshold → alert_phase=frozen (ALERT_RETRY_THRESHOLD not numeric)"; return
+        rm -rf "$tmp"; skip "F1: L2 retry threshold → alert_phase=paused (ALERT_RETRY_THRESHOLD not numeric)"; return
     fi
     # Arm first
     invoke_l2 "$tmp" --l2-armed-at "2026-06-06T12:00:00Z" --session-id "$sid"
@@ -111,10 +111,10 @@ run_f1() {
     done
     val=$(read_field "$tmp" "$sid" "alert.alert_phase")
     rm -rf "$tmp"
-    if [ "$val" = "\"frozen\"" ]; then
-        pass "F1: L2 retry threshold → alert_phase=frozen"
+    if [ "$val" = "\"paused\"" ]; then
+        pass "F1: L2 retry threshold → alert_phase=paused"
     else
-        fail "F1: L2 retry threshold → alert_phase=frozen (val=$val)"
+        fail "F1: L2 retry threshold → alert_phase=paused (val=$val)"
     fi
 }
 
@@ -143,22 +143,22 @@ run_f2() {
 }
 
 run_f3() {
-    require_source "$COLLECT_L3_FILE" "F3: L2 frozen, L3 not frozen → L3 can still arm" || return
+    require_source "$COLLECT_L3_FILE" "F3: L2 paused, L3 not frozen → L3 can still arm" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$COLLECT_L3_NODE');
 const transcript = [{ role: 'assistant', content: '<<WORKFLOW_CONFIRM_INTENT: scope>>' }];
 const state = { version: '1', session_id: 't', layer1: { findings: [] },
-  alert: { alert_phase: 'frozen' }, audit: {} };
+  alert: { alert_phase: 'paused' }, audit: {} };
 const r = m.collectAuditCandidates(transcript, state);
 if (r.shouldArm !== true) { console.error('shouldArm='+r.shouldArm); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "F3: L2 frozen, L3 not frozen → L3 can still arm"
+        pass "F3: L2 paused, L3 not frozen → L3 can still arm"
     else
-        fail "F3: L2 frozen, L3 not frozen → L3 can still arm (rc=$rc, out=$out)"
+        fail "F3: L2 paused, L3 not frozen → L3 can still arm (rc=$rc, out=$out)"
     fi
 }
 
@@ -193,24 +193,24 @@ console.log(after.alert && after.alert.alert_armed_at ? 'ARMED' : 'NOT_ARMED');
 }
 
 run_f5() {
-    require_source "$COLLECT_L3_FILE" "F5: both frozen → both phases stay frozen" || return
-    # When both layers are already frozen, collect-audit-triggers must NOT re-arm L3,
-    # and the writer must not transition l2 out of frozen on its own.
+    require_source "$COLLECT_L3_FILE" "F5: L2 paused + L3 frozen → L3 stays frozen (not re-armed)" || return
+    # When L2 is paused and L3 is already frozen, collect-audit-triggers must NOT re-arm L3.
+    # audit_phase=frozen is out of #1166 scope (#1381) and stays as-is; only the alert side renamed.
     local out rc
     out=$(run_with_timeout 5 node -e "
 const m = require('$COLLECT_L3_NODE');
 const transcript = [{ role: 'assistant', content: '<<WORKFLOW_CONFIRM_INTENT: scope>>' }];
 const state = { version: '1', session_id: 't', layer1: { findings: [] },
-  alert: { alert_phase: 'frozen' }, audit: { audit_phase: 'frozen' } };
+  alert: { alert_phase: 'paused' }, audit: { audit_phase: 'frozen' } };
 const r = m.collectAuditCandidates(transcript, state);
 if (r.shouldArm !== false) { console.error('expected shouldArm=false, got '+r.shouldArm); process.exit(2); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "F5: both frozen → both phases stay frozen"
+        pass "F5: L2 paused + L3 frozen → L3 stays frozen (not re-armed)"
     else
-        fail "F5: both frozen → both phases stay frozen (rc=$rc, out=$out)"
+        fail "F5: L2 paused + L3 frozen → L3 stays frozen (not re-armed) (rc=$rc, out=$out)"
     fi
 }
 
