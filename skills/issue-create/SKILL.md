@@ -146,6 +146,19 @@ atomic write internally.
 - Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
   passed via `--label`. `type:*` is rejected to avoid confusing
   `/issue-close-finalize` routing.
+- **model label (auto-detect, Phase 4)**: Before dispatching in Phase 4, read the system prompt injection "You are powered by the model named X" to identify the current model and add the corresponding `model:*` label.
+  - Injection present + table match → add `model:<matched>`.
+  - Injection present + no table match → add `model:others`.
+  - Injection absent → skip all `model:*` labels (do not add any `model:*` label).
+
+  | System-prompt model name contains | Label |
+  |---|---|
+  | `fable` | `model:fable` |
+  | `opus` | `model:opus` |
+  | `sonnet` | `model:sonnet` |
+  | `ds4` or `deepseek` | `model:ds4` |
+
+  Always add exactly one `model:*` label (or zero when injection is absent).
 
 ## Behavioral notes
 
