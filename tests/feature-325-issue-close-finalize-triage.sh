@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: bin/github-issues/issue-close-finalize-triage.sh, bin/github-issues/issue-close-triage-lib.sh, bin/github-issues/issue-close-triage.sh
-# Tags: issue-close, stage, workflow, finalize, triage
+# Tags: issue-close, stage, workflow, finalize, triage, scope:issue-specific
 # Tests for issue #325 — /issue-close-finalize skill triage script.
 #
 # Phase 2 (`/issue-close-finalize`) runs from main worktree AFTER PR merge.
@@ -141,12 +141,15 @@ else
 fi
 teardown_tmp
 
-# --- FT4: CLOSED + appended → resume_j (J,K)
+# --- FT4: CLOSED + appended → resume_j (G,J,K)
 # #690: Step E removed.
+# #1395: Step G added — resume_j must run parent-body-update so the meta-cascade
+# fires (ICF-D/E). Without G, a meta parent never re-attempts close after the
+# last sub-issue is appended-closed.
 setup_tmp
 run_triage closed_with_appended_sentinel
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
-    pass "FT4: CLOSED:appended → resume_j (J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] && [ "$T_NEXT_STEPS" = "G,J,K" ]; then
+    pass "FT4: CLOSED:appended → resume_j (G,J,K)"
 else
     fail "FT4: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -175,7 +178,10 @@ else
 fi
 teardown_tmp
 
-# --- FT6: CLOSED + pending + history present → stuck_sentinel_only (J,K)
+# --- FT6: CLOSED + pending + history present → stuck_sentinel_only (G,J,K)
+# #1395: Step G added — stuck_sentinel_only must run parent-body-update so the
+# meta-cascade fires (ICF-D/E). Without G, a stuck close leaves a meta parent
+# permanently OPEN.
 setup_tmp
 cat >> "$TMP/docs/history.md" <<'EOF'
 
@@ -184,21 +190,22 @@ Background: x
 Changes: y
 EOF
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
-    pass "FT6: CLOSED:pending + history → stuck_sentinel_only (J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "G,J,K" ]; then
+    pass "FT6: CLOSED:pending + history → stuck_sentinel_only (G,J,K)"
 else
     fail "FT6: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
 teardown_tmp
 
-# --- FT7: CLOSED + pending + no history → stuck_sentinel_only (J,K)
+# --- FT7: CLOSED + pending + no history → stuck_sentinel_only (G,J,K)
 # #690: stuck_append_sentinel action removed; triage routes all CLOSED:pending to
-# stuck_sentinel_only (J,K) regardless of history.md state.
+# stuck_sentinel_only regardless of history.md state.
+# #1395: Step G added — see FT6.
 setup_tmp
 # history.md intentionally empty
 run_triage closed_with_pending
-if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "J,K" ]; then
-    pass "FT7: CLOSED:pending + no history → stuck_sentinel_only (J,K)"
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] && [ "$T_NEXT_STEPS" = "G,J,K" ]; then
+    pass "FT7: CLOSED:pending + no history → stuck_sentinel_only (G,J,K)"
 else
     fail "FT7: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS"
 fi
@@ -354,6 +361,56 @@ if [ "$RC" -ne 0 ]; then
     pass "FT19: OPEN + meta + repo view fails → error fall-through"
 else
     fail "FT19: rc=$RC stderr=$FT19_ERR"
+fi
+teardown_tmp
+
+# --- FT20: CLOSED + appended → resume_j must carry Step G (#1395) ---------
+# Independent documentation test: the meta-cascade requires Step G
+# (parent-body-update) in NEXT_STEPS on the resume_j path. This asserts the
+# full G,J,K set specifically so a future edit that drops G is caught even if
+# FT4 is refactored.
+setup_tmp
+run_triage closed_with_appended_sentinel
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "resume_j" ] \
+    && [ "$T_NEXT_STEPS" = "G,J,K" ] \
+    && [[ ",${T_NEXT_STEPS}," == *",G,"* ]]; then
+    pass "FT20: resume_j carries Step G for meta-cascade (G,J,K) (#1395)"
+else
+    fail "FT20: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS (Step G missing → cascade cannot fire)"
+fi
+teardown_tmp
+
+# --- FT21: CLOSED:(none) + open sub-issue → auto_close_path warns (#377) ---
+# When an already-CLOSED issue has open sub-issues, auto_close_path proceeds
+# (close is moot per #366) but triage must emit a stderr warning so the user
+# knows children remain open. RED before #377: no warning is printed today.
+setup_tmp
+FT21_ERR_FILE="$TMP/ft21_err"
+GH_MOCK_SCENARIO=closed_no_sentinel_open_subissue \
+    run_with_timeout 15 bash "$FINALIZE_TRIAGE_SCRIPT" 42 2>"$FT21_ERR_FILE" >/dev/null
+FT21_RC=$?
+FT21_ERR=$(cat "$FT21_ERR_FILE")
+if [ "$FT21_RC" -eq 0 ] && echo "$FT21_ERR" | grep -qi "open sub-issue"; then
+    pass "FT21: CLOSED:(none) + open sub-issue → stderr warns about open sub-issues (#377)"
+else
+    fail "FT21: rc=$FT21_RC stderr='$FT21_ERR' (expected warning mentioning open sub-issues)"
+fi
+teardown_tmp
+
+# --- FT22: CLOSED:pending → Step G present enables meta-cascade (#1395) ----
+# The #1395 regression: a stuck (CLOSED:pending) close of the last sub-issue
+# must run Step G so run-initial.sh triggers ICF-D/E (parent-body-update +
+# G.5 prepare). G in NEXT_STEPS is the mechanical precondition — run-initial.sh
+# gates both ICF-D (Step 5) and ICF-E (Step 6) on `,G,` membership.
+# RED before #1395: NEXT_STEPS="J,K" has no G, so the cascade never fires.
+setup_tmp
+GH_META_LABEL=true run_triage closed_with_pending
+if [ "$T_RC" -eq 0 ] && [ "$T_ACTION" = "stuck_sentinel_only" ] \
+    && [ "$T_NEXT_STEPS" = "G,J,K" ] \
+    && [[ ",${T_NEXT_STEPS}," == *",G,"* ]]; then
+    pass "FT22: CLOSED:pending → G in NEXT_STEPS drives ICF-D/E cascade (G,J,K) (#1395)"
+else
+    fail "FT22: rc=$T_RC action=$T_ACTION next=$T_NEXT_STEPS (Step G required for meta-cascade)"
 fi
 teardown_tmp
 
