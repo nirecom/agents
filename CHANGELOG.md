@@ -419,3 +419,7 @@ Changes: Fixed: `/worktree-end` and `/sweep-branches` no longer fail to force-de
 ### FEATURE: PR #1397 (2026-07-12)
 Background: feat(#1392,#1352,#544,#1353): speculative-skip engine, scope-change detection, judgment rename, settings auto-allow
 Changes: Speculative-skip verification: outline/detail skips now launch a background skip-verifier check; `next-step` blocks progress if the verifier hasn't returned and resets the plan stage if it vetoes.;Scope change detection in detail planning: class-member disposition changes, phase splits, or approach pivots relative to the outline now surface a warning before detail plan confirmation.;`WORKFLOW_OUTLINE_NOT_NEEDED` / `WORKFLOW_DETAIL_NOT_NEEDED` sentinels are now auto-allowed (no approval prompt required).
+
+### FEATURE: PR #1403 (2026-07-12)
+Background: feat(#1396): add severity/model classification labels; /issue-create auto-attaches model:* from system-prompt injection
+Changes: `/issue-create` now auto-classifies `severity:high` (fatal: workflow stops, abort, loop, security hole) or `severity:low` (cosmetic/deferrable) based on issue content; no label = normal severity;New `model:fable` / `model:opus` / `model:sonnet` / `model:ds4` / `model:others` labels auto-attached by `/issue-create` based on which model is running the current session
