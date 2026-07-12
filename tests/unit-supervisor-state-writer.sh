@@ -145,31 +145,33 @@ console.log('OK');
 }
 
 # W4 — After ALERT_RETRY_THRESHOLD (2) calls, returns { count: threshold, frozen: true }
-#       persisted state has alert_phase: frozen, alert_armed_at: null
+#       persisted state has alert_phase: paused, alert_armed_at: null.
+#       NOTE: the incrementAlertRetryCount return field `frozen:` name is unchanged (#1166);
+#       only the persisted alert_phase value renamed frozen->paused.
 run_w4() {
-    require_increment_fn "W4: at threshold returns {count:T, frozen:true}, alert_phase=frozen, alert_armed_at=null" || return
+    require_increment_fn "W4: at threshold returns {count:T, frozen:true}, alert_phase=paused, alert_armed_at=null" || return
     local tmp out rc
     tmp="$(mktemp -d)"
     out=$(WORKFLOW_PLANS_DIR="$tmp" ALERT_RETRY_THRESHOLD="$ALERT_RETRY_THRESHOLD" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const T = parseInt(process.env.ALERT_RETRY_THRESHOLD, 10);
 let last = null;
-// Seed alert_armed_at so we can verify it gets cleared on freeze
+// Seed alert_armed_at so we can verify it gets cleared on pause
 w.writeAlertState('w4-sid', { alert_armed_at: '2026-06-06T12:00:00Z' });
 for (let i = 0; i < T; i++) last = w.incrementAlertRetryCount('w4-sid');
 if (!last || last.count !== T) { console.error('count: '+JSON.stringify(last)); process.exit(2); }
 if (last.frozen !== true) { console.error('frozen: '+JSON.stringify(last)); process.exit(3); }
 const st = w.readState('w4-sid');
-if (!st || st.alert.alert_phase !== 'frozen') { console.error('phase: '+JSON.stringify(st && st.alert)); process.exit(4); }
+if (!st || st.alert.alert_phase !== 'paused') { console.error('phase: '+JSON.stringify(st && st.alert)); process.exit(4); }
 if (st.alert.alert_armed_at !== null) { console.error('armed_at: '+JSON.stringify(st.alert)); process.exit(5); }
 console.log('OK');
 " 2>&1)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "W4: at threshold returns {count:T, frozen:true}, alert_phase=frozen, alert_armed_at=null"
+        pass "W4: at threshold returns {count:T, frozen:true}, alert_phase=paused, alert_armed_at=null"
     else
-        fail "W4: at threshold returns {count:T, frozen:true}, alert_phase=frozen, alert_armed_at=null (rc=$rc, out=$out)"
+        fail "W4: at threshold returns {count:T, frozen:true}, alert_phase=paused, alert_armed_at=null (rc=$rc, out=$out)"
     fi
 }
 
@@ -265,7 +267,7 @@ run_w6c() {
     local tmp rc
     tmp="$(mktemp -d)"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$CLI" \
-        --increment-alert-retry-count --set-alert-phase frozen --session-id "w6c-sid" >/dev/null 2>&1
+        --increment-alert-retry-count --set-alert-phase paused --session-id "w6c-sid" >/dev/null 2>&1
     rc=$?
     rm -rf "$tmp"
     if [ $rc -ne 0 ]; then

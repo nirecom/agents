@@ -216,7 +216,10 @@ if (require.main === module) {
     // Build alert candidate only when an alert branch would also fire this cycle.
     let alertCandidate = null;
     const alertWouldFire = !askUserQuestionTurn &&
-      alertPhase !== "done" && alertPhase !== "frozen" &&
+      alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
+      alertPhase !== "frozen" &&
+      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       (cumSev === "error" || hangDetected || alertArmedAt);
     if (alertWouldFire) {
       let alertReason;
@@ -253,7 +256,11 @@ if (require.main === module) {
   }
 
   // (2)
-  if (!askUserQuestionTurn && cumSev === "error" && alertPhase !== "done" && alertPhase !== "frozen") {
+  if (!askUserQuestionTurn && cumSev === "error" && alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
+      alertPhase !== "frozen"
+      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
+  ) {
     if (tryIncrementFrozen()) process.exit(0);
     const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
@@ -265,7 +272,11 @@ if (require.main === module) {
   }
 
   // (3)
-  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && alertPhase !== "done" && alertPhase !== "frozen") {
+  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
+      alertPhase !== "frozen"
+      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
+  ) {
     if (tryIncrementFrozen()) process.exit(0);
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
     const reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
@@ -286,7 +297,11 @@ if (require.main === module) {
 
   // (4) advisory for cumSev=warning or cumSev=notice — legacy layer2 backward-compat only.
   // New alert-format state (state.alert) skips this branch; only old layer2 state files trigger it.
-  if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && alertPhase !== "done" && alertPhase !== "frozen" && isLegacyLayer2State) {
+  if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+      // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
+      alertPhase !== "frozen" &&
+      // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
+      isLegacyLayer2State) {
     const additionalContext = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(JSON.stringify({ additionalContext }) + "\n");
