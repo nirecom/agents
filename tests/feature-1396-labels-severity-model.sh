@@ -74,7 +74,10 @@ fi
 echo ""
 echo "=== skills/issue-create/SKILL.md checks ==="
 
-assert_skill_contains "T-skill-model-directive" "You are powered by the model"
+assert_skill_contains "T-skill-severity-directive" "severity:high"
+assert_skill_contains "T-skill-severity-low"       "severity:low"
+assert_skill_contains "T-skill-severity-normal"    "no label"
+assert_skill_contains "T-skill-model-directive"    "You are powered by the model"
 assert_skill_contains "T-skill-model-others-fallback" "model:others"
 assert_skill_contains "T-skill-model-skip-no-injection" "model:*"
 

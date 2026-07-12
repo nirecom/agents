@@ -146,6 +146,10 @@ atomic write internally.
 - Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
   passed via `--label`. `type:*` is rejected to avoid confusing
   `/issue-close-finalize` routing.
+- **severity label (auto-classify, Phase 1)**: After gathering the issue title and body in Phase 1, evaluate the content and classify severity. Add at most one `severity:*` label:
+  - Fatal behavior (workflow stops, infinite loop, abort hang, security hole, or major feature rendered unusable) → `--label severity:high`.
+  - Cosmetic or safely deferrable (visual glitch, non-blocking inconvenience, low-impact improvement) → `--label severity:low`.
+  - All other cases → no severity label (no label = normal severity).
 - **model label (auto-detect, Phase 4)**: Before dispatching in Phase 4, read the system prompt injection "You are powered by the model named X" to identify the current model and add the corresponding `model:*` label.
   - Injection present + table match → add `model:<matched>`.
   - Injection present + no table match → add `model:others`.
