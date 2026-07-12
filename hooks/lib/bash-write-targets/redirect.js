@@ -30,7 +30,7 @@ function extractRedirectTargets(seg) {
     if (/^&\d/.test(r.target)) continue;            // FD-to-FD (e.g. 2>&1 → target "&1")
     const expanded = expandRawToken(r.targetRaw);
     if (expanded === null) return null;             // unresolvable → fail-closed
-    if (expanded === "/dev/null" || expanded.endsWith("/dev/null")) continue; // null-sink
+    if (expanded === "/dev/null") continue; // null-sink (exact match only — `sub/dev/null` is a real in-scope file)
     targets.push(expanded);
   }
   return targets;
