@@ -7,11 +7,15 @@ EOF
 )"'
     assert_classify "gh pr create + heredoc body" "$cmd1" "read"
 
+    # gh issue create is a GitHub write, not a LOCAL worktree write. classify()'s
+    # contract is local-write detection, so it returns "read" (post-#1296 retire of
+    # the kind:"gh" WRITE_PATTERNS group). gh write enforcement is owned by isGhWriteIR
+    # at the enforce-worktree gh gate — not by classify.
     local cmd2='gh issue create --title T --body "$(cat <<EOF
 content
 EOF
 )"'
-    assert_classify "gh issue create + heredoc body" "$cmd2" "write"
+    assert_classify "gh issue create + heredoc body" "$cmd2" "read"
 
     assert_classify "gh pr edit plain body" 'gh pr edit 1 --body "x"' "read"
 }
@@ -26,9 +30,11 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     cmd1=$(printf 'gh pr create --body "$(cat <<EOF\ngit push origin main\nEOF\n)"')
     assert_classify "gh pr create heredoc body with git push is read" "$cmd1" "read"
 
+    # gh issue create is a GitHub write, not a local write → read (#1296). The body
+    # (even one containing rm -rf) is GitHub-side data, never executed locally.
     local cmd2
     cmd2=$(printf 'gh issue create --title "T" --body "$(cat <<EOF\nrm -rf /tmp/x\nEOF\n)"')
-    assert_classify "gh issue create heredoc body with rm -rf is write" "$cmd2" "write"
+    assert_classify "gh issue create heredoc body with rm -rf is read" "$cmd2" "read"
 
     local cmd3
     cmd3=$(printf 'gh pr edit 1 --body "$(cat <<EOF\nnpm install\nEOF\n)"')
@@ -54,10 +60,12 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     cmd8=$(printf 'gh pr create --body "$(cat <<EOF\ntee -a foo\nEOF\n)"')
     assert_classify "gh pr create heredoc body with tee -a is read" "$cmd8" "read"
 
-    # Case 9: #369 original repro
+    # Case 9: #369 original repro — gh issue create is a GitHub write, not a local
+    # write → read (#1296). The body's "git push" line is GitHub-side data, not a
+    # local command; gh write enforcement is owned by isGhWriteIR at the gh gate.
     local cmd9
     cmd9=$(printf 'gh issue create --title "T" --body "$(cat <<EOF\nThis is the background.\ngit push origin main\nMore text.\nEOF\n)"')
-    assert_classify "gh issue create heredoc body #369 original repro" "$cmd9" "write"
+    assert_classify "gh issue create heredoc body #369 original repro" "$cmd9" "read"
 
     # Case 10: lazy-match regression — body contains "this is not EOF" as inner line
     local cmd10
@@ -92,12 +100,15 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
 
 # ============ Group A inline-body stripping (#596) ============
 test_gh_group_a_inline_body_stripping() {
+    # gh issue create is a GitHub write, not a LOCAL worktree write → classify returns
+    # "read" (#1296). The --body content is GitHub-side data, never executed locally;
+    # gh write enforcement is owned by isGhWriteIR at the enforce-worktree gh gate.
     assert_classify "gh issue create --body containing 'git commit'" \
-        'gh issue create --body "git commit"' "write"
+        'gh issue create --body "git commit"' "read"
     assert_classify "gh issue create --body containing 'git push origin main'" \
-        'gh issue create --body "git push origin main"' "write"
+        'gh issue create --body "git push origin main"' "read"
     assert_classify "gh issue create --body containing ISSUE_CLOSE_SKILL prefix" \
-        'gh issue create --body "ISSUE_CLOSE_SKILL=1 git commit -m fix"' "write"
+        'gh issue create --body "ISSUE_CLOSE_SKILL=1 git commit -m fix"' "read"
 
     assert_classify "bash <abs path>/issue-create-dispatch.sh ... --body 'git commit'" \
         'bash "/absolute/path/bin/github-issues/issue-create-dispatch.sh" --verdict none -- --title "T" --body "git commit"' "read"
@@ -105,14 +116,15 @@ test_gh_group_a_inline_body_stripping() {
     assert_classify "bash <C:/...>/issue-create-dispatch.sh ... --body 'git commit'" \
         'bash "C:/git/agents/bin/github-issues/issue-create-dispatch.sh" --verdict none -- --body "git commit"' "read"
 
+    # gh issue create → GitHub write, not local write → read (#1296), regardless of body form.
     assert_classify "gh issue create --body ''" \
-        'gh issue create --body ""' "write"
+        'gh issue create --body ""' "read"
 
     assert_classify "gh issue create --body 'normal body text'" \
-        'gh issue create --body "normal body text"' "write"
+        'gh issue create --body "normal body text"' "read"
 
     assert_classify "gh issue create --body-file /path/to/file.md" \
-        'gh issue create --body-file /path/to/file.md' "write"
+        'gh issue create --body-file /path/to/file.md' "read"
 
     assert_classify "real 'git commit -m' must remain write" \
         'git commit -m "message"' "write"

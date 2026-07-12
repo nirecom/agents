@@ -44,25 +44,12 @@ WRITE_CASES=(
     'git stash pop'
     'git worktree add /tmp/w'
     'git worktree remove /tmp/w'
-    'gh pr merge 1'
-    'gh release create v1'
-    'gh api -X POST /repos'
-    'gh api -X PUT /repos/o/r'
-    'gh api -X PATCH /repos/o/r'
-    'gh api -X DELETE /repos/o/r'
-    # gh issue create: sanctioned via /issue-create skill only (#672).
-    'gh issue create'
-    # Group B (session-scoped writes) — added in fix/enforce-worktree-gh-whitelist
-    'gh issue delete 1'
-    'gh repo delete owner/repo'
-    'gh release edit v1'
-    'gh release delete v1'
-    'gh release upload v1 file.zip'
-    'gh api --method POST /repos'
-    'gh api --method DELETE /repos/o/r'
-    'gh api -XDELETE /repos/o/r'
-    'gh api --method=DELETE /repos/o/r'
-    'gh api -X=POST /repos'
+    # NOTE: gh WRITE commands (Group B: pr merge, release create/edit/delete/upload,
+    # api -X POST/PUT/PATCH/DELETE, issue create/delete, repo delete) are NOT in
+    # WRITE_CASES. gh operations write to GitHub, not the LOCAL worktree, so classify()
+    # — whose contract is local-write detection — returns "read" for them (post-#1296
+    # retire of the kind:"gh" WRITE_PATTERNS group). gh write enforcement is owned
+    # solely by isGhWriteIR at the enforce-worktree gh session-scope gate. See READ_CASES.
     'git tag -d v1'
     'git tag v1.0'
 )
@@ -117,6 +104,26 @@ READ_CASES=(
     'gh repo edit --private'
     'gh repo rename new-name'
     'gh repo archive owner/repo'
+    # Group B gh WRITE commands (#1296): these write to GitHub, not the LOCAL worktree.
+    # classify()'s contract is local-write detection, so they return "read". gh write
+    # enforcement is handled separately by isGhWriteIR at the enforce-worktree gh gate.
+    'gh pr merge 1'
+    'gh release create v1'
+    'gh api -X POST /repos'
+    'gh api -X PUT /repos/o/r'
+    'gh api -X PATCH /repos/o/r'
+    'gh api -X DELETE /repos/o/r'
+    'gh issue create'
+    'gh issue delete 1'
+    'gh repo delete owner/repo'
+    'gh release edit v1'
+    'gh release delete v1'
+    'gh release upload v1 file.zip'
+    'gh api --method POST /repos'
+    'gh api --method DELETE /repos/o/r'
+    'gh api -XDELETE /repos/o/r'
+    'gh api --method=DELETE /repos/o/r'
+    'gh api -X=POST /repos'
     # /dev/null null-sink — read-only redirects must not be classified as write
     'git status 2>/dev/null'
     'ls >/dev/null'
