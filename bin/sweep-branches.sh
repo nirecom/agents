@@ -23,6 +23,7 @@ CI_MODE=0
 SKIP_GH=0
 DRY_RUN=1
 DELETE_NO_PR=0
+TIMEOUT_SECONDS=120
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 validate_sweep_age_days() {
@@ -51,6 +52,7 @@ Options:
                         (default 30; env SWEEP_AGE_DAYS).
   --ci-mode             Emit JSON summary on stdout (instead of plain text).
   --skip-gh-check       Skip the gh PR merged-state check (testing only).
+  --timeout-seconds N   Timeout in seconds for git branch -D (default 120).
   -h, --help            Show this help and exit.
 EOF
 }
@@ -75,6 +77,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ci-mode) CI_MODE=1 ;;
     --skip-gh-check) SKIP_GH=1 ;;
+    --timeout-seconds)
+      shift
+      TIMEOUT_SECONDS="${1:?--timeout-seconds requires a value}"
+      if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TIMEOUT_SECONDS" -lt 1 ]]; then
+        printf 'ERROR: --timeout-seconds must be a positive integer, got: %s\n' "$TIMEOUT_SECONDS" >&2
+        exit 1
+      fi
+      ;;
     -h|--help) usage; exit 0 ;;
     *)
       printf 'ERROR: unknown flag: %s\n' "$1" >&2
@@ -120,6 +130,7 @@ no_pr_candidates=0
 no_pr_deleted=0
 no_pr_skipped_young=0
 no_pr_skipped_unreachable=0
+skipped_worktree_locked=0
 pr_state_unknown=0
 unmerged_pr_skipped=0
 no_pr_branches=()
@@ -372,13 +383,41 @@ for branch in "${local_candidates[@]+"${local_candidates[@]}"}"; do
     printf 'DRY-RUN: candidate branch=%s (local)\n' "$branch"
     continue
   fi
-  if SWEEP_BRANCHES_SKILL=1 git -C "$MAIN_ROOT" branch -D "$branch" 2>/dev/null; then
+  err_file="$(mktemp 2>/dev/null || printf '%s' "/tmp/sweep_branch_err.$$")"
+  if timeout "$TIMEOUT_SECONDS" git -C "$MAIN_ROOT" branch -D "$branch" 2>"$err_file"; then
     printf 'Deleted local branch: %s\n' "$branch"
     local_deleted=$((local_deleted + 1)) || true
   else
-    printf 'WARN: local branch delete failed: %s\n' "$branch" >&2
-    errors+=("local:$branch")
+    err="$(cat "$err_file" 2>/dev/null || true)"
+    rm -f "$err_file"
+    if [[ "$err" == *"checked out"* ]]; then
+      # Worktree-locked branch — resolve worktree path
+      wt_path=""
+      while IFS= read -r wt_line; do
+        case "$wt_line" in
+          worktree\ *)
+            cand_path="${wt_line#worktree }"
+            ;;
+          branch\ refs/heads/"$branch")
+            wt_path="$cand_path"
+            ;;
+          "")
+            # end of record; reset
+            cand_path=""
+            ;;
+        esac
+      done <<< "$(git worktree list --porcelain 2>/dev/null || true)"
+      if [[ -z "$wt_path" ]]; then
+        wt_path="(unknown)"
+      fi
+      printf 'WORKTREE-LOCKED: branch=%s wt=%s\n' "$branch" "$wt_path"
+      skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+    else
+      printf 'WARN: local branch delete failed: %s\n' "$branch" >&2
+      errors+=("local:$branch")
+    fi
   fi
+  rm -f "$err_file" 2>/dev/null || true
 done
 
 # ─── No-PR deletion pass (requires --apply AND --delete-no-pr) ──────────────
@@ -386,13 +425,41 @@ done
 if [[ "$APPLY" == "1" ]] && [[ "$DELETE_NO_PR" == "1" ]] && [[ "${#no_pr_branches[@]}" -gt 0 ]]; then
   for branch in "${no_pr_branches[@]}"; do
     # Reachability was verified at classification time; every branch here is safe.
-    if SWEEP_BRANCHES_SKILL=1 git -C "$MAIN_ROOT" branch -D "$branch" 2>/dev/null; then
+    err_file="$(mktemp 2>/dev/null || printf '%s' "/tmp/sweep_branch_err.$$")"
+    if timeout "$TIMEOUT_SECONDS" git -C "$MAIN_ROOT" branch -D "$branch" 2>"$err_file"; then
       printf 'Deleted no-PR local branch: %s\n' "$branch"
       no_pr_deleted=$(( no_pr_deleted + 1 )) || true
     else
-      printf 'WARN: no-PR local branch delete failed: %s\n' "$branch" >&2
-      errors+=("no-pr:$branch")
+      err="$(cat "$err_file" 2>/dev/null || true)"
+      rm -f "$err_file"
+      if [[ "$err" == *"checked out"* ]]; then
+        # Worktree-locked branch — resolve worktree path
+        wt_path=""
+        while IFS= read -r wt_line; do
+          case "$wt_line" in
+            worktree\ *)
+              cand_path="${wt_line#worktree }"
+              ;;
+            branch\ refs/heads/"$branch")
+              wt_path="$cand_path"
+              ;;
+            "")
+              # end of record; reset
+              cand_path=""
+              ;;
+          esac
+        done <<< "$(git worktree list --porcelain 2>/dev/null || true)"
+        if [[ -z "$wt_path" ]]; then
+          wt_path="(unknown)"
+        fi
+        printf 'WORKTREE-LOCKED: branch=%s wt=%s\n' "$branch" "$wt_path"
+        skipped_worktree_locked=$((skipped_worktree_locked + 1)) || true
+      else
+        printf 'WARN: no-PR local branch delete failed: %s\n' "$branch" >&2
+        errors+=("no-pr:$branch")
+      fi
     fi
+    rm -f "$err_file" 2>/dev/null || true
   done
 fi
 
@@ -431,9 +498,10 @@ if [[ "$CI_MODE" == "1" ]]; then
     errs_json="$(printf '%s\n' "${errors[@]}" | node -e \
       'const xs=require("fs").readFileSync(0,"utf8").split(/\r?\n/).filter(Boolean);process.stdout.write(JSON.stringify(xs))')"
   fi
-  printf '{"scanned":%d,"candidates":%d,"local_deleted":%d,"remote_deleted":%d,"remote_delete_failed":%d,"skipped_unmerged":%d,"skipped_young":%d,"no_pr_candidates":%d,"no_pr_deleted":%d,"no_pr_skipped_young":%d,"no_pr_skipped_unreachable":%d,"pr_state_unknown":%d,"unmerged_pr_skipped":%d,"errors":%s}\n' \
+  printf '{"scanned":%d,"candidates":%d,"local_deleted":%d,"remote_deleted":%d,"remote_delete_failed":%d,"skipped_unmerged":%d,"skipped_young":%d,"skipped_worktree_locked":%d,"no_pr_candidates":%d,"no_pr_deleted":%d,"no_pr_skipped_young":%d,"no_pr_skipped_unreachable":%d,"pr_state_unknown":%d,"unmerged_pr_skipped":%d,"errors":%s}\n' \
     "$scanned" "$candidates" "$local_deleted" "$remote_deleted" \
     "$remote_delete_failed" "$skipped_unmerged" "$skipped_young" \
+    "$skipped_worktree_locked" \
     "$no_pr_candidates" "$no_pr_deleted" "$no_pr_skipped_young" \
     "$no_pr_skipped_unreachable" "$pr_state_unknown" \
     "$unmerged_pr_skipped" \
@@ -447,6 +515,7 @@ else
   printf '  remote_delete_failed: %d\n' "$remote_delete_failed"
   printf '  skipped_unmerged: %d\n' "$skipped_unmerged"
   printf '  skipped_young: %d\n' "$skipped_young"
+  printf '  skipped_worktree_locked: %d\n' "$skipped_worktree_locked"
   printf '  no_pr_candidates: %d\n' "$no_pr_candidates"
   printf '  no_pr_deleted: %d\n' "$no_pr_deleted"
   printf '  no_pr_skipped_young: %d\n' "$no_pr_skipped_young"
