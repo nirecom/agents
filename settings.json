@@ -102,6 +102,8 @@
       "Bash(echo \"<<WORKFLOW_MARK_STEP_*>>\")",
       "Bash(echo '<<WORKFLOW_MARK_STEP_*>>')",
       "Bash(echo \"<<WORKFLOW_RESEARCH_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: *>>\")",
+      "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")",
@@ -199,8 +201,6 @@
     "ask": [
       "Bash(echo \"<<WORKFLOW_USER_VERIFIED: *>>\")",
       "Bash(echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: *>>\")",
-      "Bash(echo \"<<WORKFLOW_OUTLINE_NOT_NEEDED: *>>\")",
-      "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_REVIEW_SECURITY_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*: *>>\")",
