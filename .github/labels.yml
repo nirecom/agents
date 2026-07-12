@@ -25,3 +25,33 @@
 - name: "meta"
   color: "e4e669"
   description: "Planning/architecture issue with no implementation. Sub-issues carry the actual work."
+
+# --- Severity ---
+- name: "severity:high"
+  color: "b60205"
+  description: "Fatal: workflow stops, abort, infinite loop, security hole, or major feature impact"
+
+- name: "severity:low"
+  color: "c5def5"
+  description: "Cosmetic or safely deferrable; no label = normal severity"
+
+# --- Model ---
+- name: "model:fable"
+  color: "e99695"
+  description: "Issue is specific to or observed with Fable"
+
+- name: "model:opus"
+  color: "d4c5f9"
+  description: "Issue is specific to or observed with Claude Opus"
+
+- name: "model:sonnet"
+  color: "bfd4f2"
+  description: "Issue is specific to or observed with Claude Sonnet"
+
+- name: "model:ds4"
+  color: "f9d0c4"
+  description: "Issue is specific to or observed with DeepSeek v4"
+
+- name: "model:others"
+  color: "eeeeee"
+  description: "Issue is specific to a model not covered by other model:* labels"
