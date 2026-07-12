@@ -423,4 +423,8 @@ Changes: BUGFIX #1166: Rename alert_phase "frozen"→"paused"; introduce "closed
 ### BUGFIX: PR #1417 — fix/fix-882 (2026-07-13, c429926, #1417)
 Background: fix(#882): extract session-bound worktree resolution into SSOT helper; wire RT-1/RT-4a to it
 Changes: Extracted session-bound worktree resolution into `hooks/lib/workflow-state/resolve-worktree-path.js`: `isMainWorktree(dir)` (fail-close, execFileSync argv form) and `resolveSessionWorktreePath()` (fail-safe, reads state.cwd, rejects main worktree).;Added `bin/resolve-worktree-path` CLI wrapper: no-sid→empty, no-state→"NOSTATE", linked-wt→path, main/error→empty.;Added `skills/review-tests/scripts/select-staged-files.sh`: WORKTREE path→`git -C $WORKTREE diff --cached`; NOSTATE→cwd fallback; empty→exit 3.;Wired SKILL.md RT-0/RT-1/RT-4a to the SSOT: RT-0 resolves WORKTREE via CLI; RT-1 delegates file selection to select-staged-files.sh; RT-4a passes `${WORKTREE:-}` as argv[2] to compute-staged-tests-token.js.;Removed duplicate `isMainWorktree()` and execSync from `bin/compute-staged-tests-token.js`; wired to SSOT resolver. <!-- compose-doc-append-sentinel: branch=fix/fix-882 pr=#1417 -->
-Test gap: no L2 test for RT-1 staged-file selection via session state before this fix
+Test gap: no L2 test for RT-1 staged-file selection via session state before this fix
+
+### BUGFIX: PR #1418 — fix/fix-1415 (2026-07-13, e2f3f783b48c366dc2211a27ac4d81ca648e71f4, #1418)
+Background: PR #1418 merged on 2026-07-13.
+Changes: fix(#1415): add record_type enum field to supervisor findings; supervisor-off-proposal-shim excludes escape_hatch_event from blockingFindings, resolving cycle where WORKTREE_OFF/WORKFLOW_OFF sentinel audit records blocked subsequent OFF sentinel emits in the same session <!-- compose-doc-append-sentinel: branch=fix/fix-1415 pr=#1418 -->
