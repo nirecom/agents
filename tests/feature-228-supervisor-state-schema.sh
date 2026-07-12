@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-228-supervisor-state-schema.sh
 # Tests: hooks/lib/supervisor-state-schema.js
-# Tags: supervisor, em-supervisor, schema, unit
+# Tags: supervisor, em-supervisor, schema, unit, scope:issue-specific
 # Tests for issue #228 — supervisor-state schema module unit tests.
 #
 # Verifies the JSON Schema + validator behavior for supervisor-state.json:
@@ -230,6 +230,46 @@ console.log('OK');
     fi
 }
 
+# --- S10 ---------------------------------------------------------------------
+run_s10() {
+    require_source "$SCHEMA_MODULE" "S10: validateFinding accepts record_type=escape_hatch_event" || return
+    out=$(run_with_timeout 5 node -e "
+const s = require('$SCHEMA_MODULE_NODE');
+const r = s.validateFinding({ categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 'test', record_type: 'escape_hatch_event' });
+if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
+console.log('OK');
+" 2>&1); rc=$?
+    [ $rc -eq 0 ] && [ "$out" = "OK" ] && pass "S10: validateFinding accepts record_type=escape_hatch_event" \
+        || fail "S10: validateFinding accepts record_type=escape_hatch_event (rc=$rc, out=$out)"
+}
+
+# --- S11 ---------------------------------------------------------------------
+run_s11() {
+    require_source "$SCHEMA_MODULE" "S11: validateFinding rejects invalid record_type" || return
+    out=$(run_with_timeout 5 node -e "
+const s = require('$SCHEMA_MODULE_NODE');
+const r = s.validateFinding({ categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 'test', record_type: 'bad_value' });
+if (r.ok !== false) { console.error('expected ok=false'); process.exit(2); }
+if (!r.errors.some(e => /record_type/.test(e))) { console.error('error must mention record_type'); process.exit(3); }
+console.log('OK');
+" 2>&1); rc=$?
+    [ $rc -eq 0 ] && [ "$out" = "OK" ] && pass "S11: validateFinding rejects invalid record_type" \
+        || fail "S11: validateFinding rejects invalid record_type (rc=$rc, out=$out)"
+}
+
+# --- S12 ---------------------------------------------------------------------
+run_s12() {
+    require_source "$SCHEMA_MODULE" "S12: validateFinding accepts finding without record_type (legacy-compat)" || return
+    out=$(run_with_timeout 5 node -e "
+const s = require('$SCHEMA_MODULE_NODE');
+const r = s.validateFinding({ categories: ['workflow'], severity: 'warning', detail: 'd', reporter: 'test' });
+if (r.ok !== true) { console.error('not ok: '+JSON.stringify(r)); process.exit(2); }
+console.log('OK');
+" 2>&1); rc=$?
+    [ $rc -eq 0 ] && [ "$out" = "OK" ] && pass "S12: validateFinding accepts finding without record_type (legacy-compat)" \
+        || fail "S12: validateFinding accepts finding without record_type (legacy-compat) (rc=$rc, out=$out)"
+}
+
 run_s1
 run_s2
 run_s3
@@ -239,6 +279,9 @@ run_s6
 run_s7
 run_s8
 run_s9
+run_s10
+run_s11
+run_s12
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

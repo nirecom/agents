@@ -19,6 +19,8 @@
 #     + an OFF-sentinel Bash command on stdin → assert exit 2 AND decision:"block"
 # (b) ALL blocking findings have reporter === "enforce-worktree"
 #     + OFF cmd → assert exit 0 (false-block recovery pass-through)
+# (d) blocking finding が escape_hatch_event のみ → exit 0
+#     (循環バグ #1415 修正: escape-hatch 監査記録は blocking から除外、WORKTREE_OFF パス検証)
 # Security structure: negative assertion checks the protected outcome directly.
 
 set -u
@@ -213,9 +215,70 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
     pass "T4c: non-OFF command → shim passes through (exit 0)"
 }
 
+# --- T4d: escape_hatch_event finding + 2nd WORKTREE_OFF cmd → exit 0 (cycle bug #1415) ---
+run_t4d() {
+    local tmp sid out rc
+    tmp=$(make_tmp)
+    sid="t4d-sid-$$"
+    if command -v cygpath >/dev/null 2>&1; then
+        local tmp_node; tmp_node="$(cygpath -m "$tmp")"
+    else
+        local tmp_node="$tmp"
+    fi
+
+    local WORKTREE_OFF_CMD='echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF: test reason>>"'
+
+    # Seed state: layer1 finding tagged record_type=escape_hatch_event (audit record
+    # of a prior WORKTREE_OFF). The cycle bug #1415: this warning finding blocks the
+    # 2nd WORKTREE_OFF in the same session. Fix filters escape_hatch_event out of
+    # blockingFindings, so the OFF command must pass through.
+    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const s = require('$SCHEMA_NODE');
+const fs = require('fs');
+const st = s.createEmptyState('$sid');
+st.layer1.findings = [{
+    categories: ['workflow'],
+    severity: 'warning',
+    detail: 'escape-hatch sentinel: WORKTREE_OFF (trivial typo)',
+    reporter: 'enforce-override-handlers',
+    record_type: 'escape_hatch_event',
+    timestamp: new Date().toISOString()
+}];
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+" >/dev/null 2>&1
+
+    local hook_input
+    hook_input=$(node -e "
+process.stdout.write(JSON.stringify({
+    tool_name: 'Bash',
+    session_id: '$sid',
+    tool_input: { command: $(node -e "process.stdout.write(JSON.stringify('$WORKTREE_OFF_CMD'))") }
+}));
+")
+
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
+    rc=$?
+
+    rm -rf "$tmp"
+
+    # Security: assert NOT blocked (escape_hatch_event excluded from blocking set)
+    if echo "$out" | grep -q '"decision":"block"'; then
+        fail "T4d: escape_hatch_event finding must NOT block 2nd WORKTREE_OFF (cycle bug #1415)"
+        return
+    fi
+    if [ $rc -ne 0 ]; then
+        fail "T4d: escape_hatch_event finding + WORKTREE_OFF must exit 0, got rc=$rc"
+        return
+    fi
+    pass "T4d: escape_hatch_event finding + 2nd WORKTREE_OFF cmd → exit 0 (cycle bug fixed, not blocked)"
+}
+
 run_t4a
 run_t4b
 run_t4c
+run_t4d
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
