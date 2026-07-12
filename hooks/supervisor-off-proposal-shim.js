@@ -113,7 +113,7 @@ process.stdin.on("end", () => {
 
     // State file found — check L1 findings (non-notice severity)
     const l1Findings = (state && state.layer1 && Array.isArray(state.layer1.findings)) ? state.layer1.findings : [];
-    const blockingFindings = l1Findings.filter(f => f && f.severity !== "notice");
+    const blockingFindings = l1Findings.filter(f => f && f.severity !== "notice" && f.record_type !== "escape_hatch_event");
 
     // Pass through if no blocking findings
     if (blockingFindings.length === 0) process.exit(0);

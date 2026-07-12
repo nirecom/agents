@@ -72,6 +72,7 @@ function reportSentinel(kind, reason, sessionId) {
       severity: "warning",
       detail: `escape-hatch sentinel: ${kind} (${reason || "<no reason>"})`,
       reporter: "enforce-override-handlers",
+      record_type: "escape_hatch_event",
     });
   } catch (_) {
     // swallow
