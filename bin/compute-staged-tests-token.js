@@ -13,8 +13,10 @@
 //   resolution is unreliable (subagents, background runs) and the main
 //   worktree must never be selected. Selection order, most authoritative first:
 //     1. Explicit worktree path in argv[2] — caller states the commit target.
-//     2. Session state cwd (SESSION_ID / CLAUDE_SESSION_ID → readState().cwd),
-//        rejected when it resolves to the main worktree.
+//     2. Session state cwd — delegated to
+//        hooks/lib/workflow-state/resolve-worktree-path.js (SESSION_ID /
+//        CLAUDE_SESSION_ID → readState().cwd), rejected when it resolves to the
+//        main worktree.
 //
 // Fail-safe strategy:
 //   - Nothing resolves → returns null; main() writes empty string and exits 0.
@@ -22,9 +24,9 @@
 //   - Any unhandled exception → writes empty string and exits 0.
 // Always exits 0.
 
-const fs = require('fs');
 const path = require('path');
-const { execSync, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { resolveSessionWorktreePath } = require('../hooks/lib/workflow-state/resolve-worktree-path');
 
 // True when `dir` has at least one staged tests/** (or test/**) path.
 // Retained for test use.
@@ -42,26 +44,6 @@ function dirHasStagedTests(dir) {
   return files.some((f) => f.startsWith('tests/') || f.startsWith('test/'));
 }
 
-// True when `dir` is the main worktree (git-dir === git-common-dir).
-// Fail-safe: any error is treated as "is main worktree" (reject).
-function isMainWorktree(dir) {
-  try {
-    const gitDir = execSync(`git -C "${dir}" rev-parse --git-dir`, {
-      timeout: 5000,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    const gitCommonDir = execSync(`git -C "${dir}" rev-parse --git-common-dir`, {
-      timeout: 5000,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    return path.resolve(gitDir) === path.resolve(gitCommonDir);
-  } catch (_e) {
-    return true;
-  }
-}
-
 // Resolve the commit-target worktree per the selection order documented above.
 // Returns null when nothing resolves (NEVER process.cwd()).
 function resolveRepoDir() {
@@ -69,21 +51,7 @@ function resolveRepoDir() {
   if (explicit) {
     return explicit;
   }
-  const sessionId = process.env.SESSION_ID || process.env.CLAUDE_SESSION_ID;
-  if (sessionId) {
-    try {
-      const { readState } = require('../hooks/lib/workflow-state/state-io.js');
-      const state = readState(sessionId);
-      if (state && typeof state.cwd === 'string' && fs.existsSync(state.cwd)) {
-        if (!isMainWorktree(state.cwd)) {
-          return state.cwd;
-        }
-      }
-    } catch (_e) {
-      return null;
-    }
-  }
-  return null;
+  return resolveSessionWorktreePath();
 }
 
 try {
