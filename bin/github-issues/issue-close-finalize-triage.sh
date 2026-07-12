@@ -94,6 +94,22 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
                 # exit 3 = API error → fall through to error (conservative)
             fi
         fi
+        # #417: OPEN, no sentinel, not meta — if the issue still has open
+        # sub-issues, closing the parent now would orphan them. Route to a
+        # graceful skip (not an error) so the caller records the skip and moves
+        # on; the sub-issues must be closed first.
+        SKIP_OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || SKIP_OWNER_REPO=""
+        if [ -n "$SKIP_OWNER_REPO" ]; then
+            SKIP_SUB_RC=0
+            bash "$(dirname "${BASH_SOURCE[0]}")/parent-all-closed-check.sh" "$SKIP_OWNER_REPO" "$N" >/dev/null 2>&1 || SKIP_SUB_RC=$?
+            if [ "$SKIP_SUB_RC" -eq 1 ]; then
+                echo "Warning: issue #${N} has open sub-issues — skipping close pipeline. Close sub-issues first." >&2
+                ACTION=skipped_open_sub_issues
+                NEXT_STEPS=""
+                print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
+                exit 0
+            fi
+        fi
         # Phase 1 was never run, or its sentinel was auto-expired (#360).
         # /issue-close-finalize requires the pending sentinel posted by
         # /issue-close-stage as forcing function.
@@ -120,7 +136,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         # #690: Step E (doc-append) removed — docs/history.md is now written by
         # /worktree-end Step WE-21 from WORKTREE_NOTES.md.
         ACTION=resume_j
-        NEXT_STEPS="J,K"
+        NEXT_STEPS="G,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:)
@@ -134,6 +150,17 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         # (historyEntry="skipped_no_history_notes" in outcome JSON).
         ACTION=auto_close_path
         NEXT_STEPS="G,J,K"
+        # #377: warn (do NOT gate) if this already-CLOSED parent still has open
+        # sub-issues. auto_close_path proceeds regardless; the warning surfaces
+        # the orphaned children so they can be closed separately.
+        OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || OWNER_REPO=""
+        if [ -n "$OWNER_REPO" ]; then
+            SUB_RC=0
+            bash "$(dirname "${BASH_SOURCE[0]}")/parent-all-closed-check.sh" "$OWNER_REPO" "$N" >/dev/null 2>&1 || SUB_RC=$?
+            if [ "$SUB_RC" -eq 1 ]; then
+                echo "Warning: issue #${N} has open sub-issues that are not yet closed" >&2
+            fi
+        fi
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     CLOSED:pending)
@@ -145,7 +172,7 @@ case "${STATE}:${EFFECTIVE_SENTINEL}" in
         # Step WE-21. If the history entry is missing, use /issue-reconcile to
         # backfill via the standalone issue-to-history.sh.
         ACTION=stuck_sentinel_only
-        NEXT_STEPS="J,K"
+        NEXT_STEPS="G,J,K"
         print_triage_output "$STATE" "$SENTINEL" "$ACTION" "$NEXT_STEPS"
         ;;
     *)

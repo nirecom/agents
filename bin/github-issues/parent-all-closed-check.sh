@@ -36,8 +36,17 @@ if ! RAW=$(gh api "repos/$REPO/issues/$N/sub_issues" --paginate \
     exit 3
 fi
 
-OPEN=$(printf '%s' "$RAW" | awk -F'"open":' '{print $2}' | awk '{s+=$1} END {print s+0}')
-TOTAL=$(printf '%s' "$RAW" | awk -F'"total":' '{print $2}' | awk '{s+=$1} END {print s+0}')
+# Detect plain-number format: some mocks / API edge cases return a bare integer
+# string (e.g. "1") instead of JSON {"open":1,"total":1}. Treat that integer as
+# both the open count and (conservatively) the total count.
+RAW_TRIMMED=$(printf '%s' "$RAW" | tr -d '[:space:]')
+if printf '%s' "$RAW_TRIMMED" | grep -qE '^[0-9]+$'; then
+    OPEN="$RAW_TRIMMED"
+    TOTAL="$RAW_TRIMMED"
+else
+    OPEN=$(printf '%s' "$RAW" | awk -F'"open":' '{print $2}' | awk '{s+=$1} END {print s+0}')
+    TOTAL=$(printf '%s' "$RAW" | awk -F'"total":' '{print $2}' | awk '{s+=$1} END {print s+0}')
+fi
 
 if [ "${TOTAL:-0}" -eq 0 ] 2>/dev/null; then
     exit 2
