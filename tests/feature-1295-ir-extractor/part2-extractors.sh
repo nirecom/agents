@@ -117,14 +117,14 @@ assert_eq "PW10 null input → null (PASS now)" 'null'         "$(call_ir_null p
 # malformed input; rawText passthrough (targets reflect the raw command).
 # ===========================================================================
 echo "=== Section B: collectBashWriteTargets AT-DP2 bridge (string API; PASS now) ==="
-assert_eq "B1 redirect target captured"      '{"targets":["/tmp/foo"],"parseFailure":false}' "$(call_collect_bash 'printf x > /tmp/foo')"
-assert_eq "B2 tee non-first-seg captured"    '{"targets":["/tmp/foo"],"parseFailure":false}' "$(call_collect_bash 'cat x | tee /tmp/foo')"
+assert_eq "B1 redirect target captured"      '{"targets":[{"resolveVia":"ancestor","path":"/tmp/foo"}],"parseFailure":false}' "$(call_collect_bash 'printf x > /tmp/foo')"
+assert_eq "B2 tee non-first-seg captured"    '{"targets":[{"resolveVia":"ancestor","path":"/tmp/foo"}],"parseFailure":false}' "$(call_collect_bash 'cat x | tee /tmp/foo')"
 # B3: malformed (cmd-subst redirect target) → parseFailure preserved, targets null.
 assert_eq "B3 parseFailure preserved"        '{"targets":null,"parseFailure":true}'          "$(call_collect_bash 'printf x > $(evil)')"
 # B4: no write → targets null, parseFailure false (rawText read but nothing to capture).
 assert_eq "B4 no-write → null targets"       '{"targets":null,"parseFailure":false}'         "$(call_collect_bash 'printf x')"
 # B5: rawText passthrough — multi-verb raw command yields both targets in order.
-assert_eq "B5 rawText passthrough multi"     '{"targets":["/tmp/a","/tmp/b"],"parseFailure":false}' "$(call_collect_bash 'printf x > /tmp/a; cat y | tee /tmp/b')"
+assert_eq "B5 rawText passthrough multi"     '{"targets":[{"resolveVia":"ancestor","path":"/tmp/a"},{"resolveVia":"ancestor","path":"/tmp/b"}],"parseFailure":false}' "$(call_collect_bash 'printf x > /tmp/a; cat y | tee /tmp/b')"
 
 # B6-B9 (C1): non-first-segment verb coverage. Section B previously covered only
 # redirect + tee non-first-segment. collectBashWriteTargets ALSO captures cp/mv/rm
@@ -137,10 +137,10 @@ while IFS='^' read -r b_name b_cmd b_want; do
   [ -z "$b_name" ] && continue
   assert_eq "$b_name" "$b_want" "$(call_collect_bash "$b_cmd")"
 done <<'B_TABLE'
-B6 cp non-first-seg captured (PASS now)^cat x | cp src /tmp/dest^{"targets":["/tmp/dest"],"parseFailure":false}
-B7 mv non-first-seg captured (PASS now)^cat x | mv src /tmp/dest^{"targets":["/tmp/dest"],"parseFailure":false}
-B8 rm non-first-seg captured (PASS now)^cat x | rm /tmp/foo^{"targets":["/tmp/foo"],"parseFailure":false}
-B9 pwsh pipeline non-first-seg captured (#1069 fix)^Get-Content x | Out-File -FilePath /tmp/foo^{"targets":["/tmp/foo"],"parseFailure":false}
+B6 cp non-first-seg captured (PASS now)^cat x | cp src /tmp/dest^{"targets":[{"resolveVia":"ancestor","path":"/tmp/dest"}],"parseFailure":false}
+B7 mv non-first-seg captured (PASS now)^cat x | mv src /tmp/dest^{"targets":[{"resolveVia":"ancestor","path":"/tmp/dest"}],"parseFailure":false}
+B8 rm non-first-seg captured (PASS now)^cat x | rm /tmp/foo^{"targets":[{"resolveVia":"ancestor","path":"/tmp/foo"}],"parseFailure":false}
+B9 pwsh pipeline non-first-seg captured (#1069 fix)^Get-Content x | Out-File -FilePath /tmp/foo^{"targets":[{"resolveVia":"ancestor","path":"/tmp/foo"}],"parseFailure":false}
 B_TABLE
 
 exit "$FAIL"

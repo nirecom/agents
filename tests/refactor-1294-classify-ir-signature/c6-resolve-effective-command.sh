@@ -54,13 +54,13 @@ assert_eq "C6.1s_str_path_chained_tee" "HAS_TARGETS" \
 
 # C6.tp: target-precision assertions — prove exact target path extracted, not just HAS_TARGETS.
 # An implementation that fires the guard but extracts a wrong path would fail HAS_TARGETS only by accident.
-assert_eq "C6.tp1_tee_exact_target" "out.txt" \
+assert_eq "C6.tp1_tee_exact_target" '{"resolveVia":"ancestor","path":"out.txt"}' \
   "$(get_targets_ir 'A=1 B=2 tee out.txt')"
-assert_eq "C6.tp2_cp_exact_target" "/outside/dst.txt" \
+assert_eq "C6.tp2_cp_exact_target" '{"resolveVia":"ancestor","path":"/outside/dst.txt"}' \
   "$(get_targets_ir 'A=1 B=2 cp src /outside/dst.txt')"
-assert_eq "C6.tp3_mv_exact_target" "/outside/dst.txt" \
+assert_eq "C6.tp3_mv_exact_target" '{"resolveVia":"ancestor","path":"/outside/dst.txt"}' \
   "$(get_targets_ir 'A=1 B=2 mv src /outside/dst.txt')"
-assert_eq "C6.tp4_rm_exact_target" "file.txt" \
+assert_eq "C6.tp4_rm_exact_target" '{"resolveVia":"ancestor","path":"file.txt"}' \
   "$(get_targets_ir 'A=1 B=2 rm file.txt')"
 
 # ---------------------------------------------------------------------------

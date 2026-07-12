@@ -64,3 +64,56 @@ assert_classify() {
         fail "$desc: expected '$expected', got '$got' (cmd: $(printf '%q' "$cmd"))"
     fi
 }
+
+# --- IR write-predicate drivers (post-#1296/#1400/#1401 retire migration) ------
+# The rm/cp/mv/posix-redir/pwsh/git WRITE_PATTERNS entries were retired: classify()
+# of those commands now returns "read". In-scope BLOCKING moved to IR predicates
+# consulted at the enforce-worktree fast-allow gate. The migrated contract for a
+# retired-command "write" case is therefore: classify()=="read" AND the matching
+# isXWriteIR() predicate is true. These drivers mirror the production path
+# (classify(parse(cmd))) — see tests/fix-1391 / feature-canary5-6git for siblings.
+
+# pred_targets <fn> <cmd> → "true"|"false" — predicate in bash-write-targets.js.
+pred_targets() {
+    run_with_timeout 30 node -e "
+      const m=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets');
+      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      const fn=m[process.argv[1]];
+      if (typeof fn !== 'function') { process.stdout.write('ERROR:not-exported'); process.exit(0); }
+      try { process.stdout.write(String(fn(parse(process.argv[2])))); }
+      catch (e) { process.stdout.write('ERROR:threw'); }
+    " -- "$1" "$2" 2>/dev/null
+}
+
+# git_write_ir <cmd> → "true"|"false" — isGitWriteIR in patterns.js.
+git_write_ir() {
+    run_with_timeout 30 node -e "
+      const {isGitWriteIR}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns');
+      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      try { process.stdout.write(String(isGitWriteIR(parse(process.argv[1])))); }
+      catch (e) { process.stdout.write('ERROR:threw'); }
+    " -- "$1" 2>/dev/null
+}
+
+# assert_write_ir <desc> <cmd> <predicate> — new-contract write assertion:
+# classify()=="read" AND the named predicate is true. <predicate> ∈
+# { posix | pwsh | fileop | subst | git }.
+assert_write_ir() {
+    local desc="$1" cmd="$2" pred="$3"
+    local cls predval fn
+    cls="$(classify_cmd "$cmd")"
+    case "$pred" in
+        posix)  fn=isPosixRedirWriteIR; predval="$(pred_targets "$fn" "$cmd")" ;;
+        pwsh)   fn=isPwshWriteIR;       predval="$(pred_targets "$fn" "$cmd")" ;;
+        fileop) fn=isFileOpWriteIR;     predval="$(pred_targets "$fn" "$cmd")" ;;
+        subst)  fn=isCommandSubstWriteIR; predval="$(pred_targets "$fn" "$cmd")" ;;
+        newline) fn=isNewlineInjectedWriteIR; predval="$(pred_targets "$fn" "$cmd")" ;;
+        git)    fn=isGitWriteIR;        predval="$(git_write_ir "$cmd")" ;;
+        *)      fail "$desc: unknown predicate '$pred'"; return ;;
+    esac
+    if [ "$cls" = "read" ] && [ "$predval" = "true" ]; then
+        pass "$desc -> read + ${fn}=true (retired-write new contract)"
+    else
+        fail "$desc: expected classify=read + ${fn}=true, got classify='$cls' ${fn}='$predval' (cmd: $(printf '%q' "$cmd"))"
+    fi
+}

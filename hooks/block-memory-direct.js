@@ -51,7 +51,7 @@ function bashHitsMemory(cmd) {
   if (!ir || ir.parseFailure) return false;
   const { targets } = collectWriteTargetsFromSegments(ir.segments, { verbs: SHELL_CONFIG_VERB_SET });
   if (!targets) return false;
-  return targets.some(t => isUnderPath(t, MEMORY_DIR));
+  return targets.some(t => isUnderPath(t.path, MEMORY_DIR));
 }
 
 let input;

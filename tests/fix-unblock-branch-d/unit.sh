@@ -35,28 +35,31 @@ console.log(d);
 trap 'chmod -R u+rwX "$TMPDIR_BASE" 2>/dev/null; rm -rf "$TMPDIR_BASE"' EXIT
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T1: classify reclassifies -d/-D as write
+# T1: git branch -d/-D is a write (detected by isGitWriteIR, the SSOT).
+# Post-#1401 the git WRITE_PATTERNS entries were retired: classify() no longer
+# flags git as write; isGitWriteIR (IR-based) owns write detection. This mirrors
+# the fix-1391 gh-retire update (classify → isGhWriteIR).
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_classify_branch_delete_is_write() {
     local r
-    r="$(call_classify 'git branch -d fix/foo')"
-    if [ "$r" = "write" ]; then
-        pass "classify(git branch -d fix/foo) == write"
+    r="$(call_isGitWriteIR 'git branch -d fix/foo')"
+    if [ "$r" = "true" ]; then
+        pass "isGitWriteIR(git branch -d fix/foo) == true"
     else
-        fail "classify(git branch -d fix/foo) == $r (expected write)"
+        fail "isGitWriteIR(git branch -d fix/foo) == $r (expected true)"
     fi
-    r="$(call_classify 'git branch -D fix/foo')"
-    if [ "$r" = "write" ]; then
-        pass "classify(git branch -D fix/foo) == write"
+    r="$(call_isGitWriteIR 'git branch -D fix/foo')"
+    if [ "$r" = "true" ]; then
+        pass "isGitWriteIR(git branch -D fix/foo) == true"
     else
-        fail "classify(git branch -D fix/foo) == $r (expected write)"
+        fail "isGitWriteIR(git branch -D fix/foo) == $r (expected true)"
     fi
-    r="$(call_classify 'git -C /path branch -D fix/foo')"
-    if [ "$r" = "write" ]; then
-        pass "classify(git -C /path branch -D fix/foo) == write"
+    r="$(call_isGitWriteIR 'git -C /path branch -D fix/foo')"
+    if [ "$r" = "true" ]; then
+        pass "isGitWriteIR(git -C /path branch -D fix/foo) == true"
     else
-        fail "classify(git -C ... branch -D ...) == $r (expected write)"
+        fail "isGitWriteIR(git -C ... branch -D ...) == $r (expected true)"
     fi
 }
 

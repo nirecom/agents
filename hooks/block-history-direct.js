@@ -47,7 +47,7 @@ function bashHitsProtected(cmd) {
   if (!ir || ir.parseFailure) return false;
   const { targets } = collectWriteTargetsFromSegments(ir.segments, { verbs: SHELL_CONFIG_VERB_SET });
   if (!targets) return false;
-  return targets.some(isProtectedPath);
+  return targets.some((t) => isProtectedPath(t.path));
 }
 
 const BLOCK_MSG =

@@ -48,9 +48,14 @@ done < <(sed 's/@@/\t/g' <<'TABLE'
 out-file-cli-flag@@pwsh script.ps1 --out-file result.txt@@read
 out-file-cli-flag2@@node dist/bundle.js --out-file output.js@@read
 out-file-cli-flag3@@tool --dry-run --out-file /tmp/report.txt@@read
-# Real Out-File cmdlet (PowerShell command position) must still trigger write
-out-file-cmdlet@@Out-File -FilePath result.txt@@write
-out-file-pipeline@@Get-Process | Out-File process.txt@@write
+# Post-#1296: pwsh write cmdlets (Out-File/Set-Content/...) now classify() as "read"
+# — their WRITE_PATTERNS entries were retired; write-detection moved to isPwshWriteIR.
+# In-scope BLOCKING of these pwsh writes is enforced at the hook (IR fast-allow) and
+# verified end-to-end by tests/feature-canary5-6git/commit2-green-retire.sh L2 cases.
+# The #876 false-positive fix (out-file-cli-flag* above, a --out-file CLI flag ≠ write)
+# is unaffected — those remain "read".
+out-file-cmdlet@@Out-File -FilePath result.txt@@read
+out-file-pipeline@@Get-Process | Out-File process.txt@@read
 TABLE
 )
 

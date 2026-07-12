@@ -23,24 +23,18 @@
 
 "use strict";
 const { resolveEffectiveCommand, resolveEffectiveArgv } = require("./segment-utils");
+// Git write detection lives in a sibling module (#1401 file-split): patterns.js
+// exceeded the 500-line HARD limit, so the git-write classifier was extracted.
+const { isGitWriteIR, resolveGitSubArgv } = require("./git-write-ir");
 
 const WRITE_PATTERNS = [
-  // POSIX redirects: >, >>, 1>, 2>, &>, n>  — /dev/null null-sink is excluded (see header note)
-  { name: "posix-redirect", kind: "posix-redir", regex: /(?:^|[\s;|&])(?:\d*)>>?(?!>|\d)(?!&\d)(?!\s*\/dev\/null(?=\s|[;|&)]|$))/ },
-  // tee (writes to file while passing through)
-  { name: "tee", kind: "posix-redir", regex: /(?:^|[\s;|&])tee\b/ },
+  // posix-redirect + tee (kind posix-redir) retired (#1400): now owned by
+  // isPosixRedirWriteIR (IR-based) reached via the enforce-worktree fast-allow gate.
   // here-doc: <<EOF, <<-EOF, <<'EOF', <<"EOF"
   { name: "here-doc", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)<<-?['"]?\w/ },
   // here-string: <<<
   { name: "here-string", kind: "posix", regex: /<<</ },
-  // PowerShell write cmdlets
-  { name: "Set-Content", kind: "pwsh", regex: /\bSet-Content\b/i },
-  { name: "Add-Content", kind: "pwsh", regex: /\bAdd-Content\b/i },
-  { name: "Out-File", kind: "pwsh", regex: /\bOut-File\b/i },
-  { name: "New-Item", kind: "pwsh", regex: /\bNew-Item\b/i },
-  { name: "Remove-Item", kind: "pwsh", regex: /\bRemove-Item\b/i },
-  { name: "Move-Item", kind: "pwsh", regex: /\bMove-Item\b/i },
-  { name: "Copy-Item", kind: "pwsh", regex: /\bCopy-Item\b/i },
+  // PowerShell write cmdlets (kind pwsh) retired (#1400): now owned by isPwshWriteIR.
   // PowerShell write aliases
   { name: "sc-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])sc\b/ },
   { name: "ac-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ac\b/ },
@@ -55,9 +49,8 @@ const WRITE_PATTERNS = [
   { name: "pwsh-here-single", kind: "pwsh-here", regex: /@'[\s\S]*?'@/ },
   { name: "pwsh-here-double", kind: "pwsh-here", regex: /@"[\s\S]*?"@/ },
   // Destructive file operations
-  { name: "rm", kind: "file-op", regex: /(?:^|[\s;|&])rm\b/ },
-  { name: "mv", kind: "file-op", regex: /(?:^|[\s;|&])mv\b/ },
-  { name: "cp", kind: "file-op", regex: /(?:^|[\s;|&])cp\b/ },
+  // rm/mv/cp (kind file-op) retired from WRITE_PATTERNS (#1400): now owned by
+  // isFileOpWriteIR. file-op stays in STRIP_KINDS for the 11 entries below.
   { name: "sed-inplace", kind: "file-op", regex: /\bsed\s+-[a-zA-Z]*i\b/ },
   { name: "perl-inplace", kind: "file-op", regex: /\bperl\s+-[a-zA-Z]*i\b/ },
   { name: "patch", kind: "file-op", regex: /(?:^|[\s;|&])patch\b/ },
@@ -77,43 +70,10 @@ const WRITE_PATTERNS = [
   { name: "uv-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])uv\s+(?:pip\s+(?:install|uninstall)|add\b|remove\b|sync\b|lock\b)/ },
   { name: "cargo-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])cargo\s+(?:build|install|update|publish|clean)\b/ },
   { name: "go-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])go\s+(?:build|install|get|mod\s+(?:download|tidy|vendor))\b/ },
-  // git mutating subcommands
-  { name: "git-commit", kind: "git", regex: /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*commit\b/ },
-  { name: "git-push", kind: "git", regex: /\bgit\b.*\bpush\b/ },
-  // negative-lookahead excludes read-only plumbing: merge-base (ancestry check) and
-  // merge-tree (tree-object output only). merge-file writes back to the first arg
-  // and must still classify as write.
-  { name: "git-merge", kind: "git", regex: /\bgit\b.*\bmerge(?!-base\b|-tree\b)(?:\b|$)/ },
-  { name: "git-rebase", kind: "git", regex: /\bgit\b.*\brebase\b/ },
-  { name: "git-reset", kind: "git", regex: /\bgit\b.*\breset\b/ },
-  { name: "git-am", kind: "git", regex: /\bgit\b.*\bam\b/ },
-  // Anchor `apply` at the git subcommand position (after `git` + optional global
-  // flags) so `apply` inside an argument value (e.g. `git stash list --grep=apply`,
-  // #1024) is not a false-positive. `git stash apply` is still caught by
-  // git-stash-write; real `git apply <patch>` still matches here.
-  { name: "git-apply", kind: "git", regex: /\bgit\s+(?:-\S+(?:\s+[^-|;&\s]\S*)?\s+)*apply\b/ },
-  { name: "git-cherry-pick", kind: "git", regex: /\bgit\b.*\bcherry-pick\b/ },
-  { name: "git-revert", kind: "git", regex: /\bgit\b.*\brevert\b/ },
-  // git tag: write (create/delete) but not list (-l, -v, --list, --points-at, etc.)
-  { name: "git-tag-write", kind: "git", regex: /\bgit\b.*\btag\b(?!\s+(?:-[lLvnq]|--list|--sort|--contains|--merged|--no-merged|--points-at))/ },
-  // git-branch-mutate: anchor flags at whitespace-delimited positions to avoid
-  // false-positives where branch names contain literal "-d", "-c", etc.
-  // (e.g., `git branch agents-env-consolidate` formerly matched `-c`).
-  // -d/-D (delete), -m/-M (rename), -c/-C (copy) all mutate refs — write.
-  // Branch deletion is gated by enforce-worktree's direct registry check
-  // (isAllowedBranchDeleteWhenNotCheckedOut), which queries `git worktree list
-  // --porcelain` and allows -d/-D only when the target branch is not currently
-  // checked out in any worktree.
-  { name: "git-branch-mutate", kind: "git", regex: /\bgit\s+(?:[^|;&]*\s)?branch\b[^|;&]*\s-[dDmMcC](?:\s|$)/ },
-  { name: "git-checkout-force", kind: "git", regex: /\bgit\b.*\bcheckout\b.*(?:--|\.|\bHEAD\b)/ },
-  { name: "git-restore", kind: "git", regex: /\bgit\b.*\brestore\b/ },
-  // only push/pop/apply at subcommand position mutate the working tree (write);
-  // drop/clear delete a stash ref only — read (#1024); subcommand-position avoids FP on `stash list --grep=apply`.
-  { name: "git-stash-write", kind: "git", regex: /\bgit\b.*\bstash\s+(?:push|pop|apply)\b/ },
-  { name: "git-worktree-write", kind: "git", regex: /\bgit\b.*\bworktree\b.*\b(?:add|remove|prune)\b/ },
-  { name: "git-add-history", kind: "git", regex: /\bgit\s+add\b(?:.*\bdocs\/history\b|.*\bCHANGELOG\.md\b)/ },
-  // git update-ref: directly rewrites a ref — write op (classifier gap fix).
-  { name: "git-update-ref", kind: "git", regex: /\bgit\b.*\bupdate-ref\b/ },
+  // git mutating subcommands (kind git) retired from WRITE_PATTERNS (#1401):
+  // the 18 git write forms + config-injection are now owned by isGitWriteIR
+  // (IR-based SSOT). git write reaches the enforce-worktree main-worktree-allows
+  // predicates via the collect→scope pipeline as a {resolveVia:"self"} target.
   // gh mutating subcommands.
   // Only commands that modify repo content or are destructive are kept here (Group B).
   // Coordination commands (Group A: gh pr create/edit/close/comment/review,
@@ -131,12 +91,10 @@ const WRITE_PATTERNS = [
   // interpreter as `/bin/bash` instead of `bash`.
   { name: "interpreter-c", kind: "interpreter",
     regex: /(?:^|[\s;|&])(?:\S*\/)?(?:bash|sh|zsh|dash|fish|pwsh|powershell|cmd)(?:\.exe)?\s+(?:-c\b|-Command\b|-EncodedCommand\b|\/c\b)/i },
-  // git -c <key>=<val>: arbitrary config injection. core.sshCommand,
-  // core.fsmonitor, etc. are executed by the transport — RCE-class.
-  // Classify as write so isAllowedFastForwardMerge / isAllowedPushAllExcluded
-  // reach the predicate-level rejectRceGitFlags guard.
-  { name: "git-c-config-flag", kind: "git",
-    regex: /\bgit\b[^|;&]*\s-c\s+\S+=/ },
+  // git-c-config-flag (kind git) retired (#1401): config-injection reachability
+  // is now owned by isGitWriteIR (C3) — it returns true for `-c k=v` / --config-env
+  // regardless of subcommand, so the fast-allow gate does not exit before
+  // hasGitHooksBypass / rejectRceGitFlags run on the raw command.
 ];
 
 // gh "Group A" coordination commands: pr/issue/repo lifecycle that touch
@@ -185,7 +143,7 @@ const QUOTING_ONLY_NAMES = new Set([
 // tested against the original command. here-doc/here-string in particular MUST
 // scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
 // stripHeredocBody contract depend on it (see classify() lines 160-190).
-const STRIP_KINDS = new Set(["file-op", "posix-redir", "git", "pkg-mgr", "pwsh", "pwsh-alias", "pwsh-encoded"]);
+const STRIP_KINDS = new Set(["file-op", "pkg-mgr", "pwsh-alias", "pwsh-encoded"]);
 
 // Write command words that, when quoted at command-position, must still be
 // classified as write (#515). git/npm/gh excluded — too many false positives.
@@ -314,4 +272,4 @@ function isGhWriteIR(ir) {
   return false;
 }
 
-module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR };
+module.exports = { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGhWriteIR, isGitWriteIR, resolveGitSubArgv };
