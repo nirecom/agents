@@ -4,15 +4,15 @@
 # RED for issue #955.
 #
 # Validates: supervisor-guard.js branch (2) (cumulative_severity=error) must
-# NOT block when alert_phase is "frozen" or "done" — those are terminal states and
+# NOT block when alert_phase is "paused" or "done" — those are terminal states and
 # the session would otherwise be permanently stuck. Adds the
-# `&& l2Phase !== "done" && l2Phase !== "frozen"` guard symmetric with
+# `&& l2Phase !== "done" && l2Phase !== "paused"` guard symmetric with
 # branch (3) already at line 311.
 #
 # Out of scope (triage: NA per class members):
 # - Branch (C3) WORKTREE_OFF proposal detection (line 289): already correctly handled by
-#   tryIncrementFrozen() returning frozen:true for alert_phase=frozen. alert_phase=done is a
-#   separate orthogonality concern not in this fix's scope.
+#   tryIncrementFrozen() returning frozen:true for alert_phase=paused (return field name
+#   unchanged per #1166). alert_phase=done is a separate orthogonality concern not in this fix's scope.
 #
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json Stop hooks — if supervisor-guard.js is
@@ -52,7 +52,7 @@ require_source() {
 }
 
 # Seed state with explicit alert_phase value.
-# phase_literal: pass "null" for null, or 'pending' / 'frozen' / 'done' (with single quotes for strings).
+# phase_literal: pass "null" for null, or 'pending' / 'paused' / 'closed' / 'done' (with single quotes for strings).
 seed_state_phase() {
     local tmp="$1" sid="$2" phase_literal="$3" cum_sev_literal="$4"
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
@@ -96,12 +96,12 @@ run_f1() {
     fi
 }
 
-# F2: alert_phase=frozen, cumulative_severity=error -> L3 arm, exit 2 (#1044: shouldSkipForSeverity removed)
+# F2: alert_phase=paused, cumulative_severity=error -> L3 arm, exit 2 (#1044: shouldSkipForSeverity removed)
 run_f2() {
-    require_source "$HOOK" "F2: alert_phase=frozen + cumSev=error -> L3 arm, exit 2" || return
+    require_source "$HOOK" "F2: alert_phase=paused + cumSev=error -> L3 arm, exit 2" || return
     local tmp out rc audit_phase_after
     tmp="$(mktemp -d)"
-    seed_state_phase "$tmp" "f2-sid" "'frozen'" "'error'"
+    seed_state_phase "$tmp" "f2-sid" "'paused'" "'error'"
     out=$(run_guard "$tmp" "f2-sid")
     rc=$?
     audit_phase_after=$(WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
@@ -112,9 +112,9 @@ process.stdout.write(String(st.audit.audit_phase));
 " 2>/dev/null)
     rm -rf "$tmp"
     if [ $rc -eq 2 ] && ( echo "$out" | grep -qi 'Audit mode strategic review triggered' ) && [ "$audit_phase_after" = "pending" ]; then
-        pass "F2: alert_phase=frozen + cumSev=error -> L3 arm, exit 2"
+        pass "F2: alert_phase=paused + cumSev=error -> L3 arm, exit 2"
     else
-        fail "F2: alert_phase=frozen + cumSev=error -> L3 arm, exit 2 (rc=$rc, audit_phase=$audit_phase_after, out=$out)"
+        fail "F2: alert_phase=paused + cumSev=error -> L3 arm, exit 2 (rc=$rc, audit_phase=$audit_phase_after, out=$out)"
     fi
 }
 

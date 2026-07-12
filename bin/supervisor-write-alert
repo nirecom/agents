@@ -35,7 +35,7 @@ function usage(msg) {
     " --finding-detail <text> --finding-reporter <name>" +
     " [--finding-status <draft|confirmed>]]" +
     " [--confirm-finding-ids <csv>] [--drop-finding-ids <csv>]" +
-    " [--set-alert-phase <pending|done|frozen>]" +
+    " [--set-alert-phase <pending|done|paused|closed>]" +
     " [--mark-findings-surfaced] [--set-alert-eligible-phase <post_final_report_window|null>]"
   );
   process.exit(1);
@@ -127,8 +127,8 @@ if (hasAlertArmedAt && hasClearAlertArmedAt) {
   usage("--alert-armed-at and --clear-alert-armed-at are mutually exclusive");
 }
 
-if (hasSetAlertPhase && args["set-alert-phase"] === "frozen" && hasAlertArmedAt) {
-  usage("--set-alert-phase frozen and --alert-armed-at are mutually exclusive");
+if (hasSetAlertPhase && (args["set-alert-phase"] === "paused" || args["set-alert-phase"] === "closed") && hasAlertArmedAt) {
+  usage("--set-alert-phase paused/closed and --alert-armed-at are mutually exclusive");
 }
 
 if (hasAnyFinding && !hasAllFindings) {
@@ -191,7 +191,7 @@ if (hasCumulativeSeverity) {
 
 if (hasSetAlertPhase) {
   const raw = args["set-alert-phase"];
-  if (!["pending", "done", "frozen"].includes(raw)) usage("--set-alert-phase must be one of pending|done|frozen");
+  if (!["pending", "done", "paused", "closed"].includes(raw)) usage("--set-alert-phase must be one of pending|done|paused|closed");
   patch.alert_phase = raw;
   if (patch.alert_phase === "done") patch.alert_retry_count = 0;
 }
