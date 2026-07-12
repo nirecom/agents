@@ -5,16 +5,14 @@
 //   1. Running in the main git checkout (not a linked worktree), regardless of branch.
 //   2. Running on a protected branch even inside a linked worktree.
 // Allows writes only from a linked worktree on a non-protected branch.
-//
-// Implementation is split across sibling modules under hooks/enforce-worktree/:
-//   config / git-repo-detection / session-scope / git-hooks-bypass /
-//   shared-cmd-utils / branch-delete-guard / main-worktree-allows / bash-write-scope.
-// This file holds the dispatch block plus three small helpers (readStdin / done /
+// Implementation is split across sibling modules under hooks/enforce-worktree/
+// (config / git-repo-detection / session-scope / git-hooks-bypass / shared-cmd-utils
+// / branch-delete-guard / main-worktree-allows / bash-write-scope / block-extras).
+// This file holds the dispatch block plus small helpers (readStdin / done /
 // getWorktreeBaseDirResolved). docs(history|changelog) writes use the GitHub REST
-// API and bypass local file/git writes (Contents API: bin/lib/github-contents-write.sh,
-// Git Data API: bin/lib/github-git-data-write.sh). Limitations: Bash write detection
-// is pattern-based (UX guard, not a security boundary). Use ENFORCE_WORKTREE=off to
-// bypass for trivial direct-main work.
+// API and bypass local file/git writes (Contents API + Git Data API under bin/lib/).
+// Limitation: Bash write detection is pattern-based (UX guard, not a security
+// boundary) — use ENFORCE_WORKTREE=off to bypass for trivial direct-main work.
 
 "use strict";
 
@@ -38,6 +36,7 @@ const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhe
 const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedClarifyGuardLoop } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
+const { buildExtras } = require("./enforce-worktree/block-extras");
 
 function readStdin() {
   try {
@@ -60,8 +59,6 @@ function getWorktreeBaseDirResolved() {
 
 // Captured at hook-input parse time so the `done()` helper can self-report on block.
 let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined, extras: undefined };
-
-const { buildExtras } = require("./enforce-worktree/block-extras");
 
 function done(decision) {
   if (decision && decision.block) {
@@ -199,7 +196,7 @@ if (toolName === "Bash") {
   const cmd = toolInput.command || "";
   if (!cmd) done();
   const ir = parse(cmd);
-  if (classify(ir) !== "write") done(); // read-only command — allow
+  if (classify(ir) !== "write" && !isGhWriteCommand(ir)) done(); // read-only command — allow (gh writes must reach the session-scope gate even when classify no longer flags them after the kind:"gh" WRITE_PATTERNS retire)
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
