@@ -1,34 +1,67 @@
 # Basic write/read cases, error inputs, edge, idempotency, security, export shape.
 
-# ============ Normal-block: each should classify as "write" ============
+# ============ Normal-block cases ============
+#
+# Post-#1296/#1400/#1401 retire: the rm/cp/mv/posix-redir/pwsh/git WRITE_PATTERNS
+# entries were removed from classify(). Each such command's local-write blocking
+# now lives at the enforce-worktree fast-allow gate via an IR predicate. The
+# migrated contract is: classify()=="read" AND the matching isXWriteIR() is true
+# (assert_write_ir). Commands whose patterns were NOT retired (sed -i / perl -i /
+# patch / touch / pwsh-encoded / heredoc / here-string / interpreter-c) still
+# classify()=="write" (assert_classify), because their detection never moved to
+# the IR predicate layer.
 
-WRITE_CASES=(
+# STILL-WRITE cases: classify() still returns "write" (patterns not retired).
+STILL_WRITE_CASES=(
+    'grep <<<"input"'      # here-string (posix kind, not retired)
+    '-EncodedCommand abc'  # pwsh-encoded (not retired)
+    '-enc abc'
+    '--% Set-Content foo'  # ps-stop-parsing (not retired)
+    "sed -i 's/a/b/' f"    # file-op sed-inplace (not retired)
+    'perl -i.bak f'        # file-op perl-inplace (not retired)
+    'patch -p1 < x'        # file-op patch (not retired)
+    'touch f'              # file-op touch (not retired)
+    # pwsh-ALIAS forms (sc/ac/ni/ri) keep their WRITE_PATTERNS entries — only the
+    # full cmdlet forms (Set-Content / New-Item / …) were retired to the IR layer.
+    'sc foo'
+    'ac foo'
+    'ni foo'
+    'ri foo'
+)
+
+# RETIRED posix-redir writes: classify=read + isPosixRedirWriteIR=true.
+POSIX_REDIR_CASES=(
     'echo x > foo'
     'cat a >> b'
     'tee -a foo'
     'cmd 1> out'
     'cmd 2> err'
     'cmd &> all'
-    'grep <<<"input"'
+)
+
+# RETIRED pwsh writes: classify=read + isPwshWriteIR=true.
+PWSH_CASES=(
     'Set-Content -Path foo -Value x'
     'Add-Content foo x'
     'Out-File foo'
     'New-Item foo'
     'Remove-Item foo'
-    'sc foo'
-    'ac foo'
-    'ni foo'
-    'ri foo'
-    '-EncodedCommand abc'
-    '-enc abc'
-    '--% Set-Content foo'
+)
+
+# RETIRED file-op writes (rm/mv/cp): classify=read + isFileOpWriteIR=true.
+FILEOP_CASES=(
     'rm foo'
     'mv a b'
     'cp a b'
-    "sed -i 's/a/b/' f"
-    'perl -i.bak f'
-    'patch -p1 < x'
-    'touch f'
+)
+
+# RETIRED git writes: classify=read + isGitWriteIR=true.
+# NOTE: gh WRITE commands (Group B: pr merge, release create/edit/delete/upload,
+# api -X POST/PUT/PATCH/DELETE, issue create/delete, repo delete) are NOT here.
+# gh operations write to GitHub, not the LOCAL worktree, so classify() returns
+# "read" AND no local-write IR predicate matches — gh write enforcement is owned
+# solely by isGhWriteIR at the enforce-worktree gh session-scope gate. See READ_CASES.
+GIT_WRITE_CASES=(
     'git commit -m x'
     'git push'
     'git merge x'
@@ -44,12 +77,6 @@ WRITE_CASES=(
     'git stash pop'
     'git worktree add /tmp/w'
     'git worktree remove /tmp/w'
-    # NOTE: gh WRITE commands (Group B: pr merge, release create/edit/delete/upload,
-    # api -X POST/PUT/PATCH/DELETE, issue create/delete, repo delete) are NOT in
-    # WRITE_CASES. gh operations write to GitHub, not the LOCAL worktree, so classify()
-    # — whose contract is local-write detection — returns "read" for them (post-#1296
-    # retire of the kind:"gh" WRITE_PATTERNS group). gh write enforcement is owned
-    # solely by isGhWriteIR at the enforce-worktree gh session-scope gate. See READ_CASES.
     'git tag -d v1'
     'git tag v1.0'
 )
@@ -66,8 +93,20 @@ EOF' "write"
 
 test_write_cases() {
     local c
-    for c in "${WRITE_CASES[@]}"; do
-        assert_classify "write[$c]" "$c" "write"
+    for c in "${STILL_WRITE_CASES[@]}"; do
+        assert_classify "still-write[$c]" "$c" "write"
+    done
+    for c in "${POSIX_REDIR_CASES[@]}"; do
+        assert_write_ir "posix-redir[$c]" "$c" posix
+    done
+    for c in "${PWSH_CASES[@]}"; do
+        assert_write_ir "pwsh[$c]" "$c" pwsh
+    done
+    for c in "${FILEOP_CASES[@]}"; do
+        assert_write_ir "fileop[$c]" "$c" fileop
+    done
+    for c in "${GIT_WRITE_CASES[@]}"; do
+        assert_write_ir "git-write[$c]" "$c" git
     done
 }
 
@@ -179,7 +218,9 @@ test_classify_empty() {
 # ============ Edge cases ============
 
 test_compound_command() {
-    assert_classify "compound 'cd /tmp && rm foo'" 'cd /tmp && rm foo' "write"
+    # Retired file-op: `rm` in a later segment. classify=read, isFileOpWriteIR
+    # sees the segment (unquoted `&&` splits it into its own segment).
+    assert_write_ir "compound 'cd /tmp && rm foo'" 'cd /tmp && rm foo' fileop
 }
 
 test_quoted_false_positive_documented() {
@@ -187,24 +228,29 @@ test_quoted_false_positive_documented() {
 }
 
 test_unicode_command() {
-    assert_classify "unicode redirect" 'echo 絵文字 > foo' "write"
+    # Retired posix-redir. classify=read, isPosixRedirWriteIR=true.
+    assert_write_ir "unicode redirect" 'echo 絵文字 > foo' posix
 }
 
 test_very_long_command() {
     local long; long="$(printf 'a%.0s' $(seq 1 10240))"
     assert_classify "10KB command (no write tokens)" "echo $long" "read"
-    assert_classify "10KB command (with write token)" "echo $long > foo" "write"
+    # Retired posix-redir. classify=read, isPosixRedirWriteIR=true.
+    assert_write_ir "10KB command (with write token)" "echo $long > foo" posix
 }
 
 test_multiline_command() {
     local cmd='echo a
 echo b > c'
-    assert_classify "multi-line with redirect" "$cmd" "write"
+    # Retired posix-redir in a later line. classify=read, isPosixRedirWriteIR=true.
+    assert_write_ir "multi-line with redirect" "$cmd" posix
 }
 
 # ============ Idempotency ============
 
 test_idempotency() {
+    # Idempotency = same input yields the same output across repeated calls.
+    # Read-cmd idempotency (unchanged): `git status` → read both times.
     local a b
     a="$(classify_cmd 'git status')"
     b="$(classify_cmd 'git status')"
@@ -213,22 +259,33 @@ test_idempotency() {
     else
         fail "classify not idempotent: a=$a b=$b"
     fi
+    # Retired-write idempotency: `rm foo` now classifies "read" (file-op pattern
+    # retired — write-detection moved to isFileOpWriteIR). The pre-#1296 pin
+    # expected "write"; that was stale, NOT a non-idempotency bug (both calls
+    # already agreed). We now assert classify() is idempotent at its true value
+    # ("read") AND that isFileOpWriteIR is likewise idempotent (both "true").
     a="$(classify_cmd 'rm foo')"
     b="$(classify_cmd 'rm foo')"
-    if [ "$a" = "$b" ] && [ "$a" = "write" ]; then
-        pass "classify is idempotent (write)"
+    local p1 p2
+    p1="$(pred_targets isFileOpWriteIR 'rm foo')"
+    p2="$(pred_targets isFileOpWriteIR 'rm foo')"
+    if [ "$a" = "$b" ] && [ "$a" = "read" ] && [ "$p1" = "$p2" ] && [ "$p1" = "true" ]; then
+        pass "classify + isFileOpWriteIR idempotent for retired file-op (read + true)"
     else
-        fail "classify not idempotent: a=$a b=$b"
+        fail "retired file-op not idempotent: classify a=$a b=$b; isFileOpWriteIR p1=$p1 p2=$p2"
     fi
 }
 
 # ============ Security ============
 
 test_security_compound_destructive() {
-    assert_classify "git status; rm -rf /" 'git status; rm -rf /' "write"
+    # Retired file-op `rm` in a later `;` segment. classify=read, isFileOpWriteIR
+    # sees the segment → the destructive compound still reaches the scope pipeline.
+    assert_write_ir "git status; rm -rf /" 'git status; rm -rf /' fileop
 }
 
 test_security_encoded_bypass() {
+    # pwsh-encoded pattern was NOT retired → classify still returns "write".
     assert_classify "PowerShell -enc bypass" '-enc SQBuAHYAbwBrAGUA' "write"
 }
 

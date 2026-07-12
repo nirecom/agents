@@ -83,15 +83,18 @@ function parseCdCommandInInterpreter(command) {
  * Returns { subcommand: null, rest: "" } when no subcommand is found.
  * Quote-aware (handles "..." and '...').
  */
+// SSOT (CPR-2): git global flags that consume the next token as their value (when
+// not given via =value). Imported by hooks/lib/bash-write-patterns/patterns.js
+// (resolveGitSubArgv) so the two do not drift. Do not duplicate this set.
+const FLAGS_WITH_ARG = new Set([
+  "-C", "--git-dir", "--work-tree", "--namespace",
+  "-c", "--config-env", "--exec-path", "--super-prefix",
+]);
+
 function parseGitGlobalOptions(command) {
   const tail = command.replace(/^\s*git\b\s*/, "");
   // Tokenize quote-aware
   const tokens = tail.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-  // Global flags that consume the next token as their value (when not given via =)
-  const FLAGS_WITH_ARG = new Set([
-    "-C", "--git-dir", "--work-tree", "--namespace",
-    "-c", "--config-env", "--exec-path", "--super-prefix",
-  ]);
   let i = 0;
   while (i < tokens.length) {
     const t = tokens[i];
@@ -107,6 +110,57 @@ function parseGitGlobalOptions(command) {
     }
   }
   return { subcommand: null, rest: "" };
+}
+
+/**
+ * Extract the scope-redirecting git GLOBAL options (-C / --work-tree / --git-dir)
+ * from a SINGLE segment's already-tokenized, quote-resolved argv (the `argv` field
+ * of a command-ir segment, i.e. the tokens AFTER cmd0="git"). Only options BEFORE
+ * the subcommand verb are honored — a value-position or post-subcommand occurrence
+ * (e.g. `git commit -C <ref>`, `git log --work-tree` after a subcommand) is not a
+ * global scope selector and is ignored.
+ *
+ * This is the SEGMENT-LOCAL, quote-aware replacement for the raw-regex
+ * parseGitCPath / parseGitPathFlag whole-command scanners: because it reads the
+ * segment's OWN argv, a scope flag in a DIFFERENT segment or inside quoted text
+ * cannot leak in (fixes cross-segment + quoted --work-tree mis-scope).
+ *
+ * Returns { workTree, cIn, gitDir, sawScopeFlag }:
+ *   - workTree / cIn / gitDir: the string value of the LAST such flag seen, or null.
+ *   - sawScopeFlag: true when ANY of -C / --work-tree / --git-dir appeared as a
+ *     global option (used by callers to trigger fail-closed handling when the value
+ *     is unresolvable).
+ * gitArgv MUST be the token array after cmd0 (does not include the literal "git").
+ */
+function extractGitScopeFlagsFromArgv(gitArgv) {
+  const result = { workTree: null, cIn: null, gitDir: null, sawScopeFlag: false };
+  if (!Array.isArray(gitArgv)) return result;
+  let i = 0;
+  while (i < gitArgv.length) {
+    const tok = gitArgv[i];
+    if (typeof tok !== "string") break;
+    if (tok[0] !== "-") break; // first non-flag = subcommand verb; stop.
+    const eq = tok.indexOf("=");
+    const key = eq === -1 ? tok : tok.slice(0, eq);
+    const attached = eq !== -1 ? tok.slice(eq + 1) : null;
+    const takesValue = FLAGS_WITH_ARG.has(key);
+    let value = null;
+    if (takesValue) {
+      if (attached !== null) {
+        value = attached;
+        i += 1;
+      } else {
+        value = i + 1 < gitArgv.length ? gitArgv[i + 1] : null;
+        i += 2;
+      }
+    } else {
+      i += 1;
+    }
+    if (key === "--work-tree") { result.workTree = value; result.sawScopeFlag = true; }
+    else if (key === "-C") { result.cIn = value; result.sawScopeFlag = true; }
+    else if (key === "--git-dir") { result.gitDir = value; result.sawScopeFlag = true; }
+  }
+  return result;
 }
 
 /**
@@ -145,4 +199,4 @@ function parseGitConfigValues(command, key) {
   return values;
 }
 
-module.exports = { parseGitCArg, parseCdCommand, parseCdCommandInInterpreter, parseGitGlobalOptions, parseGitConfigValues };
+module.exports = { parseGitCArg, parseCdCommand, parseCdCommandInInterpreter, parseGitGlobalOptions, parseGitConfigValues, extractGitScopeFlagsFromArgv, FLAGS_WITH_ARG };

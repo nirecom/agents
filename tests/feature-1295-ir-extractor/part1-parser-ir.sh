@@ -218,19 +218,19 @@ assert_eq "R2f expandStatic unresolvable null" 'null'                           
 echo "=== Section C: collectWriteTargetsFromSegments + verb sets (NEW; expected FAIL pre-impl) ==="
 assert_eq "C1 SHELL_CONFIG excludes rm"      "false" "$(has_verb SHELL_CONFIG_VERB_SET rm)"
 assert_eq "C2 FULL includes rm"              "true"  "$(has_verb FULL_VERB_SET rm)"
-assert_eq "C3 piped tee captured (#1069)"    '["/tmp/foo"]' "$(collect_targets 'echo hello | tee /tmp/foo | cat' SHELL_CONFIG_VERB_SET)"
+assert_eq "C3 piped tee captured (#1069)"    '[{"resolveVia":"ancestor","path":"/tmp/foo"}]' "$(collect_targets 'echo hello | tee /tmp/foo | cat' SHELL_CONFIG_VERB_SET)"
 
 # C4 — FULL_VERB_SET captures rm; SHELL_CONFIG_VERB_SET must NOT (rm excluded).
 # The verb set is the sole switch between "shell-config guard" and "full write scan":
 # the SAME command must yield the rm target under FULL and nothing under SHELL_CONFIG.
-assert_eq "C4a FULL captures rm target"      '["/tmp/foo"]' "$(collect_targets 'rm /tmp/foo' FULL_VERB_SET)"
+assert_eq "C4a FULL captures rm target"      '[{"resolveVia":"ancestor","path":"/tmp/foo"}]' "$(collect_targets 'rm /tmp/foo' FULL_VERB_SET)"
 assert_eq "C4b SHELL_CONFIG excludes rm"     'null'         "$(collect_targets 'rm /tmp/foo' SHELL_CONFIG_VERB_SET)"
 
 # C5 (resolveEffectiveCommand/argv routing) — env-prefixed verbs resolve through
 # the collector. A=1 must not derail verb detection; the env-prefix value must feed
 # cp/mv destination expansion the same way the string extractor does.
-assert_eq "C5a env-prefix tee target"        '["/tmp/foo"]' "$(collect_targets 'A=1 tee /tmp/foo' SHELL_CONFIG_VERB_SET)"
-assert_eq "C5b env-prefix cp dest expanded"  '["out/dest"]' "$(collect_targets 'D=out cp src $D/dest' SHELL_CONFIG_VERB_SET)"
+assert_eq "C5a env-prefix tee target"        '[{"resolveVia":"ancestor","path":"/tmp/foo"}]' "$(collect_targets 'A=1 tee /tmp/foo' SHELL_CONFIG_VERB_SET)"
+assert_eq "C5b env-prefix cp dest expanded"  '[{"resolveVia":"ancestor","path":"out/dest"}]' "$(collect_targets 'D=out cp src $D/dest' SHELL_CONFIG_VERB_SET)"
 # C1 read-only redirect IR path (NEW; FAIL pre-impl): read redirects must NOT
 # produce write targets when routed through collectWriteTargetsFromSegments.
 # FAIL pre-impl because collectWriteTargetsFromSegments is not yet exported; post-impl
@@ -240,8 +240,8 @@ assert_eq "C7 herestring <<< not captured (NEW; FAIL pre-impl)"  'null' "$(colle
 
 # C2 env-prefix routing completeness (NEW; FAIL pre-impl): collector must route
 # env-prefix mv and pwsh the same way as tee (C5a) and cp (C5b).
-assert_eq "C8 env-prefix mv dest expanded (NEW; FAIL pre-impl)" '["out/dest"]' "$(collect_targets 'D=out mv src $D/dest' SHELL_CONFIG_VERB_SET)"
-assert_eq "C9 env-prefix pwsh Set-Content (NEW; FAIL pre-impl)" '["/tmp/foo"]'  "$(collect_targets 'A=1 Set-Content -Path /tmp/foo' SHELL_CONFIG_VERB_SET)"
+assert_eq "C8 env-prefix mv dest expanded (NEW; FAIL pre-impl)" '[{"resolveVia":"ancestor","path":"out/dest"}]' "$(collect_targets 'D=out mv src $D/dest' SHELL_CONFIG_VERB_SET)"
+assert_eq "C9 env-prefix pwsh Set-Content (NEW; FAIL pre-impl)" '[{"resolveVia":"ancestor","path":"/tmp/foo"}]'  "$(collect_targets 'A=1 Set-Content -Path /tmp/foo' SHELL_CONFIG_VERB_SET)"
 
 # C10: process substitution in redirect target → fail-closed → parseFailure=true.
 # collectWriteTargetsFromSegments sees a null from extractRedirectTargets and sets
@@ -264,7 +264,7 @@ assert_eq "C11 tee normal → parseFailure false (PASS now)" 'false' "$(collect_
 # preflight via bin/check-verification-gate.sh category: hook-registration.
 # ===========================================================================
 echo "=== Section D: #1069 direct-caller regression guard (NEW routing; expected FAIL pre-impl) ==="
-assert_eq "D1 non-first-seg tee captured"    '["/tmp/foo"]' "$(collect_targets 'cat x | tee /tmp/foo' SHELL_CONFIG_VERB_SET)"
+assert_eq "D1 non-first-seg tee captured"    '[{"resolveVia":"ancestor","path":"/tmp/foo"}]' "$(collect_targets 'cat x | tee /tmp/foo' SHELL_CONFIG_VERB_SET)"
 
 # C2 — #1069 multi-write-verb pipelines: EVERY writing segment contributes its
 # target, in pipeline order. One tee-only case was insufficient; these span the
@@ -275,9 +275,9 @@ while IFS='^' read -r d_name d_cmd d_set d_want; do
   [ -z "$d_name" ] && continue
   assert_eq "$d_name" "$d_want" "$(collect_targets "$d_cmd" "$d_set")"
 done <<'D_TABLE'
-D2 dual tee both targets^tee /tmp/a | tee /tmp/b^SHELL_CONFIG_VERB_SET^["/tmp/a","/tmp/b"]
-D3 cp then mv both dests^cp a /tmp/dest | mv b /tmp/dest2^SHELL_CONFIG_VERB_SET^["/tmp/dest","/tmp/dest2"]
-D4 dual redirect both targets^printf x > /tmp/a | printf y > /tmp/b^SHELL_CONFIG_VERB_SET^["/tmp/a","/tmp/b"]
+D2 dual tee both targets^tee /tmp/a | tee /tmp/b^SHELL_CONFIG_VERB_SET^[{"resolveVia":"ancestor","path":"/tmp/a"},{"resolveVia":"ancestor","path":"/tmp/b"}]
+D3 cp then mv both dests^cp a /tmp/dest | mv b /tmp/dest2^SHELL_CONFIG_VERB_SET^[{"resolveVia":"ancestor","path":"/tmp/dest"},{"resolveVia":"ancestor","path":"/tmp/dest2"}]
+D4 dual redirect both targets^printf x > /tmp/a | printf y > /tmp/b^SHELL_CONFIG_VERB_SET^[{"resolveVia":"ancestor","path":"/tmp/a"},{"resolveVia":"ancestor","path":"/tmp/b"}]
 D_TABLE
 
 # ===========================================================================
@@ -381,7 +381,7 @@ assert_eq "X2 single non-write segment"      'null' "$(collect_targets 'cat some
 # order-stable post-impl behavior — one hit still trips the guard. Pinned as the
 # expected post-impl shape (FAIL pre-impl); if the implementation dedups instead,
 # this pin is the checkpoint that surfaces the decision for review.
-assert_eq "X3 duplicate path preserved"      '["/tmp/dup","/tmp/dup"]' "$(collect_targets 'tee /tmp/dup | tee /tmp/dup' SHELL_CONFIG_VERB_SET)"
+assert_eq "X3 duplicate path preserved"      '[{"resolveVia":"ancestor","path":"/tmp/dup"},{"resolveVia":"ancestor","path":"/tmp/dup"}]' "$(collect_targets 'tee /tmp/dup | tee /tmp/dup' SHELL_CONFIG_VERB_SET)"
 
 # ===========================================================================
 # Section H: tryResolveEnvUnderPlansDir traversal boundary (helpers.js).
