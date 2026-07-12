@@ -415,3 +415,7 @@ Changes: `complexity_evaluation` now stores complexity level (`high`/`low`) inst
 ### FEATURE: PR #1388 (2026-07-12)
 Background: fix(#1380): strip trailing shell redirects before enforce-worktree force-delete match (#1172)
 Changes: Fixed: `/worktree-end` and `/sweep-branches` no longer fail to force-delete their feature branch when the underlying delete command carries a trailing shell redirect (e.g. `2>&1`, `>/dev/null`) or a quoted `-C` path that contains spaces.
+
+### FEATURE: PR #1397 (2026-07-12)
+Background: feat(#1392,#1352,#544,#1353): speculative-skip engine, scope-change detection, judgment rename, settings auto-allow
+Changes: Speculative-skip verification: outline/detail skips now launch a background skip-verifier check; `next-step` blocks progress if the verifier hasn't returned and resets the plan stage if it vetoes.;Scope change detection in detail planning: class-member disposition changes, phase splits, or approach pivots relative to the outline now surface a warning before detail plan confirmation.;`WORKFLOW_OUTLINE_NOT_NEEDED` / `WORKFLOW_DETAIL_NOT_NEEDED` sentinels are now auto-allowed (no approval prompt required).
