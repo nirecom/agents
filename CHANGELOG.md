@@ -439,3 +439,7 @@ Changes: C2 supervisor review no longer re-fires after the Final Report is deliv
 ### BUGFIX: PR #1417 (2026-07-13)
 Background: fix(#882): extract session-bound worktree resolution into SSOT helper; wire RT-1/RT-4a to it
 Changes: `/review-tests` now selects staged files from the session's linked worktree (not CWD) when run from the main-conversation context, fixing token mismatch at the pre-commit gate (#882).
+
+### BUGFIX: PR #1418 (2026-07-13)
+Background: PR #1418 merged on 2026-07-13.
+Changes: Fixed: WORKTREE_OFF / WORKFLOW_OFF no longer blocks itself when re-used in the same session; the first use now records an audit event that the shim correctly ignores for subsequent off-sentinel checks
