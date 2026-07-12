@@ -466,20 +466,22 @@ test_off_mode_allows_all_gh_writes() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_gh_api_flag_forms_write() {
-    # Mutating verbs in all flag forms — uppercase + lowercase (regex /i)
-    assert_classify "gh api -X POST"          "gh api -X POST /repos"          "write"
-    assert_classify "gh api -XPOST (no space)" "gh api -XPOST /repos"          "write"
-    assert_classify "gh api -X=POST"          "gh api -X=POST /repos"          "write"
-    assert_classify "gh api --method POST"    "gh api --method POST /repos"    "write"
-    assert_classify "gh api --method=POST"    "gh api --method=POST /repos"    "write"
-    assert_classify "gh api -X PUT"           "gh api -X PUT /repos/o/r"       "write"
-    assert_classify "gh api -X PATCH"         "gh api -X PATCH /repos/o/r"     "write"
-    assert_classify "gh api -X DELETE"        "gh api -X DELETE /repos/o/r"    "write"
-    assert_classify "gh api --method PATCH"   "gh api --method PATCH /repos"   "write"
-    assert_classify "gh api --method=DELETE"  "gh api --method=DELETE /repos"  "write"
+    # gh api is a GitHub op, not a local write → classify returns "read" post-#1296.
+    # gh gating is via isGhWriteIR at the enforce-worktree gh gate
+    # (verified separately in fix-1391 Section E / gh-whitelist Group B enforcement tests).
+    assert_classify "gh api -X POST"          "gh api -X POST /repos"          "read"
+    assert_classify "gh api -XPOST (no space)" "gh api -XPOST /repos"          "read"
+    assert_classify "gh api -X=POST"          "gh api -X=POST /repos"          "read"
+    assert_classify "gh api --method POST"    "gh api --method POST /repos"    "read"
+    assert_classify "gh api --method=POST"    "gh api --method=POST /repos"    "read"
+    assert_classify "gh api -X PUT"           "gh api -X PUT /repos/o/r"       "read"
+    assert_classify "gh api -X PATCH"         "gh api -X PATCH /repos/o/r"     "read"
+    assert_classify "gh api -X DELETE"        "gh api -X DELETE /repos/o/r"    "read"
+    assert_classify "gh api --method PATCH"   "gh api --method PATCH /repos"   "read"
+    assert_classify "gh api --method=DELETE"  "gh api --method=DELETE /repos"  "read"
     # Lowercase verb (regex is case-insensitive)
-    assert_classify "gh api -X post (lower)"  "gh api -X post /repos"          "write"
-    assert_classify "gh api --method=delete (lower)" "gh api --method=delete /repos" "write"
+    assert_classify "gh api -X post (lower)"  "gh api -X post /repos"          "read"
+    assert_classify "gh api --method=delete (lower)" "gh api --method=delete /repos" "read"
 }
 
 test_gh_api_flag_forms_read() {

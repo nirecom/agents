@@ -270,10 +270,11 @@ test_classify_with_body_var() {
         const basic = m.classify(cmd);
         const detail = m.classifyDetailed(cmd);
         const names = detail.matchedNames || [];
-        // gh issue create is a write — correct
-        if (basic !== 'write') { process.stderr.write('classify should be write, got: ' + basic + '\n'); process.exit(1); }
-        if (detail.kind !== 'write') { process.stderr.write('classifyDetailed.kind should be write, got: ' + detail.kind + '\n'); process.exit(1); }
-        if (!names.includes('gh-issue-create')) { process.stderr.write('matchedNames should include gh-issue-create, got: ' + JSON.stringify(names) + '\n'); process.exit(1); }
+        // gh issue create → classify returns 'read' post-#1296 (kind:'gh' WRITE_PATTERNS group retired);
+        // gh gating moved to isGhWriteIR at the enforce-worktree gh gate. The stripping invariant
+        // (shell-var body must not leak file-op names like rm) is what this test still guards.
+        if (basic !== 'read') { process.stderr.write('classify should be read, got: ' + basic + '\n'); process.exit(1); }
+        if (detail.kind !== 'read') { process.stderr.write('classifyDetailed.kind should be read, got: ' + detail.kind + '\n'); process.exit(1); }
         // Must NOT include file-op names (rm etc.) — shell var body must be stripped
         const fileOpNames = ['rm','mv','cp','sed-inplace','perl-inplace','patch','touch','chmod','dd','rsync','tar-extract','unzip','gunzip','bunzip2'];
         const badMatches = names.filter(n => fileOpNames.includes(n));
@@ -286,7 +287,7 @@ test_classify_with_body_var() {
             fail "test_classify_with_body_var: classifyDetailed not exported yet (#659 RED)"
             ;;
         "ok")
-            pass "test_classify_with_body_var: classifyDetailed returns write+gh-issue-create, no file-op false-positive"
+            pass "test_classify_with_body_var: classifyDetailed returns read, no file-op false-positive (stripped body)"
             ;;
         "ERROR: "*)
             fail "test_classify_with_body_var: $r"
@@ -307,11 +308,14 @@ test_classify_clean_body() {
           process.exit(0);
         }
         const cmd = \"gh issue create --title 'fix' --body 'normal body'\";
+        const basic = m.classify(cmd);
         const detail = m.classifyDetailed(cmd);
         const names = detail.matchedNames || [];
-        if (!names.includes('gh-issue-create')) { process.stderr.write('should include gh-issue-create, got: ' + JSON.stringify(names) + '\n'); process.exit(1); }
-        const nonGhCreate = names.filter(n => n !== 'gh-issue-create');
-        if (nonGhCreate.length > 0) { process.stderr.write('expected only gh-issue-create, got extras: ' + JSON.stringify(nonGhCreate) + '\n'); process.exit(1); }
+        // gh issue create → classify returns 'read' post-#1296 (kind:'gh' WRITE_PATTERNS group retired);
+        // gh gating moved to isGhWriteIR at the enforce-worktree gh gate. A clean body must not
+        // produce any matchedNames (no write-pattern false-positive from the quoted args).
+        if (basic !== 'read') { process.stderr.write('classify should be read, got: ' + basic + '\n'); process.exit(1); }
+        if (names.length > 0) { process.stderr.write('clean body should yield empty matchedNames, got: ' + JSON.stringify(names) + '\n'); process.exit(1); }
         process.stdout.write('ok');
       } catch(e) { process.stdout.write('ERROR: ' + e.message); }
     " 2>/dev/null)"
@@ -320,7 +324,7 @@ test_classify_clean_body() {
             fail "test_classify_clean_body: classifyDetailed not exported yet (#659 RED)"
             ;;
         "ok")
-            pass "test_classify_clean_body: clean body → matchedNames === [gh-issue-create]"
+            pass "test_classify_clean_body: clean body → read, empty matchedNames (no false-positive)"
             ;;
         "ERROR: "*)
             fail "test_classify_clean_body: $r"
