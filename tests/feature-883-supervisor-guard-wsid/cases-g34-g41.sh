@@ -38,20 +38,38 @@ run_g35() {
 }
 
 run_g36() {
-    require_source "$HOOK" "G36: alert_phase=frozen suppresses branch (3) despite alert_armed_at" || return
+    require_source "$HOOK" "G36: alert_phase=paused suppresses branch (3) despite alert_armed_at" || return
     local tmp out rc sid
     tmp="$(mktemp -d)"
     sid="g36-sid"
-    # G33 reaches frozen-on-threshold via retry count; G36 sets alert_phase=frozen directly.
-    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'frozen', last_run_at: null, cumulative_severity: null, findings: [] }"
+    # G33 reaches paused-on-threshold via retry count; G36 sets alert_phase=paused directly.
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'paused', last_run_at: null, cumulative_severity: null, findings: [] }"
     out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
         | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
     if [ $rc -eq 0 ]; then
-        pass "G36: alert_phase=frozen suppresses branch (3) despite alert_armed_at"
+        pass "G36: alert_phase=paused suppresses branch (3) despite alert_armed_at"
     else
-        fail "G36: alert_phase=frozen suppresses branch (3) despite alert_armed_at (rc=$rc, out=$out)"
+        fail "G36: alert_phase=paused suppresses branch (3) despite alert_armed_at (rc=$rc, out=$out)"
+    fi
+}
+
+run_g36b() {
+    require_source "$HOOK" "G36b: alert_phase=closed suppresses branch (3) despite alert_armed_at" || return
+    local tmp out rc sid
+    tmp="$(mktemp -d)"
+    sid="g36b-sid"
+    # #1166: closed is a permanent terminal alert phase; branch (3) must not fire even when armed.
+    seed_state "$tmp" "$sid" "{ alert_armed_at: '2026-01-01T12:00:00Z', alert_phase: 'closed', last_run_at: null, cumulative_severity: null, findings: [] }"
+    out=$(cd "$tmp" && echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ]; then
+        pass "G36b: alert_phase=closed suppresses branch (3) despite alert_armed_at"
+    else
+        fail "G36b: alert_phase=closed suppresses branch (3) despite alert_armed_at (rc=$rc, out=$out)"
     fi
 }
 
