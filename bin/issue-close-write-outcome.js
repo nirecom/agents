@@ -150,6 +150,10 @@ if (args[0] === "--session-id") {
     );
     process.exit(1);
   }
+  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+    process.stderr.write("issue-close-write-outcome: session-id must match [A-Za-z0-9_-]+\n");
+    process.exit(1);
+  }
   const remaining = args.slice(4);
   const [issueArg2, state2, historyEntry2, issueClosed2, sentinelsPosted2, wipCleared2] = remaining;
   if (!issueArg2 || !state2 || !historyEntry2 || !issueClosed2 || !sentinelsPosted2 || !wipCleared2) {
@@ -172,6 +176,28 @@ if (args[0] === "--session-id") {
     sentinelsPosted: sentinelsPosted2,
     wipCleared: wipCleared2,
   });
+  // Best-effort: ensure sibling issues in this session's closes_issues also get
+  // an entry, marked "subsumed". A session may cover multiple issues; without
+  // this, only the primary N gets written and siblings go missing.
+  try {
+    const plansDir = resolvePlansDir();
+    const intentPath = path.join(plansDir, sessionId + "-intent.md");
+    const parseClosesIssues = require(path.join(AGENTS_CONFIG_DIR, "hooks/lib/parse-closes-issues.js"));
+    const siblings = parseClosesIssues.parseClosesIssues(intentPath) || [];
+    for (const entry of siblings) {
+      const siblingNumber = typeof entry === "number" ? entry : entry.number;
+      if (siblingNumber === issueNumber2) continue;
+      if (bag2.issues.some((e) => e && e.issueNumber === siblingNumber)) continue;
+      upsertEntry(bag2, {
+        issueNumber: siblingNumber,
+        state: "subsumed",
+        historyEntry: "subsumed",
+        issueClosed: "subsumed",
+        sentinelsPosted: "subsumed",
+        wipCleared: "subsumed",
+      });
+    }
+  } catch (_) {}
   fs.writeFileSync(outFile, JSON.stringify(bag2, null, 2));
   process.exit(0);
 }
