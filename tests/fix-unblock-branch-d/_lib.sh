@@ -78,6 +78,18 @@ call_classify() {
     " -- "$1" 2>/dev/null
 }
 
+# Post-#1401 the git WRITE_PATTERNS entries were retired: classify() no longer
+# flags git commands as write; isGitWriteIR (IR-based SSOT) owns that detection.
+call_isGitWriteIR() {
+    run_with_timeout 30 node -e "
+      try {
+        const { isGitWriteIR } = require('$PATTERNS_MODULE');
+        const { parse } = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+        console.log(String(isGitWriteIR(parse(process.argv[1]))));
+      } catch (e) { console.log('ERROR: ' + e.message); }
+    " -- "$1" 2>/dev/null
+}
+
 # Run the hook end-to-end. Mirrors the wrapper used in feature-parallel-sessions-*.sh.
 run_hook() {
     local payload="$1" cwd="$2"

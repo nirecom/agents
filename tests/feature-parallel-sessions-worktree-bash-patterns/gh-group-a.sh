@@ -21,8 +21,11 @@ EOF
 }
 
 test_gh_group_a_with_redirect_still_write() {
-    assert_classify "gh pr create + redirect to file" \
-        'gh pr create --body "x" > out.txt' "write"
+    # The external `> out.txt` redirect is a retired posix-redir write:
+    # classify=read + isPosixRedirWriteIR=true. The gh command itself is read
+    # (GitHub write); the file redirect is what reaches the scope pipeline.
+    assert_write_ir "gh pr create + redirect to file" \
+        'gh pr create --body "x" > out.txt' posix
 }
 
 test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
@@ -50,7 +53,9 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
 
     local cmd6
     cmd6=$(printf 'gh pr create --body "$(cat <<EOF\ngit push origin\nEOF\n)" > out.txt')
-    assert_classify "gh pr create heredoc body with write pattern plus external redirect is write" "$cmd6" "write"
+    # The heredoc body is safe (collapses to read), but the external `> out.txt`
+    # redirect is a retired posix-redir write: classify=read + isPosixRedirWriteIR=true.
+    assert_write_ir "gh pr create heredoc body with write pattern plus external redirect is write" "$cmd6" posix
 
     local cmd7
     cmd7=$(printf 'echo "$(cat <<EOF\ngit push\nEOF\n)"')
@@ -90,7 +95,9 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     # Case 14: `cat <<EOF > out.txt` — rest-of-line redirect on opener must remain visible → write
     local cmd14
     cmd14=$(printf 'gh pr create --body "x"; cat <<EOF > out.txt\nbody\nEOF')
-    assert_classify "cat heredoc with rest-of-line redirect after opener is write" "$cmd14" "write"
+    # The rest-of-line `> out.txt` on the heredoc opener is a retired posix-redir
+    # write: classify=read + isPosixRedirWriteIR=true.
+    assert_write_ir "cat heredoc with rest-of-line redirect after opener is write" "$cmd14" posix
 
     # Case 15: unquoted heredoc body with backticks — must remain write
     local cmd15
@@ -126,8 +133,9 @@ test_gh_group_a_inline_body_stripping() {
     assert_classify "gh issue create --body-file /path/to/file.md" \
         'gh issue create --body-file /path/to/file.md' "read"
 
-    assert_classify "real 'git commit -m' must remain write" \
-        'git commit -m "message"' "write"
+    # Real git write: retired → classify=read + isGitWriteIR=true.
+    assert_write_ir "real 'git commit -m' must remain write" \
+        'git commit -m "message"' git
 
     local probe_unknown_tmp
     probe_unknown_tmp=$(printf 'bash /tmp/issue-create-dispatch.sh --body "$(cat <<EOF\ngit commit\nEOF\n)"')

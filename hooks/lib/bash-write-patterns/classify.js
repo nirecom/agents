@@ -3,7 +3,8 @@
 const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("../strip-quoted-args");
 const { isStrictSentinel } = require("../sentinel-patterns");
 const { parse } = require("../command-ir");
-const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS } = require("./patterns");
+const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGitWriteIR } = require("./patterns");
+const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR } = require("../bash-write-targets");
 
 // Returns true when cmd invokes a known dispatcher via bash/sh/zsh/dash.
 // Quotes around the path are tolerated. Backslashes are normalised to forward
@@ -221,17 +222,19 @@ function isReadOnlyInterpreterC(cmd) {
       if (bashDouble) body = bashDouble[1];
     }
 
-    // pwsh/powershell family: -Command only (not -c)
+    // pwsh/powershell family: -Command / -c (PowerShell accepts `-c` as a
+    // documented alias for -Command). Symmetric with the bash `-c` handling so a
+    // genuine pwsh read demotes regardless of the flag spelling.
     if (body === null) {
       const pwshSingle = trimmed.match(
-        /^(?:pwsh|powershell)(?:\.exe)?\s+-Command\s+'([^']*)'\s*$/i
+        /^(?:pwsh|powershell)(?:\.exe)?\s+(?:-Command|-c)\s+'([^']*)'\s*$/i
       );
       if (pwshSingle) body = pwshSingle[1];
     }
 
     if (body === null) {
       const pwshDouble = trimmed.match(
-        /^(?:pwsh|powershell)(?:\.exe)?\s+-Command\s+"((?:[^"\\]|\\.)*)"\s*$/i
+        /^(?:pwsh|powershell)(?:\.exe)?\s+(?:-Command|-c)\s+"((?:[^"\\]|\\.)*)"\s*$/i
       );
       if (pwshDouble) body = pwshDouble[1];
     }
@@ -256,6 +259,34 @@ function isReadOnlyInterpreterC(cmd) {
     // still demote to read.
     if (segments.length === 1 && /^git\b/.test(segments[0])) return false;
 
+    // #1400/#1401 (GAP 1+2): after rm/cp/mv/posix-redir/pwsh/git leave
+    // WRITE_PATTERNS, classify() of an inner body like `rm /f` or `git commit`
+    // returns "read", so the segments.every(read) check below would demote the
+    // wrapper to read and fast-allow it. This is REGRESSION PREVENTION only — it
+    // is NOT the full interpreter-c IR target-extraction migration (canary-6a).
+    //
+    // Fail-closed for ALL writes: parse EACH inner segment to IR and refuse to
+    // demote to read when ANY inner segment is a write. The IR predicates see
+    // through env-prefix (`FOO=1 rm f`) and wrappers (`command git commit`) — a
+    // first-token string scan cannot. Covers the multi-segment case
+    // (`git status && git commit` — a LATER segment is the write) because every
+    // segment is checked, not just the first. The #820 single-segment bare-git
+    // guard above is a subset of isGitWriteIR here (kept for defense-in-depth).
+    const innerSegIsWrite = (s) => {
+      let segIr;
+      try { segIr = parse(s); } catch (_) { return true; } // unparseable → fail-closed
+      if (!segIr || segIr.parseFailure === true) return true;
+      return classify(segIr) === "write" ||
+        isGitWriteIR(segIr) ||
+        isPosixRedirWriteIR(segIr) ||
+        isPwshWriteIR(segIr) ||
+        isFileOpWriteIR(segIr) ||
+        isCommandSubstWriteIR(segIr) ||
+        isExoticExecWriteIR(segIr);
+    };
+    if (segments.some(innerSegIsWrite)) return false;
+
+    // Only demote to read when EVERY inner segment is genuinely read.
     return segments.every((s) => classify(s) === "read");
   } catch (e) { return false; }
 }

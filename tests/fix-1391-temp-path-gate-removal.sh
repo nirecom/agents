@@ -80,10 +80,14 @@ gh_write_ir() {
     node -e "const {isGhWriteIR}=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-patterns/patterns'); const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir'); process.stdout.write(String(isGhWriteIR(parse(process.argv[1]))))" -- "$1" 2>/dev/null
 }
 
-echo "=== Section A: classify temp-path gate removal (fail-before-fix) ==="
-# A1/A2/A4/A5 expect "write" — they FAIL pre-fix (gate demotes to "read") and
-# pass after the gate is removed. A3 is handled as a standalone assertion below
-# (it contains a literal pipe, which the IFS='|' table cannot carry as one field).
+echo "=== Section A: classify temp-path gate removal — new contract ==="
+# Post-#1296: classify() returns "read" for POSIX write redirects and tee (their
+# WRITE_PATTERNS entries were retired). The intermediate classify VALUE is "read";
+# in-scope BLOCKING of these writes is now enforced at the IR fast-allow layer
+# (isPosixRedirWriteIR etc.) and is verified end-to-end by the L2 hook-decision
+# cases in tests/feature-canary5-6git/commit2-green-retire.sh. These rows pin the
+# new classify="read" contract (they also confirm the temp-path gate — which used
+# to force "read" only for temp paths — no longer special-cases temp vs non-temp).
 while IFS='|' read -r name input want; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
     name="${name//[[:space:]]/}"
@@ -91,29 +95,26 @@ while IFS='|' read -r name input want; do
     got="$(classify_ir "$input")"
     assert_eq "$name" "$want" "$got"
 done <<'TABLE'
-A1 | echo x > /tmp/foo                    | write
-A2 | echo x > /tmp/r8/.claude/foo-r8      | write
-A4 | echo x > /var/tmp/foo                | write
-A5 | echo x > /dev/shm/foo                | write
+A1 | echo x > /tmp/foo                    | read
+A2 | echo x > /tmp/r8/.claude/foo-r8      | read
+A4 | echo x > /var/tmp/foo                | read
+A5 | echo x > /dev/shm/foo                | read
 TABLE
 
 # A3 stands outside the IFS='|' table: its input `ls | tee /tmp/out` contains a
 # literal pipe, which would be split as a field separator inside the table loop.
-# `tee` is a write both before and after the fix (sanity row, always green).
-assert_eq "A3" "write" "$(classify_ir 'ls | tee /tmp/out')"
+# tee's WRITE_PATTERNS entry was retired too → classify()="read"; hook-level
+# blocking covered by feature-canary5-6git commit2 L2 cases.
+assert_eq "A3" "read" "$(classify_ir 'ls | tee /tmp/out')"
 
-# A6/A7 (review C4): temp-path redirect classify edge cases with quoting / special
-# chars / Windows temp. Fail-before-fix like A1 — the gate currently demotes these
-# to "read" (isOsTempPath returns true for the redirect target), and the gate
-# removal restores "write". Kept as standalone assert_eq lines (not table rows)
-# because the quoted path with spaces contains characters awkward for IFS='|'.
-# A6: quoted temp path containing a space. isOsTempPath('/tmp/dir with space/foo')
-#   is true → pre-fix classify demotes to "read"; post-fix "write". FAILs now.
-assert_eq "A6: quoted /tmp path with space" "write" "$(classify_ir 'echo x > "/tmp/dir with space/foo"')"
-# A7: Windows AppData/Local/Temp redirect target. isOsTempPath matches the
-#   appdata[/\\]local[/\\]temp[/\\] branch (command-ir.js:177) → true → pre-fix
-#   classify demotes to "read"; post-fix "write". FAILs now (fail-before-fix).
-assert_eq "A7: Windows AppData/Local/Temp path" "write" "$(classify_ir 'echo x > C:/Users/u/AppData/Local/Temp/foo')"
+# A6/A7: temp-path redirect classify edge cases with quoting / special chars /
+# Windows temp. Same new contract: classify()="read" (redirect write-detection
+# moved to isPosixRedirWriteIR). Kept as standalone assert_eq lines (not table
+# rows) because the quoted path with spaces contains characters awkward for IFS='|'.
+# A6: quoted temp path containing a space.
+assert_eq "A6: quoted /tmp path with space" "read" "$(classify_ir 'echo x > "/tmp/dir with space/foo"')"
+# A7: Windows AppData/Local/Temp redirect target.
+assert_eq "A7: Windows AppData/Local/Temp path" "read" "$(classify_ir 'echo x > C:/Users/u/AppData/Local/Temp/foo')"
 
 echo "=== Section B: classify sanity (green before and after) ==="
 while IFS='|' read -r name input want; do

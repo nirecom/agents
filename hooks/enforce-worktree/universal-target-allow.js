@@ -59,13 +59,14 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
     if (hasCommandSequencing(cmd)) {
       if (hasCommandSequencingOutsideHeredoc(cmd)) return { verdict: "abstain" };
       // Sequencing is heredoc-body-only: check targets now; allow if all under plans-dir.
-      const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(irToUse);
+      const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(irToUse, repoRoot);
       if (hPf || !areAllBashTargetsUnderPlansDir(hTargets)) return { verdict: "abstain" };
       return { verdict: "allow", reason: "heredoc-body-only sequencing; all write targets under plans-dir" };
     }
 
-    // Extract write targets from all applicable extractors.
-    const { targets, parseFailure } = collectBashWriteTargets(irToUse);
+    // Extract write targets from all applicable extractors (forward repoRoot so a
+    // git self-target is visible on the universal path too — D4).
+    const { targets, parseFailure } = collectBashWriteTargets(irToUse, repoRoot);
 
     // Guard 3: parse failure from any extractor → abstain (fail-closed).
     if (parseFailure) return { verdict: "abstain" };
@@ -74,12 +75,10 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
     if (!targets || targets.length === 0) return { verdict: "abstain" };
 
     // Guard 5: every target must resolve outside every repo in sessionRoots.
-    // Strip surrounding shell quotes first — some extractors (e.g. tee) return
-    // raw token strings that include the original shell quote characters ("path" or 'path').
-    // areAllBashTargetsOutsideSessionScope does not strip quotes internally.
-    // Fail-closed to abstain if any target is in scope.
-    const bareTargets = targets.map((t) => String(t).replace(/^["']|["']$/g, ""));
-    if (!areAllBashTargetsOutsideSessionScope(bareTargets, sessionRoots)) {
+    // areAllBashTargetsOutsideSessionScope strips surrounding shell quotes from
+    // each target's .path internally (centralized quote-strip — CPR-2), so no
+    // pre-stripping is needed here. Fail-closed to abstain if any target is in scope.
+    if (!areAllBashTargetsOutsideSessionScope(targets, sessionRoots)) {
       return { verdict: "abstain" };
     }
     return { verdict: "allow", reason: "all write targets outside session scope" };

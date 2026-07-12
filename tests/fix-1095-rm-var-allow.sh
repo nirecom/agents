@@ -73,12 +73,23 @@ call_rm() {
 # Claude Code session and observe whether the hook blocks or allows it.
 # ─────────────────────────────────────────────────────────────────────────────
 
+    # Resolve the ACTUAL plans-dir: extractRmTargets only ALLOWs a $VAR whose value
+    # is under getWorkflowPlansDir() (helpers.js tryResolveEnvUnderPlansDir — a
+    # path-traversal / arbitrary-path guard). The prior fixtures hardcoded
+    # /tmp/... which is NOT under the plans-dir on this host (Windows:
+    # %USERPROFILE%\.workflow-plans), so they fail-closed to null regardless of the
+    # write-patterns migration. We derive the plans-dir at runtime and build the
+    # $VAR value under it so the ALLOW contract is exercised portably.
+    PLANS_DIR="$(run_with_timeout 30 node -e "
+      try { process.stdout.write(require('${_AGENTS_DIR_NODE}/hooks/lib/workflow-plans-dir').getWorkflowPlansDir().replace(/\\\\/g,'/')); }
+      catch (e) { process.stdout.write(''); }
+    " 2>/dev/null)"
+
 test_rm_var_resolution() {
-    # NEW BEHAVIOR (will fail until rm.js tokenizeRmArgs is fixed):
-    # $VAR with a defined, simple-path value → resolves to the path.
-    assert_fn_result 'rm -rf "$SCRATCHPAD" (defined) → ["/tmp/test-scratch"]' \
-        "$(call_rm 'rm -rf "$SCRATCHPAD"' 'SCRATCHPAD=/tmp/test-scratch')" \
-        '["/tmp/test-scratch"]'
+    # $VAR with a defined value UNDER the plans-dir → resolves and is ALLOWed.
+    assert_fn_result 'rm -rf "$SCRATCHPAD" (under plans-dir) → [scratch path]' \
+        "$(call_rm 'rm -rf "$SCRATCHPAD"' "SCRATCHPAD=${PLANS_DIR}/test-scratch")" \
+        "[\"${PLANS_DIR}/test-scratch\"]"
 
     # EXISTING BEHAVIOR (must pass now and after fix):
     # $VAR not set → null (fail-closed, unresolvable).
@@ -86,12 +97,19 @@ test_rm_var_resolution() {
         "$(call_rm 'rm -rf "$UNDEFINED_VAR"')" \
         'null'
 
-    # NEW BEHAVIOR (will fail until rm.js tokenizeRmArgs is fixed):
-    # $VAR with a literal suffix ($SCRATCHPAD/child) → resolves to env+suffix.
+    # $VAR (under plans-dir) with a literal suffix → resolves to env+suffix.
     # detail.md Step 3 allows the simple-form $VAR and $VAR/<literal-suffix>.
-    assert_fn_result 'rm -rf "$SCRATCHPAD/child" (literal suffix) → ["/tmp/child"]' \
-        "$(call_rm 'rm -rf "$SCRATCHPAD/child"' 'SCRATCHPAD=/tmp')" \
-        '["/tmp/child"]'
+    assert_fn_result 'rm -rf "$SCRATCHPAD/child" (literal suffix) → [scratch/child]' \
+        "$(call_rm 'rm -rf "$SCRATCHPAD/child"' "SCRATCHPAD=${PLANS_DIR}")" \
+        "[\"${PLANS_DIR}/child\"]"
+
+    # ARBITRARY-PATH guard: a $VAR value OUTSIDE the plans-dir → null (fail-closed).
+    # This is the sibling of the ALLOW case above — it proves the resolver ALLOWs
+    # only plans-dir-scoped vars and still fail-closes on arbitrary paths (the very
+    # protection that made the old /tmp/... fixtures return null).
+    assert_fn_result 'rm -rf "$SCRATCHPAD" (outside plans-dir) → null' \
+        "$(call_rm 'rm -rf "$SCRATCHPAD"' 'SCRATCHPAD=/tmp/outside-plans')" \
+        'null'
 
     # ${VAR} brace form → null (fail-closed; only bare $VAR is resolved).
     assert_fn_result 'rm -rf "${SCRATCHPAD}" (brace form) → null' \

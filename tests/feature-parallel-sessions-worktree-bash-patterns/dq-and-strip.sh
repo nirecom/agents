@@ -32,25 +32,34 @@ test_cosmetic_quote_file_op_documented_fn() {
         '"cp" src dst' "write"
 }
 
-# ============ #514 — DQ-wrapped $(...) and `...` with write tokens classify as write ============
+# ============ #514 — DQ-wrapped $(...) and `...` with write tokens ============
+# Post-#1296/#1400/#1401 retire, classify() no longer catches rm/mv/tee/redirect
+# nested inside "$(...)"/backtick substitution (those WRITE_PATTERNS regexes were
+# removed). The IR parser keeps a double-quoted substitution as ONE argv token,
+# so isPosixRedirWriteIR / isFileOpWriteIR do not see the nested write either.
+# isCommandSubstWriteIR restores this coverage: it scans argvRaw for unquoted /
+# double-quoted $()/backtick substitutions and re-parses the inner command,
+# excluding single-quoted (literal) spans. So the new contract is
+# classify=read + isCommandSubstWriteIR=true. (touch is NOT retired → it still
+# classify()=="write" even inside a substitution — kept as assert_classify.)
 test_dq_command_substitution_with_redirect() {
     # HIGH#1: redirect inside $() inside DQ
-    assert_classify 'echo "$(echo hi > out.txt)" (#514 redirect inside $())' \
-        'echo "$(echo hi > out.txt)"' "write"
+    assert_write_ir 'echo "$(echo hi > out.txt)" (#514 redirect inside $())' \
+        'echo "$(echo hi > out.txt)"' subst
     # HIGH#1: write command word inside $() inside DQ
-    assert_classify 'echo "$(rm tmp)" (#514 HIGH rm inside $())' \
-        'echo "$(rm tmp)"' "write"
+    assert_write_ir 'echo "$(rm tmp)" (#514 HIGH rm inside $())' \
+        'echo "$(rm tmp)"' subst
     assert_classify 'echo "$(touch f)" (#514 HIGH touch inside $())' \
         'echo "$(touch f)"' "write"
-    assert_classify 'echo "$(tee out)" (#514 HIGH tee inside $())' \
-        'echo "$(tee out)"' "write"
-    assert_classify 'echo "$(mv a b)" (#514 HIGH mv inside $())' \
-        'echo "$(mv a b)"' "write"
+    assert_write_ir 'echo "$(tee out)" (#514 HIGH tee inside $())' \
+        'echo "$(tee out)"' subst
+    assert_write_ir 'echo "$(mv a b)" (#514 HIGH mv inside $())' \
+        'echo "$(mv a b)"' subst
     # HIGH#2: backtick substitution sibling of $()
-    assert_classify 'echo "`rm tmp`" (#514 HIGH backtick rm)' \
-        'echo "`rm tmp`"' "write"
-    assert_classify 'echo "`echo hi > out`" (#514 HIGH backtick redirect)' \
-        'echo "`echo hi > out`"' "write"
+    assert_write_ir 'echo "`rm tmp`" (#514 HIGH backtick rm)' \
+        'echo "`rm tmp`"' subst
+    assert_write_ir 'echo "`echo hi > out`" (#514 HIGH backtick redirect)' \
+        'echo "`echo hi > out`"' subst
     # Read commands inside $() / backticks remain read
     assert_classify 'echo "$(git status)" (#514 regression read cmd)' \
         'echo "$(git status)"' "read"
@@ -118,12 +127,13 @@ test_quoted_arg_no_false_positive_posix_redir() {
         'echo "tee file"' "read"
 }
 
-# Regression guard: real unquoted redirects and tee must remain "write" after fix.
+# Regression guard: real unquoted redirects and tee. Retired posix-redir →
+# classify=read + isPosixRedirWriteIR=true (write-detection moved to the IR layer).
 test_unquoted_redirect_and_tee_still_write() {
-    assert_classify "echo hi > out.txt" 'echo hi > out.txt' "write"
-    assert_classify "echo hi >> out.txt" 'echo hi >> out.txt' "write"
-    assert_classify "echo hi | tee out.txt" 'echo hi | tee out.txt' "write"
-    assert_classify "tee out.txt" 'tee out.txt' "write"
+    assert_write_ir "echo hi > out.txt" 'echo hi > out.txt' posix
+    assert_write_ir "echo hi >> out.txt" 'echo hi >> out.txt' posix
+    assert_write_ir "echo hi | tee out.txt" 'echo hi | tee out.txt' posix
+    assert_write_ir "tee out.txt" 'tee out.txt' posix
     assert_classify "cmd 2>&1 (FD-to-FD, null-sink form not applicable)" 'cmd 2>&1' "read"
     assert_classify "cmd 2>/dev/null" 'cmd 2>/dev/null' "read"
     assert_classify "cmd 2>/dev/null | grep x" 'cmd 2>/dev/null | grep x' "read"
@@ -135,6 +145,9 @@ test_devnull_inside_command_substitution() {
         'echo $(grep x file 2>/dev/null)' "read"
     assert_classify 'echo $(grep x file >/dev/null)' \
         'echo $(grep x file >/dev/null)' "read"
-    assert_classify 'echo $(echo x > out.txt) (real redirect inside $() stays write)' \
-        'echo $(echo x > out.txt)' "write"
+    # Unquoted $() with a real redirect: the IR parser splits the inner redirect
+    # into its own segment → isPosixRedirWriteIR=true (not the DQ subst path).
+    # Retired posix-redir: classify=read.
+    assert_write_ir 'echo $(echo x > out.txt) (real redirect inside $() stays write)' \
+        'echo $(echo x > out.txt)' posix
 }
