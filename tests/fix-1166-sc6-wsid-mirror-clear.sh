@@ -6,7 +6,7 @@
 # Validates that SC-6 in skills/session-close/SKILL.md includes a wsid mirror-clear step:
 # 1. [Structural] The SC-6 section resolves Session-ID from WORKTREE_NOTES.md via awk.
 # 2. [Structural] The SC-6 section calls supervisor-write-alert with --session-id "$WSID"
-#    and --set-alert-phase frozen and --clear-alert-armed-at.
+#    and --set-alert-phase closed and --clear-alert-armed-at.
 # 3. [L2 integration] Running the awk extraction + supervisor-write-alert mirror-clear
 #    command sequence against a synthetic WORKTREE_NOTES.md + wsid state file leaves
 #    the wsid store's alert_armed_at as null (i.e., the armed flag is cleared).
@@ -73,7 +73,7 @@ run_s2() {
 
 # L2: Actually run the mirror-clear command sequence against a synthetic setup.
 # Simulates: fake WORKTREE_NOTES.md with Session-ID, wsid state with alert_armed_at set,
-# then runs awk extraction + supervisor-write-alert --session-id WSID --set-alert-phase frozen --clear-alert-armed-at,
+# then runs awk extraction + supervisor-write-alert --session-id WSID --set-alert-phase closed --clear-alert-armed-at,
 # and verifies that alert_armed_at in the wsid state file is null afterward.
 run_l2() {
     require_source "$WRITE_ALERT" "L2: supervisor-write-alert --clear-alert-armed-at clears wsid alert_armed_at" || return
@@ -88,7 +88,7 @@ run_l2() {
     printf 'Session-ID: %s\nSome-Other-Field: ignore\n' "$wsid" > "$tmp/WORKTREE_NOTES.md"
 
     # Seed wsid state with alert_armed_at set (armed state) and alert_phase=null
-    # so that --set-alert-phase frozen + --clear-alert-armed-at is a valid transition.
+    # so that --set-alert-phase closed + --clear-alert-armed-at is a valid transition.
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node -e "
 const w = require('$WRITER_NODE');
 const s = require('$SCHEMA_NODE');
@@ -122,11 +122,11 @@ process.stdout.write(st && st.alert && st.alert.alert_armed_at ? 'armed' : 'not-
         return
     fi
 
-    # Run the mirror-clear: --set-alert-phase frozen clears alert_armed_at at the writer level
+    # Run the mirror-clear: --set-alert-phase closed clears alert_armed_at at the writer level
     # (terminal state enforced by writeAlertState). Also pass --clear-alert-armed-at explicitly.
     WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$WRITE_ALERT" \
         --session-id "$extracted_wsid" \
-        --set-alert-phase frozen \
+        --set-alert-phase closed \
         --clear-alert-armed-at \
         >/dev/null 2>&1
     local write_rc=$?
