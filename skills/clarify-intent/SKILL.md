@@ -139,7 +139,16 @@ CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).
 CI-C1b. Read `skills/_shared/judge-task-complexity.md`; evaluate all S1–S6 signals against the confirmed intent.md (S6 approximated from intent.md line count only — outline.md does not exist yet). Then as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty>`. This is the sole guaranteed write point for complexity_evaluation.
-CI-C1c. **Outline skip record**: First evaluate `resolveSkipConditionsFromComplexity` via a separate Bash call: `node -e "const r=require('$AGENTS_CONFIG_DIR/hooks/lib/workflow-state/skip-signal-resolver.js');const v=r.resolveSkipConditionsFromComplexity('$SESSION_ID','outline');process.stdout.write(v?'auto':'judgment')"`. If output is `auto` (0-signal-low session), so_c1 and so_c2 are auto-satisfied as true. Otherwise fall back to judgment evaluation: so_c1 (single obvious approach) and so_c2 (change locations uniquely identified). When both conditions are true (either path) — perform 2 SEPARATE Bash calls in order: (1) `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true`; (2) `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"`. No chaining. Then launch `skip-verifier` via the Agent tool (run_in_background: true) with session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`. Detail skip is NOT recorded here — outline.md does not exist yet. If both conditions are not met, skip this step.
+CI-C1c. **Outline skip record**: Run (separate Bash call):
+   `node -e "const r=require('$AGENTS_CONFIG_DIR/hooks/lib/workflow-state/skip-signal-resolver.js');const v=r.resolveSkipConditionsFromComplexity('$SESSION_ID','outline');process.stdout.write(v?'auto':'judgment')"`
+   - `auto` → no judgment needed; proceed to record below.
+   - `judgment` → evaluate so_c1 (single obvious approach) and so_c2 (change locations identified). Not both true → skip this step.
+
+   When proceeding — 2 SEPARATE Bash calls in order:
+   (1) `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true`
+   (2) `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"`
+   Then launch skip-verifier: Agent tool (run_in_background: true), session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`.
+   Detail skip is NOT recorded here — outline.md does not exist yet.
 CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
 CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
