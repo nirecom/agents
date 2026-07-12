@@ -169,6 +169,17 @@ run_e5() {
     out=$(invoke_emit "$prog")
     assert_first_call "$out" "workflow" "warning" "enforce-override-handlers" \
         "E5: reportSentinel(WORKFLOW_OFF) emits workflow/warning/enforce-override-handlers"
+
+    # E5b: additionally assert record_type: escape_hatch_event on the sentinel finding
+    local rt_check
+    rt_check=$(run_with_timeout 5 node -e "
+const o = JSON.parse(process.argv[1]);
+const f = (o.calls[0]||{}).finding||{};
+if (f.record_type !== 'escape_hatch_event') { console.log('RT:'+f.record_type); process.exit(0); }
+console.log('OK');
+" "$out" 2>&1)
+    [ "$rt_check" = "OK" ] && pass "E5b: reportSentinel(WORKFLOW_OFF) finding carries record_type=escape_hatch_event" \
+        || fail "E5b: reportSentinel(WORKFLOW_OFF) finding carries record_type=escape_hatch_event ($rt_check)"
 }
 
 # --- E6: reportSentinel WORKFLOW_ON ---
