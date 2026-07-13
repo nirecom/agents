@@ -247,9 +247,9 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram-gemini${C_RESET}\n"
 ln -sf "$AGENTS_ROOT/bin/extract-accepted-tradeoffs" ~/.local/bin/extract-accepted-tradeoffs
 printf "${C_GREEN}Symlinked: ~/.local/bin/extract-accepted-tradeoffs${C_RESET}\n"
 
-# --- ~/.local/bin/review-skill-size symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-skill-size" ~/.local/bin/review-skill-size
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-skill-size${C_RESET}\n"
+# --- ~/.local/bin/review-prompt-size symlink ---
+ln -sf "$AGENTS_ROOT/bin/review-prompt-size" ~/.local/bin/review-prompt-size
+printf "${C_GREEN}Symlinked: ~/.local/bin/review-prompt-size${C_RESET}\n"
 
 # --- ~/.local/bin/review-code-size symlink ---
 ln -sf "$AGENTS_ROOT/bin/review-code-size" ~/.local/bin/review-code-size
