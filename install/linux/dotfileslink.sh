@@ -159,6 +159,15 @@ fi
 [ "${DOTFILESLINK_LINKS_ONLY:-0}" = "1" ] && exit 0
 
 # --- Assemble ~/.claude/settings.json from base + extension ---
+if ! type node >/dev/null 2>&1; then
+    _dl_nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+    [ -s "$_dl_nvm_dir/nvm.sh" ] && . "$_dl_nvm_dir/nvm.sh"
+    unset _dl_nvm_dir
+fi
+if ! type node >/dev/null 2>&1; then
+    printf "${C_YELLOW}Error: node not found. Run: nvm install --lts${C_RESET}\n" >&2
+    exit 1
+fi
 node "$AGENTS_ROOT/install/assemble-settings.js"
 
 # --- git core.hooksPath ---
