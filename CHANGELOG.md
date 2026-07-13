@@ -447,3 +447,7 @@ Changes: Fixed: WORKTREE_OFF / WORKFLOW_OFF no longer blocks itself when re-used
 ### FEATURE: PR #1420 (2026-07-13)
 Background: feat(#1400,#1401): WRITE_PATTERNS→IR migration — retire green-group + git, typed write-target contract, fail-closed security convergence
 Changes: Hardened main-worktree write-protection: git commands, shell redirects, PowerShell cmdlets, and file operations are now detected via IR-based analysis rather than surface-regex patterns. Exotic execution constructs (command substitution, eval, xargs, find -exec, process substitution) that attempt writes are fail-closed blocked. No change to user-visible allow/block outcomes for ordinary workflows.
+
+### FEATURE: PR #1429 (2026-07-13)
+Background: PR #1429 merged on 2026-07-13.
+Changes: Session-close Final Report no longer dumps all supervisor findings in detail; shows a one-line count+severity summary instead (#1342);Pre-merge supervisor check no longer blocks when a fresh audit verdict (WARN/CONTINUE) already reviewed the findings; only BLOCK verdicts gate the merge (#1374)
