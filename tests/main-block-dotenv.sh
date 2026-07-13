@@ -1,7 +1,12 @@
 #!/bin/bash
 # Tests: bin/cat, hooks/block-dotenv.js
-# Tags: dotenv, secrets, hook, bin, env
+# Tags: dotenv, secrets, hook, bin, env, scope:common
 # Test suite for block-dotenv.js PreToolUse hook
+#
+# L3 gap (what this test does NOT catch):
+# - hook registration in real Claude Code host process (test calls node "$HOOK" directly, bypassing PreToolUse dispatch)
+# - interaction between block-dotenv.js and other hooks in the same PreToolUse chain
+# Closest-to-action mitigation: hook-registration category checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -424,6 +429,36 @@ expect_block "runCommands cat .env" \
 
 expect_block "editFiles .env" \
     '{"tool_name":"editFiles","tool_input":{"file_path":".env"}}'
+
+echo ""
+echo "=== Bash: git add .env (should block) ==="
+
+# block-dotenv.js catches `git add .env` via positional-path parser:
+# argv[2] = ".env" passes isDotenvPath() -> blocked.
+expect_block "git add .env (direct path)" \
+    '{"tool_name":"Bash","tool_input":{"command":"git add .env"}}'
+
+expect_block "git add ./subdir/.env (relative path)" \
+    '{"tool_name":"Bash","tool_input":{"command":"git add ./subdir/.env"}}'
+
+expect_block "git add /abs/path/.env (absolute path)" \
+    '{"tool_name":"Bash","tool_input":{"command":"git add /project/.env"}}'
+
+# git -C <path> add .env: the command-parser walks argv; after consuming "-C"
+# and its value (/some/repo), ".env" appears as a positional to "add" -> blocked.
+expect_block "git -C repo add .env" \
+    '{"tool_name":"Bash","tool_input":{"command":"git -C /some/repo add .env"}}'
+
+# Wildcard git add is not blocked at PreToolUse level (intent.md scope).
+# pre-commit hook is the backstop for wildcard staging.
+expect_approve "git add . (wildcard, not blocked here)" \
+    '{"tool_name":"Bash","tool_input":{"command":"git add ."}}'
+
+expect_approve "git add -A (wildcard, not blocked here)" \
+    '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}'
+
+expect_approve "git add .env.example (safe suffix)" \
+    '{"tool_name":"Bash","tool_input":{"command":"git add .env.example"}}'
 
 echo ""
 echo "=== Results ==="

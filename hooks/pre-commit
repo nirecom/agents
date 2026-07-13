@@ -251,7 +251,7 @@ if [ -n "$REMOTE_URL" ]; then
 fi
 
 # Block direct commits of .env files (use .env.example / .env.sample / .env.template instead)
-ENV_FILES="$(git diff --cached --name-only --diff-filter=A | grep -E '(^|/)\.env$' || true)"
+ENV_FILES="$(git diff --cached --name-only --diff-filter=AM | grep -E '(^|/)\.env$' || true)"
 if [ -n "$ENV_FILES" ]; then
     echo "pre-commit: .env file(s) staged for commit:"
     echo "$ENV_FILES" | sed 's/^/  /'
