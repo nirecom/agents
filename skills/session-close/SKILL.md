@@ -177,7 +177,7 @@ Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read
 - `<BUGS_FOUND>`, `<RELATED_TASKS>`, `<NEXT_TASKS>` → extract the matching `##` section content from WORKTREE_NOTES.md backup; or `- (none)` when file absent
 - `<SUPERVISOR_ALERT_SUMMARY>` → from supervisor state: `phase: <alert.alert_phase|none>, severity: <alert.cumulative_severity|none>, findings: <count>`; or `(not run)` when state absent
 - `<SUPERVISOR_AUDIT_SUMMARY>` → from supervisor state: `phase: <audit.audit_phase|none>, verdict: <audit.audit_verdict|none>, cause: <audit.audit_cause|none>`; or `(not run)` when state absent
-- `<SUPERVISOR_FINDINGS_DETAIL>` → when `alert.findings` is non-empty, call `formatLayer2Findings(alert.findings, { sessionId, workflowSessionId, supervisorPath, stateFilePath, forFinalReport: true })` and expand its result as literal text; when state absent, `alert.findings` empty, or render is null, expand to `(no findings)`
+- `<SUPERVISOR_FINDINGS_DETAIL>` → when `alert.findings` is non-empty, call `formatLayer2Findings(alert.findings, { sessionId, workflowSessionId, supervisorPath, stateFilePath, summaryOnly: true })` and expand its result as literal text; when state absent, `alert.findings` empty, or render is null, expand to `(no findings)`
 
 Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
 When `CONV_LANG` is set in `$CLAUDE_ENV_FILE` and is not `english`, write all substituted section body text in that language — headings (`##`, `###` lines) remain English.
@@ -190,6 +190,7 @@ After emitting, mark completion:
   if [ -n "$WSID" ] && [ "$WSID" != "<session-id>" ]; then
     node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$WSID" --set-alert-phase closed --clear-alert-armed-at
   fi
+  node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit" --clear-audit-phase --session-id "<session-id>"
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
 `stop-final-report-guard.js` validates completion by checking all 13 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.

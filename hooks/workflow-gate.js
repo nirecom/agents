@@ -155,6 +155,32 @@ function parseDetailFilesToModify(plansDir, wsid) {
   }
 }
 
+// Returns true when the audit has seen all current findings (audit_last_run_at >= newest
+// finding timestamp) and the verdict is non-BLOCK. A fresh non-BLOCK verdict means the
+// audit already reviewed everything and approved or warned without blocking — so the
+// warning-flush path should be skipped (#1374).
+function isAuditVerdictFresh(auditState, alertFindings) {
+  if (!auditState) return false;
+  const verdict = auditState.audit_verdict;
+  if (!verdict || verdict === "BLOCK") return false;
+  const lastRunAt = auditState.audit_last_run_at;
+  if (lastRunAt == null) return false;
+  const lastRunMs = new Date(lastRunAt).getTime();
+  if (Number.isNaN(lastRunMs)) return false;
+  const findings = Array.isArray(alertFindings) ? alertFindings : [];
+  if (findings.length === 0) return true;
+  const newestFindingMs = Math.max(
+    ...findings.map((f) => (f && f.timestamp ? new Date(f.timestamp).getTime() : 0))
+  );
+  return Number.isFinite(newestFindingMs) && lastRunMs >= newestFindingMs;
+}
+
+// Returns true only for BLOCK verdict — the one verdict that always gates the merge (#1374).
+function shouldBlockOnAuditVerdict(auditState, alertFindings) {
+  if (!auditState) return false;
+  return auditState.audit_verdict === "BLOCK";
+}
+
 // Supervisor pre-merge gate: warning-flush and scope-drift checks.
 // hookCwd: resolved cwd from the hook payload (toolInput.cwd) — allows
 // resolveBranchDiff to target the actual repo being merged, not process.cwd().
@@ -187,7 +213,8 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd) {
       if (cumSev && SEVERITY_RANK[cumSev] >= SEVERITY_RANK[AUDIT_SEVERITY_THRESHOLD] && findings.length > 0) {
         const au = alertState.audit || {};
         const skip = au.audit_phase === "pending" || au.audit_phase === "in_progress" ||
-          (au.audit_last_run_at != null && au.audit_cause === "pre-merge-warning-flush");
+          (au.audit_last_run_at != null && au.audit_cause === "pre-merge-warning-flush") ||
+          isAuditVerdictFresh(au, findings);
         if (!skip) {
           try {
             writeAuditState(alertEffectiveSid, {
@@ -199,6 +226,16 @@ function checkSupervisorPreMerge(sessionId, mergeKind, hookCwd) {
           } catch (_) {}
           blockWithoutError(formatPreMergeBlockReason("warning-flush", sessionId, alertWsid, null, null, alertEffectiveSid));
         }
+      }
+    }
+
+    // Path (i-b): BLOCK verdict always gates the merge, regardless of findings (#1374).
+    // Non-BLOCK verdicts (WARN, CONTINUE) skip warning-flush via isAuditVerdictFresh above.
+    if (alertState) {
+      const auditState = alertState.audit || {};
+      const findings = (alertState.alert && Array.isArray(alertState.alert.findings) ? alertState.alert.findings : []);
+      if (shouldBlockOnAuditVerdict(auditState, findings)) {
+        blockWithoutError(formatPreMergeBlockReason("audit-verdict:" + auditState.audit_verdict, sessionId, alertWsid, null, null, alertEffectiveSid));
       }
     }
 
@@ -650,4 +687,4 @@ if (require.main === module) {
   block(lines.join("\n"));
 }
 
-module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, hasUnstagedTrackedChanges, findAdditionalDirectories, parseDetailFilesToModify, checkSupervisorPreMerge };
+module.exports = { resolveRepoDir, hasStagedTestChanges, hasStagedDocChanges, hasWorktreeNotesDocEvidence, isWorktreeContext, isDocsOnlyStaged, resolveExternalDocsRepo, hasStagedChanges, hasUnstagedTrackedChanges, findAdditionalDirectories, parseDetailFilesToModify, checkSupervisorPreMerge, shouldBlockOnAuditVerdict, isAuditVerdictFresh };
