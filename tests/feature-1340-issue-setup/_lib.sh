@@ -34,7 +34,7 @@ FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
-# Table-driven equality assertion (per test-design.md §Table-Driven Tests).
+# Table-driven equality assertion (per test-design/parser-regex-tests.md §Table-Driven Tests).
 assert_eq() {
     local name="$1" want="$2" got="$3"
     if [ "$want" = "$got" ]; then echo "PASS: $name"; PASS=$((PASS + 1))

@@ -9,10 +9,11 @@ Write or update tests for the current task.
 
 ## Procedure
 
-WT-1. Read `skills/_shared/test-design.md` for test case categories, naming conventions, and layer selection rules. Also read `rules/test.md` for timeout, E2E, and installer test patterns.
-テスト対象ソースファイルがパーサ/正規表現/allowlist ファイル（sentinel-patterns.js,
-bash-write-patterns.js, command-parser.js, scan-outbound.sh, .private-info-*list のいずれか）
-の場合は、`skills/_shared/test-design.md` の **Table-Driven Tests** セクションのパターンを適用すること。
+WT-1. Read:
+   - `rules/core-principles.md`
+   - `skills/_shared/test-design.md`
+   - `rules/test.md`
+   For parser / regex / allowlist targets, apply the Table-Driven Tests pattern from `test-design/parser-regex-tests.md`.
 WT-2. Identify which source file(s) need tests.
 WT-3. **Enumerate call paths**: For each source file from step WT-2, trace all integration
    paths it participates in — what calls it, what it calls, and what format/contract
