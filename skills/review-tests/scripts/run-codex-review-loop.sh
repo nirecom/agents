@@ -67,6 +67,10 @@ for v in CTX_SURVEY_CODE CTX_SURVEY_HISTORY CTX_CONCERNS_LOG; do
 done
 TEST_DESIGN="$AGENTS_CONFIG_DIR/skills/_shared/test-design.md"
 if [[ -s "$TEST_DESIGN" ]]; then args+=(--context "$TEST_DESIGN"); fi
+PARSER_TESTS="$AGENTS_CONFIG_DIR/skills/_shared/test-design/parser-regex-tests.md"
+if [[ -s "$PARSER_TESTS" ]]; then args+=(--context "$PARSER_TESTS"); fi
+PROTECTION_TESTS="$AGENTS_CONFIG_DIR/skills/_shared/test-design/protection-fix-tests.md"
+if [[ -s "$PROTECTION_TESTS" ]]; then args+=(--context "$PROTECTION_TESTS"); fi
 if [[ -n "$CHANGED_FILES_CTX" ]]; then args+=(--context "$CHANGED_FILES_CTX"); fi
 RC=0
 "$AGENTS_CONFIG_DIR/bin/run-codex-review-loop" "${args[@]}" || RC=$?
