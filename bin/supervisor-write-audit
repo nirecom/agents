@@ -17,7 +17,7 @@ const KNOWN_VALUE_FLAGS = new Set([
   "--set-audit-verdict",
   "--audit-cause",
 ]);
-const KNOWN_BOOL_FLAGS = new Set(["--clear-audit-armed-at", "--increment-audit-retry-count"]);
+const KNOWN_BOOL_FLAGS = new Set(["--clear-audit-armed-at", "--clear-audit-phase", "--increment-audit-retry-count"]);
 
 function usage(msg) {
   if (msg) console.error(`[supervisor-write-audit] ERROR: ${msg}`);
@@ -25,7 +25,7 @@ function usage(msg) {
     "Usage: node bin/supervisor-write-audit [--session-id <sid>] [--mirror-session-id <sid>]" +
     " [--audit-armed-at <iso>] [--clear-audit-armed-at]" +
     " [--last-run-at <iso>]" +
-    " [--set-audit-phase <pending|in_progress|done|frozen>]" +
+    " [--set-audit-phase <pending|in_progress|done|frozen>] [--clear-audit-phase]" +
     " [--set-audit-verdict <CONTINUE|WARN|BLOCK>]" +
     " [--audit-cause <text>]" +
     " [--increment-audit-retry-count]"
@@ -69,6 +69,7 @@ if (!rawSid) {
 const FLAG_SPECS = {
   "audit-armed-at":       { kind: "value", patch: (v) => ({ audit_armed_at: v }),        mutexGroup: "armed-at" },
   "clear-audit-armed-at": { kind: "bool",  patch: ()  => ({ audit_armed_at: null }),      mutexGroup: "armed-at" },
+  "clear-audit-phase":    { kind: "bool",  patch: ()  => ({ audit_phase: null }) },
   "last-run-at":          { kind: "value", patch: (v) => ({ audit_last_run_at: v }) },
   "audit-cause":          { kind: "value", patch: (v) => ({ audit_cause: v }) },
   "set-audit-phase": {
