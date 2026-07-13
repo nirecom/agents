@@ -22,11 +22,15 @@ Single-round only — no Cn revision rounds.
 
 Parser/regex/allowlist sources: verify a table-driven test pattern exists (bash: `while IFS='|' read -r` loop; JS: `cases.forEach(` or `for (const `). Report absence as MISSING.
 Flag false-green patterns: assertions where expected and actual are the same literal, or test functions/blocks with no assertion call. Report as MISSING (coverage-integrity issue).
+For security/guard/classifier targets, also read `skills/_shared/test-design/protection-fix-tests.md` for Protection Fix Patterns 1–4.
+For parser/regex/allowlist targets, also read `skills/_shared/test-design/parser-regex-tests.md` for Table-Driven Tests and Mutation Probe detail.
 
 ## Procedure
 
 Read test file(s) and source file(s).
 Read `skills/_shared/test-design.md` for the checklist.
+For security/guard/classifier targets, also read `skills/_shared/test-design/protection-fix-tests.md`.
+For parser/regex/allowlist targets, also read `skills/_shared/test-design/parser-regex-tests.md`.
 Evaluate coverage — report what IS covered, what is MISSING, and what is N/A (with reason).
 Return a verdict in exactly one of these two formats:
 
