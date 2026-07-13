@@ -455,3 +455,7 @@ Changes: Session-close Final Report no longer dumps all supervisor findings in d
 ### FEATURE: PR #1430 (2026-07-13)
 Background: feat(#1145,#1404): WE-15 adaptive block message + cleanup-cascade/SKILL.md guardrails
 Changes: `worktree-end`: When WE-15 (`git worktree remove`) fails due to a CWD lock or busy state, `WORKTREE_OFF` is not needed — `/sweep-worktrees` reclaims the worktree automatically. Follow the WE-16 fallback and continue to WE-20.
+
+### FEATURE: PR #1433 (2026-07-13)
+Background: feat(#1431): test-design.md progressive-disclosure split + Pattern 4 classifier coverage
+Changes: Classifier/guard both-direction test coverage (Pattern 4) is now a documented standard in `test-design.md`; `write-tests` and `review-tests` now load `core-principles.md` to surface CPR-5 symmetry at tester context, preventing recurrence of the #1425 false-positive class
