@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/.env, bin/scan-outbound.sh, hooks/pre-commit
-# Tags: scan, filter, outbound, hook, git
+# Tags: scan, filter, outbound, hook, git, scope:common
 # Test suite for hooks/pre-commit — dotenv-vs-private-repo order fix.
 #
 # Currently the dotenv-add check runs BEFORE the private-repo check, so even
@@ -12,7 +12,13 @@
 #   - public repo + new .env -> rc=1 (blocked)
 #   - no remote + new .env -> rc=1 (blocked: unknown visibility, treat as public)
 #   - non-github host + new .env -> rc=0 (skipped: scan only runs for github)
-#   - modify existing .env on public -> rc=0 (only NEW .env files trigger)
+#   - modify existing .env on public -> rc=1 (blocked: Modified filter now active)
+#
+# L3 gap (what this test does NOT catch):
+# - real git installation with actual hooks path wired (test uses -c core.hooksPath= bypass)
+# - real `gh` CLI auth behavior vs stub (test injects a fake `gh` binary)
+# - network-isolated environments where gh api timeout differs from test stub
+# Closest-to-action mitigation: hook-registration category checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh.
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -196,7 +202,7 @@ else
 fi
 
 echo ""
-echo "=== Test 7: public repo + modify existing .env -> success ==="
+echo "=== Test 7: public repo + modify existing .env -> blocked ==="
 REPO="$TMPBASE/repo7"
 make_repo "$REPO" "https://github.com/foo/public"
 STUBDIR="$TMPBASE/stub7"
@@ -211,10 +217,24 @@ PATH="$EXEC_PATH" AGENTS_CONFIG_DIR="$FAKE_AGENTS" \
 echo "SECRET=v2" > "$REPO/.env"
 git -C "$REPO" add .env
 run_commit "$REPO" "modify env" "$PATH7"
-if [ "$PC_RC" = "0" ]; then
-    pass "public + modify existing .env -> rc=0"
+if [ "$PC_RC" = "1" ]; then
+    pass "public + modify existing .env -> rc=1 (blocked)"
 else
-    fail "public + modify existing .env -> expected rc=0, got rc=$PC_RC. out=[$PC_OUT]"
+    fail "public + modify existing .env -> expected rc=1, got rc=$PC_RC. out=[$PC_OUT]"
+fi
+
+echo ""
+echo "=== Test 8: github remote + gh api fails -> blocked (treated as public) ==="
+REPO="$TMPBASE/repo8"
+make_repo "$REPO" "https://github.com/foo/unknown"
+# Default stub ($EXEC_PATH) exits 1 for all gh calls — simulates auth error / network failure.
+echo "SECRET=x" > "$REPO/.env"
+git -C "$REPO" add .env
+run_commit "$REPO" "add env"
+if [ "$PC_RC" = "1" ]; then
+    pass "github remote + gh api failure -> rc=1 (treated as public)"
+else
+    fail "github remote + gh api failure -> expected rc=1, got rc=$PC_RC. out=[$PC_OUT]"
 fi
 
 echo ""
