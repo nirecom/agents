@@ -108,6 +108,15 @@ process.stdout.write(result || '');
     else
         pass "T4c: summaryOnly:true → individual finding detail NOT in output"
     fi
+
+    # T4d (GREEN-guard): summaryOnly:true emits EXACTLY the canonical one-line format
+    #   [EM Supervisor] N finding(s), highest severity: X.
+    # Precise format check (T4b's "2|error|warning" is too loose to catch drift).
+    if echo "$out_sum" | grep -qE '^\[EM Supervisor\] [0-9]+ finding\(s\), highest severity: '; then
+        pass "T4d: summaryOnly:true → canonical '[EM Supervisor] N finding(s), highest severity: X.' format"
+    else
+        fail "T4d: summaryOnly:true output does not match canonical one-line format, got: $(printf '%q' "$out_sum")"
+    fi
 }
 
 # --- T5: CONV_LANG symmetric coverage for formatL2ArmedReason, formatWorktreeOffProposalReason (Fix 3 / C4) ---
