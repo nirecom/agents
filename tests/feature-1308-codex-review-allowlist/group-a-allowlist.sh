@@ -1,7 +1,7 @@
 # ===========================================================================
 # GROUP A: FORMAT ALLOWLIST (cases 1-9) — TABLE-DRIVEN
 # Tests the FORMAT + verdict → exit-code mapping in run-codex-review-loop.
-# Per skills/_shared/test-design.md §Table-Driven Tests, allowlist changes
+# Per skills/_shared/test-design/parser-regex-tests.md §Table-Driven Tests, allowlist changes
 # must be exercised through a table-driven loop. The first column (case-name)
 # is injected into every assertion message (Go t.Run(name) equivalent).
 #

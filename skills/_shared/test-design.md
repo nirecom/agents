@@ -33,6 +33,7 @@ Report medium and low gaps as advisory only.
   - Permission: operations respect access control boundaries — unprivileged callers are denied (OWASP ASVS V4 Access Control)
   - Prompt injection: LLM/agent inputs from untrusted sources do not override system instructions or trigger unintended tool calls (OWASP LLM Top 10 LLM01, MCP Top 10 MCP06)
   - Security idempotency: re-running security-relevant operations (e.g., permission grants, secret rotation) does not escalate privileges or leave duplicate entries (extension of Idempotency cases)
+- **Classifier / guard cases**: when the unit yields one of several verdicts (allow/block, read/write, match/miss), cover every verdict — not only the one the change targets. The non-targeted verdict on sanctioned input is the CPR-5 symmetric counterpart of the targeted-reject case; omitting it ships false-positive over-blocking (origin: #1425).
 
 ## Security vs Test Compatibility
 
@@ -148,86 +149,6 @@ New test files follow `<area>-<issue-or-feature>-<topic>.sh` where `<area>` is o
 
 Existing files are NOT renamed — `git blame` continuity is preserved. Frontmatter handles semantic grouping via `# Tags:`.
 
-## Table-Driven Tests (required when changing parsers, regex constants, or allowlists)
-
-When modifying parsers, regex constants, or allowlists (e.g. sentinel-patterns.js,
-bash-write-patterns.js, command-parser.js, scan-outbound.sh), use table-driven patterns
-in the corresponding test file.
-
-### Standard bash pattern
-
-while IFS='|' read -r name input want; do
-    [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
-    name="${name//[[:space:]]/}"
-    want="${want//[[:space:]]/}"
-    got=$(eval_subject "$input")
-    assert_eq "$name" "$want" "$got"
-done <<'TABLE'
-case-name-1 | input value 1 | expected-1
-case-name-2 | input value 2 | expected-2
-TABLE
-
-Define assert_eq inline in each test file (no shared library):
-
-assert_eq() {
-    local name="$1" want="$2" got="$3"
-    if [ "$want" = "$got" ]; then echo "PASS: $name"; PASS=$((PASS + 1))
-    else echo "FAIL: $name — want=$(printf '%q' "$want") got=$(printf '%q' "$got")"; FAIL=$((FAIL + 1)); fi
-}
-
-- The first column `name` is injected into every assertion message (equivalent to Go's `t.Run(name)`).
-- `IFS='|'` allows spaces inside fields without quoting. `read -r` prevents backslash expansion.
-- Blank lines and `#` comment lines in the heredoc are skipped.
-
-### Equivalent JS pattern
-
-A JS test is considered table-driven when it uses:
-- `cases.forEach()` iteration, or
-- `for (const {name, input, want} of cases)` iteration,
-- with `name` included in the assertion message inside each iteration.
-
-### When this rule applies
-
-Apply when any of the following is true:
-- Adding or modifying regex constants in a pattern file.
-- Testing the same function with 2 or more different inputs.
-- An existing test file for a parser/regex/allowlist target has fewer than 2 cases per logical path.
-
-## Mutation Probe (lightweight regex kill verification)
-
-Run a mutation probe against parser/regex files when:
-- Adding a new regex constant (verify the test FAILs when that constant is removed).
-- Fixing a regex bug (verify the regression test FAILs against the unpatched code).
-
-### Running the probe
-
-bin/mutation-probe.sh <target-js-file>
-
-Probe behavior:
-1. Identifies regex constants in the target file (single-line `const NAME = /regex/;` form).
-2. Replaces each constant with `/(?!)/` (never-match) in a temporary copy and runs the tests.
-3. Records PASS and FAIL counts.
-4. Computes mutation score = (FAIL count / total) × 100% and reports it.
-
-Required threshold: at least 80% of probed regex constants must cause a test FAIL.
-
-### Known limitation (partial coverage)
-
-`bin/mutation-probe.sh` targets single-line form (`const NAME = /regex/;`) only.
-Not covered in the current version:
-- Two-line form (`const NAME =\n  /regex/;`): common in sentinel-patterns.js.
-- Patterns inside object literals (`regex` field of `WRITE_PATTERNS` array): bash-write-patterns.js.
-
-When the probe runs against these files it prints the detected constant count and a
-"partial coverage" warning. Full coverage is planned for T1-E2 (Stryker).
-
-### Relationship to table-driven tests
-
-- Table-driven: parametrically covers input/output cases.
-- Mutation probe: verifies that each regex constant is actually exercised by tests (not dead code).
-
-Run both when adding to a parser/regex file.
-
 ## False-Green Detection
 
 False-green tests (tests that always pass regardless of code state) are forbidden.
@@ -253,36 +174,7 @@ so it is not a hard CI failure.
 Motivated by 11 dead assertions found and fixed after the fact in PR #865.
 Applying the false-green detector at authoring time prevents recurrence.
 
-## Security / Protection Fix Test Patterns (#1001)
+## 詳細ファイル
 
-Tests for protection fixes (security boundaries, input sanitization, access-control
-enforcement) must apply all three patterns below. Omitting any one creates a structural
-coverage gap.
-
-### Pattern 1 — Negative assertion
-
-For rejected input, directly assert that the protected resource was NOT modified.
-Asserting only exit code or error message is insufficient.
-
-Example: for a fix that prevents symlink following, assert both that the command exited
-non-zero AND that the link target file remains unchanged.
-
-### Pattern 2 — Attack scenario structure
-
-Structure the bugfix test so it FAILs against the unpatched code:
-1. Set up preconditions that reproduce the vulnerable state before the fix.
-2. Execute the action under test.
-3. Assert that the attack was blocked (protected resource unchanged).
-
-This provides test-layer evidence that complements the workflow-level fail-before-fix gate.
-
-### Pattern 3 — Paired gap (Skipped-Because)
-
-Scenarios not implementable at the current layer (require fault injection, cannot
-reproduce in CI, etc.) must be left as comments rather than deleted:
-
-# SKIPPED: <scenario description>
-# Because: <reason — e.g. "requires real root access", "fault injection not possible at L2">
-# L3 gap: <what only the real environment would catch>
-
-One Skipped-Because comment per scenario, placed adjacent to the relevant test code.
+- **パーサ/正規表現/allowlist 対象**: `skills/_shared/test-design/parser-regex-tests.md` — Table-Driven Tests・Mutation Probe パターン。
+- **セキュリティ/ガード/分類器修正**: `skills/_shared/test-design/protection-fix-tests.md` — Protection Fix Patterns 1〜4。
