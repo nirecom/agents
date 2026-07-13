@@ -1,13 +1,14 @@
 #!/bin/bash
-# Tests: bin/review-skill-size
-# Tags: skill-size, review, bin, uncommitted
-# Tests for bin/review-skill-size — 3-source union diff detection
-# Verifies that staged, unstaged, and untracked SKILL.md files are all detected
-# (not just committed diffs), and that all cases exit 0.
+# Tests: bin/review-prompt-size
+# Tags: prompt-size, review, bin, uncommitted
+# Tests for bin/review-prompt-size — 3-source union diff detection
+# Verifies that staged, unstaged, and untracked prompt files are all detected
+# (not just committed diffs), across SKILL.md, rules/*.md, agents/*.md,
+# and skills/_shared/*.md.
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$AGENTS_ROOT/bin/review-skill-size"
+SCRIPT="$AGENTS_ROOT/bin/review-prompt-size"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -21,6 +22,14 @@ run_with_timeout() {
         perl -e 'alarm 120; exec @ARGV' -- "$@"
     fi
 }
+
+# --- Existence gate ---------------------------------------------------------
+if [ ! -f "$SCRIPT" ]; then
+    echo "SKIP: bin/review-prompt-size not yet created (write-code step pending)"
+    echo ""
+    echo "Results: 0 passed, 0 failed (skipped)"
+    exit 0
+fi
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -75,7 +84,7 @@ else
     pass "Case 1: exits 0 for staged SKILL.md"
 fi
 
-if echo "$OUTPUT" | grep -q "## Skill Size Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Prompt Size Review: PERFORMED"; then
     pass "Case 1: PERFORMED for staged SKILL.md"
 else
     fail "Case 1: PERFORMED not found for staged SKILL.md. Output: $OUTPUT"
@@ -110,7 +119,7 @@ else
     pass "Case 2: exits 0 for unstaged modified SKILL.md"
 fi
 
-if echo "$OUTPUT" | grep -q "## Skill Size Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Prompt Size Review: PERFORMED"; then
     pass "Case 2: PERFORMED for unstaged SKILL.md"
 else
     fail "Case 2: PERFORMED not found for unstaged SKILL.md. Output: $OUTPUT"
@@ -140,7 +149,7 @@ else
     pass "Case 3: exits 0 for untracked SKILL.md"
 fi
 
-if echo "$OUTPUT" | grep -q "## Skill Size Review: PERFORMED"; then
+if echo "$OUTPUT" | grep -q "## Prompt Size Review: PERFORMED"; then
     pass "Case 3: PERFORMED for untracked SKILL.md"
 else
     fail "Case 3: PERFORMED not found for untracked SKILL.md. Output: $OUTPUT"
@@ -150,6 +159,93 @@ if echo "$OUTPUT" | grep -q "exceeds 100-line safety net"; then
     pass "Case 3: line-count warning present for untracked 150-line SKILL.md"
 else
     fail "Case 3: 'exceeds 100-line safety net' warning missing for untracked file. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 4: Staged rules/coding/test.md 150 lines → detected (WARN)
+# ---------------------------------------------------------------------------
+REPO4=$(make_repo)
+git -C "$REPO4" checkout -q -b feature4
+mkdir -p "$REPO4/rules/coding"
+make_lines 150 > "$REPO4/rules/coding/test.md"
+git -C "$REPO4" add "$REPO4/rules/coding/test.md"
+# DO NOT commit — file is only staged
+
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO4" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+    fail "Case 4: expected exit 0, got $EXIT_CODE"
+else
+    pass "Case 4: exits 0 for staged rules/*.md"
+fi
+
+if echo "$OUTPUT" | grep -q "## Prompt Size Review: PERFORMED"; then
+    pass "Case 4: PERFORMED for staged rules/*.md"
+else
+    fail "Case 4: PERFORMED not found for staged rules/*.md. Output: $OUTPUT"
+fi
+
+if echo "$OUTPUT" | grep -q "exceeds 100-line safety net"; then
+    pass "Case 4: line-count warning present for staged 150-line rules/*.md"
+else
+    fail "Case 4: 'exceeds 100-line safety net' warning missing for staged rules/*.md. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 5: Staged agents/foo.md 150 lines → detected (WARN)
+# ---------------------------------------------------------------------------
+REPO5=$(make_repo)
+git -C "$REPO5" checkout -q -b feature5
+mkdir -p "$REPO5/agents"
+make_lines 150 > "$REPO5/agents/foo.md"
+git -C "$REPO5" add "$REPO5/agents/foo.md"
+# DO NOT commit — file is only staged
+
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO5" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -ne 0 ]]; then
+    fail "Case 5: expected exit 0, got $EXIT_CODE"
+else
+    pass "Case 5: exits 0 for staged agents/*.md"
+fi
+
+if echo "$OUTPUT" | grep -q "## Prompt Size Review: PERFORMED"; then
+    pass "Case 5: PERFORMED for staged agents/*.md"
+else
+    fail "Case 5: PERFORMED not found for staged agents/*.md. Output: $OUTPUT"
+fi
+
+if echo "$OUTPUT" | grep -q "exceeds 100-line safety net"; then
+    pass "Case 5: line-count warning present for staged 150-line agents/*.md"
+else
+    fail "Case 5: 'exceeds 100-line safety net' warning missing for staged agents/*.md. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 6: Staged skills/_shared/bar.md 201 lines → HARD (exit 1)
+# ---------------------------------------------------------------------------
+REPO6=$(make_repo)
+git -C "$REPO6" checkout -q -b feature6
+mkdir -p "$REPO6/skills/_shared"
+make_lines 201 > "$REPO6/skills/_shared/bar.md"
+git -C "$REPO6" add "$REPO6/skills/_shared/bar.md"
+# DO NOT commit — file is only staged
+
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO6" && run_with_timeout bash "$SCRIPT" --base main 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -eq 1 ]]; then
+    pass "Case 6: exits 1 for staged 201-line skills/_shared/*.md (HARD)"
+else
+    fail "Case 6: expected exit 1, got $EXIT_CODE. Output: $OUTPUT"
+fi
+
+if echo "$OUTPUT" | grep -q "exceeds 200-line hard limit"; then
+    pass "Case 6: output contains 'exceeds 200-line hard limit'"
+else
+    fail "Case 6: 'exceeds 200-line hard limit' not found. Output: $OUTPUT"
 fi
 
 # ---------------------------------------------------------------------------
