@@ -69,7 +69,7 @@ flowchart TD
         S6a["run-tests"]
         S6b["review-code-security"]
         S6c["review-code-codex<br/>Codex second opinion"]
-        S6d["review-skill-size"]
+        S6d["review-prompt-size"]
     end
 
     S6a & S6b & S6c & S6d --> S7["11 · Docs"]
@@ -228,7 +228,7 @@ skills/            — slash commands (/clarify-intent, /make-outline-plan, /mak
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-skill-size, extract-accepted-tradeoffs, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, and other tools
 bin/lib/           — shared bash libraries (codex-core.sh)
 install/
   win/             — Windows-specific install subscripts

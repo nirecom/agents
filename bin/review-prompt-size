@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Skill file size / quality review.
-# Usage: review-skill-size [--base <ref>] [--all]
+# Prompt file size / quality review.
+# Usage: review-prompt-size [--base <ref>] [--all]
 #
 # Always emits one of:
-#   ## Skill Size Review: PERFORMED
-#   ## Skill Size Review: PERFORMED (all-scan mode)
-#   ## Skill Size Review: SKIPPED — <reason>
+#   ## Prompt Size Review: PERFORMED
+#   ## Prompt Size Review: PERFORMED (all-scan mode)
+#   ## Prompt Size Review: SKIPPED — <reason>
 #
-# Exits 1 when any changed SKILL.md exceeds the HARD limit (>200 lines) in diff mode. --all mode always exits 0 (audit/discovery).
+# Exits 1 when any changed prompt file exceeds the HARD limit (>200 lines) in diff mode. --all mode always exits 0 (audit/discovery).
 
 set -uo pipefail
 
@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
     --all) ALL_SCAN=1; shift ;;
     --base)
       if [[ $# -lt 2 ]]; then
-        echo "## Skill Size Review: SKIPPED (--base requires an argument)"; exit 0
+        echo "## Prompt Size Review: SKIPPED (--base requires an argument)"; exit 0
       fi
       BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; shift ;;
@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
-  echo "## Skill Size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+  echo "## Prompt Size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
 fi
 
 report_targets() {
@@ -40,7 +40,7 @@ report_targets() {
     local lines
     lines=$(wc -l < "$file" | tr -d ' ')
     if (( lines > 200 )); then
-      echo "HARD: $file — $lines lines total (exceeds 200-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md)"
+      echo "HARD: $file — $lines lines total (exceeds 200-line hard limit; move multi-step procedures to skills/<name>/scripts/ or bin/<tool> — see rules/coding/file-split.md Pattern B)"
       HARD_HIT=1
     elif (( lines > 100 )); then
       echo "WARN: $file — $lines lines (exceeds 100-line safety net)"
@@ -51,7 +51,7 @@ report_targets() {
   echo ""
 
   cat <<'EOF'
-### Manual review checklist — apply to every SKILL.md (regardless of line count)
+### Manual review checklist — apply to every prompt file (regardless of line count)
 
 Criteria SSOT: rules/prompt.md (§1 Form — directives, one-line, multi-step → CLI).
 
@@ -60,43 +60,48 @@ EOF
 }
 
 if [[ "$ALL_SCAN" -eq 1 ]]; then
-  TARGETS=$(find skills/ -name SKILL.md -not -path '*/_archived/*' 2>/dev/null | sort || true)
+  TARGETS=$(
+    { find skills/ -name SKILL.md -not -path '*/_archived/*' 2>/dev/null || true; \
+      find rules/ -name '*.md' -not -path '*/_archived/*' 2>/dev/null || true; \
+      find agents/ -name '*.md' -not -path '*/_archived/*' 2>/dev/null || true; \
+      find skills/_shared/ -name '*.md' 2>/dev/null || true; } | sort -u
+  )
   if [[ -z "$TARGETS" ]]; then
-    echo "## Skill Size Review: SKIPPED — no SKILL.md files found"; exit 0
+    echo "## Prompt Size Review: SKIPPED — no prompt files found"; exit 0
   fi
-  echo "## Skill Size Review: PERFORMED (all-scan mode)"
+  echo "## Prompt Size Review: PERFORMED (all-scan mode)"
   echo ""
   COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-  echo "All SKILL.md files scanned: $COUNT"
+  echo "All prompt files scanned: $COUNT"
   report_targets "$TARGETS"
   exit 0
 fi
 
 BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
-  echo "## Skill Size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+  echo "## Prompt Size Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
 }
 
 ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
 CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
 if [[ -s "$ERR" ]]; then
-  echo "## Skill Size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
+  echo "## Prompt Size Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
 fi
 CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
 CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
 CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
 
-TARGETS=$(printf '%s\n' "$CHANGED" | grep -E '^skills/.+/SKILL\.md$' | grep -v '/_archived/' || true)
+TARGETS=$(printf '%s\n' "$CHANGED" | grep -E '^(skills/.+/SKILL\.md|rules/.+\.md|agents/.+\.md|skills/_shared/.+\.md)$' | grep -v '/_archived/' || true)
 
 if [[ -z "$TARGETS" ]]; then
-  echo "## Skill Size Review: SKIPPED — no SKILL.md files changed"; exit 0
+  echo "## Prompt Size Review: SKIPPED — no prompt files changed"; exit 0
 fi
 
-echo "## Skill Size Review: PERFORMED"
+echo "## Prompt Size Review: PERFORMED"
 echo ""
 COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
-echo "Changed SKILL.md files: $COUNT"
+echo "Changed prompt files: $COUNT"
 report_targets "$TARGETS"
 
 [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
