@@ -34,10 +34,6 @@ unset _arg
 printf "${C_CYAN}=== agents installer ===${C_RESET}\n"
 
 echo ""
-printf -- "${C_BOLD}--- Creating symlinks ---${C_RESET}\n"
-"$AGENTS_ROOT/install/linux/dotfileslink.sh"
-
-echo ""
 printf -- "${C_BOLD}--- Checking Node.js (nvm) ---${C_RESET}\n"
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [ ! -s "$NVM_DIR/nvm.sh" ]; then
@@ -52,6 +48,10 @@ if ! type npm >/dev/null 2>&1; then
     printf "${C_YELLOW}Error: nvm is installed but npm not found. Run: nvm install --lts${C_RESET}\n" >&2
     exit 1
 fi
+
+echo ""
+printf -- "${C_BOLD}--- Creating symlinks ---${C_RESET}\n"
+"$AGENTS_ROOT/install/linux/dotfileslink.sh"
 
 echo ""
 printf -- "${C_BOLD}--- Installing Claude Code ---${C_RESET}\n"

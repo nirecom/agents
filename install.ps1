@@ -23,10 +23,6 @@ $AgentsRoot = $PSScriptRoot
 Write-Host "=== agents installer ===" -ForegroundColor Cyan
 
 Write-Host ""
-Write-Host "--- Creating symlinks ---"
-& "$AgentsRoot\install\win\dotfileslink.ps1"
-
-Write-Host ""
 Write-Host "--- Checking Node.js (fnm) ---"
 if (-not (Get-Command fnm -ErrorAction SilentlyContinue)) {
     if (Get-Command winget -ErrorAction SilentlyContinue) {
@@ -42,6 +38,10 @@ if (-not (Get-Command fnm -ErrorAction SilentlyContinue)) {
     Write-Host "Restart your terminal and re-run install.ps1." -ForegroundColor Yellow
     exit 1
 }
+
+Write-Host ""
+Write-Host "--- Creating symlinks ---"
+& "$AgentsRoot\install\win\dotfileslink.ps1"
 
 Write-Host ""
 Write-Host "--- Installing Claude Code ---"
