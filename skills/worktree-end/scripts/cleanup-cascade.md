@@ -7,10 +7,10 @@ Read it (do not `bash` it) — same Read-as-spec pattern as skills/_shared/*.md.
 -->
 
 ## WE-15 — git worktree remove
-`git -C <main> worktree remove <path>` (never `--force`).
+`git -C <main> worktree remove <path>` (never `--force`). Try once only — do not retry, and do NOT emit WORKTREE_OFF; on failure follow WE-16.
 
 ## WE-16 — On WE-15 failure (conditional)
-If WE-15 (git worktree remove) exits non-zero (EPERM, busy, not-empty, any error): print stderr warning that /sweep-worktrees will reclaim automatically; skip WE-18 (orphan-dir cleanup) and WE-19 (branch -D); proceed to WE-20. (WE-18 skipped: dir occupied — self-resolves at next sweep. WE-19 skipped: git cascade rule blocks `branch -D` while worktree registered.)
+If WE-15 (git worktree remove) exits non-zero (EPERM, busy, not-empty, any error): print stderr warning that /sweep-worktrees will reclaim automatically; skip WE-18 (orphan-dir cleanup) and WE-19 (branch -D); proceed to WE-20. (WE-18 skipped: dir occupied — self-resolves at next sweep. WE-19 skipped: git cascade rule blocks `branch -D` while worktree registered.) Never emit WORKTREE_OFF and never use `--force` to force removal — /sweep-worktrees salvages the leftover worktree on its next run.
 
 ## WE-17 — git worktree prune
 `git -C <main> worktree prune`

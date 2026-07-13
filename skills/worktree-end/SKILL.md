@@ -70,10 +70,12 @@ Resolve main root from the worktree's `.git` file. `cd "<main-worktree-root>"` a
 
 ### Steps WE-15..WE-22 — Cleanup cascade
 Read `$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after confirmed merge and inventory.
+If WE-15 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-16 and continue to WE-20.
 
 ## Rules
 - Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.
 - `git worktree remove --force` is prohibited; see `rules/ops.md`.
+- `<<WORKFLOW_ENFORCE_WORKTREE_OFF>>` must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
 - `git branch -D` (WE-19 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
 - `<<WORKFLOW_USER_VERIFIED>>` emitted in WE-8 (before merge), WE-7 (post-web-merge), or WE-4b (bootstrap). Never on abort or while polling. Protocol: `skills/_shared/user-verified.md`.
 - `AUTO_MERGE_PR=on` skips AskUserQuestion in WE-5 (worktree mode only).

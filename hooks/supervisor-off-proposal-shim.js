@@ -8,6 +8,7 @@ let input = "";
 process.stdin.on("data", (d) => { input += d; });
 process.stdin.on("end", () => {
   try {
+    let resolvedWsid = null;
     const parsed = JSON.parse(input || "{}");
     const toolName = parsed.tool_name || "";
     if (toolName !== "Bash" && toolName !== "runInTerminal" && toolName !== "runCommands") process.exit(0);
@@ -44,6 +45,39 @@ process.stdin.on("end", () => {
 
     const sessionId = parsed.session_id || "";
 
+    // Detect worktree-end cleanup context to produce an adaptive block message.
+    function computeIsWtEnd() {
+      let isWorktreeEndEnv;
+      try {
+        ({ isWorktreeEndEnv } = require(path.join(__dirname, "./lib/worktree-end-env-anchor.js")));
+      } catch (e) {
+        return false; // module unavailable — fail-open to fixed message
+      }
+      if (sessionId && isWorktreeEndEnv(sessionId)) return true;
+      let wsid = resolvedWsid;
+      if (!wsid) {
+        try {
+          const { resolveWorkflowSessionId } = require(path.join(__dirname, "./lib/resolve-workflow-session-id.js"));
+          wsid = resolveWorkflowSessionId();
+        } catch (e) { wsid = null; }
+      }
+      if (wsid && wsid !== sessionId && isWorktreeEndEnv(wsid)) return true;
+      return false;
+    }
+
+    function buildReason(isWtEnd, convLangPrefix) {
+      if (isWtEnd) {
+        return convLangPrefix +
+          "[EM Supervisor] OFF sentinel emit blocked.\n" +
+          "This looks like the worktree-end cleanup phase. If 'git worktree remove' (WE-15) failed, WORKTREE_OFF is NOT needed — /sweep-worktrees reclaims the worktree automatically later.\n" +
+          "Follow the WE-16 fallback: skip to WE-20 and continue.";
+      }
+      return convLangPrefix +
+        "[EM Supervisor] OFF sentinel emit blocked.\n" +
+        "Active supervisor findings exist.\n" +
+        "Re-run after the supervisor audit completes.";
+    }
+
     // Check if workflow is already OFF (bypass if so)
     try {
       const { isWorkflowOff } = require(path.join(__dirname, "./lib/session-markers.js"));
@@ -79,6 +113,7 @@ process.stdin.on("end", () => {
         try {
           const { resolveWorkflowSessionId } = require(path.join(__dirname, "./lib/resolve-workflow-session-id.js"));
           const wsid = resolveWorkflowSessionId();
+          resolvedWsid = wsid || null;
           if (wsid) {
             const fallback = tryRead(wsid);
             if (fallback !== null) { stateFileFound = true; state = fallback.parsed; }
@@ -103,10 +138,8 @@ process.stdin.on("end", () => {
         const injection = getConvLangInjection();
         if (injection) convLangPrefix = injection + "\n";
       } catch (e) { /* fail-open */ }
-      const reason = convLangPrefix +
-        "[EM Supervisor] OFF sentinel emit blocked.\n" +
-        "Active supervisor findings exist.\n" +
-        "Re-run after the supervisor audit completes.";
+      const isWtEnd = computeIsWtEnd();
+      const reason = buildReason(isWtEnd, convLangPrefix);
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
       process.exit(2);
     }
@@ -129,10 +162,8 @@ process.stdin.on("end", () => {
       if (injection) convLangPrefix = injection + "\n";
     } catch (e) { /* fail-open */ }
 
-    const reason = convLangPrefix +
-      "[EM Supervisor] OFF sentinel emit blocked.\n" +
-      "Active supervisor findings exist.\n" +
-      "Re-run after the supervisor audit completes.";
+    const isWtEnd = computeIsWtEnd();
+    const reason = buildReason(isWtEnd, convLangPrefix);
 
     process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     process.exit(2);
