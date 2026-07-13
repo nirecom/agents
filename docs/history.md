@@ -447,4 +447,8 @@ Changes: feat(#1431): progressive-disclosure split of `skills/_shared/test-desig
 
 ### FEATURE: PR #1434 — docs/issue-1428 (2026-07-13, 4fc6a17, #1434)
 Background: feat(#1428): rename review-skill-size → review-prompt-size; extend to rules/*.md, agents/*.md, skills/_shared/*.md
-Changes: Renamed `bin/review-skill-size` → `bin/review-prompt-size` and extended diff-mode and `--all` scan to cover `rules/*.md`, `agents/*.md`, and `skills/_shared/*.md` in addition to `SKILL.md`. Updated `rules/coding/file-split.md` Pattern B and `rules/prompt.md` scope definition. Updated all references in `README.md`, installer scripts, and `run-quality-gates.sh`. Closes #1428. <!-- compose-doc-append-sentinel: branch=docs/issue-1428 pr=#1434 -->
+Changes: Renamed `bin/review-skill-size` → `bin/review-prompt-size` and extended diff-mode and `--all` scan to cover `rules/*.md`, `agents/*.md`, and `skills/_shared/*.md` in addition to `SKILL.md`. Updated `rules/coding/file-split.md` Pattern B and `rules/prompt.md` scope definition. Updated all references in `README.md`, installer scripts, and `run-quality-gates.sh`. Closes #1428. <!-- compose-doc-append-sentinel: branch=docs/issue-1428 pr=#1434 -->
+
+### FEATURE: PR #1437 — fix/1435-precommit-env (2026-07-14, 12bea8c, #1437)
+Background: fix(#1435): block modified .env files in pre-commit (--diff-filter=AM)
+Changes: BUGFIX: pre-commit `--diff-filter=A` → `AM` — block modified .env files at commit time (#1435). Test gap: no test verified that modifying an existing tracked .env was blocked; Test 7 expected rc=0 (gap). Added Test 7 rc=1 and Test 8 (gh api failure → treat as public). <!-- compose-doc-append-sentinel: branch=fix/1435-precommit-env pr=#1437 -->
