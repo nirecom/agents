@@ -232,11 +232,11 @@ Write-Launcher "$LocalBin\extract-accepted-tradeoffs.cmd" $eatCmdContent "extrac
 $eatShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/extract-accepted-tradeoffs`" `"`$@`"`n"
 Write-Launcher "$LocalBin\extract-accepted-tradeoffs" $eatShimContent "extract-accepted-tradeoffs (bash shim)"
 
-# --- ~/.local/bin/review-skill-size launchers (cmd + bash shim) ---
-$rssCmdContent = "@echo off`r`nwsl bash -c ""review-skill-size %*""`r`n"
-Write-Launcher "$LocalBin\review-skill-size.cmd" $rssCmdContent "review-skill-size.cmd"
-$rssShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-skill-size`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-skill-size" $rssShimContent "review-skill-size (bash shim)"
+# --- ~/.local/bin/review-prompt-size launchers (cmd + bash shim) ---
+$rpsCmdContent = "@echo off`r`nwsl bash -c ""review-prompt-size %*""`r`n"
+Write-Launcher "$LocalBin\review-prompt-size.cmd" $rpsCmdContent "review-prompt-size.cmd"
+$rpsShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-prompt-size`" `"`$@`"`n"
+Write-Launcher "$LocalBin\review-prompt-size" $rpsShimContent "review-prompt-size (bash shim)"
 
 # --- ~/.local/bin/review-code-size launchers (cmd + bash shim) ---
 $rcsCmdContent = "@echo off`r`nwsl bash -c ""review-code-size %*""`r`n"
