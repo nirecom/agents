@@ -463,3 +463,7 @@ Changes: Classifier/guard both-direction test coverage (Pattern 4) is now a docu
 ### FEATURE: PR #1434 (2026-07-13)
 Background: feat(#1428): rename review-skill-size → review-prompt-size; extend to rules/*.md, agents/*.md, skills/_shared/*.md
 Changes: `review-prompt-size` (renamed from `review-skill-size`) now enforces the 200-line hard limit on `rules/*.md`, `agents/*.md`, and `skills/_shared/*.md` in diff mode — not just `SKILL.md`.
+
+### FEATURE: PR #1437 (2026-07-14)
+Background: fix(#1435): block modified .env files in pre-commit (--diff-filter=AM)
+Changes: Fixed: `pre-commit` hook now blocks commits of modified `.env` files (previously only newly-added `.env` files were caught).
