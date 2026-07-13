@@ -14,9 +14,10 @@ Each pattern has the same axis: entrypoint-private vs shared.
 - Entrypoint-private modules: sibling `<name>/` folder.
 - Shared across multiple entrypoints: adjacent `lib/` (e.g., `hooks/lib/`).
 
-## Pattern B — SKILL.md
+## Pattern B — Prompt files (SKILL.md, rules/*.md, agents/*.md, skills/_shared/*.md)
 
 - WARN: >100 lines. HARD (must split): >200 lines.
 - Keep `SKILL.md` as the prompt entrypoint; never reduce it to dispatch-only.
 - Skill-private procedures (3+ steps): `skills/<name>/scripts/<verb>.sh`.
 - Shared across multiple skills or tools: `bin/<tool>`.
+- `rules/*.md` / `agents/*.md` / `skills/_shared/*.md`: split into a sibling `<name>/` directory when the HARD limit is exceeded.
