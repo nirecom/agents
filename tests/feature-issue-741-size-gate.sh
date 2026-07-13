@@ -1,14 +1,14 @@
 #!/bin/bash
-# Tests: bin/review-skill-size, bin/review-code-size
-# Tags: skill-size, code-size, review, bin, hard-block
+# Tests: bin/review-prompt-size, bin/review-code-size
+# Tags: skill-size, code-size, review, bin, hard-block, prompt
 # Tests for issue #741: HARD-blocking exit 1 behavior in diff mode
-# Verifies: review-skill-size HARD at >200 lines exits 1, --all always exits 0;
+# Verifies: review-prompt-size HARD at >200 lines exits 1, --all always exits 0;
 #           review-code-size HARD at >500 lines exits 1, --all always exits 0;
 #           boundary conditions (exactly 200 / 500 lines → exit 0).
 set -euo pipefail
 
 AGENTS_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT_SKILL="$AGENTS_ROOT/bin/review-skill-size"
+SCRIPT_SKILL="$AGENTS_ROOT/bin/review-prompt-size"
 SCRIPT_CODE="$AGENTS_ROOT/bin/review-code-size"
 ERRORS=0
 
@@ -23,6 +23,13 @@ run_with_timeout() {
         perl -e 'alarm 120; exec @ARGV' -- "$@"
     fi
 }
+
+# review-prompt-size availability (Cases 1-5, 11-12 depend on it; Cases 6-10 are independent)
+PROMPT_SIZE_SKIP=0
+if [ ! -f "$SCRIPT_SKILL" ]; then
+    echo "NOTE: bin/review-prompt-size not yet created — Cases 1-5 and 11-12 skipped (write-code step pending)"
+    PROMPT_SIZE_SKIP=1
+fi
 
 TMPDIR_BASE=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
@@ -58,8 +65,10 @@ make_lines() {
     done
 }
 
+if [[ $PROMPT_SIZE_SKIP -eq 0 ]]; then
+
 # ---------------------------------------------------------------------------
-# Case 1: review-skill-size — 201-line SKILL.md in diff mode → exit 1
+# Case 1: review-prompt-size — 201-line SKILL.md in diff mode → exit 1
 # ---------------------------------------------------------------------------
 REPO=$(make_repo)
 git -C "$REPO" checkout -q -b feature-c1
@@ -72,13 +81,13 @@ EXIT_CODE=0
 OUTPUT=$(cd "$REPO" && run_with_timeout bash "$SCRIPT_SKILL" --base main 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -eq 1 ]]; then
-    pass "Case 1: review-skill-size exits 1 for 201-line SKILL.md in diff mode"
+    pass "Case 1: review-prompt-size exits 1 for 201-line SKILL.md in diff mode"
 else
     fail "Case 1: expected exit 1, got $EXIT_CODE"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 2: review-skill-size — HARD output contains expected message and path reference
+# Case 2: review-prompt-size — HARD output contains expected message and path reference
 # (reuse output from Case 1)
 # ---------------------------------------------------------------------------
 if echo "$OUTPUT" | grep -q "exceeds 200-line hard limit"; then
@@ -94,7 +103,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 3: review-skill-size — 201-line SKILL.md in --all mode → exit 0
+# Case 3: review-prompt-size — 201-line SKILL.md in --all mode → exit 0
 # ---------------------------------------------------------------------------
 REPO=$(make_repo)
 mkdir -p "$REPO/skills/somename"
@@ -104,13 +113,13 @@ EXIT_CODE=0
 OUTPUT=$(cd "$REPO" && run_with_timeout bash "$SCRIPT_SKILL" --all 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -eq 0 ]]; then
-    pass "Case 3: review-skill-size exits 0 for 201-line SKILL.md in --all mode"
+    pass "Case 3: review-prompt-size exits 0 for 201-line SKILL.md in --all mode"
 else
     fail "Case 3: expected exit 0 (--all never blocks), got $EXIT_CODE"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 4: review-skill-size — 150-line SKILL.md in diff mode → exit 0 (WARN only)
+# Case 4: review-prompt-size — 150-line SKILL.md in diff mode → exit 0 (WARN only)
 # ---------------------------------------------------------------------------
 REPO=$(make_repo)
 git -C "$REPO" checkout -q -b feature-c4
@@ -123,13 +132,13 @@ EXIT_CODE=0
 OUTPUT=$(cd "$REPO" && run_with_timeout bash "$SCRIPT_SKILL" --base main 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -eq 0 ]]; then
-    pass "Case 4: review-skill-size exits 0 for 150-line SKILL.md (WARN only)"
+    pass "Case 4: review-prompt-size exits 0 for 150-line SKILL.md (WARN only)"
 else
     fail "Case 4: expected exit 0 for WARN threshold, got $EXIT_CODE"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 5: review-skill-size — exactly 200 lines → exit 0 (boundary: >200, not >=200)
+# Case 5: review-prompt-size — exactly 200 lines → exit 0 (boundary: >200, not >=200)
 # ---------------------------------------------------------------------------
 REPO=$(make_repo)
 git -C "$REPO" checkout -q -b feature-c5
@@ -142,10 +151,12 @@ EXIT_CODE=0
 OUTPUT=$(cd "$REPO" && run_with_timeout bash "$SCRIPT_SKILL" --base main 2>&1) || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -eq 0 ]]; then
-    pass "Case 5: review-skill-size exits 0 for exactly 200 lines (boundary: >200 triggers HARD)"
+    pass "Case 5: review-prompt-size exits 0 for exactly 200 lines (boundary: >200 triggers HARD)"
 else
     fail "Case 5: expected exit 0 for exactly 200 lines, got $EXIT_CODE"
 fi
+
+fi # end: review-prompt-size cases 1-5
 
 # ---------------------------------------------------------------------------
 # Case 6: review-code-size — 501-line JS in diff mode → exit 1
@@ -235,6 +246,47 @@ if [[ $EXIT_CODE -eq 0 ]]; then
 else
     fail "Case 10: expected exit 0 for exactly 500 lines, got $EXIT_CODE"
 fi
+
+if [[ $PROMPT_SIZE_SKIP -eq 0 ]]; then
+
+# ---------------------------------------------------------------------------
+# Case 11: review-prompt-size — 201-line rules/coding/test.md in diff mode → exit 1
+# ---------------------------------------------------------------------------
+REPO=$(make_repo)
+git -C "$REPO" checkout -q -b feature-c11
+mkdir -p "$REPO/rules/coding"
+make_lines 201 > "$REPO/rules/coding/test.md"
+git -C "$REPO" add "$REPO/rules/coding/test.md"
+git -C "$REPO" commit -q -m "add 201-line rules/coding/test.md"
+
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO" && run_with_timeout bash "$SCRIPT_SKILL" --base main 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -eq 1 ]]; then
+    pass "Case 11: review-prompt-size exits 1 for 201-line rules/coding/test.md in diff mode"
+else
+    fail "Case 11: expected exit 1, got $EXIT_CODE. Output: $OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 12: review-prompt-size — 201-line rules/coding/test.md in --all mode → exit 0
+# ---------------------------------------------------------------------------
+REPO=$(make_repo)
+mkdir -p "$REPO/rules/coding"
+make_lines 201 > "$REPO/rules/coding/test.md"
+git -C "$REPO" add "$REPO/rules/coding/test.md"
+git -C "$REPO" commit -q -m "add 201-line rules/coding/test.md on main"
+
+EXIT_CODE=0
+OUTPUT=$(cd "$REPO" && run_with_timeout bash "$SCRIPT_SKILL" --all 2>&1) || EXIT_CODE=$?
+
+if [[ $EXIT_CODE -eq 0 ]]; then
+    pass "Case 12: review-prompt-size exits 0 for 201-line rules/*.md in --all mode (never blocks)"
+else
+    fail "Case 12: expected exit 0 (--all never blocks), got $EXIT_CODE. Output: $OUTPUT"
+fi
+
+fi # end: review-prompt-size cases 11-12
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -4,8 +4,8 @@ globs: "rules/**/*.md,skills/**/SKILL.md,agents/**/*.md"
 
 # Prompt-Content Quality Criteria
 
-SSOT for prompt-style content quality. Applies to: `rules/*.md`, `skills/*/SKILL.md`, `agents/*.md`.
-Referenced by: `bin/review-skill-size`, `/refactor-prompts` skill, future review skills.
+SSOT for prompt-style content quality. Applies to: `rules/*.md`, `skills/*/SKILL.md`, `agents/*.md`, `skills/_shared/*.md`.
+Referenced by: `bin/review-prompt-size`, `/refactor-prompts` skill, future review skills.
 
 ## 1. Form
 
