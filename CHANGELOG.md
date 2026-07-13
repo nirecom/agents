@@ -459,3 +459,7 @@ Changes: `worktree-end`: When WE-15 (`git worktree remove`) fails due to a CWD l
 ### FEATURE: PR #1433 (2026-07-13)
 Background: feat(#1431): test-design.md progressive-disclosure split + Pattern 4 classifier coverage
 Changes: Classifier/guard both-direction test coverage (Pattern 4) is now a documented standard in `test-design.md`; `write-tests` and `review-tests` now load `core-principles.md` to surface CPR-5 symmetry at tester context, preventing recurrence of the #1425 false-positive class
+
+### FEATURE: PR #1434 (2026-07-13)
+Background: feat(#1428): rename review-skill-size → review-prompt-size; extend to rules/*.md, agents/*.md, skills/_shared/*.md
+Changes: `review-prompt-size` (renamed from `review-skill-size`) now enforces the 200-line hard limit on `rules/*.md`, `agents/*.md`, and `skills/_shared/*.md` in diff mode — not just `SKILL.md`.
