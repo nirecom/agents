@@ -451,3 +451,7 @@ Changes: Hardened main-worktree write-protection: git commands, shell redirects,
 ### FEATURE: PR #1429 (2026-07-13)
 Background: PR #1429 merged on 2026-07-13.
 Changes: Session-close Final Report no longer dumps all supervisor findings in detail; shows a one-line count+severity summary instead (#1342);Pre-merge supervisor check no longer blocks when a fresh audit verdict (WARN/CONTINUE) already reviewed the findings; only BLOCK verdicts gate the merge (#1374)
+
+### FEATURE: PR #1430 (2026-07-13)
+Background: feat(#1145,#1404): WE-15 adaptive block message + cleanup-cascade/SKILL.md guardrails
+Changes: `worktree-end`: When WE-15 (`git worktree remove`) fails due to a CWD lock or busy state, `WORKTREE_OFF` is not needed — `/sweep-worktrees` reclaims the worktree automatically. Follow the WE-16 fallback and continue to WE-20.
