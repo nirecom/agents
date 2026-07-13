@@ -265,6 +265,150 @@ w.writeAuditState('$sid', {
 run_t5_pass1
 run_t5_pass2
 
+# --- #1374: verdict + freshness-aware pre-merge skip (Path(i)) ---
+# seed_verdict: cumSev=warning + 1 finding at $fts, plus an audit block already
+# recorded (verdict/last_run_at/cause) from a NON-warning-flush cause.
+# Under the current code the skip only fires for audit_cause=="pre-merge-warning-flush",
+# so a stage-boundary verdict does NOT skip → gate re-arms & blocks (RED until #1374).
+seed_verdict() {
+    local tmp_node="$1" sid="$2" fts="$3" alast="$4" averdict="$5" acause="$6"
+    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+const wf = require('$WFSTATE_NODE');
+wf.markStep('$sid', 'user_verification', 'complete');
+" >/dev/null 2>&1
+
+    WORKFLOW_PLANS_DIR="$tmp_node" run_with_timeout 5 node -e "
+const w = require('$WRITER_NODE');
+const s = require('$SCHEMA_NODE');
+const fs = require('fs');
+const st = s.createEmptyState('$sid');
+st.alert.cumulative_severity = 'warning';
+st.alert.findings = [{
+    categories: ['workflow'],
+    severity: 'warning',
+    detail: 'verdict-aware finding',
+    reporter: 'test',
+    timestamp: '$fts'
+}];
+st.audit.audit_phase = null;
+st.audit.audit_verdict = '$averdict';
+st.audit.audit_last_run_at = '$alast';
+st.audit.audit_cause = '$acause';
+st.audit.audit_armed_at = null;
+fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
+" >/dev/null 2>&1
+}
+
+# run_t5_verdict_ready (RED until #1374):
+# T0 finding, audit ran at T1 (>T0), verdict=WARN, cause="stage-boundary:CONFIRM_DETAIL".
+# A fresh non-BLOCK verdict covering the current findings must let merge through.
+# Current code ignores non-"pre-merge-warning-flush" causes → re-arms & blocks.
+run_t5_verdict_ready() {
+    local tmp sid out state
+    tmp=$(make_tmp)
+    sid="t5vr-sid-$$"
+    if command -v cygpath >/dev/null 2>&1; then
+        local tmp_node; tmp_node="$(cygpath -m "$tmp")"
+    else
+        local tmp_node="$tmp"
+    fi
+
+    # T0 finding timestamp, T1 audit_last_run_at (T1 > T0)
+    local t0="2026-01-01T00:00:00.000Z"
+    local t1="2026-01-01T01:00:00.000Z"
+    seed_verdict "$tmp_node" "$sid" "$t0" "$t1" "WARN" "stage-boundary:CONFIRM_DETAIL"
+
+    local hook_input
+    hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash"}}' "$sid")
+
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+
+    rm -rf "$tmp"
+
+    if echo "$out" | grep -q '"decision":"block"'; then
+        fail "run_t5_verdict_ready [RED-EXPECTED until #1374]: fresh non-BLOCK verdict (cause=stage-boundary) still blocks — verdict-aware skip not implemented"
+        return
+    fi
+    if echo "$out" | grep -q '"decision":"approve"'; then
+        pass "run_t5_verdict_ready: fresh WARN verdict (audit_last_run_at >= findingAt) → approve"
+    else
+        fail "run_t5_verdict_ready: expected decision:approve, got: $(printf '%q' "$out")"
+    fi
+}
+
+# run_t5_stale_verdict (RED until #1374 WITH freshness anchor):
+# audit ran at T1 with verdict=CONTINUE, THEN a new warning finding arrived at T2 (>T1).
+# A naive verdict-only skip would wrongly approve; the freshness check
+# (audit_last_run_at >= latestFindingAt) must catch the stale verdict and BLOCK.
+run_t5_stale_verdict() {
+    local tmp sid out
+    tmp=$(make_tmp)
+    sid="t5sv-sid-$$"
+    if command -v cygpath >/dev/null 2>&1; then
+        local tmp_node; tmp_node="$(cygpath -m "$tmp")"
+    else
+        local tmp_node="$tmp"
+    fi
+
+    # audit ran at T1; new finding at T2 (T2 > T1) → verdict is stale
+    local t1="2026-01-01T01:00:00.000Z"
+    local t2="2026-01-01T02:00:00.000Z"
+    seed_verdict "$tmp_node" "$sid" "$t2" "$t1" "CONTINUE" "stage-boundary:CONFIRM_DETAIL"
+
+    local hook_input
+    hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash"}}' "$sid")
+
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+
+    rm -rf "$tmp"
+
+    # Must block: the verdict predates the newest finding (stale).
+    if echo "$out" | grep -q '"decision":"block"'; then
+        pass "run_t5_stale_verdict: new finding after audit ran (T2 > audit_last_run_at) → stale verdict → block"
+    else
+        fail "run_t5_stale_verdict [RED until #1374 freshness anchor]: stale verdict wrongly skipped — freshness check (audit_last_run_at >= latestFindingAt) missing; got: $(printf '%q' "$out")"
+    fi
+}
+
+# run_t5_verdict_block (GREEN-guard / regression prevention):
+# audit ran at T1 (> finding timestamps) with verdict=BLOCK. BLOCK must always block,
+# regardless of freshness. Verifies the #1374 skip never approves a BLOCK verdict.
+run_t5_verdict_block() {
+    local tmp sid out
+    tmp=$(make_tmp)
+    sid="t5vb-sid-$$"
+    if command -v cygpath >/dev/null 2>&1; then
+        local tmp_node; tmp_node="$(cygpath -m "$tmp")"
+    else
+        local tmp_node="$tmp"
+    fi
+
+    # T1 (audit_last_run_at) > T0 (finding) — fresh, but verdict=BLOCK
+    local t0="2026-01-01T00:00:00.000Z"
+    local t1="2026-01-01T01:00:00.000Z"
+    seed_verdict "$tmp_node" "$sid" "$t0" "$t1" "BLOCK" "stage-boundary:CONFIRM_DETAIL"
+
+    local hook_input
+    hook_input=$(printf '{"tool_name":"Bash","session_id":"%s","tool_input":{"command":"gh pr merge --squash"}}' "$sid")
+
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        run_with_timeout 15 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+
+    rm -rf "$tmp"
+
+    if echo "$out" | grep -q '"decision":"block"'; then
+        pass "run_t5_verdict_block: BLOCK verdict always blocks (fresh or stale)"
+    else
+        fail "run_t5_verdict_block: BLOCK verdict must block regardless of freshness, got: $(printf '%q' "$out")"
+    fi
+}
+
+run_t5_verdict_ready
+run_t5_stale_verdict
+run_t5_verdict_block
+
 # C6: fail-open edge cases for checkSupervisorPreMerge
 # When the detail.md file referenced by scope-drift is missing → hook exits 0 (fail-open, no crash)
 # When there is no git repo (non-git directory) → Path(ii) fails-open → hook exits 0
