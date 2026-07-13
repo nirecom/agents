@@ -138,6 +138,9 @@ if ($staleItem -and ($staleItem.Attributes -band [IO.FileAttributes]::ReparsePoi
     Remove-Item $staleSettings -Force
     Write-Host "Removed stale symlink: $staleSettings" -ForegroundColor Yellow
 }
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    throw "node not found. Install fnm and run: fnm install --lts"
+}
 & node (Join-Path $AgentsRoot "install\assemble-settings.js")
 if ($LASTEXITCODE -ne 0) { throw "assemble-settings.js failed (exit $LASTEXITCODE)" }
 
