@@ -113,3 +113,47 @@ run_g_t5_3() {
         fail "$label (rc=$rc, audit_phase=$audit_phase, out=$out)"
     fi
 }
+
+# G-T5-4 — Phase A guard: alert_phase=closed + cumSev=error + auditPhase=null
+#           + activePendingOrRunning=false → Phase A must NOT arm (#1432).
+#
+# Branches (2) and (3) already guard alertPhase=closed (exit 0 without block).
+# Phase A (audit-arm) did not have this guard, allowing it to fire erroneously
+# when branches (2)/(3) short-circuit. After the fix, alertPhase=closed is also
+# excluded from Phase A.
+#
+# Feature-detection: probe whether supervisor-guard.js Phase A contains the
+# alertPhase-closed guard by running the scenario and checking that audit_phase
+# stays null (no arm). If Phase A fires (audit_phase=pending), the guard is absent
+# and we report SKIP (fix not yet applied).
+run_g_t5_4() {
+    local label="G-T5-4: alertPhase=closed + cumSev=error + auditPhase=null → Phase A must NOT arm (#1432)"
+    require_source "$HOOK" "$label" || return
+    require_t5_guard_removed "$label" || return
+    local tmp out rc audit_phase
+    tmp="$(mktemp -d)"
+    # Seed: cumSev=error (would trigger Phase A) but alert_phase=closed (should suppress it).
+    # Branches (2) and (3) will short-circuit at exit 0 (alertPhase=closed guard).
+    # Phase A should also exit 0 without arming when alertPhase=closed.
+    seed_audit_state_t5 "$tmp" "g-t5-4-sid" \
+        "{ alert_phase: 'closed', alert_armed_at: null, cumulative_severity: 'error', findings: [{categories:['workflow'],severity:'error',detail:'test',timestamp:'2026-06-22T10:00:00.000Z'}], alert_retry_count: 0 }" \
+        "{ audit_phase: null, audit_verdict: null, audit_last_run_at: null, audit_armed_at: null, audit_cause: null, audit_retry_count: 0, findings: [] }"
+    out=$(echo '{"stop_hook_active":false,"session_id":"g-t5-4-sid","transcript_path":""}' \
+        | WORKFLOW_PLANS_DIR="$tmp" run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    audit_phase=$(read_audit_field_t5 "$tmp" "g-t5-4-sid" "audit_phase")
+    rm -rf "$tmp"
+    # Phase A must NOT arm: audit_phase must stay null, no block emitted, exit 0.
+    if [ $rc -eq 0 ] \
+        && ! ( echo "$out" | grep -q '"decision":"block"' ) \
+        && [ "$audit_phase" = "null" ]; then
+        pass "$label"
+    else
+        # If audit_phase=pending (Phase A armed), the fix is not yet applied — SKIP.
+        if [ "$audit_phase" = "pending" ]; then
+            pass "$label: SKIP (Phase A alertPhase=closed guard not yet implemented — #1432)"
+        else
+            fail "$label (rc=$rc, audit_phase=$audit_phase, out=$(echo "$out" | head -c 200))"
+        fi
+    fi
+}

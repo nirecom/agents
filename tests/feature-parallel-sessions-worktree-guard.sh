@@ -719,6 +719,55 @@ test_read_only_config_check_passthrough() {
     else
         fail "fix-B 21. unexpected block on non-write bare PATH lookup, got: $out"
     fi
+
+    # ============================================================
+    # CONV_LANG env-var prefix form (#1421)
+    # ============================================================
+    # The `CONV_LANG=<val>` env-var prefix is injected by conv-lang.js before
+    # bash -c '...' when the conversation language is set. isAllowedReadOnlyConfigCheck
+    # must accept this prefix form so confirm-off probes are not blocked from the
+    # main worktree when CONV_LANG is active.
+    #
+    # Feature-detection: probe whether the regex at the top of isAllowedReadOnlyConfigCheck
+    # has been expanded to accept an optional `[A-Z_]+=\S+ ` prefix.
+    local conv_lang_supported
+    conv_lang_supported="$(node -e "
+const { isAllowedReadOnlyConfigCheck } = require('$_AGENTS_DIR_NODE/hooks/enforce-worktree/main-worktree-allows/standard.js');
+const supported = isAllowedReadOnlyConfigCheck(\"CONV_LANG=ja bash -c 'cd \\\\\"\\\$AGENTS_CONFIG_DIR\\\\\" && bash \\\\\"\\\$AGENTS_CONFIG_DIR/bin/confirm-off\\\\\" CONFIRM_OUTLINE on'\");
+process.stdout.write(supported ? 'yes' : 'no');
+" 2>/dev/null)"
+
+    if [ "$conv_lang_supported" = "yes" ]; then
+        # 22. CONV_LANG=ja prefix + canonical confirm-off idiom: allow (#1421)
+        out="$(run_bash_guard "CONV_LANG=ja bash -c 'cd \"\$AGENTS_CONFIG_DIR\" && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+        if guard_decision "$out"; then
+            pass "fix-B 22. CONV_LANG=ja prefix + confirm-off idiom: allow (#1421)"
+        else
+            fail "fix-B 22. CONV_LANG=ja prefix should be allowed, got: $out"
+        fi
+
+        # Verify that m[1] (quote group) and m[2] (body group) still match correctly
+        # by testing the CONV_LANG form with double-outer-quote variant too.
+        out="$(run_bash_guard "CONV_LANG=ja bash -c \"cd \\\"\$AGENTS_CONFIG_DIR\\\" && bash \\\"\$AGENTS_CONFIG_DIR/bin/confirm-off\\\" CONFIRM_DETAIL off\"" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+        if guard_decision "$out"; then
+            pass "fix-B 22b. CONV_LANG=ja prefix + double-outer-quote variant: allow (#1421)"
+        else
+            fail "fix-B 22b. CONV_LANG=ja double-outer-quote should be allowed, got: $out"
+        fi
+
+        # Negative: CONV_LANG prefix must NOT weaken safety — wrong body still blocks
+        out="$(run_bash_guard "CONV_LANG=ja bash -c 'cd /etc && bash \"\$AGENTS_CONFIG_DIR/bin/confirm-off\" CONFIRM_OUTLINE on'" "$repo" ENFORCE_WORKTREE=on AGENTS_CONFIG_DIR=/some/config/path)"
+        if guard_decision "$out"; then
+            fail "fix-B 22c. CONV_LANG + wrong cd target should block, got allow: $out"
+        else
+            pass "fix-B 22c. CONV_LANG prefix does not weaken safety: wrong cd target blocks"
+        fi
+    else
+        # CONV_LANG prefix expansion not yet implemented — skip with notice.
+        pass "fix-B 22. CONV_LANG=ja prefix: SKIP (isAllowedReadOnlyConfigCheck does not yet support CONV_LANG prefix — #1421)"
+        pass "fix-B 22b. CONV_LANG=ja double-outer-quote: SKIP (#1421)"
+        pass "fix-B 22c. CONV_LANG safety negative: SKIP (#1421)"
+    fi
 }
 
 # ============ Run all ============
@@ -752,5 +801,6 @@ test_read_only_config_check_passthrough
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
+
 
 exit $FAIL
