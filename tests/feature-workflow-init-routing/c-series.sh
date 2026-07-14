@@ -31,8 +31,8 @@ echo ""
 echo "--- C11: skills/clarify-intent/SKILL.md Completion section ---"
 assert_contains "$CLARIFY_INTENT_MD" "gh issue create" \
     "C11a: clarify-intent Completion contains 'gh issue create'"
-assert_contains "$CLARIFY_INTENT_MD" "gh issue edit.*--add-label|--add-label" \
-    "C11b: clarify-intent Completion contains 'gh issue edit --add-label'"
+assert_contains "$CLARIFY_INTENT_MD" "clarify-commit-scope|add-label" \
+    "C11b: clarify-intent Completion delegates label-add (clarify-commit-scope or add-label)"
 assert_contains "$CLARIFY_INTENT_MD" "intent:clarified" \
     "C11c: clarify-intent Completion references 'intent:clarified'"
 assert_contains "$CLARIFY_INTENT_MD" "workflow_init" \

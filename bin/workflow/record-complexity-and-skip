@@ -1,0 +1,60 @@
+#!/bin/bash
+set -euo pipefail
+
+: "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR required}"
+
+# Args: --session <SID> --verdict <high|low> --signals <csv-or-empty> [--target <outline|detail>]
+SESSION_ID=""
+VERDICT=""
+SIGNALS=""
+TARGET="outline"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --session) SESSION_ID="$2"; shift 2 ;;
+        --verdict) VERDICT="$2"; shift 2 ;;
+        --signals) SIGNALS="$2"; shift 2 ;;
+        --target)  TARGET="$2"; shift 2 ;;
+        *) echo "Unknown flag: $1" >&2; exit 2 ;;
+    esac
+done
+
+: "${SESSION_ID:?--session required}"
+: "${VERDICT:?--verdict required}"
+
+# Normalize AGENTS_CONFIG_DIR to Windows-style path for Node.js on Windows/Cygwin.
+AGENTS_CONFIG_DIR_N="$(cygpath -m "$AGENTS_CONFIG_DIR" 2>/dev/null || echo "$AGENTS_CONFIG_DIR")"
+
+# Step 1: Record complexity evaluation. stdout redirected to stderr so RECORDED_* lines
+# do NOT contaminate caller's SKIP_MODE capture.
+node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
+    --session "$SESSION_ID" \
+    --verdict "$VERDICT" \
+    --signals "$SIGNALS" 1>&2
+
+# Step 2: Resolve skip conditions. Values are passed via env vars (not string interpolation)
+# to prevent JS injection if SESSION_ID or TARGET contain quote characters.
+SKIP_MODE=$(RCS_BRIDGE="$AGENTS_CONFIG_DIR_N/hooks/lib/workflow-state/skip-signal-resolver.js" \
+  RCS_SID="$SESSION_ID" RCS_TARGET="$TARGET" node -e '
+const r = require(process.env.RCS_BRIDGE);
+const v = r.resolveSkipConditionsFromComplexity(process.env.RCS_SID, process.env.RCS_TARGET);
+process.stdout.write(v ? "auto" : "judgment");
+')
+
+# Step 3: If auto, record skip judgment. stdout redirected to stderr.
+if [[ "$SKIP_MODE" = "auto" ]]; then
+    if [[ "$TARGET" = "detail" ]]; then
+        node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+            --session "$SESSION_ID" \
+            --target "$TARGET" \
+            --c1 true --c2 true --c3 true 1>&2
+    else
+        node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+            --session "$SESSION_ID" \
+            --target "$TARGET" \
+            --c1 true --c2 true 1>&2
+    fi
+fi
+
+# Step 4: Output ONLY 'auto' or 'judgment' to stdout. Nothing else.
+printf '%s' "$SKIP_MODE"
