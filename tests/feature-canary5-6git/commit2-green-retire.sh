@@ -47,6 +47,10 @@ PR4 /dev/null-only redirect FALSE (regression pin)^echo x >/dev/null^false
 PR5 plain read false^ls -la^false
 PR-BUG3 sub/dev/null suffix is a real write (exact-match only)^echo x > sub/dev/null^true
 PR-BUG3b exact /dev/null stays read^echo x > /dev/null^false
+PR-BUG-FD2 FD-to-FD 2>&1 is not a write (regression pin #1436)^ls 2>&1^false
+PR-BUG-FD3 output FD-to-FD >&2 is not a write (regression pin #1436)^cmd >&2^false
+PR-BUG-FDQ quoted &1 path is a write not FD-dup (regression pin #1436)^echo x > '&1'^true
+PR-BUG-FDQ2 quoted &1file path is a write not FD-dup (regression pin #1436)^echo x > '&1file'^true
 POSIX_TABLE
 
 # isPwshWriteIR — true for cmdlets, false for non-pwsh.
