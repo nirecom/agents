@@ -144,6 +144,13 @@ process.stdin.on("end", () => {
       process.exit(2);
     }
 
+    // Early exit if alert review is complete (alert_phase=done) and no error
+    const alertPhase = state && state.alert && state.alert.alert_phase;
+    const cumSev = state && state.alert && state.alert.cumulative_severity;
+    if (alertPhase === "done" && cumSev !== "error") {
+      process.exit(0);
+    }
+
     // State file found — check L1 findings (non-notice severity)
     const l1Findings = (state && state.layer1 && Array.isArray(state.layer1.findings)) ? state.layer1.findings : [];
     const blockingFindings = l1Findings.filter(f => f && f.severity !== "notice" && f.record_type !== "escape_hatch_event");
