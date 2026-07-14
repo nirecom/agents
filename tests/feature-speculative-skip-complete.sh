@@ -146,11 +146,12 @@ assert_eq "S-API. barrel exports recordSkipVerdict+readSkipVerdict+hasSpeculativ
 echo ""
 echo "=== STATIC cases (non-skippable) ==="
 
-# S1: clarify-intent CI-C1c uses 'judgment' not 'manual'
-if [ -f "$CI_SKILL" ] && grep -qF "process.stdout.write(v?'auto':'judgment')" "$CI_SKILL"; then
-  pass "S1. clarify-intent CI-C1c emits 'auto':'judgment' (not 'manual')"
+# S1: clarify-intent CI-C1b calls record-complexity-and-skip; CI-C1c branches on SKIP_MODE (auto/judgment not manual)
+# Updated for #1413 refactor: inline node replaced by shared script; vocabulary (auto/judgment) preserved via SKIP_MODE.
+if [ -f "$CI_SKILL" ] && grep -qF "record-complexity-and-skip" "$CI_SKILL" && grep -qE "SKIP_MODE.*(auto|judgment)" "$CI_SKILL"; then
+  pass "S1. clarify-intent CI-C1b calls record-complexity-and-skip; CI-C1c branches on SKIP_MODE (auto/judgment)"
 else
-  fail "S1. clarify-intent CI-C1c does NOT emit 'auto':'judgment'"
+  fail "S1. clarify-intent CI-C1b missing record-complexity-and-skip or CI-C1c missing SKIP_MODE branching"
 fi
 
 # S1b: clarify-intent CI-C1c must NOT contain old 'manual' form (C1 gap)

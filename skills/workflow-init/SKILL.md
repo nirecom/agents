@@ -60,7 +60,7 @@ If ALL issues in `ISSUES[@]` carry the `meta` label → **Path META** (WI-12 Pat
 - **script error (ERROR, exit 2)**: `AskUserQuestion` "sub-issue fetch failed for #N. How to proceed?" → "Continue to Path META" / "Abort (`<<WORKFLOW_ABORTED_META_SUBISSUE_FETCH_ERROR: #N>>`)".
 - **all NO_OPEN (exit 1 for all ISSUES[@])**: proceed to Path META (PM1–PM5) as before.
 
-If any issue carries `meta` but not all → warn "mixed meta/non-meta issues — falling through to Path A/B" and continue with standard routing below.
+If any issue carries `meta` but not all → strip meta-labelled issues from `ISSUES[@]` and rebuild `REPO_MAP_ARGS` for the remaining entries; warn "[workflow-init: meta issues stripped from mixed set — proceeding with non-meta issues only]" and continue with standard routing below.
 
 If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) OR any N in `ISSUES[@]` lacks the `intent:clarified` label → Path B. Only when every N carries `intent:clarified` → Path A. Path B is the default.
 
@@ -96,6 +96,13 @@ WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before
 - A1a. Set session title: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"`
 - A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with `"${REPO_MAP_ARGS[@]}"` followed by all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
 - A3. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #{N} has intent:clarified label>>"`.
+- A3a. **複雑度評価**：`skills/_shared/judge-task-complexity.md` を読み、確定した intent.md に対して全 S1–S6 シグナルを評価する（S6 は intent.md 行数のみで近似 — outline.md は未存在）。その後 separate Bash call として：
+  `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`
+  `$SKIP_MODE` は `auto` または `judgment`。
+- A3b. **Outline skip — センチネル発火判定**（CI-C1c と同一ロジック）：
+  - `SKIP_MODE=auto` → 追加判断不要。センチネル発火ブロックへ。
+  - `SKIP_MODE=judgment` → so_c1/so_c2 を評価。両方 true でない → skip（A4 へ）。両方 true → `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true` を実行してからセンチネル発火ブロックへ。
+  - **センチネル発火ブロック**（separate Bash calls）：`echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` → Agent tool（run_in_background: true）：subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`。
 - A4. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
 - A5. Invoke `make-outline-plan` (surveys already complete via WI-9).
 
