@@ -451,4 +451,8 @@ Changes: Renamed `bin/review-skill-size` → `bin/review-prompt-size` and extend
 
 ### FEATURE: PR #1437 — fix/1435-precommit-env (2026-07-14, 12bea8c, #1437)
 Background: fix(#1435): block modified .env files in pre-commit (--diff-filter=AM)
-Changes: BUGFIX: pre-commit `--diff-filter=A` → `AM` — block modified .env files at commit time (#1435). Test gap: no test verified that modifying an existing tracked .env was blocked; Test 7 expected rc=0 (gap). Added Test 7 rc=1 and Test 8 (gh api failure → treat as public). <!-- compose-doc-append-sentinel: branch=fix/1435-precommit-env pr=#1437 -->
+Changes: BUGFIX: pre-commit `--diff-filter=A` → `AM` — block modified .env files at commit time (#1435). Test gap: no test verified that modifying an existing tracked .env was blocked; Test 7 expected rc=0 (gap). Added Test 7 rc=1 and Test 8 (gh api failure → treat as public). <!-- compose-doc-append-sentinel: branch=fix/1435-precommit-env pr=#1437 -->
+
+### FEATURE: PR #1438 — fix/1436-fd-dup (2026-07-14, b7c4f91416c105fd1ccfd23a4f02105222c1f948, #1438)
+Background: fix(#1436): exclude FD-to-FD redirects from isPosixRedirWriteIR write detection
+Changes: Added `&& !/^&\d/.test(r.targetRaw)` to `writeRedirs` filter in `isPosixRedirWriteIR` (bash-write-targets.js:93) to exclude FD-to-FD redirects (`2>&1`, `>&2`) from write-target detection. Root cause: PR #1420 (2026-07-12) retired surface-regex entries with FD-to-FD negative-lookahead (from BUGFIX #243, PR #304) without porting the guard to `isPosixRedirWriteIR`. Four regression rows added to commit2-green-retire.sh POSIX_TABLE: PR-BUG-FD2/FD3 (Red→Green) and PR-BUG-FDQ/FDQ2 (always-true guard against `r.target`-based regression). Test gap: no `isPosixRedirWriteIR` regression test for FD-to-FD redirects (`2>&1`) as a non-write case. <!-- compose-doc-append-sentinel: branch=fix/1436-fd-dup pr=#1438 -->
