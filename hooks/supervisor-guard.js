@@ -312,7 +312,7 @@ if (require.main === module) {
   // (audit) Phase A: arm audit if a trigger fires and it hasn't already run for this cause.
   if (collectAuditCandidatesFn && writeAuditState && !askUserQuestionTurn) {
     const activePendingOrRunning = auditPhase === "pending" || auditPhase === "in_progress";
-    if (!activePendingOrRunning && auditPhase !== "frozen") {
+    if (!activePendingOrRunning && auditPhase !== "frozen" && alertPhase !== "closed") {
       const transcriptForAudit = parseTranscriptForAudit(input.transcript_path || "");
       let auditTrigger = { shouldArm: false, cause: null };
       try { auditTrigger = collectAuditCandidatesFn(transcriptForAudit, state); } catch (_) {}

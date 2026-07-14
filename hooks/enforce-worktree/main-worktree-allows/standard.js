@@ -135,7 +135,7 @@ function isAllowedFastForwardMerge(cmd) {
  */
 function isAllowedReadOnlyConfigCheck(cmd) {
   if (!cmd || typeof cmd !== "string") return false;
-  const m = cmd.match(/^\s*bash\s+-c\s+(['"])([\s\S]+)\1\s*$/);
+  const m = cmd.match(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*bash\s+-c\s+(['"])([\s\S]+)\1\s*$/);
   if (!m) return false;
   const quote = m[1];
   let body = m[2];
@@ -519,6 +519,29 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
 }
 
 /**
+ * True when cmd is a supervisor bin tool invocation whose write targets (if any)
+ * resolve to /tmp/ (the universal output sink for supervisor tools).
+ *
+ * Approved scripts:
+ *   bash "$AGENTS_CONFIG_DIR/bin/supervisor-review-codex" — may write to /tmp/
+ *   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" — no write targets
+ *
+ * Hard restriction: any redirect present must point to /tmp/.
+ */
+function isAllowedSupervisorBinTool(cmd) {
+  if (!cmd) return false;
+
+  // Pattern: bash or node invoking a supervisor-* bin tool (quoted or unquoted AGENTS_CONFIG_DIR).
+  const supervisorBinPattern = /(?:bash|node)\s+"?\$?\{?AGENTS_CONFIG_DIR\}?\/bin\/supervisor-(?:review-codex|write-alert)/;
+  if (!supervisorBinPattern.test(cmd)) return false;
+
+  // If there's a redirect, it must point to /tmp/.
+  if (/>/.test(cmd) && !/>\s*(['"])?\/tmp\//.test(cmd)) return false;
+
+  return true;
+}
+
+/**
  * True when cmd is the canonical clarify-guard-loop invocation:
  *   bash "<AGENTS_CONFIG_DIR>/bin/github-issues/clarify-guard-loop.sh" [args...]
  * (double-quoted script path only). Rejects: shell chaining, command substitution,
@@ -568,5 +591,6 @@ module.exports = {
   isAllowedMainWorktreeCleanup,
   isAllowedComposeDocAppend,
   isAllowedWorkerScriptInvocation,
+  isAllowedSupervisorBinTool,
   isAllowedClarifyGuardLoop,
 };
