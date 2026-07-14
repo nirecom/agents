@@ -138,16 +138,14 @@ CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).
-CI-C1b. `skills/_shared/judge-task-complexity.md` を読み、確定した intent.md に対して全 S1–S6 シグナルを評価する（S6 は intent.md 行数のみで近似 — outline.md は未存在）。その後 separate Bash call として：
-  `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`
-  `$SKIP_MODE` は `auto` または `judgment`。共有スクリプトは complexity_evaluation の記録と（`auto` 時のみ）record-skip-judgment の記録を担う。
-CI-C1c. **Outline skip — センチネル発火判定**：
-  - `SKIP_MODE=auto`（全条件自動充足）→ 追加判断不要。**そのまま下記「センチネル発火」ブロックへ**。
-  - `SKIP_MODE=judgment`（エージェント判断が必要）→ so_c1（単一自明なアプローチ）と so_c2（変更箇所が特定済み）を評価。両方 true でない → **skip（センチネル発火ブロックに進まず CI-C2 へ）**。両方 true → 別 Bash call で `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true` を実行してから「センチネル発火」ブロックへ。
+CI-C1b. Read `skills/_shared/judge-task-complexity.md`; evaluate all S1–S6 signals against the confirmed intent.md (S6 approximated from intent.md line count only — outline.md does not exist yet). Then run as a separate Bash call: `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`. `$SKIP_MODE` is `auto` or `judgment`; the shared script records complexity_evaluation and (when `auto`) record-skip-judgment.
+CI-C1c. **Outline skip — sentinel dispatch**:
+  - `SKIP_MODE=auto` → all conditions met automatically; proceed directly to the sentinel block below.
+  - `SKIP_MODE=judgment` → evaluate so_c1 (single obvious approach) and so_c2 (change locations identified). Not both true → skip (proceed to CI-C2 without sentinel block). Both true → run `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true` as a separate Bash call, then proceed to the sentinel block.
 
-  **センチネル発火ブロック**（`auto`、または `judgment`+両条件 true で到達）— separate Bash calls（順序どおりに）：
+  **Sentinel block** (reached via `auto` or `judgment`+both conditions true) — separate Bash calls in order:
   - `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"`
-  - Agent tool（run_in_background: true）：subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`。
+  - Agent tool (run_in_background: true): subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`.
 CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
 CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
