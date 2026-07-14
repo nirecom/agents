@@ -90,7 +90,7 @@ function isPosixRedirWriteIR(ir) {
   for (const seg of ir.segments) {
     if (resolveEffectiveCommand(seg) === "tee") return true;
     if (seg.redirects && Array.isArray(seg.redirects)) {
-      const writeRedirs = seg.redirects.filter((r) => r.op !== "<" && r.op !== "<<<");
+      const writeRedirs = seg.redirects.filter((r) => r.op !== "<" && r.op !== "<<<" && !/^&\d/.test(r.targetRaw));
       if (writeRedirs.length === 0) continue;
       // /dev/null-only exclusion: if EVERY write-redirect target is /dev/null,
       // this is a null-sink, not a write.
