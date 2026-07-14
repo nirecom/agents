@@ -66,6 +66,7 @@ run_g_b6
 run_g_t5_1
 run_g_t5_2
 run_g_t5_3
+run_g_t5_4
 run_g_c3a
 run_g_c3b
 run_g_c3c
