@@ -467,3 +467,7 @@ Changes: `review-prompt-size` (renamed from `review-skill-size`) now enforces th
 ### FEATURE: PR #1437 (2026-07-14)
 Background: fix(#1435): block modified .env files in pre-commit (--diff-filter=AM)
 Changes: Fixed: `pre-commit` hook now blocks commits of modified `.env` files (previously only newly-added `.env` files were caught).
+
+### FEATURE: PR #1438 (2026-07-14)
+Background: fix(#1436): exclude FD-to-FD redirects from isPosixRedirWriteIR write detection
+Changes: Commands using `2>&1` or `>&2` (FD-to-FD redirects) no longer trigger a spurious write-block in the main worktree; regression from #1420.
