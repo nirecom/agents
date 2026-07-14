@@ -109,6 +109,14 @@ function readState(sessionId) {
       if (state.workflow_type === "wf-plan") {
         state.workflow_type = "wf-meta";
       }
+      // Convenience view: top-level skip_judgment map keyed by step name.
+      // Allows callers to access state.skip_judgment[step] instead of
+      // state.steps[step].skip_judgment. Read-only; not persisted.
+      state.skip_judgment = {};
+      for (const step of Object.keys(state.steps)) {
+        const sj = state.steps[step] && state.steps[step].skip_judgment;
+        if (sj) state.skip_judgment[step] = sj;
+      }
     }
     return state;
   } catch (e) {

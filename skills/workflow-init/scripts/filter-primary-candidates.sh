@@ -62,12 +62,17 @@ for N in "${CANDIDATES[@]}"; do
 done
 
 declare -A PARENT_EXCLUDE
+declare -A META_CANDIDATE
 for i in "${!CANDIDATES[@]}"; do
     N="${CANDIDATES[$i]}"
     PARENT_NUM=""
-    RAW_PARENT=$(gh issue view "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --json parent 2>/dev/null) || RAW_PARENT=""
+    RAW_PARENT=$(gh issue view "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --json parent,labels 2>/dev/null) || RAW_PARENT=""
     if [ -n "$RAW_PARENT" ]; then
         PARENT_NUM=$(printf '%s' "$RAW_PARENT" | jq -r '.parent.number // empty' 2>/dev/null) || PARENT_NUM=""
+        IS_META=0
+        HAS_META=$(printf '%s' "$RAW_PARENT" | jq -r '[.labels[]?.name // empty] | any(. == "meta") | if . then "1" else "0" end' 2>/dev/null) || HAS_META=0
+        IS_META="${HAS_META:-0}"
+        META_CANDIDATE["$i"]="$IS_META"
     fi
     if [ -n "$PARENT_NUM" ] && [ -n "${CANDIDATE_SET[$PARENT_NUM]:-}" ]; then
         PARENT_EXCLUDE["$PARENT_NUM"]=1
@@ -75,23 +80,34 @@ for i in "${!CANDIDATES[@]}"; do
 done
 
 # Pass B: emit surviving candidates in input order.
+# Phase 1: collect survivors by CLOSED + parent-exclude axes.
 SURVIVORS=()
 SURVIVOR_IDXS=()
 for i in "${!CANDIDATES[@]}"; do
     N="${CANDIDATES[$i]}"
-    # parent-exclude axis
-    if [ -n "${PARENT_EXCLUDE[$N]:-}" ]; then
-        continue
-    fi
-    # CLOSED axis (fail-open on error)
-    STATE=""
+    if [ -n "${PARENT_EXCLUDE[$N]:-}" ]; then continue; fi
     STATE=$(bash "$ISSUE_STATE_CHECK" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} "$N" 2>/dev/null) || STATE=""
-    if [ "$STATE" = "closed" ]; then
-        continue
-    fi
+    if [ "$STATE" = "closed" ]; then continue; fi
     SURVIVORS+=("$N")
     SURVIVOR_IDXS+=("$i")
 done
+
+# Phase 2: meta-exclude axis — strip meta survivors only when at least one non-meta exists.
+NON_META_EXISTS=0
+for k in "${!SURVIVORS[@]}"; do
+    IDX="${SURVIVOR_IDXS[$k]}"
+    if [ "${META_CANDIDATE[$IDX]:-0}" != "1" ]; then NON_META_EXISTS=1; break; fi
+done
+
+if [ "$NON_META_EXISTS" -eq 1 ]; then
+    FILTERED=(); FILTERED_IDXS=()
+    for k in "${!SURVIVORS[@]}"; do
+        IDX="${SURVIVOR_IDXS[$k]}"
+        if [ "${META_CANDIDATE[$IDX]:-0}" = "1" ]; then continue; fi
+        FILTERED+=("${SURVIVORS[$k]}"); FILTERED_IDXS+=("$IDX")
+    done
+    SURVIVORS=("${FILTERED[@]}"); SURVIVOR_IDXS=("${FILTERED_IDXS[@]}")
+fi
 
 # Helper: emit token for index i and issue N
 emit_token() {
