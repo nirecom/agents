@@ -1,16 +1,19 @@
 #!/bin/bash
 # Tests: skills/workflow-init/scripts/filter-primary-candidates.sh
-# Tags: workflow-init, filter-primary-candidates, primary-detection, parent-filter, closed-filter, scope:issue-specific
+# Tags: workflow-init, filter-primary-candidates, primary-detection, parent-filter, closed-filter, meta-filter, scope:issue-specific
 #
 # Feature 1005 — filter-primary-candidates.sh (NEW WI-3 primary-candidate
 # filter). The script takes a list of candidate issue numbers (the `#N`
 # matches WI-3 detected) and emits the subset eligible to be the session
-# primary, one number per line, in input order. Two exclusion axes:
+# primary, one number per line, in input order. Three exclusion axes:
 #   - CLOSED filter: a candidate whose issue-state-check.sh reports "closed"
 #     is dropped (a closed issue is not a valid new primary).
 #   - parent filter: a candidate A that is the PARENT of another candidate B
 #     (i.e. B's parentIssue == A) is dropped — the child B is the more specific
 #     work item, so the parent is not proposed as primary.
+#   - meta filter: a candidate carrying the "meta" label is dropped WHEN at least
+#     one non-meta candidate survives (meta issues are planning umbrellas, not
+#     the concrete work item). If every candidate is meta, none is dropped.
 # Fallback: if every candidate is filtered out, emit the ORIGINAL candidate list
 # unchanged (never return an empty primary set). Output order = input order.
 #
@@ -19,12 +22,13 @@
 #
 # Mock contract (matches closed-detection.sh's helper convention):
 #   issue-state-check.sh <N>  → prints MOCK_STATE_<N> (default "open").
-#   gh issue view <N> --json parent  → {"parent":{"number":M}} from
-#     GH_MOCK_PARENT_<N> (default null). Value "fail" → gh exits 1 (fail-open).
+#   gh issue view <N> --json parent,labels  → {"parent":<p>,"labels":<l>} from
+#     GH_MOCK_PARENT_<N> (default null) and GH_MOCK_LABELS_<N> (default []).
+#     GH_MOCK_PARENT_<N>="fail" → gh exits 1 (fail-open).
 #
 # L3 gap (what these tests do NOT catch):
-# - Whether the real issue-state-check.sh / gh parent linkage match the mock
-#   shapes against a live GitHub repo.
+# - Whether the real issue-state-check.sh / gh parent+labels linkage match the
+#   mock shapes against a live GitHub repo.
 # - Whether WI-3 invokes filter-primary-candidates.sh correctly in a live
 #   workflow-init session and renders the surviving primary set.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
@@ -59,16 +63,29 @@ setup_mock() {
     TMP="$(mktemp -d 2>/dev/null || mktemp -d -t filtprim)"
     mkdir -p "$TMP/mock-bin" "$TMP/bin/github-issues"
 
-    # gh mock: `gh issue view <N> --json parent` → parent JSON per-N.
+    # gh mock: `gh issue view <N> --json parent,labels` → combined JSON per-N.
     cat > "$TMP/mock-bin/gh" <<'MOCKGH'
 #!/bin/bash
 sub1="${1:-}"; sub2="${2:-}"
 if [ "$sub1" = "issue" ] && [ "$sub2" = "view" ]; then
     N="${3:-}"
-    VARNAME="GH_MOCK_PARENT_${N}"
-    VAL="${!VARNAME:-}"
-    if [ "$VAL" = "fail" ]; then echo "mock parent fail" >&2; exit 1; fi
-    if [ -z "$VAL" ]; then echo '{"parent":null}'; else echo "$VAL"; fi
+    PARENT_VAR="GH_MOCK_PARENT_${N}"
+    PARENT_RAW="${!PARENT_VAR:-}"
+    LABELS_VAR="GH_MOCK_LABELS_${N}"
+    LABELS_RAW="${!LABELS_VAR:-[]}"
+    if [ "$PARENT_RAW" = "fail" ]; then echo "mock parent/labels fail" >&2; exit 1; fi
+    if [ -z "$PARENT_RAW" ]; then
+        PARENT_JSON="null"
+    else
+        # Extract number from {"parent":{"number":N}} shape
+        PARENT_NUM=$(echo "$PARENT_RAW" | grep -oE '"number":[0-9]+' | grep -oE '[0-9]+' | head -1)
+        if [ -n "$PARENT_NUM" ]; then
+            PARENT_JSON="{\"number\":$PARENT_NUM}"
+        else
+            PARENT_JSON="null"
+        fi
+    fi
+    printf '{"parent":%s,"labels":%s}\n' "$PARENT_JSON" "$LABELS_RAW"
     exit 0
 fi
 echo '{}'
@@ -98,6 +115,7 @@ teardown_mock() {
     rm -rf "$TMP" 2>/dev/null || true
     for v in $(env | grep -oE '^MOCK_STATE_[0-9]+' || true); do unset "$v"; done
     for v in $(env | grep -oE '^GH_MOCK_PARENT_[0-9]+' || true); do unset "$v"; done
+    for v in $(env | grep -oE '^GH_MOCK_LABELS_[0-9]+' || true); do unset "$v"; done
 }
 
 emitted() {  # args: OUT N → 0 if token for N present as a stdout line
@@ -237,6 +255,55 @@ if require_sut "FP-9"; then
         pass "FP-9: output preserves input order (303 301 302)"
     else
         fail "FP-9: expected order '303 301 302'; got rc=$RC order='$ORDER' out=$OUT"
+    fi
+fi
+teardown_mock
+
+# FP-10: meta-label candidate excluded when non-meta candidate exists.
+# #401 has meta label, #402 is non-meta (OPEN). meta-exclude axis → #401 excluded.
+setup_mock
+export GH_MOCK_LABELS_401='[{"name":"meta"}]'
+if require_sut "FP-10"; then
+    OUT=$(run_with_timeout 10 bash "$SUT" 401 402 2>/dev/null)
+    RC=$?
+    if [ "$RC" -eq 0 ] && ! emitted "$OUT" 401 && emitted "$OUT" 402; then
+        pass "FP-10: meta #401 excluded when non-meta #402 present"
+    else
+        fail "FP-10: expected #401 absent, #402 present; got rc=$RC out=$OUT"
+    fi
+fi
+teardown_mock
+
+# FP-11: all candidates have meta label → fallback emits all (fail-open).
+# No non-meta candidate exists → neither is excluded.
+setup_mock
+export GH_MOCK_LABELS_401='[{"name":"meta"}]'
+export GH_MOCK_LABELS_402='[{"name":"meta"}]'
+if require_sut "FP-11"; then
+    OUT=$(run_with_timeout 10 bash "$SUT" 401 402 2>/dev/null)
+    RC=$?
+    if [ "$RC" -eq 0 ] && emitted "$OUT" 401 && emitted "$OUT" 402; then
+        pass "FP-11: all-meta → fallback emits both #401 and #402"
+    else
+        fail "FP-11: expected fallback 401/402 both present; got rc=$RC out=$OUT"
+    fi
+fi
+teardown_mock
+
+# FP-12: cross-repo — meta candidate (#501 in repo-a) excluded when non-meta
+# candidate (#502 in repo-b) exists. Indexed META_CANDIDATE keying prevents
+# cross-repo same-number confusion (using different numbers here for mock compat).
+setup_mock
+export GH_MOCK_LABELS_501='[{"name":"meta"}]'
+export GH_MOCK_LABELS_502='[]'
+if require_sut "FP-12"; then
+    OUT=$(run_with_timeout 10 bash "$SUT" --repo-map 0:acme/repo-a --repo-map 1:acme/repo-b 501 502 2>/dev/null)
+    RC=$?
+    # #501 (meta, repo-a) should be absent; acme/repo-b#502 (non-meta) should be present
+    if [ "$RC" -eq 0 ] && ! emitted "$OUT" 501 && printf '%s' "$OUT" | grep -qF 'acme/repo-b#502'; then
+        pass "FP-12: cross-repo meta #501 excluded; acme/repo-b#502 survives with repo token"
+    else
+        fail "FP-12: expected 501 absent, acme/repo-b#502 present; got rc=$RC out=$OUT"
     fi
 fi
 teardown_mock
