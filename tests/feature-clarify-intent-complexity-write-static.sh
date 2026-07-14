@@ -1,12 +1,16 @@
 #!/bin/bash
-# Tests: skills/clarify-intent/SKILL.md
+# Tests: skills/clarify-intent/SKILL.md, bin/workflow/record-complexity-and-skip
 # Tags: skill, static, complexity-evaluation, scope:issue-specific
 #
-# Issue #1350 — clarify-intent gains the one-time complexity-evaluation WRITE.
+# Issue #1350/#1427 — clarify-intent invokes the shared record-complexity-and-skip
+# wrapper (which internally records the complexity evaluation) at CI-C1b.
 #
-# Verifies clarify-intent/SKILL.md invokes bin/workflow/record-complexity-evaluation
-# at the new CI-C1b step, and that the write is emitted before CI-C1c (so the
-# persisted verdict exists for all downstream readers).
+# After the #1427 refactor, the SKILL.md no longer calls record-complexity-evaluation
+# directly; it calls the wrapper 'record-complexity-and-skip', which owns the
+# record-complexity-evaluation call. The wrapper must be invoked before CI-C1c so the
+# persisted verdict exists for all downstream readers. Regression guards CI-COMP-4/5
+# assert that the WORKFLOW_OUTLINE_NOT_NEEDED sentinel and the skip-verifier subagent
+# launch remain in SKILL.md (agent context), NOT delegated into the shared script.
 #
 # Pre-implementation: assertions are expected to FAIL until the skill is
 # rewritten. The script does not abort on individual assertion failures.
@@ -31,58 +35,71 @@ require_file() {
 
 CI_SKILL="$REPO_ROOT/skills/clarify-intent/SKILL.md"
 
-# ---------------------------------------------------------------------------
-# CI-COMP-1: record-complexity-evaluation appears in an EXECUTABLE command
-# context, not merely a prose/comment mention. The write point is a Bash call:
-# `node ".../bin/workflow/record-complexity-evaluation" ...`. Require the token
-# to co-occur on a line with an invocation shape (node/bash/path-to-bin).
-# ---------------------------------------------------------------------------
-echo "=== CI-COMP-1: SKILL.md invokes record-complexity-evaluation (command context) ==="
+# CI-COMP-1: record-complexity-and-skip appears in SKILL.md in executable command context.
+# After refactor, the SKILL.md calls 'record-complexity-and-skip' (the wrapper) instead of
+# 'record-complexity-evaluation' directly. The wrapper is invoked via bash/bin path.
+echo "=== CI-COMP-1: SKILL.md invokes record-complexity-and-skip (command context) ==="
 if require_file "$CI_SKILL"; then
-  if ! has_fixed "record-complexity-evaluation" "$CI_SKILL"; then
-    fail "CI-COMP-1. clarify-intent/SKILL.md missing 'record-complexity-evaluation'"
-  elif has_re '(node|bash|bin/workflow/)[^`]*record-complexity-evaluation' "$CI_SKILL"; then
-    pass "CI-COMP-1. record-complexity-evaluation appears in an executable command context"
+  if ! has_fixed "record-complexity-and-skip" "$CI_SKILL"; then
+    fail "CI-COMP-1. clarify-intent/SKILL.md missing 'record-complexity-and-skip'"
+  elif has_re '(bash|bin/workflow/)[^`]*record-complexity-and-skip' "$CI_SKILL"; then
+    pass "CI-COMP-1. record-complexity-and-skip appears in an executable command context"
   else
-    fail "CI-COMP-1. record-complexity-evaluation present but not in a node/bash/bin invocation context"
+    fail "CI-COMP-1. record-complexity-and-skip present but not in bash/bin invocation context"
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# CI-COMP-2: CI-C1b label present AND anchored to the complexity-write step.
-# The record call must appear at/after the CI-C1b label and before CI-C1c, so
-# CI-C1b is genuinely the complexity-write step (not just a stray label).
-# ---------------------------------------------------------------------------
-echo "=== CI-COMP-2: CI-C1b label present and owns the complexity write ==="
+# CI-COMP-2: CI-C1b label present AND anchored to record-complexity-and-skip call.
+echo "=== CI-COMP-2: CI-C1b label present and owns the record-complexity-and-skip call ==="
 if require_file "$CI_SKILL"; then
   if ! has_fixed "CI-C1b" "$CI_SKILL"; then
     fail "CI-COMP-2. clarify-intent/SKILL.md missing 'CI-C1b'"
   else
     line_c1b=$(grep -n "CI-C1b" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-    line_rec=$(grep -n "record-complexity-evaluation" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-    if [ -z "$line_rec" ]; then
-      fail "CI-COMP-2. CI-C1b present but no record-complexity-evaluation to anchor it"
-    elif [ "$line_c1b" -le "$line_rec" ]; then
-      pass "CI-COMP-2. CI-C1b (L$line_c1b) heads the complexity write (record at L$line_rec)"
+    line_rcs=$(grep -n "record-complexity-and-skip" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
+    if [ -z "$line_rcs" ]; then
+      fail "CI-COMP-2. CI-C1b present but no record-complexity-and-skip to anchor it"
+    elif [ "$line_c1b" -le "$line_rcs" ]; then
+      pass "CI-COMP-2. CI-C1b (L$line_c1b) heads the record-complexity-and-skip call (L$line_rcs)"
     else
-      fail "CI-COMP-2. CI-C1b (L$line_c1b) appears after the record call (L$line_rec) — label not anchoring the write"
+      fail "CI-COMP-2. CI-C1b (L$line_c1b) appears after record-complexity-and-skip (L$line_rcs)"
     fi
   fi
 fi
 
-# ---------------------------------------------------------------------------
-# CI-COMP-3: record-complexity-evaluation appears before CI-C1c
-# ---------------------------------------------------------------------------
-echo "=== CI-COMP-3: record-complexity-evaluation precedes CI-C1c ==="
+# CI-COMP-3: record-complexity-and-skip appears before CI-C1c.
+echo "=== CI-COMP-3: record-complexity-and-skip precedes CI-C1c ==="
 if require_file "$CI_SKILL"; then
-  line_record=$(grep -n "record-complexity-evaluation" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
+  line_rcs=$(grep -n "record-complexity-and-skip" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
   line_c1c=$(grep -n "CI-C1c" "$CI_SKILL" 2>/dev/null | head -1 | cut -d: -f1)
-  if [ -z "$line_record" ] || [ -z "$line_c1c" ]; then
-    fail "CI-COMP-3. could not find both anchors (record-complexity-evaluation=$line_record, CI-C1c=$line_c1c)"
-  elif [ "$line_record" -lt "$line_c1c" ]; then
-    pass "CI-COMP-3. record-complexity-evaluation (L$line_record) precedes CI-C1c (L$line_c1c)"
+  if [ -z "$line_rcs" ] || [ -z "$line_c1c" ]; then
+    fail "CI-COMP-3. could not find both anchors (record-complexity-and-skip=$line_rcs, CI-C1c=$line_c1c)"
+  elif [ "$line_rcs" -lt "$line_c1c" ]; then
+    pass "CI-COMP-3. record-complexity-and-skip (L$line_rcs) precedes CI-C1c (L$line_c1c)"
   else
-    fail "CI-COMP-3. ordering wrong: record-complexity-evaluation=L$line_record, CI-C1c=L$line_c1c (expected record first)"
+    fail "CI-COMP-3. ordering wrong: record-complexity-and-skip=L$line_rcs, CI-C1c=L$line_c1c"
+  fi
+fi
+
+# CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED sentinel remains in SKILL.md.
+# Regression guard: the sentinel must fire from SKILL.md (agent context), NOT delegated to script.
+echo "=== CI-COMP-4: WORKFLOW_OUTLINE_NOT_NEEDED remains in SKILL.md ==="
+if require_file "$CI_SKILL"; then
+  if has_fixed "WORKFLOW_OUTLINE_NOT_NEEDED" "$CI_SKILL"; then
+    pass "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED sentinel present in SKILL.md"
+  else
+    fail "CI-COMP-4. WORKFLOW_OUTLINE_NOT_NEEDED missing from SKILL.md (sentinel must stay in agent context)"
+  fi
+fi
+
+# CI-COMP-5: skip-verifier subagent reference remains in SKILL.md.
+# Regression guard: the skip-verifier Agent launch must stay in SKILL.md.
+echo "=== CI-COMP-5: skip-verifier reference remains in SKILL.md ==="
+if require_file "$CI_SKILL"; then
+  if has_fixed "skip-verifier" "$CI_SKILL"; then
+    pass "CI-COMP-5. skip-verifier reference present in SKILL.md"
+  else
+    fail "CI-COMP-5. skip-verifier missing from SKILL.md (must stay in agent context)"
   fi
 fi
 
