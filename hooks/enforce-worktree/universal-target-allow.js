@@ -5,7 +5,7 @@
 // allow when every parseable write target resolves outside the session scope.
 // Sequenced commands and parse failures → abstain (fail-closed, C1).
 
-const { collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir } = require("./bash-write-scope");
+const { collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude } = require("./bash-write-scope");
 const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc } = require("./shared-cmd-utils");
 const { parse } = require("../lib/command-ir");
 
@@ -60,8 +60,8 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
       if (hasCommandSequencingOutsideHeredoc(cmd)) return { verdict: "abstain" };
       // Sequencing is heredoc-body-only: check targets now; allow if all under plans-dir.
       const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(irToUse, repoRoot);
-      if (hPf || !areAllBashTargetsUnderPlansDir(hTargets)) return { verdict: "abstain" };
-      return { verdict: "allow", reason: "heredoc-body-only sequencing; all write targets under plans-dir" };
+      if (hPf || !(areAllBashTargetsUnderPlansDir(hTargets) || areAllBashTargetsUnderClaude(hTargets))) return { verdict: "abstain" };
+      return { verdict: "allow", reason: "heredoc-body-only sequencing; all write targets under plans-dir or claude scratchpad" };
     }
 
     // Extract write targets from all applicable extractors (forward repoRoot so a
