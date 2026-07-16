@@ -24,7 +24,8 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 const { resolveSessionId } = require("./lib/workflow-state");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { classify, isGitWriteIR } = require("./lib/bash-write-patterns");
-const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isNewlineInjectedWriteIR, isExoticExecWriteIR } = require("./lib/bash-write-targets");
+const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isNewlineInjectedWriteIR, isExoticExecWriteIR, isInterpreterCWriteIR } = require("./lib/bash-write-targets");
+const { isPkgMgrWriteIR } = require("./lib/bash-write-targets/pkg-mgr");
 const { parse } = require("./lib/command-ir");
 const { parseCdCommand } = require("./lib/parse-git-args");
 const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch, isCommandRepoExcluded } = require("./enforce-worktree/config");
@@ -181,7 +182,7 @@ if (toolName === "Bash") {
   const cmd = toolInput.command || "";
   if (!cmd) done();
   const ir = parse(cmd);
-  if (classify(ir) !== "write" && !isGhWriteCommand(ir) && !isPosixRedirWriteIR(ir) && !isPwshWriteIR(ir) && !isFileOpWriteIR(ir) && !isGitWriteIR(ir) && !isCommandSubstWriteIR(ir) && !isNewlineInjectedWriteIR(ir) && !isExoticExecWriteIR(ir)) done(); // read-only command — allow. gh/posix-redir/pwsh/file-op/git write detectors must reach the scope pipeline even when classify no longer flags them (their WRITE_PATTERNS entries were retired, #1296/#1400/#1401). isCommandSubstWriteIR restores #514 (write hidden in "$(...)"/backtick substitution); isNewlineInjectedWriteIR restores newline-separated writes; isExoticExecWriteIR restores writes hidden in eval/xargs/find action clauses (final shell-layer round; unparseable/dynamic bodies fail-closed).
+  if (classify(ir) !== "write" && !isGhWriteCommand(ir) && !isPosixRedirWriteIR(ir) && !isPwshWriteIR(ir) && !isFileOpWriteIR(ir) && !isGitWriteIR(ir) && !isCommandSubstWriteIR(ir) && !isNewlineInjectedWriteIR(ir) && !isExoticExecWriteIR(ir) && !isPkgMgrWriteIR(ir) && !isInterpreterCWriteIR(ir)) done(); // read-only command — allow. gh/posix-redir/pwsh/file-op/git/pkg-mgr/interpreter-c write detectors must reach the scope pipeline even when classify no longer flags them (their WRITE_PATTERNS entries were retired, #1296/#1400/#1401/#1411). isCommandSubstWriteIR restores #514 (write hidden in "$(...)"/backtick substitution); isNewlineInjectedWriteIR restores newline-separated writes; isExoticExecWriteIR restores writes hidden in eval/xargs/find action clauses (final shell-layer round; unparseable/dynamic bodies fail-closed).
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
