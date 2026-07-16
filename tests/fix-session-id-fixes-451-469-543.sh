@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-session-id-fixes-451-469-543.sh
-# Tests: fix/session-id-fixes-451-469-543
+# Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-set-single.sh, bin/workflow/workflow-init-driver, hooks/lib/workflow-state/state-io.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: session-id, wip-state, cleanup-zombies
 #
 # RED suite — three combined fixes:
@@ -22,6 +22,7 @@ WIP_STATE="$AGENTS_DIR/bin/github-issues/wip-state.sh"
 WIP_SET_SINGLE="$AGENTS_DIR/bin/github-issues/wip-set-single.sh"
 WIP_SET_RESUME="$AGENTS_DIR/skills/workflow-init/scripts/wip-set-resume.sh"
 AGG_WIP_CHECK="$AGENTS_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh"
+DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
 STATE_IO_JS="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
 CLARIFY_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
 WI_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
