@@ -2,6 +2,7 @@
 
 const path = require("path");
 const os = require("os");
+const { foldCase, isAtOrUnderClaudeBase } = require("../claude-scratchpad-base");
 
 // True if the token looks like a variable expansion or command substitution
 // that we cannot statically resolve.
@@ -54,6 +55,37 @@ function expandStaticShellTokens(s, opts = {}) {
     const remainder = s.replace(wpRe, "");
     if (remainder.includes("$") || remainder.includes("`")) return null;
     return wpd + remainder;
+  }
+
+  // $SCRATCHPAD or ${SCRATCHPAD} — expand when env var resolves under <os-tmpdir>/claude/.
+  // Security invariant: only allow expansion when the resolved path is under the claude
+  // scratchpad base (SSOT base in lib/claude-scratchpad-base.js). If SCRATCHPAD is unset →
+  // fail-closed (null). If set to a path NOT under <tmpdir>/claude/ → fall through to the
+  // generic $VAR handler (which may allow it if the value is under plans-dir, else fail-closed).
+  // Residual (F1): this is a pure resolver — the outside-repo guard against a poisoned TEMP
+  // that nests the claude base inside a repo is enforced by every allow-decision caller
+  // (areAllBashTargetsUnderClaude, isAllowedNewItemCommand) via findRepoRoot, not here.
+  const scratchRe = /^\$(?:\{SCRATCHPAD\}|SCRATCHPAD)(?=\/|\\|$)/;
+  if (scratchRe.test(s)) {
+    const sp = process.env.SCRATCHPAD;
+    if (!sp) return null; // fail-closed: unset or empty → cannot resolve
+    if (isAtOrUnderClaudeBase(sp)) {
+      // SCRATCHPAD points into <tmpdir>/claude/ — safe to expand.
+      const remainder = s.replace(scratchRe, "");
+      if (remainder.includes("$") || remainder.includes("`")) return null;
+      const candidate = sp + remainder;
+      // Traversal guard: the FINAL resolved candidate (env value + remainder) must
+      // remain at/under SCRATCHPAD itself — closes `$SCRATCHPAD/../../...` escapes
+      // at the resolver layer (mirror of tryResolveEnvUnderPlansDir step (b)).
+      const normSp = foldCase(path.resolve(sp));
+      const normCand = foldCase(path.resolve(candidate));
+      if (normCand !== normSp &&
+          !normCand.startsWith(normSp + path.sep) &&
+          !normCand.startsWith(normSp + "/")) return null;
+      return candidate;
+    }
+    // SCRATCHPAD set but NOT under <tmpdir>/claude/ — fall through to generic handler.
+    // (Generic handler will allow if value is under plans-dir, or fail-closed otherwise.)
   }
 
   // Generic $VAR / ${VAR} — resolve via process.env when env value AND the final
