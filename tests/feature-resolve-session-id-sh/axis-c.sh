@@ -73,56 +73,104 @@ fi
 teardown
 
 # ===========================================================================
-# B-25: aggregate-wip-check.sh graceful degradation when SID is UNRESOLVABLE.
-# Since #1251 the script locates the bridge SCRIPT-RELATIVELY (BASH_SOURCE),
-# so the bridge is always present regardless of AGENTS_CONFIG_DIR — the old
-# "bridge absent from fixture AGENTS_CONFIG_DIR tree" premise is obsolete.
-# Instead, fully isolate every SID source in the child env (no P2/P3/P4 env,
-# empty transcript base, non-git CWD so P6/P7 fail): the real bridge returns
-# rc=2 → SID_SET stays 0 → no --session-id, and the script must not abort.
-# The fake wip-state.sh capture tree still dispatches via AGENTS_CONFIG_DIR
-# (that dispatch is env-based by design).
+# B-25: driver wip-check phase graceful degradation when SID is UNRESOLVABLE.
+# When all SID sources are absent (no P2/P3/P4 env, empty transcript base,
+# non-git CWD), resolve-session-id returns rc=2 → driver falls back to
+# spawning resolve-session-id but must not abort. The driver should proceed
+# without --session-id in the wip-state.sh call.
 # ===========================================================================
-setup
-FIXTURE_DIR="$TMP/b25-fixture"
-mkdir -p "$FIXTURE_DIR/bin/github-issues"
-
-CAPTURE_FILE="$TMP/b25-capture.txt"
-cat > "$FIXTURE_DIR/bin/github-issues/wip-state.sh" <<WIP_EOF
+DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+if [ ! -f "$DRIVER" ]; then
+    fail "B-25: bin/workflow/workflow-init-driver not found"
+else
+    B25_TMP="$(mktemp -d 2>/dev/null || mktemp -d -t b25drv)"
+    B25_PLANS="$B25_TMP/plans"
+    B25_CFG="$B25_TMP/cfg"
+    B25_MOCKBIN="$B25_TMP/bin"
+    B25_RESP="$B25_TMP/resp"
+    B25_WIPD="$B25_TMP/wip"
+    B25_CAPTURE="$B25_TMP/wip-capture.txt"
+    mkdir -p "$B25_PLANS" "$B25_MOCKBIN" "$B25_RESP" "$B25_WIPD" \
+        "$B25_CFG/bin/github-issues" "$B25_CFG/hooks/lib" \
+        "$B25_CFG/skills/workflow-init/scripts"
+    # gh mock: return issue JSON for #99
+    cat > "$B25_MOCKBIN/gh" <<GHEOF
+#!/bin/bash
+RESP="$B25_RESP"
+cmd="\${1:-}"; sub="\${2:-}"
+if [ "\$cmd" = "issue" ] && [ "\$sub" = "view" ]; then
+    shift 2; N=""
+    while [ \$# -gt 0 ]; do
+        case "\$1" in
+            --repo|--json|--jq) if [ \$# -ge 2 ]; then shift 2; else shift; fi ;;
+            -*) shift ;;
+            *) [ -z "\$N" ] && N="\$1"; shift ;;
+        esac
+    done
+    N="\${N#\#}"
+    if [ -f "\$RESP/issue-view-\$N.json" ]; then cat "\$RESP/issue-view-\$N.json"; exit 0; fi
+    exit 1
+fi
+if [ "\$cmd" = "repo" ] && [ "\$sub" = "view" ]; then echo "mockorg/mockrepo"; exit 0; fi
+if [ "\$cmd" = "api" ]; then echo "[]"; exit 0; fi
+exit 0
+GHEOF
+    chmod +x "$B25_MOCKBIN/gh"
+    printf '{"number":99,"title":"T","body":"B","labels":[{"name":"type:task"}],"state":"OPEN","createdAt":"2026-01-01T00:00:00Z"}\n' \
+        > "$B25_RESP/issue-view-99.json"
+    # wip-state.sh mock: capture args, return "same"
+    cat > "$B25_CFG/bin/github-issues/wip-state.sh" <<WIPEOF
 #!/bin/bash
 CMD="\$1"; shift
 case "\$CMD" in
-    check) printf '%s\n' "\$*" >> '$CAPTURE_FILE'; echo "none" ;;
-    *)     echo "none" ;;
+    check) printf '%s\n' "\$*" >> '$B25_CAPTURE'; echo "same" ;;
+    set)   exit 0 ;;
+    *)     exit 0 ;;
 esac
-WIP_EOF
-chmod +x "$FIXTURE_DIR/bin/github-issues/wip-state.sh"
+WIPEOF
+    chmod +x "$B25_CFG/bin/github-issues/wip-state.sh"
+    # resolve-session-id: fail (simulate unresolvable SID)
+    printf '#!/bin/bash\necho "SID unresolvable" >&2\nexit 2\n' > "$B25_CFG/bin/resolve-session-id"
+    chmod +x "$B25_CFG/bin/resolve-session-id"
+    # parse-issue-tokens
+    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$B25_CFG/bin/parse-issue-tokens"
+    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$B25_CFG/hooks/lib/parse-closes-issues.js"
+    # filter-init-candidates passthrough
+    cat > "$B25_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
+#!/bin/bash
+while [ $# -gt 0 ]; do
+    case "$1" in --repo-map) shift 2 ;; -*) shift ;; *) echo "#${1#\#}"; shift ;; esac
+done
+exit 0
+FEOF
+    chmod +x "$B25_CFG/bin/parse-issue-tokens" \
+        "$B25_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
 
-NONGIT_CWD="$TMP/b25-nongit"
-mkdir -p "$NONGIT_CWD"
-
-REAL_AGG="$AGENTS_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh"
-if [ ! -f "$REAL_AGG" ]; then
-    fail "B-25: aggregate-wip-check.sh not found"
-else
-    OUT=$(bash -c "
-        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID
-        export CLAUDE_TRANSCRIPT_BASE_DIR='$CLAUDE_TRANSCRIPT_BASE_DIR'
-        export AGENTS_CONFIG_DIR='$FIXTURE_DIR'
-        cd '$NONGIT_CWD'
-        bash '$REAL_AGG' 99
+    : > "$B25_CAPTURE"
+    B25_NONGIT="$B25_TMP/nongit"
+    mkdir -p "$B25_NONGIT"
+    ORIG_PATH_B25="$PATH"
+    export PATH="$B25_MOCKBIN:$PATH"
+    B25_OUT=$(bash -c "
+        unset CLAUDE_SESSION_ID CLAUDE_ENV_FILE CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+        export WORKFLOW_PLANS_DIR='$B25_PLANS'
+        export AGENTS_CONFIG_DIR='$B25_CFG'
+        export CLAUDE_TRANSCRIPT_BASE_DIR='$B25_TMP/transcripts'
+        mkdir -p '$B25_TMP/transcripts'
+        cd '$B25_NONGIT'
+        node '$DRIVER' '#99'
     " 2>/dev/null)
-    CAPTURE=$(cat "$CAPTURE_FILE" 2>/dev/null || echo "")
-    # Script must not abort; capture must NOT have --session-id. Output is
-    # "ALL_SAME none" — uniform "none" results take the all_same branch
-    # (ALL_NONE unreachable there; scratch-validated against the real script).
-    if [ "$OUT" = "ALL_SAME none" ] && ! echo "$CAPTURE" | grep -q "\-\-session-id"; then
-        pass "B-25: aggregate-wip-check.sh degrades gracefully (no --session-id, no abort) when SID unresolvable"
+    B25_RC=$?
+    export PATH="$ORIG_PATH_B25"
+    B25_CAPTURE_CONTENT=$(cat "$B25_CAPTURE" 2>/dev/null || echo "")
+    # Driver must not abort (ACTION=done or ask_user is acceptable); must not pass --session-id
+    if [ "$B25_RC" -eq 0 ] && ! echo "$B25_CAPTURE_CONTENT" | grep -q "\-\-session-id"; then
+        pass "B-25: driver wip-check degrades gracefully (no --session-id, no abort) when SID unresolvable"
     else
-        fail "B-25: out='$OUT' capture='$CAPTURE' (expected 'ALL_SAME none', no --session-id)"
+        fail "B-25: rc=$B25_RC capture='$B25_CAPTURE_CONTENT' (expected rc=0, no --session-id in wip-state call)"
     fi
+    rm -rf "$B25_TMP" 2>/dev/null || true
 fi
-teardown
 
 # ===========================================================================
 # B-31: P3 — CLAUDE_ENV_FILE (KEY=VALUE) provides the SID when P2 is unset.

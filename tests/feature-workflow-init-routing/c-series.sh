@@ -79,9 +79,8 @@ else
     fail "C13d: resume-clarified branch text missing (need none + intent:clarified + per-N set loop)"
 fi
 
-# C13e: abort path emits WORKFLOW_ABORTED_WIP_CONFLICT sentinel.
-assert_contains "$WORKFLOW_INIT_MD" "WORKFLOW_ABORTED_WIP_CONFLICT" \
-    "C13e: 'abort' branch emits <<WORKFLOW_ABORTED_WIP_CONFLICT>> sentinel"
+# C13e removed: WORKFLOW_ABORTED_WIP_CONFLICT sentinel abolished (#996);
+# abort is now handled by driver ACTION=blocked REASON=user_aborted.
 
 # C13f: Aggregate WIP classification (same/none/other) documented across ISSUES.
 if grep -qE "all.*same|all.*none|Any.*other|any.*other|all.*WIP" "$WORKFLOW_INIT_MD"; then
