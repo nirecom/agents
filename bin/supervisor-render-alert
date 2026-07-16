@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# supervisor-render-alert — CLI wrapper: render actionable supervisor findings for a session.
+#
+# Usage: bin/supervisor-render-alert [--session-id] <sid> [--plans-dir <dir>]
+#        bin/supervisor-render-alert --session-id <sid> [--plans-dir <dir>]
+#
+# Always exits 0 — never gates the session on its own errors.
+
+set -euo pipefail
+
+SESSION_ID=""
+PLANS_DIR=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-id)
+      SESSION_ID="${2:?--session-id requires a value}"
+      shift 2
+      ;;
+    --plans-dir)
+      PLANS_DIR="${2:?--plans-dir requires a value}"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      if [[ -z "$SESSION_ID" ]]; then
+        SESSION_ID="$1"
+        shift
+      else
+        echo "ERROR: unexpected argument: $1" >&2
+        exit 2
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "$SESSION_ID" ]]; then
+  echo "ERROR: session-id required (use --session-id <sid> or pass as positional arg)" >&2
+  exit 2
+fi
+
+if ! [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "ERROR: session-id contains invalid characters (must match [A-Za-z0-9_-])" >&2
+  exit 2
+fi
+
+if [[ -z "$PLANS_DIR" ]]; then
+  if [[ -n "${AGENTS_CONFIG_DIR:-}" ]] && [[ -x "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir" ]]; then
+    PLANS_DIR="$(bash "${AGENTS_CONFIG_DIR}/bin/workflow-plans-dir")"
+  else
+    PLANS_DIR="${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}"
+  fi
+fi
+
+STATE_FILE="${PLANS_DIR}/${SESSION_ID}-supervisor-state.json"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if command -v cygpath >/dev/null 2>&1; then
+  NODE_DIR="$(cygpath -m "$SCRIPT_DIR")"
+else
+  NODE_DIR="$SCRIPT_DIR"
+fi
+
+FALLBACK_LINE="[EM Supervisor] Review complete — no actionable findings."
+
+if [[ ! -f "$STATE_FILE" ]]; then
+  echo "$FALLBACK_LINE"
+  exit 0
+fi
+
+# cygpath for state file path in node
+if command -v cygpath >/dev/null 2>&1; then
+  NODE_STATE="$(cygpath -m "$STATE_FILE")"
+else
+  NODE_STATE="$STATE_FILE"
+fi
+
+if ! node -e "
+const fs = require('fs');
+const r = require('$NODE_DIR/../hooks/lib/supervisor-findings-render');
+let state;
+try { state = JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); } catch(e) {
+  process.stdout.write('$FALLBACK_LINE\n'); process.exit(0);
+}
+const findings = (state && state.alert && Array.isArray(state.alert.findings)) ? state.alert.findings : [];
+const result = r.formatLayer2Findings(findings, { actionableOnly: true });
+process.stdout.write((result || '$FALLBACK_LINE') + '\n');
+" "$NODE_STATE" 2>/dev/null; then
+  echo "$FALLBACK_LINE"
+fi
+exit 0

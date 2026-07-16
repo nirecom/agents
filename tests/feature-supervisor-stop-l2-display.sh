@@ -218,6 +218,117 @@ run_t3_not_completed
 run_t4_no_findings
 run_t5_invalid_json
 
+# --- T6: actionableOnly mode — Stop hook emits compact per-finding lines ---
+# T6a: workflow/warning finding → additionalContext contains "[EM Supervisor] warning (workflow):"
+#      and does NOT contain old verbose header "Findings (severity >= warning):" or footer "Session ID:"
+#      RED-EXPECTED: hook not yet passing actionableOnly:true to formatLayer2Findings
+# T6b: notice-only findings (NON-empty array) → additionalContext contains the fallback line
+#      RED-EXPECTED: hook not yet passing actionableOnly:true
+# T6c: workflow/warning finding → additionalContext contains "/issue-create" signal
+#      RED-EXPECTED: hook not yet passing actionableOnly:true (current format lacks this signal)
+
+run_t6_actionable_only_hook() {
+    local WF_FINDING="[{categories:['workflow'],severity:'warning',detail:'X',reporter:'test'}]"
+
+    # T6a: workflow/warning finding → compact per-finding format, no verbose headers/footers
+    run_t6a() {
+        local tmp sid tmp_node out
+        tmp=$(make_tmp); sid="l2t6a-sid-$$"
+        tmp_node="$(node_dir "$tmp")"
+
+        seed_alert "$tmp_node" "$sid" "done" "null" "null" "$WF_FINDING"
+
+        local hook_input
+        hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
+
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+            run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+        local rc=$?
+        rm -rf "$tmp"
+
+        if [ $rc -ne 0 ]; then
+            fail "T6a: exit code should be 0, got $rc"; return
+        fi
+        if ! echo "$out" | grep -q "additionalContext"; then
+            fail "T6a: stdout must contain additionalContext, got: $(printf '%q' "${out:0:80}")"; return
+        fi
+        # Assert compact per-finding line present
+        if ! echo "$out" | grep -q "\[EM Supervisor\] warning (workflow):"; then
+            fail "T6a [RED-EXPECTED]: additionalContext must contain '[EM Supervisor] warning (workflow):' compact line (actionableOnly not yet passed by hook); got: $(printf '%q' "${out:0:200}")"; return
+        fi
+        # Assert old verbose header absent
+        if echo "$out" | grep -q "Findings (severity >= warning):"; then
+            fail "T6a [RED-EXPECTED]: additionalContext must NOT contain old verbose 'Findings (severity >= warning):' header (actionableOnly not yet passed by hook)"; return
+        fi
+        # Assert old footer absent
+        if echo "$out" | grep -q "Session ID:"; then
+            fail "T6a [RED-EXPECTED]: additionalContext must NOT contain old 'Session ID:' footer (actionableOnly not yet passed by hook)"; return
+        fi
+        pass "T6a: workflow/warning → compact per-finding line, no verbose headers/footers, exit 0"
+    }
+
+    # T6b: notice-only (NON-empty) array → fallback line in additionalContext
+    # Note: existing empty-array gate at line 90 fires for [], so we seed a notice-only non-empty array.
+    run_t6b() {
+        local tmp sid tmp_node out
+        tmp=$(make_tmp); sid="l2t6b-sid-$$"
+        tmp_node="$(node_dir "$tmp")"
+
+        seed_alert "$tmp_node" "$sid" "done" "null" "null" "[{categories:['other'],severity:'notice',detail:'n',reporter:'test'}]"
+
+        local hook_input
+        hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
+
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+            run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+        local rc=$?
+        rm -rf "$tmp"
+
+        if [ $rc -ne 0 ]; then
+            fail "T6b: exit code should be 0, got $rc"; return
+        fi
+        # When actionableOnly is active: notice-only → fallback line in additionalContext
+        if ! echo "$out" | grep -q "additionalContext"; then
+            fail "T6b [RED-EXPECTED]: stdout must contain additionalContext for notice-only non-empty array (actionableOnly not yet passed by hook); got: $(printf '%q' "${out:0:80}")"; return
+        fi
+        if ! echo "$out" | grep -q "no actionable findings"; then
+            fail "T6b [RED-EXPECTED]: additionalContext must contain fallback 'no actionable findings' for notice-only findings (actionableOnly not yet passed by hook); got: $(printf '%q' "${out:0:200}")"; return
+        fi
+        pass "T6b: notice-only non-empty findings → fallback line in additionalContext, exit 0"
+    }
+
+    # T6c: workflow/warning finding → /issue-create signal in additionalContext
+    run_t6c() {
+        local tmp sid tmp_node out
+        tmp=$(make_tmp); sid="l2t6c-sid-$$"
+        tmp_node="$(node_dir "$tmp")"
+
+        seed_alert "$tmp_node" "$sid" "done" "null" "null" "$WF_FINDING"
+
+        local hook_input
+        hook_input=$(printf '{"session_id":"%s","transcript_path":""}' "$sid")
+
+        out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+            run_with_timeout 10 node "$HOOK" <<< "$hook_input" 2>/dev/null)
+        local rc=$?
+        rm -rf "$tmp"
+
+        if [ $rc -ne 0 ]; then
+            fail "T6c: exit code should be 0, got $rc"; return
+        fi
+        if ! echo "$out" | grep -q "/issue-create"; then
+            fail "T6c [RED-EXPECTED]: additionalContext must contain '/issue-create' signal for workflow finding (actionableOnly not yet passed by hook); got: $(printf '%q' "${out:0:200}")"; return
+        fi
+        pass "T6c: workflow/warning finding → /issue-create signal in additionalContext, exit 0"
+    }
+
+    run_t6a
+    run_t6b
+    run_t6c
+}
+
+run_t6_actionable_only_hook
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -gt 0 ] && exit 1

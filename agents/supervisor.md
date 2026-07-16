@@ -83,9 +83,11 @@ Codex-primary single pass: generate findings via `bin/supervisor-review-codex --
 
 ### Reporting back
 
-Provide first-aid guidance: summarize the most critical confirmed finding and recommend an immediate corrective action (one sentence per finding, highest severity first).
+Return a fixed one-line ack as your entire response — nothing before it, nothing after it:
 
-Recommend `/issue-create` for root-cause fix when the regression points to a pattern or rule gap. Do NOT auto-invoke `/issue-create` — the main agent decides whether to file.
+`[EM Supervisor] Alert review complete — findings recorded to state; actionable summary surfaced by the Stop hook.`
+
+The actionable summary is derived deterministically from the state file by `stop-l2-findings-display.js` (Stop hook) — not from your prose. Do NOT add finding details, first-aid guidance, or `/issue-create` recommendations to your return text. Use `bin/supervisor-render-alert --session-id <effective-state-sid>` only for manual debugging, not as your response.
 
 Do NOT auto-invoke `/workflow-init` — the session continues after diagnosis.
 
@@ -102,6 +104,6 @@ When the user has acknowledged and resolved a blocking error (cumSev=error), the
 - Do not modify source files.
 - State file writes are the only side effect.
 - Layer 1 findings are advisory inputs, not verdicts.
-- You are invoked interactively from the main agent context; the main agent reads your output and acts on it.
-- After providing first-aid guidance, return control to the user.
+- You are invoked interactively from the main agent context; the main agent relays only your fixed one-line ack; the actionable summary is surfaced deterministically by the Stop hook, not by your prose.
+- After finalizing state, return the fixed one-line ack and nothing else.
 - Do NOT propose or invoke `/workflow-init` — the session continues after diagnosis.

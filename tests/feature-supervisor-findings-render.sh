@@ -300,6 +300,154 @@ process.exit(hasEscaped && !hasRaw ? 0 : 1);
 }
 run_c3_for_final_report
 
+# --- T7: formatLayer2Findings actionableOnly option ---
+# T7a: all-notice findings → output equals/contains "no actionable findings" fallback sentence (RED-EXPECTED)
+# T7b: mixed error/warning/notice → error/warning details present, notice detail absent (RED-EXPECTED)
+# T7c: empty array → result is null (existing early-return behavior; assert NULL sentinel) (GREEN)
+# T7d: 2 warning/error findings → every non-empty output line starts with [EM Supervisor] (RED-EXPECTED)
+# T7e: classifier both-verdicts — workflow→/issue-create signal; code→no /issue-create signal (RED-EXPECTED)
+
+run_t7_actionable_only() {
+    if [ ! -f "$AGENTS_DIR/hooks/lib/supervisor-findings-render.js" ]; then
+        skip "T7-all: supervisor-findings-render.js not present"
+        return
+    fi
+
+    # T7a: all-notice findings → fallback sentence (actionableOnly filters them out → zero actionable)
+    # RED-EXPECTED: actionableOnly mode not yet implemented; current code returns verbose listing
+    local out_notice
+    out_notice=$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+    { categories: ['other'], severity: 'notice', detail: 'notice-only-detail-alpha', reporter: 'test', timestamp: new Date().toISOString() },
+    { categories: ['env'],   severity: 'notice', detail: 'notice-only-detail-beta',  reporter: 'test', timestamp: new Date().toISOString() }
+];
+const result = r.formatLayer2Findings(findings, { actionableOnly: true });
+process.stdout.write(result === null ? 'NULL' : result);
+" 2>/dev/null)
+
+    if echo "$out_notice" | grep -qi "no actionable findings"; then
+        pass "T7a: actionableOnly + all-notice → fallback 'no actionable findings' sentence"
+    else
+        fail "T7a [RED-EXPECTED]: actionableOnly + all-notice → 'no actionable findings' not returned (actionableOnly not yet implemented); got: $(printf '%q' "${out_notice:0:100}")"
+    fi
+
+    # T7b: mixed → error/warning present, unique notice detail absent
+    # RED-EXPECTED: actionableOnly not yet implemented
+    local out_mixed notice_token="UNIQUE-NOTICE-DETAIL-BETA-99"
+    out_mixed=$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+    { categories: ['code'],  severity: 'error',   detail: 'error-detail-gamma',    reporter: 'test', timestamp: new Date().toISOString() },
+    { categories: ['workflow'], severity: 'warning', detail: 'warning-detail-delta', reporter: 'test', timestamp: new Date().toISOString() },
+    { categories: ['other'], severity: 'notice',  detail: 'UNIQUE-NOTICE-DETAIL-BETA-99', reporter: 'test', timestamp: new Date().toISOString() }
+];
+const result = r.formatLayer2Findings(findings, { actionableOnly: true });
+process.stdout.write(result === null ? 'NULL' : result);
+" 2>/dev/null)
+
+    local t7b_ok=1
+    if ! echo "$out_mixed" | grep -q "error-detail-gamma"; then
+        fail "T7b [RED-EXPECTED]: actionableOnly → error detail 'error-detail-gamma' missing (actionableOnly not yet implemented)"
+        t7b_ok=0
+    fi
+    if ! echo "$out_mixed" | grep -q "warning-detail-delta"; then
+        fail "T7b [RED-EXPECTED]: actionableOnly → warning detail 'warning-detail-delta' missing (actionableOnly not yet implemented)"
+        t7b_ok=0
+    fi
+    if echo "$out_mixed" | grep -q "$notice_token"; then
+        fail "T7b [RED-EXPECTED]: actionableOnly → notice detail '$notice_token' must be filtered out (actionableOnly not yet implemented)"
+        t7b_ok=0
+    fi
+    if [ "$t7b_ok" -eq 1 ]; then
+        pass "T7b: actionableOnly + mixed → error/warning details present, notice detail absent"
+    fi
+
+    # T7c: empty array → result is null (existing early-return at line 33 fires before actionableOnly branch)
+    # This must be GREEN now (the early return already handles [])
+    local out_empty
+    out_empty=$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const result = r.formatLayer2Findings([], { actionableOnly: true });
+process.stdout.write(result === null ? 'NULL' : String(result));
+" 2>/dev/null)
+
+    if [ "$out_empty" = "NULL" ]; then
+        pass "T7c: actionableOnly + empty array → null (existing early-return behavior, GREEN)"
+    else
+        fail "T7c: actionableOnly + [] → expected null (NULL sentinel), got: $(printf '%q' "${out_empty:0:80}")"
+    fi
+
+    # T7d: 2 warning/error findings → every non-empty output line starts with [EM Supervisor]
+    # RED-EXPECTED: actionableOnly not yet implemented; current code produces multi-line verbose output
+    local out_prefix
+    out_prefix=$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+    { categories: ['code'], severity: 'error',   detail: 'detail-epsilon', reporter: 'test', timestamp: new Date().toISOString() },
+    { categories: ['env'],  severity: 'warning', detail: 'detail-zeta',    reporter: 'test', timestamp: new Date().toISOString() }
+];
+const result = r.formatLayer2Findings(findings, { actionableOnly: true });
+process.stdout.write(result === null ? 'NULL' : result);
+" 2>/dev/null)
+
+    if [ "$out_prefix" = "NULL" ]; then
+        fail "T7d [RED-EXPECTED]: actionableOnly returned null for non-empty error/warning findings"
+    else
+        # Check that every non-empty line starts with [EM Supervisor]
+        local bad_line
+        bad_line=$(echo "$out_prefix" | grep -v "^\[EM Supervisor\]" | grep -v "^$" | head -1)
+        if [ -z "$bad_line" ]; then
+            pass "T7d: actionableOnly → every non-empty output line starts with [EM Supervisor]"
+        else
+            fail "T7d [RED-EXPECTED]: actionableOnly → line not starting with [EM Supervisor]: $(printf '%q' "${bad_line:0:100}")"
+        fi
+    fi
+
+    # T7e: classifier both-verdicts
+    # workflow category → /issue-create signal present; code category → /issue-create signal absent
+    # RED-EXPECTED: actionableOnly not yet implemented
+    local out_classifier
+    out_classifier=$(run_with_timeout 10 node -e "
+const r = require('$RENDER_NODE');
+const findings = [
+    { categories: ['workflow'], severity: 'warning', detail: 'wf-detail', reporter: 'test', timestamp: new Date().toISOString() },
+    { categories: ['code'],    severity: 'warning', detail: 'cd-detail', reporter: 'test', timestamp: new Date().toISOString() }
+];
+const result = r.formatLayer2Findings(findings, { actionableOnly: true });
+process.stdout.write(result === null ? 'NULL' : result);
+" 2>/dev/null)
+
+    if [ "$out_classifier" = "NULL" ]; then
+        fail "T7e [RED-EXPECTED]: actionableOnly returned null for non-empty findings"
+    else
+        local wf_line code_line
+        wf_line=$(echo "$out_classifier" | grep "workflow")
+        code_line=$(echo "$out_classifier" | grep "code")
+
+        local t7e_ok=1
+        if [ -z "$wf_line" ]; then
+            fail "T7e [RED-EXPECTED]: workflow finding line not present in actionableOnly output"
+            t7e_ok=0
+        elif ! echo "$wf_line" | grep -q "/issue-create"; then
+            fail "T7e [RED-EXPECTED]: workflow line must contain /issue-create signal, got: $(printf '%q' "${wf_line:0:150}")"
+            t7e_ok=0
+        fi
+        if [ -z "$code_line" ]; then
+            fail "T7e [RED-EXPECTED]: code finding line not present in actionableOnly output"
+            t7e_ok=0
+        elif echo "$code_line" | grep -q "/issue-create"; then
+            fail "T7e [RED-EXPECTED]: code line must NOT contain /issue-create signal, got: $(printf '%q' "${code_line:0:150}")"
+            t7e_ok=0
+        fi
+        if [ "$t7e_ok" -eq 1 ]; then
+            pass "T7e: classifier both-verdicts — workflow→/issue-create, code→no /issue-create"
+        fi
+    fi
+}
+
+run_t7_actionable_only
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -gt 0 ] && exit 1
