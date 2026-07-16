@@ -15,14 +15,24 @@ test_quoted_arg_no_false_positive_file_op() {
         'doc-append --subject "touch file.txt"' "read"
 }
 
-# Interpreter -c: write when payload contains write tokens; read when payload
-# is read-only (isReadOnlyInterpreterC recursively classifies the body).
+# Interpreter -c (#1411 IR migration): the interpreter-c WRITE_PATTERNS entry was
+# retired to the IR predicate isInterpreterCWriteIR. A write-bearing inner body now
+# yields classify=read + isInterpreterCWriteIR=true (assert_write_ir interpc). A
+# read-only inner body stays classify=read + isInterpreterCWriteIR=false
+# (assert_interpreter_c_read). Pre-impl the predicate is undefined → the write rows
+# FAIL cleanly (RED-pending); the read rows classify=read but predval=ERROR → also
+# FAIL until write-code lands the predicate.
 test_interpreter_c_always_write() {
-    assert_classify 'bash -c "rm foo"' 'bash -c "rm foo"' "write"
-    # Read-only payloads: isReadOnlyInterpreterC classifies body then overrides.
-    assert_classify 'sh -c "echo hello"' 'sh -c "echo hello"' "read"
-    assert_classify 'pwsh -Command "Get-Content foo"' 'pwsh -Command "Get-Content foo"' "read"
-    assert_classify 'zsh -c "ls"' 'zsh -c "ls"' "read"
+    # Write bodies → read + isInterpreterCWriteIR=true.
+    assert_write_ir 'bash -c "rm foo"'              'bash -c "rm foo"'              interpc
+    assert_write_ir 'sh -c "echo hi > out"'         'sh -c "echo hi > out"'         interpc
+    assert_write_ir 'pwsh -Command "Remove-Item foo"' 'pwsh -Command "Remove-Item foo"' interpc
+    assert_write_ir 'bash -c "git commit"'          'bash -c "git commit"'          interpc
+    assert_write_ir 'bash -c "npm install"'         'bash -c "npm install"'         interpc
+    # Read bodies → read + isInterpreterCWriteIR=false.
+    assert_interpreter_c_read 'sh -c "echo hello"'             'sh -c "echo hello"'
+    assert_interpreter_c_read 'pwsh -Command "Get-Content foo"' 'pwsh -Command "Get-Content foo"'
+    assert_interpreter_c_read 'zsh -c "ls"'                    'zsh -c "ls"'
 }
 
 # Documented FN: command name itself wrapped in quotes — strip removes it
