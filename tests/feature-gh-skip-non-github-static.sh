@@ -1,7 +1,7 @@
 #!/bin/bash
-# Tests: skills/clarify-intent/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/issue-close-stage/SKILL.md, skills/workflow-init/SKILL.md
-# Tags: issue-close, stage, workflow, finalize, init
-# Static grep-based checks for the non-GitHub-remote gate wiring across 5 SKILL.md files.
+# Tests: skills/commit-push/SKILL.md, skills/issue-close-stage/SKILL.md, bin/detect-non-github.sh
+# Tags: issue-close, stage, workflow, finalize, init, scope:issue-specific
+# Static grep-based checks for the non-GitHub-remote gate wiring across wrapped SKILL.md files.
 #
 # Pre-implementation: all checks expected to FAIL until SKILL.md gates land.
 # Post-implementation: all checks should PASS.
@@ -39,41 +39,31 @@ ALL_SKILLS=(
     "$ISSUE_CLOSE_FINALIZE_SKILL"
 )
 
+WRAPPED_SKILLS=(
+    "$COMMIT_PUSH_SKILL"
+    "$ISSUE_CLOSE_STAGE_SKILL"
+)
+
 # ---------------------------------------------------------------------------
-# Group 1: is-github-dotcom-remote helper invocation present in each SKILL.md
+# Group 1: detect-non-github.sh invocation present in each wrapped SKILL.md
 # ---------------------------------------------------------------------------
-echo "=== Group 1: is-github-dotcom-remote invocation ==="
-for f in "${ALL_SKILLS[@]}"; do
+echo "=== Group 1: detect-non-github.sh invocation ==="
+for f in "${WRAPPED_SKILLS[@]}"; do
     if require_file "$f"; then
         name="$(basename "$(dirname "$f")")"
-        if has_fixed "is-github-dotcom-remote" "$f"; then
-            pass "is-github-dotcom-remote referenced in $name/SKILL.md"
+        if has_fixed "detect-non-github.sh" "$f"; then
+            pass "detect-non-github.sh referenced in $name/SKILL.md"
         else
-            fail "is-github-dotcom-remote missing from $f"
+            fail "detect-non-github.sh missing from $f"
         fi
     fi
 done
 
 # ---------------------------------------------------------------------------
-# Group 2: NON_GITHUB=0 reset present in each SKILL.md
-# ---------------------------------------------------------------------------
-echo "=== Group 2: NON_GITHUB=0 reset ==="
-for f in "${ALL_SKILLS[@]}"; do
-    if require_file "$f"; then
-        name="$(basename "$(dirname "$f")")"
-        if has_fixed "NON_GITHUB=0" "$f"; then
-            pass "NON_GITHUB=0 reset present in $name/SKILL.md"
-        else
-            fail "NON_GITHUB=0 reset missing from $f"
-        fi
-    fi
-done
-
-# ---------------------------------------------------------------------------
-# Group 3: skip message present in each SKILL.md
+# Group 3: skip message present in each wrapped SKILL.md
 # ---------------------------------------------------------------------------
 echo "=== Group 3: GITHUB_ISSUES disabled skip message ==="
-for f in "${ALL_SKILLS[@]}"; do
+for f in "${WRAPPED_SKILLS[@]}"; do
     if require_file "$f"; then
         name="$(basename "$(dirname "$f")")"
         if has_fixed "GITHUB_ISSUES disabled" "$f"; then
