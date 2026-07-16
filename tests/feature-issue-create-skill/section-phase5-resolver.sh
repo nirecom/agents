@@ -1,36 +1,37 @@
 # F-622-1/2/3, R1-R3, G1-G3 tests (Phase 5 resolver + session-dedup)
 
 # ---------------------------------------------------------------------------
-# F-622-1: SKILL.md mentions worktree-notes-append.js in Phase 5
+# F-622-1: run-phase5-record.sh mentions worktree-notes-append.js
 # ---------------------------------------------------------------------------
-if [ ! -f "$SKILL_MD" ]; then
-    fail "F-622-1: SKILL.md missing"
-elif grep -q "worktree-notes-append.js" "$SKILL_MD"; then
-    pass "F-622-1: SKILL.md mentions worktree-notes-append.js"
+_PHASE5_SCRIPT="$AGENTS_DIR/skills/issue-create/scripts/run-phase5-record.sh"
+if [ ! -f "$_PHASE5_SCRIPT" ]; then
+    fail "F-622-1: run-phase5-record.sh missing"
+elif grep -q "worktree-notes-append.js" "$_PHASE5_SCRIPT"; then
+    pass "F-622-1: run-phase5-record.sh mentions worktree-notes-append.js"
 else
-    fail "F-622-1: SKILL.md does not mention worktree-notes-append.js — RED until Phase 5 is added"
+    fail "F-622-1: run-phase5-record.sh does not mention worktree-notes-append.js — RED until Phase 5 is added"
 fi
 
 # ---------------------------------------------------------------------------
-# F-622-2: SKILL.md Phase 5 contains non-fatal behavior note
+# F-622-2: run-phase5-record.sh contains non-fatal behavior note
 # ---------------------------------------------------------------------------
-if [ ! -f "$SKILL_MD" ]; then
-    fail "F-622-2: SKILL.md missing"
-elif grep -qiE "non.fatal|non fatal|nonfatal" "$SKILL_MD"; then
-    pass "F-622-2: SKILL.md Phase 5 contains non-fatal directive"
+if [ ! -f "$_PHASE5_SCRIPT" ]; then
+    fail "F-622-2: run-phase5-record.sh missing"
+elif grep -qiE "non.fatal|non fatal|nonfatal" "$_PHASE5_SCRIPT"; then
+    pass "F-622-2: run-phase5-record.sh contains non-fatal directive"
 else
-    fail "F-622-2: SKILL.md missing non-fatal directive — RED until Phase 5 is added"
+    fail "F-622-2: run-phase5-record.sh missing non-fatal directive — RED until Phase 5 is added"
 fi
 
 # ---------------------------------------------------------------------------
-# F-622-3: SKILL.md Phase 5 mentions --skip-if-main flag
+# F-622-3: run-phase5-record.sh mentions --skip-if-main flag
 # ---------------------------------------------------------------------------
-if [ ! -f "$SKILL_MD" ]; then
-    fail "F-622-3: SKILL.md missing"
-elif grep -q -- "--skip-if-main" "$SKILL_MD"; then
-    pass "F-622-3: SKILL.md Phase 5 mentions --skip-if-main"
+if [ ! -f "$_PHASE5_SCRIPT" ]; then
+    fail "F-622-3: run-phase5-record.sh missing"
+elif grep -q -- "--skip-if-main" "$_PHASE5_SCRIPT"; then
+    pass "F-622-3: run-phase5-record.sh mentions --skip-if-main"
 else
-    fail "F-622-3: SKILL.md does not mention --skip-if-main — RED until Phase 5 is added"
+    fail "F-622-3: run-phase5-record.sh does not mention --skip-if-main — RED until Phase 5 is added"
 fi
 
 # ---------------------------------------------------------------------------
