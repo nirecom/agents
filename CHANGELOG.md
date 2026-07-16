@@ -498,3 +498,7 @@ Changes: Hook blocks no longer arm supervisor alert mode on their own — `repor
 ### FEATURE: PR #1472 (2026-07-17)
 Background: feat(#1411): pkg-mgr × 7 + interpreter-c IR migration + retire (canary-6a Phase 2)
 Changes: Fix: chained interpreter commands (`bash -c '...'; sh -c 'rm file'`) were incorrectly fast-allowed from the main worktree — write bodies in subsequent segments were missed. Now correctly blocked.;Fix: `pwsh -command "..."` (lowercase flag) and `bash -lc "..."` (combined POSIX flag) were not detected as inline-script invocations and were incorrectly allowed from the main worktree. Now correctly blocked.
+
+### FEATURE: PR #1477 (2026-07-17)
+Background: feat(#1470): add check-inline-procedures quality gate to WF-CODE-6
+Changes: New `check-inline-procedures` quality gate in WF-CODE-6: warns when prompt files contain inline numbered procedure blocks of 3 or more steps (advisory only, always exits 0).
