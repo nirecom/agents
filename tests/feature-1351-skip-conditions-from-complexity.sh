@@ -4,9 +4,9 @@
 # Tags: L1, workflow, speculative-skip, scope:issue-specific
 # Security: N/A — pure read-only logic; no shell expansion, I/O mutation, or external untrusted input
 # L3 gap (what this test does NOT catch):
-# - Real orchestrator reading resolveSkipConditionsFromComplexity result and branching correctly at CI-C1c/MOP-1d/MOP-C1
+# - Real orchestrator reading resolveSkipConditionsFromComplexity result and branching correctly at CI-C1c/MOP-1d/MOP-C1 (now in check-outline-skip.sh / check-detail-skip.sh)
 # - End-to-end: 0-signal session auto-skipping outline/detail in a real claude -p session
-# - SC-W1/SC-W2 grep the SKILL.md for the symbol name; they do NOT prove the orchestrator
+# - SC-W1/SC-W2 grep the script files for the symbol name; they do NOT prove the orchestrator
 #   invokes it at the correct step, with the correct target, or wired to record-skip-judgment
 # Closest-to-action mitigation: wiring gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
@@ -75,11 +75,14 @@ fi
 # SC-W2: make-outline-plan SKILL.md wires the resolver (NON-SKIPPABLE)
 # ==========================================================================
 echo ""
-echo "=== SC-W2: make-outline-plan SKILL.md references resolver (static) ==="
-if [ -f "$MOP_SKILL" ] && grep -q 'resolveSkipConditionsFromComplexity' "$MOP_SKILL"; then
-    pass "SC-W2. make-outline-plan SKILL.md references resolveSkipConditionsFromComplexity"
+echo "=== SC-W2: make-outline-plan scripts reference resolver (static) ==="
+MOP_OUTLINE_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"
+MOP_DETAIL_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"
+if [ -f "$MOP_OUTLINE_SKIP" ] && grep -q 'resolveSkipConditionsFromComplexity' "$MOP_OUTLINE_SKIP" \
+   && [ -f "$MOP_DETAIL_SKIP" ] && grep -q 'resolveSkipConditionsFromComplexity' "$MOP_DETAIL_SKIP"; then
+    pass "SC-W2. make-outline-plan scripts reference resolveSkipConditionsFromComplexity"
 else
-    fail "SC-W2. make-outline-plan SKILL.md does NOT reference resolveSkipConditionsFromComplexity"
+    fail "SC-W2. make-outline-plan scripts do NOT reference resolveSkipConditionsFromComplexity"
 fi
 
 # ==========================================================================
@@ -97,22 +100,24 @@ fi
 # SC-W4: make-outline-plan SKILL.md uses 'outline' at MOP-1d (NON-SKIPPABLE)
 # ==========================================================================
 echo ""
-echo "=== SC-W4: make-outline-plan SKILL.md uses 'outline' at MOP-1d (static) ==="
-if [ -f "$MOP_SKILL" ] && grep -qE "resolveSkipConditionsFromComplexity.*outline|'outline'.*resolveSkipConditionsFromComplexity" "$MOP_SKILL"; then
-    pass "SC-W4. make-outline-plan SKILL.md passes 'outline' to resolveSkipConditionsFromComplexity"
+echo "=== SC-W4: check-outline-skip.sh uses 'outline' (static) ==="
+MOP_OUTLINE_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"
+if [ -f "$MOP_OUTLINE_SKIP" ] && grep -qE 'resolveSkipConditionsFromComplexity.*outline|"outline".*resolveSkipConditionsFromComplexity' "$MOP_OUTLINE_SKIP"; then
+    pass "SC-W4. check-outline-skip.sh passes 'outline' to resolveSkipConditionsFromComplexity"
 else
-    fail "SC-W4. make-outline-plan SKILL.md does NOT pass 'outline' to resolveSkipConditionsFromComplexity"
+    fail "SC-W4. check-outline-skip.sh does NOT pass 'outline' to resolveSkipConditionsFromComplexity"
 fi
 
 # ==========================================================================
 # SC-W5: make-outline-plan SKILL.md uses 'detail' at MOP-C1 (NON-SKIPPABLE)
 # ==========================================================================
 echo ""
-echo "=== SC-W5: make-outline-plan SKILL.md uses 'detail' at MOP-C1 (static) ==="
-if [ -f "$MOP_SKILL" ] && grep -qE "resolveSkipConditionsFromComplexity.*detail|'detail'.*resolveSkipConditionsFromComplexity" "$MOP_SKILL"; then
-    pass "SC-W5. make-outline-plan SKILL.md passes 'detail' to resolveSkipConditionsFromComplexity"
+echo "=== SC-W5: check-detail-skip.sh uses 'detail' (static) ==="
+MOP_DETAIL_SKIP="$AGENTS_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"
+if [ -f "$MOP_DETAIL_SKIP" ] && grep -qE 'resolveSkipConditionsFromComplexity.*detail|"detail".*resolveSkipConditionsFromComplexity' "$MOP_DETAIL_SKIP"; then
+    pass "SC-W5. check-detail-skip.sh passes 'detail' to resolveSkipConditionsFromComplexity"
 else
-    fail "SC-W5. make-outline-plan SKILL.md does NOT pass 'detail' to resolveSkipConditionsFromComplexity"
+    fail "SC-W5. check-detail-skip.sh does NOT pass 'detail' to resolveSkipConditionsFromComplexity"
 fi
 
 # ==========================================================================
