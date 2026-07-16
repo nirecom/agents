@@ -135,4 +135,8 @@ Changes: Add `bin/check-inline-procedures` quality gate to WF-CODE-6: detects in
 
 ### FEATURE: PR #1478 — feature/1468-scriptify-survey-history (2026-07-17, 3913c52, #1478)
 Background: feat(#1468): scriptify survey-history/SKILL.md — extract 4 inline violations to scripts
-Changes: #1468: scriptify survey-history/SKILL.md — extracted 4 rules/prompt.md §1.3/§1.5 violations to scripts/; reduces SKILL.md from 132 lines to 88 lines (WARN resolved) <!-- compose-doc-append-sentinel: branch=feature/1468-scriptify-survey-history pr=#1478 -->
+Changes: #1468: scriptify survey-history/SKILL.md — extracted 4 rules/prompt.md §1.3/§1.5 violations to scripts/; reduces SKILL.md from 132 lines to 88 lines (WARN resolved) <!-- compose-doc-append-sentinel: branch=feature/1468-scriptify-survey-history pr=#1478 -->
+
+### FEATURE: PR #1479 — refactor/scriptify-agent-files-1469 (2026-07-17, 4ed0aa4d287b4337224d42448dbc555f9a79489a, #1479)
+Background: refactor(#1469): scriptify 5 agent .md files — extract inline procedures to sibling dirs
+Changes: Extracted inline procedure blocks from 5 agent .md files to sibling directories (agents/<name>/); created agents/lib/planner-review-loop-protocol.md for the shared Risk-Signal File protocol (outline/detail planners); new sibling files: agents/outline-planner/output-format.md, agents/detail-planner/procedure.md, agents/detail-planner/supplementary-rules.md, agents/issue-close-finalize-worker/state-schema.md, agents/outline-reviewer/concern-identifiers.md, agents/detail-reviewer/concern-identifiers.md; line counts reduced from 108–173 to 76–111; contract sections (Verdict Format, Required response trailer, Output contract, Procedure verdict) kept inline per CPR-6 orchestrator integrity requirement. <!-- compose-doc-append-sentinel: branch=refactor/scriptify-agent-files-1469 pr=#1479 -->
