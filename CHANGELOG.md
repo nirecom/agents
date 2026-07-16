@@ -479,3 +479,7 @@ Changes: Worktree-end (WE-7/WE-8) now explicitly keeps the working directory in 
 ### FEATURE: PR #1458 (2026-07-17)
 Background: feat(workflow-init): consolidate WI-2..WI-9 into resumable Node.js driver
 Changes: `/workflow-init` now runs its mechanical steps (issue fetch, WIP check, closed-issue handling, path routing) through a single resumable driver command — routing is deterministic across models, and an interrupted run resumes from a checkpoint instead of restarting.;Fixed: starting a session with a single issue and no existing work-in-progress claim no longer misreports the WIP state (previously the no-claim branch was unreachable and the session could skip the fresh-claim routing).
+
+### FEATURE: PR #1459 (2026-07-17)
+Background: fix(enforce-worktree): restore scratchpad-redirect and New-Item-Directory allow paths lost in PR #1420 IR-signature migration
+Changes: Fixed a regression where sanctioned commands run from the main worktree were wrongly blocked as "write from main worktree": creating a worktree directory with `New-Item -ItemType Directory` (worktree setup) and `git worktree remove` now work again.;Fixed session-artifact and scratchpad writes (heredoc/redirect targeting the workflow plans directory or the temporary scratchpad) being wrongly blocked from the main worktree.
