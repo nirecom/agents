@@ -86,7 +86,12 @@ See `docs/security-policy.md` for the full pattern list.
   `refs/remotes/origin/HEAD` → local `main`/`master` → `init.defaultBranch` → fallback
   `main`. Override via `DEFAULT_BRANCHES=develop,trunk,...` (comma-separated).
   Allows: HEAD unborn, detached HEAD, files outside any git repo, `git worktree
-  add/remove/prune` lifecycle commands, PowerShell `New-Item -ItemType Directory`.
+  add/remove/prune` lifecycle commands, PowerShell `New-Item -ItemType Directory`
+  (target resolves outside the repo, or under the session scratchpad / `WORKFLOW_PLANS_DIR`),
+  and Bash writes whose targets ALL resolve under the session scratchpad
+  (`<os-tmpdir>/claude/`, scoped to `$SCRATCHPAD` when set) or `WORKFLOW_PLANS_DIR`
+  (heredoc/redirect forms included). Non-directory `New-Item`, in-repo targets, quoted
+  paths that expand into the repo, and mixed/unresolvable target sets stay fail-closed.
   Defense-in-depth at commit time via the bash block in `pre-commit`. Falsy values
   (`off|0|false|no|disabled`, case-insensitive) opt out.
   `ENFORCE_WORKTREE_EXCLUDE`: unified path-coverage list. When ALL staged files are covered,

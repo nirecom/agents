@@ -3,6 +3,7 @@
 const { getSessionRepoRoots } = require("./session-scope");
 const { isExcluded } = require("./shared-cmd-utils");
 const { findRepoRoot, normalizeForCompare } = require("./git-repo-detection");
+const { isAllowedScratchpadTarget } = require("../lib/claude-scratchpad-base");
 const { classify, isGhWriteIR } = require("../lib/bash-write-patterns");
 const { isGitWriteIR } = require("../lib/bash-write-patterns/patterns");
 const { splitShellCommands } = require("../lib/shell-segments");
@@ -134,6 +135,38 @@ function areAllBashTargetsUnderPlansDir(targets) {
   }
 }
 
+// True if all targets are provably under the session scratchpad allow root (H2:
+// the SCRATCHPAD dir when the harness exposes it, else <os-tmpdir>/claude/) AND
+// outside every git repo root. NOT a generic temp-dir allow: /tmp/evil.md,
+// /var/tmp/evil.md, <tmpdir>/evil.md (root), and /tmp/not-claude/... all remain blocked.
+// F1 hardening: the outside-repo clause defends against a poisoned TEMP/TMP that nests
+// the claude base inside a repo (SSOT base + guard live in lib/claude-scratchpad-base.js).
+function areAllBashTargetsUnderClaude(targets) {
+  if (!targets || targets.length === 0) return false;
+  try {
+    const nodePath = require("path");
+    const isUnder = (rawT) => {
+      const t = normalizeTarget(rawT);
+      if (t.malformed === true) return false;
+      const raw = String(t.path).replace(/^["']|["']$/g, "");
+      let resolved = raw;
+      if (raw.includes("$") || raw.includes("~")) {
+        const expanded = expandStaticShellTokens(raw, { fromQuotedContext: "unquoted" });
+        if (expanded === null) return false;
+        resolved = expanded;
+      }
+      // Reject path traversal
+      if (/(?:^|[/\\])\.\.(?:[/\\]|$)/.test(resolved)) return false;
+      const n = nodePath.resolve(resolved);
+      // Must be strictly under the scratchpad allow root AND outside every repo root.
+      return isAllowedScratchpadTarget(n, findRepoRoot);
+    };
+    return targets.every(isUnder);
+  } catch (_) {
+    return false; // fail-closed
+  }
+}
+
 // EXCLUDE check for file-target writes and git commit (staged files).
 function isWriteTargetAllExcluded(cmd, targets, repoRoot, patterns) {
   if (!patterns || patterns.length === 0) return false;
@@ -242,6 +275,7 @@ module.exports = {
   collectBashWriteTargets,
   areAllBashTargetsOutsideSessionScope,
   areAllBashTargetsUnderPlansDir,
+  areAllBashTargetsUnderClaude,
   isWriteTargetAllExcluded,
   isEverySegmentExcluded,
   isGhWriteCommand,
