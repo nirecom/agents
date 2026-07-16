@@ -16,19 +16,11 @@ way as `/issue-close-finalize`: parse `## Issues` and iterate.
 
 ## Pre-flight
 
-```bash
-NON_GITHUB=0
-"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"; rc=$?
-case $rc in
-  0) ;;                # GitHub — proceed with gh
-  1) NON_GITHUB=1 ;;   # non-GitHub — skip gh invocation
-  *) ;;                # unknown (rc=2) — fail-open, keep existing behavior
-esac
-if [ "${NON_GITHUB:-0}" = "1" ]; then
-  echo "[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping issue-close-stage]"
-  exit 0
-fi
-```
+Run: `"$AGENTS_CONFIG_DIR/bin/detect-non-github.sh" "issue-close-stage" || exit 0`
+
+On non-GitHub remote the script exits 1, so `|| exit 0` terminates the skill immediately (no gh work). On a GitHub remote (or unknown/fail-open) the script exits 0 and the skill continues into the checks below.
+
+Skip message on non-GitHub remote (emitted by the script to stdout): `[GITHUB_ISSUES disabled: non-GitHub remote detected, skipping issue-close-stage]`
 
 - `AGENTS_CONFIG_DIR` must be set.
 - Must be invoked from a **linked worktree** (not the main worktree). Abort
