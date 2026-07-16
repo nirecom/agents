@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/labels.yml'
       - 'bin/github-issues/sync-labels.sh'
+      - 'bin/github-issues/propagate-labels.sh'
       - '.github/workflows/sync-labels.yml'
   workflow_dispatch:
 
@@ -20,3 +21,21 @@ jobs:
         run: bash bin/github-issues/sync-labels.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  propagate:
+    needs: sync
+    runs-on: ubuntu-latest
+    env:
+      HAS_PAT: ${{ secrets.PROPAGATE_LABELS_PAT != '' }}
+    steps:
+      - name: Skip when PROPAGATE_LABELS_PAT is absent
+        if: env.HAS_PAT != 'true'
+        run: echo "PROPAGATE_LABELS_PAT not set — skipping propagation"
+      - uses: actions/checkout@v4
+        if: env.HAS_PAT == 'true'
+      - name: Propagate labels.yml to sibling repos
+        if: env.HAS_PAT == 'true'
+        run: bash bin/github-issues/propagate-labels.sh
+        env:
+          PROPAGATE_LABELS_PAT: ${{ secrets.PROPAGATE_LABELS_PAT }}
+          AGENTS_WORKSPACE: ${{ github.workspace }}
