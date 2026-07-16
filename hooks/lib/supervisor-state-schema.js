@@ -56,6 +56,7 @@ function validateFinding(f) {
   if (f.reporter !== undefined && typeof f.reporter !== "string") {
     errors.push("reporter must be a string");
   }
+  // class_dedup_count?: number — set by appendFinding class dedup; not validated (unknown fields pass).
   // Axis A (#885): optional fields — reason, context, co_blocked_by.
   if (f.reason !== undefined) {
     if (typeof f.reason !== "string" || f.reason.length < 1) {

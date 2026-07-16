@@ -114,32 +114,32 @@ try {
 
 # --- E1: reportBlock enforce-worktree ---
 run_e1() {
-    require_source "$EMIT_MODULE" "E1: reportBlock(enforce-worktree) emits workflow/error/enforce-worktree" || return
+    require_source "$EMIT_MODULE" "E1: reportBlock(enforce-worktree) emits workflow/notice/enforce-worktree" || return
     local prog out
     prog="$(build_stub_prog "emit.reportBlock('enforce-worktree', 'git push origin main', 'sid-e1');" 0)"
     out=$(invoke_emit "$prog")
-    assert_first_call "$out" "workflow" "error" "enforce-worktree" \
-        "E1: reportBlock(enforce-worktree) emits workflow/error/enforce-worktree"
+    assert_first_call "$out" "workflow" "notice" "enforce-worktree" \
+        "E1: reportBlock(enforce-worktree) emits workflow/notice/enforce-worktree"
 }
 
 # --- E2: reportBlock workflow-gate ---
 run_e2() {
-    require_source "$EMIT_MODULE" "E2: reportBlock(workflow-gate) emits workflow/error/workflow-gate" || return
+    require_source "$EMIT_MODULE" "E2: reportBlock(workflow-gate) emits workflow/notice/workflow-gate" || return
     local prog out
     prog="$(build_stub_prog "emit.reportBlock('workflow-gate', 'git commit', 'sid-e2');" 0)"
     out=$(invoke_emit "$prog")
-    assert_first_call "$out" "workflow" "error" "workflow-gate" \
-        "E2: reportBlock(workflow-gate) emits workflow/error/workflow-gate"
+    assert_first_call "$out" "workflow" "notice" "workflow-gate" \
+        "E2: reportBlock(workflow-gate) emits workflow/notice/workflow-gate"
 }
 
 # --- E3: reportBlock enforce-issue-close ---
 run_e3() {
-    require_source "$EMIT_MODULE" "E3: reportBlock(enforce-issue-close) emits workflow/error/enforce-issue-close" || return
+    require_source "$EMIT_MODULE" "E3: reportBlock(enforce-issue-close) emits workflow/notice/enforce-issue-close" || return
     local prog out
     prog="$(build_stub_prog "emit.reportBlock('enforce-issue-close', 'gh issue close 1', 'sid-e3');" 0)"
     out=$(invoke_emit "$prog")
-    assert_first_call "$out" "workflow" "error" "enforce-issue-close" \
-        "E3: reportBlock(enforce-issue-close) emits workflow/error/enforce-issue-close"
+    assert_first_call "$out" "workflow" "notice" "enforce-issue-close" \
+        "E3: reportBlock(enforce-issue-close) emits workflow/notice/enforce-issue-close"
 }
 
 # --- E4: reportFallback ---
@@ -265,9 +265,9 @@ else console.log('UNEXPECTED_CALLS:'+o.calls.length);
     fi
 }
 
-# --- E-Block: reportBlock emits severity:"error" ---
+# --- E-Block: reportBlock emits severity:"notice" (#1255 打ち手1) ---
 run_e_block() {
-    require_source "$EMIT_MODULE" "E-Block: reportBlock emits workflow/error/enforce-worktree" || return
+    require_source "$EMIT_MODULE" "E-Block: reportBlock emits workflow/notice/enforce-worktree" || return
     local prog out
     prog="$(build_stub_prog "emit.reportBlock('enforce-worktree', 'git commit', 'sid-eblock');" 0)"
     out=$(invoke_emit "$prog")
@@ -275,11 +275,11 @@ run_e_block() {
     check=$(run_with_timeout 5 node -e "
 const o = JSON.parse(process.argv[1]);
 const f = (o.calls[0]||{}).finding||{};
-if (f.severity !== 'error') { console.log('SEV:'+f.severity); process.exit(0); }
+if (f.severity !== 'notice') { console.log('SEV:'+f.severity); process.exit(0); }
 console.log('OK');
 " "$out" 2>&1)
-    [ "$check" = "OK" ] && pass "E-Block: reportBlock emits workflow/error/enforce-worktree" \
-        || fail "E-Block: reportBlock emits workflow/error/enforce-worktree ($check)"
+    [ "$check" = "OK" ] && pass "E-Block: reportBlock emits workflow/notice/enforce-worktree" \
+        || fail "E-Block: reportBlock emits workflow/notice/enforce-worktree ($check)"
 }
 
 run_e1
