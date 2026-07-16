@@ -490,3 +490,7 @@ Changes: When `PROPAGATE_LABELS_PAT` secret is set, label changes in `.github/la
 ### FEATURE: PR #1461 (2026-07-17) (2026-07-17)
 Background: fix(#1450): reduce supervisor alert output to actionable-only findings
 Changes: EM Supervisor alert reviews now surface only actionable findings (severity warning/error) as a single-line summary per finding instead of the full verbose report. Notice-level findings are recorded in the state file but not shown. A /issue-create hint is appended when the finding category suggests it. This reduces context window pollution in the main agent on every supervisor review.
+
+### FEATURE: PR #1471 (2026-07-17)
+Background: fix(#1255): supervisor reportBlock severity notice + block finding class dedup
+Changes: Hook blocks no longer arm supervisor alert mode on their own — `reportBlock` severity is now `notice`, and repeated blocks from the same hook on the same command are collapsed into a single finding with a count field
