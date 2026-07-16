@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/SKILL.md, settings.json
+# Tests: hooks/lib/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json
 # Tags: L1, L2, workflow, speculative-skip, scope:issue-specific
 #
 # Issues #1392, #1352, #544, #1353 — speculative-skip engine: outline/detail
@@ -161,12 +161,16 @@ else
   pass "S1b. clarify-intent CI-C1c has no stale 'auto':'manual'"
 fi
 
-# S2: make-outline-plan MOP-1d/MOP-C1 both use 'judgment' (≥2 occurrences, C2 gap)
-S2_COUNT="$(grep -cF "process.stdout.write(v?'auto':'judgment')" "$MOP_SKILL" 2>/dev/null || echo 0)"
-if [ -f "$MOP_SKILL" ] && [ "$S2_COUNT" -ge 2 ]; then
-  pass "S2. make-outline-plan contains 'auto':'judgment' ×${S2_COUNT} (MOP-1d + MOP-C1)"
+# S2: check-outline-skip.sh and check-detail-skip.sh each contain 'judgment' (≥1 each, C2 gap)
+MOP_OUTLINE_SKIP_S2="$AGENTS_DIR/skills/make-outline-plan/scripts/check-outline-skip.sh"
+MOP_DETAIL_SKIP_S2="$AGENTS_DIR/skills/make-outline-plan/scripts/check-detail-skip.sh"
+S2_OUTLINE_COUNT="$(grep -cF 'process.stdout.write(v ? "auto" : "judgment")' "$MOP_OUTLINE_SKIP_S2" 2>/dev/null || echo 0)"
+S2_DETAIL_COUNT="$(grep -cF 'process.stdout.write(v ? "auto" : "judgment")' "$MOP_DETAIL_SKIP_S2" 2>/dev/null || echo 0)"
+if [ -f "$MOP_OUTLINE_SKIP_S2" ] && [ -f "$MOP_DETAIL_SKIP_S2" ] \
+   && [ "$S2_OUTLINE_COUNT" -ge 1 ] && [ "$S2_DETAIL_COUNT" -ge 1 ]; then
+  pass "S2. check-outline-skip.sh and check-detail-skip.sh each contain 'auto':'judgment' (MOP-1d + MOP-C1)"
 else
-  fail "S2. make-outline-plan should have ≥2 'auto':'judgment', found=${S2_COUNT}"
+  fail "S2. scripts missing 'auto':'judgment': outline_count=${S2_OUTLINE_COUNT} detail_count=${S2_DETAIL_COUNT}"
 fi
 
 # S3: make-outline-plan must NOT contain the old 'manual' form anywhere.
