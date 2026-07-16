@@ -68,6 +68,13 @@ See `docs/security-policy.md` for the full pattern list.
   `write_tests` already satisfied). exit ≠ 0, or any test command lacking a valid contract (ad-hoc runner,
   piped/compound run-all.sh, no-match), demotes `run_tests` to `pending`. Sentinel echoes, read-only
   commands, and git non-exec subcommands (resolved past leading global options) excluded
+- `detect-worktree-conflict.js` (PostToolUse, matcher: `Bash|runInTerminal|runCommands`) — when a
+  failed terminal command's stderr matches `fatal: '<branch>' is already used by worktree`, emits a
+  single `additionalContext` guidance message (locate via `git worktree list`, finish with
+  `/worktree-end` or reclaim with `/sweep-worktrees`). Non-blocking, fail-open on malformed input;
+  success detection uses the shared 3-field contract (`exit_code ?? exitCode ?? success`).
+  Deliberately limited to exactly one pattern + one message (#1443) — generalizing git-error
+  guidance into a table is #1447's scope
 - `session-start.js` (SessionStart) — appends `CLAUDE_SESSION_ID=<sid>` to `CLAUDE_ENV_FILE`;
   inherits prior session's workflow steps if cwd+branch match found in transcript (see
   [workflow.md — Session ID flow](workflow.md)); otherwise creates fresh state; outputs
