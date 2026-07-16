@@ -38,40 +38,7 @@ Receive a JSON object with `phase` determining the pass type:
 - `session_id`: session ID string (resolves env-var propagation gap for Step ICF-K)
 - `outcome_file_path`: absolute path to write outcome JSON (resolves env-var propagation gap for Step ICF-K)
 
-## State file schema
-
-Path: `<artifact_dir>/<session-id>-finalize-state-<rootN>.json`
-
-Write atomically: write to `<state_file_path>.tmp` then `mv <state_file_path>.tmp <state_file_path>`.
-
-Accept only `schema_version: 3`. Reject other versions.
-
-```json
-{
-  "schema_version": 3,
-  "root_issue_number": "<rootN>",
-  "current_issue_number": "<N>",
-  "issue_repo": "<owner/repo or repo — omit for current-repo issues>",
-  "owner_repo": "<owner/repo>",
-  "agents_config_dir": "<resolved>",
-  "main_worktree_path": "<resolved>",
-  "phase": "init_done|awaiting_recursion|terminal",
-  "triage_action": "<resume_e|resume_h|resume_j|auto_close_path|meta_pending_subs|stuck_*>",
-  "g5_loop_iteration": 0,
-  "g5_history": [
-    {
-      "iteration": 1,
-      "issue_number": "<N>",
-      "proposal_status": "ok|skipped",
-      "proposal_parent": "<P or null>",
-      "user_decision": "accept|decline|llm_declined|skipped|null",
-      "g5_3a_completed": false,
-      "recursion_completed": false
-    }
-  ],
-  "proposal_counters": { "accepted": 0, "declined": 0, "skipped": 0 }
-}
-```
+See agents/issue-close-finalize-worker/state-schema.md for the State file schema and the phase=initial write template.
 
 ## Procedure
 
@@ -89,38 +56,7 @@ eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
 ```
 
 `STATUS=failed` → emit `status: failed`, `summary: "$SUMMARY"` and stop.
-`STATUS=init_done` → write state file (atomic: `.tmp` → `mv`) using fields from eval output.
-
-State file JSON to write (use values from eval):
-```json
-{
-  "schema_version": 3,
-  "root_issue_number": <root_issue_number>,
-  "current_issue_number": <issue_number>,
-  "issue_repo": "<issue_repo — omit field if empty>",
-  "owner_repo": "$OWNER_REPO",
-  "agents_config_dir": "<agents_config_dir>",
-  "main_worktree_path": "<main_worktree_path>",
-  "merge_commit": "$MERGE_COMMIT",
-  "phase": "init_done",
-  "triage_action": "$TRIAGE_ACTION",
-  "g5_loop_iteration": 0,
-  "g5_history": [
-    {
-      "iteration": 1,
-      "issue_number": "<issue_number>",
-      "proposal_status": "$PROPOSAL_STATUS",
-      "proposal_parent": <PROPOSAL_PARENT or null>,
-      "user_decision": null,
-      "g5_3a_completed": false,
-      "recursion_completed": false
-    }
-  ],
-  "proposal_counters": { "accepted": 0, "declined": 0, "skipped": 0 }
-}
-```
-
-When `TRIAGE_ACTION=meta_pending_subs`: omit `g5_history` field; main context returns early.
+`STATUS=init_done` → write state file (atomic: `.tmp` → `mv`) using the phase=initial template from agents/issue-close-finalize-worker/state-schema.md. When `TRIAGE_ACTION=meta_pending_subs`: omit `g5_history` field; main context returns early.
 
 Write log and emit `status: init_done`.
 
