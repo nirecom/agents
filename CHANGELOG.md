@@ -487,3 +487,6 @@ Changes: Fixed a regression where sanctioned commands run from the main worktree
 ### FEATURE: PR #1460 (2026-07-17)
 Background: feat(#1261): labels.yml SSOT propagation to sibling repos via CI
 Changes: When `PROPAGATE_LABELS_PAT` secret is set, label changes in `.github/labels.yml` now automatically propagate to sibling repos (`dotfiles`, `my-private-repo`) via the new `propagate` CI job — sibling `labels.yml` files are overwritten with a GENERATED header to prevent direct edits.
+### FEATURE: PR #1461 (2026-07-17) (2026-07-17)
+Background: fix(#1450): reduce supervisor alert output to actionable-only findings
+Changes: EM Supervisor alert reviews now surface only actionable findings (severity warning/error) as a single-line summary per finding instead of the full verbose report. Notice-level findings are recorded in the state file but not shown. A /issue-create hint is appended when the finding category suggests it. This reduces context window pollution in the main agent on every supervisor review.
