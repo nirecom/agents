@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Inline procedure block review (rules/prompt.md §1.3).
+# Usage: check-inline-procedures [--base <ref>] [--all]
+#
+# Always emits one of:
+#   ## Inline Procedure Review: PERFORMED
+#   ## Inline Procedure Review: PERFORMED (all-scan mode)
+#   ## Inline Procedure Review: SKIPPED — <reason>
+#
+# Advisory only — always exits 0 (WARN findings do not block).
+set -uo pipefail
+
+WARN_HIT=0
+BASE_REF="origin/main"
+BASE_EXPLICIT=0
+ALL_SCAN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL_SCAN=1; shift ;;
+    --base)
+      if [[ $# -lt 2 ]]; then
+        echo "## Inline Procedure Review: SKIPPED (--base requires an argument)"; exit 0
+      fi
+      BASE_REF="$2"; BASE_EXPLICIT=1; shift 2 ;;
+    *) echo "Unknown argument: $1" >&2; shift ;;
+  esac
+done
+
+if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
+  echo "## Inline Procedure Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
+fi
+
+scan_file() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  local run=0
+  local run_start=0
+  local lineno=0
+  local block_warned=0
+  while IFS= read -r line; do
+    lineno=$((lineno + 1))
+    if [[ "$line" =~ ^[0-9]+\.[[:space:]] ]]; then
+      run=$((run + 1))
+      if [[ $run -eq 1 ]]; then run_start=$lineno; fi
+      if [[ $run -ge 3 && $block_warned -eq 0 ]]; then
+        echo "WARN: $file:$run_start: inline procedure block (>=3 steps); move to bin/<tool> or skills/<name>/lib/ (rules/prompt.md §1.3)"
+        WARN_HIT=1
+        block_warned=1
+      fi
+    else
+      run=0
+      block_warned=0
+    fi
+  done < "$file"
+}
+
+if [[ "$ALL_SCAN" -eq 1 ]]; then
+  CANDIDATES=$(
+    { find skills/ -name SKILL.md -not -path '*/_archived/*' 2>/dev/null || true; \
+      find agents/ -name '*.md' -not -path '*/_archived/*' 2>/dev/null || true; \
+      find skills/_shared/ -name '*.md' 2>/dev/null || true; } | sort -u
+  )
+  TARGETS=$(printf '%s\n' "$CANDIDATES" \
+    | grep -E '^(skills/[^/]+/SKILL\.md|agents/[^/]+\.md|skills/_shared/[^/]+\.md)$' \
+    | grep -v '/_archived/' || true)
+  if [[ -z "$TARGETS" ]]; then
+    echo "## Inline Procedure Review: SKIPPED — no prompt files found"; exit 0
+  fi
+  echo "## Inline Procedure Review: PERFORMED (all-scan mode)"
+  echo ""
+  while IFS= read -r file; do scan_file "$file"; done <<< "$TARGETS"
+  [[ "$WARN_HIT" -eq 0 ]] && echo "No inline procedure blocks found."
+  exit 0
+fi
+
+BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
+  echo "## Inline Procedure Review: SKIPPED (merge-base unresolved: $BASE_REF)"; exit 0
+}
+
+ERR=$(mktemp)
+trap 'rm -f "$ERR"' EXIT
+CHANGED_COMMITTED=$(git diff --name-only --diff-filter=ACMRT "$BASE_SHA"...HEAD 2>"$ERR" || true)
+if [[ -s "$ERR" ]]; then
+  echo "## Inline Procedure Review: SKIPPED (git diff failed: $(cat "$ERR"))"; exit 0
+fi
+CHANGED_STAGED=$(git diff --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
+CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
+
+TARGETS=$(printf '%s\n' "$CHANGED" \
+  | grep -E '^(skills/[^/]+/SKILL\.md|agents/[^/]+\.md|skills/_shared/[^/]+\.md)$' \
+  | grep -v '/_archived/' || true)
+
+if [[ -z "$TARGETS" ]]; then
+  echo "## Inline Procedure Review: SKIPPED — no prompt files changed"; exit 0
+fi
+
+echo "## Inline Procedure Review: PERFORMED"
+echo ""
+COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
+echo "Changed prompt files: $COUNT"
+echo ""
+while IFS= read -r file; do scan_file "$file"; done <<< "$TARGETS"
+[[ "$WARN_HIT" -eq 0 ]] && echo "No inline procedure blocks found."
+exit 0

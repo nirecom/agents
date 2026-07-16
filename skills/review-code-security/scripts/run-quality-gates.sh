@@ -22,6 +22,7 @@ MERGE_BASE=$(_resolve_merge_base)
 
 review-code-codex --base "$MERGE_BASE" --context "${AGENTS_CONFIG_DIR}/rules/core-principles.md" || true
 review-prompt-size --base "$MERGE_BASE" || true
+check-inline-procedures --base "$MERGE_BASE" || true
 review-code-size --base "$MERGE_BASE" || true
 review-env-example --base "$MERGE_BASE" || true
 review-step-numbers --base "$MERGE_BASE" || true
