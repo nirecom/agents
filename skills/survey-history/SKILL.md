@@ -10,26 +10,13 @@ made after the relevant issue was opened that might invalidate its premises.
 
 ## Procedure
 
-### Step 0 — Resolve <PLANS_DIR>
-
-Before any tool call below that references <PLANS_DIR>, run the following Bash command exactly once:
-
-```bash
-PLANS_DIR=$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir" 2>/dev/null \
-              || printf '%s\n' "${WORKFLOW_PLANS_DIR:-$HOME/.workflow-plans}")
-printf 'PLANS_DIR=%s\n' "$PLANS_DIR"
-```
-
-Capture the printed absolute path and substitute it for every <PLANS_DIR>
-placeholder in the remainder of this SKILL.md. Subagent prompts must receive
-the resolved absolute path as a literal string (subagents cannot expand $VAR).
-Reuse across all subsequent steps in this skill invocation — do not re-resolve.
+Apply `skills/_shared/resolve-plans-dir.md` once at the start of Procedure;
+substitute the resolved absolute path for every `<PLANS_DIR>` placeholder
+below. Reuse across all subsequent steps — do not re-resolve.
 
 When invoked as a parallel Agent subagent by workflow-init, the orchestrator
 passes `artifact_path` and `context_path` as resolved absolute strings — use
-those instead of running Step 0.
-
-Canonical documentation: skills/_shared/resolve-plans-dir.md.
+those instead.
 
 SH-1. **Input and issue number resolution:**
    Input precedence (read whichever exists first):
@@ -46,19 +33,7 @@ SH-2. Run: `gh issue view <N> --json createdAt --jq .createdAt`
    - On failure (gh unavailable, auth error, etc.): record "gh unavailable — using
      approximate date" and continue; set `openedAt` to 90 days ago as a conservative fallback.
 
-SH-3. **Keyword-only mode** (no issue number available):
-    Output header MUST include: `**DEGRADED MODE** — no issue context; results are best-effort`
-    - Skip Step SH-2 (gh issue view) — no issue = no reliable issue data.
-    - Skip `gh pr list` — no issue context means PR filter is unreliable.
-    - Use `--since='1 year ago'` for git log scope (avoids unbounded history scan).
-    - Source keywords from context.md `## Keywords` section if present;
-      otherwise extract from `## User initial prompt` inline (≥4 chars, stop-words excluded).
-      When initial keyword search returns zero results, extract 3–5 symptom-level tokens from `## User initial prompt` or issue body text (behaviors, affected outputs/artifacts, feature area — including artifact/file names that represent the affected feature) and retry once.
-    - Run Step SH-4a and SH-4b only (git log + history docs); skip Step SH-4c (gh pr list).
-    - All claims produced in this mode get `verdict: indeterminate`
-      (never `holds` or `contradicted` — insufficient evidence without issue context).
-    - Rationale: without issue context, gh pr list has no filter; git log needs a date cap;
-      verdicts require traceable evidence.
+SH-3. **Keyword-only mode** (no issue number available): run `bash "$AGENTS_CONFIG_DIR/skills/survey-history/scripts/keyword-only-mode.sh"` and follow the procedure it outputs.
     After writing the artifact (Step SH-6), stop. Do NOT invoke make-outline-plan.
 
 SH-4. Run the following three investigations in parallel:
@@ -66,12 +41,7 @@ SH-4. Run the following three investigations in parallel:
    a. **Git log since issue opened:**
       `git log --since=<openedAt> --pretty=format:"%h %ad %s" --date=short`
 
-   b. **History docs entries since issue opened** (follow progressive disclosure per `skills/_shared/file-investigation.md`):
-      - Grep `docs/history.md` for date strings ≥ openedAt (format `YYYY-MM-DD`).
-        Read the surrounding context (±5 lines) for each match.
-      - If `docs/history/index.md` exists, grep it for the same date range to find archived
-        entries. For each matching archive file listed in the index, read the relevant
-        section of that file (e.g. `docs/history/2025-*.md`) to retrieve the full entry.
+   b. Run `bash "$AGENTS_CONFIG_DIR/skills/survey-history/scripts/history-docs-search.sh" --since <openedAt>` and follow the procedure it outputs.
 
    c. **Merged PRs since issue opened:**
       `gh pr list --state merged --search "merged:>=<openedAt>" --limit 20 --json number,title,mergedAt`
@@ -83,22 +53,8 @@ SH-5. **Relevance scoring:**
    Score each commit/PR subject by keyword match count.
    Keep: score ≥ 1 entries, plus the top 5 by score regardless of threshold.
 
-SH-6. Write `<PLANS_DIR>/<session-id>-survey-history.md`:
-   ```
-   ## Survey history — changes since issue #<N> opened (<openedAt>)
-
-   ## Verified Claims
-   - claim: <text from intent.md Background/Scope>
-     verdict: holds | contradicted | indeterminate
-     evidence: <commit hash / PR# / history entry, or "no matching history found">
-
-   ## Candidate class members
-   - <member name>: <one-line description> (from: <commit-ref or history entry>)
-     proposed triage: <MUST | OPTIONAL | NA> — <one-line rationale>
-
-   ## Premise impact assessment
-   <one paragraph: describe contradictions found, or state "No premise contradictions detected.">
-   ```
+SH-6. Run `bash "$AGENTS_CONFIG_DIR/skills/survey-history/scripts/artifact-template.sh"` to get the output format,
+   then write `<PLANS_DIR>/<session-id>-survey-history.md` following that format.
    The `## Candidate class members` section lists sibling members identified
    from git history and history.md (per `rules/core-principles.md` CPR-4 Elevate
    Perspective). Each member is two lines: (a) name + description + commit/history-entry reference;
