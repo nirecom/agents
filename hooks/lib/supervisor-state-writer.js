@@ -238,6 +238,28 @@ function appendFinding(sessionId, finding) {
     }
   }
 
+  // Class dedup: collapse same reporter+command block findings session-wide (after co-block
+  // annotation). Class key = reporter + "|" + command; different reporters on the same command
+  // are NOT collapsed (they are distinct hook actors and may form co-block sibling pairs above).
+  // C4 intentional discard — subsequent findings of same class are NOT pushed; only
+  // class_dedup_count on the first-occurrence finding is incremented.
+  // C2 tradeoff: co_blocked_by mutations on sibling findings above are preserved even when the
+  // new finding is discarded. Walk is O(n); bounded by notice+dedup keeping findings compact.
+  const classCmd = extractCoBlockKey(newFinding.detail);
+  if (classCmd !== newFinding.detail && typeof newFinding.reporter === "string") {
+    const existingBlock = findings.find(
+      (f) => f.reporter === newFinding.reporter && extractCoBlockKey(f.detail) === classCmd
+    );
+    if (existingBlock !== undefined) {
+      existingBlock.class_dedup_count = (existingBlock.class_dedup_count || 1) + 1;
+      ensureAlertScheduled(state, sessionId, finding);
+      state.last_updated = nowIso;
+      const vrDedup = validate(state);
+      if (vrDedup.ok) writeAtomic(filePath, state);
+      return true;
+    }
+  }
+
   findings.push(newFinding);
   state.last_updated = nowIso;
 
