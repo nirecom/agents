@@ -1,0 +1,378 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * bin/workflow/workflow-init-driver
+ * Entrypoint for the workflow-init driver pipeline.
+ *
+ * Usage:
+ *   workflow-init-driver [#N ...]
+ *   workflow-init-driver --resume <ckpt-path> --answer <answer> [#N ...]
+ *   workflow-init-driver --phase <phase-name> [#N ...]
+ *   workflow-init-driver --help
+ */
+
+const { spawnSync } = require("child_process");
+const path = require("path");
+
+const { checkpointPath, makeInitialState, writeCheckpoint, readCheckpoint } = require("./lib/workflow-init/checkpoint");
+const { emitDone, emitAskUser, emitBlocked } = require("./lib/workflow-init/directive");
+const { detectIssues } = require("./lib/workflow-init/phases/detect-issues");
+const { fetchIssues } = require("./lib/workflow-init/phases/fetch-issues");
+const { wipCheck } = require("./lib/workflow-init/phases/wip-check");
+const { closedDetection } = require("./lib/workflow-init/phases/closed-detection");
+const { labelExtract } = require("./lib/workflow-init/phases/label-extract");
+const { routeDecision } = require("./lib/workflow-init/phases/route-decision");
+const { writeContext } = require("./lib/workflow-init/phases/write-context");
+
+// --- Env / config -----------------------------------------------------------
+
+const agentsConfigDir =
+  process.env.AGENTS_CONFIG_DIR ||
+  path.resolve(__dirname, "../..");
+
+const plansDir =
+  process.env.WORKFLOW_PLANS_DIR ||
+  path.join(require("os").homedir(), ".workflow-plans");
+
+const nonGithub = process.env.NON_GITHUB === "1";
+
+// --- Session ID resolution --------------------------------------------------
+
+// Path-safe session-id charset (CWE-22) — mirrors the canonical validator in
+// hooks/lib/workflow-state/session-id.js. The sid flows into path.join() for
+// the checkpoint and context.md filenames; any other value must be rejected.
+const SID_RE = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Validate a candidate session ID from an untrusted source.
+ * Returns the trimmed sid when it matches SID_RE; null otherwise.
+ */
+function validSid(raw) {
+  if (typeof raw !== "string") return null;
+  const sid = raw.trim();
+  return SID_RE.test(sid) ? sid : null;
+}
+
+/**
+ * Resolve the session ID.
+ * Returns { sid: string, reliable: boolean }.
+ * When reliable=false, downstream callers must not pass --session-id to wip-state.
+ * Every source that can carry arbitrary text is validated with validSid();
+ * an invalid value falls through to the next source as if it were unset.
+ */
+function resolveSessionId() {
+  const envSid = validSid(process.env.CLAUDE_SESSION_ID);
+  if (envSid) {
+    return { sid: envSid, reliable: true };
+  }
+  const resolveScript = path.join(agentsConfigDir, "bin", "resolve-session-id");
+  // resolve-session-id is a bash script — spawn via bash
+  const { buildBashScriptSpawn } = require("./lib/workflow-init/spawn-env");
+  const [cmd, args, opts] = buildBashScriptSpawn(resolveScript, []);
+  const result = spawnSync(cmd, args, opts);
+  if (result.status === 0 && result.stdout) {
+    const scriptSid = validSid(result.stdout);
+    if (scriptSid) {
+      return { sid: scriptSid, reliable: true };
+    }
+  }
+  // SID unresolvable — use timestamp fallback for checkpoint naming only.
+  // Digits-only by construction, but validated symmetrically (CPR-5).
+  const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  return { sid: validSid(ts) || "unresolved-sid", reliable: false };
+}
+
+// --- Argument parsing -------------------------------------------------------
+
+function parseArgs(argv) {
+  const args = argv.slice(2);
+  let resumePath = null;
+  let answer = null;
+  let phaseOnly = null;
+  const tokens = [];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--help" || a === "-h") {
+      process.stdout.write(
+        "Usage: workflow-init-driver [#N ...]\n" +
+          "       workflow-init-driver --resume <ckpt> --answer <answer> [#N ...]\n" +
+          "       workflow-init-driver --phase <phase> [#N ...]\n"
+      );
+      process.exit(0);
+    } else if (a === "--resume" && i + 1 < args.length) {
+      resumePath = args[++i];
+    } else if (a === "--answer" && i + 1 < args.length) {
+      answer = args[++i];
+    } else if (a === "--phase" && i + 1 < args.length) {
+      phaseOnly = args[++i];
+    } else if (!a.startsWith("--")) {
+      tokens.push(a);
+    }
+    i++;
+  }
+  return { resumePath, answer, phaseOnly, tokens };
+}
+
+// --- Answer handling (resume transitions) ------------------------------------
+
+/**
+ * Apply an answer to the state after a previous ask_user interruption.
+ * Returns: { ok: true, state, startPhase } on success
+ *          { blocked: true, reason } for abort
+ *          { invalid: true, message } for invalid answers
+ */
+function applyAnswer(ckptData, answer, tokens) {
+  const { ask_id, state } = ckptData;
+
+  if (!ask_id) {
+    return { invalid: true, message: `No pending ask_id in checkpoint` };
+  }
+
+  if (answer === "abort") {
+    return { blocked: true, reason: "user_aborted" };
+  }
+
+  // fetch_failed_path_c
+  if (ask_id === "fetch_failed_path_c") {
+    if (answer === "continue") {
+      // Clear issues, proceed to write-context
+      state.issues = [];
+      return { ok: true, state, startPhase: "write-context" };
+    }
+    return { invalid: true, message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected: continue|abort` };
+  }
+
+  // wip_conflict + continue → override all wip_results to 'same', re-run wip-check
+  if (ask_id === "wip_conflict") {
+    if (answer === "continue") {
+      for (const n of state.issues) {
+        state.wip_results[n] = "same";
+      }
+      return { ok: true, state, startPhase: "wip-check" };
+    }
+    return { invalid: true, message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected: continue|abort` };
+  }
+
+  // wip_rc2 + continue → treat rc2 Ns as 'none', re-run wip-check
+  if (ask_id === "wip_rc2") {
+    if (answer === "continue") {
+      // Reset all wip_results so wip-check can re-evaluate
+      // The wip_results for "error"-state ones should be reset to none
+      // Actually: treat all non-same as 'none' so they get re-tried
+      // Per spec: "treat rc2 Ns as 'none'"  — but we don't know which ones were rc2
+      // Best approach: clear the wip_results for all issues not yet 'same'
+      for (const n of state.issues) {
+        if (state.wip_results[n] !== "same") {
+          state.wip_results[n] = "none";
+        }
+      }
+      return { ok: true, state, startPhase: "wip-check" };
+    }
+    return { invalid: true, message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected: continue|abort` };
+  }
+
+  // wip_error + continue → treat error Ns as 'none', re-run wip-check
+  if (ask_id === "wip_error") {
+    if (answer === "continue") {
+      for (const n of state.issues) {
+        if (state.wip_results[n] === "error") {
+          state.wip_results[n] = "none";
+        }
+      }
+      return { ok: true, state, startPhase: "wip-check" };
+    }
+    return { invalid: true, message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected: continue|abort` };
+  }
+
+  // closed_reopen_N
+  if (ask_id.startsWith("closed_reopen_")) {
+    const closedN = parseInt(ask_id.replace("closed_reopen_", ""), 10);
+    if (answer === "reopen") {
+      // Update cache to treat as OPEN
+      if (state.issue_json_cache[closedN]) {
+        state.issue_json_cache[closedN].state = "OPEN";
+      }
+      return { ok: true, state, startPhase: "closed-detection" };
+    }
+    if (answer === "remove") {
+      state.issues = state.issues.filter((n) => n !== closedN);
+      if (state.issues.length === 0) {
+        return { blocked: true, reason: "no_issues_remaining" };
+      }
+      return { ok: true, state, startPhase: "closed-detection" };
+    }
+    return {
+      invalid: true,
+      message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected: reopen|remove|abort`,
+    };
+  }
+
+  // meta_select + #M → issues=[M], clear repo_map, force re-fetch
+  if (ask_id === "meta_select") {
+    const m = answer.match(/^#?(\d+)$/);
+    if (m) {
+      const selectedN = parseInt(m[1], 10);
+      state.issues = [selectedN];
+      state.repo_map = {};
+      state.issue_json_cache[selectedN] = null;
+      // Reset wip_results for the selected issue so it's re-checked
+      state.wip_results = {};
+      return { ok: true, state, startPhase: "fetch-issues" };
+    }
+    return {
+      invalid: true,
+      message: `Invalid answer '${answer}' for ask_id '${ask_id}'. Expected #N (issue number)`,
+    };
+  }
+
+  return { invalid: true, message: `Unknown ask_id '${ask_id}' in checkpoint` };
+}
+
+// --- Phase pipeline -----------------------------------------------------------
+
+const PHASE_ORDER = [
+  "detect-issues",
+  "fetch-issues",
+  "wip-check",
+  "closed-detection",
+  "label-extract",
+  "route-decision",
+  "write-context",
+];
+
+function phaseIndex(name) {
+  return PHASE_ORDER.indexOf(name);
+}
+
+/**
+ * Run the pipeline from startPhase through write-context.
+ * Returns the final directive result.
+ */
+function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
+  const startIdx = phaseIndex(startPhase);
+  if (startIdx < 0) {
+    process.stderr.write(`Unknown phase: ${startPhase}\n`);
+    process.exit(1);
+  }
+
+  let currentPhase = startPhase;
+
+  for (let i = startIdx; i < PHASE_ORDER.length; i++) {
+    const phase = PHASE_ORDER[i];
+    currentPhase = phase;
+    let result;
+
+    if (phase === "detect-issues") {
+      result = detectIssues(state, tokens, agentsConfigDir);
+    } else if (phase === "fetch-issues") {
+      result = fetchIssues(state);
+    } else if (phase === "wip-check") {
+      result = wipCheck(state, agentsConfigDir, sessionId);
+    } else if (phase === "closed-detection") {
+      result = closedDetection(state);
+    } else if (phase === "label-extract") {
+      result = labelExtract(state);
+    } else if (phase === "route-decision") {
+      result = routeDecision(state);
+    } else if (phase === "write-context") {
+      result = writeContext(state, plansDir, sessionId);
+    }
+
+    if (result && result.ask) {
+      // Write checkpoint with ask_id, then emit ask_user
+      writeCheckpoint(ckptFile, sessionId, phase, result.askId, state);
+      emitAskUser(ckptFile, result.askId, result.question, result.options);
+      return;
+    }
+
+    if (result && result.blocked) {
+      writeCheckpoint(ckptFile, sessionId, phase, null, state);
+      emitBlocked(ckptFile, result.reason || "unknown");
+      return;
+    }
+  }
+
+  // Pipeline complete
+  const pathDecision = state.path_decision || "C";
+  writeCheckpoint(ckptFile, sessionId, "write-context", null, state);
+  emitDone(ckptFile, pathDecision);
+}
+
+// --- Main -------------------------------------------------------------------
+
+function main() {
+  const { resumePath, answer, phaseOnly, tokens } = parseArgs(process.argv);
+
+  const { sid: sessionId, reliable: sidReliable } = resolveSessionId();
+  // wipSid: the session ID to pass to wip-state.sh; null when not reliably resolved.
+  const wipSid = sidReliable ? sessionId : null;
+  const ckptFile = checkpointPath(plansDir, sessionId);
+
+  // NON_GITHUB=1 → immediate done/Path C (also writes context.md)
+  if (nonGithub) {
+    const state = makeInitialState();
+    state.path_decision = "C";
+    writeContext(state, plansDir, sessionId);
+    writeCheckpoint(ckptFile, sessionId, "write-context", null, state);
+    emitDone(ckptFile, "C");
+    return;
+  }
+
+  // --resume + --answer flow
+  if (resumePath && answer !== null) {
+    const ckptResult = readCheckpoint(resumePath);
+
+    if (ckptResult.error) {
+      if (ckptResult.error === "version_mismatch") {
+        // Version mismatch → ignore checkpoint, restart from first phase using positional tokens
+        const freshState = makeInitialState();
+        runPipeline(freshState, "detect-issues", tokens, wipSid, ckptFile);
+        return;
+      }
+      // Missing/malformed checkpoint → diagnostic error
+      process.stderr.write(`[workflow-init-driver] checkpoint error: ${ckptResult.message}\n`);
+      emitBlocked(resumePath, "checkpoint_invalid");
+      return;
+    }
+
+    const { data: ckptData } = ckptResult;
+
+    // Apply answer
+    const applyResult = applyAnswer(ckptData, answer, tokens);
+
+    if (applyResult.blocked) {
+      // For abort: do NOT mutate checkpoint
+      emitBlocked(ckptFile, applyResult.reason);
+      return;
+    }
+
+    if (applyResult.invalid) {
+      process.stderr.write(`[workflow-init-driver] invalid answer: ${applyResult.message}\n`);
+      // Re-emit the pending ask_user (checkpoint unchanged)
+      const { ask_id, state } = ckptData;
+      // We need the question/options — but we've lost them. Re-run the phase to regenerate.
+      // Actually, just emit blocked with invalid-answer
+      emitBlocked(ckptFile, "invalid-answer");
+      return;
+    }
+
+    // ok → continue pipeline
+    runPipeline(applyResult.state, applyResult.startPhase, tokens, wipSid, ckptFile);
+    return;
+  }
+
+  // Normal first-run (or re-run from scratch)
+  const state = makeInitialState();
+
+  // --phase mode: run only one phase (for testing individual phases in isolation)
+  if (phaseOnly) {
+    runPipeline(state, phaseOnly, tokens, wipSid, ckptFile);
+    return;
+  }
+
+  runPipeline(state, "detect-issues", tokens, wipSid, ckptFile);
+}
+
+main();

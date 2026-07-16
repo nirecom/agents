@@ -3,16 +3,16 @@
 #
 # Usage:
 #   PLANS_DIR=... SESSION_ID=... AGENTS_CONFIG_DIR=... \
-#     bash path-a-label-and-board.sh [--repo-map IDX:owner/repo ...] <primary-N> [related-N ...]
+#     bash path-a-label-and-board.sh [--repo-map IDX:owner/repo ...] <first-N> [siblings-N ...]
 #
 # --repo-map IDX:owner/repo  (repeatable) — per-issue repo routing. Index is
-#   0-based across ALL issues (primary=idx0, related[k]=idx k+1).
+#   0-based across ALL issues (first-N=idx0, siblings[k]=idx k+1).
 #
 # Behavior:
-#   - For each related issue (positions 2..N): gh issue edit --add-label intent:clarified.
-#     Label failure for any related issue is fail-closed (writes an abort marker, exit 1).
+#   - For each sibling issue (positions 2..N): gh issue edit --add-label intent:clarified.
+#     Label failure for any sibling issue is fail-closed (writes an abort marker, exit 1).
 #     gh issue edit --add-label is idempotent — re-running /workflow-init is safe.
-#   - For every issue (primary + related): ensure-board-card.sh (best-effort; warn-continue).
+#   - For every issue (first-N + siblings): ensure-board-card.sh (best-effort; warn-continue).
 #     ensure-board-card.sh is itself idempotent — no-op when the card is already present.
 
 set -uo pipefail
@@ -20,7 +20,7 @@ set -uo pipefail
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
 
 if [ "$#" -lt 1 ]; then
-    echo "[path-a-label-and-board] usage: [--repo-map IDX:owner/repo ...] <primary-N> [related-N ...]" >&2
+    echo "[path-a-label-and-board] usage: [--repo-map IDX:owner/repo ...] <first-N> [siblings-N ...]" >&2
     exit 2
 fi
 
@@ -42,16 +42,16 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "${#POSITIONAL[@]}" -lt 1 ]; then
-    echo "[path-a-label-and-board] usage: [--repo-map IDX:owner/repo ...] <primary-N> [related-N ...]" >&2
+    echo "[path-a-label-and-board] usage: [--repo-map IDX:owner/repo ...] <first-N> [siblings-N ...]" >&2
     exit 2
 fi
 
-PRIMARY="${POSITIONAL[0]}"
-RELATED=("${POSITIONAL[@]:1}")
+FIRST_N="${POSITIONAL[0]}"
+SIBLINGS=("${POSITIONAL[@]:1}")
 
-# Label related issues (index 1..N in the full list).
-for k in "${!RELATED[@]}"; do
-    N="${RELATED[$k]}"
+# Label sibling issues (index 1..N in the full list).
+for k in "${!SIBLINGS[@]}"; do
+    N="${SIBLINGS[$k]}"
     i=$((k + 1))
     if ! gh issue edit "$N" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} --add-label "intent:clarified"; then
         if [ -n "${PLANS_DIR:-}" ] && [ -n "${SESSION_ID:-}" ]; then
@@ -63,8 +63,8 @@ for k in "${!RELATED[@]}"; do
     fi
 done
 
-# ensure-board-card for all issues (primary at idx 0, related at idx 1..N).
-ALL_ISSUES=("$PRIMARY" "${RELATED[@]}")
+# ensure-board-card for all issues (first-N at idx 0, siblings at idx 1..N).
+ALL_ISSUES=("$FIRST_N" "${SIBLINGS[@]}")
 for i in "${!ALL_ISSUES[@]}"; do
     N="${ALL_ISSUES[$i]}"
     if ! bash "$AGENTS_CONFIG_DIR/bin/github-issues/ensure-board-card.sh" ${REPO_OF[$i]:+--repo "${REPO_OF[$i]}"} "$N"; then

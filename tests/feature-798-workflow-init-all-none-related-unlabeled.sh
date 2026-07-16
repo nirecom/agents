@@ -1,26 +1,24 @@
 #!/bin/bash
-# Tests: skills/workflow-init/SKILL.md
+# Tests: skills/workflow-init/SKILL.md, bin/workflow/workflow-init-driver
 # Tags: workflow-init, wip-state, all-none, label-check, related-issues
-# Tests for issue #589/#798 — workflow-init WI-5 ALL_NONE / WI-8 FORCE_PATH_B fallback.
+# Tests for issue #589/#798 — workflow-init WI-5 ALL_NONE / FORCE_PATH_B fallback.
 #
 # WI-5 ALL_NONE previously only checked whether the *primary* issue had the
 # `intent:clarified` label; related issues without the label were silently
 # routed to Path A (resume) instead of Path B (re-clarify), causing
 # clarify-intent to be skipped for issues whose intent was never captured.
 #
-# The fix:
-#   - WI-5 ALL_NONE evaluates all N's labels (not just primary).
-#   - WI-8 introduces a FORCE_PATH_B fallback when any related N is unlabeled.
-#   - WI-5 ERROR branch routes to AskUserQuestion (no silent warn-and-continue).
-#
-# RED before /write-code runs — these grep assertions match prose that
-# /write-code will add to skills/workflow-init/SKILL.md.
+# The fix (now absorbed into the driver):
+#   - ALL_NONE evaluates all N's labels (not just the first).
+#   - force_path_b=true is set when WIP is freshly claimed (ALL_NONE case).
+#   - WI-8/route-decision enforces FORCE_PATH_B fallback.
+#   - wip_error branch routes to ask_user (no silent warn-and-continue).
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-WIP_RESUME_SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/wip-set-resume.sh"
+DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
 
 PASS=0
 FAIL=0
@@ -43,161 +41,211 @@ if [ ! -f "$WORKFLOW_INIT_SKILL" ]; then
 fi
 
 # ============================================================================
-# T1: WI-5 ALL_NONE condition covers all N (not just primary)
+# T1: SKILL.md references the driver (not wip-set-resume.sh) for WIP handling
 # ============================================================================
-# The fixed SKILL.md must NOT contain prose limiting the ALL_NONE label check
-# to the primary issue. Pre-fix text reads:
-#   "ALL_NONE → if `intent:clarified` ∈ labels of primary: ..."
-# Post-fix text must replace `primary` with all-N phrasing
-# (e.g. "labels of all N", "every N", "each N in ISSUES").
-ALL_NONE_LINE=$(grep -nE '^- `ALL_NONE`' "$WORKFLOW_INIT_SKILL" | head -1 || true)
-if [ -z "$ALL_NONE_LINE" ]; then
-    fail "T1: WI-5 ALL_NONE bullet not found in SKILL.md"
-elif echo "$ALL_NONE_LINE" | grep -qiE "labels of primary[^a-zA-Z_]"; then
-    fail "T1: WI-5 ALL_NONE still checks only 'labels of primary' — must cover all N"
-elif echo "$ALL_NONE_LINE" | grep -q "wip-set-resume.sh"; then
-    pass "T1: WI-5 ALL_NONE references wip-set-resume.sh (all-N handling delegated)"
-elif echo "$ALL_NONE_LINE" | grep -qiE "(labels of all N|labels of every N|labels of each N|all N have|every N has|each N has|for all N|ALL_CLARIFIED)"; then
-    pass "T1: WI-5 ALL_NONE condition covers all N (not just primary)"
+if grep -qE "workflow-init-driver" "$WORKFLOW_INIT_SKILL"; then
+    pass "T1: SKILL.md references workflow-init-driver (driver handles WIP aggregation)"
+elif grep -qE "bin/workflow/workflow-init-driver|workflow.init.driver" "$WORKFLOW_INIT_SKILL"; then
+    pass "T1: SKILL.md references workflow-init-driver"
 else
-    fail "T1: WI-5 ALL_NONE does not reference wip-set-resume.sh or all-N prose; line: $ALL_NONE_LINE"
+    fail "T1: SKILL.md does not reference workflow-init-driver — driver loop not found"
 fi
 
 # ============================================================================
-# T2: WI-8 references FORCE_PATH_B fallback for related N without intent:clarified
+# T2: SKILL.md references FORCE_PATH_B or force_path_b behavior
 # ============================================================================
-if grep -qiE "(FORCE_PATH_B|force.path.b|force path B)" "$WORKFLOW_INIT_SKILL" && grep -q "NEEDS_CLARIFY" "$WORKFLOW_INIT_SKILL"; then
-    pass "T2: WI-8 references FORCE_PATH_B + NEEDS_CLARIFY (related N without intent:clarified handled)"
+if grep -qiE "(FORCE_PATH_B|force.path.b|force path B|PATH_DECISION)" "$WORKFLOW_INIT_SKILL"; then
+    pass "T2: SKILL.md references FORCE_PATH_B / PATH_DECISION (routing documented)"
 else
-    fail "T2: WI-8 missing FORCE_PATH_B or NEEDS_CLARIFY reference"
+    fail "T2: SKILL.md missing FORCE_PATH_B or PATH_DECISION reference"
 fi
 
 # ============================================================================
-# T3: WI-5 ERROR branch references AskUserQuestion (no silent warn-and-continue)
+# T3: SKILL.md references ask_user handling for wip errors (no silent continue)
 # ============================================================================
-# The pre-fix behavior was to warn-and-continue when wip-state detection
-# failed. The fix (rc=2 escalation, #589) routes to AskUserQuestion so the
-# user is forced to resolve ambiguity before the workflow proceeds.
-ERROR_LINE=$(grep -nE '^- `ERROR' "$WORKFLOW_INIT_SKILL" | head -1 || true)
-if [ -z "$ERROR_LINE" ]; then
-    fail "T3: WI-5 ERROR bullet not found in SKILL.md"
-elif echo "$ERROR_LINE" | grep -qiE "(AskUserQuestion|ask.*user.*question)"; then
-    pass "T3: WI-5 ERROR branch references AskUserQuestion"
+if grep -qiE "(ask_user|AskUserQuestion|wip_error|wip_conflict)" "$WORKFLOW_INIT_SKILL"; then
+    pass "T3: SKILL.md references ask_user / AskUserQuestion for wip conflict/error handling"
 else
-    fail "T3: WI-5 ERROR branch does not reference AskUserQuestion — may still silently warn; line: $ERROR_LINE"
+    fail "T3: SKILL.md missing ask_user/AskUserQuestion reference for wip error branch"
 fi
 
 # ============================================================================
-# T4: wip-set-resume.sh exists and is executable
+# T4: bin/workflow/workflow-init-driver exists and is accessible
 # ============================================================================
-if [ -x "$WIP_RESUME_SCRIPT" ]; then
-    pass "T4: wip-set-resume.sh exists and is executable"
+if [ -f "$DRIVER" ]; then
+    pass "T4: bin/workflow/workflow-init-driver exists"
 else
-    fail "T4: wip-set-resume.sh missing or not executable: $WIP_RESUME_SCRIPT"
+    fail "T4: bin/workflow/workflow-init-driver missing"
 fi
 
-# --- mock setup for T5-T7 ----------------------------------------------------
-setup_mock() {
-    TMP="$(mktemp -d 2>/dev/null || mktemp -d -t wipresume)"
-    mkdir -p "$TMP/mock-bin" "$TMP/bin/github-issues"
-
-    # Mock gh: reads GH_MOCK_LABELS_<N> per issue.
-    # Invocation: gh issue view <N> --json labels --jq ...
-    cat > "$TMP/mock-bin/gh" <<'MOCKGH'
-#!/bin/bash
-# args: issue view <N> --json labels --jq '[.labels[].name]'
-N=""
-prev=""
-for a in "$@"; do
-    if [ "$prev" = "view" ]; then
-        N="$a"
-        break
-    fi
-    prev="$a"
-done
-VARNAME="GH_MOCK_LABELS_${N}"
-VAL="${!VARNAME:-}"
-if [ "$VAL" = "fail" ]; then
-    exit 1
-fi
-if [ -z "$VAL" ]; then
-    echo "[]"
-    exit 0
-fi
-echo "$VAL"
-exit 0
-MOCKGH
-    chmod +x "$TMP/mock-bin/gh"
-
-    # Mock wip-state.sh: exits GH_MOCK_WIP_RC (default 0).
-    cat > "$TMP/bin/github-issues/wip-state.sh" <<'MOCKWIP'
-#!/bin/bash
-exit "${GH_MOCK_WIP_RC:-0}"
-MOCKWIP
-    chmod +x "$TMP/bin/github-issues/wip-state.sh"
-
-    export AGENTS_CONFIG_DIR="$TMP"
-    export PATH="$TMP/mock-bin:$PATH"
+# --- helper setup for T5-T7 -------------------------------------------------
+# Use cygpath -u (POSIX) so MOCKBIN works in bash PATH entries.
+to_native() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s' "$1"; fi
 }
+ROOT_TMP="$(to_native "$(mktemp -d)")"
+trap 'rm -rf "$ROOT_TMP"' EXIT
+ORIG_PATH="$PATH"
+_CN=0
 
-teardown_mock() {
-    rm -rf "$TMP" 2>/dev/null
-    # unset any GH_MOCK_LABELS_* vars and rc var
-    for v in $(env | grep -oE '^GH_MOCK_LABELS_[0-9]+' || true); do
-        unset "$v"
+if [ ! -f "$DRIVER" ]; then
+    echo "SKIP: T5-T7 require $DRIVER (not yet built)"
+    FAIL=$((FAIL + 3))
+else
+
+setup_drv() {
+    local sid="$1"
+    _CN=$((_CN + 1))
+    CASE_DIR="$ROOT_TMP/case-$_CN"
+    PLANS="$CASE_DIR/plans"
+    CFG="$CASE_DIR/cfg"
+    MOCKBIN="$CASE_DIR/bin"
+    RESP="$CASE_DIR/resp"
+    WIPD="$CASE_DIR/wip"
+    mkdir -p "$PLANS" "$MOCKBIN" "$RESP" "$WIPD" \
+        "$CFG/bin/github-issues" "$CFG/hooks/lib" "$CFG/skills/workflow-init/scripts"
+    cat > "$MOCKBIN/gh" <<GHEOF
+#!/bin/bash
+echo "\$*" >> "$CASE_DIR/gh.log"
+RESP="$RESP"
+GHEOF
+    cat >> "$MOCKBIN/gh" <<'GHEOF2'
+cmd="${1:-}"; sub="${2:-}"
+if [ "$cmd" = "issue" ] && [ "$sub" = "view" ]; then
+    shift 2; N=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --repo|--json|--jq) if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+            -*) shift ;;
+            *) [ -z "$N" ] && N="$1"; shift ;;
+        esac
     done
-    unset GH_MOCK_WIP_RC
-    PATH="${PATH#$TMP/mock-bin:}"
-    export PATH
+    N="${N#\#}"
+    if [ -f "$RESP/issue-view-$N.json" ]; then cat "$RESP/issue-view-$N.json"; exit 0; fi
+    echo "mock-gh: no fixture for issue $N" >&2; exit 1
+fi
+if [ "$cmd" = "repo" ] && [ "$sub" = "view" ]; then echo "mockorg/mockrepo"; exit 0; fi
+if [ "$cmd" = "api" ]; then echo "[]"; exit 0; fi
+echo "mock-gh: unhandled: $*" >&2; exit 1
+GHEOF2
+    chmod +x "$MOCKBIN/gh"
+    cat > "$CFG/bin/github-issues/wip-state.sh" <<WIPEOF
+#!/bin/bash
+WIPD="$WIPD"
+WIPEOF
+    cat >> "$CFG/bin/github-issues/wip-state.sh" <<'WIPEOF2'
+V=""; N=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --session-id|--repo) shift 2 ;;
+        -*) shift ;;
+        *) [ -z "$V" ] && V="$1" || N="$1"; shift ;;
+    esac
+done
+N="${N#\#}"
+echo "$V $N" >> "$WIPD/calls.log"
+case "$V" in
+    check) if [ -f "$WIPD/s-$N" ]; then cat "$WIPD/s-$N"; else echo "none"; fi; exit 0 ;;
+    set) echo "same" > "$WIPD/s-$N"; exit 0 ;;
+    *) exit 0 ;;
+esac
+WIPEOF2
+    chmod +x "$CFG/bin/github-issues/wip-state.sh"
+    printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock}"\n' > "$CFG/bin/resolve-session-id"
+    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$CFG/bin/parse-issue-tokens"
+    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$CFG/hooks/lib/parse-closes-issues.js"
+    cat > "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
+#!/bin/bash
+while [ $# -gt 0 ]; do
+    case "$1" in --repo-map) shift 2 ;; -*) shift ;; *) echo "#${1#\#}"; shift ;; esac
+done
+exit 0
+FEOF
+    chmod +x "$CFG/bin/resolve-session-id" "$CFG/bin/parse-issue-tokens" \
+        "$CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+    export WORKFLOW_PLANS_DIR="$PLANS" AGENTS_CONFIG_DIR="$CFG" CLAUDE_SESSION_ID="$sid"
+    unset NON_GITHUB CLAUDE_ENV_FILE 2>/dev/null || true
+    export PATH="$MOCKBIN:$ORIG_PATH"
+}
+
+teardown_drv() {
+    export PATH="$ORIG_PATH"
+    unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID 2>/dev/null || true
+}
+
+mock_issue() {
+    local n="$1" state="$2" labels_csv="${3:-}" labels="" l
+    local IFS=','
+    for l in $labels_csv; do labels="$labels{\"name\":\"$l\"},"; done
+    labels="[${labels%,}]"
+    printf '{"number":%s,"title":"Issue %s","body":"Body","labels":%s,"state":"%s","createdAt":"2026-07-01T00:00:00Z"}\n' \
+        "$n" "$n" "$labels" "$state" > "$RESP/issue-view-$n.json"
+}
+
+TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
+
+run_drv() {
+    DROUT="$(cd "$CASE_DIR" && "$TIMEOUT_WRAP" 30 node "$DRIVER" "$@" 2>/dev/null)"
+    DRRC=$?
+    return 0
+}
+
+kv() {
+    local val
+    val="$(printf '%s\n' "$DROUT" | grep -m1 "^${1}=")" || { printf ''; return; }
+    val="${val#"${1}"=}"
+    val="${val%$'\r'}"
+    case "$val" in \'*\') val="${val#\'}"; val="${val%\'}" ;; esac
+    printf '%s' "$val"
 }
 
 # ============================================================================
-# T5: all-clarified + no-meta → exit 0 + ALL_SET
+# T5: all-clarified + wip=none → wip set for all, ACTION=done
 # ============================================================================
-setup_mock
-export GH_MOCK_LABELS_101='["intent:clarified","type:task"]'
-export GH_MOCK_LABELS_102='["intent:clarified","type:task"]'
-export GH_MOCK_WIP_RC=0
-OUT=$(run_with_timeout 10 bash "$WIP_RESUME_SCRIPT" 101 102 2>/dev/null)
-RC=$?
-if [ "$RC" -eq 0 ] && echo "$OUT" | grep -q "^ALL_SET$"; then
-    pass "T5: all-clarified + no-meta → ALL_SET, exit 0"
+setup_drv t5-wip798
+mock_issue 101 OPEN "intent:clarified,type:task"
+mock_issue 102 OPEN "intent:clarified,type:task"
+run_drv '#101' '#102'
+ACT="$(kv ACTION)"
+if [ "$ACT" = "done" ] && grep -q '^set 101$' "$WIPD/calls.log" 2>/dev/null && grep -q '^set 102$' "$WIPD/calls.log" 2>/dev/null; then
+    pass "T5: all-clarified + wip=none → wip set for both, ACTION=done"
 else
-    fail "T5: expected (ALL_SET,0); got rc=$RC out=$OUT"
+    fail "T5: expected done + set 101 + set 102; got ACT=$ACT calls=$(cat "$WIPD/calls.log" 2>/dev/null | tr '\n' ';')"
 fi
-teardown_mock
+teardown_drv
 
 # ============================================================================
-# T6: one N lacking intent:clarified → exit 1 + NEEDS_CLARIFY
+# T6: one N lacking intent:clarified → PATH_DECISION=B (force_path_b + label check)
 # ============================================================================
-setup_mock
-export GH_MOCK_LABELS_201='["intent:clarified","type:task"]'
-export GH_MOCK_LABELS_202='["type:task"]'
-export GH_MOCK_WIP_RC=0
-OUT=$(run_with_timeout 10 bash "$WIP_RESUME_SCRIPT" 201 202 2>/dev/null)
-RC=$?
-if [ "$RC" -eq 1 ] && echo "$OUT" | grep -q "^NEEDS_CLARIFY"; then
-    pass "T6: one N unlabeled → NEEDS_CLARIFY, exit 1"
+setup_drv t6-wip798
+mock_issue 201 OPEN "intent:clarified,type:task"
+mock_issue 202 OPEN "type:task"
+run_drv '#201' '#202'
+ACT="$(kv ACTION)"
+PD="$(kv PATH_DECISION)"
+if [ "$ACT" = "done" ] && [ "$PD" = "B" ]; then
+    pass "T6: one N unlabeled → PATH_DECISION=B"
 else
-    fail "T6: expected (NEEDS_CLARIFY,1); got rc=$RC out=$OUT"
+    fail "T6: expected done PATH_DECISION=B; got ACT=$ACT PD=$PD"
 fi
-teardown_mock
+teardown_drv
 
 # ============================================================================
-# T7: meta N → META_SKIP in stdout, still ALL_SET, exit 0
+# T7: meta N + intent:clarified → PATH_DECISION=META (meta handled separately)
 # ============================================================================
-setup_mock
-export GH_MOCK_LABELS_301='["intent:clarified","meta"]'
-export GH_MOCK_LABELS_302='["intent:clarified","type:task"]'
-export GH_MOCK_WIP_RC=0
-OUT=$(run_with_timeout 10 bash "$WIP_RESUME_SCRIPT" 301 302 2>/dev/null)
-RC=$?
-if [ "$RC" -eq 0 ] && echo "$OUT" | grep -q "^META_SKIP 301$" && echo "$OUT" | grep -q "^ALL_SET$"; then
-    pass "T7: meta N → META_SKIP + ALL_SET, exit 0"
+setup_drv t7-wip798
+mock_issue 301 OPEN "intent:clarified,meta"
+run_drv '#301'
+ACT="$(kv ACTION)"
+PD="$(kv PATH_DECISION)"
+if [ "$ACT" = "done" ] && [ "$PD" = "META" ]; then
+    pass "T7: meta N with intent:clarified → PATH_DECISION=META"
 else
-    fail "T7: expected META_SKIP 301 + ALL_SET, rc=0; got rc=$RC out=$OUT"
+    fail "T7: expected done PATH_DECISION=META; got ACT=$ACT PD=$PD"
 fi
-teardown_mock
+teardown_drv
+
+fi  # end of driver-present block
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
