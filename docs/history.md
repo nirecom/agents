@@ -131,4 +131,8 @@ Changes: refactor(#1466): extract NON_GITHUB detection into shared bin/detect-no
 
 ### FEATURE: PR #1477 — feature/issue-1470 (2026-07-17, 60572a88bba2c2b3b37fa85e03ec99806a53dc9a, #1477)
 Background: feat(#1470): add check-inline-procedures quality gate to WF-CODE-6
-Changes: Add `bin/check-inline-procedures` quality gate to WF-CODE-6: detects inline numbered procedure blocks (≥3 consecutive `N. ` lines at column 0) in `skills/*/SKILL.md`, `agents/*.md`, and `skills/_shared/*.md`; emits advisory WARN findings. Integrated into `run-quality-gates.sh` alongside `review-prompt-size`. Always exits 0. Closes #1470. <!-- compose-doc-append-sentinel: branch=feature/issue-1470 pr=#1477 -->
+Changes: Add `bin/check-inline-procedures` quality gate to WF-CODE-6: detects inline numbered procedure blocks (≥3 consecutive `N. ` lines at column 0) in `skills/*/SKILL.md`, `agents/*.md`, and `skills/_shared/*.md`; emits advisory WARN findings. Integrated into `run-quality-gates.sh` alongside `review-prompt-size`. Always exits 0. Closes #1470. <!-- compose-doc-append-sentinel: branch=feature/issue-1470 pr=#1477 -->
+
+### FEATURE: PR #1478 — feature/1468-scriptify-survey-history (2026-07-17, 3913c52, #1478)
+Background: feat(#1468): scriptify survey-history/SKILL.md — extract 4 inline violations to scripts
+Changes: #1468: scriptify survey-history/SKILL.md — extracted 4 rules/prompt.md §1.3/§1.5 violations to scripts/; reduces SKILL.md from 132 lines to 88 lines (WARN resolved) <!-- compose-doc-append-sentinel: branch=feature/1468-scriptify-survey-history pr=#1478 -->
