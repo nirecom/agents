@@ -259,13 +259,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# WF-META-DOC2: skills/workflow-init/SKILL.md contains WI-8 open sub-issue
-#               guard referencing list-open-sub-issues script
+# WF-META-DOC2: driver route-decision.js contains sub_issues API call
+#               (list-open-sub-issues.sh absorbed into driver route-decision phase)
 # ---------------------------------------------------------------------------
-if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "WF-META-DOC2: skills/workflow-init/SKILL.md missing"
-elif grep -q "list-open-sub-issues" "$WORKFLOW_INIT_MD"; then
-    pass "WF-META-DOC2: workflow-init SKILL.md WI-8 references list-open-sub-issues guard"
+ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
+if [ ! -f "$ROUTE_DECISION_JS" ]; then
+    fail "WF-META-DOC2: driver route-decision.js missing at $ROUTE_DECISION_JS"
+elif grep -q "sub_issues" "$ROUTE_DECISION_JS"; then
+    pass "WF-META-DOC2: driver route-decision.js references sub_issues API (open sub-issue guard)"
 else
-    fail "WF-META-DOC2: workflow-init SKILL.md missing list-open-sub-issues reference — RED until implementation"
+    fail "WF-META-DOC2: driver route-decision.js missing sub_issues API reference"
 fi

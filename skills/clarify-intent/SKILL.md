@@ -116,7 +116,7 @@ Handle its stdout / exit code:
 - Exit 0, empty stdout → all entries labelled, WIP-set, board-carded per the order above.
 - `CREATED:<N>` (Path C — empty `closes_issues`) → backfill the `## Issues` placeholder body from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` (Read + Edit; title = the created issue's title). The CLI already ran WIP set + board card for the new N.
 - `CLOSED:<N>` + exit 2 → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — options: "Reopen and continue" (run `gh issue reopen <N>`, then re-run the call) / "Remove from closes_issues and continue" (offered only when `len(closes_issues) >= 2`; Read + Edit intent.md to remove N, then re-run) / "Abort session". No side effects fired yet — the CLI stops on the first CLOSED entry before any mutation.
-- `RC2` + exit 2 → `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env unresolvable; conflict detection broken). How to proceed?" → "Skip and continue (acknowledge risk)" → warn + re-run for remaining / "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_SET_RC2: #{N}>>"` + stop.
+- `RC2` + exit 2 → `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env unresolvable; conflict detection broken). How to proceed?" → "Skip and continue (acknowledge risk)" → warn + re-run for remaining / "Abort session" → stop.
 
 Then:
 

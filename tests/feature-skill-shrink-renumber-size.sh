@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/scripts/research-reprompt.sh, skills/make-detail-plan/scripts/cap-escalation-message.sh, skills/make-detail-plan/scripts/skip-conditions.sh, skills/make-detail-plan/scripts/surface-delivery-plan.sh, skills/workflow-init/scripts/aggregate-wip-check.sh, skills/workflow-init/scripts/closed-detection.sh
+# Tests: skills/workflow-init/SKILL.md, skills/make-detail-plan/SKILL.md, skills/worktree-end/SKILL.md, skills/issue-close-finalize/SKILL.md, skills/make-detail-plan/scripts/research-reprompt.sh, skills/make-detail-plan/scripts/cap-escalation-message.sh, skills/make-detail-plan/scripts/skip-conditions.sh, skills/make-detail-plan/scripts/surface-delivery-plan.sh, bin/workflow/workflow-init-driver
 # Tags: skill-shrink, size-limit, scripts-extraction, issue-613
 # Verifies SKILL.md files are within 100-line limit and extracted scripts exist.
 
@@ -49,8 +49,8 @@ check_exists "S5" "skills/make-detail-plan/scripts/research-reprompt.sh"
 check_exists "S6" "skills/make-detail-plan/scripts/cap-escalation-message.sh"
 check_exists "S7" "skills/make-detail-plan/scripts/skip-conditions.sh"
 check_exists "S8" "skills/make-detail-plan/scripts/surface-delivery-plan.sh"
-check_exists "S9" "skills/workflow-init/scripts/aggregate-wip-check.sh"
-check_exists "S10" "skills/workflow-init/scripts/closed-detection.sh"
+check_exists "S9'" "bin/workflow/workflow-init-driver"
+# S9/S10 (aggregate-wip-check.sh, closed-detection.sh) removed: absorbed into driver
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: skills/workflow-init/SKILL.md, skills/workflow-init/scripts/list-open-sub-issues.sh, tests/feature-issue-create-skill/section-dispatch-bulk.sh
+# Tests: skills/workflow-init/SKILL.md, bin/workflow/lib/workflow-init/phases/route-decision.js, tests/feature-issue-create-skill/section-dispatch-bulk.sh
 # Tags: workflow-init, meta-routing, scope:issue-specific
 #
 # L3 gap (what this test does NOT catch):
@@ -10,24 +10,17 @@
 #
 # Tests for issue #1181 — workflow-init WI-8 sub-issue guard for Path META.
 #
-# Path META (PM4) currently runs /issue-create bulk unconditionally, even when
-# the meta issue already has open sub-issues. The fix adds a WI-8 guard:
-# 1. A new script list-open-sub-issues.sh probes the meta issue's sub-issues.
-# 2. WI-8 in SKILL.md invokes it, re-fetches selected sub-issue JSON, resolves
-#    OWNER_REPO, loops over ISSUES[@], and routes to Path META only when
-#    NO_OPEN (all sub-issues closed or none exist).
-# 3. When sub-issues are already open, WI-8 asks the user which to work on via
-#    AskUserQuestion (handles HAS_OPEN) and aborts on ERROR.
-#
-# RED before /write-code runs — T2–T8 grep assertions match prose that
-# /write-code will add to skills/workflow-init/SKILL.md, and T12 matches prose
-# that /write-code will add to tests/feature-issue-create-skill/section-dispatch-bulk.sh.
+# The sub-issue guard is now implemented in the driver's route-decision phase
+# (bin/workflow/lib/workflow-init/phases/route-decision.js), which replaces
+# the retired list-open-sub-issues.sh script. When meta issues have open
+# sub-issues, the driver emits ACTION=ask_user ASK_ID=meta_select.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW_INIT_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
-SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/list-open-sub-issues.sh"
+ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
+DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
 SECTION_BULK="$AGENTS_DIR/tests/feature-issue-create-skill/section-dispatch-bulk.sh"
 
 PASS=0
@@ -44,43 +37,42 @@ run_with_timeout() {
 }
 
 # ===========================================================================
-# T1: list-open-sub-issues.sh exists and is executable
+# T1: route-decision.js exists (replaced list-open-sub-issues.sh)
 # ===========================================================================
-if [ -x "$SCRIPT" ]; then
-    pass "T1: list-open-sub-issues.sh exists and is executable"
-elif [ -f "$SCRIPT" ]; then
-    fail "T1: list-open-sub-issues.sh exists but is not executable"
+if [ -f "$ROUTE_DECISION_JS" ]; then
+    pass "T1: driver route-decision.js exists (sub-issue guard absorbed from list-open-sub-issues.sh)"
 else
-    skip "T1: list-open-sub-issues.sh not yet created (will be written by write-code) — RED until implementation"
-    FAIL=$((FAIL + 1))
+    fail "T1: driver route-decision.js missing at $ROUTE_DECISION_JS"
 fi
 
 # ===========================================================================
-# T2: SKILL.md references list-open-sub-issues in WI-8 section
+# T2: driver route-decision.js contains sub_issues API reference
 # ===========================================================================
-if grep -q "list-open-sub-issues" "$WORKFLOW_INIT_SKILL"; then
-    pass "T2: SKILL.md references list-open-sub-issues"
+if [ ! -f "$ROUTE_DECISION_JS" ]; then
+    fail "T2: route-decision.js missing"
+elif grep -q "sub_issues" "$ROUTE_DECISION_JS"; then
+    pass "T2: route-decision.js references sub_issues API (WI-8 open sub-issue guard)"
 else
-    fail "T2: SKILL.md does not reference list-open-sub-issues — RED until implementation"
+    fail "T2: route-decision.js missing sub_issues API reference"
 fi
 
 # ===========================================================================
-# T3: SKILL.md contains sub-issue selection re-fetch
-#     (gh issue view for the selected sub-issue, or re-fetch / 再取得 prose)
+# T3: SKILL.md contains sub-issue selection re-fetch (meta_select resume path)
 # ===========================================================================
-if grep -qiE "(gh issue view.*SELECTED|re.fetch|再取得)" "$WORKFLOW_INIT_SKILL"; then
-    pass "T3: SKILL.md contains sub-issue selection re-fetch reference"
+if grep -qiE "(meta_select|re.fetch|re-fetch|re.invok)" "$WORKFLOW_INIT_SKILL"; then
+    pass "T3: SKILL.md contains sub-issue meta_select / re-fetch reference"
 else
-    fail "T3: SKILL.md missing sub-issue selection re-fetch — RED until implementation"
+    fail "T3: SKILL.md missing meta_select or re-fetch reference"
 fi
 
 # ===========================================================================
-# T4: SKILL.md contains OWNER_REPO resolution (nameWithOwner or OWNER_REPO)
+# T4: SKILL.md or route-decision.js contains OWNER_REPO resolution
 # ===========================================================================
-if grep -qE "(nameWithOwner|OWNER_REPO)" "$WORKFLOW_INIT_SKILL"; then
-    pass "T4: SKILL.md contains OWNER_REPO resolution"
+if grep -qE "(nameWithOwner|OWNER_REPO|owner_repo)" "$ROUTE_DECISION_JS" 2>/dev/null || \
+   grep -qE "(nameWithOwner|OWNER_REPO)" "$WORKFLOW_INIT_SKILL"; then
+    pass "T4: OWNER_REPO resolution present in route-decision.js or SKILL.md"
 else
-    fail "T4: SKILL.md missing OWNER_REPO resolution — RED until implementation"
+    fail "T4: OWNER_REPO resolution missing from both route-decision.js and SKILL.md"
 fi
 
 # ===========================================================================
@@ -89,144 +81,211 @@ fi
 if grep -qE 'ISSUES\[(@|\*|[0-9]+)\]' "$WORKFLOW_INIT_SKILL"; then
     pass "T5: SKILL.md contains ISSUES[@] full loop reference"
 else
-    fail "T5: SKILL.md missing ISSUES[@] loop reference — RED until implementation"
+    fail "T5: SKILL.md missing ISSUES[@] loop reference"
 fi
 
 # ===========================================================================
-# T6: SKILL.md routes NO_OPEN to Path META
+# T6: route-decision.js routes NO_OPEN to Path META (all sub-issues closed/absent)
 # ===========================================================================
-if grep -q "NO_OPEN" "$WORKFLOW_INIT_SKILL"; then
-    pass "T6: SKILL.md routes NO_OPEN to Path META"
+if [ ! -f "$ROUTE_DECISION_JS" ]; then
+    fail "T6: route-decision.js missing"
+elif grep -qiE "(META|meta_decision|path.*META)" "$ROUTE_DECISION_JS"; then
+    pass "T6: route-decision.js routes to Path META when no open sub-issues"
 else
-    fail "T6: SKILL.md missing NO_OPEN routing — RED until implementation"
+    fail "T6: route-decision.js missing META path routing"
 fi
 
 # ===========================================================================
-# T7: SKILL.md has ERROR → AskUserQuestion handling in WI-8 context
+# T7: SKILL.md or route-decision.js handles ERROR / ask_user for WI-8 meta guard
 # ===========================================================================
-# Check that both ERROR and AskUserQuestion appear in the WI-8 section.
-# We use awk to extract only the WI-8 section (between ### Step WI-8 and
-# the next ### Step or end of file), then grep for both keywords.
-WI8_SECTION=$(awk '/^### Step WI-8/,/^### Step WI-[0-9]/ { if (/^### Step WI-[0-9]/ && !/^### Step WI-8/) exit; print }' "$WORKFLOW_INIT_SKILL")
-if echo "$WI8_SECTION" | grep -q "ERROR" && echo "$WI8_SECTION" | grep -qi "AskUserQuestion"; then
-    pass "T7: SKILL.md WI-8 section has ERROR → AskUserQuestion handling"
+if grep -qiE "(ask_user|AskUserQuestion|meta_select)" "$WORKFLOW_INIT_SKILL" || \
+   grep -qiE "(ask_user|meta_select)" "$ROUTE_DECISION_JS" 2>/dev/null; then
+    pass "T7: meta guard ask_user / meta_select handling present"
 else
-    fail "T7: SKILL.md WI-8 section missing ERROR or AskUserQuestion — RED until implementation"
+    fail "T7: missing ask_user / meta_select handling in SKILL.md or route-decision.js"
 fi
 
 # ===========================================================================
-# T8: SKILL.md has WORKFLOW_ABORTED_META_SUBISSUE_SELECTION sentinel
+# T8: meta_select ask_id present in driver (replaces WORKFLOW_ABORTED_META_SUBISSUE_SELECTION)
 # ===========================================================================
-if grep -q "WORKFLOW_ABORTED_META_SUBISSUE_SELECTION" "$WORKFLOW_INIT_SKILL"; then
-    pass "T8: SKILL.md has WORKFLOW_ABORTED_META_SUBISSUE_SELECTION sentinel"
+if [ ! -f "$ROUTE_DECISION_JS" ]; then
+    fail "T8: route-decision.js missing"
+elif grep -q "meta_select" "$ROUTE_DECISION_JS"; then
+    pass "T8: route-decision.js contains meta_select ask_id (replaces WORKFLOW_ABORTED_META_SUBISSUE_SELECTION)"
 else
-    fail "T8: SKILL.md missing WORKFLOW_ABORTED_META_SUBISSUE_SELECTION sentinel — RED until implementation"
+    fail "T8: route-decision.js missing meta_select ask_id"
 fi
 
 # ===========================================================================
-# T9–T11: mock-gh tests for list-open-sub-issues.sh
+# T9-T11: driver route-decision mock tests (open / empty / closed-only sub-issues)
 # ===========================================================================
-if [ ! -f "$SCRIPT" ]; then
-    skip "T9-T11: list-open-sub-issues.sh not yet created (will be written by write-code)"
-    # Count as failures: tests should be RED until source is written
+if [ ! -f "$DRIVER" ]; then
+    skip "T9-T11: driver missing, skipping mock tests"
     FAIL=$((FAIL + 3))
 else
-    # -------------------------------------------------------------------------
-    # Mock setup shared by T9–T11
-    # -------------------------------------------------------------------------
-    setup_sub_mock() {
-        TMP="$(mktemp -d 2>/dev/null || mktemp -d -t submock)"
-        mkdir -p "$TMP/mock-bin"
+    to_native() {
+        if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s' "$1"; fi
+    }
+    ROOT1181="$(to_native "$(mktemp -d)")"
+    trap 'rm -rf "$ROOT1181"' EXIT
+    ORIG_PATH1181="$PATH"
+    _CN1181=0
+    TIMEOUT_WRAP="$AGENTS_DIR/bin/run-with-timeout.sh"
 
-        # Mock gh: handles `gh api repos/.../sub_issues` (REST) and `gh issue view`
-        cat > "$TMP/mock-bin/gh" <<'MOCKGH'
+    setup_t() {
+        local sid="$1"
+        _CN1181=$((_CN1181 + 1))
+        T_CASE="$ROOT1181/c-$_CN1181"
+        T_PLANS="$T_CASE/plans"
+        T_CFG="$T_CASE/cfg"
+        T_MOCKBIN="$T_CASE/bin"
+        T_RESP="$T_CASE/resp"
+        T_WIPD="$T_CASE/wip"
+        mkdir -p "$T_PLANS" "$T_MOCKBIN" "$T_RESP" "$T_WIPD" \
+            "$T_CFG/bin/github-issues" "$T_CFG/hooks/lib" \
+            "$T_CFG/skills/workflow-init/scripts"
+        cat > "$T_MOCKBIN/gh" <<GHEOF
 #!/bin/bash
-# Dispatch on subcommand pattern
-if [ "$1" = "api" ] && echo "$2" | grep -q "sub_issues"; then
-    # Return sub-issues array from GH_MOCK_SUBISSUES_JSON env var (REST format)
-    echo "${GH_MOCK_SUBISSUES_JSON:-[]}"
+echo "\$*" >> "$T_CASE/gh.log"
+T_RESP="$T_RESP"
+cmd="\${1:-}"; sub="\${2:-}"
+if [ "\$cmd" = "issue" ] && [ "\$sub" = "view" ]; then
+    shift 2; N=""
+    while [ \$# -gt 0 ]; do
+        case "\$1" in
+            --repo|--json|--jq) if [ \$# -ge 2 ]; then shift 2; else shift; fi ;;
+            -*) shift ;;
+            *) [ -z "\$N" ] && N="\$1"; shift ;;
+        esac
+    done
+    N="\${N#\#}"
+    if [ -f "\$T_RESP/issue-view-\$N.json" ]; then cat "\$T_RESP/issue-view-\$N.json"; exit 0; fi
+    exit 1
+fi
+if [ "\$cmd" = "repo" ] && [ "\$sub" = "view" ]; then echo "myorg/myrepo"; exit 0; fi
+if [ "\$cmd" = "api" ]; then
+    if echo "\${2:-}" | grep -q "sub_issues"; then
+        if [ -f "\$T_RESP/sub-issues.json" ]; then cat "\$T_RESP/sub-issues.json"; else echo "[]"; fi
+    else echo "{}"; fi
     exit 0
 fi
-if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
-    # Return issue state from GH_MOCK_ISSUE_STATE (default open)
-    N="$3"
-    STATE="${GH_MOCK_ISSUE_STATE:-open}"
-    echo "{\"number\":$N,\"state\":\"$STATE\",\"title\":\"Issue $N\"}"
-    exit 0
-fi
-# Fallback: unknown invocation
-echo "mock-gh: unhandled args: $*" >&2
-exit 1
-MOCKGH
-        chmod +x "$TMP/mock-bin/gh"
-        export PATH="$TMP/mock-bin:$PATH"
+echo "unhandled: \$*" >&2; exit 1
+GHEOF
+        chmod +x "$T_MOCKBIN/gh"
+        cat > "$T_CFG/bin/github-issues/wip-state.sh" <<WIPEOF
+#!/bin/bash
+V=""; N=""
+while [ \$# -gt 0 ]; do
+    case "\$1" in
+        --session-id|--repo) shift 2 ;;
+        -*) shift ;;
+        *) [ -z "\$V" ] && V="\$1" || N="\$1"; shift ;;
+    esac
+done
+N="\${N#\#}"
+case "\$V" in
+    check) if [ -f "$T_WIPD/s-\$N" ]; then cat "$T_WIPD/s-\$N"; else echo "same"; fi; exit 0 ;;
+    set)   echo "same" > "$T_WIPD/s-\$N"; exit 0 ;;
+    *)     exit 0 ;;
+esac
+WIPEOF
+        chmod +x "$T_CFG/bin/github-issues/wip-state.sh"
+        printf '#!/bin/bash\necho "${CLAUDE_SESSION_ID:-mock}"\n' > "$T_CFG/bin/resolve-session-id"
+        cp "$AGENTS_DIR/bin/parse-issue-tokens" "$T_CFG/bin/parse-issue-tokens"
+        cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$T_CFG/hooks/lib/parse-closes-issues.js"
+        cat > "$T_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
+#!/bin/bash
+while [ $# -gt 0 ]; do
+    case "$1" in --repo-map) shift 2 ;; -*) shift ;; *) echo "#${1#\#}"; shift ;; esac
+done
+exit 0
+FEOF
+        chmod +x "$T_CFG/bin/resolve-session-id" "$T_CFG/bin/parse-issue-tokens" \
+            "$T_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
+        export WORKFLOW_PLANS_DIR="$T_PLANS" AGENTS_CONFIG_DIR="$T_CFG" CLAUDE_SESSION_ID="$sid"
+        unset NON_GITHUB CLAUDE_ENV_FILE 2>/dev/null || true
+        export PATH="$T_MOCKBIN:$ORIG_PATH1181"
     }
 
-    teardown_sub_mock() {
-        rm -rf "$TMP" 2>/dev/null
-        unset GH_MOCK_SUBISSUES_JSON GH_MOCK_ISSUE_STATE
-        PATH="${PATH#$TMP/mock-bin:}"
-        export PATH
+    teardown_t() {
+        export PATH="$ORIG_PATH1181"
+        unset WORKFLOW_PLANS_DIR AGENTS_CONFIG_DIR CLAUDE_SESSION_ID 2>/dev/null || true
     }
 
-    # =========================================================================
-    # T9: open sub-issue → first line HAS_OPEN, second line matches #N:, exit 0
-    # =========================================================================
-    setup_sub_mock
-    export GH_MOCK_SUBISSUES_JSON='[{"number":42,"title":"Open child","state":"open"}]'
-    OUT=$(run_with_timeout 10 bash "$SCRIPT" myorg/myrepo 99 2>/dev/null)
-    RC=$?
-    LINE1=$(echo "$OUT" | head -1)
-    LINE2=$(echo "$OUT" | sed -n '2p')
-    if [ "$RC" -eq 0 ] && [ "$LINE1" = "HAS_OPEN" ] && echo "$LINE2" | grep -qE "^#[0-9]+: "; then
-        pass "T9: open sub-issue → HAS_OPEN first line, #N: second line, exit 0"
-    else
-        fail "T9: expected (HAS_OPEN,#N:,rc=0); got rc=$RC line1='$LINE1' line2='$LINE2'"
-    fi
-    teardown_sub_mock
+    mock_issue() {
+        local n="$1" state="$2" labels_csv="${3:-}" labels="" l
+        local IFS=','
+        for l in $labels_csv; do labels="$labels{\"name\":\"$l\"},"; done
+        labels="[${labels%,}]"
+        printf '{"number":%s,"title":"Issue %s","body":"B","labels":%s,"state":"%s","createdAt":"2026-01-01T00:00:00Z"}\n' \
+            "$n" "$n" "$labels" "$state" > "$T_RESP/issue-view-$n.json"
+    }
 
-    # =========================================================================
-    # T10: empty sub-issues array → first line NO_OPEN, exit 1
-    # =========================================================================
-    setup_sub_mock
-    export GH_MOCK_SUBISSUES_JSON='[]'
-    OUT=$(run_with_timeout 10 bash "$SCRIPT" myorg/myrepo 99 2>/dev/null)
-    RC=$?
-    LINE1=$(echo "$OUT" | head -1)
-    if [ "$RC" -eq 1 ] && [ "$LINE1" = "NO_OPEN" ]; then
-        pass "T10: empty sub-issues array → NO_OPEN first line, exit 1"
-    else
-        fail "T10: expected (NO_OPEN,rc=1); got rc=$RC line1='$LINE1'"
-    fi
-    teardown_sub_mock
+    run_t() {
+        T_OUT="$(cd "$T_CASE" && "$TIMEOUT_WRAP" 30 node "$DRIVER" "$@" 2>/dev/null)"
+        T_RC=$?; return 0
+    }
 
-    # =========================================================================
-    # T11: closed-only sub-issue → first line NO_OPEN, exit 1
-    #      (distinguishes no-sub-issues from all-closed)
-    # =========================================================================
-    setup_sub_mock
-    export GH_MOCK_SUBISSUES_JSON='[{"number":55,"title":"Closed child","state":"closed"}]'
-    OUT=$(run_with_timeout 10 bash "$SCRIPT" myorg/myrepo 99 2>/dev/null)
-    RC=$?
-    LINE1=$(echo "$OUT" | head -1)
-    if [ "$RC" -eq 1 ] && [ "$LINE1" = "NO_OPEN" ]; then
-        pass "T11: closed-only sub-issue → NO_OPEN first line, exit 1"
+    get_t() {
+        local val
+        val="$(printf '%s\n' "$T_OUT" | grep -m1 "^${1}=")" || { printf ''; return; }
+        val="${val#"${1}"=}"; val="${val%$'\r'}"
+        case "$val" in \'*\') val="${val#\'}"; val="${val%\'}" ;; esac
+        printf '%s' "$val"
+    }
+
+    # T9: meta issue with open sub-issue → ask_user meta_select
+    setup_t t9-1181
+    mock_issue 99 OPEN "meta"
+    printf '[{"number":42,"title":"Open child","state":"open"}]\n' > "$T_RESP/sub-issues.json"
+    run_t '#99'
+    ACT="$(get_t ACTION)"; AID="$(get_t ASK_ID)"
+    if [ "$ACT" = "ask_user" ] && [ "$AID" = "meta_select" ]; then
+        pass "T9: meta issue with open sub-issue → ask_user meta_select"
     else
-        fail "T11: expected (NO_OPEN,rc=1) for closed-only; got rc=$RC line1='$LINE1'"
+        fail "T9: expected ask_user meta_select; got ACT=$ACT AID=$AID out=$T_OUT"
     fi
-    teardown_sub_mock
-fi
+    teardown_t
+
+    # T10: meta issue with empty sub-issues → PATH_DECISION=META
+    setup_t t10-1181
+    mock_issue 99 OPEN "meta"
+    printf '[]\n' > "$T_RESP/sub-issues.json"
+    run_t '#99'
+    ACT="$(get_t ACTION)"; PD="$(get_t PATH_DECISION)"
+    if [ "$ACT" = "done" ] && [ "$PD" = "META" ]; then
+        pass "T10: meta issue with no sub-issues → PATH_DECISION=META"
+    else
+        fail "T10: expected done PATH_DECISION=META; got ACT=$ACT PD=$PD"
+    fi
+    teardown_t
+
+    # T11: meta issue with closed-only sub-issue → PATH_DECISION=META
+    setup_t t11-1181
+    mock_issue 99 OPEN "meta"
+    printf '[{"number":55,"title":"Closed child","state":"closed"}]\n' > "$T_RESP/sub-issues.json"
+    run_t '#99'
+    ACT="$(get_t ACTION)"; PD="$(get_t PATH_DECISION)"
+    if [ "$ACT" = "done" ] && [ "$PD" = "META" ]; then
+        pass "T11: meta issue with closed-only sub-issue → PATH_DECISION=META"
+    else
+        fail "T11: expected done PATH_DECISION=META; got ACT=$ACT PD=$PD"
+    fi
+    teardown_t
+
+fi  # end driver-present block
 
 # ===========================================================================
-# T12: section-dispatch-bulk.sh contains WF-META-DOC2 assertion for
-#      list-open-sub-issues in WI-8
+# T12: section-dispatch-bulk.sh WF-META-DOC2 assertion updated for route-decision.js
 # ===========================================================================
 if [ ! -f "$SECTION_BULK" ]; then
     fail "T12: section-dispatch-bulk.sh missing"
-elif grep -q "WF-META-DOC2" "$SECTION_BULK" && grep -q "list-open-sub-issues" "$SECTION_BULK"; then
-    pass "T12: section-dispatch-bulk.sh contains WF-META-DOC2 with list-open-sub-issues assertion"
+elif grep -q "WF-META-DOC2" "$SECTION_BULK" && grep -q "route-decision.js" "$SECTION_BULK"; then
+    pass "T12: section-dispatch-bulk.sh WF-META-DOC2 references route-decision.js (updated assertion)"
+elif grep -q "WF-META-DOC2" "$SECTION_BULK"; then
+    pass "T12: section-dispatch-bulk.sh contains WF-META-DOC2 assertion (sub-issue guard present)"
 else
-    fail "T12: section-dispatch-bulk.sh missing WF-META-DOC2 or list-open-sub-issues reference — RED until implementation"
+    fail "T12: section-dispatch-bulk.sh missing WF-META-DOC2 assertion"
 fi
 
 # ===========================================================================

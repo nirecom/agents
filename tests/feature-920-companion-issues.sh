@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-920-companion-issues.sh
-# Tests: bin/github-issues/find-companion-issues.sh, bin/github-issues/lib/companion-passes.sh, skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, .env.example
+# Tests: bin/github-issues/find-companion-issues.sh, bin/github-issues/lib/companion-passes.sh, bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js, skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, .env.example
 # Tags: companion-issues, workflow-init, clarify-intent, find-companion-issues, scope:issue-specific
 #
 # Dispatch + aggregate entrypoint for the feature-920-companion-issues split
