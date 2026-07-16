@@ -1,7 +1,7 @@
 #!/bin/bash
-# skills/workflow-init/scripts/filter-primary-candidates.sh
+# skills/workflow-init/scripts/filter-init-candidates.sh
 #
-# WI-3 primary candidate filter. Takes candidate issue numbers as positional args.
+# WI-3 init candidate filter. Takes candidate issue numbers as positional args.
 # Emits surviving candidates one per line in input order, exit 0 always.
 #
 # Two exclusion axes:
@@ -16,7 +16,7 @@
 #   - With repo context: "owner/repo#N"
 #   - Without repo context: "#N"
 #
-# Usage: filter-primary-candidates.sh [--repo-map IDX:owner/repo ...] [N...]
+# Usage: filter-init-candidates.sh [--repo-map IDX:owner/repo ...] [N...]
 # Env:   AGENTS_CONFIG_DIR (required)
 
 set -uo pipefail

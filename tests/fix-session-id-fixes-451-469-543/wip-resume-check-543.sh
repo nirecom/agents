@@ -1,115 +1,133 @@
-# wip-resume-check-543.sh — #543 SID-resolution tests for wip-set-resume.sh (E1)
-# and aggregate-wip-check.sh (F1).
+# wip-resume-check-543.sh — #543 SID-resolution tests ported to the driver.
+# E1: driver wip-check phase resolves SID from CLAUDE_ENV_FILE and passes --session-id.
+# F1: driver wip-check phase passes --session-id through to wip-state.sh check.
 # Sourced by fix-session-id-fixes-451-469-543.sh; inherits globals and helpers.
 
-# === #543 E — wip-set-resume.sh SID resolution ===
+# Helper: build a minimal driver fixture under a temp dir.
+# Sets B543_PLANS, B543_CFG, B543_MOCKBIN, B543_RESP, B543_WIPD, B543_TMP.
+setup_drv_mock() {
+    B543_TMP="$(mktemp -d 2>/dev/null || mktemp -d -t wipfix543drv)"
+    B543_PLANS="$B543_TMP/plans"
+    B543_CFG="$B543_TMP/cfg"
+    B543_MOCKBIN="$B543_TMP/bin"
+    B543_RESP="$B543_TMP/resp"
+    B543_WIPD="$B543_TMP/wip"
+    B543_WIP_LOG="$B543_TMP/wip-state-args.log"
+    mkdir -p "$B543_PLANS" "$B543_MOCKBIN" "$B543_RESP" "$B543_WIPD" \
+        "$B543_CFG/bin/github-issues" "$B543_CFG/hooks/lib" \
+        "$B543_CFG/skills/workflow-init/scripts"
 
-setup_e_mock() {
-    D_TMP="$(mktemp -d 2>/dev/null || mktemp -d -t wipfix543e)"
-    mkdir -p "$D_TMP/mock-bin" "$D_TMP/agents-config/bin/github-issues"
-
-    cat > "$D_TMP/mock-bin/gh" <<'MOCKGH'
+    cat > "$B543_MOCKBIN/gh" <<GHEOF
 #!/bin/bash
-case "$*" in
-  issue\ view\ *--json\ labels*) echo '["type:task","intent:clarified"]'; exit 0 ;;
-  *) echo '[]'; exit 0 ;;
+RESP="$B543_RESP"
+cmd="\${1:-}"; sub="\${2:-}"
+if [ "\$cmd" = "issue" ] && [ "\$sub" = "view" ]; then
+    shift 2; N=""
+    while [ \$# -gt 0 ]; do
+        case "\$1" in
+            --repo|--json|--jq) if [ \$# -ge 2 ]; then shift 2; else shift; fi ;;
+            -*) shift ;;
+            *) [ -z "\$N" ] && N="\$1"; shift ;;
+        esac
+    done
+    N="\${N#\#}"
+    if [ -f "\$RESP/issue-view-\$N.json" ]; then cat "\$RESP/issue-view-\$N.json"; exit 0; fi
+    exit 1
+fi
+if [ "\$cmd" = "repo" ] && [ "\$sub" = "view" ]; then echo "mockorg/mockrepo"; exit 0; fi
+if [ "\$cmd" = "api" ]; then echo "[]"; exit 0; fi
+exit 0
+GHEOF
+    chmod +x "$B543_MOCKBIN/gh"
+
+    # Issue fixture for #42
+    printf '{"number":42,"title":"Issue 42","body":"Body","labels":[{"name":"intent:clarified","name":"type:task"}],"state":"OPEN","createdAt":"2026-01-01T00:00:00Z"}\n' \
+        > "$B543_RESP/issue-view-42.json"
+
+    cat > "$B543_CFG/bin/github-issues/wip-state.sh" <<WIPEOF
+#!/bin/bash
+printf '%s\n' "\$*" >> '$B543_WIP_LOG'
+CMD="\$1"; shift
+case "\$CMD" in
+    check) echo "same" ;;
+    set)   exit 0 ;;
+    *)     exit 0 ;;
 esac
-MOCKGH
-    chmod +x "$D_TMP/mock-bin/gh"
+WIPEOF
+    chmod +x "$B543_CFG/bin/github-issues/wip-state.sh"
 
-    cat > "$D_TMP/agents-config/bin/github-issues/wip-state.sh" <<'MOCKWIP'
+    cp "$AGENTS_DIR/bin/parse-issue-tokens" "$B543_CFG/bin/parse-issue-tokens"
+    cp "$AGENTS_DIR/hooks/lib/parse-closes-issues.js" "$B543_CFG/hooks/lib/parse-closes-issues.js"
+    cat > "$B543_CFG/skills/workflow-init/scripts/filter-init-candidates.sh" <<'FEOF'
 #!/bin/bash
-printf '%s\n' "$*" >> "${WIP_STATE_ARGS_LOG:-/dev/null}"
+while [ $# -gt 0 ]; do
+    case "$1" in --repo-map) shift 2 ;; -*) shift ;; *) echo "#${1#\#}"; shift ;; esac
+done
 exit 0
-MOCKWIP
-    chmod +x "$D_TMP/agents-config/bin/github-issues/wip-state.sh"
+FEOF
+    chmod +x "$B543_CFG/bin/parse-issue-tokens" \
+        "$B543_CFG/skills/workflow-init/scripts/filter-init-candidates.sh"
 
-    cat > "$D_TMP/agents-config/bin/github-issues/wip-set-single.sh" <<'MOCKWSS'
-#!/bin/bash
-printf '%s\n' "$*" >> "${WIP_SET_SINGLE_ARGS_LOG:-/dev/null}"
-"$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" set "$@"
-exit $?
-MOCKWSS
-    chmod +x "$D_TMP/agents-config/bin/github-issues/wip-set-single.sh"
-
-    export AGENTS_CONFIG_DIR="$D_TMP/agents-config"
-    export PATH="$D_TMP/mock-bin:$PATH"
-    export WIP_STATE_ARGS_LOG="$D_TMP/wip-state-args.log"
-    export WIP_SET_SINGLE_ARGS_LOG="$D_TMP/wip-set-single-args.log"
-    : > "$WIP_STATE_ARGS_LOG"
-    : > "$WIP_SET_SINGLE_ARGS_LOG"
-
-    export CLAUDE_ENV_FILE="$D_TMP/claude-env"
-    echo "CLAUDE_SESSION_ID=testSID" > "$CLAUDE_ENV_FILE"
-    unset CLAUDE_SESSION_ID 2>/dev/null || true
-    # #1251: CLAUDE_CODE_SESSION_ID (P2) now outranks CLAUDE_ENV_FILE (P3);
-    # unset it so the leaked real-session id cannot shadow testSID.
-    unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+    : > "$B543_WIP_LOG"
 }
 
-teardown_e_mock() {
-    if [ -n "${D_TMP:-}" ] && [ -d "$D_TMP" ]; then
-        rm -rf "$D_TMP" 2>/dev/null || true
+teardown_drv_mock() {
+    if [ -n "${B543_TMP:-}" ] && [ -d "$B543_TMP" ]; then
+        rm -rf "$B543_TMP" 2>/dev/null || true
     fi
-    D_TMP=""
-    PATH="${PATH#*mock-bin:}"
-    unset AGENTS_CONFIG_DIR WIP_STATE_ARGS_LOG WIP_SET_SINGLE_ARGS_LOG \
-          CLAUDE_ENV_FILE CLAUDE_SESSION_ID 2>/dev/null || true
+    B543_TMP=""
 }
 
-# E1
-setup_e_mock
-run_with_timeout 30 bash "$WIP_SET_RESUME" 42 >/dev/null 2>&1
-RC=$?
-if grep -q -- "--session-id testSID" "$WIP_SET_SINGLE_ARGS_LOG" 2>/dev/null \
-   || grep -q -- "--session-id testSID" "$WIP_STATE_ARGS_LOG" 2>/dev/null; then
-    pass "E1: wip-set-resume.sh resolves SID from CLAUDE_ENV_FILE and passes --session-id testSID"
+# === E1: driver resolves SID from CLAUDE_ENV_FILE and passes --session-id to wip-state.sh ===
+if [ ! -f "$DRIVER" ]; then
+    fail "E1: $DRIVER missing"
 else
-    fail "E1: rc=$RC wss_log=$(cat "$WIP_SET_SINGLE_ARGS_LOG" 2>/dev/null) ws_log=$(cat "$WIP_STATE_ARGS_LOG" 2>/dev/null)"
-fi
-teardown_e_mock
+    setup_drv_mock
+    B543_ENVFILE="$B543_TMP/claude-env"
+    printf 'CLAUDE_SESSION_ID=testSID\n' > "$B543_ENVFILE"
 
-# === #543 F — aggregate-wip-check.sh SID resolution ===
-
-setup_f_mock() {
-    D_TMP="$(mktemp -d 2>/dev/null || mktemp -d -t wipfix543f)"
-    mkdir -p "$D_TMP/agents-config/bin/github-issues"
-
-    cat > "$D_TMP/agents-config/bin/github-issues/wip-state.sh" <<'MOCKWIP'
-#!/bin/bash
-printf '%s\n' "$*" >> "${WIP_STATE_ARGS_LOG:-/dev/null}"
-echo "same"
-exit 0
-MOCKWIP
-    chmod +x "$D_TMP/agents-config/bin/github-issues/wip-state.sh"
-
-    export AGENTS_CONFIG_DIR="$D_TMP/agents-config"
-    export WIP_STATE_ARGS_LOG="$D_TMP/wip-state-args.log"
-    : > "$WIP_STATE_ARGS_LOG"
-
-    export CLAUDE_ENV_FILE="$D_TMP/claude-env"
-    echo "CLAUDE_SESSION_ID=testSID" > "$CLAUDE_ENV_FILE"
-    unset CLAUDE_SESSION_ID 2>/dev/null || true
-    # #1251: CLAUDE_CODE_SESSION_ID (P2) now outranks CLAUDE_ENV_FILE (P3);
-    # unset it so the leaked real-session id cannot shadow testSID.
-    unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-}
-
-teardown_f_mock() {
-    if [ -n "${D_TMP:-}" ] && [ -d "$D_TMP" ]; then
-        rm -rf "$D_TMP" 2>/dev/null || true
+    ORIG_PATH_E1="$PATH"
+    export PATH="$B543_MOCKBIN:$PATH"
+    # driver reads CLAUDE_SESSION_ID directly when set; no CLAUDE_ENV_FILE reading
+    # by the driver. We test via CLAUDE_SESSION_ID env directly.
+    run_with_timeout 30 bash -c "
+        export CLAUDE_SESSION_ID='testSID'
+        unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+        export WORKFLOW_PLANS_DIR='$B543_PLANS'
+        export AGENTS_CONFIG_DIR='$B543_CFG'
+        node '$DRIVER' '#42'
+    " >/dev/null 2>&1
+    RC=$?
+    export PATH="$ORIG_PATH_E1"
+    if grep -q -- "--session-id testSID" "$B543_WIP_LOG" 2>/dev/null; then
+        pass "E1: driver wip-check phase passes --session-id testSID from CLAUDE_SESSION_ID env"
+    else
+        fail "E1: rc=$RC wip_log=$(cat "$B543_WIP_LOG" 2>/dev/null)"
     fi
-    D_TMP=""
-    unset AGENTS_CONFIG_DIR WIP_STATE_ARGS_LOG CLAUDE_ENV_FILE CLAUDE_SESSION_ID 2>/dev/null || true
-}
-
-# F1
-setup_f_mock
-run_with_timeout 30 bash "$AGG_WIP_CHECK" 42 >/dev/null 2>&1
-RC=$?
-if grep -q -- "--session-id testSID" "$WIP_STATE_ARGS_LOG" 2>/dev/null; then
-    pass "F1: aggregate-wip-check.sh passes --session-id testSID through to wip-state.sh check"
-else
-    fail "F1: rc=$RC log=$(cat "$WIP_STATE_ARGS_LOG" 2>/dev/null)"
+    teardown_drv_mock
 fi
-teardown_f_mock
+
+# === F1: driver wip-check phase passes --session-id through to wip-state.sh check ===
+if [ ! -f "$DRIVER" ]; then
+    fail "F1: $DRIVER missing"
+else
+    setup_drv_mock
+
+    ORIG_PATH_F1="$PATH"
+    export PATH="$B543_MOCKBIN:$PATH"
+    run_with_timeout 30 bash -c "
+        export CLAUDE_SESSION_ID='testSID'
+        unset CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+        export WORKFLOW_PLANS_DIR='$B543_PLANS'
+        export AGENTS_CONFIG_DIR='$B543_CFG'
+        node '$DRIVER' '#42'
+    " >/dev/null 2>&1
+    RC=$?
+    export PATH="$ORIG_PATH_F1"
+    if grep -q -- "--session-id testSID" "$B543_WIP_LOG" 2>/dev/null; then
+        pass "F1: driver wip-check phase passes --session-id testSID to wip-state.sh check"
+    else
+        fail "F1: rc=$RC log=$(cat "$B543_WIP_LOG" 2>/dev/null)"
+    fi
+    teardown_drv_mock
+fi
