@@ -114,6 +114,7 @@ if (require.main === module) {
       workflowSessionId,
       supervisorPath,
       stateFilePath,
+      actionableOnly: true,
     });
     if (!rendered) process.exit(0);
 
