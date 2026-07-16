@@ -494,3 +494,7 @@ Changes: EM Supervisor alert reviews now surface only actionable findings (sever
 ### FEATURE: PR #1471 (2026-07-17)
 Background: fix(#1255): supervisor reportBlock severity notice + block finding class dedup
 Changes: Hook blocks no longer arm supervisor alert mode on their own — `reportBlock` severity is now `notice`, and repeated blocks from the same hook on the same command are collapsed into a single finding with a count field
+
+### FEATURE: PR #1472 (2026-07-17)
+Background: feat(#1411): pkg-mgr × 7 + interpreter-c IR migration + retire (canary-6a Phase 2)
+Changes: Fix: chained interpreter commands (`bash -c '...'; sh -c 'rm file'`) were incorrectly fast-allowed from the main worktree — write bodies in subsequent segments were missed. Now correctly blocked.;Fix: `pwsh -command "..."` (lowercase flag) and `bash -lc "..."` (combined POSIX flag) were not detected as inline-script invocations and were incorrectly allowed from the main worktree. Now correctly blocked.
