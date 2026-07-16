@@ -92,6 +92,60 @@ assert_file_op_write() {
   fi
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# #1411 SSOT helpers: pkg-mgr (7 tools) and interpreter-c write detection moved
+# OUT of classify()/WRITE_PATTERNS INTO isPkgMgrWriteIR
+# (hooks/lib/bash-write-targets/pkg-mgr.js) and isInterpreterCWriteIR
+# (hooks/lib/bash-write-targets.js). A real pkg-mgr / interpreter-c write now
+# classifies "read"; detection is via these predicates === true. Pre-impl the
+# module/fn is missing → helper prints ERROR:* so the assertion FAILs cleanly.
+# ─────────────────────────────────────────────────────────────────────────────
+PKGMGR_HELPER="$TMPDIR_BASE/pkgmgr-helper.js"
+cat > "$PKGMGR_HELPER" <<'NODE_PM'
+const path = require("path");
+let m;
+try { m = require(path.join(process.argv[2], "hooks", "lib", "bash-write-targets", "pkg-mgr")); }
+catch (e) { process.stdout.write("ERROR:no-module"); process.exit(0); }
+if (typeof m.isPkgMgrWriteIR !== "function") { process.stdout.write("ERROR:not-exported"); process.exit(0); }
+const { parse } = require(path.join(process.argv[2], "hooks", "lib", "command-ir"));
+process.stdout.write(String(m.isPkgMgrWriteIR(parse(process.argv[3]))));
+NODE_PM
+
+INTERPC_HELPER="$TMPDIR_BASE/interpc-helper.js"
+cat > "$INTERPC_HELPER" <<'NODE_IC'
+const path = require("path");
+const m = require(path.join(process.argv[2], "hooks", "lib", "bash-write-targets"));
+if (typeof m.isInterpreterCWriteIR !== "function") { process.stdout.write("ERROR:not-exported"); process.exit(0); }
+const { parse } = require(path.join(process.argv[2], "hooks", "lib", "command-ir"));
+process.stdout.write(String(m.isInterpreterCWriteIR(parse(process.argv[3]))));
+NODE_IC
+
+# Assert a real pkg-mgr write: post-retire SSOT is classify=="read" + isPkgMgrWriteIR==true.
+assert_pkg_mgr_write() {
+  local label="$1" cmd="$2"
+  local c p
+  c="$(classify "$cmd")"
+  p="$(run_with_timeout 15 node "$PKGMGR_HELPER" "$AGENTS_DIR" "$cmd")"
+  if [ "$c" = "read" ] && [ "$p" = "true" ]; then
+    pass "$label → pkg-mgr-write (classify=read + isPkgMgrWriteIR=true)"
+  else
+    fail "$label → expected classify=read+isPkgMgrWriteIR=true, got classify='$c' isPkgMgrWriteIR='$p' (cmd: $cmd)"
+  fi
+}
+
+# Assert a real interpreter-c write: post-retire SSOT is classify=="read" + isInterpreterCWriteIR==true.
+assert_interpreter_c_write() {
+  local label="$1" cmd="$2"
+  local c i
+  c="$(classify "$cmd")"
+  i="$(run_with_timeout 15 node "$INTERPC_HELPER" "$AGENTS_DIR" "$cmd")"
+  if [ "$c" = "read" ] && [ "$i" = "true" ]; then
+    pass "$label → interpreter-c-write (classify=read + isInterpreterCWriteIR=true)"
+  else
+    fail "$label → expected classify=read+isInterpreterCWriteIR=true, got classify='$c' isInterpreterCWriteIR='$i' (cmd: $cmd)"
+  fi
+}
+
 # classify_raw_js: pass a raw JS expression as the classify() argument.
 # Used for edge-input tests (null, empty string, non-string) that cannot be
 # represented as bash variables.
