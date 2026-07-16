@@ -40,10 +40,10 @@ Check `AUTO_MERGE_PR`: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG
 Display URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED` → WE-7; else re-display and stop.
 
 ### Step WE-7 — Post-web-merge sync
-`git fetch --prune origin`, then emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"User confirmed PR #<N> merged via web UI"`) → WE-9.
+`git fetch --prune origin`, then emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"User confirmed PR #<N> merged via web UI"`) → WE-9. Keep CWD in the linked worktree throughout WE-7; do not switch to main worktree before WE-13.
 
 ### Step WE-8 — Local merge
-Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. Failure → surface error and stop.
+Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. Failure → surface error and stop. Keep CWD in the linked worktree throughout WE-8; do not switch to main worktree before WE-13.
 
 ### Step WE-9 — Gitignored state inventory
 Default backup dir: `<main_root>/.worktree-backup/<branch>/`.
@@ -78,6 +78,7 @@ If WE-15 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-wor
 - `<<WORKFLOW_ENFORCE_WORKTREE_OFF>>` must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
 - `git branch -D` (WE-19 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
 - `<<WORKFLOW_USER_VERIFIED>>` emitted in WE-8 (before merge), WE-7 (post-web-merge), or WE-4b (bootstrap). Never on abort or while polling. Protocol: `skills/_shared/user-verified.md`.
+- CWD must remain in the linked worktree from WE-7/WE-8 through WE-12; switch to main worktree only at WE-13.
 - `AUTO_MERGE_PR=on` skips AskUserQuestion in WE-5 (worktree mode only).
 - Secret values must not appear in the backup manifest.
 - Use `hooks/cleanup-orphan-dir.js` for orphan directory cleanup — never `rm -rf`.
