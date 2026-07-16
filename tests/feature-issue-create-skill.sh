@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: agents/issues/, agents/issues/100/sub_issues, agents/issues/201, agents/issues/201/sub_issues, agents/issues/42, agents/issues/9999, bin/gh, bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, skills/workflow-init/SKILL.md
+# Tests: agents/issues/, agents/issues/100/sub_issues, agents/issues/201, agents/issues/201/sub_issues, agents/issues/42, agents/issues/9999, bin/gh, bin/github-issues/issue-create-dispatch.sh, bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, skills/issue-create/scripts/run-bulk-dispatch.sh, skills/issue-create/scripts/run-phase5-record.sh, skills/workflow-init/SKILL.md
 # Tags: issue-create, github, sub-issue, frontmatter, tests, scope:issue-specific
 #
 # L3 gap (what this test does NOT catch):
@@ -64,6 +64,8 @@ SUB_DIR="$SCRIPT_DIR/feature-issue-create-skill"
 . "$SUB_DIR/section-dispatch-bulk.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/section-phase5-resolver.sh"
+# shellcheck source=/dev/null
+. "$SUB_DIR/section-scripts-existence.sh"
 
 # ---------------------------------------------------------------------------
 # Summary
