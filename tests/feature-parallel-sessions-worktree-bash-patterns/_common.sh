@@ -95,9 +95,37 @@ git_write_ir() {
     " -- "$1" 2>/dev/null
 }
 
+# pkg_mgr_write_ir <cmd> → "true"|"false" — isPkgMgrWriteIR in
+# hooks/lib/bash-write-targets/pkg-mgr.js (#1411). Pre-impl the module does not
+# exist → require() throws → emit ERROR:no-module so the assertion FAILs cleanly
+# (RED-pending) rather than aborting the harness.
+pkg_mgr_write_ir() {
+    run_with_timeout 30 node -e "
+      let m; try { m=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets/pkg-mgr'); }
+      catch (e) { process.stdout.write('ERROR:no-module'); process.exit(0); }
+      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      if (typeof m.isPkgMgrWriteIR !== 'function') { process.stdout.write('ERROR:not-exported'); process.exit(0); }
+      try { process.stdout.write(String(m.isPkgMgrWriteIR(parse(process.argv[1])))); }
+      catch (e) { process.stdout.write('ERROR:threw'); }
+    " -- "$1" 2>/dev/null
+}
+
+# interpreter_c_write_ir <cmd> → "true"|"false" — isInterpreterCWriteIR in
+# hooks/lib/bash-write-targets.js (#1411). Pre-impl the fn is undefined → the
+# typeof guard emits ERROR:not-exported → assertion FAILs cleanly (RED-pending).
+interpreter_c_write_ir() {
+    run_with_timeout 30 node -e "
+      const m=require('${_AGENTS_DIR_NODE}/hooks/lib/bash-write-targets');
+      const {parse}=require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+      if (typeof m.isInterpreterCWriteIR !== 'function') { process.stdout.write('ERROR:not-exported'); process.exit(0); }
+      try { process.stdout.write(String(m.isInterpreterCWriteIR(parse(process.argv[1])))); }
+      catch (e) { process.stdout.write('ERROR:threw'); }
+    " -- "$1" 2>/dev/null
+}
+
 # assert_write_ir <desc> <cmd> <predicate> — new-contract write assertion:
 # classify()=="read" AND the named predicate is true. <predicate> ∈
-# { posix | pwsh | fileop | subst | git }.
+# { posix | pwsh | fileop | subst | git | pkgmgr | interpc }.
 assert_write_ir() {
     local desc="$1" cmd="$2" pred="$3"
     local cls predval fn
@@ -109,11 +137,42 @@ assert_write_ir() {
         subst)  fn=isCommandSubstWriteIR; predval="$(pred_targets "$fn" "$cmd")" ;;
         newline) fn=isNewlineInjectedWriteIR; predval="$(pred_targets "$fn" "$cmd")" ;;
         git)    fn=isGitWriteIR;        predval="$(git_write_ir "$cmd")" ;;
+        pkgmgr) fn=isPkgMgrWriteIR;     predval="$(pkg_mgr_write_ir "$cmd")" ;;
+        interpc) fn=isInterpreterCWriteIR; predval="$(interpreter_c_write_ir "$cmd")" ;;
         *)      fail "$desc: unknown predicate '$pred'"; return ;;
     esac
     if [ "$cls" = "read" ] && [ "$predval" = "true" ]; then
         pass "$desc -> read + ${fn}=true (retired-write new contract)"
     else
         fail "$desc: expected classify=read + ${fn}=true, got classify='$cls' ${fn}='$predval' (cmd: $(printf '%q' "$cmd"))"
+    fi
+}
+
+# assert_pkg_mgr_read <desc> <cmd> — read-subcommand contract: classify()=="read"
+# AND isPkgMgrWriteIR==false. Pre-impl the predicate is missing → predval is an
+# ERROR string (not "false") → assertion FAILs cleanly (RED-pending).
+assert_pkg_mgr_read() {
+    local desc="$1" cmd="$2"
+    local cls predval
+    cls="$(classify_cmd "$cmd")"
+    predval="$(pkg_mgr_write_ir "$cmd")"
+    if [ "$cls" = "read" ] && [ "$predval" = "false" ]; then
+        pass "$desc -> read + isPkgMgrWriteIR=false"
+    else
+        fail "$desc: expected classify=read + isPkgMgrWriteIR=false, got classify='$cls' isPkgMgrWriteIR='$predval' (cmd: $(printf '%q' "$cmd"))"
+    fi
+}
+
+# assert_interpreter_c_read <desc> <cmd> — read contract for interpreter-c bodies:
+# classify()=="read" AND isInterpreterCWriteIR==false.
+assert_interpreter_c_read() {
+    local desc="$1" cmd="$2"
+    local cls predval
+    cls="$(classify_cmd "$cmd")"
+    predval="$(interpreter_c_write_ir "$cmd")"
+    if [ "$cls" = "read" ] && [ "$predval" = "false" ]; then
+        pass "$desc -> read + isInterpreterCWriteIR=false"
+    else
+        fail "$desc: expected classify=read + isInterpreterCWriteIR=false, got classify='$cls' isInterpreterCWriteIR='$predval' (cmd: $(printf '%q' "$cmd"))"
     fi
 }

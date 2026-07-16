@@ -55,6 +55,38 @@ FILEOP_CASES=(
     'cp a b'
 )
 
+# RETIRED pkg-mgr writes (#1411): classify=read + isPkgMgrWriteIR=true. The 7-tool
+# pkg-mgr WRITE_PATTERNS group (npm/pnpm/yarn/pip/uv/cargo/go) was migrated to the
+# IR predicate isPkgMgrWriteIR (hooks/lib/bash-write-targets/pkg-mgr.js). Pre-impl
+# the predicate is undefined → assert_write_ir FAILs cleanly (RED-pending).
+PKG_MGR_CASES=(
+    'npm install foo'
+    'npm ci'
+    'pnpm install'
+    'pnpm add lodash'
+    'yarn install'
+    'yarn add react'
+    'pip install pytest'
+    'pip3 install black'
+    'uv pip install requests'
+    'uv add ruff'
+    'cargo build'
+    'cargo check'
+    'cargo install ripgrep'
+    'go build ./...'
+    'go mod tidy'
+)
+
+# pkg-mgr READ subcommands: classify=read AND isPkgMgrWriteIR=false (inspection).
+PKG_MGR_READ_CASES=(
+    'npm list'
+    'pip show black'
+    'cargo tree'
+    'go env'
+    'go version'
+    'yarn info'
+)
+
 # RETIRED git writes: classify=read + isGitWriteIR=true.
 # NOTE: gh WRITE commands (Group B: pr merge, release create/edit/delete/upload,
 # api -X POST/PUT/PATCH/DELETE, issue create/delete, repo delete) are NOT here.
@@ -107,6 +139,12 @@ test_write_cases() {
     done
     for c in "${GIT_WRITE_CASES[@]}"; do
         assert_write_ir "git-write[$c]" "$c" git
+    done
+    for c in "${PKG_MGR_CASES[@]}"; do
+        assert_write_ir "pkg-mgr[$c]" "$c" pkgmgr
+    done
+    for c in "${PKG_MGR_READ_CASES[@]}"; do
+        assert_pkg_mgr_read "pkg-mgr-read[$c]" "$c"
     done
 }
 

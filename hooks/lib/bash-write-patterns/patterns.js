@@ -62,14 +62,8 @@ const WRITE_PATTERNS = [
   { name: "unzip", kind: "file-op", regex: /(?:^|[\s;|&])unzip\b/ },
   { name: "gunzip", kind: "file-op", regex: /(?:^|[\s;|&])gunzip\b/ },
   { name: "bunzip2", kind: "file-op", regex: /(?:^|[\s;|&])bunzip2\b/ },
-  // Package manager installs (write to node_modules, lock files, site-packages, etc.)
-  { name: "npm-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])npm\s+(?:install|ci|update|uninstall|i\b|run\b|exec\b|publish\b|pack\b|link\b)/ },
-  { name: "pnpm-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])pnpm\s+(?:install|add|remove|update|run\b|exec\b|publish\b|pack\b|link\b)/ },
-  { name: "yarn-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])yarn\s+(?:install|add|remove|upgrade|run\b|pack\b|publish\b|link\b|\b(?!list|info|why|outdated|audit))/ },
-  { name: "pip-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])pip(?:3)?\s+(?:install|uninstall|download)\b/ },
-  { name: "uv-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])uv\s+(?:pip\s+(?:install|uninstall)|add\b|remove\b|sync\b|lock\b)/ },
-  { name: "cargo-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])cargo\s+(?:build|install|update|publish|clean)\b/ },
-  { name: "go-write", kind: "pkg-mgr", regex: /(?:^|[\s;|&])go\s+(?:build|install|get|mod\s+(?:download|tidy|vendor))\b/ },
+  // pkg-mgr (npm/pnpm/yarn/pip/uv/cargo/go) retired to IR (#1411 canary-6a).
+  // isPkgMgrWriteIR in hooks/lib/bash-write-targets/pkg-mgr.js is the SSOT.
   // git mutating subcommands (kind git) retired from WRITE_PATTERNS (#1401):
   // the 18 git write forms + config-injection are now owned by isGitWriteIR
   // (IR-based SSOT). git write reaches the enforce-worktree main-worktree-allows
@@ -83,14 +77,8 @@ const WRITE_PATTERNS = [
   // enforcement nor session-scope check.
   // The kind:"gh" WRITE_PATTERNS group has been retired (#1296). gh write
   // detection is now owned solely by isGhWriteIR (IR-based SSOT) below.
-  // Interpreter -c / -Command: shell/interpreter invocations with inline body.
-  // Tested against ORIGINAL cmd (not stripped) — the inline body is irrelevant;
-  // the interpreter call itself is always a potential write.
-  // Path-qualified prefix (e.g. /bin/bash, /usr/bin/sh) is accepted via the
-  // optional `(?:\S*\/)?` group so wrappers cannot evade by spelling the
-  // interpreter as `/bin/bash` instead of `bash`.
-  { name: "interpreter-c", kind: "interpreter",
-    regex: /(?:^|[\s;|&])(?:\S*\/)?(?:bash|sh|zsh|dash|fish|pwsh|powershell|cmd)(?:\.exe)?\s+(?:-c\b|-Command\b|-EncodedCommand\b|\/c\b)/i },
+  // interpreter-c (bash/sh/zsh/pwsh -c/-Command/-EncodedCommand) retired to IR (#1411 canary-6a).
+  // isInterpreterCWriteIR in hooks/lib/bash-write-targets.js is the SSOT.
   // git-c-config-flag (kind git) retired (#1401): config-injection reachability
   // is now owned by isGitWriteIR (C3) — it returns true for `-c k=v` / --config-env
   // regardless of subcommand, so the fast-allow gate does not exit before
@@ -134,16 +122,14 @@ const QUOTING_ONLY_NAMES = new Set([
 // gh: NOT in STRIP_KINDS — the kind:"gh" WRITE_PATTERNS group was retired (#1296);
 //   gh write detection is now owned solely by isGhWriteIR (IR-based SSOT below),
 //   which operates on parsed argv tokens and is unaffected by quote-stripping.
-// Accepted tradeoff (AT-DP1, #416): adding "pkg-mgr" causes stripQuotedArgs to
-// collapse quoted write verbs (e.g. npm "install") into no-match → 'read'
-// (false-negative). Claude Code normally issues unquoted commands so real-world
-// impact is minimal. To recover true-positive detection for quoted writes, revert
-// this set and use a sentinel-only case-bypass instead.
+// AT-DP1 (#416): "pkg-mgr" has been removed from STRIP_KINDS because the
+// pkg-mgr WRITE_PATTERNS entries were retired to isPkgMgrWriteIR (#1411 canary-6a).
+// The tradeoff (stripQuotedArgs collapsing quoted write verbs) no longer applies.
 // Other kinds (posix [here-doc/here-string], interpreter) are
 // tested against the original command. here-doc/here-string in particular MUST
 // scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
 // stripHeredocBody contract depend on it (see classify() lines 160-190).
-const STRIP_KINDS = new Set(["file-op", "pkg-mgr", "pwsh-alias", "pwsh-encoded"]);
+const STRIP_KINDS = new Set(["file-op", "pwsh-alias", "pwsh-encoded"]);
 
 // Write command words that, when quoted at command-position, must still be
 // classified as write (#515). git/npm/gh excluded — too many false positives.
