@@ -28,6 +28,7 @@ function aggregateCategories(findings) {
  * @param {string} opts.stateFilePath
  * @param {boolean} [opts.forFinalReport] - when true, escape `<` to U+2039, normalize newlines, and suppress footer
  * @param {boolean} [opts.summaryOnly] - when true, return a 1-line summary instead of the full list
+ * @param {boolean} [opts.actionableOnly] - when true, return only severity>=warning findings, one line each; zero actionable → 1-line "no actionable findings" message
  */
 function formatLayer2Findings(findings, opts) {
   if (!Array.isArray(findings) || findings.length === 0) return null;
@@ -35,6 +36,7 @@ function formatLayer2Findings(findings, opts) {
   const { sessionId, workflowSessionId, supervisorPath, stateFilePath } = opts;
   const forFinalReport = opts.forFinalReport === true;
   const summaryOnly = opts.summaryOnly === true;
+  const actionableOnly = opts.actionableOnly === true;
 
   if (summaryOnly) {
     const SRANK = { error: 2, warning: 1, notice: 0 };
@@ -45,6 +47,25 @@ function formatLayer2Findings(findings, opts) {
       if (typeof s === "string" && (SRANK[s] !== undefined ? SRANK[s] : -1) > (SRANK[highestSev] !== undefined ? SRANK[highestSev] : -1)) highestSev = s;
     }
     return `[EM Supervisor] ${findings.length} finding(s), highest severity: ${highestSev}.`;
+  }
+  if (actionableOnly) {
+    const actionable = findings.filter(f => f && (f.severity === "error" || f.severity === "warning"));
+    if (actionable.length === 0) {
+      return "[EM Supervisor] Review complete — no actionable findings.";
+    }
+    const ISSUE_CREATE_CATEGORIES = new Set(["workflow", "intent", "outline", "detail", "test", "security"]);
+    const lines = [];
+    for (const f of actionable) {
+      let cats = Array.isArray(f.categories) ? f.categories.join(", ") : "(none)";
+      let detail = typeof f.detail === "string" ? f.detail : "(no detail)";
+      detail = escapeTokens(detail.replace(/[\r\n]+/g, " "));
+      cats = escapeTokens(cats);
+      let line = `[EM Supervisor] ${f.severity} (${cats}): ${detail}`;
+      const needsHint = Array.isArray(f.categories) && f.categories.some(c => ISSUE_CREATE_CATEGORIES.has(c));
+      if (needsHint) line += " [→ /issue-create 推奨]";
+      lines.push(line);
+    }
+    return lines.join("\n");
   }
   const wsidLabel = workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId;
 
