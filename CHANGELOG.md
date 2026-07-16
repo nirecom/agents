@@ -483,3 +483,7 @@ Changes: `/workflow-init` now runs its mechanical steps (issue fetch, WIP check,
 ### FEATURE: PR #1459 (2026-07-17)
 Background: fix(enforce-worktree): restore scratchpad-redirect and New-Item-Directory allow paths lost in PR #1420 IR-signature migration
 Changes: Fixed a regression where sanctioned commands run from the main worktree were wrongly blocked as "write from main worktree": creating a worktree directory with `New-Item -ItemType Directory` (worktree setup) and `git worktree remove` now work again.;Fixed session-artifact and scratchpad writes (heredoc/redirect targeting the workflow plans directory or the temporary scratchpad) being wrongly blocked from the main worktree.
+
+### FEATURE: PR #1460 (2026-07-17)
+Background: feat(#1261): labels.yml SSOT propagation to sibling repos via CI
+Changes: When `PROPAGATE_LABELS_PAT` secret is set, label changes in `.github/labels.yml` now automatically propagate to sibling repos (`dotfiles`, `my-private-repo`) via the new `propagate` CI job — sibling `labels.yml` files are overwritten with a GENERATED header to prevent direct edits.
