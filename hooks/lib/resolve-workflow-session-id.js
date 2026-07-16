@@ -17,6 +17,37 @@ function _readSessionIdFromWorktreeNotes(notesPath) {
 }
 
 /**
+ * Identify the "own" worktree root among `dirs`: the entry whose path is `cwd`
+ * itself or a proper ancestor of `cwd`. Uses path.resolve()-normalized prefix
+ * matching with a path-separator boundary (so `C:/git/wt1` does not match
+ * `C:/git/wt1-other`); on win32 the comparison is case-insensitive.
+ * When multiple ancestors qualify (nested worktrees), the deepest wins.
+ * Returns the ORIGINAL (unnormalized) dir string, or null when none matches.
+ */
+function _findOwnWorktreeDir(dirs, cwd) {
+  const norm = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+  const cwdNorm = norm(path.resolve(cwd));
+  let own = null;
+  let ownLen = -1;
+  for (const dir of dirs) {
+    if (!dir) continue;
+    const dirNorm = norm(path.resolve(dir));
+    const isMatch =
+      cwdNorm === dirNorm ||
+      (cwdNorm.startsWith(dirNorm) &&
+        (dirNorm.endsWith("/") ||
+          dirNorm.endsWith(path.sep) ||
+          cwdNorm[dirNorm.length] === "/" ||
+          cwdNorm[dirNorm.length] === path.sep));
+    if (isMatch && dirNorm.length > ownLen) {
+      own = dir;
+      ownLen = dirNorm.length;
+    }
+  }
+  return own;
+}
+
+/**
  * Resolve the workflow session ID (wsid) — the timestamped session prefix used by
  * plan artifacts in WORKFLOW_PLANS_DIR (e.g. `<YYYYMMDD-HHMMSS>-intent.md`).
  * Distinct from resolveSessionId() which returns the CC session UUID.
@@ -101,6 +132,45 @@ function resolveWorkflowSessionId(_ctx = {}) {
       // fall through
     }
   }
+
+  // Priority 1d: sibling worktree scan. Reached only after Priority 1–3
+  // (env-var-based) all fail. Own-worktree-first: identify the worktree root that
+  // is CWD itself or an ancestor of CWD (so a CWD in a linked-worktree SUBDIR still
+  // resolves to that worktree, not a sibling). If own's WORKTREE_NOTES.md yields a
+  // Session-ID, it wins immediately. Only NON-own entries are collected as siblings;
+  // multiple distinct sibling Session-IDs are ambiguous → null (fail-safe; do not
+  // fall through to Priority 4).
+  try {
+    const wtOut = execSync("git worktree list --porcelain", {
+      encoding: "utf8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"],
+    });
+    const worktreeDirs = [];
+    let current = null;
+    for (const line of wtOut.split("\n")) {
+      if (line.startsWith("worktree ")) {
+        current = line.slice("worktree ".length).trim();
+      } else if (line === "" && current !== null) {
+        if (current) worktreeDirs.push(current);
+        current = null;
+      }
+    }
+    // Handle last entry if no trailing blank line (R6).
+    if (current) worktreeDirs.push(current);
+
+    const ownDir = _findOwnWorktreeDir(worktreeDirs, process.cwd());
+    if (ownDir) {
+      const ownSid = _readSessionIdFromWorktreeNotes(path.join(ownDir, "WORKTREE_NOTES.md"));
+      if (ownSid) return ownSid; // own worktree wins over any sibling
+    }
+    const hits = new Set();
+    for (const dir of worktreeDirs) {
+      if (dir === ownDir) continue; // exclude own from the sibling set
+      const sid = _readSessionIdFromWorktreeNotes(path.join(dir, "WORKTREE_NOTES.md"));
+      if (sid) hits.add(sid);
+    }
+    if (hits.size === 1) return [...hits][0];
+    if (hits.size > 1) return null; // ambiguous: distinct Session-IDs → fail-safe
+  } catch (_) {}
 
   let entries;
   try {
