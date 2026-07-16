@@ -471,3 +471,7 @@ Changes: Fixed: `pre-commit` hook now blocks commits of modified `.env` files (p
 ### FEATURE: PR #1438 (2026-07-14)
 Background: fix(#1436): exclude FD-to-FD redirects from isPosixRedirWriteIR write detection
 Changes: Commands using `2>&1` or `>&2` (FD-to-FD redirects) no longer trigger a spurious write-block in the main worktree; regression from #1420.
+
+### FEATURE: PR #1451 (2026-07-17)
+Background: fix(#1443,#1442): WE-7/WE-8 linked-worktree CWD directives + CWD-independent session-ID fallback
+Changes: Worktree-end (WE-7/WE-8) now explicitly keeps the working directory in the linked worktree until the final cleanup step, preventing the premature-switch errors that previously forced a second user-verified sentinel.;When a git command fails because a branch is already checked out in another worktree, a guidance message now points to the conflicting worktree and the commands to resolve it.;Workflow sentinels are now recognized as the same session whether emitted from the linked or the main worktree (session resolution no longer depends on the current directory).
