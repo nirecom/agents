@@ -195,7 +195,9 @@ function innerCommandIsWrite(inner, recurse) {
   let innerIr;
   try { innerIr = parse(inner); } catch (_) { return true; }
   if (!innerIr || innerIr.parseFailure === true) return true;
-  if (isPosixRedirWriteIR(innerIr) || isPwshWriteIR(innerIr) || isFileOpWriteIR(innerIr) || isGitWriteIR(innerIr)) return true;
+  let isPkgMgrWriteIR;
+  try { ({ isPkgMgrWriteIR } = require("./bash-write-targets/pkg-mgr")); } catch (_) { isPkgMgrWriteIR = () => false; }
+  if (isPosixRedirWriteIR(innerIr) || isPwshWriteIR(innerIr) || isFileOpWriteIR(innerIr) || isGitWriteIR(innerIr) || isPkgMgrWriteIR(innerIr) || isInterpreterCWriteIR(innerIr)) return true;
   // Fail-closed widening: classify() sees interpreter-c wrappers (`sh -c '…'`)
   // and any WRITE_PATTERNS-flagged write that the narrow IR predicates above do
   // not individually cover. classify() never demotes a write to read, so adding
@@ -355,6 +357,57 @@ function findSegmentIsWrite(seg) {
   return false;
 }
 
+// True when any segment is a shell/interpreter invocation with a -c/-Command/-EncodedCommand/\/c
+// flag AND the inline body contains a write. This retires the "interpreter-c" WRITE_PATTERNS
+// entry (#1411 canary-6a) and provides IR-based re-parse of the body.
+// Fail-closed: any unrecognized/ambiguous form returns true (treats as write).
+// CIRCULAR DEPENDENCY NOTE: isReadOnlyInterpreterC (classify.js) is lazy-required inside
+// this function to avoid classify.js → bash-write-targets.js → classify.js cycle.
+const INTERP_NAMES = new Set(["bash", "sh", "zsh", "dash", "fish", "pwsh", "powershell", "cmd"]);
+
+// Returns true when any argv token is a -c style flag for the given interpreter.
+// interpBase must already be lowercased and .exe-stripped.
+// - POSIX shells: -c or combined short flags like -lc, -xc (single-dash, lowercase c).
+// - PowerShell: case-insensitive -c/-Command/-EncodedCommand.
+// - cmd: /c (case-insensitive).
+function hasCFlag(argv, interpBase) {
+  return argv.some((a) => {
+    const al = a.toLowerCase();
+    if (interpBase === "cmd") return al === "/c";
+    if (interpBase === "pwsh" || interpBase === "powershell")
+      return al === "-c" || al === "-command" || al === "-encodedcommand";
+    // POSIX shells: standalone -c or combined like -lc, -xc (lowercase c only)
+    return al === "-c" || (a.startsWith("-") && !a.startsWith("--") && /c/.test(a.slice(1)));
+  });
+}
+
+function isInterpreterCWriteIR(ir) {
+  if (!ir || ir.parseFailure === true) return false;
+  if (!ir.segments) return false;
+  for (const seg of ir.segments) {
+    const eff = resolveEffectiveCommand(seg);
+    if (eff == null) continue;
+    const base = commandBasename(eff);
+    if (base == null) continue;
+    const interpBase = base.toLowerCase().replace(/\.exe$/i, "");
+    if (!INTERP_NAMES.has(interpBase)) continue;
+    const argv = resolveEffectiveArgv(seg);
+    if (!argv || !hasCFlag(argv, interpBase)) continue;
+    // Segment is an interpreter with a -c flag: check if its body is a write.
+    // Lazy require to break classify.js ↔ bash-write-targets.js cycle.
+    let isReadOnlyInterpreterC;
+    try {
+      ({ isReadOnlyInterpreterC } = require("./bash-write-patterns/classify"));
+    } catch (_) { return true; } // fail-closed if classify unavailable
+    if (typeof isReadOnlyInterpreterC !== "function") return true;
+    // Use seg.rawText if available, else reconstruct from argv.
+    const rawText = seg.rawText || argv.join(" ");
+    // Write body → return true immediately; read body → continue checking remaining segments.
+    if (!isReadOnlyInterpreterC(rawText)) return true;
+  }
+  return false;
+}
+
 // True when any segment carries a hidden write inside an eval / xargs / find
 // action clause. Wire this into the SAME three sites as isCommandSubstWriteIR /
 // isNewlineInjectedWriteIR. Fail-safe: guard !ir / parseFailure at the top.
@@ -389,4 +442,5 @@ module.exports = {
   isCommandSubstWriteIR,
   isNewlineInjectedWriteIR,
   isExoticExecWriteIR,
+  isInterpreterCWriteIR,
 };

@@ -92,6 +92,15 @@ function classify(cmd) {
       const subCmd = ir.argv.find((a) => !a.startsWith("-"));
       if (subCmd && subCmd !== "reset") suppressedPatterns.add("git-reset");
     }
+    // #1411: pkg-mgr subcommands are shell commands, not PowerShell short aliases.
+    // npm ci (clean-install) is the known conflict with ci-alias (Copy-Item).
+    // Suppress all pwsh-alias patterns when cmd0 is a known pkg-mgr tool.
+    const PKG_MGR_CMDS = new Set(["npm", "pnpm", "yarn", "pip", "pip3", "uv", "cargo", "go"]);
+    if (ir.cmd0 && PKG_MGR_CMDS.has(ir.cmd0.toLowerCase())) {
+      for (const n of ["ci-alias", "ni-alias", "ri-alias", "mi-alias", "sc-alias", "ac-alias"]) {
+        suppressedPatterns.add(n);
+      }
+    }
 
     // --- end IR-based signal suppressors ---
 
@@ -133,16 +142,6 @@ function classify(cmd) {
       }
       if (reMatched.length === 0) return "read";
       if (reMatched.every((n) => QUOTING_ONLY_NAMES.has(n))) return "read";
-    }
-    // Re-classify bash -c / pwsh -Command when only interpreter-c matches
-    // and the inner body is read-only.
-    const nonQuotingMatches = matchedNames.filter((n) => !QUOTING_ONLY_NAMES.has(n));
-    if (
-      nonQuotingMatches.length === 1 &&
-      nonQuotingMatches[0] === "interpreter-c" &&
-      isReadOnlyInterpreterC(cmd)
-    ) {
-      return "read";
     }
     return "write";
   } catch (e) {
@@ -276,13 +275,17 @@ function isReadOnlyInterpreterC(cmd) {
       let segIr;
       try { segIr = parse(s); } catch (_) { return true; } // unparseable → fail-closed
       if (!segIr || segIr.parseFailure === true) return true;
+      // Lazy require isPkgMgrWriteIR to avoid circular dependency.
+      let isPkgMgrWriteIR;
+      try { ({ isPkgMgrWriteIR } = require("../bash-write-targets/pkg-mgr")); } catch (_) { isPkgMgrWriteIR = () => false; }
       return classify(segIr) === "write" ||
         isGitWriteIR(segIr) ||
         isPosixRedirWriteIR(segIr) ||
         isPwshWriteIR(segIr) ||
         isFileOpWriteIR(segIr) ||
         isCommandSubstWriteIR(segIr) ||
-        isExoticExecWriteIR(segIr);
+        isExoticExecWriteIR(segIr) ||
+        isPkgMgrWriteIR(segIr);
     };
     if (segments.some(innerSegIsWrite)) return false;
 

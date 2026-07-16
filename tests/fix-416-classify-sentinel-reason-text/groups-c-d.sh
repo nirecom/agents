@@ -6,11 +6,11 @@
 echo ""
 echo "--- Group C: Real writes remain write (should PASS now) ---"
 
-# T3.14: bare npm install → write (real write, unquoted)
-assert_classify \
+# T3.14: bare npm install → real pkg-mgr write. Post-#1411 retire: classify=read
+# + isPkgMgrWriteIR=true (pkg-mgr WRITE_PATTERNS migrated to the IR predicate).
+assert_pkg_mgr_write \
   "T3.14 npm install foo (bare)" \
-  "npm install foo" \
-  "write"
+  "npm install foo"
 
 # T3.14e/T3.15: gh commands are GitHub operations, not local worktree writes.
 # classify()'s contract is LOCAL-write detection (does this gate enforce-worktree?).
@@ -30,15 +30,14 @@ assert_classify \
   "gh pr merge 123 --squash" \
   "read"
 
-# T3.16: bare pip install → write
-assert_classify \
+# T3.16: bare pip install → real pkg-mgr write. Post-#1411: classify=read +
+# isPkgMgrWriteIR=true.
+assert_pkg_mgr_write \
   "T3.16 pip install pytest (bare)" \
-  "pip install pytest" \
-  "write"
+  "pip install pytest"
 
 echo ""
 echo "--- Group C2: Accepted false-negatives (quoted write verbs → read after STRIP_KINDS) ---"
-echo "    WILL FAIL until write-code adds pkg-mgr/gh to STRIP_KINDS"
 
 # T3.14b: quoted "install" verb → stripped → no npm-write match → read (AT-DP1)
 assert_classify \
@@ -64,12 +63,12 @@ assert_classify \
   'gh pr "merge" 123' \
   "read"
 
-# T3.14f: pwsh -Command "Remove-Item foo" → interpreter-c is NOT in STRIP_KINDS →
-# original cmd scanned → Remove-Item matches → write (existing behavior preserved).
-assert_classify \
-  "T3.14f pwsh -Command Remove-Item (interpreter-c not in STRIP_KINDS → write)" \
-  'pwsh -Command "Remove-Item foo"' \
-  "write"
+# T3.14f: pwsh -Command "Remove-Item foo" → interpreter-c write. Post-#1411 retire:
+# the interpreter-c WRITE_PATTERNS entry migrated to isInterpreterCWriteIR →
+# classify=read + isInterpreterCWriteIR=true.
+assert_interpreter_c_write \
+  "T3.14f pwsh -Command Remove-Item (interpreter-c → read + isInterpreterCWriteIR=true)" \
+  'pwsh -Command "Remove-Item foo"'
 
 echo ""
 echo "--- Group D: isSentinelEchoSafe security — unsafe reasons → write ---"

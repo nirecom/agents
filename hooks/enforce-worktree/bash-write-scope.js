@@ -13,8 +13,10 @@ const {
   extractStagedFiles,
   collectWriteTargetsFromSegments, FULL_VERB_SET,
   isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR,
+  isInterpreterCWriteIR,
 } = require("../lib/bash-write-targets");
 const { extractGitWriteTargets } = require("../lib/bash-write-targets/git");
+const { isPkgMgrWriteIR, extractPkgMgrWriteTargets } = require("../lib/bash-write-targets/pkg-mgr");
 
 function isInSessionScope(repoRoot, sessionRoots) {
   if (!repoRoot) return false;
@@ -68,6 +70,19 @@ function collectBashWriteTargets(ir, repoRoot) {
     }
     if (gitTargets.length > 0) {
       const merged = (green.targets || []).concat(gitTargets);
+      return { targets: merged, parseFailure: green.parseFailure };
+    }
+  }
+
+  // Pkg-mgr self-target merge: only when repoRoot was passed AND this is a pkg-mgr write.
+  if (repoRoot !== undefined && isPkgMgrWriteIR(ir)) {
+    const pkgMgrTargets = extractPkgMgrWriteTargets(ir, repoRoot);
+    if (pkgMgrTargets === null) {
+      // pkg-mgr write but repoRoot unresolvable → fail-closed.
+      return { targets: green.targets, parseFailure: true };
+    }
+    if (pkgMgrTargets.length > 0) {
+      const merged = (green.targets || []).concat(pkgMgrTargets);
       return { targets: merged, parseFailure: green.parseFailure };
     }
   }
@@ -237,6 +252,8 @@ function isEverySegmentExcluded(ir, repoRoot, patterns) {
     // resolvable local file target to EXCLUDE-check. Fail closed to the block,
     // same treatment as gh writes (final shell-layer round).
     if (isExoticExecWriteIR(segIr)) return false;
+    if (isPkgMgrWriteIR(segIr)) return false;
+    if (isInterpreterCWriteIR(segIr)) return false;
     const isGitWrite = isGitWriteIR(segIr);
     const isWriteSeg = classify(segIr) === "write" ||
       isPosixRedirWriteIR(segIr) || isPwshWriteIR(segIr) || isFileOpWriteIR(segIr) ||
