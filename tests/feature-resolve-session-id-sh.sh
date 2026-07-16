@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/resolve-session-id, hooks/lib/workflow-state/session-id.js, bin/lib/codex-core.sh, bin/lib/gemini-core.sh, bin/github-issues/wip-state/session-id.sh, skills/workflow-init/scripts/aggregate-wip-check.sh, skills/workflow-init/scripts/wip-set-resume.sh, bin/issue-close-write-outcome.js
+# Tests: bin/resolve-session-id, hooks/lib/workflow-state/session-id.js, bin/lib/codex-core.sh, bin/lib/gemini-core.sh, bin/github-issues/wip-state/session-id.sh, bin/workflow/workflow-init-driver, bin/issue-close-write-outcome.js
 # Tags: scope:common, pwsh-not-required, session-id, bridge
 # Tests for bin/resolve-session-id (bash bridge) and all callers — Issue #1251.
 #
