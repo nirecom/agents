@@ -490,4 +490,8 @@ Changes: FEATURE #1411 (canary-6a Phase 2): Retired 8 surface-regex WRITE_PATTER
 
 ### FEATURE: PR #1473 — refactor/scriptify-mop-skill-1464 (2026-07-17, 0325115, #1473)
 Background: refactor(#1464): extract inline node -e from make-outline-plan/SKILL.md into scripts
-Changes: REFACTOR #1464: Extract inline `node -e` calls from `skills/make-outline-plan/SKILL.md` (MOP-1d, MOP-C1) into `skills/make-outline-plan/scripts/check-outline-skip.sh` and `check-detail-skip.sh`; update tests that grep those patterns <!-- compose-doc-append-sentinel: branch=refactor/scriptify-mop-skill-1464 pr=#1473 -->
+Changes: REFACTOR #1464: Extract inline `node -e` calls from `skills/make-outline-plan/SKILL.md` (MOP-1d, MOP-C1) into `skills/make-outline-plan/scripts/check-outline-skip.sh` and `check-detail-skip.sh`; update tests that grep those patterns <!-- compose-doc-append-sentinel: branch=refactor/scriptify-mop-skill-1464 pr=#1473 -->
+
+### FEATURE: PR #1474 — chore/1467-write-tests (2026-07-17, a94bcb2a360e85f60921bfe343bf7cbed7201220, #1474)
+Background: refactor(#1467): scriptify issue-create Phase 4-5 dispatch
+Changes: REFACTOR #1467: scriptify issue-create Phase 4-5 dispatch — extracted Phase 4 bulk-sub-of TSV manifest write + dispatch call and Phase 5 worktree-notes-append loop from skills/issue-create/SKILL.md (175 lines, WARN >100) into skills/issue-create/scripts/run-bulk-dispatch.sh and skills/issue-create/scripts/run-phase5-record.sh; SKILL.md Phase 4/5 sections replaced with single-line script invocation directives, resolving rules/prompt.md §1.3 violation <!-- compose-doc-append-sentinel: branch=chore/1467-write-tests pr=#1474 -->
