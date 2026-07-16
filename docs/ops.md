@@ -95,6 +95,35 @@ Canonical rules: [`rules/github-issues.md` § Session model](../rules/github-iss
 
 ---
 
+## Label Propagation PAT (PROPAGATE_LABELS_PAT)
+
+The `propagate` job in `.github/workflows/sync-labels.yml` pushes canonical `.github/labels.yml`
+changes from this repo to the sibling repos (`dotfiles`, `dotfiles-private`) and syncs their
+GitHub label API objects to match. It runs only after the self-sync `sync` job succeeds.
+
+**Required scope:** `repo`. Because `dotfiles-private` is a private repository, the narrower
+`public_repo` scope is insufficient — the token must carry the full `repo` scope.
+
+**Creating the token:** GitHub → Settings → Developer settings → Personal access tokens (classic)
+→ Generate new token → select the `repo` scope → generate and copy the value. Then, in this repo:
+Settings → Secrets and variables → Actions → New repository secret → name it `PROPAGATE_LABELS_PAT`
+→ paste the token value → save.
+
+**When the secret is absent:** the `propagate` job skips (it logs `PROPAGATE_LABELS_PAT not set —
+skipping propagation`), the sibling repos are left untouched, and the self-sync `sync` job still
+runs normally. No propagation failure is raised.
+
+**First run:** once the PAT is registered, pushing any change to `.github/labels.yml` or
+`bin/github-issues/sync-labels.sh` (or triggering a manual `workflow_dispatch`) fires the first
+propagation. Each sibling's `labels.yml` is overwritten with the canonical 13-label content
+prefixed by the `# GENERATED — …` header, then committed and pushed.
+
+**Branch-protection note:** if a sibling's `main` branch has branch protection enabled, the
+direct push is rejected and that sibling is recorded as a failure (the others still proceed).
+Neither sibling currently has branch protection, so the direct push succeeds today.
+
+---
+
 ## Worktree-end / Merge Operations
 
 ### `AUTO_MERGE_PR=on` — do not press the GitHub UI merge button
