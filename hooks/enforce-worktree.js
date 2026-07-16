@@ -17,7 +17,6 @@
 "use strict";
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
@@ -35,28 +34,13 @@ const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, hasCommandSequencingOutsideHeredoc, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
 const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop } = require("./enforce-worktree/main-worktree-allows");
-const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
+const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 const { buildExtras } = require("./enforce-worktree/block-extras");
 
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch (e) {
-    return "";
-  }
-}
-
-// Resolve WORKTREE_BASE_DIR with ~ expansion and a default of ~/git/worktrees.
-// Per rules/worktree.md, this is the parent directory all linked worktrees live under.
-function getWorktreeBaseDirResolved() {
-  const raw = (process.env.WORKTREE_BASE_DIR || "").trim();
-  const baseRaw = raw || path.join(os.homedir(), "git", "worktrees");
-  const expanded = baseRaw.startsWith("~")
-    ? path.join(os.homedir(), baseRaw.slice(1).replace(/^[\/\\]/, ""))
-    : baseRaw;
-  return path.resolve(expanded);
-}
+// readStdin / getWorktreeBaseDirResolved moved to enforce-worktree/entry-helpers.js
+// (file-split, rules/coding/file-split.md). getWorktreeBaseDirResolved stays re-exported below.
+const { readStdin, getWorktreeBaseDirResolved } = require("./enforce-worktree/entry-helpers");
 
 // Captured at hook-input parse time so the `done()` helper can self-report on block.
 let _reportContext = { sessionId: undefined, command: undefined, toolName: undefined, extras: undefined };
@@ -324,7 +308,7 @@ if (toolName === "Bash") {
         // Non-git CWD (#878): allow when all targets are provably under plans-dir;
         // arbitrary external paths (e.g. /tmp/x) remain fail-closed.
         if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
-            (repoRoot || areAllBashTargetsUnderPlansDir(targets))) done();
+            (repoRoot || areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets))) done();
 
         // Bug 1: all targets covered by EXCLUDE → allow.
         if (excludePatterns.length > 0 &&
@@ -332,7 +316,7 @@ if (toolName === "Bash") {
           done();
         }
       } else if (!hasCommandSequencingOutsideHeredoc(cmd) &&
-                 areAllBashTargetsUnderPlansDir(targets)) {
+                 (areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets))) {
         // #1109: sequencing operators appear ONLY inside a heredoc body (e.g.
         // shell fragments written by `cat <<'EOF' > plans-dir/file.md`).
         // The actual write target is under plans-dir — allow.
