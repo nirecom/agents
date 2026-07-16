@@ -23,7 +23,7 @@ function reportBlock(hook, command, sessionId, extras = {}) {
   try {
     const finding = {
       categories: ["workflow"],
-      severity: "error",
+      severity: "notice",
       detail: `hook blocked: ${hook} on ${command || "<unknown>"}`,
       reporter: hook,
     };
