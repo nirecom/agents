@@ -23,20 +23,15 @@ else
     fail "W5: SKILL.md must retain ISSUES= AND must NOT contain 'Move the selected entry to index 0'"
 fi
 
-# W6a: >=2 branch bullet must NOT fire AskUserQuestion or mention 'primary issue' (primary-abolition).
-if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "W6a: >=2 branch no-AskUserQuestion check (file not found)"
+# W6a: >=2 issues handled by driver detect-issues phase (no AskUserQuestion for primary selection).
+# Driver detect-issues.js processes all tokens without interactive narrowing.
+DETECT_ISSUES_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/detect-issues.js"
+if [ ! -f "$DETECT_ISSUES_JS" ]; then
+    fail "W6a: driver detect-issues.js not found (>=2 branch check failed)"
+elif grep -qiE "(AskUserQuestion|pick.one|primary.issue)" "$DETECT_ISSUES_JS"; then
+    fail "W6a: detect-issues.js must not invoke AskUserQuestion or reference 'primary issue'"
 else
-    PLUS_BULLET=$(grep -E "\*\*>=2\*\*" "$WORKFLOW_INIT_MD" | head -1 || true)
-    if [ -z "$PLUS_BULLET" ]; then
-        fail "W6a: no '**>=2**' marker found in SKILL.md"
-    elif printf '%s' "$PLUS_BULLET" | grep -qF '`AskUserQuestion`'; then
-        fail "W6a: >=2 branch bullet must not invoke AskUserQuestion (primary-abolition regression)"
-    elif printf '%s' "$PLUS_BULLET" | grep -qF "primary issue"; then
-        fail "W6a: >=2 branch bullet must not contain 'primary issue' (primary-abolition regression)"
-    else
-        pass "W6a: >=2 branch bullet contains neither 'AskUserQuestion' nor 'primary issue'"
-    fi
+    pass "W6a: detect-issues.js handles >=2 tokens without AskUserQuestion or primary-issue narrowing"
 fi
 assert_absent_local "$WORKFLOW_INIT_MD" "pick one" \
     "W6b: 'pick one' (old narrowing behavior) is absent from SKILL.md"
@@ -95,18 +90,21 @@ else
     fi
 fi
 
-# W12: WI-4 text covers all-N fetch (loop over all ISSUES, not primary-only).
+# W12: WI-4 (driver fetch-issues phase) covers all-N fetch.
 echo ""
 echo "--- Issue #797: all-N routing assertions ---"
 
-if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "W12: WI-4 all-N fetch check (file not found)"
+FETCH_ISSUES_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/fetch-issues.js"
+if [ ! -f "$FETCH_ISSUES_JS" ]; then
+    fail "W12a: driver fetch-issues.js not found (all-N fetch check failed)"
+elif grep -qE "(for|forEach|map|issues\.)" "$FETCH_ISSUES_JS" && grep -qE "issue.*view|gh.*issue" "$FETCH_ISSUES_JS"; then
+    pass "W12a: driver fetch-issues.js contains all-N loop fetching via gh issue view"
 else
-    if grep -qE "for each N in .ISSUES|ISSUES\[@\].*gh issue view|gh issue view.*ISSUES\[@\]|loop.*ISSUES|each.*N.*fetch" "$WORKFLOW_INIT_MD"; then
-        pass "W12a: WI-4 contains all-N fetch pattern"
-    else
-        fail "W12a: WI-4 must reference all-N fetch pattern (ISSUES[@] loop or similar)"
-    fi
+    fail "W12a: driver fetch-issues.js must contain a loop for gh issue view per N"
+fi
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W12b: SKILL.md not found"
+else
     assert_absent_local "$WORKFLOW_INIT_MD" "from the primary's \`gh issue view\`" \
         "W12b: WI-4 no longer has primary-only fetch reference in label-extract context"
 fi
@@ -119,15 +117,18 @@ else
         "W13: WI-7 no longer extracts labels from the primary's gh issue view JSON only"
 fi
 
-# W14: WI-8 routing predicate covers all N (not just primary).
-if [ ! -f "$WORKFLOW_INIT_MD" ]; then
-    fail "W14: WI-8 all-N predicate (file not found)"
+# W14: WI-8 (driver route-decision phase) routing predicate covers all N.
+ROUTE_DECISION_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/route-decision.js"
+if [ ! -f "$ROUTE_DECISION_JS" ]; then
+    fail "W14a: driver route-decision.js not found (all-N predicate check failed)"
+elif grep -qE "(every|all|forEach|issues\.)" "$ROUTE_DECISION_JS" && grep -qE "intent.clarified" "$ROUTE_DECISION_JS"; then
+    pass "W14a: driver route-decision.js contains all-N routing predicate with intent:clarified"
 else
-    if grep -qE "ALL N|all N|intent:clarified.*every N|every N.*intent:clarified" "$WORKFLOW_INIT_MD"; then
-        pass "W14a: WI-8 contains all-N routing predicate"
-    else
-        fail "W14a: WI-8 must contain all-N routing predicate (ALL N or every N)"
-    fi
+    fail "W14a: driver route-decision.js must contain all-N routing predicate (every N intent:clarified check)"
+fi
+if [ ! -f "$WORKFLOW_INIT_MD" ]; then
+    fail "W14b: SKILL.md not found"
+else
     assert_absent_local "$WORKFLOW_INIT_MD" "labels of primary" \
         "W14b: WI-8 no longer routes on 'labels of primary'"
 fi

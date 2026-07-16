@@ -1,11 +1,13 @@
 #!/bin/bash
 # tests/feature-920-companion-issues/b-series.sh
-# Tests: skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md
+# Tests: skills/workflow-init/SKILL.md, skills/clarify-intent/SKILL.md, bin/workflow/workflow-init-driver, bin/workflow/lib/workflow-init/phases/wip-check.js
 # Tags: companion-issues, workflow-init, clarify-intent, scope:issue-specific
 #
-# B-series: SKILL.md prose contracts — WI-5 deletion + WI-6..13 → WI-5..12
-# renumber + CI-2b update (reason field + own search). RED until source is
-# rewritten.
+# B-series: SKILL.md prose contracts — WI-5 deletion + CI-2b update (reason
+# field + own search). The workflow-init driver rewrite moved the aggregate
+# WIP check (B2) and the non-GitHub gate (B9) from SKILL.md step prose into
+# bin/workflow/workflow-init-driver + lib phases; those assertions target the
+# driver sources now.
 #
 # L3 gap (what these tests do NOT catch):
 # - Whether workflow-init or clarify-intent actually invoke the companion-search
@@ -35,16 +37,25 @@ else
     fail "B1: workflow-init SKILL.md not found"
 fi
 
-# B2: WI-5 (renumbered) is now "Aggregate WIP check" — was WI-6 before #968.
-if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    if grep -qE "^### Step WI-5 — Aggregate" "$WORKFLOW_INIT_SKILL" \
-        || grep -qE "^### Step WI-5 .*WIP check" "$WORKFLOW_INIT_SKILL"; then
-        pass "B2: WI-5 heading is now 'Aggregate WIP check' (post-renumber)"
+# B2: Aggregate WIP check — the former WI-5 step prose moved into the driver
+# phase bin/workflow/lib/workflow-init/phases/wip-check.js (workflow-init
+# driver rewrite). Protected concept unchanged: the aggregate classification
+# (any_other → conflict ask / ALL_NONE → fresh claim + Path B force) exists,
+# and SKILL.md WI-2 names "Aggregate WIP check" as the WIP entry point.
+WIP_PHASE="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+if [ -f "$WIP_PHASE" ] && [ -f "$WORKFLOW_INIT_SKILL" ]; then
+    a=0; b=0; c=0; d=0
+    grep -qF "Aggregate WIP check" "$WORKFLOW_INIT_SKILL" && a=1
+    grep -qF 'askId: "wip_conflict"' "$WIP_PHASE" && b=1
+    grep -qF "noneIssues.length === issues.length" "$WIP_PHASE" && c=1
+    grep -qF "force_path_b" "$WIP_PHASE" && d=1
+    if [ "$a" -eq 1 ] && [ "$b" -eq 1 ] && [ "$c" -eq 1 ] && [ "$d" -eq 1 ]; then
+        pass "B2: aggregate WIP check lives in wip-check.js and SKILL.md WI-2 names it"
     else
-        fail "B2: WI-5 heading not 'Aggregate WIP check' (renumber not yet applied)"
+        fail "B2: aggregate WIP check incomplete (skill=$a conflict=$b all-none=$c force-b=$d)"
     fi
 else
-    fail "B2: workflow-init SKILL.md not found"
+    fail "B2: wip-check.js or workflow-init SKILL.md not found"
 fi
 
 # B3: WI-13 must NOT exist any more (max is WI-12 post-renumber).
@@ -144,18 +155,27 @@ else
     fail "B10: clarify-intent SKILL.md not found"
 fi
 
-# B9: WI-2 gate ranges renumbered to WI-3..WI-8 (skip) + WI-9..WI-12 (run normally)
-if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    a=0; b=0
-    grep -q "WI-3..WI-8" "$WORKFLOW_INIT_SKILL" && a=1
-    grep -q "WI-9..WI-12" "$WORKFLOW_INIT_SKILL" && b=1
-    if [ "$a" -eq 1 ] && [ "$b" -eq 1 ]; then
-        pass "B9: WI-2 gate ranges updated to WI-3..WI-8 / WI-9..WI-12"
+# B9: WI-2 non-GitHub gate — the step-range prose ("skip WI-3..WI-8, run
+# WI-9..WI-12 normally") moved into the driver entrypoint
+# bin/workflow/workflow-init-driver (workflow-init driver rewrite). Protected
+# concept unchanged: NON_GITHUB=1 short-circuits the gh-dependent phases but
+# still writes context.md and emits done/Path C; SKILL.md documents the
+# NON_GITHUB=1 → Path C routing.
+DRIVER_BIN="$AGENTS_DIR/bin/workflow/workflow-init-driver"
+if [ -f "$DRIVER_BIN" ] && [ -f "$WORKFLOW_INIT_SKILL" ]; then
+    a=0; b=0; c=0
+    grep -qF 'process.env.NON_GITHUB === "1"' "$DRIVER_BIN" && a=1
+    NONGH_BLOCK=$(awk '/if \(nonGithub\) \{/{flag=1} flag{print} flag && /^  \}/{flag=0}' "$DRIVER_BIN" 2>/dev/null || true)
+    if echo "$NONGH_BLOCK" | grep -q "writeContext" \
+        && echo "$NONGH_BLOCK" | grep -qF 'emitDone(ckptFile, "C")'; then b=1; fi
+    grep -qF "NON_GITHUB=1" "$WORKFLOW_INIT_SKILL" && c=1
+    if [ "$a" -eq 1 ] && [ "$b" -eq 1 ] && [ "$c" -eq 1 ]; then
+        pass "B9: NON_GITHUB gate short-circuits driver to done/Path C (context.md still written)"
     else
-        fail "B9: WI-2 gate ranges still legacy (3-8=$a 9-12=$b)"
+        fail "B9: NON_GITHUB gate incomplete (env-gate=$a short-circuit=$b skill-doc=$c)"
     fi
 else
-    fail "B9: workflow-init SKILL.md not found"
+    fail "B9: workflow-init-driver or workflow-init SKILL.md not found"
 fi
 
 echo ""

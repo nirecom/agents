@@ -16,62 +16,39 @@ First step of every workflow session. Routes on GH issue context: Path A (`#N` +
 
 Canonical: `skills/_shared/resolve-plans-dir.md`. Substitute the resolved absolute path for every `<PLANS_DIR>` placeholder below. Subagent prompts must receive literals — they cannot expand `$VAR`.
 
-### Step WI-2 — Non-GitHub remote gate
+### Step WI-2 — Driver loop
 
-Canonical: `skills/_shared/non-github-remote-gate.md`. `NON_GITHUB=1` → skip Steps WI-3..WI-8 (issue detection / `gh issue view` / route logic), proceed as **Path C**. Steps WI-9..WI-12 (context.md write, survey launch, C1–C2) run as normal.
+The driver (`bin/workflow/workflow-init-driver`) handles WI-3..WI-9: token detection, `gh issue view` fetch for each N in `ISSUES`, Aggregate WIP check (all N: all_same / all_none / any_other), CLOSED detection, label extraction, route decision, and context.md write. The driver writes the checkpoint and `<SID>-context.md` directly under PLANS_DIR (outside git repos → ENFORCE_WORKTREE does not apply).
 
-### Step WI-3 — Detect `#N`
+Invocation: `node "$AGENTS_CONFIG_DIR/bin/workflow/workflow-init-driver" <raw-tokens> 2>/dev/null`
 
-Regex `(?:[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)?#\d+` (detects all three forms: `#N`, `repo#N`, `owner/repo#N`):
-- **0** → Path C.
-- **1** → pipe the single token to `node "$AGENTS_CONFIG_DIR/bin/parse-issue-tokens" "<token>"` to get `[{number, repo?}]`. Set `ISSUES=(<number>)`. If `repo` is present and short-form (no `/`), resolve via `gh repo view "<repo>" --json owner,name --jq '.owner.login + "/" + .name'`; on failure, use AskUserQuestion to confirm CWD fallback. Build `REPO_MAP_ARGS` array: for each entry with `repo` field set, add `--repo-map 0:<resolved-owner/repo>`.
-- **>=2** → Pipe all found raw tokens (space-separated) to `node "$AGENTS_CONFIG_DIR/bin/parse-issue-tokens" <tokens...>` to get `[{number, repo?}]` for each. For each entry with `repo` field: if short-form (no `/`), resolve via `gh repo view "<repo>" --json owner,name --jq '.owner.login + "/" + .name'`; on failure, AskUserQuestion to confirm CWD fallback (do NOT silently fall back). Build `REPO_MAP_ARGS` array: for each entry at index `i` with `repo` set, add `--repo-map i:<resolved-owner/repo>`. Pass bare issue numbers AND `"${REPO_MAP_ARGS[@]}"` to `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/filter-primary-candidates.sh" "${REPO_MAP_ARGS[@]}" <bare-numbers...>`. Pipe `filter-primary-candidates.sh` stdout lines to `node "$AGENTS_CONFIG_DIR/bin/parse-issue-tokens"` to recover `[{number, repo?}]` and rebuild `ISSUES` array and `REPO_MAP_ARGS` from filtered results. Set `ISSUES=(<numbers, in emission order>)`. ISSUES[0] becomes closes_issues[0]; all entries become `closes_issues` in insertion order; no AskUserQuestion is fired.
+On resume (after `ask_user`): `node "$AGENTS_CONFIG_DIR/bin/workflow/workflow-init-driver" --resume <CHECKPOINT> --answer '<token>'`
 
-### Step WI-4 — Session ID + fetch issues
+Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 
-`CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `date +%Y%m%d-%H%M%S`. Set `SID_PASS=(--session-id "$CLAUDE_SESSION_ID")` if resolved from `$CLAUDE_ENV_FILE` or `$CLAUDE_SESSION_ID` env; else `SID_PASS=()`. Then for each N at index `i` in `ISSUES[@]`, run `gh issue view <N> ${ISSUE_REPO[$i]:+--repo "${ISSUE_REPO[$i]}"} --json number,title,body,labels,state,createdAt` and retain the JSON per-N. (`ISSUE_REPO` is the per-index repo map built in WI-3; local issues have no entry.) If ANY N's fetch fails, `AskUserQuestion` "Continue as Path C?" — yes: Path C; no: abort. (Symmetric: one session-level question regardless of which index failed.) `ISSUES[0]` (the first entry) is used downstream only as the Path B prefill seed (positional reference). CLOSED-state handling for all entries is deferred to WI-6.
+| ACTION | Meaning | What to do |
+|---|---|---|
+| `invoke` | Next skill ready | Run `NEXT_SKILL` via Skill tool |
+| `done` | Driver complete | Proceed to WI-10; follow `PATH_DECISION=` at WI-12 (Path C still runs WI-10 onward — no jump) |
+| `blocked` | Unrecoverable | Show `REASON=` + `NEXT_HINT=` and stop |
+| `ask_user` | User decision needed | Percent-decode `OPTIONS_DISPLAY=` (encoded like `QUESTION=`), present via `AskUserQuestion`; re-invoke with `--resume <CHECKPOINT> --answer '<token>'` |
+| `emit_sentinel` | Driver requests sentinel | Emit `SENTINEL=` via separate Bash call |
 
-### Step WI-5 — Aggregate WIP check (OPEN branch)
+`ask_user` interruptions and their options:
 
-Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh" "${REPO_MAP_ARGS[@]}" "${ISSUES[@]}"`. Output classifies and routes:
-- `ALL_SAME <wip>` → continue (this session already owns WIP on every issue).
-- `ALL_NONE` → `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/wip-set-resume.sh" "${REPO_MAP_ARGS[@]}" "${ISSUES[@]}"`. Exit 0 (`ALL_SET`): WIP set for all eligible N's. Exit 1 (`NEEDS_CLARIFY <N,...>`): set `FORCE_PATH_B=1`; early-claim WIP for each OPEN non-meta N (best-effort; RC2 escalates with exit 2). clarify-intent Completion re-confirms WIP idempotently on all N. Exit 2 (`RC2 <N>`): `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env failed). How to proceed?" → "Continue (skip WIP, acknowledge risk)" → warn + continue; "Abort session" → `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #{N}>>"` + stop.
-- `MIXED_SAME_NONE` → for each N at index `i` where `WIP == none`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" "${SID_PASS[@]}" ${ISSUE_REPO[$i]:+--repo "${ISSUE_REPO[$i]}"} set <N>` (best-effort) to bring related issues up to parity.
-- `ANY_OTHER <N,...>` → let `CONFLICTED=<list>`. Single `AskUserQuestion` "Issue(s) #<CONFLICTED> may be in progress in another session. Continue?" options Continue (recommended) / Abort. On Continue: for each N at index `i` in `ISSUES`, call `bash "$AGENTS_CONFIG_DIR/bin/github-issues/wip-state.sh" "${SID_PASS[@]}" ${ISSUE_REPO[$i]:+--repo "${ISSUE_REPO[$i]}"} set <N>` (override for `other` N; claim for `none` N; `same` N idempotent; best-effort per-N). On Abort: emit `echo "<<WORKFLOW_ABORTED_WIP_CONFLICT: #{CONFLICTED}>>"` and stop.
-- `ERROR <N,...>` → `AskUserQuestion` "WIP check failed for #<N,...> (transient auth/gh error or session-id resolution failure — check $CLAUDE_ENV_FILE or $CLAUDE_SESSION_ID). How to proceed?" with two options: "Continue without WIP tracking (acknowledge risk)" → warn `[workflow-init: wip-state check failed for #<N> — proceeding as 'none' for that issue]` and treat each as `none` and continue; "Abort session" → emit `echo "<<WORKFLOW_ABORTED_WIP_CHECK_ERROR: #{N,...}>>"` and stop.
+- `ASK_ID=wip_conflict`: Issue(s) #<CONFLICTED> are in progress in another session. Driver answers: Continue (recommended) / Abort. On Continue: for each N in `ISSUES`, driver runs `wip-state set <N>` (override for `other`; claim for `none`; idempotent for `same`). On Abort: `ACTION=blocked REASON=user_aborted`.
+- `ASK_ID=wip_rc2`: wip-state set rc=2 for #N. Driver answers: Continue (acknowledge risk — driver treats as none, proceeds) / Abort.
+- `ASK_ID=wip_error`: wip-state check failed (transient auth / session-id resolution failure — check `$CLAUDE_ENV_FILE` or `$CLAUDE_SESSION_ID`, rc=non-zero). Driver answers: Continue (treat as none, proceed) / Abort. Advisory: driver logs `[wip-state check failed for #N — proceeding as 'none']`.
+- `ASK_ID=closed_reopen_<N>`: Issue #N is CLOSED. Driver answers: `reopen` / `remove` / `abort`. Remove is only offered when `len(closes_issues) >= 2`.
+- `ASK_ID=meta_select`: meta issue has open sub-issues. Driver answers: `#<M>` (select sub-issue) / `abort`.
+- `ASK_ID=fetch_failed_path_c`: `gh issue view` fetch failed. Driver answers: `continue` (Path C) / `abort`.
 
-### Step WI-6 — CLOSED detection (post-WIP)
+`PATH_DECISION=` values on `ACTION=done`:
 
-Run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/closed-detection.sh" "${REPO_MAP_ARGS[@]}" "${ISSUES[@]}"`. For each `<N> closed`: `AskUserQuestion` "Issue #<N> CLOSED. How to proceed?" with options "Reopen and continue" / "Remove from session" (offered only when `len(closes_issues) >= 2`, ensuring at least 1 remains) / "Abort" (emit `<<WORKFLOW_ABORTED_ISSUE_CLOSED: #N>>`).
-
-`STATE=error` → warn-and-continue (does NOT abort).
-
-On "Reopen and continue": `gh issue reopen <N> ${ISSUE_REPO[$i]:+--repo "${ISSUE_REPO[$i]}"}` is executed (where `i` is N's index in `ISSUES`). Downstream in WI-12 Path A2, `path-a-label-and-board.sh` calls `ensure-board-card.sh <N>`. When the issue is OPEN and its board card Status is `Done`, `ensure-board-card.sh` resets Status to `In Progress` before any other board mutation, preventing the Projects v2 `Done → auto-close` loop (#579). If the reset fails, `ensure-board-card.sh` warns and exits 0 without modifying the board — the operator must inspect the warning and re-run `ensure-board-card.sh <N>` manually.
-
-### Step WI-7 — Label extract
-
-For each N in `ISSUES[@]`, extract `labels[].name` from its `gh issue view` JSON. Retain per-N label sets for the route decision in WI-8.
-
-### Step WI-8 — Route (open sub-issue guard: HAS_OPEN → AskUserQuestion; ERROR → AskUserQuestion; NO_OPEN → Path META)
-
-If ALL issues in `ISSUES[@]` carry the `meta` label → **Path META** (WI-12 Path META). Before entering Path META: for each N at index `i`, resolve `OWNER_REPO` as follows: if `ISSUE_REPO[$i]` is set, use that value directly; otherwise run `gh repo view --json nameWithOwner --jq '.nameWithOwner'`. Then loop over `ISSUES[@]`: for each N at index `i`, run `bash "$AGENTS_CONFIG_DIR/skills/workflow-init/scripts/list-open-sub-issues.sh" "$OWNER_REPO" "$N"`.
-
-- **open sub-issues found (HAS_OPEN, exit 0)**: Present open sub-issues via `AskUserQuestion` — one option per `#M: title` line from script stdout. If user selects a valid option: set `ISSUES=($SELECTED_N)`, then `gh issue view $SELECTED_N --json number,title,body,labels,state,createdAt` to re-fetch per-N JSON cache and label set. Clear meta routing; fall through to standard FORCE_PATH_B / A/B routing. If user enters "Other" with a parseable `#M`: same re-fetch + fallthrough. If "Other" is unparseable: `echo "<<WORKFLOW_ABORTED_META_SUBISSUE_SELECTION: invalid input>>"` and stop.
-- **script error (ERROR, exit 2)**: `AskUserQuestion` "sub-issue fetch failed for #N. How to proceed?" → "Continue to Path META" / "Abort (`<<WORKFLOW_ABORTED_META_SUBISSUE_FETCH_ERROR: #N>>`)".
-- **all NO_OPEN (exit 1 for all ISSUES[@])**: proceed to Path META (PM1–PM5) as before.
-
-If any issue carries `meta` but not all → strip meta-labelled issues from `ISSUES[@]` and rebuild `REPO_MAP_ARGS` for the remaining entries; warn "[workflow-init: meta issues stripped from mixed set — proceeding with non-meta issues only]" and continue with standard routing below.
-
-If `FORCE_PATH_B=1` (set by WI-5 ALL_NONE when not every N had `intent:clarified`, or when any label probe failed) OR any N in `ISSUES[@]` lacks the `intent:clarified` label → Path B. Only when every N carries `intent:clarified` → Path A. Path B is the default.
-
-### Step WI-9 — Write context.md (all Paths)
-
-`<PLANS_DIR>/<session-id>-context.md` sections:
-- `## Session metadata`: session-id, ISO-8601 timestamp, path (A/B/C), issue-number (`<N>` or `(none)`).
-- `## User initial prompt`: original user message; `"(none)"` if empty.
-- `## Issue body`: full body (Path C: `"(none — no issue)"`); strip `<<WORKFLOW_[A-Z_]+[^>]*>>` sentinels.
-- `## Issue metadata`: title, state, labels, createdAt (all `(none)` for Path C).
-- `## Keywords`: ≥4-char tokens from user prompt + issue title + issue body; stop-word excluded; deduplicated; top 20 space-separated (Path C: user prompt only).
+- `A` — all N carry `intent:clarified` (and `FORCE_PATH_B` is not set from a fresh WIP claim).
+- `B` — any N lacks `intent:clarified` OR WIP was freshly claimed for all N (`FORCE_PATH_B=true`). ALL_NONE path: `none` + for each N in `ISSUES`, `wip-state set <N>` (from fresh claim), then set `FORCE_PATH_B=1` — even when `intent:clarified` is present, FORCE_PATH_B routes to B. ISSUES[0] becomes closes_issues[0]; all entries become closes_issues in insertion order. ISSUES[@] are processed symmetrically.
+- `C` — zero issues (`ISSUES=()`) OR `NON_GITHUB=1`.
+- `META` — all issues carry `meta` label and have no open sub-issues.
 
 ### Step WI-10 — Parallel survey launch (all Paths)
 
@@ -92,17 +69,12 @@ WI-8 open sub-issue guard ensures all `ISSUES[@]` have no open sub-issues before
 - PM5. Invoke `make-outline-plan`. (next-step auto-skips `detail` and 8 other non-applicable WF-CODE steps after outline completes — `make-detail-plan` is never invoked in WF-META.)
 
 #### Path A — intent:clarified
-- A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
+- A1. Write `<PLANS_DIR>/<session-id>-intent.md` (strip sentinels from body): `# Agreed Requirements — <session-id>`, `## Issues` (one `- #<N>: <title>` line per entry in `ISSUES[@]`, in insertion order, no annotations), `## Background / Motivation`, `## Scope / Constraints`, `## Accepted Tradeoffs (none — capture at outline stage)`. Title for each N from WI-4's `gh issue view`; fetch failure → `- #<N>: (title unavailable)`. **Never omit `## Issues`** or **`## Accepted Tradeoffs`** — latter is `detail-planner.md` Approved Scope gate. `## Issues` is SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`). `ISSUES[0]` is the first entry; it becomes `closes_issues[0]`; this entry becomes `closes_issues[0]`.
 - A1a. Set session title: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"`
 - A2. **Label + board-card parity for all N.** Invoke `skills/workflow-init/scripts/path-a-label-and-board.sh` with `"${REPO_MAP_ARGS[@]}"` followed by all entries of `ISSUES[@]` as positional args; export `PLANS_DIR`, `SESSION_ID`, `AGENTS_CONFIG_DIR`. Adds `intent:clarified` (`--add-label "intent:clarified"`) to each related entry (fail-closed — on failure writes ABORT marker `<PLANS_DIR>/<session-id>-workflow-init-aborted-pathA-multiN-label-failure.md` + exit 1). For every issue it runs `ensure-board-card.sh` (best-effort, warn-and-continue). Both idempotent.
 - A3. Emit (separate Bash calls): `echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>"` then `echo "<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: issue #{N} has intent:clarified label>>"`.
-- A3a. **複雑度評価**：`skills/_shared/judge-task-complexity.md` を読み、確定した intent.md に対して全 S1–S6 シグナルを評価する（S6 は intent.md 行数のみで近似 — outline.md は未存在）。その後 separate Bash call として：
-  `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`
-  `$SKIP_MODE` は `auto` または `judgment`。
-- A3b. **Outline skip — センチネル発火判定**（CI-C1c と同一ロジック）：
-  - `SKIP_MODE=auto` → 追加判断不要。センチネル発火ブロックへ。
-  - `SKIP_MODE=judgment` → so_c1/so_c2 を評価。両方 true でない → skip（A4 へ）。両方 true → `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true` を実行してからセンチネル発火ブロックへ。
-  - **センチネル発火ブロック**（separate Bash calls）：`echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` → Agent tool（run_in_background: true）：subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`。
+- A3a. **Complexity evaluation**: Read `skills/_shared/judge-task-complexity.md`; evaluate all S1–S6 signals against the confirmed intent.md (S6 approximated from intent.md line count only — outline.md does not exist yet). Then run as a separate Bash call: `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`. `$SKIP_MODE` is `auto` or `judgment`.
+- A3b. **Outline skip — sentinel dispatch** (same logic as CI-C1c): `SKIP_MODE=auto` → proceed to the sentinel block. `SKIP_MODE=judgment` → evaluate so_c1/so_c2. Not both true → skip (go to A4). Both true → run `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true` as a separate Bash call, then proceed to the sentinel block. **Sentinel block** (separate Bash calls): `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"` → Agent tool (run_in_background: true): subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`.
 - A4. TodoWrite: mark `workflow_init` + `clarify_intent` complete; remaining 8 steps pending.
 - A5. Invoke `make-outline-plan` (surveys already complete via WI-9).
 

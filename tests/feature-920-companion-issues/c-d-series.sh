@@ -107,36 +107,28 @@ else
     fail "D4: clarify-intent SKILL.md not found"
 fi
 
-# D5: WI-3 references filter-primary-candidates.sh (#1117 Step 4 — CLOSED+parent
-# primary-candidate filter). The reference may live in WI-3 or its body prose;
-# assert the script name appears in workflow-init SKILL.md.
-if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    if grep -q "filter-primary-candidates.sh" "$WORKFLOW_INIT_SKILL"; then
-        pass "D5: workflow-init SKILL.md references filter-primary-candidates.sh"
-    else
-        fail "D5: workflow-init SKILL.md does not reference filter-primary-candidates.sh"
-    fi
+# D5: filter-init-candidates.sh exists (WI-3 candidate filter script retained for
+# AGENTS_CONFIG_DIR injection; absorbed into driver detect-issues phase).
+FILTER_INIT_SCRIPT="$AGENTS_DIR/skills/workflow-init/scripts/filter-init-candidates.sh"
+if [ -f "$FILTER_INIT_SCRIPT" ]; then
+    pass "D5: filter-init-candidates.sh exists (WI-3 init-candidate filter retained)"
 else
-    fail "D5: workflow-init SKILL.md not found"
+    fail "D5: filter-init-candidates.sh not found at $FILTER_INIT_SCRIPT"
 fi
 
-# D6: WI-5 ALL_NONE NEEDS_CLARIFY (Exit 1) branch no longer says "skip WIP" as a
-# definitive statement — early claim now happens in wip-set-resume.sh (#1117
-# Step 1). The Exit 2 RC2 branch may still legitimately say "skip WIP,
-# acknowledge risk", so isolate just the Exit-1 segment (between `Exit 1` and
-# `Exit 2`) of the ALL_NONE bullet.
-if [ -f "$WORKFLOW_INIT_SKILL" ]; then
-    ALL_NONE_BULLET=$(grep -E '^- `ALL_NONE`' "$WORKFLOW_INIT_SKILL" | head -1 || true)
-    EXIT1_SEG=$(printf '%s' "$ALL_NONE_BULLET" | sed -E 's/.*Exit 1//; s/Exit 2.*//')
-    if [ -z "$ALL_NONE_BULLET" ]; then
-        fail "D6: WI-5 ALL_NONE bullet not found in workflow-init SKILL.md"
-    elif printf '%s' "$EXIT1_SEG" | grep -qi "skip WIP"; then
-        fail "D6: WI-5 ALL_NONE Exit-1 branch still says 'skip WIP' definitively; seg='$EXIT1_SEG'"
-    else
-        pass "D6: WI-5 ALL_NONE Exit-1 branch no longer says 'skip WIP' definitively"
-    fi
-else
+# D6: ALL_NONE WIP-set behavior is now handled by the driver's wip-check phase
+# (wip-set-resume.sh absorbed; no separate WI-5 bullet in SKILL.md). Verify
+# that SKILL.md does NOT contain the old "skip WIP" text and that the driver
+# wip-check phase exists as evidence of correct handling.
+WIP_CHECK_JS="$AGENTS_DIR/bin/workflow/lib/workflow-init/phases/wip-check.js"
+if [ ! -f "$WORKFLOW_INIT_SKILL" ]; then
     fail "D6: workflow-init SKILL.md not found"
+elif grep -qi "skip WIP" "$WORKFLOW_INIT_SKILL"; then
+    fail "D6: workflow-init SKILL.md still says 'skip WIP' definitively"
+elif [ -f "$WIP_CHECK_JS" ]; then
+    pass "D6: SKILL.md has no 'skip WIP' text; ALL_NONE handling is in driver wip-check phase"
+else
+    fail "D6: driver wip-check.js not found — ALL_NONE handling missing"
 fi
 
 echo ""

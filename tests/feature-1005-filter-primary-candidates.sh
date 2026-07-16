@@ -1,26 +1,23 @@
 #!/bin/bash
-# Tests: skills/workflow-init/scripts/filter-primary-candidates.sh
-# Tags: workflow-init, filter-primary-candidates, primary-detection, parent-filter, closed-filter, meta-filter, scope:issue-specific
+# Tests: skills/workflow-init/scripts/filter-init-candidates.sh
+# Tags: workflow-init, filter-init-candidates, init-detection, parent-filter, closed-filter, meta-filter, scope:issue-specific
 #
-# Feature 1005 — filter-primary-candidates.sh (NEW WI-3 primary-candidate
-# filter). The script takes a list of candidate issue numbers (the `#N`
-# matches WI-3 detected) and emits the subset eligible to be the session
-# primary, one number per line, in input order. Three exclusion axes:
+# Feature 1005 — filter-init-candidates.sh (WI-3 init-candidate filter).
+# The script takes a list of candidate issue numbers (the `#N` matches WI-3
+# detected) and emits the subset eligible for the session, one number per
+# line, in input order. Three exclusion axes:
 #   - CLOSED filter: a candidate whose issue-state-check.sh reports "closed"
-#     is dropped (a closed issue is not a valid new primary).
+#     is dropped (a closed issue is not a valid new init candidate).
 #   - parent filter: a candidate A that is the PARENT of another candidate B
 #     (i.e. B's parentIssue == A) is dropped — the child B is the more specific
-#     work item, so the parent is not proposed as primary.
+#     work item, so the parent is not proposed.
 #   - meta filter: a candidate carrying the "meta" label is dropped WHEN at least
 #     one non-meta candidate survives (meta issues are planning umbrellas, not
 #     the concrete work item). If every candidate is meta, none is dropped.
 # Fallback: if every candidate is filtered out, emit the ORIGINAL candidate list
-# unchanged (never return an empty primary set). Output order = input order.
+# unchanged (never return an empty set). Output order = input order.
 #
-# The script does not exist yet (created by /write-code). All FP-* cases are RED
-# until then; the existence gate reports each as a clean failure (no crash).
-#
-# Mock contract (matches closed-detection.sh's helper convention):
+# Mock contract (matches the helper convention):
 #   issue-state-check.sh <N>  → prints MOCK_STATE_<N> (default "open").
 #   gh issue view <N> --json parent,labels  → {"parent":<p>,"labels":<l>} from
 #     GH_MOCK_PARENT_<N> (default null) and GH_MOCK_LABELS_<N> (default []).
@@ -29,15 +26,15 @@
 # L3 gap (what these tests do NOT catch):
 # - Whether the real issue-state-check.sh / gh parent+labels linkage match the
 #   mock shapes against a live GitHub repo.
-# - Whether WI-3 invokes filter-primary-candidates.sh correctly in a live
-#   workflow-init session and renders the surviving primary set.
+# - Whether WI-3 (driver detect-issues phase) invokes filter-init-candidates.sh
+#   correctly in a live workflow-init session.
 # Closest-to-action mitigation: WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh category: skill-orchestration
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SUT="$AGENTS_DIR/skills/workflow-init/scripts/filter-primary-candidates.sh"
+SUT="$AGENTS_DIR/skills/workflow-init/scripts/filter-init-candidates.sh"
 
 PASS=0
 FAIL=0
@@ -55,7 +52,7 @@ run_with_timeout() {
 # without invoking a missing file (keeps the runner from crashing).
 require_sut() {  # arg: case-label
     if [ -x "$SUT" ] || [ -f "$SUT" ]; then return 0; fi
-    fail "$1: filter-primary-candidates.sh not found at $SUT (RED until /write-code)"
+    fail "$1: filter-init-candidates.sh not found at $SUT"
     return 1
 }
 

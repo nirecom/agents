@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: agents/survey-code.md, agents/survey-history.md, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/workflow-init/SKILL.md
+# Tests: agents/survey-code.md, agents/survey-history.md, bin/workflow/lib/workflow-init/phases/write-context.js, skills/_shared/survey-artifact-valid.md, skills/clarify-intent/SKILL.md, skills/survey-code/SKILL.md, skills/survey-history/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: workflow, init, routing, clarify-intent, planning, scope:issue-specific
 # Test suite for "shift survey-code/survey-history left into workflow-init" (Issue #327).
 #
@@ -9,6 +9,9 @@
 #
 # Files under test:
 #   - skills/workflow-init/SKILL.md       (gains context.md writing + parallel surveys)
+#   - bin/workflow/lib/workflow-init/phases/write-context.js
+#                                         (context.md section schema — moved out of
+#                                          SKILL.md prose by the workflow-init driver rewrite)
 #   - skills/survey-code/SKILL.md         (input precedence: intent.md preferred, context.md fallback)
 #   - skills/survey-history/SKILL.md      (input precedence + keyword-only DEGRADED MODE)
 #   - skills/clarify-intent/SKILL.md      (consumes survey artifacts; emits NOT_NEEDED sentinel)
@@ -24,6 +27,7 @@ SH_SKILL="$REPO_ROOT/skills/survey-history/SKILL.md"
 CI_SKILL="$REPO_ROOT/skills/clarify-intent/SKILL.md"
 SH_AGENT="$REPO_ROOT/agents/survey-history.md"
 SC_AGENT="$REPO_ROOT/agents/survey-code.md"
+WC_PHASE="$REPO_ROOT/bin/workflow/lib/workflow-init/phases/write-context.js"
 
 ERRORS=0
 PASS_COUNT=0
@@ -105,8 +109,11 @@ assert_regex() {
 # ===========================================================================
 echo "--- Group A: workflow-init/SKILL.md ---"
 assert_file_contains "A1" "WI mentions context.md artifact"                 "$WI_SKILL" "context.md"
-assert_file_contains "A2" "WI defines ## Session metadata section"          "$WI_SKILL" "## Session metadata"
-assert_file_contains "A3" "WI defines ## Keywords section"                  "$WI_SKILL" "## Keywords"
+# A2/A3: the context.md section schema moved from SKILL.md prose into the
+# driver phase write-context.js (workflow-init driver rewrite). The contract
+# protected here is unchanged: context.md must emit these sections.
+assert_file_contains "A2" "context.md schema emits ## Session metadata (write-context.js)" "$WC_PHASE" "## Session metadata"
+assert_file_contains "A3" "context.md schema emits ## Keywords (write-context.js)"         "$WC_PHASE" "## Keywords"
 assert_file_contains "A4" "WI handles sentinel stripping"                   "$WI_SKILL" "sentinel"
 assert_file_contains "A5a" "WI launches Agent subagent"                     "$WI_SKILL" "Agent"
 assert_file_contains "A5b" "WI references survey-code subagent"             "$WI_SKILL" "survey-code"
