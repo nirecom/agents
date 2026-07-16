@@ -41,60 +41,7 @@ Your output must stay at the level of: design direction, utility/pattern reuse s
 3. Propose **2-3 approaches** in the format below. Each approach must be mutually exclusive from the others (i.e., choosing one rules out the others at a fundamental level).
 4. If — and only if — only one approach is viable, emit `SINGLE_APPROACH_JUSTIFIED` (see below).
 
-## Output Format
-
-```
-## Approach A: <short name>
-
-<1-2 paragraph description at design-direction level. No file paths. No steps.>
-
-**Builds on:** <existing utilities, patterns, or conventions already in the codebase>
-**Trade-off vs other options:** <one line>
-**Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
-**Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
-
----
-
-## Approach B: <short name>
-
-<1-2 paragraph description>
-
-**Builds on:** <...>
-**Trade-off vs other options:** <one line>
-**Delivery plan:** <triage rationale / execution order / split policy — 1-2 lines>
-**Cross-component risks:** <component contract mismatches, dependency direction violations, or uncovered responsibility areas at design level; "none identified" if clean; "unable to assess — N components unread" if 8-file cap prevents full scan>
-
----
-
-## Approach C: <short name> (optional)
-
-<...>
-```
-
-## SINGLE_APPROACH_JUSTIFIED
-
-If only one approach is genuinely viable (not just the easiest), emit **only** the following as your entire reply:
-
-```
-SINGLE_APPROACH_JUSTIFIED: <one-line reason why alternatives are not viable>
-DELIVERY_PLAN: <triage rationale / execution order / split policy — one line>
-CROSS_COMPONENT_RISKS: <component contract mismatches, dependency direction issues, or coverage gaps; "none identified" if clean; "unable to assess" if 8-file cap prevents full scan>
-```
-
-The make-outline-plan skill will skip the review round and proceed directly to make-detail-plan.
-
-## Requesting Research
-
-If external knowledge is required to propose correct approaches, emit **only** the following as your entire reply:
-
-```
-NEEDS_RESEARCH
-skill: deep-research
-question: <one-line summary of what to investigate>
-reason: <one-line — why this blocks approach design and cannot be resolved by reading local files>
-```
-
-**Budget:** research can be requested at most 2 times per make-outline-plan invocation.
+See agents/outline-planner/output-format.md for the Output Format, SINGLE_APPROACH_JUSTIFIED, and NEEDS_RESEARCH templates.
 
 ## Rules
 
@@ -118,15 +65,7 @@ are added automatically; planner-authored copies are stripped before the final
 write. Start your draft from `# <H1 title>` then `## Adopted approach` /
 `## Delivery plan` and subsequent sections.
 
-## Risk-Signal File
-
-When ANY of the following conditions apply, write ONE LINE of reason text to `<PLANS_DIR>/<session-id>-outline-risk-signal.txt` using the Write tool. Do NOT include any text in the plan draft itself:
-
-1. The requirements in intent.md cannot be achieved by this plan (scope conflict or missing information).
-2. The reviewer keeps raising the same concern without referencing source files (non-convergence risk).
-3. An unresolved security concern exists (credential exposure, unsafe input handling, privilege escalation, etc.).
-
-File content: one short reason line only (no markers, no prefix). If none of the conditions apply, do not create this file.
+See agents/lib/planner-review-loop-protocol.md for the Risk-Signal File protocol (PLANNER_TYPE=outline).
 
 ## Consuming `## Class members`
 
