@@ -93,59 +93,34 @@ CI-6. This step exits exclusively via the Completion section below — the skill
 
 ## Completion
 
-Scope is final after CI-5. Side effects fire now — never before — so a CI-5 scope change cannot strand a stale WIP claim or board card.
+Scope is final after CI-5. Side effects fire now — never before.
 
-Run the non-GitHub gate: `"$AGENTS_CONFIG_DIR/bin/is-github-dotcom-remote"`. rc=0 → GitHub (proceed). rc=1 → non-GitHub (`NON_GITHUB=1`, pass `--non-github`). rc=2 → unknown (fail-open, proceed as GitHub).
-
-Read `closes_issues` from intent.md (canonical parser: `hooks/lib/parse-closes-issues.js`). This is the confirmed post-CI-5 SSOT.
-
-Build `REPO_MAP_ARGS` from the parsed entries: for each entry at index `i` with `repo` field set, add `--repo-map i:<repo>`. Pass bare integers as `--issues` CSV.
-
-**Reconcile side effects** (label / WIP set / board-card parity for all entries, or Path-C issue creation when empty):
-`bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-commit-scope.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>" --issues "$(IFS=,; echo "${closes_numbers[*]}")" "${REPO_MAP_ARGS[@]}" [--non-github]`.
-
-(`closes_numbers` is the bare-integer CSV extracted from the parsed `closes_issues` array.)
-
-The CLI runs the per-entry order For each issue N in `closes_issues`:
+`run-completion.sh` reconciles: calls `clarify-commit-scope.sh` (per-N side-effect order), then `clarify-guard-loop.sh` (uses `check-closes-issues-nonempty.sh`). For each issue N in `closes_issues`:
 1. `intent:clarified` add-label,
 2. `wip-state.sh set`,
 3. board card.
-Best-effort per-N — continue with the remaining entries on any per-N failure. On a persistent `wip-state set failed for #<N>` warning, add `intent:clarified-wip-failed: #<N>` under Constraints.
+Best-effort per-N — continue with the remaining entries on any per-N failure. On a persistent `wip-state set failed for #<N>` warning, add `intent:clarified-wip-failed: #<N>` under Constraints. Path C (empty `closes_issues`): `gh issue create` → `CREATED:<N>`.
 
-Handle its stdout / exit code:
-- Exit 0, empty stdout → all entries labelled, WIP-set, board-carded per the order above.
-- `CREATED:<N>` (Path C — empty `closes_issues`) → backfill the `## Issues` placeholder body from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` (Read + Edit; title = the created issue's title). The CLI already ran WIP set + board card for the new N.
-- `CLOSED:<N>` + exit 2 → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — options: "Reopen and continue" (run `gh issue reopen <N>`, then re-run the call) / "Remove from closes_issues and continue" (offered only when `len(closes_issues) >= 2`; Read + Edit intent.md to remove N, then re-run) / "Abort session". No side effects fired yet — the CLI stops on the first CLOSED entry before any mutation.
-- `RC2` + exit 2 → `AskUserQuestion` "WIP set rc=2 for #<N> (session-id/env unresolvable; conflict detection broken). How to proceed?" → "Skip and continue (acknowledge risk)" → warn + re-run for remaining / "Abort session" → stop.
+Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/run-completion.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"`.
 
-Then:
+CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on its single stdout token:
 
-<!-- closes_issues guard: canonical parser is hooks/lib/parse-closes-issues.js — do not reimplement. -->
+- `PROCEED` → proceed to CI-C1 (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
+- `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
+- `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
+- `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session".
+- `NEED_ISSUE` → invoke `/issue-create` → backfill `## Issues` → re-run guard-loop only.
+- `RETRY_EXHAUSTED` → `AskUserQuestion` "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?" — "Retry `/issue-create`" / "Manual recovery" / "Abort workflow" → emit `<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>`.
+- `CLOSED_ENTRY` → `AskUserQuestion` "Tracking-issue guard detected a CLOSED entry. How should we recover?" — "Reopen the closed entry and retry" / "Abort session" → `<<WORKFLOW_RESET_FROM_clarify_intent: closed tracking entry>>`.
 
-CI-C0. **Tracking-issue guard** — at most 2 automatic passes; further failures escalate to AskUserQuestion. `<session-id>` and `<PLANS_DIR>` are the same values used in CI-4 — reuse, do not re-resolve.
-
-   Run: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>" [--non-github]` (add `--non-github` when the gate set it). The CLI owns the `GUARD_ATTEMPT` counter file under `<PLANS_DIR>` and wraps `check-closes-issues-nonempty.sh` (SSOT — parse-closes-issues.js). Branch on its single stdout token:
-
-   - **`PROCEED`** → counter cleared; proceed to CI-C1 (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
-   - **`NEED_ISSUE`** → STOP. Do NOT emit the completion sentinel. Invoke `/issue-create` to create a tracking issue. After it returns issue N, backfill the `## Issues` body in intent.md from `(none — pending issue creation or NON_GITHUB)` to `- #N: <title>` (Read + Edit). Then re-run **only this guard step** — do NOT re-enter the Reconcile block (a second `gh issue create` would duplicate the issue).
-   - **`RETRY_EXHAUSTED`** (`/issue-create` already ran but `closes_issues` is still empty) → emit no new sentinel. Open `AskUserQuestion`: "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?"
-     - **"Retry `/issue-create` once more"** — invoke `/issue-create` again, then re-run this guard.
-     - **"Manual recovery"** — instruct the user to run `gh issue create` and edit `## Issues` directly; on confirmation, re-run the guard.
-     - **"Abort workflow"** — emit `echo "<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>"` and exit the skill.
-   - **`CLOSED_ENTRY`** → STOP. Do NOT emit the completion sentinel. The issue exists but is closed — do NOT create a duplicate. `AskUserQuestion`: "Tracking-issue guard detected a CLOSED entry. How should we recover?" — options: "Reopen the closed entry and retry" (user runs `gh issue reopen <N>`, then re-run guard) / "Abort session" (emit `<<WORKFLOW_RESET_FROM_clarify_intent: closed tracking entry>>`).
-
-   Note (CPR-5 Orthogonality): no new workflow sentinel is introduced. Retry-exhaustion is an interactive recovery prompt, not a workflow state transition.
+Note (CPR-5 Orthogonality): no new workflow sentinel is introduced. Interactive recovery remains in SKILL.md.
 
 CI-C1. `echo "<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>"`
 CI-C1a. If `NON_GITHUB=0` and `closes_issues` is non-empty, run `cc-session-title set-issue` as a separate Bash call: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" set-issue "$(pwd)" "<PLANS_DIR>"` (mirrors workflow-init Path A A1a; call after intent.md is written).
 CI-C1b. Read `skills/_shared/judge-task-complexity.md`; evaluate all S1–S6 signals against the confirmed intent.md (S6 approximated from intent.md line count only — outline.md does not exist yet). Then run as a separate Bash call: `SKIP_MODE=$(bash "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-and-skip" --session "$SESSION_ID" --verdict <high|low> --signals <csv-or-empty> --target outline)`. `$SKIP_MODE` is `auto` or `judgment`; the shared script records complexity_evaluation and (when `auto`) record-skip-judgment.
-CI-C1c. **Outline skip — sentinel dispatch**:
-  - `SKIP_MODE=auto` → all conditions met automatically; proceed directly to the sentinel block below.
-  - `SKIP_MODE=judgment` → evaluate so_c1 (single obvious approach) and so_c2 (change locations identified). Not both true → skip (proceed to CI-C2 without sentinel block). Both true → run `node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" --session "$SESSION_ID" --target outline --c1 true --c2 true` as a separate Bash call, then proceed to the sentinel block.
-
-  **Sentinel block** (reached via `auto` or `judgment`+both conditions true) — separate Bash calls in order:
-  - `echo "<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>"`
-  - Agent tool (run_in_background: true): subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md`.
+CI-C1c. **Outline skip — sentinel dispatch**: `SKIP_MODE=judgment` → evaluate so_c1 (single obvious approach) and so_c2 (change locations identified) from intent.md context first. Run `TOKEN=$(bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/check-complexity-skip.sh" --session "$SESSION_ID" [--so-c1 <bool>] [--so-c2 <bool>] | tail -1)` (script emits `<<WORKFLOW_OUTLINE_NOT_NEEDED: {reason}>>` when applicable; `SKIP_MODE` inherited from CI-C1b).
+   - `SENTINEL_EMITTED` → Agent tool (run_in_background: true): subagent_type=skip-verifier, session_id=`$SESSION_ID`, target=`outline`, intent_path=`<PLANS_DIR>/$SESSION_ID-intent.md` → CI-C2.
+   - `NO_SENTINEL` → CI-C2.
 CI-C2. TodoWrite: mark `workflow_init` + `clarify_intent` completed; remaining steps pending.
 CI-C3. Apply the validity check from `skills/_shared/survey-artifact-valid.md` to both
    workflow-init survey artifacts:
