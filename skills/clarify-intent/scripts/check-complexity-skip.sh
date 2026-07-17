@@ -39,7 +39,7 @@ fi
 
 # judgment mode
 if [[ "$SO_C1" == "true" && "$SO_C2" == "true" ]]; then
-    "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
+    node "$AGENTS_CONFIG_DIR/bin/workflow/record-skip-judgment" \
         --session "$SESSION_ID" \
         --target outline \
         --c1 true \

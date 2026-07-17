@@ -18,6 +18,14 @@ Temporary migration code must be wrapped with `# --- BEGIN temporary: <old> → 
 
 See also `rules/installer.md` for installer and system configuration rules.
 
+## bin/ Script Execute Bit
+
+When adding a new script (`.sh` or shebang-based extensionless file) under `bin/`, immediately run:
+
+    git update-index --chmod=+x <path>
+
+This records mode 100755 in the git index regardless of `core.fileMode` setting, ensuring the execute bit is preserved on all platforms (macOS, Linux, WSL).
+
 ## File Naming Conventions
 
 - **Backup files:** Use `.bak` extension. Overwrite previous `.bak` (do not accumulate). Timestamped variants (`.bak.YYYYMMDD_HHMMSS`) are acceptable when history preservation is needed.
