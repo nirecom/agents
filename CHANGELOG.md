@@ -514,3 +514,7 @@ Changes: When `enforce-worktree` blocks a Bash write command, the block reason n
 ### FEATURE: PR #1489 (2026-07-17)
 Background: fix(#1483): add missing scripts to enforce-worktree SANCTIONED allowlist
 Changes: `/issue-create` can now be invoked from the main worktree when `ENFORCE_WORKTREE=on` — a missing allowlist entry caused every attempt to be blocked, generating supervisor warnings that then sealed the `WORKTREE_OFF` escape hatch.
+
+### FEATURE: PR #1491 (2026-07-17)
+Background: fix(#1145): narrow isWorktreeEndEnv() to WE-15..WE-22 cleanup window
+Changes: Fixed: worktree-end supervisor adaptive guidance ("WE-15 cleanup in progress") no longer fires incorrectly in post-WE-22 contexts (e.g. /session-close); WORKTREE_OFF block message now uses correct fixed text after cleanup window closes.
