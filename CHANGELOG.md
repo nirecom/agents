@@ -526,3 +526,7 @@ Changes: `enforce-worktree`: fix three write-detector false-negatives/positives 
 ### FEATURE: PR #1493 (2026-07-17)
 Background: fix(#1482,#861,#1161): post-compact workflow progress + conv-lang any no-op + pr-merge reset_reason
 Changes: Fixed `CONV_LANG=any` injecting "Respond to the user in any." instead of being a no-op — `any` is now treated like `english` (no injection).;After context compaction, the resumed conversation now shows a 10-step workflow progress summary (step names and statuses read directly from the session state file), preventing the assistant from re-doing completed steps.
+
+### FEATURE: PR #1496 (2026-07-17)
+Background: feat(#1492): rename model:* labels to reporter-model:*, add model-scope:* taxonomy
+Changes: **Label taxonomy**: `model:*` labels renamed to `reporter-model:*`; new `model-scope:*` labels added for issues scoped to a specific model's behavior. Run `bin/github-issues/migrate-model-labels.sh --dry-run` to preview the GitHub migration.
