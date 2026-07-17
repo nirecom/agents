@@ -66,7 +66,7 @@ IC-3. When `CLOSES` is non-empty, emit a notice:
 
 ## Procedure
 
-Callable from main worktree or linked worktree — `issue-create.sh` sanctions the `gh issue create` call via `ISSUE_CREATE_SKILL=1` inline prefix.
+Must be invoked from a linked worktree when `ENFORCE_WORKTREE=on`.
 
 Four phases: **Gather → Survey → Confirm → Dispatch**.
 
