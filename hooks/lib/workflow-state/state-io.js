@@ -364,6 +364,13 @@ function clearLastPushedSha(sessionId) {
   return true;
 }
 
+function recordSessionWorktree(sessionId, worktreePath) {
+  const state = readState(sessionId);
+  if (!state) return;
+  state.session_worktree = worktreePath;
+  writeState(sessionId, state);
+}
+
 // Returns the effective skippable steps for the given session.
 // BUGFIX sessions exclude write_tests and review_tests (T0-A gate).
 // Lazy require avoids circular dependency with is-bugfix-session.js.
@@ -441,4 +448,5 @@ module.exports = {
   recordSkipVerdict,
   readSkipVerdict,
   hasSpeculativeSkipPending,
+  recordSessionWorktree,
 };

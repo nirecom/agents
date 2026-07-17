@@ -44,8 +44,7 @@ fi
 # ---------------------------------------------------------------------------
 # Throwaway git fixture + isolated workflow-state dir
 # ---------------------------------------------------------------------------
-SCRATCH_BASE="C:/Users/nire/AppData/Local/Temp/claude/c--git-agents/ae7c934f-ae6c-4d46-903e-d3282194d4e3/scratchpad"
-TMPDIR_BASE="$(mktemp -d "$SCRATCH_BASE/rwp-test-XXXXXX" 2>/dev/null || mktemp -d)"
+TMPDIR_BASE="$(mktemp -d 2>/dev/null || mktemp -d -t rwp-test)"
 MAIN_REPO="$TMPDIR_BASE/main"
 WTA="$TMPDIR_BASE/wtA"
 WF_DIR="$TMPDIR_BASE/workflow-state"
@@ -267,6 +266,106 @@ if [[ -n "$caseH_got" ]]; then
   pass "Case H (token for linked worktree): non-empty token '$caseH_got'"
 else
   fail "Case H (token for linked worktree): empty token, expected non-empty"
+fi
+
+# ===========================================================================
+# Cases I-L: state.session_worktree fallback (issue #950)
+#
+# When state.cwd points to the main worktree (i.e. the session was started
+# from main), resolveSessionWorktreePath() must fall back to
+# state.session_worktree (set by branching-handler after /worktree-start).
+# These cases are EXPECTED to FAIL until the source fix lands.
+# ===========================================================================
+
+# Helper: write state JSON with both cwd and optional session_worktree.
+# $1: cwd value (node-form path)
+# $2: session_worktree value (node-form path | "null" | "" to omit)
+write_state_950() {
+  local cwd_val="$1"
+  local sw_val="$2"
+  local sw_line=""
+  if [[ "$sw_val" = "null" ]]; then
+    sw_line='"session_worktree": null,'
+  elif [[ -n "$sw_val" ]]; then
+    sw_line="\"session_worktree\": \"$sw_val\","
+  fi
+  cat > "$WF_DIR/$SESSION_ID.json" <<EOF
+{
+  "version": 1,
+  "session_id": "$SESSION_ID",
+  "created_at": "2026-07-18T00:00:00.000Z",
+  "cwd": "$cwd_val",
+  $sw_line
+  "git_branch": "wt-branch-a",
+  "steps": {}
+}
+EOF
+}
+
+# Helper: invoke the JS resolver directly (not the bin wrapper) so we can
+# inspect the resolveSessionWorktreePath() return value in isolation.
+# Uses a tiny inline Node.js runner that prints the return value or "null".
+run_resolver_js() {
+  local sid="$1"
+  SESSION_ID="$sid" \
+  CLAUDE_SESSION_ID="" \
+  CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
+    bash "$RUN_TIMEOUT" 30 node -e "
+const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/lib/workflow-state/resolve-worktree-path.js');
+const result = resolveSessionWorktreePath('$sid');
+process.stdout.write(result === null ? '' : result);
+" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# Case I: state.cwd=main + state.session_worktree=valid linked worktree path
+# Expected: resolveSessionWorktreePath returns that linked worktree path.
+# FAIL before fix (source still reads only state.cwd).
+# ---------------------------------------------------------------------------
+write_state_950 "$MAIN_NODE" "$WTA_NODE"
+caseI_got="$(run_resolver_js "$SESSION_ID")"
+if [[ "$caseI_got" = "$WTA_NODE" ]]; then
+  pass "Case I (session_worktree fallback): got '$caseI_got'"
+else
+  fail "Case I (session_worktree fallback): got '$caseI_got', expected '$WTA_NODE' [expected FAIL before source fix]"
+fi
+
+# ---------------------------------------------------------------------------
+# Case J: state.cwd=main + state.session_worktree=null
+# Expected: resolveSessionWorktreePath returns null (empty stdout).
+# FAIL before fix only if the code tries to use null as a path.
+# ---------------------------------------------------------------------------
+write_state_950 "$MAIN_NODE" "null"
+caseJ_got="$(run_resolver_js "$SESSION_ID")"
+if [[ -z "$caseJ_got" ]]; then
+  pass "Case J (session_worktree=null -> empty): got empty as expected"
+else
+  fail "Case J (session_worktree=null -> empty): got '$caseJ_got', expected empty [expected FAIL before source fix]"
+fi
+
+# ---------------------------------------------------------------------------
+# Case K: state.cwd=main + state.session_worktree=nonexistent path
+# Expected: resolveSessionWorktreePath returns null (empty stdout).
+# ---------------------------------------------------------------------------
+NONEXISTENT_PATH="$TMPDIR_BASE/does-not-exist"
+write_state_950 "$MAIN_NODE" "$NONEXISTENT_PATH"
+caseK_got="$(run_resolver_js "$SESSION_ID")"
+if [[ -z "$caseK_got" ]]; then
+  pass "Case K (session_worktree=nonexistent -> empty): got empty as expected"
+else
+  fail "Case K (session_worktree=nonexistent -> empty): got '$caseK_got', expected empty [expected FAIL before source fix]"
+fi
+
+# ---------------------------------------------------------------------------
+# Case L: state.cwd=main + state.session_worktree=main worktree path
+# (isMainWorktree=true) -> must also be rejected, return empty.
+# ---------------------------------------------------------------------------
+write_state_950 "$MAIN_NODE" "$MAIN_NODE"
+caseL_got="$(run_resolver_js "$SESSION_ID")"
+if [[ -z "$caseL_got" ]]; then
+  pass "Case L (session_worktree=main -> empty): got empty as expected"
+else
+  fail "Case L (session_worktree=main -> empty): got '$caseL_got', expected empty [expected FAIL before source fix]"
 fi
 
 # ---------------------------------------------------------------------------
