@@ -37,7 +37,7 @@ do not persist between Bash tool calls.
 ## Step SC-1a — Detect WF-META session
 
 Run:
-  node -e "try{const s=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/workflow-state').readState('<session-id>');process.stdout.write(s&&s.workflow_type==='wf-meta'?'yes':'no')}catch(_){process.stdout.write('no')}"
+  node "$AGENTS_CONFIG_DIR/bin/session-close-detect-wf-meta.js" "<session-id>"
 
 - stdout `yes` → WF-META session. Record `IS_WF_META=yes` as an LLM-tracked state literal (not a shell variable — every Bash call is self-contained). Proceed to SC-2C.
 - stdout `no` → proceed to SC-1b (ENFORCE_WORKTREE detection).
@@ -153,34 +153,9 @@ On `status: complete`:
 
 ## Step SC-6 — Emit Final Report directly into assistant text
 
-Read four input files via the Read tool:
-- `<PLANS_DIR>/<session-id>-final-report-env.json`
-- `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
-- `<PLANS_DIR>/<session-id>-intent.md`
-- The WORKTREE_NOTES.md backup path from the `NOTES_BACKUP_PATH` field in the env JSON
-- `<PLANS_DIR>/<session-id>-supervisor-state.json` (optional — absent → treat as no supervisor run)
-
-Generate the skeleton (run this Bash command):
-  node -e "process.stdout.write(require(process.env.AGENTS_CONFIG_DIR + '/hooks/lib/final-report-schema').renderSkeleton('<session-id>'))"
-(`<session-id>` must match `^[A-Za-z0-9_-]+$` — abort if it does not)
-
-Substitute every `<PLACEHOLDER>` token in the skeleton using the values you read:
-- `<PR_NUMBER>`, `<PR_TITLE>`, `<PR_URL>`, `<PR_STATE>` → env JSON fields (use `(none)` when empty)
-- `<BRANCH>`, `<WORKTREE_PATH>`, `<CREATED_DATE>`, `<BACKUP_MANIFEST_PATH>`, `<BRANCH_DELETED>` → env JSON fields (use `(none)` when empty)
-- `<CLOSED_ISSUES_LIST>` → parse `closes_issues` from intent.md; render as `- #N` lines or `- (none)`
-- `<CLOSED_ISSUE_OUTCOMES>` → one line per issue from outcome JSON `issues[]`: `- #N: <state> (history: <historyEntry>, closed: <issueClosed>, sentinels: <sentinelsPosted>, wip: <wipCleared>)`; when outcome JSON missing or `issues` empty: `- (outcome data not found — investigate)`
-  - `state: "skipped_wf_meta"` → display as `kept open (planning session)`; other subfields remain as-is.
-- `<CC_RESTART_REQUIRED_DECISION>` → `required (<CC_RESTART_REASON>)` when `CC_RESTART_REQUIRED` is `required`, otherwise `not_required`
-- `<VSCODE_RELOAD_REQUIRED_DECISION>` → same pattern using `VSCODE_RELOAD_REQUIRED` / `VSCODE_RELOAD_REASON`
-- `<INSTALLER_RERUN_REQUIRED_DECISION>` → same pattern using `INSTALLER_RERUN_REQUIRED` / `INSTALLER_RERUN_REASON`
-- `<OS_REBOOT_REQUIRED_DECISION>` → same pattern using `OS_REBOOT_REQUIRED` / `OS_REBOOT_REASON`
-- `<BUGS_FOUND>`, `<RELATED_TASKS>`, `<NEXT_TASKS>` → extract the matching `##` section content from WORKTREE_NOTES.md backup; or `- (none)` when file absent
-- `<SUPERVISOR_ALERT_SUMMARY>` → from supervisor state: `phase: <alert.alert_phase|none>, severity: <alert.cumulative_severity|none>, findings: <count>`; or `(not run)` when state absent
-- `<SUPERVISOR_AUDIT_SUMMARY>` → from supervisor state: `phase: <audit.audit_phase|none>, verdict: <audit.audit_verdict|none>, cause: <audit.audit_cause|none>`; or `(not run)` when state absent
-- `<SUPERVISOR_FINDINGS_DETAIL>` → when `alert.findings` is non-empty, call `formatLayer2Findings(alert.findings, { sessionId, workflowSessionId, supervisorPath, stateFilePath, summaryOnly: true })` and expand its result as literal text; when state absent, `alert.findings` empty, or render is null, expand to `(no findings)`
-
-Do not leave any `<PLACEHOLDER>` tokens unsubstituted. Emit the substituted text verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
-When `CONV_LANG` is set in `$CLAUDE_ENV_FILE` and is not `english`, write all substituted section body text in that language — headings (`##`, `###` lines) remain English.
+Run: node "$AGENTS_CONFIG_DIR/bin/render-final-report.js" "<session-id>" "<PLANS_DIR>/<session-id>-final-report-env.json" "<PLANS_DIR>/<session-id>-issue-close-outcome.json" "<PLANS_DIR>/<session-id>-intent.md" "<PLANS_DIR>/<session-id>-supervisor-state.json"
+Emit the stdout verbatim into your assistant text reply — no preamble, no summarization, no section reordering, no merging.
+When `CONV_LANG` in `$CLAUDE_ENV_FILE` is not `english`, translate the body text into that language — headings remain English.
 
 SC-6a. Mark session title complete: `node "$AGENTS_CONFIG_DIR/bin/cc-session-title" mark-complete "$(pwd)"`. Fail-open.
 
@@ -193,15 +168,14 @@ After emitting, mark completion:
   node "$AGENTS_CONFIG_DIR/bin/supervisor-write-audit" --clear-audit-phase --session-id "<session-id>"
   echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"
 
-`stop-final-report-guard.js` validates completion by checking all 13 Final Report headings from `getSectionHeadings()` appear after the `## Final Report — <session-id>` line. Missing any heading, or any unsubstituted `<TOKEN>` present → `decision: block` + exit 2 + re-prompt with a specific list.
+`stop-final-report-guard.js` blocks (exit 2) when any of the 13 headings or any unsubstituted `<TOKEN>` is missing/present after `## Final Report — <session-id>`.
 
 ## Step SC-7 — Surface alert findings (post-Final-Report)
 
 Read `<PLANS_DIR>/<session-id>-supervisor-state.json` (Read tool). If absent, or `alert.findings` is empty, or `alert.findings_surfaced_at` is already set, skip to the sentinel and return.
 
-Compute the render (summaryOnly: true — call with summaryOnly: false to see the full findings):
-
-  node -e "const r=require(process.env.AGENTS_CONFIG_DIR+'/hooks/lib/supervisor-findings-render');const s=require('fs');const st=JSON.parse(s.readFileSync('<PLANS_DIR>/<session-id>-supervisor-state.json','utf8'));const out=r.formatLayer2Findings(st.alert.findings||[],{sessionId:'<session-id>',workflowSessionId:process.env.CLAUDE_SESSION_ID||null,supervisorPath:process.env.AGENTS_CONFIG_DIR+'/agents/supervisor.md',stateFilePath:'<PLANS_DIR>/<session-id>-supervisor-state.json',summaryOnly:true});if(out)process.stdout.write(out+'\n');"
+Run:
+  node "$AGENTS_CONFIG_DIR/bin/session-close-render-sc7.js" "<PLANS_DIR>/<session-id>-supervisor-state.json" "<session-id>"
 
 When the render is non-empty: emit the text verbatim into the assistant reply (no preamble, no wrapping).
 

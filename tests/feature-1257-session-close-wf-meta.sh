@@ -380,7 +380,7 @@ test_S4_skill_md_has_skipped_wf_meta_and_kept_open() {
     fi
     local has_skipped has_kept
     grep -qF "skipped_wf_meta" "$SKILL_MD" && has_skipped=1 || has_skipped=0
-    grep -qF "kept open (planning session)" "$SKILL_MD" && has_kept=1 || has_kept=0
+    grep -qF "kept open (planning session)" "${AGENTS_DIR}/hooks/lib/final-report-schema.js" && has_kept=1 || has_kept=0
     if [ "$has_skipped" = "1" ] && [ "$has_kept" = "1" ]; then
         pass "S4_skill_md_has_skipped_wf_meta_and_kept_open: both 'skipped_wf_meta' and 'kept open (planning session)' found"
     elif [ "$has_skipped" = "0" ] && [ "$has_kept" = "0" ]; then
