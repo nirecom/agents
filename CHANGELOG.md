@@ -522,3 +522,7 @@ Changes: Fixed: worktree-end supervisor adaptive guidance ("WE-15 cleanup in pro
 ### FEATURE: PR #1494 (2026-07-17)
 Background: fix(enforce-worktree): write-detector false-negatives/false-positives (#1424 #1425 #1448)
 Changes: `enforce-worktree`: fix three write-detector false-negatives/positives — sequenced `gh` write commands are now detected per-segment (#1424); multi-line `\`-continued commands no longer trigger false-positive write blocks (#1425); redirects to non-repo temp paths from a non-git CWD and compounds with trailing `; echo RC=$?` are no longer blocked (#1448).
+
+### FEATURE: PR #1493 (2026-07-17)
+Background: fix(#1482,#861,#1161): post-compact workflow progress + conv-lang any no-op + pr-merge reset_reason
+Changes: Fixed `CONV_LANG=any` injecting "Respond to the user in any." instead of being a no-op — `any` is now treated like `english` (no injection).;After context compaction, the resumed conversation now shows a 10-step workflow progress summary (step names and statuses read directly from the session state file), preventing the assistant from re-doing completed steps.
