@@ -275,7 +275,7 @@ Reviewer scripts call `codex_core_check_jq` at startup; missing jq results in ea
 |------|---------|
 | [fnm](https://github.com/Schniz/fnm) (Windows) / [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) | Installer: installs Claude Code and Codex via npm |
 | [uv](https://github.com/astral-sh/uv) + Python 3 | `doc-append`, `doc-rotate.py`, `sort-history.py`, `convert-history-table.py` |
-| [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit` (without it, all repos are scanned conservatively) |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Private-repo detection in `hooks/pre-commit`; `project` scope (`gh auth refresh -s project`) required for `/issue-create` and Projects v2 |
 | `osascript` (macOS) / `notify-send` (Linux) | Toast notifications from `bin/session-sync.sh` |
 
 ### GitHub Copilot

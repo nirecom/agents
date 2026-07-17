@@ -106,6 +106,15 @@ echo ""
 printf -- "${C_BOLD}--- Setting up global gitignore (WORKTREE_NOTES.md) ---${C_RESET}\n"
 "$AGENTS_ROOT/install/linux/global-gitignore.sh"
 
+if command -v gh >/dev/null 2>&1; then
+    if gh auth status >/dev/null 2>&1; then
+        if ! gh auth status 2>&1 | grep -q "'project'"; then
+            printf "${C_YELLOW}notice: gh auth lacks 'project' scope — Projects v2 / /issue-create will fail.${C_RESET}\n" >&2
+            printf "${C_YELLOW}notice: Run 'gh auth refresh -s project' or '/issue-setup' to add it.${C_RESET}\n" >&2
+        fi
+    fi
+fi
+
 echo ""
 printf "${C_GREEN}=== Done ===${C_RESET}\n"
 if [ "$_need_restart" = "true" ]; then
