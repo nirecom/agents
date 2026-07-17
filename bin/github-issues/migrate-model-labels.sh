@@ -62,6 +62,23 @@ declare -A RENAMES=(
 for OLD in "model:fable" "model:opus" "model:sonnet" "model:ds4"; do
   NEW="${RENAMES[$OLD]}"
   EXISTING="$(gh label list --repo "$REPO" --search "$OLD" --json name --jq '.[0].name // empty' 2>/dev/null || true)"
+  NEW_EXISTS="$(gh label list --repo "$REPO" --search "$NEW" --json name \
+    --jq '.[0].name // empty' 2>/dev/null || true)"
+  if [[ "$NEW_EXISTS" == "$NEW" ]]; then
+    NEW_COUNT="$(gh issue list --label "$NEW" --state all --limit 1 \
+      --repo "$REPO" --json number --jq 'length' 2>/dev/null || echo "0")"
+    if [[ "$NEW_COUNT" -eq 0 ]]; then
+      if [[ "$DRY_RUN" -eq 1 ]]; then
+        echo "[DRY-RUN] Would DELETE $NEW (exists, 0 issues) before renaming $OLD → $NEW"
+      else
+        gh label delete "$NEW" --repo "$REPO" --yes
+        echo "PRE-DELETED: $NEW (0 issues, cleared for rename)"
+      fi
+    else
+      echo "WARN: $NEW already exists with $NEW_COUNT issue(s) — skipping rename of $OLD"
+      continue
+    fi
+  fi
   if [[ "$EXISTING" == "$OLD" ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
       echo "[DRY-RUN] Would RENAME $OLD → $NEW"
