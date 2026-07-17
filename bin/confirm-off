@@ -42,7 +42,7 @@ if [ ! -f "$GETCV" ]; then
   exit 2
 fi
 
-"$GETCV" --is-off "$CO_KEY" "$CO_DEFAULT"
+bash "$GETCV" --is-off "$CO_KEY" "$CO_DEFAULT"
 rc=$?
 case "$rc" in
   0) printf 'OFF\n'; exit 0 ;;
