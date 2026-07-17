@@ -542,3 +542,7 @@ Changes: Fix: bin/ scripts now have the correct execute bit recorded in git (mod
 ### FEATURE: PR #1505 (2026-07-17)
 Background: fix(#1499): add ISSUE_TOKEN_CLI_GUARD_RE to parseIssueToken — reject bare digits
 Changes: Fixed: `/workflow-init` no longer extracts spurious issue numbers from free-text tokens that contain bare digits (e.g. version strings like `bash 3.2` no longer match as issue `#3`).
+
+### FEATURE: PR #1507 (2026-07-17)
+Background: feat(#1492): sync-labels DELETE propagation + migrate pre-delete guard
+Changes: sync-labels.sh now deletes labels absent from `.github/labels.yml`; `propagate-labels.sh` inherits this automatically for sibling repos;`--dry-run` flag added to `sync-labels.sh` (gates all mutations: CREATE, UPDATE, and DELETE);`migrate-model-labels.sh` Phase 1 pre-delete guard: safely clears zero-issue target labels before rename, fixing CI ordering issue that previously blocked issue association preservation
