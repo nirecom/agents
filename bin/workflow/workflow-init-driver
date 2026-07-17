@@ -15,6 +15,7 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
 
+const { ISSUE_TOKEN_CLI_GUARD_RE } = require("../../hooks/lib/parse-closes-issues.js");
 const { checkpointPath, makeInitialState, writeCheckpoint, readCheckpoint } = require("./lib/workflow-init/checkpoint");
 const { emitDone, emitAskUser, emitBlocked } = require("./lib/workflow-init/directive");
 const { detectIssues } = require("./lib/workflow-init/phases/detect-issues");
@@ -52,6 +53,36 @@ function validSid(raw) {
   if (typeof raw !== "string") return null;
   const sid = raw.trim();
   return SID_RE.test(sid) ? sid : null;
+}
+
+const MAX_TOKEN_LEN = 64;
+
+function validateTokens(tokens) {
+  // Zero tokens is valid (Path C — no issue supplied).
+  if (tokens.length === 0) return null;
+  for (const tok of tokens) {
+    if (/[\r\n]/.test(tok)) {
+      return {
+        reason: "invalid_token_newline",
+        nextHint:
+          "raw-tokens must be issue number tokens like #15 — not the full user prompt." +
+          " Pass '#N' tokens only (e.g. workflow-init-driver '#15').",
+      };
+    }
+    if (
+      !ISSUE_TOKEN_CLI_GUARD_RE.test(tok) ||
+      !/^[^#]*#\d+$/.test(tok) ||
+      tok.length > MAX_TOKEN_LEN
+    ) {
+      return {
+        reason: "invalid_token_format",
+        nextHint:
+          "raw-tokens must be '#N', 'repo#N', or 'owner/repo#N' (e.g. '#15')." +
+          " Received: " + JSON.stringify(tok),
+      };
+    }
+  }
+  return null;
 }
 
 /**
@@ -304,6 +335,14 @@ function runPipeline(state, startPhase, tokens, sessionId, ckptFile) {
 
 function main() {
   const { resumePath, answer, phaseOnly, tokens } = parseArgs(process.argv);
+
+  {
+    const tokErr = validateTokens(tokens);
+    if (tokErr) {
+      emitBlocked("<pre-session>", tokErr.reason, tokErr.nextHint);
+      return;
+    }
+  }
 
   const { sid: sessionId, reliable: sidReliable } = resolveSessionId();
   // wipSid: the session ID to pass to wip-state.sh; null when not reliably resolved.
