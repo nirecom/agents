@@ -138,6 +138,10 @@ assert_script_contains "T-migrate-phase-rename"    "RENAME"
 assert_script_contains "T-migrate-phase-create"    "sync-labels.sh"
 assert_script_contains "T-migrate-phase-others"    "model:others"
 assert_script_contains "T-migrate-phase-1488"      "1488"
+assert_script_contains "T-migrate-predelete-new-exists-check" "NEW_EXISTS="
+assert_script_contains "T-migrate-predelete-count-check"      "NEW_COUNT="
+assert_script_contains "T-migrate-predelete-deleted-msg"      "PRE-DELETED:"
+assert_script_contains "T-migrate-predelete-warn-msg"         "WARN: "
 
 echo ""
 echo "=== migrate-model-labels.sh: subprocess execution (--dry-run) ==="
@@ -204,6 +208,63 @@ else
         FAIL=$((FAIL + 1))
     fi
 fi
+
+echo ""
+echo "=== migrate-model-labels.sh: mock execution tests (pre-delete guard) ==="
+
+MOCK_GH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures/gh-mock"
+[ -x "$MOCK_GH_DIR/gh" ] || chmod +x "$MOCK_GH_DIR/gh" 2>/dev/null || true
+
+# T-migrate-T1-exec: empty target exists, issue count=0 → DELETE then RENAME in order.
+MT1_TMP="$(mktemp -d)"
+MT1_LOG="$MT1_TMP/gh.log"; : > "$MT1_LOG"
+(
+  export PATH="$MOCK_GH_DIR:$PATH"
+  export GH_MOCK_LABEL_LOG="$MT1_LOG"
+  export GH_MOCK_SCENARIO="default"
+  export GH_MOCK_LABEL_SEARCH="model:fable
+reporter-model:fable"
+  export GH_MOCK_ISSUE_COUNT=0
+  bash "$MIGRATE_SCRIPT" --repo nirecom/agents \
+    >"$MT1_TMP/out" 2>&1 || true
+)
+del_line=$(grep -n 'label delete reporter-model:fable' "$MT1_LOG" 2>/dev/null | head -1 | cut -d: -f1 || true)
+edit_line=$(grep -n 'label edit model:fable' "$MT1_LOG" 2>/dev/null | head -1 | cut -d: -f1 || true)
+if [ -n "$del_line" ] && [ -n "$edit_line" ] && [ "$del_line" -lt "$edit_line" ]; then
+    echo "PASS: T-migrate-T1-exec — delete (line $del_line) before rename (line $edit_line)"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: T-migrate-T1-exec — del_line=${del_line:-MISSING} edit_line=${edit_line:-MISSING} log=$(cat "$MT1_LOG")"
+    FAIL=$((FAIL + 1))
+fi
+rm -rf "$MT1_TMP"
+
+# T-migrate-T2-exec: target exists, issue count=1 → no DELETE, WARN in stdout.
+MT2_TMP="$(mktemp -d)"
+MT2_LOG="$MT2_TMP/gh.log"; : > "$MT2_LOG"
+MT2_OUT="$MT2_TMP/out"
+(
+  export PATH="$MOCK_GH_DIR:$PATH"
+  export GH_MOCK_LABEL_LOG="$MT2_LOG"
+  export GH_MOCK_SCENARIO="default"
+  export GH_MOCK_LABEL_SEARCH="model:fable
+reporter-model:fable"
+  export GH_MOCK_ISSUE_COUNT=1
+  bash "$MIGRATE_SCRIPT" --repo nirecom/agents \
+    >"$MT2_OUT" 2>&1 || true
+)
+delete_absent=1
+grep -q 'label delete reporter-model:fable' "$MT2_LOG" 2>/dev/null && delete_absent=0 || true
+warn_present=0
+grep -q 'WARN: reporter-model:fable' "$MT2_OUT" 2>/dev/null && warn_present=1 || true
+if [ "$delete_absent" -eq 1 ] && [ "$warn_present" -eq 1 ]; then
+    echo "PASS: T-migrate-T2-exec — no delete, WARN present"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: T-migrate-T2-exec — delete_absent=$delete_absent warn_present=$warn_present out=$(cat "$MT2_OUT")"
+    FAIL=$((FAIL + 1))
+fi
+rm -rf "$MT2_TMP"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
