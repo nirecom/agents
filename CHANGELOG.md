@@ -518,3 +518,7 @@ Changes: `/issue-create` can now be invoked from the main worktree when `ENFORCE
 ### FEATURE: PR #1491 (2026-07-17)
 Background: fix(#1145): narrow isWorktreeEndEnv() to WE-15..WE-22 cleanup window
 Changes: Fixed: worktree-end supervisor adaptive guidance ("WE-15 cleanup in progress") no longer fires incorrectly in post-WE-22 contexts (e.g. /session-close); WORKTREE_OFF block message now uses correct fixed text after cleanup window closes.
+
+### FEATURE: PR #1494 (2026-07-17)
+Background: fix(enforce-worktree): write-detector false-negatives/false-positives (#1424 #1425 #1448)
+Changes: `enforce-worktree`: fix three write-detector false-negatives/positives — sequenced `gh` write commands are now detected per-segment (#1424); multi-line `\`-continued commands no longer trigger false-positive write blocks (#1425); redirects to non-repo temp paths from a non-git CWD and compounds with trailing `; echo RC=$?` are no longer blocked (#1448).
