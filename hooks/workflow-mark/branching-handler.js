@@ -2,8 +2,10 @@
 // Handles BRANCHING_COMPLETE (and legacy BRANCHING_DECIDED) sentinels, emitted
 // when the worktree/branch setup step finishes. Marks branching_complete in workflow state.
 
+const fs = require("fs");
 const { validateSkipReason } = require("./skip-reason");
-const { markStep } = require("../lib/workflow-state");
+const { markStep, recordSessionWorktree } = require("../lib/workflow-state");
+const { isMainWorktree } = require("../lib/workflow-state/resolve-worktree-path");
 const {
   BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
   BRANCHING_DECIDED_RE_DQ, BRANCHING_DECIDED_LOOKSLIKE_RE,
@@ -50,6 +52,17 @@ function handle(ctx) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. branching_complete NOT recorded.`
       );
+    }
+    try {
+      const wtMatch = v.reason.match(/\bworktree:\s*([^\s|]+)/);
+      const wtPath = wtMatch ? wtMatch[1] : null;
+      if (wtPath && fs.existsSync(wtPath) && !isMainWorktree(wtPath)) {
+        recordSessionWorktree(sessionId, wtPath);
+      } else {
+        recordSessionWorktree(sessionId, null);
+      }
+    } catch (e) {
+      pushMessage(`workflow-mark: warning — failed to record session_worktree: ${e.message}`);
     }
     return true;
   }
