@@ -530,3 +530,7 @@ Changes: Fixed `CONV_LANG=any` injecting "Respond to the user in any." instead o
 ### FEATURE: PR #1496 (2026-07-17)
 Background: feat(#1492): rename model:* labels to reporter-model:*, add model-scope:* taxonomy
 Changes: **Label taxonomy**: `model:*` labels renamed to `reporter-model:*`; new `model-scope:*` labels added for issues scoped to a specific model's behavior. Run `bin/github-issues/migrate-model-labels.sh --dry-run` to preview the GitHub migration.
+
+### FEATURE: PR #1497 (2026-07-17)
+Background: feat(#1487): add soft gh auth 'project' scope check to install.sh + install.ps1
+Changes: `install.sh` and `install.ps1` now warn on completion when `gh` is installed and authenticated but lacks the `'project'` scope needed for Projects v2 and `/issue-create`. Run `gh auth refresh -s project` or `/issue-setup` to add it.
