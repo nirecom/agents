@@ -502,3 +502,7 @@ Changes: Fix: chained interpreter commands (`bash -c '...'; sh -c 'rm file'`) we
 ### FEATURE: PR #1477 (2026-07-17)
 Background: feat(#1470): add check-inline-procedures quality gate to WF-CODE-6
 Changes: New `check-inline-procedures` quality gate in WF-CODE-6: warns when prompt files contain inline numbered procedure blocks of 3 or more steps (advisory only, always exits 0).
+
+### FEATURE: PR #1480 (2026-07-17)
+Background: refactor(#1463): scriptify session-close/SKILL.md
+Changes: Session close Final Report placeholders are now substituted by `bin/render-final-report.js` — no manual LLM token substitution required; all 13 section headings and field values are resolved deterministically.
