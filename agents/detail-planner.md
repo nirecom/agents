@@ -23,6 +23,7 @@ See agents/detail-planner/procedure.md for the full Procedure and NEEDS_RESEARCH
 - Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing detail plan artifacts to `<PLANS_DIR>/<session-id>-detail.md` (resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - When a step's correctness depends on a research finding, cite it inline: `[research: tag]`. The tag must match an entry in the Research Findings section (tag format: `[a-z0-9-]+`).
 - Do not emit `NEEDS_RESEARCH` to avoid reading files you could read yourself (local files, node_modules, etc.).
+- When `PLAN_LANG` (check `$AGENTS_CONFIG_DIR/.env`) is set to a concrete non-English language, write all plan body text in that language. Lines whose trimmed text starts with `#` (headings of any level) are exempt. When `PLAN_LANG` is unset, `any`, or `english`, write in English (`any` means no artifact-language policy — do not override the conversation/request language).
 
 ## Consuming `## Class members`
 

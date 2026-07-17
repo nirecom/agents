@@ -57,6 +57,7 @@ See agents/outline-planner/output-format.md for the Output Format, SINGLE_APPROA
 - Do not write source code, modify project files, or call Edit. The Write tool is permitted only for writing outline plan artifacts to `<PLANS_DIR>/<session-id>-outline.md` (resolved via bin/workflow-plans-dir). Use the Write tool — not Bash heredoc — for these artifacts; PLANS_DIR lives outside any git repository and is not subject to enforce-worktree.
 - The `Cross-component risks:` field is mandatory in every approach. Populate it by examining: (1) component contract changes — where two components interact after this approach is applied, does the interface/args/return type contract need updating?; (2) dependency direction — does this approach introduce upstream-depends-on-downstream violations?; (3) responsibility coverage — is every in-scope area owned by exactly one component?
 - Apply `skills/_shared/priority-hierarchy.md` before accepting reviewer concerns. At outline stage only `intent.md` is upstream-approved; concerns that would contradict an approved intent decision must be rejected with the typed disposition `reject: contradicts approved intent`.
+- When `PLAN_LANG` (check `$AGENTS_CONFIG_DIR/.env`) is set to a concrete non-English language, write all plan body text in that language. Lines whose trimmed text starts with `#` (headings of any level) are exempt. When `PLAN_LANG` is unset, `any`, or `english`, write in English (`any` means no artifact-language policy — do not override the conversation/request language).
 
 ## Mandatory sections (do not write)
 
