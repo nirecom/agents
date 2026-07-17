@@ -510,3 +510,7 @@ Changes: Session close Final Report placeholders are now substituted by `bin/ren
 ### FEATURE: PR #1490 (2026-07-17)
 Background: feat(enforce-worktree): report write predicate name in block reason
 Changes: When `enforce-worktree` blocks a Bash write command, the block reason now names the detection predicate that fired (e.g. `Detected by: POSIX redirect or tee (isPosixRedirWriteIR)`), making it easier to diagnose unexpected blocks.
+
+### FEATURE: PR #1489 (2026-07-17)
+Background: fix(#1483): add missing scripts to enforce-worktree SANCTIONED allowlist
+Changes: `/issue-create` can now be invoked from the main worktree when `ENFORCE_WORKTREE=on` — a missing allowlist entry caused every attempt to be blocked, generating supervisor warnings that then sealed the `WORKTREE_OFF` escape hatch.
