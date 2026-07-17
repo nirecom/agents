@@ -538,3 +538,7 @@ Changes: `install.sh` and `install.ps1` now warn on completion when `gh` is inst
 ### FEATURE: PR #1502 (2026-07-17)
 Background: fix(#1485): add bash/node prefix to direct call sites + chmod+x sweep on bin/
 Changes: Fix: bin/ scripts now have the correct execute bit recorded in git (mode 100755); direct shebang-based invocation works on macOS, Linux, and WSL without needing a bash/node prefix
+
+### FEATURE: PR #1505 (2026-07-17)
+Background: fix(#1499): add ISSUE_TOKEN_CLI_GUARD_RE to parseIssueToken — reject bare digits
+Changes: Fixed: `/workflow-init` no longer extracts spurious issue numbers from free-text tokens that contain bare digits (e.g. version strings like `bash 3.2` no longer match as issue `#3`).
