@@ -5,7 +5,7 @@
 // allow when every parseable write target resolves outside the session scope.
 // Sequenced commands and parse failures → abstain (fail-closed, C1).
 
-const { collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude } = require("./bash-write-scope");
+const { collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, areAllWriteSegmentsOutsideSessionScope } = require("./bash-write-scope");
 const { hasCommandSequencing, hasCommandSequencingOutsideHeredoc } = require("./shared-cmd-utils");
 const { parse } = require("../lib/command-ir");
 
@@ -55,9 +55,16 @@ function checkUniversalTargetAllow(toolName, toolInput, sessionRoots, repoRoot, 
     // Guard 2 (C1 fail-closed): sequenced commands may contain repo-internal write
     // segments invisible to any single extractor. Abstain immediately — UNLESS the
     // sequencing operators appear only inside a heredoc body (#1109) AND all targets
-    // are provably under plans-dir (safe non-repo external writes).
+    // are provably under plans-dir (safe non-repo external writes), OR all write
+    // segments are provably outside session scope (#1448A).
     if (hasCommandSequencing(cmd)) {
-      if (hasCommandSequencingOutsideHeredoc(cmd)) return { verdict: "abstain" };
+      if (hasCommandSequencingOutsideHeredoc(cmd)) {
+        const seqIr = parse(cmd);
+        if (areAllWriteSegmentsOutsideSessionScope(seqIr, repoRoot, sessionRoots)) {
+          return { verdict: "allow", reason: "all write segments outside session scope" };
+        }
+        return { verdict: "abstain" };
+      }
       // Sequencing is heredoc-body-only: check targets now; allow if all under plans-dir.
       const { targets: hTargets, parseFailure: hPf } = collectBashWriteTargets(irToUse, repoRoot);
       if (hPf || !(areAllBashTargetsUnderPlansDir(hTargets) || areAllBashTargetsUnderClaude(hTargets))) return { verdict: "abstain" };

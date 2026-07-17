@@ -174,67 +174,62 @@ function isGhWriteIR(ir) {
   if (!ir || ir.parseFailure === true) return false;
   if (!ir.segments || ir.segments.length === 0) return false;
 
-  // Find the first gh segment (direct, env-prefix `env VAR=val gh ...`, or VAR=val-prefix `VAR=val gh ...`).
-  // argv in IR excludes cmd0 — it starts with the first argument after the command name.
-  let ghArgv = null;
   for (const seg of ir.segments) {
+    // Resolve the effective gh argv for this segment (direct, env-prefix, or VAR=val-prefix).
+    // argv in IR excludes cmd0 — it starts with the first argument after the command name.
+    let ghArgv = null;
     if (seg.cmd0 === "gh") {
       ghArgv = seg.argv; // argv already excludes cmd0
-      break;
-    }
-    // `env VARNAME=val gh ...` form — synthetic seg so resolveEffectiveCommand skips leading assignments
-    if (seg.cmd0 === "env" && Array.isArray(seg.argv) && seg.argv.length > 0) {
+    } else if (seg.cmd0 === "env" && Array.isArray(seg.argv) && seg.argv.length > 0) {
+      // `env VARNAME=val gh ...` form — synthetic seg so resolveEffectiveCommand skips leading assignments
       const synthSeg = { cmd0: seg.argv[0], argv: seg.argv.slice(1) };
       if (resolveEffectiveCommand(synthSeg) === "gh") {
         ghArgv = resolveEffectiveArgv(synthSeg);
-        break;
       }
-    }
-    // `VAR=val gh ...` form (inline env assignment as cmd0)
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv)) {
+    } else if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(seg.cmd0) && Array.isArray(seg.argv)) {
+      // `VAR=val gh ...` form (inline env assignment as cmd0)
       if (resolveEffectiveCommand(seg) === "gh") {
         ghArgv = resolveEffectiveArgv(seg);
-        break;
       }
     }
-  }
-  if (!ghArgv || ghArgv.length === 0) return false;
+    if (!ghArgv || ghArgv.length === 0) continue;
 
-  // Skip leading gh global flags (and their values) so sub0/sub1 read from the
-  // effective subcommand position — closes the global-flag-before-subcommand
-  // bypass (#1296 retire; see resolveGhSubArgv). Composes with the env-prefix /
-  // VAR=val resolution above (that ran first, so subArgv starts after `gh`).
-  const subArgv = resolveGhSubArgv(ghArgv);
-  if (subArgv.length === 0) return false;
+    // Skip leading gh global flags (and their values) so sub0/sub1 read from the
+    // effective subcommand position — closes the global-flag-before-subcommand
+    // bypass (#1296 retire; see resolveGhSubArgv). Composes with the env-prefix /
+    // VAR=val resolution above (that ran first, so subArgv starts after `gh`).
+    const subArgv = resolveGhSubArgv(ghArgv);
+    if (subArgv.length === 0) continue;
 
-  const sub0 = subArgv[0];
-  const sub1 = subArgv[1];
-  const sub2 = subArgv[2];
+    const sub0 = subArgv[0];
+    const sub1 = subArgv[1];
+    const sub2 = subArgv[2];
 
-  if (sub0 === "pr" && sub1 === "merge") return true;
-  if (sub0 === "issue" && sub1 === "delete") return true;
-  if (sub0 === "repo" && sub1 === "delete") return true;
-  if (sub0 === "release" && sub1 != null && /^(?:create|delete|edit|upload)$/.test(sub1)) return true;
-  if (sub0 === "issue" && sub1 === "create") return true;
+    if (sub0 === "pr" && sub1 === "merge") return true;
+    if (sub0 === "issue" && sub1 === "delete") return true;
+    if (sub0 === "repo" && sub1 === "delete") return true;
+    if (sub0 === "release" && sub1 != null && /^(?:create|delete|edit|upload)$/.test(sub1)) return true;
+    if (sub0 === "issue" && sub1 === "create") return true;
 
-  if (sub0 === "api") {
-    // gh api -X METHOD / --method METHOD (loop is order-tolerant, matches the
-    // retired regex; iterate the effective subArgv so global flags before `api`
-    // are already stripped).
-    for (let i = 1; i < subArgv.length; i++) {
-      const tok = subArgv[i];
-      if (tok === "-X" || tok === "--method") {
-        const method = subArgv[i + 1];
-        if (method && /^(?:POST|PUT|PATCH|DELETE)$/i.test(method)) return true;
-      // -X=? preserves the retired gh-api-mutate regex's -X= (equals) coverage (#1296)
-      } else if (/^-X=?(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
-        return true;
+    if (sub0 === "api") {
+      // gh api -X METHOD / --method METHOD (loop is order-tolerant, matches the
+      // retired regex; iterate the effective subArgv so global flags before `api`
+      // are already stripped).
+      for (let i = 1; i < subArgv.length; i++) {
+        const tok = subArgv[i];
+        if (tok === "-X" || tok === "--method") {
+          const method = subArgv[i + 1];
+          if (method && /^(?:POST|PUT|PATCH|DELETE)$/i.test(method)) return true;
+        // -X=? preserves the retired gh-api-mutate regex's -X= (equals) coverage (#1296)
+        } else if (/^-X=?(?:POST|PUT|PATCH|DELETE)$/i.test(tok) || /^--method=(?:POST|PUT|PATCH|DELETE)$/i.test(tok)) {
+          return true;
+        }
       }
+      // gh api PUT repos/.../contents/...
+      if (sub1 === "PUT" && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/contents\//.test(sub2)) return true;
+      // gh api POST|PATCH repos/.../git/{blobs,trees,commits,refs}
+      if ((sub1 === "POST" || sub1 === "PATCH") && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/git\/(?:blobs|trees|commits|refs)/.test(sub2)) return true;
     }
-    // gh api PUT repos/.../contents/...
-    if (sub1 === "PUT" && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/contents\//.test(sub2)) return true;
-    // gh api POST|PATCH repos/.../git/{blobs,trees,commits,refs}
-    if ((sub1 === "POST" || sub1 === "PATCH") && sub2 != null && /^repos\/[^/\s]+\/[^/\s]+\/git\/(?:blobs|trees|commits|refs)/.test(sub2)) return true;
   }
 
   return false;

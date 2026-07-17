@@ -304,6 +304,50 @@ function isEverySegmentExcluded(ir, repoRoot, patterns) {
   return hasWriteSegment === true;
 }
 
+// Per-segment scope check for sequenced commands (#1448A).
+// Accepts an IR object. For each segment:
+//   - read segment → skip (continue)
+//   - write segment with extractable targets → check each target with isInSessionScope;
+//     if any target is in scope → return false (fail-closed)
+//   - write segment with no extractable targets (targetless write: git commit, gh pr merge,
+//     interpreter-c, encoded-command, exotic-exec, pkg-mgr without extractable path) →
+//     return false (fail-closed)
+// Returns true only when every write segment's targets are provably outside session scope.
+// Mirrors isEverySegmentExcluded's segment iteration pattern but checks scope instead of EXCLUDE.
+function areAllWriteSegmentsOutsideSessionScope(ir, repoRoot, sessionRoots) {
+  if (!ir || ir.parseFailure === true) return false;
+  if (!ir.segments || ir.segments.length === 0) return false;
+
+  for (const seg of ir.segments) {
+    const segIr = { rawText: seg.rawText, segments: [seg], parseFailure: false, cmd0: seg.cmd0, cmd0Raw: seg.cmd0Raw || "", argv: seg.argv, argvRaw: seg.argvRaw || [], redirects: seg.redirects, kind: seg.kind, separators: [] };
+    // Targetless write predicates: no local file target extractable → fail-closed.
+    const isGhWrite = isGhWriteIR(segIr);
+    if (isGhWrite) return false;
+    if (isExoticExecWriteIR(segIr)) return false;
+    if (isPkgMgrWriteIR(segIr)) return false;
+    if (isInterpreterCWriteIR(segIr)) return false;
+    if (isEncodedCommandWriteIR(segIr)) return false;
+    // Determine if this is a write segment (mirrors isEverySegmentExcluded logic).
+    const isGitWrite = isGitWriteIR(segIr);
+    const isWriteSeg = classify(segIr) === "write" ||
+      isPosixRedirWriteIR(segIr) || isPwshWriteIR(segIr) || isFileOpWriteIR(segIr) ||
+      isCommandSubstWriteIR(segIr) ||
+      isExtendedFileOpWriteIR(segIr) ||
+      isGitWrite;
+    if (!isWriteSeg) continue;
+    // Write segment: collect targets and scope-check each one.
+    const result = isGitWrite
+      ? collectBashWriteTargets(segIr, repoRoot)
+      : collectBashWriteTargets(segIr);
+    if (result.parseFailure === true) return false;
+    // Targetless write (no extractable targets) → fail-closed.
+    if (result.targets === null || result.targets.length === 0) return false;
+    // Check each target: if any resolves inside session scope → fail-closed.
+    if (!areAllBashTargetsOutsideSessionScope(result.targets, sessionRoots)) return false;
+  }
+  return true;
+}
+
 module.exports = {
   isInSessionScope,
   collectBashWriteTargets,
@@ -312,5 +356,6 @@ module.exports = {
   areAllBashTargetsUnderClaude,
   isWriteTargetAllExcluded,
   isEverySegmentExcluded,
+  areAllWriteSegmentsOutsideSessionScope,
   isGhWriteCommand,
 };
