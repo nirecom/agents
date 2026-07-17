@@ -204,4 +204,8 @@ Changes: fix(#1511): add explicit PLAN_LANG directive to outline-planner, detail
 
 ### FEATURE: PR #1515 — fix/923-enforce-worktree-early-exit (2026-07-18, 5e2c5efe3c94a40e4afebcd614d409e531992694, #1515)
 Background: fix(#923): enforce-worktree early-exit for git worktree remove/prune
-Changes: fix(#923): add early-exit in enforce-worktree.js that evaluates isAllowedWorktreeCommand (for git worktree remove/prune) before the session-scope pipeline; uses CWD-anchored isMainCheckout to block linked-CWD + -C <main> and main-CWD + -C <other-repo> misuse; adds 6 L2 integration tests (T923-L2.A–F) covering allow/block dispatch at the full hook boundary <!-- compose-doc-append-sentinel: branch=fix/923-enforce-worktree-early-exit pr=#1515 -->
+Changes: fix(#923): add early-exit in enforce-worktree.js that evaluates isAllowedWorktreeCommand (for git worktree remove/prune) before the session-scope pipeline; uses CWD-anchored isMainCheckout to block linked-CWD + -C <main> and main-CWD + -C <other-repo> misuse; adds 6 L2 integration tests (T923-L2.A–F) covering allow/block dispatch at the full hook boundary <!-- compose-doc-append-sentinel: branch=fix/923-enforce-worktree-early-exit pr=#1515 -->
+
+### FEATURE: PR #1516 — fix/950-session-worktree (2026-07-18, 96bfb7fcd4f1e45beca9b29edc0bc458dca9c26a, #1516)
+Background: fix(#950): resolveSessionWorktreePath falls back to state.session_worktree for mid-session /worktree-start
+Changes: BUGFIX #950: `resolveSessionWorktreePath` now falls back to a new `state.session_worktree` field when `state.cwd` points to the main worktree (mid-session `/worktree-start` case). `branching-handler.js` writes the field via `recordSessionWorktree()` on `WORKFLOW_BRANCHING_COMPLETE`. Fixes exit-code-3 failure in `select-staged-files.sh` / `/review-tests` when the session was started from the main worktree. <!-- compose-doc-append-sentinel: branch=fix/950-session-worktree pr=#1516 -->
