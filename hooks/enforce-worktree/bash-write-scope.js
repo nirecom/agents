@@ -13,8 +13,9 @@ const {
   extractStagedFiles,
   collectWriteTargetsFromSegments, FULL_VERB_SET,
   isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR,
-  isInterpreterCWriteIR,
+  isInterpreterCWriteIR, isEncodedCommandWriteIR, isExtendedFileOpWriteIR,
 } = require("../lib/bash-write-targets");
+const { extractFileOpTargets } = require("../lib/bash-write-targets/file-op");
 const { extractGitWriteTargets } = require("../lib/bash-write-targets/git");
 const { isPkgMgrWriteIR, extractPkgMgrWriteTargets } = require("../lib/bash-write-targets/pkg-mgr");
 
@@ -84,6 +85,20 @@ function collectBashWriteTargets(ir, repoRoot) {
     if (pkgMgrTargets.length > 0) {
       const merged = (green.targets || []).concat(pkgMgrTargets);
       return { targets: merged, parseFailure: green.parseFailure };
+    }
+  }
+
+  // Extended file-op targets are ancestor-file targets (repoRoot-independent) —
+  // merge unconditionally so per-segment EXCLUDE callers (which pass no repoRoot)
+  // also receive them (C5).
+  if (isExtendedFileOpWriteIR(ir)) {
+    const fileOpTargets = extractFileOpTargets(ir);
+    if (fileOpTargets === null) {
+      return { targets: green.targets, parseFailure: true };
+    }
+    if (fileOpTargets.length > 0) {
+      const wrapped = fileOpTargets.map((p) => ({ resolveVia: "ancestor", path: p }));
+      green.targets = (green.targets || []).concat(wrapped);
     }
   }
 
@@ -254,10 +269,12 @@ function isEverySegmentExcluded(ir, repoRoot, patterns) {
     if (isExoticExecWriteIR(segIr)) return false;
     if (isPkgMgrWriteIR(segIr)) return false;
     if (isInterpreterCWriteIR(segIr)) return false;
+    if (isEncodedCommandWriteIR(segIr)) return false; // no extractable local target → fail-closed
     const isGitWrite = isGitWriteIR(segIr);
     const isWriteSeg = classify(segIr) === "write" ||
       isPosixRedirWriteIR(segIr) || isPwshWriteIR(segIr) || isFileOpWriteIR(segIr) ||
       isCommandSubstWriteIR(segIr) ||
+      isExtendedFileOpWriteIR(segIr) ||
       isGitWrite;
     if (!isWriteSeg) continue;
     // write segment
