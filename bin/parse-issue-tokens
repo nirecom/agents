@@ -6,7 +6,7 @@ try {
     path.join(path.dirname(__dirname), 'hooks', 'lib', 'parse-closes-issues.js')
   );
   const raw = process.argv.slice(2).join(' ');
-  const tokens = raw.split(/[\s,\n]+/).filter(Boolean);
+  const tokens = raw.split(/[\s,\n]+/).filter(Boolean).filter((tok) => /#/.test(tok));
   const results = tokens.map(parseIssueToken).filter(Boolean);
   console.log(JSON.stringify(results));
 } catch (e) {
