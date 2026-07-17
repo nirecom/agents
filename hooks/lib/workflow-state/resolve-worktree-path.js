@@ -50,8 +50,15 @@ function resolveSessionWorktreePath(sessionId) {
     if (state === null) return null;
     if (!state.cwd || typeof state.cwd !== "string") return null;
     if (!fs.existsSync(state.cwd)) return null;
-    if (isMainWorktree(state.cwd)) return null;
-    return state.cwd;
+    if (!isMainWorktree(state.cwd)) return state.cwd;
+    // Fallback: mid-session /worktree-start case — state.cwd was recorded at session
+    // creation from the main worktree; branching-handler.js writes the actual linked
+    // worktree path to state.session_worktree after WORKFLOW_BRANCHING_COMPLETE.
+    const swt = typeof state.session_worktree === "string" ? state.session_worktree : null;
+    if (!swt) return null;
+    if (!fs.existsSync(swt)) return null;
+    if (isMainWorktree(swt)) return null;
+    return swt;
   } catch (_e) {
     return null;
   }
