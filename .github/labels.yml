@@ -35,23 +35,44 @@
   color: "c5def5"
   description: "Cosmetic or safely deferrable; no label = normal severity"
 
-# --- Model ---
-- name: "model:fable"
+# --- Reporter Model ---
+- name: "reporter-model:fable"
   color: "e99695"
-  description: "Issue is specific to or observed with Fable"
+  description: "Model that reported this issue (reliability signal): Fable"
 
-- name: "model:opus"
+- name: "reporter-model:opus"
   color: "d4c5f9"
-  description: "Issue is specific to or observed with Claude Opus"
+  description: "Model that reported this issue (reliability signal): Claude Opus"
 
-- name: "model:sonnet"
+- name: "reporter-model:sonnet"
   color: "bfd4f2"
-  description: "Issue is specific to or observed with Claude Sonnet"
+  description: "Model that reported this issue (reliability signal): Claude Sonnet"
 
-- name: "model:ds4"
+- name: "reporter-model:ds4"
   color: "f9d0c4"
-  description: "Issue is specific to or observed with DeepSeek v4"
+  description: "Model that reported this issue (reliability signal): DeepSeek v4"
 
-- name: "model:others"
-  color: "eeeeee"
-  description: "Issue is specific to a model not covered by other model:* labels"
+- name: "reporter-model:devstral"
+  color: "c2e0c6"
+  description: "Model that reported this issue (reliability signal): Devstral"
+
+- name: "reporter-model:qwen-coder"
+  color: "fef2c0"
+  description: "Model that reported this issue (reliability signal): Qwen Coder"
+
+# --- Model Scope ---
+- name: "model-scope:ds4"
+  color: "f9d0c4"
+  description: "Issue scoped to DeepSeek-v4-specific behavior (occurrence limited to this model)"
+
+- name: "model-scope:devstral"
+  color: "c2e0c6"
+  description: "Issue scoped to Devstral-specific behavior (occurrence limited to this model)"
+
+- name: "model-scope:qwen-coder"
+  color: "fef2c0"
+  description: "Issue scoped to Qwen-Coder-specific behavior (occurrence limited to this model)"
+
+- name: "model-scope:claude"
+  color: "bfd4f2"
+  description: "Issue scoped to Claude-family-specific behavior (occurrence limited to Claude models)"
