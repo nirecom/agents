@@ -134,4 +134,44 @@ process.stdout.write(JSON.stringify(r === undefined ? null : r));
     else
         fail "T22: expected null, got $OUT"
     fi
+
+    # T-A1 [No-op] CONV_LANG=any → null ("any" added to no-op list)
+    OUT=$(call_helper set "any")
+    if [ "$OUT" = "null" ]; then
+        pass "T-A1: CONV_LANG=any → null (no-op)"
+    else
+        fail "T-A1: expected null for CONV_LANG=any, got $OUT"
+    fi
+
+    # T-A2 [No-op] CONV_LANG=ANY (uppercase) → null (case-insensitive via toLowerCase)
+    OUT=$(call_helper set "ANY")
+    if [ "$OUT" = "null" ]; then
+        pass "T-A2: CONV_LANG=ANY (uppercase) → null (case-insensitive no-op)"
+    else
+        fail "T-A2: expected null for CONV_LANG=ANY (uppercase), got $OUT"
+    fi
+
+    # T-A3 [No-op] CONV_LANG=" any " (whitespace-padded) → null (trim then no-op)
+    OUT=$(call_helper set " any ")
+    if [ "$OUT" = "null" ]; then
+        pass "T-A3: CONV_LANG=' any ' (padded) → null (trim → no-op)"
+    else
+        fail "T-A3: expected null for padded 'any', got $OUT"
+    fi
+
+    # T-A4 [Regression] CONV_LANG=japanese → injection string (still works after adding "any")
+    OUT=$(call_helper set "japanese")
+    if [ "$OUT" = "\"$EXPECTED_JA\"" ]; then
+        pass "T-A4: CONV_LANG=japanese → injection still works (regression)"
+    else
+        fail "T-A4: regression — expected \"$EXPECTED_JA\", got $OUT"
+    fi
+
+    # T-A5 [Regression] CONV_LANG=english → null (existing no-op preserved)
+    OUT=$(call_helper set "english")
+    if [ "$OUT" = "null" ]; then
+        pass "T-A5: CONV_LANG=english → null (existing no-op preserved)"
+    else
+        fail "T-A5: regression — expected null for CONV_LANG=english, got $OUT"
+    fi
 fi

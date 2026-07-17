@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # filename: tests/fix-conv-lang-inject.sh
-# Tests: hooks/lib/conv-lang.js, hooks/session-start.js, hooks/post-compact.js
-# Tags: hook-injection, conv-lang
+# Tests: hooks/lib/conv-lang.js, hooks/post-compact.js, hooks/workflow-mark.js
+# Tags: scope:issue-specific
 #
 # Dispatch entrypoint. All test logic lives in tests/fix-conv-lang-inject/.
 #
@@ -18,6 +18,7 @@ source "$SCRIPT_DIR/fix-conv-lang-inject/helpers.sh"
 source "$SCRIPT_DIR/fix-conv-lang-inject/unit-helper.sh"
 source "$SCRIPT_DIR/fix-conv-lang-inject/integration-session-start.sh"
 source "$SCRIPT_DIR/fix-conv-lang-inject/integration-post-compact.sh"
+source "$SCRIPT_DIR/fix-conv-lang-inject/integration-workflow-mark.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
