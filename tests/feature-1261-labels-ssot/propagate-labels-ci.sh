@@ -119,7 +119,7 @@ teardown_mock() {
     fi
     TMP=""
     unset MOCK_LOG GIT_DIFF_RC PROPAGATE_LABELS_PAT CANONICAL_LABELS_FILE \
-          SIBLING_REPOS AGENTS_WORKSPACE GIT_WORK_DIR 2>/dev/null || true
+          SIBLING_REPOS AGENTS_WORKSPACE GIT_WORK_DIR GH_MOCK_LABEL_LIST 2>/dev/null || true
 }
 
 # Helper: find the first labels.yml written under the workdir

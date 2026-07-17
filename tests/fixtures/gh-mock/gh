@@ -342,6 +342,35 @@ case "$ARGS" in
     fi
     exit 0
     ;;
+  # label delete アーム (migrate-model-labels.sh pre-delete guard 用)
+  "label delete "*)
+    if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
+        printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
+    fi
+    exit 0
+    ;;
+  # label edit --name アーム (migrate-model-labels.sh rename 用)
+  "label edit "*"--name "*)
+    if [ -n "${GH_MOCK_LABEL_LOG:-}" ]; then
+        printf '%s\n' "$ARGS" >> "$GH_MOCK_LABEL_LOG"
+    fi
+    exit 0
+    ;;
+  # label list --search アーム (migrate-model-labels.sh 存在確認用)
+  # GH_MOCK_LABEL_SEARCH: 改行区切りリスト。search 語が含まれれば返す。
+  "label list --search "*"--json name"*)
+    SEARCH_TERM="$(printf '%s' "$ARGS" | sed -nE 's/.*--search ([^ ]+).*/\1/p')"
+    if printf '%s\n' "${GH_MOCK_LABEL_SEARCH:-}" | grep -qxF "$SEARCH_TERM"; then
+        printf '%s\n' "$SEARCH_TERM"
+    fi
+    exit 0
+    ;;
+  # issue list --label アーム (migrate-model-labels.sh issue 数確認用)
+  # GH_MOCK_ISSUE_COUNT: unset/空 → 0。set されていればその数値を返す。
+  "issue list --label "*"--json number --jq"*)
+    printf '%s\n' "${GH_MOCK_ISSUE_COUNT:-0}"
+    exit 0
+    ;;
   # Label create handler — used by sync-labels.sh / bootstrap-labels.sh.
   # Logs the full args to $GH_MOCK_LABEL_LOG (if set) and exits 0.
   "label create "*"--force"*)
