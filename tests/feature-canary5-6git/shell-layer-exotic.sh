@@ -91,7 +91,8 @@ write_signal() {
     const ir=parse(process.argv[1]);
     const w = classify(ir)==='write' || isGitWriteIR(ir) ||
       t.isPosixRedirWriteIR(ir) || t.isPwshWriteIR(ir) || t.isFileOpWriteIR(ir) ||
-      t.isCommandSubstWriteIR(ir) || t.isNewlineInjectedWriteIR(ir) || t.isExoticExecWriteIR(ir);
+      t.isCommandSubstWriteIR(ir) || t.isNewlineInjectedWriteIR(ir) || t.isExoticExecWriteIR(ir) ||
+      t.isInterpreterCWriteIR(ir);
     process.stdout.write(String(w));
   " -- "$1" "$WT_NODE" 2>/dev/null
 }

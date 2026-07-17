@@ -28,10 +28,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 echo "=== ST: WRITE_PATTERNS / STRIP_KINDS structure (RED-pending-impl) ==="
 assert_eq "ST1 WRITE_PATTERNS posix-redir count == 0" "0" "$(kind_count posix-redir)"
 assert_eq "ST2 WRITE_PATTERNS pwsh count == 0"        "0" "$(kind_count pwsh)"
-assert_eq "ST3 WRITE_PATTERNS file-op count == 11"    "11" "$(kind_count file-op)"
+assert_eq "ST3 WRITE_PATTERNS file-op count == 0"     "0"    "$(kind_count file-op)"
 assert_eq "ST4 STRIP_KINDS has no posix-redir"        "false" "$(strip_has posix-redir)"
 assert_eq "ST5 STRIP_KINDS has no pwsh"               "false" "$(strip_has pwsh)"
-assert_eq "ST6 STRIP_KINDS keeps file-op"             "true"  "$(strip_has file-op)"
+assert_eq "ST6 STRIP_KINDS has no file-op"            "false" "$(strip_has file-op)"
 
 echo "=== PR: green fast-allow IR predicates (RED-pending-impl) ==="
 # isPosixRedirWriteIR — true for write redirect / tee; FALSE for read redirect
@@ -89,15 +89,16 @@ CL3 classify redirect → read^echo x > f^read
 CL4 classify Set-Content → read^Set-Content f -Value x^read
 CL_TABLE
 
-echo "=== SANITY: file-op regression pins that survive the retire (PASS now) ==="
-# sed-inplace..bunzip2 remain in WRITE_PATTERNS → still classify write.
+echo "=== SANITY: file-op commands classify 'read' post-canary-7 retire ==="
+# canary-7 retired sed-inplace..bunzip2 from WRITE_PATTERNS into IR predicates.
+# classify() returns "read"; isExtendedFileOpWriteIR handles detection at hook level.
 while IFS='^' read -r name cmd want; do
   [ -z "$name" ] && continue
   assert_eq "$name" "$want" "$(classify_ir "$cmd")"
 done <<'SAN_TABLE'
-SAN1 sed -i still write^sed -i s/a/b/ f^write
-SAN2 touch still write^touch f^write
-SAN3 chmod still write^chmod +x f^write
+SAN1 sed -i classify read post-canary-7^sed -i s/a/b/ f^read
+SAN2 touch classify read post-canary-7^touch f^read
+SAN3 chmod classify read post-canary-7^chmod +x f^read
 SAN_TABLE
 
 echo "=== IC: isReadOnlyInterpreterC write-verb inner-body guard (RED-pending-impl) ==="
