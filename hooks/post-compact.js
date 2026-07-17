@@ -5,6 +5,20 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { getConvLangInjection } = require("./lib/conv-lang");
+const { readState } = require("./lib/workflow-state");
+
+const WORKFLOW_STEPS = [
+  "workflow_init",
+  "clarify_intent",
+  "research",
+  "outline",
+  "detail",
+  "write_tests",
+  "review_security",
+  "docs",
+  "user_verification",
+  "cleanup",
+];
 
 function readStdin() {
   const chunks = [];
@@ -38,9 +52,31 @@ try {
     `State file: ${path.join(stateDir, sessionId + ".json")}`,
   ];
   try {
+    const state = readState(sessionId);
+    lines.push("");
+    lines.push("Workflow progress:");
+    if (state && state.steps) {
+      if (state.cwd)        lines.push(`Worktree: ${state.cwd}`);
+      if (state.git_branch) lines.push(`Branch: ${state.git_branch}`);
+      for (const step of WORKFLOW_STEPS) {
+        const s = state.steps[step] || {};
+        const status = s.status || "pending";
+        const annotation =
+          (step === "user_verification" && status === "pending" && s.reset_reason === "post-merge")
+            ? " (reset after pr merge — expected)"
+            : "";
+        lines.push(`- ${step}: ${status}${annotation}`);
+      }
+    } else {
+      lines.push("(no state file found — run /workflow-init)");
+    }
+  } catch (_e) { /* fail-open */ }
+
+  try {
     const convLang = getConvLangInjection();
     if (convLang) lines.push(convLang);
   } catch (_e) { /* fail-open */ }
+
   console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
 } catch (e) {
   console.log("{}");
