@@ -574,6 +574,44 @@ fi
 rm -f "$out_file27" "$err_file27"
 teardown_tmp
 
+# ============================================================================
+# Bash-version guard (28-29)
+# This classifier depends on bash-4 semantics (associative array MATCHED,
+# ${!MATCHED[@]} iteration). The guard rejects bash major < 4 up front.
+# AGENTS_BASH_MAJOR_OVERRIDE forces the detected major version for the test.
+#
+# Exit-code contract: the guard MUST exit 3 (internal-error slot per
+# user-verified.md), distinct from usage-error 2 and verdict-produced 0.
+# ============================================================================
+
+# --- 28: bash major < 4 → version guard fires: exit 3 + "requires bash" stderr.
+# TEST_EXPECTED_FAIL_UNTIL_GUARD_IMPLEMENTED (guard not yet in source)
+out28="$(mktemp)"; err28="$(mktemp)"
+export AGENTS_BASH_MAJOR_OVERRIDE=3
+run_with_timeout 15 bash "$CHECK_SCRIPT" --files foo.md >"$out28" 2>"$err28"
+rc28=$?
+unset AGENTS_BASH_MAJOR_OVERRIDE
+if [ "$rc28" -eq 3 ] && grep -qiE "requires bash" "$err28"; then
+    pass "28: bash<4 → exit 3 (internal-error slot) + 'requires bash' stderr"
+else
+    fail "28: expected exit 3 + 'requires bash'; got rc=$rc28 stderr=[$(cat "$err28")]"
+fi
+rm -f "$out28" "$err28"
+
+# --- 29: bash major >= 4 → guard passes through; exit is NOT 3 (guard did not
+# reject). foo.md matches no category → normal exit 0. Passes pre- and post-fix.
+out29="$(mktemp)"; err29="$(mktemp)"
+export AGENTS_BASH_MAJOR_OVERRIDE=4
+run_with_timeout 15 bash "$CHECK_SCRIPT" --files foo.md >"$out29" 2>"$err29"
+rc29=$?
+unset AGENTS_BASH_MAJOR_OVERRIDE
+if [ "$rc29" -ne 3 ]; then
+    pass "29: bash>=4 → guard passes through (rc=$rc29 != 3)"
+else
+    fail "29: expected rc != 3 (guard should not reject bash 4); got rc=$rc29 stderr=[$(cat "$err29")]"
+fi
+rm -f "$out29" "$err29"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
