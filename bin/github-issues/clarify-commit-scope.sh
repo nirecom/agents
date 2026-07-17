@@ -13,6 +13,11 @@
 # --repo <slug>: repo for Path C gh issue create (backward compat).
 set -uo pipefail
 
+if [ "${AGENTS_BASH_MAJOR_OVERRIDE:-${BASH_VERSINFO:-0}}" -lt 4 ]; then
+  printf '[clarify-commit-scope] requires bash >= 4 (found %s). Install a newer bash: '"'"'brew install bash'"'"'.\n' "${BASH_VERSION:-unknown}" >&2
+  exit 1
+fi
+
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
 
 SESSION_ID=""
@@ -73,7 +78,7 @@ if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
             --title "Tracking issue" \
             --body "Auto-created by clarify-intent" \
             --label "intent:clarified" \
-            "${REPO_ARGS[@]}" 2>/dev/null); then
+            ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} 2>/dev/null); then
         echo "[clarify-commit-scope] gh issue create failed" >&2
         exit 1
     fi
@@ -114,15 +119,15 @@ for i in "${!CLEAN_ISSUES[@]}"; do
     if [ -n "${REPO_OF[$i]:-}" ]; then
         ISSUE_REPO_ARGS+=(--repo "${REPO_OF[$i]}")
     fi
-    gh issue edit "$N" --add-label "intent:clarified" "${ISSUE_REPO_ARGS[@]}" 2>/dev/null || true
+    gh issue edit "$N" --add-label "intent:clarified" ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} 2>/dev/null || true
     WIP_RC=0
     # C4 fix: wip-set-single.sh does not accept "set" as a positional verb
-    WIP_OUT=$(wip-set-single.sh "${ISSUE_REPO_ARGS[@]}" "$N" 2>/dev/null) || WIP_RC=$?
+    WIP_OUT=$(wip-set-single.sh ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} "$N" 2>/dev/null) || WIP_RC=$?
     if [[ "$WIP_RC" -eq 2 ]]; then
         echo "RC2"
         exit 2
     fi
-    ensure-board-card.sh "${ISSUE_REPO_ARGS[@]}" "$N" 2>/dev/null || true
+    ensure-board-card.sh ${ISSUE_REPO_ARGS[@]+"${ISSUE_REPO_ARGS[@]}"} "$N" 2>/dev/null || true
 done
 
 exit 0
