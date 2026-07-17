@@ -181,10 +181,10 @@ test_S6_session_close_step4_uses_skeleton() {
         skip "S6_session_close_step4_uses_skeleton (skills/session-close/SKILL.md missing)"
         return
     fi
-    if grep -qF "renderSkeleton" "$f"; then
-        pass "S6_session_close_step4_uses_skeleton: SKILL.md references renderSkeleton"
+    if grep -qE "renderSkeleton|renderFinalReport|render-final-report" "$f"; then
+        pass "S6_session_close_step4_uses_skeleton: SKILL.md references skeleton/final-report renderer"
     else
-        fail "S6_session_close_step4_uses_skeleton: SKILL.md does not reference renderSkeleton"
+        fail "S6_session_close_step4_uses_skeleton: SKILL.md does not reference renderSkeleton/renderFinalReport/render-final-report"
     fi
 }
 

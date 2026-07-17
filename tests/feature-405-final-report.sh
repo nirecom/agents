@@ -420,20 +420,20 @@ $out"
 
 test_K5_skill_md_outcome_absent_fallback() {
     require_session_close_skill "K5_skill_md_outcome_absent_fallback" || return
-    if grep -qF "outcome data not found — investigate" "$SESSION_CLOSE_SKILL_MD"; then
-        pass "K5: session-close SKILL.md contains outcome-absent fallback text"
+    if grep -qF "outcome data not found — investigate" "${AGENTS_DIR}/hooks/lib/final-report-schema.js"; then
+        pass "K5: final-report-schema.js contains outcome-absent fallback text"
     else
-        fail "K5: SKILL.md missing 'outcome data not found — investigate' fallback"
+        fail "K5: final-report-schema.js missing 'outcome data not found — investigate' fallback"
     fi
 }
 
 test_K6_skill_md_notes_absent_fallback() {
     require_session_close_skill "K6_skill_md_notes_absent_fallback" || return
     # Look for the "- (none)" fallback being referenced for the findings blocks.
-    if grep -qF -- "- (none)" "$SESSION_CLOSE_SKILL_MD"; then
-        pass "K6: session-close SKILL.md references '- (none)' notes-absent fallback"
+    if grep -qF -- "- (none)" "${AGENTS_DIR}/hooks/lib/final-report-schema.js"; then
+        pass "K6: final-report-schema.js references '- (none)' notes-absent fallback"
     else
-        fail "K6: SKILL.md missing '- (none)' notes-absent fallback marker"
+        fail "K6: final-report-schema.js missing '- (none)' notes-absent fallback marker"
     fi
 }
 

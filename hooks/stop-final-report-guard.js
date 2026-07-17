@@ -30,37 +30,6 @@ function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function buildPostMergeReminder(env) {
-  function safeEnvVal(key) {
-    const v = env[key];
-    if (v === undefined || v === null || v === "") return "(none)";
-    return String(v).replace(/[\r\n]/g, " ").slice(0, 200);
-  }
-  function catValue(cat) {
-    const v = safeEnvVal(cat.newKey);
-    if (v !== "(none)") return v;
-    if (!cat.legacyKey) return "not_required";
-    const legacy = safeEnvVal(cat.legacyKey);
-    if (legacy !== "(none)") {
-      if (legacy === cat.legacyYes) return "required";
-      if (legacy === "no") return "not_required";
-      return legacy;
-    }
-    return "not_required";
-  }
-  const lines = ["### Post-Merge Actions Required"];
-  for (const cat of schema.CATEGORIES) {
-    const v = catValue(cat);
-    const reasonVal = safeEnvVal(cat.reasonKey);
-    if (v === "required" && reasonVal !== "(none)") {
-      lines.push(`- ${cat.label}: required (${reasonVal})`);
-    } else {
-      lines.push(`- ${cat.label}: ${v}`);
-    }
-  }
-  return lines.join("\n");
-}
-
 if (require.main === module) {
   let input = {};
   try {
@@ -170,7 +139,7 @@ if (require.main === module) {
       `The following headings were missing from your output: ${missing.join(", ")}. ` +
       `Re-emit the Final Report verbatim — do not reformat, summarize, reorder, or merge sections. ` +
       `(Hook: stop-final-report-guard.js)\n\n` +
-      buildPostMergeReminder(env);
+      schema.buildPostMergeLines(env).join("\n");
     process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     process.exit(2);
   }
