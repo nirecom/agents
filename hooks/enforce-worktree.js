@@ -23,9 +23,7 @@ try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ 
 
 const { resolveSessionId } = require("./lib/workflow-state");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
-const { classify, isGitWriteIR } = require("./lib/bash-write-patterns");
-const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isNewlineInjectedWriteIR, isExoticExecWriteIR, isInterpreterCWriteIR, isEncodedCommandWriteIR, isExtendedFileOpWriteIR } = require("./lib/bash-write-targets");
-const { isPkgMgrWriteIR } = require("./lib/bash-write-targets/pkg-mgr");
+const { detectWritePredicate } = require("./enforce-worktree/write-detector");
 const { parse } = require("./lib/command-ir");
 const { parseCdCommand } = require("./lib/parse-git-args");
 const { isEnforceWorktreeOn, getProtectedBranches, getCurrentBranch, isCommandRepoExcluded } = require("./enforce-worktree/config");
@@ -187,12 +185,14 @@ const _toolCwd = typeof toolInput.cwd === "string" ? toolInput.cwd : undefined;
 }
 
 let repoRoot = null;
+let _writeDetector = null;
 
 if (toolName === "Bash") {
   const cmd = toolInput.command || "";
   if (!cmd) done();
   const ir = parse(cmd);
-  if (classify(ir) !== "write" && !isGhWriteCommand(ir) && !isPosixRedirWriteIR(ir) && !isPwshWriteIR(ir) && !isFileOpWriteIR(ir) && !isGitWriteIR(ir) && !isCommandSubstWriteIR(ir) && !isNewlineInjectedWriteIR(ir) && !isExoticExecWriteIR(ir) && !isPkgMgrWriteIR(ir) && !isInterpreterCWriteIR(ir) && !isEncodedCommandWriteIR(ir) && !isExtendedFileOpWriteIR(ir)) done(); // read-only command — allow. gh/posix-redir/pwsh/file-op/git/pkg-mgr/interpreter-c/encoded/extended-file-op write detectors must reach the scope pipeline even when classify no longer flags them (#1296/#1400/#1401/#1411/#1402 canary-7). isCommandSubstWriteIR restores #514; isNewlineInjectedWriteIR restores newline-separated writes; isExoticExecWriteIR restores eval/xargs/find writes.
+  _writeDetector = detectWritePredicate(ir);
+  if (!_writeDetector) done(); // read-only command — allow
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
@@ -276,7 +276,8 @@ if (toolName === "Bash") {
         block: true,
         reason:
           "ENFORCE_WORKTREE: gh write blocked. Reason: cannot determine repo root for this command.\n" +
-          "Run gh from inside a session repo's worktree, or set ENFORCE_WORKTREE=off.",
+          "Run gh from inside a session repo's worktree, or set ENFORCE_WORKTREE=off." +
+          (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
       });
     }
     if (!sessionRoots.has(detected)) {
@@ -285,7 +286,8 @@ if (toolName === "Bash") {
         reason:
           `ENFORCE_WORKTREE: gh write blocked. Reason: target repo (${repoRoot}) is not in session scope.\n` +
           "Add this repo to ENFORCE_WORKTREE_ADDITIONAL_REPOS in agents config, or run from a session repo.\n" +
-          "Or set ENFORCE_WORKTREE=off to bypass.",
+          "Or set ENFORCE_WORKTREE=off to bypass." +
+          (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
       });
     }
     // gh writes are GitHub operations, not local file writes — session-scope is sufficient.
@@ -415,7 +417,7 @@ if (!repoRoot) {
       reason:
         "ENFORCE_WORKTREE: Bash write blocked. Reason: cannot determine repo root\n" +
         "(non-git CWD or parseFailure). If this is a legitimate non-repo write,\n" +
-        "use Edit/Write tools or set ENFORCE_WORKTREE=off.",
+        "use Edit/Write tools or set ENFORCE_WORKTREE=off." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
     });
   }
   done(); // Edit/Write/MultiEdit: fail-open maintained (staging dir writes)
@@ -456,7 +458,7 @@ if (mainCheckout !== false) {
       `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
       "Main worktree is reserved for merge/pull only. Work from a linked worktree.\n" +
       "Run: /worktree-start <task-name>\n" +
-      "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work.",
+      "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
   });
 }
 
@@ -468,7 +470,7 @@ if (currentBranch && protectedBranches.includes(currentBranch)) {
       `ENFORCE_WORKTREE: write blocked. Reason: protected branch '${currentBranch}' in linked worktree.\n` +
       "Switch to a feature branch before writing.\n" +
       "Run: git switch -c feature/<task-name>\n" +
-      "Or set ENFORCE_WORKTREE=off in agents config.",
+      "Or set ENFORCE_WORKTREE=off in agents config." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
   });
 }
 
