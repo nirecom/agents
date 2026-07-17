@@ -25,11 +25,29 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   if (!acd) return false;
   if (!repoRoot) return false;
 
-  // (a) Identity: bash "<sanctioned-script-path>" [args...]
-  const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
-  if (!m) return false;
-  const scriptPath = m[1];
-  const argTail    = m[2] || "";
+  // (a) Identity: bare bash "<path>" [args…] OR eval "$(bash "<path>")" [|| exit 0]  (#1484)
+  let scriptPath, argTail;
+  const mEval = cmd.match(
+    /^\s*eval\s+"\$\(bash\s+"([^"]+)"\s*\)"\s*(?:\|\|\s*exit\s+0\s*)?$/
+  );
+  if (mEval) {
+    scriptPath = mEval[1];
+    argTail    = "";
+    // PreToolUse receives the raw command before shell expansion, so
+    // $AGENTS_CONFIG_DIR arrives as a literal.  Normalize it to the
+    // actual acd value before the SANCTIONED comparison (#1484).
+    if (
+      scriptPath.startsWith("$AGENTS_CONFIG_DIR/") ||
+      scriptPath.startsWith("$AGENTS_CONFIG_DIR\\")
+    ) {
+      scriptPath = acd + scriptPath.slice("$AGENTS_CONFIG_DIR".length);
+    }
+  } else {
+    const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
+    if (!m) return false;
+    scriptPath = m[1];
+    argTail    = m[2] || "";
+  }
 
   const SANCTIONED = [
     "bin/check-unstaged-tracked.sh",
@@ -40,6 +58,7 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
     "bin/github-issues/issue-create-dispatch.sh",
     "skills/issue-create/scripts/run-bulk-dispatch.sh",
     "skills/issue-create/scripts/run-phase5-record.sh",
+    "skills/issue-close-finalize/scripts/pre-flight.sh",
   ];
 
   let normScript;
