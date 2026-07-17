@@ -534,3 +534,7 @@ Changes: **Label taxonomy**: `model:*` labels renamed to `reporter-model:*`; new
 ### FEATURE: PR #1497 (2026-07-17)
 Background: feat(#1487): add soft gh auth 'project' scope check to install.sh + install.ps1
 Changes: `install.sh` and `install.ps1` now warn on completion when `gh` is installed and authenticated but lacks the `'project'` scope needed for Projects v2 and `/issue-create`. Run `gh auth refresh -s project` or `/issue-setup` to add it.
+
+### FEATURE: PR #1502 (2026-07-17)
+Background: fix(#1485): add bash/node prefix to direct call sites + chmod+x sweep on bin/
+Changes: Fix: bin/ scripts now have the correct execute bit recorded in git (mode 100755); direct shebang-based invocation works on macOS, Linux, and WSL without needing a bash/node prefix
