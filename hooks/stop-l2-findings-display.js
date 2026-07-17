@@ -32,13 +32,12 @@ if (require.main === module) {
 
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, resolveWorkflowSessionId, readState, writeAlertState, getStatePath;
+  let resolveSessionId, readState, writeAlertState, getStatePath;
   let formatLayer2Findings;
   const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
-    ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ readState, writeAlertState, getStatePath } = require("./lib/supervisor-state-writer"));
     ({ formatLayer2Findings } = require("./lib/supervisor-findings-render"));
   } catch (_) {
@@ -55,33 +54,7 @@ if (require.main === module) {
     } catch (_) {}
     if (!sessionId || !SESSION_ID_RE.test(sessionId)) process.exit(0);
 
-    // Dual-ID effective-state lookup (mirrors supervisor-guard.js pattern)
-    let workflowSessionId = null;
-    const envWsid = process.env.WORKFLOW_SESSION_ID;
-    if (envWsid && SESSION_ID_RE.test(envWsid)) {
-      workflowSessionId = envWsid;
-    } else {
-      try {
-        workflowSessionId = resolveWorkflowSessionId({});
-      } catch (_) {}
-    }
-
-    let effectiveSid = sessionId;
-    try {
-      if (
-        workflowSessionId &&
-        workflowSessionId !== sessionId &&
-        SESSION_ID_RE.test(workflowSessionId)
-      ) {
-        const primaryState = readState(sessionId);
-        if (primaryState === null) {
-          const fallbackState = readState(workflowSessionId);
-          if (fallbackState !== null) {
-            effectiveSid = workflowSessionId;
-          }
-        }
-      }
-    } catch (_) {}
+    const effectiveSid = sessionId;
 
     const state = readState(effectiveSid);
     if (!state) process.exit(0);
@@ -111,7 +84,7 @@ if (require.main === module) {
 
     const rendered = formatLayer2Findings(al.findings, {
       sessionId,
-      workflowSessionId,
+      workflowSessionId: null,
       supervisorPath,
       stateFilePath,
       actionableOnly: true,

@@ -45,12 +45,11 @@ if (require.main === module) {
   // (1)
   if (input.stop_hook_active === true) process.exit(0);
 
-  let resolveSessionId, resolveWorkflowSessionId, isWorkflowOff, readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState;
+  let resolveSessionId, isWorkflowOff, readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState;
   let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
   let arbitrate, formatIntegratedReason;
   try {
     ({ resolveSessionId } = require("./lib/workflow-state"));
-    ({ resolveWorkflowSessionId } = require("./lib/resolve-workflow-session-id"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));
@@ -81,59 +80,7 @@ if (require.main === module) {
   // canonical shape. Fail-open (exit 0) — the guard must never block on its own input parse.
   if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) process.exit(0);
 
-  // wsid resolution for the audit-arm three-ID stanza and effective-state fallback.
-  // Priority: WORKFLOW_SESSION_ID env var (set by /worktree-start, propagates
-  // cleanly into hook subprocesses) > CWD WORKTREE_NOTES.md / plans-dir scan
-  // (defensive fallback when env propagation breaks — Anthropic bug #27987).
-  let workflowSessionId = null;
-  const envWsid = process.env.WORKFLOW_SESSION_ID;
-  if (envWsid && /^[A-Za-z0-9_-]+$/.test(envWsid)) {
-    workflowSessionId = envWsid;
-  } else {
-    try {
-      workflowSessionId = resolveWorkflowSessionId({});
-    } catch (_) {
-      workflowSessionId = null;
-    }
-  }
-
-  let effectiveSupervisorStateSessionId = sessionId;
-  try {
-    // Resolve effective state-file session ID: prefer the CC UUID if its state
-    // file is non-null; fall back to workflowSessionId when available, different,
-    // and its state file is non-null. Uses readState() (not existsSync) so that
-    // a zero-length or corrupt CC-UUID file triggers fallback correctly.
-    if (
-      workflowSessionId &&
-      workflowSessionId !== sessionId &&
-      /^[A-Za-z0-9_-]+$/.test(workflowSessionId)
-    ) {
-      const primaryState = readState(sessionId);
-      if (primaryState === null) {
-        const fallbackState = readState(workflowSessionId);
-        if (fallbackState !== null) {
-          effectiveSupervisorStateSessionId = workflowSessionId;
-        }
-      } else {
-        // Also fall through when primaryState exists but is unarmed and
-        // the wsid state is armed (e.g. report-writer wrote to wsid file).
-        const primaryArmed =
-          primaryState.alert && primaryState.alert.alert_armed_at;
-        if (primaryArmed == null) {
-          const fallbackState = readState(workflowSessionId);
-          if (
-            fallbackState &&
-            fallbackState.alert &&
-            fallbackState.alert.alert_armed_at != null
-          ) {
-            effectiveSupervisorStateSessionId = workflowSessionId;
-          }
-        }
-      }
-    }
-  } catch (_) {
-    effectiveSupervisorStateSessionId = sessionId; // fail-open
-  }
+  const effectiveSupervisorStateSessionId = sessionId;
 
   try {
     if (isWorkflowOff(sessionId)) process.exit(0);
@@ -193,12 +140,6 @@ if (require.main === module) {
     const auditCause = audit.audit_cause || null;
     // Consume audit_phase regardless of verdict so Phase B doesn't re-fire next cycle.
     try { writeAuditState(effectiveSupervisorStateSessionId, { audit_phase: null }); } catch (_) {}
-    // Mirror the clear so the other identity's store doesn't retain a stale audit_phase=done.
-    const auditPhaseClearMirrorSid =
-      effectiveSupervisorStateSessionId === sessionId ? workflowSessionId : sessionId;
-    if (auditPhaseClearMirrorSid && auditPhaseClearMirrorSid !== effectiveSupervisorStateSessionId) {
-      try { writeAuditState(auditPhaseClearMirrorSid, { audit_phase: null }); } catch (_) {}
-    }
     const auditCandidate = {
       verdict: auditVerdict || "CONTINUE",
       reason: auditCause || `Audit mode strategic review: ${auditVerdict || "CONTINUE"} verdict.`,
@@ -208,11 +149,6 @@ if (require.main === module) {
     // The in-memory clear propagates to branch (3) below; the file write is the mirror-clear fix.
     alertArmedAt = null;
     try { writeAlertState(effectiveSupervisorStateSessionId, { alert_armed_at: null }); } catch (_) {}
-    const alertArmedClearMirrorSid =
-      effectiveSupervisorStateSessionId === sessionId ? workflowSessionId : sessionId;
-    if (alertArmedClearMirrorSid && alertArmedClearMirrorSid !== effectiveSupervisorStateSessionId) {
-      try { writeAlertState(alertArmedClearMirrorSid, { alert_armed_at: null }); } catch (_) {}
-    }
     // Build alert candidate only when an alert branch would also fire this cycle.
     let alertCandidate = null;
     const alertWouldFire = !askUserQuestionTurn &&
@@ -224,10 +160,10 @@ if (require.main === module) {
     if (alertWouldFire) {
       let alertReason;
       if (cumSev === "error") {
-        alertReason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+        alertReason = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
       } else {
         const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
-        alertReason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+        alertReason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
       }
       alertCandidate = { verdict: "BLOCK", reason: alertReason };
     }
@@ -262,7 +198,7 @@ if (require.main === module) {
       // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
   ) {
     if (tryIncrementFrozen()) process.exit(0);
-    const reason = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+    const reason = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(
         JSON.stringify({ decision: "block", reason, systemMessage: reason }) + "\n"
@@ -279,7 +215,7 @@ if (require.main === module) {
   ) {
     if (tryIncrementFrozen()) process.exit(0);
     const cause = hangDetected ? "C1 sentinel hang" : "C2 scheduled-review";
-    const reason = formatL2ArmedReason(cause, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+    const reason = formatL2ArmedReason(cause, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     } catch (_) {}
@@ -302,7 +238,7 @@ if (require.main === module) {
       alertPhase !== "frozen" &&
       // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
       isLegacyLayer2State) {
-    const additionalContext = formatCumSevErrorReason(findings, sessionId, workflowSessionId, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
+    const additionalContext = formatCumSevErrorReason(findings, sessionId, null, supervisorPath, stateFilePath, effectiveSupervisorStateSessionId);
     try {
       process.stdout.write(JSON.stringify({ additionalContext }) + "\n");
     } catch (_) {}
@@ -336,7 +272,6 @@ if (require.main === module) {
           "[EM Supervisor] Audit mode strategic review triggered.",
           `Trigger: ${auditTrigger.cause}`,
           `Session ID: ${sessionId}`,
-          `Workflow session ID: ${workflowSessionId == null ? "UNAVAILABLE" : workflowSessionId}`,
           `Effective state session ID: ${effectiveSupervisorStateSessionId}`,
           `State file: ${stateFilePath}`,
           "",
