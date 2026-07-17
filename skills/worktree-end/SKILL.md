@@ -71,6 +71,8 @@ Resolve main root from the worktree's `.git` file. `cd "<main-worktree-root>"` a
 ### Steps WE-15..WE-22 — Cleanup cascade
 Read `$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after confirmed merge and inventory.
 If WE-15 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-16 and continue to WE-20.
+Cleanup-active marker (WE-14b create → WE-22a delete) brackets the window so the
+supervisor OFF-block adaptive message fires only during WE-15..WE-22 — see cleanup-cascade.md.
 
 ## Rules
 - Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.

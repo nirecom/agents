@@ -6,6 +6,16 @@ permission dialogs). It is the canonical SSOT for what those operations are.
 Read it (do not `bash` it) — same Read-as-spec pattern as skills/_shared/*.md.
 -->
 
+## WE-14b — Create cleanup-active marker
+`node "$AGENTS_CONFIG_DIR/hooks/lib/worktree-cleanup-marker.js" create <sid>`
+Run immediately before WE-15 — marks the cleanup window (WE-15..WE-22) active so the
+supervisor OFF-block adaptive message fires only during real cleanup. Non-fatal on
+failure (fail-open: no marker → generic message). `<sid>` is a placeholder the
+orchestrator replaces with the WE-12-resolved session id (same convention as `<main>`);
+do NOT rely on a `$SID` shell variable — it does not survive across separate Bash calls.
+plans-dir is resolved inside the JS helper via getWorkflowPlansDir(). If the placeholder
+is empty, the CLI falls back to CLAUDE_SESSION_ID.
+
 ## WE-15 — git worktree remove
 `git -C <main> worktree remove <path>` (never `--force`). Try once only — do not retry, and do NOT emit WORKTREE_OFF; on failure follow WE-16.
 
@@ -39,3 +49,11 @@ Sibling repo fanout: parse `SIBLING_REPOS_JSON` from the env JSON (field added b
 
 ## WE-22 — Verify cleanup
 `git -C <main> worktree list` — confirm no stale entries.
+
+## WE-22a — Delete cleanup-active marker
+`node "$AGENTS_CONFIG_DIR/hooks/lib/worktree-cleanup-marker.js" delete <sid>`
+Run after WE-22 completes. Idempotent (already-absent is success). `<sid>` is the same
+orchestrator-replaced placeholder as WE-14b (not a `$SID` shell var); plans-dir is
+resolved inside the JS helper, and an empty placeholder falls back to CLAUDE_SESSION_ID.
+This closes the cleanup window — post-WE-22 the marker no longer exists, so
+isWorktreeEndEnv() returns false (fixes the session-2659fd1d false positive).
