@@ -23,6 +23,10 @@ const fs = require("fs");
 // Accepts: #N, repo#N, owner/repo#N, N (bare legacy), and optional ": <title>" suffix.
 const ISSUE_TOKEN_BODY_RE = /^(?:([a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)#|#)?(\d+)(?:.*)?$/;
 
+// CLI guard: token must contain '#' immediately before digits.
+// Rejects bare digit strings and decimal numbers (e.g. "3.2", "42").
+const ISSUE_TOKEN_CLI_GUARD_RE = /^(?:[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)?#\d/;
+
 function collectEntries(lines, headingRe) {
   let inSection = false;
   const entries = [];
@@ -59,6 +63,7 @@ function collectEntries(lines, headingRe) {
 // Returns {number: N, repo?: string} on match, null if not a valid token.
 function parseIssueToken(token) {
   const t = (token || "").trim();
+  if (!ISSUE_TOKEN_CLI_GUARD_RE.test(t)) return null;
   const m = t.match(ISSUE_TOKEN_BODY_RE);
   if (!m || !m[2]) return null;
   const result = { number: parseInt(m[2], 10) };
@@ -81,4 +86,4 @@ function parseClosesIssues(intentMdPath) {
   return collectEntries(lines, /^## closes_issues\s*$/);
 }
 
-module.exports = { parseClosesIssues, parseIssueToken };
+module.exports = { parseClosesIssues, parseIssueToken, ISSUE_TOKEN_CLI_GUARD_RE };
