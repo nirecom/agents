@@ -558,3 +558,7 @@ Changes: Planning agents (outline-planner, detail-planner, clarify-intent) now w
 ### FEATURE: PR #1515 (2026-07-18)
 Background: fix(#923): enforce-worktree early-exit for git worktree remove/prune
 Changes: `git worktree remove` and `git worktree prune` from the main worktree are now correctly allowed even when a `-C <path>` flag is used; a security boundary blocks the same commands from a linked worktree or when `-C` targets a different repo
+
+### FEATURE: PR #1516 (2026-07-18)
+Background: fix(#950): resolveSessionWorktreePath falls back to state.session_worktree for mid-session /worktree-start
+Changes: `/review-tests` now works when the session was started from the main worktree and `/worktree-start` was run mid-session (exit-code-3 fixed).
