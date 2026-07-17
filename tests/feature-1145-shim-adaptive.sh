@@ -2,11 +2,13 @@
 # tests/feature-1145-shim-adaptive.sh
 # Tests: hooks/supervisor-off-proposal-shim.js, hooks/lib/worktree-end-env-anchor.js
 # Tags: supervisor, em-supervisor, pretooluse, off-proposal, shim, we15, adaptive-message, scope:issue-specific, pwsh-not-required, hook-registration
-# L2 integration tests for the adaptive OFF-block message added AFTER write-code.
-# When computeIsWtEnd() (via isWorktreeEndEnv) returns true, the block reason switches
-# to the WE-15/WE-16 adaptive text (mentions /sweep-worktrees and WE-20); otherwise the
-# fixed "Active supervisor findings exist" text is kept.
-# RED-EXPECTED: shim not yet modified + worktree-end-env-anchor.js not yet implemented.
+# L2 integration tests for the adaptive OFF-block message.
+# When computeIsWtEnd() (via isWorktreeEndEnv) returns true — now based on the
+# <sid>-wt-cleanup-active marker file — the block reason switches to the WE-15/WE-16
+# adaptive text (mentions /sweep-worktrees and WE-20); otherwise the fixed
+# "Active supervisor findings exist" text is kept.
+# T4j (NEW): proves that old final-report-env.json alone does NOT trigger adaptive text
+# (the false-positive scenario that motivated this fix).
 #
 # L3 gap (what this test does NOT catch):
 # - The shim firing as a real PreToolUse hook inside a live claude -p session
@@ -47,7 +49,7 @@ tmp_node_for() {
 }
 
 if [ ! -f "$SHIM" ] || [ ! -f "$ANCHOR" ]; then
-    fail "T4e-i: shim or worktree-end-env-anchor.js not present (RED-EXPECTED — WE-15 adaptive not yet implemented)"
+    fail "T4e-j: shim or worktree-end-env-anchor.js not present"
     echo ""
     echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
     exit 1
@@ -86,13 +88,13 @@ process.stdout.write(JSON.stringify({
 "
 }
 
-# --- T4e: worktree-end env present + blocking finding → adaptive block text ---
+# --- T4e: cleanup marker present + blocking finding → adaptive block text ---
 run_t4e() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4e-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
-    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${sid}-final-report-env.json"
+    touch "$tmp/${sid}-wt-cleanup-active"
     hook_input=$(build_hook_input "$sid")
 
     out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
@@ -101,22 +103,22 @@ run_t4e() {
     rm -rf "$tmp"
 
     if ! echo "$out" | grep -q '"decision":"block"'; then
-        fail "T4e: must emit decision:block (findings path, worktree-end env)"; return; fi
+        fail "T4e: must emit decision:block (findings path, marker present)"; return; fi
     if [ $rc -ne 2 ]; then fail "T4e: must exit 2, got rc=$rc"; return; fi
     if ! echo "$out" | grep -q '/sweep-worktrees'; then
         fail "T4e: adaptive text must mention /sweep-worktrees"; return; fi
     if ! echo "$out" | grep -q 'WE-20'; then
         fail "T4e: adaptive text must mention WE-20"; return; fi
-    pass "T4e: worktree-end env + blocking finding → exit 2 + adaptive (/sweep-worktrees + WE-20)"
+    pass "T4e: cleanup marker + blocking finding → exit 2 + adaptive (/sweep-worktrees + WE-20)"
 }
 
-# --- T4f: session-close schema (WORKTREE_PATH="") → fixed text (no adaptive) ---
+# --- T4f: NO marker file (post-WE-22 scenario) + blocking finding → fixed text (no adaptive) ---
 run_t4f() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4f-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
-    printf '%s' '{"WORKTREE_PATH":"","OTHER_FIELD":"x"}' > "$tmp/${sid}-final-report-env.json"
+    # no marker file — simulates post-WE-22 scenario where marker has been deleted
     hook_input=$(build_hook_input "$sid")
 
     out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
@@ -128,17 +130,19 @@ run_t4f() {
         fail "T4f: must emit decision:block (findings path)"; return; fi
     if [ $rc -ne 2 ]; then fail "T4f: must exit 2, got rc=$rc"; return; fi
     if echo "$out" | grep -q '/sweep-worktrees'; then
-        fail "T4f: session-close schema must NOT use adaptive text (found /sweep-worktrees)"; return; fi
-    pass "T4f: session-close schema (WORKTREE_PATH=\"\") → exit 2 + fixed text (no /sweep-worktrees)"
+        fail "T4f: no marker (post-WE-22) must NOT use adaptive text (found /sweep-worktrees)"; return; fi
+    pass "T4f: no marker (post-WE-22) → exit 2 + fixed text (no /sweep-worktrees)"
 }
 
-# --- T4g: corrupt env JSON → fail-open to fixed text (no adaptive) ---
+# --- T4g: marker deleted after cleanup → no adaptive (WE-22 cleanup scenario) ---
 run_t4g() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4g-sid-$$"
     seed_blocking_finding "$sid" "$tmp_node"
-    printf '%s' '"not valid json{' > "$tmp/${sid}-final-report-env.json"
+    # Create the marker then delete it (simulates WE-22 cleanup having run)
+    touch "$tmp/${sid}-wt-cleanup-active"
+    rm "$tmp/${sid}-wt-cleanup-active"
     hook_input=$(build_hook_input "$sid")
 
     out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
@@ -150,17 +154,17 @@ run_t4g() {
         fail "T4g: must emit decision:block (findings path)"; return; fi
     if [ $rc -ne 2 ]; then fail "T4g: must exit 2, got rc=$rc"; return; fi
     if echo "$out" | grep -q '/sweep-worktrees'; then
-        fail "T4g: corrupt env JSON must fail-open to fixed text (found /sweep-worktrees)"; return; fi
-    pass "T4g: corrupt env JSON → exit 2 + fixed text (fail-open, no /sweep-worktrees)"
+        fail "T4g: deleted marker must fail-open to fixed text (found /sweep-worktrees)"; return; fi
+    pass "T4g: marker deleted (WE-22 cleanup) → exit 2 + fixed text (no /sweep-worktrees)"
 }
 
-# --- T4h: ENOENT path (no state file) + worktree-end env → adaptive block text ---
+# --- T4h: ENOENT state file + cleanup marker present → adaptive block text ---
 run_t4h() {
     local tmp tmp_node sid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
     sid="t4h-sid-$$"
-    # NO state file seeded → ENOENT block path. Genuine WORKTREE_OFF emit.
-    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${sid}-final-report-env.json"
+    # NO state file seeded → ENOENT block path. Marker present (genuine WORKTREE_OFF emit).
+    touch "$tmp/${sid}-wt-cleanup-active"
     hook_input=$(build_hook_input "$sid")
 
     out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
@@ -175,10 +179,10 @@ run_t4h() {
         fail "T4h: ENOENT site adaptive text must mention /sweep-worktrees"; return; fi
     if ! echo "$out" | grep -q 'WE-20'; then
         fail "T4h: ENOENT site adaptive text must mention WE-20"; return; fi
-    pass "T4h: ENOENT + worktree-end env → exit 2 + adaptive (/sweep-worktrees + WE-20)"
+    pass "T4h: ENOENT state + marker present → exit 2 + adaptive (/sweep-worktrees + WE-20)"
 }
 
-# --- T4i: ccSid != wsid; env file named by wsid; adaptive resolves via wsid fallback ---
+# --- T4i: ccSid != wsid; marker named by wsid; adaptive resolves via wsid fallback ---
 run_t4i() {
     local tmp tmp_node ccSid wsid hook_input out rc
     tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
@@ -188,8 +192,8 @@ run_t4i() {
     # Blocking finding seeded under the CC session id (primary read path).
     seed_blocking_finding "$ccSid" "$tmp_node"
 
-    # env file is named by the WORKFLOW session id (wsid), NOT the CC session id.
-    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${wsid}-final-report-env.json"
+    # Marker is named by the WORKFLOW session id (wsid), NOT the CC session id.
+    touch "$tmp/${wsid}-wt-cleanup-active"
 
     # Priority 2 wsid resolution: CLAUDE_CODE_SESSION_ID=wsid + <wsid>-context.md artifact.
     printf '%s' 'context' > "$tmp/${wsid}-context.md"
@@ -210,7 +214,33 @@ run_t4i() {
         fail "T4i: wsid-resolved adaptive text must mention /sweep-worktrees"; return; fi
     if ! echo "$out" | grep -q 'WE-20'; then
         fail "T4i: wsid-resolved adaptive text must mention WE-20"; return; fi
-    pass "T4i: ccSid != wsid, env named by wsid → adaptive fires via wsid fallback (/sweep-worktrees + WE-20)"
+    pass "T4i: ccSid != wsid, marker named by wsid → adaptive fires via wsid fallback (/sweep-worktrees + WE-20)"
+}
+
+# --- T4j (NEW — KEY REGRESSION): old final-report-env.json exists + blocking finding + NO marker → NO adaptive ---
+# Proves the false-positive scenario is fixed: old code keyed on env-json content, so
+# stale env-json after WE-22 would incorrectly trigger adaptive text in a later session.
+run_t4j() {
+    local tmp tmp_node sid hook_input out rc
+    tmp=$(make_tmp); tmp_node="$(tmp_node_for "$tmp")"
+    sid="t4j-sid-$$"
+    seed_blocking_finding "$sid" "$tmp_node"
+    # Write valid old-style env-json (as the old implementation would leave behind)
+    # but NO cleanup marker (simulates post-WE-22 state where marker was deleted)
+    printf '%s' '{"WORKTREE_PATH":"/some/path","MERGE_SHA":"abc123"}' > "$tmp/${sid}-final-report-env.json"
+    hook_input=$(build_hook_input "$sid")
+
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+        run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+
+    if ! echo "$out" | grep -q '"decision":"block"'; then
+        fail "T4j: must emit decision:block (findings path)"; return; fi
+    if [ $rc -ne 2 ]; then fail "T4j: must exit 2, got rc=$rc"; return; fi
+    if echo "$out" | grep -q '/sweep-worktrees'; then
+        fail "T4j: stale env-json + no marker must NOT produce adaptive text (found /sweep-worktrees) — false-positive regression detected"; return; fi
+    pass "T4j (KEY REGRESSION): stale env-json + no marker → exit 2 + fixed text (proves false-positive is fixed)"
 }
 
 run_t4e
@@ -218,6 +248,7 @@ run_t4f
 run_t4g
 run_t4h
 run_t4i
+run_t4j
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
