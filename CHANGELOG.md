@@ -550,3 +550,7 @@ Changes: sync-labels.sh now deletes labels absent from `.github/labels.yml`; `pr
 ### BUGFIX: PR #1512 (2026-07-18)
 Background: fix(#1488): validate workflow-init-driver raw-token args — reject newline/malformed tokens with NEXT_HINT
 Changes: `workflow-init` now validates raw-token arguments before processing — multi-line text, prose, or malformed tokens are rejected with a clear `ACTION=blocked REASON= NEXT_HINT=` response. Improves compatibility with non-Claude-Code-native LLMs (e.g. DeepSeek V4 Flash) that may misinterpret the `<raw-tokens>` placeholder.
+
+### FEATURE: PR #1513 (2026-07-18)
+Background: fix(#1511): add PLAN_LANG directive to outline-planner, detail-planner, and clarify-intent
+Changes: Planning agents (outline-planner, detail-planner, clarify-intent) now write plan artifacts in the language set by `PLAN_LANG` from the first write — eliminates the same-session re-write when `PLAN_LANG=japanese`
