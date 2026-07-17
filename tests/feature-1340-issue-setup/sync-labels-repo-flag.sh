@@ -62,6 +62,10 @@ case "$ARGS" in
     # CREATE path
     exit 0
     ;;
+  label\ delete\ *)
+    # DELETE path (sync-labels.sh DELETE action)
+    exit 0
+    ;;
   *)
     echo "MOCK GH: no match for args=$ARGS" >&2
     exit 2

@@ -92,6 +92,20 @@ FOUR_LABELS_YML='- name: "type:task"
   description: "Issue body ratified."
 '
 
+TWO_LABELS_YML='- name: "type:task"
+  color: "0e8a16"
+  description: "Normal work item."
+
+- name: "type:incident"
+  color: "d93f0b"
+  description: "Incident or bug."
+'
+
+ONE_LABEL_YML='- name: "type:task"
+  color: "0e8a16"
+  description: "Normal work item."
+'
+
 # ============================================================================
 # S-series — three-way status (issue #724)
 # ============================================================================
@@ -106,10 +120,10 @@ RC=$?
 created_count=$(grep -c '(created)' "$OUT" 2>/dev/null; true)
 log_total=$(grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
 log_force=$(grep -c -- '--force' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
-has_summary=$(grep -c '3 created, 0 updated, 0 already-exists / 3 total' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '3 created, 0 updated, 0 already-exists, 0 deleted / 3 total' "$OUT" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$created_count" -eq 3 ] && [ "$log_total" -eq 3 ] \
    && [ "$log_force" -eq 0 ] && [ "$has_summary" -eq 1 ]; then
-    pass "S1: all-new — 3 created (no --force), summary '3 created, 0 updated, 0 already-exists / 3 total'"
+    pass "S1: all-new — 3 created (no --force), summary '3 created, 0 updated, 0 already-exists, 0 deleted / 3 total'"
 else
     fail "S1: rc=$RC created=$created_count log_total=$log_total log_force=$log_force summary_hit=$has_summary"
 fi
@@ -125,7 +139,7 @@ run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
 RC=$?
 exists_count=$(grep -c '(already exists)' "$OUT" 2>/dev/null; true)
 log_total=$(grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
-has_summary=$(grep -c '0 created, 0 updated, 3 already-exists / 3 total' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 3 already-exists, 0 deleted / 3 total' "$OUT" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$exists_count" -eq 3 ] && [ "$log_total" -eq 0 ] \
    && [ "$has_summary" -eq 1 ]; then
     pass "S2: all-existing-unchanged — 0 API calls, 3 already-exists"
@@ -148,7 +162,7 @@ exists_count=$(grep -c '(already exists)' "$OUT" 2>/dev/null; true)
 log_total=$(grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
 log_force=$(grep -c -- '--force' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
 updated_is_task=$(grep -E 'type:task.*\(updated\)' "$OUT" | wc -l | tr -d ' ')
-has_summary=$(grep -c '0 created, 1 updated, 2 already-exists / 3 total' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 1 updated, 2 already-exists, 0 deleted / 3 total' "$OUT" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$updated_count" -eq 1 ] && [ "$exists_count" -eq 2 ] \
    && [ "$log_total" -eq 1 ] && [ "$log_force" -eq 1 ] \
    && [ "$updated_is_task" -ge 1 ] && [ "$has_summary" -eq 1 ]; then
@@ -172,7 +186,7 @@ exists_count=$(grep -c '(already exists)' "$OUT" 2>/dev/null; true)
 log_total=$(grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
 log_force=$(grep -c -- '--force' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
 updated_is_incident=$(grep -E 'type:incident.*\(updated\)' "$OUT" | wc -l | tr -d ' ')
-has_summary=$(grep -c '0 created, 1 updated, 2 already-exists / 3 total' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 1 updated, 2 already-exists, 0 deleted / 3 total' "$OUT" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$updated_count" -eq 1 ] && [ "$exists_count" -eq 2 ] \
    && [ "$log_total" -eq 1 ] && [ "$log_force" -eq 1 ] \
    && [ "$updated_is_incident" -ge 1 ] && [ "$has_summary" -eq 1 ]; then
@@ -197,7 +211,7 @@ updated_count=$(grep -c '(updated)' "$OUT" 2>/dev/null; true)
 exists_count=$(grep -c '(already exists)' "$OUT" 2>/dev/null; true)
 log_total=$(grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
 log_force=$(grep -c -- '--force' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
-has_summary=$(grep -c '1 created, 2 updated, 1 already-exists / 4 total' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '1 created, 2 updated, 1 already-exists, 0 deleted / 4 total' "$OUT" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$created_count" -eq 1 ] && [ "$updated_count" -eq 2 ] \
    && [ "$exists_count" -eq 1 ] && [ "$log_total" -eq 3 ] && [ "$log_force" -eq 2 ] \
    && [ "$has_summary" -eq 1 ]; then
@@ -231,11 +245,75 @@ unset GH_MOCK_LABEL_LIST
 run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
 RC=$?
 log_total=$(grep -c 'label create' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
-has_summary=$(grep -c '0 created, 0 updated, 0 already-exists / 0 total' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 0 already-exists, 0 deleted / 0 total' "$OUT" 2>/dev/null; true)
 if [ "$RC" -eq 0 ] && [ "$log_total" -eq 0 ] && [ "$has_summary" -eq 1 ]; then
-    pass "S7: empty labels.yml — no API calls, summary '0/0/0 / 0 total'"
+    pass "S7: empty labels.yml — no API calls, summary '0/0/0/0 / 0 total'"
 else
     fail "S7: rc=$RC log_total=$log_total summary_hit=$has_summary"
+fi
+teardown_sync_tmp
+
+# --- S8: DELETE basic — orphaned label deleted.
+setup_sync_tmp "$TWO_LABELS_YML"
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\ntype:incident\td93f0b\tIncident or bug.\nstale:old\taaaaaa\tOld stale label.'
+OUT="$TMP/s8.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+deleted_count=$(grep -c '(deleted)' "$OUT" 2>/dev/null; true)
+delete_logged=$(grep -c 'label delete stale:old' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 2 already-exists, 1 deleted / 3 total' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$deleted_count" -ge 1 ] && [ "$delete_logged" -ge 1 ] \
+   && [ "$has_summary" -eq 1 ]; then
+    pass "S8: DELETE basic — stale:old deleted, log recorded, summary correct"
+else
+    fail "S8: rc=$RC deleted_count=$deleted_count delete_logged=$delete_logged summary=$has_summary out=$(cat "$OUT")"
+fi
+teardown_sync_tmp
+
+# --- S9: DELETE --dry-run — gh label delete NOT called.
+setup_sync_tmp "$ONE_LABEL_YML"
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\nghost:label\tbbbbbb\tGhost label.'
+OUT="$TMP/s9.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" --dry-run "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+dryrun_msg=$(grep -c '\[DRY-RUN\] Would delete: ghost:label' "$OUT" 2>/dev/null; true)
+delete_logged=$(grep -c 'label delete' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 1 already-exists, 1 deleted / 2 total' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$dryrun_msg" -ge 1 ] && [ "$delete_logged" -eq 0 ] \
+   && [ "$has_summary" -eq 1 ]; then
+    pass "S9: DELETE --dry-run — dry-run msg shown, no gh call, summary correct"
+else
+    fail "S9: rc=$RC dryrun_msg=$dryrun_msg delete_logged=$delete_logged summary=$has_summary out=$(cat "$OUT")"
+fi
+teardown_sync_tmp
+
+# --- S10: no DELETE — remote matches yml exactly.
+setup_sync_tmp "$TWO_LABELS_YML"
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\ntype:incident\td93f0b\tIncident or bug.'
+OUT="$TMP/s10.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+delete_logged=$(grep -c 'label delete' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 2 already-exists, 0 deleted / 2 total' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$delete_logged" -eq 0 ] && [ "$has_summary" -eq 1 ]; then
+    pass "S10: no DELETE — remote matches yml, no delete calls, summary correct"
+else
+    fail "S10: rc=$RC delete_logged=$delete_logged summary=$has_summary out=$(cat "$OUT")"
+fi
+teardown_sync_tmp
+
+# --- S11: DELETE multiple — 3 orphaned labels deleted.
+setup_sync_tmp "$ONE_LABEL_YML"
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\nold:a\taaaaaa\tOld A.\nold:b\tbbbbbb\tOld B.\nold:c\tcccccc\tOld C.'
+OUT="$TMP/s11.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+delete_logged=$(grep -c 'label delete' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 1 already-exists, 3 deleted / 4 total' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$delete_logged" -ge 3 ] && [ "$has_summary" -eq 1 ]; then
+    pass "S11: DELETE multiple — 3 labels deleted, summary correct"
+else
+    fail "S11: rc=$RC delete_logged=$delete_logged summary=$has_summary out=$(cat "$OUT")"
 fi
 teardown_sync_tmp
 

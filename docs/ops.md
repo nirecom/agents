@@ -115,8 +115,13 @@ runs normally. No propagation failure is raised.
 
 **First run:** once the PAT is registered, pushing any change to `.github/labels.yml` or
 `bin/github-issues/sync-labels.sh` (or triggering a manual `workflow_dispatch`) fires the first
-propagation. Each sibling's `labels.yml` is overwritten with the canonical 13-label content
+propagation. Each sibling's `labels.yml` is overwritten with the canonical label content
 prefixed by the `# GENERATED — …` header, then committed and pushed.
+
+**DELETE propagation:** `sync-labels.sh` deletes any label present on the remote repo but absent
+from `.github/labels.yml`. This applies to all callers including `propagate-labels.sh` — orphaned
+labels on sibling repos are removed automatically during propagation. Run with `--dry-run` to
+preview what would be created, updated, or deleted before making live changes.
 
 **Branch-protection note:** if a sibling's `main` branch has branch protection enabled, the
 direct push is rejected and that sibling is recorded as a failure (the others still proceed).

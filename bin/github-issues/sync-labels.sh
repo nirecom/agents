@@ -15,9 +15,14 @@ set -uo pipefail
 REPO_FLAG=""
 REPO_FLAG_SET=0
 LABELS_FILE=""
+DRY_RUN=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
         --repo)
             if [ $# -lt 2 ]; then
                 echo "Error: --repo requires a value" >&2; exit 2
@@ -64,6 +69,7 @@ fi
 C_GREEN='\033[0;32m'
 C_YELLOW='\033[0;33m'
 C_GRAY='\033[0;90m'
+C_RED='\033[0;31m'
 C_RESET='\033[0m'
 
 # Parse the YAML with a small awk script. We only support the limited schema
@@ -96,13 +102,17 @@ CREATED=0
 UPDATED=0
 SKIPPED=0
 FAIL=0
+DELETED=0
 
 while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
     [ -z "$ACTION" ] && continue
     case "$ACTION" in
         CREATE)
             printf '%b%s (created)%b\n' "$C_GREEN" "$NAME" "$C_RESET"
-            if ! gh label create ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --color "$COLOR" --description "$DESC"; then
+            if [[ "$DRY_RUN" -eq 1 ]]; then
+                printf '  [DRY-RUN] Would create: %s\n' "$NAME"
+                CREATED=$((CREATED + 1))
+            elif ! gh label create ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --color "$COLOR" --description "$DESC"; then
                 echo "  Failed to create $NAME" >&2
                 FAIL=$((FAIL + 1))
             else
@@ -111,7 +121,10 @@ while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
             ;;
         UPDATE)
             printf '%b%s (updated)%b\n' "$C_YELLOW" "$NAME" "$C_RESET"
-            if ! gh label create ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --color "$COLOR" --description "$DESC" --force; then
+            if [[ "$DRY_RUN" -eq 1 ]]; then
+                printf '  [DRY-RUN] Would update: %s\n' "$NAME"
+                UPDATED=$((UPDATED + 1))
+            elif ! gh label create ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --color "$COLOR" --description "$DESC" --force; then
                 echo "  Failed to update $NAME" >&2
                 FAIL=$((FAIL + 1))
             else
@@ -122,18 +135,37 @@ while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
             printf '%b%s (already exists)%b\n' "$C_GRAY" "$NAME" "$C_RESET"
             SKIPPED=$((SKIPPED + 1))
             ;;
+        DELETE)
+            printf '%b%s (deleted)%b\n' "$C_RED" "$NAME" "$C_RESET"
+            if [[ "$DRY_RUN" -eq 1 ]]; then
+                printf '  [DRY-RUN] Would delete: %s\n' "$NAME"
+                DELETED=$((DELETED + 1))
+            elif ! gh label delete ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --yes; then
+                echo "  Failed to delete $NAME" >&2
+                FAIL=$((FAIL + 1))
+            else
+                DELETED=$((DELETED + 1))
+            fi
+            ;;
     esac
 done < <(awk '
     BEGIN { FS = OFS = "\t" }
-    NR == FNR { existing[$1] = $2 OFS $3; next }
+    NR == FNR { if ($1 != "") existing[$1] = $2 OFS $3; next }
     {
       key = $1
+      if (key == "") next
+      yml_seen[key] = 1
       if (!(key in existing))              { print "CREATE", $1, $2, $3 }
       else if (existing[key] == $2 OFS $3) { print "SKIP",   $1, $2, $3 }
       else                                  { print "UPDATE", $1, $2, $3 }
     }
+    END {
+      for (k in existing) {
+        if (!(k in yml_seen)) { print "DELETE", k }
+      }
+    }
 ' <(printf '%s\n' "$EXISTING") <(parse_and_apply))
 
-TOTAL=$((CREATED + UPDATED + SKIPPED + FAIL))
-echo "$CREATED created, $UPDATED updated, $SKIPPED already-exists / $TOTAL total"
+TOTAL=$((CREATED + UPDATED + SKIPPED + DELETED + FAIL))
+echo "$CREATED created, $UPDATED updated, $SKIPPED already-exists, $DELETED deleted / $TOTAL total"
 [ "$FAIL" -eq 0 ]
