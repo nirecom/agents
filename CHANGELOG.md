@@ -506,3 +506,7 @@ Changes: New `check-inline-procedures` quality gate in WF-CODE-6: warns when pro
 ### FEATURE: PR #1480 (2026-07-17)
 Background: refactor(#1463): scriptify session-close/SKILL.md
 Changes: Session close Final Report placeholders are now substituted by `bin/render-final-report.js` — no manual LLM token substitution required; all 13 section headings and field values are resolved deterministically.
+
+### FEATURE: PR #1490 (2026-07-17)
+Background: feat(enforce-worktree): report write predicate name in block reason
+Changes: When `enforce-worktree` blocks a Bash write command, the block reason now names the detection predicate that fired (e.g. `Detected by: POSIX redirect or tee (isPosixRedirWriteIR)`), making it easier to diagnose unexpected blocks.
