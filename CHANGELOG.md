@@ -546,3 +546,7 @@ Changes: Fixed: `/workflow-init` no longer extracts spurious issue numbers from 
 ### FEATURE: PR #1507 (2026-07-17)
 Background: feat(#1492): sync-labels DELETE propagation + migrate pre-delete guard
 Changes: sync-labels.sh now deletes labels absent from `.github/labels.yml`; `propagate-labels.sh` inherits this automatically for sibling repos;`--dry-run` flag added to `sync-labels.sh` (gates all mutations: CREATE, UPDATE, and DELETE);`migrate-model-labels.sh` Phase 1 pre-delete guard: safely clears zero-issue target labels before rename, fixing CI ordering issue that previously blocked issue association preservation
+
+### BUGFIX: PR #1512 (2026-07-18)
+Background: fix(#1488): validate workflow-init-driver raw-token args — reject newline/malformed tokens with NEXT_HINT
+Changes: `workflow-init` now validates raw-token arguments before processing — multi-line text, prose, or malformed tokens are rejected with a clear `ACTION=blocked REASON= NEXT_HINT=` response. Improves compatibility with non-Claude-Code-native LLMs (e.g. DeepSeek V4 Flash) that may misinterpret the `<raw-tokens>` placeholder.
