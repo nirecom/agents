@@ -32,12 +32,15 @@ function emitAskUser(ckptPath, askId, question, optionsDisplay) {
   process.stdout.write(lines.join("\n") + "\n");
 }
 
-function emitBlocked(ckptPath, reason) {
+function emitBlocked(ckptPath, reason, nextHint) {
   const lines = [
     `ACTION=blocked`,
     `CHECKPOINT=${ckptPath}`,
     `REASON=${reason}`,
   ];
+  if (nextHint) {
+    lines.push(`NEXT_HINT=${nextHint}`);
+  }
   process.stdout.write(lines.join("\n") + "\n");
 }
 
