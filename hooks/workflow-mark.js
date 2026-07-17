@@ -119,7 +119,7 @@ if (mergeResult.hit) {
       // gh pr merge: reset verification but do not record a sha
       // (no local push happened in this command).
       msg = "workflow-mark: gh pr merge detected — user_verification reset to pending.";
-      try { markStep(sessionId, "user_verification", "pending"); }
+      try { markStep(sessionId, "user_verification", "pending", { reset_reason: "post-merge" }); }
       catch (e) { msg = `workflow-mark: gh pr merge detected — user_verification reset FAILED: ${e.message}`; }
     }
     done(msg);
