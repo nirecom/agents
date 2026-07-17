@@ -317,11 +317,18 @@ if (toolName === "Bash") {
       // main-checkout block (fail-closed). Single | (pipe) is allowed — it is
       // needed for `cmd | tee /out` and carries no sequencing risk beyond the tee.
       if (!hasCommandSequencing(cmd)) {
-        // Bug 2: all targets resolve outside session scope (incl. non-git paths) → allow.
-        // Non-git CWD (#878): allow when all targets are provably under plans-dir;
-        // arbitrary external paths (e.g. /tmp/x) remain fail-closed.
+        // Bug 2: all targets resolve outside session scope → allow.
+        // Non-git CWD (#1448B): when repoRoot is null, also require that every target
+        // resolves to a non-git path (findRepoRoot===null) or is under plans-dir/.claude.
+        // Without repoRoot, sessionRoots may be empty and cannot reliably protect
+        // non-session git repos from accidental cross-repo writes.
         if (areAllBashTargetsOutsideSessionScope(targets, sessionRoots) &&
-            (repoRoot || areAllBashTargetsUnderPlansDir(targets) || areAllBashTargetsUnderClaude(targets))) done();
+            (repoRoot !== null ||
+             areAllBashTargetsUnderPlansDir(targets) ||
+             areAllBashTargetsUnderClaude(targets) ||
+             targets.every(t => findRepoRoot(String(t.path || '').replace(/^["']|["']$/g, '')) === null))) {
+          done();
+        }
 
         // Bug 1: all targets covered by EXCLUDE → allow.
         if (excludePatterns.length > 0 &&
