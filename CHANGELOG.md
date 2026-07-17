@@ -562,3 +562,7 @@ Changes: `git worktree remove` and `git worktree prune` from the main worktree a
 ### FEATURE: PR #1516 (2026-07-18)
 Background: fix(#950): resolveSessionWorktreePath falls back to state.session_worktree for mid-session /worktree-start
 Changes: `/review-tests` now works when the session was started from the main worktree and `/worktree-start` was run mid-session (exit-code-3 fixed).
+
+### FEATURE: PR #1514 (2026-07-18)
+Background: refactor(#1508): unify supervisor state key on CC UUID
+Changes: Supervisor state key unified on CC UUID: `bin/supervisor-report` auto-resolve now uses CC UUID exclusively (via `CLAUDE_CODE_SESSION_ID` env var); `--mirror-session-id` flag removed. Downstream hooks (`supervisor-guard.js`, `stop-l2-findings-display.js`) simplified: wsid fallback shim removed, single-store read on CC UUID key.
