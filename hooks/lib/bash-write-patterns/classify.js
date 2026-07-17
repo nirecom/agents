@@ -4,7 +4,7 @@ const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssi
 const { isStrictSentinel } = require("../sentinel-patterns");
 const { parse } = require("../command-ir");
 const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGitWriteIR } = require("./patterns");
-const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR } = require("../bash-write-targets");
+const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isExoticExecWriteIR, isEncodedCommandWriteIR, isExtendedFileOpWriteIR } = require("../bash-write-targets");
 
 // Returns true when cmd invokes a known dispatcher via bash/sh/zsh/dash.
 // Quotes around the path are tolerated. Backslashes are normalised to forward
@@ -285,7 +285,9 @@ function isReadOnlyInterpreterC(cmd) {
         isFileOpWriteIR(segIr) ||
         isCommandSubstWriteIR(segIr) ||
         isExoticExecWriteIR(segIr) ||
-        isPkgMgrWriteIR(segIr);
+        isPkgMgrWriteIR(segIr) ||
+        isEncodedCommandWriteIR(segIr) ||
+        isExtendedFileOpWriteIR(segIr);
     };
     if (segments.some(innerSegIsWrite)) return false;
 
