@@ -54,12 +54,7 @@ echo "=== labels.yml checks ==="
 assert_contains_label "T-labels-severity-high" "severity:high"
 assert_contains_color "T-labels-severity-high-color" "b60205"
 assert_contains_label "T-labels-severity-low" "severity:low"
-assert_contains_label "T-labels-model-fable" "model:fable"
-assert_contains_label "T-labels-model-opus" "model:opus"
-assert_contains_label "T-labels-model-sonnet" "model:sonnet"
-assert_contains_label "T-labels-model-ds4" "model:ds4"
-assert_contains_label "T-labels-model-others" "model:others"
-assert_contains_color "T-labels-model-others-color" "eeeeee"
+# model:* labels renamed to reporter-model:* by issue #1492 — covered by feature-issue-1492-label-taxonomy.sh
 
 # ラベル件数チェック（既存6件 + 新規7件 = 13件以上）
 COUNT=$(grep -c '^- name:' "$LABELS_YML" 2>/dev/null || echo "0")
