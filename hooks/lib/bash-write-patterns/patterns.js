@@ -35,33 +35,21 @@ const WRITE_PATTERNS = [
   // here-string: <<<
   { name: "here-string", kind: "posix", regex: /<<</ },
   // PowerShell write cmdlets (kind pwsh) retired (#1400): now owned by isPwshWriteIR.
-  // PowerShell write aliases
-  { name: "sc-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])sc\b/ },
-  { name: "ac-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ac\b/ },
-  { name: "ni-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ni\b/ },
-  { name: "ri-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ri\b/ },
-  { name: "mi-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])mi\b/ },
-  { name: "ci-alias", kind: "pwsh-alias", regex: /(?:^|[\s;|&])ci\b/ },
+  // PowerShell write aliases (kind pwsh-alias) retired (#1402 canary-7): now owned by
+  // isPwshWriteIR (IR-based) via PWSH_CMDLET_RE in bash-write-targets.js.
   // PowerShell encoded / bypass
-  { name: "encoded-command", kind: "pwsh-encoded", regex: /-EncodedCommand\b|-enc\b/i },
-  { name: "ps-stop-parsing", kind: "pwsh-encoded", regex: /(?:^|[\s;|&])--%/ },
+  // encoded-command / ps-stop-parsing (kind pwsh-encoded) retired (#1402 canary-7):
+  // isEncodedCommandWriteIR (bash-write-targets/encoded.js) is the fail-closed SSOT.
+  // Scoped to pwsh/powershell interpreters (not arbitrary -enc flags).
   // PowerShell here-strings
+  // here-doc/here-string here-* entries are RETAINED (not retired #1402): they are
+  // QUOTING_ONLY markers required by the Group A override + isSafeHeredocOnly gate.
+  // isHereWriteIR (bash-write-targets/here.js) is the IR-side read/write companion.
   { name: "pwsh-here-single", kind: "pwsh-here", regex: /@'[\s\S]*?'@/ },
   { name: "pwsh-here-double", kind: "pwsh-here", regex: /@"[\s\S]*?"@/ },
-  // Destructive file operations
-  // rm/mv/cp (kind file-op) retired from WRITE_PATTERNS (#1400): now owned by
-  // isFileOpWriteIR. file-op stays in STRIP_KINDS for the 11 entries below.
-  { name: "sed-inplace", kind: "file-op", regex: /\bsed\s+-[a-zA-Z]*i\b/ },
-  { name: "perl-inplace", kind: "file-op", regex: /\bperl\s+-[a-zA-Z]*i\b/ },
-  { name: "patch", kind: "file-op", regex: /(?:^|[\s;|&])patch\b/ },
-  { name: "touch", kind: "file-op", regex: /(?:^|[\s;|&])touch\b/ },
-  { name: "chmod", kind: "file-op", regex: /(?:^|[\s;|&])chmod\b/ },
-  { name: "dd", kind: "file-op", regex: /(?:^|[\s;|&])dd\b/ },
-  { name: "rsync", kind: "file-op", regex: /(?:^|[\s;|&])rsync\b/ },
-  { name: "tar-extract", kind: "file-op", regex: /\btar\b.*-[a-zA-Z]*x/ },
-  { name: "unzip", kind: "file-op", regex: /(?:^|[\s;|&])unzip\b/ },
-  { name: "gunzip", kind: "file-op", regex: /(?:^|[\s;|&])gunzip\b/ },
-  { name: "bunzip2", kind: "file-op", regex: /(?:^|[\s;|&])bunzip2\b/ },
+  // Destructive file operations (kind file-op) retired (#1402 canary-7):
+  // isExtendedFileOpWriteIR (bash-write-targets/file-op.js) is the SSOT.
+  // Flag-gated verbs (sed -i, perl -i, tar -x, dd of=) require explicit flags.
   // pkg-mgr (npm/pnpm/yarn/pip/uv/cargo/go) retired to IR (#1411 canary-6a).
   // isPkgMgrWriteIR in hooks/lib/bash-write-targets/pkg-mgr.js is the SSOT.
   // git mutating subcommands (kind git) retired from WRITE_PATTERNS (#1401):
@@ -106,37 +94,31 @@ const QUOTING_ONLY_NAMES = new Set([
 ]);
 
 // Pattern kinds where classify() tests the stripped (quote-removed) command.
-// - file-op (cp/mv/rm/touch/chmod etc.): write tokens inside quoted args
-//   (e.g. `doc-append --subject "rm tmp"`) must not false-positive.
 // - posix-redir (posix-redirect, tee): redirect chars inside quoted args
 //   (e.g. `grep -nE "pattern > match" file`, #460) and `tee` in quoted prose
 //   (e.g. `doc-append --subject "tee output"`) must not false-positive.
 // - git (#692): git verbs inside quoted args (e.g. `grep -n "git push" file`)
 //   must not false-positive. The git-commit / git-push / git-merge / etc.
 //   regexes use `\bgit\b.*\bverb\b` which span quoted prose without stripping.
-// - "pkg-mgr" (#416): npm/pip/etc. verbs in sentinel echo reason text
-//   (e.g. echo "<<...: npm install fix>>") caused false-positive write.
-//   Stripping quoted args prevents the match.
-// - "pwsh" / "pwsh-alias" / "pwsh-encoded" (#416): defense-in-depth for pwsh
-//   verbs in reason text.
 // gh: NOT in STRIP_KINDS — the kind:"gh" WRITE_PATTERNS group was retired (#1296);
 //   gh write detection is now owned solely by isGhWriteIR (IR-based SSOT below),
 //   which operates on parsed argv tokens and is unaffected by quote-stripping.
 // AT-DP1 (#416): "pkg-mgr" has been removed from STRIP_KINDS because the
 // pkg-mgr WRITE_PATTERNS entries were retired to isPkgMgrWriteIR (#1411 canary-6a).
-// The tradeoff (stripQuotedArgs collapsing quoted write verbs) no longer applies.
-// Other kinds (posix [here-doc/here-string], interpreter) are
-// tested against the original command. here-doc/here-string in particular MUST
-// scan the original cmd because the Group A QUOTING_ONLY_NAMES override and
-// stripHeredocBody contract depend on it (see classify() lines 160-190).
-const STRIP_KINDS = new Set(["file-op", "pwsh-alias", "pwsh-encoded"]);
+// STRIP_KINDS: file-op/pwsh-alias/pwsh-encoded retired (#1402 canary-7). here-*
+// entries stay in WRITE_PATTERNS as QUOTING_ONLY markers but are kind:"posix"/
+// "pwsh-here" (never in STRIP_KINDS — original-cmd scan preserved). The Set is
+// now empty; classify() no longer strips quoted args for any write-path kind.
+const STRIP_KINDS = new Set();
 
 // Write command words that, when quoted at command-position, must still be
 // classified as write (#515). git/npm/gh excluded — too many false positives.
-// sed/perl excluded — in-place flag detection requires argument scanning.
+// sed/perl/tar excluded from QUOTED_COMMAND_WORD_WRITE_NAMES: their write mode
+// requires an explicit flag (-i / -x). Quoted command-position presence alone
+// does not imply a write. isExtendedFileOpWriteIR covers the flag-gated path.
 const QUOTED_COMMAND_WORD_WRITE_NAMES = new Set([
   "tee", "rm", "mv", "cp", "patch", "touch", "chmod", "dd", "rsync",
-  "unzip", "gunzip", "bunzip2", "sc", "ac", "ni", "ri",
+  "unzip", "gunzip", "bunzip2", "sc", "ac", "ni", "ri", "mi", "ci",
 ]);
 
 // Reason-text guard: reject expansion triggers inside a bash double-quoted string.
