@@ -7,6 +7,9 @@ const { extractPwshWriteTargets } = require("./bash-write-targets/pwsh");
 const { extractCpMvDestination } = require("./bash-write-targets/cp-mv");
 const { extractRmTargets } = require("./bash-write-targets/rm");
 const { extractStagedFiles } = require("./bash-write-targets/staged");
+const { isEncodedCommandWriteIR } = require("./bash-write-targets/encoded");
+const { isExtendedFileOpWriteIR } = require("./bash-write-targets/file-op");
+const { isHereWriteIR } = require("./bash-write-targets/here");
 
 const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
@@ -197,7 +200,8 @@ function innerCommandIsWrite(inner, recurse) {
   if (!innerIr || innerIr.parseFailure === true) return true;
   let isPkgMgrWriteIR;
   try { ({ isPkgMgrWriteIR } = require("./bash-write-targets/pkg-mgr")); } catch (_) { isPkgMgrWriteIR = () => false; }
-  if (isPosixRedirWriteIR(innerIr) || isPwshWriteIR(innerIr) || isFileOpWriteIR(innerIr) || isGitWriteIR(innerIr) || isPkgMgrWriteIR(innerIr) || isInterpreterCWriteIR(innerIr)) return true;
+  // isHereWriteIR always false (here-shape read boundary); not in OR chain.
+  if (isPosixRedirWriteIR(innerIr) || isPwshWriteIR(innerIr) || isFileOpWriteIR(innerIr) || isGitWriteIR(innerIr) || isPkgMgrWriteIR(innerIr) || isInterpreterCWriteIR(innerIr) || isEncodedCommandWriteIR(innerIr) || isExtendedFileOpWriteIR(innerIr)) return true;
   // Fail-closed widening: classify() sees interpreter-c wrappers (`sh -c '…'`)
   // and any WRITE_PATTERNS-flagged write that the narrow IR predicates above do
   // not individually cover. classify() never demotes a write to read, so adding
@@ -443,4 +447,7 @@ module.exports = {
   isNewlineInjectedWriteIR,
   isExoticExecWriteIR,
   isInterpreterCWriteIR,
+  isEncodedCommandWriteIR,
+  isExtendedFileOpWriteIR,
+  isHereWriteIR,
 };
