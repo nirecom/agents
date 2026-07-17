@@ -37,6 +37,9 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
     "bin/issue-close-gate.sh",
     "bin/github-issues/issue-close-stage-triage.sh",
     "bin/github-issues/parent-body-update.sh",
+    "bin/github-issues/issue-create-dispatch.sh",
+    "skills/issue-create/scripts/run-bulk-dispatch.sh",
+    "skills/issue-create/scripts/run-phase5-record.sh",
   ];
 
   let normScript;
