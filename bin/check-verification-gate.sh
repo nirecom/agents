@@ -17,6 +17,11 @@
 
 set -euo pipefail
 
+if [ "${AGENTS_BASH_MAJOR_OVERRIDE:-${BASH_VERSINFO:-0}}" -lt 4 ]; then
+  printf '[check-verification-gate] requires bash >= 4 (found %s). Install a newer bash: '"'"'brew install bash'"'"'.\n' "${BASH_VERSION:-unknown}" >&2
+  exit 3
+fi
+
 usage() {
     cat >&2 <<'EOF'
 Usage: check-verification-gate.sh [--files FILE...] | [--stdin] [--settings-path PATH]

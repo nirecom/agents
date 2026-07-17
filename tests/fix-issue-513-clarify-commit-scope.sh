@@ -385,6 +385,81 @@ else
     fail "CCS-9: clarify-commit-scope.sh not yet present (expected RED before /write-code)"
 fi
 
+# ============================================================================
+# Bash-version guard (issue: bash 3.2 `declare -A` / empty-array nounset)
+# The guard rejects bash major < 4 up front, because this script depends on
+# associative arrays (`declare -A REPO_OF`) and bash-4 array semantics.
+# AGENTS_BASH_MAJOR_OVERRIDE lets the test force the detected major version.
+#
+# CRITICAL exit-code contract: the guard MUST exit 1, NOT 2. run-completion.sh
+# treats exit 2 from this script as a CLOSED-entry success signal, so a version
+# failure that exited 2 would be silently swallowed as "issue already closed".
+# ============================================================================
+
+# CCS-GUARD-1: bash major < 4 → version guard fires: exit 1 + "requires bash"
+# stderr. AGENTS_CONFIG_DIR is set (via setup_mock) so exit 1 can only originate
+# from the guard, not from the AGENTS_CONFIG_DIR :? check.
+# TEST_EXPECTED_FAIL_UNTIL_GUARD_IMPLEMENTED (guard not yet in source)
+if [ -f "$CCS" ]; then
+    setup_mock
+    export AGENTS_BASH_MAJOR_OVERRIDE=3
+    STDERR=$(run_with_timeout 15 bash "$CCS" \
+        --session-id "test-sid" \
+        --plans-dir "$TMP/plans" \
+        --issues "101" 2>&1 >/dev/null)
+    RC=$?
+    unset AGENTS_BASH_MAJOR_OVERRIDE
+    if [ "$RC" -eq 1 ] && echo "$STDERR" | grep -qiE "requires bash"; then
+        pass "CCS-GUARD-1: bash<4 → exit 1 (not 2) + 'requires bash' stderr"
+    else
+        fail "CCS-GUARD-1: expected exit 1 + 'requires bash'; got rc=$RC stderr='$STDERR'"
+    fi
+    teardown_mock
+else
+    fail "CCS-GUARD-1: clarify-commit-scope.sh not yet present (expected RED before /write-code)"
+fi
+
+# CCS-GUARD-2: bash major >= 4 → guard passes through, script proceeds normally.
+# With --non-github + valid plans-dir the run exits 0; assertion is only that the
+# exit code is NOT 1 (i.e. the guard did not reject). Passes pre- and post-fix.
+if [ -f "$CCS" ]; then
+    setup_mock
+    export AGENTS_BASH_MAJOR_OVERRIDE=4
+    OUT=$(run_with_timeout 15 bash "$CCS" \
+        --session-id "test-sid" \
+        --plans-dir "$TMP/plans" \
+        --issues "101" \
+        --non-github 2>/dev/null)
+    RC=$?
+    unset AGENTS_BASH_MAJOR_OVERRIDE
+    if [ "$RC" -ne 1 ]; then
+        pass "CCS-GUARD-2: bash>=4 → guard passes through (rc=$RC != 1)"
+    else
+        fail "CCS-GUARD-2: expected rc != 1 (guard should not reject bash 4); got rc=$RC"
+    fi
+    teardown_mock
+else
+    fail "CCS-GUARD-2: clarify-commit-scope.sh not yet present (expected RED before /write-code)"
+fi
+
+# CCS-GUARD-3: static regression — no bare "${REPO_ARGS[@]}" / "${ISSUE_REPO_ARGS[@]}"
+# expansion. Under bash 3.2 `set -u`, expanding an empty array bare is an unbound
+# error; the fix converts each to the empty-safe idiom ${ARR[@]+"${ARR[@]}"}.
+# The ERE [^+] guard ensures the idiom's inner "${...[@]}" (preceded by +) is NOT
+# counted as a bare match — only genuinely-bare expansions are flagged.
+# TEST_EXPECTED_FAIL_UNTIL_GUARD_IMPLEMENTED (bare expansions still present pre-fix)
+if [ -f "$CCS" ]; then
+    MATCHES=$(grep -nE '[^+]"\$\{(ISSUE_)?REPO_ARGS\[@\]\}"' "$CCS" || true)
+    if [ -z "$MATCHES" ]; then
+        pass "CCS-GUARD-3: no bare REPO_ARGS/ISSUE_REPO_ARGS array expansion"
+    else
+        fail "CCS-GUARD-3: bare array expansion(s) still present:
+$MATCHES"
+    fi
+else
+    fail "CCS-GUARD-3: clarify-commit-scope.sh not yet present (expected RED before /write-code)"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 exit $((FAIL > 0 ? 1 : 0))
