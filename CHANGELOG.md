@@ -554,3 +554,7 @@ Changes: `workflow-init` now validates raw-token arguments before processing —
 ### FEATURE: PR #1513 (2026-07-18)
 Background: fix(#1511): add PLAN_LANG directive to outline-planner, detail-planner, and clarify-intent
 Changes: Planning agents (outline-planner, detail-planner, clarify-intent) now write plan artifacts in the language set by `PLAN_LANG` from the first write — eliminates the same-session re-write when `PLAN_LANG=japanese`
+
+### FEATURE: PR #1515 (2026-07-18)
+Background: fix(#923): enforce-worktree early-exit for git worktree remove/prune
+Changes: `git worktree remove` and `git worktree prune` from the main worktree are now correctly allowed even when a `-C <path>` flag is used; a security boundary blocks the same commands from a linked worktree or when `-C` targets a different repo

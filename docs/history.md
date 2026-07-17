@@ -200,4 +200,8 @@ Test gap: no L3 test for real claude -p + non-native LLM session driving workflo
 
 ### FEATURE: PR #1513 — fix/1511-plan-lang-directive (2026-07-18, b5490b54af826dad3091fd62b9b5485ca30009be, #1513)
 Background: fix(#1511): add PLAN_LANG directive to outline-planner, detail-planner, and clarify-intent
-Changes: fix(#1511): add explicit PLAN_LANG directive to outline-planner, detail-planner, and clarify-intent CI-4 — agents now write plan artifacts in the configured language from the first write, eliminating the reactive re-write cycle triggered by check-plan-lang.js when PLAN_LANG=japanese <!-- compose-doc-append-sentinel: branch=fix/1511-plan-lang-directive pr=#1513 -->
+Changes: fix(#1511): add explicit PLAN_LANG directive to outline-planner, detail-planner, and clarify-intent CI-4 — agents now write plan artifacts in the configured language from the first write, eliminating the reactive re-write cycle triggered by check-plan-lang.js when PLAN_LANG=japanese <!-- compose-doc-append-sentinel: branch=fix/1511-plan-lang-directive pr=#1513 -->
+
+### FEATURE: PR #1515 — fix/923-enforce-worktree-early-exit (2026-07-18, 5e2c5efe3c94a40e4afebcd614d409e531992694, #1515)
+Background: fix(#923): enforce-worktree early-exit for git worktree remove/prune
+Changes: fix(#923): add early-exit in enforce-worktree.js that evaluates isAllowedWorktreeCommand (for git worktree remove/prune) before the session-scope pipeline; uses CWD-anchored isMainCheckout to block linked-CWD + -C <main> and main-CWD + -C <other-repo> misuse; adds 6 L2 integration tests (T923-L2.A–F) covering allow/block dispatch at the full hook boundary <!-- compose-doc-append-sentinel: branch=fix/923-enforce-worktree-early-exit pr=#1515 -->
