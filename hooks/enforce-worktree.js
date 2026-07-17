@@ -193,6 +193,32 @@ if (toolName === "Bash") {
   const ir = parse(cmd);
   _writeDetector = detectWritePredicate(ir);
   if (!_writeDetector) done(); // read-only command — allow
+
+  // Early-exit for git worktree remove/prune (write confirmed above): resolve
+  // repo root from CWD (not from -C flag) so the CWD checkout type drives the
+  // allow/block decision. This prevents the main-path isMainCheckout(repoRoot)
+  // from wrongly resolving via a -C target and allowing linked-CWD or
+  // cross-repo invocations. Non-git CWD (cwdRoot===null) falls through to the
+  // main fail-closed block below.
+  if (/\bgit\b/.test(cmd) && /\bworktree\s+(?:remove|prune)\b/.test(cmd)) {
+    const cwdRoot = findRepoRootForBash("git", _toolCwd);
+    if (cwdRoot !== null) {
+      const cwd = _toolCwd || process.cwd();
+      if (isMainCheckout(cwd) === true && isAllowedWorktreeCommand(cmd, cwdRoot)) {
+        done();
+      } else {
+        done({
+          block: true,
+          reason:
+            "ENFORCE_WORKTREE: git worktree remove/prune blocked.\n" +
+            "Reason: must be invoked from the main worktree (not a linked worktree),\n" +
+            "and -C (if used) must target the main repo root.\n" +
+            "Use /worktree-end to remove a linked worktree.",
+        });
+      }
+    }
+  }
+
   repoRoot = findRepoRootForBash(cmd, _toolCwd);
 
   // git branch -d/-D: gated by direct check against `git worktree list --porcelain`.
