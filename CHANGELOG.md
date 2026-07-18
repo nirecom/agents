@@ -566,3 +566,7 @@ Changes: `/review-tests` now works when the session was started from the main wo
 ### FEATURE: PR #1514 (2026-07-18)
 Background: refactor(#1508): unify supervisor state key on CC UUID
 Changes: Supervisor state key unified on CC UUID: `bin/supervisor-report` auto-resolve now uses CC UUID exclusively (via `CLAUDE_CODE_SESSION_ID` env var); `--mirror-session-id` flag removed. Downstream hooks (`supervisor-guard.js`, `stop-l2-findings-display.js`) simplified: wsid fallback shim removed, single-store read on CC UUID key.
+
+### FEATURE: PR #1518 (2026-07-18)
+Background: fix(enforce-worktree): remove wtCount upper-bound for skill-prefixed stash (#1024)
+Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands no longer false-block `enforce-worktree.js` (#1115, #982).;`git -C <path> worktree remove/prune/add` now passes `enforce-worktree.js` from both main-worktree and linked-worktree CWDs (#923, #838).;Sanctioned worker scripts (`issue-close-stage-worker`, `commit-push-worker`, etc.) launched from the main worktree with linked-worktree path arguments no longer false-block (#959).;`WORKTREE_END_SKILL=1 git stash pop/drop/push` during `/worktree-end` WE-20 no longer false-blocks in repos with multiple linked worktrees (zombie worktree accumulation) (#1024).
