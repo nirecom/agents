@@ -570,3 +570,7 @@ Changes: Supervisor state key unified on CC UUID: `bin/supervisor-report` auto-r
 ### FEATURE: PR #1518 (2026-07-18)
 Background: fix(enforce-worktree): remove wtCount upper-bound for skill-prefixed stash (#1024)
 Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands no longer false-block `enforce-worktree.js` (#1115, #982).;`git -C <path> worktree remove/prune/add` now passes `enforce-worktree.js` from both main-worktree and linked-worktree CWDs (#923, #838).;Sanctioned worker scripts (`issue-close-stage-worker`, `commit-push-worker`, etc.) launched from the main worktree with linked-worktree path arguments no longer false-block (#959).;`WORKTREE_END_SKILL=1 git stash pop/drop/push` during `/worktree-end` WE-20 no longer false-blocks in repos with multiple linked worktrees (zombie worktree accumulation) (#1024).
+
+### FEATURE: PR #1506 (2026-07-18)
+Background: feat(#1498): add C4 premature-stop guard Stop hook
+Changes: When Claude stops mid-workflow while a pending skill is waiting (ACTION=invoke), the new premature-stop guard Stop hook auto-resumes Claude and prompts it to run the pending skill.
