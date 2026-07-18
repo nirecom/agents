@@ -254,3 +254,100 @@ run_t11() {
         fail "T11: expected decision:block for pre-init invoke (rc=$rc, out=$out)"
     fi
 }
+
+# ---------------------------------------------------------------------------
+# T12: empty stdin → exit 0 (fail-open on missing input)
+# ---------------------------------------------------------------------------
+run_t12() {
+    require_source "$HOOK" "T12: empty stdin -> exit 0 fail-open" || return
+    local out rc
+    out=$(echo -n "" | run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        pass "T12: empty stdin -> exit 0 fail-open"
+    else
+        fail "T12: expected exit 0 on empty stdin (rc=$rc, out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# T13: malformed (non-JSON) input → exit 0 (fail-open on parse error)
+# ---------------------------------------------------------------------------
+run_t13() {
+    require_source "$HOOK" "T13: malformed JSON -> exit 0 fail-open" || return
+    local out rc
+    out=$(echo "not-valid-json" | run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        pass "T13: malformed JSON -> exit 0 fail-open"
+    else
+        fail "T13: expected exit 0 on malformed JSON (rc=$rc, out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# T14: session_id fails SESSION_ID_RE (contains spaces) → exit 0 pass-through
+# ---------------------------------------------------------------------------
+run_t14() {
+    require_source "$HOOK" "T14: invalid session_id (spaces) -> exit 0 pass-through" || return
+    local tmp out rc
+    tmp="$(mktemp -d)"
+    out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"sid with spaces\",\"transcript_path\":\"\"}" \
+        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+          run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"block"'; then
+        pass "T14: invalid session_id -> exit 0 pass-through"
+    else
+        fail "T14: expected exit 0 for invalid session_id (rc=$rc, out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# T15: next-step binary absent (AGENTS_CONFIG_DIR points to empty dir,
+#      but workflow state IS present) → exit 0 fail-open
+# ---------------------------------------------------------------------------
+run_t15() {
+    require_source "$HOOK" "T15: next-step binary absent -> exit 0 fail-open" || return
+    local tmp sid out rc fake_agents
+    tmp="$(mktemp -d)"
+    sid="t15-sid"
+    fake_agents="$tmp/fake-agents"
+    mkdir -p "$fake_agents"
+    seed_workflow_state "$tmp" "$sid" "invoke"
+    out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+          AGENTS_CONFIG_DIR="$fake_agents" \
+          run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ! echo "$out" | grep -q '"block"'; then
+        pass "T15: next-step binary absent -> exit 0 fail-open"
+    else
+        fail "T15: expected exit 0 when next-step missing (rc=$rc, out=$out)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# T16: ACTION=invoke → reason string contains NEXT_SKILL value
+# Verifies that the skill name is propagated into the block reason message.
+# ---------------------------------------------------------------------------
+run_t16() {
+    require_source "$HOOK" "T16: ACTION=invoke -> reason contains NEXT_SKILL" || return
+    local tmp sid out rc
+    tmp="$(mktemp -d)"
+    sid="t16-sid"
+    seed_workflow_state "$tmp" "$sid" "invoke"
+    out=$(echo "{\"stop_hook_active\":false,\"session_id\":\"$sid\",\"transcript_path\":\"\"}" \
+        | CLAUDE_WORKFLOW_DIR="$tmp/workflow" WORKFLOW_PLANS_DIR="$tmp/plans" \
+          run_with_timeout 15 node "$HOOK_NODE" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    # The reason field must mention NEXT_SKILL; next-step returns NEXT_SKILL for this session.
+    if echo "$out" | grep -q '"block"' && echo "$out" | grep -q 'NEXT_SKILL='; then
+        pass "T16: decision:block reason contains NEXT_SKILL"
+    else
+        fail "T16: expected reason with NEXT_SKILL in block output (rc=$rc, out=$out)"
+    fi
+}

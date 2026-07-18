@@ -22,6 +22,7 @@ fi
 HOOK="$AGENTS_DIR/hooks/stop-premature-stop-guard.js"
 HOOK_NODE="$_AGENTS_DIR_NODE/hooks/stop-premature-stop-guard.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
+SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -61,6 +62,11 @@ run_t8
 run_t9
 run_t10
 run_t11
+run_t12
+run_t13
+run_t14
+run_t15
+run_t16
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
