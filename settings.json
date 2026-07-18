@@ -274,6 +274,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-premature-stop-guard.js\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/supervisor-guard.js\"",
             "timeout": 5
           },
