@@ -228,7 +228,11 @@ function isAllowedMidOperationAbort(cmd, repoRoot) {
  *   - stash: only push|pop|apply|drop|clear (not branch|show|store|create|list)
  *   - restore: no --source (would rewrite from arbitrary tree)
  *   - Linked-worktrees probe: spawnSync git worktree list --porcelain must return
- *     exactly 1 entry. Fail-closed on git error.
+ *     >= 1 entry; upper bound depends on prefix/subcommand —
+ *       · skill-prefixed stash: no upper bound (ref-only, #1024)
+ *       · skill-prefixed restore/checkout: <= 2 entries
+ *       · no-prefix: exactly 1 entry
+ *     Fail-closed on git error.
  */
 function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
@@ -288,8 +292,12 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
     });
     if (r.status !== 0) return false;
     const wtCount = ((r.stdout || "").match(/^worktree\s/gm) || []).length;
+    if (wtCount < 1) return false;
+    // stash is ref-only (never rewrites tracked working-tree files), so a
+    // skill-prefixed stash needs no linked-worktree upper bound (#1024).
+    if (skillPrefixed && sub === "stash") return true;
     const maxCount = skillPrefixed ? 2 : 1;
-    return wtCount >= 1 && wtCount <= maxCount;
+    return wtCount <= maxCount;
   } catch (e) { return false; }
 }
 
