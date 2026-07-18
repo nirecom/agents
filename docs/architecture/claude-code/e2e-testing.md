@@ -5,24 +5,20 @@ L2 tests cannot exercise real Stop-event, SubagentStop, or PostCompact paths.
 
 ## Hook Coverage Map
 
-| Hook | Current L2 | Priority | Rationale |
+| Hook | E2E Test | Coverage type | L3 gap summary |
 |---|---|---|---|
-| `hooks/workflow-mark.js` | partial (`tests/feature-robust-workflow/settings-e2e.sh` — RUN_E2E-gated, extracted in PR #964) | **P1 — extract** | E2E exists but gated by RUN_E2E in a dedicated file; #943 to make it the default coverage path. |
-| `hooks/stop-confirm-plan-guard.js` | none | **P1 — add** | Stop-hook sentinel-order validation is unreachable from unit tests; the hook reads the live transcript. |
-| `hooks/stop-final-report-guard.js` | extensive (`tests/feature-534-stop-final-report-guard.sh`, 20+ L2 cases) | **P2 — add E2E** | L2 is thorough but cannot exercise the real Stop-event path; one E2E case validates registration. |
-| `hooks/session-start.js` | partial (`tests/feature-772-session-start-cleanup-inherit.sh` covers env-file write) | **P2 — add E2E** | env-file write covered at L2; need E2E for actual CONV_LANG injection into a live session. |
-| `hooks/subagent-start.js` | partial (`tests/feature-1303-lang-hooks/group2-subagent-start.sh` covers the `PLAN_LANG` planner/reviewer whitelist via real spawn) | **P3 — add E2E** | `PLAN_LANG` whitelist covered at L2; real Task-tool sub-agent context injection only reachable via `claude -p`. |
-| `hooks/lang-inject.js` | L2 (`tests/feature-1303-lang-hooks/group1-lang-inject.sh` — real spawn: CONV_LANG per-turn, PLAN_LANG when planning, fail-open) | **P3 — add E2E** | hook-registration gap: real UserPromptSubmit firing and `additionalContext` surfacing into a live session are unverifiable at L2. |
-| `hooks/post-compact.js` | none | **P3 — add** | PostCompact event is not reproducible at L2 (requires real compaction trigger). |
-| `hooks/stop-enforce-worktree-on-warn.js` | none (advisory) | **P3 — add** | Advisory context-injection is only confirmable in a live session. |
-| `hooks/supervisor-guard.js` | L2-only (`tests/feature-719-supervisor-guard-hook.sh`, `tests/feature-883-supervisor-guard-wsid.sh`) | **OUT — defer** | No observable signal under `claude -p --output-format json`; re-evaluate after #937 phase 2. |
+| `hooks/workflow-mark.js` | `tests/feature-943-e2e-workflow-mark.sh` | RUN_E2E-gated (real `claude -p`) | Most sentinel dispatch paths covered by L1 unit tests; this validates hook registration. |
+| `hooks/stop-confirm-plan-guard.js` | `tests/feature-943-e2e-stop-confirm-plan-guard.sh` | deterministic direct-node (11 cases) | Layer 1 + Layer 2 classifier boundaries fully covered; live Stop-event not exercised. |
+| `hooks/stop-final-report-guard.js` | `tests/feature-943-e2e-stop-final-report-guard.sh` | deterministic direct-node (8 cases) | Paired with existing L2 `feature-534-stop-final-report-guard.sh`; real Stop-event path not exercised. |
+| `hooks/session-start.js` | `tests/feature-943-e2e-session-start.sh` | direct-node E2/E3 + RUN_E2E-gated E1 | additionalContext and CONV_LANG covered by direct-node; state inheritance and zombie cleanup are L3 gaps. |
+| `hooks/subagent-start.js` | `tests/feature-943-e2e-subagent-start.sh` | deterministic direct-node (6 cases) | Paired with existing L2 `feature-1303-lang-hooks/group2-subagent-start.sh`; real Task-tool dispatch not exercised. |
+| `hooks/lang-inject.js` | `tests/feature-943-e2e-lang-inject.sh` | deterministic direct-node (4 cases) | Paired with existing L2 `feature-1303-lang-hooks/group1-lang-inject.sh`; real UserPromptSubmit not exercised. |
+| `hooks/post-compact.js` | `tests/feature-943-e2e-post-compact.sh` | deterministic direct-node (4 cases) | Settings registration, re-injection, workflow steps, CONV_LANG covered; real PostCompact event not exercised. |
+| `hooks/stop-enforce-worktree-on-warn.js` | `tests/feature-943-e2e-stop-enforce-worktree-on-warn.sh` | deterministic direct-node (3 cases) | OFF-only and balanced OFF+ON covered; ON-then-OFF order is an untested advisory path. |
+| `hooks/supervisor-guard.js` | none | OUT — deferred | No observable signal under `claude -p --output-format json`; re-evaluate after #937 phase 2. |
 
-## Implementation Order (#943)
+## Two E2E Test Types
 
-1. `workflow-mark.js` — extract existing embedded E2E to a dedicated file.
-2. `stop-confirm-plan-guard.js` — write fresh E2E.
-3. `stop-final-report-guard.js` — write fresh E2E (paired with existing L2; both kept).
-4. `session-start.js` — write fresh E2E (paired with `feature-772-session-start-cleanup-inherit.sh`).
-5. `subagent-start.js` — write fresh E2E.
-6. `post-compact.js` — write fresh E2E.
-7. `stop-enforce-worktree-on-warn.js` — write fresh E2E.
+**Issue-specific tests** (`tests/feature-943-e2e-*.sh`): hook-level coverage for the 8 L3-gap hooks added in #943. Most are deterministic direct-node (always run); two files have one `RUN_E2E`-gated case each (`workflow-mark.sh`, `session-start.sh`).
+
+**Matrix coverage run**: run all `RUN_E2E`-gated tests in one pass. Use `bin/run-e2e-matrix.sh` to discover and execute every `tests/*.sh` file that contains a `RUN_E2E`-gated case.
