@@ -3,6 +3,13 @@
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows.js
 # Tags: worktree, enforce, hook, bin, git, security, interpreter-wrapper, fix-802, scope:common
 # Tests for isAllowedMainWorktreeCleanup() — #297; isAllowedWorktreeCommand — #778, #802
+# L3 gap: These tests load the Node module directly (L2 — real git repos, real subprocesses).
+#   What only a real Claude Code hook-firing session would catch:
+#   - Whether enforce-worktree.js correctly routes PreToolUse Bash tool calls to
+#     isAllowedMainWorktreeCleanup / isAllowedWorktreeCommand (ordering + early-exit guards).
+#   - isAllowedWorktreeCommand worktree-add path (lines 76-98: isPathOutsideRepo gate,
+#     && cd tail handling) — pre-existing L2 gap not addressed in this PR (#1024 scope:
+#     only isAllowedMainWorktreeCleanup wtCount fix). File a follow-up issue to add coverage.
 set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then _A="$(cygpath -m "$AGENTS_DIR")"; else _A="$AGENTS_DIR"; fi
@@ -62,6 +69,19 @@ git -C "$MAIN_VERY_DIRTY" commit --allow-empty --no-verify -q -m init
 git -C "$MAIN_VERY_DIRTY" worktree add -q -b feature-a "$TMPBASE/very-dirty-wt1" 2>/dev/null
 git -C "$MAIN_VERY_DIRTY" worktree add -q -b feature-b "$TMPBASE/very-dirty-wt2" 2>/dev/null
 if command -v cygpath >/dev/null 2>&1; then MAIN_VERY_DIRTY_N="$(cygpath -m "$MAIN_VERY_DIRTY")"; else MAIN_VERY_DIRTY_N="$MAIN_VERY_DIRTY"; fi
+
+# MAIN_ZOMBIE_DIRTY — 3 linked worktrees (wtCount=4) for S34b zombie scenario
+MAIN_ZOMBIE_DIRTY="$TMPBASE/main-zombie-dirty"
+mkdir -p "$MAIN_ZOMBIE_DIRTY"
+git -C "$MAIN_ZOMBIE_DIRTY" init -q -b main
+git -C "$MAIN_ZOMBIE_DIRTY" config user.email "test@example.com"
+git -C "$MAIN_ZOMBIE_DIRTY" config user.name "Test"
+git -C "$MAIN_ZOMBIE_DIRTY" config core.hooksPath /dev/null
+git -C "$MAIN_ZOMBIE_DIRTY" commit --allow-empty --no-verify -q -m init
+git -C "$MAIN_ZOMBIE_DIRTY" worktree add -q -b zombie-1 "$TMPBASE/zombie-wt-1" 2>/dev/null
+git -C "$MAIN_ZOMBIE_DIRTY" worktree add -q -b zombie-2 "$TMPBASE/zombie-wt-2" 2>/dev/null
+git -C "$MAIN_ZOMBIE_DIRTY" worktree add -q -b zombie-3 "$TMPBASE/zombie-wt-3" 2>/dev/null
+if command -v cygpath >/dev/null 2>&1; then MAIN_ZOMBIE_DIRTY_N="$(cygpath -m "$MAIN_ZOMBIE_DIRTY")"; else MAIN_ZOMBIE_DIRTY_N="$MAIN_ZOMBIE_DIRTY"; fi
 
 check_mc() {
   run_with_timeout node -e "
@@ -123,7 +143,8 @@ assert_block "git stash pop && echo done"      "$MAIN_CLEAN_N" "S25: chaining bl
 assert_block "git -C \"$OTHER_N\" stash pop"  "$MAIN_CLEAN_N" "S26: -C /other blocked"
 
 # === WORKTREE_END_SKILL=1 prefix handling (S27-S42, new behavior) ===
-# S27-S29, S34, S36 FAIL until source changes are applied.
+# S27-S29, S36 FAIL until source changes are applied.
+# S34 changed to assert_allow: stash has no upper cap with skill prefix (#1024).
 # S37/S38/S39/S42 retargeted to isAllowedWorktreeCommand (#778) — no-prefix forms.
 
 # S27: skill-prefixed stash at wtCount=2 (linked WT present) → allow after fix
@@ -134,8 +155,16 @@ assert_block "git -C \"$MAIN_DIRTY_N\" stash push -m tmp" "$MAIN_DIRTY_N" "S28: 
 assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" stash pop" "$MAIN_DIRTY_N" "S27b: skill-prefixed stash pop at wtCount=2 → allow (#1024)"
 # S29: skill-prefixed restore at wtCount=2 → allow after fix
 assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_DIRTY_N\" restore README.md" "$MAIN_DIRTY_N" "S29: skill-prefixed restore at wtCount=2 → allow (#705)"
-# S34: skill-prefixed stash at wtCount=3 → block (cap=2 even with prefix)
-assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_VERY_DIRTY_N\" stash push" "$MAIN_VERY_DIRTY_N" "S34: skill-prefixed stash at wtCount=3 → block (count cap)"
+# S34: skill-prefixed stash push at wtCount=3 → allow (stash has no upper cap with skill prefix) (#1024)
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_VERY_DIRTY_N\" stash push" "$MAIN_VERY_DIRTY_N" "S34: skill-prefixed stash push at wtCount=3 → allow (stash has no upper cap with skill prefix) (#1024)"
+# S34b: skill-prefixed stash pop at wtCount=4 (zombie scenario) → allow (#1024)
+assert_allow "WORKTREE_END_SKILL=1 git -C \"$MAIN_ZOMBIE_DIRTY_N\" stash pop" "$MAIN_ZOMBIE_DIRTY_N" "S34b: skill-prefixed stash pop at wtCount=4 (zombie scenario) → allow (#1024)"
+# S34c: no-prefix stash pop at wtCount=3 → block (no-prefix unchanged) (#1024)
+assert_block "git -C \"$MAIN_VERY_DIRTY_N\" stash pop" "$MAIN_VERY_DIRTY_N" "S34c: no-prefix stash pop at wtCount=3 → block (no-prefix unchanged) (#1024)"
+# S34d: skill-prefixed restore at wtCount=3 → block (restore keeps cap=2) (#1024)
+assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_VERY_DIRTY_N\" restore README.md" "$MAIN_VERY_DIRTY_N" "S34d: skill-prefixed restore at wtCount=3 → block (restore keeps cap) (#1024)"
+# S34e: skill-prefixed checkout at wtCount=3 → block (checkout keeps cap=2) (#1024)
+assert_block "WORKTREE_END_SKILL=1 git -C \"$MAIN_VERY_DIRTY_N\" checkout -- README.md" "$MAIN_VERY_DIRTY_N" "S34e: skill-prefixed checkout at wtCount=3 → block (checkout keeps cap) (#1024)"
 # S35: shell chaining → block (current behavior)
 assert_block "git stash push && rm README.md" "$MAIN_CLEAN_N" "S35: chaining blocked"
 # S36: skill-prefixed stash at wtCount=1 → allow after fix
