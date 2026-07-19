@@ -587,6 +587,6 @@ Changes: Fix: `bin/scan-outbound.sh` no longer drops the last line of private-in
 Background: feat(#1384,#1522,#478,#1124,#1146,#1245): reduce outline planning friction — frontrunner-collapse, abolish MOP-7 dialog, PLAN_LANG directives, VS Code text visibility
 Changes: Outline approach selection now requires only one confirmation (the outline approval step); the prior approach-selection dialog before that step is removed.;When one outline approach clearly dominates all alternatives on cost, risk, and fit, the planner now skips the approach menu automatically (frontrunner-collapse).;Plan files (`outline.md`, `detail.md`) are now written in the configured language (`PLAN_LANG`) from the first draft, avoiding redundant re-write cycles.
 
-### FEATURE: PR #1531 (2026-07-19)
-Background: feat(#1527): add OS-conditional block rules to env-example.md and review-env-example
-Changes: `bin/review-env-example` now flags a blank line immediately before `#@endif` as a HARD error.
+### FEATURE: PR #1530 (2026-07-19)
+Background: fix(#1521, #1196): write_tests evidence fallback + mark-step evidence gate
+Changes: Fixed a bug where the `write_tests` step would stay pending after PR merge even though test files were already committed, causing an oracle abort in `/worktree-end`. The evidence check now looks at committed changes when the staging area is empty.;`WORKFLOW_MARK_STEP_write_tests_complete` sentinel now accepted when staged or committed test evidence exists (previously always rejected). Guides recovery with `--reset review_tests` when `review_tests` completes ahead of `write_tests`.
