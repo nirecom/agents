@@ -18,8 +18,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CANONICAL_LABELS_FILE="${CANONICAL_LABELS_FILE:-.github/labels.yml}"
-if [[ -z "${SIBLING_REPOS:-}" ]]; then
-    printf '%s\n' "SIBLING_REPOS not set — skipping propagation"
+if [[ -z "${PROPAGATE_LABELS_REPOS:-}" ]]; then
+    printf '%s\n' "PROPAGATE_LABELS_REPOS not set — skipping propagation"
     exit 0
 fi
 AGENTS_WORKSPACE="${AGENTS_WORKSPACE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
@@ -48,7 +48,7 @@ EXIT_CODE=0
 # F1: validate SIBLING format before any git/network call
 _REPO_RE='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
 
-for SIBLING in $SIBLING_REPOS; do
+for SIBLING in $PROPAGATE_LABELS_REPOS; do
     # Per-sibling body runs in a subshell with `set -e` so any failing step
     # aborts just that sibling; the outer loop keeps going and records EXIT_CODE.
     (
