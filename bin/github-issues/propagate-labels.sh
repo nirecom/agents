@@ -45,20 +45,27 @@ GENERATED_HEADER="# GENERATED — source: nirecom/agents .github/labels.yml — 
 
 EXIT_CODE=0
 
-# F1: validate SIBLING format before any git/network call
-_REPO_RE='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+while IFS= read -r _ENTRY_PATH; do
+    _ENTRY_PATH="${_ENTRY_PATH#"${_ENTRY_PATH%%[![:space:]]*}"}"
+    _ENTRY_PATH="${_ENTRY_PATH%"${_ENTRY_PATH##*[![:space:]]}"}"
+    [ -z "$_ENTRY_PATH" ] && continue
 
-for SIBLING in $PROPAGATE_LABELS_REPOS; do
-    # Per-sibling body runs in a subshell with `set -e` so any failing step
-    # aborts just that sibling; the outer loop keeps going and records EXIT_CODE.
+    _REMOTE_URL="$(git -C "$_ENTRY_PATH" remote get-url origin 2>/dev/null)" || {
+        printf '%s\n' "cannot resolve remote for path: $_ENTRY_PATH — skipping" >&2
+        EXIT_CODE=1
+        continue
+    }
+
+    SIBLING="$(printf '%s\n' "$_REMOTE_URL" | sed 's|.*github\.com[:/]\(.*\)\.git$|\1|; t; s|.*github\.com[:/]\(.*\)$|\1|')"
+
+    if ! [[ "$SIBLING" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+        printf '%s\n' "invalid resolved repo format: $SIBLING (from path: $_ENTRY_PATH) — skipping" >&2
+        EXIT_CODE=1
+        continue
+    fi
+
     (
         set -e
-
-        # F1: reject malformed/hostile SIBLING values before embedding PAT in URL
-        if ! printf '%s' "$SIBLING" | grep -qE "$_REPO_RE"; then
-            printf '%s\n' "invalid SIBLING repo format: $SIBLING — skipping" >&2
-            exit 1
-        fi
 
         slug="${SIBLING//\//-}"
         DEST="$GIT_WORK_DIR/$slug"
@@ -68,9 +75,7 @@ for SIBLING in $PROPAGATE_LABELS_REPOS; do
             exit 1
         fi
 
-        # F3: strip PAT from persisted remote URL so git config holds no credential
         git -C "$DEST" remote set-url origin "https://github.com/$SIBLING.git"
-
         git -C "$DEST" config user.email "github-actions[bot]@users.noreply.github.com"
         git -C "$DEST" config user.name "github-actions[bot]"
 
@@ -95,6 +100,6 @@ for SIBLING in $PROPAGATE_LABELS_REPOS; do
     if [[ "$rc" -ne 0 ]]; then
         EXIT_CODE=1
     fi
-done
+done < <(printf '%s\n' "$PROPAGATE_LABELS_REPOS" | tr ';' '\n')
 
 exit "$EXIT_CODE"
