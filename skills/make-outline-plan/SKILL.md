@@ -57,6 +57,8 @@ MOP-4a. **Mandatory sections carry-forward (helper handles assembly — do not i
    - Do NOT instruct the planner to author the 3 mandatory sections — the helper strips planner-authored copies before the final write.
    - Legacy intent.md (pre-#462) lacking `## Class members` is handled by the helper's soft-fail path (auto-injects a stub) — no orchestrator action needed.
 
+   Constraint: outline-planner cannot add new entries to `## Accepted Tradeoffs` — `assemble-mandatory.sh` carries the intent.md tradeoffs verbatim. Record new design decisions in `## Confirmed non-goals` or `## Constraints` instead.
+
    `EXTENSIONS_USED` counter initialized to 0 at loop start.
 
 MOP-5. **Codex review loop.** Follows `skills/_shared/codex-review-loop.md`
@@ -95,19 +97,17 @@ MOP-6. **Cap outcome dispatch.**
    `<RAW_FILE>` = `<PLANS_DIR>/<session-id>-outline-codex-round-<round_number-1>-raw.md`; `<round_number-1>` = `$(( $(cat <PLANS_DIR>/<session-id>-outline-plan-round-number.txt) - 1 ))`.
 
 MOP-7. On `APPROVED`:
-   Before outputting the prose rationale summary and before composing the AskUserQuestion, run: `CONV_LANG=$(bash -c 'cd "$AGENTS_CONFIG_DIR" && bin/get-config-var CONV_LANG 2>/dev/null || true')`. If CONV_LANG is non-empty, produce the prose preamble and all AskUserQuestion fields (question, option labels, option descriptions) in that language. EXCEPTION: the bypass option's label MUST stay in English: "Pass all approaches to make-detail-plan without selecting" — AskUserQuestion returns the selected label as the answer; localizing it breaks the MOP-8 comparison.
-   Output a prose rationale summary in main conversation — one paragraph per approach (rationale + trade-offs + delivery plan). Do NOT write this preamble to outline.md.
+   Retrieve `CONV_LANG=$(bash "$AGENTS_CONFIG_DIR/bin/get-config-var" CONV_LANG 2>/dev/null || true)`.
 
-   Decide the chosen approach and record it as `CHOSEN_APPROACH`. Check via Bash:
-   `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_OUTLINE on'`
-   - stdout `OFF` → set `CHOSEN_APPROACH` = "Pass all approaches to make-detail-plan without selecting". Do NOT call `AskUserQuestion`.
-   - stdout `ON` or `ERROR` → present approved approaches via `AskUserQuestion`. One option MUST be "Pass all approaches to make-detail-plan without selecting". Set `CHOSEN_APPROACH` to the user's selection.
+   Evaluate each approach and select the recommended one (highest trade-off score across cost, risk, existing-code consistency, and delivery timeline). Record it as `CHOSEN_APPROACH=<approach-name>`.
 
-   MOP-8 handles the file write — do NOT write here.
+   Emit this prose rationale summary as the turn-final assistant message, not as mid-turn text between tool calls — the VS Code extension renders only turn-final assistant text. Write the summary in `CONV_LANG` (or English if unset). For each approach, write one paragraph (rationale + trade-offs + delivery plan). End with: `Recommended approach: <name> — <one-line reason>`.
+
+   Do NOT write this prose to outline.md. MOP-8 handles the file write.
 
 MOP-8. Write the chosen approach to `<PLANS_DIR>/<session-id>-outline.md` per the Output Schema. Always execute confirm-plan Steps 1+2 (artifact write + breadcrumb). Then branch on the bypass condition:
-   - **Bypass** (`CONFIRM_OUTLINE=off` OR `CHOSEN_APPROACH` == "Pass all approaches to make-detail-plan without selecting" (compare CHOSEN_APPROACH against the option's value field — always the stable English key regardless of display label)): output a one-paragraph prose summary of the approaches; proceed without emitting `<<WORKFLOW_CONFIRM_OUTLINE>>`.
-   - **Sentinel** (ON path, single approach selected): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
+   - **Bypass (CONFIRM_OUTLINE=off only):** emit one-paragraph prose summary and proceed without `<<WORKFLOW_CONFIRM_OUTLINE>>`.
+   - **Sentinel** (ON path): apply confirm-plan Step 3 — in the SAME response as `echo "<<WORKFLOW_CONFIRM_OUTLINE: {one-line summary}>>"`, also include the `make-detail-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise → ask what to change, re-run outline-planner, loop back to MOP-7.
 
 ## Output Schema (`<session-id>-outline.md`)
 
@@ -130,12 +130,13 @@ The file (per `PLAN_LANG` in `.env`; see `.env.example`) contains:
 - **Chat output during the discussion loop** is restricted to:
   (a) one status line per round (`Round N: APPROVED` / `Round N: NEEDS_REVISION (proceeding)`)
   (b) NO path output — `show-plan-link.js` PostToolUse hook emits the sole authoritative breadcrumb. Orchestrator MUST NOT print, duplicate, translate, paraphrase, or reformat the path. See `skills/_shared/confirm-plan.md` Step 2.
-  (c) the prose rationale preamble emitted in MOP-7 before `AskUserQuestion`
+  (c) the MOP-7 turn-final prose rationale summary
   (d) the concern summary block rendered by the MOP-6 ESCALATE path when exit 2 fires — exactly one block per cap-reach event.
   No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception), no codex/reviewer transcripts, no "falling back to Claude reviewer" notices in chat. Diagnostics go to `<session-id>-outline-debug.log` only.
+- Write every orchestrator-authored outline.md body — both the MOP-3 minimal single-approach file and the MOP-8 chosen-approach file — in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - outline-planner and outline-reviewer never see implementation details — direction-level only.
 - `WORKFLOW_MARK_STEP_detail_complete` is NOT emitted here; only `make-detail-plan` emits it. This skill emits `WORKFLOW_MARK_STEP_outline_complete` (marks outline-stage state).
-- **Confirmation dialogs per run**: OFF mode fires neither. ON mode with a single approach selected fires two: MOP-7 (`AskUserQuestion`) and MOP-8 (`<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel). ON mode where MOP-7 yielded "Pass all approaches to make-detail-plan without selecting" fires MOP-7 only — MOP-8 sentinel is bypassed (Logical-OR bypass, same effect as `CONFIRM_OUTLINE=off`).
+- **Confirmation dialogs per run**: OFF mode fires none. ON mode fires exactly one: the MOP-8 `<<WORKFLOW_CONFIRM_OUTLINE>>` sentinel. The MOP-7 AskUserQuestion and the multi-approach passthrough bypass option are abolished (#1522); the orchestrator auto-selects the recommended approach. `CONFIRM_OUTLINE=off` is the sole remaining MOP-8 bypass path.
 - **`AskUserQuestion` is for choices, not content.** `question` is one sentence; option `description` ≤80 chars. Approach bodies/rationales/trade-offs go in the MOP-7 prose preamble — never inside dialog fields. The dialog UI is narrow; long content there is unreadable.
 - Never pause for user confirmation during intermediate steps (codex/reviewer revision rounds in MOP-6, between-step summaries). Update files silently; inform the user with plain text only.
 - Report observations per rules/supervisor-reporting.md.
