@@ -452,4 +452,56 @@ Describe "session-sync.ps1 plans sync" {
         Set-Content -Path (Join-Path $projDir "session.jsonl") -Value "data"
         { & $SyncScript -Action push -ClaudeDir $script:TestDir } | Should -Not -Throw
     }
+
+    # WORKFLOW_PLANS_DIR is set explicitly so the plans source is a deterministic,
+    # test-controlled directory rather than the real ~/.workflow-plans (which the
+    # helper resolves to by default and which contains hundreds of live files).
+    It "push excludes supervisor-state.json from projects/plans" {
+        $plansDir = Join-Path $script:TestDir "plans"
+        New-Item -ItemType Directory -Path $plansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $plansDir "abc-intent.md") -Value "intent content"
+        Set-Content -Path (Join-Path $plansDir "abc-supervisor-state.json") -Value '{"state":"internal"}'
+        try {
+            $env:WORKFLOW_PLANS_DIR = $plansDir
+            & $SyncScript -Action push -ClaudeDir $script:TestDir
+        } finally {
+            Remove-Item Env:WORKFLOW_PLANS_DIR -ErrorAction SilentlyContinue
+        }
+        $destDir = Join-Path $script:TestDir "projects\plans"
+        Test-Path (Join-Path $destDir "abc-intent.md") | Should -BeTrue -Because ".md plan files must still sync"
+        Test-Path (Join-Path $destDir "abc-supervisor-state.json") | Should -BeFalse -Because "supervisor-state.json is machine-local and must not be synced"
+    }
+
+    It "push excludes wi-checkpoint.json from projects/plans" {
+        $plansDir = Join-Path $script:TestDir "plans"
+        New-Item -ItemType Directory -Path $plansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $plansDir "abc-intent.md") -Value "intent content"
+        Set-Content -Path (Join-Path $plansDir "abc-wi-checkpoint.json") -Value '{"step":"WF-CODE-3"}'
+        try {
+            $env:WORKFLOW_PLANS_DIR = $plansDir
+            & $SyncScript -Action push -ClaudeDir $script:TestDir
+        } finally {
+            Remove-Item Env:WORKFLOW_PLANS_DIR -ErrorAction SilentlyContinue
+        }
+        $destDir = Join-Path $script:TestDir "projects\plans"
+        Test-Path (Join-Path $destDir "abc-intent.md") | Should -BeTrue -Because ".md plan files must still sync"
+        Test-Path (Join-Path $destDir "abc-wi-checkpoint.json") | Should -BeFalse -Because "wi-checkpoint.json is machine-local and must not be synced"
+    }
+
+    It "push still includes .md plan files when json files also present" {
+        $plansDir = Join-Path $script:TestDir "plans"
+        New-Item -ItemType Directory -Path $plansDir -Force | Out-Null
+        Set-Content -Path (Join-Path $plansDir "abc-intent.md") -Value "intent content"
+        Set-Content -Path (Join-Path $plansDir "abc-outline.md") -Value "outline content"
+        Set-Content -Path (Join-Path $plansDir "abc-supervisor-state.json") -Value '{"state":"internal"}'
+        try {
+            $env:WORKFLOW_PLANS_DIR = $plansDir
+            & $SyncScript -Action push -ClaudeDir $script:TestDir
+        } finally {
+            Remove-Item Env:WORKFLOW_PLANS_DIR -ErrorAction SilentlyContinue
+        }
+        $destDir = Join-Path $script:TestDir "projects\plans"
+        Test-Path (Join-Path $destDir "abc-intent.md") | Should -BeTrue -Because "the .md filter must not drop legitimate plan files"
+        Test-Path (Join-Path $destDir "abc-outline.md") | Should -BeTrue -Because "all .md plan files must sync"
+    }
 }
