@@ -23,15 +23,31 @@ const {
 const {
   markReviewTestsComplete,
   clearReviewTestsWarnings,
+  markStep,
+  readState,
 } = require("../lib/workflow-state");
+const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
 
 function extractToken(payload) {
   const m = payload.match(/token=([A-Za-z0-9]+)/);
   return m ? m[1] : null;
 }
 
+function backfillWriteTests(sessionId, repoCwd, pushMessage) {
+  try {
+    const st = readState(sessionId);
+    if (!st) return;
+    if (((st.steps && st.steps.write_tests) || {}).status !== "pending") return;
+    if (!hasCompletionEvidence("write_tests", sessionId, { repoDir: repoCwd })) return;
+    markStep(sessionId, "write_tests", "complete");
+    pushMessage("[workflow] write_tests: complete (auto-backfilled from review_tests evidence).");
+  } catch (e) {
+    pushMessage(`[workflow] write_tests backfill warning: ${e.message} — review_tests already recorded.`);
+  }
+}
+
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
 
   const completeMatch = cmd.match(REVIEW_TESTS_COMPLETE_RE_DQ);
   const warningsMatch = cmd.match(REVIEW_TESTS_WARNINGS_RE_DQ);
@@ -57,6 +73,7 @@ function handle(ctx) {
     try {
       markReviewTestsComplete(sessionId, token);
       pushMessage(`[workflow] review_tests: complete (token: ${token}).`);
+      backfillWriteTests(sessionId, repoCwd, pushMessage);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. review_tests NOT recorded.`
