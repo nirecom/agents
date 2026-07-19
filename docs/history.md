@@ -252,4 +252,8 @@ Changes: category=BUGFIX subject="PROPAGATE_LABELS_REPOS format: semicolon-separ
 
 ### FEATURE: PR #1549 — fix/1542-sync-labels-ci-propagation (2026-07-19, 6160311, #1549)
 Background: fix(#1542): add CI fallback in propagate-labels.sh; pass PROPAGATE_LABELS_REPOS in sync-labels.yml
+Changes: fix(#1542): add 2-stage resolver in propagate-labels.sh — stage 1 uses `[ -d ]` guard to run existing `git -C path remote get-url`; stage 2 falls back to `basename + AGENTS_WORKSPACE owner` for absolute paths absent in CI (ubuntu-latest). sync-labels.yml propagate job now receives `PROPAGATE_LABELS_REPOS` via `vars.PROPAGATE_LABELS_REPOS`. Also fixed sync-labels.sh invocation to use `$SCRIPT_DIR` instead of `$AGENTS_WORKSPACE/bin/github-issues/` for self-contained path resolution. <!-- compose-doc-append-sentinel: branch=fix/1542-sync-labels-ci-propagation pr=#1549 -->
+
+### FEATURE: PR #1549 — fix/1542-sync-labels-ci-propagation (2026-07-19, 6160311c8357fff83d191c68d7131cac83f7bc66, #1549)
+Background: fix(#1542): add CI fallback in propagate-labels.sh; pass PROPAGATE_LABELS_REPOS in sync-labels.yml
 Changes: fix(#1542): add 2-stage resolver in propagate-labels.sh — stage 1 uses `[ -d ]` guard to run existing `git -C path remote get-url`; stage 2 falls back to `basename + AGENTS_WORKSPACE owner` for absolute paths absent in CI (ubuntu-latest). sync-labels.yml propagate job now receives `PROPAGATE_LABELS_REPOS` via `vars.PROPAGATE_LABELS_REPOS`. Also fixed sync-labels.sh invocation to use `$SCRIPT_DIR` instead of `$AGENTS_WORKSPACE/bin/github-issues/` for self-contained path resolution. <!-- compose-doc-append-sentinel: branch=fix/1542-sync-labels-ci-propagation pr=#1549 -->
