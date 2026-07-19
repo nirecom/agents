@@ -27,6 +27,7 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 | `type:incident` | Incident. Closed → INCIDENT entry in `history.md`. |
 | `status:cancelled` | Cancelled without completion. Applied before close by `/issue-close-migrated`. |
 | `status:migrated` | Merged into another issue. Applied before close by `/issue-close-migrated`. |
+| `status:regressed` | Reopened after a prior close. Applied automatically by `/issue-create` reopen verdict. Kept on close as regression history. |
 | `meta` | Planning/architecture issue with no implementation. Close via `admin_close_path`. Convention: `Group: ` title prefix. Sub-issues carry the actual work. |
 
 - Apply labels: `bin/github-issues/sync-labels.sh` (reads `.github/labels.yml`, runs `gh label create --force`).
