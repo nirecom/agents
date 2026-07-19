@@ -76,7 +76,7 @@ switch ($Action) {
         $plansDest = Join-Path $ProjectsDir "plans"
         if (Test-Path $plansSource) {
             if (-not (Test-Path $plansDest)) { New-Item -ItemType Directory -Path $plansDest -Force | Out-Null }
-            Get-ChildItem -Path $plansSource -File | Copy-Item -Destination $plansDest -Force
+            Get-ChildItem -Path $plansSource -File | Where-Object { $_.Extension -eq '.md' } | Copy-Item -Destination $plansDest -Force
         }
         $ErrorActionPreference = "Continue"
         git -C $ProjectsDir add . 2>&1 | Out-Null
@@ -133,7 +133,7 @@ switch ($Action) {
         $localPlans = $PlansDir
         if (Test-Path $syncPlans) {
             if (-not (Test-Path $localPlans)) { New-Item -ItemType Directory -Path $localPlans -Force | Out-Null }
-            Get-ChildItem -Path $syncPlans -File | Copy-Item -Destination $localPlans -Force
+            Get-ChildItem -Path $syncPlans -File | Where-Object { $_.Extension -eq '.md' -and (Test-Path $_.FullName) } | Copy-Item -Destination $localPlans -Force
         }
         Write-Host "Pulled session data." -ForegroundColor Green
     }
@@ -168,7 +168,7 @@ switch ($Action) {
         $localPlans = $PlansDir
         if (Test-Path $syncPlans) {
             if (-not (Test-Path $localPlans)) { New-Item -ItemType Directory -Path $localPlans -Force | Out-Null }
-            Get-ChildItem -Path $syncPlans -File | Copy-Item -Destination $localPlans -Force
+            Get-ChildItem -Path $syncPlans -File | Where-Object { $_.Extension -eq '.md' -and (Test-Path $_.FullName) } | Copy-Item -Destination $localPlans -Force
         }
         Write-Host "Reset to remote state." -ForegroundColor Green
     }

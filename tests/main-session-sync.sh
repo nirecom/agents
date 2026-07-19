@@ -832,6 +832,38 @@ else
     fail "push did not copy plans/abc-intent.md (output: $output)"
 fi
 
+# --- Fix: Push excludes supervisor-state.json from plans sync (.md-only filter) ---
+# WORKFLOW_PLANS_DIR is set explicitly so the plans source is a deterministic,
+# test-controlled directory instead of the real ~/.workflow-plans.
+echo "[plans] Push excludes supervisor-state.json (session-sync.sh)"
+PLANS_FILTER_REMOTE="$TMPDIR_BASE/plans-filter-remote.git"
+PLANS_FILTER_CLAUDE="$TMPDIR_BASE/plans-filter/.claude"
+PLANS_FILTER_PROJECTS="$PLANS_FILTER_CLAUDE/projects"
+PLANS_FILTER_SRC="$TMPDIR_BASE/plans-filter-src"
+git init --bare "$PLANS_FILTER_REMOTE" >/dev/null 2>&1
+mkdir -p "$PLANS_FILTER_CLAUDE"
+"$DOTFILES_DIR/install/linux/session-sync-init.sh" \
+    --claude-dir "$PLANS_FILTER_CLAUDE" --remote-url "$PLANS_FILTER_REMOTE" >/dev/null 2>&1
+_git_config_user "$PLANS_FILTER_PROJECTS"
+git -C "$PLANS_FILTER_PROJECTS" add .gitattributes >/dev/null 2>&1
+git -C "$PLANS_FILTER_PROJECTS" commit -m "initial" >/dev/null 2>&1
+git -C "$PLANS_FILTER_PROJECTS" push -u origin main >/dev/null 2>&1
+mkdir -p "$PLANS_FILTER_SRC"
+echo "intent content" > "$PLANS_FILTER_SRC/abc-intent.md"
+echo '{"state":"internal"}' > "$PLANS_FILTER_SRC/abc-supervisor-state.json"
+WORKFLOW_PLANS_DIR="$PLANS_FILTER_SRC" "$DOTFILES_DIR/bin/session-sync.sh" \
+    push --claude-dir "$PLANS_FILTER_CLAUDE" >/dev/null 2>&1 || true
+if [ -f "$PLANS_FILTER_PROJECTS/plans/abc-intent.md" ]; then
+    pass "push syncs .md plan file"
+else
+    fail "push did not sync .md plan file"
+fi
+if [ ! -f "$PLANS_FILTER_PROJECTS/plans/abc-supervisor-state.json" ]; then
+    pass "push excludes supervisor-state.json from plans sync"
+else
+    fail "push copied supervisor-state.json into plans sync (should filter to .md only) [EXPECTED FAIL - fix not yet applied]"
+fi
+
 # --- Edge: Push when plans dir absent ---
 echo "[plans] Push when plans dir absent"
 PLANS_NOPLANS_REMOTE="$TMPDIR_BASE/plans-noplans-remote.git"
