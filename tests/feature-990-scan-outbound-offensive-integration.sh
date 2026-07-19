@@ -54,6 +54,8 @@ build_sandbox_full() {
     mkdir -p "$sandbox/hooks/lib" "$sandbox/bin"
     cp "$HOOK_SRC" "$sandbox/hooks/scan-outbound.js"
     cp -r "$AGENTS_DIR/hooks/lib/." "$sandbox/hooks/lib/" 2>/dev/null || true
+    mkdir -p "$sandbox/hooks/workflow-gate"
+    cp -r "$AGENTS_DIR/hooks/workflow-gate/." "$sandbox/hooks/workflow-gate/" 2>/dev/null || true
     cat > "$sandbox/bin/scan-outbound.sh" <<STUBSH
 #!/bin/bash
 exit ${ob_exit}
@@ -73,6 +75,8 @@ build_sandbox() {
     cp "$HOOK_SRC" "$sandbox/hooks/scan-outbound.js"
     # Copy all hooks/lib files used by scan-outbound.js
     cp -r "$AGENTS_DIR/hooks/lib/." "$sandbox/hooks/lib/" 2>/dev/null || true
+    mkdir -p "$sandbox/hooks/workflow-gate"
+    cp -r "$AGENTS_DIR/hooks/workflow-gate/." "$sandbox/hooks/workflow-gate/" 2>/dev/null || true
     # Provide a stub bin/scan-outbound.sh that always exits 0 (clean).
     cat > "$sandbox/bin/scan-outbound.sh" <<'SH'
 #!/bin/bash
@@ -252,6 +256,8 @@ build_sandbox_no_offensive() {
     mkdir -p "$sandbox/hooks/lib" "$sandbox/bin"
     cp "$HOOK_SRC" "$sandbox/hooks/scan-outbound.js"
     cp -r "$AGENTS_DIR/hooks/lib/." "$sandbox/hooks/lib/" 2>/dev/null || true
+    mkdir -p "$sandbox/hooks/workflow-gate"
+    cp -r "$AGENTS_DIR/hooks/workflow-gate/." "$sandbox/hooks/workflow-gate/" 2>/dev/null || true
     # scan-outbound.sh stub (clean)
     cat > "$sandbox/bin/scan-outbound.sh" <<'SH'
 #!/bin/bash
