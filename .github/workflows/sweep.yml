@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: read
     steps:
       - uses: actions/checkout@v4
 
@@ -18,3 +19,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENTS_CONFIG_DIR: ${{ github.workspace }}
         run: bash bin/sweep-worktrees.sh --ci-mode --apply --min-age-hours 24
+
+      - name: Run audit-tests (issue-specific staleness)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+        run: bash bin/audit-tests.sh --format text || true
+
+      - name: Run audit-tests-common (scope:common orphan detection)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENTS_CONFIG_DIR: ${{ github.workspace }}
+        run: bash bin/audit-tests-common.sh --format text || true
