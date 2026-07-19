@@ -622,3 +622,7 @@ Changes: `/issue-create` reopen verdict now refreshes the issue body with a **Re
 ### FEATURE: PR #1550 (2026-07-20)
 Background: feat(#943): add per-hook seam L3 tests for 6 workflow hooks; split test taxonomy to L1-L4
 Changes: Added per-hook seam TL3 tests for workflow-mark, session-start, stop-confirm-plan-guard, and stop-final-report-guard hooks: each runs a real `claude -p` session and asserts observable side effects. subagent-start and post-compact documented as TL3 gap pending a future full-pipeline TL4 suite. All tests gated by RUN_E2E.;Test-layer taxonomy is now TL1–TL4 (prefixed to stay greppable): "E2E" refers specifically to full-pipeline (workflow-init → Final Report) tests; single-hook real-session tests are TL3.
+
+### FEATURE: PR #1559 (2026-07-20)
+Background: feat(#1552): add --no-delete flag and protected: labels key to sync-labels.sh
+Changes: `sync-labels.sh` now supports `--no-delete` to add and update labels without deleting any existing ones, and a `protected:` list in `.github/labels.yml` that shields GitHub default labels (bug, enhancement, etc.) from deletion during a normal sync. Set `PROPAGATE_LABELS_NO_DELETE` to propagate labels to sibling repos without deleting theirs.
