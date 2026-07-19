@@ -50,11 +50,33 @@ while IFS= read -r _ENTRY_PATH; do
     _ENTRY_PATH="${_ENTRY_PATH%"${_ENTRY_PATH##*[![:space:]]}"}"
     [ -z "$_ENTRY_PATH" ] && continue
 
-    _REMOTE_URL="$(git -C "$_ENTRY_PATH" remote get-url origin 2>/dev/null)" || {
-        printf '%s\n' "cannot resolve remote for path: $_ENTRY_PATH — skipping" >&2
-        EXIT_CODE=1
-        continue
-    }
+    if [ -d "$_ENTRY_PATH" ]; then
+        _REMOTE_URL="$(git -C "$_ENTRY_PATH" remote get-url origin 2>/dev/null)" || {
+            printf '%s\n' "cannot resolve remote for path: $_ENTRY_PATH — skipping" >&2
+            EXIT_CODE=1
+            continue
+        }
+    else
+        case "$_ENTRY_PATH" in
+            /*|[A-Za-z]:\\*)
+                _REPO_BASENAME="$(basename "$_ENTRY_PATH")"
+                _CURRENT_ORIGIN="$(git -C "$AGENTS_WORKSPACE" remote get-url origin 2>/dev/null)"
+                _CURRENT_OWNER="$(printf '%s\n' "$_CURRENT_ORIGIN" | sed 's|.*github\.com[:/]\([^/]*\)/.*|\1|; t; s/.*//')"
+                if [ -z "$_REPO_BASENAME" ] || [ -z "$_CURRENT_OWNER" ]; then
+                    printf '%s\n' "cannot resolve owner/basename for path: $_ENTRY_PATH — skipping" >&2
+                    EXIT_CODE=1
+                    continue
+                fi
+                printf '%s\n' "path not found, resolving via basename+owner: $_ENTRY_PATH → $_CURRENT_OWNER/$_REPO_BASENAME"
+                _REMOTE_URL="https://github.com/$_CURRENT_OWNER/$_REPO_BASENAME.git"
+                ;;
+            *)
+                printf '%s\n' "cannot resolve remote for path: $_ENTRY_PATH — skipping" >&2
+                EXIT_CODE=1
+                continue
+                ;;
+        esac
+    fi
 
     SIBLING="$(printf '%s\n' "$_REMOTE_URL" | sed 's|.*github\.com[:/]\(.*\)\.git$|\1|; t; s|.*github\.com[:/]\(.*\)$|\1|')"
 
@@ -93,7 +115,7 @@ while IFS= read -r _ENTRY_PATH; do
             git -C "$DEST" push
         fi
 
-        GH_TOKEN="$PROPAGATE_LABELS_PAT" bash "$AGENTS_WORKSPACE/bin/github-issues/sync-labels.sh" \
+        GH_TOKEN="$PROPAGATE_LABELS_PAT" bash "$SCRIPT_DIR/sync-labels.sh" \
             --repo "$SIBLING" "$CANONICAL_LABELS_FILE"
     )
     rc=$?
