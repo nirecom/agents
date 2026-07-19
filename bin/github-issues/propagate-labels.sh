@@ -18,7 +18,10 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CANONICAL_LABELS_FILE="${CANONICAL_LABELS_FILE:-.github/labels.yml}"
-SIBLING_REPOS="${SIBLING_REPOS:-nirecom/dotfiles nirecom/my-private-repo}"
+if [[ -z "${SIBLING_REPOS:-}" ]]; then
+    printf '%s\n' "SIBLING_REPOS not set — skipping propagation"
+    exit 0
+fi
 AGENTS_WORKSPACE="${AGENTS_WORKSPACE:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
 # F2: reject path traversal in CANONICAL_LABELS_FILE
