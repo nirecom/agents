@@ -15,10 +15,10 @@ globs: "**/*.js,**/*.ts,**/*.mjs,**/*.cjs,**/package.json,**/.nvmrc,**/.node-ver
 - `===`/`!==` always; `==`/`!=` is forbidden except for the deliberate `x == null` pattern.
 - Prefer small, focused modules.
 
-#### Windows path normalization
+#### Windows: POSIX path normalization
 
-- External inputs (hook payloads, Bash tool `cwd`, CLI args, env vars) may arrive as POSIX drive-letter paths (e.g., `/c/git/agents` from Git Bash / MSYS2). Node.js file and process APIs (`fs.*`, `spawnSync cwd`, `path.resolve`) require Windows-form paths on Windows and will fail with ENOENT on the POSIX form.
-- Normalize any externally-sourced path before passing it to a file or process API — convert `/c/foo` → `C:\foo` (a no-op on POSIX). Apply symmetric treatment: if one code path normalizes, all code paths receiving the same class of input must normalize too (CPR-5).
+- `toolInput.cwd`, env vars, and CLI args may deliver paths in POSIX drive-letter form (`/c/...` from Git Bash / MSYS2); Node.js `fs.*` and `spawnSync cwd` fail with ENOENT on this form — normalize via `toWindowsPath` (no-op on POSIX) before every file or process API call.
+- Apply at every call site that accepts the same path input class; omitting one site while normalizing another is a CPR-5 violation.
 
 #### TypeScript-specific (applies when .ts files are added)
 
