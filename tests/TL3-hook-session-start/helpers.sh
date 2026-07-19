@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Helpers for L3-hook-stop-confirm-plan-guard.
-# Sourced by ../L3-hook-stop-confirm-plan-guard.sh — assumes AGENTS_DIR, pass(), fail() defined.
+# Helpers for TL3-hook-session-start.
+# Sourced by ../TL3-hook-session-start.sh — assumes AGENTS_DIR, pass(), fail() defined.
 
 # WSL-via-Windows bridge: CLAUDECODE not propagated, global settings read from Windows profile — test may pass on WSL but fail on macOS native
 
@@ -31,7 +31,7 @@ make_tmp_base() {
     local d
     d="$(node -e "
 const os=require('os'),path=require('path'),fs=require('fs');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'f943-scp-')).replace(/\\\\/g,'/');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'f943-ss-')).replace(/\\\\/g,'/');
 console.log(dir);
 " 2>/dev/null)"
     [ -z "$d" ] && d="$(mktemp -d)"

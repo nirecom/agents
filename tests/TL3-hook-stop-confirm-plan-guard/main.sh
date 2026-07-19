@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# L3 seam body for stop-confirm-plan-guard.js (Stop).
-# Sourced by ../L3-hook-stop-confirm-plan-guard.sh after helpers.sh.
+# TL3 seam body for stop-confirm-plan-guard.js (Stop).
+# Sourced by ../TL3-hook-stop-confirm-plan-guard.sh after helpers.sh.
 
 echo ""
-echo "=== L3: stop-confirm-plan-guard.js Stop real invocation (marker consumed) ==="
+echo "=== TL3: stop-confirm-plan-guard.js Stop real invocation (marker consumed) ==="
 
 SCP_SID="e4a4a300-0000-0000-0000-000000000004"
 SCP_BASE="$(make_tmp_base)"
@@ -78,6 +78,6 @@ else
     fail "SCP-E1. turn marker still present after Stop — hook did not fire. claude rc=$SCP_RC output: $SCP_OUTPUT"
 fi
 
-# L3 gap: the block path (path representation in the last assistant turn →
+# TL3 gap: the block path (path representation in the last assistant turn →
 # decision:block) is non-deterministic — it depends on the model echoing a
 # plans-dir path. Only marker consumption is exercised deterministically here.

@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# L3 seam body for stop-final-report-guard.js (Stop).
-# Sourced by ../L3-hook-stop-final-report-guard.sh after helpers.sh.
+# TL3 seam body for stop-final-report-guard.js (Stop).
+# Sourced by ../TL3-hook-stop-final-report-guard.sh after helpers.sh.
 
 echo ""
-echo "=== L3: stop-final-report-guard.js Stop real invocation (block case) ==="
+echo "=== TL3: stop-final-report-guard.js Stop real invocation (block case) ==="
 
 SFR_SID="e3933200-0000-0000-0000-000000000003"
 SFR_BASE="$(make_tmp_base)"
@@ -68,6 +68,6 @@ else
     fail "SFR-E1. expected non-zero exit from Stop block, got rc=0. output: $SFR_OUTPUT"
 fi
 
-# L3 gap: the pass-case (all 13 headings emitted → exit 0) is non-deterministic
+# TL3 gap: the pass-case (all 13 headings emitted → exit 0) is non-deterministic
 # because it depends on the model reproducing every heading verbatim; only the
 # deterministic block case is exercised here.

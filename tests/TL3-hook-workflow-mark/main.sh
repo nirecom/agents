@@ -1,10 +1,10 @@
 # shellcheck shell=bash
-# L3 seam body for workflow-mark.js (PostToolUse).
-# Sourced by ../L3-hook-workflow-mark.sh after helpers.sh.
+# TL3 seam body for workflow-mark.js (PostToolUse).
+# Sourced by ../TL3-hook-workflow-mark.sh after helpers.sh.
 # Assumes AGENTS_DIR, pass(), fail(), and helpers already loaded.
 
 echo ""
-echo "=== L3: workflow-mark.js PostToolUse real invocation ==="
+echo "=== TL3: workflow-mark.js PostToolUse real invocation ==="
 
 WM_SID="e1e1e1e1-0000-0000-0000-000000000001"
 WM_BASE="$(make_tmp_base)"
@@ -73,6 +73,6 @@ else
     fail "WM-E1. state file $WM_STATE_FILE not created. claude rc=$WM_RC output: $WM_OUTPUT"
 fi
 
-# L3 gap: only the research→complete mark is exercised. Other sentinels
+# TL3 gap: only the research→complete mark is exercised. Other sentinels
 # (USER_VERIFIED, RESET_FROM, NOT_NEEDED) and the &&-chain multi-sentinel path
 # rely on model output cooperation and are covered at L2 in feature-robust-workflow.
