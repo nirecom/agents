@@ -29,6 +29,8 @@ Group related variables into `# --- <Category name> ---` heading comments. Conse
 ## OS-conditional markers
 
 Lines matching `#@if <os>` or `#@endif` are exempt from all comment-block rules — they are not counted toward the 1–5 line limit and are not checked for prohibited content.
+No blank line immediately before `#@endif`: the last content line inside an `#@if` block and the closing `#@endif` must not be separated by a blank line. `bin/review-env-example` detects this as a HARD finding.
+When a Windows block and a POSIX block have identical "What you can do" / "What you can't do" lines differing only in format examples, write the description once in the Windows block only. The POSIX block contains `VAR=` only (no description lines). This is a WARN-level judgment call, not a HARD check.
 
 ## Enforcement
 
