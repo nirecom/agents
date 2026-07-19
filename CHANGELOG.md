@@ -582,3 +582,7 @@ Changes: Fixed `/issue-close-migrated` silently leaving issues OPEN: `close-not-
 ### FEATURE: PR #1525 (2026-07-19)
 Background: fix: scan-outbound trailing-newline guard, gh api write scanning, test stub regression check
 Changes: Fix: `bin/scan-outbound.sh` no longer drops the last line of private-info allowlist/blocklist files that lack a trailing newline — blocklist enforcement and allowlist exemptions now apply to every pattern regardless of file format.;Fix: `hooks/scan-outbound.js` now scans `gh api` write requests (POST/PATCH/PUT/DELETE with `-f`/`-F`/`--field`/`--input @file`) for private information, matching the existing coverage for `gh issue`, `gh pr`, and similar commands.
+
+### FEATURE: PR #1529 (2026-07-19)
+Background: feat(#1384,#1522,#478,#1124,#1146,#1245): reduce outline planning friction — frontrunner-collapse, abolish MOP-7 dialog, PLAN_LANG directives, VS Code text visibility
+Changes: Outline approach selection now requires only one confirmation (the outline approval step); the prior approach-selection dialog before that step is removed.;When one outline approach clearly dominates all alternatives on cost, risk, and fit, the planner now skips the approach menu automatically (frontrunner-collapse).;Plan files (`outline.md`, `detail.md`) are now written in the configured language (`PLAN_LANG`) from the first draft, avoiding redundant re-write cycles.
