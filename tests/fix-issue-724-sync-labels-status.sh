@@ -317,6 +317,78 @@ else
 fi
 teardown_sync_tmp
 
+# --- S12: --no-delete — gh label delete not called, NO-DELETE message shown.
+setup_sync_tmp "$TWO_LABELS_YML"
+# Remote: type:task + type:incident (match) + ghost:label (orphan → DELETE 候補)
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\ntype:incident\td93f0b\tIncident or bug.\nghost:label\tbbbbbb\tGhost label.'
+OUT="$TMP/s12.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" --no-delete "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+delete_logged=$(grep -c 'label delete' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+nodelete_msg=$(grep -c '\[NO-DELETE\] Skipped delete: ghost:label' "$OUT" 2>/dev/null; true)
+has_summary=$(grep -c '0 created, 0 updated, 2 already-exists, 1 deleted / 3 total' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$delete_logged" -eq 0 ] \
+   && [ "$nodelete_msg" -ge 1 ] && [ "$has_summary" -eq 1 ]; then
+    pass "S12: --no-delete — gh label delete not called, NO-DELETE msg shown, summary correct"
+else
+    fail "S12: rc=$RC delete_logged=$delete_logged nodelete_msg=$nodelete_msg summary=$has_summary out=$(cat "$OUT")"
+fi
+teardown_sync_tmp
+
+# --- S13: protected label — never deleted even in normal sync (no --no-delete).
+PROTECTED_LABELS_YML='- name: "type:task"
+  color: "0e8a16"
+  description: "Normal work item."
+
+protected:
+  - bug
+  - enhancement
+'
+setup_sync_tmp "$PROTECTED_LABELS_YML"
+# Remote: type:task (match) + bug (protected) + old:stale (orphan, not protected → DELETE)
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\nbug\tee0701\tSomething is not working.\nold:stale\taaaaaa\tStale label.'
+OUT="$TMP/s13.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+bug_deleted=$(grep -c 'label delete.*bug' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+bug_deleted_out=$(grep -c 'bug (deleted)' "$OUT" 2>/dev/null; true)
+stale_deleted=$(grep -c 'label delete' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+stale_deleted_out=$(grep -c 'old:stale (deleted)' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$bug_deleted" -eq 0 ] && [ "$bug_deleted_out" -eq 0 ] \
+   && [ "$stale_deleted" -ge 1 ] && [ "$stale_deleted_out" -ge 1 ]; then
+    pass "S13: protected label — bug not deleted (protected), old:stale deleted (not protected)"
+else
+    fail "S13: rc=$RC bug_deleted=$bug_deleted bug_deleted_out=$bug_deleted_out stale_deleted=$stale_deleted stale_deleted_out=$stale_deleted_out out=$(cat "$OUT")"
+fi
+teardown_sync_tmp
+
+# --- S14: protected label with spaces — "good first issue" not deleted.
+PROTECTED_SPACES_YML='- name: "type:task"
+  color: "0e8a16"
+  description: "Normal work item."
+
+protected:
+  - "good first issue"
+  - "help wanted"
+'
+setup_sync_tmp "$PROTECTED_SPACES_YML"
+# Remote: type:task (match) + "good first issue" (protected) + old:cruft (not protected → DELETE)
+export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal work item.\ngood first issue\t7057ff\tGood for newcomers.\nold:cruft\tcccccc\tOld cruft label.'
+OUT="$TMP/s14.out"
+run_with_timeout 30 bash "$SYNC_SCRIPT" "$LABELS_FILE" >"$OUT" 2>&1
+RC=$?
+gfi_deleted=$(grep -c 'label delete.*good first issue' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+gfi_deleted_out=$(grep -c 'good first issue (deleted)' "$OUT" 2>/dev/null; true)
+cruft_deleted=$(grep -c 'label delete' "$GH_MOCK_LABEL_LOG" 2>/dev/null; true)
+cruft_deleted_out=$(grep -c 'old:cruft (deleted)' "$OUT" 2>/dev/null; true)
+if [ "$RC" -eq 0 ] && [ "$gfi_deleted" -eq 0 ] && [ "$gfi_deleted_out" -eq 0 ] \
+   && [ "$cruft_deleted" -ge 1 ] && [ "$cruft_deleted_out" -ge 1 ]; then
+    pass "S14: protected label with spaces — 'good first issue' not deleted, old:cruft deleted"
+else
+    fail "S14: rc=$RC gfi_deleted=$gfi_deleted gfi_deleted_out=$gfi_deleted_out cruft_deleted=$cruft_deleted cruft_deleted_out=$cruft_deleted_out out=$(cat "$OUT")"
+fi
+teardown_sync_tmp
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

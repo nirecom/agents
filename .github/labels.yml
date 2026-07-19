@@ -76,3 +76,16 @@
 - name: "model-scope:claude"
   color: "bfd4f2"
   description: "Issue scoped to Claude-family-specific behavior (occurrence limited to Claude models)"
+
+# --- Protected labels (never deleted by sync-labels.sh, even in normal sync) ---
+# GitHub default labels that sibling repos may use in existing issues.
+protected:
+  - bug
+  - enhancement
+  - documentation
+  - "good first issue"
+  - invalid
+  - duplicate
+  - question
+  - wontfix
+  - "help wanted"
