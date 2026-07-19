@@ -1,7 +1,7 @@
 #!/bin/bash
 # bin/github-issues/close-not-planned.sh --type migrated|cancelled [--into M] N
 #
-# Apply status label, post a comment, and close issue N with --reason not_planned.
+# Apply status label, post a comment, and close issue N with --reason "not planned".
 # --into M  required when --type migrated; prohibited when --type cancelled.
 #
 # Exit 0: success.
@@ -60,4 +60,4 @@ else
 fi
 gh issue comment "$N" --body "$COMMENT"
 
-gh issue close "$N" --reason not_planned
+gh issue close "$N" --reason "not planned"

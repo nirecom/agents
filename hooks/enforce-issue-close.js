@@ -66,7 +66,9 @@ if (process.env.ISSUE_CLOSE_SKILL === "1") {
   process.exit(0);
 }
 
-const isNotPlanned = cmd.includes("--reason not_planned");
+const isNotPlanned = cmd.includes("--reason not_planned") ||
+  cmd.includes('--reason "not planned"') ||
+  cmd.includes("--reason not planned");
 process.stderr.write(
   isNotPlanned
     ? "Direct `gh issue close` is not allowed. Use /issue-close-migrated <N> --type migrated|cancelled instead.\n"

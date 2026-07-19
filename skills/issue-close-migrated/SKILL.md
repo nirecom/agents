@@ -1,6 +1,6 @@
 ---
 name: issue-close-migrated
-description: Close an issue as status:migrated or status:cancelled with --reason not_planned. Applies label, posts comment, and closes.
+description: Close an issue as status:migrated or status:cancelled with --reason "not planned". Applies label, posts comment, and closes.
 user-invocable: false
 ---
 
@@ -33,5 +33,5 @@ The `gh issue close` inside `close-not-planned.sh` is a subprocess of the Bash t
 
 ## Rules
 
-- Always close with `--reason not_planned` via `close-not-planned.sh`. Never use `--reason completed` for migrated or cancelled issues.
+- Always close with `--reason "not planned"` via `close-not-planned.sh`. Never use `--reason completed` for migrated or cancelled issues.
 - Never invoke `gh issue close` directly from this skill — use `close-not-planned.sh`.

@@ -28,7 +28,7 @@ or out-of-band creation, use `.github/ISSUE_TEMPLATE/incident.yml` (or
 
 The two phases together run the full transaction-safe flow: sub-issue gate → pending sentinel comment → history.md append → parent body update → `gh issue close` → resolved-by + appended sentinel. **Never run `gh issue close` directly** — the `enforce-issue-close.js` hook will block it.
 
-To close an issue as `status:migrated` or `status:cancelled` (uses `--reason not_planned`):
+To close an issue as `status:migrated` or `status:cancelled` (uses `--reason "not planned"`):
 
 ```
 /issue-close-migrated <N> --type migrated --into <M>   # migrated into issue M
