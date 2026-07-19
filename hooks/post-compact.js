@@ -58,6 +58,7 @@ try {
     if (state && state.steps) {
       if (state.cwd)        lines.push(`Worktree: ${state.cwd}`);
       if (state.git_branch) lines.push(`Branch: ${state.git_branch}`);
+      let pendingCount = 0;
       for (const step of WORKFLOW_STEPS) {
         const s = state.steps[step] || {};
         const status = s.status || "pending";
@@ -66,6 +67,12 @@ try {
             ? " (reset after pr merge — expected)"
             : "";
         lines.push(`- ${step}: ${status}${annotation}`);
+        if (status === "pending" && !(step === "user_verification" && s.reset_reason === "post-merge")) {
+          pendingCount++;
+        }
+      }
+      if (pendingCount > 0) {
+        lines.push("→ Workflow is in progress. Run /resume-session to resume from the current step.");
       }
     } else {
       lines.push("(no state file found — run /workflow-init)");
