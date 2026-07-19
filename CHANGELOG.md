@@ -602,3 +602,7 @@ Changes: Restored full test coverage for `scan-outbound.js` offensive-content de
 ### FEATURE: PR #1539 (2026-07-19)
 Background: fix(#1492): PROPAGATE_LABELS_REPOS format — semicolon-separated absolute paths
 Changes: `PROPAGATE_LABELS_REPOS` format changed to semicolon-separated absolute directory paths (e.g. `C:\git\dotfiles;C:\git\my-private-repo`). Space-separated `owner/repo` format no longer works. Update your `.env` before the next propagation run.
+
+### FEATURE: PR #1549 (2026-07-19)
+Background: fix(#1542): add CI fallback in propagate-labels.sh; pass PROPAGATE_LABELS_REPOS in sync-labels.yml
+Changes: Labels now propagate to sibling repos in CI: the `sync-labels.yml` propagate job now receives `PROPAGATE_LABELS_REPOS`; Windows absolute paths that do not exist on ubuntu-latest are automatically resolved to `owner/repo` via repo basename and the current repo's git remote owner.
