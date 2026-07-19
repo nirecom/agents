@@ -73,6 +73,7 @@ check_file() {
   local raw line stripped
   local has_findings=0
 
+  local prev_was_blank=0
   # Use a unique sentinel to mark IFS-safe reads; we need to preserve leading spaces.
   while IFS= read -r raw || [[ -n "$raw" ]]; do
     lineno=$((lineno + 1))
@@ -84,6 +85,7 @@ check_file() {
       # flush: standalone heading — discard collected comments (they belong to no variable)
       comment_lines=()
       comment_lineno=()
+      prev_was_blank=0
       continue
     fi
 
@@ -91,12 +93,20 @@ check_file() {
     if [[ -z "${line//[[:space:]]/}" ]]; then
       comment_lines=()
       comment_lineno=()
+      prev_was_blank=1
       continue
     fi
 
     # OS-conditional block markers — do not accumulate, do not count toward
     # the per-variable comment-line limit.
     if [[ "$line" =~ ^[[:space:]]*#@(if|endif) ]]; then
+      if [[ "${BASH_REMATCH[1]}" == "endif" ]] && (( prev_was_blank == 1 )); then
+        echo "HARD: $file:$lineno: blank line before #@endif"
+        HARD_COUNT=$((HARD_COUNT + 1))
+        HARD_HIT=1
+        has_findings=1
+      fi
+      prev_was_blank=0
       continue
     fi
 
@@ -104,6 +114,7 @@ check_file() {
     if [[ "$line" =~ ^[[:space:]]*# ]]; then
       comment_lines+=("$line")
       comment_lineno+=("$lineno")
+      prev_was_blank=0
       continue
     fi
 
@@ -224,12 +235,14 @@ check_file() {
       # reset for next variable block
       comment_lines=()
       comment_lineno=()
+      prev_was_blank=0
       continue
     fi
 
     # any other line: reset
     comment_lines=()
     comment_lineno=()
+    prev_was_blank=0
   done < "$file"
 
   return "$has_findings"
