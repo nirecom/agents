@@ -598,3 +598,7 @@ Changes: `WORKFLOW_ENFORCE_WORKTREE_OFF` sentinel no longer blocked after `sessi
 ### FEATURE: PR #1538 (2026-07-19)
 Background: fix(#1526): add hooks/workflow-gate/ copy and bin/scan-offensive stub to test sandboxes
 Changes: Restored full test coverage for `scan-outbound.js` offensive-content detection: T1,T3,T5–T9 now pass green after sandbox setup was fixed to include missing dependencies.
+
+### FEATURE: PR #1539 (2026-07-19)
+Background: fix(#1492): PROPAGATE_LABELS_REPOS format — semicolon-separated absolute paths
+Changes: `PROPAGATE_LABELS_REPOS` format changed to semicolon-separated absolute directory paths (e.g. `C:\git\dotfiles;C:\git\my-private-repo`). Space-separated `owner/repo` format no longer works. Update your `.env` before the next propagation run.
