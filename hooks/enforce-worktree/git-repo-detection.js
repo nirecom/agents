@@ -30,6 +30,12 @@ function toWindowsPath(raw) {
 //           "checked but unresolved" — by convention block-side under
 //           enforce-worktree (see #885 plan).
 function isMainCheckout(repoCwd) {
+  // Normalize POSIX-form paths (e.g. /c/git/agents from Git Bash) so
+  // spawnSync cwd resolves correctly on Windows. Symmetric with
+  // findRepoRootForBash lines 201-203; toWindowsPath is a no-op on POSIX.
+  if (typeof repoCwd === "string" && /^\/[a-zA-Z]\//.test(repoCwd)) {
+    repoCwd = toWindowsPath(repoCwd);
+  }
   try {
     const common = spawnSync("git", ["rev-parse", "--git-common-dir"], {
       cwd: repoCwd, encoding: "utf8", timeout: 2000,
