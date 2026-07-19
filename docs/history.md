@@ -220,4 +220,8 @@ Changes: issue:#1115 category:BUGFIX subject:"fix(enforce-worktree): POSIX fd-du
 
 ### FEATURE: PR #1506 — feature/1498-stop-premature-stop-guard (2026-07-18, ab9553f, #1506)
 Background: feat(#1498): add C4 premature-stop guard Stop hook
-Changes: FEATURE #1498: Add C4 premature-stop guard Stop hook — stop-premature-stop-guard.js detects ACTION=invoke from next-step after Claude stops and outputs decision:block to auto-resume; uses CC SID directly (simplified after #1508 unified supervisor state keying to CC UUID); wired in settings.json Stop hooks array; T1-T16 integration tests cover all paths including fail-open edge cases <!-- compose-doc-append-sentinel: branch=feature/1498-stop-premature-stop-guard pr=#1506 -->
+Changes: FEATURE #1498: Add C4 premature-stop guard Stop hook — stop-premature-stop-guard.js detects ACTION=invoke from next-step after Claude stops and outputs decision:block to auto-resume; uses CC SID directly (simplified after #1508 unified supervisor state keying to CC UUID); wired in settings.json Stop hooks array; T1-T16 integration tests cover all paths including fail-open edge cases <!-- compose-doc-append-sentinel: branch=feature/1498-stop-premature-stop-guard pr=#1506 -->
+
+### FEATURE: PR #1523 — fix/fix-1509-close-not-planned (2026-07-19, 9e5e4f2d1cc999aa358f8e598203e2cba6bd5e5c, #1523)
+Background: fix(#1509): close-not-planned.sh --reason flag value and isNotPlanned detection
+Changes: #1509: fix close-not-planned.sh --reason flag: used `not_planned` (underscore) but gh CLI requires `"not planned"` (space); issues silently stayed OPEN. Expanded enforce-issue-close.js isNotPlanned detection to 3 forms; aligned docs/ops.md prose and skills/issue-close-migrated/SKILL.md. Tests P8/P8a/P8b/P9/P9a added. <!-- compose-doc-append-sentinel: branch=fix/fix-1509-close-not-planned pr=#1523 -->
