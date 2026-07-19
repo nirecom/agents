@@ -590,3 +590,7 @@ Changes: Outline approach selection now requires only one confirmation (the outl
 ### FEATURE: PR #1530 (2026-07-19)
 Background: fix(#1521, #1196): write_tests evidence fallback + mark-step evidence gate
 Changes: Fixed a bug where the `write_tests` step would stay pending after PR merge even though test files were already committed, causing an oracle abort in `/worktree-end`. The evidence check now looks at committed changes when the staging area is empty.;`WORKFLOW_MARK_STEP_write_tests_complete` sentinel now accepted when staged or committed test evidence exists (previously always rejected). Guides recovery with `--reset review_tests` when `review_tests` completes ahead of `write_tests`.
+
+### FEATURE: PR #1535 (2026-07-19)
+Background: fix(#1528): add TERMINAL_ALERT_PHASES constant; supervisor shim/guard closed+paused bypass
+Changes: `WORKFLOW_ENFORCE_WORKTREE_OFF` sentinel no longer blocked after `session-close` completes or supervisor alert retry-exhaustion, when findings are present but cumulative severity is below `error`.
