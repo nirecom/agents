@@ -185,7 +185,7 @@ case "$VERDICT" in
 
     reopen)
         [ -n "$TARGET" ] || { echo "Error: --target required for --verdict reopen" >&2; exit 2; }
-        MSYS_NO_PATHCONV=1 gh issue reopen "$TARGET" >/dev/null
+        bash "$(dirname "${BASH_SOURCE[0]}")/reopen-with-update.sh" "$TARGET"
         slug="$(get_repo_slug)"
         echo "https://github.com/${slug}/issues/${TARGET}"
         ;;

@@ -18,6 +18,10 @@
   color: "5319e7"
   description: "Merged into another issue. Applied after close."
 
+- name: "status:regressed"
+  color: "e4763e"
+  description: "Reopened after a prior close; regression history is preserved."
+
 - name: "intent:clarified"
   color: "1d76db"
   description: "Issue body ratified via /clarify-intent. /workflow-init Path A skips the interview."

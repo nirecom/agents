@@ -1,4 +1,6 @@
-# DV1-DV12, DV-graphql-fail, DV7-DV9, D5-D6: dispatch core tests
+# DV1-DV12, DV2-b, DV2-c, DV-graphql-fail, DV7-DV9, D5-D6: dispatch core tests
+# Tests: bin/github-issues/reopen-with-update.sh, bin/github-issues/issue-create-dispatch.sh
+# Tags: scope:issue-specific
 
 # ---------------------------------------------------------------------------
 # DV1: verdict=none → exactly one `gh issue create`, no extra API calls
@@ -25,25 +27,85 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# DV2: verdict=reopen --target 42 → `gh issue reopen 42`, no `gh issue create`
+# DV2: verdict=reopen --target 42 → `gh issue reopen 42`, `gh issue edit` (body+label), URL on stdout
 # ---------------------------------------------------------------------------
 if [ ! -x "$DISPATCH" ]; then
     fail "DV2: dispatch script missing — RED until implementation"
 else
     setup_mock
     STDOUT_OUT="$TMP/dv2-stdout.txt"
+    REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
     run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >"$STDOUT_OUT" 2>/dev/null
     RC=$?
     LAST_LINE=$(tail -1 "$STDOUT_OUT" 2>/dev/null)
-    if [ "$RC" -eq 0 ] \
+    if [ ! -x "$REOPEN_SCRIPT" ]; then
+        fail "DV2: reopen-with-update.sh missing — RED until implementation"
+    elif [ "$RC" -eq 0 ] \
        && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && ! grep -q "issue create" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue view.*--json body" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue edit" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue edit.*--add-label" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+       && grep -q "issue comment" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
        && [ "$LAST_LINE" = "https://github.com/nirecom/agents/issues/42" ]; then
-        pass "DV2: verdict=reopen --target 42 → reopen called, stdout=URL of #42"
+        pass "DV2: verdict=reopen --target 42 → reopen + body-read + body edit + label added + new comment, stdout=URL of #42"
     else
         fail "DV2: verdict=reopen behavior incorrect (rc=$RC stdout='$LAST_LINE' log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
     fi
     teardown_mock
+fi
+
+# ---------------------------------------------------------------------------
+# DV2-b: verdict=reopen --target 42 + GH_MOCK_REOPEN_LOG_COMMENT_BODY set →
+#         api PATCH recorded (updates existing log comment), no new comment posted
+# ---------------------------------------------------------------------------
+if [ ! -x "$DISPATCH" ]; then
+    fail "DV2-b: dispatch script missing — RED until implementation"
+else
+    REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
+    if [ ! -x "$REOPEN_SCRIPT" ]; then
+        fail "DV2-b: reopen-with-update.sh missing — RED until implementation"
+    else
+        setup_mock
+        export GH_MOCK_REOPEN_LOG_COMMENT_BODY="<!-- reopen-log -->"
+        STDOUT_OUT="$TMP/dv2b-stdout.txt"
+        run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >"$STDOUT_OUT" 2>/dev/null
+        RC=$?
+        if [ "$RC" -eq 0 ] \
+           && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+           && grep -qE "api.*-X PATCH.*repos/.*issues/comments/" "$GH_MOCK_ARGS_LOG" 2>/dev/null \
+           && ! grep -q "issue comment" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+            pass "DV2-b: reopen-log comment exists → PATCH used to update it, no new comment posted"
+        else
+            fail "DV2-b: expected PATCH update of existing log comment (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+        fi
+        teardown_mock
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# DV2-c: verdict=reopen --target 42 + GH_MOCK_LABEL_FAIL=1 →
+#         exit 0 (label failure is non-fatal), issue reopen 42 is still recorded
+# ---------------------------------------------------------------------------
+if [ ! -x "$DISPATCH" ]; then
+    fail "DV2-c: dispatch script missing — RED until implementation"
+else
+    REOPEN_SCRIPT="$(dirname "$DISPATCH")/reopen-with-update.sh"
+    if [ ! -x "$REOPEN_SCRIPT" ]; then
+        fail "DV2-c: reopen-with-update.sh missing — RED until implementation"
+    else
+        setup_mock
+        export GH_MOCK_LABEL_FAIL=1
+        run_with_timeout 30 bash "$DISPATCH" --verdict reopen --target 42 >/dev/null 2>/dev/null
+        RC=$?
+        if [ "$RC" -eq 0 ] \
+           && grep -q "issue reopen 42" "$GH_MOCK_ARGS_LOG" 2>/dev/null; then
+            pass "DV2-c: GH_MOCK_LABEL_FAIL=1 → exit 0 (label failure non-fatal), reopen still recorded"
+        else
+            fail "DV2-c: label failure should be non-fatal (rc=$RC log=$(cat "$GH_MOCK_ARGS_LOG" 2>/dev/null))"
+        fi
+        teardown_mock
+    fi
 fi
 
 # ---------------------------------------------------------------------------
