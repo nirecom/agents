@@ -18,6 +18,7 @@
 const fs = require("fs");
 const path = require("path");
 const { detectSentinelHang, detectAskUserQuestionTurn, parseTranscriptForAudit } = require('./supervisor-guard/detect');
+const { TERMINAL_ALERT_PHASES } = require('./lib/supervisor-state-schema');
 
 function readStdin() {
   const chunks = [];
@@ -152,7 +153,7 @@ if (require.main === module) {
     // Build alert candidate only when an alert branch would also fire this cycle.
     let alertCandidate = null;
     const alertWouldFire = !askUserQuestionTurn &&
-      alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+      !TERMINAL_ALERT_PHASES.has(alertPhase) &&
       // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
       alertPhase !== "frozen" &&
       // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
@@ -192,7 +193,7 @@ if (require.main === module) {
   }
 
   // (2)
-  if (!askUserQuestionTurn && cumSev === "error" && alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+  if (!askUserQuestionTurn && cumSev === "error" && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
       // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
       alertPhase !== "frozen"
       // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
@@ -208,7 +209,7 @@ if (require.main === module) {
   }
 
   // (3)
-  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+  if (!askUserQuestionTurn && (hangDetected || alertArmedAt) && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
       // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
       alertPhase !== "frozen"
       // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
@@ -233,7 +234,7 @@ if (require.main === module) {
 
   // (4) advisory for cumSev=warning or cumSev=notice — legacy layer2 backward-compat only.
   // New alert-format state (state.alert) skips this branch; only old layer2 state files trigger it.
-  if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && alertPhase !== "done" && alertPhase !== "paused" && alertPhase !== "closed" &&
+  if (!askUserQuestionTurn && (cumSev === "warning" || cumSev === "notice") && !TERMINAL_ALERT_PHASES.has(alertPhase) &&
       // --- BEGIN temporary: alert_phase "frozen" legacy alias (#1166) ---
       alertPhase !== "frozen" &&
       // --- END temporary: alert_phase "frozen" legacy alias (#1166) ---
