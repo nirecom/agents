@@ -74,6 +74,17 @@ case "$ARGS" in
     eval "PNUM=\${GH_MOCK_PARENT_NUM_${INUM}:-}"
     echo "$PNUM"
     exit 0 ;;
+  api\ repos/*/issues/*/comments\ *)
+    # reopen-with-update.sh: list comments on an issue to find <!-- reopen-log --> marker
+    if [ -n "${GH_MOCK_REOPEN_LOG_COMMENT_BODY:-}" ]; then
+        printf '[{"id":999001,"body":"%s"}]\n' "$GH_MOCK_REOPEN_LOG_COMMENT_BODY"
+    else
+        echo "[]"
+    fi
+    exit 0 ;;
+  api\ *-X\ PATCH\ *repos/*/issues/comments/*)
+    # reopen-with-update.sh: PATCH to update the reopen-log comment
+    exit 0 ;;
   api\ repos/*/issues/*\ --jq*)
     # parent-ancestor-reopen.sh: api repos/<owner>/<repo>/issues/<N> --jq .parent.number // empty
     INUM=$(echo "$ARGS" | awk '{print $2}' | awk -F/ '{print $NF}')
@@ -100,10 +111,24 @@ case "$ARGS" in
     NUM=$(echo "$ARGS" | sed 's/.*issue(number: \([0-9]*\)).*/\1/')
     echo "${NUM}000"
     exit 0 ;;
+  issue\ view\ *--json\ body*)
+    # reopen-with-update.sh: fetch current issue body
+    echo "${GH_MOCK_ISSUE_BODY:-}"
+    exit 0 ;;
   issue\ view\ *--json\ state*)
     NUM=$(echo "$ARGS" | awk '{print $3}')
     eval "STATE=\${GH_MOCK_ISSUE_STATE_${NUM}:-OPEN}"
     echo "$STATE"
+    exit 0 ;;
+  issue\ edit\ *--add-label*)
+    # reopen-with-update.sh: add status:regressed label
+    if [ "${GH_MOCK_LABEL_FAIL:-0}" = "1" ]; then
+        echo "error: label not found" >&2
+        exit 1
+    fi
+    exit 0 ;;
+  issue\ edit\ *--body*)
+    # reopen-with-update.sh: update issue body
     exit 0 ;;
   issue\ comment\ *)
     exit 0 ;;
@@ -175,4 +200,5 @@ teardown_mock() {
     unset GH_MOCK_SUBISSUE_API_FAIL GH_MOCK_NEW_ISSUE_NUM GH_MOCK_ISSUE_STATE_42 GH_MOCK_ISSUE_STATE_43 GH_MOCK_ISSUE_STATE_100 2>/dev/null || true
     unset GH_MOCK_PARENT_NUM_200 GH_MOCK_PARENT_ABSENT_100 GH_MOCK_REOPEN_FAIL_100 GH_MOCK_GRAPHQL_DBID_FAIL 2>/dev/null || true
     unset GH_MOCK_ISSUE_NUMS GH_MOCK_CREATE_CURSOR GH_MOCK_SUBISSUE_FAIL_FROM GH_MOCK_SUBISSUE_CURSOR 2>/dev/null || true
+    unset GH_MOCK_ISSUE_BODY GH_MOCK_REOPEN_LOG_COMMENT_BODY GH_MOCK_LABEL_FAIL 2>/dev/null || true
 }
