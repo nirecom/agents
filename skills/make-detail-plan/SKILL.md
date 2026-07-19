@@ -101,8 +101,10 @@ See `bash "$AGENTS_CONFIG_DIR/skills/make-detail-plan/scripts/skip-conditions.sh
 - Read intent/outline before planning — never plan from assumptions.
 - Outline's Delivery plan must be surfaced in MDP-2 before planner subagent runs (required).
 - Orchestrator chat during discussion loop is restricted to: (a) one status line per round (`Round N: APPROVED|NEEDS_REVISION (proceeding)`); (b) NO path output — `show-plan-link.js` PostToolUse hook is the sole authoritative breadcrumb (do not print/duplicate/translate/paraphrase/reformat); (c) the `Delivery plan (...)` summary from MDP-2; (d) the concern summary block rendered by the MDP-6 ESCALATE path when exit 2 fires — exactly one block per cap-reach event. No per-round natural-language summaries (the cap-reach summary in (d) is the sole exception). Diagnostics → `<session-id>-detail-debug.log`.
+- Write the MDP-7 orchestrator-authored detail.md body in the PLAN_LANG language (see .env.example) from the first draft; do not draft in English and re-translate.
 - Follow `rules/core-principles.md`.
 - **One user-facing confirmation per run** — only the final plan approval in MDP-7. Never pause during intermediate revision rounds (MDP-4..5): write drafts silently, inform user with plain text only.
+- Deliver user-facing analysis summaries (approach comparison, risk assessment, trade-off rationale) as turn-final assistant text or via AskUserQuestion preview/description — not as mid-turn text between tool calls, which is invisible in VS Code.
 - Planner + reviewer apply `skills/_shared/priority-hierarchy.md` — codex/reviewer concerns must not override approved intent.md / outline.md decisions.
 - Report observations per rules/supervisor-reporting.md.
 

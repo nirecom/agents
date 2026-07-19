@@ -38,6 +38,8 @@ DELIVERY_PLAN: <triage rationale / execution order / split policy — one line>
 CROSS_COMPONENT_RISKS: <component contract mismatches, dependency direction issues, or coverage gaps; "none identified" if clean; "unable to assess" if 8-file cap prevents full scan>
 ```
 
+`<one-line reason>` recognized forms: `topology-only — …`, `intent-lock — …`, `frontrunner-collapse — …`.
+
 The make-outline-plan skill will skip the review round and proceed directly to make-detail-plan.
 
 ## NEEDS_RESEARCH

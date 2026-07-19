@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests: agents/outline-planner.md
-# Tags: outline, planning, agent, bin, tests
+# Tags: outline, planning, agent, bin, tests, scope:common
 # Static grep-based checks for outline-planner topology-collapse rule (#420).
 #
 # Verifies that agents/outline-planner.md contains the new rule instructing
@@ -41,6 +41,18 @@ fi
 echo "=== outline-planner.md: intent-lock collapse + straw-alternative prohibition (#1287) ==="
 if require_file "$PLANNER"; then
     for needle in "intent-lock" "straw" "Fabricating alternatives"; do
+        if has_fixed "$needle" "$PLANNER"; then
+            pass "outline-planner.md contains '$needle'"
+        else
+            fail "outline-planner.md missing '$needle'"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
+echo "=== outline-planner.md: frontrunner-collapse rule (#1384) ==="
+if require_file "$PLANNER"; then
+    for needle in "frontrunner-collapse" "frontrunner"; do
         if has_fixed "$needle" "$PLANNER"; then
             pass "outline-planner.md contains '$needle'"
         else

@@ -27,6 +27,7 @@ CI-2. Check via Bash: `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_
 CI-2a. Aggregate candidate class members per `reference/aggregate-class-members.md`.
 
 CI-2b. **Companion-issue pre-check + batch presentation.** Skip when `closes_issues` is empty (Path C). Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/precheck-companions.sh" --seed "${closes_issues[0]}" --exclude "$(IFS=,; echo "${closes_issues[*]}")" --output-file "<PLANS_DIR>/<session-id>-companion-precheck.json"`. The precheck wraps `companion-search.sh --seed <N> --exclude <csv>` (SSOT), carries each candidate's `reason` column, and evaluates decomposition impact. Exit 1 → no candidates → skip. Exit 0 → follow `reference/companion-batch-presentation.md`: display the per-candidate decomposition annotations and `Reason:` field in the main conversation, then present all candidates in a single batch multiSelect. Selected `#M` appended to `closes_issues` before CI-4 writes intent.md. No WIP claim or side effects here — reconciliation happens in Completion after CI-5.
+- Emit companion analysis (issue comparison, scope clarification, trade-off summary) as turn-final assistant text or AskUserQuestion preview/description — not as mid-turn text between tool calls (invisible in VS Code).
 
 CI-3. Interview via `AskUserQuestion`: 1 question per call; include one **(recommended)** option; dependency order; max 5 rounds; unresolved branches → document as constraints.
 
@@ -108,6 +109,8 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 - `PROCEED` → proceed to CI-C1 (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
 - `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
 - `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
+  - Remove-and-continue branch: after removing the issue from closes_issues, also remove the corresponding `- #N: title` line from the `## Issues` section of the in-progress `intent.md` (and from `outline.md` if it already exists).
+  - This keeps plan artifacts in sync with closes_issues — stale `- #N:` entries cause confusion in downstream steps.
 - `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session".
 - `NEED_ISSUE` → invoke `/issue-create` → backfill `## Issues` → re-run guard-loop only.
 - `RETRY_EXHAUSTED` → `AskUserQuestion` "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?" — "Retry `/issue-create`" / "Manual recovery" / "Abort workflow" → emit `<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>`.
