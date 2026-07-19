@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# L3 seam body for session-start.js (SessionStart).
-# Sourced by ../L3-hook-session-start.sh after helpers.sh.
+# TL3 seam body for session-start.js (SessionStart).
+# Sourced by ../TL3-hook-session-start.sh after helpers.sh.
 
 echo ""
-echo "=== L3: session-start.js SessionStart real invocation ==="
+echo "=== TL3: session-start.js SessionStart real invocation ==="
 
 SS_SID="e2292100-0000-0000-0000-000000000002"
 SS_BASE="$(make_tmp_base)"
@@ -83,5 +83,5 @@ else
     fail "SS-E2. additionalContext missing session_id line. claude rc=$SS_RC output: $SS_OUTPUT"
 fi
 
-# L3 gap: CONV_LANG/settings-drift injection branches depend on host env config
+# TL3 gap: CONV_LANG/settings-drift injection branches depend on host env config
 # and are not asserted here; covered at L2 in feature-772-session-start-cleanup-inherit.sh.

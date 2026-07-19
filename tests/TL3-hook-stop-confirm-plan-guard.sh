@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
-# Tags: stop-confirm-plan-guard, hook, L3, run-e2e, scope:permanent
+# Tags: stop-confirm-plan-guard, hook, TL3, run-e2e, scope:permanent
 #
-# Issue #943 — per-hook seam L3 test: stop-confirm-plan-guard.js (Stop).
+# Issue #943 — per-hook seam TL3 test: stop-confirm-plan-guard.js (Stop).
 # A per-turn marker fixture is placed in CLAUDE_WORKFLOW_DIR; a live `claude -p`
 # session triggers the Stop hook, which reads and deletes the marker via
 # readAndDeleteTurnMarkers(). Assert marker present before, absent after.
-# Layer: L3 (live claude -p session, real Stop firing, real turn marker).
+# Layer: TL3 (live claude -p session, real Stop firing, real turn marker).
 set -euo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,10 +19,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/L3-hook-stop-confirm-plan-guard/helpers.sh
-. "$AGENTS_DIR/tests/L3-hook-stop-confirm-plan-guard/helpers.sh"
-# shellcheck source=tests/L3-hook-stop-confirm-plan-guard/main.sh
-. "$AGENTS_DIR/tests/L3-hook-stop-confirm-plan-guard/main.sh"
+# shellcheck source=tests/TL3-hook-stop-confirm-plan-guard/helpers.sh
+. "$AGENTS_DIR/tests/TL3-hook-stop-confirm-plan-guard/helpers.sh"
+# shellcheck source=tests/TL3-hook-stop-confirm-plan-guard/main.sh
+. "$AGENTS_DIR/tests/TL3-hook-stop-confirm-plan-guard/main.sh"
 
 echo ""
 echo "=== Results ==="

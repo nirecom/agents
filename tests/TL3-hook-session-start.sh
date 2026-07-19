@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Tests: hooks/session-start.js
-# Tags: session-start, hook, L3, run-e2e, scope:permanent
+# Tags: session-start, hook, TL3, run-e2e, scope:permanent
 #
-# Issue #943 — per-hook seam L3 test: session-start.js (SessionStart).
+# Issue #943 — per-hook seam TL3 test: session-start.js (SessionStart).
 # Fresh `claude -p` session with no prior state → createInitialState writes a
 # state file with all steps pending, and additionalContext surfaces the sid.
-# Layer: L3 (live claude -p session, real SessionStart firing, real state file).
+# Layer: TL3 (live claude -p session, real SessionStart firing, real state file).
 set -euo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -18,10 +18,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/L3-hook-session-start/helpers.sh
-. "$AGENTS_DIR/tests/L3-hook-session-start/helpers.sh"
-# shellcheck source=tests/L3-hook-session-start/main.sh
-. "$AGENTS_DIR/tests/L3-hook-session-start/main.sh"
+# shellcheck source=tests/TL3-hook-session-start/helpers.sh
+. "$AGENTS_DIR/tests/TL3-hook-session-start/helpers.sh"
+# shellcheck source=tests/TL3-hook-session-start/main.sh
+. "$AGENTS_DIR/tests/TL3-hook-session-start/main.sh"
 
 echo ""
 echo "=== Results ==="

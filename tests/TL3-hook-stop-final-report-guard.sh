@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-final-report-guard.js
-# Tags: stop-final-report-guard, hook, L3, run-e2e, scope:permanent
+# Tags: stop-final-report-guard, hook, TL3, run-e2e, scope:permanent
 #
-# Issue #943 — per-hook seam L3 test: stop-final-report-guard.js (Stop).
+# Issue #943 — per-hook seam TL3 test: stop-final-report-guard.js (Stop).
 # A live `claude -p` session with the final-report-env fixture present but no
 # Final Report heading emitted → Stop hook fires decision:block and claude
 # exits non-zero. Deterministic block case only.
-# Layer: L3 (live claude -p session, real Stop firing, real env-file fixture).
+# Layer: TL3 (live claude -p session, real Stop firing, real env-file fixture).
 set -euo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,10 +19,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/L3-hook-stop-final-report-guard/helpers.sh
-. "$AGENTS_DIR/tests/L3-hook-stop-final-report-guard/helpers.sh"
-# shellcheck source=tests/L3-hook-stop-final-report-guard/main.sh
-. "$AGENTS_DIR/tests/L3-hook-stop-final-report-guard/main.sh"
+# shellcheck source=tests/TL3-hook-stop-final-report-guard/helpers.sh
+. "$AGENTS_DIR/tests/TL3-hook-stop-final-report-guard/helpers.sh"
+# shellcheck source=tests/TL3-hook-stop-final-report-guard/main.sh
+. "$AGENTS_DIR/tests/TL3-hook-stop-final-report-guard/main.sh"
 
 echo ""
 echo "=== Results ==="
