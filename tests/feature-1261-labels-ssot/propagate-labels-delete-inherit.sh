@@ -169,6 +169,123 @@ else
 fi
 teardown_mock
 
+# ===========================================================================
+# T-propagate-no-delete: PROPAGATE_LABELS_NO_DELETE=1 のとき
+# sync-labels.sh が --no-delete で呼ばれ gh label delete が抑止される
+# ===========================================================================
+# Positive control (T-propagate-no-delete-control): without the env var, the
+# same fixture MUST log a gh label delete. This proves the propagation path is
+# actually exercised — so that the NO_DELETE=1 run's zero-delete result is a
+# real suppression, not a skipped repo. The control passes today (delete
+# inherited); the NO_DELETE=1 case is RED until the pass-through lands.
+setup_propagate_no_delete_mock() {
+    setup_mock
+    # gh mock: support GH_MOCK_LABEL_LIST for `label list`, log `label delete`.
+    cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+[ -n "${MOCK_LOG:-}" ] && printf '%s\n' "gh $ARGS" >> "$MOCK_LOG"
+case "$ARGS" in
+  label\ list*)
+    if [ -n "${GH_MOCK_LABEL_LIST:-}" ]; then
+        printf '%s\n' "$GH_MOCK_LABEL_LIST"
+    fi
+    exit 0
+    ;;
+  label\ delete\ *)
+    exit 0
+    ;;
+  label\ create\ *--force*)
+    exit 0
+    ;;
+  label\ create\ *)
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+MOCK_EOF
+    chmod +x "$TMP/mock-bin/gh"
+    # git mock: extend with a `remote get-url origin` arm so propagate-labels.sh
+    # resolves the sibling slug from a directory-path entry (the -d branch),
+    # then drives clone/diff/commit/push and reaches sync-labels.sh.
+    cat > "$TMP/mock-bin/git" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+[ -n "${MOCK_LOG:-}" ] && printf '%s\n' "git $ARGS" >> "$MOCK_LOG"
+case "$1" in
+  clone)
+    DEST="${!#}"
+    mkdir -p "$DEST/.github"
+    echo "# old seeded content" > "$DEST/.github/labels.yml"
+    exit 0
+    ;;
+  -C)
+    _GIT_DIR="$2"; shift 2
+    case "$1" in
+      remote)
+        # `git -C <dir> remote get-url origin`
+        [ "$2" = "get-url" ] && echo "https://github.com/myorg/myrepo.git"
+        exit 0
+        ;;
+      config) exit 0 ;;
+      diff) exit "${GIT_DIFF_RC:-0}" ;;
+      add) exit 0 ;;
+      commit) exit 0 ;;
+      push) exit 0 ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+MOCK_EOF
+    chmod +x "$TMP/mock-bin/git"
+    export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
+    export GIT_DIFF_RC=0
+    export AGENTS_WORKSPACE="$AGENTS_DIR"
+    export GIT_WORK_DIR="$TMP/workdir"
+    export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
+    # Directory-path entry: propagate-labels.sh -d branch resolves it via
+    # `git -C <dir> remote get-url origin` (mocked → myorg/myrepo).
+    mkdir -p "$TMP/sibling-repo"
+    export PROPAGATE_LABELS_REPOS="$TMP/sibling-repo"
+    cat > "$TMP/agents-workspace/.github/labels.yml" <<'LABELS_EOF'
+- name: "type:task"
+  color: "0e8a16"
+  description: "Normal task"
+LABELS_EOF
+    # type:task + stale:ghost → stale:ghost は DELETE 候補
+    export GH_MOCK_LABEL_LIST=$'type:task\t0e8a16\tNormal task\nstale:ghost\taaaaaa\tOld ghost label'
+}
+
+# --- Control: env var unset → DELETE MUST be logged (propagation path live).
+setup_propagate_no_delete_mock
+unset PROPAGATE_LABELS_NO_DELETE
+run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
+CTRL_DELETE_LOGGED=0
+grep -q "gh label delete" "$MOCK_LOG" 2>/dev/null && CTRL_DELETE_LOGGED=1
+if [ "$CTRL_DELETE_LOGGED" = "1" ]; then
+    pass "T-propagate-no-delete-control: without env var, DELETE is propagated (path live)"
+else
+    fail "T-propagate-no-delete-control: delete_logged=$CTRL_DELETE_LOGGED log=$(cat "$MOCK_LOG" 2>/dev/null)"
+fi
+teardown_mock
+
+# --- T-propagate-no-delete: env var set → DELETE MUST be suppressed.
+setup_propagate_no_delete_mock
+export PROPAGATE_LABELS_NO_DELETE=1
+run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
+DELETE_LOGGED=0
+grep -q "gh label delete" "$MOCK_LOG" 2>/dev/null && DELETE_LOGGED=1
+if [ "$DELETE_LOGGED" = "0" ]; then
+    pass "T-propagate-no-delete: PROPAGATE_LABELS_NO_DELETE=1 suppresses DELETE via --no-delete"
+else
+    fail "T-propagate-no-delete: delete_logged=$DELETE_LOGGED log=$(cat "$MOCK_LOG" 2>/dev/null)"
+fi
+unset PROPAGATE_LABELS_NO_DELETE
+teardown_mock
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

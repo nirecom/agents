@@ -123,6 +123,17 @@ from `.github/labels.yml`. This applies to all callers including `propagate-labe
 labels on sibling repos are removed automatically during propagation. Run with `--dry-run` to
 preview what would be created, updated, or deleted before making live changes.
 
+**Protected labels:** the `protected:` top-level key in `.github/labels.yml` lists label names that
+`sync-labels.sh` never deletes, even in a normal sync. It shields the nine GitHub default labels
+(`bug`, `enhancement`, `documentation`, `good first issue`, `invalid`, `duplicate`, `question`,
+`wontfix`, `help wanted`) that sibling repos may still use on existing issues.
+
+**Suppressing all deletes:** pass `--no-delete` to `sync-labels.sh` to run CREATE and UPDATE only,
+skipping every DELETE (each is logged `[NO-DELETE] Skipped delete`). For propagation, set
+`PROPAGATE_LABELS_NO_DELETE` to any non-empty value and `propagate-labels.sh` threads `--no-delete`
+through to each sibling. Use this for a first-time additive sync to a repo whose existing labels
+must be preserved.
+
 **Branch-protection note:** if a sibling's `main` branch has branch protection enabled, the
 direct push is rejected and that sibling is recorded as a failure (the others still proceed).
 Neither sibling currently has branch protection, so the direct push succeeds today.

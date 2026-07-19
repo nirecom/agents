@@ -1,7 +1,7 @@
 #!/bin/bash
 # Apply .github/labels.yml to the current repository via `gh label create`.
 #
-# Usage: bin/github-issues/sync-labels.sh [--repo OWNER/REPO] [path-to-labels.yml]
+# Usage: bin/github-issues/sync-labels.sh [--repo OWNER/REPO] [--dry-run] [--no-delete] [path-to-labels.yml]
 #
 # Three-way diff: labels not on remote are created (no --force), labels that
 # differ are updated (--force), labels that already match are skipped entirely.
@@ -16,11 +16,16 @@ REPO_FLAG=""
 REPO_FLAG_SET=0
 LABELS_FILE=""
 DRY_RUN=0
+NO_DELETE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run)
             DRY_RUN=1
+            shift
+            ;;
+        --no-delete)
+            NO_DELETE=1
             shift
             ;;
         --repo)
@@ -92,6 +97,48 @@ parse_and_apply() {
     ' "$LABELS_FILE"
 }
 
+# Read the protected: top-level key from labels.yml.
+# Lines under "protected:" starting with "  - " are protected label names.
+PROTECTED_CSV=""
+_in_protected=0
+while IFS= read -r _line; do
+    case "$_line" in
+        protected:*)
+            _in_protected=1
+            ;;
+        "- name:"*|"  color:"*|"  description:"*)
+            _in_protected=0
+            ;;
+        *)
+            if [ "$_in_protected" = "1" ]; then
+                case "$_line" in
+                    "  - "*)
+                        _pname="${_line#  - }"
+                        _pname="${_pname#\"}"
+                        _pname="${_pname%\"}"
+                        if [ -n "$_pname" ]; then
+                            if [ -n "$PROTECTED_CSV" ]; then
+                                PROTECTED_CSV="$PROTECTED_CSV,$_pname"
+                            else
+                                PROTECTED_CSV="$_pname"
+                            fi
+                        fi
+                        ;;
+                    "#"*|"")
+                        : ;;
+                    "- name:"*)
+                        _in_protected=0
+                        ;;
+                    *)
+                        _in_protected=0
+                        ;;
+                esac
+            fi
+            ;;
+    esac
+done < "$LABELS_FILE"
+unset _in_protected _pname _line
+
 if ! EXISTING=$(gh label list ${REPO_FLAG:+--repo "$REPO_FLAG"} --json name,color,description --limit 1000 \
                   --jq '.[] | [.name, .color, .description] | @tsv'); then
     echo "error: gh label list failed; cannot determine existing labels" >&2
@@ -140,6 +187,9 @@ while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
             if [[ "$DRY_RUN" -eq 1 ]]; then
                 printf '  [DRY-RUN] Would delete: %s\n' "$NAME"
                 DELETED=$((DELETED + 1))
+            elif [[ "$NO_DELETE" -eq 1 ]]; then
+                printf '  [NO-DELETE] Skipped delete: %s\n' "$NAME"
+                DELETED=$((DELETED + 1))
             elif ! gh label delete ${REPO_FLAG:+--repo "$REPO_FLAG"} "$NAME" --yes; then
                 echo "  Failed to delete $NAME" >&2
                 FAIL=$((FAIL + 1))
@@ -148,8 +198,16 @@ while IFS=$'\t' read -r ACTION NAME COLOR DESC; do
             fi
             ;;
     esac
-done < <(awk '
-    BEGIN { FS = OFS = "\t" }
+done < <(awk -v protected_csv="$PROTECTED_CSV" '
+    BEGIN {
+        FS = OFS = "\t"
+        n = split(protected_csv, _pa, ",")
+        for (i = 1; i <= n; i++) {
+            _k = _pa[i]
+            gsub(/^[ \t]+|[ \t]+$/, "", _k)
+            if (_k != "") protected_set[_k] = 1
+        }
+    }
     NR == FNR { if ($1 != "") existing[$1] = $2 OFS $3; next }
     {
       key = $1
@@ -161,7 +219,7 @@ done < <(awk '
     }
     END {
       for (k in existing) {
-        if (!(k in yml_seen)) { print "DELETE", k }
+        if (!(k in yml_seen) && !(k in protected_set)) { print "DELETE", k }
       }
     }
 ' <(printf '%s\n' "$EXISTING") <(parse_and_apply))
