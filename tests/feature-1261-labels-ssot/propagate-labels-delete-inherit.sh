@@ -107,7 +107,7 @@ teardown_mock() {
     fi
     TMP=""
     unset MOCK_LOG GIT_DIFF_RC PROPAGATE_LABELS_PAT CANONICAL_LABELS_FILE \
-          SIBLING_REPOS AGENTS_WORKSPACE GIT_WORK_DIR GH_MOCK_LABEL_LIST 2>/dev/null || true
+          PROPAGATE_LABELS_REPOS AGENTS_WORKSPACE GIT_WORK_DIR GH_MOCK_LABEL_LIST 2>/dev/null || true
 }
 
 # ===========================================================================
@@ -150,7 +150,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 # labels.yml: type:task のみ (setup_mock の 2 件を上書き)
 cat > "$TMP/agents-workspace/.github/labels.yml" <<'LABELS_EOF'
 - name: "type:task"

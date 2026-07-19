@@ -119,7 +119,7 @@ teardown_mock() {
     fi
     TMP=""
     unset MOCK_LOG GIT_DIFF_RC PROPAGATE_LABELS_PAT CANONICAL_LABELS_FILE \
-          SIBLING_REPOS AGENTS_WORKSPACE GIT_WORK_DIR GH_MOCK_LABEL_LIST 2>/dev/null || true
+          PROPAGATE_LABELS_REPOS AGENTS_WORKSPACE GIT_WORK_DIR GH_MOCK_LABEL_LIST 2>/dev/null || true
 }
 
 # Helper: find the first labels.yml written under the workdir
@@ -135,7 +135,7 @@ unset PROPAGATE_LABELS_PAT 2>/dev/null || true
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="testorg/testrepo"
+export PROPAGATE_LABELS_REPOS="testorg/testrepo"
 STDOUT="$(run_with_timeout 30 bash "$TARGET" 2>&1)"
 RC=$?
 CLONE_LOGGED=0
@@ -157,7 +157,7 @@ export PROPAGATE_LABELS_PAT=""
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="testorg/testrepo"
+export PROPAGATE_LABELS_REPOS="testorg/testrepo"
 STDOUT="$(run_with_timeout 30 bash "$TARGET" 2>&1)"
 RC=$?
 CLONE_LOGGED=0
@@ -180,7 +180,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 CLONE_URL_HAS_PAT=0
 grep "git clone" "$MOCK_LOG" 2>/dev/null | grep -q "x-access-token:test-secret-pat-12345" && CLONE_URL_HAS_PAT=1
@@ -203,7 +203,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 SIBLING_LABELS="$(find_sibling_labels)"
 FIRST_LINE=""
@@ -223,7 +223,7 @@ export GIT_DIFF_RC=0  # no changes
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 RC=$?
 COMMIT_LOGGED=0
@@ -245,7 +245,7 @@ export GIT_DIFF_RC=1  # has changes
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 COMMIT_LOGGED=0
 PUSH_LOGGED=0
@@ -268,7 +268,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
 GH_LABEL_LOGGED=0
 grep -q "gh label" "$MOCK_LOG" 2>/dev/null && GH_LABEL_LOGGED=1
@@ -290,7 +290,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="nirecom/dotfiles nirecom/my-private-repo"
+export PROPAGATE_LABELS_REPOS="nirecom/dotfiles nirecom/my-private-repo"
 run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
 RC=$?
 DOTFILES_CLONED=0
@@ -317,7 +317,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 # First run
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 # Second run (simulating re-invocation; script overwrites via temp file so no dup)
@@ -337,7 +337,7 @@ export GIT_DIFF_RC=1  # trigger commit path
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 EMAIL_LOGGED=0
 NAME_LOGGED=0
@@ -369,7 +369,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="nirecom/dotfiles nirecom/my-private-repo"
+export PROPAGATE_LABELS_REPOS="nirecom/dotfiles nirecom/my-private-repo"
 # Override mock git to fail on clone of first sibling (dotfiles), succeed for second
 cat > "$TMP/mock-bin/git" <<'MOCK_EOF'
 #!/bin/bash
@@ -431,7 +431,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export SIBLING_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="myorg/myrepo"
 STDOUT="$(run_with_timeout 30 bash "$TARGET" 2>&1)"
 SIBLING_LABELS="$(find_sibling_labels)"
 PAT_IN_FILE=0
@@ -446,7 +446,7 @@ fi
 teardown_mock
 
 # ===========================================================================
-# T-propagate-env: custom SIBLING_REPOS (single entry) + custom CANONICAL_LABELS_FILE
+# T-propagate-env: custom PROPAGATE_LABELS_REPOS (single entry) + custom CANONICAL_LABELS_FILE
 # ===========================================================================
 setup_mock
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
@@ -461,7 +461,7 @@ CUSTOM_EOF
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/custom-src/.github/custom-labels.yml"
-export SIBLING_REPOS="custom-owner/custom-repo"
+export PROPAGATE_LABELS_REPOS="custom-owner/custom-repo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 RC=$?
 # Only custom-owner/custom-repo should be cloned
@@ -474,7 +474,7 @@ SIBLING_LABELS="$(find_sibling_labels)"
 CUSTOM_CONTENT=0
 [ -n "$SIBLING_LABELS" ] && grep -q "custom:label" "$SIBLING_LABELS" 2>/dev/null && CUSTOM_CONTENT=1
 if [ "$CUSTOM_CLONED" = "1" ] && [ "$DEFAULT_CLONED" = "0" ] && [ "$CUSTOM_CONTENT" = "1" ]; then
-    pass "T-propagate-env: custom SIBLING_REPOS + CANONICAL_LABELS_FILE respected"
+    pass "T-propagate-env: custom PROPAGATE_LABELS_REPOS + CANONICAL_LABELS_FILE respected"
 else
     fail "T-propagate-env: rc=$RC custom_cloned=$CUSTOM_CLONED default_cloned=$DEFAULT_CLONED custom_content=$CUSTOM_CONTENT log=$(cat "$MOCK_LOG" 2>/dev/null)"
 fi
