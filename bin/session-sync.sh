@@ -60,7 +60,7 @@ case "$ACTION" in
         # Copy plans into sync area
         if [ -d "$PLANS_DIR" ]; then
             mkdir -p "$PROJECTS_DIR/plans"
-            cp "$PLANS_DIR/"* "$PROJECTS_DIR/plans/" 2>/dev/null || true
+            cp "$PLANS_DIR/"*.md "$PROJECTS_DIR/plans/" 2>/dev/null || true
         fi
         git -C "$PROJECTS_DIR" add .
         _local_changes=$(git -C "$PROJECTS_DIR" status --porcelain)
@@ -145,7 +145,7 @@ case "$ACTION" in
         # Merge plans from remote into local
         if [ -d "$PROJECTS_DIR/plans" ]; then
             mkdir -p "$PLANS_DIR"
-            cp "$PROJECTS_DIR/plans/"* "$PLANS_DIR/" 2>/dev/null || true
+            cp "$PROJECTS_DIR/plans/"*.md "$PLANS_DIR/" 2>/dev/null || true
         fi
         echo "Pulled session data."
         ;;
@@ -172,7 +172,7 @@ case "$ACTION" in
         # Merge plans from remote into local
         if [ -d "$PROJECTS_DIR/plans" ]; then
             mkdir -p "$PLANS_DIR"
-            cp "$PROJECTS_DIR/plans/"* "$PLANS_DIR/" 2>/dev/null || true
+            cp "$PROJECTS_DIR/plans/"*.md "$PLANS_DIR/" 2>/dev/null || true
         fi
         echo "Reset to remote state."
         ;;
