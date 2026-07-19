@@ -54,8 +54,8 @@ WT-7. Present the final test file content to the user for review — gated by **
 After completing this skill:
 1. Stage the test files: `git add tests/`
    The commit gate detects staged tests/ changes as evidence of completion.
-   Emit `<<WORKFLOW_MARK_STEP_write_tests_complete>>` from the linked worktree CWD if write_tests needs to be marked immediately (accepted only when staged or committed test evidence exists).
-   Note: linked worktree CWD is required — emitting from main worktree cannot see the linked worktree's staged files.
+   Emit `<<WORKFLOW_MARK_STEP_write_tests_complete>>` from the linked worktree CWD (accepted only when staged or committed test evidence exists).
+   Note: Do not emit from main worktree.
    `/review-tests` auto-backfills write_tests when evidence exists; the sentinel is a fallback for edge cases.
 2. Run tests (validation only — this does not satisfy the run_tests workflow step).
 
