@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Tests: agents/outline-planner.md, agents/outline-reviewer.md, skills/_shared/codex-review-loop.md, skills/make-outline-plan/SKILL.md, hooks/stop-confirm-plan-guard.js
-# Tags: outline, planning, sentinel, workflow, skill
+# Tags: outline, planning, sentinel, workflow, skill, scope:common
 # Contract tests for make-outline-plan skill (Stage 2: outline-planner + outline-reviewer)
 # L3 gap (what this test does NOT catch):
-# - real Claude Code session running make-outline-plan where user picks "Pass all approaches" and
-#   no CONFIRM dialog appears (only verifiable in a live session with AskUserQuestion)
-# - actual AskUserQuestion option list rendered in VS Code (that "Pass all approaches" shows as an option)
+# - real Claude Code session where orchestrator auto-selects approach and MOP-8 sentinel fires
+#   correctly (only verifiable in a live session; AskUserQuestion no longer used in MOP-7)
+# - VS Code turn-final text rendering for the prose rationale summary (only verifiable live)
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration.
 # Target files (expected to FAIL until implementation is complete):
@@ -302,14 +302,14 @@ echo ""
 # ---------------------------------------------------------------------------
 # Issue #789: Step 8 bypass on "Pass all approaches" selection
 # ---------------------------------------------------------------------------
-echo "--- Issue #789: Step 8 bypass on 'Pass all' selection ---"
+echo "--- Issue #789: MOP-7 / MOP-8 outline confirmation flow ---"
 
 AGENTS_ROOT_789="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
 SKILL_789="$AGENTS_ROOT_789/skills/make-outline-plan/SKILL.md"
 
-# 789-1: "Pass all approaches to make-detail-plan without selecting" present in SKILL.md
-assert_contains "$SKILL_789" 'Pass all approaches to make-detail-plan without selecting' \
-    "789-1: 'Pass all approaches to make-detail-plan without selecting' present in SKILL.md"
+# 789-1: "Pass all approaches" bypass option absent from SKILL.md (#1522)
+assert_absent "$SKILL_789" 'Pass all approaches' \
+    "789-1: 'Pass all approaches' bypass option abolished from SKILL.md (#1522)"
 
 # 789-2: Step 8 references confirm-plan Steps 1+2 (always-execute contract)
 assert_contains "$SKILL_789" 'Steps 1.{0,5}2' \
@@ -416,6 +416,24 @@ else
     # Cleanup both test dirs
     rm -rf "$_789_TMPDIR" 2>/dev/null || true
 fi
+
+echo ""
+# ---------------------------------------------------------------------------
+# Issue #1384: frontrunner-collapse rule
+# ---------------------------------------------------------------------------
+echo "--- Issue #1384: frontrunner-collapse rule ---"
+
+AGENTS_ROOT_1384="$(cd "$(dirname "$0")/.." && (pwd -W 2>/dev/null || pwd))"
+PLANNER_1384="$AGENTS_ROOT_1384/agents/outline-planner.md"
+OUTPUT_FORMAT_1384="$AGENTS_ROOT_1384/agents/outline-planner/output-format.md"
+
+# 1384-1: frontrunner-collapse keyword present in outline-planner.md
+assert_contains "$PLANNER_1384" "frontrunner-collapse" \
+    "1384-1: frontrunner-collapse keyword present in agents/outline-planner.md"
+
+# 1384-2: frontrunner-collapse form present in output-format.md
+assert_contains "$OUTPUT_FORMAT_1384" "frontrunner-collapse" \
+    "1384-2: frontrunner-collapse form present in agents/outline-planner/output-format.md"
 
 echo ""
 # ---------------------------------------------------------------------------
