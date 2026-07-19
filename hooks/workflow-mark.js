@@ -154,10 +154,14 @@ const messages = [];
 // the harness surfaces the failure instead of silently swallowing it.
 let fatalError = false;
 
+const state = readState(sessionId);
+const repoCwd = resolveRepoCwd({ command, input, stateCwd: state && state.cwd });
+
 const ctx = {
   sessionId,
   pushMessage: (m) => messages.push(m),
   signalFatal: (m) => { messages.push(m); fatalError = true; },
+  repoCwd,
 };
 
 for (const cmd of sentinelParts) {

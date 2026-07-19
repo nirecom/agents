@@ -411,6 +411,19 @@ function computeVerdict(rawSid, _didAutoRepair) {
         );
         return;
       }
+      if (step === "review_tests" && currentStep === "write_tests") {
+        // Scoped recovery: review_tests auto-completed ahead of write_tests.
+        // Point at the --reset tool instead of a full /workflow-init reset.
+        // No single quotes — emit() wraps NEXT_HINT/REASON in single quotes.
+        emit(
+          "abort",
+          "",
+          "review_tests is complete but write_tests is not. Recovery: node " + __filename +
+            " --reset review_tests (state is session-global; no worktree cd needed). Then re-run /write-tests.",
+          "inconsistent: " + step + " is complete but " + currentStep + " is pending"
+        );
+        return;
+      }
       const { hasCompletionEvidence: hceGeneric } = require("../../hooks/lib/workflow-state/evidence-resolver");
       let genericRepoDir = process.env.CLAUDE_PROJECT_DIR || null;
       if (!genericRepoDir) {

@@ -53,7 +53,7 @@ check() {
 
 check_contains() {
   local desc="$1" needle="$2" haystack="$3"
-  if echo "$haystack" | grep -qF "$needle"; then
+  if echo "$haystack" | grep -qF -- "$needle"; then
     echo "PASS: $desc"
     PASS=$((PASS + 1))
   else
@@ -64,7 +64,7 @@ check_contains() {
 
 check_not_contains() {
   local desc="$1" needle="$2" haystack="$3"
-  if echo "$haystack" | grep -qF "$needle"; then
+  if echo "$haystack" | grep -qF -- "$needle"; then
     echo "FAIL: $desc -- did NOT expect [$needle] in: $haystack"
     FAIL=$((FAIL + 1))
   else
@@ -294,6 +294,51 @@ if [ -n "${NEXT_HINT:-}" ]; then
     PASS=$((PASS + 1))
   fi
 fi
+
+echo ""
+echo "=== OWTE-6 (fail-before-fix: committed-diff fallback — #1196): write_tests=pending + review_tests=complete + committed tests/ (empty staged) → auto-repair to complete ==="
+
+SID="owte6-$$"
+write_state "$SID" "$(WRITE_TESTS_PENDING_INCONSISTENT_STATE $SID)"
+REPO=$(setup_repo)
+REPO_N=$(to_node_path "$REPO")
+DEFAULT_BRANCH=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD "refs/remotes/origin/$DEFAULT_BRANCH"
+git -C "$REPO" update-ref "refs/remotes/origin/$DEFAULT_BRANCH" HEAD
+git -C "$REPO" checkout -q -b feature-owte6
+mkdir -p "$REPO/tests"
+echo "content" > "$REPO/tests/feature-owte6.sh"
+git -C "$REPO" add tests/feature-owte6.sh
+git -C "$REPO" commit -q --no-verify -m "add test"
+# Staged area is now empty (all committed)
+
+if ! git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD >/dev/null 2>&1; then
+  echo "SKIP: OWTE-6 (could not set origin/HEAD fake ref)"
+  PASS=$((PASS + 1))
+else
+  OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
+  ACTION=""; NEXT_SKILL=""
+  eval "$OUT" 2>/dev/null || true
+
+  WRITE_TESTS_STATUS=$(read_state_status "$SID" "write_tests")
+  check "OWTE-6. committed tests/ (empty staged) → write_tests auto-repaired to complete" "complete" "$WRITE_TESTS_STATUS"
+fi
+
+echo ""
+echo "=== OWTE-7 (fail-before-fix: scoped recovery hint — #1521): write_tests=pending + review_tests=complete + no evidence → abort with --reset review_tests hint ==="
+
+SID="owte7-$$"
+write_state "$SID" "$(WRITE_TESTS_PENDING_INCONSISTENT_STATE $SID)"
+REPO=$(setup_repo)
+REPO_N=$(to_node_path "$REPO")
+# Plain repo: no origin/HEAD, no staged tests, no committed tests in tests/ dir
+
+OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" run_next_step --session "$SID")
+ACTION=""; NEXT_HINT=""
+eval "$OUT" 2>/dev/null || true
+
+check "OWTE-7. no evidence + later-complete → ACTION=abort" "abort" "${ACTION:-}"
+check_contains "OWTE-7b. NEXT_HINT contains scoped '--reset review_tests' recovery" "--reset review_tests" "${NEXT_HINT:-}"
 
 echo ""
 echo "=== Results ==="

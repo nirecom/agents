@@ -124,11 +124,14 @@ run_gate_and_mark_tests() {
     echo "=== WS-EV-6: MARK_STEP write_tests_complete → rejected, NOT recorded ==="
 
     REPO=$(setup_repo)
+    REPO_N=$(to_node_path "$REPO")
     SID="ev6-$$"
     write_state "$SID" "$(ALL_COMPLETE_EXCEPT write_tests "$SID")"
 
     MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_write_tests_complete>>"' "$SID")
-    MARK_OUT=$(run_mark "$MARK_JSON")
+    # Pass CLAUDE_PROJECT_DIR so resolveRepoCwd finds the isolated test repo (no staged tests),
+    # not process.cwd() which is the agents worktree and may have staged test files.
+    MARK_OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null <<< "$MARK_JSON" || true)
 
     if echo "$MARK_OUT" | grep -q "NOT recorded"; then
         pass "WS-EV-6a. MARK_STEP write_tests_complete → additionalContext contains 'NOT recorded'"
@@ -141,6 +144,35 @@ run_gate_and_mark_tests() {
         pass "WS-EV-6b. write_tests state remains pending"
     else
         fail "WS-EV-6b. expected write_tests=pending, got: $ACTUAL_STATUS"
+    fi
+
+    echo ""
+    echo "=== WS-EV-6c (fail-before-fix): MARK_STEP write_tests_complete WITH staged tests → evidence gate accepts, recorded ==="
+
+    REPO=$(setup_repo)
+    REPO_N=$(to_node_path "$REPO")
+    SID="ev6c-$$"
+    write_state "$SID" "$(ALL_COMPLETE_EXCEPT write_tests "$SID")"
+    # Stage a test file so evidence is present
+    mkdir -p "$REPO/tests"
+    echo "content" > "$REPO/tests/my-test.sh"
+    git -C "$REPO" add tests/my-test.sh
+
+    MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_write_tests_complete>>"' "$SID")
+    # Call node directly with CLAUDE_PROJECT_DIR so resolveRepoCwd finds the staged tests
+    MARK_OUT=$(CLAUDE_PROJECT_DIR="$REPO_N" CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$MARK_HOOK" 2>/dev/null <<< "$MARK_JSON" || true)
+
+    if echo "$MARK_OUT" | grep -q "NOT recorded"; then
+        fail "WS-EV-6c. expected MARK_STEP accepted (no 'NOT recorded') when staged tests present, got: $MARK_OUT"
+    else
+        pass "WS-EV-6c. MARK_STEP write_tests_complete WITH staged tests → not rejected"
+    fi
+
+    ACTUAL_STATUS=$(read_state_status "$SID" "write_tests")
+    if [ "$ACTUAL_STATUS" = "complete" ]; then
+        pass "WS-EV-6c-b. write_tests recorded complete when staged tests present"
+    else
+        fail "WS-EV-6c-b. expected write_tests=complete, got: $ACTUAL_STATUS"
     fi
 
     echo ""

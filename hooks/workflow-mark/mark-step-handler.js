@@ -5,9 +5,10 @@
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, markStep, readState, writeState } = require("../lib/workflow-state");
+const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
 
 function handle(ctx) {
-  const { cmd, sessionId, pushMessage, signalFatal } = ctx;
+  const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
 
   const markMatch = cmd.match(MARKER_RE_DQ) || cmd.match(MARKER_RE_SQ);
 
@@ -37,15 +38,19 @@ function handle(ctx) {
       return true;
     }
 
-    // write_tests and docs must go through evidence (staged files) or NOT_NEEDED sentinels
+    // write_tests requires staged or committed test evidence (or NOT_NEEDED sentinel).
+    // MARK_STEP is accepted only when evidence exists; otherwise reject with guidance.
     if (stepName === "write_tests") {
-      pushMessage(
-        `workflow-mark: write_tests NOT recorded — MARK_STEP not accepted for this step. ` +
-          `Stage tests/ changes (run /write-tests then git add tests/) ` +
-          `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` +
-          ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
-      );
-      return true;
+      if (!hasCompletionEvidence("write_tests", sessionId, { repoDir: repoCwd })) {
+        pushMessage(
+          `workflow-mark: write_tests NOT recorded — MARK_STEP not accepted for this step. ` +
+            `Stage tests/ changes (run /write-tests then git add tests/) ` +
+            `OR declare not needed: echo "<<WORKFLOW_WRITE_TESTS_NOT_NEEDED: {reason}>>"` +
+            ` (reason must be >=3 non-space chars, no '>', not a placeholder)`
+        );
+        return true;
+      }
+      // Evidence present — fall through to the common markStep path below.
     }
     if (stepName === "docs") {
       pushMessage(
