@@ -7,9 +7,12 @@ const { stripQuotedArgs, stripInlineBodyArg } = require("./strip-quoted-args");
 const FORGE_SCAN_TARGET_REGEX =
   /\bgh\b\s+(?:pr\s+(?:create|edit|close|comment|review)|issue\s+(?:create|edit|close|comment))\b/;
 
+const GH_API_WRITE_REGEX =
+  /\bgh\b\s+api\b.*?(?:-X\s+(?:POST|PATCH|PUT|DELETE)|--method(?:\s+|=)(?:POST|PATCH|PUT|DELETE))/i;
+
 function isForgeScanTarget(command) {
   if (typeof command !== "string" || command.length === 0) return false;
-  return FORGE_SCAN_TARGET_REGEX.test(command);
+  return FORGE_SCAN_TARGET_REGEX.test(command) || GH_API_WRITE_REGEX.test(command);
 }
 
 // Extract --body / --title quoted values (single or double quoted).
@@ -60,10 +63,29 @@ function extractHeredocs(command, out) {
   }
 }
 
+// Extract -f / -F / --field key=value payloads and --input @file paths from gh api write commands.
+function extractApiFieldTexts(command, inline, filePaths) {
+  // -f key=val, -F key=val, --field key=val — capture the value after =
+  const reField = /(?:^|\s)(?:-f|-F|--field)\s+[^=\s]+=(\S+)/g;
+  let m;
+  while ((m = reField.exec(command)) !== null) {
+    inline.push(m[1]);
+  }
+  // --input @file — capture file path (strip leading @)
+  const reInput = /--input\s+@(\S+)/g;
+  while ((m = reInput.exec(command)) !== null) {
+    filePaths.push(m[1]);
+  }
+}
+
 function extractTexts(command) {
   const inline = [];
   const filePaths = [];
   if (typeof command !== "string" || command.length === 0) {
+    return { inline, filePaths };
+  }
+  if (GH_API_WRITE_REGEX.test(command)) {
+    extractApiFieldTexts(command, inline, filePaths);
     return { inline, filePaths };
   }
   extractFlagQuoted(command, "body", inline);
@@ -127,4 +149,4 @@ function extractRepoFlag(command) {
   return null;
 }
 
-module.exports = { isForgeScanTarget, extractTexts, extractRepoFlag };
+module.exports = { isForgeScanTarget, extractTexts, extractRepoFlag, GH_API_WRITE_REGEX };

@@ -38,7 +38,7 @@ fi
 # Load allowlist patterns (skip comments and empty lines)
 ALLOW_PATTERNS=()
 if [ -f "$ALLOWLIST" ]; then
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
         line="${line%$'\r'}"
         [[ -z "$line" || "$line" =~ ^# ]] && continue
         ALLOW_PATTERNS+=("$line")
@@ -51,7 +51,7 @@ BLOCK_HARD_PATTERNS=()
 BLOCK_WARN_PATTERNS=()
 if [ -f "$BLOCKLIST" ]; then
     _bl_lineno=0
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
         _bl_lineno=$((_bl_lineno + 1))
         line="${line%$'\r'}"
         [[ -z "$line" || "$line" =~ ^# ]] && continue

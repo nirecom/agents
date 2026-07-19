@@ -1,16 +1,21 @@
 #!/bin/bash
 # Tests: hooks/lib/forge-write-extract.js
-# Tags: hook, bin, git, pr, github
+# Tags: hook, bin, git, pr, github, scope:common
 # Unit tests for hooks/lib/forge-write-extract.js
 #
 # The module exports two functions:
 #   - isForgeScanTarget(command) -> boolean
 #       true for: gh issue (create|edit|close|comment), gh pr (create|edit|close|comment|review)
-#       false for: gh repo *, gh issue list, git commit, anything else
+#                 gh api -X POST/PATCH/PUT/DELETE, gh api --method POST/PATCH/PUT/DELETE
+#       false for: gh repo *, gh issue list, git commit, gh api -X GET, gh api (no method flag)
 #   - extractTexts(command) -> { inline: string[], filePaths: string[] }
 #       --body "x" / --title "x" / --body 'x'   -> inline[]
 #       --body-file /path                        -> filePaths[]
 #       heredoc <<'EOF'\n...\nEOF                -> inline[]
+#       -f key=value / -F key=value / --field key=value -> inline[] (gh api fields)
+#       --input @/path                           -> filePaths[]
+#       --input - (stdin)                        -> empty (no extraction)
+#       gh api -X GET (read-only)                -> empty (no extraction)
 #       no match                                 -> { inline: [], filePaths: [] }
 #
 # These tests target the POST-implementation behavior. While the module does
@@ -148,6 +153,10 @@ expect_target_true "gh pr edit -> true"                    'gh pr edit 5 --body 
 expect_target_true "gh pr close -> true"                   'gh pr close 5'
 expect_target_true "gh pr comment -> true"                 'gh pr comment 5 --body "B"'
 expect_target_true "gh pr review -> true"                  'gh pr review 5 --body "B"'
+expect_target_true "gh api -X POST -> true"                'gh api -X POST /repos/owner/repo/issues -f title=Test'
+expect_target_true "gh api --method PATCH -> true"         'gh api --method PATCH /repos/owner/repo/issues/5 -f state=closed'
+expect_target_true "gh api --method=PUT -> true"           'gh api --method=PUT /repos/owner/repo/labels/1 -f name=bug'
+expect_target_true "gh api -X DELETE -> true"              'gh api -X DELETE /repos/owner/repo/issues/5/labels/bug'
 
 echo ""
 echo "=== isForgeScanTarget: FALSE cases ==="
@@ -157,8 +166,11 @@ expect_target_false "gh repo edit -> false"                'gh repo edit --descr
 expect_target_false "gh repo rename -> false"              'gh repo rename old new'
 expect_target_false "gh repo archive -> false"             'gh repo archive myrepo'
 expect_target_false "git commit -> false"                  'git commit -m "msg"'
-expect_target_false "gh api PATCH -> false"                'gh api -X PATCH repos/owner/repo/issues/5'
+expect_target_true "gh api -X PATCH -> true"               'gh api -X PATCH repos/owner/repo/issues/5'
 expect_target_false "bare gh -> false"                     'gh'
+expect_target_false "gh api -X GET -> false"               'gh api -X GET /repos/owner/repo/issues'
+expect_target_false "gh api implicit GET -> false"         'gh api /repos/owner/repo/issues'
+expect_target_false "gh api no method flag -> false"       'gh api /repos/owner/repo -f body=secret'
 
 echo ""
 echo "=== extractTexts: cases ==="
@@ -209,6 +221,35 @@ HEREDOC_NONEOF_CMD=$'gh issue create --body "$(cat <<\'END\'\nhello with non-eof
 expect_extract "heredoc with non-EOF delimiter -> inline" \
     "$HEREDOC_NONEOF_CMD" \
     'return v.inline.some(s => s.indexOf("hello with non-eof") !== -1);'
+
+echo ""
+echo "=== extractTexts: gh api field cases (fail-before-fix #714) ==="
+
+# gh api field extraction — fails before #714 fix (isForgeScanTarget returns
+# false for all gh api commands so extractTexts is never reached)
+expect_extract "gh api -f key=value -> inline" \
+    'gh api -X POST /repos/owner/repo/issues -f title=MyTitle -f body=MyBody' \
+    'return v.inline.includes("MyTitle") && v.inline.includes("MyBody");'
+
+expect_extract "gh api -F uppercase -> inline" \
+    'gh api -X PATCH /repos/owner/repo/issues/5 -F body=UpdatedBody' \
+    'return v.inline.includes("UpdatedBody");'
+
+expect_extract "gh api --field key=value -> inline" \
+    'gh api -X POST /repos/owner/repo/issues --field title=LongTitle' \
+    'return v.inline.includes("LongTitle");'
+
+expect_extract "gh api --input @file -> filePaths" \
+    'gh api -X POST /repos/owner/repo/issues --input @/tmp/issue-body.md' \
+    'return v.filePaths.includes("/tmp/issue-body.md") && v.inline.length === 0;'
+
+expect_extract "gh api --input - (stdin) -> empty" \
+    'gh api -X POST /repos/owner/repo/issues --input -' \
+    'return v.filePaths.length === 0 && v.inline.length === 0;'
+
+expect_extract "gh api GET -> no extraction" \
+    'gh api -X GET /repos/owner/repo/issues -f filter=all' \
+    'return v.inline.length === 0 && v.filePaths.length === 0;'
 
 echo ""
 echo "================================"

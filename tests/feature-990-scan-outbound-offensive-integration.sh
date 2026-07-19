@@ -315,6 +315,18 @@ run_t9() {
     fi
 }
 
+# Regression: scan-offensive stub must be Node.js script (not bash) — #1035
+# scan-outbound.js invokes scan-offensive via spawnSync('node', ...) which
+# requires the stub to be a valid Node.js script (not bash syntax)
+T_STUB_CHECK_TMP="$(mktemp -d)"
+build_sandbox "$T_STUB_CHECK_TMP" 0
+if head -1 "$T_STUB_CHECK_TMP/bin/scan-offensive" | grep -q '#!/usr/bin/env node'; then
+    pass "scan-offensive stub is Node.js (compatible with spawnSync('node', ...))"
+else
+    fail "scan-offensive stub is NOT Node.js — incompatible with scan-outbound.js spawnSync invocation (#1035)"
+fi
+rm -rf "$T_STUB_CHECK_TMP"
+
 run_t1
 run_t2
 run_t3
