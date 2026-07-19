@@ -98,17 +98,19 @@ For BUGFIX sessions (`fix/*` branch), tests must be written and run BEFORE the i
 - Write the fix → confirm tests now pass.
 - This fail-before-fix evidence is enforced by the workflow gate: `write_tests` and `review_tests` cannot be skipped in BUGFIX sessions.
 
-### L2 fallback — required gap documentation
+### TL2 fallback — required gap documentation
 
-When you choose L2 over L3, you MUST add a `# L3 gap` block to the test file header documenting what L3 would additionally verify. Template:
+Test-layer tokens are `TL1`–`TL4` (see `rules/test.md` "Test Layer Selection"); the `TL` prefix avoids collision with the local `L1:`/`L2:` case labels used inside individual test scripts.
 
-    # L3 gap (what this test does NOT catch):
+When you choose TL2 over TL3, you MUST add a `# TL3 gap` block to the test file header documenting what TL3 would additionally verify. Template:
+
+    # TL3 gap (what this test does NOT catch):
     # - <observable behavior 1 that only the real environment exhibits>
     # - <observable behavior 2 ...>
     # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
     # via bin/check-verification-gate.sh category: <category-token>.
 
-A test file without an L3 gap block is treated as a claim of full L3 coverage. `/review-tests` will challenge L1/L2 tests lacking this block when the file matches a risk category.
+A test file without a `# TL3 gap` block is treated as a claim of full TL3 coverage. `/review-tests` will challenge TL1/TL2 tests lacking this block when the file matches a risk category.
 
 ### Deciding whether to write an integration test
 
