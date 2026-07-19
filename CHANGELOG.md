@@ -578,3 +578,7 @@ Changes: When Claude stops mid-workflow while a pending skill is waiting (ACTION
 ### FEATURE: PR #1523 (2026-07-19)
 Background: fix(#1509): close-not-planned.sh --reason flag value and isNotPlanned detection
 Changes: Fixed `/issue-close-migrated` silently leaving issues OPEN: `close-not-planned.sh` passed `--reason not_planned` (underscore) but gh CLI requires `--reason "not planned"` (space); issues now close correctly.
+
+### FEATURE: PR #1525 (2026-07-19)
+Background: fix: scan-outbound trailing-newline guard, gh api write scanning, test stub regression check
+Changes: Fix: `bin/scan-outbound.sh` no longer drops the last line of private-info allowlist/blocklist files that lack a trailing newline — blocklist enforcement and allowlist exemptions now apply to every pattern regardless of file format.;Fix: `hooks/scan-outbound.js` now scans `gh api` write requests (POST/PATCH/PUT/DELETE with `-f`/`-F`/`--field`/`--input @file`) for private information, matching the existing coverage for `gh issue`, `gh pr`, and similar commands.
