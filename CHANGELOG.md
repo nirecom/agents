@@ -626,3 +626,7 @@ Changes: Added per-hook seam TL3 tests for workflow-mark, session-start, stop-co
 ### FEATURE: PR #1559 (2026-07-20)
 Background: feat(#1552): add --no-delete flag and protected: labels key to sync-labels.sh
 Changes: `sync-labels.sh` now supports `--no-delete` to add and update labels without deleting any existing ones, and a `protected:` list in `.github/labels.yml` that shields GitHub default labels (bug, enhancement, etc.) from deletion during a normal sync. Set `PROPAGATE_LABELS_NO_DELETE` to propagate labels to sibling repos without deleting theirs.
+
+### FEATURE: PR #1562 (2026-07-20)
+Background: fix(#1557): audit-tests staleness via closed_at; add common orphan detector and scope tag enforcement
+Changes: `bin/audit-tests.sh` now uses GitHub issue `closed_at` instead of last-commit date to detect stale issue-specific tests — fixes a regression introduced in 2026-06-01 where all candidates were suppressed.;New `/sweep-tests` skill reports retirement candidates on demand (scope:common orphan detection via `bin/audit-tests-common.sh`; nightly CI steps added).;`bin/check-test-scope-tag.sh` enforces `scope:issue-specific` / `scope:common` tag on staged `tests/*.sh` at pre-commit.
