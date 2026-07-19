@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/workflow-mark.js
-# Tags: workflow-mark, hook, e2e, run-e2e, scope:issue-specific
+# Tags: workflow-mark, hook, L3, run-e2e, scope:permanent
 #
 # Issue #943 — per-hook seam L3 test: workflow-mark.js (PostToolUse).
 # Real `claude -p` session emits a WORKFLOW_MARK_STEP sentinel via Bash;
@@ -18,10 +18,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/feature-943-e2e-workflow-mark/helpers.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-workflow-mark/helpers.sh"
-# shellcheck source=tests/feature-943-e2e-workflow-mark/e2e-main.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-workflow-mark/e2e-main.sh"
+# shellcheck source=tests/L3-hook-workflow-mark/helpers.sh
+. "$AGENTS_DIR/tests/L3-hook-workflow-mark/helpers.sh"
+# shellcheck source=tests/L3-hook-workflow-mark/main.sh
+. "$AGENTS_DIR/tests/L3-hook-workflow-mark/main.sh"
 
 echo ""
 echo "=== Results ==="

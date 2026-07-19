@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# E2E body for stop-confirm-plan-guard.js (Stop).
-# Sourced by ../feature-943-e2e-stop-confirm-plan-guard.sh after helpers.sh.
+# L3 seam body for stop-confirm-plan-guard.js (Stop).
+# Sourced by ../L3-hook-stop-confirm-plan-guard.sh after helpers.sh.
 
 echo ""
-echo "=== E2E: stop-confirm-plan-guard.js Stop real invocation (marker consumed) ==="
+echo "=== L3: stop-confirm-plan-guard.js Stop real invocation (marker consumed) ==="
 
 SCP_SID="e4a4a300-0000-0000-0000-000000000004"
 SCP_BASE="$(make_tmp_base)"

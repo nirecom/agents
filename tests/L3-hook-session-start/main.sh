@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# E2E body for session-start.js (SessionStart).
-# Sourced by ../feature-943-e2e-session-start.sh after helpers.sh.
+# L3 seam body for session-start.js (SessionStart).
+# Sourced by ../L3-hook-session-start.sh after helpers.sh.
 
 echo ""
-echo "=== E2E: session-start.js SessionStart real invocation ==="
+echo "=== L3: session-start.js SessionStart real invocation ==="
 
 SS_SID="e2292100-0000-0000-0000-000000000002"
 SS_BASE="$(make_tmp_base)"

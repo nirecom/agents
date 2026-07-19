@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-final-report-guard.js
-# Tags: stop-final-report-guard, hook, e2e, run-e2e, scope:issue-specific
+# Tags: stop-final-report-guard, hook, L3, run-e2e, scope:permanent
 #
 # Issue #943 — per-hook seam L3 test: stop-final-report-guard.js (Stop).
 # A live `claude -p` session with the final-report-env fixture present but no
@@ -19,10 +19,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/feature-943-e2e-stop-final-report-guard/helpers.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-stop-final-report-guard/helpers.sh"
-# shellcheck source=tests/feature-943-e2e-stop-final-report-guard/e2e-main.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-stop-final-report-guard/e2e-main.sh"
+# shellcheck source=tests/L3-hook-stop-final-report-guard/helpers.sh
+. "$AGENTS_DIR/tests/L3-hook-stop-final-report-guard/helpers.sh"
+# shellcheck source=tests/L3-hook-stop-final-report-guard/main.sh
+. "$AGENTS_DIR/tests/L3-hook-stop-final-report-guard/main.sh"
 
 echo ""
 echo "=== Results ==="
