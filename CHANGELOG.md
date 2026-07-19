@@ -610,3 +610,7 @@ Changes: Labels now propagate to sibling repos in CI: the `sync-labels.yml` prop
 ### FEATURE: PR #1547 (2026-07-19)
 Background: fix(#923): normalize POSIX paths in isMainCheckout to fix worktree-remove block
 Changes: `git worktree remove` no longer incorrectly blocked when Git Bash supplies a POSIX-form working directory path (e.g., `/c/git/agents`) as `toolInput.cwd`. Fix is root-cause level: `isMainCheckout` now normalizes POSIX paths before passing them to `spawnSync`, symmetric with the existing normalization in `findRepoRootForBash`.
+
+### FEATURE: PR #1555 (2026-07-19)
+Background: feat(#1537): add /resume-session hint to PostCompact notification
+Changes: Context-compaction notification (PostCompact) now includes a recovery hint when the workflow is in progress: "→ Workflow is in progress. Run /resume-session to resume from the current step." The hint is suppressed after a PR merge (expected state), so it only appears when action is genuinely required.
