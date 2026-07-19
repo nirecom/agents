@@ -233,6 +233,25 @@ if [ -n "$SH_NO_EXEC" ]; then
     exit 1
 fi
 
+# Check scope tag on staged tests/*.sh files
+_staged_tests=""
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    tests/_archive/*) continue ;;
+    tests/*.sh) _staged_tests="$_staged_tests $f" ;;
+  esac
+done <<< "$(git diff --cached --name-only -- 'tests/*.sh')"
+if [ -n "$_staged_tests" ]; then
+  # shellcheck disable=SC2086
+  if ! "$_cfg_dir/bin/check-test-scope-tag.sh" --staged $_staged_tests; then
+    echo ""
+    echo "Commit blocked: staged tests/*.sh file(s) lack scope:issue-specific or scope:common tag."
+    echo "Add '# Tags: ... scope:issue-specific' or '# Tags: ... scope:common' to the file."
+    exit 1
+  fi
+fi
+
 # Check if this repo is private via GitHub API (skip scanning if private)
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [ -n "$REMOTE_URL" ]; then

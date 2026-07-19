@@ -24,7 +24,8 @@ SW-2c. After worktree removal, retry `git branch -D` for each WORKTREE-LOCKED
    cascade rule no longer prevents deletion. Failures are ignored (reclaimed
    next cycle).
 SW-3. Invoke `/sweep-plans` (dry-run by default; pass `--apply` to delete).
-SW-4. Future sub-skills to be added in subsequent PRs:
+SW-4. Invoke `/sweep-tests` (dry-run; `--apply` is not forwarded — report only).
+SW-5. Future sub-skills to be added in subsequent PRs:
    - `/sweep-wip` — stale WIP fingerprints
    - `/sweep-logs` — old terminal logs / temp files
 
