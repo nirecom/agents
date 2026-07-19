@@ -586,3 +586,7 @@ Changes: Fix: `bin/scan-outbound.sh` no longer drops the last line of private-in
 ### FEATURE: PR #1529 (2026-07-19)
 Background: feat(#1384,#1522,#478,#1124,#1146,#1245): reduce outline planning friction — frontrunner-collapse, abolish MOP-7 dialog, PLAN_LANG directives, VS Code text visibility
 Changes: Outline approach selection now requires only one confirmation (the outline approval step); the prior approach-selection dialog before that step is removed.;When one outline approach clearly dominates all alternatives on cost, risk, and fit, the planner now skips the approach menu automatically (frontrunner-collapse).;Plan files (`outline.md`, `detail.md`) are now written in the configured language (`PLAN_LANG`) from the first draft, avoiding redundant re-write cycles.
+
+### FEATURE: PR #1531 (2026-07-19)
+Background: feat(#1527): add OS-conditional block rules to env-example.md and review-env-example
+Changes: `bin/review-env-example` now flags a blank line immediately before `#@endif` as a HARD error.
