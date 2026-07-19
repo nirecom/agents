@@ -618,3 +618,7 @@ Changes: Context-compaction notification (PostCompact) now includes a recovery h
 ### FEATURE: PR #1556 (2026-07-20)
 Background: feat(#1544): /issue-create reopen verdict — idempotent 3-point update
 Changes: `/issue-create` reopen verdict now refreshes the issue body with a **Reopened** banner (count + timestamp), maintains a single reopen-log comment via edit (no stacking), and applies the new `status:regressed` label — preventing sessions from misreading a previously-closed regression issue as "done".
+
+### FEATURE: PR #1550 (2026-07-20)
+Background: feat(#943): add per-hook seam L3 tests for 6 workflow hooks; split test taxonomy to L1-L4
+Changes: Added per-hook seam TL3 tests for workflow-mark, session-start, stop-confirm-plan-guard, and stop-final-report-guard hooks: each runs a real `claude -p` session and asserts observable side effects. subagent-start and post-compact documented as TL3 gap pending a future full-pipeline TL4 suite. All tests gated by RUN_E2E.;Test-layer taxonomy is now TL1–TL4 (prefixed to stay greppable): "E2E" refers specifically to full-pipeline (workflow-init → Final Report) tests; single-hook real-session tests are TL3.
