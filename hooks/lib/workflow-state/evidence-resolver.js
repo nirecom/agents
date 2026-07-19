@@ -9,11 +9,33 @@
 // (pending treatment preserved) — this never throws.
 
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
 const { getWorkflowPlansDir } = require("../workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
 const { hasStagedDocChanges, hasStagedTestChanges } = require("../../workflow-gate/staged-evidence");
 const { hasWorktreeNotesDocEvidence } = require("../../workflow-gate/worktree-context");
+
+// Post-merge fallback: checks whether any committed file under tests/ or test/
+// differs from the default branch (origin/HEAD). Returns false on any failure
+// (fail-open: pending treatment preserved).
+function hasCommittedTestChanges(repoDir) {
+  try {
+    const baseRef = execFileSync(
+      "git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+      { cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] }
+    ).trim();
+    if (!baseRef) return false;
+    const diffOut = execFileSync(
+      "git", ["diff", "--name-only", baseRef + "...HEAD"],
+      { cwd: repoDir, encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] }
+    );
+    return diffOut.split("\n").some(
+      (line) => line.startsWith("tests/") || line.startsWith("test/")
+    );
+  } catch (e) {
+    return false;
+  }
+}
 
 // Resolve the git repository root used by docs evidence checks.
 // Precedence: opts.repoDir → CLAUDE_PROJECT_DIR → git rev-parse. Returns null
@@ -73,7 +95,8 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
     if (step === "write_tests") {
       const repoDir = resolveRepoDir(opts);
       if (!repoDir) return false;
-      return hasStagedTestChanges(repoDir);
+      if (hasStagedTestChanges(repoDir)) return true;
+      return hasCommittedTestChanges(repoDir);
     }
     // run_tests: sentinel-only — no evidence-based predicate here.
     // Completion is owned by workflow-run-tests.js (run-all.sh contract-trust)
@@ -106,7 +129,10 @@ function describeEvidence(step) {
     return ["<PLANS_DIR>/<sessionId>-detail.md exists"];
   }
   if (step === "write_tests") {
-    return ["a staged file is under tests/ or test/ (per hasStagedTestChanges)"];
+    return [
+      "a staged file is under tests/ or test/ (per hasStagedTestChanges)",
+      "a committed file under tests/ or test/ differs from the default branch (post-merge fallback)",
+    ];
   }
   return [];
 }
