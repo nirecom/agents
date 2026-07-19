@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/stop-confirm-plan-guard.js
-# Tags: stop-confirm-plan-guard, hook, e2e, run-e2e, scope:issue-specific
+# Tags: stop-confirm-plan-guard, hook, L3, run-e2e, scope:permanent
 #
 # Issue #943 — per-hook seam L3 test: stop-confirm-plan-guard.js (Stop).
 # A per-turn marker fixture is placed in CLAUDE_WORKFLOW_DIR; a live `claude -p`
@@ -19,10 +19,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/feature-943-e2e-stop-confirm-plan-guard/helpers.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-stop-confirm-plan-guard/helpers.sh"
-# shellcheck source=tests/feature-943-e2e-stop-confirm-plan-guard/e2e-main.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-stop-confirm-plan-guard/e2e-main.sh"
+# shellcheck source=tests/L3-hook-stop-confirm-plan-guard/helpers.sh
+. "$AGENTS_DIR/tests/L3-hook-stop-confirm-plan-guard/helpers.sh"
+# shellcheck source=tests/L3-hook-stop-confirm-plan-guard/main.sh
+. "$AGENTS_DIR/tests/L3-hook-stop-confirm-plan-guard/main.sh"
 
 echo ""
 echo "=== Results ==="

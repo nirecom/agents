@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests: hooks/session-start.js
-# Tags: session-start, hook, e2e, run-e2e, scope:issue-specific
+# Tags: session-start, hook, L3, run-e2e, scope:permanent
 #
 # Issue #943 — per-hook seam L3 test: session-start.js (SessionStart).
 # Fresh `claude -p` session with no prior state → createInitialState writes a
@@ -18,10 +18,10 @@ ERRORS=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
 
-# shellcheck source=tests/feature-943-e2e-session-start/helpers.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-session-start/helpers.sh"
-# shellcheck source=tests/feature-943-e2e-session-start/e2e-main.sh
-. "$AGENTS_DIR/tests/feature-943-e2e-session-start/e2e-main.sh"
+# shellcheck source=tests/L3-hook-session-start/helpers.sh
+. "$AGENTS_DIR/tests/L3-hook-session-start/helpers.sh"
+# shellcheck source=tests/L3-hook-session-start/main.sh
+. "$AGENTS_DIR/tests/L3-hook-session-start/main.sh"
 
 echo ""
 echo "=== Results ==="

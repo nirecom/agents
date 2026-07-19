@@ -1,10 +1,10 @@
 # shellcheck shell=bash
-# E2E body for workflow-mark.js (PostToolUse).
-# Sourced by ../feature-943-e2e-workflow-mark.sh after helpers.sh.
+# L3 seam body for workflow-mark.js (PostToolUse).
+# Sourced by ../L3-hook-workflow-mark.sh after helpers.sh.
 # Assumes AGENTS_DIR, pass(), fail(), and helpers already loaded.
 
 echo ""
-echo "=== E2E: workflow-mark.js PostToolUse real invocation ==="
+echo "=== L3: workflow-mark.js PostToolUse real invocation ==="
 
 WM_SID="e1e1e1e1-0000-0000-0000-000000000001"
 WM_BASE="$(make_tmp_base)"

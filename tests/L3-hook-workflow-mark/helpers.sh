@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Helpers for feature-943-e2e-session-start.
-# Sourced by ../feature-943-e2e-session-start.sh — assumes AGENTS_DIR, pass(), fail() defined.
+# Helpers for L3-hook-workflow-mark.
+# Sourced by ../L3-hook-workflow-mark.sh — assumes AGENTS_DIR, pass(), fail() defined.
 
 # WSL-via-Windows bridge: CLAUDECODE not propagated, global settings read from Windows profile — test may pass on WSL but fail on macOS native
 
@@ -8,6 +8,7 @@
 #   CLAUDE_WORKFLOW_DIR — state files and turn markers (hooks/lib/workflow-state/state-io.js)
 #   WORKFLOW_PLANS_DIR  — plans-dir fixtures (hooks/lib/workflow-plans-dir.js; MUST be absolute)
 
+# run_with_timeout <secs> <command...> — first arg is seconds.
 run_with_timeout() {
     local secs="$1"; shift
     if command -v timeout >/dev/null 2>&1; then
@@ -19,6 +20,7 @@ run_with_timeout() {
     fi
 }
 
+# node_path — translate a path for node -e argv on MSYS2/Cygwin.
 node_path() {
     if command -v cygpath >/dev/null 2>&1; then
         cygpath -m "$1"
@@ -27,11 +29,12 @@ node_path() {
     fi
 }
 
+# make_tmp_base — session-scoped temp root, forward-slash normalized.
 make_tmp_base() {
     local d
     d="$(node -e "
 const os=require('os'),path=require('path'),fs=require('fs');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'f943-ss-')).replace(/\\\\/g,'/');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'f943-wm-')).replace(/\\\\/g,'/');
 console.log(dir);
 " 2>/dev/null)"
     [ -z "$d" ] && d="$(mktemp -d)"

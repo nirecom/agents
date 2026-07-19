@@ -1,9 +1,9 @@
 # shellcheck shell=bash
-# E2E body for stop-final-report-guard.js (Stop).
-# Sourced by ../feature-943-e2e-stop-final-report-guard.sh after helpers.sh.
+# L3 seam body for stop-final-report-guard.js (Stop).
+# Sourced by ../L3-hook-stop-final-report-guard.sh after helpers.sh.
 
 echo ""
-echo "=== E2E: stop-final-report-guard.js Stop real invocation (block case) ==="
+echo "=== L3: stop-final-report-guard.js Stop real invocation (block case) ==="
 
 SFR_SID="e3933200-0000-0000-0000-000000000003"
 SFR_BASE="$(make_tmp_base)"
