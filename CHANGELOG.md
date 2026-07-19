@@ -594,3 +594,7 @@ Changes: Fixed a bug where the `write_tests` step would stay pending after PR me
 ### FEATURE: PR #1535 (2026-07-19)
 Background: fix(#1528): add TERMINAL_ALERT_PHASES constant; supervisor shim/guard closed+paused bypass
 Changes: `WORKFLOW_ENFORCE_WORKTREE_OFF` sentinel no longer blocked after `session-close` completes or supervisor alert retry-exhaustion, when findings are present but cumulative severity is below `error`.
+
+### FEATURE: PR #1538 (2026-07-19)
+Background: fix(#1526): add hooks/workflow-gate/ copy and bin/scan-offensive stub to test sandboxes
+Changes: Restored full test coverage for `scan-outbound.js` offensive-content detection: T1,T3,T5–T9 now pass green after sandbox setup was fixed to include missing dependencies.
