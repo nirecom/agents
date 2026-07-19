@@ -34,6 +34,12 @@ setup_mock() {
     mkdir -p "$TMP/workdir"
     mkdir -p "$TMP/agents-workspace/.github"
 
+    # Repo directory stubs for path-based PROPAGATE_LABELS_REPOS
+    mkdir -p "$TMP/repos/myorg/myrepo"
+    mkdir -p "$TMP/repos/nirecom/dotfiles"
+    mkdir -p "$TMP/repos/nirecom/my-private-repo"
+    mkdir -p "$TMP/repos/custom-owner/custom-repo"
+    mkdir -p "$TMP/repos/testorg/testrepo"
     # Canonical labels.yml fixture
     cat > "$TMP/agents-workspace/.github/labels.yml" <<'LABELS_EOF'
 - name: "type:task"
@@ -46,6 +52,8 @@ LABELS_EOF
 
     # Mock git: logs all invocations; handles clone/config/diff/add/commit/push.
     # GIT_DIFF_RC knob: 0 = no diff (skip commit), non-zero = has diff (commit+push).
+    # For -C <dir> remote get-url origin: derives owner/repo from the last two
+    # path components of the directory (basename logic).
     cat > "$TMP/mock-bin/git" <<'MOCK_EOF'
 #!/bin/bash
 ARGS="$*"
@@ -72,6 +80,15 @@ case "$1" in
       add) exit 0 ;;
       commit) exit 0 ;;
       push) exit 0 ;;
+      remote)
+        # Only emit output for get-url; other subcommands (set-url etc.) exit 0
+        if [ "${2:-}" = "get-url" ]; then
+            _REPO_NAME="$(basename "$_GIT_DIR")"
+            _OWNER_NAME="$(basename "$(dirname "$_GIT_DIR")")"
+            printf 'https://github.com/%s/%s.git\n' "$_OWNER_NAME" "$_REPO_NAME"
+        fi
+        exit 0
+        ;;
       *) exit 0 ;;
     esac
     ;;
@@ -86,25 +103,11 @@ esac
 MOCK_EOF
     chmod +x "$TMP/mock-bin/git"
 
-    # Mock gh: logs all invocations; handles label list and label create.
+    # Mock gh: logs all invocations; all subcommands exit 0.
     cat > "$TMP/mock-bin/gh" <<'MOCK_EOF'
 #!/bin/bash
-ARGS="$*"
-[ -n "${MOCK_LOG:-}" ] && printf '%s\n' "gh $ARGS" >> "$MOCK_LOG"
-case "$ARGS" in
-  label\ list*)
-    exit 0
-    ;;
-  label\ create\ *--force*)
-    exit 0
-    ;;
-  label\ create\ *)
-    exit 0
-    ;;
-  *)
-    exit 0
-    ;;
-esac
+[ -n "${MOCK_LOG:-}" ] && printf '%s\n' "gh $*" >> "$MOCK_LOG"
+exit 0
 MOCK_EOF
     chmod +x "$TMP/mock-bin/gh"
 
@@ -129,6 +132,7 @@ find_sibling_labels() {
 
 # ===========================================================================
 # T-propagate-2: PAT unset → skip message, exit 0, git clone NOT logged
+# NOTE: PROPAGATE_LABELS_REPOS left in owner/repo format (PAT guard returns before the resolution loop runs).
 # ===========================================================================
 setup_mock
 unset PROPAGATE_LABELS_PAT 2>/dev/null || true
@@ -151,6 +155,7 @@ teardown_mock
 
 # ===========================================================================
 # T-propagate-2b: PAT empty string → skip message, exit 0, git clone NOT logged
+# NOTE: PROPAGATE_LABELS_REPOS left in owner/repo format (PAT guard returns before the resolution loop runs).
 # ===========================================================================
 setup_mock
 export PROPAGATE_LABELS_PAT=""
@@ -180,7 +185,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 CLONE_URL_HAS_PAT=0
 grep "git clone" "$MOCK_LOG" 2>/dev/null | grep -q "x-access-token:test-secret-pat-12345" && CLONE_URL_HAS_PAT=1
@@ -203,7 +208,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 SIBLING_LABELS="$(find_sibling_labels)"
 FIRST_LINE=""
@@ -223,7 +228,7 @@ export GIT_DIFF_RC=0  # no changes
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 RC=$?
 COMMIT_LOGGED=0
@@ -245,7 +250,7 @@ export GIT_DIFF_RC=1  # has changes
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 COMMIT_LOGGED=0
 PUSH_LOGGED=0
@@ -268,7 +273,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
 GH_LABEL_LOGGED=0
 grep -q "gh label" "$MOCK_LOG" 2>/dev/null && GH_LABEL_LOGGED=1
@@ -290,7 +295,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="nirecom/dotfiles nirecom/my-private-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/nirecom/dotfiles;$TMP/repos/nirecom/my-private-repo"
 run_with_timeout 60 bash "$TARGET" >/dev/null 2>&1
 RC=$?
 DOTFILES_CLONED=0
@@ -317,7 +322,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 # First run
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 # Second run (simulating re-invocation; script overwrites via temp file so no dup)
@@ -337,7 +342,7 @@ export GIT_DIFF_RC=1  # trigger commit path
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 EMAIL_LOGGED=0
 NAME_LOGGED=0
@@ -369,7 +374,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="nirecom/dotfiles nirecom/my-private-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/nirecom/dotfiles;$TMP/repos/nirecom/my-private-repo"
 # Override mock git to fail on clone of first sibling (dotfiles), succeed for second
 cat > "$TMP/mock-bin/git" <<'MOCK_EOF'
 #!/bin/bash
@@ -397,9 +402,15 @@ case "$1" in
       add) exit 0 ;;
       commit) exit 0 ;;
       push) exit 0 ;;
+      remote)
+        if [ "${2:-}" = "get-url" ]; then
+            _REPO_NAME="$(basename "$_GIT_DIR")"
+            _OWNER_NAME="$(basename "$(dirname "$_GIT_DIR")")"
+            printf 'https://github.com/%s/%s.git\n' "$_OWNER_NAME" "$_REPO_NAME"
+        fi
+        exit 0 ;;
       *) exit 0 ;;
-    esac
-    ;;
+    esac ;;
   diff) exit "${GIT_DIFF_RC:-0}" ;;
   add) exit 0 ;;
   commit) exit 0 ;;
@@ -431,7 +442,7 @@ export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
 STDOUT="$(run_with_timeout 30 bash "$TARGET" 2>&1)"
 SIBLING_LABELS="$(find_sibling_labels)"
 PAT_IN_FILE=0
@@ -461,7 +472,7 @@ CUSTOM_EOF
 export AGENTS_WORKSPACE="$TMP/agents-workspace"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/custom-src/.github/custom-labels.yml"
-export PROPAGATE_LABELS_REPOS="custom-owner/custom-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/custom-owner/custom-repo"
 run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
 RC=$?
 # Only custom-owner/custom-repo should be cloned
