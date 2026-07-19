@@ -51,6 +51,9 @@ cp "$HOOK_SRC"      "$FAKE_AGENTS/hooks/scan-outbound.js"
 cp "$ISPRIV_SRC"    "$FAKE_AGENTS/hooks/lib/is-private-repo.js"
 [ -f "$PARSEGIT_SRC" ]   && cp "$PARSEGIT_SRC"   "$FAKE_AGENTS/hooks/lib/parse-git-args.js"
 [ -f "$BWPATTERNS_SRC" ] && cp "$BWPATTERNS_SRC" "$FAKE_AGENTS/hooks/lib/bash-write-patterns.js"
+cp -r "$DOTFILES_DIR/hooks/lib/." "$FAKE_AGENTS/hooks/lib/" 2>/dev/null || true
+mkdir -p "$FAKE_AGENTS/hooks/workflow-gate"
+cp -r "$DOTFILES_DIR/hooks/workflow-gate/." "$FAKE_AGENTS/hooks/workflow-gate/" 2>/dev/null || true
 
 if [ -f "$FORGE_SRC" ]; then
     cp "$FORGE_SRC" "$FAKE_AGENTS/hooks/lib/forge-write-extract.js"
@@ -69,6 +72,11 @@ EOF
 fi
 
 chmod +x "$FAKE_AGENTS/bin/scan-outbound.sh"
+cat > "$FAKE_AGENTS/bin/scan-offensive" <<'STUBJS'
+#!/usr/bin/env node
+process.exit(0);
+STUBJS
+chmod +x "$FAKE_AGENTS/bin/scan-offensive"
 : > "$FAKE_AGENTS/.private-info-allowlist"
 cat > "$FAKE_AGENTS/.private-info-blocklist" <<'EOF'
 forbiddenword[0-9]+
