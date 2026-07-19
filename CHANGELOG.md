@@ -574,3 +574,7 @@ Changes: POSIX I/O redirects (`2>&1`, `N>&1`, `N>&-`) in sanctioned git commands
 ### FEATURE: PR #1506 (2026-07-18)
 Background: feat(#1498): add C4 premature-stop guard Stop hook
 Changes: When Claude stops mid-workflow while a pending skill is waiting (ACTION=invoke), the new premature-stop guard Stop hook auto-resumes Claude and prompts it to run the pending skill.
+
+### FEATURE: PR #1523 (2026-07-19)
+Background: fix(#1509): close-not-planned.sh --reason flag value and isNotPlanned detection
+Changes: Fixed `/issue-close-migrated` silently leaving issues OPEN: `close-not-planned.sh` passed `--reason not_planned` (underscore) but gh CLI requires `--reason "not planned"` (space); issues now close correctly.
