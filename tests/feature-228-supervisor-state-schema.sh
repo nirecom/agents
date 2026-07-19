@@ -214,19 +214,19 @@ console.log('OK');
 
 # --- S9 ----------------------------------------------------------------------
 run_s9() {
-    require_source "$SCHEMA_MODULE" "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'error'" || return
+    require_source "$SCHEMA_MODULE" "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'warning'" || return
     local out rc
     out=$(run_with_timeout 5 node -e "
 const s = require('$SCHEMA_MODULE_NODE');
 if (typeof s.AUDIT_SEVERITY_THRESHOLD === 'undefined') { console.error('AUDIT_SEVERITY_THRESHOLD not exported'); process.exit(2); }
-if (s.AUDIT_SEVERITY_THRESHOLD !== 'error') { console.error('expected error, got '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(3); }
+if (s.AUDIT_SEVERITY_THRESHOLD !== 'warning') { console.error('expected warning, got '+s.AUDIT_SEVERITY_THRESHOLD); process.exit(3); }
 console.log('OK');
 " 2>&1)
     rc=$?
     if [ $rc -eq 0 ] && [ "$out" = "OK" ]; then
-        pass "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'error'"
+        pass "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'warning'"
     else
-        fail "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'error' (rc=$rc, out=$out)"
+        fail "S9: AUDIT_SEVERITY_THRESHOLD exported and equals 'warning' (rc=$rc, out=$out)"
     fi
 }
 

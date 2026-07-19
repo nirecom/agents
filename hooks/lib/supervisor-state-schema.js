@@ -14,6 +14,8 @@ const RECORD_TYPE_VALUES = ["concern", "escape_hatch_event"];
 
 const ALERT_PHASE_VALUES = [null, "pending", "done", "paused", "closed"];
 
+const TERMINAL_ALERT_PHASES = new Set(["done", "paused", "closed"]);
+
 const ALERT_ELIGIBLE_PHASE_VALUES = [null, "post_final_report_window"];
 
 const SEVERITY_RANK = { error: 2, warning: 1, notice: 0 };
@@ -174,6 +176,7 @@ module.exports = {
   SEVERITY_VALUES,
   RECORD_TYPE_VALUES,
   ALERT_PHASE_VALUES,
+  TERMINAL_ALERT_PHASES,
   ALERT_ELIGIBLE_PHASE_VALUES,
   SEVERITY_RANK,
   ALERT_RETRY_THRESHOLD,

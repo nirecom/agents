@@ -144,10 +144,11 @@ process.stdin.on("end", () => {
       process.exit(2);
     }
 
-    // Early exit if alert review is complete (alert_phase=done) and no error
+    // Early exit if alert phase is terminal (done/paused/closed) and no error
+    const { TERMINAL_ALERT_PHASES } = require("./lib/supervisor-state-schema");
     const alertPhase = state && state.alert && state.alert.alert_phase;
     const cumSev = state && state.alert && state.alert.cumulative_severity;
-    if (alertPhase === "done" && cumSev !== "error") {
+    if (TERMINAL_ALERT_PHASES.has(alertPhase) && cumSev !== "error") {
       process.exit(0);
     }
 
