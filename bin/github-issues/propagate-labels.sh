@@ -116,7 +116,7 @@ while IFS= read -r _ENTRY_PATH; do
         fi
 
         GH_TOKEN="$PROPAGATE_LABELS_PAT" bash "$SCRIPT_DIR/sync-labels.sh" \
-            --repo "$SIBLING" "$CANONICAL_LABELS_FILE"
+            --repo "$SIBLING" ${PROPAGATE_LABELS_NO_DELETE:+--no-delete} "$CANONICAL_LABELS_FILE"
     )
     rc=$?
     if [[ "$rc" -ne 0 ]]; then
