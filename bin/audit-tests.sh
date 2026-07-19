@@ -7,7 +7,7 @@
 # Scans top-level tests/feature-NNN-*.sh files. For each, locates the optional
 # sibling tests/<stem>/ folder, computes MAX last-commit date across both,
 # and (when online) checks the matching GitHub issue's state. Files whose
-# issue is CLOSED and whose last-commit is older than N months (default 3)
+# issue is CLOSED and whose issue's closed_at is older than N months (default 3)
 # are reported as deletion candidates.
 
 set -euo pipefail
@@ -103,7 +103,7 @@ fi
 # Header.
 if [[ "$FORMAT" == "text" ]]; then
   echo "# audit-tests.sh report — ${TODAY}"
-  echo "# Criteria: feature-NNN-* pattern, issue CLOSED, last-commit > ${STALE_MONTHS} months ago (cutoff ${CUTOFF_DATE})"
+  echo "# Criteria: feature-NNN-* pattern, issue CLOSED, issue's closed_at older than ${STALE_MONTHS} months (cutoff ${CUTOFF_DATE})"
   if [[ "$OFFLINE" -eq 1 ]]; then
     echo "# Mode: OFFLINE (issue-state checks skipped — no candidates will be emitted)"
   fi
@@ -160,13 +160,14 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
     max_date="$sib_date"
   fi
 
-  # Online: query issue state.
+  # Online: query issue state and closed_at.
   issue_state="unknown"
+  issue_closed_at=""
   if [[ "$OFFLINE" -eq 0 && "$GH_OK" -eq 1 ]]; then
-    raw_state="$(gh api "repos/${REPO_SLUG}/issues/${issue_num}" --jq .state 2>/dev/null || true)"
-    if [[ -n "$raw_state" ]]; then
-      issue_state="$(echo "$raw_state" | tr '[:upper:]' '[:lower:]')"
-    fi
+    raw_fields="$(gh api "repos/${REPO_SLUG}/issues/${issue_num}" \
+      --jq '.state + " " + (.closed_at // "")' 2>/dev/null || true)"
+    issue_state="$(echo "$raw_fields" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]')"
+    issue_closed_at="$(echo "$raw_fields" | cut -d' ' -f2-)"
   fi
 
   # Offline: skip emission.
@@ -174,13 +175,16 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
     continue
   fi
 
-  # Filter: issue must be closed.
+  # Filter: issue must be closed AND closed_at older than cutoff
   if [[ "$issue_state" != "closed" ]]; then
     continue
   fi
-
-  # Filter: last-commit must be older than cutoff.
-  if [[ ! "$max_date" < "$CUTOFF_DATE" ]]; then
+  issue_closed_date="${issue_closed_at%%T*}"
+  if [[ -z "$issue_closed_date" ]]; then
+    echo "WARNING: ${dispatcher}: issue #${issue_num} is closed but closed_at unavailable — skipped" >&2
+    continue
+  fi
+  if [[ ! "$issue_closed_date" < "$CUTOFF_DATE" ]]; then
     continue
   fi
 
@@ -188,7 +192,7 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
 
   if [[ "$FORMAT" == "text" ]]; then
     echo "CANDIDATE: ${dispatcher}"
-    echo "  Issue: #${issue_num} (${issue_state})"
+    echo "  Issue: #${issue_num} (${issue_state}, closed: ${issue_closed_date})"
     if [[ -d "$sibling" ]]; then
       echo "  Last-commit: ${max_date} (dispatcher: ${disp_date} | sibling: ${sib_date})"
       echo "  Sibling folder: ${sibling}/ (${sib_count} files)"
@@ -204,7 +208,7 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
     if [[ -d "$sibling" ]]; then
       sib_field="\"${sibling}/\""
     fi
-    JSON_ITEMS+=("{\"dispatcher\":\"${dispatcher}\",\"issue\":${issue_num},\"state\":\"${issue_state}\",\"last_commit\":\"${max_date}\",\"dispatcher_date\":\"${disp_date}\",\"sibling_date\":\"${sib_date}\",\"sibling\":${sib_field},\"sibling_file_count\":${sib_count}}")
+    JSON_ITEMS+=("{\"dispatcher\":\"${dispatcher}\",\"issue\":${issue_num},\"state\":\"${issue_state}\",\"closed_at\":\"${issue_closed_date}\",\"last_commit\":\"${max_date}\",\"dispatcher_date\":\"${disp_date}\",\"sibling_date\":\"${sib_date}\",\"sibling\":${sib_field},\"sibling_file_count\":${sib_count}}")
   fi
 done
 
