@@ -614,3 +614,7 @@ Changes: `git worktree remove` no longer incorrectly blocked when Git Bash suppl
 ### FEATURE: PR #1555 (2026-07-19)
 Background: feat(#1537): add /resume-session hint to PostCompact notification
 Changes: Context-compaction notification (PostCompact) now includes a recovery hint when the workflow is in progress: "→ Workflow is in progress. Run /resume-session to resume from the current step." The hint is suppressed after a PR merge (expected state), so it only appears when action is genuinely required.
+
+### FEATURE: PR #1556 (2026-07-20)
+Background: feat(#1544): /issue-create reopen verdict — idempotent 3-point update
+Changes: `/issue-create` reopen verdict now refreshes the issue body with a **Reopened** banner (count + timestamp), maintains a single reopen-log comment via edit (no stacking), and applies the new `status:regressed` label — preventing sessions from misreading a previously-closed regression issue as "done".
