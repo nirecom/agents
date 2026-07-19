@@ -606,3 +606,7 @@ Changes: `PROPAGATE_LABELS_REPOS` format changed to semicolon-separated absolute
 ### FEATURE: PR #1549 (2026-07-19)
 Background: fix(#1542): add CI fallback in propagate-labels.sh; pass PROPAGATE_LABELS_REPOS in sync-labels.yml
 Changes: Labels now propagate to sibling repos in CI: the `sync-labels.yml` propagate job now receives `PROPAGATE_LABELS_REPOS`; Windows absolute paths that do not exist on ubuntu-latest are automatically resolved to `owner/repo` via repo basename and the current repo's git remote owner.
+
+### FEATURE: PR #1547 (2026-07-19)
+Background: fix(#923): normalize POSIX paths in isMainCheckout to fix worktree-remove block
+Changes: `git worktree remove` no longer incorrectly blocked when Git Bash supplies a POSIX-form working directory path (e.g., `/c/git/agents`) as `toolInput.cwd`. Fix is root-cause level: `isMainCheckout` now normalizes POSIX paths before passing them to `spawnSync`, symmetric with the existing normalization in `findRepoRootForBash`.
