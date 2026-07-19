@@ -39,3 +39,4 @@ jobs:
         env:
           PROPAGATE_LABELS_PAT: ${{ secrets.PROPAGATE_LABELS_PAT }}
           AGENTS_WORKSPACE: ${{ github.workspace }}
+          PROPAGATE_LABELS_REPOS: ${{ vars.PROPAGATE_LABELS_REPOS }}

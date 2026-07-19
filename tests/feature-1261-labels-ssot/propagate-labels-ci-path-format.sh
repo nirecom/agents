@@ -208,6 +208,53 @@ else
 fi
 teardown_mock
 
+# ===========================================================================
+# T-propagate-ci-path-1: existing path → resolved via git remote get-url (no fallback)
+# AGENTS_WORKSPACE not consulted when path exists; clone uses owner from remote URL.
+# ===========================================================================
+setup_mock
+mkdir -p "$TMP/repos/testorg/agents"
+export AGENTS_WORKSPACE="$TMP/repos/testorg/agents"
+export PROPAGATE_LABELS_REPOS="$TMP/repos/myorg/myrepo"
+export PROPAGATE_LABELS_PAT="test-pat-path1"
+export GIT_WORK_DIR="$TMP/workdir"
+export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
+run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
+RC=$?
+CLONE_HAS_REPO=0
+grep "git clone" "$MOCK_LOG" 2>/dev/null | grep -q "myorg/myrepo" && CLONE_HAS_REPO=1
+AGENTS_WS_CONSULTED=0
+grep -q "\-C $TMP/repos/testorg/agents remote get-url" "$MOCK_LOG" 2>/dev/null && AGENTS_WS_CONSULTED=1
+teardown_mock
+if [ "$CLONE_HAS_REPO" = "1" ] && [ "$AGENTS_WS_CONSULTED" = "0" ]; then
+    pass "T-propagate-ci-path-1: existing path resolved via git remote get-url, AGENTS_WORKSPACE not consulted"
+else
+    fail "T-propagate-ci-path-1: clone_has_repo=$CLONE_HAS_REPO agents_ws_consulted=$AGENTS_WS_CONSULTED"
+fi
+
+# ===========================================================================
+# T-propagate-ci-path-2: non-existent path + AGENTS_WORKSPACE owner-lookup fails → exit 1, no clone
+# mock *no-remote* branch exits 1 for remote get-url; fallback owner lookup also fails.
+# Path uses "no-remote" segment so the mock exits 1 for the path-based lookup too.
+# ===========================================================================
+setup_mock
+mkdir -p "$TMP/repos/no-remote/agents"
+export AGENTS_WORKSPACE="$TMP/repos/no-remote/agents"
+export PROPAGATE_LABELS_REPOS="/nonexistent/no-remote/myrepo"
+export PROPAGATE_LABELS_PAT="test-pat-path2"
+export GIT_WORK_DIR="$TMP/workdir"
+export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
+run_with_timeout 30 bash "$TARGET" >/dev/null 2>&1
+RC=$?
+CLONE_CALLED=0
+grep -q "git clone" "$MOCK_LOG" 2>/dev/null && CLONE_CALLED=1
+teardown_mock
+if [ "$RC" != "0" ] && [ "$CLONE_CALLED" = "0" ]; then
+    pass "T-propagate-ci-path-2: owner-lookup fails → exit 1, no clone"
+else
+    fail "T-propagate-ci-path-2: rc=$RC clone_called=$CLONE_CALLED"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
