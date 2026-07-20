@@ -11,6 +11,19 @@
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
 Codex CLI and Gemini CLI are both supported (install with `-Develop`).
 
+## Prerequisites
+
+The installer (`install.ps1` / `install.sh`) automatically installs the following dependencies:
+
+| Dependency | Scope | Why required |
+|---|---|---|
+| `gh` (GitHub CLI) | `project`, `repo` | `/issue-create`, Projects v2 integration, PR creation |
+| `jq` | — | `/worktree-end` doc-append pipeline, GitHub API writes |
+
+After installation, `gh auth login` is invoked only in interactive sessions and only when not
+already authenticated (skipped on headless/CI machines and on already-authenticated re-runs);
+`gh auth refresh -s project` then adds the required `project` scope automatically.
+
 ## What's Inside
 
 ### Hook-enforced end-to-end workflow
