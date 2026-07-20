@@ -122,7 +122,7 @@ the event, would my unit tests still pass?"* If yes, a unit test is not enough.
 Every `tests/*.sh` file (excluding `tests/_archive/`) must carry exactly two single-line
 headers within the first 10 lines, right after the shebang and filename comment:
 
-- `# Tests: <path1>, <path2>` — comma-separated repo-relative source paths (forward slash). Used by `bin/audit-tests.sh` for staleness checks and by Tier 2 semantic selection.
+- `# Tests: <path1>, <path2>` — comma-separated repo-relative source paths (forward slash). Used by `bin/audit-tests.sh` for staleness checks and by Tier 2 semantic selection. Each token must match `^[A-Za-z0-9._/-]+$` (no spaces, parentheses, CLI flags, or globs). `bin/check-test-frontmatter.sh` enforces this as a HARD pre-commit check; path non-existence is WARN only.
 - `# Tags: <kw1>, <kw2>` — comma-separated kebab-case keywords. Used by the LLM Tier 2 matcher in `skills/run-tests/SKILL.md`.
 
 Both lines are **single-line** — no multi-line blocks, no YAML-style `- ` continuation. Long lines are acceptable; parsers rely on single-line format.
