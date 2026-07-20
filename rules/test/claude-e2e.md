@@ -26,7 +26,7 @@ When writing tests that spawn `claude -p`, three precautions are required:
 
 ## Acceptance Criteria for `claude -p` E2E Tests
 
-- Skip-gate: `[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77` then `"$AGENTS_DIR/bin/get-config-var" --is-off RUN_E2E off && exit 77` before invoking `claude -p`.
+- Skip-gate: `[ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77` then `"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77` before invoking `claude -p`.
 - Skip-gate: `command -v claude >/dev/null 2>&1 || exit 77`.
 - Process hygiene: `unset CLAUDECODE` before invocation.
 - Fixture hygiene: write `settings.json` with only the hook under test; never include `disableBypassPermissionsMode`.
@@ -38,7 +38,7 @@ When writing tests that spawn `claude -p`, three precautions are required:
 
 ## Canonical Template
 
-Reference: `tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh` (real `claude -p` E2E currently gated on `RUN_E2E`).
+Reference: `tests/feature-644-agent-delegation/phase5-main-transcript-no-delegated-output.sh` (real `claude -p` E2E currently gated on `RUN_TL3`).
 
 ## Hook Coverage Map
 

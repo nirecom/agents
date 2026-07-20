@@ -8,7 +8,7 @@
 # # L3 gap
 # L2 here exercises the writer module with a real tmpdir-backed WORKFLOW_PLANS_DIR.
 # Real Stop-hook firing under a live `claude -p` session is covered separately
-# (feature-1027-stop-l2-findings-display.sh, RUN_E2E-gated).
+# (feature-1027-stop-l2-findings-display.sh, RUN_TL3-gated).
 
 set -u
 

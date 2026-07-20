@@ -44,12 +44,12 @@ Two axes are separated here (do not conflate them): **substrate fidelity** (how 
 ### Test file naming by layer
 
 - **TL1 / TL2** (default, always-run): named by subsystem (`feat-`, `fix-`, `cc-`, `bin-`, `enforce-`, …). No layer prefix. Layer is recorded in `# Tags:`.
-- **TL3 / TL4** (real-environment, `RUN_E2E`-gated): carry a layer prefix — `TL3-<category>-<name>` (e.g. `TL3-hook-workflow-mark`, `TL3-installer-…`), `TL4-<name>` (e.g. `TL4-workflow-…`). The prefix marks the gated expensive tier so it is visible in `ls tests/` and greppable as a group.
+- **TL3 / TL4** (real-environment, `RUN_TL3`-gated): carry a layer prefix — `TL3-<category>-<name>` (e.g. `TL3-hook-workflow-mark`, `TL3-installer-…`), `TL4-<name>` (e.g. `TL4-workflow-…`). The prefix marks the gated expensive tier so it is visible in `ls tests/` and greppable as a group.
 - Never embed an issue number in a TL3/TL4 filename: retire policies key on `feature-<N>` names and would delete permanent coverage after the issue closes.
 
 ### Closest-to-action verification
 
-When a TL2 fallback is taken, verification of the residual gap MUST happen at the closest workflow point before the action becomes irreversible (commit / merge / install). The `bin/check-verification-gate.sh` classifier runs as preflight inside the `<<WORKFLOW_USER_VERIFIED>>` emission protocol (`skills/_shared/user-verified.md`) and fires an `AskUserQuestion` (before commit or merge) only when `RUN_E2E=on` and the staged file set matches a risk category (when `RUN_E2E=off`, the ask is suppressed and categories are logged only).
+When a TL2 fallback is taken, verification of the residual gap MUST happen at the closest workflow point before the action becomes irreversible (commit / merge / install). The `bin/check-verification-gate.sh` classifier runs as preflight inside the `<<WORKFLOW_USER_VERIFIED>>` emission protocol (`skills/_shared/user-verified.md`) and fires an `AskUserQuestion` (before commit or merge) only when `RUN_TL3=on` and the staged file set matches a risk category (when `RUN_TL3=off`, the ask is suppressed and categories are logged only).
 
 ### Risk categories (SSOT)
 

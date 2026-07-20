@@ -9,5 +9,5 @@
 # session with forced compaction — out of scope for automated CI.
 #
 # This body performs no real invocation; the entry point exits 77 (skipped)
-# before sourcing when RUN_E2E=off, and this comment documents the residual gap.
+# before sourcing when RUN_TL3=off, and this comment documents the residual gap.
 echo "SKIP: post-compact.js TL3 gap — PostCompact unfireable in a short claude -p session"

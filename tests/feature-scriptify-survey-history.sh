@@ -19,7 +19,7 @@
 # L3 test would invoke SKILL.md within a real `claude -p` session to verify
 # end-to-end that the model correctly calls each extracted script, reads its
 # template output, and produces a well-formed survey-history.md artifact. That
-# level of verification requires RUN_E2E=on and is not covered here.
+# level of verification requires RUN_TL3=on and is not covered here.
 
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1

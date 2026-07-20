@@ -12,7 +12,7 @@ set -euo pipefail
 AGENTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 [ -x "$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"$AGENTS_DIR/bin/get-config-var" --is-off RUN_E2E off && exit 77
+"$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 
 # shellcheck source=tests/TL3-hook-subagent-start/main.sh

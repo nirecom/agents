@@ -2,7 +2,7 @@
 # Tests: hooks/lib/supervisor-state-writer.js, hooks/lib/supervisor-state-schema.js, hooks/supervisor-guard.js, hooks/stop-l2-findings-display.js
 # Tags: supervisor, alert-phase, closed, paused, frozen, regression, #1166, scope:issue-specific
 # L3 gap: hook-registration — whether the hook actually fires on Stop events in a real
-#          claude -p session requires RUN_E2E=on; skipped here (L2 unit-level).
+#          claude -p session requires RUN_TL3=on; skipped here (L2 unit-level).
 #
 # RED for issue #1166 (pre-implementation).
 #

@@ -73,7 +73,7 @@ cat > "$REPO8/tests/feature-973-review-e2e-coverage.sh" <<'EOF'
 #!/bin/bash
 # Tests: bin/review-e2e-coverage
 # Tags: scope:issue-specific, lint
-echo "claude -p RUN_E2E hooks/stop-confirm-plan-guard.js"
+echo "claude -p RUN_TL3 hooks/stop-confirm-plan-guard.js"
 EOF
 git -C "$REPO8" add hooks/ tests/
 git -C "$REPO8" commit -q -m "hook change + self-test file present"

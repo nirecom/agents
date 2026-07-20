@@ -106,7 +106,7 @@ is_allow() { [ "$1" = "{}" ]; }
 is_block() { echo "$1" | grep -q '"decision":"block"'; }
 
 # SKIPPED: real claude -p session where PreToolUse intercepts these Bash commands live
-# Because: requires RUN_E2E=on + real settings.json hook registration; not reproducible at L2
+# Because: requires RUN_TL3=on + real settings.json hook registration; not reproducible at L2
 # L3 gap: settings.json hook wiring — whether enforce-worktree.js fires at all in a live session
 
 # ── ALLOW-expected: sanctioned commands the guard must permit ─────────────────
