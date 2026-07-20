@@ -61,23 +61,36 @@ while IFS= read -r path; do
   stems+=("${stem}")
 done <<< "${changed}"
 
-if [[ ${#stems[@]} -eq 0 ]]; then
-  exit 0
+declare -A seen
+
+# Stem-match selection (skipped when the diff produced no stems, e.g. docs-only).
+if [[ ${#stems[@]} -gt 0 ]]; then
+  while IFS= read -r test; do
+    [[ -f "${test}" ]] || continue
+    fname="${test##*/}"
+    for stem in "${stems[@]}"; do
+      if [[ "${fname}" == *"${stem}"* ]]; then
+        if [[ -z "${seen[${test}]+x}" ]]; then
+          echo "${test}"
+          seen[${test}]=1
+        fi
+        break
+      fi
+    done
+  done < <(find "${TESTS_DIR}" -maxdepth 1 -name "*.sh" | sort)
 fi
 
-declare -A seen
-while IFS= read -r test; do
-  [[ -f "${test}" ]] || continue
-  fname="${test##*/}"
-  for stem in "${stems[@]}"; do
-    if [[ "${fname}" == *"${stem}"* ]]; then
-      if [[ -z "${seen[${test}]+x}" ]]; then
-        echo "${test}"
-        seen[${test}]=1
+# RUN_TL3=on: always append TL3-*.sh (real-environment tier), even on docs-only diffs.
+if [[ -x "${AGENTS_DIR}/bin/get-config-var" ]]; then
+  if ! "${AGENTS_DIR}/bin/get-config-var" --is-off RUN_TL3 off 2>/dev/null; then
+    while IFS= read -r tl3; do
+      [[ -f "${tl3}" ]] || continue
+      if [[ -z "${seen[${tl3}]+x}" ]]; then
+        echo "${tl3}"
+        seen[${tl3}]=1
       fi
-      break
-    fi
-  done
-done < <(find "${TESTS_DIR}" -maxdepth 1 -name "*.sh" | sort)
+    done < <(find "${TESTS_DIR}" -maxdepth 1 -name "TL3-*.sh" | sort)
+  fi
+fi
 
 exit 0
