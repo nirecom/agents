@@ -111,9 +111,7 @@ md_paragraph() {
 # Group A — ask gate wiring (skills/_shared/user-verified.md)
 # ============================================================================
 
-# ============================================================================
 # Case 1 — user-verified.md contains reader `confirm-off RUN_TL4 off`
-# ============================================================================
 echo "=== Case 1: user-verified.md confirm-off RUN_TL4 off ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "1. user-verified.md not found at $USER_VERIFIED"
@@ -123,10 +121,8 @@ else
     fail "1. reader 'confirm-off RUN_TL4 off' missing"
 fi
 
-# ============================================================================
 # Case 2 — user-verified.md contains NO RUN_TL3 token at all (orthogonality).
 #          Also guards cases 5-8: a stray RUN_TL3 means the split is partial.
-# ============================================================================
 echo "=== Case 2: user-verified.md free of RUN_TL3 ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "2. user-verified.md not found"
@@ -137,10 +133,8 @@ else
     pass "2. no RUN_TL3 token in user-verified.md"
 fi
 
-# ============================================================================
 # Case 3 — user-verified.md does NOT contain raw `get-config-var --is-off`
 #          (T17 invariant double-lock)
-# ============================================================================
 echo "=== Case 3: user-verified.md raw get-config-var --is-off absent ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "3. user-verified.md not found"
@@ -150,10 +144,8 @@ else
     pass "3. raw 'get-config-var --is-off' idiom absent"
 fi
 
-# ============================================================================
 # Case 4 — RUN_TL4 reader reference precedes check-verification-gate.sh call
 #          (guard-before-classifier ordering)
-# ============================================================================
 echo "=== Case 4: RUN_TL4 reader precedes classifier invocation ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "4. user-verified.md not found"
@@ -171,11 +163,9 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 5 — the OFF branch itself carries the suppress-ask directive ("do not" +
 #          "AskUserQuestion"), so the directive cannot satisfy this case while
 #          actually being bound to the ON or ERROR branch.
-# ============================================================================
 echo "=== Case 5: OFF branch carries the suppress-ask directive ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "5. user-verified.md not found"
@@ -192,9 +182,7 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 6 — distinct log annotation string `skipped: RUN_TL4=off` (CPR-5)
-# ============================================================================
 echo "=== Case 6: log annotation 'skipped: RUN_TL4=off' ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "6. user-verified.md not found"
@@ -204,12 +192,10 @@ else
     fail "6. distinct annotation 'skipped: RUN_TL4=off' missing"
 fi
 
-# ============================================================================
 # Case 7 — "run the preflight unchanged" is bound to BOTH non-suppressing
 #          branches (ON and ERROR); ERROR must additionally say fail-safe, since
 #          an ambiguous config read must never silence the gate. A subsection-wide
 #          check would pass with the word present on only one of the two.
-# ============================================================================
 echo "=== Case 7: ON and ERROR branches both run the preflight unchanged ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "7. user-verified.md not found"
@@ -234,10 +220,8 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 8 — off-path classifier-error totality: "classifier" together with
 #          "skip"/"skipping" in the off-path context (no ask on classifier error)
-# ============================================================================
 echo "=== Case 8: off-path classifier-error totality ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "8. user-verified.md not found"
@@ -263,9 +247,7 @@ fi
 # Group B — .env.example split
 # ============================================================================
 
-# ============================================================================
 # Case 9 — .env.example defines RUN_TL4=off
-# ============================================================================
 echo "=== Case 9: .env.example RUN_TL4=off entry ==="
 if [ ! -f "$ENV_EXAMPLE" ]; then
     fail "9. .env.example not found"
@@ -275,9 +257,7 @@ else
     fail "9. 'RUN_TL4=off' entry missing"
 fi
 
-# ============================================================================
 # Case 10 — .env.example still defines RUN_TL3=off (deletion-accident detector)
-# ============================================================================
 echo "=== Case 10: .env.example RUN_TL3=off entry retained ==="
 if [ ! -f "$ENV_EXAMPLE" ]; then
     fail "10. .env.example not found"
@@ -287,9 +267,7 @@ else
     fail "10. 'RUN_TL3=off' entry missing (accidental deletion?)"
 fi
 
-# ============================================================================
 # Case 11 — RUN_TL4 comment block mentions both 'verification-gate' and 'commit'
-# ============================================================================
 echo "=== Case 11: RUN_TL4 block mentions verification-gate + commit ==="
 if [ ! -f "$ENV_EXAMPLE" ]; then
     fail "11. .env.example not found"
@@ -306,10 +284,8 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 12 — RUN_TL3 comment block mentions NEITHER 'verification-gate' NOR 'ask'
 #           (proves the split completed — ask wording moved out of RUN_TL3)
-# ============================================================================
 echo "=== Case 12: RUN_TL3 block free of verification-gate / ask ==="
 if [ ! -f "$ENV_EXAMPLE" ]; then
     fail "12. .env.example not found"
@@ -328,7 +304,6 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 13 — bin/review-env-example --all reports PERFORMED and emits zero
 #           `^HARD: ./.env.example:` lines.
 #
@@ -341,7 +316,6 @@ fi
 #           Exit 0 is asserted as an extra guard — not sufficient, but necessary:
 #           a wrapper failure or 60s timeout could otherwise leave a truncated
 #           but marker-bearing stdout that passes both stdout checks.
-# ============================================================================
 echo "=== Case 13: review-env-example --all PERFORMED + zero HARD ==="
 if [ ! -f "$REVIEW_ENV_EXAMPLE" ]; then
     fail "13. review-env-example not found at $REVIEW_ENV_EXAMPLE"
@@ -364,14 +338,42 @@ else
     fi
 fi
 
+# Case 20 — RUN_TL4 block discloses that automated TL4 tests do not exist yet:
+#           RUN_TL4=on runs no tests, it only re-enables the manual confirmation.
+#           "does not affect which tests run" (the pre-#1586 wording) states
+#           orthogonality but leaves the reader assuming TL4 tests exist and are
+#           gated elsewhere — the disclosure is what this case pins.
+#           Two co-occurring signals are required rather than one literal phrase,
+#           so any natural rewording of the disclosure still passes.
+echo "=== Case 20: RUN_TL4 block discloses no automated TL4 tests yet ==="
+if [ ! -f "$ENV_EXAMPLE" ]; then
+    fail "20. .env.example not found"
+else
+    block="$(env_block_for RUN_TL4)"
+    tl4_tests_re='(tl4|automated)[^.]{0,40}tests?|tests?[^.]{0,40}(tl4|automated)'
+    absent_re='not[[:space:]]+(yet[[:space:]]+)?(implemented|exist|written|available)'
+    absent_re="$absent_re"'|do(es)?[[:space:]]+not[[:space:]]+exist|none[[:space:]]+exist'
+    absent_re="$absent_re"'|no[[:space:]]+[a-z0-9 -]{0,24}tests?[[:space:]]+(exist|run)'
+    absent_re="$absent_re"'|runs?[[:space:]]+no[[:space:]]+[a-z0-9 -]{0,24}tests?|nothing[[:space:]]+runs'
+    if [ -z "$block" ]; then
+        fail "20. RUN_TL4 comment block not found in .env.example"
+    elif ! printf '%s\n' "$block" | grep -qiE "$tl4_tests_re"; then
+        fail "20. RUN_TL4 block does not tie TL4/automated to tests"
+        printf '%s\n' "$block" | sed 's/^/  | /'
+    elif ! printf '%s\n' "$block" | grep -qiE "$absent_re"; then
+        fail "20. RUN_TL4 block does not disclose that no automated TL4 tests exist yet"
+        printf '%s\n' "$block" | sed 's/^/  | /'
+    else
+        pass "20. RUN_TL4 block discloses that no automated TL4 tests exist yet"
+    fi
+fi
+
 # ============================================================================
 # Group C — doc SSOT (section-scoped; whole-file grep would false-negative pass)
 # ============================================================================
 
-# ============================================================================
 # Case 14 — rules/test.md "Closest-to-action verification" section references
 #           RUN_TL4=on and no longer references RUN_TL3
-# ============================================================================
 echo "=== Case 14: rules/test.md closest-to-action section on RUN_TL4 ==="
 if [ ! -f "$TEST_MD" ]; then
     fail "14. rules/test.md not found"
@@ -390,10 +392,8 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 15 — rules/test.md "Test file naming by layer" section still carries the
 #           RUN_TL3-gated wording (protects the deliberately-unchanged line)
-# ============================================================================
 echo "=== Case 15: rules/test.md naming section retains RUN_TL3-gated ==="
 if [ ! -f "$TEST_MD" ]; then
     fail "15. rules/test.md not found"
@@ -408,10 +408,8 @@ else
     fi
 fi
 
-# ============================================================================
 # Case 16 — docs/ops.md: the ask paragraph references RUN_TL4 (and not RUN_TL3),
 #           while the test-execution paragraph still references RUN_TL3
-# ============================================================================
 echo "=== Case 16: docs/ops.md ask paragraph on RUN_TL4, exec paragraph on RUN_TL3 ==="
 if [ ! -f "$OPS_MD" ]; then
     fail "16. docs/ops.md not found"
@@ -440,10 +438,8 @@ fi
 # Group D — non-regression
 # ============================================================================
 
-# ============================================================================
 # Case 17 — check-verification-gate.sh references none of RUN_TL3 / RUN_TL4 /
 #           get-config-var / confirm-off (classifier purity)
-# ============================================================================
 echo "=== Case 17: classifier purity ==="
 if [ ! -f "$CLASSIFIER" ]; then
     fail "17. check-verification-gate.sh not found"
@@ -454,10 +450,8 @@ else
     pass "17. classifier is pure (no RUN_TL3/RUN_TL4/get-config-var/confirm-off)"
 fi
 
-# ============================================================================
 # Case 18 — bin/select-tests.sh references RUN_TL3 and NOT RUN_TL4
 #           (out-of-scope file protection: the selection gate stays on RUN_TL3)
-# ============================================================================
 echo "=== Case 18: select-tests.sh gate stays on RUN_TL3 ==="
 if [ ! -f "$SELECT_TESTS" ]; then
     fail "18. select-tests.sh not found"
@@ -470,9 +464,7 @@ else
     pass "18. select-tests.sh references RUN_TL3 only"
 fi
 
-# ============================================================================
 # Case 19 — T17 regression: zero `get-config-var --is-off` matches under skills/
-# ============================================================================
 echo "=== Case 19: T17 zero-match in skills/ ==="
 matches="$(grep -rlnE 'get-config-var[[:space:]]+--is-off' "$AGENTS_DIR/skills/" 2>/dev/null || true)"
 if [ -z "$matches" ]; then
