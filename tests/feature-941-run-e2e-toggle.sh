@@ -165,44 +165,47 @@ else
 fi
 
 # ============================================================================
-# Case 5 — RUN_TL3=0 is treated as off (exit 77)
+# Case 5 — RUN_TL3=off is treated as off (exit 77)
+# get-config-var only recognises "off"/"on" (not "0") — see #1581.
 # ============================================================================
-echo "=== Case 5: RUN_TL3=0 treated as off ==="
+echo "=== Case 5: RUN_TL3=off treated as off ==="
 
 if [ ! -f "$PHASE5_SCRIPT" ]; then
     fail "5. phase5 script not found"
 else
     set +e
-    PATH="$STUB_DIR:$PATH" FEATURE_644_PHASE=5 RUN_TL3=0 \
+    PATH="$STUB_DIR:$PATH" FEATURE_644_PHASE=5 RUN_TL3=off \
         run_with_timeout 30 bash "$PHASE5_SCRIPT" >/tmp/941-c5.out 2>&1
     rc=$?
     set -e
     if [ "$rc" -eq 77 ]; then
-        pass "5. RUN_TL3=0 → exit 77 (treated as off)"
+        pass "5. RUN_TL3=off → exit 77 (treated as off)"
     else
-        fail "5. expected exit 77 with RUN_TL3=0, got $rc"
+        fail "5. expected exit 77 with RUN_TL3=off, got $rc"
         sed 's/^/  | /' /tmp/941-c5.out
     fi
     rm -f /tmp/941-c5.out
 fi
 
 # ============================================================================
-# Case 6 — Static check: feature-robust-workflow.sh migrated guard
+# Case 6 — Static check: guard migrated to get-config-var --is-off RUN_TL3
+# The guard lives in the sourced settings-e2e.sh, not the dispatcher.
 # ============================================================================
-echo "=== Case 6: feature-robust-workflow.sh guard migration ==="
+echo "=== Case 6: feature-robust-workflow guard migration ==="
 
-if [ ! -f "$ROBUST_WF" ]; then
-    fail "6. feature-robust-workflow.sh not found"
+SETTINGS_E2E="$AGENTS_DIR/tests/feature-robust-workflow/settings-e2e.sh"
+if [ ! -f "$SETTINGS_E2E" ]; then
+    fail "6. feature-robust-workflow/settings-e2e.sh not found"
 else
-    # New pattern: get-config-var --is-off RUN_TL3
-    if grep -qE 'get-config-var[^|]*--is-off[[:space:]]+RUN_TL3' "$ROBUST_WF"; then
+    # New pattern: get-config-var --is-off RUN_TL3 (in sourced settings-e2e.sh)
+    if grep -qE 'get-config-var[^|]*--is-off[[:space:]]+RUN_TL3' "$SETTINGS_E2E"; then
         pass "6a. new guard pattern (get-config-var --is-off RUN_TL3) present"
     else
         fail "6a. new guard pattern (get-config-var --is-off RUN_TL3) missing"
     fi
 
-    # Old pattern: ${RUN_TL3:-0} should be gone
-    if grep -qE '\$\{RUN_TL3:-0\}' "$ROBUST_WF"; then
+    # Old pattern: ${RUN_TL3:-0} should be gone from both dispatcher and sourced file
+    if grep -qE '\$\{RUN_TL3:-0\}' "$ROBUST_WF" || grep -qE '\$\{RUN_TL3:-0\}' "$SETTINGS_E2E"; then
         fail "6b. legacy guard pattern (\${RUN_TL3:-0}) still present"
     else
         pass "6b. legacy guard pattern (\${RUN_TL3:-0}) removed"
