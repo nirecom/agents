@@ -185,4 +185,4 @@ function stripShellVarAssignment(str) {
   }
 }
 
-module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment };
+module.exports = { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment, stripDqPreservingCmdSubst };
