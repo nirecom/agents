@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Tests: bin/check-test-scope-tag.sh
+# Tests: bin/check-test-frontmatter.sh
 # Tags: TL2, audit-tests, retire, scope:issue-specific
 #
-# TL2 test of bin/check-test-scope-tag.sh, which enforces that every test
+# TL2 test of bin/check-test-frontmatter.sh, which enforces that every test
 # file under tests/ carries a `# Tags: scope:...` tag. Covers --staged
 # (explicit file list) and --all (repo-wide fixture scan) modes. Source
 # under test is being created by #1557 — cases go green once the script
@@ -18,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SCRIPT="${CHECK_TEST_SCOPE_TAG_BIN:-$REPO_ROOT/bin/check-test-scope-tag.sh}"
+SCRIPT="${CHECK_TEST_FRONTMATTER_BIN:-$REPO_ROOT/bin/check-test-frontmatter.sh}"
 FIXTURE_ROOT="$SCRIPT_DIR/fix-1557-check-test-scope-tag/fixture"
 
 PASS=0
