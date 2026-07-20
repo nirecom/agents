@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Tests: install.sh, install.ps1
-# Tags: install, gh-scope, scope:issue-specific
+# Tests: install.sh, install.ps1, install/linux/gh.sh, install/linux/jq.sh
+# Tags: install, gh-install, jq-install, auth-idempotent, non-interactive, scope:issue-specific
 #
-# Tests the 3-stage soft gh auth project-scope check in install.sh (issue #1487).
-# The check emits a notice on stderr when gh is installed, authenticated, but
-# lacks the 'project' scope. It is a soft warning -- exit code remains 0.
+# Tests gh and jq install scripts added in issues #1567 and #1566.
+# Also verifies that the scope-warn block removed from install.sh no longer fires.
 #
-# L3 gap (what this test does NOT catch):
-# - install.ps1 PowerShell scope-check: colour/stream behavior requires real pwsh runtime.
-# - Covered by manual smoke test only; tracked in issue #1487.
+# TL3 gap (what this test does NOT catch):
+# - install.ps1 / install/win/gh.ps1 / install/win/jq.ps1: PowerShell behavior requires real pwsh runtime.
+# - Real winget/apt-get/brew: mock package managers do not verify network or privilege behavior.
+# - Real gh auth login: TTY-gated path requires interactive terminal; non-interactive path is covered by T6.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer.
 
@@ -71,6 +71,8 @@ trap 'rm -rf "$TMP"' EXIT
 #   install/linux/session-sync-init.sh
 #   install/linux/vscode-settings.sh
 #   install/linux/global-gitignore.sh
+#   install/linux/gh.sh
+#   install/linux/jq.sh
 #   (codex.sh / gemini.sh only when --develop, not exercised here)
 #
 # Also stubs:
@@ -83,7 +85,7 @@ mkdir -p "$FAKE_ROOT/install/linux"
 mkdir -p "$FAKE_ROOT/mock-bin"
 
 # NOP sub-scripts
-for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh global-gitignore.sh codex.sh gemini.sh; do
+for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh global-gitignore.sh codex.sh gemini.sh gh.sh jq.sh; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_ROOT/install/linux/$_stub"
     chmod +x "$FAKE_ROOT/install/linux/$_stub"
 done
@@ -165,57 +167,82 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# T2: gh installed but not authenticated (gh auth status exits non-zero)
-#     -> no warning on stderr
+# T2: gh.sh direct — already authenticated -> auth login is skipped
+#
+# gh.sh checks `gh auth status` first; if already authenticated, it must
+# skip `gh auth login` entirely and proceed to `gh auth refresh -s project`.
+# Relies on install/linux/gh.sh (created in write-code step).
 # ---------------------------------------------------------------------------
+GH_SH="$AGENTS_DIR/install/linux/gh.sh"
 T2_BIN="$TMP/t2-bin"
 mkdir -p "$T2_BIN"
-cat > "$T2_BIN/gh" << 'GH_T2_EOF'
+LOGIN_MARKER="$TMP/t2-login-called"
+cat > "$T2_BIN/gh" << GH_T2_EOF
 #!/usr/bin/env bash
-case "$*" in
-  auth\ status*) exit 1 ;;
+case "\$*" in
+  auth\ status*)  exit 0 ;;
+  auth\ login*)   touch "$LOGIN_MARKER"; exit 0 ;;
+  auth\ refresh*) exit 0 ;;
   *) exit 0 ;;
 esac
 GH_T2_EOF
 chmod +x "$T2_BIN/gh"
+# mock package managers (should not be called when gh already installed)
+printf '#!/usr/bin/env bash\nexit 0\n' > "$T2_BIN/brew"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$T2_BIN/apt-get"
+chmod +x "$T2_BIN/brew" "$T2_BIN/apt-get"
 
+STDOUT_FILE="$TMP/t2-stdout.log"
 STDERR_FILE="$TMP/t2-stderr.log"
-run_install "$T2_BIN" "$STDERR_FILE"
-RC=$?
-if [ "$RC" -eq 0 ] && ! grep -q "gh auth lacks" "$STDERR_FILE" 2>/dev/null; then
-    pass "T2: gh installed but not authenticated -> no scope warning on stderr"
+if [ -f "$GH_SH" ]; then
+    run_with_timeout 15 env -i PATH="$T2_BIN:$PATH" HOME="$TMP/home-t2" bash "$GH_SH" \
+        >"$STDOUT_FILE" 2>"$STDERR_FILE"
+    RC=$?
+    if [ "$RC" -eq 0 ] && [ ! -f "$LOGIN_MARKER" ]; then
+        pass "T2: gh.sh — already authenticated -> auth login skipped, exit 0"
+    else
+        fail "T2: rc=$RC login_called=$([ -f "$LOGIN_MARKER" ] && echo yes || echo no) stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fi
 else
-    fail "T2: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fail "T2: install/linux/gh.sh not yet created (implement in write-code step)"
 fi
 
 # ---------------------------------------------------------------------------
-# T3: gh installed, authenticated, 'project' scope present -> no warning on stderr
+# T3: jq.sh direct — jq already installed -> reports "already installed", exit 0
+#
+# jq.sh checks `command -v jq` first; if found, it must print a message
+# indicating jq is already installed and exit 0 without calling the installer.
+# Relies on install/linux/jq.sh (created in write-code step).
 # ---------------------------------------------------------------------------
+JQ_SH="$AGENTS_DIR/install/linux/jq.sh"
 T3_BIN="$TMP/t3-bin"
 mkdir -p "$T3_BIN"
-cat > "$T3_BIN/gh" << 'GH_T3_EOF'
-#!/usr/bin/env bash
-case "$*" in
-  auth\ status*)
-    echo "Token scopes: 'gist', 'project', 'read:org', 'repo'"
-    exit 0 ;;
-  *) exit 0 ;;
-esac
-GH_T3_EOF
-chmod +x "$T3_BIN/gh"
+# Provide a fake jq binary so command -v jq succeeds
+printf '#!/usr/bin/env bash\necho "jq-1.6"\nexit 0\n' > "$T3_BIN/jq"
+chmod +x "$T3_BIN/jq"
 
+STDOUT_FILE="$TMP/t3-stdout.log"
 STDERR_FILE="$TMP/t3-stderr.log"
-run_install "$T3_BIN" "$STDERR_FILE"
-RC=$?
-if [ "$RC" -eq 0 ] && ! grep -q "gh auth lacks" "$STDERR_FILE" 2>/dev/null; then
-    pass "T3: gh installed, authenticated, 'project' scope present -> no scope warning on stderr"
+if [ -f "$JQ_SH" ]; then
+    run_with_timeout 15 env -i PATH="$T3_BIN:$PATH" HOME="$TMP/home-t3" bash "$JQ_SH" \
+        >"$STDOUT_FILE" 2>"$STDERR_FILE"
+    RC=$?
+    COMBINED_OUT="$(cat "$STDOUT_FILE" "$STDERR_FILE" 2>/dev/null)"
+    if [ "$RC" -eq 0 ] && echo "$COMBINED_OUT" | grep -qi "already\|installed\|found\|skip"; then
+        pass "T3: jq.sh — jq already installed -> exit 0 with installed message"
+    else
+        fail "T3: rc=$RC output=$COMBINED_OUT"
+    fi
 else
-    fail "T3: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fail "T3: install/linux/jq.sh not yet created (implement in write-code step)"
 fi
 
 # ---------------------------------------------------------------------------
-# T4: gh installed, authenticated, 'project' scope absent
-#     -> warning on stderr containing "gh auth lacks 'project' scope"
+# T4: install.sh — gh authenticated but no 'project' scope
+#     -> install.sh exits 0, NO scope-warn emitted (scope-warn block deleted in #1567)
+#
+# Previously T4 verified that a scope warning WAS emitted. After the scope-warn
+# block is removed and replaced by gh.sh/jq.sh calls, no warning should appear.
 # ---------------------------------------------------------------------------
 T4_BIN="$TMP/t4-bin"
 mkdir -p "$T4_BIN"
@@ -233,10 +260,120 @@ chmod +x "$T4_BIN/gh"
 STDERR_FILE="$TMP/t4-stderr.log"
 run_install "$T4_BIN" "$STDERR_FILE"
 RC=$?
-if [ "$RC" -eq 0 ] && grep -q "gh auth lacks 'project' scope" "$STDERR_FILE" 2>/dev/null; then
-    pass "T4: gh installed, authenticated, no 'project' scope -> warning on stderr"
+if [ "$RC" -eq 0 ] && ! grep -q "gh auth lacks 'project' scope" "$STDERR_FILE" 2>/dev/null; then
+    pass "T4: install.sh — no 'project' scope -> NO scope-warn on stderr (scope-warn block deleted)"
 else
     fail "T4: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+fi
+
+# ---------------------------------------------------------------------------
+# T5: gh.sh direct — package manager fails AND gh not found -> gh.sh exits 0 (non-fatal)
+#
+# When the package manager (apt-get/brew) returns non-zero and gh is still not
+# available afterward, gh.sh must continue without failing.
+# Relies on install/linux/gh.sh (created in write-code step).
+# ---------------------------------------------------------------------------
+T5_BIN="$TMP/t5-bin"
+mkdir -p "$T5_BIN"
+# No gh binary in PATH; package managers fail
+printf '#!/usr/bin/env bash\nexit 1\n' > "$T5_BIN/apt-get"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$T5_BIN/brew"
+chmod +x "$T5_BIN/apt-get" "$T5_BIN/brew"
+
+STDOUT_FILE="$TMP/t5-stdout.log"
+STDERR_FILE="$TMP/t5-stderr.log"
+if [ -f "$GH_SH" ]; then
+    run_with_timeout 15 env -i PATH="$T5_BIN:$PATH" HOME="$TMP/home-t5" bash "$GH_SH" \
+        >"$STDOUT_FILE" 2>"$STDERR_FILE"
+    RC=$?
+    if [ "$RC" -eq 0 ]; then
+        pass "T5: gh.sh — package manager fails, gh not found -> exit 0 (non-fatal)"
+    else
+        fail "T5: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fi
+else
+    fail "T5: install/linux/gh.sh not yet created (implement in write-code step)"
+fi
+
+# ---------------------------------------------------------------------------
+# T6: gh.sh direct — non-TTY stdin -> auth login skipped, exit 0
+#
+# When stdin is not a terminal ([ -t 0 ] is false), gh.sh must skip gh auth login
+# to avoid hanging in headless/CI environments. It should still try
+# gh auth refresh -s project (non-fatal) and exit 0.
+# Relies on install/linux/gh.sh (created in write-code step).
+# ---------------------------------------------------------------------------
+T6_BIN="$TMP/t6-bin"
+mkdir -p "$T6_BIN"
+T6_LOGIN_MARKER="$TMP/t6-login-called"
+cat > "$T6_BIN/gh" << GH_T6_EOF
+#!/usr/bin/env bash
+case "\$*" in
+  auth\ status*)  exit 1 ;;
+  auth\ login*)   touch "$T6_LOGIN_MARKER"; exit 0 ;;
+  auth\ refresh*) exit 0 ;;
+  *) exit 0 ;;
+esac
+GH_T6_EOF
+chmod +x "$T6_BIN/gh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$T6_BIN/apt-get"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$T6_BIN/brew"
+chmod +x "$T6_BIN/apt-get" "$T6_BIN/brew"
+
+STDOUT_FILE="$TMP/t6-stdout.log"
+STDERR_FILE="$TMP/t6-stderr.log"
+if [ -f "$GH_SH" ]; then
+    # Redirect stdin from /dev/null to simulate non-TTY (CI) environment
+    run_with_timeout 15 env -i PATH="$T6_BIN:$PATH" HOME="$TMP/home-t6" bash "$GH_SH" \
+        >/dev/null 2>"$STDERR_FILE" </dev/null
+    RC=$?
+    if [ "$RC" -eq 0 ] && [ ! -f "$T6_LOGIN_MARKER" ]; then
+        pass "T6: gh.sh — non-TTY stdin -> auth login skipped, exit 0"
+    else
+        fail "T6: rc=$RC login_called=$([ -f "$T6_LOGIN_MARKER" ] && echo yes || echo no) stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fi
+else
+    fail "T6: install/linux/gh.sh not yet created (implement in write-code step)"
+fi
+
+# ---------------------------------------------------------------------------
+# T7: jq.sh direct — installer returns non-zero but jq binary found on re-check -> exit 0
+#
+# When apt-get/brew exits non-zero for jq install, jq.sh must re-check with
+# command -v jq. If jq is now available (e.g. another mechanism installed it),
+# jq.sh must exit 0. This mirrors the CPR-5 symmetric re-check in jq.ps1.
+# Relies on install/linux/jq.sh (created in write-code step).
+# ---------------------------------------------------------------------------
+T7_BIN="$TMP/t7-bin"
+mkdir -p "$T7_BIN"
+T7_JQ_INSTALL_CALLED="$TMP/t7-install-called"
+# apt-get and brew: exit non-zero for install sub-command, but jq binary is present
+cat > "$T7_BIN/apt-get" << APT_T7_EOF
+#!/usr/bin/env bash
+if [ "\$1" = "install" ]; then
+    touch "$T7_JQ_INSTALL_CALLED"
+    exit 1
+fi
+exit 0
+APT_T7_EOF
+printf '#!/usr/bin/env bash\nexit 1\n' > "$T7_BIN/brew"
+# jq IS available in PATH (simulates "installed by other means" or "already present")
+printf '#!/usr/bin/env bash\necho "jq-1.6"\nexit 0\n' > "$T7_BIN/jq"
+chmod +x "$T7_BIN/apt-get" "$T7_BIN/brew" "$T7_BIN/jq"
+
+STDOUT_FILE="$TMP/t7-stdout.log"
+STDERR_FILE="$TMP/t7-stderr.log"
+if [ -f "$JQ_SH" ]; then
+    run_with_timeout 15 env -i PATH="$T7_BIN:$PATH" HOME="$TMP/home-t7" bash "$JQ_SH" \
+        >"$STDOUT_FILE" 2>"$STDERR_FILE"
+    RC=$?
+    if [ "$RC" -eq 0 ]; then
+        pass "T7: jq.sh — installer non-zero but jq found on re-check -> exit 0"
+    else
+        fail "T7: rc=$RC stderr=$(cat "$STDERR_FILE" 2>/dev/null)"
+    fi
+else
+    fail "T7: install/linux/jq.sh not yet created (implement in write-code step)"
 fi
 
 # ---------------------------------------------------------------------------
