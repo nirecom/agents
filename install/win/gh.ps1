@@ -41,10 +41,15 @@ if ($LASTEXITCODE -eq 0) {
     }
 }
 
-Write-Host "Adding 'project' scope to gh auth..." -ForegroundColor Yellow
-try {
-    gh auth refresh -s project
-    Write-Host "gh auth project scope ready." -ForegroundColor Green
-} catch {
-    Write-Host "gh auth refresh -s project did not complete; continuing installation." -ForegroundColor Yellow
+# Add project scope (only if not already granted — idempotency)
+$authStatusOut = (gh auth status 2>&1) -join "`n"
+if ($authStatusOut -match 'project') {
+    Write-Host "gh: project scope already granted." -ForegroundColor DarkGray
+} else {
+    try {
+        gh auth refresh -s project
+        Write-Host "gh auth project scope ready." -ForegroundColor Green
+    } catch {
+        Write-Host "gh auth refresh -s project did not complete; continuing installation." -ForegroundColor Yellow
+    }
 }
