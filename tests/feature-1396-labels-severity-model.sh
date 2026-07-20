@@ -40,7 +40,7 @@ assert_contains_color() {
 
 assert_skill_contains() {
     local name="$1" pattern="$2"
-    if grep -qF "$pattern" "$SKILL_MD" 2>/dev/null; then
+    if grep -qF -- "$pattern" "$SKILL_MD" 2>/dev/null; then
         echo "PASS: $name"
         PASS=$((PASS + 1))
     else
@@ -49,12 +49,23 @@ assert_skill_contains() {
     fi
 }
 
+assert_skill_not_contains() {
+    local name="$1" pattern="$2"
+    if grep -qF -- "$pattern" "$SKILL_MD" 2>/dev/null; then
+        echo "FAIL: $name — pattern unexpectedly present in SKILL.md: $pattern"
+        FAIL=$((FAIL + 1))
+    else
+        echo "PASS: $name"
+        PASS=$((PASS + 1))
+    fi
+}
+
 echo "=== labels.yml checks ==="
 
 assert_contains_label "T-labels-severity-high" "severity:high"
 assert_contains_color "T-labels-severity-high-color" "b60205"
 assert_contains_label "T-labels-severity-low" "severity:low"
-# model:* labels renamed to reporter-model:* by issue #1492 — covered by feature-issue-1492-label-taxonomy.sh
+# reporter-model:* labels (formerly model:*) — mapping covered by fix-1579-reporter-model-keyword-scan.sh
 
 # ラベル件数チェック（既存6件 + 新規7件 = 13件以上）
 COUNT=$(grep -c '^- name:' "$LABELS_YML" 2>/dev/null || echo "0")
@@ -73,8 +84,8 @@ assert_skill_contains "T-skill-severity-directive" "severity:high"
 assert_skill_contains "T-skill-severity-low"       "severity:low"
 assert_skill_contains "T-skill-severity-normal"    "no label"
 assert_skill_contains "T-skill-model-directive"    "You are powered by the model"
-assert_skill_contains "T-skill-model-others-fallback" "model:others"
-assert_skill_contains "T-skill-model-skip-no-injection" "model:*"
+assert_skill_contains "T-skill-reporter-model-flag" "--reporter-model"
+assert_skill_not_contains "T-skill-model-others-removed" "model:others"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

@@ -20,6 +20,7 @@ BODY_PROVIDED=0
 EXTRA_LABELS=()
 ASSIGNEE=""
 MILESTONE=""
+REPORTER_MODEL=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -38,6 +39,7 @@ while [ $# -gt 0 ]; do
             EXTRA_LABELS+=("$val"); shift 2 ;;
         --assignee)   ASSIGNEE="${2:?--assignee requires value}"; shift 2 ;;
         --milestone)  MILESTONE="${2:?--milestone requires value}"; shift 2 ;;
+        --reporter-model) REPORTER_MODEL="${2:?--reporter-model requires value}"; shift 2 ;;
         -h|--help)
             sed -n '2,12p' "$0" >&2; exit 0 ;;
         *)
@@ -129,6 +131,43 @@ if [ "${ISSUE_CREATE_SKIP_SCHEMA:-0}" != "1" ]; then
         echo "Error: missing canonical fields: $S" >&2
         echo "Hint: ISSUE_CREATE_SKIP_SCHEMA=1 bypasses (emergency only)." >&2
         exit 3
+    fi
+fi
+
+# Map raw model name to reporter-model:* label.
+# SSOT: case RHS labels must match .github/labels.yml reporter-model:* entries.
+# Drift prevention: tests/fix-1579-reporter-model-keyword-scan.sh T15 verifies this.
+# -w word-boundary: plural/gerund forms (hangs/hanging) intentionally not matched.
+if [ -n "$REPORTER_MODEL" ]; then
+    _rm_label=""
+    case "$REPORTER_MODEL" in
+        *fable*)    _rm_label="reporter-model:fable" ;;
+        *opus*)     _rm_label="reporter-model:opus" ;;
+        *sonnet*)   _rm_label="reporter-model:sonnet" ;;
+        *ds4*|*deepseek*) _rm_label="reporter-model:ds4" ;;
+        *devstral*) _rm_label="reporter-model:devstral" ;;
+        *qwen*)     _rm_label="reporter-model:qwen-coder" ;;
+    esac
+    [ -n "$_rm_label" ] && EXTRA_LABELS+=("$_rm_label")
+fi
+
+# Keyword scan: force severity:high on confirmed-high signals.
+# Conservative: 4 words only; no -i flag; -w word-boundary (plural/gerund intentionally excluded).
+if [ -n "$TITLE" ]; then
+    _scan_text="$TITLE"
+    if [ -n "$BODY_FILE" ]; then
+        _scan_text="$_scan_text $(cat "$BODY_FILE")"
+    elif [ -n "$BODY" ]; then
+        _scan_text="$_scan_text $BODY"
+    fi
+    if printf '%s' "$_scan_text" | grep -qwE 'abort|hang|security|leak'; then
+        _new_labels=()
+        for _l in "${EXTRA_LABELS[@]:-}"; do
+            case "$_l" in severity:*) ;; *) _new_labels+=("$_l") ;; esac
+        done
+        _new_labels+=("severity:high")
+        EXTRA_LABELS=("${_new_labels[@]}")
+        echo "note: keyword scan matched — severity:high forced" >&2
     fi
 fi
 
