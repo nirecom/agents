@@ -646,3 +646,7 @@ Changes: `propagate-labels.sh` no longer requires `PROPAGATE_LABELS_PAT` — it 
 ### FEATURE: PR #1580 (2026-07-20)
 Background: fix(#1573): gh auth refresh -s project — add idempotency scope check (#1580)
 Changes: Installer no longer triggers interactive device-auth prompts on re-run when GitHub project scope is already granted.
+
+### FEATURE: PR #1585 (2026-07-20)
+Background: refactor(#1581): rename RUN_E2E to RUN_TL3; fix TL3 test selection
+Changes: `RUN_E2E` flag renamed to `RUN_TL3` — if you run TL3 tests locally, update your `.env` (`RUN_E2E=on` → `RUN_TL3=on`). Setting `RUN_TL3=on` now also auto-selects all `tests/TL3-*.sh` files when running the test suite via `bin/select-tests.sh`.
