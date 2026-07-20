@@ -61,7 +61,16 @@ while IFS= read -r path; do
   stems+=("${stem}")
 done <<< "${changed}"
 
-declare -A seen
+# Portable seen-set: temp file; compatible with bash 3.x (macOS default).
+_seen=$(mktemp)
+trap 'rm -f "$_seen"' EXIT
+
+_emit_if_new() {
+  local path="$1"
+  grep -qxF "${path}" "${_seen}" 2>/dev/null && return
+  echo "${path}"
+  printf '%s\n' "${path}" >> "${_seen}"
+}
 
 # Stem-match selection (skipped when the diff produced no stems, e.g. docs-only).
 if [[ ${#stems[@]} -gt 0 ]]; then
@@ -70,10 +79,7 @@ if [[ ${#stems[@]} -gt 0 ]]; then
     fname="${test##*/}"
     for stem in "${stems[@]}"; do
       if [[ "${fname}" == *"${stem}"* ]]; then
-        if [[ -z "${seen[${test}]+x}" ]]; then
-          echo "${test}"
-          seen[${test}]=1
-        fi
+        _emit_if_new "${test}"
         break
       fi
     done
@@ -85,10 +91,7 @@ if [[ -x "${AGENTS_DIR}/bin/get-config-var" ]]; then
   if ! "${AGENTS_DIR}/bin/get-config-var" --is-off RUN_TL3 off 2>/dev/null; then
     while IFS= read -r tl3; do
       [[ -f "${tl3}" ]] || continue
-      if [[ -z "${seen[${tl3}]+x}" ]]; then
-        echo "${tl3}"
-        seen[${tl3}]=1
-      fi
+      _emit_if_new "${tl3}"
     done < <(find "${TESTS_DIR}" -maxdepth 1 -name "TL3-*.sh" | sort)
   fi
 fi
