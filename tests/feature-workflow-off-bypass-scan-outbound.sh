@@ -3,14 +3,15 @@
 # Tests: hooks/scan-outbound.js
 # Tags: scan, filter, outbound, hook, workflow
 #
-# PR2: hooks/scan-outbound.js must early-return (approve) when
-# <workflowDir>/<sid>.workflow-off marker exists for the calling session.
+# PR2: hooks/scan-outbound.js must NOT bypass the private-info security scan
+# even when <workflowDir>/<sid>.workflow-off marker exists for the session.
 #
 # Contract:
 #   - Without marker: hook runs normally (may approve or block depending on
 #     content + public-repo detection — we don't assert behavior, only that
 #     it doesn't crash).
-#   - With marker + valid sid: hook approves immediately (no scan).
+#   - With marker + valid sid: private-info scan still runs and blocks (no
+#     bypass for security scans).
 #   - With invalid (traversal) sid: bypass MUST NOT apply.
 
 set -u
@@ -125,8 +126,8 @@ test_A_no_marker_blocks_private_info() {
     fi
 }
 
-# B: With marker present and valid sid, hook approves identical content (no scan).
-test_B_marker_approves_immediately() {
+# B: With marker present and valid sid, private-info scan still blocks (no bypass).
+test_B_marker_still_scans_private_info() {
     require_hook "B" || return
     local wfdir; wfdir="$(fresh_workflow_dir)"
     local sid="testsession123"
@@ -138,13 +139,34 @@ test_B_marker_approves_immediately() {
         return
     fi
     if echo "$HOOK_OUT" | grep -q '"decision":"block"'; then
-        fail "B: marker present → expected approve but got block (bypass not implemented?): $HOOK_OUT"
+        pass "B: marker present → scan still blocks private-info (no bypass)"
+    elif echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
+        fail "B: marker bypassed private-info scan (expected block): $HOOK_OUT"
+    else
+        fail "B: expected block decision but got: $HOOK_OUT"
+    fi
+}
+
+# B2: With marker present and valid sid, benign (non-flagged) content still approves.
+# This verifies that the fix doesn't accidentally turn the hook into an unconditional blocker.
+test_B2_marker_approves_benign_content() {
+    require_hook "B2" || return
+    local wfdir; wfdir="$(fresh_workflow_dir)"
+    local sid="testsession123"
+    write_marker_file "$wfdir" "$sid"
+    local benign_content="This is a perfectly ordinary log message with no secrets."
+    local payload; payload="$(build_edit_payload "$sid" "$TMPDIR_BASE/bar.txt" "$benign_content")"
+    run_hook "$payload" "$wfdir"
+    if [ "$HOOK_RC" -ne 0 ]; then
+        fail "B2: hook crashed rc=$HOOK_RC (out: $HOOK_OUT)"
         return
     fi
-    if echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
-        pass "B: marker present → hook approves immediately (workflow-off bypass)"
+    if echo "$HOOK_OUT" | grep -q '"decision":"block"'; then
+        fail "B2: marker present but hook blocked benign content (unconditional blocker bug): $HOOK_OUT"
+    elif echo "$HOOK_OUT" | grep -q '"decision":"approve"'; then
+        pass "B2: marker present → benign content still approves (not unconditional blocker)"
     else
-        fail "B: expected explicit approve decision but got: $HOOK_OUT"
+        fail "B2: unexpected response for benign content: $HOOK_OUT"
     fi
 }
 
@@ -170,7 +192,8 @@ test_C_traversal_sid_no_bypass() {
 
 run_all() {
     test_A_no_marker_blocks_private_info
-    test_B_marker_approves_immediately
+    test_B_marker_still_scans_private_info
+    test_B2_marker_approves_benign_content
     test_C_traversal_sid_no_bypass
 }
 

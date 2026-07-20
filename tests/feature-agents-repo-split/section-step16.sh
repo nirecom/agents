@@ -333,8 +333,11 @@ echo ""
 echo "=== N27: install.sh — idempotent rc-append (marker appears exactly once) ==="
 
 INSTALL_SH="$AGENTS_ROOT/install.sh"
+_n27_uname="$(uname -s 2>/dev/null || echo unknown)"
 if [ ! -f "$INSTALL_SH" ]; then
     fail "N27. install.sh not found at $INSTALL_SH"
+elif [[ "$_n27_uname" == MINGW* || "$_n27_uname" == MSYS* || "$_n27_uname" == CYGWIN* ]]; then
+    skip "N27. install.sh is a Linux/macOS installer; on Windows shell ($_n27_uname) it delegates to install.ps1 (rc-append covered by N28)"
 else
     _n27_td=$(mktemp -d)
     trap 'rm -rf "$_n27_td"' EXIT
@@ -346,8 +349,8 @@ else
     touch "$_n27_fake_bashrc"
 
     # Run install.sh twice in a subshell with fake HOME and AGENTS_ROOT
-    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
-    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
+    (export HOME="$_n27_fake_home"; export AGENTS_ROOT="$AGENTS_ROOT"; export SHELL=/bin/bash; bash "$INSTALL_SH" >/dev/null 2>&1 || true)
 
     _n27_marker_count=$(grep -c 'BEGIN agents profile sourcing' "$_n27_fake_bashrc" 2>/dev/null; true)
     _n27_marker_count="${_n27_marker_count:-0}"
