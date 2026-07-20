@@ -9,8 +9,8 @@ Stop-event, SubagentStop, or PostCompact paths.
 
 | Hook | Coverage | Priority | Rationale |
 |---|---|---|---|
-| `hooks/workflow-mark.js` | **TL3 covered** (`tests/TL3-hook-workflow-mark.sh` — RUN_E2E-gated) | done (#943) | Live `claude -p` emits a MARK_STEP sentinel via Bash → state file `steps.research.status=complete`. |
-| `hooks/stop-confirm-plan-guard.js` | **TL3 covered** (`tests/TL3-hook-stop-confirm-plan-guard.sh` — RUN_E2E-gated) | done (#943) | Turn marker fixture consumed (deleted) by the live Stop hook via readAndDeleteTurnMarkers(). |
+| `hooks/workflow-mark.js` | **TL3 covered** (`tests/TL3-hook-workflow-mark.sh` — RUN_TL3-gated) | done (#943) | Live `claude -p` emits a MARK_STEP sentinel via Bash → state file `steps.research.status=complete`. |
+| `hooks/stop-confirm-plan-guard.js` | **TL3 covered** (`tests/TL3-hook-stop-confirm-plan-guard.sh` — RUN_TL3-gated) | done (#943) | Turn marker fixture consumed (deleted) by the live Stop hook via readAndDeleteTurnMarkers(). |
 | `hooks/stop-final-report-guard.js` | **TL3 covered** (`tests/TL3-hook-stop-final-report-guard.sh`; TL2: `tests/feature-534-stop-final-report-guard.sh`, 20+ cases) | done (#943) | Live Stop with env-file fixture but no Final Report heading → decision:block → non-zero exit (block case). |
 | `hooks/session-start.js` | **TL3 covered** (`tests/TL3-hook-session-start.sh`; TL2: `tests/feature-772-session-start-cleanup-inherit.sh`) | done (#943) | Fresh live session → createInitialState writes all-pending state; additionalContext surfaces the sid. |
 | `hooks/subagent-start.js` | **TL3 gap** (partial TL2: `tests/feature-1303-lang-hooks/group2-subagent-start.sh`; gap documented in `tests/TL3-hook-subagent-start.sh`) | TL3 gap (#943) → TL4 (#1543) | No observable side-effect file; sub-agent output-language signal is non-deterministic — no automated TL3. |

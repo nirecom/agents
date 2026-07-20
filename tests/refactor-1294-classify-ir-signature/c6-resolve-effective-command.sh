@@ -582,7 +582,7 @@ assert_eq "C6.ub_chained_cp_in_scope_abstain" "abstain" "$(check_in_scope_abstai
 # Asserts no-crash AND no unexpected block decision. Without a real session (no
 # WIP/scope-roots configured), the hook cannot make a scope-based block decision,
 # so both before and after fix the result is no-block. Full allow/block assertion
-# requires a live claude -p session (L3 gap — gated on RUN_E2E).
+# requires a live claude -p session (L3 gap — gated on RUN_TL3).
 # ---------------------------------------------------------------------------
 hook_decision() {
   local output

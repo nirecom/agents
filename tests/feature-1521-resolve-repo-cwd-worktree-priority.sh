@@ -14,7 +14,7 @@
 # L3 gap (what this test does NOT catch):
 # - Whether Claude Code actually populates stdin `cwd` with the linked worktree
 #   path during a real PostToolUse hook invocation. Only a live `claude -p`
-#   session (RUN_E2E) exercises the real stdin cwd wiring end-to-end. This unit
+#   session (RUN_TL3) exercises the real stdin cwd wiring end-to-end. This unit
 #   test asserts the resolution logic given controlled inputs, not the wiring.
 #
 # Pre-implementation expectation: C1 FAILS until the guard is added (existing

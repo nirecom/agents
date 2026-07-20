@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Tests: skills/_shared/user-verified.md, .env.example, docs/ops.md, rules/test.md
 # Tags: run-e2e, verification-gate, user-verified, scope:issue-specific
-# Tests for issue #1405 — gate the #833 verification-gate ask behind RUN_E2E.
+# Tests for issue #1405 — gate the #833 verification-gate ask behind RUN_TL3.
 #
-# Test-first (TDD): the RUN_E2E guard in user-verified.md and the doc edits have
+# Test-first (TDD): the RUN_TL3 guard in user-verified.md and the doc edits have
 # NOT been written yet — content assertions (cases 1,3,4,5,6,7,8,9,11,12) are
 # EXPECTED TO FAIL initially (RED state). Cases 2,10,13,14 already hold and PASS.
 #
 # L3 gap (what this test does NOT catch):
-# - The real `claude -p` commit/merge-flow path where RUN_E2E=off actually
+# - The real `claude -p` commit/merge-flow path where RUN_TL3=off actually
 #   suppresses the AskUserQuestion is never exercised — this is a structural
 #   (grep/line-number) test only. A live session would confirm the classifier
 #   preflight is skipped and no ask is raised.
-# - Closest-to-action mitigation: case 3 asserts the RUN_E2E reader reference
+# - Closest-to-action mitigation: case 3 asserts the RUN_TL3 reader reference
 #   precedes the check-verification-gate.sh invocation (guard-before-classifier
 #   ordering), the ordering property the runtime path relies on.
 
@@ -38,15 +38,15 @@ pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 # ============================================================================
-# Case 1 — user-verified.md contains reader `confirm-off RUN_E2E off`
+# Case 1 — user-verified.md contains reader `confirm-off RUN_TL3 off`
 # ============================================================================
-echo "=== Case 1: user-verified.md confirm-off RUN_E2E off ==="
+echo "=== Case 1: user-verified.md confirm-off RUN_TL3 off ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "1. user-verified.md not found at $USER_VERIFIED"
-elif grep -qE 'confirm-off[[:space:]]+RUN_E2E[[:space:]]+off' "$USER_VERIFIED"; then
-    pass "1. reader 'confirm-off RUN_E2E off' present"
+elif grep -qE 'confirm-off[[:space:]]+RUN_TL3[[:space:]]+off' "$USER_VERIFIED"; then
+    pass "1. reader 'confirm-off RUN_TL3 off' present"
 else
-    fail "1. reader 'confirm-off RUN_E2E off' missing"
+    fail "1. reader 'confirm-off RUN_TL3 off' missing"
 fi
 
 # ============================================================================
@@ -63,59 +63,59 @@ else
 fi
 
 # ============================================================================
-# Case 3 — RUN_E2E reader reference precedes check-verification-gate.sh call
+# Case 3 — RUN_TL3 reader reference precedes check-verification-gate.sh call
 #          (guard-before-classifier ordering)
 # ============================================================================
-echo "=== Case 3: RUN_E2E reader precedes classifier invocation ==="
+echo "=== Case 3: RUN_TL3 reader precedes classifier invocation ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "3. user-verified.md not found"
 else
-    reader_ln="$(grep -nE 'confirm-off[[:space:]]+RUN_E2E[[:space:]]+off' "$USER_VERIFIED" | head -1 | cut -d: -f1)"
+    reader_ln="$(grep -nE 'confirm-off[[:space:]]+RUN_TL3[[:space:]]+off' "$USER_VERIFIED" | head -1 | cut -d: -f1)"
     classifier_ln="$(grep -nE 'check-verification-gate\.sh' "$USER_VERIFIED" | head -1 | cut -d: -f1)"
     if [ -z "$reader_ln" ]; then
-        fail "3. RUN_E2E reader reference not found (cannot compare ordering)"
+        fail "3. RUN_TL3 reader reference not found (cannot compare ordering)"
     elif [ -z "$classifier_ln" ]; then
         fail "3. check-verification-gate.sh invocation not found (cannot compare ordering)"
     elif [ "$reader_ln" -lt "$classifier_ln" ]; then
-        pass "3. RUN_E2E reader (L$reader_ln) precedes classifier call (L$classifier_ln)"
+        pass "3. RUN_TL3 reader (L$reader_ln) precedes classifier call (L$classifier_ln)"
     else
-        fail "3. RUN_E2E reader (L$reader_ln) does NOT precede classifier call (L$classifier_ln)"
+        fail "3. RUN_TL3 reader (L$reader_ln) does NOT precede classifier call (L$classifier_ln)"
     fi
 fi
 
 # ============================================================================
 # Case 4 — user-verified.md documents OFF → suppress-ask directive
-#          (both "do not" case-insensitive and "AskUserQuestion" in RUN_E2E subsection)
+#          (both "do not" case-insensitive and "AskUserQuestion" in RUN_TL3 subsection)
 # ============================================================================
 echo "=== Case 4: OFF → suppress-ask directive ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "4. user-verified.md not found"
 else
-    # Isolate the RUN_E2E subsection: from the first RUN_E2E mention to the next
+    # Isolate the RUN_TL3 subsection: from the first RUN_TL3 mention to the next
     # top-level (## ) heading (or EOF).
     subsection="$(awk '
-        /RUN_E2E/ { grab=1 }
+        /RUN_TL3/ { grab=1 }
         grab && /^## / && seen { exit }
         grab { print; seen=1 }
     ' "$USER_VERIFIED")"
     if printf '%s\n' "$subsection" | grep -qi 'do not' \
         && printf '%s\n' "$subsection" | grep -q 'AskUserQuestion'; then
-        pass "4. RUN_E2E subsection contains both 'do not' and 'AskUserQuestion'"
+        pass "4. RUN_TL3 subsection contains both 'do not' and 'AskUserQuestion'"
     else
-        fail "4. RUN_E2E subsection missing 'do not' and/or 'AskUserQuestion'"
+        fail "4. RUN_TL3 subsection missing 'do not' and/or 'AskUserQuestion'"
     fi
 fi
 
 # ============================================================================
-# Case 5 — distinct log annotation string `skipped: RUN_E2E=off` (CPR-5)
+# Case 5 — distinct log annotation string `skipped: RUN_TL3=off` (CPR-5)
 # ============================================================================
-echo "=== Case 5: log annotation 'skipped: RUN_E2E=off' ==="
+echo "=== Case 5: log annotation 'skipped: RUN_TL3=off' ==="
 if [ ! -f "$USER_VERIFIED" ]; then
     fail "5. user-verified.md not found"
-elif grep -qF 'skipped: RUN_E2E=off' "$USER_VERIFIED"; then
-    pass "5. distinct annotation 'skipped: RUN_E2E=off' present"
+elif grep -qF 'skipped: RUN_TL3=off' "$USER_VERIFIED"; then
+    pass "5. distinct annotation 'skipped: RUN_TL3=off' present"
 else
-    fail "5. distinct annotation 'skipped: RUN_E2E=off' missing"
+    fail "5. distinct annotation 'skipped: RUN_TL3=off' missing"
 fi
 
 # ============================================================================
@@ -127,7 +127,7 @@ if [ ! -f "$USER_VERIFIED" ]; then
     fail "6. user-verified.md not found"
 else
     subsection="$(awk '
-        /RUN_E2E/ { grab=1 }
+        /RUN_TL3/ { grab=1 }
         grab && /^## / && seen { exit }
         grab { print; seen=1 }
     ' "$USER_VERIFIED")"
@@ -147,7 +147,7 @@ if [ ! -f "$USER_VERIFIED" ]; then
     fail "7. user-verified.md not found"
 else
     subsection="$(awk '
-        /RUN_E2E/ { grab=1 }
+        /RUN_TL3/ { grab=1 }
         grab && /^## / && seen { exit }
         grab { print; seen=1 }
     ' "$USER_VERIFIED")"
@@ -160,55 +160,55 @@ else
 fi
 
 # ============================================================================
-# Case 8 — .env.example RUN_E2E block mentions "verification-gate"
+# Case 8 — .env.example RUN_TL3 block mentions "verification-gate"
 # ============================================================================
-echo "=== Case 8: .env.example RUN_E2E block mentions verification-gate ==="
+echo "=== Case 8: .env.example RUN_TL3 block mentions verification-gate ==="
 if [ ! -f "$ENV_EXAMPLE" ]; then
     fail "8. .env.example not found"
 else
-    # RUN_E2E block: from the RUN_E2E comment header/value up to the next blank-line
-    # separated category. Extract the contiguous comment+value region around RUN_E2E=.
+    # RUN_TL3 block: from the RUN_TL3 comment header/value up to the next blank-line
+    # separated category. Extract the contiguous comment+value region around RUN_TL3=.
     block="$(awk '
-        /^RUN_E2E=/ { print; inblock=0; next }
+        /^RUN_TL3=/ { print; inblock=0; next }
         /^#/ { buf = buf $0 "\n"; next }
         /^[[:space:]]*$/ { if (matched) exit; buf=""; next }
         { if (!matched) buf="" }
         END { }
-        /^RUN_E2E=/ { }
+        /^RUN_TL3=/ { }
     ' "$ENV_EXAMPLE")"
-    # Simpler robust approach: grab 8 lines of context around RUN_E2E= and search.
-    region="$(grep -nE '^RUN_E2E=' "$ENV_EXAMPLE" | head -1 | cut -d: -f1)"
+    # Simpler robust approach: grab 8 lines of context around RUN_TL3= and search.
+    region="$(grep -nE '^RUN_TL3=' "$ENV_EXAMPLE" | head -1 | cut -d: -f1)"
     if [ -z "$region" ]; then
-        fail "8. RUN_E2E= entry not found in .env.example"
+        fail "8. RUN_TL3= entry not found in .env.example"
     else
         start=$((region > 8 ? region - 8 : 1))
         end=$((region + 1))
         if sed -n "${start},${end}p" "$ENV_EXAMPLE" | grep -qi 'verification-gate'; then
-            pass "8. RUN_E2E block mentions 'verification-gate'"
+            pass "8. RUN_TL3 block mentions 'verification-gate'"
         else
-            fail "8. RUN_E2E block does not mention 'verification-gate'"
+            fail "8. RUN_TL3 block does not mention 'verification-gate'"
         fi
     fi
 fi
 
 # ============================================================================
-# Case 9 — .env.example RUN_E2E block contains "commit"
+# Case 9 — .env.example RUN_TL3 block contains "commit"
 #          (i.e. "before commit or merge" wording — not pre-merge only)
 # ============================================================================
-echo "=== Case 9: .env.example RUN_E2E block mentions 'commit' ==="
+echo "=== Case 9: .env.example RUN_TL3 block mentions 'commit' ==="
 if [ ! -f "$ENV_EXAMPLE" ]; then
     fail "9. .env.example not found"
 else
-    region="$(grep -nE '^RUN_E2E=' "$ENV_EXAMPLE" | head -1 | cut -d: -f1)"
+    region="$(grep -nE '^RUN_TL3=' "$ENV_EXAMPLE" | head -1 | cut -d: -f1)"
     if [ -z "$region" ]; then
-        fail "9. RUN_E2E= entry not found in .env.example"
+        fail "9. RUN_TL3= entry not found in .env.example"
     else
         start=$((region > 8 ? region - 8 : 1))
         end=$((region + 1))
         if sed -n "${start},${end}p" "$ENV_EXAMPLE" | grep -qi 'commit'; then
-            pass "9. RUN_E2E block mentions 'commit'"
+            pass "9. RUN_TL3 block mentions 'commit'"
         else
-            fail "9. RUN_E2E block does not mention 'commit'"
+            fail "9. RUN_TL3 block does not mention 'commit'"
         fi
     fi
 fi
@@ -238,26 +238,26 @@ else
 fi
 
 # ============================================================================
-# Case 11 — rules/test.md contains `RUN_E2E=on` qualifier AND
+# Case 11 — rules/test.md contains `RUN_TL3=on` qualifier AND
 #           "before commit or merge" wording in closest-to-action verification
 # ============================================================================
-echo "=== Case 11: rules/test.md RUN_E2E=on + before commit or merge ==="
+echo "=== Case 11: rules/test.md RUN_TL3=on + before commit or merge ==="
 if [ ! -f "$TEST_MD" ]; then
     fail "11. rules/test.md not found"
 else
-    if grep -qE 'RUN_E2E=on' "$TEST_MD" \
+    if grep -qE 'RUN_TL3=on' "$TEST_MD" \
         && grep -qiE 'before commit or merge' "$TEST_MD"; then
-        pass "11. rules/test.md has 'RUN_E2E=on' and 'before commit or merge'"
+        pass "11. rules/test.md has 'RUN_TL3=on' and 'before commit or merge'"
     else
-        fail "11. rules/test.md missing 'RUN_E2E=on' and/or 'before commit or merge'"
+        fail "11. rules/test.md missing 'RUN_TL3=on' and/or 'before commit or merge'"
     fi
 fi
 
 # ============================================================================
-# Case 12 — docs/ops.md RUN_E2E paragraph mentions verification-gate suppression
+# Case 12 — docs/ops.md RUN_TL3 paragraph mentions verification-gate suppression
 #           AND references both commit and merge firing points
 # ============================================================================
-echo "=== Case 12: docs/ops.md RUN_E2E verification-gate + commit/merge ==="
+echo "=== Case 12: docs/ops.md RUN_TL3 verification-gate + commit/merge ==="
 if [ ! -f "$OPS_MD" ]; then
     fail "12. docs/ops.md not found"
 else
@@ -272,16 +272,16 @@ fi
 
 # ============================================================================
 # Case 13 — Non-regression: check-verification-gate.sh source does NOT reference
-#           RUN_E2E, get-config-var, or confirm-off (classifier purity)
+#           RUN_TL3, get-config-var, or confirm-off (classifier purity)
 # ============================================================================
 echo "=== Case 13: classifier purity ==="
 if [ ! -f "$CLASSIFIER" ]; then
     fail "13. check-verification-gate.sh not found"
-elif grep -qE 'RUN_E2E|get-config-var|confirm-off' "$CLASSIFIER"; then
-    fail "13. classifier references RUN_E2E/get-config-var/confirm-off (impurity)"
-    grep -nE 'RUN_E2E|get-config-var|confirm-off' "$CLASSIFIER" | sed 's/^/  | /'
+elif grep -qE 'RUN_TL3|get-config-var|confirm-off' "$CLASSIFIER"; then
+    fail "13. classifier references RUN_TL3/get-config-var/confirm-off (impurity)"
+    grep -nE 'RUN_TL3|get-config-var|confirm-off' "$CLASSIFIER" | sed 's/^/  | /'
 else
-    pass "13. classifier is pure (no RUN_E2E/get-config-var/confirm-off)"
+    pass "13. classifier is pure (no RUN_TL3/get-config-var/confirm-off)"
 fi
 
 # ============================================================================

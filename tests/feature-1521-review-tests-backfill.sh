@@ -22,7 +22,7 @@
 # L3 gap (what this test does NOT catch):
 # - Whether the real Claude Code PreToolUse/PostToolUse hook is actually invoked
 #   with the linked-worktree path in stdin `cwd`. Only a live `claude -p` session
-#   (RUN_E2E) exercises the harness stdin cwd wiring end-to-end. This L2 test
+#   (RUN_TL3) exercises the harness stdin cwd wiring end-to-end. This L2 test
 #   spawns workflow-mark.js directly with a synthesized stdin payload, so it
 #   verifies handler + resolver logic but not the harness contract that supplies
 #   the cwd. B5 is the closest-to-action guard for that wiring at L2.
