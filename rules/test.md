@@ -49,7 +49,7 @@ Two axes are separated here (do not conflate them): **substrate fidelity** (how 
 
 ### Closest-to-action verification
 
-When a TL2 fallback is taken, verification of the residual gap MUST happen at the closest workflow point before the action becomes irreversible (commit / merge / install). The `bin/check-verification-gate.sh` classifier runs as preflight inside the `<<WORKFLOW_USER_VERIFIED>>` emission protocol (`skills/_shared/user-verified.md`) and fires an `AskUserQuestion` (before commit or merge) only when `RUN_TL3=on` and the staged file set matches a risk category (when `RUN_TL3=off`, the ask is suppressed and categories are logged only).
+When a TL2 fallback is taken, verification of the residual gap MUST happen at the closest workflow point before the action becomes irreversible (commit / merge / install). The `bin/check-verification-gate.sh` classifier runs as preflight inside the `<<WORKFLOW_USER_VERIFIED>>` emission protocol (`skills/_shared/user-verified.md`) and fires an `AskUserQuestion` (before commit or merge) only when `RUN_TL4=on` and the staged file set matches a risk category (when `RUN_TL4=off`, the ask is suppressed and categories are logged only).
 
 ### Risk categories (SSOT)
 
