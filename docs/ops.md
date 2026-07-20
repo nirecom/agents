@@ -109,9 +109,11 @@ GitHub label API objects to match. It runs only after the self-sync `sync` job s
 Settings → Secrets and variables → Actions → New repository secret → name it `PROPAGATE_LABELS_PAT`
 → paste the token value → save.
 
-**When the secret is absent:** the `propagate` job skips (it logs `PROPAGATE_LABELS_PAT not set —
-skipping propagation`), the sibling repos are left untouched, and the self-sync `sync` job still
-runs normally. No propagation failure is raised.
+**When the secret is absent:** the script first tries `gh auth token` as a fallback. In CI the
+GITHUB_TOKEN returned this way typically lacks push access to sibling repos, so the propagation
+effectively skips; in local developer runs `gh auth token` usually succeeds and propagation
+proceeds normally. If both `PROPAGATE_LABELS_PAT` and `gh auth token` are unavailable, the script
+exits 0 and logs `PROPAGATE_LABELS_PAT not set and gh auth token failed — skipping propagation`.
 
 **First run:** once the PAT is registered, pushing any change to `.github/labels.yml` or
 `bin/github-issues/sync-labels.sh` (or triggering a manual `workflow_dispatch`) fires the first
@@ -133,6 +135,17 @@ skipping every DELETE (each is logged `[NO-DELETE] Skipped delete`). For propaga
 `PROPAGATE_LABELS_NO_DELETE` to any non-empty value and `propagate-labels.sh` threads `--no-delete`
 through to each sibling. Use this for a first-time additive sync to a repo whose existing labels
 must be preserved.
+
+**`PROPAGATE_LABELS_REPOS` directory entries:** an entry can be either a direct git repo path or a
+parent directory. If the entry is a directory but not itself a git repo, `propagate-labels.sh`
+scans one level of subdirectories and propagates to each git repo found there. An empty parent
+(no git repos one level down) skips gracefully with exit 0.
+
+**Asset propagation:** in addition to `.github/labels.yml`, each sibling receives copies of
+`bin/github-issues/sync-labels.sh`, `.github/ISSUE_TEMPLATE/task.yml`,
+`.github/ISSUE_TEMPLATE/incident.yml`, and `.github/workflows/sync-labels.yml` from the agents
+workspace. Missing source assets are silently skipped; present ones are committed in the same
+commit as `labels.yml`.
 
 **Branch-protection note:** if a sibling's `main` branch has branch protection enabled, the
 direct push is rejected and that sibling is recorded as a failure (the others still proceed).
