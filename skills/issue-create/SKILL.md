@@ -132,27 +132,22 @@ Failure is non-fatal — the script logs a stderr warning and continues.
 
 ## Label policy
 
-- `type:task` is attached unconditionally by the underlying script.
+- `type:task` is attached unconditionally by the underlying script. (meaning: implementation task ticket — closes as a FEATURE history entry)
 - Additional non-`type:*` labels (e.g. `area:hooks`, `priority:high`) may be
   passed via `--label`. `type:*` is rejected to avoid confusing
   `/issue-close-finalize` routing.
 - **severity label (auto-classify, Phase 1)**: After gathering the issue title and body in Phase 1, evaluate the content and classify severity. Add at most one `severity:*` label:
-  - Fatal behavior (workflow stops, infinite loop, abort hang, security hole, or major feature rendered unusable) → `--label severity:high`.
+  - Fatal or high-impact behavior → `--label severity:high`:
+    - Workflow interruption or abnormal behavior mid-execution (abort, hang, infinite loop, etc.)
+    - Security breach (confidential information leak, external attack vector, prompt injection)
+    - Primary feature rendered completely unusable
   - Cosmetic or safely deferrable (visual glitch, non-blocking inconvenience, low-impact improvement) → `--label severity:low`.
   - All other cases → no severity label (no label = normal severity).
-- **model label (auto-detect, Phase 4)**: Before dispatching in Phase 4, read the system prompt injection "You are powered by the model named X" to identify the current model and add the corresponding `model:*` label.
-  - Injection present + table match → add `model:<matched>`.
-  - Injection present + no table match → add `model:others`.
-  - Injection absent → skip all `model:*` labels (do not add any `model:*` label).
-
-  | System-prompt model name contains | Label |
-  |---|---|
-  | `fable` | `model:fable` |
-  | `opus` | `model:opus` |
-  | `sonnet` | `model:sonnet` |
-  | `ds4` or `deepseek` | `model:ds4` |
-
-  Always add exactly one `model:*` label (or zero when injection is absent).
+- **reporter-model label (auto-detect, Phase 4)**: Before dispatching in Phase 4, read the system-prompt injection `"You are powered by the model named X. The exact model ID is <id>."` and pass the model identifier to the dispatch script via `--reporter-model "<id>"`. The script maps the raw model name to the correct `reporter-model:*` label — SKILL.md does not list label names or a mapping table.
+  - Example: injection says `"You are powered by the model named Sonnet 4.6. The exact model ID is claude-sonnet-4-6."` → pass `--reporter-model "claude-sonnet-4-6"` (script case `*sonnet*` matches).
+  - Injection present → pass `--reporter-model "<extracted-id>"` in the `--` passthrough args to the dispatch command.
+  - Injection absent → omit `--reporter-model` entirely (no reporter-model:* label added).
+  - Unrecognized model names: the script silently skips the label — do not add any label manually.
 
 ## Behavioral notes
 
