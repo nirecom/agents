@@ -634,3 +634,7 @@ Changes: `bin/audit-tests.sh` now uses GitHub issue `closed_at` instead of last-
 ### FEATURE: PR #1570 (2026-07-20)
 Background: feat(#1567,#295,#1566): self-sufficient gh + jq installer; add Prerequisites docs
 Changes: The installer (`install.ps1` / `install.sh`) now automatically installs `gh` (GitHub CLI) and `jq`. On interactive runs, `gh auth login` is attempted if not already authenticated; `gh auth refresh -s project` adds the Projects v2 scope required by `/issue-create`. CI / headless environments are skipped safely.;A new **Prerequisites** section in the README lists `gh` and `jq` with their required scopes and why each is needed.
+
+### FEATURE: PR #1577 (2026-07-20)
+Background: fix(#1568 #1533 #1457 #1449 #1385 #1191): fix 6 false positives in enforce-worktree hook
+Changes: Fixed 6 false positives in the `enforce-worktree` hook that blocked sanctioned commands (multi-line `gh issue create` body, ANSI-C-quoted body, `run-quality-gates.sh`, `bash -c` read-only workflow CLI, VAR-prefixed dispatch) from the main worktree.
