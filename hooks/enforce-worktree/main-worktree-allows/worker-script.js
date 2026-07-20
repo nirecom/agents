@@ -10,6 +10,51 @@ const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
 
+// Replace only real newlines that are inside DQ spans with a space.
+// Preserves $() and backtick verbatim (so the \$\( guard still fires on them).
+// Returns the original string on any exception.
+function foldDqNewlines(str) {
+  try {
+    let out = "";
+    let i = 0;
+    const n = str.length;
+    while (i < n) {
+      const ch = str[i];
+      if (ch !== '"') {
+        out += ch;
+        i++;
+        continue;
+      }
+      // Inside DQ span — fold literal newlines, keep everything else verbatim
+      out += '"';
+      i++;
+      while (i < n) {
+        const c = str[i];
+        if (c === "\\" && i + 1 < n) {
+          out += c + str[i + 1];
+          i += 2;
+          continue;
+        }
+        if (c === '"') {
+          out += c;
+          i++;
+          break;
+        }
+        if (c === "\r" || c === "\n") {
+          out += " ";
+          i++;
+        } else {
+          out += c;
+          i++;
+        }
+      }
+    }
+    return out;
+  } catch (_) {
+    return str;
+  }
+}
+
 /**
  * True when cmd is a sanctioned worker-script invocation whose write targets
  * (log redirects etc.) all resolve inside registered linked worktrees of repoRoot.
@@ -43,7 +88,7 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
       scriptPath = acd + scriptPath.slice("$AGENTS_CONFIG_DIR".length);
     }
   } else {
-    const m = cmd.match(/^\s*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
+    const m = cmd.match(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s'"]*\s+)*bash\s+"([^"]+)"(\s[\s\S]*)?$/);
     if (!m) return false;
     scriptPath = m[1];
     argTail    = m[2] || "";
@@ -59,6 +104,7 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
     "skills/issue-create/scripts/run-bulk-dispatch.sh",
     "skills/issue-create/scripts/run-phase5-record.sh",
     "skills/issue-close-finalize/scripts/pre-flight.sh",
+    "skills/review-code-security/scripts/run-quality-gates.sh",
   ];
 
   let normScript;
@@ -75,11 +121,14 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   });
   if (!matched) return false;
 
-  // (b) Structural argTail scan — reject chaining/substitution but allow redirects
-  if (/\|\||&&|;|\$\(|`|<\(|>\(|\n/.test(argTail)) return false;
+  // (b) Structural argTail scan — reject chaining/substitution but allow redirects.
+  // foldDqNewlines folds only DQ-internal newlines so "$(cmd)" is preserved for the
+  // \$\( check (fail-closed: DQ-internal $() still triggers rejection).
+  const scanTail = foldDqNewlines(argTail);
+  if (/\|\||&&|;|\$\(|`|<\(|>\(|\n/.test(scanTail)) return false;
   // Reject bare & (background operator): `cmd & evil` runs evil in main worktree.
   // &> / &>> (redirect-both forms) are exempt — their & is followed by >.
-  if (/&(?!>)/.test(argTail)) return false;
+  if (/&(?!>)/.test(scanTail)) return false;
 
   // (c) Extract write targets
   const { targets, parseFailure } = collectBashWriteTargets(cmd);

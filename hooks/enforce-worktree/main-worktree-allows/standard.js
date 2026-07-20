@@ -408,6 +408,23 @@ function isAllowedClarifyGuardLoop(cmd, repoRoot) {
   return true;
 }
 
+/**
+ * True when cmd is a `bash -c '...'` invocation whose inner body is read-only
+ * (no writes, no chaining operators, no $() with write content).
+ * Delegates to isReadOnlyInterpreterC from classify.js.
+ * Fail-closed: returns false on any error or missing dependency.
+ */
+function isAllowedReadOnlyWorkflowCli(cmd) {
+  if (!cmd || typeof cmd !== "string") return false;
+  try {
+    const { isReadOnlyInterpreterC } = require("../../lib/bash-write-patterns/classify");
+    if (typeof isReadOnlyInterpreterC !== "function") return false;
+    return isReadOnlyInterpreterC(cmd) === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = {
   isAllowedWorktreeCommand,
   isAllowedFastForwardMerge,
@@ -419,4 +436,5 @@ module.exports = {
   isAllowedWorkerScriptInvocation,
   isAllowedSupervisorBinTool,
   isAllowedClarifyGuardLoop,
+  isAllowedReadOnlyWorkflowCli,
 };

@@ -246,11 +246,13 @@ function isNewlineInjectedWriteIR(ir) {
   const raw = ir.rawText;
   if (!raw || typeof raw !== "string") return false;
   if (!/[\r\n]/.test(raw)) return false;
-  const { stripHeredocBody } = require("./strip-quoted-args");
+  const { stripHeredocBody, stripDqPreservingCmdSubst } = require("./strip-quoted-args");
   let stripped;
   try { stripped = stripHeredocBody(raw); } catch (_) { stripped = raw; }
   const folded = stripped.replace(/\\[ \t]*\r?\n/g, ' ');
-  const lines = folded.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+  let foldedDq;
+  try { foldedDq = stripDqPreservingCmdSubst(folded); } catch (_) { foldedDq = folded; }
+  const lines = foldedDq.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) return false;
   for (const line of lines) {
     if (innerCommandIsWrite(line, isCommandSubstWriteIR)) return true;
