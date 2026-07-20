@@ -18,7 +18,7 @@
 #   - The Final Report renders correctly with all PR fields as "(none)"
 #   - No gh CLI call is made (no PR attempted)
 #   - The session-close-worker skips /issue-close-finalize entirely
-#   These require a full claude -p E2E session and are gated on RUN_E2E.
+#   These require a full claude -p E2E session and are gated on RUN_TL3.
 
 set -u
 
