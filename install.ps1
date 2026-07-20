@@ -91,15 +91,13 @@ Write-Host ""
 Write-Host "--- Setting up global gitignore (WORKTREE_NOTES.md) ---"
 & "$AgentsRoot\install\win\global-gitignore.ps1"
 
-if (Get-Command gh -ErrorAction SilentlyContinue) {
-    $ghAuthStatus = gh auth status 2>&1 | Out-String
-    if ($LASTEXITCODE -eq 0) {
-        if ($ghAuthStatus -notmatch "'project'") {
-            Write-Host "notice: gh auth lacks 'project' scope -- Projects v2 / /issue-create will fail." -ForegroundColor Yellow
-            Write-Host "notice: Run 'gh auth refresh -s project' or '/issue-setup' to add it." -ForegroundColor Yellow
-        }
-    }
-}
+Write-Host ""
+Write-Host "--- Installing gh (GitHub CLI) ---"
+& "$AgentsRoot\install\win\gh.ps1"
+
+Write-Host ""
+Write-Host "--- Installing jq ---"
+& "$AgentsRoot\install\win\jq.ps1"
 
 Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Cyan
