@@ -53,6 +53,7 @@ case "$1" in
       add) exit 0 ;;
       commit) exit 0 ;;
       push) exit 0 ;;
+      rev-parse) exit 0 ;;
       remote)
         # Only emit output for get-url; other subcommands (set-url etc.) exit 0
         if [ "${2:-}" = "get-url" ]; then
