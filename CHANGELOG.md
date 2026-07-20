@@ -638,3 +638,7 @@ Changes: The installer (`install.ps1` / `install.sh`) now automatically installs
 ### FEATURE: PR #1577 (2026-07-20)
 Background: fix(#1568 #1533 #1457 #1449 #1385 #1191): fix 6 false positives in enforce-worktree hook
 Changes: Fixed 6 false positives in the `enforce-worktree` hook that blocked sanctioned commands (multi-line `gh issue create` body, ANSI-C-quoted body, `run-quality-gates.sh`, `bash -c` read-only workflow CLI, VAR-prefixed dispatch) from the main worktree.
+
+### FEATURE: PR #1578 (2026-07-20)
+Background: fix(#1560,#1546,#1262,#1545,#1548,#1565): propagate-labels PAT fallback, depth-1 scan, hooksPath clear, asset copy, docs, fixture fixes
+Changes: `propagate-labels.sh` no longer requires `PROPAGATE_LABELS_PAT` — it now falls back to `gh auth token` when the variable is unset, making local developer runs work out of the box.;`PROPAGATE_LABELS_REPOS` now accepts a parent directory: every git repo found one level deep is synced, letting you point it at a whole `~/git` parent instead of listing repos individually.;`propagate-labels.sh` now propagates `sync-labels.sh` and shared `.github` templates/workflows alongside `labels.yml`, keeping sibling repos fully in sync with agents in one pass.
