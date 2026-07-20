@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/refactor-enforce-worktree-positive-allow.sh
-# Tests: bin/compose-doc-append-entry, bin/lib/, bin/lib/github-contents-validate.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, hooks/enforce-worktree.js, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-create/SKILL.md
-# Tags: worktree, enforce, hook, issue-close, finalize
+# Tests: bin/compose-doc-append-entry, bin/lib/, bin/lib/github-contents-validate.sh, bin/lib/github-contents-write.sh, bin/lib/github-git-data-write.sh, hooks/enforce-worktree.js, hooks/lib/bash-write-targets.js, hooks/lib/strip-quoted-args.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/standard.js, skills/issue-close-finalize/scripts/step-e.sh, skills/issue-create/SKILL.md
+# Tags: worktree, enforce, hook, issue-close, finalize, scope:issue-specific
 #
 # Tests for refactor/enforce-worktree-positive-allow.
 #
@@ -112,6 +112,13 @@ test_l3_42_issue_659_multiline_body_bare_blocked_for_skill_reason_from_main
 test_l3_43_issue_713_process_env_alone_does_not_authorize
 test_l3_44_issue_713_other_gh_kinds_unaffected_main_in_session
 test_l3_45_issue_713_other_gh_kinds_unaffected_linked
+test_l3_46_issue_1533_dispatch_multiline_body_allowed_from_main
+test_l3_47_issue_1533_dispatch_command_substitution_blocked_from_main
+test_l3_48_issue_1457_ansi_c_quote_allowed_from_main
+test_l3_49_issue_1449_run_quality_gates_allowed_from_main
+test_l3_50_issue_1191_var_prefix_bash_dispatch_allowed_from_main
+test_l3_51_issue_1385_bash_c_readonly_workflow_allowed_from_main
+test_l3_52_issue_1385_bash_c_write_body_blocked_from_main
 
 echo ""
 echo "Total: PASS=$PASS FAIL=$FAIL"
