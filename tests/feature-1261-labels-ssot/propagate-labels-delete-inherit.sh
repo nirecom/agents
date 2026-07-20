@@ -145,12 +145,52 @@ case "$ARGS" in
 esac
 MOCK_EOF
 chmod +x "$TMP/mock-bin/gh"
+# #1560 fix: PROPAGATE_LABELS_REPOS must be a directory path (not a bare slug).
+# A bare slug never enters the -d branch and does not match the /*|drive-letter
+# cases, so propagate-labels.sh skips it and no delete is ever logged. Provide a
+# real directory plus a git mock whose `remote get-url origin` resolves it to a
+# sibling slug, so the -d branch drives clone → sync-labels.sh → gh label delete.
+cat > "$TMP/mock-bin/git" <<'MOCK_EOF'
+#!/bin/bash
+ARGS="$*"
+[ -n "${MOCK_LOG:-}" ] && printf '%s\n' "git $ARGS" >> "$MOCK_LOG"
+case "$1" in
+  clone)
+    DEST="${!#}"
+    mkdir -p "$DEST/.github"
+    echo "# old seeded content" > "$DEST/.github/labels.yml"
+    exit 0
+    ;;
+  -C)
+    _GIT_DIR="$2"; shift 2
+    case "$1" in
+      remote)
+        # `git -C <dir> remote get-url origin` → resolve sibling slug
+        [ "$2" = "get-url" ] && echo "https://github.com/myorg/myrepo.git"
+        exit 0
+        ;;
+      rev-parse) exit 0 ;;
+      config) exit 0 ;;
+      diff) exit "${GIT_DIFF_RC:-0}" ;;
+      add) exit 0 ;;
+      commit) exit 0 ;;
+      push) exit 0 ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+MOCK_EOF
+chmod +x "$TMP/mock-bin/git"
 export PROPAGATE_LABELS_PAT="test-secret-pat-12345"
 export GIT_DIFF_RC=0
 export AGENTS_WORKSPACE="$AGENTS_DIR"
 export GIT_WORK_DIR="$TMP/workdir"
 export CANONICAL_LABELS_FILE="$TMP/agents-workspace/.github/labels.yml"
-export PROPAGATE_LABELS_REPOS="myorg/myrepo"
+# Directory-path entry: propagate-labels.sh -d branch resolves it via
+# `git -C <dir> remote get-url origin` (mocked → myorg/myrepo).
+mkdir -p "$TMP/sibling-repo"
+export PROPAGATE_LABELS_REPOS="$TMP/sibling-repo"
 # labels.yml: type:task のみ (setup_mock の 2 件を上書き)
 cat > "$TMP/agents-workspace/.github/labels.yml" <<'LABELS_EOF'
 - name: "type:task"

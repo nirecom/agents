@@ -16,7 +16,7 @@ Run `/issue-setup` to initialize the target repo's labels and Projects v2 board.
 
 To sync labels manually only (e.g. when the project already exists): `bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"`, or add `--repo OWNER/REPO` for a different target.
 
-Creates `type:task`, `type:incident`, `status:cancelled`, `status:migrated`, and `priority:*` labels from `.github/labels.yml`. Safe to re-run (uses `--force`).
+Creates all labels defined in `.github/labels.yml` (the canonical set) from that file. Safe to re-run (uses `--force`).
 
 ## Step 2 — Migrate docs/history.md → closed issues — *Migration (one-time)*
 

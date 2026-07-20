@@ -12,8 +12,12 @@
 set -uo pipefail
 
 if [[ -z "${PROPAGATE_LABELS_PAT:-}" ]]; then
-    printf '%s\n' "PROPAGATE_LABELS_PAT not set — skipping propagation"
-    exit 0
+    _FALLBACK_TOKEN="$(gh auth token 2>/dev/null)"
+    if [[ -z "$_FALLBACK_TOKEN" ]]; then
+        printf '%s\n' "PROPAGATE_LABELS_PAT not set and gh auth token failed — skipping propagation"
+        exit 0
+    fi
+    PROPAGATE_LABELS_PAT="$_FALLBACK_TOKEN"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,11 +55,22 @@ while IFS= read -r _ENTRY_PATH; do
     [ -z "$_ENTRY_PATH" ] && continue
 
     if [ -d "$_ENTRY_PATH" ]; then
-        _REMOTE_URL="$(git -C "$_ENTRY_PATH" remote get-url origin 2>/dev/null)" || {
-            printf '%s\n' "cannot resolve remote for path: $_ENTRY_PATH — skipping" >&2
-            EXIT_CODE=1
-            continue
-        }
+        if git -C "$_ENTRY_PATH" rev-parse --git-dir >/dev/null 2>&1; then
+            _REMOTE_URLS=("$(git -C "$_ENTRY_PATH" remote get-url origin 2>/dev/null)")
+        else
+            _REMOTE_URLS=()
+            for _SUBDIR in "$_ENTRY_PATH"/*/; do
+                [ -d "$_SUBDIR" ] || continue
+                git -C "$_SUBDIR" rev-parse --git-dir >/dev/null 2>&1 || continue
+                _SUB_URL="$(git -C "$_SUBDIR" remote get-url origin 2>/dev/null)" || continue
+                [ -n "$_SUB_URL" ] || continue
+                _REMOTE_URLS+=("$_SUB_URL")
+            done
+            if [ "${#_REMOTE_URLS[@]}" -eq 0 ]; then
+                printf '%s\n' "no git repos found in depth-1 scan of: $_ENTRY_PATH — skipping" >&2
+                continue
+            fi
+        fi
     else
         case "$_ENTRY_PATH" in
             /*|[A-Za-z]:\\*)
@@ -76,52 +91,70 @@ while IFS= read -r _ENTRY_PATH; do
                 continue
                 ;;
         esac
+        _REMOTE_URLS=("$_REMOTE_URL")
     fi
 
-    SIBLING="$(printf '%s\n' "$_REMOTE_URL" | sed 's|.*github\.com[:/]\(.*\)\.git$|\1|; t; s|.*github\.com[:/]\(.*\)$|\1|')"
+    for _REMOTE_URL in "${_REMOTE_URLS[@]}"; do
+        SIBLING="$(printf '%s\n' "$_REMOTE_URL" | sed 's|.*github\.com[:/]\(.*\)\.git$|\1|; t; s|.*github\.com[:/]\(.*\)$|\1|')"
 
-    if ! [[ "$SIBLING" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-        printf '%s\n' "invalid resolved repo format: $SIBLING (from path: $_ENTRY_PATH) — skipping" >&2
-        EXIT_CODE=1
-        continue
-    fi
-
-    (
-        set -e
-
-        slug="${SIBLING//\//-}"
-        DEST="$GIT_WORK_DIR/$slug"
-
-        if ! git clone "https://x-access-token:$PROPAGATE_LABELS_PAT@github.com/$SIBLING.git" "$DEST"; then
-            printf '%s\n' "clone failed for $SIBLING — skipping" >&2
-            exit 1
+        if ! [[ "$SIBLING" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            printf '%s\n' "invalid resolved repo format: $SIBLING (from path: $_ENTRY_PATH) — skipping" >&2
+            EXIT_CODE=1
+            continue
         fi
 
-        git -C "$DEST" remote set-url origin "https://github.com/$SIBLING.git"
-        git -C "$DEST" config user.email "github-actions[bot]@users.noreply.github.com"
-        git -C "$DEST" config user.name "github-actions[bot]"
+        (
+            set -e
 
-        mkdir -p "$DEST/.github"
-        tmp="$(mktemp)"
-        { printf '%s\n' "$GENERATED_HEADER"; cat "$CANONICAL_LABELS_FILE"; } > "$tmp"
-        cp "$tmp" "$DEST/.github/labels.yml"
-        rm -f "$tmp"
+            slug="${SIBLING//\//-}"
+            DEST="$GIT_WORK_DIR/$slug"
 
-        git -C "$DEST" add .github/labels.yml
-        if git -C "$DEST" diff --cached --quiet; then
-            printf '%s\n' "$SIBLING: labels.yml unchanged — skipping commit/push"
-        else
-            git -C "$DEST" commit -m "chore: propagate labels.yml from nirecom/agents"
-            git -C "$DEST" push
+            if ! git clone "https://x-access-token:$PROPAGATE_LABELS_PAT@github.com/$SIBLING.git" "$DEST"; then
+                printf '%s\n' "clone failed for $SIBLING — skipping" >&2
+                exit 1
+            fi
+
+            git -C "$DEST" remote set-url origin "https://github.com/$SIBLING.git"
+            git -C "$DEST" config core.hooksPath ""
+            git -C "$DEST" config user.email "github-actions[bot]@users.noreply.github.com"
+            git -C "$DEST" config user.name "github-actions[bot]"
+
+            mkdir -p "$DEST/.github"
+            tmp="$(mktemp)"
+            { printf '%s\n' "$GENERATED_HEADER"; cat "$CANONICAL_LABELS_FILE"; } > "$tmp"
+            cp "$tmp" "$DEST/.github/labels.yml"
+            rm -f "$tmp"
+
+            git -C "$DEST" add .github/labels.yml
+            _ASSETS=(
+                "bin/github-issues/sync-labels.sh"
+                ".github/ISSUE_TEMPLATE/task.yml"
+                ".github/ISSUE_TEMPLATE/incident.yml"
+                ".github/workflows/sync-labels.yml"
+            )
+            for _ASSET in "${_ASSETS[@]}"; do
+                _SRC="$AGENTS_WORKSPACE/$_ASSET"
+                [ -f "$_SRC" ] || continue
+                _DEST_DIR="$DEST/$(dirname "$_ASSET")"
+                mkdir -p "$_DEST_DIR"
+                cp "$_SRC" "$DEST/$_ASSET"
+                git -C "$DEST" add "$_ASSET"
+            done
+            if git -C "$DEST" diff --cached --quiet; then
+                printf '%s\n' "$SIBLING: nothing changed — skipping commit/push"
+            else
+                git -C "$DEST" commit -m "chore: propagate labels and shared .github assets from nirecom/agents"
+                git -C "$DEST" push
+            fi
+
+            GH_TOKEN="$PROPAGATE_LABELS_PAT" bash "$SCRIPT_DIR/sync-labels.sh" \
+                --repo "$SIBLING" ${PROPAGATE_LABELS_NO_DELETE:+--no-delete} "$CANONICAL_LABELS_FILE"
+        )
+        rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            EXIT_CODE=1
         fi
-
-        GH_TOKEN="$PROPAGATE_LABELS_PAT" bash "$SCRIPT_DIR/sync-labels.sh" \
-            --repo "$SIBLING" ${PROPAGATE_LABELS_NO_DELETE:+--no-delete} "$CANONICAL_LABELS_FILE"
-    )
-    rc=$?
-    if [[ "$rc" -ne 0 ]]; then
-        EXIT_CODE=1
-    fi
+    done
 done < <(printf '%s\n' "$PROPAGATE_LABELS_REPOS" | tr ';' '\n')
 
 exit "$EXIT_CODE"
