@@ -44,5 +44,9 @@ else
     printf "${C_YELLOW}gh: non-interactive session — skipping gh auth login. Run 'gh auth login' manually later.${C_RESET}\n"
 fi
 
-# Add project scope (always run — non-fatal)
-gh auth refresh -s project || printf "${C_YELLOW}gh auth refresh -s project did not complete; continuing installation.${C_RESET}\n"
+# Add project scope (only if not already granted — idempotency)
+if gh auth status 2>&1 | grep -qi 'project'; then
+    printf "${C_GRAY}gh: project scope already granted.${C_RESET}\n"
+else
+    gh auth refresh -s project || printf "${C_YELLOW}gh auth refresh -s project did not complete; continuing installation.${C_RESET}\n"
+fi

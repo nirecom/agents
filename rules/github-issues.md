@@ -88,7 +88,7 @@ GitHub Issues and PRs share the same number space. Distinguish them in prose:
 
 ## Environment
 
-- `gh` must have `project` scope for Projects v2 (`/issue-create`): `gh auth refresh -s project`. Default `gh auth login` does not include `project`. The `agents` installer (`install.ps1` / `install.sh`) installs `gh` and runs `gh auth refresh -s project` automatically; dotfiles may also install `gh` as a side effect, but `agents` manages its own copy independently.
+- `gh` must have `project` scope for Projects v2 (`/issue-create`).
 - `AGENTS_CONFIG_DIR` must be set for `/issue-close-stage` and `/issue-close-finalize` (skills abort with clear error if unset).
 - `gh issue close` from bash scripts (`close-completed.sh`, `close-not-planned.sh`) is invisible to `enforce-issue-close.js` — PreToolUse fires on the Bash-tool command head only, not subprocesses.
 - `ISSUE_CLOSE_SKILL=1` is effective only in the hook's Node.js process (set at session launch). Bash-tool inline or `export` forms do not reach the hook process.
