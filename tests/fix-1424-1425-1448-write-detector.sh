@@ -237,6 +237,30 @@ else
     fail "N1d isNewlineInjectedWriteIR(write on second line) expected true, got $got"
 fi
 
+# N1e — MUST-NOT-FIRE: DQ body containing a real embedded newline (not backslash-continuation).
+# A command like `gh issue create --body "line1\nline2"` where \n is a literal newline
+# INSIDE a double-quoted string must NOT trigger write detection.
+# The DQ span is not a command separator — it is data inside quotes.
+# stripDqPreservingCmdSubst must blank out the DQ contents so the embedded LF
+# does not become a spurious second command line.
+# Expected: isNewlineInjectedWriteIR returns false (fix in stripDqPreservingCmdSubst).
+got="$(node -e "
+const nl = '\n';
+// Construct: gh issue create --body \"line1<LF>rm -rf /\nline3\"
+// The body text contains real newlines but is wrapped in double quotes.
+const body = 'line1' + nl + 'rm -rf /' + nl + 'line3';
+const cmd = 'gh issue create --body \"' + body + '\"';
+const {parse} = require('${_AGENTS_DIR_NODE}/hooks/lib/command-ir');
+const {isNewlineInjectedWriteIR} = require('${TARGETS_JS}');
+const ir = parse(cmd);
+console.log(isNewlineInjectedWriteIR(ir) ? 'true' : 'false');
+" 2>/dev/null)"
+if [ "$got" = "false" ]; then
+    pass "N1e isNewlineInjectedWriteIR(DQ body with real embedded newlines) → false (newlines inside DQ are data, not command separators)"
+else
+    fail "N1e isNewlineInjectedWriteIR(DQ body with embedded newlines) expected false, got $got (false-positive: DQ body contents not stripped)"
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Section 3: #1448 — sequenced outside-scope allow via full hook
 #

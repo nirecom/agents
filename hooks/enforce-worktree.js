@@ -32,7 +32,7 @@ const { setPayloadDerivedPaths, _getPayloadDerivedPaths, getSessionRepoRoots } =
 const { hasGitHooksBypass } = require("./enforce-worktree/git-hooks-bypass");
 const { findFirstUnquotedAnd, hasCommandSequencing, hasCommandSequencingOutsideHeredoc, isExcluded, getExcludePatterns, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix } = require("./enforce-worktree/shared-cmd-utils");
 const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhenNotCheckedOut } = require("./enforce-worktree/branch-delete-guard");
-const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop } = require("./enforce-worktree/main-worktree-allows");
+const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop, isAllowedReadOnlyWorkflowCli } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
 
@@ -474,6 +474,7 @@ if (mainCheckout !== false) {
     if (isAllowedWorktreeCommand(cmd, repoRoot)) done();
     if (isAllowedFastForwardMerge(cmd)) done();
     if (isAllowedReadOnlyConfigCheck(cmd)) done();
+    if (isAllowedReadOnlyWorkflowCli(cmd)) done();
     if (isAllowedPushAllExcluded(cmd, repoRoot, getExcludePatterns())) done();
     if (isAllowedMidOperationAbort(cmd, repoRoot)) done();
     if (isAllowedMainWorktreeCleanup(cmd, repoRoot)) done();
@@ -528,4 +529,5 @@ module.exports = {
   setPayloadDerivedPaths,
   _getPayloadDerivedPaths,
   isAllowedClarifyGuardLoop,
+  isAllowedReadOnlyWorkflowCli,
 };

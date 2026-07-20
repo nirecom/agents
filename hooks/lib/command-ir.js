@@ -34,6 +34,18 @@ function hasUnclosedQuote(str) {
       i++;
     } else {
       if (ch === '"') { inDouble = true; i++; }
+      else if (ch === '$' && i + 1 < n && str[i + 1] === "'") {
+        // ANSI-C quoting: $'...' — skip without setting inSingle
+        i += 2; // skip $ and opening '
+        let closed = false;
+        while (i < n) {
+          const ac = str[i];
+          if (ac === '\\' && i + 1 < n) { i += 2; continue; }
+          if (ac === "'") { i++; closed = true; break; }
+          i++;
+        }
+        if (!closed) return true; // fail-closed: unclosed ANSI-C quote
+      } else if (ch === '\\' && i + 1 < n) { i += 2; } // backslash-escape in unquoted context
       else if (ch === "'") { inSingle = true; i++; }
       else { i++; }
     }
