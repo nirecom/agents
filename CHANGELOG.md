@@ -650,3 +650,7 @@ Changes: Installer no longer triggers interactive device-auth prompts on re-run 
 ### FEATURE: PR #1585 (2026-07-20)
 Background: refactor(#1581): rename RUN_E2E to RUN_TL3; fix TL3 test selection
 Changes: `RUN_E2E` flag renamed to `RUN_TL3` — if you run TL3 tests locally, update your `.env` (`RUN_E2E=on` → `RUN_TL3=on`). Setting `RUN_TL3=on` now also auto-selects all `tests/TL3-*.sh` files when running the test suite via `bin/select-tests.sh`.
+
+### FEATURE: PR #1587 (2026-07-20)
+Background: fix(#1576): audit-tests parser hardening + sweep-tests --fix-headers/--apply
+Changes: `audit-tests` gains `--fix-headers` (report malformed `# Tests:` tokens) and `--apply` (auto-rewrite headers; git-rm closed stale test files). `pre-commit` now enforces the `# Tests:` header format (regex `^[A-Za-z0-9._/-]+$` per token) and blocks commits that violate it. `bin/check-test-scope-tag.sh` renamed to `bin/check-test-frontmatter.sh`.
