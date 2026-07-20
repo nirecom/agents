@@ -1,6 +1,6 @@
 "use strict";
-// Extract scannable text from `gh` forge-write commands (issue/pr create|edit|close|comment|review).
-// Deliberately narrower than GH_GROUP_A_REGEX — excludes `gh repo` and `gh api`.
+// Extract scannable text from `gh` forge-write commands (issue/pr create|edit|close|comment|review;
+// repo create|edit). `gh api` write commands also covered. `gh repo rename|archive|delete` excluded.
 
 const { stripQuotedArgs, stripInlineBodyArg } = require("./strip-quoted-args");
 
@@ -10,9 +10,15 @@ const FORGE_SCAN_TARGET_REGEX =
 const GH_API_WRITE_REGEX =
   /\bgh\b\s+api\b.*?(?:-X\s+(?:POST|PATCH|PUT|DELETE)|--method(?:\s+|=)(?:POST|PATCH|PUT|DELETE))/i;
 
+const GH_REPO_WRITE_REGEX = /\bgh\b\s+repo\s+(?:create|edit)\b/;
+
 function isForgeScanTarget(command) {
   if (typeof command !== "string" || command.length === 0) return false;
-  return FORGE_SCAN_TARGET_REGEX.test(command) || GH_API_WRITE_REGEX.test(command);
+  return FORGE_SCAN_TARGET_REGEX.test(command) || GH_API_WRITE_REGEX.test(command) || GH_REPO_WRITE_REGEX.test(command);
+}
+
+function isRepoWriteTarget(command) {
+  return typeof command === "string" && command.length > 0 && GH_REPO_WRITE_REGEX.test(command);
 }
 
 // Extract --body / --title quoted values (single or double quoted).
@@ -94,6 +100,10 @@ function extractTexts(command) {
   extractFlagUnquoted(command, "title", inline);
   extractBodyFile(command, filePaths);
   extractHeredocs(command, inline);
+  extractFlagQuoted(command, "description", inline);
+  extractFlagUnquoted(command, "description", inline);
+  extractFlagQuoted(command, "homepage", inline);
+  extractFlagUnquoted(command, "homepage", inline);
   return { inline, filePaths };
 }
 
@@ -149,4 +159,4 @@ function extractRepoFlag(command) {
   return null;
 }
 
-module.exports = { isForgeScanTarget, extractTexts, extractRepoFlag, GH_API_WRITE_REGEX };
+module.exports = { isForgeScanTarget, isRepoWriteTarget, extractTexts, extractRepoFlag, GH_API_WRITE_REGEX, GH_REPO_WRITE_REGEX };
