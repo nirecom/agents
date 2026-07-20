@@ -12,9 +12,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/test-frontmatter-constants.sh
+source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
+# shellcheck source=lib/test-frontmatter-fix.sh
+source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+
 STALE_MONTHS=3
 OFFLINE=0
 FORMAT=text
+FIX_HEADERS=0
+APPLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +36,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --offline)
       OFFLINE=1
+      shift
+      ;;
+    --fix-headers)
+      FIX_HEADERS=1
+      shift
+      ;;
+    --apply)
+      APPLY=1
       shift
       ;;
     --format)
@@ -124,6 +140,17 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
   stem="${base%.sh}"
   sibling="tests/${stem}"
 
+  # --fix-headers mode: report (or, with --apply, rewrite) the # Tests: header
+  # for every dispatcher regardless of staleness. Deletion staleness logic is
+  # skipped in this mode.
+  if [[ "$FIX_HEADERS" -eq 1 ]]; then
+    _fix_headers_report "$dispatcher"
+    if [[ "$APPLY" -eq 1 ]]; then
+      _fix_headers_apply "$dispatcher"
+    fi
+    continue
+  fi
+
   # Validate # Tests: header (warn if listed path missing).
   tests_header="$(grep -m1 -E '^# Tests:' "$dispatcher" 2>/dev/null || true)"
   if [[ -n "$tests_header" ]]; then
@@ -164,7 +191,8 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
   issue_state="unknown"
   issue_closed_at=""
   if [[ "$OFFLINE" -eq 0 && "$GH_OK" -eq 1 ]]; then
-    raw_fields="$(gh api "repos/${REPO_SLUG}/issues/${issue_num}" \
+    GH_TIMEOUT="${GH_TIMEOUT:-30}"
+    raw_fields="$("$SCRIPT_DIR/run-with-timeout.sh" "$GH_TIMEOUT" gh api "repos/${REPO_SLUG}/issues/${issue_num}" \
       --jq '.state + " " + (.closed_at // "")' 2>/dev/null || true)"
     issue_state="$(echo "$raw_fields" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]')"
     issue_closed_at="$(echo "$raw_fields" | cut -d' ' -f2-)"
@@ -190,6 +218,18 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
 
   CANDIDATES+=("$dispatcher")
 
+  # --apply (deletion) mode: git-rm the candidate only when every # Tests: token
+  # is format-OK (A-flag=false) AND path-deleted-with-no-rename (C-class).
+  if [[ "$APPLY" -eq 1 ]]; then
+    classify_tests_header "$dispatcher"
+    if [[ "$CHR_ALL_C" -eq 1 ]]; then
+      git rm -q "$dispatcher" >/dev/null 2>&1 || git rm "$dispatcher" || true
+      echo "DELETED: ${dispatcher}"
+    else
+      echo "SKIP_DELETE_HAS_A_OR_B: ${dispatcher}"
+    fi
+  fi
+
   if [[ "$FORMAT" == "text" ]]; then
     echo "CANDIDATE: ${dispatcher}"
     echo "  Issue: #${issue_num} (${issue_state}, closed: ${issue_closed_date})"
@@ -211,6 +251,11 @@ for dispatcher in tests/feature-[0-9]*-*.sh; do
     JSON_ITEMS+=("{\"dispatcher\":\"${dispatcher}\",\"issue\":${issue_num},\"state\":\"${issue_state}\",\"closed_at\":\"${issue_closed_date}\",\"last_commit\":\"${max_date}\",\"dispatcher_date\":\"${disp_date}\",\"sibling_date\":\"${sib_date}\",\"sibling\":${sib_field},\"sibling_file_count\":${sib_count}}")
   fi
 done
+
+# --fix-headers mode reports per-file and does not emit staleness candidates.
+if [[ "$FIX_HEADERS" -eq 1 ]]; then
+  exit 0
+fi
 
 if [[ "$FORMAT" == "json" ]]; then
   printf '{"generated":"%s","cutoff":"%s","stale_months":%s,"offline":%s,"candidates":[' \

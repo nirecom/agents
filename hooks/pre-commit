@@ -244,10 +244,10 @@ while IFS= read -r f; do
 done <<< "$(git diff --cached --name-only -- 'tests/*.sh')"
 if [ -n "$_staged_tests" ]; then
   # shellcheck disable=SC2086
-  if ! "$_cfg_dir/bin/check-test-scope-tag.sh" --staged $_staged_tests; then
+  if ! "$_cfg_dir/bin/check-test-frontmatter.sh" --staged $_staged_tests; then
     echo ""
-    echo "Commit blocked: staged tests/*.sh file(s) lack scope:issue-specific or scope:common tag."
-    echo "Add '# Tags: ... scope:issue-specific' or '# Tags: ... scope:common' to the file."
+    echo "Commit blocked: staged tests/*.sh file(s) fail frontmatter validation."
+    echo "Each file must have '# Tests: <path>' (comma-separated tokens) and '# Tags: ... scope:...'."
     exit 1
   fi
 fi

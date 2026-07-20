@@ -8,12 +8,21 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/test-frontmatter-constants.sh
+source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
+# shellcheck source=lib/test-frontmatter-fix.sh
+source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+
 FORMAT="text"
 OFFLINE=0
+FIX_HEADERS=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --format) FORMAT="$2"; shift 2 ;;
     --offline) OFFLINE=1; shift ;;
+    --fix-headers) FIX_HEADERS=1; shift ;;
+    --apply) echo "ERROR: --apply is not supported by audit-tests-common.sh (deletion requires issue staleness context)" >&2; exit 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -47,6 +56,13 @@ for testfile in "$REPO_ROOT/tests/"*.sh; do
   case "$testfile" in
     */tests/_archive/*) continue ;;
   esac
+
+  # --fix-headers mode: report A/B/C token classification per file (no rewrite;
+  # deletion is not supported here — CPR-5 symmetry with audit-tests.sh).
+  if [[ "$FIX_HEADERS" -eq 1 ]]; then
+    ( cd "$REPO_ROOT" && _fix_headers_report "tests/$base" )
+    continue
+  fi
 
   tests_header="$(grep -m1 -E '^# Tests:' "$testfile" 2>/dev/null || true)"
   if [[ -z "$tests_header" ]]; then
@@ -88,6 +104,11 @@ for testfile in "$REPO_ROOT/tests/"*.sh; do
     orphan_missing_csvs+=("$local_missing")
   fi
 done
+
+# --fix-headers mode reports per-file classification and does not emit orphans.
+if [[ "$FIX_HEADERS" -eq 1 ]]; then
+  exit 0
+fi
 
 if [[ "${#orphan_files[@]}" -eq 0 ]]; then
   if [[ "$FORMAT" == "json" ]]; then
