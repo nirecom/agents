@@ -215,14 +215,14 @@ done
 After migration, all session artifacts (`-intent.md`, `-outline.md`,
 `-detail.md`, `drafts/-context.md`) share a prefix-less session-ID stem.
 
-## Claude Code E2E Tests
+## Claude Code TL3 Tests
 
 E2E tests that spawn real `claude -p` sessions are opt-in. They are gated on the
-`RUN_E2E` config flag — `bin/get-config-var --is-off RUN_E2E off && exit 77`
+`RUN_TL3` config flag — `bin/get-config-var --is-off RUN_TL3 off && exit 77`
 makes the test skip with TAP exit code 77 when the flag is off. Set
-`RUN_E2E=on` in the agents config `.env` to run them locally.
+`RUN_TL3=on` in the agents config `.env` to run them locally.
 
-When `RUN_E2E=off` the verification-gate ask is also suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the worktree-end path); set `RUN_E2E=on` to re-activate it.
+When `RUN_TL3=off` the verification-gate ask is also suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the worktree-end path); set `RUN_TL3=on` to re-activate it.
 
 When `claude` is not on `PATH`, gates also exit 77
 (`command -v claude >/dev/null 2>&1 || exit 77`). This keeps CI green on hosts
