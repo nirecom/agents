@@ -642,3 +642,7 @@ Changes: Fixed 6 false positives in the `enforce-worktree` hook that blocked san
 ### FEATURE: PR #1578 (2026-07-20)
 Background: fix(#1560,#1546,#1262,#1545,#1548,#1565): propagate-labels PAT fallback, depth-1 scan, hooksPath clear, asset copy, docs, fixture fixes
 Changes: `propagate-labels.sh` no longer requires `PROPAGATE_LABELS_PAT` — it now falls back to `gh auth token` when the variable is unset, making local developer runs work out of the box.;`PROPAGATE_LABELS_REPOS` now accepts a parent directory: every git repo found one level deep is synced, letting you point it at a whole `~/git` parent instead of listing repos individually.;`propagate-labels.sh` now propagates `sync-labels.sh` and shared `.github` templates/workflows alongside `labels.yml`, keeping sibling repos fully in sync with agents in one pass.
+
+### FEATURE: PR #1580 (2026-07-20)
+Background: fix(#1573): gh auth refresh -s project — add idempotency scope check (#1580)
+Changes: Installer no longer triggers interactive device-auth prompts on re-run when GitHub project scope is already granted.
