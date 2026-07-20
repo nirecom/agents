@@ -630,3 +630,7 @@ Changes: `sync-labels.sh` now supports `--no-delete` to add and update labels wi
 ### FEATURE: PR #1562 (2026-07-20)
 Background: fix(#1557): audit-tests staleness via closed_at; add common orphan detector and scope tag enforcement
 Changes: `bin/audit-tests.sh` now uses GitHub issue `closed_at` instead of last-commit date to detect stale issue-specific tests — fixes a regression introduced in 2026-06-01 where all candidates were suppressed.;New `/sweep-tests` skill reports retirement candidates on demand (scope:common orphan detection via `bin/audit-tests-common.sh`; nightly CI steps added).;`bin/check-test-scope-tag.sh` enforces `scope:issue-specific` / `scope:common` tag on staged `tests/*.sh` at pre-commit.
+
+### FEATURE: PR #1570 (2026-07-20)
+Background: feat(#1567,#295,#1566): self-sufficient gh + jq installer; add Prerequisites docs
+Changes: The installer (`install.ps1` / `install.sh`) now automatically installs `gh` (GitHub CLI) and `jq`. On interactive runs, `gh auth login` is attempted if not already authenticated; `gh auth refresh -s project` adds the Projects v2 scope required by `/issue-create`. CI / headless environments are skipped safely.;A new **Prerequisites** section in the README lists `gh` and `jq` with their required scopes and why each is needed.
