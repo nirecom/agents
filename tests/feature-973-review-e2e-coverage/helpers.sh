@@ -16,7 +16,7 @@ Stub fixture for review-e2e-coverage tests.
 
 | Hook | Current L2 | Priority | Rationale |
 |---|---|---|---|
-| `hooks/workflow-mark.js` | partial (`tests/feature-robust-workflow/settings-e2e.sh` — RUN_E2E-gated) | **P1 — extract** | E2E exists but is gated by RUN_E2E. |
+| `hooks/workflow-mark.js` | partial (`tests/feature-robust-workflow/settings-e2e.sh` — RUN_TL3-gated) | **P1 — extract** | E2E exists but is gated by RUN_TL3. |
 | `hooks/stop-confirm-plan-guard.js` | none | **P1 — add** | Stop-hook sentinel-order validation. |
 | `hooks/stop-final-report-guard.js` | extensive | **P2 — add E2E** | L2 cannot exercise real Stop-event path. |
 | `hooks/session-start.js` | partial | **P2 — add E2E** | env-file write covered at L2. |
@@ -68,7 +68,7 @@ write_e2e_test_for_hook() {
 # Tests: hooks/${hook_stem}.js
 # Tags: scope:issue-specific, e2e
 [ -x "\$AGENTS_DIR/bin/get-config-var" ] || exit 77
-"\$AGENTS_DIR/bin/get-config-var" --is-off RUN_E2E off && exit 77
+"\$AGENTS_DIR/bin/get-config-var" --is-off RUN_TL3 off && exit 77
 command -v claude >/dev/null 2>&1 || exit 77
 unset CLAUDECODE
 # Reference: hooks/${hook_stem}.js
