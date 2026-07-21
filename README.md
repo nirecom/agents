@@ -9,7 +9,7 @@
 - **One installer, every platform** — Linux, macOS, and Windows (native and WSL2) all handled by a single branching install; hooks and shell rules detect the platform automatically.
 
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
-Codex CLI and Gemini CLI are both supported (install with `-Develop`).
+Codex CLI is supported (install with `-Develop`).
 
 ## Prerequisites
 
@@ -306,7 +306,7 @@ GitHub Copilot for VS Code is required for Copilot integration. The installer
 ```bash
 git clone https://github.com/nirecom/agents ~/git/agents
 cd ~/git/agents && ./install.sh
-# Add --develop to also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
+# Add --develop to also install Codex CLI
 ```
 
 > If nvm was just installed, restart your terminal before re-running `./install.sh` so that Node.js (npm) is available.
@@ -323,7 +323,7 @@ source ~/.agents_profile
 git clone https://github.com/nirecom/agents $HOME\git\agents
 Set-Location $HOME\git\agents
 .\install.ps1
-# Add -Develop to also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
+# Add -Develop to also install Codex CLI
 ```
 
 > If fnm was just installed, restart your terminal before re-running `.\install.ps1` so that Node.js (npm) is available.

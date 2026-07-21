@@ -5,6 +5,9 @@ export SYSTEM_OPS_APPROVED=1
 #
 # Provides: gemini_core_init, gemini_core_check_cli,
 #           gemini_core_run, gemini_core_log, gemini_core_emit_failed
+#
+# NOTE: gemini_core_extract_svg was removed (diagram-specific).
+#       Keep this file for future reviewer LLM use of gemini CLI.
 
 # gemini_core_init <label>
 # Sets: GEMINI_LABEL, LOG_DIR, START_TS, START_EPOCH, SESSION_ID, BRANCH
@@ -105,28 +108,3 @@ gemini_core_emit_failed() {
   exit 0
 }
 
-# gemini_core_extract_svg <raw_output>
-# Extracts SVG markup from a Gemini response.
-# Looks for <svg...>...</svg> block; falls back to stripping ```svg fences.
-# Prints extracted SVG to stdout; returns 1 if nothing found.
-gemini_core_extract_svg() {
-  local raw="$1"
-
-  # Try to extract fenced ```svg block first
-  local fenced
-  fenced=$(printf '%s' "$raw" | sed -n '/^```svg/,/^```/{/^```/d;p}')
-  if [[ -n "$fenced" ]]; then
-    printf '%s\n' "$fenced"
-    return 0
-  fi
-
-  # Fallback: extract <svg...>...</svg> directly
-  local inline
-  inline=$(printf '%s' "$raw" | sed -n '/<svg/,/<\/svg>/p')
-  if [[ -n "$inline" ]]; then
-    printf '%s\n' "$inline"
-    return 0
-  fi
-
-  return 1
-}

@@ -85,7 +85,7 @@ mkdir -p "$FAKE_ROOT/install/linux"
 mkdir -p "$FAKE_ROOT/mock-bin"
 
 # NOP sub-scripts
-for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh global-gitignore.sh codex.sh gemini.sh gh.sh jq.sh; do
+for _stub in dotfileslink.sh claude-code.sh session-sync-init.sh vscode-settings.sh global-gitignore.sh codex.sh gh.sh jq.sh; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_ROOT/install/linux/$_stub"
     chmod +x "$FAKE_ROOT/install/linux/$_stub"
 done
