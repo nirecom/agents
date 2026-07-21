@@ -339,8 +339,12 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Evidence-based auto-complete for outline (#1133): outline.md exists →
-  // mark complete and recompute. MUST run BEFORE the inconsistency scan.
+  // Evidence-based auto-complete for outline (#1133): outline.md exists AND no
+  // codex review cycle is in flight (round-number/concern-ledger files absent —
+  // see evidence-resolver.js) → mark complete and recompute. A draft written
+  // mid-loop must NOT auto-complete; outline.md is overwritten in place on
+  // every revision round, so file existence alone is not proof of approval.
+  // MUST run BEFORE the inconsistency scan.
   if (currentStep === "outline" && !_didAutoRepair &&
       (state.steps.outline || {}).status === "pending") {
     const { hasCompletionEvidence: hce1133o } = require("../../hooks/lib/workflow-state/evidence-resolver");
@@ -351,8 +355,12 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Evidence-based auto-complete for detail (#1133): detail.md exists →
-  // mark complete and recompute. MUST run BEFORE the inconsistency scan.
+  // Evidence-based auto-complete for detail (#1133): detail.md exists AND no
+  // codex review cycle is in flight (round-number/concern-ledger files absent —
+  // see evidence-resolver.js) → mark complete and recompute. A draft written
+  // mid-loop must NOT auto-complete; detail.md is overwritten in place on
+  // every revision round, so file existence alone is not proof of approval.
+  // MUST run BEFORE the inconsistency scan.
   if (currentStep === "detail" && !_didAutoRepair &&
       (state.steps.detail || {}).status === "pending") {
     const { hasCompletionEvidence: hce1133d } = require("../../hooks/lib/workflow-state/evidence-resolver");
