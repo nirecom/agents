@@ -2,7 +2,7 @@
 
 This document describes the design decisions behind extending the agents framework to
 GitHub Copilot (VS Code). Claude Code remains the primary target; Copilot is the first
-secondary target, with Codex CLI and Gemini CLI planned for later.
+secondary target, with Codex CLI planned for later.
 
 ---
 
@@ -317,12 +317,12 @@ The following were explicitly excluded from the initial Copilot port:
 | `/loop`, `/schedule` harness skills | Claude Code-specific; no Copilot equivalent |
 | `AGENTS.md` creation | Deferred to Codex support pass; today only the settings key is enabled |
 | Codex CLI support | Next after Copilot pilot |
-| Gemini CLI support | Next after Codex |
+| Gemini CLI support | Removed — see history/2026.md |
 | VS Code extension hooks | Copilot hook system covers config-based hooks; a VS Code extension would be needed for deeper integration (e.g., workflow gate UI) |
 
 ---
 
-## 8. Future: Codex and Gemini
+## 8. Future: Codex
 
 The directory layout is designed to accept siblings:
 
@@ -331,13 +331,13 @@ agents/
 ├── copilot/
 │   └── prompts/       ← Copilot-specific skill rewrites (make-plan, write-tests, deep-research)
 ├── codex/             ← future: AGENTS.md body + ~/.codex/prompts/ symlinks
-└── gemini/            ← future: GEMINI.md body + ~/.gemini/ hooks
 ```
 
 Skills shared without modification live under `skills/` and are served to all agents via
 the `~/.claude/skills/` symlink and the Agent Skills open standard.
 
-Gemini CLI's hook system is also Claude Code-compatible (same JSON protocol, similar
-hook event names). The `settings.json` matcher extension pattern used for Copilot
-should apply directly. Codex CLI does not have a hooks API as of early 2026; coverage
+Codex CLI does not have a hooks API as of early 2026; coverage
 will be limited to instructions and custom prompts.
+
+> Note: The gemini/ sibling directory was removed as part of the Gemini/mermaid diagram
+> tooling retirement. See [history/2026.md](../history/2026.md) for context.
