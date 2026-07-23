@@ -42,8 +42,8 @@ check_literal "R38" "CP-1" "skills/commit-push/SKILL.md"
 # R39: deep-research → DR
 check_literal "R39" "DR-1" "skills/deep-research/SKILL.md"
 
-# R40: draw-mermaid → DM
-check_literal "R40" "DM-1" "skills/draw-mermaid/SKILL.md"
+# R40: draw-mermaid → removed (Gemini/mermaid diagram tooling retired)
+# check_literal "R40" "DM-1" "skills/draw-mermaid/SKILL.md"  # file deleted
 
 # R41: issue-create → IC
 check_literal "R41" "IC-1" "skills/issue-create/SKILL.md"
