@@ -214,18 +214,6 @@ Write-Launcher "$LocalBin\get-config-var.cmd" $gcvCmdContent "get-config-var.cmd
 $gcvShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/get-config-var`" `"`$@`"`n"
 Write-Launcher "$LocalBin\get-config-var" $gcvShimContent "get-config-var (bash shim)"
 
-# --- ~/.local/bin/draw-diagram launchers (cmd + bash shim) ---
-$ddCmdContent = "@echo off`r`nwsl bash -c ""draw-diagram %*""`r`n"
-Write-Launcher "$LocalBin\draw-diagram.cmd" $ddCmdContent "draw-diagram.cmd"
-$ddShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/draw-diagram`" `"`$@`"`n"
-Write-Launcher "$LocalBin\draw-diagram" $ddShimContent "draw-diagram (bash shim)"
-
-# --- ~/.local/bin/draw-diagram-gemini launchers (cmd + bash shim) ---
-$ddgCmdContent = "@echo off`r`nwsl bash -c ""draw-diagram-gemini %*""`r`n"
-Write-Launcher "$LocalBin\draw-diagram-gemini.cmd" $ddgCmdContent "draw-diagram-gemini.cmd"
-$ddgShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/draw-diagram-gemini`" `"`$@`"`n"
-Write-Launcher "$LocalBin\draw-diagram-gemini" $ddgShimContent "draw-diagram-gemini (bash shim)"
-
 # --- ~/.local/bin/extract-accepted-tradeoffs launchers (cmd + bash shim) ---
 $eatCmdContent = "@echo off`r`nwsl bash -c ""extract-accepted-tradeoffs %*""`r`n"
 Write-Launcher "$LocalBin\extract-accepted-tradeoffs.cmd" $eatCmdContent "extract-accepted-tradeoffs.cmd"

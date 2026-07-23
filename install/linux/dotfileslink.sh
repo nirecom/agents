@@ -243,15 +243,6 @@ printf "${C_GREEN}Symlinked: ~/.local/bin/review-plan-codex${C_RESET}\n"
 ln -sf "$AGENTS_ROOT/bin/get-config-var" ~/.local/bin/get-config-var
 printf "${C_GREEN}Symlinked: ~/.local/bin/get-config-var${C_RESET}\n"
 
-# --- ~/.local/bin/draw-diagram symlink ---
-ln -sf "$AGENTS_ROOT/bin/draw-diagram" ~/.local/bin/draw-diagram
-printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram${C_RESET}\n"
-
-# --- ~/.local/bin/draw-diagram-gemini symlink ---
-ln -sf "$AGENTS_ROOT/bin/draw-diagram-gemini" ~/.local/bin/draw-diagram-gemini
-printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram-gemini${C_RESET}\n"
-
-
 # --- ~/.local/bin/extract-accepted-tradeoffs symlink ---
 ln -sf "$AGENTS_ROOT/bin/extract-accepted-tradeoffs" ~/.local/bin/extract-accepted-tradeoffs
 printf "${C_GREEN}Symlinked: ~/.local/bin/extract-accepted-tradeoffs${C_RESET}\n"
