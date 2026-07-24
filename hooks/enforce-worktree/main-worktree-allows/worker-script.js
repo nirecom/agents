@@ -9,6 +9,7 @@ const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
+const { matchFinalizeWorkerOverlay } = require("./finalize-worker-overlay");
 
 // Replace only real newlines that are inside DQ spans with a space.
 // Preserves $() and backtick verbatim (so the \$\( guard still fires on them).
@@ -70,6 +71,15 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   if (!acd) return false;
   if (!repoRoot) return false;
 
+  // (a0) Finalize-worker overlay (#1600): HARD-validates identity, env VALUES, and
+  // argument shapes for the 3 live finalize scripts (single-line, fully-resolved
+  // literal eval), including per-token metacharacter rejection on unquoted args.
+  // On match, skip the legacy SANCTIONED/arg-tail path and defer only to the
+  // shared write-scope tail (c)/(d).
+  if (matchFinalizeWorkerOverlay(cmd, acd, repoRoot) !== null) {
+    return writeTargetsAllInLinkedWorktrees(cmd, repoRoot);
+  }
+
   // (a) Identity: bare bash "<path>" [args…] OR eval "$(bash "<path>")" [|| exit 0]  (#1484)
   let scriptPath, argTail;
   const mEval = cmd.match(
@@ -129,7 +139,19 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   // Reject bare & (background operator): `cmd & evil` runs evil in main worktree.
   // &> / &>> (redirect-both forms) are exempt — their & is followed by >.
   if (/&(?!>)/.test(scanTail)) return false;
+  // Reject bare | (pipe): outside a DQ span, `x|evilcmd` is a shell pipeline —
+  // the arg-tail regex would otherwise treat it as one opaque token (CPR-5,
+  // mirrors finalize-worker-overlay.js's per-token unquoted-metachar reject).
+  if (/\|/.test(scanTail)) return false;
 
+  // (c)/(d) Shared write-scope tail.
+  return writeTargetsAllInLinkedWorktrees(cmd, repoRoot);
+}
+
+// (c)/(d) Write-target scope tail: extract write targets and require every one to
+// land inside a registered linked worktree of repoRoot (never the main worktree).
+// Shared by the legacy SANCTIONED path and the #1600 finalize-worker overlay.
+function writeTargetsAllInLinkedWorktrees(cmd, repoRoot) {
   // (c) Extract write targets
   const { targets, parseFailure } = collectBashWriteTargets(cmd);
   if (parseFailure) return false;

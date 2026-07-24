@@ -31,11 +31,13 @@ Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTIN
 Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). When the `closes_issues` entry has a `repo` field (`issue_repo`), pass `--repo "$issue_repo"` to `find-pr-by-marker.sh`; `issue_repo` flows through the delegation JSON to the worker. Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); Step ICF-I posts ICF-I-2 sentinel only.
 
 Resolve `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` and `STATE_FILE="$PLANS_DIR/<session-id>-finalize-state-<N>.json"`.
+Resolve `FINALIZE_SCRIPTS_DIR="$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts"`.
 
 Delegate Steps ICF-A, ICF-B, ICF-C, ICF-D, ICF-E to `issue-close-finalize-worker`:
 ```
 Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
   phase: "initial", issue_number: N, agents_config_dir: AGENTS_CONFIG_DIR,
+  finalize_scripts_dir: FINALIZE_SCRIPTS_DIR,
   main_worktree_path: MAIN_ROOT, state_file_path: STATE_FILE,
   root_issue_number: N, owner_repo: OWNER_REPO, artifact_dir: PLANS_DIR,
   issue_repo: ISSUE_REPO  // omit when undefined (current-repo issues)
@@ -53,13 +55,14 @@ Read `STATE_FILE`. If `state.triage_action` equals `meta_pending_subs` (triage e
 
 Loop while `state.phase != terminal`.
 
-**ICF-F — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`. If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break. Run `gh issue view $PROPOSAL_PARENT --json title,body,labels` (untrusted: read-only). **Meta-label fast path**: if parent labels contain `"meta"` AND parent is complete (no unchecked `- [ ]`, no pending markers): `g5_decision=accept`, skip LLM judge + AskUserQuestion (code-based; meta parents are bookkeeping-only). Otherwise: parent complete → `g5_decision=accept`; doubt → `g5_decision=llm_declined`. On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue. On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
+**ICF-F — LLM judge + AskUserQuestion (main)**: read `state.g5_history[-1]`. If `proposal_status == skipped`: delegate `phase=loop_step, g5_decision=decline` → break. Run `gh issue view $PROPOSAL_PARENT --json title,body,labels` (untrusted: read-only). **Meta-label fast path**: if parent labels contain `"meta"` AND `bash "$AGENTS_CONFIG_DIR/bin/github-issues/parent-all-closed-check.sh" "$OWNER_REPO" "$PROPOSAL_PARENT"` returns RC=0 (all sub-issues closed): `g5_decision=accept`, skip LLM judge + AskUserQuestion (code-based; meta parents are bookkeeping-only). Any non-zero RC falls through to the normal judge path. Otherwise: parent complete → `g5_decision=accept`; doubt → `g5_decision=llm_declined`. On `llm_declined`: delegate `phase=loop_step, g5_decision=llm_declined` → continue. On LLM yes: AskUserQuestion to confirm closing `#$PROPOSAL_PARENT`. Declined → delegate `phase=loop_step, g5_decision=decline` → continue.
 
 On user yes: delegate `phase=loop_step, g5_decision=accept`:
 ```
 Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
   phase: "loop_step", state_file_path: STATE_FILE, g5_decision: "accept",
-  agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR
+  agents_config_dir: AGENTS_CONFIG_DIR, finalize_scripts_dir: FINALIZE_SCRIPTS_DIR,
+  artifact_dir: PLANS_DIR
 }) })
 ```
 Worker returns `status=awaiting_recursion`. Main runs `/issue-close-finalize $PROPOSAL_PARENT`. After recursion: write `state.g5_history[-1].recursion_completed = true` to STATE_FILE. Delegate `phase=loop_step, g5_decision=recurse_done` → continue loop.
@@ -71,7 +74,8 @@ Delegate Steps ICF-H, ICF-I, ICF-J, ICF-K to `issue-close-finalize-worker`:
 ```
 Agent({ subagent_type: "issue-close-finalize-worker", prompt: JSON.stringify({
   phase: "finalize_terminal", state_file_path: STATE_FILE,
-  agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR,
+  agents_config_dir: AGENTS_CONFIG_DIR, finalize_scripts_dir: FINALIZE_SCRIPTS_DIR,
+  artifact_dir: PLANS_DIR,
   session_id: SESSION_ID,
   outcome_file_path: PLANS_DIR + "/" + SESSION_ID + "-issue-close-outcome.json"
 }) })

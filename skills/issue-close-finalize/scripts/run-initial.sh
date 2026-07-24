@@ -16,6 +16,8 @@ ISSUE_REPO="${3:-}"
 : "${FINALIZE_SCRIPTS_DIR:?FINALIZE_SCRIPTS_DIR not set}"
 : "${MAIN_WORKTREE_PATH:?MAIN_WORKTREE_PATH not set}"
 
+cd "$MAIN_WORKTREE_PATH"
+
 # Step 1: pre-flight — sets OWNER_REPO
 rc=0
 eval "$(AGENTS_CONFIG_DIR="$AGENTS_CONFIG_DIR" bash "$FINALIZE_SCRIPTS_DIR/pre-flight.sh")" || rc=$?
