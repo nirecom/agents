@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1579-reporter-model-keyword-scan.sh
-# Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml
+# Tests: bin/github-issues/issue-create.sh, skills/issue-create/SKILL.md, .github/labels.yml, hooks/lib/model-match.js, bin/model-match.js
 # Tags: scope:issue-specific
 # TL2 — no real GitHub API calls; tests script logic only.
 # TL3 gap (what this test does NOT catch):
@@ -14,6 +14,9 @@ set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 IC="$REPO_ROOT/bin/github-issues/issue-create.sh"
 LABELS_YML="$REPO_ROOT/.github/labels.yml"
+# #1611: the reporter-model:* label table moved out of issue-create.sh into the
+# shared matcher module. T15 follows the SSOT.
+MODEL_MATCH_JS="$REPO_ROOT/hooks/lib/model-match.js"
 
 PASS=0; FAIL=0
 
@@ -121,12 +124,76 @@ assert_label_absent "T13-abstract-no-match" --title "abstract concept" --body "b
 assert_label_absent "T14-hanging-no-match"  --title "hanging around"   --body "b" "severity:high"
 
 echo ""
-echo "=== T15 drift check: script reporter-model:* RHS ⊆ labels.yml ==="
+echo "=== T16 reporter-model via raw self-report sentence (--reporter-model-text) ==="
 
-# Extract reporter-model:* label strings appearing in issue-create.sh, compare to labels.yml.
-SCRIPT_LABELS=$(grep -oE 'reporter-model:[a-z0-9-]+' "$IC" 2>/dev/null | sort -u)
+# The dispatch script must accept the untouched self-report sentence and delegate
+# ID extraction + label lookup to the shared matcher (#1611).
+assert_label_present "T16-self-report-text-opus" \
+    --title t --body "b" \
+    --reporter-model-text "You are powered by the model named Opus 4.8. The exact model ID is claude-opus-4-8." \
+    "reporter-model:opus"
+
+assert_label_present "T17-self-report-text-ds4" \
+    --title t --body "b" \
+    --reporter-model-text "You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash." \
+    "reporter-model:ds4"
+
+echo ""
+echo "=== T18 flag precedence: explicit --reporter-model beats --reporter-model-text ==="
+
+# Plan Step 3-3: "両方指定時は --reporter-model を優先" — the already-extracted
+# id is authoritative; the raw sentence is only a convenience extractor.
+assert_label_present "T18-explicit-flag-wins" \
+    --title t --body "b" \
+    --reporter-model "claude-opus-4-8" \
+    --reporter-model-text "You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash." \
+    "reporter-model:opus"
+
+assert_label_absent "T18b-text-derived-label-suppressed" \
+    --title t --body "b" \
+    --reporter-model "claude-opus-4-8" \
+    --reporter-model-text "You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash." \
+    "reporter-model:ds4"
+
+echo ""
+echo "=== T19 matcher subprocess failure degrades to no label (never aborts) ==="
+
+# The label table now lives in a JS module reached through `node`. On a host
+# without a working node, issue creation must still succeed — it just loses the
+# reporter-model:* label, exactly like an unknown model does today.
+BROKEN_NODE_DIR="$WORK/broken-node"
+mkdir -p "$BROKEN_NODE_DIR"
+printf '#!/usr/bin/env bash\nexit 127\n' > "$BROKEN_NODE_DIR/node"
+chmod +x "$BROKEN_NODE_DIR/node"
+
+: > "$CAP"
+GH_LABEL_CAPTURE="$CAP" \
+PATH="$BROKEN_NODE_DIR:$MOCKDIR:$PATH" \
+AGENTS_CONFIG_DIR="" \
+ISSUE_CREATE_SKIP_SCHEMA=1 \
+    bash "$IC" --title t --body "b" \
+        --reporter-model-text "You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash." \
+        >/dev/null 2>>"$WORK/stderr.txt"
+
+if grep -q '^reporter-model:' "$CAP"; then
+    fail "T19-no-label-when-matcher-fails" "a reporter-model:* label appeared although the matcher process could not run (got: $(tr '\n' ' ' < "$CAP"))"
+else
+    pass "T19-no-label-when-matcher-fails"
+fi
+
+if grep -qxF 'type:task' "$CAP"; then
+    pass "T19b-issue-still-created"
+else
+    fail "T19b-issue-still-created" "issue creation aborted when the matcher process failed (labels: $(tr '\n' ' ' < "$CAP"))"
+fi
+
+echo ""
+echo "=== T15 drift check: matcher-module reporter-model:* RHS ⊆ labels.yml ==="
+
+# Extract reporter-model:* label strings from the SSOT module, compare to labels.yml.
+SCRIPT_LABELS=$(grep -oE 'reporter-model:[a-z0-9-]+' "$MODEL_MATCH_JS" 2>/dev/null | sort -u)
 if [ -z "$SCRIPT_LABELS" ]; then
-    fail "T15-drift" "no reporter-model:* labels found in issue-create.sh (fix not yet applied)"
+    fail "T15-drift" "no reporter-model:* labels found in hooks/lib/model-match.js (module not yet implemented)"
 else
     MISSING=""
     while IFS= read -r lbl; do

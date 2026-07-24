@@ -143,11 +143,8 @@ Failure is non-fatal — the script logs a stderr warning and continues.
     - Primary feature rendered completely unusable
   - Cosmetic or safely deferrable (visual glitch, non-blocking inconvenience, low-impact improvement) → `--label severity:low`.
   - All other cases → no severity label (no label = normal severity).
-- **reporter-model label (auto-detect, Phase 4)**: Before dispatching in Phase 4, read the system-prompt injection `"You are powered by the model named X. The exact model ID is <id>."` and pass the model identifier to the dispatch script via `--reporter-model "<id>"`. The script maps the raw model name to the correct `reporter-model:*` label — SKILL.md does not list label names or a mapping table.
-  - Example: injection says `"You are powered by the model named Sonnet 4.6. The exact model ID is claude-sonnet-4-6."` → pass `--reporter-model "claude-sonnet-4-6"` (script case `*sonnet*` matches).
-  - Injection present → pass `--reporter-model "<extracted-id>"` in the `--` passthrough args to the dispatch command.
-  - Injection absent → omit `--reporter-model` entirely (no reporter-model:* label added).
-  - Unrecognized model names: the script silently skips the label — do not add any label manually.
+- **reporter-model label (auto-detect, Phase 4)**: pass the system prompt's model self-report sentence verbatim as `--reporter-model-text "<sentence>"` in the `--` passthrough args. The dispatch script extracts the identifier and resolves the label through the shared matcher.
+  - No self-report sentence present → omit the flag; never add a `reporter-model:*` label by hand.
 
 ## Behavioral notes
 
