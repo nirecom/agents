@@ -44,7 +44,7 @@ See agents/issue-close-finalize-worker/state-schema.md for the State file schema
 
 ## Procedure
 
-Construct each `eval` command string as a **single physical line** with all values fully resolved to literal absolute paths — never write `$var` into the eval string. Substitute your own resolved values for the `<...>` placeholders below. Shell-variable indirection (`$var`), backticks, and `~` inside the `eval` command string are prohibited — the PreToolUse overlay validator rejects any `$`, backtick, or `~` inside the script-path or env-value spans, and rejects any `cd` prefix or backslash line-continuation.
+Construct each `eval` command string as a single physical line with all values fully resolved to literal absolute paths — never write `$var`, backticks, `~`, a `cd` prefix, or a line continuation into the eval string. Substitute your own resolved values for the `<...>` placeholders below.
 
 ### phase=initial
 
