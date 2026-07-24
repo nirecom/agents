@@ -89,3 +89,6 @@ Background: reporter-model:* labels were silently failing due to stale model lab
 Changes: - `/issue-create`: `reporter-model:*` labels are now applied reliably — the LLM passes the raw model name via `--reporter-model` and the script resolves the correct label, eliminating the silent failures introduced when PR #1496 renamed `model:*` to `reporter-model:*` without updating SKILL.md.
 - `/issue-create`: severity is now forced to `high` when the issue title or body contains the words `abort`, `hang`, `security`, or `leak` (word-boundary match, conservative).
 
+### FEATURE: PR #1612 (2026-07-24)
+Background: fix(#1600,#1590,#1501,#1307): finalize-worker overlay for SANCTIONED allowlist
+Changes: Fixed: `/issue-close-finalize` Phase 2 no longer fails on the loop-step, run-initial, and finalize-terminal scripts — these are now recognized as sanctioned worker-script invocations.;Fixed: the issue-close-finalize meta-label fast path no longer misreads issue-body prose as an incomplete sub-issue checklist.
