@@ -265,7 +265,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-final-report-guard.js\"",
-            "timeout": 5
+            "timeout": 10
           },
           {
             "type": "command",
