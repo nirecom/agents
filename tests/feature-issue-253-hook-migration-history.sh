@@ -100,8 +100,8 @@ expect_approve "B8e: Bash echo >> notes.md" \
 expect_approve "B8f: Bash cat docs/history.md" \
     '{"tool_name":"Bash","tool_input":{"command":"cat docs/history.md"}}'
 
-# B9: Edit docs/history/2025.md → approve (different basename, archive file)
-expect_approve "B9: Edit docs/history/2025.md (archive)" \
+# B9: Edit docs/history/2025.md → block (rotated archive is protected under the append-only doc family, #1611)
+expect_block "B9: Edit docs/history/2025.md (archive)" \
     '{"tool_name":"Edit","tool_input":{"file_path":"docs/history/2025.md","old_string":"a","new_string":"b"}}'
 
 # B10: Edit docs/history-notes.md → approve (suffix match would be wrong)
