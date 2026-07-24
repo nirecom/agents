@@ -252,6 +252,53 @@ function recordComplexityEvaluation(sessionId, level, signals) {
   writeState(sessionId, state);
 }
 
+// recordSessionModel(sessionId, { modelId | id, source }):
+// Top-level field writer (like recordComplexityEvaluation). Read-modify-write.
+// Freezes the session's model identity ONCE — later layers must not overwrite
+// an earlier one — and decides `verbose_prompt` in the same transaction so the
+// flag and the identity can never disagree.
+// The identifier key is accepted as `modelId` or `id`: resolveModelId() returns
+// the `{ id, source }` shape and is passed straight through by SessionStart.
+// Returns { recorded, verbosePrompt }. Write errors propagate to the caller,
+// which is responsible for failing open.
+function recordSessionModel(sessionId, descriptor) {
+  const d = descriptor && typeof descriptor === "object" ? descriptor : {};
+  const rawId = typeof d.modelId === "string" && d.modelId.trim() ? d.modelId : d.id;
+  const modelId = typeof rawId === "string" && rawId.trim() ? rawId.trim() : null;
+  if (!modelId) return { recorded: false, verbosePrompt: false };
+
+  let state = readState(sessionId);
+  if (!state) {
+    state = createInitialState(sessionId);
+  }
+  // Write-once: layer① → ② → ③ must not turn into last-writer-wins.
+  if (state.session_model) {
+    return { recorded: false, verbosePrompt: state.verbose_prompt === true };
+  }
+
+  let verbosePrompt = false;
+  try {
+    require("../load-env").loadDefaultEnv();
+    const { matchKeyword, parseKeywordList } = require("../model-match");
+    verbosePrompt =
+      matchKeyword(modelId, parseKeywordList(process.env.VERBOSE_PROMPT_MODELS)) !== null;
+  } catch (_) {
+    verbosePrompt = false;
+  }
+
+  state.session_model = {
+    id: modelId,
+    source: typeof d.source === "string" && d.source ? d.source : "unknown",
+    recorded_at: new Date().toISOString(),
+  };
+  state.verbose_prompt = verbosePrompt;
+  // readState adds skip_judgment as a convenience view only; writing it back
+  // would persist it permanently.
+  delete state.skip_judgment;
+  writeState(sessionId, state);
+  return { recorded: true, verbosePrompt };
+}
+
 // record the staged-tests fingerprint at sentinel-emission time
 function markReviewTestsComplete(sessionId, token, extraFields = {}) {
   if (typeof token !== "string" || token.length === 0) {
@@ -438,6 +485,7 @@ module.exports = {
   findLatestStateForContext,
   markStep,
   recordComplexityEvaluation,
+  recordSessionModel,
   markReviewTestsComplete,
   clearReviewTestsWarnings,
   invalidateReviewTests,
