@@ -16,7 +16,7 @@ Receive a JSON object with `phase` determining the pass type:
 - `issue_number`: integer
 - `agents_config_dir`: resolved path
 - `finalize_scripts_dir`: resolved absolute path to the finalize skill's `scripts/` directory
-- `main_worktree_path`: absolute path to main worktree
+- `main_worktree_path`: absolute path to main worktree (**required for phase=initial only** — consumed solely to set the MAIN_WORKTREE_PATH env for run-initial.sh; not an input for loop_step/finalize_terminal)
 - `state_file_path`: absolute path to write state JSON (may not exist yet)
 - `root_issue_number`: integer (equals `issue_number` for the outermost call)
 - `owner_repo`: `"owner/repo"` string
@@ -29,12 +29,14 @@ Receive a JSON object with `phase` determining the pass type:
 - `agents_config_dir`: resolved path
 - `finalize_scripts_dir`: resolved absolute path to the finalize skill's `scripts/` directory
 - `artifact_dir`: directory to write log to
+- (main_worktree_path is intentionally NOT an input for this phase — loop_step/finalize_terminal is CWD-independent)
 
 **`phase=finalize_terminal`**:
 - `state_file_path`: absolute path to existing state JSON
 - `agents_config_dir`: resolved path
 - `finalize_scripts_dir`: resolved absolute path to the finalize skill's `scripts/` directory
 - `artifact_dir`: directory to write log to
+- (main_worktree_path is intentionally NOT an input for this phase — loop_step/finalize_terminal is CWD-independent)
 - `session_id`: session ID string (resolves env-var propagation gap for Step ICF-K)
 - `outcome_file_path`: absolute path to write outcome JSON (resolves env-var propagation gap for Step ICF-K)
 
@@ -42,17 +44,12 @@ See agents/issue-close-finalize-worker/state-schema.md for the State file schema
 
 ## Procedure
 
-Run all commands from `main_worktree_path`.
+Construct each `eval` command string as a **single physical line** with all values fully resolved to literal absolute paths — never write `$var` into the eval string. Substitute your own resolved values for the `<...>` placeholders below. Shell-variable indirection (`$var`), backticks, and `~` inside the `eval` command string are prohibited — the PreToolUse overlay validator rejects any `$`, backtick, or `~` inside the script-path or env-value spans, and rejects any `cd` prefix or backslash line-continuation.
 
 ### phase=initial
 
 ```bash
-cd "$main_worktree_path"
-eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
-  FINALIZE_SCRIPTS_DIR="$finalize_scripts_dir" \
-  MAIN_WORKTREE_PATH="$main_worktree_path" \
-  bash "$finalize_scripts_dir/run-initial.sh" \
-  "$issue_number" "$root_issue_number" "${issue_repo:-}")"
+eval "$(AGENTS_CONFIG_DIR="<agents_config_dir>" FINALIZE_SCRIPTS_DIR="<agents_config_dir>/skills/issue-close-finalize/scripts" MAIN_WORKTREE_PATH="<main_worktree_path>" bash "<agents_config_dir>/skills/issue-close-finalize/scripts/run-initial.sh" "<N>" "<root_N>" "<issue_repo-or-omit-if-empty>")"
 ```
 
 `STATUS=failed` → emit `status: failed`, `summary: "$SUMMARY"` and stop.
@@ -63,11 +60,7 @@ Write log and emit `status: init_done`.
 ### phase=loop_step
 
 ```bash
-cd "$main_worktree_path"
-eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
-  FINALIZE_SCRIPTS_DIR="$finalize_scripts_dir" \
-  node "$finalize_scripts_dir/run-loop-step.js" \
-  "$state_file_path" "$g5_decision")"
+eval "$(AGENTS_CONFIG_DIR="<agents_config_dir>" FINALIZE_SCRIPTS_DIR="<agents_config_dir>/skills/issue-close-finalize/scripts" node "<agents_config_dir>/skills/issue-close-finalize/scripts/run-loop-step.js" "<state_file_path>" "<g5_decision>")"
 ```
 
 Emit output status: `$STATUS`. `STATUS=failed` → emit `status: failed`.
@@ -75,10 +68,7 @@ Emit output status: `$STATUS`. `STATUS=failed` → emit `status: failed`.
 ### phase=finalize_terminal
 
 ```bash
-cd "$main_worktree_path"
-eval "$(AGENTS_CONFIG_DIR="$agents_config_dir" \
-  bash "$finalize_scripts_dir/run-finalize-terminal.sh" \
-  "$state_file_path" "$session_id" "$outcome_file_path")"
+eval "$(AGENTS_CONFIG_DIR="<agents_config_dir>" bash "<agents_config_dir>/skills/issue-close-finalize/scripts/run-finalize-terminal.sh" "<state_file_path>" "<session_id>" "<outcome_file_path>")"
 ```
 
 `STATUS=failed` → emit `status: failed`, `summary: "$SUMMARY"` and stop.

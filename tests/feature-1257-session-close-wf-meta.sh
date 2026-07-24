@@ -355,9 +355,12 @@ test_S3_write_outcome_wf_meta_before_issue_close_finalize() {
         return
     fi
     # issue-close-write-outcome.js --wf-meta call must appear before /issue-close-finalize
+    # #1307: anchor on the real invocation ("issue-close-finalize --from-session"), not the
+    # bare "/issue-close-finalize" — the bare form also matches SKILL.md prose (e.g. "never
+    # invokes /issue-close-finalize"), which could resolve to a line before the outcome call.
     local outcome_wf_meta_line finalize_line
     outcome_wf_meta_line="$(grep -n "issue-close-write-outcome.js --wf-meta" "$SKILL_MD" 2>/dev/null | head -1 | cut -d: -f1)"
-    finalize_line="$(grep -n "/issue-close-finalize" "$SKILL_MD" 2>/dev/null | head -1 | cut -d: -f1)"
+    finalize_line="$(grep -n "issue-close-finalize --from-session" "$SKILL_MD" 2>/dev/null | head -1 | cut -d: -f1)"
     if [ -z "$outcome_wf_meta_line" ]; then
         fail "S3_write_outcome_wf_meta_before_issue_close_finalize: 'issue-close-write-outcome.js --wf-meta' not found in SKILL.md"
         return
