@@ -32,13 +32,15 @@ if (require.main === module) {
   const transcriptPath = input.transcript_path;
   if (!transcriptPath) process.exit(0);
 
-  let OFF_DQ, OFF_LL, ON_DQ, ON_LL;
+  let OFF_DQ, OFF_LL, ON_DQ, ON_LL, OFF_EMG_DQ, OFF_EMG_LL;
   try {
     ({
       ENFORCE_WORKTREE_OFF_RE_DQ: OFF_DQ,
       ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE: OFF_LL,
       ENFORCE_WORKTREE_ON_RE_DQ: ON_DQ,
       ENFORCE_WORKTREE_ON_LOOKSLIKE_RE: ON_LL,
+      ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ: OFF_EMG_DQ,
+      ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE: OFF_EMG_LL,
     } = require("./lib/sentinel-patterns"));
   } catch (_) {
     process.exit(0);
@@ -71,7 +73,10 @@ if (require.main === module) {
       if (!item || item.type !== "tool_use" || item.name !== "Bash") continue;
       const cmd = (item.input && item.input.command) || "";
       cmdOrder++;
-      if (OFF_DQ.test(cmd) || OFF_LL.test(cmd)) lastOffIdx = cmdOrder;
+      // EMERGENCY OFF is a distinct string the normal OFF regexes do not match;
+      // test it explicitly so an unrestored emergency OFF still warns.
+      if (OFF_DQ.test(cmd) || OFF_LL.test(cmd) ||
+          OFF_EMG_DQ.test(cmd) || OFF_EMG_LL.test(cmd)) lastOffIdx = cmdOrder;
       if (ON_DQ.test(cmd) || ON_LL.test(cmd)) lastOnIdx = cmdOrder;
     }
   }

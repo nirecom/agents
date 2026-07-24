@@ -54,6 +54,13 @@ if (require.main === module) {
     } catch (_) {}
     if (!sessionId || !SESSION_ID_RE.test(sessionId)) process.exit(0);
 
+    // Quiet layer (#1607): exit BEFORE findings_surfaced_at is written, so the
+    // findings are not consumed and resurface once the session resumes. fail-open.
+    try {
+      const { isNextStepPaused, isWorkflowOff } = require("./lib/session-markers");
+      if (isNextStepPaused(sessionId) || isWorkflowOff(sessionId)) process.exit(0);
+    } catch (_) { /* fail-open */ }
+
     const effectiveSid = sessionId;
 
     const state = readState(effectiveSid);

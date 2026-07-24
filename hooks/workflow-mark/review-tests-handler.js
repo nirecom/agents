@@ -23,6 +23,7 @@ const {
 const {
   markReviewTestsComplete,
   clearReviewTestsWarnings,
+  clearReviewTestsTerminalMarker,
   markStep,
   readState,
 } = require("../lib/workflow-state");
@@ -128,6 +129,8 @@ function handle(ctx) {
     }
     try {
       clearReviewTestsWarnings(sessionId, reason);
+      // #1361: accepting the gap ends this review — drop the re-invoke guard marker.
+      clearReviewTestsTerminalMarker(sessionId);
       pushMessage(
         "[workflow] REVIEW_TESTS_WARNINGS_ACCEPTED: warnings cleared — /write-code unblocked."
       );

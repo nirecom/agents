@@ -34,6 +34,7 @@ After reading `<wsid>-intent.md`, run `bin/supervisor-check-session-active --wsi
 - `<plans-dir>/<wsid>-detail.md`
 - `<plans-dir>/<effective-state-sid>-supervisor-state.json` (Layer 1 findings — advisory only)
 - Recent transcript turns
+- `skills/_shared/off-legitimacy-rubric.md` — read only when checklist item 6 fires (C3 off-proposal trigger).
 - Use `hooks/lib/workflow-plans-dir.js` to resolve `<plans-dir>`.
 
 ### Terminated-session detection
@@ -65,7 +66,7 @@ When findings share a `co_blocked_by` link or fall in the same 60-second cluster
 3. **Non-goal violation** — has the work touched declared non-goals?
 4. **Tacit knowledge continuity** — is the new code consistent with surrounding patterns and unwritten conventions?
 5. **Perspective (CPR-4/CPR-5/CPR-6)** — is the change solved at the class level (CPR-4), applied across symmetric siblings (CPR-5), and integrity-preserving end-to-end (CPR-6)? For cascade failures, trace the causality chain to the single most-upstream root cause; file one root-cause finding and have downstream findings reference it rather than duplicating the cause.
-6. **WORKTREE_OFF / WORKFLOW_OFF proposal validity** — when the block reason is a C3 off-proposal trigger: was a sanctioned-command false-block the cause (see `rules/workflow-off.md` "Sanctioned-command false-block recovery"), or was the proposal an improvised bypass? If sanctioned, recommend filing a fix issue for the underlying enforce-worktree regression; if improvised, recommend reverting and using the proper escape hatch.
+6. **WORKTREE_OFF / WORKFLOW_OFF proposal validity** — when the block reason is a C3 off-proposal trigger: classify the departure reason with the REJECT/ALLOW criteria of `skills/_shared/off-legitimacy-rubric.md` (SSOT — read it before classifying), and apply its sanctioned-WIP rule so `git -c workflow.wip=1` (`--wip`) is never classified as an improvised bypass. If a sanctioned-command false-block was the cause (see `rules/workflow-off.md` "Sanctioned-command false-block recovery"), recommend filing a fix issue for the underlying enforce-worktree regression; if improvised, recommend reverting and using the proper escape hatch.
 7. **`/issue-create` Phase 4 dispatch detection** — when transcript shows `ISSUE_CREATE_SKILL=1 ... issue-create-dispatch.sh`, verify the preceding transcript contains ALL THREE of: (a) `gh issue list --state all --search "<keyword tokens>"` (duplicate-search phase), (b) at least one additional symptom-token `gh issue list` search, (c) `gh issue view <N> --json` (candidate inspection). All three present → legitimate Phase 4 dispatch. Any absent → may be Phase 1–3 bypass.
 8. **Scope-drift pre-merge recognition** — when a merge is blocked with `audit_cause: scope-drift:pre-merge`, confirm that detail.md's `## Files to modify` declaration matches the actual changed-file set (branch diff) before approving the merge.
 

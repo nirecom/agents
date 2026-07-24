@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-372-enforce-worktree-on-warn.sh
 # Tests: hooks/stop-enforce-worktree-on-warn.js, settings.json
-# Tags: stop, hook, worktree, sentinel, scope:372
+# Tags: stop, hook, worktree, sentinel, emergency-sentinel, scope:issue-specific, pwsh-not-required, TL2
 # Tests for issue #372 — Stop hook that warns when a WORKFLOW_ENFORCE_WORKTREE_OFF
 # proposal in the transcript was never followed by a matching ON sentinel.
 #
@@ -92,8 +92,73 @@ run_w372_2() {
     fi
 }
 
+# --- #1608: WORKTREE_OFF_EMERGENCY is a distinct string the normal OFF regexes do not
+# match; the advisory must still fire (worktree-scoped) when it is unrestored, cancel on a
+# later WORKTREE_ON, and must NOT fire for a WORKFLOW_OFF_EMERGENCY (that is not worktree-scoped).
+
+# W372-3 (B1) — WORKTREE_OFF_EMERGENCY proposed, no matching ON -> advisory present, exit 0
+run_w372_3() {
+    require_source "$HOOK" "W372-3: unmatched WORKTREE_OFF_EMERGENCY -> advisory, exit 0" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY: examiner broken>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    out=$(printf '{"stop_hook_active":false,"session_id":"w372-3-sid","transcript_path":"%s"}' "$tp" \
+        | run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && ( echo "$out" | grep -qi "additionalContext" ) && ( echo "$out" | grep -qi "ENFORCE_WORKTREE_ON\|restore" ); then
+        pass "W372-3: unmatched WORKTREE_OFF_EMERGENCY -> additionalContext advisory, exit 0"
+    else
+        fail "W372-3: unmatched WORKTREE_OFF_EMERGENCY -> advisory expected (rc=$rc, out=$out)"
+    fi
+}
+
+# W372-4 (B2) — WORKTREE_OFF_EMERGENCY then a later WORKTREE_ON -> no advisory (empty stdout)
+run_w372_4() {
+    require_source "$HOOK" "W372-4: WORKTREE_OFF_EMERGENCY+ON -> no advisory" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY: examiner broken>>\""}}]}}' \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: restored>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    out=$(printf '{"stop_hook_active":false,"session_id":"w372-4-sid","transcript_path":"%s"}' "$tp" \
+        | run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ -z "$out" ]; then
+        pass "W372-4: WORKTREE_OFF_EMERGENCY then WORKTREE_ON -> no advisory (empty stdout)"
+    else
+        fail "W372-4: emergency OFF cancelled by ON must not warn (rc=$rc, out=$out)"
+    fi
+}
+
+# W372-5 (B3) — WORKFLOW_OFF_EMERGENCY only (no worktree emergency) -> NO advisory (hook is worktree-scoped)
+run_w372_5() {
+    require_source "$HOOK" "W372-5: WORKFLOW_OFF_EMERGENCY -> no worktree advisory" || return
+    local tmp out rc tp
+    tmp="$(mktemp -d)"
+    make_fixture "$tmp/t.jsonl" \
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: examiner broken>>\""}}]}}'
+    tp="$(node_path "$tmp/t.jsonl")"
+    out=$(printf '{"stop_hook_active":false,"session_id":"w372-5-sid","transcript_path":"%s"}' "$tp" \
+        | run_with_timeout 5 node "$HOOK" 2>/dev/null)
+    rc=$?
+    rm -rf "$tmp"
+    if [ $rc -eq 0 ] && [ -z "$out" ]; then
+        pass "W372-5: WORKFLOW_OFF_EMERGENCY only -> no advisory (worktree-scoped hook does not fire)"
+    else
+        fail "W372-5: worktree-scoped hook must not fire on WORKFLOW emergency (rc=$rc, out=$out)"
+    fi
+}
+
 run_w372_1
 run_w372_2
+run_w372_3
+run_w372_4
+run_w372_5
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
