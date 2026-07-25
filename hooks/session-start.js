@@ -101,8 +101,8 @@ if (sessionId) {
 
 // Freeze which model drives this session, and with it the verbose-prompt flag.
 // Must run AFTER the state file exists so the record lands in this session's own
-// state rather than in a file created for it. Write-once — layer③ only fills in
-// when neither the payload nor the env carried an identifier.
+// state rather than in a file created for it. Write-once — no-op when the hook
+// payload carried no identifier.
 if (sessionId) {
   try {
     const { resolveModelId } = require("./lib/model-identity");
@@ -244,17 +244,10 @@ try {
   const convLang = getConvLangInjection();
   if (convLang) lines.push(convLang);
 } catch (_e) { /* fail-open */ }
-// Either the hardening line (model already known and matched) or the one-time
-// self-report request (layer③ bootstrap) — never both: asking for a self-report
-// after the flag is already resolved would be pure wasted context.
+// The hardening line, only when the model is already known and matched.
 try {
-  const { getVerbosePromptInjection, getModelSelfReportRequest } = require("./lib/verbose-prompt");
+  const { getVerbosePromptInjection } = require("./lib/verbose-prompt");
   const verbosePrompt = getVerbosePromptInjection(sessionId);
-  if (verbosePrompt) {
-    lines.push(verbosePrompt);
-  } else {
-    const selfReportRequest = getModelSelfReportRequest(sessionId);
-    if (selfReportRequest) lines.push(selfReportRequest);
-  }
+  if (verbosePrompt) lines.push(verbosePrompt);
 } catch (_e) { /* fail-open */ }
 console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
