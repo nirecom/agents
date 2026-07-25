@@ -1,5 +1,12 @@
 ---
-globs: "**/*.js,**/*.ts,**/*.mjs,**/*.cjs,**/package.json,**/.nvmrc,**/.node-version"
+paths:
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.mjs"
+  - "**/*.cjs"
+  - "**/package.json"
+  - "**/.nvmrc"
+  - "**/.node-version"
 ---
 
 ## Node.js

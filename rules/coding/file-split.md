@@ -1,5 +1,12 @@
 ---
-globs: "**/*.js,**/*.ts,**/*.py,**/*.sh,rules/**/*.md,skills/**/SKILL.md,agents/**/*.md"
+paths:
+  - "**/*.js"
+  - "**/*.ts"
+  - "**/*.py"
+  - "**/*.sh"
+  - "rules/**/*.md"
+  - "skills/**/SKILL.md"
+  - "agents/**/*.md"
 ---
 
 # File Split Rule

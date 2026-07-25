@@ -1,5 +1,7 @@
 ---
-globs: "docs/architecture.md,docs/architecture/**/*.md"
+paths:
+  - "docs/architecture.md"
+  - "docs/architecture/**/*.md"
 ---
 
 ## architecture.md Rules

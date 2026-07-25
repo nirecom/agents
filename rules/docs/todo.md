@@ -1,5 +1,6 @@
 ---
-globs: "docs/todo.md"
+paths:
+  - "docs/todo.md"
 ---
 
 ## todo.md Rules

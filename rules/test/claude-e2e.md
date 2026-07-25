@@ -1,5 +1,10 @@
 ---
-globs: "tests/**,**/*.sh,**/*.Tests.ps1,test_*.py,**/*.spec.*"
+paths:
+  - "tests/**"
+  - "**/*.sh"
+  - "**/*.Tests.ps1"
+  - "test_*.py"
+  - "**/*.spec.*"
 ---
 
 # Claude Code E2E Testing

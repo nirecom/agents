@@ -51,7 +51,7 @@ Session planning artifacts (`<session-id>-intent.md`, `-outline.md`, `-detail.md
 - **Outline stage:** each approach must declare a **Delivery plan** field (triage rationale / execution order / split policy). When `CONFIRM_DETAIL=off`, the delivery plan must be finalized here. See `skills/make-outline-plan/SKILL.md`.
 - **Detail stage:** opens with **Delivery plan** first (importance-first section ordering). When outline carried a delivery plan forward, it is surfaced to the main conversation before the planner runs. See `skills/make-detail-plan/SKILL.md` and `agents/detail-planner.md`.
 
-## Sub-rules (path-scoped via `globs:`)
+## Sub-rules (loaded conditionally via the `paths:` frontmatter key)
 
 Loaded automatically when editing the relevant file type; also readable on demand:
 

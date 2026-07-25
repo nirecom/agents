@@ -1,5 +1,9 @@
 ---
-globs: install/**,**/*.ps1,**/*.nsi,**/*.iss
+paths:
+  - "install/**"
+  - "**/*.ps1"
+  - "**/*.nsi"
+  - "**/*.iss"
 ---
 
 # Installer & System Configuration
