@@ -15,9 +15,19 @@ const {
   ISSUE_CLOSE_VERIFIED_END_RE_DQ, ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
 const { getWorkflowDir } = require("../lib/workflow-state");
+const { consumeOffClearance, handleEmergencyOff } = require("./enforce-override-handlers/off-clearance");
+const { handleNextStepPause } = require("./enforce-override-handlers/next-step-pause");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal } = ctx;
+
+  // --- EMERGENCY OFF handler ---
+  // Only the dedicated *_EMERGENCY_* regexes match the `_EMERGENCY` sentinels; the
+  // normal OFF regexes below never do, so this branch is their sole handler.
+  if (handleEmergencyOff(ctx)) return true;
+
+  // --- NEXT_STEP_PAUSE / NEXT_STEP_RESUME handler (#1607 quiet layer) ---
+  if (handleNextStepPause(ctx)) return true;
 
   // --- ENFORCE_WORKTREE_OFF handler ---
   const enforceOffMatch = cmd.match(ENFORCE_WORKTREE_OFF_RE_DQ);
@@ -64,6 +74,8 @@ function handle(ctx) {
         { mode: 0o600 }
       );
       fs.renameSync(tmp, markerPath);
+      // Single-use: the clearance token that authorized this OFF is consumed now.
+      consumeOffClearance("worktree", sessionId);
       try {
         const { reportSentinel } = require("../lib/supervisor-emit");
         reportSentinel("WORKTREE_OFF", reasonStored, sessionId);
@@ -175,6 +187,8 @@ function handle(ctx) {
         { mode: 0o600 }
       );
       fs.renameSync(tmp, markerPath);
+      // Single-use: the clearance token that authorized this OFF is consumed now.
+      consumeOffClearance("workflow", sessionId);
       try {
         const { reportSentinel } = require("../lib/supervisor-emit");
         reportSentinel("WORKFLOW_OFF", reasonStored, sessionId);

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/lib/workflow-state/evidence-resolver.js
 # Tags: workflow, gate, hook, bin, git
 # Tests for evidence-based write_tests/docs enforcement
 # in workflow-gate.js (PreToolUse) and workflow-mark.js (PostToolUse)
@@ -28,10 +28,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)/main-workflow-evidence"
 . "$SCRIPT_DIR/worktree-notes.sh"
 # shellcheck source=./main-workflow-evidence/evidence-resolver.sh
 . "$SCRIPT_DIR/evidence-resolver.sh"
+# shellcheck source=./main-workflow-evidence/evidence-resolver-security.sh
+. "$SCRIPT_DIR/evidence-resolver-security.sh"
 
 run_gate_and_mark_tests
 run_worktree_notes_tests
 run_evidence_resolver_tests
+run_evidence_resolver_security_tests
 
 echo ""
 echo "=== Results ==="

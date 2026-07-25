@@ -283,6 +283,23 @@ function clearReviewTestsWarnings(sessionId, reason) {
   });
 }
 
+// Remove the review-loop terminal marker written by run-codex-review-loop.sh
+// after a non-success terminal exit (issue #1361). Accepting the coverage gap
+// ends the review, so the re-invoke guard must no longer fire. Fail-open.
+function clearReviewTestsTerminalMarker(sessionId) {
+  try {
+    assertValidSessionId(sessionId);
+    const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+    const markerPath = path.join(
+      getWorkflowPlansDir(),
+      `${sessionId}-test-review-terminal.txt`
+    );
+    fs.unlinkSync(markerPath);
+  } catch (e) {
+    // ENOENT (no marker) and any other failure are non-fatal.
+  }
+}
+
 // re-pending the review_tests step; clears the recorded token
 function invalidateReviewTests(sessionId, reason) {
   markStep(sessionId, "review_tests", "pending", {
@@ -306,6 +323,9 @@ function cleanupZombies(maxAgeDays = 7) {
   for (const file of files) {
     const filePath = path.join(workflowDir, file);
 
+    // Catches every transient write-then-rename leftover on the 24h cutoff,
+    // including the token-minting forms `<sid>.off-clearance.tmp` and
+    // `<sid>.off-clearance.mint.tmp`. Runs before the marker-suffix set below.
     if (file.endsWith(".tmp")) {
       try {
         const st = fs.statSync(filePath);
@@ -314,7 +334,13 @@ function cleanupZombies(maxAgeDays = 7) {
       continue;
     }
 
-    if (file.endsWith(".workflow-off") || file.endsWith(".worktree-off") || file.endsWith(".issue-close-verified")) {
+    if (
+      file.endsWith(".workflow-off") ||
+      file.endsWith(".worktree-off") ||
+      file.endsWith(".issue-close-verified") ||
+      file.endsWith(".next-step-paused") ||
+      file.endsWith(".off-clearance")
+    ) {
       try {
         const st = fs.statSync(filePath);
         if (st.mtimeMs < cutoff) fs.unlinkSync(filePath);
@@ -440,6 +466,7 @@ module.exports = {
   recordComplexityEvaluation,
   markReviewTestsComplete,
   clearReviewTestsWarnings,
+  clearReviewTestsTerminalMarker,
   invalidateReviewTests,
   cleanupZombies,
   setLastPushedSha,
