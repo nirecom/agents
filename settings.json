@@ -292,6 +292,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-enforce-worktree-on-warn.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-exit-worktree-warn.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -639,6 +644,16 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-plan-lang.js\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "EnterWorktree|ExitWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-native-worktree-record.js\"",
+            "timeout": 5
           }
         ]
       }
