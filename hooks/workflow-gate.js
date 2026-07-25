@@ -309,9 +309,10 @@ if (require.main === module) {
   const { isWorkflowOff, isWorktreeOff } = require("./lib/session-markers");
   if (isWorkflowOff(sessionId)) approve();
 
-  // EARLY GATE: 2-tier enforcement before Edit/Write tools.
+  // EARLY GATE: 3-tier enforcement before Edit/Write tools.
   //   Tier 1: workflow_init must be complete/skipped first.
   //   Tier 2: clarify_intent must be complete/skipped (only checked once Tier 1 clears).
+  //   Tier 3: session-bound worktree exists but CWD is outside it (worktree-entry-gate.js).
   // Fail-open precedence (do NOT reorder):
   //   1. No sessionId → fall through (cannot enforce)
   //   2. readState() returns null → fall through (no state to check)
@@ -319,9 +320,14 @@ if (require.main === module) {
   //   4. Tier 1 not clear → block (references /workflow-init)
   //   5. Tier 2 not clear → block (references /clarify-intent)
   //   6. Both clear → fall through (gate dormant)
+  //   7. Tier 3 predicate false or throws → fall through (gate dormant)
   //
   // Multi-hook execution: Claude Code runs all PreToolUse hooks independently;
   // approve from this hook does NOT short-circuit block-dotenv etc.
+  //
+  // Deferral contract with enforce-worktree.js: the "worktree exists but the session
+  // is not inside it" diagnosis is owned here; enforce-worktree.js keeps its own
+  // main-worktree block verdict unchanged and only swaps its remedy line (#1610).
   //
   // State inheritance: if findLatestStateForContext() inherited a state where both
   // steps are already complete, gate is dormant by design — inherited state represents
@@ -381,6 +387,22 @@ if (require.main === module) {
           );
           }
         }
+        // Tier 3: session-bound worktree exists but CWD is outside it (#1610).
+        try {
+          const { evaluateWorktreeEntry, buildBlockReason } = require("./workflow-gate/worktree-entry-gate");
+          const wtVerdict = evaluateWorktreeEntry({ sessionId, input, toolName, toolInput, state: earlyState });
+          if (wtVerdict && wtVerdict.verdict === "advisory") {
+            process.stderr.write(
+              `workflow-gate: session worktree ${wtVerdict.worktreePath} was never entered (subagent context) — proceeding.\n`
+            );
+          } else if (wtVerdict && wtVerdict.verdict === "block") {
+            block(buildBlockReason({
+              toolName,
+              worktreePath: wtVerdict.worktreePath,
+              cwd: wtVerdict.cwd,
+            }));
+          }
+        } catch (e) { /* fail-open: Tier 3 dormant */ }
       }
     }
   }
