@@ -161,13 +161,10 @@ See `docs/security-policy.md` for the full pattern list.
   provider's sibling: a pure provider holding the single definition of a one-line procedure-hardening
   directive, injected only for models whose identifier matches `VERBOSE_PROMPT_MODELS`. Keeping the
   text in `hooks/lib/` rather than `rules/*.md` is what makes it cost zero context while the flag is
-  off. Which model is driving the session is resolved once at SessionStart — hook payload `model`
-  field, then `SESSION_MODEL_ID`, then the model's own self-report — and frozen in the session state
-  file (`session_model` + `verbose_prompt`), so later reads never re-decide. Three consumers:
-  `session-start.js` (resolves, freezes, then injects — or asks for a self-report when nothing
-  resolved), `post-compact.js` (read-only re-injection after compaction), and
-  `bin/record-session-model.js` (the self-report recording CLI, which injects on the recording turn
-  itself so there is no gap until the next SessionStart). Fail-open throughout: an unresolvable
+  off. Which model is driving the session is resolved once at SessionStart from the hook payload's
+  `model` field, and frozen in the session state file (`session_model` + `verbose_prompt`), so later
+  reads never re-decide. Two consumers: `session-start.js` (resolves, freezes, then injects) and
+  `post-compact.js` (read-only re-injection after compaction). Fail-open throughout: an unresolvable
   model, an unusable session id, or an unwritable state directory all yield no injection.
 
 **Permission glob matching**: Permissions are matched against the entire command string.

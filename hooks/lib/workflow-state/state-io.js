@@ -254,8 +254,8 @@ function recordComplexityEvaluation(sessionId, level, signals) {
 
 // recordSessionModel(sessionId, { modelId | id, source }):
 // Top-level field writer (like recordComplexityEvaluation). Read-modify-write.
-// Freezes the session's model identity ONCE — later layers must not overwrite
-// an earlier one — and decides `verbose_prompt` in the same transaction so the
+// Freezes the session's model identity ONCE — re-invocation must not overwrite
+// an already-recorded identity — and decides `verbose_prompt` in the same transaction so the
 // flag and the identity can never disagree.
 // The identifier key is accepted as `modelId` or `id`: resolveModelId() returns
 // the `{ id, source }` shape and is passed straight through by SessionStart.
@@ -271,7 +271,7 @@ function recordSessionModel(sessionId, descriptor) {
   if (!state) {
     state = createInitialState(sessionId);
   }
-  // Write-once: layer① → ② → ③ must not turn into last-writer-wins.
+  // Write-once: must not turn into last-writer-wins.
   if (state.session_model) {
     return { recorded: false, verbosePrompt: state.verbose_prompt === true };
   }
