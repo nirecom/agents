@@ -69,7 +69,11 @@ WS-7. Invoke `worktree-copy-worker` via Task tool. Build input JSON with Node to
    - `status: partial` → call `AskUserQuestion` in main (surface denied/errors via artifact log path); user must confirm or abort.
    - `status: failed` → surface error and stop.
 
-WS-8. Final report: worktree path, branch, and which gitignored state was copied.
+WS-8. Enter the worktree: call the native `EnterWorktree` tool with the WS-3 path.
+   One confirmation dialog for worktrees outside `.claude/worktrees/` is normal since v2.1.206.
+   Protocol: `skills/_shared/worktree-transition.md`
+
+WS-9. Final report: worktree path, branch, which gitignored state was copied, and whether the session entered the worktree (WS-8).
 
 ## Rules
 
