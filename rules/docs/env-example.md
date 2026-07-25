@@ -1,5 +1,9 @@
 ---
-globs: "**/.env.example,**/.env.sample,**/.env.template,**/.env.dist"
+paths:
+  - "**/.env.example"
+  - "**/.env.sample"
+  - "**/.env.template"
+  - "**/.env.dist"
 ---
 
 ## .env.example Rules

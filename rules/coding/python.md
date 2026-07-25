@@ -1,5 +1,11 @@
 ---
-globs: "**/*.py,**/pyproject.toml,**/uv.lock,**/requirements.txt,**/setup.py,**/setup.cfg"
+paths:
+  - "**/*.py"
+  - "**/pyproject.toml"
+  - "**/uv.lock"
+  - "**/requirements.txt"
+  - "**/setup.py"
+  - "**/setup.cfg"
 ---
 
 ## Python

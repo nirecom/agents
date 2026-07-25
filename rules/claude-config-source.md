@@ -1,5 +1,15 @@
 ---
-globs: "**/docker-compose.yml,**/docker-compose.yaml,**/docker-compose.*.yml,**/docker-compose.*.yaml,**/compose.yml,**/compose.yaml,**/Dockerfile,**/Dockerfile.*,**/.env,**/.env.*"
+paths:
+  - "**/docker-compose.yml"
+  - "**/docker-compose.yaml"
+  - "**/docker-compose.*.yml"
+  - "**/docker-compose.*.yaml"
+  - "**/compose.yml"
+  - "**/compose.yaml"
+  - "**/Dockerfile"
+  - "**/Dockerfile.*"
+  - "**/.env"
+  - "**/.env.*"
 ---
 
 # Docker Compose: Applying Changes

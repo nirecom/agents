@@ -1,6 +1,6 @@
 #!/bin/bash
-# Tests: skills/_shared/judge-task-complexity.md, skills/write-code/SKILL.md
-# Tags: skill, bin, env, config, tests
+# Tests: skills/_shared/judge-task-complexity.md, skills/write-code/SKILL.md, CLAUDE.md, .env.example, rules/coding/python.md, rules/coding/nodejs.md
+# Tags: skill, bin, env, config, tests, scope:common
 # Static grep-based checks for the /write-code skill implementation.
 #
 # Verifies that skills/write-code/SKILL.md exists with correct content,
@@ -164,26 +164,26 @@ if require_file "$CLAUDE_MD"; then
 fi
 
 # ---------------------------------------------------------------------------
-# k. rules/coding/python.md retains globs: frontmatter
+# k. rules/coding/python.md retains paths: frontmatter
 # ---------------------------------------------------------------------------
-echo "=== k. rules/coding/python.md has globs: frontmatter ==="
+echo "=== k. rules/coding/python.md has paths: frontmatter ==="
 if require_file "$PYTHON_RULES"; then
-    if head -10 "$PYTHON_RULES" | grep -F "globs:" >/dev/null 2>&1; then
-        pass "rules/coding/python.md retains 'globs:' frontmatter"
+    if head -10 "$PYTHON_RULES" | grep -F "paths:" >/dev/null 2>&1; then
+        pass "rules/coding/python.md retains 'paths:' frontmatter"
     else
-        fail "rules/coding/python.md missing 'globs:' in first 10 lines"
+        fail "rules/coding/python.md missing 'paths:' in first 10 lines"
     fi
 fi
 
 # ---------------------------------------------------------------------------
-# l. rules/coding/nodejs.md retains globs: frontmatter
+# l. rules/coding/nodejs.md retains paths: frontmatter
 # ---------------------------------------------------------------------------
-echo "=== l. rules/coding/nodejs.md has globs: frontmatter ==="
+echo "=== l. rules/coding/nodejs.md has paths: frontmatter ==="
 if require_file "$NODEJS_RULES"; then
-    if head -10 "$NODEJS_RULES" | grep -F "globs:" >/dev/null 2>&1; then
-        pass "rules/coding/nodejs.md retains 'globs:' frontmatter"
+    if head -10 "$NODEJS_RULES" | grep -F "paths:" >/dev/null 2>&1; then
+        pass "rules/coding/nodejs.md retains 'paths:' frontmatter"
     else
-        fail "rules/coding/nodejs.md missing 'globs:' in first 10 lines"
+        fail "rules/coding/nodejs.md missing 'paths:' in first 10 lines"
     fi
 fi
 
