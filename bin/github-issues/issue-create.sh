@@ -134,6 +134,28 @@ if [ "${ISSUE_CREATE_SKIP_SCHEMA:-0}" != "1" ]; then
     fi
 fi
 
+# Outbound scan guard (#1591): title AND body travel to GitHub, so both are
+# scanned as one stream — scanning only the body would let a leak in --title
+# through. Body-file CONTENT is scanned, not the path.
+# shellcheck source=../lib/gh-outbound-guard.sh
+. "$(cd "$(dirname "$0")" && pwd)/../lib/gh-outbound-guard.sh"
+SCAN_TMP=$(mktemp)
+{
+    printf '%s\n' "$TITLE"
+    if [ -n "$BODY_FILE" ]; then
+        cat "$BODY_FILE"
+    else
+        printf '%s\n' "$BODY"
+    fi
+} > "$SCAN_TMP"
+# Fixed literal label, never the caller-supplied --body-file path: scan-outbound.sh's
+# allowlist keys file-shaped labels to the destination repo path of a committed file
+# (see github-contents-write.sh). This label is composed issue-body text, not a
+# committed file's content, so a local/caller-controlled path must never be able to
+# coincidentally match an unrelated allowlist glob entry.
+gh_outbound_guard "issue-body" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
+rm -f "$SCAN_TMP"
+
 # Map raw model name to reporter-model:* label.
 # SSOT: case RHS labels must match .github/labels.yml reporter-model:* entries.
 # Drift prevention: tests/fix-1579-reporter-model-keyword-scan.sh T15 verifies this.

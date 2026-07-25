@@ -18,6 +18,18 @@ All call `bin/scan-outbound.sh` as the scanner (single source of truth for patte
 
 **Known false-negatives (v1):** `gh repo edit/create/rename/archive` commands are not scanned — they have zero callers in the current codebase. `gh api` raw calls are not scanned regardless of payload. Non-github.com remotes follow the same private-repo skip path as all other commands.
 
+**Wrapper-script blind spot:** `gh` / `gh api` calls issued from *inside* wrapper scripts — multi-process chains such as `run-completion.sh` → `clarify-commit-scope.sh` → `gh issue create` — are invisible to `scan-outbound.js`. The hook inspects only the literal Bash-tool command string, never what a subprocess does internally. The convention below closes that gap.
+
+### Wrapper-script self-scan convention
+
+Scripts that pass free text (title, body, commit message, file content) to `gh` must call `gh_outbound_guard` from `bin/lib/gh-outbound-guard.sh` immediately before sending.
+
+- **Two-layer defense**: the hook layer covers what Claude types directly in Bash tool calls; the script layer covers what scripts do internally to `gh`. Neither subsumes the other.
+- **Fail-closed**: warn-tier scanner results are treated as blocks, identically to hard violations — these scripts run non-interactively, so there is no user to ask. An unresolvable scanner or a usage error also blocks. See `## Scanner Exit Codes` for the code table.
+- **`<label>` argument**: pass the actual logical file path so per-file `.private-info-allowlist` entries (`path:pattern`) apply. Allowlist entries are label-scoped — the same pattern under a different label still blocks.
+- **Writes with no backing local file** (inline issue body text, composed revision notes) have no path to key on; they can only be relaxed via global (non-per-file) allowlist patterns.
+- The guard is a sourced library: it `return`s, never `exit`s, and must be invoked with input redirection (`gh_outbound_guard "<label>" < "$file"`) — never on the right-hand side of a pipe, which would run it in a subshell and lose `GH_OUTBOUND_GUARD_MESSAGE`.
+
 **Private repos are skipped**: detected dynamically via `gh api` (GitHub CLI). If the repo's `private` flag is `true`, scanning is skipped. If `gh` is unavailable or the API call fails, scanning proceeds (fail-open, safe default).
 
 ### Forge-write target visibility
@@ -143,6 +155,7 @@ Ensure `settings.json` has the hooks section (check `~/.claude/settings.json`).
 | File | Purpose |
 |:---|:---|
 | `bin/scan-outbound.sh` | Scanner script (detection patterns) |
+| `bin/lib/gh-outbound-guard.sh` | Sourceable fail-closed guard wrapper scripts call before handing free text to `gh` |
 | `claude-global/hooks/pre-commit` | Git pre-commit hook (staged files) |
 | `claude-global/hooks/commit-msg` | Git commit-msg hook (commit message) |
 | `claude-global/hooks/scan-outbound.js` | Claude Code PreToolUse hook |
