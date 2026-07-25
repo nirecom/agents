@@ -19,6 +19,9 @@ case "$ARGS" in
   auth\ status*)
     echo "Token scopes: 'gist', 'project', 'read:org', 'repo'"
     exit 0 ;;
+  label\ list\ *)
+    printf 'type:task\n'
+    exit 0 ;;
   issue\ create\ *)
     # Default: same NUM for every create (back-compat with single-create tests).
     # Opt-in counter mode for bulk: when GH_MOCK_ISSUE_NUMS is a comma list, each

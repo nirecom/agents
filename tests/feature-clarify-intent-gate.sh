@@ -174,7 +174,13 @@ mkdir -p "$COMMIT_REPO"
 SID="sid-commit-regression"
 write_state "$SID" "$(complete_state "$SID")"
 COMMIT_INPUT=$(printf '{"session_id":"%s","tool_name":"Bash","tool_input":{"command":"git -C %s commit -m test"}}' "$SID" "$COMMIT_REPO")
-assert_decision "commit_gate_regression" "$COMMIT_INPUT" "block"
+COMMIT_OUTPUT=$(printf '%s' "$COMMIT_INPUT" | AGENTS_CONFIG_DIR="$COMMIT_REPO" run_with_timeout node "$GATE_HOOK" 2>/dev/null || true)
+COMMIT_DECISION=$(echo "$COMMIT_OUTPUT" | node -e "let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(d).decision||'')}catch(e){process.stdout.write('')}})")
+if [ "$COMMIT_DECISION" = "block" ]; then
+    pass "commit_gate_regression"
+else
+    fail "commit_gate_regression (expected=block, got=$COMMIT_DECISION, output=$COMMIT_OUTPUT)"
+fi
 
 # 13a+b. same pending+Edit input twice → both block  [NEW BEHAVIOR — will fail pre-implementation]
 SID="sid-twice"
