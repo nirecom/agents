@@ -3,8 +3,16 @@
 // with all 13 canonical section headings present and no unsubstituted
 // `<PLACEHOLDER>` tokens remaining.
 //
-// Trigger: <plans-dir>/<sid>-final-report-env.json exists (written by
-// worktree-end Step WE-9..WE-11). On any other turn the hook exits 0 silently.
+// Triggers (#1611 — two independent lanes, CPR-3):
+// - Lane A: <plans-dir>/<sid>-final-report-env.json exists (written by
+//   worktree-end Step WE-9..WE-11 or session-close SC-2A/SC-2B/SC-2C) → validate
+//   the Final Report shape (the whole validation section below is lane A only).
+// - Lane B: that env file is ABSENT and `bin/workflow/next-step --session <sid>`
+//   reports ACTION=invoke with REASON='pre_final_report_gate' → the close
+//   procedure was never started. Block unconditionally WITHOUT scanning the
+//   transcript, so a hand-written Final Report is rejected too. Lane B is a
+//   "close procedure not executed" detector, not a shape validator.
+// On any other turn the hook exits 0 silently.
 //
 // Contract (post-#830 fix):
 // - Parse transcript JSONL; backward-scan for the latest type:"assistant" entry
@@ -28,6 +36,80 @@ function readStdin() {
     }
   } catch (_) {}
   return Buffer.concat(chunks).toString("utf8");
+}
+
+// Lane B (#1611): the env file is absent, so /session-close never reached
+// SC-2A/SC-2B/SC-2C. Consult the workflow state via `bin/workflow/next-step`:
+// ACTION=invoke + REASON='pre_final_report_gate' means every other step is done
+// and only session close remains. Block unconditionally in that case — the
+// transcript is NOT scanned, so a hand-written Final Report is rejected too.
+// Escape hatches: session-close gate `yield`, `<sid>.workflow-off` marker, and
+// the gate marked complete (which makes next-step stop returning invoke).
+// Fail-open on every error path: the function simply returns and the caller
+// exits 0.
+function runCloseProcedureLane(sid, plansDir) {
+  try {
+    // Escape hatch (b): session-scoped workflow-off marker.
+    try {
+      const { isWorkflowOff } = require("./lib/session-markers");
+      if (isWorkflowOff(sid)) return;
+    } catch (_) {
+      return;
+    }
+
+    // Escape hatch (a): the session-close gate yielded to the supervisor.
+    try {
+      const gate = JSON.parse(
+        fs.readFileSync(path.join(plansDir, `${sid}-session-close-gate.json`), "utf8")
+      );
+      if (gate && gate.gate_action === "yield") return;
+    } catch (_) { /* absent or malformed = no gate = keep evaluating */ }
+
+    const agentsDir = process.env.AGENTS_CONFIG_DIR
+      ? process.env.AGENTS_CONFIG_DIR
+      : path.join(__dirname, "..");
+    const nextStepPath = path.join(agentsDir, "bin", "workflow", "next-step");
+    if (!fs.existsSync(nextStepPath)) return;
+
+    // The current environment MUST be inherited: CLAUDE_WORKFLOW_DIR decides
+    // where the workflow state lives. Passing a scrubbed env would lose it and
+    // silently fail open.
+    const { spawnSync } = require("child_process");
+    const result = spawnSync(process.execPath, [nextStepPath, "--session", sid], {
+      timeout: 3000,
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+    });
+    if (!result || result.status !== 0 || !result.stdout) return;
+
+    const lines = result.stdout.split("\n");
+    const actionLine = lines.find((l) => l.startsWith("ACTION="));
+    if (actionLine !== "ACTION=invoke") return;
+    // REASON is single-quoted by next-step's emit().
+    const reasonLine = lines.find((l) => l.startsWith("REASON="));
+    const reasonValue = reasonLine ? reasonLine.slice("REASON=".length).replace(/^'|'$/g, "") : "";
+    if (reasonValue !== "pre_final_report_gate") return;
+
+    const hintLine = lines.find((l) => l.startsWith("NEXT_HINT="));
+    const hint = hintLine
+      ? hintLine.slice("NEXT_HINT=".length).replace(/^'|'$/g, "")
+      : "Run /session-close from the main worktree.";
+
+    let reason =
+      `[final-report] Every workflow step is complete and only session close remains. ` +
+      `${hint} A hand-written final report is not accepted — the close procedure has not ` +
+      `produced its artifacts yet. Escape hatches: emit ` +
+      `<<WORKFLOW_MARK_STEP_pre_final_report_gate_complete>>, or turn workflow enforcement ` +
+      `off for this session. (Hook: stop-final-report-guard.js)`;
+    try {
+      const { getConvLangInjection } = require("./lib/conv-lang");
+      const convLang = getConvLangInjection();
+      if (convLang) reason += `\n\n${convLang}`;
+    } catch (_) { /* fail-open on CONV_LANG errors */ }
+
+    process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+    process.exit(2);
+  } catch (_) { /* fail-open */ }
 }
 
 if (require.main === module) {
@@ -62,7 +144,8 @@ if (require.main === module) {
   try {
     envRaw = fs.readFileSync(envFilePath, "utf8");
   } catch (_) {
-    // No env-file → not a Final Report turn → silent pass-through.
+    // No env-file → lane B: the close procedure never wrote its artifacts.
+    runCloseProcedureLane(sid, plansDir);
     process.exit(0);
   }
 

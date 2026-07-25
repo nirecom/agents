@@ -25,9 +25,13 @@ function readStdin() {
 }
 
 let sessionId;
+let modelHint = null;
 try {
   const input = JSON.parse(readStdin());
   sessionId = input.session_id;
+  // Layer① of model identification — kept as a bare value, not the whole input,
+  // so nothing else in this hook can start depending on the payload shape.
+  modelHint = input.model ?? null;
   // transcript_path → correct JSONL path for worktree sessions
   if (input.transcript_path) process.env.CLAUDE_SESSION_JSONL_PATH = input.transcript_path;
 } catch (e) {
@@ -93,6 +97,19 @@ if (sessionId) {
   } catch (e) {
     // Fail-open
   }
+}
+
+// Freeze which model drives this session, and with it the verbose-prompt flag.
+// Must run AFTER the state file exists so the record lands in this session's own
+// state rather than in a file created for it. Write-once — layer③ only fills in
+// when neither the payload nor the env carried an identifier.
+if (sessionId) {
+  try {
+    const { resolveModelId } = require("./lib/model-identity");
+    const { recordSessionModel } = require("./lib/workflow-state");
+    const resolved = resolveModelId({ model: modelHint });
+    if (resolved) recordSessionModel(sessionId, resolved);
+  } catch (e) { /* fail-open */ }
 }
 
 // Set VS Code session title from intent.md issue #.
@@ -226,5 +243,18 @@ try {
 try {
   const convLang = getConvLangInjection();
   if (convLang) lines.push(convLang);
+} catch (_e) { /* fail-open */ }
+// Either the hardening line (model already known and matched) or the one-time
+// self-report request (layer③ bootstrap) — never both: asking for a self-report
+// after the flag is already resolved would be pure wasted context.
+try {
+  const { getVerbosePromptInjection, getModelSelfReportRequest } = require("./lib/verbose-prompt");
+  const verbosePrompt = getVerbosePromptInjection(sessionId);
+  if (verbosePrompt) {
+    lines.push(verbosePrompt);
+  } else {
+    const selfReportRequest = getModelSelfReportRequest(sessionId);
+    if (selfReportRequest) lines.push(selfReportRequest);
+  }
 } catch (_e) { /* fail-open */ }
 console.log(JSON.stringify({ additionalContext: lines.join("\n") }));
