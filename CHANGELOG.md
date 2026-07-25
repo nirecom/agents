@@ -100,3 +100,7 @@ Changes: New emergency OFF sentinels (`WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY` 
 ### FEATURE: PR #1628 (2026-07-25)
 Background: feat(#1611): model-conditional prompt hardening for low-gap-filling backends
 Changes: New VERBOSE_PROMPT_MODELS setting: when the running model matches the allowlist, workflow-rule reinforcement text is auto-injected at session start and after compaction (no effect for models outside the list).;Direct edits to rotated history/changelog archive files (docs/history/*.md, changelog/*.md) are now blocked, matching the existing append-only guard on history.md / CHANGELOG.md.
+
+### FEATURE: PR #1635 (2026-07-25)
+Background: fix: remove unauthorized SESSION_MODEL_ID env override
+Changes: Removed the SESSION_MODEL_ID environment variable and automatic model self-report detection from prompt hardening. Model detection now relies solely on the session hook payload and the VERBOSE_PROMPT_MODELS allowlist.
