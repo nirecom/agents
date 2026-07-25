@@ -179,6 +179,18 @@ in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
+### VS Code worktree session visibility
+
+The `anthropic.claude-code` VS Code extension hardcodes `includeWorktrees:!1` in its
+session-list call, so sessions whose cwd is inside a linked git worktree never appear in the
+extension's session list — and every extension auto-upgrade overwrites a manual fix.
+Run `bin/vscode-patch-include-worktrees` to re-apply it: the tool classifies each installed
+bundle and refuses rather than guessing when it sees a shape it does not recognize. It writes
+`extension.js.bak` only when that file is absent — a `.bak` left by an earlier run or an older
+version is preserved as-is, never refreshed. Add `--dry-run` to report without writing.
+Patching the on-disk bundle does not touch the running extension host, so after a successful
+patch run VS Code's `Developer: Reload Window` before worktree sessions become visible.
+
 ### Cross-machine session continuity
 
 Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and syncs
@@ -241,7 +253,7 @@ skills/            — slash commands (/clarify-intent, /make-outline-plan, /mak
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-patch-include-worktrees, and other tools
 bin/lib/           — shared bash libraries (codex-core.sh)
 install/
   win/             — Windows-specific install subscripts
