@@ -65,6 +65,12 @@ if (require.main === module) {
       process.exit(0);
     }
 
+    // Skip when next-step is paused (#1607): no auto-resume while quiet.
+    try {
+      const { isNextStepPaused } = require("./lib/session-markers");
+      if (isNextStepPaused(sessionId)) process.exit(0);
+    } catch (_) { /* fail-open */ }
+
     // Skip sessions with no workflow state file (non-workflow sessions).
     let wfState = null;
     try {

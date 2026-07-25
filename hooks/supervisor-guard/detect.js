@@ -122,6 +122,7 @@ function detectOffProposal(transcriptPath) {
   }
   let WORKTREE_OFF_DQ, WORKTREE_OFF_LL, WORKTREE_ON_DQ, WORKTREE_ON_LL;
   let WORKFLOW_OFF_DQ, WORKFLOW_OFF_LL, WORKFLOW_ON_DQ, WORKFLOW_ON_LL;
+  let WORKTREE_OFF_EMG_DQ, WORKTREE_OFF_EMG_LL, WORKFLOW_OFF_EMG_DQ, WORKFLOW_OFF_EMG_LL;
   try {
     ({
       ENFORCE_WORKTREE_OFF_RE_DQ: WORKTREE_OFF_DQ,
@@ -132,6 +133,10 @@ function detectOffProposal(transcriptPath) {
       ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE: WORKFLOW_OFF_LL,
       ENFORCE_WORKFLOW_ON_RE_DQ: WORKFLOW_ON_DQ,
       ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE: WORKFLOW_ON_LL,
+      ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ: WORKTREE_OFF_EMG_DQ,
+      ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE: WORKTREE_OFF_EMG_LL,
+      ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ: WORKFLOW_OFF_EMG_DQ,
+      ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE: WORKFLOW_OFF_EMG_LL,
     } = require("../lib/sentinel-patterns"));
   } catch (_) {
     return { detected: false, kind: null };
@@ -160,9 +165,13 @@ function detectOffProposal(transcriptPath) {
       const text = (item.input && item.input.command) || "";
       if (!text) continue;
       cmdOrder++;
-      if (WORKTREE_OFF_DQ.test(text) || WORKTREE_OFF_LL.test(text)) lastWorktreeOffIdx = cmdOrder;
+      // EMERGENCY OFF forms are distinct strings that the normal OFF regexes do
+      // NOT match, so they must be tested explicitly to register as OFF proposals.
+      if (WORKTREE_OFF_DQ.test(text) || WORKTREE_OFF_LL.test(text) ||
+          WORKTREE_OFF_EMG_DQ.test(text) || WORKTREE_OFF_EMG_LL.test(text)) lastWorktreeOffIdx = cmdOrder;
       if (WORKTREE_ON_DQ.test(text) || WORKTREE_ON_LL.test(text)) lastWorktreeOnIdx = cmdOrder;
-      if (WORKFLOW_OFF_DQ.test(text) || WORKFLOW_OFF_LL.test(text)) lastWorkflowOffIdx = cmdOrder;
+      if (WORKFLOW_OFF_DQ.test(text) || WORKFLOW_OFF_LL.test(text) ||
+          WORKFLOW_OFF_EMG_DQ.test(text) || WORKFLOW_OFF_EMG_LL.test(text)) lastWorkflowOffIdx = cmdOrder;
       if (WORKFLOW_ON_DQ.test(text) || WORKFLOW_ON_LL.test(text)) lastWorkflowOnIdx = cmdOrder;
     }
   }

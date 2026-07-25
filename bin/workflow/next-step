@@ -256,6 +256,35 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
+  // Quiet layer (#1607): when the session is deliberately outside the workflow,
+  // next-step reports ACTION=paused instead of nagging with the next step.
+  // Cause-specific resume guidance — NEXT_STEP_RESUME does NOT clear workflow-OFF.
+  // fail-open: a marker-read failure just means the normal (noisy) verdict.
+  try {
+    const { isNextStepPaused, isWorkflowOff } = require("../../hooks/lib/session-markers");
+    if (isNextStepPaused(sid)) {
+      emit(
+        "paused",
+        "",
+        "next-step is quiet. Take no workflow action; continue the out-of-workflow work. " +
+          "Resume with: echo \"<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>\"",
+        "next-step-paused"
+      );
+      return;
+    }
+    if (isWorkflowOff(sid)) {
+      emit(
+        "paused",
+        "",
+        "workflow enforcement is OFF, so next-step is quiet. Take no workflow action. " +
+          "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\" " +
+          "(a next-step resume sentinel does NOT clear workflow-OFF)",
+        "workflow-off-quiet"
+      );
+      return;
+    }
+  } catch (_e) { /* fail-open */ }
+
   const statePath = getStatePath(sid);
   if (!fs.existsSync(statePath)) {
     emit("invoke", "workflow-init", "Run /workflow-init to initialize the session state.", "no-state");

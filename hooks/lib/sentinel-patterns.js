@@ -73,10 +73,36 @@ const ENFORCE_WORKFLOW_OFF_RE_DQ =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF: ([^>]+)>>"$/;
 const ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF([: ].*)?>>"$/;
+// EMERGENCY OFF sentinels (#1608): bypass the Phase1 clearance examination.
+// Human-only (settings.json `ask`) and audited. Distinct strings, so the normal
+// OFF DQ regexes above never match them — that is the bypass mechanism itself.
+// Note: neither the normal *_RE_DQ nor the normal *_LOOKSLIKE_RE forms match the
+// `_EMERGENCY` strings — only the dedicated *_EMERGENCY_* regexes below do. Any
+// consumer that must see an emergency OFF has to test them explicitly.
+const ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ =
+  /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: ([^>]+)>>"$/;
+const ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY([: ].*)?>>"$/;
+const ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ =
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY: ([^>]+)>>"$/;
+const ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY([: ].*)?>>"$/;
 const ENFORCE_WORKFLOW_ON_RE_DQ =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON: ([^>]+)>>"$/;
 const ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE =
   /^echo "<<WORKFLOW_ENFORCE_WORKFLOW_ON([: ].*)?>>"$/;
+// NEXT_STEP_PAUSE/RESUME (#1607): standalone quiet layer for next-step and the
+// supervisor hooks. Does NOT suspend enforcement — it only silences re-announcement
+// while the user deliberately works outside the workflow. Reason mandatory.
+const NEXT_STEP_PAUSE_RE_DQ =
+  /^echo "<<WORKFLOW_NEXT_STEP_PAUSE: ([^>]+)>>"$/;
+const NEXT_STEP_PAUSE_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_NEXT_STEP_PAUSE([: ].*)?>>"$/;
+const NEXT_STEP_RESUME_RE_DQ =
+  /^echo "<<WORKFLOW_NEXT_STEP_RESUME: ([^>]+)>>"$/;
+const NEXT_STEP_RESUME_LOOKSLIKE_RE =
+  /^echo "<<WORKFLOW_NEXT_STEP_RESUME([: ].*)?>>"$/;
+
 // CONFIRM_<STAGE> sentinels emitted by clarify-intent / make-outline-plan /
 // make-detail-plan after the artifact is written. PreToolUse `confirm-checkpoint.js`
 // surfaces the dialog. Stop hook `stop-confirm-plan-guard.js` (Layer 2) returns
@@ -150,8 +176,16 @@ function isSentinel(cmd) {
     ENFORCE_WORKTREE_ON_LOOKSLIKE_RE.test(cmd) ||
     ENFORCE_WORKFLOW_OFF_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE.test(cmd) ||
+    ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ.test(cmd) ||
+    ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE.test(cmd) ||
+    ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ.test(cmd) ||
+    ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE.test(cmd) ||
     ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE.test(cmd) ||
+    NEXT_STEP_PAUSE_RE_DQ.test(cmd) ||
+    NEXT_STEP_PAUSE_LOOKSLIKE_RE.test(cmd) ||
+    NEXT_STEP_RESUME_RE_DQ.test(cmd) ||
+    NEXT_STEP_RESUME_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_INTENT_LOOKSLIKE_RE.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
@@ -192,7 +226,11 @@ function isStrictSentinel(cmd) {
     ENFORCE_WORKTREE_OFF_RE_DQ.test(cmd) ||
     ENFORCE_WORKTREE_ON_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_OFF_RE_DQ.test(cmd) ||
+    ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ.test(cmd) ||
+    ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ.test(cmd) ||
     ENFORCE_WORKFLOW_ON_RE_DQ.test(cmd) ||
+    NEXT_STEP_PAUSE_RE_DQ.test(cmd) ||
+    NEXT_STEP_RESUME_RE_DQ.test(cmd) ||
     CONFIRM_INTENT_RE_DQ.test(cmd) ||
     CONFIRM_OUTLINE_RE_DQ.test(cmd) ||
     CONFIRM_DETAIL_RE_DQ.test(cmd) ||
@@ -265,7 +303,11 @@ module.exports = {
   ENFORCE_WORKTREE_OFF_RE_DQ, ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE,
   ENFORCE_WORKTREE_ON_RE_DQ, ENFORCE_WORKTREE_ON_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_OFF_RE_DQ, ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE,
+  ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE,
+  ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE,
   ENFORCE_WORKFLOW_ON_RE_DQ, ENFORCE_WORKFLOW_ON_LOOKSLIKE_RE,
+  NEXT_STEP_PAUSE_RE_DQ, NEXT_STEP_PAUSE_LOOKSLIKE_RE,
+  NEXT_STEP_RESUME_RE_DQ, NEXT_STEP_RESUME_LOOKSLIKE_RE,
   CONFIRM_INTENT_RE_DQ, CONFIRM_INTENT_LOOKSLIKE_RE,
   CONFIRM_OUTLINE_RE_DQ, CONFIRM_OUTLINE_LOOKSLIKE_RE,
   CONFIRM_DETAIL_RE_DQ, CONFIRM_DETAIL_LOOKSLIKE_RE,

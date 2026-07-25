@@ -34,9 +34,22 @@ function checkReviewTests(step, stepState, opts) {
     if (writeTestsEvidenceBypassed) return { action: "skip" };
     return { action: "block", reason: null };
   }
-  // status === "complete": unresolved warnings always block (C2 enforcement).
+  // status === "complete": unresolved warnings block (C2 enforcement), but only
+  // when they belong to the current workflow session id (issue #924). Warnings
+  // recorded under a prior wsid are stale and must not block this wsid's commit.
   if (stepState && stepState.warnings_summary) {
-    return { action: "block", reason: "warnings-pending" };
+    const warnWsid = stepState.wsid;
+    let staleWarnings = false;
+    if (warnWsid) {
+      const { resolveWorkflowSessionId } = require("../lib/resolve-workflow-session-id");
+      let resolvedWsid = null;
+      try { resolvedWsid = resolveWorkflowSessionId() || null; } catch (_) {}
+      if (resolvedWsid && resolvedWsid !== warnWsid) staleWarnings = true;
+    }
+    // Missing stored wsid (legacy state), unresolvable wsid, or matching wsid →
+    // keep the historical block. Stale prior-wsid warnings fall through to the
+    // token/wsid checks below.
+    if (!staleWarnings) return { action: "block", reason: "warnings-pending" };
   }
 
   // Validate stored token against freshly computed staged-tests fingerprint.

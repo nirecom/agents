@@ -10,7 +10,14 @@ const CATEGORIES = [
 
 const SEVERITY_VALUES = ["error", "warning", "notice"];
 
-const RECORD_TYPE_VALUES = ["concern", "escape_hatch_event"];
+// off_examination / off_clearance_consumed: OFF-clearance audit trail (#1608).
+// Without these, appendFinding() would silently drop the audit entries.
+const RECORD_TYPE_VALUES = [
+  "concern",
+  "escape_hatch_event",
+  "off_examination",
+  "off_clearance_consumed",
+];
 
 const ALERT_PHASE_VALUES = [null, "pending", "done", "paused", "closed"];
 

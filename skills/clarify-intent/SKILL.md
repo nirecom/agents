@@ -111,7 +111,7 @@ CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on it
 - `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
   - Remove-and-continue branch: after removing the issue from closes_issues, also remove the corresponding `- #N: title` line from the `## Issues` section of the in-progress `intent.md` (and from `outline.md` if it already exists).
   - This keeps plan artifacts in sync with closes_issues — stale `- #N:` entries cause confusion in downstream steps.
-- `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session".
+- `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session". A rc=2 caused by session-id resolution failure is recoverable by re-running with `CLAUDE_SESSION_ID` passed explicitly (it does not propagate to child processes).
 - `NEED_ISSUE` → invoke `/issue-create` → backfill `## Issues` → re-run guard-loop only.
 - `RETRY_EXHAUSTED` → `AskUserQuestion` "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?" — "Retry `/issue-create`" / "Manual recovery" / "Abort workflow" → emit `<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>`.
 - `CLOSED_ENTRY` → `AskUserQuestion` "Tracking-issue guard detected a CLOSED entry. How should we recover?" — "Reopen the closed entry and retry" / "Abort session" → `<<WORKFLOW_RESET_FROM_clarify_intent: closed tracking entry>>`.

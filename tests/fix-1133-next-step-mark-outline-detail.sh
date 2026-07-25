@@ -9,6 +9,9 @@
 #
 # Covers #1133 (next-step --mark CLI, outline/detail auto-repair, scoped hints):
 #   --mark <step> <status> flag (M1-M6), outline/detail evidence auto-repair (A1-A2),
+#   mid-review guard: same-stage codex round-number/concern-ledger marker suppresses
+#   auto-complete (A3-A5 outline, A7-A8 detail) while an unrelated-stage marker does
+#   not (A6, A9) and a marker owned by another session does not either (A10, A11),
 #   scoped abort hint when outline=pending+detail=complete (H1-H2),
 #   generic hint bifurcation by hasCompletionEvidence (B1-B2),
 #   reconcile-state --dry-run showing outline/detail in EVIDENCE_STEPS (G1),
@@ -295,6 +298,8 @@ SUB_DIR="$SCRIPT_DIR/fix-1133-next-step-mark-outline-detail"
 . "$SUB_DIR/idempotency-security.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/auto-repair.sh"
+# shellcheck source=/dev/null
+. "$SUB_DIR/auto-repair-session-scope.sh"
 # shellcheck source=/dev/null
 . "$SUB_DIR/hint.sh"
 # shellcheck source=/dev/null

@@ -106,11 +106,14 @@
       "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
+      "Bash(echo \"<<WORKFLOW_NEXT_STEP_RESUME: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")",
       "Bash(doc-append *)",
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",
       "Bash(get-config-var *)",
+      "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" *')",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" *)",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" *')",
       "Bash(bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" *)",
       "Write(**/tests/**)",
@@ -206,6 +209,9 @@
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: *>>\")",
+      "Bash(echo \"<<WORKFLOW_NEXT_STEP_PAUSE: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
@@ -400,6 +406,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-memory-direct.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-off-clearance-write.js\"",
             "timeout": 5
           }
         ]
