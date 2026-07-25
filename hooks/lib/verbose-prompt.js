@@ -5,13 +5,9 @@
 // zero context while the flag is off — rules/*.md would load unconditionally
 // into every session.
 //
-// Consumers: hooks/session-start.js, hooks/post-compact.js, and
-// bin/record-session-model.js (which injects on the recording turn itself).
+// Consumers: hooks/session-start.js, hooks/post-compact.js.
 
-const path = require("path");
 const { readState, SESSION_ID_VALID_RE } = require("./workflow-state");
-const { loadDefaultEnv } = require("./load-env");
-const { parseKeywordList } = require("./model-match");
 
 // The single definition of the hardening line. One sentence covering the three
 // observed failure modes: skipped skill steps, summarizing over a prescribed
@@ -37,31 +33,7 @@ function getVerbosePromptInjection(sessionId) {
   }
 }
 
-// Layer③ bootstrap: ask the model to self-report once, but only while the
-// feature is configured AND nothing has been recorded yet. Both conditions off
-// means zero added context, which is the whole point of gating here.
-function getModelSelfReportRequest(sessionId) {
-  try {
-    if (!isUsableSessionId(sessionId)) return null;
-    loadDefaultEnv();
-    if (parseKeywordList(process.env.VERBOSE_PROMPT_MODELS).length === 0) return null;
-
-    const state = readState(sessionId);
-    if (state && state.session_model) return null;
-
-    const agentsDir = process.env.AGENTS_CONFIG_DIR || path.join(__dirname, "..", "..");
-    const cli = path.join(agentsDir, "bin", "record-session-model.js");
-    return (
-      `Run this once now, before anything else: node "${cli}" --session ${sessionId} ` +
-      `--self-report-text "<the sentence in your system prompt that names the model you are powered by>"`
-    );
-  } catch (_) {
-    return null;
-  }
-}
-
 module.exports = {
   VERBOSE_PROMPT_TEXT,
   getVerbosePromptInjection,
-  getModelSelfReportRequest,
 };

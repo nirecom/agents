@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 # tests/feature-1611-verbose-prompt-injection.sh
-# Tests: hooks/lib/model-identity.js, hooks/lib/verbose-prompt.js, bin/record-session-model.js, hooks/lib/workflow-state/state-io.js, hooks/session-start.js, hooks/post-compact.js
+# Tests: hooks/lib/model-identity.js, hooks/lib/verbose-prompt.js, hooks/lib/workflow-state/state-io.js, hooks/session-start.js, hooks/post-compact.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
 #
 # Issue #1611 — model-conditional prompt hardening.
 #
-#   detection   layer① SessionStart stdin `model`
-#               layer② SESSION_MODEL_ID (after loadDefaultEnv)
-#               layer③ self-report recorded through bin/record-session-model.js
+#   detection   layer① SessionStart stdin `model` (the only detection layer)
 #   persistence session state file: `session_model` (write-once) + `verbose_prompt`
 #   provider    hooks/lib/verbose-prompt.js (pure, no side effects)
-#   consumers   SessionStart, PostCompact, and the recording CLI's own stdout
+#   consumers   SessionStart, PostCompact
 #
 # Every case runs against a temp CLAUDE_WORKFLOW_DIR / WORKFLOW_PLANS_DIR /
 # AGENTS_CONFIG_DIR; the real ~/.claude workflow state is never touched.
@@ -18,8 +16,6 @@
 # TL3 gap (what this test does NOT catch):
 # - What the live Claude Code SessionStart payload actually puts in `model`
 #   (string / object / absent) for a given backend — only a real session shows it.
-# - Whether the model actually obeys the self-report request line (layer③ is
-#   compliance-dependent by design).
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight via
 # bin/check-verification-gate.sh categories: hook-registration, skill-orchestration.
 
@@ -30,7 +26,6 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODEL_IDENTITY_JS="$REPO_DIR/hooks/lib/model-identity.js"
 VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
 STATE_IO_JS="$REPO_DIR/hooks/lib/workflow-state/state-io.js"
-RECORD_CLI="$REPO_DIR/bin/record-session-model.js"
 SESSION_START_JS="$REPO_DIR/hooks/session-start.js"
 POST_COMPACT_JS="$REPO_DIR/hooks/post-compact.js"
 
@@ -88,7 +83,7 @@ export SIO_MOD="$(to_node_path "$STATE_IO_JS")"
 
 # jsn <expression> [KEY=VAL ...] — evaluate with MI / VP / SIO bound.
 # null/undefined → "null"; objects/arrays → JSON; throw → "THREW".
-# Ambient VERBOSE_PROMPT_MODELS / SESSION_MODEL_ID are always cleared first so
+# Ambient VERBOSE_PROMPT_MODELS is always cleared first so
 # the developer's own shell cannot colour a result; per-case KEY=VAL wins.
 JSN_SCRIPT='
 function req(p) { try { return require(p); } catch (e) { return null; } }
@@ -108,7 +103,7 @@ jsn() {
     local expr="$1"; shift
     local out
     out="$(run_with_timeout 30 env \
-        -u VERBOSE_PROMPT_MODELS -u SESSION_MODEL_ID \
+        -u VERBOSE_PROMPT_MODELS \
         CLAUDE_WORKFLOW_DIR="$WFDIR_N" \
         WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         AGENTS_CONFIG_DIR="$CFGDIR_N" \
@@ -158,7 +153,7 @@ try {
 echo "=== preconditions (new modules) ==="
 # ---------------------------------------------------------------------------
 
-for f in "$MODEL_IDENTITY_JS" "$VERBOSE_PROMPT_JS" "$RECORD_CLI"; do
+for f in "$MODEL_IDENTITY_JS" "$VERBOSE_PROMPT_JS"; do
     rel="${f#$REPO_DIR/}"
     if [ -f "$f" ]; then pass "X-exists-$rel"
     else fail "X-exists-$rel" "not implemented yet"; fi
@@ -195,7 +190,7 @@ TABLE
 
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== B: resolveModelId (layer① → layer② precedence) ==="
+echo "=== B: resolveModelId (layer① only) ==="
 # ---------------------------------------------------------------------------
 
 resolve() {
@@ -206,22 +201,10 @@ resolve() {
 
 assert_eq "B01-hook-input-wins-source" "claude-opus-4-8:hook-input" \
     "$(resolve "{model: 'claude-opus-4-8'}")"
-assert_eq "B02-env-layer-when-no-hook-input" "env-model-id:env" \
-    "$(resolve "{session_id: 's'}" SESSION_MODEL_ID=env-model-id)"
-assert_eq "B03-hook-input-beats-env" "hook-model:hook-input" \
-    "$(resolve "{model: 'hook-model'}" SESSION_MODEL_ID=env-model-id)"
-assert_eq "B04-neither-layer" "null" \
+assert_eq "B04-no-hook-input-is-null" "null" \
     "$(resolve "{session_id: 's'}")"
-assert_eq "B05-empty-env-is-unset" "null" \
-    "$(resolve "{session_id: 's'}" SESSION_MODEL_ID=)"
 assert_eq "B06-malformed-input-fail-open" "null" \
     "$(resolve "undefined")"
-
-# layer② must go through loadDefaultEnv(), i.e. a .env file counts too.
-printf 'SESSION_MODEL_ID=dotenv-model\n' > "$CFGDIR/.env"
-assert_eq "B07-env-layer-reads-dotenv" "dotenv-model:env" \
-    "$(resolve "{session_id: 's'}")"
-rm -f "$CFGDIR/.env"
 
 # ---------------------------------------------------------------------------
 echo ""
@@ -331,104 +314,6 @@ assert_eq "D08-provider-has-no-side-effect" "$D08_BEFORE" "$(state_hash sid-d01)
 
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== E: getModelSelfReportRequest (layer③ bootstrap line) ==="
-# ---------------------------------------------------------------------------
-
-selfreq() {
-    local e="VP.getModelSelfReportRequest('$1')"; shift
-    jsn "$e" "$@"
-}
-
-seed_state "sid-e01"
-E01="$(selfreq sid-e01 'VERBOSE_PROMPT_MODELS=deepseek;qwen')"
-if [ "$E01" != "null" ] && [ "$E01" != "THREW" ] && [ "$E01" != "EMPTY" ]; then
-    pass "E01-enabled-and-unrecorded-returns-line"
-else
-    fail "E01-enabled-and-unrecorded-returns-line" "got=$E01"
-fi
-case "$E01" in
-    *record-session-model*) pass "E01b-line-names-the-recording-cli" ;;
-    *)                      fail "E01b-line-names-the-recording-cli" "got=$E01" ;;
-esac
-
-seed_state "sid-e02" '{"session_model":{"id":"deepseek-v4-flash","source":"hook-input"}}'
-assert_eq "E02-already-recorded-returns-null" "null" \
-    "$(selfreq sid-e02 'VERBOSE_PROMPT_MODELS=deepseek;qwen')"
-
-seed_state "sid-e03"
-assert_eq "E03-feature-unset-returns-null" "null" "$(selfreq sid-e03)"
-
-seed_state "sid-e04"
-assert_eq "E04-feature-empty-returns-null" "null" "$(selfreq sid-e04 VERBOSE_PROMPT_MODELS=)"
-
-E05="$(selfreq sid-e05-never-created 'VERBOSE_PROMPT_MODELS=deepseek')"
-if [ "$E05" != "null" ] && [ "$E05" != "THREW" ] && [ "$E05" != "EMPTY" ]; then
-    pass "E05-no-state-file-counts-as-unrecorded"
-else
-    fail "E05-no-state-file-counts-as-unrecorded" "got=$E05"
-fi
-
-# ---------------------------------------------------------------------------
-echo ""
-echo "=== F: bin/record-session-model.js (record + same-turn injection) ==="
-# ---------------------------------------------------------------------------
-
-SELF_DS4="You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash."
-SELF_OPUS="You are powered by the model named Opus 4.8. The exact model ID is claude-opus-4-8."
-
-# cli <KEY=VAL...> -- <args...> → prints "<exit>|<stdout>"
-cli() {
-    local envs=()
-    while [ $# -gt 0 ] && [ "$1" != "--" ]; do envs+=("$1"); shift; done
-    [ "${1:-}" = "--" ] && shift
-    local out code
-    out="$(run_with_timeout 30 env \
-        -u VERBOSE_PROMPT_MODELS -u SESSION_MODEL_ID \
-        CLAUDE_WORKFLOW_DIR="$WFDIR_N" \
-        WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
-        AGENTS_CONFIG_DIR="$CFGDIR_N" \
-        CLAUDE_PROJECT_DIR="$PROJDIR_N" \
-        ${envs[@]+"${envs[@]}"} \
-        node "$RECORD_CLI" "$@" </dev/null 2>/dev/null)"
-    code=$?
-    printf '%s|%s' "$code" "$out"
-}
-
-seed_state "sid-f01"
-assert_eq "F01-match-prints-hardening-text" "0|$VP_TEXT" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek;qwen' -- --session sid-f01 --self-report-text "$SELF_DS4")"
-assert_eq "F01b-model-id-extracted" "deepseek-v4-flash" "$(state_field sid-f01 session_model.id)"
-assert_eq "F01c-source-is-self-report" "self-report" "$(state_field sid-f01 session_model.source)"
-
-# Second run: already recorded → silent, still exit 0.
-assert_eq "F02-second-run-is-silent" "0|" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek;qwen' -- --session sid-f01 --self-report-text "$SELF_DS4")"
-
-seed_state "sid-f03"
-assert_eq "F03-non-matching-model-silent" "0|" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek;qwen' -- --session sid-f03 --self-report-text "$SELF_OPUS")"
-assert_eq "F03b-recorded-anyway" "claude-opus-4-8" "$(state_field sid-f03 session_model.id)"
-
-seed_state "sid-f04"
-assert_eq "F04-feature-unset-silent" "0|" \
-    "$(cli -- --session sid-f04 --self-report-text "$SELF_DS4")"
-assert_eq "F04b-recorded-anyway" "deepseek-v4-flash" "$(state_field sid-f04 session_model.id)"
-
-# Positional (already-extracted) model id form.
-seed_state "sid-f05"
-assert_eq "F05-positional-model-id" "0|$VP_TEXT" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek' -- --session sid-f05 deepseek-v4-flash)"
-
-# Fail-open: bad invocations never break the model's turn.
-assert_eq "F06-missing-session-exit-0" "0|" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek' -- --self-report-text "$SELF_DS4")"
-seed_state "sid-f07"
-assert_eq "F07-unparsable-self-report-exit-0" "0|" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek' -- --session sid-f07 --self-report-text "nothing useful here")"
-assert_eq "F07b-nothing-recorded" "null" "$(state_field sid-f07 session_model.id)"
-
-# ---------------------------------------------------------------------------
-echo ""
 echo "=== G: SessionStart integration ==="
 # ---------------------------------------------------------------------------
 
@@ -436,7 +321,7 @@ echo "=== G: SessionStart integration ==="
 hook_out() {
     local hook="$1" stdin_json="$2"; shift 2
     printf '%s' "$stdin_json" | run_with_timeout 60 env \
-        -u VERBOSE_PROMPT_MODELS -u SESSION_MODEL_ID -u CLAUDE_ENV_FILE \
+        -u VERBOSE_PROMPT_MODELS -u CLAUDE_ENV_FILE \
         CLAUDE_WORKFLOW_DIR="$WFDIR_N" \
         WORKFLOW_PLANS_DIR="$PLANSDIR_N" \
         AGENTS_CONFIG_DIR="$CFGDIR_N" \
@@ -465,26 +350,19 @@ if contains "$VP_TEXT" "$G03"; then pass "G03-layer1-record-then-inject"
 else fail "G03-layer1-record-then-inject" "hardening line absent on the recording turn"; fi
 assert_eq "G03b-source-is-hook-input" "hook-input" "$(state_field sid-g03 session_model.source)"
 
-# No model in stdin and feature enabled → bootstrap the self-report instead.
+# No model in stdin, feature enabled → nothing to key off of: no flag armed,
+# no hardening line, and no session_model recorded.
 seed_state "sid-g04"
 G04="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-g04"}' 'VERBOSE_PROMPT_MODELS=deepseek;qwen')"
-if contains "record-session-model" "$G04"; then pass "G04-unrecorded-asks-for-self-report"
-else fail "G04-unrecorded-asks-for-self-report" "self-report request line absent"; fi
-if contains "$VP_TEXT" "$G04"; then fail "G04b-no-hardening-line-yet" "hardening line injected before any model was recorded"
-else pass "G04b-no-hardening-line-yet"; fi
+if contains "$VP_TEXT" "$G04"; then fail "G04-no-model-no-injection" "hardening line injected without a hook-input model"
+else pass "G04-no-model-no-injection"; fi
+assert_eq "G04b-nothing-recorded" "null" "$(state_field sid-g04 session_model.id)"
 
-# Feature disabled → zero context growth on either axis.
+# Feature disabled → zero context growth.
 seed_state "sid-g05"
-G05="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-g05"}')"
-if contains "record-session-model" "$G05"; then fail "G05-feature-off-adds-nothing" "self-report line injected with the feature disabled"
+G05="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-g05","model":"claude-opus-4-8"}')"
+if contains "$VP_TEXT" "$G05"; then fail "G05-feature-off-adds-nothing" "hardening line injected with the feature disabled"
 else pass "G05-feature-off-adds-nothing"; fi
-
-# layer② only: SESSION_MODEL_ID must be enough to arm the flag.
-seed_state "sid-g06"
-G06="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-g06"}' 'VERBOSE_PROMPT_MODELS=deepseek' SESSION_MODEL_ID=deepseek-v4-flash)"
-if contains "$VP_TEXT" "$G06"; then pass "G06-layer2-arms-the-flag"
-else fail "G06-layer2-arms-the-flag" "hardening line absent when only SESSION_MODEL_ID is set"; fi
-assert_eq "G06b-source-is-env" "env" "$(state_field sid-g06 session_model.source)"
 
 # The hook must still emit valid JSON on the record-then-inject path.
 G07="$(printf '%s' "$G03" | run_with_timeout 30 node -e '
@@ -520,13 +398,13 @@ else pass "H03b-no-injection-without-flag"; fi
 
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== J: adversarial session IDs on the self-report bootstrap path ==="
+echo "=== J: adversarial session IDs ==="
 # ---------------------------------------------------------------------------
 #
-# The session id reaches three places that build paths or spawn work from it:
-# the provider, the recording CLI (`--session`), and SessionStart's own state
-# handling. A traversal / metacharacter / control-character id must never
-# create a file outside CLAUDE_WORKFLOW_DIR and must never reach a shell.
+# The session id reaches two places that build paths or spawn work from it:
+# the read-only provider and SessionStart's own state handling. A traversal /
+# metacharacter / control-character id must never create a file outside
+# CLAUDE_WORKFLOW_DIR and must never reach a shell.
 
 snapshot_outside_wfdir() {
     find "$TMPROOT" -mindepth 1 -not -path "$WFDIR" -not -path "$WFDIR/*" 2>/dev/null | LC_ALL=C sort
@@ -539,18 +417,40 @@ EVIL_SUBSHELL="\$(touch $TMPROOT/pwned-subshell)"
 EVIL_CONTROL="$(printf 'a\001b')"
 EVIL_NEWLINE="$(printf 'a\nb')"
 
+# evil_state_path <evil-sid> — print the raw, unsanitized path a state file
+# for <evil-sid> would resolve to via path.join(WFDIR, sid + ".json"): the
+# exact join formula getStatePath()/seed_state() use, with no validation.
+evil_state_path() {
+    run_with_timeout 30 node -e '
+const path = require("path");
+process.stdout.write(path.join(process.argv[2], process.argv[1] + ".json"));
+' "$1" "$WFDIR_N" 2>/dev/null
+}
+
 j_idx=0
 for evil in "$EVIL_TRAVERSAL" "$EVIL_SHELL" "$EVIL_SUBSHELL" "$EVIL_CONTROL" "$EVIL_NEWLINE"; do
     j_idx=$((j_idx + 1))
 
-    # Provider must refuse, never build a path from it.
-    assert_eq "J01-$j_idx-provider-returns-null" "null" \
-        "$(jsn "VP.getModelSelfReportRequest(process.env.EVIL_SID)" \
-              'VERBOSE_PROMPT_MODELS=deepseek' "EVIL_SID=$evil")"
+    # Seed a legitimate-looking state file (verbose_prompt: true) at the exact
+    # location readState() would resolve to for this id if SESSION_ID_VALID_RE
+    # were broken (seed_state uses the same unsanitized path.join formula as
+    # getStatePath()). Without this, a "null" result is trivially true because
+    # no file exists yet — it proves nothing about id-validation actually
+    # rejecting the id. With the file present, "null" can only come from the
+    # isUsableSessionId()/SESSION_ID_VALID_RE gate refusing to look it up.
+    evil_path="$(evil_state_path "$evil")"
+    seed_state "$evil" '{"verbose_prompt":true}'
 
-    # Recording CLI must fail open, silently.
-    assert_eq "J02-$j_idx-cli-exit-0-silent" "0|" \
-        "$(cli 'VERBOSE_PROMPT_MODELS=deepseek' -- --session "$evil" --self-report-text "$SELF_DS4")"
+    # Provider must refuse, never build a path from it — even with a seeded
+    # verbose_prompt:true file sitting at the resolved location.
+    assert_eq "J01-$j_idx-provider-returns-null" "null" \
+        "$(jsn "VP.getVerbosePromptInjection(process.env.EVIL_SID)" \
+              "EVIL_SID=$evil")"
+
+    # Clean up immediately: the traversal id resolves outside $TMPROOT (which
+    # the top-level trap does not clean), and any leftover file here would
+    # also corrupt the J04/J05 outside-workflow-dir canary checks below.
+    [ -n "$evil_path" ] && rm -f "$evil_path" 2>/dev/null
 done
 
 # SessionStart with an adversarial session_id must still emit valid JSON.
@@ -598,10 +498,6 @@ echo "=== K: state-write failure and atomic-write hygiene ==="
 BROKEN_WFDIR="$TMPROOT/not-a-directory"
 printf 'this is a file, not a directory\n' > "$BROKEN_WFDIR"
 BROKEN_WFDIR_N="$(to_node_path "$BROKEN_WFDIR")"
-
-assert_eq "K01-cli-fails-open-on-unwritable-dir" "0|" \
-    "$(cli 'VERBOSE_PROMPT_MODELS=deepseek' "CLAUDE_WORKFLOW_DIR=$BROKEN_WFDIR_N" \
-        -- --session sid-k01 --self-report-text "$SELF_DS4")"
 
 K02_OUT="$(hook_out "$SESSION_START_JS" '{"session_id":"sid-k02","model":"deepseek-v4-flash"}' \
     'VERBOSE_PROMPT_MODELS=deepseek' "CLAUDE_WORKFLOW_DIR=$BROKEN_WFDIR_N")"
