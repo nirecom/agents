@@ -10,6 +10,12 @@ const path = require("path");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
+// Steps whose ACTION=invoke is handled by a dedicated Stop hook. Emitting a
+// second generic block in the same turn would surface two competing messages,
+// so this guard stays silent for them (CPR-3 — one owner per condition).
+// - pre_final_report_gate → owned by hooks/stop-final-report-guard.js lane B.
+const DELEGATED_REASONS = new Set(["pre_final_report_gate"]);
+
 function readStdin() {
   const chunks = [];
   const buf = Buffer.alloc(65536);
@@ -96,6 +102,11 @@ if (require.main === module) {
     const lines = result.stdout.split("\n");
     const actionLine = lines.find((l) => l.startsWith("ACTION="));
     if (!actionLine || actionLine !== "ACTION=invoke") process.exit(0);
+
+    // Delegate reasons owned by a dedicated Stop hook (REASON is single-quoted).
+    const reasonLine = lines.find((l) => l.startsWith("REASON="));
+    const reasonValue = reasonLine ? reasonLine.slice("REASON=".length).replace(/^'|'$/g, "") : "";
+    if (DELEGATED_REASONS.has(reasonValue)) process.exit(0);
 
     // Extract NEXT_SKILL for the continuation message.
     const skillLine = lines.find((l) => l.startsWith("NEXT_SKILL="));

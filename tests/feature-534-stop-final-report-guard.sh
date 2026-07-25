@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-534-stop-final-report-guard.sh
-# Tests: hooks/stop-final-report-guard.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md
-# Tags: settings, config, hook, tests
+# Tests: hooks/stop-final-report-guard.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, hooks/stop-premature-stop-guard.js, bin/workflow/next-step
+# Tags: settings, config, hook, tests, scope:issue-specific, TL2
 #
 # Issue #534 / #626 / #771 — Stop hook: stop-final-report-guard.js
 #
@@ -10,8 +10,13 @@
 # `## Final Report — <sid>` in transcript; residual <TOKEN> check;
 # no env-file `reported` flag check.
 #
-# 1. env file absent → exit 0 (no-op)
-# 2. env file malformed JSON → exit 0 (fail-open)
+# 1. env file absent → 系統B trigger (#1611): consult `bin/workflow/next-step`.
+#    ACTION=invoke + REASON='pre_final_report_gate' means the close procedure was
+#    never started → exit 2 + decision:block unconditionally (the transcript is
+#    NOT scanned, so a hand-written Final Report is rejected too). Escape hatches:
+#    session-close gate `yield`, `<sid>.workflow-off`, gate marked complete.
+#    Any other next-step verdict → exit 0 (no-op, as before).
+# 2. env file malformed JSON → exit 0 (fail-open; no 系統B fall-through)
 # 3. stop_hook_active:true → exit 0
 # 4. last `## Final Report — <sid>` absent in transcript → exit 0
 # 5. any of the 12 `###` headings missing AFTER that position → exit 2 + decision:block
@@ -93,6 +98,7 @@ source "$TESTS_SUBDIR/helpers.sh"
 source "$TESTS_SUBDIR/g01-g08.sh"
 source "$TESTS_SUBDIR/g16-i1.sh"
 source "$TESTS_SUBDIR/g21-g27.sh"
+source "$TESTS_SUBDIR/g28-trigger.sh"
 
 # ---------------------------------------------------------------------------
 # Run all tests
@@ -123,6 +129,24 @@ test_G29_transcript_path_absent_exit0
 test_G30_envfile_no_gate_no_header_blocks
 test_G31_envfile_gate_yield_no_header_exit0
 test_G32_envfile_gate_proceed_no_header_blocks
+test_G33_no_env_gate_reached_no_report_blocks
+test_G34_no_env_handwritten_full_report_still_blocks
+test_G35_no_env_midworkflow_exit0
+test_G36_no_env_no_state_exit0
+test_G37_no_env_gate_yield_exit0
+test_G38_no_env_workflow_off_exit0
+test_G39_no_env_gate_complete_exit0
+test_G40_nondefault_workflow_dir_env_inheritance
+test_G41_env_present_full_report_exit0
+test_G42_env_present_missing_heading_blocks
+test_G43_env_malformed_does_not_fall_through_to_B
+test_G44_stop_hook_active_exit0
+test_G45_premature_guard_delegates_gate_reason
+test_G46_premature_guard_other_invoke_still_blocks
+test_G47_settings_stop_timeout_is_10
+test_G48_corrupt_state_fails_open
+test_G49_state_without_steps_fails_open
+test_G50_unusable_workflow_dir_fails_open
 test_I1_settings_json_stop_hook
 
 echo ""
