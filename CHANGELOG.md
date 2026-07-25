@@ -108,3 +108,7 @@ Changes: Removed the SESSION_MODEL_ID environment variable and automatic model s
 ### FEATURE: PR #1634 (2026-07-25)
 Background: fix(#1610): worktree transition guard — ExitWorktree reminder + outside-worktree write gate
 Changes: `/worktree-start` now enters the newly created worktree automatically, and `/worktree-end` releases that binding when switching back to the main worktree.;A session-stop reminder now warns when the worktree was entered but never exited, so the extension-host worktree binding is not left dangling at session end.;Edits are now blocked when a session has a linked worktree but the current working directory is outside it (after the branch/worktree step); the block message explains how to enter the worktree and lists the opt-out escape hatches.;`enforce-worktree` block messages now include clearer remediation guidance.
+
+### FEATURE: PR #1650 (2026-07-25)
+Background: fix(#1641): use paths: frontmatter key for conditional rules
+Changes: Conditional `rules/` files are now actually loaded conditionally. They previously declared their scope under a frontmatter key Claude Code does not read, so all of them were injected into every session regardless of which files you were working on.
