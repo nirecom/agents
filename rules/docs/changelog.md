@@ -1,5 +1,7 @@
 ---
-globs: "CHANGELOG.md,docs/CHANGELOG.md"
+paths:
+  - "CHANGELOG.md"
+  - "docs/CHANGELOG.md"
 ---
 
 ## CHANGELOG.md Rules

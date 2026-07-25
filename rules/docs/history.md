@@ -1,5 +1,7 @@
 ---
-globs: "docs/history.md,docs/history/**/*.md"
+paths:
+  - "docs/history.md"
+  - "docs/history/**/*.md"
 ---
 
 ## history.md Rules

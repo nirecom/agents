@@ -1,21 +1,37 @@
 #!/usr/bin/env bash
 # tests/refactor-rules-progressive-disclosure.sh
-# Tests: agents/memory, skills/_shared/test-design.md
-# Tags: frontmatter, tests, skill, agent, bin
+# Tests: rules/claude-config-source.md, rules/coding.md, rules/coding/file-split.md, rules/coding/nodejs.md, rules/coding/python.md, rules/docs.md, rules/docs/architecture.md, rules/docs/changelog.md, rules/docs/env-example.md, rules/docs/history.md, rules/docs/readme.md, rules/docs/todo.md, rules/installer.md, rules/prompt.md, rules/test.md, rules/test/claude-e2e.md, rules/test/installer.md, rules/test/macos-timeout.md, skills/_shared/test-design.md
+# Tags: frontmatter, rules, paths, progressive-disclosure, tests, scope:common
 #
-# Tests for refactor/rules-progressive-disclosure:
-#   - globs: frontmatter validity in new sub-files
-#   - No remaining paths: frontmatter
-#   - Section heading coverage (primary content assertion)
-#   - Verbatim always-load sentences in thin pointers
-#   - Thin-pointer link validity
-#   - Char-count sanity (sub-files >= 95% of original)
-#   - Memory index consistency
-#   - Memory merge check (new file exists, old files deleted)
+# Dispatcher for the refactor/rules-progressive-disclosure test group.
+# Test groups live in tests/refactor-rules-progressive-disclosure/ and are
+# sourced below; this file owns the shared helpers and PASS/FAIL/SKIP totals.
+#
+# Groups:
+#   paths-frontmatter.sh — exact paths: file set, per-file item counts, no globs:
+#   helper-fixtures.sh   — table-driven fixtures for check_paths_frontmatter
+#   cleanup.sh           — stub deletion + hub files stay unconditional
+#   content-parity.sh    — headings, verbatim sentences, links, char-count
+#   memory.sh            — memory index consistency and merge check
 #
 # These tests validate POST-IMPLEMENTATION state.
 # Tests that reference .bak files or sub-files not yet created will SKIP or FAIL
 # appropriately — that is expected behavior before implementation is complete.
+#
+# TL3 gap (what this test does NOT catch):
+# - Whether Claude Code actually injects a rule file with valid `paths:` frontmatter
+#   into the session context when a matching file is read or edited.
+# - Whether a conditional rule is correctly withheld when no matching path is touched
+#   in the session (over-injection / always-on regression).
+# - Whether user-scope conditional matching fires at all through the
+#   ~/.claude/rules symlink into this repo (host-specific symlink resolution).
+# This test only validates frontmatter FORMAT statically. The runtime injection
+# proof is obtained once, post-merge, by observing whether these files still appear
+# in a fresh session's injected context through the ~/.claude/rules symlink; the
+# branch state is not observable before merge because that symlink resolves to the
+# main worktree. It is deliberately not committed as a test.
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
+# via bin/check-verification-gate.sh category: hook-registration.
 
 if [ -z "$_TIMEOUT_WRAPPED" ]; then
     export _TIMEOUT_WRAPPED=1
@@ -28,6 +44,7 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MEMORY_DIR="$HOME/.claude/projects/c--git-agents/memory"
+PARTS_DIR="$(dirname "${BASH_SOURCE[0]}")/refactor-rules-progressive-disclosure"
 
 PASS=0
 FAIL=0
@@ -64,52 +81,105 @@ extract_frontmatter() {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: check a file has valid globs: frontmatter
+# Helper: check a file has valid paths: frontmatter (YAML list form)
 # Returns 0 (success) and prints nothing if valid.
 # Returns 1 and prints reason if invalid.
 # ---------------------------------------------------------------------------
-check_globs_frontmatter() {
+check_paths_frontmatter() {
     local file="$1"
 
-    # (a) file starts with ---
+    # (a) line 1 is --- and a terminating --- exists
     local first_line
     first_line="$(head -1 "$file" 2>/dev/null)"
     if [[ "$first_line" != "---" ]]; then
-        echo "does not start with ---"
+        echo "line 1 is not ---"
+        return 1
+    fi
+    if ! awk 'NR==1 && /^---/{next} /^---/{found=1; exit} END{exit !found}' "$file"; then
+        echo "no terminating --- for frontmatter block"
         return 1
     fi
 
-    # (b) contains globs: key in frontmatter
     local fm
     fm="$(extract_frontmatter "$file")"
-    if ! echo "$fm" | grep -q "^globs:"; then
-        echo "no globs: key in frontmatter"
+
+    # (b) exactly one ^paths: line, with no trailing value after the colon
+    local paths_count
+    paths_count="$(echo "$fm" | grep -c '^paths:' || true)"
+    if [ "$paths_count" -ne 1 ]; then
+        echo "expected exactly 1 'paths:' line in frontmatter, found $paths_count"
+        return 1
+    fi
+    local paths_line
+    paths_line="$(echo "$fm" | grep '^paths:')"
+    if [ "$paths_line" != "paths:" ]; then
+        echo "paths: must have no inline value (got: $paths_line)"
         return 1
     fi
 
-    # (c) globs: value is a quoted string (not a YAML list)
-    local globs_line
-    globs_line="$(echo "$fm" | grep "^globs:")"
-    # Must match: globs: "..." — value starts with a quote
-    if ! echo "$globs_line" | grep -qE '^globs:[[:space:]]+"'; then
-        echo "globs: value is not a quoted string (got: $globs_line)"
-        return 1
-    fi
-    # Must NOT be followed by a YAML list item on the next line
-    local next_line
-    next_line="$(echo "$fm" | awk '/^globs:/{found=1; next} found{print; exit}')"
-    if echo "$next_line" | grep -qE '^[[:space:]]*-[[:space:]]'; then
-        echo "globs: appears to be a YAML list (found list item: $next_line)"
+    # (c) collect list items following paths: until a non-list line; empty set = FAIL
+    local items
+    items="$(echo "$fm" | awk '/^paths:$/{found=1; next} found{ if ($0 ~ /^[[:space:]]*-/) print; else exit }')"
+    if [ -z "$items" ]; then
+        echo "paths: has no list items"
         return 1
     fi
 
-    # (d) globs: value does not contain .. or backslash
-    if echo "$globs_line" | grep -qE '\.\.|\\'; then
-        echo "globs: value contains .. or backslash: $globs_line"
+    local item_count=0
+    while IFS= read -r item; do
+        [ -z "$item" ] && continue
+        item_count=$((item_count + 1))
+        # (d) full-line shape: 2-space indent, '- ', double-quoted, no quote/backslash inside
+        if ! echo "$item" | grep -qE '^  - "[^"\\]+"$'; then
+            echo "malformed list item (expected '  - \"pattern\"'): $item"
+            return 1
+        fi
+        # (e) reject .. and backslashes in every item
+        if echo "$item" | grep -qE '\.\.|\\'; then
+            echo "list item contains .. or backslash: $item"
+            return 1
+        fi
+    done <<< "$items"
+
+    # (f) no unexpected frontmatter keys
+    local extra
+    extra="$(echo "$fm" | grep -vE '^paths:$' | grep -vE '^[[:space:]]*-' | grep -vE '^[[:space:]]*$' || true)"
+    if [ -n "$extra" ]; then
+        echo "unexpected frontmatter key(s): $(echo "$extra" | tr '\n' ' ')"
         return 1
+    fi
+
+    # (g) OPTIONAL non-gating full-YAML sanity parse (skipped silently if unavailable)
+    if command -v uv >/dev/null 2>&1; then
+        local yaml_out
+        yaml_out="$(printf '%s\n' "$fm" | run_with_timeout 60 uv run --with pyyaml python -c 'import sys,yaml; d=yaml.safe_load(sys.stdin.read()); sys.exit(0 if isinstance(d, dict) and isinstance(d.get("paths"), list) and d["paths"] else 3)' 2>&1)"
+        local yaml_rc=$?
+        if [ "$yaml_rc" -eq 3 ]; then
+            echo "YAML parse: 'paths' is not a non-empty list"
+            return 1
+        fi
+        # any other non-zero rc (uv/network/tooling failure) is ignored: non-gating
     fi
 
     return 0
+}
+
+# ---------------------------------------------------------------------------
+# Helper: count list items under paths: in a file's frontmatter
+# ---------------------------------------------------------------------------
+count_paths_items() {
+    extract_paths_items "$1" | grep -c . || true
+}
+
+# ---------------------------------------------------------------------------
+# Helper: print the paths: list item VALUES (unquoted patterns), one per line,
+# in file order. Non-list lines terminate the block.
+# ---------------------------------------------------------------------------
+extract_paths_items() {
+    local file="$1"
+    extract_frontmatter "$file" \
+        | awk '/^paths:$/{found=1; next} found{ if ($0 ~ /^[[:space:]]*-/) print; else exit }' \
+        | sed -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/^"//' -e 's/"$//'
 }
 
 # ---------------------------------------------------------------------------
@@ -128,395 +198,23 @@ extract_headings() {
 }
 
 # ---------------------------------------------------------------------------
-# Test 1 — globs: frontmatter validity
+# Test groups
 # ---------------------------------------------------------------------------
-echo "=== Test 1: globs: frontmatter validity ==="
-if [ "$RENAME_DONE" = "false" ]; then
-    skip "T1: globs frontmatter" "run after rules/ rename implementation"
-else
-
-GLOBS_FILES=(
-    "rules/docs/history.md"
-    "rules/docs/todo.md"
-    "rules/docs/changelog.md"
-    "rules/docs/architecture.md"
-    "rules/docs/readme.md"
-    "rules/docs/env-example.md"
-    "rules/coding/python.md"
-    "rules/coding/nodejs.md"
-    "rules/test/installer.md"
-    "rules/test/macos-timeout.md"
-    "rules/test/claude-e2e.md"
-    "rules/claude-config-source.md"
-)
-
-for rel in "${GLOBS_FILES[@]}"; do
-    abs="$REPO_ROOT/$rel"
-    if [ ! -f "$abs" ]; then
-        fail "T1: $rel" "file not found"
+# Fail-closed: a missing or unsourceable group file must FAIL, never silently
+# reduce the run to zero assertions and exit 0.
+for part in helper-fixtures paths-frontmatter cleanup content-parity memory; do
+    part_file="$PARTS_DIR/$part.sh"
+    if [ ! -f "$part_file" ]; then
+        echo "FAIL: test group file missing: $part_file"
+        FAIL=$((FAIL + 1))
         continue
     fi
-    reason="$(check_globs_frontmatter "$abs")"
-    if [ $? -eq 0 ]; then
-        pass "T1: $rel — valid globs: frontmatter"
-    else
-        fail "T1: $rel" "$reason"
+    # shellcheck source=/dev/null
+    if ! . "$part_file"; then
+        echo "FAIL: test group failed to source: $part_file"
+        FAIL=$((FAIL + 1))
     fi
 done
-fi
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 2 — No remaining paths: frontmatter under rules/
-# ---------------------------------------------------------------------------
-echo "=== Test 2: No paths: frontmatter under rules/ ==="
-
-# Find files under rules/ that have paths: in their frontmatter
-found_paths_fm=0
-while IFS= read -r -d '' f; do
-    # Extract frontmatter and check for paths: key
-    fm="$(extract_frontmatter "$f")"
-    if echo "$fm" | grep -qE '^paths:'; then
-        fail "T2: paths: frontmatter found in $f"
-        found_paths_fm=1
-    fi
-done < <(find "$REPO_ROOT/rules" -name "*.md" -print0 2>/dev/null)
-
-if [ "$found_paths_fm" -eq 0 ]; then
-    pass "T2: No paths: frontmatter found in any rules/ file"
-fi
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 3 — Section heading coverage
-# ---------------------------------------------------------------------------
-echo "=== Test 3: Section heading coverage ==="
-
-test_heading_coverage() {
-    local bak_file="$1"
-    local test_name="$2"
-    shift 2
-    local target_files=("$@")
-
-    if [ ! -f "$bak_file" ]; then
-        skip "T3: $test_name" ".bak file not yet created (run after implementation)"
-        return
-    fi
-
-    local all_exist=1
-    for f in "${target_files[@]}"; do
-        if [ ! -f "$f" ]; then
-            all_exist=0
-            break
-        fi
-    done
-
-    if [ "$all_exist" -eq 0 ]; then
-        fail "T3: $test_name" "one or more target files not found"
-        return
-    fi
-
-    local any_fail=0
-    while IFS= read -r heading; do
-        [ -z "$heading" ] && continue
-        local count=0
-        for f in "${target_files[@]}"; do
-            if grep -qF "$heading" "$f" 2>/dev/null; then
-                count=$((count + 1))
-            fi
-        done
-        if [ "$count" -eq 0 ]; then
-            fail "T3: $test_name" "heading '$heading' not found in any target file (content loss)"
-            any_fail=1
-        elif [ "$count" -gt 1 ]; then
-            fail "T3: $test_name" "heading '$heading' found in $count files (duplication)"
-            any_fail=1
-        fi
-    done < <(extract_headings "$bak_file")
-
-    if [ "$any_fail" -eq 0 ]; then
-        pass "T3: $test_name — all headings covered exactly once"
-    fi
-}
-
-# test.md group
-test_heading_coverage \
-    "$REPO_ROOT/rules/test.md.bak" \
-    "rules/test.md headings" \
-    "$REPO_ROOT/rules/test.md" \
-    "$REPO_ROOT/skills/_shared/test-design.md"
-
-# docs-convention.md group
-if [ "$RENAME_DONE" = "true" ]; then
-    test_heading_coverage \
-        "$REPO_ROOT/rules/docs.md.bak" \
-        "rules/docs.md headings" \
-        "$REPO_ROOT/rules/docs.md" \
-        "$REPO_ROOT/rules/docs/history.md" \
-        "$REPO_ROOT/rules/docs/todo.md" \
-        "$REPO_ROOT/rules/docs/changelog.md" \
-        "$REPO_ROOT/rules/docs/architecture.md" \
-        "$REPO_ROOT/rules/docs/readme.md" \
-        "$REPO_ROOT/rules/docs/env-example.md"
-else
-    skip "T3: rules/docs.md headings" "run after rules/ rename implementation"
-fi
-
-# coding.md group
-test_heading_coverage \
-    "$REPO_ROOT/rules/coding.md.bak" \
-    "rules/coding.md headings" \
-    "$REPO_ROOT/rules/coding.md" \
-    "$REPO_ROOT/rules/coding/python.md" \
-    "$REPO_ROOT/rules/coding/nodejs.md"
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 4 — Verbatim always-load sentences in rules/test.md
-# ---------------------------------------------------------------------------
-echo "=== Test 4: Verbatim always-load sentences in rules/test.md ==="
-
-TEST_MD="$REPO_ROOT/rules/test.md"
-
-check_sentence() {
-    local file="$1"
-    local sentence="$2"
-    local label="$3"
-    if [ ! -f "$file" ]; then
-        fail "T4: $label" "file not found: $file"
-        return
-    fi
-    if grep -qF "$sentence" "$file"; then
-        pass "T4: $label"
-    else
-        fail "T4: $label" "sentence not found: $sentence"
-    fi
-}
-
-check_sentence "$TEST_MD" \
-    "Do not write or edit test files directly in the main conversation." \
-    "always-load sentence: test files in main conversation"
-
-check_sentence "$TEST_MD" \
-    'After writing test code, run `/review-tests` to verify test case completeness before committing.' \
-    "always-load sentence: /review-tests"
-
-check_sentence "$TEST_MD" \
-    "Always run tests with a timeout (default **120 seconds**). Tests that hang block the entire workflow." \
-    "always-load sentence: 120 seconds timeout"
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 5 — Thin-pointer link validity
-# ---------------------------------------------------------------------------
-echo "=== Test 5: Thin-pointer link validity ==="
-
-check_links_in_file() {
-    local file="$1"
-    local label="$2"
-
-    if [ ! -f "$file" ]; then
-        fail "T5: $label" "file not found: $file"
-        return
-    fi
-
-    local file_dir
-    file_dir="$(dirname "$file")"
-    local any_fail=0
-
-    # Extract markdown links: [text](path) — only relative paths (no http)
-    while IFS= read -r link_path; do
-        [ -z "$link_path" ] && continue
-        # Skip absolute URLs
-        if echo "$link_path" | grep -qE '^https?://'; then
-            continue
-        fi
-        # Skip anchor-only links
-        if echo "$link_path" | grep -qE '^#'; then
-            continue
-        fi
-        # Strip any trailing anchor (#section)
-        link_path="${link_path%%#*}"
-        [ -z "$link_path" ] && continue
-
-        local abs_target="$file_dir/$link_path"
-        if [ ! -f "$abs_target" ]; then
-            fail "T5: $label" "linked file not found: $link_path (from $file)"
-            any_fail=1
-        fi
-    done < <(grep -oE '\[([^]]*)\]\(([^)]*)\)' "$file" | sed 's/.*(\(.*\))/\1/')
-
-    if [ "$any_fail" -eq 0 ]; then
-        pass "T5: $label — all links valid"
-    fi
-}
-
-check_links_in_file "$REPO_ROOT/rules/test.md" "rules/test.md links"
-if [ "$RENAME_DONE" = "true" ]; then
-    check_links_in_file "$REPO_ROOT/rules/docs.md" "rules/docs.md links"
-else
-    skip "T5: rules/docs.md links" "run after rules/ rename implementation"
-fi
-check_links_in_file "$REPO_ROOT/rules/coding.md" "rules/coding.md links"
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 6 — Char-count sanity (sub-files >= 95% of original .bak)
-# ---------------------------------------------------------------------------
-echo "=== Test 6: Char-count sanity ==="
-
-check_charcount() {
-    local bak_file="$1"
-    local test_name="$2"
-    shift 2
-    local sub_files=("$@")
-
-    if [ ! -f "$bak_file" ]; then
-        skip "T6: $test_name" ".bak file not yet created (run after implementation)"
-        return
-    fi
-
-    local missing=0
-    for f in "${sub_files[@]}"; do
-        if [ ! -f "$f" ]; then
-            missing=1
-            break
-        fi
-    done
-    if [ "$missing" -eq 1 ]; then
-        fail "T6: $test_name" "one or more sub-files not found"
-        return
-    fi
-
-    local bak_count
-    bak_count="$(file_charcount "$bak_file")"
-
-    local sub_total=0
-    for f in "${sub_files[@]}"; do
-        local c
-        c="$(file_charcount "$f")"
-        sub_total=$((sub_total + c))
-    done
-
-    # floor = ceil(bak_count * 95 / 100)
-    local threshold=$(( (bak_count * 95 + 99) / 100 ))
-
-    if [ "$sub_total" -ge "$threshold" ]; then
-        pass "T6: $test_name — sub-files total $sub_total chars >= ${threshold} (95% of $bak_count)"
-    else
-        fail "T6: $test_name" "sub-files total $sub_total chars < $threshold (95% of $bak_count bak chars)"
-    fi
-}
-
-check_charcount \
-    "$REPO_ROOT/rules/test.md.bak" \
-    "rules/test.md char-count" \
-    "$REPO_ROOT/rules/test.md" \
-    "$REPO_ROOT/skills/_shared/test-design.md"
-
-if [ "$RENAME_DONE" = "true" ]; then
-    check_charcount \
-        "$REPO_ROOT/rules/docs.md.bak" \
-        "rules/docs.md char-count" \
-        "$REPO_ROOT/rules/docs.md" \
-        "$REPO_ROOT/rules/docs/history.md" \
-        "$REPO_ROOT/rules/docs/todo.md" \
-        "$REPO_ROOT/rules/docs/changelog.md" \
-        "$REPO_ROOT/rules/docs/architecture.md" \
-        "$REPO_ROOT/rules/docs/readme.md" \
-        "$REPO_ROOT/rules/docs/env-example.md"
-else
-    skip "T6: rules/docs.md char-count" "run after rules/ rename implementation"
-fi
-
-check_charcount \
-    "$REPO_ROOT/rules/coding.md.bak" \
-    "rules/coding.md char-count" \
-    "$REPO_ROOT/rules/coding.md" \
-    "$REPO_ROOT/rules/coding/python.md" \
-    "$REPO_ROOT/rules/coding/nodejs.md"
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 7 — Memory index consistency
-# ---------------------------------------------------------------------------
-echo "=== Test 7: Memory index consistency ==="
-
-MEMORY_INDEX="$MEMORY_DIR/MEMORY.md"
-
-if [ ! -f "$MEMORY_INDEX" ]; then
-    fail "T7: MEMORY.md exists" "file not found: $MEMORY_INDEX"
-else
-    pass "T7: MEMORY.md exists"
-
-    # Every feedback_*.md / project_*.md in the directory is referenced in MEMORY.md
-    any_fail=0
-    while IFS= read -r -d '' memfile; do
-        fname="$(basename "$memfile")"
-        if ! grep -qF "$fname" "$MEMORY_INDEX"; then
-            fail "T7: memory file '$fname' referenced in MEMORY.md" "not referenced"
-            any_fail=1
-        fi
-    done < <(find "$MEMORY_DIR" -maxdepth 1 \( -name "feedback_*.md" -o -name "project_*.md" \) -print0 2>/dev/null)
-
-    if [ "$any_fail" -eq 0 ]; then
-        pass "T7: all memory files referenced in MEMORY.md"
-    fi
-
-    # Every file referenced in MEMORY.md exists on disk
-    any_fail=0
-    while IFS= read -r ref; do
-        [ -z "$ref" ] && continue
-        abs="$MEMORY_DIR/$ref"
-        if [ ! -f "$abs" ]; then
-            fail "T7: MEMORY.md reference '$ref' exists on disk" "file not found"
-            any_fail=1
-        fi
-    done < <(grep -oE '\(([^)]+\.md)\)' "$MEMORY_INDEX" | sed 's/[()]//g' | grep -vE '^https?://')
-
-    if [ "$any_fail" -eq 0 ]; then
-        pass "T7: all MEMORY.md references exist on disk"
-    fi
-fi
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# Test 8 — Memory merge check
-# ---------------------------------------------------------------------------
-echo "=== Test 8: Memory merge check ==="
-
-NEW_FILE="$MEMORY_DIR/feedback_third_party_references.md"
-DELETED_1="$MEMORY_DIR/feedback_deep_research_source_quality.md"
-DELETED_2="$MEMORY_DIR/feedback_neutral_tone_for_third_parties.md"
-
-# New merged file must exist
-if [ -f "$NEW_FILE" ]; then
-    pass "T8: feedback_third_party_references.md exists (merged file)"
-else
-    fail "T8: feedback_third_party_references.md exists (merged file)" "file not found"
-fi
-
-# Old files must not exist
-if [ ! -f "$DELETED_1" ]; then
-    pass "T8: feedback_deep_research_source_quality.md deleted"
-else
-    fail "T8: feedback_deep_research_source_quality.md deleted" "file still exists"
-fi
-
-if [ ! -f "$DELETED_2" ]; then
-    pass "T8: feedback_neutral_tone_for_third_parties.md deleted"
-else
-    fail "T8: feedback_neutral_tone_for_third_parties.md deleted" "file still exists"
-fi
-
-echo ""
 
 # ---------------------------------------------------------------------------
 # Summary

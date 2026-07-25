@@ -1,5 +1,8 @@
 ---
-globs: "tests/**,**/*.sh,**/*.Tests.ps1"
+paths:
+  - "tests/**"
+  - "**/*.sh"
+  - "**/*.Tests.ps1"
 ---
 
 ## Test Execution Timeout — Portable Wrapper
