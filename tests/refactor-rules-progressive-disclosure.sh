@@ -26,8 +26,10 @@
 # - Whether user-scope conditional matching fires at all through the
 #   ~/.claude/rules symlink into this repo (host-specific symlink resolution).
 # This test only validates frontmatter FORMAT statically. The runtime injection
-# proof is obtained once, pre-merge, via a one-shot manual `claude -p` probe
-# (session verification step V1) and is deliberately not committed as a test.
+# proof is obtained once, post-merge, by observing whether these files still appear
+# in a fresh session's injected context through the ~/.claude/rules symlink; the
+# branch state is not observable before merge because that symlink resolves to the
+# main worktree. It is deliberately not committed as a test.
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: hook-registration.
 
