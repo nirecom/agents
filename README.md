@@ -191,6 +191,14 @@ version is preserved as-is, never refreshed. Add `--dry-run` to report without w
 Patching the on-disk bundle does not touch the running extension host, so after a successful
 patch run VS Code's `Developer: Reload Window` before worktree sessions become visible.
 
+The same tool also cleans up the title-only stub session files that accumulate in
+`~/.claude/projects/` when a session is renamed: add `--prune-stub-sessions` (additive — the
+patch pass still runs) and, optionally, `--claude-projects-dir <path>` to scan somewhere other
+than `~/.claude/projects`. A stub is deleted only when another copy of the same session is
+proven to carry both a real transcript record and every one of the stub's titles; anything
+else is reported and kept, and no backup is taken. Its report lines name the file relative to
+the announced `prune-root:`, never by basename alone. Combine with `--dry-run` first.
+
 ### Cross-machine session continuity
 
 Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and syncs
@@ -254,7 +262,7 @@ copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
 bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-patch-include-worktrees, and other tools
-bin/lib/           — shared bash libraries (codex-core.sh)
+bin/lib/           — libraries backing bin/ entrypoints (codex-core.sh, per-tool module dirs)
 install/
   win/             — Windows-specific install subscripts
   linux/           — Linux/macOS install subscripts
