@@ -28,6 +28,11 @@ export MSYS2_ARG_CONV_EXCL="*"
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOAD_ENV_SRC="$AGENTS_DIR/hooks/lib/load-env.js"
 PATH_MATCH_SRC="$AGENTS_DIR/hooks/lib/path-match.js"
+# load-env.js requires ./agents-config-dir, which in turn requires
+# ./path-normalize — both must land in the fixture lib/ or the fixture copy of
+# load-env.js dies with MODULE_NOT_FOUND before any assertion runs.
+ACD_SRC="$AGENTS_DIR/hooks/lib/agents-config-dir.js"
+PATH_NORMALIZE_SRC="$AGENTS_DIR/hooks/lib/path-normalize.js"
 REAL_HELPER="$AGENTS_DIR/hooks/lib/workflow-plans-dir.js"
 REAL_BRIDGE="$AGENTS_DIR/bin/workflow-plans-dir"
 
@@ -71,6 +76,12 @@ make_fixture() {
     cp "$LOAD_ENV_SRC" "$dir/lib/load-env.js"
     if [ -f "$PATH_MATCH_SRC" ]; then
         cp "$PATH_MATCH_SRC" "$dir/lib/path-match.js"
+    fi
+    if [ -f "$ACD_SRC" ]; then
+        cp "$ACD_SRC" "$dir/lib/agents-config-dir.js"
+    fi
+    if [ -f "$PATH_NORMALIZE_SRC" ]; then
+        cp "$PATH_NORMALIZE_SRC" "$dir/lib/path-normalize.js"
     fi
     # The planned hooks/lib/workflow-plans-dir.js implementation.
     cat > "$dir/lib/workflow-plans-dir.js" <<'EOF'

@@ -10,6 +10,7 @@ const { extractStagedFiles } = require("./bash-write-targets/staged");
 const { isEncodedCommandWriteIR } = require("./bash-write-targets/encoded");
 const { isExtendedFileOpWriteIR } = require("./bash-write-targets/file-op");
 const { isHereWriteIR } = require("./bash-write-targets/here");
+const { spanAwareNewlineSplit, scanSpans } = require("./quote-spans");
 
 const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
@@ -138,38 +139,30 @@ function isFileOpWriteIR(ir) {
   return false;
 }
 
-// Extract the inner command strings from every `$(...)` and backtick
-// substitution found in a raw text fragment. Nested `$(...)` is captured at the
-// outermost level (the inner content is re-scanned recursively by the caller).
-// Fail-open on malformed nesting is acceptable here — the caller only widens
-// detection; it never demotes a write to read.
+// Extract the inner command strings of every `$(...)` / backtick substitution in
+// a raw text fragment -> { ok, subs }.
+//
+// Boundaries come from the shared quote-span scanner (hooks/lib/quote-spans), not
+// from a local paren counter. The previous depth-counting walker closed a `$(`
+// frame at the first `)` it met, but `)` is also the PATTERN TERMINATOR of a
+// `case` statement — so `"$(case x in x) rm -f README.md;; esac)"` yielded the
+// inner text `case x in x` and the `rm` never reached innerCommandIsWrite at all
+// (#1569). Single-quoted text is literal to the shell, and the scanner opens no
+// substitution frame inside it, so `echo '$(rm f)'` stays a non-write for free.
+//
+// Every cmdsubst/backtick span is returned, nested ones included: over-reporting
+// only widens detection, while a missed span silently demotes a write to a read.
+// ok:false (unparseable fragment) is the caller's fail-closed signal.
 function extractCommandSubstitutions(raw) {
-  if (!raw || typeof raw !== "string") return [];
-  // Single-quoted spans are LITERAL — the shell does not expand $()/backticks
-  // inside them. Blank them out first so `echo '$(rm f)'` is not a false write.
-  // Double-quoted spans DO expand substitutions, so they are left intact.
-  raw = raw.replace(/'[^']*'/g, "");
-  const out = [];
-  // $(...) with balanced-paren scan (handles one level of nesting).
-  for (let i = 0; i < raw.length - 1; i++) {
-    if (raw[i] === "$" && raw[i + 1] === "(") {
-      let depth = 1;
-      let j = i + 2;
-      for (; j < raw.length && depth > 0; j++) {
-        if (raw[j] === "(") depth++;
-        else if (raw[j] === ")") depth--;
-      }
-      if (depth === 0) {
-        out.push(raw.slice(i + 2, j - 1));
-        i = j - 1;
-      }
-    }
+  if (!raw || typeof raw !== "string") return { ok: true, subs: [] };
+  const sr = scanSpans(raw);
+  if (!sr.ok) return { ok: false, subs: [] };
+  const subs = [];
+  for (const s of sr.spans) {
+    if (s.kind !== "cmdsubst" && s.kind !== "backtick") continue;
+    subs.push(raw.slice(s.innerStart, s.innerEnd));
   }
-  // Backtick substitution `...`.
-  const btRe = /`([^`]*)`/g;
-  let m;
-  while ((m = btRe.exec(raw)) !== null) out.push(m[1]);
-  return out;
+  return { ok: true, subs };
 }
 
 // True when a write (posix redirect / tee / pwsh cmdlet / rm-cp-mv / git write)
@@ -222,7 +215,12 @@ function isCommandSubstWriteIR(ir) {
     if (Array.isArray(seg.argvRaw)) fragments.push(...seg.argvRaw);
     if (seg.cmd0Raw) fragments.push(seg.cmd0Raw);
     for (const frag of fragments) {
-      for (const inner of extractCommandSubstitutions(frag)) {
+      const { ok, subs } = extractCommandSubstitutions(frag);
+      // A fragment the scanner cannot parse hides its own substitution
+      // boundaries; guessing at them is the attacker's choice, so this is a
+      // write (fail-closed).
+      if (!ok) return true;
+      for (const inner of subs) {
         if (innerCommandIsWrite(inner, isCommandSubstWriteIR)) return true;
       }
     }
@@ -252,7 +250,9 @@ function isNewlineInjectedWriteIR(ir) {
   const folded = stripped.replace(/\\[ \t]*\r?\n/g, ' ');
   let foldedDq;
   try { foldedDq = stripDqPreservingCmdSubst(folded); } catch (_) { foldedDq = folded; }
-  const lines = foldedDq.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+  // Span-aware: a newline inside a quote is argument text, not a line break.
+  const { ok: splitOk, lines } = spanAwareNewlineSplit(foldedDq);
+  if (!splitOk) return true; // unparseable spans → fail closed
   if (lines.length < 2) return false;
   for (const line of lines) {
     if (innerCommandIsWrite(line, isCommandSubstWriteIR)) return true;
