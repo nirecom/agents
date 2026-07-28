@@ -141,6 +141,29 @@ MOCKBOARD
        "$TMP/mock-bin/ensure-board-card.sh" \
        "$FAKE_ACD/bin/github-issues/"
 
+    # Path C reads <plans-dir>/<sid>-intent.md for the issue title/body. Every
+    # case uses --session-id "test-sid", so stage a minimal valid intent.md with
+    # scan-clean placeholder content.
+    cat > "$TMP/plans/test-sid-intent.md" <<'INTENTMD'
+# Agreed Requirements — test-sid
+**Title:** Placeholder tracking issue title
+
+## Background / Motivation
+Placeholder background text.
+
+## Scope
+Placeholder scope text.
+INTENTMD
+
+    # gh_outbound_guard resolves the scanner from $AGENTS_CONFIG_DIR/bin and
+    # fails CLOSED when it is missing. Provide the real scanner plus empty
+    # allow/block lists so the placeholder content scans clean (rc=0).
+    mkdir -p "$FAKE_ACD/bin"
+    cp "$AGENTS_DIR/bin/scan-outbound.sh" "$FAKE_ACD/bin/scan-outbound.sh"
+    chmod +x "$FAKE_ACD/bin/scan-outbound.sh"
+    : > "$FAKE_ACD/.private-info-allowlist"
+    : > "$FAKE_ACD/.private-info-blocklist"
+
     export PATH="$TMP/mock-bin:$PATH"
     export AGENTS_CONFIG_DIR="$FAKE_ACD"
     # The temp plans dir IS the expected base so the prefix check passes.

@@ -141,6 +141,15 @@ REMOTE_EOF
     mkdir -p "$AGENTS_CONFIG_DIR/bin/github-issues" "$AGENTS_CONFIG_DIR/.github"
     touch "$AGENTS_CONFIG_DIR/.github/labels.yml"
 
+    # gh_outbound_guard (sourced by issue-create.sh before the real gh call)
+    # resolves the scanner from $AGENTS_CONFIG_DIR/bin and fails CLOSED when it
+    # is missing. Provide the real scanner plus empty allow/block lists so the
+    # guard scans the clean placeholder title/body and returns rc=0.
+    cp "$AGENTS_DIR/bin/scan-outbound.sh" "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
+    chmod +x "$AGENTS_CONFIG_DIR/bin/scan-outbound.sh"
+    : > "$AGENTS_CONFIG_DIR/.private-info-allowlist"
+    : > "$AGENTS_CONFIG_DIR/.private-info-blocklist"
+
     # Phase 0a calls: bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-create-preflight.sh"
     # and:           bash "$AGENTS_CONFIG_DIR/bin/github-issues/sync-labels.sh"
     # Place mock scripts at those exact paths.

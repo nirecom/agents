@@ -83,6 +83,19 @@ for entry in "${FILES[@]}"; do
     LOCAL_PATHS+=("$lp")
 done
 
+# Outbound scan guard (#1591): scan every file (each combined with the commit
+# MESSAGE) up front, under its own repo-relative label so per-file allowlist
+# entries apply. The commit is atomic, so one blocked file must abort before any
+# blob is created.
+# shellcheck source=gh-outbound-guard.sh
+. "$(dirname "$0")/gh-outbound-guard.sh"
+for i in "${!LOCAL_PATHS[@]}"; do
+    SCAN_TMP=$(mktemp)
+    { printf 'commit-message: %s\n' "$MESSAGE"; cat "${LOCAL_PATHS[$i]}"; } > "$SCAN_TMP"
+    gh_outbound_guard "${REPO_PATHS[$i]}" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
+    rm -f "$SCAN_TMP"
+done
+
 # Pre-flight: warn (not abort) if `repo` scope is absent.
 if command -v gh >/dev/null 2>&1; then
     if ! gh auth status 2>&1 | grep -qE '(\bscopes:.*\brepo\b|\brepo\b)'; then

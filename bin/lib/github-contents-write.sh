@@ -65,6 +65,16 @@ if [[ ! -f "$FILE" ]]; then
     exit 1
 fi
 
+# Outbound scan guard (#1591): the commit MESSAGE travels to GitHub alongside the
+# file content, so both are scanned as one stream before any `gh api` call. One
+# scan is enough — the content does not change across retries.
+# shellcheck source=gh-outbound-guard.sh
+. "$(dirname "$0")/gh-outbound-guard.sh"
+SCAN_TMP=$(mktemp)
+{ printf 'commit-message: %s\n' "$MESSAGE"; cat "$FILE"; } > "$SCAN_TMP"
+gh_outbound_guard "$FILE_PATH" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
+rm -f "$SCAN_TMP"
+
 # Pre-flight: warn (not abort) if `repo` scope is absent.
 if command -v gh >/dev/null 2>&1; then
     if ! gh auth status 2>&1 | grep -qE '(\bscopes:.*\brepo\b|\brepo\b)'; then

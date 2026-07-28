@@ -61,34 +61,11 @@ CI-3b. **Multi-repo probe** (run after CI-3a, before writing intent.md):
 
    After all probes: CI-4 writes a `## worktrees` section with the collected results.
 
-CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Sections (in order): `## Issues` (mandatory — single SSOT for `closes_issues`; canonical parser: `hooks/lib/parse-closes-issues.js`), Background/Motivation, Scope, Constraints, Interview Log (optional), `## Class members` (mandatory — see schema below), `## Accepted Tradeoffs` (schema: `### <title>` heading + 1-paragraph rationale per entry; empty → write `(none)`), `## worktrees` (optional — omit for single-repo sessions; include when CI-3b collected sibling worktree paths). The `## Accepted Tradeoffs` section captures design decisions already settled — used by `extract-mandatory-sections` to suppress re-raised concerns in later codex reviews. Write intent.md body text in the language set by `PLAN_LANG` (`$AGENTS_CONFIG_DIR/.env`) when it is a concrete non-English language; lines whose trimmed text starts with `#` (headings of any level) are exempt. When `PLAN_LANG` is unset, `any`, or `english`, write in English (`any` disables the artifact-language policy — keep the conversation/request language).
-
-   **`## worktrees` schema (optional section):** written by CI-4 when CI-3b collected at least one non-empty worktree path. Omit entirely for single-repo sessions. Format per entry: one `- repo: <owner/repo>` line followed by `  worktree_path: <absolute path>` (2-space indent) on the next line.
-
-   **`## Class members` schema (mandatory section):** appears immediately before
-   `## Accepted Tradeoffs`. Format per member:
-   ```
-   - <name>: <description> — triage: <MUST | OPTIONAL | NA>
-   ```
-   Triage enum (exact strings — protocol violation otherwise):
-   - `triage: MUST` — symmetric change required for class consistency; planner MUST cover.
-   - `triage: OPTIONAL` — related; planner SHOULD address or explicitly defer in `## Confirmed non-goals`.
-   - `triage: NA` — sibling exists but orthogonal; out of scope for this task.
-
-   When no candidates were detected: write `- (none detected)` (no triage field).
-
-   **`## Issues` section rules** (immediately after H1, before Background/Motivation — mandatory; this is the single SSOT, no separate `## closes_issues` section is written):
-   - One entry line per issue in `closes_issues`, in the order found. Current-repo issues use `- #<N>: <title>`. Cross-repo issues use `- repo#<N>: <title>` (short form) or `- owner/repo#<N>: <title>` (full form, preferred when owner is known).
-   - **Path B** (issue known via auto-detect): read the first entry's title from `context.md ## Issue metadata - title:`; for any additional issues, fetch via `gh issue view <N> --json title --jq .title`. If a fetch fails, write `- #<N>: (title unavailable)`. For cross-repo entries, pass `--repo <owner/repo>` to the fetch.
-   - **Path C** (no issue yet — empty `closes_issues`): write an EMPTY `## Issues` section as placeholder:
-     ```
-     ## Issues
-     (none — pending issue creation or NON_GITHUB)
-     ```
-     Completion backfills `- #<N>: <title>` after a successful `gh issue create`. The empty placeholder satisfies `assemble-mandatory.sh`'s "heading must be present" invariant.
-   - **context.md missing or title line absent**: write `- #<N>: (title unavailable)`.
+CI-4. Write `<PLANS_DIR>/<session-id>-intent.md` (Write tool, no mkdir). `<PLANS_DIR>` resolves to `~/.workflow-plans/` unless `WORKFLOW_PLANS_DIR` overrides it (`$HOME/.workflow-plans/` on POSIX). Read `CLAUDE_SESSION_ID` from `$CLAUDE_ENV_FILE`; fallback `YYYYMMDD-HHMMSS`. Section order, per-section schemas, and language rules: `reference/intent-md-schema.md`. `## Issues` is the single SSOT for `closes_issues` (canonical parser: `hooks/lib/parse-closes-issues.js`).
 
 CI-5. Apply `skills/_shared/confirm-plan.md` protocol using `CONFIRM_INTENT`. On the `ON` path: in the SAME response as `echo "<<WORKFLOW_CONFIRM_INTENT: {one-line summary}>>"`, also include the next tool_use — the Completion side-effect Bash call, then the `make-outline-plan` Skill invocation. Do NOT end the response on the CONFIRM echo. Revise: update intent.md (re-run interview if scope changes significantly), loop back to protocol Step 1.
+
+CI-5a. When `closes_issues` is non-empty and a Revise loop substantively changed intent.md, run per issue N: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-body-append.sh" --issue <N> [--repo <slug>] --note "<one-paragraph summary of what changed this round>"`. Skip when `closes_issues` is empty (Path C).
 
 CI-6. This step exits exclusively via the Completion section below — the skill terminates only after CI-C1 emits the completion sentinel.
 
@@ -107,10 +84,11 @@ Run `bash "$AGENTS_CONFIG_DIR/skills/clarify-intent/scripts/run-completion.sh" -
 CI-C0. **Tracking-issue guard** — handled by `run-completion.sh`. Branch on its single stdout token:
 
 - `PROCEED` → proceed to CI-C1 (emit `<<WORKFLOW_CLARIFY_INTENT_COMPLETE>>`).
-- `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>` (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
+- `CREATED:<N>` (Path C) → backfill `## Issues` from `(none — pending issue creation or NON_GITHUB)` to `- #<N>: <title>`, where `<title>` is the `**Title:**` line's content (matches the created issue's actual title) (Read + Edit). Re-run **guard-loop only**: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/clarify-guard-loop.sh" --session-id "<session-id>" --plans-dir "<PLANS_DIR>"` → branch on its token below.
 - `CLOSED:<N>` → `AskUserQuestion` "Issue #<N> is CLOSED. How to proceed?" — "Reopen and continue" / "Remove from closes_issues and continue" (when `len(closes_issues) >= 2` only) / "Abort session" → re-run run-completion.sh.
   - Remove-and-continue branch: after removing the issue from closes_issues, also remove the corresponding `- #N: title` line from the `## Issues` section of the in-progress `intent.md` (and from `outline.md` if it already exists).
   - This keeps plan artifacts in sync with closes_issues — stale `- #N:` entries cause confusion in downstream steps.
+- `SCAN_BLOCKED` (Path C) → read `<PLANS_DIR>/<session-id>-intent-scan-block.txt`; `AskUserQuestion` "Outbound scan blocked the tracking-issue body. How to proceed?" — "Fix intent.md and retry" (then re-run `run-completion.sh`) / "Abort session".
 - `RC2` → `AskUserQuestion` "WIP set rc=2 for #<N>. How to proceed?" → "Skip and continue" / "Abort session". A rc=2 caused by session-id resolution failure is recoverable by re-running with `CLAUDE_SESSION_ID` passed explicitly (it does not propagate to child processes).
 - `NEED_ISSUE` → invoke `/issue-create` → backfill `## Issues` → re-run guard-loop only.
 - `RETRY_EXHAUSTED` → `AskUserQuestion` "Tracking-issue guard failed twice. `closes_issues` is still empty. How should we recover?" — "Retry `/issue-create`" / "Manual recovery" / "Abort workflow" → emit `<<WORKFLOW_RESET_FROM_clarify_intent: tracking-issue guard exhausted>>`.
