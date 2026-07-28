@@ -6,6 +6,10 @@
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, markStep, readState, writeState } = require("../lib/workflow-state");
 const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
+const {
+  UnapprovedCompletionError,
+  confirmSentinelFor,
+} = require("../lib/workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;
@@ -81,11 +85,24 @@ function handle(ctx) {
     }
 
     try {
+      // Deliberately NOT sanctioned: MARK_STEP_* is permissions.allow (freely
+      // emittable by the model), so completing an approval-gated step must go
+      // through the approval requirement, never around it (#1133).
       markStep(sessionId, stepName, status);
     } catch (e) {
-      pushMessage(
-        `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
-      );
+      if (e instanceof UnapprovedCompletionError) {
+        pushMessage(
+          `workflow-mark: ${stepName} NOT recorded — no user approval on record ` +
+            `(${e.code}). MARK_STEP cannot approve a plan stage. ` +
+            `Ask the user to approve, then emit: ` +
+            `echo "<<${confirmSentinelFor(stepName)}: {summary}>>" ` +
+            `(or verify CONFIRM_${stepName.toUpperCase()}=off in your config).`
+        );
+      } else {
+        pushMessage(
+          `workflow-mark: failed to write state — ${e.message}. Step "${stepName}" NOT recorded.`
+        );
+      }
     }
 
     // workflow_init completing signals a new workflow run on this session UUID.

@@ -113,6 +113,13 @@ node_call() {
 
 # Write a state file where a single step carries the given raw JSON object.
 # Other steps are set to complete so next-step walks to the target step.
+#
+# The blanket-complete loop also completes the approval-gated steps
+# (outline/detail, #1133) that are not the caller's target. Those completions
+# would trip the completion-boundary invariant in writeState, so the fixture
+# seeds a synthetic plan_approvals record for each non-target gated step. The
+# source is a HASH_EXEMPT_SOURCES member, so no artifact hash is required and
+# the fixture is independent of ambient CONFIRM_OUTLINE / CONFIRM_DETAIL.
 write_gate_state() {
   local sid="$1" step="$2" step_json="$3"
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
@@ -122,6 +129,17 @@ write_gate_state() {
       s.steps[k] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };
     }
     s.steps['$step'] = $step_json;
+    s.plan_approvals = s.plan_approvals || {};
+    for (const g of ['outline', 'detail']) {
+      if (g === '$step') continue;
+      s.plan_approvals[g] = {
+        source: 'confirm-flag-off',
+        reason: 'test fixture',
+        artifact_sha256: null,
+        artifact_hash_status: 'not-applicable',
+        recorded_at: '2026-04-11T10:00:00.000Z',
+      };
+    }
     io.writeState('$sid', s);
   " 2>/dev/null
 }
