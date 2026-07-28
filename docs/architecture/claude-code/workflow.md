@@ -189,6 +189,16 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     modifications. Skipped on `git -c workflow.wip=1` or WORKTREE_OFF marker.
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
     Detection logic: hasUnstagedTrackedChanges() in hooks/workflow-gate/staged-evidence.js.
+  Gate 2 (code-size HARD limit, #1701): runs `bash bin/review-code-size --staged` against the
+    staged index and blocks when any staged code file exceeds the 500-line HARD limit
+    (rules/coding/file-split.md). The script owns thresholds and line counting (CPR-2);
+    the hook only maps exit 1 → block. Line counts come from the staged blob
+    (`git show :<file>`), not the working tree, so the commit that performs a split passes.
+    Not skipped by the docs-only short-circuit, `workflow.wip=1`, or WORKTREE_OFF —
+    only WORKFLOW_OFF bypasses it (early return). Fails closed on infrastructure errors
+    (AGENTS_CONFIG_DIR unresolved, script missing, bash not on PATH, unexpected exit code);
+    fails open only on the 3s spawn timeout.
+    Implementation: checkCodeSizeHardLimit() in hooks/workflow-gate/code-size-gate.js.
   loads ~/.claude/projects/workflow/<session_id>.json
   docs-only short-circuit: if ALL staged files match the human-facing docs allowlist
     (docs/*.md or root README/CHANGELOG/CONTRIBUTING/LICENSE.md),
@@ -323,6 +333,9 @@ When detected, the gate skips `user_verification` and Gate 1 (unstaged-tracked
 check). All other automated gates (`run_tests`, `review_security`, `docs`) still
 fire. The gate does NOT mutate state in the WIP path — `user_verification` remains
 `pending`, so the next non-WIP commit re-blocks until the user verifies.
+
+Gate 2 (code-size HARD limit) also continues to fire for WIP commits — a WIP
+commit must not be able to land a file that exceeds the 500-line HARD limit.
 
 The `-c key=value` form is parsed by `parseGitConfigValues` (in
 `hooks/lib/parse-git-args.js`) and only recognized when it appears **before**
