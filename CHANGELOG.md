@@ -128,3 +128,7 @@ Changes: GitHub issue/PR content created or updated mid-session (including auto-
 ### FEATURE: PR #1677 (2026-07-28)
 Background: refactor(#1655): relocate vscode-cc-repair out of bin/lib/ and document apply-by-default
 Changes: `bin/vscode-cc-repair` is now a directory: run it as `bin/vscode-cc-repair/index.js`. Its implementation modules moved out of `bin/lib/`, which is reserved for libraries shared by more than one entrypoint.;README now states explicitly that the tool applies for real unless `--dry-run` is passed, and that `--prune-stub-sessions` renames matched stub session files to `.bak` without asking for confirmation.
+
+### FEATURE: PR #1675 (2026-07-28)
+Background: feat(#1672): add --allow-backdate to doc-append and batch backfill script
+Changes: `/issue-reconcile` can now backfill issues closed long ago. `doc-append --allow-backdate` lifts the ascending-date guard for backfill only, and a new batch script records a whole list of issues in one pass.
