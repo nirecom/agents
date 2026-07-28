@@ -136,3 +136,7 @@ Changes: `/issue-reconcile` can now backfill issues closed long ago. `doc-append
 ### FEATURE: PR #1683 (2026-07-29)
 Background: feat(#1640): lightweight measurement infrastructure
 Changes: Added two read-only measurement commands: `bin/measure-norm-docs`, which reports the size of normative docs against the file-split thresholds, and `bin/count-subagents`, which counts subagent invocations in a session. Added an opt-in `RECORD_STEP_TIMESTAMPS` setting (default `off`) that records when each workflow step started.
+
+### FEATURE: PR #1700 (2026-07-29)
+Background: refactor(#1586): decouple verification-gate ask from RUN_TL3; add RUN_TL4
+Changes: Added a new configuration option, `RUN_TL4` (default `off`), that controls the verification confirmation prompt shown before commit or merge. `RUN_TL3` now controls only which tests are selected and run.;If you previously set `RUN_TL3=on` and relied on that confirmation prompt, it will no longer appear. Add `RUN_TL4=on` to your configuration to keep the previous behaviour.
