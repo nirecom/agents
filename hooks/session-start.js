@@ -6,7 +6,7 @@ const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
 const { cleanupZombies, createInitialState, writeState, readState,
-        getCurrentContext, findLatestStateForContext,
+        getCurrentContext, findLatestStateForContext, reconcileEffectiveState,
         VALID_STEPS } = require("./workflow-state");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
@@ -180,9 +180,26 @@ function buildWorkflowStatus(sessionId) {
   let nextAction = "run /workflow-init to initialize the session state";
 
   if (state && state.steps) {
+    // Display the derived view (#1681) so the status block agrees with what the
+    // gates enforce. When derivation changes a step, the recorded value is shown
+    // alongside it — the record is still the audit trail. Fail-open: any failure
+    // falls back to the raw record.
+    let snapshot = null;
+    try {
+      snapshot = reconcileEffectiveState(state, sessionId, {
+        resolveAll: true,
+        repoDir: process.env.CLAUDE_PROJECT_DIR,
+        isWfMeta: state.workflow_type === "wf-meta",
+      });
+    } catch (e) { snapshot = null; }
     for (const step of VALID_STEPS) {
-      const s = (state.steps[step] || {}).status || "pending";
-      statusLines.push(`- ${step}: ${s}`);
+      const raw = (state.steps[step] || {}).status || "pending";
+      const eff = (snapshot && snapshot.steps && snapshot.steps[step])
+        ? snapshot.steps[step].status
+        : raw;
+      statusLines.push(
+        eff === raw ? `- ${step}: ${eff}` : `- ${step}: ${eff} (recorded: ${raw})`
+      );
     }
   } else {
     for (const step of VALID_STEPS) {

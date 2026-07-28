@@ -96,6 +96,9 @@ JSON_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{
 # closes_issues absent, but we've already passed clarify_intent — should NOT be blocked.
 JSON_NOT_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}}}'
 
+# #1681: outline recorded as skipped, but its skip_verdict was vetoed.
+JSON_OUTLINE_VETOED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-07-01T00:00:00.000Z"}},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1681]}'
+
 JSON_CORRUPT='{invalid json'
 
 # review_tests complete while write_tests still pending — impossible ordering.
