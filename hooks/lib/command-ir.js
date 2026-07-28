@@ -7,6 +7,7 @@
 // (fail-closed). isOsTempPath(target) is the SSOT predicate for OS temp-path detection.
 
 const { tokenizeSegment, tokenizeSegmentWithQuotes, splitSegmentsWithSeparators, REDIRECT_RE, ATTACHED_REDIRECT_RE } = require("./command-parser");
+const { hasUnclosedQuoteSpan } = require("./quote-spans");
 
 // Extract the file descriptor string from a redirect operator.
 // Returns "1" for plain >, "1" for 1>, "2" for 2>, "&" for &>, etc.
@@ -14,43 +15,6 @@ function extractFd(op) {
   if (op.length > 0 && /^\d/.test(op)) return op[0];
   if (op.startsWith("&")) return "&";
   return "1";
-}
-
-// Detect unclosed quotes in a command string (fail-closed: treat as malformed).
-// Returns true when the string has an unclosed single or double quote.
-function hasUnclosedQuote(str) {
-  let inDouble = false;
-  let inSingle = false;
-  let i = 0;
-  const n = str.length;
-  while (i < n) {
-    const ch = str[i];
-    if (inDouble) {
-      if (ch === "\\" && i + 1 < n) { i += 2; continue; }
-      if (ch === '"') { inDouble = false; }
-      i++;
-    } else if (inSingle) {
-      if (ch === "'") { inSingle = false; }
-      i++;
-    } else {
-      if (ch === '"') { inDouble = true; i++; }
-      else if (ch === '$' && i + 1 < n && str[i + 1] === "'") {
-        // ANSI-C quoting: $'...' — skip without setting inSingle
-        i += 2; // skip $ and opening '
-        let closed = false;
-        while (i < n) {
-          const ac = str[i];
-          if (ac === '\\' && i + 1 < n) { i += 2; continue; }
-          if (ac === "'") { i++; closed = true; break; }
-          i++;
-        }
-        if (!closed) return true; // fail-closed: unclosed ANSI-C quote
-      } else if (ch === '\\' && i + 1 < n) { i += 2; } // backslash-escape in unquoted context
-      else if (ch === "'") { inSingle = true; i++; }
-      else { i++; }
-    }
-  }
-  return inDouble || inSingle;
 }
 
 // Build a SegmentIR from a segment string.
@@ -145,7 +109,7 @@ function parse(cmd) {
     }
 
     // Fail-closed: unclosed quotes indicate malformed input
-    if (hasUnclosedQuote(cmd)) {
+    if (hasUnclosedQuoteSpan(cmd, ["dq", "sq", "ansic"])) {
       return { segments: [], cmd0: "", argv: [], redirects: [], kind: "empty", rawText, separators: [], parseFailure: true };
     }
 

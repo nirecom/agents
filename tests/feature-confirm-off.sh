@@ -44,6 +44,9 @@ trap 'rm -rf "$FIX"' EXIT
 cp "$REPO_ROOT/bin/get-config-var" "$FIX/bin/" || { echo "FAIL: cannot copy get-config-var"; exit 1; }
 cp "$REPO_ROOT/bin/confirm-off" "$FIX/bin/" || { echo "FAIL: cannot copy confirm-off (expected pre-implementation)"; exit 1; }
 cp "$REPO_ROOT/hooks/lib/load-env.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy load-env.js"; exit 1; }
+# Transitive requires of load-env.js: ./agents-config-dir -> ./path-normalize
+cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy agents-config-dir.js"; exit 1; }
+cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$FIX/hooks/lib/" || { echo "FAIL: cannot copy path-normalize.js"; exit 1; }
 
 chmod +x "$FIX/bin/get-config-var" "$FIX/bin/confirm-off" 2>/dev/null || true
 

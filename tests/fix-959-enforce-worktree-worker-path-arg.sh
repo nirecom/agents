@@ -183,6 +183,12 @@ setup_fake_acd() {
     local name="$1"
     local d="$TMPDIR_BASE/fake-acd-$name"
     mkdir -p "$d/bin/github-issues"
+    # Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
+    # AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real
+    # one always carries the guard itself — a marker-less stub is not a faithful
+    # config dir, it is the hostile case, which tests/fix-1630-*.sh own.
+    mkdir -p "$d/hooks"
+    touch "$d/hooks/enforce-worktree.js"
     touch "$d/bin/check-unstaged-tracked.sh"
     touch "$d/bin/probe-remote-bootstrap.sh"
     touch "$d/bin/issue-close-gate.sh"

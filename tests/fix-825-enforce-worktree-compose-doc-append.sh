@@ -22,6 +22,12 @@ trap 'rm -rf "$TMPBASE" 2>/dev/null' EXIT
 FAKE_ACD="$TMPBASE/fake-agents"
 mkdir -p "$FAKE_ACD/bin"
 touch "$FAKE_ACD/bin/compose-doc-append-entry"
+# Both trust markers (hooks/lib/agents-config-dir.js: hooks/enforce-worktree.js
+# AND bin/). This stub stands in for a LEGITIMATE agents checkout, and a real one
+# always carries the guard itself — a marker-less stub is not a faithful config
+# dir, it is the hostile case, which tests/fix-1630-*.sh own.
+mkdir -p "$FAKE_ACD/hooks"
+touch "$FAKE_ACD/hooks/enforce-worktree.js"
 if command -v cygpath >/dev/null 2>&1; then FAKE_ACD_N="$(cygpath -m "$FAKE_ACD")"; else FAKE_ACD_N="$FAKE_ACD"; fi
 
 # Main repo with NO linked worktrees (post-worktree-end state)

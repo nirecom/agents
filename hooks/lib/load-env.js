@@ -19,6 +19,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { configDirCandidates } = require("./agents-config-dir");
 
 // filterOsBlocks strips lines inside #@if <token> / #@endif blocks that do not
 // match the current platform, and removes all marker lines from the output.
@@ -101,18 +102,28 @@ function loadEnv(envPath) {
 }
 
 function loadDefaultEnv() {
+  // Candidate ENUMERATION is shared with hooks/lib/agents-config-dir.js — the
+  // (a)/(b)/(c) sources below are now its "env"/"module"/"realpath" candidates,
+  // normalized through normalizeCwd + path.resolve (so a Git Bash
+  // `/c/git/agents` value resolves), and (c) is still the
+  // `realpathSync(__filename)` walk that reaches a symlinked checkout.
+  //
+  // The SELECTION POLICY is deliberately NOT shared (CPR-3): load-env decides
+  // where SETTINGS come from, so an explicit AGENTS_CONFIG_DIR short-circuits —
+  // it is the sole config source and never falls through, or a child process
+  // pointed at an alternate/test config dir would get the real repo's .env
+  // injected. The resolver decides WHO is executing and does fall through.
+  // Pinned by tests/fix-389-load-env-default-fallback T389-7.
+  const candidates = configDirCandidates();
   // (a) Honor AGENTS_CONFIG_DIR if set
-  if (process.env.AGENTS_CONFIG_DIR) {
-    return loadEnv(path.join(process.env.AGENTS_CONFIG_DIR, ".env"));
+  const envCandidate = candidates.find((c) => c.source === "env");
+  if (envCandidate) {
+    return loadEnv(path.join(envCandidate.dir, ".env"));
   }
-  // (b) __dirname two levels up (direct install path)
-  const dirFallback = path.resolve(__dirname, "..", "..");
-  if (loadEnv(path.join(dirFallback, ".env"))) return true;
-  // (c) Resolve __filename through symlinks (e.g. ~/.claude/hooks/lib -> real repo)
-  try {
-    const realCfgDir = path.resolve(path.dirname(fs.realpathSync(__filename)), "..", "..");
-    if (loadEnv(path.join(realCfgDir, ".env"))) return true;
-  } catch (_) {}
+  // (b) module-relative, then (c) realpath-resolved
+  for (const c of candidates) {
+    if (loadEnv(path.join(c.dir, ".env"))) return true;
+  }
   if (process.env.AGENTS_HOOK_DEBUG === "1") {
     process.stderr.write("[load-env] loadDefaultEnv: .env not found via AGENTS_CONFIG_DIR, __dirname, or realpathSync\n");
   }

@@ -7,6 +7,8 @@ const { stripQuotedArgs } = require("../../lib/strip-quoted-args");
 const { hasShellChaining, isExcluded, hasWorktreeEndSkillPrefix, stripWorktreeEndSkillPrefix, rejectRceGitFlags, rejectInterpreterAndChaining } = require("../shared-cmd-utils");
 const { parseGitCPath } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
+const { rejectsUnsafeArgTail } = require("../arg-tail-guard");
+const { resolveAgentsConfigDir } = require("../../lib/agents-config-dir");
 // Extracted siblings (file-split per rules/coding/file-split.md) — re-exported below.
 const { isAllowedWorktreeCommand } = require("./worktree-command");
 const { isAllowedWorkerScriptInvocation } = require("./worker-script");
@@ -316,7 +318,8 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
  */
 function isAllowedComposeDocAppend(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
-  const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
+  // Marker-validated config dir (#1630) — env-independent; null stays fail-closed.
+  const acd = resolveAgentsConfigDir();
   if (!acd) return false;
 
   // Structural opening: `bash "<path>"` double-quoted only (matches worker spec literal).
@@ -334,11 +337,10 @@ function isAllowedComposeDocAppend(cmd, repoRoot) {
   } catch (e) { return false; }
   if (normScript.toLowerCase() !== normTarget.toLowerCase()) return false;
 
-  // Raw-form argTail scan — no stripQuotedArgs, catches:
-  //   · redirect chars > < and embedded newlines (missed by hasShellChaining)
-  //   · $(...) and ` inside double-quoted arg values (masked by stripQuotedArgs)
-  //   · | ; & chaining in the arg portion
-  if (/[|;&><\n]|\$\(|`/.test(argTail)) return false;
+  // Span-aware argTail scan (`sanctioned-bin`: no redirect of any form, no bare
+  // `&`), so a metacharacter inside a quoted argument value stays data while a
+  // substitution or ANSI-C word is rejected wherever it sits.
+  if (rejectsUnsafeArgTail(argTail, "sanctioned-bin")) return false;
 
   void repoRoot; // signature symmetry with sibling predicates
   return true;
@@ -377,7 +379,8 @@ function isAllowedSupervisorBinTool(cmd) {
  */
 function isAllowedClarifyGuardLoop(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
-  const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
+  // Marker-validated config dir (#1630) — env-independent; null stays fail-closed.
+  const acd = resolveAgentsConfigDir();
   if (!acd) return false;
 
   // Must start with: bash "<double-quoted-path>" [args...]
@@ -395,10 +398,8 @@ function isAllowedClarifyGuardLoop(cmd, repoRoot) {
   } catch (e) { return false; }
   if (normScript.toLowerCase() !== normTarget.toLowerCase()) return false;
 
-  // Raw argTail scan: reject chaining, substitution, redirects, bare &
-  if (/[|;&><\n]|\$\(|`/.test(argTail)) return false;
-  // Reject bare & (background operator); &> / &>> are not present in valid args
-  if (/&/.test(argTail)) return false;
+  // Span-aware argTail scan — same `sanctioned-bin` profile as :341 (CPR-5).
+  if (rejectsUnsafeArgTail(argTail, "sanctioned-bin")) return false;
 
   // Fail-closed: any write targets in the command → reject
   const { targets } = collectBashWriteTargets(cmd);

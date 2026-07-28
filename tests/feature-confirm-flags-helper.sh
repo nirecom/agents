@@ -416,6 +416,9 @@ FAKE_AGENTS="$TMPDIR_BASE/fake-agents"
 FAKE_HOME="$TMPDIR_BASE/fake-home"
 mkdir -p "$FAKE_AGENTS/hooks/lib" "$FAKE_HOME"
 cp "$REPO_ROOT/hooks/lib/load-env.js" "$FAKE_AGENTS/hooks/lib/load-env.js"
+# Transitive requires of load-env.js: ./agents-config-dir -> ./path-normalize
+cp "$REPO_ROOT/hooks/lib/agents-config-dir.js" "$FAKE_AGENTS/hooks/lib/agents-config-dir.js"
+cp "$REPO_ROOT/hooks/lib/path-normalize.js" "$FAKE_AGENTS/hooks/lib/path-normalize.js"
 printf 'CONFIRM_DETAIL=off\n' > "$FAKE_AGENTS/.env"
 
 ln_ok=1

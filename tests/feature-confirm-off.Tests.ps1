@@ -10,6 +10,9 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
         $script:helper = Join-Path $script:repoRoot 'bin\confirm-off.ps1'
         $script:gcvHelper = Join-Path $script:repoRoot 'bin\get-config-var.ps1'
         $script:loadEnv = Join-Path $script:repoRoot 'hooks\lib\load-env.js'
+        # Transitive requires of load-env.js: ./agents-config-dir -> ./path-normalize
+        $script:acdLib = Join-Path $script:repoRoot 'hooks\lib\agents-config-dir.js'
+        $script:pathNormLib = Join-Path $script:repoRoot 'hooks\lib\path-normalize.js'
         # Build per-suite fixture mirroring real layout.
         $script:fix = Join-Path ([System.IO.Path]::GetTempPath()) ("co-" + [guid]::NewGuid().ToString('N').Substring(0,8))
         New-Item -ItemType Directory -Path (Join-Path $script:fix 'bin') -Force | Out-Null
@@ -17,6 +20,8 @@ Describe 'confirm-off.ps1 OFF/ON/ERROR matrix' {
         if (Test-Path $script:gcvHelper) { Copy-Item -Path $script:gcvHelper -Destination (Join-Path $script:fix 'bin\get-config-var.ps1') -Force }
         if (Test-Path $script:helper)    { Copy-Item -Path $script:helper    -Destination (Join-Path $script:fix 'bin\confirm-off.ps1')    -Force }
         if (Test-Path $script:loadEnv)   { Copy-Item -Path $script:loadEnv   -Destination (Join-Path $script:fix 'hooks\lib\load-env.js')  -Force }
+        if (Test-Path $script:acdLib)    { Copy-Item -Path $script:acdLib    -Destination (Join-Path $script:fix 'hooks\lib\agents-config-dir.js') -Force }
+        if (Test-Path $script:pathNormLib) { Copy-Item -Path $script:pathNormLib -Destination (Join-Path $script:fix 'hooks\lib\path-normalize.js') -Force }
         $script:fixHelper = Join-Path $script:fix 'bin\confirm-off.ps1'
     }
 

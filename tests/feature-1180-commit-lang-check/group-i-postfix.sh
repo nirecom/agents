@@ -91,6 +91,9 @@ cp "$AGENTS_DIR/hooks/lib/detect-cjk.js"       "$_i10_cfg/hooks/lib/"
 cp "$AGENTS_DIR/hooks/lib/lang-config.js"       "$_i10_cfg/hooks/lib/"
 cp "$AGENTS_DIR/hooks/lib/lint-plan-lang.js"    "$_i10_cfg/hooks/lib/"
 cp "$AGENTS_DIR/hooks/lib/load-env.js"          "$_i10_cfg/hooks/lib/"
+# load-env.js -> agents-config-dir.js -> path-normalize.js (transitive requires)
+cp "$AGENTS_DIR/hooks/lib/agents-config-dir.js" "$_i10_cfg/hooks/lib/"
+cp "$AGENTS_DIR/hooks/lib/path-normalize.js"    "$_i10_cfg/hooks/lib/"
 
 # Create a temp repo with a staged file containing CJK content
 _i10_repo="$(make_git_repo i10)"
