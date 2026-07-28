@@ -433,10 +433,381 @@ else
     fail "Case 13: SKIPPED not found for --base+--all conflict. Output: $OUTPUT"
 fi
 
+# ===========================================================================
+# --staged mode (issue #1701)
+# ---------------------------------------------------------------------------
+# `--staged` scans ONLY the git index (staged blobs) — never the working tree,
+# never past commits, never untracked files. Line counts come from
+# `git show ":<path>"`, not `wc -l` on the working-tree file.
+#
+# The cases below SKIP (without failing) until `--staged` is implemented.
+# ===========================================================================
+
+SKIPPED_COUNT=0
+skip() { echo "SKIP: $1"; SKIPPED_COUNT=$((SKIPPED_COUNT + 1)); }
+
+# Probe: is `--staged` recognized by the script under test?
+STAGED_SUPPORTED=1
+PROBE_REPO=$(make_repo)
+PROBE_OUT=$( (cd "$PROBE_REPO" && run_with_timeout bash "$SCRIPT" --staged 2>&1) || true )
+if printf '%s' "$PROBE_OUT" | grep -q "Unknown argument: --staged"; then
+    STAGED_SUPPORTED=0
+fi
+
+# Run the script in --staged mode inside $1; sets STAGED_EXIT / STAGED_OUT.
+run_staged() {
+    local repo="$1"; shift
+    STAGED_EXIT=0
+    STAGED_OUT=$( (cd "$repo" && run_with_timeout bash "$SCRIPT" --staged "$@" 2>&1) ) || STAGED_EXIT=$?
+}
+
+# ---------------------------------------------------------------------------
+# Case S1: staged 501-line .js → exit 1 (HARD)
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S1: --staged not implemented yet"
+else
+    REPO_S1=$(make_repo)
+    git -C "$REPO_S1" checkout -q -b features1
+    mkdir -p "$REPO_S1/bin"
+    make_lines 501 > "$REPO_S1/bin/big.js"
+    git -C "$REPO_S1" add "$REPO_S1/bin/big.js"
+
+    run_staged "$REPO_S1"
+    if [[ $STAGED_EXIT -ne 1 ]]; then
+        fail "Case S1: expected exit 1 for staged 501-line .js, got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S1: staged 501-line .js → exit 1"
+    fi
+    if echo "$STAGED_OUT" | grep -q "HARD:"; then
+        pass "Case S1: HARD marker present"
+    else
+        fail "Case S1: HARD not found. Output: $STAGED_OUT"
+    fi
+    if echo "$STAGED_OUT" | grep -qE "PERFORMED \(staged mode\)|PERFORMED"; then
+        pass "Case S1: PERFORMED status line present"
+    else
+        fail "Case S1: PERFORMED status line missing. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S2: 501-line .js untracked only (not staged) → exit 0
+# Regression guard: --staged must NOT scan untracked files.
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S2: --staged not implemented yet"
+else
+    REPO_S2=$(make_repo)
+    git -C "$REPO_S2" checkout -q -b features2
+    mkdir -p "$REPO_S2/bin"
+    make_lines 501 > "$REPO_S2/bin/untracked-big.js"
+    # DO NOT git add
+
+    run_staged "$REPO_S2"
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S2: expected exit 0 (untracked must be ignored), got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S2: untracked 501-line .js ignored → exit 0"
+    fi
+    if echo "$STAGED_OUT" | grep -q "HARD:"; then
+        fail "Case S2: untracked file must not produce HARD. Output: $STAGED_OUT"
+    else
+        pass "Case S2: no HARD for untracked file"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S3: 501-line file only in past branch commits, nothing staged → exit 0
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S3: --staged not implemented yet"
+else
+    REPO_S3=$(make_repo)
+    git -C "$REPO_S3" checkout -q -b features3
+    mkdir -p "$REPO_S3/bin"
+    make_lines 501 > "$REPO_S3/bin/committed-big.js"
+    git -C "$REPO_S3" add "$REPO_S3/bin/committed-big.js"
+    git -C "$REPO_S3" commit -q -m "add 501-line JS"
+    # Index is now clean relative to HEAD — nothing staged.
+
+    run_staged "$REPO_S3"
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S3: expected exit 0 (past commits must be ignored), got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S3: past-commit-only 501-line .js ignored → exit 0"
+    fi
+    if echo "$STAGED_OUT" | grep -q "SKIPPED"; then
+        pass "Case S3: SKIPPED — no code files staged"
+    else
+        fail "Case S3: expected SKIPPED. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S4: boundary — staged 500-line .js → exit 0
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S4: --staged not implemented yet"
+else
+    REPO_S4=$(make_repo)
+    git -C "$REPO_S4" checkout -q -b features4
+    mkdir -p "$REPO_S4/bin"
+    make_lines 500 > "$REPO_S4/bin/boundary.js"
+    git -C "$REPO_S4" add "$REPO_S4/bin/boundary.js"
+
+    run_staged "$REPO_S4"
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S4: expected exit 0 at exactly 500 lines, got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S4: staged 500-line .js (boundary) → exit 0"
+    fi
+    if echo "$STAGED_OUT" | grep -q "HARD:"; then
+        fail "Case S4: 500 lines must not trigger HARD. Output: $STAGED_OUT"
+    else
+        pass "Case S4: no HARD at exactly 500 lines"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S5: only docs staged → SKIPPED, exit 0
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S5: --staged not implemented yet"
+else
+    REPO_S5=$(make_repo)
+    git -C "$REPO_S5" checkout -q -b features5
+    mkdir -p "$REPO_S5/docs"
+    make_lines 600 > "$REPO_S5/docs/readme.md"
+    git -C "$REPO_S5" add "$REPO_S5/docs/readme.md"
+
+    run_staged "$REPO_S5"
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S5: expected exit 0 for docs-only staged, got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S5: docs-only staged → exit 0"
+    fi
+    if echo "$STAGED_OUT" | grep -q "SKIPPED"; then
+        pass "Case S5: SKIPPED for docs-only staged"
+    else
+        fail "Case S5: SKIPPED not found. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S6: --staged + --all → mutually exclusive, SKIPPED, exit 0
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S6: --staged not implemented yet"
+else
+    REPO_S6=$(make_repo)
+    mkdir -p "$REPO_S6/bin"
+    make_lines 501 > "$REPO_S6/bin/big.js"
+    git -C "$REPO_S6" add "$REPO_S6/bin/big.js"
+
+    run_staged "$REPO_S6" --all
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S6: expected exit 0 for --staged + --all, got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S6: --staged + --all → exit 0"
+    fi
+    if echo "$STAGED_OUT" | grep -q "SKIPPED"; then
+        pass "Case S6: SKIPPED for --staged + --all"
+    else
+        fail "Case S6: SKIPPED not found for --staged + --all. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S7: --staged + --base → mutually exclusive, SKIPPED, exit 0
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S7: --staged not implemented yet"
+else
+    REPO_S7=$(make_repo)
+    mkdir -p "$REPO_S7/bin"
+    make_lines 501 > "$REPO_S7/bin/big.js"
+    git -C "$REPO_S7" add "$REPO_S7/bin/big.js"
+
+    run_staged "$REPO_S7" --base HEAD
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S7: expected exit 0 for --staged + --base, got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S7: --staged + --base → exit 0"
+    fi
+    if echo "$STAGED_OUT" | grep -q "SKIPPED"; then
+        pass "Case S7: SKIPPED for --staged + --base"
+    else
+        fail "Case S7: SKIPPED not found for --staged + --base. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S8: index 501 lines / worktree 500 lines → exit 1 (index wins)
+# Proves the count comes from `git show ":<path>"`, not `wc -l`.
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S8: --staged not implemented yet"
+else
+    REPO_S8=$(make_repo)
+    git -C "$REPO_S8" checkout -q -b features8
+    mkdir -p "$REPO_S8/bin"
+    make_lines 501 > "$REPO_S8/bin/shrink.js"
+    git -C "$REPO_S8" add "$REPO_S8/bin/shrink.js"
+    # Shrink the working tree copy to 500 lines WITHOUT re-staging.
+    make_lines 500 > "$REPO_S8/bin/shrink.js"
+
+    run_staged "$REPO_S8"
+    if [[ $STAGED_EXIT -ne 1 ]]; then
+        fail "Case S8: expected exit 1 (index has 501), got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S8: index 501 / worktree 500 → exit 1 (index blob is authoritative)"
+    fi
+    if echo "$STAGED_OUT" | grep -q "501 lines"; then
+        pass "Case S8: reported line count is the indexed 501"
+    else
+        fail "Case S8: expected '501 lines' in output. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S9: index 300 lines / worktree 600 lines → exit 0 (worktree ignored)
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S9: --staged not implemented yet"
+else
+    REPO_S9=$(make_repo)
+    git -C "$REPO_S9" checkout -q -b features9
+    mkdir -p "$REPO_S9/bin"
+    make_lines 300 > "$REPO_S9/bin/grow.js"
+    git -C "$REPO_S9" add "$REPO_S9/bin/grow.js"
+    # Grow the working tree copy to 600 lines WITHOUT re-staging.
+    make_lines 600 > "$REPO_S9/bin/grow.js"
+
+    run_staged "$REPO_S9"
+    if [[ $STAGED_EXIT -ne 0 ]]; then
+        fail "Case S9: expected exit 0 (index has 300), got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S9: index 300 / worktree 600 → exit 0 (working tree ignored)"
+    fi
+    if echo "$STAGED_OUT" | grep -q "HARD:"; then
+        fail "Case S9: working-tree growth must not trigger HARD. Output: $STAGED_OUT"
+    else
+        pass "Case S9: no HARD from unstaged working-tree growth"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S10: partial stage — 1000-line working tree, 501 lines in the index
+# → exit 1, decided by the staged blob's line count.
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S10: --staged not implemented yet"
+else
+    REPO_S10=$(make_repo)
+    git -C "$REPO_S10" checkout -q -b features10
+    mkdir -p "$REPO_S10/bin"
+    make_lines 501 > "$REPO_S10/bin/partial.js"
+    git -C "$REPO_S10" add "$REPO_S10/bin/partial.js"
+    # Append 499 more lines to the working tree only → worktree 1000, index 501.
+    make_lines 1000 > "$REPO_S10/bin/partial.js"
+
+    STAGED_LINES=$(git -C "$REPO_S10" show ":bin/partial.js" | wc -l | tr -d ' ')
+    if [[ "$STAGED_LINES" -ne 501 ]]; then
+        fail "Case S10: fixture setup wrong — staged blob has $STAGED_LINES lines, expected 501"
+    else
+        pass "Case S10: fixture — staged blob has 501 lines, worktree has 1000"
+    fi
+
+    run_staged "$REPO_S10"
+    if [[ $STAGED_EXIT -ne 1 ]]; then
+        fail "Case S10: expected exit 1 from partially staged blob, got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S10: partial stage (index 501) → exit 1"
+    fi
+    if echo "$STAGED_OUT" | grep -q "501 lines"; then
+        pass "Case S10: HARD count reflects the staged blob (501), not the worktree (1000)"
+    else
+        fail "Case S10: expected '501 lines' in output. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S11: staged file with a SPACE in its name → exit 1 (HARD), name intact
+# Security fix H1: `-z` null-delimited `git diff --name-only --cached` +
+# core.quotePath=false must discover paths containing spaces without splitting
+# them on whitespace or emitting a quoted/escaped path.
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S11: --staged not implemented yet"
+else
+    REPO_S11=$(make_repo)
+    git -C "$REPO_S11" checkout -q -b features11
+    mkdir -p "$REPO_S11/bin"
+    make_lines 501 > "$REPO_S11/bin/my file.js"
+    git -C "$REPO_S11" add "$REPO_S11/bin/my file.js"
+
+    run_staged "$REPO_S11"
+    if [[ $STAGED_EXIT -ne 1 ]]; then
+        fail "Case S11: expected exit 1 for staged 501-line 'my file.js', got $STAGED_EXIT. Output: $STAGED_OUT"
+    else
+        pass "Case S11: staged 501-line file with space in name → exit 1"
+    fi
+    if echo "$STAGED_OUT" | grep -q "HARD:"; then
+        pass "Case S11: HARD marker present for space-containing filename"
+    else
+        fail "Case S11: HARD not found. Output: $STAGED_OUT"
+    fi
+    if echo "$STAGED_OUT" | grep -qF "my file.js"; then
+        pass "Case S11: filename with space reported verbatim (no quoting/splitting)"
+    else
+        fail "Case S11: expected 'my file.js' in output. Output: $STAGED_OUT"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Case S12: staged file with a COLON in its name → exit 1 (HARD), name intact
+# Security fix M1: `git show ":./${file}"` / `git cat-file -e ":./$file"` must
+# stop git from parsing `0:big.js` as <stage>:<path> (stage 0 of `big.js`).
+# Colons are illegal in Windows filenames — SKIP there instead of failing.
+# ---------------------------------------------------------------------------
+if [[ $STAGED_SUPPORTED -eq 0 ]]; then
+    skip "Case S12: --staged not implemented yet"
+else
+    REPO_S12=$(make_repo)
+    git -C "$REPO_S12" checkout -q -b features12
+    mkdir -p "$REPO_S12/bin"
+    if ! make_lines 501 > "$REPO_S12/bin/0:big.js" 2>/dev/null; then
+        skip "Case S12: filesystem rejects ':' in filenames (Windows) — colon case not exercisable"
+    elif ! git -C "$REPO_S12" add "$REPO_S12/bin/0:big.js" 2>/dev/null; then
+        skip "Case S12: git could not stage a ':'-containing path on this platform"
+    else
+        run_staged "$REPO_S12"
+        if [[ $STAGED_EXIT -ne 1 ]]; then
+            fail "Case S12: expected exit 1 for staged 501-line '0:big.js', got $STAGED_EXIT. Output: $STAGED_OUT"
+        else
+            pass "Case S12: staged 501-line file with colon in name → exit 1"
+        fi
+        if echo "$STAGED_OUT" | grep -q "HARD:"; then
+            pass "Case S12: HARD marker present for colon-containing filename"
+        else
+            fail "Case S12: HARD not found. Output: $STAGED_OUT"
+        fi
+        if echo "$STAGED_OUT" | grep -qF "0:big.js"; then
+            pass "Case S12: ':'-containing path not parsed as <stage>:<path>"
+        else
+            fail "Case S12: expected '0:big.js' in output. Output: $STAGED_OUT"
+        fi
+    fi
+fi
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
+if [[ $SKIPPED_COUNT -gt 0 ]]; then
+    echo "$SKIPPED_COUNT --staged case(s) skipped (feature not implemented yet)."
+fi
 if [[ $ERRORS -eq 0 ]]; then
     echo "All tests passed."
     exit 0

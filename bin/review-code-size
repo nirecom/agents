@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Code file size / quality review for code files.
-# Usage: review-code-size [--base <ref>] [--all]
+# Usage: review-code-size [--base <ref>] [--all] [--staged]
+#
+# --staged: check only files staged in the git index. Line counts are read from the
+# staged blob via `git show :<file>` (not the working tree), so a commit that performs
+# a split passes. Exits 1 when any staged code file exceeds the HARD limit.
+# Mutually exclusive with --all / --base.
 #
 # File extensions checked: semicolon-separated list in CODE_FILE_EXTENSIONS env var.
 # Default: "js;sh;py". Example override: CODE_FILE_EXTENSIONS="js;sh;py;tf;java;ts"
@@ -22,9 +27,11 @@ _EXT_PATTERN="$(printf '%s' "$_EXTS" | tr ';' '|')"
 BASE_REF="origin/main"
 BASE_EXPLICIT=0
 ALL_SCAN=0
+STAGED_ONLY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) ALL_SCAN=1; shift ;;
+    --staged) STAGED_ONLY=1; shift ;;
     --base)
       if [[ $# -lt 2 ]]; then
         echo "## Code-size Review: SKIPPED (--base requires an argument)"; exit 0
@@ -38,14 +45,44 @@ if [[ "$ALL_SCAN" -eq 1 && "$BASE_EXPLICIT" -eq 1 ]]; then
   echo "## Code-size Review: SKIPPED — --base and --all are mutually exclusive"; exit 0
 fi
 
+if [[ "$STAGED_ONLY" -eq 1 && ( "$ALL_SCAN" -eq 1 || "$BASE_EXPLICIT" -eq 1 ) ]]; then
+  echo "## Code-size Review: SKIPPED — --staged is mutually exclusive with --all/--base"; exit 0
+fi
+
+# Shared extension + exclusion filter for a newline-delimited path list.
+filter_code_targets() {
+  printf '%s\n' "$1" \
+    | grep -E "\.($_EXT_PATTERN)$" \
+    | grep -v 'node_modules/' \
+    | grep -v '\.git/' \
+    | grep -v '_archive/' \
+    | grep -v '_archived/' || true
+}
+
+# Line count from the staged blob (git index), not the working tree.
+# M1: use :./<path> to avoid git parsing a colon-prefixed name as <stage>:<path>.
+count_lines_index() {
+  git show ":./${1}" 2>/dev/null | wc -l | tr -d ' '
+}
+
+count_lines_worktree() {
+  wc -l < "${1}" | tr -d ' '
+}
+
 report_targets() {
   local targets="$1"
+  local source="${2:-worktree}"
   echo ""
   echo "[Line counts]"
   while IFS= read -r file; do
-    [[ -f "$file" ]] || continue
     local lines
-    lines=$(wc -l < "$file" | tr -d ' ')
+    if [[ "$source" == "index" ]]; then
+      git cat-file -e ":./$file" 2>/dev/null || continue
+      lines=$(count_lines_index "$file")
+    else
+      [[ -f "$file" ]] || continue
+      lines=$(count_lines_worktree "$file")
+    fi
     if (( lines > 500 )); then
       echo "  HARD: $file — $lines lines total (exceeds 500-line hard limit; split into <name>/ sibling folder — see rules/coding/file-split.md)"
       HARD_HIT=1
@@ -64,7 +101,8 @@ if [[ "$ALL_SCAN" -eq 1 ]]; then
   TARGETS=$(find . -type f \
     -not -path '*/node_modules/*' \
     -not -path '*/.git/*' \
-    -not -path '*/_archive/*' 2>/dev/null \
+    -not -path '*/_archive/*' \
+    -not -path '*/_archived/*' 2>/dev/null \
     | grep -E "\.($_EXT_PATTERN)$" | sort || true)
   if [[ -z "$TARGETS" ]]; then
     echo "## Code-size Review: SKIPPED — no code files found"; exit 0
@@ -73,8 +111,31 @@ if [[ "$ALL_SCAN" -eq 1 ]]; then
   echo ""
   COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
   echo "All code files scanned: $COUNT (extensions: $_EXTS)"
-  report_targets "$TARGETS"
+  report_targets "$TARGETS" worktree
   exit 0
+fi
+
+if [[ "$STAGED_ONLY" -eq 1 ]]; then
+  # H1: use -z + core.quotePath=false so non-ASCII and special-char paths are
+  # delivered as null-delimited raw bytes rather than C-escaped quoted strings.
+  TARGETS=""
+  while IFS= read -r -d '' file; do
+    if echo "$file" | grep -qE "\.($_EXT_PATTERN)$" \
+      && ! echo "$file" | grep -q 'node_modules/' \
+      && ! echo "$file" | grep -q '\.git/' \
+      && ! echo "$file" | grep -q '_archive/'; then
+      TARGETS="${TARGETS}${file}"$'\n'
+    fi
+  done < <(git -c core.quotePath=false diff -z --name-only --cached --diff-filter=ACMRT 2>/dev/null || true)
+  if [[ -z "$TARGETS" ]]; then
+    echo "## Code-size Review: SKIPPED — no code files staged"; exit 0
+  fi
+  echo "## Code-size Review: PERFORMED (staged mode)"
+  echo ""
+  COUNT=$(printf '%s\n' "$TARGETS" | grep -c . || true)
+  echo "Changed code files: $COUNT (extensions: $_EXTS)"
+  report_targets "$TARGETS" index
+  [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0
 fi
 
 BASE_SHA=$(git merge-base "$BASE_REF" HEAD 2>/dev/null) || {
@@ -92,7 +153,7 @@ CHANGED_UNSTAGED=$(git diff --name-only --diff-filter=ACMRT 2>/dev/null || true)
 CHANGED_UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 CHANGED=$(printf '%s\n' "$CHANGED_COMMITTED" "$CHANGED_STAGED" "$CHANGED_UNSTAGED" "$CHANGED_UNTRACKED" | sort -u | grep -v '^$' || true)
 
-TARGETS=$(printf '%s\n' "$CHANGED" | grep -E "\.($_EXT_PATTERN)$" | grep -v 'node_modules/' | grep -v '\.git/' | grep -v '_archive/' || true)
+TARGETS=$(filter_code_targets "$CHANGED")
 
 if [[ -z "$TARGETS" ]]; then
   echo "## Code-size Review: SKIPPED — no code files changed"; exit 0
@@ -102,6 +163,6 @@ echo "## Code-size Review: PERFORMED"
 echo ""
 COUNT=$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')
 echo "Changed code files: $COUNT (extensions: $_EXTS)"
-report_targets "$TARGETS"
+report_targets "$TARGETS" worktree
 
 [[ "$HARD_HIT" -eq 1 ]] && exit 1 || exit 0

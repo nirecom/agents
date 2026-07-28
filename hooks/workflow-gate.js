@@ -587,6 +587,14 @@ if (require.main === module) {
     }
   }
 
+  // Gate 2 (issue #1701): HARD file-size limit. bin/review-code-size --staged owns the
+  // thresholds and line counting (CPR-2); this call site only maps exit 1 -> block.
+  {
+    const { checkCodeSizeHardLimit } = require("./workflow-gate/code-size-gate");
+    const sizeVerdict = checkCodeSizeHardLimit(repoDir);
+    if (sizeVerdict.action === "block") block(sizeVerdict.reason);
+  }
+
   // session_id is required — fail-safe if missing
   if (!sessionId) {
     block(
