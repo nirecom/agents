@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin-vscode-cc-repair-prune.sh
-# Tests: bin/vscode-cc-repair, bin/lib/vscode-cc-repair/prune.js, bin/lib/vscode-cc-repair/prune/verify.js, bin/lib/vscode-cc-repair/prune/execute.js, bin/lib/vscode-cc-repair/cli.js, bin/lib/vscode-cc-repair/patch/apply.js
+# Tests: bin/vscode-cc-repair, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js, bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/cli.js, bin/vscode-cc-repair/patch/apply.js
 # Tags: bin, vscode, prune, session-files, scope:common, pwsh-not-required, TL2
 #
 # The `--prune-stub-sessions` path: scan ~/.claude/projects for title-only stub
@@ -56,18 +56,18 @@ set -euo pipefail
 command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SCRIPT="$AGENTS_DIR/bin/vscode-cc-repair"
-REQUIRE_PATH="./bin/vscode-cc-repair"
+SCRIPT="$AGENTS_DIR/bin/vscode-cc-repair/index.js"
+REQUIRE_PATH="./bin/vscode-cc-repair/index.js"
 # The record-grammar module, required directly: the shape predicates are the SSOT both
 # the classifier and the verifier read a line with, and a rename that left the old
 # shape-only spelling exported would be invisible from the entrypoint.
-VERIFY_REQUIRE="./bin/lib/vscode-cc-repair/prune/verify"
-PRUNE_REQUIRE="./bin/lib/vscode-cc-repair/prune"
+VERIFY_REQUIRE="./bin/vscode-cc-repair/prune/verify"
+PRUNE_REQUIRE="./bin/vscode-cc-repair/prune"
 # The acting half, required directly: isCounterpartPath and TALLY_KEY are the two guards a
 # forged plan meets, and neither is observable through the entrypoint's report alone.
-EXECUTE_REQUIRE="./bin/lib/vscode-cc-repair/prune/execute"
-LIB_DIR="$AGENTS_DIR/bin/lib/vscode-cc-repair"
-LIB_REL="bin/lib/vscode-cc-repair"
+EXECUTE_REQUIRE="./bin/vscode-cc-repair/prune/execute"
+LIB_DIR="$AGENTS_DIR/bin/vscode-cc-repair"
+LIB_REL="bin/vscode-cc-repair"
 PARTS_DIR="$AGENTS_DIR/tests/bin-vscode-cc-repair-prune"
 
 if [ ! -f "$SCRIPT" ]; then

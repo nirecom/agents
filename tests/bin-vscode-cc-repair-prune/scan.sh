@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune.js
+# Tests: bin/vscode-cc-repair/prune.js
 # Tags: bin, vscode, prune, scan, roots, session-files, scope:common, pwsh-not-required, TL2
 #
 # D — enumeration and root resolution: which files the tool is even allowed to

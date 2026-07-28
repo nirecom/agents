@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune/execute.js, bin/lib/vscode-cc-repair/prune.js
+# Tests: bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/prune.js
 # Tags: bin, vscode, prune, execute, security, containment, tally, session-files, scope:common, pwsh-not-required, TL2
 #
 # L — what a forged plan may claim about WHERE its files live, and what a forged plan may
