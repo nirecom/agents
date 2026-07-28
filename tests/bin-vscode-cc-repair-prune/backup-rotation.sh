@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune/execute.js, bin/lib/vscode-cc-repair/cli.js
+# Tests: bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/cli.js
 # Tags: bin, vscode, prune, execute, backup, rescue, session-files, scope:common, pwsh-not-required, TL2
 #
 # J11-J15 — the rescue copy across REPEATED prunes of the same session.

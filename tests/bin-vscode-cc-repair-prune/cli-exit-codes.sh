@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/vscode-cc-repair, bin/lib/vscode-cc-repair/cli.js
+# Tests: bin/vscode-cc-repair, bin/vscode-cc-repair/cli.js
 # Tags: bin, vscode, prune, cli, exit-codes, scope:common, pwsh-not-required, TL2
 #
 # F — the command-line surface: flag dependency, argument rejection, report shape,

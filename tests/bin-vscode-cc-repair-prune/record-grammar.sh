@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune/verify.js, bin/lib/vscode-cc-repair/prune.js
+# Tests: bin/vscode-cc-repair/prune/verify.js, bin/vscode-cc-repair/prune.js
 # Tags: bin, vscode, prune, record-grammar, security, session-files, scope:common, pwsh-not-required, TL2
 #
 # H — the RECORD GRAMMAR, and the two holes that opened when I3 was removed (#1655).

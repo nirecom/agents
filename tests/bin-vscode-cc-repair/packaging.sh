@@ -25,10 +25,10 @@ run_c3_index_mode() {
     SKIP=$((SKIP + 1))
     return 0
   fi
-  mode="$(git -C "$AGENTS_DIR" ls-files -s -- bin/vscode-cc-repair \
+  mode="$(git -C "$AGENTS_DIR" ls-files -s -- bin/vscode-cc-repair/index.js \
     | awk '{print $1}')"
   if [ -z "$mode" ]; then
-    echo "SKIP: C3-e02 git index mode (bin/vscode-cc-repair not tracked yet)"
+    echo "SKIP: C3-e02 git index mode (bin/vscode-cc-repair/index.js not tracked yet)"
     SKIP=$((SKIP + 1))
     return 0
   fi

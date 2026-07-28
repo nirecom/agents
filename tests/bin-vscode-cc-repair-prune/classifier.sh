@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune.js, bin/lib/vscode-cc-repair/prune/verify.js
+# Tests: bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
 # Tags: bin, vscode, prune, classifier, session-files, scope:common, pwsh-not-required, TL2
 #
 # A — classifySessionFile, the gate every deletion passes through. Driven directly

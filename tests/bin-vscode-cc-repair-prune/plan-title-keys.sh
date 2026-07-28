@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune/execute.js, bin/lib/vscode-cc-repair/prune.js
+# Tests: bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/prune.js
 # Tags: bin, vscode, prune, execute, security, type-safety, title-keys, session-files, scope:common, pwsh-not-required, TL2
 #
 # M6-M9 — the LAST raw dereference of a caller-supplied plan field: `decision.titleKeys`.

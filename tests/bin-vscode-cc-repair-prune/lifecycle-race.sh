@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune.js, bin/lib/vscode-cc-repair/prune/execute.js
+# Tests: bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/execute.js
 # Tags: bin, vscode, prune, lifecycle, race, session-files, scope:common, pwsh-not-required, TL2
 #
 # E — the deletion lifecycle, and the I4 re-verification window.

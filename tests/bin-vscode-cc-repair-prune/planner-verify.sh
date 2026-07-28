@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/lib/vscode-cc-repair/prune.js, bin/lib/vscode-cc-repair/prune/verify.js
+# Tests: bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
 # Tags: bin, vscode, prune, planner, verify, session-files, scope:common, pwsh-not-required, TL2
 #
 # B + C — the two halves of the deletion decision.
