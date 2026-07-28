@@ -79,6 +79,28 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
 - `branching_complete` and `pre_final_report_gate`: cannot be `skipped`
 
+**`skip_verdict` field (outline/detail only):** When a speculative skip is recorded
+(`WORKFLOW_OUTLINE_NOT_NEEDED` / `WORKFLOW_DETAIL_NOT_NEEDED`), a `skip_verdict` object is
+stored alongside the `steps[step]` entry (top-level, keyed by step name):
+
+```json
+{
+  "skip_verdicts": {
+    "outline": {
+      "verdict": "pending",
+      "recorded_at": "2026-07-15T10:00:00.000Z"
+    }
+  }
+}
+```
+
+`verdict` is `pending` (skip-verifier not yet run), `approve` (skip confirmed safe), or
+`veto` (skip rejected — step must run). A `veto` verdict de-skips the step at read time:
+`reconcileEffectiveState` treats a step whose raw status is `skipped` but whose
+`skip_verdict.verdict === "veto"` as `pending`, forcing `next-step` to schedule it.
+A `pending` verdict blocks next-step with a `"skip_verdict_pending"` hint until the
+verifier resolves.
+
 ## Steps and owners
 
 The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io.js`. `bin/workflow/next-step --list` renders it with status markers.
@@ -106,7 +128,14 @@ bypassing the state file entry for those steps. The state file still contains th
 (created by `session-start.js` with status `pending`); the evidence override happens only in
 the gate, not in the file.
 
-`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending`, it calls `hasCompletionEvidence()` from `evidence-resolver.js` and, if evidence is found (intent/outline/detail plan artifact exists, or test files are staged), auto-marks the step `complete` and re-evaluates the verdict — capped at one auto-repair per next-step call. This resolves compaction gaps where the step completed but the marker was lost.
+**Effective state derivation (Approach B):** Every consumer — `workflow-gate.js`, `bin/workflow/next-step`, `session-start.js` — reads the *effective* (derived) step status via `reconcileEffectiveState(state, sessionId, opts)` in `hooks/lib/workflow-state/effective-state.js`, not the raw JSON record directly. The function applies four derivation stages without writing anything back to disk:
+
+1. **wf-meta auto-skip** — non-applicable WF-CODE steps are treated as `skipped`.
+2. **skip_verdict gate** — outline/detail steps with a pending or vetoed `skip_verdict` are held at `pending`/`skipped` accordingly (see `skip_verdict` field above).
+3. **Post-veto reset** — when outline or detail is veto-de-skipped, downstream steps that were `complete` in the raw record are treated as `pending` until the plan is re-approved.
+4. **Evidence + approval resolution** — for `pending` steps in `EVIDENCE_STEPS`, `hasCompletionEvidence()` is checked; for approval-gated steps (`outline`, `detail`), `evaluateCompletionApproval()` is also checked. Only when both pass is the effective status `complete`. This derivation is read-only and does not mutate the state file.
+
+`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending` in the effective view, evidence already resolves it to `complete` inside the snapshot — no write-back occurs (Approach B). This resolves compaction gaps where the step completed but the marker was lost.
 
 `research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
 their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
@@ -141,6 +170,9 @@ Session start → session-start.js (SessionStart hook)
       markers from SessionStart and PostCompact entries (in file order)
     tries each collected ID in reverse order (PostCompact/most-recent first):
       skip if: no state file, branch mismatch, or all-pending
+        (all-pending guard: a session whose every step is pending was abandoned
+         before doing any real work — inheriting it would overwrite a genuine
+         in-progress session's state; skip and try the next collected ID — #1305)
       if user_verification=complete: stop trying this JSONL (task done, start fresh)
       else: copies matching session's steps (state inheritance)
     if no match found in any transcript: creates fresh state with all steps pending

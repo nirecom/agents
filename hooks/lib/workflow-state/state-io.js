@@ -4,7 +4,6 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
-const { _listJsonlByMtime } = require("./session-id");
 
 const VALID_STEPS = [
   "workflow_init",
@@ -124,6 +123,19 @@ function readState(sessionId) {
   }
 }
 
+// Raw, unprocessed read of the state file: no migration, no synthesis, no
+// convenience view. Callers that must distinguish "actually recorded on disk"
+// from "readState() filled it in" (evaluateInheritance S3, #1681) need this.
+// Fail-open: missing or corrupt file → null.
+function readRawState(sessionId) {
+  try {
+    const raw = fs.readFileSync(getStatePath(sessionId), "utf8");
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
 // writeState(sessionId, state, opts):
 //   opts.sanctioned : one of completion-approval.SANCTIONED_SOURCES. Bypasses the
 //                     approval invariant and stamps an audit record instead.
@@ -180,60 +192,6 @@ function getCurrentContext() {
     if (git_branch === "HEAD") git_branch = null;
   } catch (e) {}
   return { cwd, git_branch };
-}
-
-const SESSION_ID_RE = /Current workflow session_id:\s*([^\s\\]+)/;
-
-function findLatestStateForContext(ctx) {
-  if (!ctx || typeof ctx.cwd !== "string") return null;
-
-  const encoded = ctx.cwd.toLowerCase().replace(/[^a-zA-Z0-9]/g, "-");
-  const transcriptBase = process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
-    path.join(os.homedir(), ".claude", "projects");
-  const transcriptDir = path.join(transcriptBase, encoded);
-
-  let files;
-  try {
-    files = _listJsonlByMtime(transcriptDir).slice(0, 10);
-  } catch (e) {
-    return null;
-  }
-
-  for (const { name } of files) {
-    const filePath = path.join(transcriptDir, name);
-    const foundIds = [];
-    try {
-      const content = fs.readFileSync(filePath, "utf8");
-      for (const line of content.split("\n")) {
-        if (!line) continue;
-        try {
-          const entry = JSON.parse(line);
-          if (entry.type !== "attachment") continue;
-          const att = entry.attachment;
-          if (!att || att.exitCode !== 0) continue;
-          if (!["SessionStart", "PostCompact"].includes(att.hookEvent)) continue;
-          const m = (att.stdout || "").match(SESSION_ID_RE);
-          if (m) foundIds.push(m[1]);
-        } catch (e) {}
-      }
-    } catch (e) { continue; }
-
-    if (foundIds.length === 0) continue;
-
-    for (const id of [...foundIds].reverse()) {
-      try {
-        const state = readState(id);
-        if (!state) continue;
-        if ((state.git_branch ?? null) !== (ctx.git_branch ?? null)) continue;
-        const allPending = Object.values(state.steps || {})
-          .every((v) => !v || v.status === "pending");
-        if (allPending) continue;
-        if (state.steps?.user_verification?.status === "complete") break;
-        return state;
-      } catch (e) { continue; }
-    }
-  }
-  return null;
 }
 
 // opts is passed straight through to writeState (see its contract for
@@ -471,44 +429,8 @@ function getSkippableSteps(sessionId) {
   return SKIPPABLE_STEPS;
 }
 
-// A-4 speculative-skip verdict lifecycle. Stored as a `skip_verdict` dimension
-// inside state.steps[targetStep] — sibling to skip_reason/skip_judgment. Uses
-// read-modify-write (NOT markStep, which full-replaces) so co-located fields survive.
-function recordSkipVerdict(sessionId, targetStep, verdict, source) {
-  assertValidSessionId(sessionId);
-  if (targetStep !== "outline" && targetStep !== "detail") return;
-  if (verdict !== "pending" && verdict !== "confirm" && verdict !== "veto") return;
-  let state = readState(sessionId);
-  if (!state) {
-    state = createInitialState(sessionId);
-  }
-  if (!state.steps[targetStep]) state.steps[targetStep] = { status: "pending", updated_at: null };
-  state.steps[targetStep].skip_verdict = {
-    verdict,
-    source: source || "unknown",
-    recorded_at: new Date().toISOString(),
-  };
-  writeState(sessionId, state);
-}
-
-function readSkipVerdict(sessionId, targetStep) {
-  try {
-    const state = readState(sessionId);
-    if (!state || !state.steps || !state.steps[targetStep]) return null;
-    return state.steps[targetStep].skip_verdict || null;
-  } catch (_) {
-    return null;
-  }
-}
-
-function hasSpeculativeSkipPending(sessionId, targetStep) {
-  try {
-    const sv = readSkipVerdict(sessionId, targetStep);
-    return sv !== null && sv.verdict === "pending";
-  } catch (_) {
-    return false;
-  }
-}
+// A-4 speculative-skip verdict lifecycle now lives in ./skip-verdict.js
+// (aggregated by the workflow-state barrel).
 
 module.exports = {
   VALID_STEPS,
@@ -519,10 +441,10 @@ module.exports = {
   assertValidSessionId,
   SESSION_ID_VALID_RE,
   readState,
+  readRawState,
   writeState,
   createInitialState,
   getCurrentContext,
-  findLatestStateForContext,
   markStep,
   recordComplexityEvaluation,
   recordSessionModel,
@@ -534,8 +456,5 @@ module.exports = {
   setLastPushedSha,
   clearLastPushedSha,
   getSkippableSteps,
-  recordSkipVerdict,
-  readSkipVerdict,
-  hasSpeculativeSkipPending,
   recordSessionWorktree,
 };
