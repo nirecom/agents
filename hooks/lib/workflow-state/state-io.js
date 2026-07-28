@@ -124,7 +124,18 @@ function readState(sessionId) {
   }
 }
 
-function writeState(sessionId, state) {
+// writeState(sessionId, state, opts):
+//   opts.sanctioned : one of completion-approval.SANCTIONED_SOURCES. Bypasses the
+//                     approval invariant and stamps an audit record instead.
+//   opts.reason     : free text recorded on a stamped audit record.
+//
+// Failure contract: readState stays FAIL-OPEN, but writeState is FAIL-CLOSED for
+// the completion-boundary invariant below — an unapproved completion of a gated
+// step throws UnapprovedCompletionError and nothing is persisted. (Same precedent
+// as recordComplexityEvaluation, which throws on an invalid level.)
+function writeState(sessionId, state, opts = {}) {
+  // Lazy require avoids a circular dependency: completion-approval → state-io.
+  require("./completion-approval").applyCompletionBoundaryInvariant(sessionId, state, opts);
   const workflowDir = getWorkflowDir();
   fs.mkdirSync(workflowDir, { recursive: true });
   const filePath = getStatePath(sessionId);
@@ -132,6 +143,7 @@ function writeState(sessionId, state) {
   fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf8");
   fs.renameSync(tmpPath, filePath);
 }
+
 
 function createInitialState(sessionId, ctx) {
   const steps = {};
@@ -224,13 +236,15 @@ function findLatestStateForContext(ctx) {
   return null;
 }
 
-function markStep(sessionId, stepName, status, extraFields = {}) {
+// opts is passed straight through to writeState (see its contract for
+// opts.sanctioned). All pre-existing call sites use <= 4 args.
+function markStep(sessionId, stepName, status, extraFields = {}, opts = {}) {
   let state = readState(sessionId);
   if (!state) {
     state = createInitialState(sessionId);
   }
   state.steps[stepName] = { status, updated_at: new Date().toISOString(), ...extraFields };
-  writeState(sessionId, state);
+  writeState(sessionId, state, opts);
 }
 
 // recordComplexityEvaluation(sessionId, level, signals):

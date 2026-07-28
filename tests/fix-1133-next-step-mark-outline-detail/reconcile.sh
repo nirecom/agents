@@ -16,21 +16,33 @@ check_contains "G1. reconcile-state --dry-run output mentions outline" \
 check_contains "G1b. reconcile-state --dry-run output mentions detail" \
   "detail" "${RECONCILE_OUT:-}"
 
-# Verify that when outline.md exists, reconcile-state would mark it complete.
+# Post-#1133: reconcile-state must NOT propose completing a gated step from
+# artifact presence alone — it passes no sanctioned token, so an unapproved
+# outline stays pending and the line names the missing approval instead of a
+# pending -> complete transition.
 SID="g1b-$$"
 write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
 touch "$PLANS_DIR/${SID}-outline.md"
 
 run_reconcile --session "$SID" --dry-run
 
-check_contains "G1c. reconcile-state --dry-run with outline.md → would update outline" \
-  "outline" "${RECONCILE_OUT:-}"
-if echo "${RECONCILE_OUT:-}" | grep -qiE "would update|pending.*complete"; then
-  echo "PASS: G1d. reconcile-state --dry-run with outline.md → shows pending->complete transition"
-  PASS=$((PASS + 1))
-else
-  echo "FAIL: G1d. reconcile-state --dry-run with outline.md → expected pending->complete, got: ${RECONCILE_OUT:-}"
-  FAIL=$((FAIL + 1))
-fi
+check_contains "G1c. dry-run with outline.md but no approval → reports approval missing" \
+  "approval missing" "${RECONCILE_OUT:-}"
+# Scoped to the outline line only: non-gated steps (write_tests/docs) may
+# legitimately show transitions from the ambient repo's own evidence.
+check_not_contains "G1d. dry-run does NOT propose outline pending -> complete without approval" \
+  "outline: pending -> complete" "${RECONCILE_OUT:-}"
+
+rm -f "$PLANS_DIR/${SID}-outline.md"
+
+# With an approval on record the evidence-driven reconcile transition returns.
+SID="g1f-$$"
+write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
+seed_approval "$SID" outline
+
+run_reconcile --session "$SID" --dry-run
+
+check_contains "G1f. dry-run with outline.md + approval → proposes pending -> complete" \
+  "outline: pending -> complete" "${RECONCILE_OUT:-}"
 
 rm -f "$PLANS_DIR/${SID}-outline.md"

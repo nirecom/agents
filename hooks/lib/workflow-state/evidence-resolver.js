@@ -7,6 +7,13 @@
 // `pending` in state JSON can be treated as complete based on on-disk
 // artifacts. fail-open contract: any error or missing file yields false
 // (pending treatment preserved) — this never throws.
+//
+// NON-AUTHORITATIVE for the approval-gated steps: this predicate is a heuristic,
+// not completion authority. For `outline` and `detail` it cannot distinguish
+// "review has not started" from "review finished but the user has not approved
+// yet" — both leave the same on-disk shape. Authority for those two steps is the
+// approval record owned by completion-approval.js, enforced at the writeState
+// boundary. A true result here is a necessary, never a sufficient, condition.
 
 const path = require("path");
 const { execSync, execFileSync } = require("child_process");
@@ -143,6 +150,8 @@ function describeEvidence(step) {
       "<PLANS_DIR>/<sessionId>-outline.md exists",
       "no in-flight review cycle: <sessionId>-outline-plan-round-number.txt and "
         + "<sessionId>-outline-plan-concern-ledger.txt are both absent",
+      "NOT sufficient: completion additionally requires a recorded user approval "
+        + "(plan_approvals.outline via WORKFLOW_CONFIRM_OUTLINE, or CONFIRM_OUTLINE=off)",
     ];
   }
   if (step === "detail") {
@@ -150,6 +159,8 @@ function describeEvidence(step) {
       "<PLANS_DIR>/<sessionId>-detail.md exists",
       "no in-flight review cycle: <sessionId>-detail-plan-round-number.txt and "
         + "<sessionId>-detail-plan-concern-ledger.txt are both absent",
+      "NOT sufficient: completion additionally requires a recorded user approval "
+        + "(plan_approvals.detail via WORKFLOW_CONFIRM_DETAIL, or CONFIRM_DETAIL=off)",
     ];
   }
   if (step === "write_tests") {

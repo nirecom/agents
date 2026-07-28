@@ -15,7 +15,12 @@ eval "$OUT" 2>/dev/null || true
 
 check "H1. outline=pending + detail=complete (no evidence) → ACTION=abort" \
   "abort" "${ACTION:-}"
-check_contains "H1b. scoped hint contains --mark outline complete" \
+# Post-#1133 the recovery for a gated step is a recorded approval, not --mark:
+# the hint must steer to the CONFIRM sentinel and must NOT advertise --mark as a
+# back-door around the approval gate.
+check_contains "H1b. scoped hint steers to the CONFIRM_OUTLINE approval sentinel" \
+  "WORKFLOW_CONFIRM_OUTLINE" "${NEXT_HINT:-}"
+check_not_contains "H1c. scoped hint does NOT offer --mark outline complete as recovery" \
   "--mark outline complete" "${NEXT_HINT:-}"
 
 echo ""
