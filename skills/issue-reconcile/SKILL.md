@@ -48,7 +48,7 @@ OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')
 DEF=$(gh api "repos/$OWNER_REPO" --jq '.default_branch')
 gh api "repos/$OWNER_REPO/contents/docs/history.md?ref=$DEF" \
     | jq -r '.content' | tr -d '\r\n' | base64 -d > "$STAGE"
-bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM" --target "$STAGE"
+bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-to-history.sh" "$NUM" --target "$STAGE" --allow-backdate
 bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
     --owner "${OWNER_REPO%%/*}" --repo "${OWNER_REPO#*/}" \
     --path docs/history.md --file "$STAGE" \
@@ -56,9 +56,21 @@ bash "$AGENTS_CONFIG_DIR/bin/lib/github-contents-write.sh" \
 rm -f "$STAGE"
 ```
 
+`--allow-backdate` is mandatory here: every reconcile entry is older than the
+stream tail, and `doc-append` rejects that by default.
+
 The script is internally idempotent — running it on `history-only` does
 nothing harmful — but skip those in step 2 anyway to avoid unnecessary
 GitHub API calls.
+
+## Step 3b: batch backfill
+
+When more than a handful of issues are pending, do not run Step 3 per issue —
+70 issues would mean 70 commits. Create a linked worktree, write the issue
+numbers one per line, and run `skills/issue-reconcile/scripts/backfill-batch.sh
+--repo-dir <worktree> --numbers-file <path>`. It appends every entry, sorts and
+rotates once, and lists the appended issues in `<worktree>/.backfill-appended.txt`
+for the sentinel step. Commit and PR the result as one change.
 
 After a successful append, post the `appended` sentinel so future runs
 classify the issue as clean. The `gh issue comment` call is gated by
