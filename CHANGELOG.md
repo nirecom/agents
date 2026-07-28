@@ -116,3 +116,7 @@ Changes: Conditional `rules/` files are now actually loaded conditionally. They 
 ### FEATURE: PR #1664 (2026-07-28)
 Background: refactor(#1569, #1630): shared quote-span scanner + env-independent AGENTS_CONFIG_DIR anchor
 Changes: enforce-worktree write detection now runs on a single shared quote/expansion-span scanner, so shell quoting forms that one guard understood and another missed behave the same way everywhere; ambiguous or pathologically nested commands resolve to a block instead of slipping through.;Sanctioned finalize-worker commands are no longer falsely blocked when `AGENTS_CONFIG_DIR` is missing or stale in a subagent-spawned hook process.
+
+### FEATURE: PR #1649 (2026-07-28)
+Background: feat(#1627): add bin/vscode-patch-include-worktrees
+Changes: New `bin/vscode-patch-include-worktrees` re-enables worktree sessions in the VS Code extension's session list. Sessions started from a linked git worktree were missing from the list, and each extension upgrade undid a manual fix. Run the command, then `Developer: Reload Window`; `--dry-run` reports what it would change without writing. The tool refuses instead of guessing when an extension build no longer matches the expected shape.
