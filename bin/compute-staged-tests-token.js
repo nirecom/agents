@@ -14,7 +14,7 @@
 //   worktree must never be selected. Selection order, most authoritative first:
 //     1. Explicit worktree path in argv[2] — caller states the commit target.
 //     2. Session state cwd — delegated to
-//        hooks/lib/workflow-state/resolve-worktree-path.js (SESSION_ID /
+//        hooks/workflow-state/resolve-worktree-path.js (SESSION_ID /
 //        CLAUDE_SESSION_ID → readState().cwd), rejected when it resolves to the
 //        main worktree.
 //
@@ -26,7 +26,7 @@
 
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { resolveSessionWorktreePath } = require('../hooks/lib/workflow-state/resolve-worktree-path');
+const { resolveSessionWorktreePath } = require('../hooks/workflow-state/resolve-worktree-path');
 
 // True when `dir` has at least one staged tests/** (or test/**) path.
 // Retained for test use.

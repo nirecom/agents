@@ -13,7 +13,7 @@ const {
   NEXT_STEP_PAUSE_RE_DQ, NEXT_STEP_PAUSE_LOOKSLIKE_RE,
   NEXT_STEP_RESUME_RE_DQ, NEXT_STEP_RESUME_LOOKSLIKE_RE,
 } = require("../../lib/sentinel-patterns");
-const { getWorkflowDir } = require("../../lib/workflow-state");
+const { getWorkflowDir } = require("../../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 

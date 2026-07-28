@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-891-l2-phase-guard-cli.sh
-# Tests: hooks/supervisor-guard.js, bin/supervisor-write-alert, hooks/lib/workflow-state.js
+# Tests: hooks/supervisor-guard.js, bin/supervisor-write-alert, hooks/workflow-state.js
 # Tags: supervisor, em-supervisor, layer2, l2-phase, stop, guard, cli
 # L3 gap (what this test does NOT catch):
 # - hook registration in settings.json Stop hooks
@@ -300,7 +300,7 @@ const fs = require('fs');
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'g45-wf-'));
 process.env.CLAUDE_WORKFLOW_DIR = tmpDir;
 
-const { VALID_STEPS, writeState, readState } = require('$_AGENTS_DIR_NODE/hooks/lib/workflow-state');
+const { VALID_STEPS, writeState, readState } = require('$_AGENTS_DIR_NODE/hooks/workflow-state');
 const h = require('$MARK_STEP_HANDLER_NODE');
 
 // Seed stale state: all steps complete (prior workflow contamination)

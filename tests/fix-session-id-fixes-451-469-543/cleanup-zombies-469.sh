@@ -7,7 +7,7 @@ run_cleanup_node() {
     local wfdir="$1"
     local days="${2:-7}"
     (cd "$AGENTS_DIR" && CLAUDE_WORKFLOW_DIR="$wfdir" node -e "
-const wf = require('./hooks/lib/workflow-state/state-io.js');
+const wf = require('./hooks/workflow-state/state-io.js');
 wf.cleanupZombies($days);
 " 2>/dev/null) || true
 }

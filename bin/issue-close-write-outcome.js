@@ -34,7 +34,7 @@ function resolvePlansDir() {
 
 function resolveSessionId() {
   try {
-    return require(path.join(__dirname, "..", "hooks", "lib", "workflow-state")).resolveSessionId() || "";
+    return require(path.join(__dirname, "..", "hooks", "workflow-state")).resolveSessionId() || "";
   } catch (_) {
     const codeSid = process.env.CLAUDE_CODE_SESSION_ID;
     if (codeSid && /^[A-Za-z0-9_-]+$/.test(codeSid.trim())) return codeSid.trim();

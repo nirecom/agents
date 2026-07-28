@@ -101,7 +101,7 @@ process.stdin.on("end", () => {
       if (!sid || !SID_RE.test(sid)) return { status: "absent" };
       let tokenPath;
       try {
-        const { getWorkflowDir } = require(path.join(__dirname, "./lib/workflow-state"));
+        const { getWorkflowDir } = require(path.join(__dirname, "./workflow-state"));
         tokenPath = path.join(getWorkflowDir(), sid + ".off-clearance");
       } catch (e) {
         return { status: "error" };

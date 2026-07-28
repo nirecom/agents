@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/fix-1443-1442-session-id-resolvers.sh
-# Tests: hooks/lib/resolve-workflow-session-id.js, hooks/lib/workflow-state/session-id.js
+# Tests: hooks/lib/resolve-workflow-session-id.js, hooks/workflow-state/session-id.js
 # Tags: worktree-end, worktree-context, session-id, scope:issue-specific, pwsh-not-required
 #
 # Issue #1443 / #1442 — resolve the session id from sibling worktrees when env
@@ -39,7 +39,7 @@ else
 fi
 
 RESOLVE_WSID_NODE="$AGENTS_DIR_NODE/hooks/lib/resolve-workflow-session-id.js"
-SESSION_ID_NODE="$AGENTS_DIR_NODE/hooks/lib/workflow-state/session-id.js"
+SESSION_ID_NODE="$AGENTS_DIR_NODE/hooks/workflow-state/session-id.js"
 
 PASS=0
 FAIL=0

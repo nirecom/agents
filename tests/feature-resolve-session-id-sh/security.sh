@@ -41,7 +41,7 @@ teardown
 # Because: P7 encodes path.resolve(raw) with replace(/[^a-zA-Z0-9]/g,'-') —
 # every path separator becomes '-', so the transcript-dir lookup can never
 # escape CLAUDE_TRANSCRIPT_BASE_DIR. L2-unreachable exploit; neutralized at
-# the encoding regex in hooks/lib/workflow-state/session-id.js (P7).
+# the encoding regex in hooks/workflow-state/session-id.js (P7).
 
 # SKIPPED: shell-metacharacter injection via SID env vars
 # (e.g. CLAUDE_CODE_SESSION_ID='$(touch pwned)').

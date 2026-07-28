@@ -12,7 +12,7 @@
 # written (exits 0, outcome JSON absent).
 #
 # GREEN post-fix: private resolveSessionId() delegates to
-# require(hooks/lib/workflow-state).resolveSessionId() which checks
+# require(hooks/workflow-state).resolveSessionId() which checks
 # CLAUDE_CODE_SESSION_ID first (P2) and the file is written.
 # ===========================================================================
 setup

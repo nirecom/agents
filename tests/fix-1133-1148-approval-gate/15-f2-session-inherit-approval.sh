@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/session-start.js, hooks/lib/workflow-state/completion-approval.js, hooks/lib/workflow-state/state-io.js
+# Tests: hooks/session-start.js, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js
 # Tags: workflow, approval-gate, session-start, inheritance, artifact-hash, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================

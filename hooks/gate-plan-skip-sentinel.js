@@ -9,7 +9,7 @@ const { OUTLINE_NOT_NEEDED_RE_DQ, DETAIL_NOT_NEEDED_RE_DQ, WRITE_TESTS_NOT_NEEDE
 let hasValidSkipJudgment = null;
 let resolveSessionId = null;
 try {
-  ({ hasValidSkipJudgment, resolveSessionId } = require("./lib/workflow-state"));
+  ({ hasValidSkipJudgment, resolveSessionId } = require("./workflow-state"));
 } catch (_e) { /* fail-open */ }
 
 function readStdin() {

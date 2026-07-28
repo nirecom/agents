@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, hooks/lib/workflow-state.js
+# Tests: skills/make-detail-plan/SKILL.md, skills/write-tests/SKILL.md, hooks/workflow-state.js
 # Tags: skill, static, complexity-evaluation, scope:issue-specific
 #
 # Issue #1350 — make-detail-plan (MDP-3) and write-tests (WT-5) become READERS
@@ -55,7 +55,7 @@ assert_read_first() {
 
 MDP_SKILL="$REPO_ROOT/skills/make-detail-plan/SKILL.md"
 WT_SKILL="$REPO_ROOT/skills/write-tests/SKILL.md"
-BARREL="$REPO_ROOT/hooks/lib/workflow-state.js"
+BARREL="$REPO_ROOT/hooks/workflow-state.js"
 BARREL_N="$(cygpath -m "$BARREL" 2>/dev/null || echo "$BARREL")"
 
 # ---------------------------------------------------------------------------

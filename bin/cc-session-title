@@ -5,7 +5,7 @@
 //   add-pr <cwd> <prNumber>         → writeAddPr
 //   mark-complete <cwd>             → writeMarkComplete
 //
-// Session ID is resolved via the shared resolveSessionId() (hooks/lib/workflow-state/
+// Session ID is resolved via the shared resolveSessionId() (hooks/workflow-state/
 // session-id.js) — single source of truth for the resolution chain, which reads
 // CLAUDE_CODE_SESSION_ID before the JSONL mtime scan (#1082).
 //
@@ -21,7 +21,7 @@ try {
     path.join(agentsDir, "hooks", "lib", "session-title")
   );
   const { resolveSessionId } = require(
-    path.join(agentsDir, "hooks", "lib", "workflow-state", "session-id")
+    path.join(agentsDir, "hooks", "workflow-state", "session-id")
   );
 
   // When invoked from Claude Code's Bash tool, CLAUDE_CODE_CHILD_SESSION=1 is

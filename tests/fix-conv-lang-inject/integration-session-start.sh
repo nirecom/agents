@@ -34,7 +34,7 @@ T14_HOOKS="$T14_AGENTS/hooks"
 T14_LIB="$T14_HOOKS/lib"
 mkdir -p "$T14_LIB"
 # Copy the real hooks tree shallow-ish: only what session-start.js requires.
-# session-start.js requires ./lib/workflow-state and ./lib/settings-drift, plus
+# session-start.js requires ./workflow-state and ./lib/settings-drift, plus
 # ./lib/conv-lang (the new one). We mirror lib/* by symlink/copy, then override
 # conv-lang.js with a thrower.
 if [ -d "$AGENTS_DIR/hooks/lib" ]; then

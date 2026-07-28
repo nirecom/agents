@@ -267,7 +267,7 @@ MIG_EOF
 # Invoke readState() via node and capture migrated state
 MIG_HOOK_DIR="$(cd "$(dirname "$0")/.." && pwd)/hooks"
 MIGRATED=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-  const wsLib = require(process.argv[1] + '/lib/workflow-state.js');
+  const wsLib = require(process.argv[1] + '/workflow-state.js');
   const state = wsLib.readState(process.argv[2]);
   console.log(JSON.stringify(state.steps));
 " "$MIG_HOOK_DIR" "$SID" 2>/dev/null || echo "{}")

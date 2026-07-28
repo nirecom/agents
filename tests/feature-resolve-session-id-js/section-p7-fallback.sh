@@ -20,7 +20,7 @@ mkdir -p "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENC_JS17"
 echo '{}' > "$CLAUDE_TRANSCRIPT_BASE_DIR/$ENC_JS17/foreign-sid-js17.jsonl"
 # Key difference vs JS-11: AGENTS_CONFIG_DIR is explicitly unset (-u AGENTS_CONFIG_DIR)
 # so the resolver must fall back to path.resolve(__dirname,"..","..","..")
-# (the __dirname anchor inside hooks/lib/workflow-state/session-id.js).
+# (the __dirname anchor inside hooks/workflow-state/session-id.js).
 OUT=$(cd "$FOREIGN_JS17" && run_with_timeout 60 env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u AGENTS_CONFIG_DIR \
   CLAUDE_TRANSCRIPT_BASE_DIR="$CLAUDE_TRANSCRIPT_BASE_DIR" \
   node -e "

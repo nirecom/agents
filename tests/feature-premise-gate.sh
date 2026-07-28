@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-mark.js, hooks/lib/workflow-state/state-io.js, skills/make-outline-plan/SKILL.md, hooks/lib/sentinel-patterns.js, settings.json
+# Tests: hooks/workflow-mark.js, hooks/workflow-state/state-io.js, skills/make-outline-plan/SKILL.md, hooks/lib/sentinel-patterns.js, settings.json
 # Tags: workflow, outline, planning, settings, config, premise-gate, removal, scope:issue-specific
 # Test suite for premise-verification gate REMOVAL (abort-only contract).
 # Static doc/JSON checks + asserts that PREMISE_FAIL/PREMISE_ACK sentinel
@@ -213,7 +213,7 @@ unset regex_rc
 
 # PG-STATE-IO-REMOVED: state-io.js does not export premise helper functions
 state_io_check=$(run_with_timeout node -e "
-  const m = require('$REPO_ROOT/hooks/lib/workflow-state/state-io.js');
+  const m = require('$REPO_ROOT/hooks/workflow-state/state-io.js');
   const found = ['setPremiseContradiction','clearPremiseContradiction','getPremiseContradiction']
     .filter(n => typeof m[n] !== 'undefined');
   if (found.length > 0) { process.stdout.write('found: ' + found.join(', ')); process.exit(1); }

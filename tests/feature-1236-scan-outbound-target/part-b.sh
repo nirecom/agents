@@ -26,12 +26,15 @@ build_sandbox() {
     local off_rc="${5:-0}" # bin/scan-offensive exit code
     local blocklist="${6:-}" # content to write into .private-info-blocklist
 
-    mkdir -p "$sbox/hooks/lib/workflow-state" "$sbox/hooks/workflow-gate" "$sbox/bin"
+    mkdir -p "$sbox/hooks/workflow-state" "$sbox/hooks/workflow-gate" "$sbox/bin"
 
     # Copy hook + all lib deps
     cp "$HOOK_SRC" "$sbox/hooks/scan-outbound.js"
     cp -r "$AGENTS_DIR/hooks/lib/." "$sbox/hooks/lib/" 2>/dev/null || true
-    # Copy workflow-gate (required by hooks/lib/workflow-state/evidence-resolver.js)
+    # Copy workflow-state barrel + folder (moved out of hooks/lib/ — must be copied explicitly)
+    cp "$AGENTS_DIR/hooks/workflow-state.js" "$sbox/hooks/workflow-state.js" 2>/dev/null || true
+    cp -r "$AGENTS_DIR/hooks/workflow-state/." "$sbox/hooks/workflow-state/" 2>/dev/null || true
+    # Copy workflow-gate (required by hooks/workflow-state/evidence-resolver.js)
     cp -r "$AGENTS_DIR/hooks/workflow-gate/." "$sbox/hooks/workflow-gate/" 2>/dev/null || true
     # Stub session-markers.js to avoid deep dependency chain for sandbox isolation
     cat > "$sbox/hooks/lib/session-markers.js" <<'SESSIONSTUB'

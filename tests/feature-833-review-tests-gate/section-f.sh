@@ -1,5 +1,5 @@
 # tests/feature-833-review-tests-gate/section-f.sh
-# Tests: hooks/workflow-gate.js, hooks/lib/workflow-state/state-io.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, wsid, scope:issue-specific
 #
 # Section F: wsid (workflow session id) match enforcement at the commit gate.

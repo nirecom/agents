@@ -19,8 +19,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
-const { isConfirmOffForStageFromFile } = require("../plan-confirm-flag");
+const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
+const { isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
 const { SESSION_ID_VALID_RE, readState, writeState } = require("./state-io");
 
 // The ONLY enumeration of the approval-gated step class. Every check iterates
@@ -62,7 +62,7 @@ function ensureEnvLoaded() {
   if (_envLoaded) return;
   _envLoaded = true;
   try {
-    const { loadDefaultEnv } = require("../load-env");
+    const { loadDefaultEnv } = require("../lib/load-env");
     loadDefaultEnv();
   } catch (_) { /* fail-open: env stays as-is */ }
 }

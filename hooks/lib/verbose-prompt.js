@@ -7,7 +7,7 @@
 //
 // Consumers: hooks/session-start.js, hooks/post-compact.js.
 
-const { readState, SESSION_ID_VALID_RE } = require("./workflow-state");
+const { readState, SESSION_ID_VALID_RE } = require("../workflow-state");
 
 // The single definition of the hardening line. One sentence covering the three
 // observed failure modes: skipped skill steps, summarizing over a prescribed

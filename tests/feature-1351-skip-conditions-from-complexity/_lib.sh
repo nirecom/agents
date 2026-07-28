@@ -9,9 +9,9 @@ fi
 _SC_COMPLEXITY_LIB_SOURCED=1
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js"
+RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
 RESOLVER_N="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
-STATEIO="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
+STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
 
 CI_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"

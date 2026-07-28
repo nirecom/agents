@@ -11,7 +11,7 @@ fi
 BRIDGE_DIR="$NODE_DIR" node -e '
   const path = require("path");
   try {
-    const r = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "lib", "workflow-state")).resolveSessionId();
+    const r = require(path.join(process.env.BRIDGE_DIR, "..", "hooks", "workflow-state")).resolveSessionId();
     if (!r) { process.stderr.write("resolve-session-id: session id unresolvable\n"); process.exit(2); }
     process.stdout.write(r);
   } catch (e) {

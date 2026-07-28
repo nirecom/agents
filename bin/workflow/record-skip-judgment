@@ -19,7 +19,7 @@
 
 const path = require("path");
 const { recordSkipJudgment, readSkipJudgment } = require(
-  path.join(__dirname, "..", "..", "hooks", "lib", "workflow-state")
+  path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
 
 function verifyWrite(sj, conditions, allMet) {

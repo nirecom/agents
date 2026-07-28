@@ -17,7 +17,7 @@ if (!sessionId) {
 
 let answer = "no";
 try {
-  const { readState } = require(path.resolve(__dirname, "../hooks/lib/workflow-state"));
+  const { readState } = require(path.resolve(__dirname, "../hooks/workflow-state"));
   const state = readState(sessionId);
   if (state && state.workflow_type === "wf-meta") answer = "yes";
 } catch (_) {

@@ -124,7 +124,7 @@ if (require.main === module) {
 
   if (input.stop_hook_active === true) process.exit(0);
 
-  const { resolveSessionId } = require("./lib/workflow-state");
+  const { resolveSessionId } = require("./workflow-state");
   const sid = resolveSessionId({
     sessionIdFromInput: input.session_id,
     transcriptPath: input.transcript_path,

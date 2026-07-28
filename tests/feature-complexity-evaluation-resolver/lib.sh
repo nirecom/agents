@@ -7,9 +7,9 @@
 # the entrypoint keeps the test cases; mechanics live here.
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js"
+RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
 RESOLVER_N="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
-STATEIO="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
+STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
 
 RECORD_CLI="$AGENTS_DIR/bin/workflow/record-complexity-evaluation"

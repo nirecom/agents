@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/is-private-repo.js, hooks/lib/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tests: hooks/lib/is-private-repo.js, hooks/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, bin, git
 # Test suite for workflow state machine:
 #   claude-global/hooks/workflow-gate.js   (PreToolUse commit gate)
@@ -11,7 +11,7 @@ GATE_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-gate.js"
 MARK_HOOK="$DOTFILES_DIR/claude-global/hooks/workflow-mark.js"
 SESSION_START="$DOTFILES_DIR/claude-global/hooks/session-start.js"
 SETTINGS="$DOTFILES_DIR/claude-global/settings.json"
-WS_REL="./claude-global/hooks/lib/workflow-state.js"
+WS_REL="./claude-global/hooks/workflow-state.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

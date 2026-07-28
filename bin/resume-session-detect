@@ -5,7 +5,7 @@ const {
   resolveSessionId,
   readState,
   VALID_STEPS,
-} = require("../hooks/lib/workflow-state");
+} = require("../hooks/workflow-state");
 
 const STEP_TO_SKILL = Object.freeze({
   workflow_init:  "workflow-init",

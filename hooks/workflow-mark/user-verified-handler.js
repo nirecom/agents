@@ -3,7 +3,7 @@
 // step. Marks user_verification as complete and records the approval reason.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep } = require("../lib/workflow-state");
+const { markStep } = require("../workflow-state");
 const {
   USER_VERIFIED_RE_DQ, USER_VERIFIED_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");

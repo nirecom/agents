@@ -15,7 +15,7 @@
 // workflow sentinel echoes are excluded via that rule).
 
 const fs = require("fs");
-const { resolveSessionId, markStep, readState } = require("./lib/workflow-state");
+const { resolveSessionId, markStep, readState } = require("./workflow-state");
 const { parse, resolveEffectiveSegment } = require("./lib/command-ir");
 
 function readStdin() {

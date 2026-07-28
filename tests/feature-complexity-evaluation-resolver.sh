@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state/skip-signal-resolver.js, hooks/lib/workflow-state/state-io.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
+# Tests: hooks/workflow-state/skip-signal-resolver.js, hooks/workflow-state/state-io.js, bin/workflow/record-complexity-evaluation, bin/workflow/read-complexity-evaluation
 # Tags: L2, workflow, complexity-evaluation, scope:issue-specific
 #
 # Issue #1350 — one-time persisted SSOT for the S1..S6 complexity evaluation.

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-workflow-init-routing/m-g-s-series.sh
-# Tests: hooks/lib/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tests: hooks/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, init, routing, scope:common
 #
 # M-series: state migration of workflow_init key (M1-M4)
@@ -87,7 +87,7 @@ MARK_JSON=$(build_mark_json 'echo "<<WORKFLOW_MARK_STEP_workflow_init_complete>>
 MARK_OUTPUT=$(echo "$MARK_JSON" | CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout node "$MARK_HOOK" 2>/dev/null || true)
 
 actual_after=$( (cd "$AGENTS_DIR" && node -e "
-const { readState } = require('./hooks/lib/workflow-state.js');
+const { readState } = require('./hooks/workflow-state.js');
 const s = readState('$SID');
 const wi = s && s.steps && s.steps.workflow_init;
 process.stdout.write(wi ? wi.status : 'MISSING');

@@ -16,7 +16,7 @@ const {
   computeArtifactSha,
   recordPlanApproval,
   confirmSentinelFor,
-} = require("../lib/workflow-state/completion-approval");
+} = require("../workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;

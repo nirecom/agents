@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state/completion-approval.js, hooks/lib/workflow-state/effective-state.js, hooks/lib/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state
+# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state
 # Tags: workflow, next-step, approval-gate, outline, detail, confirm-sentinel, scope:common, pwsh-not-required
 #
 # TL3 gap (what this test does NOT catch):
@@ -41,9 +41,9 @@ MK_PAYLOAD="$SUB_DIR/mk-payload.js"
 
 to_node_path() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
 AGENTS_DIR_N="$(to_node_path "$AGENTS_DIR")"
-WFSTATE_N="$AGENTS_DIR_N/hooks/lib/workflow-state.js"
-COMPLETION_APPROVAL_N="$AGENTS_DIR_N/hooks/lib/workflow-state/completion-approval.js"
-EFFECTIVE_STATE_N="$AGENTS_DIR_N/hooks/lib/workflow-state/effective-state.js"
+WFSTATE_N="$AGENTS_DIR_N/hooks/workflow-state.js"
+COMPLETION_APPROVAL_N="$AGENTS_DIR_N/hooks/workflow-state/completion-approval.js"
+EFFECTIVE_STATE_N="$AGENTS_DIR_N/hooks/workflow-state/effective-state.js"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT

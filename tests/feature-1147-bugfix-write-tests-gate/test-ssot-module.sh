@@ -36,7 +36,7 @@ NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u
 echo "=== C1: isBugfixBranch() — branch name pattern ==="
 C1_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {isBugfixBranch} = require(process.env.AGENTS_REQ + '/hooks/lib/workflow-state/is-bugfix-session');
+    const {isBugfixBranch} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/is-bugfix-session');
     console.log('fix/foo:', isBugfixBranch('fix/foo'));
     console.log('main:', isBugfixBranch('main'));
     console.log('feature/x:', isBugfixBranch('feature/x'));
@@ -66,7 +66,7 @@ fi
 echo "=== C2: createInitialState — is_bugfix flag from git_branch ==="
 C2_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {createInitialState} = require(process.env.AGENTS_REQ + '/hooks/lib/workflow-state/state-io');
+    const {createInitialState} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
     const s1 = createInitialState('test-c2-fix', {git_branch: 'fix/x', cwd: '/tmp'});
     const s2 = createInitialState('test-c2-main', {git_branch: 'main', cwd: '/tmp'});
     const s3 = createInitialState('test-c2-null', {git_branch: null, cwd: '/tmp'});
@@ -116,7 +116,7 @@ EOF
 
 C3_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {isBugfixSession} = require(process.env.AGENTS_REQ + '/hooks/lib/workflow-state/is-bugfix-session');
+    const {isBugfixSession} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/is-bugfix-session');
     console.log('result:', isBugfixSession('${SID_C3}'));
 } catch(e) {
     console.log('MODULE_NOT_FOUND: ' + e.message);
@@ -148,7 +148,7 @@ EOF
 
 C4_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {isBugfixSession} = require(process.env.AGENTS_REQ + '/hooks/lib/workflow-state/is-bugfix-session');
+    const {isBugfixSession} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/is-bugfix-session');
     console.log('fix/x fallback:', isBugfixSession('${SID_C4A}'));
     console.log('main fallback:', isBugfixSession('${SID_C4B}'));
 } catch(e) {
@@ -176,7 +176,7 @@ write_state "$SID_C5" "true" "fix/x"
 
 C5_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {getSkippableSteps} = require(process.env.AGENTS_REQ + '/hooks/lib/workflow-state/state-io');
+    const {getSkippableSteps} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
     const steps = getSkippableSteps('${SID_C5}');
     console.log('write_tests in skippable:', steps.includes('write_tests'));
     console.log('review_tests in skippable:', steps.includes('review_tests'));
@@ -207,7 +207,7 @@ write_state "$SID_C6" "false" "feature/foo"
 
 C6_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {getSkippableSteps} = require(process.env.AGENTS_REQ + '/hooks/lib/workflow-state/state-io');
+    const {getSkippableSteps} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
     const steps = getSkippableSteps('${SID_C6}');
     console.log('write_tests in skippable:', steps.includes('write_tests'));
     console.log('review_tests in skippable:', steps.includes('review_tests'));

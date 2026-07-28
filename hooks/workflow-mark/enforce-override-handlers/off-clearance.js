@@ -10,7 +10,7 @@ const {
   ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE,
   ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ, ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE,
 } = require("../../lib/sentinel-patterns");
-const { getWorkflowDir } = require("../../lib/workflow-state");
+const { getWorkflowDir } = require("../../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 

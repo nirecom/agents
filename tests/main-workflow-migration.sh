@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/workflow-state.js
+# Tests: hooks/workflow-state.js
 # Tags: workflow, hook, bin, env, config
-# TDD tests for the readState() migration in claude-global/hooks/lib/workflow-state.js
+# TDD tests for the readState() migration in claude-global/hooks/workflow-state.js
 # Migration (not yet implemented) transforms old state files:
 #   - verify key → renamed to run_tests
 #   - code key  → deleted
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-WORKFLOW_STATE_JS="$DOTFILES_DIR/claude-global/hooks/lib/workflow-state.js"
+WORKFLOW_STATE_JS="$DOTFILES_DIR/claude-global/hooks/workflow-state.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }

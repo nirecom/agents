@@ -4,11 +4,15 @@
 
 const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow-state");
+const { VALID_STEPS, createInitialState, writeState } = require("../workflow-state");
+const {
+  recordStepTimestampsEnabled,
+  applyStartedAt,
+} = require("../workflow-state/step-timestamps");
 const {
   APPROVAL_GATED_STEPS,
   buildAuditApproval,
-} = require("../lib/workflow-state/completion-approval");
+} = require("../workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
@@ -59,8 +63,13 @@ function handle(ctx) {
       const newState = createInitialState(sessionId);
       const fromIndex = VALID_STEPS.indexOf(fromStep);
       const now = new Date().toISOString();
+      const stamp = recordStepTimestampsEnabled();
       for (let i = 0; i < fromIndex; i++) {
-        newState.steps[VALID_STEPS[i]] = { status: "complete", updated_at: now };
+        const entry = { status: "complete", updated_at: now };
+        // A DECLARED complete: updated_at is already synthetic here, so started_at is
+        // synthesised alongside it (prev: null). Rule SSOT: workflow-state/step-timestamps.js.
+        if (stamp) applyStartedAt(entry, { prev: null, now });
+        newState.steps[VALID_STEPS[i]] = entry;
       }
       // WORKFLOW_RESET_FROM_* is permissions.ask — the user already approved this
       // rollback, so the force-completed steps carry a sanctioned audit record

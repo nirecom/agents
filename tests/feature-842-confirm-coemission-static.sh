@@ -221,7 +221,7 @@ fi
 # Case F: state-io.js must NOT contain pr-created in CONFIRM_NEXT_STEP_HINT
 # ---------------------------------------------------------------------------
 echo "=== Case F: state-io.js: pr-created hint absent ==="
-STATE_IO="$REPO_ROOT/hooks/lib/workflow-state/state-io.js"
+STATE_IO="$REPO_ROOT/hooks/workflow-state/state-io.js"
 if require_file "$STATE_IO"; then
     if has_fixed "pr-created" "$STATE_IO"; then
         fail "state-io.js still contains pr-created in CONFIRM_NEXT_STEP_HINT"

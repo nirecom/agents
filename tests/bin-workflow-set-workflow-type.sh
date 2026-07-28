@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: bin/workflow/set-workflow-type, hooks/lib/workflow-state/state-io.js
+# Tests: bin/workflow/set-workflow-type, hooks/workflow-state/state-io.js
 # Tags: L2, workflow, wf-meta, scope:common
 #
 # L3 gap (what this test does NOT catch):
@@ -196,7 +196,7 @@ run_tests() {
   run_script "$SID5" "wf-meta"
   local PRESERVED
   PRESERVED="$(cd "$SCRIPT_AGENTS_DIR" && node -e "
-    const {readState,writeState}=require('./hooks/lib/workflow-state');
+    const {readState,writeState}=require('./hooks/workflow-state');
     const st=readState('$SID5');
     writeState('$SID5',st);
     const st2=readState('$SID5');

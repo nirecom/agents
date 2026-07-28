@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tests: hooks/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, intent, planning
 # Tests for new workflow steps: clarify_intent and branching_complete
 # Covers:
@@ -11,7 +11,7 @@ set -euo pipefail
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 GATE_HOOK="$DOTFILES_DIR/hooks/workflow-gate.js"
 MARK_HOOK="$DOTFILES_DIR/hooks/workflow-mark.js"
-WS_LIB="$DOTFILES_DIR/hooks/lib/workflow-state.js"
+WS_LIB="$DOTFILES_DIR/hooks/workflow-state.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
@@ -217,7 +217,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 }
 EOF
 M1_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-const wf = require('./hooks/lib/workflow-state.js');
+const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.clarify_intent ? s.steps.clarify_intent.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
@@ -248,7 +248,7 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 }
 EOF
 M2_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-const wf = require('./hooks/lib/workflow-state.js');
+const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
@@ -261,7 +261,7 @@ fi
 # M2-compat: Old state JSON with branching_decision key (legacy) → migrated to branching_complete
 SID_M2C="test-m2-compat-$$"
 M2C_RESULT=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-const {readState} = require('./hooks/lib/workflow-state.js');
+const {readState} = require('./hooks/workflow-state.js');
 const sid = '$SID_M2C';
 const dir = process.env.CLAUDE_WORKFLOW_DIR;
 require('fs').writeFileSync(dir + '/' + sid + '.json',
@@ -298,12 +298,12 @@ cat > "$WORKFLOW_DIR/${SID}.json" <<EOF
 }
 EOF
 M3_CI=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-const wf = require('./hooks/lib/workflow-state.js');
+const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.clarify_intent ? s.steps.clarify_intent.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
 M3_BD=$(cd "$DOTFILES_DIR" && CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-const wf = require('./hooks/lib/workflow-state.js');
+const wf = require('./hooks/workflow-state.js');
 const s = wf.readState('$SID');
 console.log(s && s.steps && s.steps.branching_complete ? s.steps.branching_complete.status : 'MISSING');
 " 2>/dev/null || echo "ERROR")
@@ -320,7 +320,7 @@ fi
 
 # M4: VALID_STEPS exports clarify_intent at index 0 and includes branching_complete
 M4_RESULT=$(cd "$DOTFILES_DIR" && node -e "
-const wf = require('./hooks/lib/workflow-state.js');
+const wf = require('./hooks/workflow-state.js');
 const vs = wf.VALID_STEPS;
 const ciIdx = vs.indexOf('clarify_intent');
 const bdIdx = vs.indexOf('branching_complete');
@@ -337,7 +337,7 @@ fi
 # M5: SKIPPABLE_STEPS includes clarify_intent (skippable via WORKFLOW_CLARIFY_INTENT_NOT_NEEDED)
 #     but does NOT include branching_complete (always required)
 M5_RESULT=$(cd "$DOTFILES_DIR" && node -e "
-const wf = require('./hooks/lib/workflow-state.js');
+const wf = require('./hooks/workflow-state.js');
 const ss = wf.SKIPPABLE_STEPS;
 const hasCi = ss.includes('clarify_intent');
 const hasBd = ss.includes('branching_complete');

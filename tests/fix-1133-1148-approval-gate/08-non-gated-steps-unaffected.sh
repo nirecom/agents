@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/lib/workflow-state/completion-approval.js, hooks/lib/workflow-state/state-io.js, bin/workflow/next-step
+# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/next-step
 # Tags: workflow, approval-gate, regression, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================

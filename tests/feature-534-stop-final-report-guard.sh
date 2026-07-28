@@ -31,7 +31,7 @@
 # L3 gap: does not verify the hook fires in a real Claude Code Stop event. L3 would require
 #         a live `claude -p` session with the hook registered; see rules/test/claude-e2e.md.
 # Known gap: resolveSessionId fallback (SID derived from transcript filename when session_id
-#            absent from stdin) tests hooks/lib/workflow-state.js — out of scope for this file.
+#            absent from stdin) tests hooks/workflow-state.js — out of scope for this file.
 
 set -u
 

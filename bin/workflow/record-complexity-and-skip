@@ -34,7 +34,7 @@ node "$AGENTS_CONFIG_DIR/bin/workflow/record-complexity-evaluation" \
 
 # Step 2: Resolve skip conditions. Values are passed via env vars (not string interpolation)
 # to prevent JS injection if SESSION_ID or TARGET contain quote characters.
-SKIP_MODE=$(RCS_BRIDGE="$AGENTS_CONFIG_DIR_N/hooks/lib/workflow-state/skip-signal-resolver.js" \
+SKIP_MODE=$(RCS_BRIDGE="$AGENTS_CONFIG_DIR_N/hooks/workflow-state/skip-signal-resolver.js" \
   RCS_SID="$SESSION_ID" RCS_TARGET="$TARGET" node -e '
 const r = require(process.env.RCS_BRIDGE);
 const v = r.resolveSkipConditionsFromComplexity(process.env.RCS_SID, process.env.RCS_TARGET);

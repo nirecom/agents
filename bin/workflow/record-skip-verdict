@@ -37,7 +37,7 @@ if (verdict !== "confirm" && verdict !== "veto") {
   process.exit(1);
 }
 
-const workflowStatePath = path.join(__dirname, "../../hooks/lib/workflow-state");
+const workflowStatePath = path.join(__dirname, "../../hooks/workflow-state");
 const { recordSkipVerdict } = require(workflowStatePath);
 
 try {

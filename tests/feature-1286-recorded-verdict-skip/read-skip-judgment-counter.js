@@ -6,8 +6,8 @@
 //
 // Wrapping strategy:
 //   The helper may import readSkipJudgment from either of two paths:
-//     (A) hooks/lib/workflow-state.js        (dispatch/re-export module)
-//     (B) hooks/lib/workflow-state/skip-signal-resolver.js  (underlying resolver)
+//     (A) hooks/workflow-state.js        (dispatch/re-export module)
+//     (B) hooks/workflow-state/skip-signal-resolver.js  (underlying resolver)
 //   To guarantee interception regardless of which path the helper uses, this
 //   preload wraps readSkipJudgment on BOTH module exports against a SHARED counter.
 //
@@ -43,12 +43,12 @@ let readSkipJudgmentCallCount = 0;
 // this file: tests/feature-1286-recorded-verdict-skip/read-skip-judgment-counter.js
 // AGENTS_DIR is two levels up.
 const AGENTS_DIR = path.resolve(__dirname, "..", "..");
-const workflowStatePath = path.join(AGENTS_DIR, "hooks", "lib", "workflow-state.js");
+const workflowStatePath = path.join(AGENTS_DIR, "hooks", "workflow-state.js");
 const skipSignalResolverPath = path.join(
-  AGENTS_DIR, "hooks", "lib", "workflow-state", "skip-signal-resolver.js"
+  AGENTS_DIR, "hooks", "workflow-state", "skip-signal-resolver.js"
 );
 
-// Wrap the dispatch/re-export module (hooks/lib/workflow-state.js).
+// Wrap the dispatch/re-export module (hooks/workflow-state.js).
 try {
   // Force-load the module so it's in cache before next-step requires it.
   const wfState = require(workflowStatePath);
@@ -63,7 +63,7 @@ try {
   // Module not available — counter stays at 0.
 }
 
-// Wrap the underlying resolver module (hooks/lib/workflow-state/skip-signal-resolver.js).
+// Wrap the underlying resolver module (hooks/workflow-state/skip-signal-resolver.js).
 // This ensures interception when the helper imports directly from the resolver rather
 // than from the dispatch module. Each wrapper has its own captured `orig` and calls
 // only that orig — no cross-calling, no double-counting.

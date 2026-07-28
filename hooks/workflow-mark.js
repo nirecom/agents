@@ -31,7 +31,7 @@ const {
   markStep,
   setLastPushedSha,
   readState,
-} = require("./lib/workflow-state");
+} = require("./workflow-state");
 const { isMergeToProtectedCommand } = require("./lib/merge-detect");
 const { resolveRepoCwd } = require("./lib/path-normalize");
 // Sentinel recognition centralized in hooks/lib/sentinel-patterns.js (SSOT).

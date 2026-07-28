@@ -10,7 +10,7 @@
 const fs = require("fs");
 const { getConvLangInjection } = require("./lib/conv-lang");
 const { getPlanLangInjection } = require("./lib/lang-config");
-const { resolveSessionId, readState } = require("./lib/workflow-state");
+const { resolveSessionId, readState } = require("./workflow-state");
 
 const PLAN_STEPS = ["clarify_intent", "outline", "detail"];
 

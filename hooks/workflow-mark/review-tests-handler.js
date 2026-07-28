@@ -26,8 +26,8 @@ const {
   clearReviewTestsTerminalMarker,
   markStep,
   readState,
-} = require("../lib/workflow-state");
-const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
+} = require("../workflow-state");
+const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
 
 function extractToken(payload) {
   const m = payload.match(/token=([A-Za-z0-9]+)/);

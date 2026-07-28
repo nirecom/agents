@@ -41,7 +41,7 @@ const nonGithub = process.env.NON_GITHUB === "1";
 // --- Session ID resolution --------------------------------------------------
 
 // Path-safe session-id charset (CWE-22) — mirrors the canonical validator in
-// hooks/lib/workflow-state/session-id.js. The sid flows into path.join() for
+// hooks/workflow-state/session-id.js. The sid flows into path.join() for
 // the checkpoint and context.md filenames; any other value must be rejected.
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 

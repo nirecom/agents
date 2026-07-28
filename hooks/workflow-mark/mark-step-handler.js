@@ -4,12 +4,12 @@
 // (user_verification, write_tests, docs) that must be emitted via their own paths.
 
 const { MARKER_RE_DQ, MARKER_RE_SQ } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, markStep, readState, writeState } = require("../lib/workflow-state");
-const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
+const { VALID_STEPS, markStep, readState, writeState } = require("../workflow-state");
+const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
 const {
   UnapprovedCompletionError,
   confirmSentinelFor,
-} = require("../lib/workflow-state/completion-approval");
+} = require("../workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage, signalFatal, repoCwd } = ctx;

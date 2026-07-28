@@ -159,7 +159,7 @@ process.stdout.write(JSON.stringify(state, null, 2));
 call_is_planning() {
     local sid="$1" wf_dir="$2"
     local wf_dir_node; wf_dir_node="$(to_node_path "$wf_dir")"
-    local state_io_node; state_io_node="$(to_node_path "$AGENTS_DIR/hooks/lib/workflow-state")"
+    local state_io_node; state_io_node="$(to_node_path "$AGENTS_DIR/hooks/workflow-state")"
     CLAUDE_WORKFLOW_DIR="$wf_dir_node" \
         run_with_timeout 10 node -e "
 const { readState } = require('$state_io_node');
@@ -370,8 +370,8 @@ echo ""
 
 echo "=== Group 3: isPlanning() logic unit tests ==="
 
-if [ ! -f "$AGENTS_DIR/hooks/lib/workflow-state.js" ] && \
-   [ ! -f "$AGENTS_DIR/hooks/lib/workflow-state/state-io.js" ]; then
+if [ ! -f "$AGENTS_DIR/hooks/workflow-state.js" ] && \
+   [ ! -f "$AGENTS_DIR/hooks/workflow-state/state-io.js" ]; then
     skip "G3: workflow-state not found"
 else
     # G3-T1: all planning steps pending → true

@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-833-review-tests-gate/section-g.sh
-# Tests: hooks/workflow-gate/review-tests-checker.js, hooks/lib/workflow-state/state-io.js
+# Tests: hooks/workflow-gate/review-tests-checker.js, hooks/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, checker, state-io, scope:issue-specific
 #
 # Section G: checkReviewTests unit tests and markReviewTestsComplete error handling.
@@ -17,7 +17,7 @@ else
 fi
 
 CHECKER_NODE="$_AGENTS_DIR_NODE/hooks/workflow-gate/review-tests-checker.js"
-STATE_IO_NODE="$_AGENTS_DIR_NODE/hooks/lib/workflow-state/state-io.js"
+STATE_IO_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state/state-io.js"
 
 # ============================================================================
 # Section G: checkReviewTests unit tests + markReviewTestsComplete error guard

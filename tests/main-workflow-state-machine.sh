@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
+# Tests: hooks/workflow-state.js, hooks/session-start.js, hooks/workflow-gate.js, hooks/workflow-mark.js
 # Tags: workflow, gate, hook, settings, config, scope:common
 # Integration regression tests for the Workflow State Machine.
 # Covers: state inheritance, cross-repo commits, RESET_FROM, USER_VERIFIED,
@@ -15,7 +15,7 @@ DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 GATE_HOOK="$DOTFILES_DIR/hooks/workflow-gate.js"
 MARK_HOOK="$DOTFILES_DIR/hooks/workflow-mark.js"
 SESSION_START="$DOTFILES_DIR/hooks/session-start.js"
-WORKFLOW_STATE_LIB="$DOTFILES_DIR/hooks/lib/workflow-state.js"
+WORKFLOW_STATE_LIB="$DOTFILES_DIR/hooks/workflow-state.js"
 SETTINGS="$DOTFILES_DIR/settings.json"
 
 # ---------------------------------------------------------------------------

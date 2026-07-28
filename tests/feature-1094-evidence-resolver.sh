@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state/evidence-resolver.js
+# Tests: hooks/workflow-state/evidence-resolver.js
 # Tags: L2, workflow, evidence, scope:issue-specific
 
 # L3 gap (what this test does NOT catch):
@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented"; exit 0; }
+[ -f "hooks/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -17,7 +17,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/lib/workflow-state/evidence-resolver.js"
+RESOLVER="$AGENTS_DIR/hooks/workflow-state/evidence-resolver.js"
 # Node on Windows requires a native path (C:/...), not a POSIX/MSYS path (/c/...).
 RESOLVER="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
 

@@ -14,7 +14,7 @@ const DEFAULT_REMEDY = "Run: /worktree-start <task-name>\n";
 
 function buildWorktreeRemedy(sessionId) {
   try {
-    const { resolveSessionWorktreePath } = require("../lib/workflow-state/resolve-worktree-path");
+    const { resolveSessionWorktreePath } = require("../workflow-state/resolve-worktree-path");
     const worktreePath = resolveSessionWorktreePath(sessionId);
     if (!worktreePath) return DEFAULT_REMEDY;
     return (

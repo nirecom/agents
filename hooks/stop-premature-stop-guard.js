@@ -46,7 +46,7 @@ if (require.main === module) {
   let isWorkflowOff;
   let appendFinding;
   try {
-    ({ resolveSessionId, readState: readWorkflowState } = require("./lib/workflow-state"));
+    ({ resolveSessionId, readState: readWorkflowState } = require("./workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ appendFinding } = require("./lib/supervisor-state-writer"));
   } catch (_) {

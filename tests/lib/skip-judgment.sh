@@ -5,7 +5,7 @@
 #
 # Required in-scope symbols (must be set/defined BEFORE first use of plant_valid_skip):
 #   SKIP_JUDGMENT_RESOLVER_N  — Windows-native (or POSIX) path to
-#                               hooks/lib/workflow-state/skip-signal-resolver.js
+#                               hooks/workflow-state/skip-signal-resolver.js
 #   api_exists                — shell function; returns 0 if recordSkipJudgment
 #                               exists in the resolver, non-zero otherwise
 #   run_with_timeout          — shell function; wraps a command with a timeout

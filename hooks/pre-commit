@@ -84,7 +84,7 @@ if _is_enforce_worktree_on; then
     fi
 
     # WORKFLOW_OFF / WORKTREE_OFF session-marker bypass: mirror enforce-worktree.js.
-    # Resolves session id via hooks/lib/workflow-state.js#resolveSessionId() and
+    # Resolves session id via hooks/workflow-state.js#resolveSessionId() and
     # checks both .workflow-off and .worktree-off markers via hooks/lib/session-markers.js.
     # rc=0 → bypass granted; rc=2 → no bypass (sid unresolved OR no marker); any
     # other rc → unexpected error, surface a warning and fall through to enforcement.
@@ -95,7 +95,7 @@ if _is_enforce_worktree_on; then
           try {
             const cfg = process.env.AGENTS_CONFIG_DIR;
             if (!cfg) process.exit(2);
-            const { resolveSessionId } = require(cfg + "/hooks/lib/workflow-state");
+            const { resolveSessionId } = require(cfg + "/hooks/workflow-state");
             const { isWorkflowOff, isWorktreeOff } = require(cfg + "/hooks/lib/session-markers");
             const sid = resolveSessionId();
             if (!sid) process.exit(2);

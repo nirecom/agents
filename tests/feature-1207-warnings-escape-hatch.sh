@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-1207-warnings-escape-hatch.sh
-# Tests: hooks/workflow-gate/review-tests-checker.js, hooks/lib/workflow-state/state-io.js
+# Tests: hooks/workflow-gate/review-tests-checker.js, hooks/workflow-state/state-io.js
 # Tags: review-tests, warnings-escape-hatch, warnings-accepted, token-preservation, scope:issue-specific
 #
 # Issue #1207 — WARNINGS escape hatch: after clearReviewTestsWarnings(), the
@@ -29,7 +29,7 @@ set -uo pipefail
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECKER_JS="$AGENTS_DIR/hooks/workflow-gate/review-tests-checker.js"
-STATE_IO_JS="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
+STATE_IO_JS="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 export AGENTS_CONFIG_DIR="$AGENTS_DIR"
 
 PASS=0
@@ -44,7 +44,7 @@ RWT="$AGENTS_DIR/bin/run-with-timeout.sh"
 # ---------------------------------------------------------------------------
 missing=()
 [[ -f "$CHECKER_JS" ]]  || missing+=("hooks/workflow-gate/review-tests-checker.js")
-[[ -f "$STATE_IO_JS" ]] || missing+=("hooks/lib/workflow-state/state-io.js")
+[[ -f "$STATE_IO_JS" ]] || missing+=("hooks/workflow-state/state-io.js")
 if [[ "${#missing[@]}" -gt 0 ]]; then
     for m in "${missing[@]}"; do echo "FAIL: precondition missing — $m"; done
     echo ""

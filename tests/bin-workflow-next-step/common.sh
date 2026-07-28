@@ -17,11 +17,11 @@ run_with_timeout() {
 }
 
 # Windows-native path to skip-signal-resolver.js (used by plant_valid_skip).
-SKIP_JUDGMENT_RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js")"
+SKIP_JUDGMENT_RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js")"
 
 # Guard: returns 0 if recordSkipJudgment is available, non-zero otherwise.
 api_exists() {
-  [ -f "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" ] || return 1
+  [ -f "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" ] || return 1
   run_with_timeout node -e "
     const r = require('$SKIP_JUDGMENT_RESOLVER_N');
     if (typeof r.recordSkipJudgment !== 'function') process.exit(1);

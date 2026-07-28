@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/workflow-state/resolve-worktree-path.js, bin/resolve-worktree-path, skills/review-tests/scripts/select-staged-files.sh
+# Tests: hooks/workflow-state/resolve-worktree-path.js, bin/resolve-worktree-path, skills/review-tests/scripts/select-staged-files.sh
 # Tags: scope:issue-specific
 # Tests for issue #882: worktree-aware staged-file selection for /review-tests.
 #
@@ -20,7 +20,7 @@ set -uo pipefail
 # Resolve paths
 # ---------------------------------------------------------------------------
 AGENTS_WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RESOLVER_JS="$AGENTS_WORKTREE/hooks/lib/workflow-state/resolve-worktree-path.js"
+RESOLVER_JS="$AGENTS_WORKTREE/hooks/workflow-state/resolve-worktree-path.js"
 RESOLVER_BIN="$AGENTS_WORKTREE/bin/resolve-worktree-path"
 SELECT_SH="$AGENTS_WORKTREE/skills/review-tests/scripts/select-staged-files.sh"
 COMPUTE_JS="$AGENTS_WORKTREE/bin/compute-staged-tests-token.js"
@@ -311,7 +311,7 @@ run_resolver_js() {
   CLAUDE_SESSION_ID="" \
   CLAUDE_WORKFLOW_DIR="$WF_DIR_NODE" \
     bash "$RUN_TIMEOUT" 30 node -e "
-const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/lib/workflow-state/resolve-worktree-path.js');
+const { resolveSessionWorktreePath } = require('$AGENTS_NODE/hooks/workflow-state/resolve-worktree-path.js');
 const result = resolveSessionWorktreePath('$sid');
 process.stdout.write(result === null ? '' : result);
 " 2>/dev/null

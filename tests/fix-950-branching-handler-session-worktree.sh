@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-mark/branching-handler.js, hooks/lib/workflow-state/state-io.js, hooks/lib/workflow-state/resolve-worktree-path.js
+# Tests: hooks/workflow-mark/branching-handler.js, hooks/workflow-state/state-io.js, hooks/workflow-state/resolve-worktree-path.js
 # Tags: fix, branching-handler, state-io, session-worktree, scope:issue-specific
 #
 # Tests for issue #950: branching-handler.js must write state.session_worktree
