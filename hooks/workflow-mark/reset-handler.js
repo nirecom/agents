@@ -8,7 +8,7 @@ const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow
 const {
   recordStepTimestampsEnabled,
   applyStartedAt,
-} = require("../lib/workflow-state/state-io/step-timestamps");
+} = require("../lib/workflow-state/step-timestamps");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
@@ -63,7 +63,7 @@ function handle(ctx) {
       for (let i = 0; i < fromIndex; i++) {
         const entry = { status: "complete", updated_at: now };
         // A DECLARED complete: updated_at is already synthetic here, so started_at is
-        // synthesised alongside it (prev: null). Rule SSOT: state-io/step-timestamps.js.
+        // synthesised alongside it (prev: null). Rule SSOT: workflow-state/step-timestamps.js.
         if (stamp) applyStartedAt(entry, { prev: null, now });
         newState.steps[VALID_STEPS[i]] = entry;
       }

@@ -45,7 +45,7 @@ function recordStepTimestampsEnabled() {
   let raw = process.env.RECORD_STEP_TIMESTAMPS;
   if (typeof raw !== "string" || raw === "") {
     try {
-      require("../../load-env").loadDefaultEnv();
+      require("../load-env").loadDefaultEnv();
     } catch (_) {
       // fail-safe: an unreadable .env leaves the feature off
     }
