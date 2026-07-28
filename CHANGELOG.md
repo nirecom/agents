@@ -140,3 +140,7 @@ Changes: Added two read-only measurement commands: `bin/measure-norm-docs`, whic
 ### FEATURE: PR #1700 (2026-07-29)
 Background: refactor(#1586): decouple verification-gate ask from RUN_TL3; add RUN_TL4
 Changes: Added a new configuration option, `RUN_TL4` (default `off`), that controls the verification confirmation prompt shown before commit or merge. `RUN_TL3` now controls only which tests are selected and run.;If you previously set `RUN_TL3=on` and relied on that confirmation prompt, it will no longer appear. Add `RUN_TL4=on` to your configuration to keep the previous behaviour.
+
+### FEATURE: PR #1704 (2026-07-29)
+Background: fix(#1679): enforce-worktree write-detection false-positive fixes
+Changes: Fixed main-worktree write guard incorrectly blocking `eval "$(...)"`, `bash -c '...'` wrappers, `$(...)` command substitutions, and heredoc syntax in quoted prose arguments — all sanctioned non-file-write patterns now pass through correctly.
