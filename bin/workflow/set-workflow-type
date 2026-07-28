@@ -3,7 +3,7 @@
 
 const path = require("path");
 const { readState, createInitialState, writeState } = require(
-  path.join(__dirname, "../../hooks/lib/workflow-state")
+  path.join(__dirname, "../../hooks/workflow-state")
 );
 
 const VALID_TYPES = new Set(["wf-code", "wf-meta"]);

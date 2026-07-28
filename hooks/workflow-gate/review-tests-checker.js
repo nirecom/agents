@@ -21,7 +21,7 @@ function checkReviewTests(step, stepState, opts) {
   // D2 defense (#1147 T0-A): BUGFIX sessions must complete review_tests — skip is not allowed.
   if (status === "skipped") {
     try {
-      const { isBugfixSession } = require("../lib/workflow-state/is-bugfix-session");
+      const { isBugfixSession } = require("../workflow-state/is-bugfix-session");
       if (isBugfixSession({ sessionId })) {
         return { action: "block", reason: null };
       }

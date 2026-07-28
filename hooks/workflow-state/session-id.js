@@ -4,21 +4,52 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
-const { isSameGitRepo } = require("../git-common-dir");
+const { isSameGitRepo } = require("../lib/git-common-dir");
 
-function _listJsonlByMtime(transcriptDir) {
+/**
+ * The one enumeration of a transcript directory, reporting what could NOT be observed
+ * instead of swallowing it. Returns { files, errors }:
+ *   files  — readable `.jsonl` REGULAR-FILE entries as { name, mtime }, mtime descending.
+ *   errors — [{ scope: "dir" | "file", path, code }]. A failed readdir yields a single
+ *            `dir` error and no files; a failed lstatSync drops only that one file.
+ * The stat is an lstat and non-regular entries are skipped, so a `.jsonl` symlink cannot
+ * pull a transcript in from outside the selected directory — symmetric with the prune
+ * walker and with bin/measure-norm-docs (CPR-5). A skipped entry is simply not listed; it
+ * is not an error, because nothing about it failed to be observed.
+ * Callers that must distinguish "the directory is empty" from "the directory could not be
+ * read" use this view; _listJsonlByMtime below is the swallowing view of the same walk.
+ */
+function listJsonlByMtimeStrict(transcriptDir) {
+  const files = [];
+  const errors = [];
+  let names;
   try {
-    return fs
-      .readdirSync(transcriptDir)
-      .filter((f) => f.endsWith(".jsonl"))
-      .map((f) => ({
-        name: f,
-        mtime: fs.statSync(path.join(transcriptDir, f)).mtimeMs,
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
+    names = fs.readdirSync(transcriptDir);
   } catch (e) {
-    return [];
+    errors.push({ scope: "dir", path: transcriptDir, code: e.code || "EIO" });
+    return { files, errors };
   }
+  for (const name of names) {
+    if (!name.endsWith(".jsonl")) continue;
+    const full = path.join(transcriptDir, name);
+    try {
+      const st = fs.lstatSync(full);
+      if (!st.isFile()) continue;
+      files.push({ name, mtime: st.mtimeMs });
+    } catch (e) {
+      errors.push({ scope: "file", path: full, code: e.code || "EIO" });
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  return { files, errors };
+}
+
+// Legacy view, preserved bit-for-bit: the original single try/catch returned [] whether
+// the readdir or any individual statSync failed, so any observed error still yields [].
+// Changing this to return partial results would change session resolution in state-io.js.
+function _listJsonlByMtime(transcriptDir) {
+  const r = listJsonlByMtimeStrict(transcriptDir);
+  return r.errors.length > 0 ? [] : r.files;
 }
 
 function findMostRecentSessionIdInDir(transcriptDir) {
@@ -198,6 +229,7 @@ function resolveSessionId(ctx = {}) {
 
 module.exports = {
   _listJsonlByMtime,
+  listJsonlByMtimeStrict,
   findMostRecentSessionIdInDir,
   resolveSessionId,
 };

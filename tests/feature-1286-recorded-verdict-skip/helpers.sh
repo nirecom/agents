@@ -17,7 +17,7 @@ else
   AGENTS_DIR_N="$AGENTS_DIR"
 fi
 
-SKIP_RESOLVER="$AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js"
+SKIP_RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
 GATE_HOOK="$AGENTS_DIR/hooks/gate-plan-skip-sentinel.js"
 RECORD_CLI="$AGENTS_DIR/bin/workflow/record-skip-judgment"
 NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"

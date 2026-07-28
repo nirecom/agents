@@ -1,7 +1,7 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state/session-id.js, hooks/lib/git-common-dir.js
+# Tests: hooks/workflow-state/session-id.js, hooks/lib/git-common-dir.js
 # Tags: workflow, hook, scope:common
-# Tests for resolveSessionId() in hooks/lib/workflow-state/session-id.js — Issue #519.
+# Tests for resolveSessionId() in hooks/workflow-state/session-id.js — Issue #519.
 #
 # After the fix, the priority chain becomes:
 #   1. ctx.sessionIdFromInput
@@ -34,7 +34,7 @@
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET="$AGENTS_DIR/hooks/lib/workflow-state.js"
+TARGET="$AGENTS_DIR/hooks/workflow-state.js"
 # Normalize to Windows-style path for Node when running under MSYS/Cygwin.
 if command -v cygpath >/dev/null 2>&1; then
     TARGET_NODE="$(cygpath -w "$TARGET" | sed 's|\\|/|g')"

@@ -49,7 +49,7 @@ function evaluateWorktreeEntry({ sessionId, input, toolName, toolInput, state } 
     if (!bc || bc.status !== "complete") return { verdict: "dormant" };
 
     // c4 — an existing linked worktree is recorded for this session.
-    const { resolveSessionWorktreePath } = require("../lib/workflow-state/resolve-worktree-path");
+    const { resolveSessionWorktreePath } = require("../workflow-state/resolve-worktree-path");
     const worktreePath = resolveSessionWorktreePath(sessionId);
     if (!worktreePath) return { verdict: "dormant" };
 

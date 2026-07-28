@@ -34,7 +34,7 @@ if (require.main === module) {
   if (tool !== "EnterWorktree" && tool !== "ExitWorktree") process.exit(0);
 
   try {
-    const { readState, writeState } = require("./lib/workflow-state/state-io");
+    const { readState, writeState } = require("./workflow-state/state-io");
     const sid = input.session_id;
     if (!sid) process.exit(0);
     const state = readState(sid);

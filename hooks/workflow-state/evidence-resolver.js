@@ -17,10 +17,10 @@
 
 const path = require("path");
 const { execSync, execFileSync } = require("child_process");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
-const { hasStagedDocChanges, hasStagedTestChanges } = require("../../workflow-gate/staged-evidence");
-const { hasWorktreeNotesDocEvidence } = require("../../workflow-gate/worktree-context");
+const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
+const { hasWorktreeNotesDocEvidence } = require("../workflow-gate/worktree-context");
 
 // Post-merge fallback: checks whether any committed file under tests/ or test/
 // differs from the default branch (origin/HEAD). Returns false on any failure

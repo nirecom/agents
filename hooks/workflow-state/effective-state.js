@@ -38,7 +38,7 @@
 const { VALID_STEPS, readRawState } = require("./state-io");
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
 const { readSkipVerdict } = require("./skip-verdict");
-const { hasStagedTestChanges } = require("../../workflow-gate/staged-evidence");
+const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,

@@ -21,7 +21,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
 
 // ---- isTrivial keyword sets (module-level frozen, referenced by tests + describe) ----

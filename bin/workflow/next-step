@@ -10,18 +10,18 @@ const {
   resolveSessionId,
   markStep,
   hasPlanArtifact,
-} = require("../../hooks/lib/workflow-state");
+} = require("../../hooks/workflow-state");
 const {
   effectiveStatus,
   reconcileEffectiveState,
-} = require("../../hooks/lib/workflow-state/effective-state");
+} = require("../../hooks/workflow-state/effective-state");
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,
   UnapprovedCompletionError,
   confirmSentinelFor,
   recoveryFor,
-} = require("../../hooks/lib/workflow-state/completion-approval");
+} = require("../../hooks/workflow-state/completion-approval");
 
 // Single resolution of the git repo root (forwarded to evidence predicates).
 // Precedence: CLAUDE_PROJECT_DIR → git rev-parse → cwd.
@@ -84,7 +84,7 @@ const STEP_HINT = Object.freeze({
 });
 
 // WF_META_AUTO_SKIP / effectiveStatus now live in
-// hooks/lib/workflow-state/effective-state.js (SSOT, imported above).
+// hooks/workflow-state/effective-state.js (SSOT, imported above).
 
 // ---- Import-time assertions -----------------------------------------------
 
@@ -512,7 +512,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
         );
         return;
       }
-      const { hasCompletionEvidence: hceGeneric } = require("../../hooks/lib/workflow-state/evidence-resolver");
+      const { hasCompletionEvidence: hceGeneric } = require("../../hooks/workflow-state/evidence-resolver");
       const hasEvidence = hceGeneric(currentStep, sid, { repoDir });
       let genericHint;
       if (hasEvidence && isApprovalGatedStep(currentStep)) {
@@ -575,7 +575,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Returns null on any failure/invalid/absent path (caller falls through, no recursion).
   function applyRecordedVerdictSkip(sid, rawSid, stepName, skipReason) {
     try {
-      const wfState = require("../../hooks/lib/workflow-state");
+      const wfState = require("../../hooks/workflow-state");
       const hvsj = wfState.hasValidSkipJudgment;
       const rsjFn = wfState.readSkipJudgment;
       const irvFn = wfState.isRecordedVerdictValid;
@@ -588,7 +588,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
         // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
         // markStep so the read-modify-write preserves skip_reason/skip_judgment.
         try {
-          const wfState2 = require("../../hooks/lib/workflow-state");
+          const wfState2 = require("../../hooks/workflow-state");
           if (typeof wfState2.recordSkipVerdict === "function") {
             wfState2.recordSkipVerdict(sid, stepName, "pending", "next-step-recorded-verdict");
           }
@@ -611,7 +611,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   let skipHint = "";
   if (currentStep === "outline" || currentStep === "detail") {
     try {
-      const { isTrivial } = require("../../hooks/lib/workflow-state/skip-signal-resolver");
+      const { isTrivial } = require("../../hooks/workflow-state/skip-signal-resolver");
       if (isTrivial(sid)) {
         skipHint = currentStep === "outline"
           ? "WORKFLOW_OUTLINE_NOT_NEEDED"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state/skip-signal-resolver.js
+# Tests: hooks/workflow-state/skip-signal-resolver.js
 # Tags: L2, workflow, skip-signal, scope:issue-specific
 #
 # Issue #485 — skip-signal-resolver.js: isTrivial predicate.
@@ -20,10 +20,10 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RESOLVER="$AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js"
+RESOLVER="$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js"
 RESOLVER="$(cygpath -m "$RESOLVER" 2>/dev/null || echo "$RESOLVER")"
 
-[ -f "$AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" ] || {
+[ -f "$AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" ] || {
   echo "SKIP: skip-signal-resolver.js not yet implemented"
   exit 0
 }

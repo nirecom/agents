@@ -132,7 +132,7 @@ check_state_file_absent() {
 seed_write_tests() {
     local sid="$1" status="$2"
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-      const m = require('$DOTFILES_WIN/hooks/lib/workflow-state');
+      const m = require('$DOTFILES_WIN/hooks/workflow-state');
       m.markStep(process.argv[1], 'write_tests', process.argv[2]);
     " "$sid" "$status" >/dev/null 2>&1 || true
 }
@@ -144,7 +144,7 @@ seed_write_tests() {
 seed_run_tests() {
     local sid="$1" status="$2"
     CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
-      const m = require('$DOTFILES_WIN/hooks/lib/workflow-state');
+      const m = require('$DOTFILES_WIN/hooks/workflow-state');
       m.markStep(process.argv[1], 'run_tests', process.argv[2]);
     " "$sid" "$status" >/dev/null 2>&1 || true
 }

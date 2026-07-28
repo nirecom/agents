@@ -222,7 +222,7 @@ E2E tests that spawn real `claude -p` sessions are opt-in. They are gated on the
 makes the test skip with TAP exit code 77 when the flag is off. Set
 `RUN_TL3=on` in the agents config `.env` to run them locally.
 
-When `RUN_TL3=off` the verification-gate ask is also suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the worktree-end path); set `RUN_TL3=on` to re-activate it.
+The verification-gate ask is gated separately on `RUN_TL4`. When `RUN_TL4=off` it is suppressed: matched risk categories are still recorded to `WORKTREE_NOTES.md ## Unverified Categories` as a log-only trace, but no `AskUserQuestion` is raised. The ask fires before commit (the `ENFORCE_WORKTREE=off` commit-push path) or before merge (the worktree-end path); set `RUN_TL4=on` to re-activate it.
 
 When `claude` is not on `PATH`, gates also exit 77
 (`command -v claude >/dev/null 2>&1 || exit 77`). This keeps CI green on hosts
@@ -268,3 +268,36 @@ cc-session-mtime.ps1              # apply
 Use `session-sync reset` when you also want to sync with the remote git repository
 (it restores mtime as part of the reset). Use `cc-session-mtime` when you only need
 mtime repair without a full git sync.
+
+## Lightweight measurement
+
+```sh
+bin/measure-norm-docs                 # bytes/lines of always-loaded normative docs
+bin/measure-norm-docs --ref v1.2.3    # the same reading taken at a past commit/tag
+bin/count-subagents                   # subagent_type tallies for this repo's sessions
+```
+
+`measure-norm-docs` counts root `CLAUDE.md` plus every `rules/**/*.md` without a `paths:`
+frontmatter key; read the `norm-docs-summary:` line and compare two `--ref` runs to see
+growth. Readings from before the frontmatter convention landed reflect the convention of
+that time and are not directly comparable.
+
+`count-subagents` prints one row per subagent type, most-used first. Exit 1 means the scan
+was incomplete for any reason — a session file was unreadable, a directory could not be
+enumerated, the scan budget truncated the run, or a named `--session` was not found — so
+treat the tally as a lower bound and read the warnings for which. `--all` widens the scan
+beyond the current repo, `--json` emits machine-readable output.
+
+Both `--json` outputs carry their own incompleteness: every `measure-norm-docs` file entry
+has a `warning` field (`null` when clean) and the report has a top-level `errors` array, so
+a stored artifact is never mistaken for a complete measurement once separated from its exit
+status. Symlinks are excluded from both tools, and `--ref` values starting with `-` are
+rejected rather than passed through to `git`.
+
+`RECORD_STEP_TIMESTAMPS=on` adds `started_at` to each workflow step in the session state
+file, making per-step elapsed time readable from the state alone. It is attempt-scoped:
+returning a step to `pending` (any `WORKFLOW_RESET_FROM_*`) drops it. Note that
+`started_at == updated_at` means only "zero measured elapsed time" — a reset marks the
+steps ahead of its target complete this way, but so does any step first recorded directly
+as `complete` or `skipped`. The equality does not by itself identify which of those
+happened, so do not read it as proof of a reset.

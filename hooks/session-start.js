@@ -7,7 +7,7 @@ const os = require("os");
 const { spawnSync } = require("child_process");
 const { cleanupZombies, createInitialState, writeState, readState,
         getCurrentContext, findLatestStateForContext, reconcileEffectiveState,
-        VALID_STEPS } = require("./lib/workflow-state");
+        VALID_STEPS } = require("./workflow-state");
 const settingsDrift = require("./lib/settings-drift");
 const { getConvLangInjection } = require("./lib/conv-lang");
 
@@ -133,7 +133,7 @@ if (sessionId) {
 if (sessionId) {
   try {
     const { resolveModelId } = require("./lib/model-identity");
-    const { recordSessionModel } = require("./lib/workflow-state");
+    const { recordSessionModel } = require("./workflow-state");
     const resolved = resolveModelId({ model: modelHint });
     if (resolved) recordSessionModel(sessionId, resolved);
   } catch (e) { /* fail-open */ }

@@ -65,7 +65,7 @@ write_complete_state() {
     node -e "
 const fs = require('fs');
 const path = require('path');
-const { VALID_STEPS } = require('$_AGENTS_DIR_NODE/hooks/lib/workflow-state.js');
+const { VALID_STEPS } = require('$_AGENTS_DIR_NODE/hooks/workflow-state.js');
 const steps = {};
 const now = new Date().toISOString();
 for (const s of VALID_STEPS) steps[s] = { status: 'complete', updated_at: now };

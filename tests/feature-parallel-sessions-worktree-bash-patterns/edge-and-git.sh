@@ -4,12 +4,13 @@
 # Tags: scope:common
 
 test_heredoc_quoted_tokens() {
+    # #1679 S-1: cat + safe body collapses to "read" via isSafeHeredocOnly gate.
     assert_classify "heredoc <<'EOF' (single-quoted token)" "cat <<'EOF'
 hello
-EOF" "write"
+EOF" "read"
     assert_classify "heredoc <<\"EOF\" (double-quoted token)" 'cat <<"EOF"
 hello
-EOF' "write"
+EOF' "read"
 }
 
 test_fd_redirect_documented_fp() {

@@ -16,7 +16,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { peekTurnMarkers } = require("./lib/turn-marker");
-const { resolveSessionId } = require("./lib/workflow-state");
+const { resolveSessionId } = require("./workflow-state");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
 const { loadDefaultEnv } = require("./lib/load-env");
 const { isVsCode, shouldOpenInVsCode, toVsCodeFileUri, openInVsCode, resolveWorkspaceFolderUri } = require("./lib/vscode-open");
