@@ -112,3 +112,7 @@ Changes: `/worktree-start` now enters the newly created worktree automatically, 
 ### FEATURE: PR #1650 (2026-07-25)
 Background: fix(#1641): use paths: frontmatter key for conditional rules
 Changes: Conditional `rules/` files are now actually loaded conditionally. They previously declared their scope under a frontmatter key Claude Code does not read, so all of them were injected into every session regardless of which files you were working on.
+
+### FEATURE: PR #1664 (2026-07-28)
+Background: refactor(#1569, #1630): shared quote-span scanner + env-independent AGENTS_CONFIG_DIR anchor
+Changes: enforce-worktree write detection now runs on a single shared quote/expansion-span scanner, so shell quoting forms that one guard understood and another missed behave the same way everywhere; ambiguous or pathologically nested commands resolve to a block instead of slipping through.;Sanctioned finalize-worker commands are no longer falsely blocked when `AGENTS_CONFIG_DIR` is missing or stale in a subagent-spawned hook process.
