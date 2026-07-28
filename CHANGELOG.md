@@ -148,3 +148,7 @@ Changes: Fixed main-worktree write guard incorrectly blocking `eval "$(...)"`, `
 ### FEATURE: PR #1703 (2026-07-29)
 Background: feat(#1701): block HARD file-size limit in workflow-gate.js (Gate 2)
 Changes: Gate 2 in `workflow-gate.js` now blocks commits when any staged code file exceeds 500 lines (HARD limit from `rules/coding/file-split.md`). The check reads the staged index blob so a commit that performs a split passes immediately.
+
+### FEATURE: PR #1702 (2026-07-29)
+Background: fix(#1305,#1681,#1091,#1619,#1648,#1674): Approach B read-time state derivation — veto de-skip, stale-state guard, early-gate security hardening
+Changes: Fixed: new workflow sessions no longer inherit stale state from a prior session that was abandoned before any real work began (#1305);Fixed: workflow sessions with a vetoed speculative plan skip now correctly return to the outline or detail planning step (#1681);Fixed: workflow-gate early tier now fails closed on derivation error instead of treating all steps as complete (#1674)
