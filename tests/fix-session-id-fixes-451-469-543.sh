@@ -1,12 +1,12 @@
 #!/bin/bash
 # tests/fix-session-id-fixes-451-469-543.sh
-# Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-set-single.sh, bin/workflow/workflow-init-driver, hooks/lib/workflow-state/state-io.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
+# Tests: bin/github-issues/wip-state.sh, bin/github-issues/wip-set-single.sh, bin/workflow/workflow-init-driver, hooks/workflow-state/state-io.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: session-id, wip-state, cleanup-zombies
 #
 # RED suite — three combined fixes:
 #   #451 — clarify-intent/workflow-init SKILL.md must mention CLAUDE_SESSION_ID
 #           in the session-id-failure hint text.
-#   #469 — hooks/lib/workflow-state/state-io.js cleanupZombies must also delete
+#   #469 — hooks/workflow-state/state-io.js cleanupZombies must also delete
 #           stale .workflow-off and .worktree-off marker files.
 #   #543 — wip-state.sh / wip-set-single.sh / wip-set-resume.sh /
 #           aggregate-wip-check.sh must accept and propagate a --session-id
@@ -23,7 +23,7 @@ WIP_SET_SINGLE="$AGENTS_DIR/bin/github-issues/wip-set-single.sh"
 WIP_SET_RESUME="$AGENTS_DIR/skills/workflow-init/scripts/wip-set-resume.sh"
 AGG_WIP_CHECK="$AGENTS_DIR/skills/workflow-init/scripts/aggregate-wip-check.sh"
 DRIVER="$AGENTS_DIR/bin/workflow/workflow-init-driver"
-STATE_IO_JS="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
+STATE_IO_JS="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 CLARIFY_SKILL="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
 WI_SKILL="$AGENTS_DIR/skills/workflow-init/SKILL.md"
 

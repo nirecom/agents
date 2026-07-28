@@ -86,7 +86,7 @@ if (require.main === module) {
   let stateEntered = false;
   let stateExited = false;
   try {
-    const { readState } = require("./lib/workflow-state/state-io");
+    const { readState } = require("./workflow-state/state-io");
     const state = readState(input.session_id);
     if (state && typeof state === "object") {
       const enteredAt = state.worktree_entered_at;

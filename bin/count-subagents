@@ -30,7 +30,7 @@ const { parseArgs } = require('util');
 const { normalizeInputPath } = require('./vscode-cc-repair/primitives');
 const { classifySessionFile, SESSION_FILE_PATTERN } = require('./vscode-cc-repair/prune');
 const { scanLines, parseLine, VERIFY_MAX_SCAN } = require('./vscode-cc-repair/prune/verify');
-const { listJsonlByMtimeStrict } = require('../hooks/lib/workflow-state/session-id');
+const { listJsonlByMtimeStrict } = require('../hooks/workflow-state/session-id');
 const { _encodeCwd } = require('../hooks/lib/session-title');
 
 const USAGE = [

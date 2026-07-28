@@ -48,4 +48,4 @@ Invariant: RT-4 emits exactly one of COMPLETE/WARNINGS; never both, never zero (
 Scan scope is limited to files changed in the current PR diff (soft scope). Pre-existing gaps outside the PR diff are excluded.
 To accept documented gaps and unblock /write-code, emit `echo "<<WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED: {reason}>>"`.
 Only critical and high tier gaps block COMPLETE. Medium and low are advisory.
-Worktree resolution is delegated to `bin/resolve-worktree-path` (SSOT: `hooks/lib/workflow-state/resolve-worktree-path.js`); staged file selection is delegated to `scripts/select-staged-files.sh` — do not re-implement inside the skill.
+Worktree resolution is delegated to `bin/resolve-worktree-path` (SSOT: `hooks/workflow-state/resolve-worktree-path.js`); staged file selection is delegated to `scripts/select-staged-files.sh` — do not re-implement inside the skill.

@@ -39,7 +39,7 @@ Each step object may carry an optional `started_at` (ISO-8601 UTC), written only
 `WORKFLOW_RESET_FROM_*` regenerates ahead of its target, `started_at` equals `updated_at`.
 That equality means zero measured elapsed time, which a directly-recorded `complete` or
 `skipped` step also produces — it does not identify a reset on its own. Rule SSOT:
-`hooks/lib/workflow-state/step-timestamps.js`.
+`hooks/workflow-state/step-timestamps.js`.
 
 ### `plan_approvals` (approval-gated steps)
 
@@ -63,7 +63,7 @@ That equality means zero measured elapsed time, which a directly-recorded `compl
 Neither step may be persisted `complete` without a valid record. On-disk evidence
 (`hasCompletionEvidence`) is necessary but never sufficient: it cannot distinguish
 "review not started" from "review finished, user has not approved". Authority lives in
-`hooks/lib/workflow-state/completion-approval.js` and is enforced at the `writeState`
+`hooks/workflow-state/completion-approval.js` and is enforced at the `writeState`
 boundary, so every caller — hooks, `next-step`, `reconcile-state` — is gated identically.
 
 `source` is a closed set (`SANCTIONED_SOURCES`); an unknown token throws rather than
@@ -89,7 +89,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 
 ## Steps and owners
 
-The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io/core.js` (re-exported by the `state-io.js` barrel). `bin/workflow/next-step --list` renders it with status markers.
+The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core.js` (re-exported by the `state-io.js` barrel). `bin/workflow/next-step --list` renders it with status markers.
 
 | Step | How completed |
 |---|---|
@@ -213,7 +213,7 @@ recent session_id in any given JSONL file.
 
 Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
 no such channel. They all resolve through one canonical implementation:
-`hooks/lib/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
+`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
 `CLAUDE_CODE_SESSION_ID` → `CLAUDE_ENV_FILE` → `CLAUDE_SESSION_ID` → `ctx.transcriptPath` →
 `WORKTREE_NOTES.md` → JSONL mtime scan (gated by an `isSameGitRepo` cross-repo guard). Bash
 callers reach it via the `bin/resolve-session-id` bridge (stdout = sid, exit 2 when
@@ -244,7 +244,7 @@ node bin/workflow/next-step --session $CLAUDE_SESSION_ID
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
 
-At the `outline` and `detail` steps only, next-step first checks for an authoritative recorded-verdict skip (#1286): when the orchestrator has recorded a valid `skip_judgment` for the step (`judgment_source` = `orchestrator`, all conditions met), next-step marks the step `skipped` directly and advances — no advisory line, no user-emitted sentinel. The record is written by `bin/workflow/record-skip-judgment` and validated by `hooks/lib/workflow-state/skip-signal-resolver.js` (`hasValidSkipJudgment`). If `markStep` fails to persist the skip, next-step falls through to normal step handling instead of re-entering the skip branch — this guards against unbounded recursion when the mark cannot be written.
+At the `outline` and `detail` steps only, next-step first checks for an authoritative recorded-verdict skip (#1286): when the orchestrator has recorded a valid `skip_judgment` for the step (`judgment_source` = `orchestrator`, all conditions met), next-step marks the step `skipped` directly and advances — no advisory line, no user-emitted sentinel. The record is written by `bin/workflow/record-skip-judgment` and validated by `hooks/workflow-state/skip-signal-resolver.js` (`hasValidSkipJudgment`). If `markStep` fails to persist the skip, next-step falls through to normal step handling instead of re-entering the skip branch — this guards against unbounded recursion when the mark cannot be written.
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 

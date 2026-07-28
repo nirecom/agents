@@ -14,7 +14,7 @@ const {
   ISSUE_CLOSE_VERIFIED_RE_DQ, ISSUE_CLOSE_VERIFIED_LOOKSLIKE_RE,
   ISSUE_CLOSE_VERIFIED_END_RE_DQ, ISSUE_CLOSE_VERIFIED_END_LOOKSLIKE_RE,
 } = require("../lib/sentinel-patterns");
-const { getWorkflowDir } = require("../lib/workflow-state");
+const { getWorkflowDir } = require("../workflow-state");
 const { consumeOffClearance, handleEmergencyOff } = require("./enforce-override-handlers/off-clearance");
 const { handleNextStepPause } = require("./enforce-override-handlers/next-step-pause");
 
@@ -257,8 +257,8 @@ function handle(ctx) {
     // Surface a self-repair hint rather than letting the gate hard-block.
     // fail-open: any error here is ignored.
     try {
-      const { readState } = require("../lib/workflow-state");
-      const { hasCompletionEvidence } = require("../lib/workflow-state/evidence-resolver");
+      const { readState } = require("../workflow-state");
+      const { hasCompletionEvidence } = require("../workflow-state/evidence-resolver");
       const state = readState(sessionId);
       if (state && state.steps) {
         let repoDir = process.env.CLAUDE_PROJECT_DIR || null;

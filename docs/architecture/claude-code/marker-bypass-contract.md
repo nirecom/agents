@@ -45,7 +45,7 @@ not by this module.
 
 ## Session-ID resolution
 
-All hooks resolve the session ID via `hooks/lib/workflow-state.js#resolveSessionId()`.
+All hooks resolve the session ID via `hooks/workflow-state.js#resolveSessionId()`.
 See that module for the full priority chain. The git hook context is notable:
 
 - `CLAUDE_ENV_FILE` is propagated by Claude Code to its own process but may or may not

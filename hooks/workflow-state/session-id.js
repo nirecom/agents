@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
-const { isSameGitRepo } = require("../git-common-dir");
+const { isSameGitRepo } = require("../lib/git-common-dir");
 
 /**
  * The one enumeration of a transcript directory, reporting what could NOT be observed

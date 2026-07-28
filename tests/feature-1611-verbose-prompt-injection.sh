@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-1611-verbose-prompt-injection.sh
-# Tests: hooks/lib/model-identity.js, hooks/lib/verbose-prompt.js, hooks/lib/workflow-state/state-io.js, hooks/session-start.js, hooks/post-compact.js
+# Tests: hooks/lib/model-identity.js, hooks/lib/verbose-prompt.js, hooks/workflow-state/state-io.js, hooks/session-start.js, hooks/post-compact.js
 # Tags: hook, model-detection, session-state, prompt-injection, scope:issue-specific, TL2
 #
 # Issue #1611 — model-conditional prompt hardening.
@@ -25,7 +25,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 MODEL_IDENTITY_JS="$REPO_DIR/hooks/lib/model-identity.js"
 VERBOSE_PROMPT_JS="$REPO_DIR/hooks/lib/verbose-prompt.js"
-STATE_IO_JS="$REPO_DIR/hooks/lib/workflow-state/state-io.js"
+STATE_IO_JS="$REPO_DIR/hooks/workflow-state/state-io.js"
 SESSION_START_JS="$REPO_DIR/hooks/session-start.js"
 POST_COMPACT_JS="$REPO_DIR/hooks/post-compact.js"
 

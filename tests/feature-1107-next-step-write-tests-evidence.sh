@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (next-step not yet evidence-aware)"; exit 0; }
+[ -f "hooks/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (next-step not yet evidence-aware)"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"

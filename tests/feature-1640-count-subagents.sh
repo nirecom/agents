@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # tests/feature-1640-count-subagents.sh
-# Tests: bin/count-subagents, hooks/lib/workflow-state/session-id.js, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
+# Tests: bin/count-subagents, hooks/workflow-state/session-id.js, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
 # Tags: measurement, subagent-count, session-transcript, enumeration-failure, stub-classifier, scope:issue-specific, pwsh-not-required, TL2
 #
 # (b) of #1640. `bin/count-subagents` aggregates `input.subagent_type` occurrences out of
 # Claude Code session transcripts, plus the C3 half of the plan: an enumeration failure
 # must never be reported as "0 invocations". `listJsonlByMtimeStrict()` is the new
 # failure-reporting view of the enumerator; `_listJsonlByMtime()` must keep its old
-# swallow-everything semantics so hooks/lib/workflow-state/state-io.js does not change
+# swallow-everything semantics so hooks/workflow-state/state-io.js does not change
 # behaviour.
 #
 # ISOLATION CONTRACT (mirrors tests/bin-vscode-cc-repair-prune.sh). The tool reads the
@@ -261,7 +261,7 @@ R11_SLUG="$(native_path "$R11/slug-one")"
 # UUID-shaped .jsonl symlink could pull a path from outside the transcript directory into
 # the report. Patched AFTER every require, so the module loader is never affected.
 STRICT_JS='
-const m = require("./hooks/lib/workflow-state/session-id");
+const m = require("./hooks/workflow-state/session-id");
 const fs = require("fs");
 const orig = fs.lstatSync;
 fs.lstatSync = function (p, ...a) {
@@ -278,7 +278,7 @@ assert_eq "C3-b/partial-result" "files=1 errors=1 scope=file" "$NODE_OUT"
 
 echo "== C3-b2: a directory that cannot be read yields a dir-scoped error =="
 STRICT_DIR_JS='
-const m = require("./hooks/lib/workflow-state/session-id");
+const m = require("./hooks/workflow-state/session-id");
 if (typeof m.listJsonlByMtimeStrict !== "function") { console.log("NO-STRICT-EXPORT"); process.exit(0); }
 const r = m.listJsonlByMtimeStrict(process.env.DIR);
 const scopes = (r.errors || []).map((e) => e.scope).join("+");
@@ -319,7 +319,7 @@ fi
 
 echo "== C3-d: _listJsonlByMtime keeps its swallow-everything semantics (state-io.js:185) =="
 LEGACY_JS='
-const m = require("./hooks/lib/workflow-state/session-id");
+const m = require("./hooks/workflow-state/session-id");
 const fs = require("fs");
 const orig = fs.lstatSync;
 fs.lstatSync = function (p, ...a) {
@@ -344,7 +344,7 @@ assert_eq "C3-d/dir-failure-empty" "[]" "$NODE_OUT"
 NODE_RC=0
 NODE_OUT="$(cd "$AGENTS_DIR" && HOME="$ISO_HOME" USERPROFILE="$ISO_HOME_NATIVE" \
     DIR="$R11_SLUG" BAD_NAME="" run_with_timeout 60 node -e '
-const m = require("./hooks/lib/workflow-state/session-id");
+const m = require("./hooks/workflow-state/session-id");
 console.log(String(m._listJsonlByMtime(process.env.DIR).length));
 ' 2>&1)" || NODE_RC=$?
 assert_eq "C3-d/healthy-path-unchanged" "2" "$NODE_OUT"

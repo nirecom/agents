@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck shell=bash
 # feature-1286 module API cases: recordSkipJudgment / readSkipJudgment /
-# hasValidSkipJudgment in hooks/lib/workflow-state/skip-signal-resolver.js.
+# hasValidSkipJudgment in hooks/workflow-state/skip-signal-resolver.js.
 # Sourced-then-run via the dispatcher; relies on helpers.sh being sourced.
 
 # ---------------------------------------------------------------------------

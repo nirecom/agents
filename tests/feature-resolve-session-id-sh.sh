@@ -1,11 +1,11 @@
 #!/bin/bash
-# Tests: bin/resolve-session-id, hooks/lib/workflow-state/session-id.js, bin/lib/codex-core.sh, bin/lib/gemini-core.sh, bin/github-issues/wip-state/session-id.sh, bin/workflow/workflow-init-driver, bin/issue-close-write-outcome.js
+# Tests: bin/resolve-session-id, hooks/workflow-state/session-id.js, bin/lib/codex-core.sh, bin/lib/gemini-core.sh, bin/github-issues/wip-state/session-id.sh, bin/workflow/workflow-init-driver, bin/issue-close-write-outcome.js
 # Tags: scope:common, pwsh-not-required, session-id, bridge
 # Tests for bin/resolve-session-id (bash bridge) and all callers — Issue #1251.
 #
 # Contract: bash "$AGENTS_CONFIG_DIR/bin/resolve-session-id" → stdout = session id,
 #   rc=0 on success, rc=2 + stderr when unresolvable. Internally delegates to
-#   hooks/lib/workflow-state.resolveSessionId() via node -e.
+#   hooks/workflow-state.resolveSessionId() via node -e.
 #
 # L3 gap (what this test does NOT catch):
 #   - Real ~/.claude/projects JSONL with a live Claude Code session writing to it
@@ -17,7 +17,7 @@
 #   - Windows path separator round-trip through the real node binary on a POSIX host
 #   - wip-set-resume.sh full two-pass flow (label probe + WIP set — needs live gh)
 #   - issue-close-write-outcome.js catch-fallback when AGENTS_CONFIG_DIR is unset
-#     (require of hooks/lib/workflow-state throws → CLAUDE_SESSION_ID env fallback)
+#     (require of hooks/workflow-state throws → CLAUDE_SESSION_ID env fallback)
 # Closest-to-action mitigation: skill-orchestration gate at WORKFLOW_USER_VERIFIED preflight.
 #
 # All tests isolate via CLAUDE_TRANSCRIPT_BASE_DIR and mktemp.

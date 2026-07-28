@@ -12,7 +12,7 @@ const {
   markStep,
   hasCompletionEvidence,
   getSkippableSteps,
-} = require("./lib/workflow-state");
+} = require("./workflow-state");
 
 const { isMergeToProtectedCommand, getProtectedBranches } = require("./lib/merge-detect");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");

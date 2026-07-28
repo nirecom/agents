@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { getConvLangInjection } = require("./lib/conv-lang");
-const { readState } = require("./lib/workflow-state");
+const { readState } = require("./workflow-state");
 
 const WORKFLOW_STEPS = [
   "workflow_init",

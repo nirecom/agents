@@ -11,7 +11,7 @@ function markReviewTestsComplete(sessionId, token, extraFields = {}) {
   if (typeof token !== "string" || token.length === 0) {
     throw new Error("markReviewTestsComplete: token must be a non-empty string");
   }
-  const { resolveWorkflowSessionId } = require("../../resolve-workflow-session-id");
+  const { resolveWorkflowSessionId } = require("../../lib/resolve-workflow-session-id");
   let wsid = null;
   try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
   markStep(sessionId, "review_tests", "complete", { token, ...extraFields, wsid });
@@ -43,7 +43,7 @@ function clearReviewTestsWarnings(sessionId, reason) {
 function clearReviewTestsTerminalMarker(sessionId) {
   try {
     assertValidSessionId(sessionId);
-    const { getWorkflowPlansDir } = require("../../workflow-plans-dir");
+    const { getWorkflowPlansDir } = require("../../lib/workflow-plans-dir");
     const markerPath = path.join(
       getWorkflowPlansDir(),
       `${sessionId}-test-review-terminal.txt`

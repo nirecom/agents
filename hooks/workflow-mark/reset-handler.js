@@ -4,15 +4,15 @@
 
 const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
-const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow-state");
+const { VALID_STEPS, createInitialState, writeState } = require("../workflow-state");
 const {
   recordStepTimestampsEnabled,
   applyStartedAt,
-} = require("../lib/workflow-state/step-timestamps");
+} = require("../workflow-state/step-timestamps");
 const {
   APPROVAL_GATED_STEPS,
   buildAuditApproval,
-} = require("../lib/workflow-state/completion-approval");
+} = require("../workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;

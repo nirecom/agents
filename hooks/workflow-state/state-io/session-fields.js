@@ -54,8 +54,8 @@ function recordSessionModel(sessionId, descriptor) {
 
   let verbosePrompt = false;
   try {
-    require("../../load-env").loadDefaultEnv();
-    const { matchKeyword, parseKeywordList } = require("../../model-match");
+    require("../../lib/load-env").loadDefaultEnv();
+    const { matchKeyword, parseKeywordList } = require("../../lib/model-match");
     verbosePrompt =
       matchKeyword(modelId, parseKeywordList(process.env.VERBOSE_PROMPT_MODELS)) !== null;
   } catch (_) {

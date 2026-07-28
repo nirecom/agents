@@ -33,7 +33,7 @@ fi
 HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
 WRITER_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-writer.js"
 SCHEMA_NODE="$_AGENTS_DIR_NODE/hooks/lib/supervisor-state-schema.js"
-WFSTATE_NODE="$_AGENTS_DIR_NODE/hooks/lib/workflow-state.js"
+WFSTATE_NODE="$_AGENTS_DIR_NODE/hooks/workflow-state.js"
 
 PASS=0; FAIL=0; SKIP=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }

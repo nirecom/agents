@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-1640-step-started-at.sh
-# Tests: hooks/lib/workflow-state/step-timestamps.js, hooks/lib/workflow-state/state-io.js, hooks/lib/workflow-state/state-io/core.js, hooks/workflow-mark/reset-handler.js, hooks/workflow-mark/mark-step-handler.js, bin/workflow/next-step
+# Tests: hooks/workflow-state/step-timestamps.js, hooks/workflow-state/state-io.js, hooks/workflow-state/state-io/core.js, hooks/workflow-mark/reset-handler.js, hooks/workflow-mark/mark-step-handler.js, bin/workflow/next-step
 # Tags: measurement, started-at, workflow-state, mark-step, reset-from, toggle, scope:issue-specific, pwsh-not-required, TL2
 #
 # (c) of #1640. With RECORD_STEP_TIMESTAMPS=on, the workflow state file records when each
@@ -92,7 +92,7 @@ nodejs() { # <toggle> <sid> <js>
 
 # Shared JS preamble. `rd()` reads the state file, `raw()` its text, `sleep()` guarantees
 # the ISO-8601 millisecond stamps of two consecutive writes actually differ.
-PRE='const S = require("./hooks/lib/workflow-state/state-io");
+PRE='const S = require("./hooks/workflow-state/state-io");
 const fs = require("fs"), path = require("path");
 const sid = process.env.SID;
 const sp = () => path.join(process.env.CLAUDE_WORKFLOW_DIR, sid + ".json");
@@ -103,13 +103,13 @@ const sleep = (ms) => { const t = Date.now(); while (Date.now() - t < ms) {} };
 
 # #1133 completion-approval gate interaction. `outline` and `detail` are the only steps
 # that cannot be persisted `complete` without a `plan_approvals` record (see
-# hooks/lib/workflow-state/completion-approval.js APPROVAL_GATED_STEPS). started_at is
+# hooks/workflow-state/completion-approval.js APPROVAL_GATED_STEPS). started_at is
 # step-agnostic, so rows that merely need SOME step drive the NON-gated `run_tests`;
 # rows that genuinely need a gated step (D8 class-wide, C1 reset, D12 seeding) prepend
 # APPROVE_GATED_JS below. That helper seeds the same audit record the sanctioned reset
 # path writes — it changes no step status and no timestamp, so every started_at
 # assertion below stays exactly as strong as it was.
-APPROVE_GATED_JS='const CA = require("./hooks/lib/workflow-state/completion-approval");
+APPROVE_GATED_JS='const CA = require("./hooks/workflow-state/completion-approval");
 for (const s of CA.APPROVAL_GATED_STEPS) {
   CA.recordPlanApproval(sid, s, { source: "reset-sentinel", reason: "started_at fixture" });
 }
@@ -117,7 +117,7 @@ for (const s of CA.APPROVAL_GATED_STEPS) {
 
 # C1-c: the whole-class post-condition. mode=on asserts the biconditional over every
 # VALID_STEPS entry; mode=off asserts `started_at` is absent everywhere.
-INV_JS='const S = require("./hooks/lib/workflow-state/state-io");
+INV_JS='const S = require("./hooks/workflow-state/state-io");
 const fs = require("fs"), path = require("path");
 const p = path.join(process.env.CLAUDE_WORKFLOW_DIR, process.env.SID + ".json");
 let st;
@@ -316,7 +316,7 @@ for (const step of S.VALID_STEPS) {
 console.log("steps=" + S.VALID_STEPS.length + " missing=" + (bad.length ? bad.join(",") : "0"));
 '
 STEP_COUNT="$(cd "$AGENTS_DIR" && run_with_timeout 30 node -e \
-    'console.log(require("./hooks/lib/workflow-state/state-io").VALID_STEPS.length)' 2>&1)" || STEP_COUNT="?"
+    'console.log(require("./hooks/workflow-state/state-io").VALID_STEPS.length)' 2>&1)" || STEP_COUNT="?"
 assert_eq "D8/all-steps-stamped" "steps=$STEP_COUNT missing=0" "$NODE_OUT"
 check_invariant "D8" "$SID" on
 

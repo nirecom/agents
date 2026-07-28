@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state.js, hooks/session-start.js
+# Tests: hooks/workflow-state.js, hooks/session-start.js
 # Tags: workflow, hook, bin, windows, wsl
 # TDD tests for findLatestStateForContext / session-start.js inheritance logic
 # Features NOT YET IMPLEMENTED — some tests are expected to FAIL (labeled "Expected FAIL").
@@ -7,7 +7,7 @@ set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SESSION_START="$DOTFILES_DIR/claude-global/hooks/session-start.js"
-WORKFLOW_STATE_LIB="$DOTFILES_DIR/claude-global/hooks/lib/workflow-state.js"
+WORKFLOW_STATE_LIB="$DOTFILES_DIR/claude-global/hooks/workflow-state.js"
 ERRORS=0
 
 fail() { echo "FAIL: $1"; ERRORS=$((ERRORS + 1)); }
