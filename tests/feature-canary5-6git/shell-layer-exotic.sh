@@ -53,6 +53,10 @@ EX.10 find -execdir git commit^find . -execdir git commit \;^true
 EX.11 find -exec sh -c 'rm f' (nested interpreter)^find . -exec sh -c 'rm f' \;^true
 EX.12 xargs -n1 tee out (write target)^echo x | xargs -n1 tee out^true
 EX.13 eval with redirect write^eval "echo x > out"^true
+FC1679-C eval "$(bash /tmp/x.sh)" (non-allowlisted interpreter)^eval "$(bash /tmp/x.sh)"^true
+FC1679-D eval "$(python3 gen.py)" (arbitrary generator)^eval "$(python3 gen.py)"^true
+FC1679-D2 eval "$(node -e ...writeFileSync)" (inline write)^eval "$(node -e 'require("fs").writeFileSync("x","y")')"^true
+FC1679-D5 eval "$(/opt/tool/gen.sh)" (arbitrary executable)^eval "$(/opt/tool/gen.sh)"^true
 BYPASS_TABLE
 
 # ---------------------------------------------------------------------------
@@ -73,6 +77,9 @@ XR.6 find -type f -exec cat (read action)^find . -type f -exec cat {} \;^false
 XR.7 bare find^find .^false
 XR.8 command substitution read (not exotic here)^x=$(git log)^false
 XR.9 process-sub reads (handled elsewhere, not exotic)^diff <(git show a) <(git show b)^false
+FP1679-J eval "$(ssh-agent -s)" (shell-init idiom)^eval "$(ssh-agent -s)"^false
+FP1679-K eval "$(fnm env --use-on-cd)" (shell-init idiom)^eval "$(fnm env --use-on-cd)"^false
+FP1679-K2 eval "$(direnv hook bash)" (shell-init idiom)^eval "$(direnv hook bash)"^false
 READ_TABLE
 
 # ---------------------------------------------------------------------------
