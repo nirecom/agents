@@ -1,33 +1,39 @@
 // The prune pass: find title-only stub session files under ~/.claude/projects and
-// delete only those whose entire content is provably already carried by a surviving
+// displace only those whose entire content is provably already carried by a surviving
 // real copy of the same session.
 //
-// The pass is split in two on purpose. planPruneRoots() only READS — it walks the
-// roots, classifies, and decides what a deletion would have to be justified by.
-// executePrunePlan() is the only function in this repository that destroys a session
-// file, and it re-establishes every fact the plan rested on immediately beforehand:
-// the tree is live (Claude Code writes to these files while this tool runs), so a
-// decision made during the walk is a decision made about a past state of the disk.
+// The pass is split in two on purpose. This file only READS — it walks the roots,
+// classifies, and decides what a deletion would have to be justified by. prune/execute.js
+// holds the acting half, and it re-establishes every fact the plan rested on immediately
+// beforehand: the tree is live (Claude Code writes to these files while this tool runs),
+// so a decision made during the walk is a decision made about a past state of the disk.
 //
-// No backups are taken. The safety of that tradeoff rests entirely on the two
-// verifications below being correct, which is why the re-verification is not optional
-// and why a stub with no real counterpart is never deleted under any circumstance.
+// The stub is displaced to `<uuid>.jsonl.bak` rather than destroyed, so a wrong decision
+// is an inconvenience rather than data loss — but that is a backstop, not a licence: a
+// stub with no real counterpart is still never touched under any circumstance.
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const { normalizeInputPath, pathKey, realPathKey, isDirectory } = require('./primitives');
+const {
+  normalizeInputPath,
+  caseFoldPath,
+  pathKey,
+  realPathKey,
+  isDirectory,
+} = require('./primitives');
 const {
   TITLE_RECORD_TYPE,
   VERIFY_MAX_SCAN,
   scanLines,
   parseLine,
   titleKey,
-  isKnownTitleRecord,
+  isOwnTitleRecord,
   isMatchingContentRecord,
   verifyCounterpart,
 } = require('./prune/verify');
+const { executePrunePlan } = require('./prune/execute');
 
 // Home-relative, no platform branch — the same as the patch path's CANDIDATE_ROOTS.
 const DEFAULT_PROJECTS_ROOTS = [['.claude', 'projects']];
@@ -143,7 +149,10 @@ function classifySessionFile(file) {
       }
       if (record.type === TITLE_RECORD_TYPE) {
         counts.titles += 1;
-        if (isKnownTitleRecord(record)) titleKeys.add(titleKey(record));
+        // Ownership is part of the predicate: a title naming ANOTHER session is
+        // information this file has no business carrying and no counterpart can be shown
+        // to hold, exactly like the foreign content record handled below.
+        if (isOwnTitleRecord(record, sessionId)) titleKeys.add(titleKey(record));
         else other += 1;
         return true;
       }
@@ -241,20 +250,6 @@ function planFailureState(result) {
   return { state: 'kept', reason: result.reason };
 }
 
-// The same mapping at EXECUTE time, where the counterpart DID verify during planning.
-// A failure now means the file moved under us: that is a race correctly detected and
-// refused, which is a decision reached (exit 0), not a fault. EACCES is the exception —
-// it means the copy could not be observed at all, which no re-run can be assumed to fix.
-function executeFailureState(result) {
-  if (result.reason === 'unreadable' && result.code !== 'ENOENT') {
-    return { state: 'unreadable', reason: result.code, scope: 'counterpart' };
-  }
-  if (result.reason === 'verify-truncated') {
-    return { state: 'unclassified', reason: 'verify-truncated' };
-  }
-  return { state: 'changed', reason: 'counterpart-changed' };
-}
-
 function heavier(a, b) {
   if (a === null) return b;
   return (SEVERITY[b.state] || 0) > (SEVERITY[a.state] || 0) ? b : a;
@@ -262,16 +257,6 @@ function heavier(a, b) {
 
 function sessionIdOf(file) {
   return path.basename(String(file)).replace(/\.jsonl$/i, '');
-}
-
-function sameKeys(a, b) {
-  const left = new Set(a || []);
-  const right = new Set(b || []);
-  if (left.size !== right.size) return false;
-  for (const key of left) {
-    if (!right.has(key)) return false;
-  }
-  return true;
 }
 
 // Walks every root, classifies each duplicated basename group, and resolves each prune
@@ -303,7 +288,11 @@ function planPruneRoots(options) {
 
   const groups = new Map();
   for (const entry of entries) {
-    const name = path.basename(entry.file).toLowerCase();
+    // The platform's case rule, not an unconditional fold: on a case-sensitive filesystem
+    // two case variants are two different session files carrying two different session
+    // ids, and fusing them into one group would let one authorise the other's deletion
+    // while every sessionId comparison downstream still calls them different sessions.
+    const name = caseFoldPath(path.basename(entry.file));
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(entry);
   }
@@ -332,12 +321,12 @@ function planPruneRoots(options) {
 
 // Picks the counterpart that justifies deleting this stub, trying every candidate in
 // turn: the first refusal is not the end of the search, because a group may hold both a
-// copy that never carried this title and one that did.
+// copy that never received this session's transcript and one that did.
 function resolveCandidate(decision) {
   const sessionId = sessionIdOf(decision.file);
   let worst = null;
   for (const counterpart of decision.counterparts) {
-    const result = verifyCounterpart(counterpart.file, decision.titleKeys, sessionId);
+    const result = verifyCounterpart(counterpart.file, sessionId);
     if (result.ok) {
       decision.via = counterpart;
       return;
@@ -350,113 +339,6 @@ function resolveCandidate(decision) {
   decision.action = failure.state === 'kept' ? 'keep' : failure.state;
   decision.reason = failure.reason;
   if (failure.scope) decision.scope = failure.scope;
-}
-
-function zeroTally() {
-  return {
-    pruned: 0,
-    wouldPrune: 0,
-    kept: 0,
-    changed: 0,
-    unreadable: 0,
-    unclassified: 0,
-    failed: 0,
-  };
-}
-
-const TALLY_KEY = {
-  pruned: 'pruned',
-  'would-prune': 'wouldPrune',
-  kept: 'kept',
-  changed: 'changed',
-  unreadable: 'unreadable',
-  unclassified: 'unclassified',
-  failed: 'failed',
-};
-
-// The only place in this repository where a session file is destroyed.
-//
-// Every deletion is preceded, in this function and immediately before the syscall, by
-// BOTH halves of the original decision being re-established against the live disk:
-// the stub must still be a stub carrying exactly the titles it was judged on (I4), and
-// the counterpart must still cover them (I3). Anything else aborts the deletion — a
-// refused race is reported as `changed` and costs nothing, while a wrong deletion is
-// unrecoverable because no backup is taken.
-function executePrunePlan(options) {
-  const opts = options || {};
-  const plan = Array.isArray(opts.plan) ? opts.plan : [];
-  const dryRun = opts.dryRun === true;
-  const onEntry = typeof opts.onEntry === 'function' ? opts.onEntry : () => {};
-  const tally = zeroTally();
-
-  for (const decision of plan) {
-    const outcome = decision.action === 'prune-candidate'
-      ? prunable(decision, dryRun)
-      : {
-        state: decision.action === 'keep' ? 'kept' : decision.action,
-        reason: decision.reason,
-        scope: decision.scope,
-      };
-
-    const key = TALLY_KEY[outcome.state];
-    if (key) tally[key] += 1;
-    onEntry({
-      file: decision.file,
-      root: decision.root,
-      state: outcome.state,
-      reason: outcome.reason,
-      scope: outcome.scope,
-      via: outcome.via,
-      realCopies: decision.realCopies,
-    });
-  }
-
-  return tally;
-}
-
-// Re-verifies one prune candidate and, unless this is a rehearsal, deletes it.
-function prunable(decision, dryRun) {
-  const sessionId = sessionIdOf(decision.file);
-  const viaFile = decision.via ? decision.via.file : null;
-  const viaRelative = decision.via
-    ? path.relative(decision.via.root, decision.via.file)
-    : null;
-
-  // I4 — the stub itself. A title-only file gaining a real message is exactly how a
-  // stub stops being a stub, and it is what Claude Code does to these files all day.
-  // The check re-reads the titles rather than comparing size and mtime: a replacement
-  // title of the same length with a restored mtime would otherwise pass.
-  const fresh = classifySessionFile(decision.file);
-  if (fresh.verdict === 'unreadable') {
-    if (fresh.reason === 'ENOENT') return { state: 'changed', reason: 'stub-changed' };
-    return { state: 'unreadable', reason: fresh.reason, scope: 'self' };
-  }
-  if (fresh.verdict === 'unclassified') {
-    return { state: 'unclassified', reason: 'classify-truncated' };
-  }
-  if (fresh.verdict !== 'stub' || !sameKeys(fresh.titleKeys, decision.titleKeys)) {
-    return { state: 'changed', reason: 'stub-changed' };
-  }
-
-  // Re-asserts the basename boundary listSessionFiles applies at discovery time.
-  // executePrunePlan is a public export — a caller-supplied plan must not be able to
-  // reach the syscall below for a file outside SESSION_FILE_PATTERN.
-  if (!SESSION_FILE_PATTERN.test(path.basename(decision.file))) {
-    return { state: 'failed', reason: 'not-a-session-file' };
-  }
-
-  // I3 — the counterpart, re-proven against the live file rather than against the plan.
-  const result = verifyCounterpart(viaFile, fresh.titleKeys, sessionId);
-  if (!result.ok) return executeFailureState(result);
-
-  if (dryRun) return { state: 'would-prune', via: viaRelative };
-
-  try {
-    fs.unlinkSync(decision.file);
-  } catch (error) {
-    return { state: 'failed', reason: error.code || 'EIO' };
-  }
-  return { state: 'pruned', via: viaRelative };
 }
 
 // Pure composition of the read-only planner and the executor. It deliberately holds no
@@ -489,7 +371,11 @@ module.exports = {
   classifySessionFile,
   planPrune,
   planPruneRoots,
-  executePrunePlan,
   pruneRoots,
+  sessionIdOf,
   verifyCounterpart,
+  isOwnTitleRecord,
+  // The acting half. Re-exported so the split is invisible from outside: the public
+  // surface is the module boundary, and it did not move.
+  executePrunePlan,
 };

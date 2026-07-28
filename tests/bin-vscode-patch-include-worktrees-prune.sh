@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/bin-vscode-patch-include-worktrees-prune.sh
-# Tests: bin/vscode-patch-include-worktrees, bin/lib/vscode-patch-include-worktrees/prune.js, bin/lib/vscode-patch-include-worktrees/prune/verify.js, bin/lib/vscode-patch-include-worktrees/cli.js
+# Tests: bin/vscode-patch-include-worktrees, bin/lib/vscode-patch-include-worktrees/prune.js, bin/lib/vscode-patch-include-worktrees/prune/verify.js, bin/lib/vscode-patch-include-worktrees/prune/execute.js, bin/lib/vscode-patch-include-worktrees/cli.js, bin/lib/vscode-patch-include-worktrees/patch/apply.js
 # Tags: bin, vscode, prune, session-files, scope:common, pwsh-not-required, TL2
 #
 # The `--prune-stub-sessions` path: scan ~/.claude/projects for title-only stub
@@ -58,6 +58,14 @@ command -v node >/dev/null 2>&1 || { echo "SKIP: node not available"; exit 77; }
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$AGENTS_DIR/bin/vscode-patch-include-worktrees"
 REQUIRE_PATH="./bin/vscode-patch-include-worktrees"
+# The record-grammar module, required directly: the shape predicates are the SSOT both
+# the classifier and the verifier read a line with, and a rename that left the old
+# shape-only spelling exported would be invisible from the entrypoint.
+VERIFY_REQUIRE="./bin/lib/vscode-patch-include-worktrees/prune/verify"
+PRUNE_REQUIRE="./bin/lib/vscode-patch-include-worktrees/prune"
+# The acting half, required directly: isCounterpartPath and TALLY_KEY are the two guards a
+# forged plan meets, and neither is observable through the entrypoint's report alone.
+EXECUTE_REQUIRE="./bin/lib/vscode-patch-include-worktrees/prune/execute"
 LIB_DIR="$AGENTS_DIR/bin/lib/vscode-patch-include-worktrees"
 LIB_REL="bin/lib/vscode-patch-include-worktrees"
 PARTS_DIR="$AGENTS_DIR/tests/bin-vscode-patch-include-worktrees-prune"
@@ -209,6 +217,12 @@ make_file_alias() { # <link> <target>
 SID_A='11111111-2222-3333-4444-555555555555'
 SID_B='66666666-7777-8888-9999-aaaaaaaaaaaa'
 SID_C='bbbbbbbb-cccc-dddd-eeee-ffffffffffff'
+# SESSION_FILE_PATTERN is case-insensitive and the duplicate-basename grouping key is
+# lowercased, while the session id itself is compared with `===`. A copy named in the
+# other case therefore lands in the SAME group while carrying a DIFFERENT session id —
+# which is the one construction that yields a counterpart classified `real` (for its own
+# id) that still REFUSES to verify for the id under test. See planner-verify.sh C10.
+SID_C_UPPER='BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF'
 
 # A distinctive title string used only by the privacy pin: it must never reach
 # stdout or stderr, because the report is expected to carry counts, not titles.
@@ -225,9 +239,33 @@ title_line_extra() { # <sessionId> <customTitle>
 ai_title_line() { # <sessionId> <title>
   printf '{"type":"ai-title","sessionId":"%s","aiTitle":"%s"}\n' "$1" "$2"
 }
+# A content record carries a PAYLOAD, and every content type names the field that holds
+# it: `message` (a non-null, non-array object) for user/assistant, `summary` (a non-empty
+# string) for summary. A record of a content type without that field is a shell, not a
+# transcript. No `summary`-typed record exists anywhere in the real local session store,
+# so this helper is the only specification of its shape — kept minimal on purpose.
 content_line() { # <sessionId> [type]
-  printf '{"type":"%s","sessionId":"%s","message":{"role":"user","content":"hello"}}\n' \
-    "${2:-user}" "$1"
+  case "${2:-user}" in
+    summary)
+      printf '{"type":"summary","sessionId":"%s","summary":"a recap of the session"}\n' "$1" ;;
+    *)
+      printf '{"type":"%s","sessionId":"%s","message":{"role":"user","content":"hello"}}\n' \
+        "${2:-user}" "$1" ;;
+  esac
+}
+# The 60-byte forgery: a content TYPE and a matching sessionId, and nothing else. One such
+# line anywhere authorises an unrecoverable delete unless the payload rule is enforced.
+content_line_shell() { # <sessionId> [type]
+  printf '{"type":"%s","sessionId":"%s"}\n' "${2:-user}" "$1"
+}
+# Splices an arbitrary JSON value into the payload slot the type names. Used for BOTH
+# directions of the payload rule — the rejected shapes and the sanctioned ones — so the
+# allow case and the block case cannot drift apart in the fixture itself.
+content_line_payload() { # <sessionId> <type> <json-value>
+  case "$2" in
+    summary) printf '{"type":"summary","sessionId":"%s","summary":%s}\n' "$1" "$3" ;;
+    *)       printf '{"type":"%s","sessionId":"%s","message":%s}\n' "$2" "$1" "$3" ;;
+  esac
 }
 # A content record with no sessionId at all — the "malformed content line" shape.
 content_line_nosid() { printf '{"type":"user","message":{"role":"user","content":"hi"}}\n'; }
@@ -243,6 +281,14 @@ mk_session() { # <dir> <sid>
   cat > "$1/$2.jsonl"
 }
 session_path() { printf '%s/%s.jsonl' "$1" "$2"; }
+
+# The timestamped rescue copy `<uuid>.jsonl.bak.YYYYMMDD_HHMMSS`, written only when a
+# plain `.bak` is already present. Prints the single match, or nothing when there is
+# none (the caller's check_file then reports the miss). More than one match is itself a
+# bug, so the newest-by-name is printed and the count is assertable via count_files.
+timestamped_backup() { # <dir> <sid>
+  find "$1" -maxdepth 1 -type f -name "$2.jsonl.bak.*" 2>/dev/null | sort | tail -1
+}
 
 # Large fixtures are generated by node, not by a bash loop: the scan-cap tests must
 # land on an EXACT byte boundary (CLASSIFY_MAX_SCAN = 1 MiB), and 8k+ shell-issued
@@ -365,10 +411,27 @@ STDERR_PREFIX='[vscode-patch-include-worktrees] '
 . "$PARTS_DIR/classifier.sh"
 # shellcheck source=./bin-vscode-patch-include-worktrees-prune/planner-verify.sh
 . "$PARTS_DIR/planner-verify.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/counterpart-aggregation.sh
+. "$PARTS_DIR/counterpart-aggregation.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/record-grammar.sh
+. "$PARTS_DIR/record-grammar.sh"
 # shellcheck source=./bin-vscode-patch-include-worktrees-prune/scan.sh
 . "$PARTS_DIR/scan.sh"
 # shellcheck source=./bin-vscode-patch-include-worktrees-prune/lifecycle-race.sh
 . "$PARTS_DIR/lifecycle-race.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/execute-guard.sh
+. "$PARTS_DIR/execute-guard.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/backup-rotation.sh
+. "$PARTS_DIR/backup-rotation.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/plan-identity.sh
+. "$PARTS_DIR/plan-identity.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/plan-containment.sh
+. "$PARTS_DIR/plan-containment.sh"
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/plan-raw-deref.sh
+. "$PARTS_DIR/plan-raw-deref.sh"
+# plan-title-keys.sh reuses the drivers plan-raw-deref.sh defines, so it must follow it.
+# shellcheck source=./bin-vscode-patch-include-worktrees-prune/plan-title-keys.sh
+. "$PARTS_DIR/plan-title-keys.sh"
 # shellcheck source=./bin-vscode-patch-include-worktrees-prune/cli-exit-codes.sh
 . "$PARTS_DIR/cli-exit-codes.sh"
 # shellcheck source=./bin-vscode-patch-include-worktrees-prune/packaging-structural.sh

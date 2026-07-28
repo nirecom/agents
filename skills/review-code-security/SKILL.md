@@ -31,6 +31,7 @@ RCS-1. **Delegate scan to security-scanner** and run quality gates in parallel (
    Output: `## Security Review: PERFORMED|FAILED` (1 line) + artifact_path pointer. Read report only on failure or explicit user request.
 
 RCS-2. **Quality gates** (Bash, parallel with RCS-1): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs review-code-codex + 6 lint gates. Each gate is advisory; non-zero exit is a warning, not a blocker.
+   When the output carries any `## <gate>: NOT FOUND` line, append `(N gates NOT FOUND)` to the `## Security Review:` line so the reader sees the sweep was incomplete.
 
 ## Patterns by Axis
 

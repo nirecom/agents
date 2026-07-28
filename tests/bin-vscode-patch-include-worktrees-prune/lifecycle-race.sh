@@ -1,4 +1,7 @@
 # Part of tests/bin-vscode-patch-include-worktrees-prune.sh (sourced, not standalone).
+# Tests: bin/lib/vscode-patch-include-worktrees/prune.js, bin/lib/vscode-patch-include-worktrees/prune/execute.js
+# Tags: bin, vscode, prune, lifecycle, race, session-files, scope:common, pwsh-not-required, TL2
+#
 # E — the deletion lifecycle, and the I4 re-verification window.
 #
 # Sections A-D reason about files that hold still. This section is about the ones that
@@ -25,7 +28,7 @@ race_fixture() { # sets RACE_ROOT / RACE_STUB / RACE_CP
 }
 
 # E01 — --dry-run must be a genuine rehearsal, not an early return. The `via=` field is
-# the tell: it can only be filled in if verifyCounterpart (I3) actually ran.
+# the tell: it can only be filled in if verifyCounterpart (I2) actually ran.
 run_e_dry_run() {
   local home ext before line
   home="$(new_home)"; ext="$(new_ext_root)"
@@ -127,11 +130,12 @@ console.log('E='+(hit.state||'-')+':'+(hit.reason||'-')+':'+(hit.scope||'-'));"
   fi
 }
 
-# R-1 .. R-5 mutate the COUNTERPART between plan and execute. Each one destroys the
-# evidence the prune decision rested on, so each must abort the unlink. They are
-# separate rows rather than one representative case because they fail differently:
-# emptied, partially rewritten, and replaced-by-another-session all reach the
-# re-verification through different branches.
+# R-1, R-2, R-4 and R-5 mutate the COUNTERPART between plan and execute in ways that
+# destroy the evidence the prune decision rested on, so each must abort the unlink. They
+# are separate rows rather than one representative case because they fail differently:
+# emptied, stripped of its transcript, and replaced-by-another-session all reach the
+# re-verification through different branches. (The counterpart mutation that must NOT
+# abort — losing its title — is R-3, deliberately kept out of this group.)
 run_e_counterpart_races() {
   race_case "R-1 counterpart emptied after planning" \
     "fs.writeFileSync(CP,'');" \
@@ -139,10 +143,6 @@ run_e_counterpart_races() {
 
   race_case "R-2 counterpart's content record removed after planning" \
     "fs.writeFileSync(CP,T(SID,'Alpha'));" \
-    "E=changed:counterpart-changed:-" present
-
-  race_case "R-3 counterpart's custom-title removed after planning" \
-    "fs.writeFileSync(CP,C(SID));" \
     "E=changed:counterpart-changed:-" present
 
   race_case "R-4 counterpart replaced by a different session's transcript" \
@@ -156,6 +156,19 @@ run_e_counterpart_races() {
   race_case "R-5 counterpart deleted after planning" \
     "fs.unlinkSync(CP);" \
     "E=changed:counterpart-changed:-" present
+}
+
+# R-3 — the row that guards the DELIBERATE semantic change of #1655, which is why it sits
+# apart from R-1..R-5 rather than inside the "each one destroys the evidence" group. The
+# counterpart loses its custom-title between plan and execute and keeps only the content
+# record for this session. Nothing the decision rested on has gone: the surviving copy
+# still holds the transcript, so re-verification succeeds and the prune correctly
+# proceeds. If anyone ever re-introduces a title condition — in verifyCounterpart, in the
+# re-verification call site, or as a "safety" extra check — this row goes red immediately.
+run_e_title_no_longer_load_bearing() {
+  race_case "R-3 counterpart's custom-title removed after planning" \
+    "fs.writeFileSync(CP,C(SID));" \
+    "E=pruned:-:-" gone
 }
 
 # SKIPPED (when deny_read cannot prove the denial): R-6 — the counterpart becomes
@@ -218,6 +231,7 @@ run_e_prune
 run_e_keep_not_deleted
 run_e_idempotent
 run_e_counterpart_races
+run_e_title_no_longer_load_bearing
 run_e_unreadable_race
 run_e_stub_races
 run_e_control

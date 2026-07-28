@@ -1,0 +1,26 @@
+# path-exposed-commands.txt
+# Single source of truth (CPR-2) for which bin/ commands get a ~/.local/bin PATH shim.
+#
+# Consumed by BOTH installers, each looping over this file:
+#   install/win/dotfileslink.ps1   -> .cmd launcher + bash shim via Write-Launcher
+#   install/linux/dotfileslink.sh  -> ln -sf symlink
+# A command added here reaches both platforms or neither (CPR-5).
+#
+# Format: one command name per line. Lines starting with `#` are comments;
+#         blank lines are ignored. Names must match a file under bin/.
+#
+# OUT OF SCOPE: the uv-based launchers (doc-append, doc-append-plain,
+# repo-visibility) — they wrap a .py under a different name and generate a
+# different launcher body, so they stay hand-written in each installer.
+
+review-code-codex
+review-plan-codex
+get-config-var
+extract-accepted-tradeoffs
+review-prompt-size
+review-code-size
+review-env-example
+review-step-numbers
+check-inline-procedures
+review-e2e-coverage
+review-bare-python

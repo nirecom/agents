@@ -26,10 +26,19 @@ function normalizeInputPath(raw) {
   return drive[1].toUpperCase() + ':\\' + tail;
 }
 
+// The ONE statement of the platform's case rule: win32 filesystems fold case, POSIX ones
+// do not. Every identity question about a path — root dedup, duplicate-basename grouping,
+// counterpart validation — is expressed through this, so those answers cannot drift apart
+// into a build where two files are "one name" to the grouper and "two sessions" to the
+// verifier. Takes any path fragment, including a bare basename, and never resolves.
+function caseFoldPath(value) {
+  const text = String(value);
+  return process.platform === 'win32' ? text.toLowerCase() : text;
+}
+
 // Comparison key for root/directory dedup. win32 paths are case-insensitive, POSIX are not.
 function pathKey(target) {
-  const resolved = path.normalize(path.resolve(String(target)));
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  return caseFoldPath(path.normalize(path.resolve(String(target))));
 }
 
 function realPathKey(target) {
@@ -50,6 +59,7 @@ module.exports = {
   PREFIX,
   warn,
   normalizeInputPath,
+  caseFoldPath,
   pathKey,
   realPathKey,
   isDirectory,

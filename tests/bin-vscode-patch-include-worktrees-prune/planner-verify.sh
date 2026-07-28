@@ -1,18 +1,22 @@
 # Part of tests/bin-vscode-patch-include-worktrees-prune.sh (sourced, not standalone).
+# Tests: bin/lib/vscode-patch-include-worktrees/prune.js, bin/lib/vscode-patch-include-worktrees/prune/verify.js
+# Tags: bin, vscode, prune, planner, verify, session-files, scope:common, pwsh-not-required, TL2
+#
 # B + C — the two halves of the deletion decision.
 #
 # B: planPrune is a pure function over an already-classified group, so it is driven
 #    table-style with constructed verdict objects. No fixtures, no I/O: the whole
 #    point is that the decision is separable from the reading.
-# C: verifyCounterpart is the I3 (superset) proof and the single reason the "no
-#    backup" tradeoff in intent.md is admissible — a stub may only be deleted once the
-#    counterpart is shown to already carry every one of its titles. It is fixture-based
-#    because "read the counterpart to the very end" is itself part of the contract.
+# C: verifyCounterpart is the I2 (content-record) proof and the single reason the "no
+#    backup" tradeoff in intent.md is admissible — a stub may only be deleted once
+#    ANOTHER file has been shown to carry a real user/assistant/summary record tagged
+#    with the same sessionId. It is fixture-based because the read budget and the
+#    early-stop point are themselves part of the contract.
 #    verifyCounterpart only ever sees ONE counterpart, so the rule for a stub with
-#    several real copies — try them in turn, prune on the first that verifies, and
-#    when they all fail report the HEAVIEST state (observation failure outranks a
-#    decision reached) — belongs to the caller and is exercised through the real
-#    two-phase path (C09-C12).
+#    several real copies — try them in turn and prune on the first that verifies, and
+#    never let an unobserved copy be reported as a decision reached — belongs to the
+#    caller and is exercised through the real two-phase path in counterpart-aggregation.sh
+#    (C08-C12), split out of this file at the 500-line hard limit.
 #
 # Serialization used below: each planPrune decision is rendered
 # `<action>:<reason|->:<counterpart-count>` so one string compares the whole table row.
@@ -74,89 +78,139 @@ console.log("A="+acts[0]);'
 
 # ---- C: verifyCounterpart --------------------------------------------------
 
-# stubTitleKeys is taken from a real classifySessionFile run rather than hand-built,
-# so the two functions are pinned against the SAME key normalization; a drift in the
-# key format would break this call rather than silently pass a mismatched set.
-verify_call() { # <counterpart-file> <stub-file> <sessionId> ; sets NODE_OUT
-  V_CP="$(native_file "$1")" V_STUB="$(native_file "$2")" V_SID="$3" \
+# C is the I2 CONTENT-RECORD proof and nothing else: the counterpart must carry a real
+# `user` / `assistant` / `summary` record tagged with the same sessionId. Title TEXT is
+# deliberately NOT a matching key (#1655). Renaming a session is an everyday act, and
+# the rename is written into whichever project directory the extension considered
+# current at that moment — so two copies of the same transcript routinely disagree about
+# the title while describing the identical session. The old rule (the counterpart must
+# already carry every one of the stub's titles) therefore refused almost every prune a
+# real user could ever want. Nothing here migrates a title and nothing here writes to the
+# counterpart: once the stub is gone the surviving copy simply keeps the title it already
+# had, which is precisely the title the user last set on the copy they were using.
+#
+# What is NOT relaxed: the stub side still re-proves its own titleKeys between plan and
+# unlink (I4, lifecycle-race.sh R-8), and an observation that failed still outranks any
+# decision reached.
+
+# The counterpart file and the sessionId are the WHOLE input. No stub is passed, because
+# the stub's title set is not part of the question any more; C13 pins the arity so a
+# stale three-argument call site cannot quietly slide a sessionId into a removed slot.
+verify_call() { # <counterpart-file> <sessionId> ; sets NODE_OUT
+  V_CP="$(native_file "$1")" V_SID="$2" \
     node_m 'const m=require("'"$REQUIRE_PATH"'");
-const stub=m.classifySessionFile(process.env.V_STUB);
-const r=m.verifyCounterpart(process.env.V_CP, stub.titleKeys, process.env.V_SID);
+const r=m.verifyCounterpart(process.env.V_CP, process.env.V_SID);
 console.log("OK="+(r.ok===true)+" R="+(r.reason||"-"));'
 }
 
 run_c_verify_counterpart() {
-  local sd cd stub cp
+  local sd cd cp
 
-  # C01 — the sanctioned direction: the counterpart carries a content record for this
-  # session AND every one of the stub's titles.
-  sd="$(new_dir)"; cd="$(new_dir)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$sd" "$SID_A"
+  # C01 — the ordinary shape: the counterpart holds a content record for this session
+  # and happens to carry the same title too. The title is incidental; the content
+  # record is the proof.
+  cd="$(new_dir)"
   { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$cd" "$SID_A"
-  stub="$(session_path "$sd" "$SID_A")"; cp="$(session_path "$cd" "$SID_A")"
-  verify_call "$cp" "$stub" "$SID_A"
-  check "C01: counterpart covering every stub title verifies" "OK=true R=-" "$NODE_OUT"
+  cp="$(session_path "$cd" "$SID_A")"
+  verify_call "$cp" "$SID_A"
+  check "C01: a counterpart with a content record for this session verifies" \
+    "OK=true R=-" "$NODE_OUT"
 
-  # C02 — the case the whole superset rule exists for: deleting here would destroy a
-  # title that survives nowhere else.
+  # C02 — THE case #1655 is about: the user renamed the session on one side, so the two
+  # copies disagree about the title while describing the same transcript. That is a
+  # rename, not a loss, and it must not block the prune.
   sd="$(new_dir)"; cd="$(new_dir)"
   { title_line "$SID_A" "Alpha"; } | mk_session "$sd" "$SID_A"
   { content_line "$SID_A"; title_line "$SID_A" "Bravo"; } | mk_session "$cd" "$SID_A"
-  verify_call "$(session_path "$cd" "$SID_A")" "$(session_path "$sd" "$SID_A")" "$SID_A"
-  check "C02: a counterpart without the stub's title is refused" \
-    "OK=false R=title-not-covered" "$NODE_OUT"
+  verify_call "$(session_path "$cd" "$SID_A")" "$SID_A"
+  check "C02: a counterpart carrying a DIFFERENT title still verifies" \
+    "OK=true R=-" "$NODE_OUT"
 
-  # C03 — partial coverage is not coverage.
+  # C03 — the old rule's other refusal shape: the stub accumulated two titles over its
+  # life and the counterpart only ever saw one of them. The stub is still written to disk
+  # here (it is what the situation looks like) but it is deliberately not an input —
+  # that removal IS the change.
   sd="$(new_dir)"; cd="$(new_dir)"
   { title_line "$SID_A" "Alpha"; title_line "$SID_A" "Bravo"; } | mk_session "$sd" "$SID_A"
   { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$cd" "$SID_A"
-  verify_call "$(session_path "$cd" "$SID_A")" "$(session_path "$sd" "$SID_A")" "$SID_A"
-  check "C03: covering one of two stub titles is refused" \
-    "OK=false R=title-not-covered" "$NODE_OUT"
-
-  # C04 — proof that verification reads the counterpart to EOF. classifySessionFile is
-  # allowed to stop early on positive evidence; verifyCounterpart is not, because a
-  # title can legitimately be the last record written.
-  sd="$(new_dir)"; cd="$(new_dir)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$sd" "$SID_A"
-  { content_line "$SID_A"; content_line "$SID_A" assistant; content_line "$SID_A" summary
-    content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$cd" "$SID_A"
-  verify_call "$(session_path "$cd" "$SID_A")" "$(session_path "$sd" "$SID_A")" "$SID_A"
-  check "C04: a matching title on the counterpart's LAST line still verifies" \
+  verify_call "$(session_path "$cd" "$SID_A")" "$SID_A"
+  check "C03: a counterpart carrying only one of the stub's two titles still verifies" \
     "OK=true R=-" "$NODE_OUT"
 
-  # C05 — I2 re-confirmed at verification time: titles alone are not a transcript.
-  sd="$(new_dir)"; cd="$(new_dir)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$sd" "$SID_A"
+  # C03b — the counterpart carries no custom-title record at all. Still fine: after the
+  # stub is deleted the counterpart keeps its own system-assigned default title. The
+  # stub's title is discarded, never migrated — that is the accepted, documented cost.
+  cd="$(new_dir)"
+  { content_line "$SID_A"; content_line "$SID_A" assistant; } | mk_session "$cd" "$SID_A"
+  verify_call "$(session_path "$cd" "$SID_A")" "$SID_A"
+  check "C03b: a counterpart with no custom-title record at all still verifies" \
+    "OK=true R=-" "$NODE_OUT"
+
+  # C05 — I2 itself, unchanged and now carrying the whole weight of the proof: titles
+  # are not a transcript, and a transcript belonging to ANOTHER session is not this
+  # session's transcript.
+  cd="$(new_dir)"
   { title_line "$SID_A" "Alpha"; content_line "$SID_B"; } | mk_session "$cd" "$SID_A"
-  verify_call "$(session_path "$cd" "$SID_A")" "$(session_path "$sd" "$SID_A")" "$SID_A"
+  verify_call "$(session_path "$cd" "$SID_A")" "$SID_A"
   check "C05: a counterpart with no matching content record is refused" \
     "OK=false R=no-content" "$NODE_OUT"
 }
 
-# C06 — VERIFY_MAX_SCAN. The counterpart is deliberately larger than the 64 MiB cap,
-# so full coverage cannot be established: this is an OBSERVATION FAILURE
-# (`unclassified`, exit 1), not a decision to keep. One 64 MiB fixture is written; the
-# cheaper 1 MiB classify cap carries the CLI-level exit-code row (cli-exit-codes.sh).
-run_c_verify_truncated() {
-  local sd cd stub cp
-  sd="$(new_dir)"; cd="$(new_dir)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$sd" "$SID_A"
+# C04 — the early-stop proof, and the replacement for the old "reads to EOF" row. That
+# property existed only because a title could be the last line of the file; with titles
+# out of the question, positive evidence is COMPLETE the moment it is seen, so the read
+# budget stops there. The fixture is deliberately larger than VERIFY_MAX_SCAN with its
+# content record on the FIRST line: a verifier that still had to reach EOF would report
+# verify-truncated here. This is what makes the pass affordable on the multi-megabyte
+# transcripts that dominate a real ~/.claude/projects.
+run_c_verify_early_stop() {
+  local cd cp
+  cd="$(new_dir)"
   mkdir -p "$cd"
   cp="$(session_path "$cd" "$SID_A")"
   gen_big "$cp" "$SID_A" $((VERIFY_MAX_SCAN + 128)) title content none
-  stub="$(session_path "$sd" "$SID_A")"
-  verify_call "$cp" "$stub" "$SID_A"
+  verify_call "$cp" "$SID_A"
+  check "C04: a content record on line 1 verifies even past VERIFY_MAX_SCAN" \
+    "OK=true R=-" "$NODE_OUT"
+  rm -f "$cp"
+}
+
+# C06 / C06b — VERIFY_MAX_SCAN, the fail-closed half of the early stop. A file that was
+# not observed in full cannot support a claim about what it does or does not contain, so
+# truncation is an OBSERVATION FAILURE (`unclassified`, exit 1), never a decision to
+# keep. Both rows put the filler BEFORE any content record (`lead none`): a leading
+# content record would trip the early stop and the cap would never be reached at all,
+# which is exactly the trap the old `lead content` fixture would now fall into.
+run_c_verify_truncated() {
+  local cd cp
+  cd="$(new_dir)"
+  mkdir -p "$cd"
+  cp="$(session_path "$cd" "$SID_A")"
+  gen_big "$cp" "$SID_A" $((VERIFY_MAX_SCAN + 128)) title none none
+  verify_call "$cp" "$SID_A"
   check "C06: a counterpart past VERIFY_MAX_SCAN reports verify-truncated" \
+    "OK=false R=verify-truncated" "$NODE_OUT"
+  rm -f "$cp"
+
+  # C06b — the security row. The ONLY matching content record sits beyond the cap, so
+  # the scanned prefix genuinely proves nothing. The early stop must never be able to
+  # convert "not observed" into "observed": truncation is checked first and
+  # unconditionally, before any content decision, so the answer is a refusal and never
+  # `ok`. Getting this backwards deletes a file on the strength of a record nobody read.
+  cd="$(new_dir)"
+  mkdir -p "$cd"
+  cp="$(session_path "$cd" "$SID_A")"
+  gen_big "$cp" "$SID_A" $((VERIFY_MAX_SCAN + 128)) title none content
+  verify_call "$cp" "$SID_A"
+  check "C06b: a content record beyond the cap is refused, not credited" \
     "OK=false R=verify-truncated" "$NODE_OUT"
   rm -f "$cp"
 }
 
 # C07 — an unreadable counterpart. Same probe-first discipline as classifier.sh A20.
 run_c_verify_unreadable() {
-  local sd cd stub cp
-  sd="$(new_dir)"; cd="$(new_dir)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$sd" "$SID_A"
+  local cd cp
+  cd="$(new_dir)"
   mkdir -p "$cd"
   cp="$(session_path "$cd" "$SID_A")"
   mkdir -p "$cp"
@@ -168,192 +222,27 @@ catch (e) { console.log("P=faulted"); }'
     skip_case "C07 unreadable counterpart (host does not fault on reading a directory)"
     return 0
   fi
-  verify_call "$cp" "$(session_path "$sd" "$SID_A")" "$SID_A"
+  verify_call "$cp" "$SID_A"
   check "C07: an unreadable counterpart reports unreadable" \
     "OK=false R=unreadable" "$NODE_OUT"
 }
 
-# C08 — two real copies, only one of which is a superset. The prune must still happen,
-# and `via=` must name the copy that actually justified it: without that field the
-# report cannot be audited after the fact. Driven end to end so the `via=` formatting
-# (a cli.js responsibility) is covered too. The two counterparts share a basename by
-# definition, so only the directory name distinguishes them in the report.
-run_c_via_selection() {
-  local home ext proj line
-  home="$(new_home)"; ext="$(new_ext_root)"; proj="$(new_proj_root)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$proj/stub" "$SID_A"
-  # viano: a genuine transcript for this session, but it never carried this title.
-  { content_line "$SID_A"; title_line "$SID_A" "Bravo"; } | mk_session "$proj/viano" "$SID_A"
-  # viayes: the only copy that covers the stub's title.
-  { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$proj/viayes" "$SID_A"
-
-  run_cli_prune "$home" "$ext" "$proj" --dry-run
-  check "C08a: exit 0" "0" "$CLI_RC"
-  check_token "C08b: the stub is reported as a would-prune" "would-prune" "$CLI_OUT"
-  line="$(prune_line "would-prune" "$CLI_OUT")"
-  check_contains "C08c: the report names the covering counterpart in via=" "viayes" "$line"
-  check_absent "C08d: the non-covering counterpart is not credited" "viano" "$line"
-  check_file "C08e: --dry-run left the stub in place" "$(session_path "$proj/stub" "$SID_A")"
+# C13 — the call-path guard. The superset parameter is gone from the signature, so the
+# arity is pinned here: a stale three-argument call site left behind in prune.js would
+# otherwise keep working by accident, silently passing the sessionId into the removed
+# slot and `undefined` into the sessionId slot — which reads as "this counterpart has no
+# content record for the session", i.e. it would refuse every prune while looking fine.
+run_c_verify_arity() {
+  node_m 'const m=require("'"$REQUIRE_PATH"'");
+console.log("N="+m.verifyCounterpart.length);'
+  check "C13: verifyCounterpart takes exactly (counterpartFile, sessionId)" "N=2" "$NODE_OUT"
 }
 
-# ---- C2: aggregation across several counterparts ---------------------------
-
-# C08 shows the happy half of the multi-counterpart rule (one copy covers, so the prune
-# happens). C09-C12 cover the half that decides whether a failure is visible at all: if
-# the state reported for the stub were taken from the LAST candidate tried, or from the
-# first decision-reached one, an observation failure would be silently downgraded to
-# `kept` and the run would exit 0 while a file's fate was never actually established.
-
-# Renders the entry describing the stub as `E=<state>:<scope|->`. The two-phase path is
-# driven directly (as in lifecycle-race.sh) because a counterpart that classifies as
-# `real` but cannot be READ at verification time is only reachable by mutating the tree
-# between the two phases — a file that was already unreadable during the scan never
-# becomes a candidate in the first place (planPrune row B06).
-# The reason field is deliberately NOT asserted: the errno for reading a directory is
-# host-dependent (EISDIR / EPERM), while the state and scope are the contract.
-agg_entry() { # <projects-root> [counterpart-file-to-make-unreadable] ; sets NODE_OUT
-  local hostile=""
-  [ -n "${2:-}" ] && hostile="$(native_file "$2")"
-  A_ROOT="$(native_path "$1")" A_HOSTILE="$hostile" \
-    node_m "
-const m=require('$REQUIRE_PATH');
-const fs=require('fs');
-const planned=m.planPruneRoots({roots:[process.env.A_ROOT]});
-const h=process.env.A_HOSTILE;
-if (h) { fs.unlinkSync(h); fs.mkdirSync(h); fs.writeFileSync(h+'/placeholder',''); }
-const seen=[];
-m.executePrunePlan({plan:planned.plan, dryRun:false, onEntry:function(e){seen.push(e);}});
-const hit=seen.filter(function(e){
-  return String(e.file).replace(/\\\\/g,'/').indexOf('/stub/')>=0;
-})[0]||{};
-console.log('E='+(hit.state||'-')+':'+(hit.scope||'-'));"
-}
-
-# Same probe-first discipline as C07: the swap trick above only produces an unreadable
-# counterpart on hosts where reading a directory faults.
-dir_read_faults() {
-  local d
-  d="$(new_dir)/asdir"
-  mkdir -p "$d"
-  : > "$d/placeholder"
-  FIXFILE="$(native_file "$d")" node_m 'const fs=require("fs");
-try { fs.readFileSync(process.env.FIXFILE); console.log("P=readable"); }
-catch (e) { console.log("P=faulted"); }'
-  [ "$NODE_OUT" = "P=faulted" ]
-}
-
-# C09 — two real counterparts, BOTH failing, with different severities: one is merely
-# not a superset (`kept`, decision reached, exit 0) and one cannot be read at all
-# (`unreadable`, observation failed, exit 1). The stub must be reported with the heavier
-# of the two. Reporting `kept` here would claim the file was examined and consciously
-# retained, when in fact one of its two copies was never observed.
-# Control property: without the swap this fixture prunes (cphostile covers the title),
-# so a run that reports `kept` cannot be explained by the fixture being unprunable.
-run_c_all_counterparts_fail() {
-  local root stub
-  if ! dir_read_faults; then
-    skip_case "C09 mixed-severity aggregation (host does not fault on reading a directory)"
-    return 0
-  fi
-  root="$(new_proj_root)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$root/stub" "$SID_A"
-  # cpkept: a genuine transcript that simply never carried this title -> title-not-covered.
-  { content_line "$SID_A"; title_line "$SID_A" "Bravo"; } | mk_session "$root/cpkept" "$SID_A"
-  # cphostile: covers the title at plan time, unreadable by verification time.
-  { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$root/cphostile" "$SID_A"
-  stub="$(session_path "$root/stub" "$SID_A")"
-
-  agg_entry "$root" "$(session_path "$root/cphostile" "$SID_A")"
-  check "C09a: when every counterpart fails, the observation failure outranks the kept" \
-    "E=unreadable:counterpart" "$NODE_OUT"
-  check_file "C09b: nothing is unlinked when no counterpart verifies" "$stub"
-  allow_read "$root"
-}
-
-# C10 / C11 — the candidate search must not stop at the first failure. The two rows are
-# the same situation with the directory names swapped, so whichever order the scan
-# happens to enumerate them in, one of the two rows has the FAILING copy first; a
-# candidate loop that gave up after one refusal fails at least one of them. Run for real
-# (not --dry-run, unlike C08) so the deletion itself is the assertion.
-run_c_candidate_search_continues() {
-  local home ext proj line
-  home="$(new_home)"; ext="$(new_ext_root)"
-
-  # C10 — the non-covering copy sorts first.
-  proj="$(new_proj_root)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$proj/stub" "$SID_A"
-  { content_line "$SID_A"; title_line "$SID_A" "Bravo"; } | mk_session "$proj/cp-a-nocover" "$SID_A"
-  { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$proj/cp-z-cover" "$SID_A"
-  run_cli_prune "$home" "$ext" "$proj"
-  check "C10a: exit 0" "0" "$CLI_RC"
-  check_contains "C10b: the prune still happens past a failing first candidate" \
-    "pruned=1" "$CLI_OUT"
-  check_contains "C10c: the failed candidate is not also reported as a keep" \
-    "kept=0" "$CLI_OUT"
-  line="$(prune_line "pruned" "$CLI_OUT")"
-  check_contains "C10d: via= names the covering copy" "cp-z-cover" "$line"
-  check_absent "C10e: the non-covering copy is not credited" "cp-a-nocover" "$line"
-  check_contains "C10f: the group counts both real copies" "real-copies=2" "$line"
-  check_no_file "C10g: the stub is gone" "$(session_path "$proj/stub" "$SID_A")"
-  check_file "C10h: the covering copy survives" "$(session_path "$proj/cp-z-cover" "$SID_A")"
-  check_file "C10i: the non-covering copy survives" "$(session_path "$proj/cp-a-nocover" "$SID_A")"
-
-  # C11 — the covering copy sorts first: the mirror image, so the pair is order-agnostic.
-  proj="$(new_proj_root)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$proj/stub" "$SID_A"
-  { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$proj/cp-a-cover" "$SID_A"
-  { content_line "$SID_A"; title_line "$SID_A" "Bravo"; } | mk_session "$proj/cp-z-nocover" "$SID_A"
-  run_cli_prune "$home" "$ext" "$proj"
-  check "C11a: exit 0" "0" "$CLI_RC"
-  check_contains "C11b: the prune happens with the covering copy first too" \
-    "pruned=1" "$CLI_OUT"
-  line="$(prune_line "pruned" "$CLI_OUT")"
-  check_contains "C11c: via= names the covering copy" "cp-a-cover" "$line"
-  check_absent "C11d: the non-covering copy is not credited" "cp-z-nocover" "$line"
-  check_no_file "C11e: the stub is gone" "$(session_path "$proj/stub" "$SID_A")"
-  check_file "C11f: the non-covering copy survives" "$(session_path "$proj/cp-z-nocover" "$SID_A")"
-}
-
-# C12 — both counterparts fail as OBSERVATION failures, of the two different kinds:
-# one is past VERIFY_MAX_SCAN (`unclassified`, verify-truncated) and one is unreadable.
-# Detail plan 3.8 ranks observation failure above decision reached but does NOT define
-# an order BETWEEN the two observation-failed states, so the assertion is exactly what
-# the plan promises: the reported state is one of them, never `kept`, and the stub is
-# not deleted. Pinning a winner here would invent a contract the plan does not state.
-run_c_two_observation_failures() {
-  local root stub big got
-  if ! dir_read_faults; then
-    skip_case "C12 two observation failures (host does not fault on reading a directory)"
-    return 0
-  fi
-  root="$(new_proj_root)"
-  { title_line "$SID_A" "Alpha"; } | mk_session "$root/stub" "$SID_A"
-  # cpbig: a leading content record makes it classify as `real` well inside
-  # CLASSIFY_MAX_SCAN, while the body pushes verification past VERIFY_MAX_SCAN.
-  mkdir -p "$root/cpbig"
-  big="$(session_path "$root/cpbig" "$SID_A")"
-  gen_big "$big" "$SID_A" $((VERIFY_MAX_SCAN + 128)) title content none
-  { content_line "$SID_A"; title_line "$SID_A" "Alpha"; } | mk_session "$root/cphostile" "$SID_A"
-  stub="$(session_path "$root/stub" "$SID_A")"
-
-  agg_entry "$root" "$(session_path "$root/cphostile" "$SID_A")"
-  case "$NODE_OUT" in
-    E=unreadable:*|E=unclassified:*) got="observation-failed" ;;
-    *) got="$NODE_OUT" ;;
-  esac
-  check "C12a: two observation failures never collapse into a kept" \
-    "observation-failed" "$got"
-  check_file "C12b: nothing is unlinked when both counterparts are unobservable" "$stub"
-  rm -f "$big"
-  allow_read "$root"
-}
 
 run_b_plan_prune
 run_b_lone_stub_invariant
 run_c_verify_counterpart
+run_c_verify_early_stop
 run_c_verify_truncated
 run_c_verify_unreadable
-run_c_via_selection
-run_c_all_counterparts_fail
-run_c_candidate_search_continues
-run_c_two_observation_failures
+run_c_verify_arity

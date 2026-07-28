@@ -1,8 +1,18 @@
-// I3, the superset proof: a stub may only be deleted once ANOTHER file has been shown
-// to already carry every one of its (sessionId, customTitle) pairs AND to hold a real
-// transcript record for that session. Nothing here deletes, and nothing here decides —
-// it only reports what could be observed, so that the caller can refuse on anything
-// short of a clean `ok`.
+// I2, the content-record proof: a stub may only be deleted once ANOTHER file has been
+// shown to hold a real transcript record tagged with the same sessionId. Deletion needs
+// that positive evidence and nothing less. Nothing here deletes, and nothing here
+// decides — it only reports what could be observed, so that the caller can refuse on
+// anything short of a clean `ok`.
+//
+// Title TEXT is deliberately not a matching key. Titles are renamed by hand, and a
+// rename is appended only to the copy in whichever project directory the extension held
+// to be current at that moment; once work moves into a linked worktree the stub and the
+// real transcript accumulate title records independently, so neither side is ever a
+// superset of the other. Requiring one would refuse nearly every genuine pair.
+//
+// The counterpart is never written to. After the stub is deleted the counterpart's own
+// title stands — its latest `custom-title` if it has one, otherwise the system-assigned
+// default — and titles that existed only on the stub are discarded, not migrated.
 //
 // The record vocabulary lives here rather than in prune.js because both the classifier
 // and the verifier must read a line the exact same way; a drift between the two would
@@ -15,14 +25,26 @@ const { StringDecoder } = require('string_decoder');
 // `custom-title` ALONE. `ai-title` is a deliberate scope exclusion: it is generated
 // rather than authored, so it is neither prunable evidence nor prunable content.
 const TITLE_RECORD_TYPE = 'custom-title';
-const CONTENT_RECORD_TYPES = new Set(['user', 'assistant', 'summary']);
+
+// Every content type names the FIELD that carries its payload, and what that field has
+// to look like. A record of a content type without that field is a shell, not a
+// transcript: `{"type":"user","sessionId":"<uuid>"}` is 60 bytes anyone can write, and
+// treating it as evidence would let it authorise an unrecoverable delete. A Map rather
+// than an object literal so that a record whose `type` is `constructor` or `__proto__`
+// cannot inherit a match from Object.prototype.
+const CONTENT_PAYLOAD = new Map([
+  ['user', (record) => isPayloadObject(record.message)],
+  ['assistant', (record) => isPayloadObject(record.message)],
+  ['summary', (record) => typeof record.summary === 'string' && record.summary !== ''],
+]);
 // A title record carrying anything outside this set holds information whose presence in
 // a counterpart cannot be proven, so it must block the `stub` verdict.
 const KNOWN_TITLE_FIELDS = new Set(['type', 'sessionId', 'customTitle']);
 
-// Verification must read to EOF (a title can legitimately be the last record written),
-// so its budget is far larger than the classifier's. It is still bounded: an unbounded
-// read on a session store measured in gigabytes is a denial of service on the user.
+// A successful verification usually stops at the first matching content record, so this
+// budget bounds the WORST case instead: a large file that is read to EOF because no
+// matching content record is ever found. It is still bounded — an unbounded read on a
+// session store measured in gigabytes is a denial of service on the user.
 const VERIFY_MAX_SCAN = 64 * 1024 * 1024;
 const CHUNK = 64 * 1024;
 
@@ -89,28 +111,43 @@ function titleKey(record) {
   return JSON.stringify([String(record.sessionId), String(record.customTitle)]);
 }
 
-// True when the record is a well-formed custom-title carrying only known fields.
-function isKnownTitleRecord(record) {
+// A message payload: an object, and neither null nor an array. Shape only — an empty
+// object is still a message, because the rule is that the field is a payload slot, not
+// that its contents are interesting.
+function isPayloadObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+// True when the record is a well-formed custom-title carrying only known fields AND
+// naming `sessionId` as its own session. Ownership is folded into the predicate rather
+// than left to the call site: a title for ANOTHER session is information this tool
+// cannot account for, and a signature that could be called without the session id is a
+// signature a call site can forget to check.
+function isOwnTitleRecord(record, sessionId) {
   if (record.type !== TITLE_RECORD_TYPE) return false;
   if (typeof record.sessionId !== 'string' || typeof record.customTitle !== 'string') return false;
+  if (record.sessionId !== sessionId) return false;
   for (const field of Object.keys(record)) {
     if (!KNOWN_TITLE_FIELDS.has(field)) return false;
   }
   return true;
 }
 
+// True only when the record is a transcript record for THIS session: the right type, the
+// right session id, and the payload its type promises.
 function isMatchingContentRecord(record, sessionId) {
-  return CONTENT_RECORD_TYPES.has(record.type) && record.sessionId === sessionId;
+  const carriesPayload = CONTENT_PAYLOAD.get(record.type);
+  if (carriesPayload === undefined) return false;
+  if (record.sessionId !== sessionId) return false;
+  return carriesPayload(record);
 }
 
-// Can `counterpartFile` stand in for a stub whose title keys are `stubTitleKeys`?
-// Returns { ok: true } only when BOTH halves hold: the counterpart carries a content
-// record for this session (I2 — titles alone are not a transcript) and every one of the
-// stub's title keys (I3 — superset). Every other outcome names why, so the caller can
-// tell a decision reached (`title-not-covered`, `no-content`) from an observation that
-// failed (`unreadable`, `verify-truncated`).
-function verifyCounterpart(counterpartFile, stubTitleKeys, sessionId) {
-  const wanted = new Set(stubTitleKeys || []);
+// Can `counterpartFile` stand in for a stub of this session? Returns { ok: true } on the
+// single remaining condition: the counterpart carries a content record for this session
+// (I2 — titles alone are not a transcript). Every other outcome names why, so the caller
+// can tell a decision reached (`no-content`) from an observation that failed
+// (`unreadable`, `verify-truncated`).
+function verifyCounterpart(counterpartFile, sessionId) {
   const sid = String(sessionId);
   let hasContent = false;
   let scan;
@@ -118,12 +155,12 @@ function verifyCounterpart(counterpartFile, stubTitleKeys, sessionId) {
     scan = scanLines(counterpartFile, VERIFY_MAX_SCAN, (line) => {
       const record = parseLine(line);
       if (record === null) return true;
-      if (record.type === TITLE_RECORD_TYPE) {
-        wanted.delete(titleKey(record));
-      } else if (isMatchingContentRecord(record, sid)) {
+      if (isMatchingContentRecord(record, sid)) {
         hasContent = true;
+        // The evidence sought is existential, so it is complete the moment it is seen:
+        // no later line in the file could retract a record already observed.
+        return false;
       }
-      // Never stops early: a title may be the very last line of the file.
       return true;
     });
   } catch (error) {
@@ -134,20 +171,20 @@ function verifyCounterpart(counterpartFile, stubTitleKeys, sessionId) {
   // a claim about what it does or does not contain, however much was seen.
   if (scan.truncated) return { ok: false, reason: 'verify-truncated' };
   if (!hasContent) return { ok: false, reason: 'no-content' };
-  if (wanted.size > 0) return { ok: false, reason: 'title-not-covered' };
   return { ok: true };
 }
 
 module.exports = {
   TITLE_RECORD_TYPE,
-  CONTENT_RECORD_TYPES,
+  CONTENT_PAYLOAD,
   KNOWN_TITLE_FIELDS,
   VERIFY_MAX_SCAN,
   CHUNK,
   scanLines,
   parseLine,
   titleKey,
-  isKnownTitleRecord,
+  isPayloadObject,
+  isOwnTitleRecord,
   isMatchingContentRecord,
   verifyCounterpart,
 };
