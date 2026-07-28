@@ -204,6 +204,12 @@ git worktree list     # verify
 The Bash classifier uses pattern matching and has false positives (e.g. `echo "x > y"`).
 Use `ENFORCE_WORKTREE=off` temporarily, or restructure the command to avoid the matched pattern.
 
+**Worktree sessions missing from the VS Code extension's session list:**
+The `anthropic.claude-code` extension asks for sessions with `includeWorktrees` disabled, so a
+session started from a linked worktree is never listed — and every extension auto-upgrade
+restores that state. Run `bin/vscode-cc-repair` (see README.md), then
+`Developer: Reload Window`.
+
 **`gh pr create` fails — PR already exists:**
 `/worktree-end` is idempotent: it calls `gh pr view` first and reuses an open PR.
 If the PR was closed manually, re-open it on GitHub before running `/worktree-end`.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Agents framework installer for Linux/macOS
 # Usage: ./install.sh [--develop] [--full]
-#   --develop : also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
+#   --develop : also install Codex CLI
 
 set -euo pipefail
 
@@ -62,10 +62,6 @@ if [ "$OPT_DEVELOP" = true ]; then
     echo ""
     printf -- "${C_BOLD}--- Installing Codex ---${C_RESET}\n"
     "$AGENTS_ROOT/install/linux/codex.sh"
-
-    echo ""
-    printf -- "${C_BOLD}--- Installing Gemini CLI + Mermaid CLI ---${C_RESET}\n"
-    "$AGENTS_ROOT/install/linux/gemini.sh"
 fi
 
 echo ""

@@ -196,62 +196,27 @@ foreach ($stale in @("$LocalBin\cc-session-title", "$LocalBin\cc-session-title.c
 }
 # --- END temporary: cc-session-title launcher cleanup ---
 
-# --- ~/.local/bin/review-code-codex launchers (cmd + bash shim) ---
-$rcCmdContent = "@echo off`r`nwsl bash -c ""review-code-codex %*""`r`n"
-Write-Launcher "$LocalBin\review-code-codex.cmd" $rcCmdContent "review-code-codex.cmd"
-$rcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-code-codex`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-code-codex" $rcShimContent "review-code-codex (bash shim)"
-
-# --- ~/.local/bin/review-plan-codex launchers (cmd + bash shim) ---
-$rpcCmdContent = "@echo off`r`nwsl bash -c ""review-plan-codex %*""`r`n"
-Write-Launcher "$LocalBin\review-plan-codex.cmd" $rpcCmdContent "review-plan-codex.cmd"
-$rpcShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-plan-codex`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-plan-codex" $rpcShimContent "review-plan-codex (bash shim)"
-
-# --- ~/.local/bin/get-config-var launchers (cmd + bash shim) ---
-$gcvCmdContent = "@echo off`r`nwsl bash -c ""get-config-var %*""`r`n"
-Write-Launcher "$LocalBin\get-config-var.cmd" $gcvCmdContent "get-config-var.cmd"
-$gcvShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/get-config-var`" `"`$@`"`n"
-Write-Launcher "$LocalBin\get-config-var" $gcvShimContent "get-config-var (bash shim)"
-
-# --- ~/.local/bin/draw-diagram launchers (cmd + bash shim) ---
-$ddCmdContent = "@echo off`r`nwsl bash -c ""draw-diagram %*""`r`n"
-Write-Launcher "$LocalBin\draw-diagram.cmd" $ddCmdContent "draw-diagram.cmd"
-$ddShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/draw-diagram`" `"`$@`"`n"
-Write-Launcher "$LocalBin\draw-diagram" $ddShimContent "draw-diagram (bash shim)"
-
-# --- ~/.local/bin/draw-diagram-gemini launchers (cmd + bash shim) ---
-$ddgCmdContent = "@echo off`r`nwsl bash -c ""draw-diagram-gemini %*""`r`n"
-Write-Launcher "$LocalBin\draw-diagram-gemini.cmd" $ddgCmdContent "draw-diagram-gemini.cmd"
-$ddgShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/draw-diagram-gemini`" `"`$@`"`n"
-Write-Launcher "$LocalBin\draw-diagram-gemini" $ddgShimContent "draw-diagram-gemini (bash shim)"
-
-# --- ~/.local/bin/extract-accepted-tradeoffs launchers (cmd + bash shim) ---
-$eatCmdContent = "@echo off`r`nwsl bash -c ""extract-accepted-tradeoffs %*""`r`n"
-Write-Launcher "$LocalBin\extract-accepted-tradeoffs.cmd" $eatCmdContent "extract-accepted-tradeoffs.cmd"
-$eatShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/extract-accepted-tradeoffs`" `"`$@`"`n"
-Write-Launcher "$LocalBin\extract-accepted-tradeoffs" $eatShimContent "extract-accepted-tradeoffs (bash shim)"
-
-# --- ~/.local/bin/review-prompt-size launchers (cmd + bash shim) ---
-$rpsCmdContent = "@echo off`r`nwsl bash -c ""review-prompt-size %*""`r`n"
-Write-Launcher "$LocalBin\review-prompt-size.cmd" $rpsCmdContent "review-prompt-size.cmd"
-$rpsShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-prompt-size`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-prompt-size" $rpsShimContent "review-prompt-size (bash shim)"
-
-# --- ~/.local/bin/review-code-size launchers (cmd + bash shim) ---
-$rcsCmdContent = "@echo off`r`nwsl bash -c ""review-code-size %*""`r`n"
-Write-Launcher "$LocalBin\review-code-size.cmd" $rcsCmdContent "review-code-size.cmd"
-$rcsShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-code-size`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-code-size" $rcsShimContent "review-code-size (bash shim)"
-
-# --- ~/.local/bin/review-env-example launchers (cmd + bash shim) ---
-$reeCmdContent = "@echo off`r`nwsl bash -c ""review-env-example %*""`r`n"
-Write-Launcher "$LocalBin\review-env-example.cmd" $reeCmdContent "review-env-example.cmd"
-$reeShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-env-example`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-env-example" $reeShimContent "review-env-example (bash shim)"
-
-# --- ~/.local/bin/review-step-numbers launchers (cmd + bash shim) ---
-$rsnCmdContent = "@echo off`r`nwsl bash -c ""review-step-numbers %*""`r`n"
-Write-Launcher "$LocalBin\review-step-numbers.cmd" $rsnCmdContent "review-step-numbers.cmd"
-$rsnShimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/review-step-numbers`" `"`$@`"`n"
-Write-Launcher "$LocalBin\review-step-numbers" $rsnShimContent "review-step-numbers (bash shim)"
+# --- PATH-exposed bin/ commands (cmd + bash shim) ---
+# The command set is declared once in install/path-exposed-commands.txt and looped over
+# here; install/linux/dotfileslink.sh consumes the same file (CPR-2 single source of truth,
+# CPR-5 both platforms expose the same set). Do NOT hand-write a launcher pair below —
+# add the command name to the list file instead.
+# Write-Launcher registers every list entry (review-code-codex, review-env-example, ...)
+# as a .cmd launcher plus a bash shim.
+$PathExposedList = Join-Path $AgentsRoot "install\path-exposed-commands.txt"
+$pathExposedCommands = @()
+if (Test-Path -LiteralPath $PathExposedList) {
+    $pathExposedCommands = @(
+        Get-Content -LiteralPath $PathExposedList |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -and (-not $_.StartsWith("#")) }
+    )
+} else {
+    Write-Warning "Command list not found: $PathExposedList (skipping)"
+}
+foreach ($command in $pathExposedCommands) {
+    $cmdContentLine = "@echo off`r`nwsl bash -c ""$command %*""`r`n"
+    Write-Launcher (Join-Path $LocalBin "$command.cmd") $cmdContentLine "$command.cmd"
+    $shimContent = "#!/usr/bin/env bash`nexec bash `"$agentsUnixPath/bin/$command`" `"`$@`"`n"
+    Write-Launcher (Join-Path $LocalBin $command) $shimContent "$command (bash shim)"
+}

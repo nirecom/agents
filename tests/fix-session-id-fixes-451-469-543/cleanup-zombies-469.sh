@@ -129,3 +129,64 @@ else
     fi
 fi
 rm -rf "$B6_DIR" 2>/dev/null || true
+
+# === #1607/#1608 cleanupZombies suffix extension (.next-step-paused / .off-clearance) ===
+
+# Deterministic cross-platform backdate via fs.utimesSync (avoids `touch -d` flakiness).
+backdate_node() {
+    node -e "const fs=require('fs');const t=(Date.now()-($2)*86400000)/1000;fs.utimesSync(process.argv[1],t,t)" "$1" 2>/dev/null || true
+}
+
+# B7: stale .next-step-paused deleted (RED until cleanupZombies suffix set is extended)
+B7_DIR="$AGENTS_DIR/tests/.tmp-b7-$$"
+mkdir -p "$B7_DIR"
+B7_FILE="$B7_DIR/sid-stale.next-step-paused"
+echo "stale" > "$B7_FILE"
+backdate_node "$B7_FILE" 14
+run_cleanup_node "$B7_DIR" 7
+if [ ! -f "$B7_FILE" ]; then
+    pass "B7: stale (14-day-old) .next-step-paused deleted by cleanupZombies"
+else
+    fail "B7: RED-EXPECTED — stale .next-step-paused NOT reaped (suffix not in cleanupZombies)"
+fi
+rm -rf "$B7_DIR" 2>/dev/null || true
+
+# B8: stale .off-clearance deleted (RED until cleanupZombies suffix set is extended)
+B8_DIR="$AGENTS_DIR/tests/.tmp-b8-$$"
+mkdir -p "$B8_DIR"
+B8_FILE="$B8_DIR/sid-stale.off-clearance"
+echo "stale" > "$B8_FILE"
+backdate_node "$B8_FILE" 14
+run_cleanup_node "$B8_DIR" 7
+if [ ! -f "$B8_FILE" ]; then
+    pass "B8: stale (14-day-old) .off-clearance deleted by cleanupZombies"
+else
+    fail "B8: RED-EXPECTED — stale .off-clearance NOT reaped (suffix not in cleanupZombies)"
+fi
+rm -rf "$B8_DIR" 2>/dev/null || true
+
+# B9: fresh .next-step-paused preserved (CPR-5 counterpart — must not over-reap)
+B9_DIR="$AGENTS_DIR/tests/.tmp-b9-$$"
+mkdir -p "$B9_DIR"
+B9_FILE="$B9_DIR/sid-fresh.next-step-paused"
+echo "fresh" > "$B9_FILE"
+run_cleanup_node "$B9_DIR" 7
+if [ -f "$B9_FILE" ]; then
+    pass "B9: fresh .next-step-paused preserved by cleanupZombies"
+else
+    fail "B9: fresh .next-step-paused was incorrectly deleted (over-reap)"
+fi
+rm -rf "$B9_DIR" 2>/dev/null || true
+
+# B10: fresh .off-clearance preserved (CPR-5 counterpart — must not over-reap)
+B10_DIR="$AGENTS_DIR/tests/.tmp-b10-$$"
+mkdir -p "$B10_DIR"
+B10_FILE="$B10_DIR/sid-fresh.off-clearance"
+echo "fresh" > "$B10_FILE"
+run_cleanup_node "$B10_DIR" 7
+if [ -f "$B10_FILE" ]; then
+    pass "B10: fresh .off-clearance preserved by cleanupZombies"
+else
+    fail "B10: fresh .off-clearance was incorrectly deleted (over-reap)"
+fi
+rm -rf "$B10_DIR" 2>/dev/null || true

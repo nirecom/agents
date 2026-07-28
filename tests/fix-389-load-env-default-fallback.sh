@@ -3,11 +3,26 @@
 # Tests: hooks/lib/load-env.js
 # Tags: env, load-env, worktree, scope:issue-specific
 # RED for issue #389.
-# L3 gap (what this test does NOT catch):
+#
+# STATUS:
+#   T389-1..6 — GREEN today and must stay green (untouched by #1569 / #1630).
+#   T389-7    — GREEN today; it PINS the deliberate policy asymmetry introduced
+#               by C4: loadDefaultEnv keeps its short-circuit (an explicit
+#               AGENTS_CONFIG_DIR is the ONLY config source and never falls
+#               through to the module / realpath candidates), whereas
+#               resolveAgentsConfigDir DOES fall through. Sharing
+#               configDirCandidates() between them must not merge the two
+#               selection policies.
+#   T389-8    — RED until C4 lands (candidate values are not yet routed through
+#               normalizeCwd + path.resolve, so a Windows-POSIX env value is
+#               passed to path.join verbatim and the .env is never found).
+#               SKIPPED on non-win32.
+#
+# TL3 gap (what this TL2 test does NOT catch):
 # - actual symlink resolution in a live ~\.claude\ → C:\git\agents\ setup
 # - ENOLINK or unusual symlink types on Windows NTFS
-# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
-# via bin/check-verification-gate.sh category: hook-registration
+# - a real hook process whose AGENTS_CONFIG_DIR was dropped by a subagent spawn
+# Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight via bin/check-verification-gate.sh category: hook-registration.
 
 set -u
 
@@ -58,19 +73,48 @@ process.stdout.write(JSON.stringify({ok, val: process.env.TEST_T389_1_KEY || ''}
     fi
 }
 
-# T389-2: When AGENTS_CONFIG_DIR is unset and __filename is inside a symlinked
-# directory (e.g. ~/.claude/hooks/lib/load-env.js → real C:/git/agents/...),
-# loadDefaultEnv should call realpathSync on __filename and walk two levels up
-# to find the real .env. This test verifies the realpathSync fallback exists in
-# the source — actual symlink behavior is the L3 gap.
+# T389-2: the realpath fallback (~/.claude/hooks/lib/... → real C:/git/agents/...)
+# still exists and is still USED.
+#
+# Retargeted for C4: the realpathSync call moved out of load-env.js into
+# hooks/lib/agents-config-dir.js (configDirCandidates), so grepping load-env.js
+# for `realpathSync(` no longer touches the code it claims to cover — it was
+# passing on an explanatory COMMENT that happened to contain the token. This is
+# now behavioural on the module that actually produces the candidate:
+#   (a) enumeration — with AGENTS_CONFIG_DIR unset, configDirCandidates() emits a
+#       `realpath`-sourced candidate. Deleting the realpathSync call makes the
+#       source disappear; a comment cannot satisfy this.
+#   (b) selection — when the module-anchored candidate does NOT validate, the
+#       realpath candidate is the one adopted (the symlinked-install case).
+# Real symlink resolution on a live ~/.claude install stays the TL3 gap.
 run_t389_2() {
-    require_source "$LOAD_ENV" "T389-2: loadDefaultEnv uses realpathSync(__filename) fallback chain" || return
-    # Look for the structural marker: realpathSync called on __filename in
-    # the loadDefaultEnv function (the #389 fix).
-    if grep -E 'realpathSync\s*\(' "$LOAD_ENV" >/dev/null 2>&1; then
-        pass "T389-2: loadDefaultEnv uses realpathSync(__filename) fallback chain"
+    local label="T389-2: realpath candidate is enumerated and adopted (agents-config-dir.js)"
+    require_source "$AGENTS_DIR/hooks/lib/agents-config-dir.js" "$label" || return
+    local out rc
+    out=$(run_with_timeout 5 env -u AGENTS_CONFIG_DIR node -e "
+const acd = require('$_AGENTS_DIR_NODE/hooks/lib/agents-config-dir.js');
+const sources = acd.configDirCandidates().map((c) => c.source);
+const real = '$_AGENTS_DIR_NODE';
+// module candidate deliberately unresolvable -> only the realpath one can win.
+const picked = acd._resolveFromCandidates([
+  { dir: real + '/no-such-module-anchor', source: 'module' },
+  { dir: real, source: 'realpath' },
+]);
+process.stdout.write(JSON.stringify({ sources, picked }));
+" 2>/dev/null)
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        fail "$label (rc=$rc, out=$out)"
+        return
+    fi
+    if ! echo "$out" | grep -q '"realpath"'; then
+        fail "$label (no realpath-sourced candidate enumerated: $out)"
+        return
+    fi
+    if echo "$out" | grep -q "\"picked\":\"$_AGENTS_DIR_NODE\""; then
+        pass "$label"
     else
-        fail "T389-2: loadDefaultEnv uses realpathSync(__filename) fallback chain (no realpathSync call in $LOAD_ENV)"
+        fail "$label (realpath candidate not adopted when the module anchor fails: $out)"
     fi
 }
 
@@ -184,12 +228,18 @@ loadDefaultEnv();
     fi
 }
 
+# shellcheck source=./fix-389-load-env-default-fallback/config-dir-cases.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fix-389-load-env-default-fallback/config-dir-cases.sh"
+
+
 run_t389_1
 run_t389_2
 run_t389_3
 run_t389_4
 run_t389_5
 run_t389_6
+run_t389_7
+run_t389_8
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

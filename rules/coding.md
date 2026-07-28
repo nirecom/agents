@@ -32,7 +32,7 @@ This records mode 100755 in the git index regardless of `core.fileMode` setting,
 
 See also `rules/core-principles.md` for the top-level design principles.
 
-## Sub-rules (path-scoped via `globs:`)
+## Sub-rules (loaded conditionally via the `paths:` frontmatter key)
 
 - [coding/python.md](coding/python.md) — `uv` 使用必須、bare `python`/`pip` 禁止
 - [coding/nodejs.md](coding/nodejs.md) — `fnm`(Windows) / `nvm`(POSIX) 使用必須

@@ -1,6 +1,17 @@
 "use strict";
-// PreToolUse hook: intercepts and blocks OFF-sentinel emit commands.
-// Fails open (exit 0) on any error (corrupt/missing file, I/O error).
+// PreToolUse hook: gates OFF-sentinel emit commands on a reason-bound clearance
+// token (<workflowDir>/<sid>.off-clearance) minted by bin/request-off-clearance
+// after a Phase1 examination (#1608).
+//
+// The gate is TOKEN-FIRST: it is decided before — and independently of — any
+// supervisor state read. Supervisor findings/severity no longer participate in
+// the verdict (deadlock root fix); the state file is consulted only to pick an
+// honest block message (#1606).
+//
+// Fail direction: the token gate is the single fail-CLOSED point (corrupt or
+// unreadable token → block). Everything else fails open (exit 0). The escape
+// when the examiner itself is broken is the EMERGENCY sentinel, which is
+// excluded from this gate by construction.
 const fs = require("fs");
 const path = require("path");
 
@@ -9,6 +20,7 @@ process.stdin.on("data", (d) => { input += d; });
 process.stdin.on("end", () => {
   try {
     let resolvedWsid = null;
+    let wsidResolved = false;
     const parsed = JSON.parse(input || "{}");
     const toolName = parsed.tool_name || "";
     if (toolName !== "Bash" && toolName !== "runInTerminal" && toolName !== "runCommands") process.exit(0);
@@ -16,34 +28,185 @@ process.stdin.on("end", () => {
 
     const patterns = require(path.join(__dirname, "./lib/sentinel-patterns.js"));
 
-    // Check if command contains an OFF sentinel emit.
-    // isGenuineEmit: true only when the DQ (double-quoted, with reason) pattern matches.
-    // LOOKSLIKE patterns catch variants (no-reason, single-quoted, etc.) but are not
-    // treated as genuine emits for the ENOENT-block path.
+    // Step 1a: exclude the EMERGENCY sentinels. Only the dedicated *_EMERGENCY_*
+    // regexes match them — the normal OFF regexes below never do — so this branch
+    // is what lets an emergency emit bypass the Phase1 clearance gate.
+    const emergencyRes = [
+      patterns.ENFORCE_WORKFLOW_OFF_EMERGENCY_RE_DQ,
+      patterns.ENFORCE_WORKFLOW_OFF_EMERGENCY_LOOKSLIKE_RE,
+      patterns.ENFORCE_WORKTREE_OFF_EMERGENCY_RE_DQ,
+      patterns.ENFORCE_WORKTREE_OFF_EMERGENCY_LOOKSLIKE_RE,
+    ];
+    for (const re of emergencyRes) {
+      if (re && re.test && re.test(command)) process.exit(0); // Phase1 bypass
+    }
+
+    // Step 1b: detect a normal OFF proposal, its target, and its reason text.
+    // isGenuineEmit: true only for the strict DQ (reason-carrying) form.
+    // LOOKSLIKE variants never activate a real OFF, so they pass through later.
     let isOffProposal = false;
     let isGenuineEmit = false;
+    let offTarget = null;
+    let reasonText = "";
 
     const WORKFLOW_OFF_DQ = patterns.ENFORCE_WORKFLOW_OFF_RE_DQ;
     const WORKFLOW_OFF_LOOKSLIKE = patterns.ENFORCE_WORKFLOW_OFF_LOOKSLIKE_RE;
     const WORKTREE_OFF_DQ = patterns.ENFORCE_WORKTREE_OFF_RE_DQ;
     const WORKTREE_OFF_LOOKSLIKE = patterns.ENFORCE_WORKTREE_OFF_LOOKSLIKE_RE;
 
-    if (WORKFLOW_OFF_DQ && WORKFLOW_OFF_DQ.test && WORKFLOW_OFF_DQ.test(command)) {
-      isOffProposal = true; isGenuineEmit = true;
-    }
-    if (!isOffProposal && WORKFLOW_OFF_LOOKSLIKE && WORKFLOW_OFF_LOOKSLIKE.test && WORKFLOW_OFF_LOOKSLIKE.test(command)) {
-      isOffProposal = true;
-    }
-    if (!isOffProposal && WORKTREE_OFF_DQ && WORKTREE_OFF_DQ.test && WORKTREE_OFF_DQ.test(command)) {
-      isOffProposal = true; isGenuineEmit = true;
-    }
-    if (!isOffProposal && WORKTREE_OFF_LOOKSLIKE && WORKTREE_OFF_LOOKSLIKE.test && WORKTREE_OFF_LOOKSLIKE.test(command)) {
-      isOffProposal = true;
+    const wfMatch = (WORKFLOW_OFF_DQ && WORKFLOW_OFF_DQ.exec) ? WORKFLOW_OFF_DQ.exec(command) : null;
+    const wtMatch = (WORKTREE_OFF_DQ && WORKTREE_OFF_DQ.exec) ? WORKTREE_OFF_DQ.exec(command) : null;
+    if (wfMatch) {
+      isOffProposal = true; isGenuineEmit = true; offTarget = "workflow"; reasonText = wfMatch[1] || "";
+    } else if (wtMatch) {
+      isOffProposal = true; isGenuineEmit = true; offTarget = "worktree"; reasonText = wtMatch[1] || "";
+    } else if (WORKFLOW_OFF_LOOKSLIKE && WORKFLOW_OFF_LOOKSLIKE.test && WORKFLOW_OFF_LOOKSLIKE.test(command)) {
+      isOffProposal = true; offTarget = "workflow";
+    } else if (WORKTREE_OFF_LOOKSLIKE && WORKTREE_OFF_LOOKSLIKE.test && WORKTREE_OFF_LOOKSLIKE.test(command)) {
+      isOffProposal = true; offTarget = "worktree";
     }
 
     if (!isOffProposal) process.exit(0);
 
     const sessionId = parsed.session_id || "";
+
+    function resolveWsid() {
+      if (wsidResolved) return resolvedWsid;
+      wsidResolved = true;
+      try {
+        const { resolveWorkflowSessionId } = require(path.join(__dirname, "./lib/resolve-workflow-session-id.js"));
+        resolvedWsid = resolveWorkflowSessionId() || null;
+      } catch (e) { resolvedWsid = null; }
+      return resolvedWsid;
+    }
+
+    // Step 2: already OFF → nothing left to gate. Target-aware (CPR-5): WORKFLOW_OFF
+    // subsumes both targets, while WORKTREE_OFF only clears a worktree-target sentinel.
+    try {
+      const { isWorkflowOff, isWorktreeOff } = require(path.join(__dirname, "./lib/session-markers.js"));
+      if (isWorkflowOff(sessionId)) process.exit(0);
+      if (offTarget === "worktree" && isWorktreeOff(sessionId)) process.exit(0);
+    } catch (e) { /* fail-open */ }
+
+    // Step 3: look-alike (non-genuine) emits never activate a real OFF.
+    if (!isGenuineEmit) process.exit(0);
+
+    // Step 4: TOKEN GATE (fail-CLOSED). The token is read directly so that
+    // ENOENT stays distinguishable from other I/O and parse failures:
+    //   absent → block (clearance never obtained)
+    //   error  → block (corrupt/unreadable must not become a free pass)
+    //   found  → validate expiry + target + reason-binding
+    const SID_RE = /^[A-Za-z0-9_-]+$/;
+    function readToken(sid) {
+      if (!sid || !SID_RE.test(sid)) return { status: "absent" };
+      let tokenPath;
+      try {
+        const { getWorkflowDir } = require(path.join(__dirname, "./lib/workflow-state"));
+        tokenPath = path.join(getWorkflowDir(), sid + ".off-clearance");
+      } catch (e) {
+        return { status: "error" };
+      }
+      let raw;
+      try {
+        raw = fs.readFileSync(tokenPath, "utf8");
+      } catch (readErr) {
+        if (readErr && readErr.code === "ENOENT") return { status: "absent" };
+        return { status: "error" };
+      }
+      try {
+        const token = JSON.parse(raw);
+        if (!token || typeof token !== "object") return { status: "error" };
+        return { status: "found", token };
+      } catch (e) {
+        return { status: "error" };
+      }
+    }
+
+    let tokenResult = readToken(sessionId);
+    if (tokenResult.status === "absent") {
+      const wsid = resolveWsid();
+      if (wsid && wsid !== sessionId) {
+        const fallback = readToken(wsid);
+        if (fallback.status !== "absent") tokenResult = fallback;
+      }
+    }
+
+    // Validity is decided by the shared SSOT validator (hooks/lib/session-markers.js).
+    // Only the read layer above is local, so ENOENT stays distinguishable from errors.
+    let allow = false;
+    if (tokenResult.status === "found") {
+      try {
+        const { evaluateOffClearance } = require(path.join(__dirname, "./lib/session-markers.js"));
+        allow = evaluateOffClearance(tokenResult.token, offTarget, reasonText) === true;
+      } catch (e) {
+        allow = false; // validator unavailable → fail-CLOSED
+      }
+    }
+    if (allow) process.exit(0);
+
+    // Step 5: the block is already decided. The supervisor state is read ONLY
+    // to select an honest message (#1606) — it can no longer change the verdict.
+    let stateFileFound = false;
+    let stateReadFailed = false;
+    try {
+      const stateWriter = require(path.join(__dirname, "./lib/supervisor-state-writer.js"));
+      const tryRead = (sid) => {
+        if (!sid) return false;
+        let raw;
+        try {
+          raw = fs.readFileSync(stateWriter.getStatePath(sid), "utf8");
+        } catch (readErr) {
+          if (readErr && readErr.code === "ENOENT") return false;
+          throw readErr;
+        }
+        JSON.parse(raw);
+        return true;
+      };
+      if (tryRead(sessionId)) {
+        stateFileFound = true;
+      } else {
+        const wsid = resolveWsid();
+        if (wsid && wsid !== sessionId && tryRead(wsid)) stateFileFound = true;
+      }
+    } catch (e) {
+      stateReadFailed = true; // message falls back to the generic honest text
+    }
+
+    const blockKind = stateReadFailed
+      ? "no-clearance-unknown"
+      : (stateFileFound ? "no-clearance-findings" : "no-clearance-enoent");
+
+    const CLEARANCE_GUIDANCE =
+      "Request clearance with: bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" --target <workflow|worktree> " +
+      "--category <rubric category> --detail \"<why>\"\n" +
+      "Then re-emit the OFF sentinel with the granted [category] inside the reason.\n" +
+      "If the examiner itself is broken, use the EMERGENCY OFF sentinel.";
+
+    function buildReason(isWtEnd, convLangPrefix, kind) {
+      if (isWtEnd) {
+        return convLangPrefix +
+          "[EM Supervisor] OFF sentinel emit blocked.\n" +
+          "This looks like the worktree-end cleanup phase. If 'git worktree remove' (WE-15) failed, WORKTREE_OFF is NOT needed — /sweep-worktrees reclaims the worktree automatically later.\n" +
+          "Follow the WE-16 fallback: skip to WE-20 and continue.";
+      }
+      const head = convLangPrefix + "[EM Supervisor] OFF sentinel emit blocked.\n";
+      if (kind === "no-clearance-enoent") {
+        return head +
+          "No clearance token for this session, and no supervisor examination has run yet. " +
+          "Supervisor findings are NOT the reason for this block.\n" +
+          CLEARANCE_GUIDANCE;
+      }
+      if (kind === "no-clearance-findings") {
+        return head +
+          "No valid clearance token for this session. Supervisor findings are NOT the reason " +
+          "for this block — an OFF departure always requires a reason-bound clearance token.\n" +
+          CLEARANCE_GUIDANCE;
+      }
+      return head +
+        "No valid clearance token for this session (supervisor state could not be read; " +
+        "its contents are NOT the reason for this block).\n" +
+        CLEARANCE_GUIDANCE;
+    }
 
     // Detect worktree-end cleanup context to produce an adaptive block message.
     function computeIsWtEnd() {
@@ -51,118 +214,14 @@ process.stdin.on("end", () => {
       try {
         ({ isWorktreeEndEnv } = require(path.join(__dirname, "./lib/worktree-end-env-anchor.js")));
       } catch (e) {
-        return false; // module unavailable — fail-open to fixed message
+        return false; // module unavailable — fall back to the fixed message
       }
       if (sessionId && isWorktreeEndEnv(sessionId)) return true;
-      let wsid = resolvedWsid;
-      if (!wsid) {
-        try {
-          const { resolveWorkflowSessionId } = require(path.join(__dirname, "./lib/resolve-workflow-session-id.js"));
-          wsid = resolveWorkflowSessionId();
-        } catch (e) { wsid = null; }
-      }
+      const wsid = resolveWsid();
       if (wsid && wsid !== sessionId && isWorktreeEndEnv(wsid)) return true;
       return false;
     }
 
-    function buildReason(isWtEnd, convLangPrefix) {
-      if (isWtEnd) {
-        return convLangPrefix +
-          "[EM Supervisor] OFF sentinel emit blocked.\n" +
-          "This looks like the worktree-end cleanup phase. If 'git worktree remove' (WE-15) failed, WORKTREE_OFF is NOT needed — /sweep-worktrees reclaims the worktree automatically later.\n" +
-          "Follow the WE-16 fallback: skip to WE-20 and continue.";
-      }
-      return convLangPrefix +
-        "[EM Supervisor] OFF sentinel emit blocked.\n" +
-        "Active supervisor findings exist.\n" +
-        "Re-run after the supervisor audit completes.";
-    }
-
-    // Check if workflow is already OFF (bypass if so)
-    try {
-      const { isWorkflowOff } = require(path.join(__dirname, "./lib/session-markers.js"));
-      if (isWorkflowOff(sessionId)) process.exit(0);
-    } catch (e) { /* fail-open */ }
-
-    // Read state file directly to distinguish ENOENT from parse/I/O errors:
-    //   - I/O error or parse error (corrupt/empty): fail-open → exit 0
-    //   - ENOENT (no state file): genuine emits block; look-alikes pass through
-    //   - Valid state: check L1 findings
-    let state = null;
-    let stateFileFound = false;
-    try {
-      const stateWriter = require(path.join(__dirname, "./lib/supervisor-state-writer.js"));
-
-      const tryRead = (sid) => {
-        const statePath = stateWriter.getStatePath(sid);
-        let raw;
-        try {
-          raw = fs.readFileSync(statePath, "utf8");
-        } catch (readErr) {
-          if (readErr.code === "ENOENT") return null; // file not found
-          throw readErr; // other I/O error → fail-open via outer catch
-        }
-        // Parse error (corrupt/empty) → fail-open via outer catch
-        return { parsed: JSON.parse(raw) };
-      };
-
-      let primary = null;
-      if (sessionId) primary = tryRead(sessionId);
-      if (primary === null) {
-        // ENOENT for primary — try wsid fallback
-        try {
-          const { resolveWorkflowSessionId } = require(path.join(__dirname, "./lib/resolve-workflow-session-id.js"));
-          const wsid = resolveWorkflowSessionId();
-          resolvedWsid = wsid || null;
-          if (wsid) {
-            const fallback = tryRead(wsid);
-            if (fallback !== null) { stateFileFound = true; state = fallback.parsed; }
-          }
-        } catch (_) { /* wsid resolution failed — stateFileFound stays false */ }
-      } else {
-        stateFileFound = true;
-        state = primary.parsed;
-      }
-    } catch (e) {
-      // I/O error or parse error (corrupt/empty file) — fail-open
-      process.exit(0);
-    }
-
-    // No state file found (ENOENT) — block genuine emits, pass look-alikes
-    if (!stateFileFound) {
-      if (!isGenuineEmit) process.exit(0); // look-alike without state → pass
-      // Genuine emit + no state file → block (no supervisor clearance established)
-      let convLangPrefix = "";
-      try {
-        const { getConvLangInjection } = require(path.join(__dirname, "./lib/conv-lang.js"));
-        const injection = getConvLangInjection();
-        if (injection) convLangPrefix = injection + "\n";
-      } catch (e) { /* fail-open */ }
-      const isWtEnd = computeIsWtEnd();
-      const reason = buildReason(isWtEnd, convLangPrefix);
-      process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
-      process.exit(2);
-    }
-
-    // Early exit if alert phase is terminal (done/paused/closed) and no error
-    const { TERMINAL_ALERT_PHASES } = require("./lib/supervisor-state-schema");
-    const alertPhase = state && state.alert && state.alert.alert_phase;
-    const cumSev = state && state.alert && state.alert.cumulative_severity;
-    if (TERMINAL_ALERT_PHASES.has(alertPhase) && cumSev !== "error") {
-      process.exit(0);
-    }
-
-    // State file found — check L1 findings (non-notice severity)
-    const l1Findings = (state && state.layer1 && Array.isArray(state.layer1.findings)) ? state.layer1.findings : [];
-    const blockingFindings = l1Findings.filter(f => f && f.severity !== "notice" && f.record_type !== "escape_hatch_event");
-
-    // Pass through if no blocking findings
-    if (blockingFindings.length === 0) process.exit(0);
-
-    // Pass through if all blocking findings are from enforce-worktree (false-block recovery)
-    if (blockingFindings.every(f => f.reporter === "enforce-worktree")) process.exit(0);
-
-    // Block: compute CONV_LANG prefix
     let convLangPrefix = "";
     try {
       const { getConvLangInjection } = require(path.join(__dirname, "./lib/conv-lang.js"));
@@ -170,9 +229,7 @@ process.stdin.on("end", () => {
       if (injection) convLangPrefix = injection + "\n";
     } catch (e) { /* fail-open */ }
 
-    const isWtEnd = computeIsWtEnd();
-    const reason = buildReason(isWtEnd, convLangPrefix);
-
+    const reason = buildReason(computeIsWtEnd(), convLangPrefix, blockKind);
     process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
     process.exit(2);
   } catch (e) {

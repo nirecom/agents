@@ -21,6 +21,11 @@ EXTRA_LABELS=()
 ASSIGNEE=""
 MILESTONE=""
 REPORTER_MODEL=""
+REPORTER_MODEL_TEXT=""
+
+# Repo root, resolved from this script's own location. AGENTS_CONFIG_DIR is not
+# usable here: callers (and tests) legitimately run with it unset or empty.
+_IC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -40,6 +45,7 @@ while [ $# -gt 0 ]; do
         --assignee)   ASSIGNEE="${2:?--assignee requires value}"; shift 2 ;;
         --milestone)  MILESTONE="${2:?--milestone requires value}"; shift 2 ;;
         --reporter-model) REPORTER_MODEL="${2:?--reporter-model requires value}"; shift 2 ;;
+        --reporter-model-text) REPORTER_MODEL_TEXT="${2:?--reporter-model-text requires value}"; shift 2 ;;
         -h|--help)
             sed -n '2,12p' "$0" >&2; exit 0 ;;
         *)
@@ -156,20 +162,17 @@ SCAN_TMP=$(mktemp)
 gh_outbound_guard "issue-body" < "$SCAN_TMP" || { rm -f "$SCAN_TMP"; exit 1; }
 rm -f "$SCAN_TMP"
 
-# Map raw model name to reporter-model:* label.
-# SSOT: case RHS labels must match .github/labels.yml reporter-model:* entries.
-# Drift prevention: tests/fix-1579-reporter-model-keyword-scan.sh T15 verifies this.
-# -w word-boundary: plural/gerund forms (hangs/hanging) intentionally not matched.
+# Map the reporting model to its reporter-model:* label.
+# SSOT for the extraction rule, the keyword matcher and the label table:
+# hooks/lib/model-match.js (drift-checked by tests/fix-1579-*.sh T15).
+# --reporter-model carries an already-extracted id and wins when both are given;
+# --reporter-model-text carries the raw self-report sentence verbatim.
+if [ -z "$REPORTER_MODEL" ] && [ -n "$REPORTER_MODEL_TEXT" ]; then
+    REPORTER_MODEL="$(node "$_IC_ROOT/bin/model-match.js" --extract-self-report "$REPORTER_MODEL_TEXT" 2>/dev/null || true)"
+fi
+# Degrade to no label (same as an unknown model) when node is unavailable.
 if [ -n "$REPORTER_MODEL" ]; then
-    _rm_label=""
-    case "$REPORTER_MODEL" in
-        *fable*)    _rm_label="reporter-model:fable" ;;
-        *opus*)     _rm_label="reporter-model:opus" ;;
-        *sonnet*)   _rm_label="reporter-model:sonnet" ;;
-        *ds4*|*deepseek*) _rm_label="reporter-model:ds4" ;;
-        *devstral*) _rm_label="reporter-model:devstral" ;;
-        *qwen*)     _rm_label="reporter-model:qwen-coder" ;;
-    esac
+    _rm_label="$(node "$_IC_ROOT/bin/model-match.js" --reporter-label "$REPORTER_MODEL" 2>/dev/null || true)"
     [ -n "$_rm_label" ] && EXTRA_LABELS+=("$_rm_label")
 fi
 

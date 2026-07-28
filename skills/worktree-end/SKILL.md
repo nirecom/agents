@@ -68,6 +68,10 @@ Run: `node "$AGENTS_CONFIG_DIR/bin/supervisor-write-alert" --session-id "$SID" -
 ### Step WE-13 — Switch CWD to main worktree
 Resolve main root from the worktree's `.git` file. `cd "<main-worktree-root>"` as its own Bash call (releases Windows CWD lock).
 
+### Step WE-13a — Release the session worktree binding
+Call the native `ExitWorktree` tool after the WE-13 `cd` to release the extension host's session worktree binding; skip silently when that tool is unavailable.
+Protocol: `skills/_shared/worktree-transition.md`
+
 ### Steps WE-15..WE-22 — Cleanup cascade
 Read `$AGENTS_CONFIG_DIR/skills/worktree-end/scripts/cleanup-cascade.md` (spec) and issue each command separately. Run only after confirmed merge and inventory.
 If WE-15 is blocked (CWD lock / busy), WORKTREE_OFF is NOT needed — /sweep-worktrees auto-reclaims; follow WE-16 and continue to WE-20.
@@ -77,7 +81,8 @@ supervisor OFF-block adaptive message fires only during WE-15..WE-22 — see cle
 ## Rules
 - Cleanup runs only after confirmed merge (or bootstrap-complete.sh exit 0 in WE-4b). No destructive steps on wait/abort/error paths.
 - `git worktree remove --force` is prohibited; see `rules/ops.md`.
-- `<<WORKFLOW_ENFORCE_WORKTREE_OFF>>` must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
+- The worktree/workflow escape-hatch sentinels must NOT be emitted to unblock WE-15; /sweep-worktrees reclaims — proceed to WE-20 (WE-16 fallback).
+- `ExitWorktree` is called only at WE-13a — never before the WE-13 `cd`.
 - `git branch -D` (WE-19 only) requires inline `WORKTREE_END_SKILL=1` env prefix.
 - `<<WORKFLOW_USER_VERIFIED>>` emitted in WE-8 (before merge), WE-7 (post-web-merge), or WE-4b (bootstrap). Never on abort or while polling. Protocol: `skills/_shared/user-verified.md`.
 - CWD must remain in the linked worktree from WE-7/WE-8 through WE-12; switch to main worktree only at WE-13.

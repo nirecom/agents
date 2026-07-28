@@ -1,5 +1,6 @@
 ---
-globs: "README.md"
+paths:
+  - "README.md"
 ---
 
 ## README.md Rules

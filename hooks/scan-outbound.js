@@ -6,7 +6,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { isPrivateRepo, resolveRepoDir, shouldScanAsPublicTarget, listPrivateRepoNames } = require("./lib/is-private-repo");
-const { isForgeScanTarget, extractTexts, extractRepoFlag } = require("./lib/forge-write-extract");
+const { isForgeScanTarget, extractTexts, extractRepoFlag, isRepoWriteTarget } = require("./lib/forge-write-extract");
 const { parseGitCArg } = require("./lib/parse-git-args");
 
 // Read stdin (cross-platform: fs.readSync for Windows compatibility)
@@ -69,10 +69,6 @@ function escapeRegex(s) {
 (async function main() {
   // Parse stdin
   const input = JSON.parse(readStdin());
-
-  // Session-scoped WORKFLOW override: bypass outbound scan for this session.
-  const { isWorkflowOff } = require("./lib/session-markers");
-  if (isWorkflowOff(input.session_id)) approve();
 
   const toolName = input.tool_name;
   const toolInput = input.tool_input || {};
@@ -138,6 +134,10 @@ function escapeRegex(s) {
         }
         isPrivate = isPrivateRepo(repoDir);
       }
+      // gh repo create/edit: target repo may not exist yet (create) or uses positional arg
+      // without --repo (edit). Visibility resolution via extractRepoFlag/cwd is unreliable.
+      // Fail-safe: always scan regardless of cwd visibility.
+      if (isRepoWriteTarget(command)) { isPrivate = false; }
     } else {
       // Check git commit messages
       const commitMatch = command.match(/git\s+(?:-C\s+\S+\s+)?commit\s/);

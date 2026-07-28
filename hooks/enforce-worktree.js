@@ -35,6 +35,7 @@ const { isBranchDeleteCommand, parseBranchDeleteTarget, isAllowedBranchDeleteWhe
 const { isAllowedWorktreeCommand, isAllowedFastForwardMerge, isAllowedReadOnlyConfigCheck, isAllowedPushAllExcluded, isAllowedMidOperationAbort, isAllowedMainWorktreeCleanup, isAllowedComposeDocAppend, isAllowedWorkerScriptInvocation, isAllowedSupervisorBinTool, isAllowedClarifyGuardLoop, isAllowedReadOnlyWorkflowCli } = require("./enforce-worktree/main-worktree-allows");
 const { isInSessionScope, collectBashWriteTargets, areAllBashTargetsOutsideSessionScope, areAllBashTargetsUnderPlansDir, areAllBashTargetsUnderClaude, isWriteTargetAllExcluded, isEverySegmentExcluded, isGhWriteCommand } = require("./enforce-worktree/bash-write-scope");
 const { checkUniversalTargetAllow } = require("./enforce-worktree/universal-target-allow");
+const { buildWorktreeRemedy } = require("./enforce-worktree/worktree-remedy");
 
 // readStdin / getWorktreeBaseDirResolved moved to enforce-worktree/entry-helpers.js
 // (file-split, rules/coding/file-split.md). getWorktreeBaseDirResolved stays re-exported below.
@@ -406,9 +407,14 @@ if (toolName === "Bash") {
       if (isMC !== false) {
         const branchDesc = branch ? `branch '${branch}'` : "detached HEAD";
         _reportContext.extras = buildExtras(undefined, _toolCwd, root, isMC);
+        const _remedy = buildWorktreeRemedy((input && input.session_id) || resolveSessionId());
         done({
           block: true,
-          reason: `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\nWork from a linked worktree (/worktree-start) or set ENFORCE_WORKTREE=off.`,
+          reason:
+            `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
+            "Work from a linked worktree.\n" +
+            _remedy +
+            "Or set ENFORCE_WORKTREE=off.",
         });
       }
       if (branch && protected_.includes(branch)) {
@@ -486,12 +492,13 @@ if (mainCheckout !== false) {
 
   const branchDesc = currentBranch ? `branch '${currentBranch}'` : "detached HEAD";
   _reportContext.extras = buildExtras(toolInput.command || undefined, _toolCwd, repoRoot, mainCheckout);
+  const _remedy = buildWorktreeRemedy((input && input.session_id) || resolveSessionId());
   done({
     block: true,
     reason:
       `ENFORCE_WORKTREE: write blocked. Reason: main worktree (${branchDesc}).\n` +
       "Main worktree is reserved for merge/pull only. Work from a linked worktree.\n" +
-      "Run: /worktree-start <task-name>\n" +
+      _remedy +
       "Or set ENFORCE_WORKTREE=off in agents config to allow direct main work." + (_writeDetector ? `\nDetected by: ${_writeDetector.detail} (${_writeDetector.name})` : ""),
   });
 }

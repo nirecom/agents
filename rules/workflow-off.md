@@ -16,7 +16,7 @@ The `{reason}` field is mandatory and non-empty. Bare sentinel form (no `: {reas
 | Hook | Bypassed? |
 |---|---|
 | `block-dotenv.js` | Yes — `.env` file access allowed |
-| `scan-outbound.js` | Yes — outbound content scan skipped |
+| `scan-outbound.js` | **No — outbound content scan always runs** |
 | `workflow-gate.js` | Yes — commit gate (step completion check) bypassed |
 | `enforce-issue-close.js` | Yes — bare `gh issue close` allowed |
 | `enforce-worktree.js` | Yes — main worktree writes allowed |

@@ -35,6 +35,15 @@ See `docs/security-policy.md` for the full pattern list.
   patterns from `hooks/lib/sentinel-patterns.js`. Subagent identification via `agent_id` presence
   (see `hooks/lib/subagent-detect.js`). Fail-open: approves on malformed stdin or absent `agent_id`.
   Defense-in-depth with the `workflow-mark.js` PostToolUse backstop (C2).
+- `block-history-direct.js` — blocks direct writes to the **append-only document family**:
+  the canonical documents (`docs/history.md`, `CHANGELOG.md`) *and* their rotated archives
+  (`docs/history/*.md`, `changelog/*.md`, `docs/changelog/*.md`). Rotation moves entries out of
+  the canonical file, so protecting only the canonical name leaves every rotated entry
+  unguarded — the sanctioned path is `doc-append` / `doc-rotate.py` for both. The rule-of-the-rule
+  documents (`rules/docs/history.md`, `rules/docs/changelog.md`) are ordinary editable prose and
+  are excluded by name. **Registered as two matcher groups**: `Edit|Write|MultiEdit|NotebookEdit`
+  for tool writes, and `Bash|runInTerminal|runCommands` for shell redirects / `tee` / `cp` / `mv`
+  into a protected path. Both groups are required — either alone leaves the other lane open.
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override
@@ -82,6 +91,17 @@ See `docs/security-policy.md` for the full pattern list.
   from next-step (`bin/workflow/next-step`); runs zombie cleanup
 - `post-compact.js` (PostCompact) — re-injects session_id into conversation context after
   compaction so the transcript retains the marker for future inheritance lookups
+- `stop-final-report-guard.js` (Stop) — two independent trigger lanes, so a skipped
+  session-close is caught even when the session never reached the lane-A precondition:
+  - **Lane A (format validation)** — fires when the Final Report env file exists; blocks
+    the turn if any required heading is missing from the rendered report.
+  - **Lane B (state-driven)** — fires when the env file is absent but the workflow state has
+    reached `pre_final_report_gate` (asked via `bin/workflow/next-step`): the close procedure
+    was never run, so the turn is blocked unconditionally. Three escape hatches: `WORKFLOW_OFF`
+    for the session, a session-close gate artifact whose `gate_action` is `yield`, and any
+    failure to consult next-step (fail-open).
+  `stop-premature-stop-guard.js` delegates to this hook rather than competing with it: when
+  next-step reports `pre_final_report_gate`, it exits 0 and lets lane B own the message.
 - `check-cross-platform.js` (PreToolUse, matcher: `Bash`) — blocks `git commit` when
   platform-specific files (`install/win/` ↔ `install/linux/`) are staged without counterpart
   changes. Skip mechanisms: `.cross-platform-skiplist` (permanent, base tool names) and
@@ -125,6 +145,28 @@ See `docs/security-policy.md` for the full pattern list.
   or parent directories treated as in-scope for gh write scope checks. If an entry
   is not itself a git repo, its immediate subdirectories are scanned (depth 1)
   and any git repos found are added. The CWD repo is always included.
+  **Quote-span analysis (SSOT)** — every predicate that needs to know whether a character sits
+  inside `'…'`, `"…"`, `$'…'`, `` `…` ``, `$(…)`, `(…)` or `$((…))` asks one scanner,
+  `hooks/lib/quote-spans.js` (`quote-spans/{scan,query,transform}.js`). Before #1569 each
+  consumer carried its own ad-hoc quote walker, so a quoting form fixed in one predicate stayed
+  broken in its siblings (CPR-8). Consumers: `hooks/lib/{strip-quoted-args,bash-write-targets,
+  command-ir}.js`, `hooks/enforce-worktree/arg-tail-guard.js`, and
+  `main-worktree-allows/{worker-script,finalize-worker-overlay}.js`. Ambiguity is never guessed
+  at: unparseable nesting or nesting past the depth cap (`MAX_SPAN_DEPTH`) yields `ok:false`
+  plus a fail reason, and every consumer maps `ok:false` to the write/block side. The transform
+  boundaries return their input unchanged instead of throwing, so a pathological command cannot
+  crash the hook into emitting no verdict at all (a crash would be fail-open).
+  **`AGENTS_CONFIG_DIR` trust anchor** — predicates that recognize a sanctioned script by
+  `<agents-config-dir>/<relative-path>` resolve that directory through
+  `hooks/lib/agents-config-dir.js` rather than reading `process.env.AGENTS_CONFIG_DIR`. The env
+  var is absent in subagent- and Bash-tool-spawned hook processes (which false-BLOCKed the
+  sanctioned finalize-worker overlay, #1630) and attacker-supplied in the hostile case. The
+  resolver falls through env → module anchor (`__dirname`) → realpath and accepts a candidate
+  only when it carries both markers (`hooks/enforce-worktree.js` and `bin/`); a candidate
+  matching one marker is ambiguous and rejected. `hooks/lib/load-env.js` deliberately does not
+  share the fall-through — an explicit `AGENTS_CONFIG_DIR` must remain the sole source of
+  settings, or an alternate config dir would silently be injected with the real repo's `.env`
+  (CPR-3). The two share only the candidate enumeration.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and
@@ -137,6 +179,15 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- **Model-conditional prompt injection** — `hooks/lib/verbose-prompt.js` is the language-injection
+  provider's sibling: a pure provider holding the single definition of a one-line procedure-hardening
+  directive, injected only for models whose identifier matches `VERBOSE_PROMPT_MODELS`. Keeping the
+  text in `hooks/lib/` rather than `rules/*.md` is what makes it cost zero context while the flag is
+  off. Which model is driving the session is resolved once at SessionStart from the hook payload's
+  `model` field, and frozen in the session state file (`session_model` + `verbose_prompt`), so later
+  reads never re-decide. Two consumers: `session-start.js` (resolves, freezes, then injects) and
+  `post-compact.js` (read-only re-injection after compaction). Fail-open throughout: an unresolvable
+  model, an unusable session id, or an unwritable state directory all yield no injection.
 
 **Permission glob matching**: Permissions are matched against the entire command string.
 `&&` does not split into subcommands. `Bash(git commit *)` does not match

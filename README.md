@@ -9,7 +9,7 @@
 - **One installer, every platform** — Linux, macOS, and Windows (native and WSL2) all handled by a single branching install; hooks and shell rules detect the platform automatically.
 
 Shared CLAUDE.md, rules, hooks, and skills — single source of truth across both tools.
-Codex CLI and Gemini CLI are both supported (install with `-Develop`).
+Codex CLI is supported (install with `-Develop`).
 
 ## Prerequisites
 
@@ -179,6 +179,31 @@ in any GitHub repo's issues and comments.
 See [docs/scan-outbound.md](docs/scan-outbound.md) for detection patterns and configuration.
 To add private patterns, copy `.private-info-blocklist.example` to `.private-info-blocklist`.
 
+### VS Code worktree session visibility
+
+The `anthropic.claude-code` VS Code extension hardcodes `includeWorktrees:!1` in its
+session-list call, so sessions whose cwd is inside a linked git worktree never appear in the
+extension's session list — and every extension auto-upgrade overwrites a manual fix.
+Run `bin/vscode-cc-repair` to re-apply it: the tool classifies each installed
+bundle and refuses rather than guessing when it sees a shape it does not recognize. It writes
+`extension.js.bak` only when that file is absent — a `.bak` left by an earlier run or an older
+version is preserved as-is, never refreshed. Add `--dry-run` to report without writing.
+Patching the on-disk bundle does not touch the running extension host, so after a successful
+patch run VS Code's `Developer: Reload Window` before worktree sessions become visible.
+
+The same tool also cleans up the title-only stub session files that accumulate in
+`~/.claude/projects/` when a session is renamed: add `--prune-stub-sessions` (additive — the
+patch pass still runs) and, optionally, `--claude-projects-dir <path>` to scan somewhere other
+than `~/.claude/projects`. A stub is removed only when another copy of the same session is
+proven to carry a real transcript record for it; anything else is reported and kept. The stub
+is not destroyed but renamed to `<uuid>.jsonl.bak` — invisible to both this tool and the
+extension, and restored by dropping the suffix — and the report names that backup in
+`backup=` next to the `via=` copy that justified the removal. An existing `.bak` from an
+earlier run is never overwritten: a same-second collision gets a timestamped generation
+(`<uuid>.jsonl.bak.<YYYYMMDD_HHMMSS>`, further disambiguated with a counter suffix if needed),
+so every earlier rescue copy stays recoverable. Report lines name the file relative to the
+announced `prune-root:`, never by basename alone. Combine with `--dry-run` first.
+
 ### Cross-machine session continuity
 
 Normalizes Claude Code project paths to drive-root form (`C:\git\`, `/git/`) and syncs
@@ -241,8 +266,8 @@ skills/            — slash commands (/clarify-intent, /make-outline-plan, /mak
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, and other tools
-bin/lib/           — shared bash libraries (codex-core.sh)
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-cc-repair, and other tools
+bin/lib/           — libraries backing bin/ entrypoints (codex-core.sh, per-tool module dirs)
 install/
   win/             — Windows-specific install subscripts
   linux/           — Linux/macOS install subscripts
@@ -306,7 +331,7 @@ GitHub Copilot for VS Code is required for Copilot integration. The installer
 ```bash
 git clone https://github.com/nirecom/agents ~/git/agents
 cd ~/git/agents && ./install.sh
-# Add --develop to also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
+# Add --develop to also install Codex CLI
 ```
 
 > If nvm was just installed, restart your terminal before re-running `./install.sh` so that Node.js (npm) is available.
@@ -323,7 +348,7 @@ source ~/.agents_profile
 git clone https://github.com/nirecom/agents $HOME\git\agents
 Set-Location $HOME\git\agents
 .\install.ps1
-# Add -Develop to also install Codex CLI + Gemini CLI + Mermaid CLI (mmdc)
+# Add -Develop to also install Codex CLI
 ```
 
 > If fnm was just installed, restart your terminal before re-running `.\install.ps1` so that Node.js (npm) is available.

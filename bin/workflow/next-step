@@ -48,7 +48,7 @@ const STEP_DESC = Object.freeze({
 });
 
 const STEP_HINT = Object.freeze({
-  branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed.",
+  branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed, then enter the worktree (EnterWorktree tool, or cd) before any Edit/Write — see skills/_shared/worktree-transition.md.",
   user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol.",
   cleanup: "Run /worktree-end (worktree path), delete branch + git push origin --delete (branch path), or echo WORKFLOW_MARK_STEP_cleanup_skipped (main/no-worktree path).",
   pre_final_report_gate: "Run /session-close from the main worktree.",
@@ -256,6 +256,35 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
+  // Quiet layer (#1607): when the session is deliberately outside the workflow,
+  // next-step reports ACTION=paused instead of nagging with the next step.
+  // Cause-specific resume guidance — NEXT_STEP_RESUME does NOT clear workflow-OFF.
+  // fail-open: a marker-read failure just means the normal (noisy) verdict.
+  try {
+    const { isNextStepPaused, isWorkflowOff } = require("../../hooks/lib/session-markers");
+    if (isNextStepPaused(sid)) {
+      emit(
+        "paused",
+        "",
+        "next-step is quiet. Take no workflow action; continue the out-of-workflow work. " +
+          "Resume with: echo \"<<WORKFLOW_NEXT_STEP_RESUME: {reason}>>\"",
+        "next-step-paused"
+      );
+      return;
+    }
+    if (isWorkflowOff(sid)) {
+      emit(
+        "paused",
+        "",
+        "workflow enforcement is OFF, so next-step is quiet. Take no workflow action. " +
+          "Restore with: echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: {reason}>>\" " +
+          "(a next-step resume sentinel does NOT clear workflow-OFF)",
+        "workflow-off-quiet"
+      );
+      return;
+    }
+  } catch (_e) { /* fail-open */ }
+
   const statePath = getStatePath(sid);
   if (!fs.existsSync(statePath)) {
     emit("invoke", "workflow-init", "Run /workflow-init to initialize the session state.", "no-state");
@@ -339,8 +368,12 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Evidence-based auto-complete for outline (#1133): outline.md exists →
-  // mark complete and recompute. MUST run BEFORE the inconsistency scan.
+  // Evidence-based auto-complete for outline (#1133): outline.md exists AND no
+  // codex review cycle is in flight (round-number/concern-ledger files absent —
+  // see evidence-resolver.js) → mark complete and recompute. A draft written
+  // mid-loop must NOT auto-complete; outline.md is overwritten in place on
+  // every revision round, so file existence alone is not proof of approval.
+  // MUST run BEFORE the inconsistency scan.
   if (currentStep === "outline" && !_didAutoRepair &&
       (state.steps.outline || {}).status === "pending") {
     const { hasCompletionEvidence: hce1133o } = require("../../hooks/lib/workflow-state/evidence-resolver");
@@ -351,8 +384,12 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Evidence-based auto-complete for detail (#1133): detail.md exists →
-  // mark complete and recompute. MUST run BEFORE the inconsistency scan.
+  // Evidence-based auto-complete for detail (#1133): detail.md exists AND no
+  // codex review cycle is in flight (round-number/concern-ledger files absent —
+  // see evidence-resolver.js) → mark complete and recompute. A draft written
+  // mid-loop must NOT auto-complete; detail.md is overwritten in place on
+  // every revision round, so file existence alone is not proof of approval.
+  // MUST run BEFORE the inconsistency scan.
   if (currentStep === "detail" && !_didAutoRepair &&
       (state.steps.detail || {}).status === "pending") {
     const { hasCompletionEvidence: hce1133d } = require("../../hooks/lib/workflow-state/evidence-resolver");

@@ -9,51 +9,10 @@ const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
-
-// Replace only real newlines that are inside DQ spans with a space.
-// Preserves $() and backtick verbatim (so the \$\( guard still fires on them).
-// Returns the original string on any exception.
-function foldDqNewlines(str) {
-  try {
-    let out = "";
-    let i = 0;
-    const n = str.length;
-    while (i < n) {
-      const ch = str[i];
-      if (ch !== '"') {
-        out += ch;
-        i++;
-        continue;
-      }
-      // Inside DQ span — fold literal newlines, keep everything else verbatim
-      out += '"';
-      i++;
-      while (i < n) {
-        const c = str[i];
-        if (c === "\\" && i + 1 < n) {
-          out += c + str[i + 1];
-          i += 2;
-          continue;
-        }
-        if (c === '"') {
-          out += c;
-          i++;
-          break;
-        }
-        if (c === "\r" || c === "\n") {
-          out += " ";
-          i++;
-        } else {
-          out += c;
-          i++;
-        }
-      }
-    }
-    return out;
-  } catch (_) {
-    return str;
-  }
-}
+const { matchFinalizeWorkerOverlay } = require("./finalize-worker-overlay");
+const { foldNewlinesInSpans } = require("../../lib/quote-spans");
+const { resolveAgentsConfigDir } = require("../../lib/agents-config-dir");
+const { rejectsUnsafeArgTail } = require("../arg-tail-guard");
 
 /**
  * True when cmd is a sanctioned worker-script invocation whose write targets
@@ -66,9 +25,20 @@ function foldDqNewlines(str) {
  */
 function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;
-  const acd = (process.env.AGENTS_CONFIG_DIR || "").trim();
+  // Marker-validated config dir (#1630): survives a subagent env gap and refuses
+  // an attacker-supplied AGENTS_CONFIG_DIR. null keeps the fail-closed contract.
+  const acd = resolveAgentsConfigDir();
   if (!acd) return false;
   if (!repoRoot) return false;
+
+  // (a0) Finalize-worker overlay (#1600): HARD-validates identity, env VALUES, and
+  // argument shapes for the 3 live finalize scripts (single-line, fully-resolved
+  // literal eval), including per-token metacharacter rejection on unquoted args.
+  // On match, skip the legacy SANCTIONED/arg-tail path and defer only to the
+  // shared write-scope tail (c)/(d).
+  if (matchFinalizeWorkerOverlay(cmd, acd, repoRoot) !== null) {
+    return writeTargetsAllInLinkedWorktrees(cmd, repoRoot);
+  }
 
   // (a) Identity: bare bash "<path>" [args…] OR eval "$(bash "<path>")" [|| exit 0]  (#1484)
   let scriptPath, argTail;
@@ -122,14 +92,23 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
   if (!matched) return false;
 
   // (b) Structural argTail scan — reject chaining/substitution but allow redirects.
-  // foldDqNewlines folds only DQ-internal newlines so "$(cmd)" is preserved for the
-  // \$\( check (fail-closed: DQ-internal $() still triggers rejection).
-  const scanTail = foldDqNewlines(argTail);
-  if (/\|\||&&|;|\$\(|`|<\(|>\(|\n/.test(scanTail)) return false;
-  // Reject bare & (background operator): `cmd & evil` runs evil in main worktree.
-  // &> / &>> (redirect-both forms) are exempt — their & is followed by >.
-  if (/&(?!>)/.test(scanTail)) return false;
+  // A newline inside a DQ span is argument text, not a command separator, so it is
+  // folded to a space first; every other newline still rejects the command.
+  // The fold is fail-closed: when it reports ok:false it hands back the input
+  // byte-for-byte, so consuming `.out` blindly would scan a tail the fold could
+  // not understand and let an unfolded newline through as "just an argument".
+  const folded = foldNewlinesInSpans(argTail, ["dq"]);
+  if (folded.ok !== true) return false;
+  if (rejectsUnsafeArgTail(folded.out, "worker-script")) return false;
 
+  // (c)/(d) Shared write-scope tail.
+  return writeTargetsAllInLinkedWorktrees(cmd, repoRoot);
+}
+
+// (c)/(d) Write-target scope tail: extract write targets and require every one to
+// land inside a registered linked worktree of repoRoot (never the main worktree).
+// Shared by the legacy SANCTIONED path and the #1600 finalize-worker overlay.
+function writeTargetsAllInLinkedWorktrees(cmd, repoRoot) {
   // (c) Extract write targets
   const { targets, parseFailure } = collectBashWriteTargets(cmd);
   if (parseFailure) return false;

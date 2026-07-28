@@ -1,3 +1,6 @@
+# C5 — NEW contract (#1608 token-first gate): supervisor findings no longer take part
+# in the verdict. A state carrying only notice-severity layer1 findings does NOT buy a
+# pass-through; with no clearance token present the genuine OFF emit is BLOCKED.
 run_c5_notice_only_pass_through() {
     local tmp sid tmp_node hook_input out rc
     tmp=$(make_tmp)
@@ -16,15 +19,15 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:'$sid',tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>\"'}}))" 2>/dev/null)
 
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     rm -rf "$tmp"
 
     if echo "$out" | grep -q '"decision":"block"' || [ $rc -eq 2 ]; then
-        fail "C5: state with only notice-severity layer1 findings → shim must pass through (exit 0), got rc=$rc out=$(printf '%q' "${out:0:60}")"
+        pass "C5: state with only notice-severity layer1 findings + no clearance token → shim BLOCKS (findings do not grant a pass)"
     else
-        pass "C5: state with only notice-severity layer1 findings → shim passes through (no block)"
+        fail "C5: notice-only findings must NOT grant a pass — token-first gate requires a clearance token, got rc=$rc out=$(printf '%q' "${out:0:60}")"
     fi
 }
 run_c5_notice_only_pass_through
@@ -32,7 +35,7 @@ run_c5_notice_only_pass_through
 eval_with_state() {
     local tmp_node="$1" sid="$2" out rc hook_input
     hook_input=$(node -e "process.stdout.write(JSON.stringify({tool_name:'Bash',session_id:process.argv[1],tool_input:{command:'echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>\"'}}))" -- "$sid" 2>/dev/null)
-    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" \
+    out=$(WORKFLOW_PLANS_DIR="$tmp_node" AGENTS_CONFIG_DIR="$tmp_node" CLAUDE_WORKFLOW_DIR="$tmp_node" \
         run_with_timeout 10 node "$SHIM" <<< "$hook_input" 2>/dev/null)
     rc=$?
     if echo "$out" | grep -q '"decision":"block"' || [ $rc -eq 2 ]; then echo "block"; else echo "pass"; fi
@@ -64,11 +67,15 @@ const st=s.createEmptyState('$sid_wt');
 st.layer1={findings:[{categories:['workflow'],severity:'warning',detail:'enforcer false-block',reporter:'enforce-worktree',timestamp:new Date().toISOString()}]};
 fs.writeFileSync(w.getStatePath('$sid_wt'),JSON.stringify(st));
 " >/dev/null 2>&1
+    # NEW contract (#1608): the old enforce-worktree-only "false-block recovery"
+    # pass-through is gone. Finding reporter/scope no longer influences the verdict —
+    # with no clearance token the emit blocks like any other. The escape hatch when the
+    # enforcer itself is broken is now the EMERGENCY sentinel, not a scoped finding.
     got=$(eval_with_state "$tmp_node" "$sid_wt")
-    if [ "$got" = "pass" ]; then
-        pass "C4-pass: layer1 WARNING finding (reporter=enforce-worktree) → shim PASSES (false-block recovery)"
+    if [ "$got" = "block" ]; then
+        pass "C4-pass: layer1 WARNING finding (reporter=enforce-worktree) → shim BLOCKS (finding scope grants no pass-through)"
     else
-        fail "C4-pass: enforce-worktree-only blocking finding must pass through, got=$got"
+        fail "C4-pass: enforce-worktree-scoped finding must NOT bypass the token gate, got=$got"
     fi
 
     rm -rf "$tmp"
@@ -146,6 +153,8 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
 }
 run_c4_state_c_alert_phase_done
 
+# NEW contract (#1608): alert_phase is no longer consulted. A terminal alert phase
+# (closed/paused) does not early-exit the shim — the token gate alone decides.
 run_c4_state_d_alert_phase_closed() {
     local tmp sid tmp_node hook_input out rc got
     tmp=$(make_tmp)
@@ -180,10 +189,10 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
         got="pass"
     fi
 
-    if [ "$got" = "pass" ]; then
-        pass "C4-state-D: alert_phase=closed + cumSev=warning + blocking L1 finding -> shim PASSES (closed early-exit)"
+    if [ "$got" = "block" ]; then
+        pass "C4-state-D: alert_phase=closed + no clearance token -> shim BLOCKS (alert_phase no longer bypasses the gate)"
     else
-        fail "C4-state-D: alert_phase=closed should bypass shim (fix not applied)"
+        fail "C4-state-D: alert_phase=closed must not bypass the token gate, got=$got"
     fi
 }
 run_c4_state_d_alert_phase_closed
@@ -222,10 +231,10 @@ fs.writeFileSync(w.getStatePath('$sid'), JSON.stringify(st));
         got="pass"
     fi
 
-    if [ "$got" = "pass" ]; then
-        pass "C4-state-E: alert_phase=paused + cumSev=warning + blocking L1 finding -> shim PASSES (paused early-exit)"
+    if [ "$got" = "block" ]; then
+        pass "C4-state-E: alert_phase=paused + no clearance token -> shim BLOCKS (alert_phase no longer bypasses the gate)"
     else
-        fail "C4-state-E: alert_phase=paused should bypass shim (fix not applied)"
+        fail "C4-state-E: alert_phase=paused must not bypass the token gate, got=$got"
     fi
 }
 run_c4_state_e_alert_phase_paused

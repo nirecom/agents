@@ -6,10 +6,13 @@
 # The module exports two functions:
 #   - isForgeScanTarget(command) -> boolean
 #       true for: gh issue (create|edit|close|comment), gh pr (create|edit|close|comment|review)
+#                 gh repo create|edit,
 #                 gh api -X POST/PATCH/PUT/DELETE, gh api --method POST/PATCH/PUT/DELETE
-#       false for: gh repo *, gh issue list, git commit, gh api -X GET, gh api (no method flag)
+#       false for: gh repo rename|archive|delete|view, gh issue list, git commit,
+#                  gh api -X GET, gh api (no method flag)
 #   - extractTexts(command) -> { inline: string[], filePaths: string[] }
 #       --body "x" / --title "x" / --body 'x'   -> inline[]
+#       --description "x" / --homepage "x"      -> inline[]
 #       --body-file /path                        -> filePaths[]
 #       heredoc <<'EOF'\n...\nEOF                -> inline[]
 #       -f key=value / -F key=value / --field key=value -> inline[] (gh api fields)
@@ -161,10 +164,11 @@ expect_target_true "gh api -X DELETE -> true"              'gh api -X DELETE /re
 echo ""
 echo "=== isForgeScanTarget: FALSE cases ==="
 expect_target_false "gh issue list -> false"               'gh issue list'
-expect_target_false "gh repo create -> false"              'gh repo create myrepo'
-expect_target_false "gh repo edit -> false"                'gh repo edit --description "d"'
+expect_target_true "gh repo create -> true"                'gh repo create myrepo'
+expect_target_true "gh repo edit -> true"                  'gh repo edit --description "d"'
 expect_target_false "gh repo rename -> false"              'gh repo rename old new'
 expect_target_false "gh repo archive -> false"             'gh repo archive myrepo'
+expect_target_false "gh repo delete -> false"              'gh repo delete myrepo'
 expect_target_false "git commit -> false"                  'git commit -m "msg"'
 expect_target_true "gh api -X PATCH -> true"               'gh api -X PATCH repos/owner/repo/issues/5'
 expect_target_false "bare gh -> false"                     'gh'
@@ -250,6 +254,17 @@ expect_extract "gh api --input - (stdin) -> empty" \
 expect_extract "gh api GET -> no extraction" \
     'gh api -X GET /repos/owner/repo/issues -f filter=all' \
     'return v.inline.length === 0 && v.filePaths.length === 0;'
+
+echo ""
+echo "=== extractTexts: gh repo description/homepage cases ==="
+
+expect_extract "gh repo create --description -> inline" \
+    'gh repo create foo/bar --description "secret-desc"' \
+    'return Array.isArray(v.inline) && v.inline.some(s => s.indexOf("secret-desc") !== -1) && Array.isArray(v.filePaths);'
+
+expect_extract "gh repo edit --homepage -> inline" \
+    'gh repo edit foo/bar --homepage "https://internal.example.com"' \
+    'return Array.isArray(v.inline) && v.inline.some(s => s.indexOf("internal.example.com") !== -1) && Array.isArray(v.filePaths);'
 
 echo ""
 echo "================================"

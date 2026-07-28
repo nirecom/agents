@@ -231,43 +231,23 @@ for stale in ~/.local/bin/cc-session-title ~/.local/bin/cc-session-title.cmd ~/.
 done
 # --- END temporary: cc-session-title launcher cleanup ---
 
-# --- ~/.local/bin/review-code-codex symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-code-codex" ~/.local/bin/review-code-codex
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-codex${C_RESET}\n"
-
-# --- ~/.local/bin/review-plan-codex symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-plan-codex" ~/.local/bin/review-plan-codex
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-plan-codex${C_RESET}\n"
-
-# --- ~/.local/bin/get-config-var symlink ---
-ln -sf "$AGENTS_ROOT/bin/get-config-var" ~/.local/bin/get-config-var
-printf "${C_GREEN}Symlinked: ~/.local/bin/get-config-var${C_RESET}\n"
-
-# --- ~/.local/bin/draw-diagram symlink ---
-ln -sf "$AGENTS_ROOT/bin/draw-diagram" ~/.local/bin/draw-diagram
-printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram${C_RESET}\n"
-
-# --- ~/.local/bin/draw-diagram-gemini symlink ---
-ln -sf "$AGENTS_ROOT/bin/draw-diagram-gemini" ~/.local/bin/draw-diagram-gemini
-printf "${C_GREEN}Symlinked: ~/.local/bin/draw-diagram-gemini${C_RESET}\n"
-
-
-# --- ~/.local/bin/extract-accepted-tradeoffs symlink ---
-ln -sf "$AGENTS_ROOT/bin/extract-accepted-tradeoffs" ~/.local/bin/extract-accepted-tradeoffs
-printf "${C_GREEN}Symlinked: ~/.local/bin/extract-accepted-tradeoffs${C_RESET}\n"
-
-# --- ~/.local/bin/review-prompt-size symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-prompt-size" ~/.local/bin/review-prompt-size
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-prompt-size${C_RESET}\n"
-
-# --- ~/.local/bin/review-code-size symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-code-size" ~/.local/bin/review-code-size
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-code-size${C_RESET}\n"
-
-# --- ~/.local/bin/review-env-example symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-env-example" ~/.local/bin/review-env-example
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-env-example${C_RESET}\n"
-
-# --- ~/.local/bin/review-step-numbers symlink ---
-ln -sf "$AGENTS_ROOT/bin/review-step-numbers" ~/.local/bin/review-step-numbers
-printf "${C_GREEN}Symlinked: ~/.local/bin/review-step-numbers${C_RESET}\n"
+# --- PATH-exposed bin/ command symlinks ---
+# The command set is declared once in install/path-exposed-commands.txt and looped over
+# here; install/win/dotfileslink.ps1 consumes the same file (CPR-2 single source of truth,
+# CPR-5 both platforms expose the same set). Do NOT hand-write an `ln -sf` below —
+# add the command name to the list file instead.
+_path_exposed_list="$AGENTS_ROOT/install/path-exposed-commands.txt"
+if [[ ! -f "$_path_exposed_list" ]]; then
+    printf "${C_YELLOW}Command list not found: %s (skipping)${C_RESET}\n" "$_path_exposed_list" >&2
+    _path_exposed_list=/dev/null
+fi
+while IFS= read -r _cmd || [[ -n "$_cmd" ]]; do
+    _cmd="${_cmd%$'\r'}"
+    _cmd="${_cmd#"${_cmd%%[![:space:]]*}"}"
+    _cmd="${_cmd%"${_cmd##*[![:space:]]}"}"
+    [[ -n "$_cmd" ]] || continue
+    [[ "$_cmd" == \#* ]] && continue
+    ln -sf "$AGENTS_ROOT/bin/$_cmd" "$HOME/.local/bin/$_cmd"
+    printf "${C_GREEN}Symlinked: ~/.local/bin/%s${C_RESET}\n" "$_cmd"
+done < "$_path_exposed_list"
+unset _cmd _path_exposed_list

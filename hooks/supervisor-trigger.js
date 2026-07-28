@@ -66,6 +66,13 @@ if (require.main === module) {
     done();
   }
 
+  // Quiet layer (#1607): suppress the advisory while paused. done() emits no
+  // additionalContext and writes no state — non-consuming. fail-open.
+  try {
+    const { isNextStepPaused } = require("./lib/session-markers");
+    if (isNextStepPaused(sessionId)) done();
+  } catch (_) { /* fail-open */ }
+
   let state = null;
   try {
     state = readState(sessionId);

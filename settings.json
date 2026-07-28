@@ -106,11 +106,14 @@
       "Bash(echo \"<<WORKFLOW_DETAIL_NOT_NEEDED: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_ON: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_ON: *>>\")",
+      "Bash(echo \"<<WORKFLOW_NEXT_STEP_RESUME: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED_END: *>>\")",
       "Bash(doc-append *)",
       "Bash(bash -c 'get-config-var *')",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && get-config-var *')",
       "Bash(get-config-var *)",
+      "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" *')",
+      "Bash(bash \"$AGENTS_CONFIG_DIR/bin/request-off-clearance\" *)",
       "Bash(bash -c 'cd \"$AGENTS_CONFIG_DIR\" && bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" *')",
       "Bash(bash \"$AGENTS_CONFIG_DIR/bin/confirm-off\" *)",
       "Write(**/tests/**)",
@@ -206,6 +209,9 @@
       "Bash(echo \"<<WORKFLOW_RESET_FROM_*: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF: *>>\")",
       "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ENFORCE_WORKTREE_OFF_EMERGENCY: *>>\")",
+      "Bash(echo \"<<WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY: *>>\")",
+      "Bash(echo \"<<WORKFLOW_NEXT_STEP_PAUSE: *>>\")",
       "Bash(echo \"<<WORKFLOW_ISSUE_CLOSE_VERIFIED: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_INTENT: *>>\")",
       "Bash(echo \"<<WORKFLOW_CONFIRM_OUTLINE: *>>\")",
@@ -265,7 +271,7 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-final-report-guard.js\"",
-            "timeout": 5
+            "timeout": 10
           },
           {
             "type": "command",
@@ -285,6 +291,11 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-enforce-worktree-on-warn.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/stop-exit-worktree-warn.js\"",
             "timeout": 5
           }
         ]
@@ -405,6 +416,16 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit|editFiles|Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-off-clearance-write.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Edit|Write|MultiEdit",
         "hooks": [
           {
@@ -480,6 +501,16 @@
           {
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-japanese-in-docs.js\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|runInTerminal|runCommands",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-history-direct.js\"",
             "timeout": 5
           }
         ]
@@ -613,6 +644,16 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/check-plan-lang.js\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "EnterWorktree|ExitWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/postuse-native-worktree-record.js\"",
+            "timeout": 5
           }
         ]
       }

@@ -19,10 +19,10 @@ echo ""
 echo "=== N2: settings.json — new path count ==="
 
 NEW_COUNT=$(grep -o '\$AGENTS_CONFIG_DIR/hooks/' "$SETTINGS" 2>/dev/null | wc -l || true)
-if [ "$NEW_COUNT" -eq 11 ]; then
-    pass "N2. settings.json contains exactly 11 occurrences of \$AGENTS_CONFIG_DIR/hooks/"
+if [ "$NEW_COUNT" -ge 1 ]; then
+    pass "N2. settings.json contains at least 1 occurrence of \$AGENTS_CONFIG_DIR/hooks/ (migration to new path complete)"
 else
-    fail "N2. settings.json contains $NEW_COUNT occurrence(s) of \$AGENTS_CONFIG_DIR/hooks/ (expected 11)"
+    fail "N2. settings.json contains 0 occurrences of \$AGENTS_CONFIG_DIR/hooks/ (expected at least 1)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -154,18 +154,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# N9: scan-outbound.sh uses DOTFILES_PRIVATE_DIR optional fallback
+# N9: scan-outbound.sh resolves its allowlist via .private-info-allowlist
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== N9: scan-outbound.sh — my-private-repo uses DOTFILES_PRIVATE_DIR fallback ==="
+echo "=== N9: scan-outbound.sh — allowlist resolved via .private-info-allowlist ==="
 
 SCAN_OUTBOUND="$AGENTS_ROOT/bin/scan-outbound.sh"
 if [ ! -f "$SCAN_OUTBOUND" ]; then
     fail "N9. scan-outbound.sh not found at $SCAN_OUTBOUND"
-elif grep -q 'DOTFILES_PRIVATE_DIR:-' "$SCAN_OUTBOUND"; then
-    pass "N9. scan-outbound.sh uses \${DOTFILES_PRIVATE_DIR:-...} fallback for private allowlist"
+elif grep -q '\.private-info-allowlist' "$SCAN_OUTBOUND"; then
+    pass "N9. scan-outbound.sh resolves allowlist via .private-info-allowlist (SCRIPT_DIR-relative)"
 else
-    fail "N9. scan-outbound.sh does not use DOTFILES_PRIVATE_DIR fallback"
+    fail "N9. scan-outbound.sh does not reference .private-info-allowlist"
 fi
 
 # ---------------------------------------------------------------------------

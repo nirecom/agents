@@ -89,6 +89,13 @@ if (require.main === module) {
     process.exit(0);
   }
 
+  // Quiet layer (#1607): a paused session suppresses every re-block branch
+  // (cumSev=error / hang / alertArmedAt) and the audit-arm block. fail-open.
+  try {
+    const { isNextStepPaused } = require("./lib/session-markers");
+    if (isNextStepPaused(sessionId)) process.exit(0);
+  } catch (_) { /* fail-open */ }
+
   let state = null;
   try {
     state = readState(effectiveSupervisorStateSessionId);

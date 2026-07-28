@@ -1,5 +1,8 @@
 ---
-globs: "rules/**/*.md,skills/**/SKILL.md,agents/**/*.md"
+paths:
+  - "rules/**/*.md"
+  - "skills/**/SKILL.md"
+  - "agents/**/*.md"
 ---
 
 # Prompt-Content Quality Criteria

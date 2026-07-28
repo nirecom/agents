@@ -37,6 +37,20 @@ function hasCommittedTestChanges(repoDir) {
   }
 }
 
+// An in-flight codex review cycle leaves its round-number and/or concern-ledger
+// file on disk (skills/_shared/codex-review-loop.md: both are deleted only on
+// a terminal verdict — APPROVED or ESCALATE — and persist across CONTINUE /
+// AUTO_EXTEND). Used to distinguish "planner wrote a draft this round" from
+// "the loop reached a terminal verdict" — draft existence alone is not proof
+// of approval, since outline.md/detail.md is the same file the planner
+// overwrites on every revision round.
+function hasUnresolvedReviewCycle(plansDir, sessionId, format) {
+  const fs = require("fs");
+  const roundFile = path.join(plansDir, sessionId + "-" + format + "-round-number.txt");
+  const ledgerFile = path.join(plansDir, sessionId + "-" + format + "-concern-ledger.txt");
+  return fs.existsSync(roundFile) || fs.existsSync(ledgerFile);
+}
+
 // Resolve the git repository root used by docs evidence checks.
 // Precedence: opts.repoDir → CLAUDE_PROJECT_DIR → git rev-parse. Returns null
 // on failure (caller treats as no-evidence).
@@ -84,13 +98,15 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
       const fs = require("fs");
       const plansDir = getWorkflowPlansDir();
-      return fs.existsSync(path.join(plansDir, sessionId + "-outline.md"));
+      if (!fs.existsSync(path.join(plansDir, sessionId + "-outline.md"))) return false;
+      return !hasUnresolvedReviewCycle(plansDir, sessionId, "outline-plan");
     }
     if (step === "detail") {
       if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
       const fs = require("fs");
       const plansDir = getWorkflowPlansDir();
-      return fs.existsSync(path.join(plansDir, sessionId + "-detail.md"));
+      if (!fs.existsSync(path.join(plansDir, sessionId + "-detail.md"))) return false;
+      return !hasUnresolvedReviewCycle(plansDir, sessionId, "detail-plan");
     }
     if (step === "write_tests") {
       const repoDir = resolveRepoDir(opts);
@@ -123,10 +139,18 @@ function describeEvidence(step) {
     ];
   }
   if (step === "outline") {
-    return ["<PLANS_DIR>/<sessionId>-outline.md exists"];
+    return [
+      "<PLANS_DIR>/<sessionId>-outline.md exists",
+      "no in-flight review cycle: <sessionId>-outline-plan-round-number.txt and "
+        + "<sessionId>-outline-plan-concern-ledger.txt are both absent",
+    ];
   }
   if (step === "detail") {
-    return ["<PLANS_DIR>/<sessionId>-detail.md exists"];
+    return [
+      "<PLANS_DIR>/<sessionId>-detail.md exists",
+      "no in-flight review cycle: <sessionId>-detail-plan-round-number.txt and "
+        + "<sessionId>-detail-plan-concern-ledger.txt are both absent",
+    ];
   }
   if (step === "write_tests") {
     return [
