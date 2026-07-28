@@ -36,6 +36,28 @@ PLANS_DIR="$TMPDIR_BASE/plans"
 mkdir -p "$PLANS_DIR"
 export WORKFLOW_PLANS_DIR="$PLANS_DIR"
 
+# Pin the CONFIRM_* stage gates ON for the whole suite. The developer's ambient
+# .env may carry CONFIRM_OUTLINE=off / CONFIRM_DETAIL=off, which legitimately
+# waives the #1133 approval gate (source "confirm-flag-off") and would mask the
+# gated-step assertions below (M1/M6, A1/A2, I1, G1).
+# The gate decision is resolved from the CONFIG FILE only
+# (plan-confirm-flag.js → isConfirmOffForStageFromFile → load-env.js
+# readDefaultEnvFile), which never consults process.env. So process.env exports
+# alone CANNOT isolate this suite — it must point AGENTS_CONFIG_DIR at a scratch
+# config dir whose .env contents are known. Every case here needs the gates-ON
+# baseline only, so a single scratch config is enough (the gates-OFF branch is
+# covered by tests/fix-1133-1148-approval-gate/14-f1-env-file-only-gate.sh).
+# Exported BEFORE any sub-file is sourced, so every child `node` invocation in
+# the sub-files inherits it.
+CONFIG_DIR_ON="$TMPDIR_BASE/config-on"
+mkdir -p "$CONFIG_DIR_ON"
+printf 'CONFIRM_INTENT=on\nCONFIRM_OUTLINE=on\nCONFIRM_DETAIL=on\n' > "$CONFIG_DIR_ON/.env"
+export AGENTS_CONFIG_DIR="$CONFIG_DIR_ON"
+# Kept alongside the file-sourced pin: hook-process code paths (and any helper
+# still on isConfirmOffForStage) read process.env.
+export CONFIRM_OUTLINE=on
+export CONFIRM_DETAIL=on
+
 PASS=0
 FAIL=0
 
@@ -267,6 +289,30 @@ REVIEW_SECURITY_COMPLETE_RUN_TESTS_PENDING() {
   }
 }
 EOF
+}
+
+# seed_approval <sid> <step> : create the <sid>-<step>.md plan artifact and record
+# a matching plan_approvals[step] entry (source confirm-sentinel + artifact sha256)
+# directly in the state file. Post-#1133 this is what a user CONFIRM sentinel
+# leaves behind, and it is the precondition for completing a gated step.
+seed_approval() {
+  local sid="$1" step="$2"
+  local artifact="$PLANS_DIR/${sid}-${step}.md"
+  [ -f "$artifact" ] || printf 'plan\n' > "$artifact"
+  node -e "
+    const fs = require('fs'), crypto = require('crypto');
+    const [stateFile, artifact, step] = process.argv.slice(1);
+    const s = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    s.plan_approvals = s.plan_approvals || {};
+    s.plan_approvals[step] = {
+      source: 'confirm-sentinel',
+      reason: 'seeded by test fixture',
+      artifact_sha256: crypto.createHash('sha256').update(fs.readFileSync(artifact)).digest('hex'),
+      artifact_hash_status: 'verified',
+      recorded_at: '2026-06-20T10:00:00.000Z'
+    };
+    fs.writeFileSync(stateFile, JSON.stringify(s, null, 2));
+  " "$WORKFLOW_DIR/${sid}.json" "$artifact" "$step"
 }
 
 setup_repo() {

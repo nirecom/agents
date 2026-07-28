@@ -62,15 +62,10 @@ function filterOsBlocks(text, platform) {
   return out.join("\n");
 }
 
-function loadEnv(envPath) {
-  if (!envPath) return false;
-  let content;
-  try {
-    content = fs.readFileSync(envPath, "utf8");
-  } catch {
-    return false; // missing or unreadable — silent no-op
-  }
-  content = filterOsBlocks(content, process.platform);
+// parseEnv parses already-OS-filtered .env text into a plain KEY→value map.
+// Pure: never touches process.env. SSOT for the KEY=VALUE line grammar.
+function parseEnv(content) {
+  const map = {};
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -85,6 +80,59 @@ function loadEnv(envPath) {
         val = val.slice(1, -1);
       }
     }
+    map[key] = val;
+  }
+  return map;
+}
+
+// readEnvFile reads a .env file into a map WITHOUT mutating process.env.
+// Returns null when the file is missing or unreadable (same fail-safe as loadEnv).
+// Use this — not process.env — for any decision that must not be forgeable by an
+// inline `VAR=x node bin/...` prefix in a model-issued Bash command.
+function readEnvFile(envPath) {
+  if (!envPath) return null;
+  let content;
+  try {
+    content = fs.readFileSync(envPath, "utf8");
+  } catch {
+    return null; // missing or unreadable — silent no-op
+  }
+  return parseEnv(filterOsBlocks(content, process.platform));
+}
+
+// readDefaultEnvFile resolves the config .env the same way loadDefaultEnv does,
+// but returns its parsed contents instead of injecting them into process.env.
+// Returns {} when no .env can be found (callers treat "absent" as "unset").
+function readDefaultEnvFile() {
+  // (a) Honor AGENTS_CONFIG_DIR if set
+  if (process.env.AGENTS_CONFIG_DIR) {
+    return readEnvFile(path.join(process.env.AGENTS_CONFIG_DIR, ".env")) || {};
+  }
+  // (b) __dirname two levels up (direct install path)
+  const dirFallback = path.resolve(__dirname, "..", "..");
+  const direct = readEnvFile(path.join(dirFallback, ".env"));
+  if (direct) return direct;
+  // (c) Resolve __filename through symlinks (e.g. ~/.claude/hooks/lib -> real repo)
+  try {
+    const realCfgDir = path.resolve(path.dirname(fs.realpathSync(__filename)), "..", "..");
+    const viaReal = readEnvFile(path.join(realCfgDir, ".env"));
+    if (viaReal) return viaReal;
+  } catch (_) {}
+  return {};
+}
+
+function loadEnv(envPath) {
+  if (!envPath) return false;
+  let content;
+  try {
+    content = fs.readFileSync(envPath, "utf8");
+  } catch {
+    return false; // missing or unreadable — silent no-op
+  }
+  content = filterOsBlocks(content, process.platform);
+  const parsed = parseEnv(content);
+  for (const key of Object.keys(parsed)) {
+    const val = parsed[key];
     // Non-empty process.env wins (explicit shell/test export takes precedence).
     // Empty-string values are treated as "not set" — Windows propagates VAR=""
     // into child processes even when the parent shell shows it as unset.
@@ -119,4 +167,4 @@ function loadDefaultEnv() {
   return false;
 }
 
-module.exports = { loadEnv, loadDefaultEnv, filterOsBlocks };
+module.exports = { loadEnv, loadDefaultEnv, filterOsBlocks, parseEnv, readEnvFile, readDefaultEnvFile };

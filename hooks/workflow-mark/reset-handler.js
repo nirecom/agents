@@ -5,6 +5,10 @@
 const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow-state");
+const {
+  APPROVAL_GATED_STEPS,
+  buildAuditApproval,
+} = require("../lib/workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
@@ -58,7 +62,17 @@ function handle(ctx) {
       for (let i = 0; i < fromIndex; i++) {
         newState.steps[VALID_STEPS[i]] = { status: "complete", updated_at: now };
       }
-      writeState(sessionId, newState);
+      // WORKFLOW_RESET_FROM_* is permissions.ask — the user already approved this
+      // rollback, so the force-completed steps carry a sanctioned audit record
+      // rather than tripping the completion-approval invariant (#1133). Gated
+      // steps are seeded explicitly so a later same-status rewrite is not refused.
+      newState.plan_approvals = newState.plan_approvals || {};
+      for (const step of APPROVAL_GATED_STEPS) {
+        if (VALID_STEPS.indexOf(step) < fromIndex) {
+          newState.plan_approvals[step] = buildAuditApproval("reset-sentinel", rawReason);
+        }
+      }
+      writeState(sessionId, newState, { sanctioned: "reset-sentinel", reason: rawReason });
     } catch (e) {
       pushMessage(`workflow-mark: reset-from failed — ${e.message}.`);
     }

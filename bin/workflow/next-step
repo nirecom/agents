@@ -10,6 +10,34 @@ const {
   resolveSessionId,
   markStep,
 } = require("../../hooks/lib/workflow-state");
+const {
+  effectiveStatus,
+  reconcileEffectiveState,
+} = require("../../hooks/lib/workflow-state/effective-state");
+const {
+  APPROVAL_GATED_STEPS,
+  isApprovalGatedStep,
+  UnapprovedCompletionError,
+  confirmSentinelFor,
+  recoveryFor,
+} = require("../../hooks/lib/workflow-state/completion-approval");
+
+// Single resolution of the git repo root (forwarded to evidence predicates).
+// Precedence: CLAUDE_PROJECT_DIR → git rev-parse → cwd.
+let _repoDirCache;
+function resolveRepoDir() {
+  if (_repoDirCache !== undefined) return _repoDirCache;
+  let repoDir = process.env.CLAUDE_PROJECT_DIR || null;
+  if (!repoDir) {
+    try {
+      repoDir = require("child_process").execSync(
+        "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
+      ).trim();
+    } catch (e) { repoDir = process.cwd(); }
+  }
+  _repoDirCache = repoDir;
+  return repoDir;
+}
 
 // ---- Lookup tables --------------------------------------------------------
 
@@ -54,15 +82,8 @@ const STEP_HINT = Object.freeze({
   pre_final_report_gate: "Run /session-close from the main worktree.",
 });
 
-const WF_META_AUTO_SKIP = new Set([
-  "branching_complete", "detail", "write_tests", "review_tests", "run_tests",
-  "review_security", "docs", "user_verification", "cleanup",
-]);
-
-function effectiveStatus(step, raw, isWfMeta) {
-  if (isWfMeta && WF_META_AUTO_SKIP.has(step) && raw === "pending") return "skipped";
-  return raw;
-}
+// WF_META_AUTO_SKIP / effectiveStatus now live in
+// hooks/lib/workflow-state/effective-state.js (SSOT, imported above).
 
 // ---- Import-time assertions -----------------------------------------------
 
@@ -269,22 +290,65 @@ function computeVerdict(rawSid, _didAutoRepair) {
   }
 
   const isWfMeta = (state.workflow_type === "wf-meta");
+  const repoDir = resolveRepoDir();
 
-  // Walk to find currentStep.
+  // Precondition preserved ahead of the snapshot: clarify_intent requires
+  // closes_issues. Resolved against the RAW walk so evidence-based resolution of
+  // clarify_intent cannot skip past the check (pre-#1148 precedence).
+  {
+    let rawCurrent = null;
+    for (const step of VALID_STEPS) {
+      const raw = (state.steps[step] || {}).status || "pending";
+      const status = effectiveStatus(step, raw, isWfMeta);
+      if (status !== "complete" && status !== "skipped") { rawCurrent = step; break; }
+    }
+    if (rawCurrent === "clarify_intent") {
+      const issues = state.closes_issues;
+      if (!issues || !Array.isArray(issues) || issues.length === 0) {
+        emit("blocked", "", "closes_issues is empty -- run /workflow-init to populate it.", "closes_issues-empty");
+        return;
+      }
+    }
+  }
+
+  // #1148: build the read-only reconciled snapshot BEFORE the inconsistency scan,
+  // so a step that on-disk evidence already resolves cannot false-abort the scan.
+  // Gated steps (outline/detail) resolve here only when the approval invariant
+  // is already satisfied (#1133) — the same predicate writeState enforces.
+  const snapshot = reconcileEffectiveState(state, sid, { repoDir, isWfMeta });
+  const snapStatus = (step) => (snapshot.steps[step] || {}).status;
+
+  // Persist the snapshot's evidence-resolved steps. Called only after the
+  // inconsistency scan has passed (or when there is nothing left to scan).
+  function persistResolutions() {
+    for (const r of snapshot.resolutions) {
+      try {
+        markStep(sid, r.step, "complete");
+      } catch (e) {
+        if (e instanceof UnapprovedCompletionError) {
+          emit("blocked", "", recoveryFor(r.step), "unapproved-completion: " + r.step);
+          return;
+        }
+        /* fail-open on any other write failure */
+      }
+    }
+  }
+
+  // Walk the snapshot to find currentStep (its statuses are already effective —
+  // do NOT re-apply effectiveStatus here).
   let currentIdx = -1;
   let currentStep = null;
   for (let i = 0; i < VALID_STEPS.length; i++) {
-    const step = VALID_STEPS[i];
-    const raw = (state.steps[step] || {}).status || "pending";
-    const status = effectiveStatus(step, raw, isWfMeta);
+    const status = snapStatus(VALID_STEPS[i]);
     if (status !== "complete" && status !== "skipped") {
       currentIdx = i;
-      currentStep = step;
+      currentStep = VALID_STEPS[i];
       break;
     }
   }
 
   if (currentStep === null) {
+    persistResolutions();
     // A-4 speculative-skip gate: before declaring done, check whether any
     // outline/detail step was skipped with an unresolved or vetoed verdict.
     // skip_verdict absent = legacy skip = fail-open (invoke write-tests to re-confirm).
@@ -317,59 +381,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
     return;
   }
 
-  // Evidence-based auto-complete for write_tests (#1107): staged test files →
-  // mark complete and recompute. MUST run BEFORE the inconsistency scan: when a
-  // later step (review_tests/run_tests) is already complete while write_tests is
-  // pending, the scan would otherwise fire `abort` first and never auto-repair.
-  if (currentStep === "write_tests" && !_didAutoRepair &&
-      (state.steps.write_tests || {}).status === "pending") {
-    const { hasCompletionEvidence } = require("../../hooks/lib/workflow-state/evidence-resolver");
-    let repoDir = process.env.CLAUDE_PROJECT_DIR || null;
-    if (!repoDir) {
-      try {
-        repoDir = require("child_process").execSync(
-          "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
-        ).trim();
-      } catch (e) { repoDir = process.cwd(); }
-    }
-    if (hasCompletionEvidence("write_tests", sid, { repoDir })) {
-      const { markStep } = require("../../hooks/lib/workflow-state");
-      try { markStep(sid, "write_tests", "complete"); } catch (e) { /* fail-open */ }
-      return computeVerdict(rawSid, true);
-    }
-  }
-
-  // Evidence-based auto-complete for outline (#1133): outline.md exists AND no
-  // codex review cycle is in flight (round-number/concern-ledger files absent —
-  // see evidence-resolver.js) → mark complete and recompute. A draft written
-  // mid-loop must NOT auto-complete; outline.md is overwritten in place on
-  // every revision round, so file existence alone is not proof of approval.
-  // MUST run BEFORE the inconsistency scan.
-  if (currentStep === "outline" && !_didAutoRepair &&
-      (state.steps.outline || {}).status === "pending") {
-    const { hasCompletionEvidence: hce1133o } = require("../../hooks/lib/workflow-state/evidence-resolver");
-    if (hce1133o("outline", sid)) {
-      const { markStep: ms1133o } = require("../../hooks/lib/workflow-state");
-      try { ms1133o(sid, "outline", "complete"); } catch (e) { /* fail-open */ }
-      return computeVerdict(rawSid, true);
-    }
-  }
-
-  // Evidence-based auto-complete for detail (#1133): detail.md exists AND no
-  // codex review cycle is in flight (round-number/concern-ledger files absent —
-  // see evidence-resolver.js) → mark complete and recompute. A draft written
-  // mid-loop must NOT auto-complete; detail.md is overwritten in place on
-  // every revision round, so file existence alone is not proof of approval.
-  // MUST run BEFORE the inconsistency scan.
-  if (currentStep === "detail" && !_didAutoRepair &&
-      (state.steps.detail || {}).status === "pending") {
-    const { hasCompletionEvidence: hce1133d } = require("../../hooks/lib/workflow-state/evidence-resolver");
-    if (hce1133d("detail", sid)) {
-      const { markStep: ms1133d } = require("../../hooks/lib/workflow-state");
-      try { ms1133d(sid, "detail", "complete"); } catch (e) { /* fail-open */ }
-      return computeVerdict(rawSid, true);
-    }
-  }
+  // Evidence-based auto-complete for write_tests / outline / detail / clarify_intent /
+  // docs is now performed once, up front, by reconcileEffectiveState (#1148). The
+  // snapshot is already resolved here; persistence happens after the scan passes.
 
   // A-4: authoritative recorded-verdict skip BEFORE inconsistency scan.
   // A valid skip_judgment allows resolving outline/detail=pending BEFORE the scan
@@ -384,12 +398,14 @@ function computeVerdict(rawSid, _didAutoRepair) {
   }
 
   // Inconsistency: later step is complete OR invalid status anywhere.
+  // Runs AGAINST THE SNAPSHOT (#1148): steps already resolved from evidence read
+  // as complete here, so a pending-but-evidenced step can no longer false-abort.
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
     const stEntry = state.steps[step];
     const rawStatus = stEntry ? stEntry.status : undefined;
     const status = rawStatus !== undefined && rawStatus !== null
-      ? effectiveStatus(step, rawStatus, isWfMeta)
+      ? snapStatus(step)
       : undefined;
     if (status !== undefined && status !== null && VALID_STATUSES.indexOf(status) === -1) {
       emit("abort", "", "", "inconsistent: " + step + " has unknown status " + rawStatus);
@@ -410,11 +426,14 @@ function computeVerdict(rawSid, _didAutoRepair) {
         return;
       }
       if (step === "detail" && currentStep === "outline") {
+        // outline is approval-gated: --mark is refused without a recorded
+        // approval, so the recovery is the CONFIRM sentinel, not --mark (#1133).
         emit(
           "abort",
           "",
-          "detail is complete but outline is pending (compaction gap). Recovery: node " + __filename +
-            " --mark outline complete (session-global; no cd needed). Then re-run next-step.",
+          "detail is complete but outline is pending (compaction gap). outline requires user approval. " +
+            "Recovery: ask the user to approve, then emit: echo \"<<" + confirmSentinelFor("outline") +
+            ": {summary}>>\". Then re-run next-step.",
           "inconsistent: " + step + " is complete but " + currentStep + " is pending"
         );
         return;
@@ -433,21 +452,25 @@ function computeVerdict(rawSid, _didAutoRepair) {
         return;
       }
       const { hasCompletionEvidence: hceGeneric } = require("../../hooks/lib/workflow-state/evidence-resolver");
-      let genericRepoDir = process.env.CLAUDE_PROJECT_DIR || null;
-      if (!genericRepoDir) {
-        try {
-          genericRepoDir = require("child_process").execSync(
-            "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
-          ).trim();
-        } catch (e) { genericRepoDir = null; }
-      }
-      const hasEvidence = hceGeneric(currentStep, sid, genericRepoDir ? { repoDir: genericRepoDir } : {});
-      const genericHint = hasEvidence
-        ? "Compaction gap: " + step + " is complete but " + currentStep + " is pending. " +
+      const hasEvidence = hceGeneric(currentStep, sid, { repoDir });
+      let genericHint;
+      if (hasEvidence && isApprovalGatedStep(currentStep)) {
+        // Gated steps: --mark cannot approve a plan stage (#1133).
+        genericHint =
+          "Compaction gap: " + step + " is complete but " + currentStep + " is pending. " +
+          "Artifact for " + currentStep + " exists but user approval is not on record. " +
+          "Recovery: ask the user to approve, then emit: echo \"<<" +
+          confirmSentinelFor(currentStep) + ": {summary}>>\".";
+      } else if (hasEvidence) {
+        genericHint =
+          "Compaction gap: " + step + " is complete but " + currentStep + " is pending. " +
           "Artifact for " + currentStep + " exists. Recovery: node " + __filename +
-          " --mark " + currentStep + " complete (session-global; no cd needed)."
-        : "Stale state from a prior workflow run or cross-task contamination detected. " +
+          " --mark " + currentStep + " complete (session-global; no cd needed).";
+      } else {
+        genericHint =
+          "Stale state from a prior workflow run or cross-task contamination detected. " +
           "Re-run /workflow-init to reset (it clears downstream steps automatically).";
+      }
       emit(
         "abort",
         "",
@@ -458,45 +481,11 @@ function computeVerdict(rawSid, _didAutoRepair) {
     }
   }
 
-  // Per-step precondition: clarify_intent requires closes_issues.
-  if (currentStep === "clarify_intent") {
-    const issues = state.closes_issues;
-    if (!issues || !Array.isArray(issues) || issues.length === 0) {
-      emit("blocked", "", "closes_issues is empty -- run /workflow-init to populate it.", "closes_issues-empty");
-      return;
-    }
-
-    // Evidence-based auto-complete (#1094): intent.md exists → mark complete and
-    // recompute to advance past clarify_intent. Recursion is capped at 1 via the
-    // _didAutoRepair flag to prevent an infinite loop on concurrent writes.
-    if (!_didAutoRepair) {
-      const { hasCompletionEvidence } = require("../../hooks/lib/workflow-state/evidence-resolver");
-      if (hasCompletionEvidence("clarify_intent", sid)) {
-        const { markStep } = require("../../hooks/lib/workflow-state");
-        try { markStep(sid, "clarify_intent", "complete"); } catch (e) { /* fail-open */ }
-        return computeVerdict(rawSid, true);
-      }
-    }
-  }
-
-  // Evidence-based auto-complete for docs (#1064): staged docs or WORKTREE_NOTES.md
-  // bullets → mark complete and recompute, instead of invoking /update-docs in a loop.
-  if (currentStep === "docs" && !_didAutoRepair) {
-    const { hasCompletionEvidence } = require("../../hooks/lib/workflow-state/evidence-resolver");
-    let repoDir = process.env.CLAUDE_PROJECT_DIR || null;
-    if (!repoDir) {
-      try {
-        repoDir = require("child_process").execSync(
-          "git rev-parse --show-toplevel", { encoding: "utf8", timeout: 5000 }
-        ).trim();
-      } catch (e) { repoDir = process.cwd(); }
-    }
-    if (hasCompletionEvidence("docs", sid, { repoDir })) {
-      const { markStep } = require("../../hooks/lib/workflow-state");
-      try { markStep(sid, "docs", "complete"); } catch (e) { /* fail-open */ }
-      return computeVerdict(rawSid, true);
-    }
-  }
+  // The scan passed — persist the snapshot's evidence-resolved steps (#1148).
+  // Gated steps reach this point only when their approval verdict already passed
+  // inside the snapshot, so the write should succeed; the throw is still handled
+  // defensively inside persistResolutions.
+  persistResolutions();
 
   const skill = STEP_TO_SKILL[currentStep];
   const hint = skill
@@ -593,7 +582,24 @@ function main() {
       process.stderr.write("next-step: could not resolve session id\n");
       process.exit(1);
     }
-    markStep(sid, args.mark, "complete");
+    // Deliberately NOT sanctioned: --reason/--mark is model-issued free text and
+    // must never be approval-equivalent. Gated steps go through the same approval
+    // invariant as every other write path (#1133) and fail closed here.
+    try {
+      markStep(sid, args.mark, "complete");
+    } catch (e) {
+      if (e instanceof UnapprovedCompletionError) {
+        process.stderr.write(
+          "next-step: --mark " + args.mark + " complete refused — " + e.code + ".\n" +
+          "  " + args.mark + " requires recorded user approval; --mark cannot grant it.\n" +
+          "  Ask the user to approve, then emit: echo \"<<" +
+            confirmSentinelFor(args.mark) + ": {summary}>>\"\n"
+        );
+        process.exit(1);
+      }
+      process.stderr.write("next-step: --mark failed — " + e.message + "\n");
+      process.exit(1);
+    }
     process.stdout.write("MARK=" + args.mark + " status=complete\n");
     process.exit(0);
   }

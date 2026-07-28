@@ -41,6 +41,7 @@ const { isSubagentCall } = require("./lib/subagent-detect");
 const notNeededHandlers = require("./workflow-mark/not-needed-handlers");
 const clarifyIntentCompleteHandler = require("./workflow-mark/clarify-intent-complete-handler");
 const branchingHandler = require("./workflow-mark/branching-handler");
+const confirmApprovalHandler = require("./workflow-mark/confirm-approval-handler");
 const userVerifiedHandler = require("./workflow-mark/user-verified-handler");
 const markStepHandler = require("./workflow-mark/mark-step-handler");
 const reviewTestsHandler = require("./workflow-mark/review-tests-handler");
@@ -170,6 +171,10 @@ for (const cmd of sentinelParts) {
   if (notNeededHandlers.handle({ ...ctx, cmd })) continue;
   if (clarifyIntentCompleteHandler.handle({ ...ctx, cmd })) continue;
   if (branchingHandler.handle({ ...ctx, cmd })) continue;
+  // CONFIRM_OUTLINE / CONFIRM_DETAIL record the plan approval that the
+  // completion-boundary invariant requires; must precede mark-step-handler so a
+  // chained "CONFIRM && MARK_STEP" records the approval before the completion.
+  if (confirmApprovalHandler.handle({ ...ctx, cmd })) continue;
   if (userVerifiedHandler.handle({ ...ctx, cmd })) continue;
   // review-tests-handler must run BEFORE mark-step-handler so the dedicated
   // REVIEW_TESTS_COMPLETE / REVIEW_TESTS_WARNINGS sentinels reach their owner

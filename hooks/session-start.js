@@ -49,6 +49,7 @@ if (sessionId && process.env.CLAUDE_ENV_FILE) {
 
 // Create initial state file if session_id is available (with inheritance logic)
 let inheritedFromSessionId = null;
+let stateWriteError = null;
 if (sessionId) {
   try {
     const existing = readState(sessionId);
@@ -71,6 +72,23 @@ if (sessionId) {
           git_branch: ctx.git_branch,
           steps: JSON.parse(JSON.stringify(inherited.steps)),
         };
+        // #1133: the inherited steps may already show outline/detail `complete`.
+        // writeState's completion-boundary invariant re-evaluates that as a
+        // pending->complete transition for the NEW session, so the prior
+        // session's approval records must travel with the steps — otherwise the
+        // write throws no-approval-record and the new session gets NO state file.
+        // Records stay bound to the artifact they were approved against via
+        // artifact_session_id (artifacts are named <owner-sid>-<step>.md).
+        if (inherited.plan_approvals && typeof inherited.plan_approvals === "object") {
+          const carried = JSON.parse(JSON.stringify(inherited.plan_approvals));
+          for (const step of Object.keys(carried)) {
+            const rec = carried[step];
+            if (rec && typeof rec === "object" && !rec.artifact_session_id) {
+              rec.artifact_session_id = inherited.session_id || null;
+            }
+          }
+          newState.plan_approvals = carried;
+        }
         // Issue #772: never carry cleanup state across session boundaries.
         // cleanup is the terminal step of the prior session's task; a new session
         // represents a new task whose cleanup obligation has not yet been incurred.
@@ -88,7 +106,16 @@ if (sessionId) {
       } else {
         newState = createInitialState(sessionId, ctx);
       }
-      try { writeState(sessionId, newState); } catch (e) {}
+      // Fail-open on the hook, but NEVER silently: a throw here means no state
+      // file exists for this session at all (total workflow-state loss).
+      try {
+        writeState(sessionId, newState);
+      } catch (e) {
+        stateWriteError = (e && e.message) || String(e);
+        try {
+          process.stderr.write(`session-start: writeState failed for ${sessionId}: ${stateWriteError}\n`);
+        } catch (_) {}
+      }
     }
   } catch (e) {
     // Fail-open
@@ -208,6 +235,12 @@ if (sessionId) {
   lines.push(`State file: ${path.join(stateDir, sessionId + ".json")}`);
   if (inheritedFromSessionId) {
     lines.push(`Inherited workflow steps from session ${inheritedFromSessionId} (cwd+branch match)`);
+  }
+  if (stateWriteError) {
+    lines.push(
+      `WARNING: workflow state file could NOT be created for this session — ${stateWriteError}. ` +
+      `Workflow step state is not persisted; run /workflow-init to re-establish it.`
+    );
   }
 }
 lines.push("");
