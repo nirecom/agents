@@ -21,7 +21,7 @@ fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RCS_SCRIPT="$AGENTS_DIR/bin/workflow/record-complexity-and-skip"
-STATEIO="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
+STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
 READ_CE="$AGENTS_DIR/bin/workflow/read-complexity-evaluation"
 

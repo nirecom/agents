@@ -18,7 +18,7 @@ const {
   readState,
   markStep,
   clearLastPushedSha,
-} = require("./lib/workflow-state");
+} = require("./workflow-state");
 const { resolveRepoCwd } = require("./lib/path-normalize");
 
 // Load $AGENTS_CONFIG_DIR/.env into process.env (existing env wins)

@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck shell=bash
 # tests/feature-1286-recorded-verdict-skip/stale-guard.sh
-# Tests: hooks/lib/workflow-state/skip-signal-resolver.js
+# Tests: hooks/workflow-state/skip-signal-resolver.js
 # Tags: L2, workflow, skip-signal, stale-guard, scope:issue-specific
 #
 # # L3 gap

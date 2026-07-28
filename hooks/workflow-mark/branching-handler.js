@@ -4,8 +4,8 @@
 
 const fs = require("fs");
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, recordSessionWorktree } = require("../lib/workflow-state");
-const { isMainWorktree } = require("../lib/workflow-state/resolve-worktree-path");
+const { markStep, recordSessionWorktree } = require("../workflow-state");
+const { isMainWorktree } = require("../workflow-state/resolve-worktree-path");
 const {
   BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
   BRANCHING_DECIDED_RE_DQ, BRANCHING_DECIDED_LOOKSLIKE_RE,

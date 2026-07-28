@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/workflow-mark.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/lib/workflow-state/completion-approval.js
+# Tests: hooks/workflow-mark.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-state/completion-approval.js
 # Tags: workflow, approval-gate, workflow-mark, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================

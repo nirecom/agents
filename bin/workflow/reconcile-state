@@ -14,16 +14,16 @@ const {
   markStep,
   hasCompletionEvidence,
   describeEvidence,
-} = require("../../hooks/lib/workflow-state");
+} = require("../../hooks/workflow-state");
 
-// EVIDENCE_STEPS is owned by hooks/lib/workflow-state/effective-state.js (SSOT)
+// EVIDENCE_STEPS is owned by hooks/workflow-state/effective-state.js (SSOT)
 // so this CLI and bin/workflow/next-step can never drift apart.
-const { EVIDENCE_STEPS } = require("../../hooks/lib/workflow-state/effective-state");
+const { EVIDENCE_STEPS } = require("../../hooks/workflow-state/effective-state");
 const {
   isApprovalGatedStep,
   evaluateCompletionApproval,
   confirmSentinelFor,
-} = require("../../hooks/lib/workflow-state/completion-approval");
+} = require("../../hooks/workflow-state/completion-approval");
 
 function printUsage() {
   process.stdout.write(

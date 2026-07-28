@@ -13,7 +13,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { getWorkflowDir } = require("./workflow-state");
+const { getWorkflowDir } = require("../workflow-state");
 
 const SID_RE = /^[A-Za-z0-9_-]+$/;
 

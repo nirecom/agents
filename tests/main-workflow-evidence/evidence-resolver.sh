@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/workflow-gate.js, hooks/lib/workflow-state/evidence-resolver.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-state/evidence-resolver.js
 # Tags: workflow, gate, hook, bin
 #
 # Case group: evidence-resolver clarify_intent + workflow-gate Tier 2 auto-repair (WS-EV-14..16).
@@ -12,8 +12,8 @@ run_evidence_resolver_tests() {
     echo "=== WS-EV-14: evidence-resolver clarify_intent — intent.md present → hasCompletionEvidence=true ==="
 
     # Only run if evidence-resolver.js is implemented
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       PLANS_TMP=$(mktemp -d)
       EV14_SID="ev14-$$"
       touch "$PLANS_TMP/${EV14_SID}-intent.md"
@@ -37,8 +37,8 @@ run_evidence_resolver_tests() {
     echo ""
     echo "=== WS-EV-15: evidence-resolver clarify_intent — intent.md absent → hasCompletionEvidence=false ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       PLANS_TMP=$(mktemp -d)
       EV15_SID="ev15-$$"
       # No intent.md created
@@ -62,7 +62,7 @@ run_evidence_resolver_tests() {
     echo ""
     echo "=== WS-EV-16: workflow-gate Tier 2 — clarify_intent pending + intent.md present → gate auto-repairs ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
       PLANS_TMP=$(mktemp -d)
       SID="ev16-$$"
       # workflow_init=complete, clarify_intent=pending, closes_issues populated
@@ -87,8 +87,8 @@ STATEOF
     echo ""
     echo "=== WS-EV-17: evidence-resolver write_tests — staged tests/ file present → hasCompletionEvidence=true ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       EV17_REPO=$(setup_repo)
       EV17_REPO_N=$(to_node_path "$EV17_REPO")
       EV17_SID="ev17-$$"
@@ -115,8 +115,8 @@ STATEOF
     echo ""
     echo "=== WS-EV-18: evidence-resolver write_tests — no staged tests/ → hasCompletionEvidence=false ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       EV18_REPO=$(setup_repo)
       EV18_REPO_N=$(to_node_path "$EV18_REPO")
       EV18_SID="ev18-$$"
@@ -143,8 +143,8 @@ STATEOF
     echo ""
     echo "=== WS-EV-19: evidence-resolver run_tests — staged tests/ present → hasCompletionEvidence=false (sentinel-only after #1215) ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       EV19_REPO=$(setup_repo)
       EV19_REPO_N=$(to_node_path "$EV19_REPO")
       EV19_SID="ev19-$$"
@@ -182,8 +182,8 @@ STATEOF
     # EACCES. Verified out-of-band that the same harness WITHOUT the throw
     # returns true, so 'false' here is caused by the throw, not a short-circuit.
     # A warm-up call before patching loads env/plans-dir state under the real fs.
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       PLANS_TMP=$(mktemp -d)
       EV20_SID="ev20-$$"
 
@@ -220,8 +220,8 @@ STATEOF
     echo ""
     echo "=== WS-EV-21: evidence-resolver detail — review-cycle marker check throws → false (no silent authorization) ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
       PLANS_TMP=$(mktemp -d)
       EV21_SID="ev21-$$"
 
@@ -258,8 +258,8 @@ STATEOF
     echo ""
     echo "=== WS-EV-22: describeEvidence names both review-cycle marker files for outline and detail ==="
 
-    if [ -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
-      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    if [ -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
+      RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
 
       EV22_OUTLINE=$(node -e "
         const r = require('$RESOLVER');

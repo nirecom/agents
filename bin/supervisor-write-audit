@@ -3,7 +3,7 @@
 
 const { writeAuditState, incrementAuditRetryCount } = require("../hooks/lib/supervisor-state-writer");
 const { AUDIT_PHASE_VALUES, AUDIT_VERDICT_VALUES } = require("../hooks/lib/supervisor-state-schema");
-const { resolveSessionId } = require("../hooks/lib/workflow-state");
+const { resolveSessionId } = require("../hooks/workflow-state");
 const { resolveWorkflowSessionId } = require("../hooks/lib/resolve-workflow-session-id");
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;

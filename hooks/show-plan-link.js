@@ -60,7 +60,7 @@ function emitForArtifact(filePath, input) {
   // Marker write is always-on (#563): the Stop guard's scan is
   // CONFIRM_<STEP>-independent — marker presence alone activates it.
   try {
-    const { resolveSessionId } = require("./lib/workflow-state");
+    const { resolveSessionId } = require("./workflow-state");
     const sid = resolveSessionId({
       sessionIdFromInput: input.session_id,
       transcriptPath: input.transcript_path,

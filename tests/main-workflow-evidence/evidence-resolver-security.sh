@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/lib/workflow-state/evidence-resolver.js, hooks/lib/workflow-state/state-io.js
+# Tests: hooks/workflow-state/evidence-resolver.js, hooks/workflow-state/state-io.js
 # Tags: workflow, hook, security, path-traversal
 #
 # Case group: hasCompletionEvidence sessionId validation (SESSION_ID_VALID_RE),
@@ -11,12 +11,12 @@ run_evidence_resolver_security_tests() {
     echo ""
     echo "=== WS-EV-23: hasCompletionEvidence rejects malformed sessionId (path traversal / metachars) ==="
 
-    if [ ! -f "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+    if [ ! -f "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
       echo "SKIP: WS-EV-23 (evidence-resolver.js not yet implemented)"
       return 0
     fi
 
-    RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/lib/workflow-state/evidence-resolver.js")"
+    RESOLVER="$(to_node_path "$DOTFILES_DIR/hooks/workflow-state/evidence-resolver.js")"
     EV23_TMP=$(mktemp -d)
     # PLANS_DIR is rooted deep inside the sandbox so that a successful '../../'
     # traversal still lands inside $EV23_TMP — nothing is ever written to a real

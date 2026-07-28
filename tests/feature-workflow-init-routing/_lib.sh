@@ -17,7 +17,7 @@ set -u
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GATE_HOOK="$AGENTS_DIR/hooks/workflow-gate.js"
 MARK_HOOK="$AGENTS_DIR/hooks/workflow-mark.js"
-STATE_LIB="$AGENTS_DIR/hooks/lib/workflow-state.js"
+STATE_LIB="$AGENTS_DIR/hooks/workflow-state.js"
 WORKFLOW_INIT_MD="$AGENTS_DIR/skills/workflow-init/SKILL.md"
 CLARIFY_INTENT_MD="$AGENTS_DIR/skills/clarify-intent/SKILL.md"
 AGENTS_CLAUDE_MD="$AGENTS_DIR/CLAUDE.md"
@@ -105,7 +105,7 @@ state_wi_ci() {
 read_wi_status() {
     local sid="$1"
     (cd "$AGENTS_DIR" && node -e "
-const { readState } = require('./hooks/lib/workflow-state.js');
+const { readState } = require('./hooks/workflow-state.js');
 const s = readState('$sid');
 const wi = s && s.steps && s.steps.workflow_init;
 process.stdout.write(wi ? wi.status : 'MISSING');

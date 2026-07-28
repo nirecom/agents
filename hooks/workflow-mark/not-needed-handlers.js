@@ -4,7 +4,7 @@
 // Each family validates the skip reason, records the step as skipped, and returns next-step guidance.
 
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, recordSkipVerdict } = require("../lib/workflow-state");
+const { markStep, recordSkipVerdict } = require("../workflow-state");
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
@@ -159,7 +159,7 @@ function handle(ctx) {
     }
     // D1 defense (#1147 T0-A): BUGFIX sessions must write tests — skip is not allowed.
     try {
-      const { isBugfixSession } = require("../lib/workflow-state/is-bugfix-session");
+      const { isBugfixSession } = require("../workflow-state/is-bugfix-session");
       if (isBugfixSession({ sessionId })) {
         pushMessage(
           `workflow-mark: WRITE_TESTS_NOT_NEEDED rejected — BUGFIX sessions require ` +

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step, hooks/lib/workflow-state/skip-signal-resolver.js
+# Tests: bin/workflow/next-step, hooks/workflow-state/skip-signal-resolver.js
 # Tags: L2, workflow, skip-signal, scope:common
 #
 # Case group: SKIP_HINT emission (#485 — cases 40–44).
@@ -21,7 +21,7 @@ run_skip_hint_tests() {
   local OUT line_count
 
   # SKIP_HINT depends on the skip-signal resolver; skip the group if absent.
-  if [ ! -f "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" ]; then
+  if [ ! -f "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" ]; then
     echo "SKIP: 40-45: SKIP_HINT (skip-signal-resolver.js not yet implemented)"
     PASS=$((PASS + 7))
     return 0
@@ -86,7 +86,7 @@ run_skip_hint_tests() {
   #   46(2)+47(1)+48(2)+49(1)+50(2)+51(1)+52(2)+53(2) = 13.
 
   local RESOLVER_N
-  RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js")"
+  RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js")"
   SKIP_JUDGMENT_RESOLVER_N="$RESOLVER_N"
 
   if ! run_with_timeout node -e "

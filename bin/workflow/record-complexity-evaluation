@@ -12,7 +12,7 @@
 
 const path = require("path");
 const { recordComplexityEvaluation, readComplexityEvaluation } = require(
-  path.join(__dirname, "..", "..", "hooks", "lib", "workflow-state")
+  path.join(__dirname, "..", "..", "hooks", "workflow-state")
 );
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;

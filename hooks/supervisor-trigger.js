@@ -42,7 +42,7 @@ if (require.main === module) {
 
   let resolveSessionId, isWorkflowOff, readState;
   try {
-    ({ resolveSessionId } = require("./lib/workflow-state"));
+    ({ resolveSessionId } = require("./workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState } = require("./lib/supervisor-state-writer"));
   } catch (_) {

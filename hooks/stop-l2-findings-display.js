@@ -37,7 +37,7 @@ if (require.main === module) {
   const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
   try {
-    ({ resolveSessionId } = require("./lib/workflow-state"));
+    ({ resolveSessionId } = require("./workflow-state"));
     ({ readState, writeAlertState, getStatePath } = require("./lib/supervisor-state-writer"));
     ({ formatLayer2Findings } = require("./lib/supervisor-findings-render"));
   } catch (_) {

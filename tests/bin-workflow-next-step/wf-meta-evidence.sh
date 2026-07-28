@@ -61,7 +61,7 @@ run_wf_meta_evidence_tests() {
 
   # ---- Case 30: clarify_intent evidence — intent.md present → next-step auto-repairs + advances ----
   # This case only runs if evidence-resolver.js exists (next-step evidence-awareness implemented).
-  if [ -f "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+  if [ -f "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
     local PLANS_DIR_WT
     PLANS_DIR_WT="$(mktemp -d)"
     ACTION=""; NEXT_SKILL=""
@@ -85,7 +85,7 @@ run_wf_meta_evidence_tests() {
   fi
 
   # ---- Case 31: clarify_intent evidence — intent.md absent → next-step returns blocked/invoke clarify-intent ----
-  if [ -f "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/evidence-resolver.js" ]; then
+  if [ -f "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/evidence-resolver.js" ]; then
     local PLANS_DIR_WT2
     PLANS_DIR_WT2="$(mktemp -d)"
     ACTION=""; NEXT_SKILL=""
