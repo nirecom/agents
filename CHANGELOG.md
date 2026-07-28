@@ -132,3 +132,7 @@ Changes: `bin/vscode-cc-repair` is now a directory: run it as `bin/vscode-cc-rep
 ### FEATURE: PR #1675 (2026-07-28)
 Background: feat(#1672): add --allow-backdate to doc-append and batch backfill script
 Changes: `/issue-reconcile` can now backfill issues closed long ago. `doc-append --allow-backdate` lifts the ascending-date guard for backfill only, and a new batch script records a whole list of issues in one pass.
+
+### FEATURE: PR #1683 (2026-07-29)
+Background: feat(#1640): lightweight measurement infrastructure
+Changes: Added two read-only measurement commands: `bin/measure-norm-docs`, which reports the size of normative docs against the file-split thresholds, and `bin/count-subagents`, which counts subagent invocations in a session. Added an opt-in `RECORD_STEP_TIMESTAMPS` setting (default `off`) that records when each workflow step started.
