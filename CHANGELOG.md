@@ -144,3 +144,7 @@ Changes: Added a new configuration option, `RUN_TL4` (default `off`), that contr
 ### FEATURE: PR #1704 (2026-07-29)
 Background: fix(#1679): enforce-worktree write-detection false-positive fixes
 Changes: Fixed main-worktree write guard incorrectly blocking `eval "$(...)"`, `bash -c '...'` wrappers, `$(...)` command substitutions, and heredoc syntax in quoted prose arguments — all sanctioned non-file-write patterns now pass through correctly.
+
+### FEATURE: PR #1703 (2026-07-29)
+Background: feat(#1701): block HARD file-size limit in workflow-gate.js (Gate 2)
+Changes: Gate 2 in `workflow-gate.js` now blocks commits when any staged code file exceeds 500 lines (HARD limit from `rules/coding/file-split.md`). The check reads the staged index blob so a commit that performs a split passes immediately.
