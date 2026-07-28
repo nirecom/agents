@@ -30,6 +30,7 @@ paths:
 | Tool | When to use |
 |------|-------------|
 | `doc-append [path] --category CATEGORY ... [--test-gap TEXT]` | Append a new entry to `history.md` or `CHANGELOG.md`. `--commits` is optional (omit for `CHANGELOG.md`). `--test-gap` required (blocking) on BUGFIX + `history.md`; `CHANGELOG.md` targets are exempt. |
+| `doc-append ... --allow-backdate` | Backfill only. Lifts the ascending-date guard so an entry older than the last one is accepted. Use for recording work that completed but was never logged (`/issue-reconcile`); never for normal close-path appends. |
 | `uv run bin/doc-rotate.py <path> ...` | Archive old entries when size threshold is exceeded |
 | `uv run bin/doc-rotate.py <path> --rebuild-index` | Rebuild `history/index.md` from existing archive files (no rotation) |
 | `uv run bin/sort-history.py <path>` | Sort an existing history.md into ascending order |
@@ -38,6 +39,8 @@ paths:
 `doc-append` categories: `INCIDENT` (numbered, uses `--cause`/`--fix`), `BUGFIX`, `FEATURE`, `REFACTOR`, `CONFIG`, `SECURITY` (all use `--background`/`--changes`).
 If `[path]` is omitted, defaults to `docs/history.md` relative to CWD.
 Install: `dotfileslink.sh` / `dotfileslink.ps1` generate `~/.local/bin/doc-append` at setup time.
+
+**Ascending-date guard**: `doc-append` rejects an entry dated more than 7 days before the last entry, so the stream cannot silently fall out of order. Backfill of long-closed work is the one legitimate exception — pass `--allow-backdate`, then run `uv run bin/sort-history.py <path>` afterwards. Each append re-sorts the entries already in the file but writes the new entry at the tail, so only the final backdated entry needs the trailing sort.
 
 **Rotation thresholds**: `history.md` warns at 500 lines, hard limit at 800 lines.
 **Auto-rotation**: `doc-append` automatically invokes `doc-rotate.py --threshold-warn 500 --floor 20` after appending when the resulting file is ≥ 500 lines. Rotation also rebuilds `history/index.md`. Manual `doc-rotate.py --dry-run` is only needed when overriding defaults.
