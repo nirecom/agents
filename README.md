@@ -199,8 +199,10 @@ proven to carry a real transcript record for it; anything else is reported and k
 is not destroyed but renamed to `<uuid>.jsonl.bak` — invisible to both this tool and the
 extension, and restored by dropping the suffix — and the report names that backup in
 `backup=` next to the `via=` copy that justified the removal. An existing `.bak` from an
-earlier run is overwritten. Report lines name the file relative to the announced
-`prune-root:`, never by basename alone. Combine with `--dry-run` first.
+earlier run is never overwritten: a same-second collision gets a timestamped generation
+(`<uuid>.jsonl.bak.<YYYYMMDD_HHMMSS>`, further disambiguated with a counter suffix if needed),
+so every earlier rescue copy stays recoverable. Report lines name the file relative to the
+announced `prune-root:`, never by basename alone. Combine with `--dry-run` first.
 
 ### Cross-machine session continuity
 
