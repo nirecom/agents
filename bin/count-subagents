@@ -12,7 +12,7 @@
 // not be enumerated, a file that could not be read, and a file too large to classify all
 // land in the summary as their own counters and force a non-zero exit.
 //
-// Stub exclusion reuses the #1655 classifier from bin/lib/vscode-cc-repair. One difference
+// Stub exclusion reuses the #1655 classifier from bin/vscode-cc-repair. One difference
 // from the prune path is deliberate: prune keeps a lone stub (it may not delete a file
 // whose content no surviving copy carries), whereas this tool deletes nothing, so no such
 // invariant is needed. A title-only file structurally holds zero subagent records, so
@@ -27,9 +27,9 @@ const os = require('os');
 const path = require('path');
 const { parseArgs } = require('util');
 
-const { normalizeInputPath } = require('./lib/vscode-cc-repair/primitives');
-const { classifySessionFile, SESSION_FILE_PATTERN } = require('./lib/vscode-cc-repair/prune');
-const { scanLines, parseLine, VERIFY_MAX_SCAN } = require('./lib/vscode-cc-repair/prune/verify');
+const { normalizeInputPath } = require('./vscode-cc-repair/primitives');
+const { classifySessionFile, SESSION_FILE_PATTERN } = require('./vscode-cc-repair/prune');
+const { scanLines, parseLine, VERIFY_MAX_SCAN } = require('./vscode-cc-repair/prune/verify');
 const { listJsonlByMtimeStrict } = require('../hooks/lib/workflow-state/session-id');
 const { _encodeCwd } = require('../hooks/lib/session-title');
 

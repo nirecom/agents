@@ -24,7 +24,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { parseArgs } = require('util');
 
-const { normalizeInputPath } = require('./lib/vscode-cc-repair/primitives');
+const { normalizeInputPath } = require('./vscode-cc-repair/primitives');
 
 const USAGE = [
   'Usage: measure-norm-docs [options]',

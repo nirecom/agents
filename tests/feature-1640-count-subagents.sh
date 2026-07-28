@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-1640-count-subagents.sh
-# Tests: bin/count-subagents, hooks/lib/workflow-state/session-id.js, bin/lib/vscode-cc-repair/prune.js, bin/lib/vscode-cc-repair/prune/verify.js
+# Tests: bin/count-subagents, hooks/lib/workflow-state/session-id.js, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/verify.js
 # Tags: measurement, subagent-count, session-transcript, enumeration-failure, stub-classifier, scope:issue-specific, pwsh-not-required, TL2
 #
 # (b) of #1640. `bin/count-subagents` aggregates `input.subagent_type` occurrences out of

@@ -101,6 +101,20 @@ const rd = () => JSON.parse(raw());
 const sleep = (ms) => { const t = Date.now(); while (Date.now() - t < ms) {} };
 '
 
+# #1133 completion-approval gate interaction. `outline` and `detail` are the only steps
+# that cannot be persisted `complete` without a `plan_approvals` record (see
+# hooks/lib/workflow-state/completion-approval.js APPROVAL_GATED_STEPS). started_at is
+# step-agnostic, so rows that merely need SOME step drive the NON-gated `run_tests`;
+# rows that genuinely need a gated step (D8 class-wide, C1 reset, D12 seeding) prepend
+# APPROVE_GATED_JS below. That helper seeds the same audit record the sanctioned reset
+# path writes — it changes no step status and no timestamp, so every started_at
+# assertion below stays exactly as strong as it was.
+APPROVE_GATED_JS='const CA = require("./hooks/lib/workflow-state/completion-approval");
+for (const s of CA.APPROVAL_GATED_STEPS) {
+  CA.recordPlanApproval(sid, s, { source: "reset-sentinel", reason: "started_at fixture" });
+}
+'
+
 # C1-c: the whole-class post-condition. mode=on asserts the biconditional over every
 # VALID_STEPS entry; mode=off asserts `started_at` is absent everywhere.
 INV_JS='const S = require("./hooks/lib/workflow-state/state-io");
@@ -134,9 +148,9 @@ check_invariant() { # <label> <sid> <mode:on|off>
 echo "== D1: with the toggle unset, started_at never appears =="
 next_sid
 nodejs UNSET "$SID" "$PRE"'
-S.markStep(sid, "detail", "pending");
-S.markStep(sid, "detail", "in_progress");
-S.markStep(sid, "detail", "complete");
+S.markStep(sid, "run_tests", "pending");
+S.markStep(sid, "run_tests", "in_progress");
+S.markStep(sid, "run_tests", "complete");
 console.log(/started_at/.test(raw()) ? "PRESENT" : "ABSENT");
 '
 assert_eq "D1/no-started_at-anywhere" "ABSENT" "$NODE_OUT"
@@ -145,8 +159,8 @@ check_invariant "D1" "$SID" off
 echo "== D1b: with the toggle unset, a step object keeps exactly its two keys =="
 next_sid
 nodejs UNSET "$SID" "$PRE"'
-S.markStep(sid, "outline", "complete");
-console.log(Object.keys(rd().steps.outline).sort().join(","));
+S.markStep(sid, "run_tests", "complete");
+console.log(Object.keys(rd().steps.run_tests).sort().join(","));
 '
 assert_eq "D1b/two-keys-only" "status,updated_at" "$NODE_OUT"
 check_invariant "D1b" "$SID" off
@@ -155,8 +169,8 @@ check_invariant "D1b" "$SID" off
 
 echo "== D2: only a trimmed, case-insensitive \"on\" enables the feature =="
 TOGGLE_PROBE="$PRE"'
-S.markStep(sid, "detail", "complete");
-console.log(typeof rd().steps.detail.started_at === "string" ? "on" : "off");
+S.markStep(sid, "run_tests", "complete");
+console.log(typeof rd().steps.run_tests.started_at === "string" ? "on" : "off");
 '
 while IFS='|' read -r name value want; do
     [[ -z "$name" || "$name" =~ ^[[:space:]]*# ]] && continue
@@ -208,7 +222,7 @@ require.cache[lePath] = {
 echo "== C2-a: with the toggle explicitly off, load-env is never consulted =="
 next_sid
 nodejs off "$SID" "$LOADENV_STUB$PRE"'
-for (let i = 0; i < 10; i++) S.markStep(sid, "detail", "complete");
+for (let i = 0; i < 10; i++) S.markStep(sid, "run_tests", "complete");
 console.log("CALLS=" + global.__leCalls);
 '
 assert_eq "C2-a/load-env-calls" "CALLS=0" "$NODE_OUT"
@@ -217,7 +231,7 @@ check_invariant "C2-a" "$SID" off
 echo "== C2-b: with the toggle unset, load-env is consulted exactly once per process =="
 next_sid
 nodejs UNSET "$SID" "$LOADENV_STUB$PRE"'
-for (let i = 0; i < 10; i++) S.markStep(sid, "detail", "complete");
+for (let i = 0; i < 10; i++) S.markStep(sid, "run_tests", "complete");
 console.log("CALLS=" + global.__leCalls);
 '
 assert_eq "C2-b/load-env-calls" "CALLS=1" "$NODE_OUT"
@@ -228,8 +242,8 @@ check_invariant "C2-b" "$SID" off
 echo "== D3: the first non-pending write stamps started_at == updated_at =="
 next_sid
 nodejs on "$SID" "$PRE"'
-S.markStep(sid, "detail", "complete");
-const e = rd().steps.detail;
+S.markStep(sid, "run_tests", "complete");
+const e = rd().steps.run_tests;
 console.log(e.started_at === e.updated_at ? "EQ" : "NE:" + e.started_at + "/" + e.updated_at);
 '
 assert_eq "D3/first-stamp-equal" "EQ" "$NODE_OUT"
@@ -238,11 +252,11 @@ check_invariant "D3" "$SID" on
 echo "== D4: non-pending -> non-pending carries started_at forward =="
 next_sid
 nodejs on "$SID" "$PRE"'
-S.markStep(sid, "detail", "in_progress");
-const a = rd().steps.detail;
+S.markStep(sid, "run_tests", "in_progress");
+const a = rd().steps.run_tests;
 sleep(5);
-S.markStep(sid, "detail", "complete");
-const b = rd().steps.detail;
+S.markStep(sid, "run_tests", "complete");
+const b = rd().steps.run_tests;
 console.log(
   (a.started_at === b.started_at ? "carry-ok" : "carry-lost") + " " +
   (b.updated_at > a.updated_at ? "advanced" : "stalled")
@@ -254,13 +268,13 @@ check_invariant "D4" "$SID" on
 echo "== D5: pending clears started_at; the next attempt gets a NEW value =="
 next_sid
 nodejs on "$SID" "$PRE"'
-S.markStep(sid, "detail", "complete");
-const first = rd().steps.detail.started_at;
-S.markStep(sid, "detail", "pending");
-const cleared = !("started_at" in rd().steps.detail);
+S.markStep(sid, "run_tests", "complete");
+const first = rd().steps.run_tests.started_at;
+S.markStep(sid, "run_tests", "pending");
+const cleared = !("started_at" in rd().steps.run_tests);
 sleep(5);
-S.markStep(sid, "detail", "in_progress");
-const second = rd().steps.detail.started_at;
+S.markStep(sid, "run_tests", "in_progress");
+const second = rd().steps.run_tests.started_at;
 console.log(
   (cleared ? "cleared" : "still-present") + " " +
   (typeof second === "string" && second !== first ? "renewed" : "stale:" + second)
@@ -283,8 +297,8 @@ check_invariant "D6" "$SID" on
 echo "== D7: extraFields cannot forge started_at — the state layer owns it =="
 next_sid
 nodejs on "$SID" "$PRE"'
-S.markStep(sid, "detail", "complete", { started_at: "1999-01-01T00:00:00.000Z" });
-const e = rd().steps.detail;
+S.markStep(sid, "run_tests", "complete", { started_at: "1999-01-01T00:00:00.000Z" });
+const e = rd().steps.run_tests;
 console.log(e.started_at === "1999-01-01T00:00:00.000Z" ? "FORGED" : "STATE-LAYER-WINS");
 '
 assert_eq "D7/extrafields-defense" "STATE-LAYER-WINS" "$NODE_OUT"
@@ -292,7 +306,7 @@ check_invariant "D7" "$SID" on
 
 echo "== D8: class-wide (CPR-4/5) — every VALID_STEPS member is stamped =="
 next_sid
-nodejs on "$SID" "$PRE"'
+nodejs on "$SID" "$PRE$APPROVE_GATED_JS"'
 const bad = [];
 for (const step of S.VALID_STEPS) {
   S.markStep(sid, step, "complete");
@@ -310,7 +324,7 @@ check_invariant "D8" "$SID" on
 
 echo "== C1-a/C1-b: reset synthesises started_at forward and drops it backward =="
 next_sid
-nodejs on "$SID" "$PRE"'
+nodejs on "$SID" "$PRE$APPROVE_GATED_JS"'
 const rh = require("./hooks/workflow-mark/reset-handler");
 S.markStep(sid, "workflow_init", "complete");
 S.markStep(sid, "clarify_intent", "complete");
@@ -369,8 +383,8 @@ echo "== D9: workflow_init complete resets downstream steps and drops started_at
 next_sid
 nodejs on "$SID" "$PRE"'
 const mh = require("./hooks/workflow-mark/mark-step-handler");
-S.markStep(sid, "detail", "complete");
-const had = typeof rd().steps.detail.started_at === "string";
+S.markStep(sid, "run_tests", "complete");
+const had = typeof rd().steps.run_tests.started_at === "string";
 mh.handle({
   cmd: "echo \"<<WORKFLOW_MARK_STEP_workflow_init_complete>>\"",
   sessionId: sid,
@@ -378,7 +392,7 @@ mh.handle({
   signalFatal: () => {},
   repoCwd: process.cwd(),
 });
-const e = rd().steps.detail;
+const e = rd().steps.run_tests;
 console.log("had=" + had + " after=" + ("started_at" in e) + " status=" + e.status);
 '
 assert_eq "D9/downstream-reset" "had=true after=false status=pending" "$NODE_OUT"
@@ -419,7 +433,7 @@ check_invariant "D11" "$SID" on
 # ---- D12: existing gates are unaffected -------------------------------------
 
 echo "== D12: next-step verdicts are identical with the toggle on and off =="
-SEED_JS="$PRE"'
+SEED_JS="$PRE$APPROVE_GATED_JS"'
 S.markStep(sid, "workflow_init", "complete");
 S.markStep(sid, "clarify_intent", "complete");
 S.markStep(sid, "research", "skipped");
