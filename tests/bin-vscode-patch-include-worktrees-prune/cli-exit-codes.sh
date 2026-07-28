@@ -1,4 +1,7 @@
 # Part of tests/bin-vscode-patch-include-worktrees-prune.sh (sourced, not standalone).
+# Tests: bin/vscode-patch-include-worktrees, bin/lib/vscode-patch-include-worktrees/cli.js
+# Tags: bin, vscode, prune, cli, exit-codes, scope:common, pwsh-not-required, TL2
+#
 # F — the command-line surface: flag dependency, argument rejection, report shape,
 # and the exit-code contract.
 #
@@ -131,26 +134,49 @@ run_f_summary_shape() {
 
 # F06 — privacy. customTitle is user content: it is the text of someone's private
 # session. The report is counts and paths, never titles — on either stream, whether the
-# file was deleted or kept. The kept row is the riskier of the two, because a
-# "title-not-covered" explanation is exactly where an implementation is tempted to
-# print the title that was not covered.
+# file was deleted or kept.
+#
+# After #1655 the tempting-to-leak reason is no longer "title-not-covered": a title
+# mismatch is not a refusal any more, so nothing on the kept branch is phrased in terms
+# of a title at all. That removes one leak site and creates another, because the PRUNED
+# branch now routinely deletes a stub whose title differs from the surviving copy's — two
+# distinct pieces of private text in play for one decision. Group C is the row that
+# covers it: neither the stub's title nor the counterpart's may surface on either stream.
 run_f_privacy() {
-  local home ext proj
+  local home ext proj other_title
   home="$(new_home)"; ext="$(new_ext_root)"; proj="$(new_proj_root)"
-  # Group A: prunable — the title appears in both copies.
+  # A second distinctive marker, so the counterpart's title is pinned independently of
+  # the stub's: an implementation that printed "renamed X -> Y" would leak this one.
+  other_title='ZZOTHERTITLEMARKERZZ'
+  # Group A: prunable — the surviving copy holds this session's transcript.
   { title_line "$SID_A" "$SECRET_TITLE"; } | mk_session "$proj/stub" "$SID_A"
   { content_line "$SID_A"; title_line "$SID_A" "$SECRET_TITLE"; } | mk_session "$proj/real" "$SID_A"
-  # Group B: kept — the counterpart does not carry the stub's title.
+  # Group B: kept — the sibling holds ANOTHER session's transcript, so it is no surviving
+  # copy for this one and the stub has nothing to be checked against.
   { title_line "$SID_B" "$SECRET_TITLE"; } | mk_session "$proj/stub" "$SID_B"
-  { content_line "$SID_B"; title_line "$SID_B" "Bravo"; } | mk_session "$proj/real" "$SID_B"
+  { content_line "$SID_A"; title_line "$SID_B" "$other_title"; } | mk_session "$proj/real" "$SID_B"
+  # Group C: the renamed session — prunable on content, with the two sides disagreeing
+  # about the title. This is the everyday case #1655 unblocked, and the one where both
+  # titles are live at the moment of deletion.
+  { title_line "$SID_C" "$SECRET_TITLE"; } | mk_session "$proj/stub" "$SID_C"
+  { content_line "$SID_C"; title_line "$SID_C" "$other_title"; } | mk_session "$proj/real" "$SID_C"
 
   run_cli_prune_split "$home" "$ext" "$proj"
   check "F06a: exit 0" "0" "$CLI_RC"
-  check_token "F06b: the covered stub was pruned" "pruned" "$CLI_STDOUT"
-  check_token "F06c: the uncovered stub was kept" "kept" "$CLI_STDOUT"
-  check_contains "F06d: the kept line explains why" "reason=title-not-covered" "$CLI_STDOUT"
+  check_token "F06b: the stub with a surviving transcript was pruned" "pruned" "$CLI_STDOUT"
+  check_token "F06c: the stub with no surviving transcript was kept" "kept" "$CLI_STDOUT"
+  # The reason is the lone-stub invariant, not a title verdict: a file holding another
+  # session's transcript never classifies as a real copy in the first place.
+  check_contains "F06d: the kept line explains why" "reason=no-real-copy" "$CLI_STDOUT"
   check_absent "F06e: no session title reaches stdout" "$SECRET_TITLE" "$CLI_STDOUT"
   check_absent "F06f: no session title reaches stderr" "$SECRET_TITLE" "$CLI_STDERR"
+  check_contains "F06g: the renamed session is pruned too" "pruned=2" "$CLI_STDOUT"
+  check_no_file "F06h: the renamed session's stub is gone" \
+    "$(session_path "$proj/stub" "$SID_C")"
+  check_absent "F06i: the counterpart's own title does not reach stdout either" \
+    "$other_title" "$CLI_STDOUT"
+  check_absent "F06j: the counterpart's own title does not reach stderr either" \
+    "$other_title" "$CLI_STDERR"
 }
 
 # ---- F3: the exit-code contract --------------------------------------------

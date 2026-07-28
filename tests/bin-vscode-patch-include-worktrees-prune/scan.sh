@@ -1,4 +1,7 @@
 # Part of tests/bin-vscode-patch-include-worktrees-prune.sh (sourced, not standalone).
+# Tests: bin/lib/vscode-patch-include-worktrees/prune.js
+# Tags: bin, vscode, prune, scan, roots, session-files, scope:common, pwsh-not-required, TL2
+#
 # D — enumeration and root resolution: which files the tool is even allowed to
 # consider, and what happens when part of the tree cannot be read.
 #

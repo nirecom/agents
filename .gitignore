@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+testResults.xml
 node_modules/
 settings.local.json
 settings-extension.json
