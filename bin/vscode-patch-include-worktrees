@@ -32,6 +32,7 @@ module.exports = {
   // The prune path.
   classifySessionFile: prune.classifySessionFile,
   verifyCounterpart: prune.verifyCounterpart,
+  isOwnTitleRecord: prune.isOwnTitleRecord,
   planPrune: prune.planPrune,
   planPruneRoots: prune.planPruneRoots,
   executePrunePlan: prune.executePrunePlan,

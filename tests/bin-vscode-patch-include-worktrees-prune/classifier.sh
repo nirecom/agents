@@ -1,4 +1,7 @@
 # Part of tests/bin-vscode-patch-include-worktrees-prune.sh (sourced, not standalone).
+# Tests: bin/lib/vscode-patch-include-worktrees/prune.js, bin/lib/vscode-patch-include-worktrees/prune/verify.js
+# Tags: bin, vscode, prune, classifier, session-files, scope:common, pwsh-not-required, TL2
+#
 # A — classifySessionFile, the gate every deletion passes through. Driven directly
 # through the exported function on REAL fixture files (single-line JSONL is cheap to
 # generate) because the verdict alphabet is wider than the CLI report exposes:
@@ -194,14 +197,22 @@ catch (e) { console.log("P=faulted"); }'
   expect_verdict "A20-unreadable-session-file" "$f" "unreadable"
 }
 
-# ---- A6: titleKeys, the unit I3 is proven in -------------------------------
+# ---- A6: titleKeys, the unit I4 is proven in -------------------------------
+
+# titleKeys no longer travels to the counterpart side: after #1655 a counterpart is
+# judged on its content record alone. The set survives because the STUB side still needs
+# it — `prunable` re-classifies the stub immediately before the unlink and compares
+# sameKeys(fresh.titleKeys, decision.titleKeys) (I4), which is how a stub that was
+# rewritten between plan and unlink is caught even when its size and mtime are unchanged
+# (lifecycle-race.sh R-8). A key format that was unstable across two reads of the SAME
+# file would make that comparison fire at random, so the normalization is pinned here.
 
 run_a_title_keys() {
   local d
   d="$(new_dir)"
   # Two records with an identical (sessionId, customTitle) pair plus one distinct
-  # pair: the normalized key set must collapse to 2, otherwise the superset check in
-  # verifyCounterpart would demand duplicate keys the counterpart never carries.
+  # pair: the normalized key set must collapse to 2, otherwise a stub that merely
+  # repeated a title would compare unequal to itself across the two reads.
   { title_line "$SID_A" "Alpha"; title_line "$SID_A" "Alpha"; title_line "$SID_A" "Bravo"; } \
     | mk_session "$d" "$SID_A"
   FIXFILE="$(native_file "$(session_path "$d" "$SID_A")")" node_m 'const m=require("'"$REQUIRE_PATH"'");
@@ -211,14 +222,129 @@ console.log("N="+keys.length+" U="+(new Set(keys)).size+" T="+r.counts.titles);'
   check "A21: duplicate (sessionId, customTitle) pairs collapse to one key" \
     "N=2 U=2 T=3" "$NODE_OUT"
 
-  # The key is derived from BOTH fields: the same title under a different sessionId
-  # is a different key, so a counterpart cannot cover it by accident.
+  # The key is derived from BOTH fields: the same title text under a different sessionId
+  # is a different key, so a stub that swapped one for the other is not mistaken for
+  # unchanged. Stated ACROSS TWO FILES rather than inside one, because a single file only
+  # ever contributes titles for its own session now (A25) — the old one-file spelling of
+  # this row would be asserting the very thing the ownership rule forbids.
   d="$(new_dir)"
-  { title_line "$SID_A" "Alpha"; title_line "$SID_B" "Alpha"; } | mk_session "$d" "$SID_A"
-  FIXFILE="$(native_file "$(session_path "$d" "$SID_A")")" node_m 'const m=require("'"$REQUIRE_PATH"'");
+  { title_line "$SID_A" "Alpha"; } | mk_session "$d" "$SID_A"
+  { title_line "$SID_B" "Alpha"; } | mk_session "$d" "$SID_B"
+  K_ONE="$(native_file "$(session_path "$d" "$SID_A")")" \
+  K_TWO="$(native_file "$(session_path "$d" "$SID_B")")" \
+    node_m 'const m=require("'"$REQUIRE_PATH"'");
+const a=Array.from(m.classifySessionFile(process.env.K_ONE).titleKeys);
+const b=Array.from(m.classifySessionFile(process.env.K_TWO).titleKeys);
+console.log("N="+(new Set(a.concat(b))).size+" A="+a.length+" B="+b.length);'
+  check "A22: the key spans sessionId as well as customTitle" "N=2 A=1 B=1" "$NODE_OUT"
+}
+
+# ---- A7: the payload rule — a content record must carry its transcript -----
+#
+# #1655 F1. Removing I3 left `isMatchingContentRecord` as the ONLY thing standing between
+# a foreign file and an unrecoverable delete, and it accepted any object whose `type` was
+# a content type and whose `sessionId` string-matched. A single 60-byte line therefore
+# authorised the deletion of a real user file. The rule now is that every content type
+# names the field carrying its payload — `message` (a non-null, non-array object) for
+# user/assistant, `summary` (a non-empty string) for summary — and a record lacking it is
+# a shell, never a transcript.
+#
+# Both directions are covered from one table (Pattern 4): the shell/ill-shaped rows must
+# fall to `indeterminate` (the file is not evidence for anything, and it is not a stub
+# either, so it stays alive), and the well-shaped rows must still reach `real`. Shipping
+# only the first half would silently refuse every genuine prune.
+payload_verdict_case() { # <name> <type> <json-payload|-> <want-verdict>
+  local d
+  d="$(new_dir)"
+  if [ "$3" = "-" ]; then
+    { content_line_shell "$SID_A" "$2"; } | mk_session "$d" "$SID_A"
+  else
+    { content_line_payload "$SID_A" "$2" "$3"; } | mk_session "$d" "$SID_A"
+  fi
+  expect_verdict "$1" "$(session_path "$d" "$SID_A")" "$4"
+}
+
+run_a_content_payload() {
+  local name type payload want
+  while IFS='|' read -r name type payload want; do
+    name="${name//[[:space:]]/}"
+    case "$name" in ''|'#'*) continue ;; esac
+    type="${type//[[:space:]]/}"
+    payload="${payload//[[:space:]]/}"
+    want="${want//[[:space:]]/}"
+    payload_verdict_case "$name" "$type" "$payload" "$want"
+  done <<'TABLE'
+A23a-user-no-message        | user      | -                             | indeterminate
+A23b-assistant-no-message   | assistant | -                             | indeterminate
+A23c-summary-no-summary     | summary   | -                             | indeterminate
+A23d-user-message-null      | user      | null                          | indeterminate
+A23e-user-message-array     | user      | []                            | indeterminate
+A23f-user-message-string    | user      | "hi"                          | indeterminate
+A23g-user-message-number    | user      | 7                             | indeterminate
+A23h-summary-empty-string   | summary   | ""                            | indeterminate
+A23i-summary-number         | summary   | 12                            | indeterminate
+A23j-summary-object         | summary   | {"text":"x"}                  | indeterminate
+A24a-user-message-object    | user      | {"role":"user","content":"hi"} | real
+A24b-assistant-msg-object   | assistant | {"role":"assistant","content":"ok"} | real
+A24c-summary-nonempty-text  | summary   | "a recap"                     | real
+TABLE
+
+  # A24d — the `message` rule is about SHAPE, not about the payload being interesting: an
+  # empty object is still a non-null, non-array object, so it stays on the allow side.
+  # Pinned separately because it is the boundary between the two halves of the table.
+  payload_verdict_case "A24d-user-message-empty-object" user '{}' real
+
+  # A24e — a shell record does not become evidence by being followed by a real one, and a
+  # real one is not spoiled by a shell preceding it: the predicate is per-record.
+  local d
+  d="$(new_dir)"
+  { content_line_shell "$SID_A"; content_line "$SID_A"; } | mk_session "$d" "$SID_A"
+  expect_verdict "A24e-shell-first-then-a-real-record" "$(session_path "$d" "$SID_A")" "real"
+}
+
+# ---- A8: title ownership — a title record belongs to its own file ----------
+#
+# #1655 codex HIGH. classifySessionFile derives the session id from the basename and used
+# to count every schema-valid custom-title toward `counts.titles` without requiring
+# `record.sessionId` to equal it. `A.jsonl` holding a title for session B was therefore
+# still a `stub`, and was deleted the moment any other copy of `A.jsonl` carried content
+# for A — destroying B's title, which exists nowhere else.
+#
+# This was already asymmetric with how the same function treats CONTENT records for
+# another session: those increment `other` and force `indeterminate`. A foreign title is
+# the same kind of thing — real information this tool cannot account for.
+run_a_title_ownership() {
+  local d
+
+  d="$(new_dir)"
+  { title_line "$SID_B" "Alpha"; } | mk_session "$d" "$SID_A"
+  expect_verdict "A25a-foreign-title-only" "$(session_path "$d" "$SID_A")" "indeterminate"
+
+  d="$(new_dir)"
+  { title_line "$SID_A" "Alpha"; title_line "$SID_B" "Bravo"; } | mk_session "$d" "$SID_A"
+  expect_verdict "A25b-own-title-plus-foreign-title" "$(session_path "$d" "$SID_A")" \
+    "indeterminate"
+
+  # The foreign pair must not enter titleKeys either. If it did, I4 would re-prove a key
+  # the file has no business carrying, and — worse — `sameKeys` would compare equal across
+  # two reads of a file whose foreign title is precisely the information at risk.
+  O_SID="$SID_A" FIXFILE="$(native_file "$(session_path "$d" "$SID_A")")" \
+    node_m 'const m=require("'"$REQUIRE_PATH"'");
 const keys=Array.from(m.classifySessionFile(process.env.FIXFILE).titleKeys);
-console.log("N="+(new Set(keys)).size);'
-  check "A22: the key spans sessionId as well as customTitle" "N=2" "$NODE_OUT"
+console.log("N="+keys.length+" OWN="+keys.filter(function(k){
+  return k.indexOf(process.env.O_SID)>=0;}).length);'
+  check "A25c: a foreign title never enters titleKeys" "N=1 OWN=1" "$NODE_OUT"
+
+  # Pattern 4 — the sanctioned direction. Ownership must not turn every stub into an
+  # indeterminate: a file whose titles all name its own session is still exactly the thing
+  # this tool exists to prune.
+  d="$(new_dir)"
+  { title_line "$SID_A" "Alpha"; title_line "$SID_A" "Bravo"; } | mk_session "$d" "$SID_A"
+  expect_verdict "A26a-own-titles-only-is-still-a-stub" "$(session_path "$d" "$SID_A")" "stub"
+  FIXFILE="$(native_file "$(session_path "$d" "$SID_A")")" node_m 'const m=require("'"$REQUIRE_PATH"'");
+const r=m.classifySessionFile(process.env.FIXFILE);
+console.log("N="+Array.from(r.titleKeys).length+" T="+r.counts.titles);'
+  check "A26b: own titles still populate titleKeys" "N=2 T=2" "$NODE_OUT"
 }
 
 run_a_stub_shapes
@@ -227,3 +353,5 @@ run_a_indeterminate_shapes
 run_a_scan_cap
 run_a_unreadable
 run_a_title_keys
+run_a_content_payload
+run_a_title_ownership

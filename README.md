@@ -194,10 +194,15 @@ patch run VS Code's `Developer: Reload Window` before worktree sessions become v
 The same tool also cleans up the title-only stub session files that accumulate in
 `~/.claude/projects/` when a session is renamed: add `--prune-stub-sessions` (additive — the
 patch pass still runs) and, optionally, `--claude-projects-dir <path>` to scan somewhere other
-than `~/.claude/projects`. A stub is deleted only when another copy of the same session is
-proven to carry both a real transcript record and every one of the stub's titles; anything
-else is reported and kept, and no backup is taken. Its report lines name the file relative to
-the announced `prune-root:`, never by basename alone. Combine with `--dry-run` first.
+than `~/.claude/projects`. A stub is removed only when another copy of the same session is
+proven to carry a real transcript record for it; anything else is reported and kept. The stub
+is not destroyed but renamed to `<uuid>.jsonl.bak` — invisible to both this tool and the
+extension, and restored by dropping the suffix — and the report names that backup in
+`backup=` next to the `via=` copy that justified the removal. An existing `.bak` from an
+earlier run is never overwritten: a same-second collision gets a timestamped generation
+(`<uuid>.jsonl.bak.<YYYYMMDD_HHMMSS>`, further disambiguated with a counter suffix if needed),
+so every earlier rescue copy stays recoverable. Report lines name the file relative to the
+announced `prune-root:`, never by basename alone. Combine with `--dry-run` first.
 
 ### Cross-machine session continuity
 

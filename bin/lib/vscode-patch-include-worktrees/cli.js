@@ -21,8 +21,9 @@ const USAGE = [
   'Options:',
   '  --extensions-dir <path>  Extension root to scan (absolute, repeatable).',
   '                           When given, the default ~/.vscode* roots are not scanned.',
-  '  --prune-stub-sessions    Additionally delete title-only stub session files whose',
+  '  --prune-stub-sessions    Additionally displace title-only stub session files whose',
   '                           content is already carried by a surviving real copy.',
+  '                           Each one is renamed to <uuid>.jsonl.bak, never deleted.',
   '  --claude-projects-dir <path>',
   '                           Session-store root to scan (absolute, repeatable).',
   '                           Requires --prune-stub-sessions. When given, the default',
@@ -100,7 +101,7 @@ function pruneSummaryLine(nRoots, scanned, groups, tally, scanErrors) {
 }
 
 // Runs the prune pass and writes its report. Returns { failed } — true when anything
-// could not be OBSERVED (unreadable / unclassified / scan error / a failed unlink).
+// could not be OBSERVED (unreadable / unclassified / scan error / a failed displacement).
 // A refused race (`changed`) is a decision that was reached and costs nothing, so it
 // stays on the success side.
 function runPrune(options) {
@@ -125,6 +126,9 @@ function runPrune(options) {
       if (entry.reason) details.push('reason=' + entry.reason);
       if (entry.scope) details.push('scope=' + entry.scope);
       if (entry.via) details.push('via=' + entry.via);
+      // The recovery path, on the rehearsal line as well as the real one: a user who
+      // wants the file back has only this report to go on.
+      if (entry.backup) details.push('backup=' + entry.backup);
       if (entry.realCopies != null) details.push('real-copies=' + entry.realCopies);
       process.stdout.write(reportLine(entry.state, relativeTo(entry.root, entry.file), details));
       if (entry.state === 'unreadable' || entry.state === 'failed') {
