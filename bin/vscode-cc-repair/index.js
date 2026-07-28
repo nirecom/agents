@@ -9,13 +9,13 @@
 // Safety posture: refuse rather than guess — the bundle is minified third-party code,
 // so anything the classifier does not recognise verbatim is reported and left alone.
 //
-// This file is dispatch and re-export only; the implementation lives in
-// bin/lib/vscode-cc-repair/.
+// This file is dispatch and re-export only; the implementation lives in the
+// sibling modules of this directory.
 'use strict';
 
-const { main } = require('./lib/vscode-cc-repair/cli');
-const patch = require('./lib/vscode-cc-repair/patch');
-const prune = require('./lib/vscode-cc-repair/prune');
+const { main } = require('./cli');
+const patch = require('./patch');
+const prune = require('./prune');
 
 if (require.main === module) {
   process.exit(main());
