@@ -1,0 +1,96 @@
+# tests/fixtures/quote-spans-corpus.txt
+# Differential corpus for tests/unit-quote-spans-differential.sh (#1569).
+# One JSON-encoded string per line (JSON so that embedded newlines, quotes and
+# backslashes survive the file round-trip verbatim). `#` lines and blank lines
+# are comments.
+#
+# Provenance is recorded per block: every case is harvested from an existing
+# test, from one of the 7 historical false positives, or from the mandatory
+# 14-case span table in tests/unit-quote-spans/structure.sh.
+
+# ── from tests/unit-command-ir.sh (hasUnclosedQuote table) ──────────────────
+"$'it'\\''s fine'"
+"$'unclosed string"
+"normal text"
+"'hello world'"
+"'unclosed"
+"\"hello world\""
+"\"unclosed"
+
+# ── from tests/fix-strip-quoted-args-lib.sh ─────────────────────────────────
+"no quotes here"
+"git commit -m \"branch -d\""
+"echo 'branch -d'"
+"echo $'branch -d'"
+"git commit -m \"branch -d fix/foo\""
+""
+"cat <<EOF"
+"VAR='x' cmd"
+"MSG=\"a b\" git commit"
+
+# ── from tests/feature-parallel-sessions-worktree-bash-patterns/dq-and-strip.sh
+"doc-append --subject \"cp files\""
+"bash -c \"rm foo\""
+"sh -c \"echo hi > out\""
+"\"cp\" src dst"
+"echo \"$(echo hi > out.txt)\""
+"echo \"$(rm tmp)\""
+"echo \"`rm tmp`\""
+"echo '$(echo hi > out.txt)'"
+"grep -nE \"pattern > match\" file.txt"
+"gh issue comment 369 --body \"use > to redirect\""
+"echo $(grep x file 2>/dev/null)"
+"echo hi | tee out.txt"
+"foo; 'cp' a b"
+"foo | \"tee\" out"
+
+# ── from tests/fix-1424-1425-1448-write-detector.sh ─────────────────────────
+"gh status && gh pr merge 123"
+"echo hi > out.txt ; echo RC=$?"
+"node bin/supervisor-report --detail \"x\" \\\n --severity error"
+"cmd 2>&1"
+"tee out.txt"
+"cmd 2>/dev/null | grep x"
+
+# ── 7 historical false positives (#1568 #1533 #1457 #1449 #1385 #1191, PR #1612)
+"gh issue create --title T --body \"line1\nline2\nline3\""
+"ISSUE_CREATE_SKILL=1 bash \"/acd/bin/github-issues/dispatch.sh\" --body \"line1\nline2\""
+"gh issue create --body $'it'\\''s fine'"
+"bash skills/review-code-security/scripts/run-quality-gates.sh"
+"bash -c 'node bin/workflow/read-complexity-evaluation --session sid'"
+"ISSUE_CREATE_SKILL=1 bash \"dispatch.sh\""
+"eval \"$(AGENTS_CONFIG_DIR=\"/acd\" FINALIZE_SCRIPTS_DIR=\"/acd/skills/issue-close-finalize/scripts\" node \"/acd/skills/issue-close-finalize/scripts/run-loop-step.js\" \"/plans/s.json\" \"accept|evil\")\""
+
+# ── the mandatory 14-case span table (tests/unit-quote-spans/structure.sh) ──
+"$(printf ')'; rm -rf x)"
+"$(echo \"a)b\")"
+"$(echo a\\')b')"
+"$(echo $'a\\')b')"
+"\"$(echo $'a\\')b')\""
+"\"$(printf ')'; rm -rf x)\""
+"$(a $(b ')') c)"
+"$(cmd \\))"
+"\"$(printf '\"')\""
+"$(printf ')'"
+"\"a'b\""
+"$(echo `date`)"
+"$( (echo x); rm -rf y )"
+"$(if [ -f a ]; then (b; c); fi)"
+"$(( 1 + (2 * 3) ))"
+"echo (a)"
+"$( (echo x)"
+
+# ── arg-tail / rejectsUnsafeToken decision-rule inputs (#1569 rules 1-6) ────
+"foo\"|\"bar"
+"foo|bar"
+"'a|b'"
+"\"$(rm -rf x)\""
+"\"`id`\""
+"a|b'"
+"echo \"a\\\"b\""
+"echo \"a\\$(not-a-subst)\""
+"echo \"a\\`not-a-backtick\\`\""
+"$'a|b'"
+"a&&b"
+"a & b"
+"a &> log"

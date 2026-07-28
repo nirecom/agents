@@ -1,15 +1,28 @@
 
+# tests/refactor-enforce-worktree-positive-allow/l3-713.sh
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/strip-quoted-args.js, hooks/lib/quote-spans.js
+# Tags: worktree, enforce, hook, issue-create, quote-spans, scope:issue-specific
+#
+# Sourced by tests/refactor-enforce-worktree-positive-allow.sh.
+#
 # ============================================================================
 # L3 — #713: /issue-create callable from main worktree (T1–T10)
 # ============================================================================
 #
-# foldDqNewlines coverage note (Gap 6):
-# foldDqNewlines is a private helper inside worker-script.js. It is exercised
-# INDIRECTLY via isAllowedWorkerScriptInvocation in L3.46 (dispatch.sh with a
-# real-newline DQ body — the embedded LF is folded so the command is still
-# recognised as a sanctioned pattern) and in L3.48 (ANSI-C quoting with skill
-# prefix). No dedicated foldDqNewlines unit test is needed; L3.46 and L3.48
-# already provide the closest-to-action coverage for this helper.
+# DQ-newline folding coverage note (Gap 6):
+# Newline folding inside double-quoted spans is no longer a private helper of
+# worker-script.js: after #1569 the span geometry comes from the shared scanner
+# (hooks/lib/quote-spans.js) and the folding itself lives in
+# hooks/enforce-worktree/arg-tail-guard.js, which worker-script.js calls.
+# The behaviour is still exercised INDIRECTLY here via
+# isAllowedWorkerScriptInvocation in L3.46 (dispatch.sh with a real-newline DQ
+# body — the embedded LF is folded so the command is still recognised as a
+# sanctioned pattern) and in L3.48 (ANSI-C quoting with skill prefix).
+# Direct unit coverage of the shared layer now lives in
+# tests/unit-quote-spans.sh (span geometry) and
+# tests/unit-quote-spans-differential.sh (old-vs-new foldDqNewlines parity),
+# so no dedicated helper unit test is added here; L3.46 and L3.48 remain the
+# closest-to-action coverage for the worker-script call path.
 
 test_l3_36_issue_713_skill_inline_prefix_allowed_from_main() {
     require_file "$GUARD_JS" "test_l3_36_issue_713_skill_inline_prefix_allowed_from_main" || return
