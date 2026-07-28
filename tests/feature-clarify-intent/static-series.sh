@@ -208,10 +208,10 @@ assert_contains "$LOCAL_SKILL_MD" "class-members-proposal.md" \
     "N11b: SKILL.md references class-members-proposal.md lib file"
 
 # N12: triage enum values (MUST, OPTIONAL, NA) replace disposition enum
-assert_contains "$LOCAL_SKILL_MD" "triage: MUST" "N12a: triage: MUST literal present in schema enum"
-assert_contains "$LOCAL_SKILL_MD" "triage: OPTIONAL" "N12b: triage: OPTIONAL literal present in schema enum"
-assert_contains "$LOCAL_SKILL_MD" 'triage: <MUST | OPTIONAL | NA>' "N12c: schema line shows full enum"
-assert_contains "$LOCAL_SKILL_MD" "triage: NA" "N12d: triage: NA literal present in schema enum"
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/intent-md-schema.md" "triage: MUST" "N12a: triage: MUST literal present in schema enum"
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/intent-md-schema.md" "triage: OPTIONAL" "N12b: triage: OPTIONAL literal present in schema enum"
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/intent-md-schema.md" 'triage: <MUST | OPTIONAL | NA>' "N12c: schema line shows full enum"
+assert_contains "$LOCAL_REPO_ROOT/skills/clarify-intent/reference/intent-md-schema.md" "triage: NA" "N12d: triage: NA literal present in schema enum"
 
 # N13: no cap別枠 wording (class members question is inside the 5-round cap, not extra)
 assert_absent "$LOCAL_SKILL_MD" "[Cc]ap 別枠|cap.*extra.*round|extra.*round.*cap" \

@@ -90,6 +90,14 @@ unset REPL
 
 # M4: write to temp file and update
 printf '%s' "$NEW_BODY" > "$BODY_TMPFILE"
+
+# Outbound scan guard (#1591) on the composed body, reusing the existing tempfile.
+# FATAL (exit 1), unlike the WARN+continue pattern used for the banner refresh
+# below: this is a security boundary, not a best-effort cosmetic update.
+# shellcheck source=../lib/gh-outbound-guard.sh
+. "$(dirname "$0")/../lib/gh-outbound-guard.sh"
+gh_outbound_guard "reopen:#$ISSUE_NUMBER" < "$BODY_TMPFILE" || exit 1
+
 if ! ISSUE_CLOSE_SKILL=1 gh issue edit "$ISSUE_NUMBER" --body-file "$BODY_TMPFILE" >/dev/null 2>&1; then
     echo "WARN: body banner update failed for #${ISSUE_NUMBER}" >&2
 fi

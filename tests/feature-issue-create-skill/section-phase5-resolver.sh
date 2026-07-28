@@ -52,6 +52,9 @@ case "$ARGS" in
   auth\ status*)
     echo "Token scopes: 'gist', 'project', 'read:org', 'repo'"
     exit 0 ;;
+  label\ list\ *)
+    printf 'type:task\n'
+    exit 0 ;;
   repo\ view\ *--json\ owner,name*)
     echo "${GH_MOCK_OWNER_REPO:-nirecom/agents}"
     exit 0 ;;
@@ -161,6 +164,9 @@ fi
 case "$ARGS" in
   auth\ status*)
     echo "Token scopes: 'project', 'repo'"; exit 0 ;;
+  label\ list\ *)
+    printf 'type:task\n'
+    exit 0 ;;
   repo\ view\ *--json\ owner,name*) echo "nirecom/agents"; exit 0 ;;
   repo\ view\ *nameWithOwner*) echo "nirecom/agents"; exit 0 ;;
   api\ graphql\ *projectsV2*)

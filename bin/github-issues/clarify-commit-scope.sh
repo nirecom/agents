@@ -2,12 +2,16 @@
 # clarify-commit-scope.sh — GH reconcile extraction for clarify-intent (#513)
 # Args: --session-id <sid> --plans-dir <dir> --issues <csv>
 #       [--repo-map IDX:owner/repo ...] [--non-github] [--repo <slug>]
-# stdout: CREATED:<N> | CLOSED:<N> | RC2
-# exit: 0 success, 1 gh failure, 2 CLOSED entry or WIP RC2, 2 bad plans-dir
+# stdout: CREATED:<N> | CLOSED:<N> | RC2 | SCAN_BLOCKED
+# exit: 0 success, 1 gh failure or missing intent.md, 2 CLOSED entry or WIP RC2,
+#       2 bad plans-dir, 2 Path C outbound-scan block (stdout SCAN_BLOCKED)
 #
 # Path B (non-empty --issues): CLOSED pre-scan first (no side effects until all clear),
 #   then per-N: gh issue edit --add-label → wip-set-single.sh → ensure-board-card.sh.
-# Path C (empty --issues): gh issue create --label intent:clarified → CREATED:<N>.
+# Path C (empty --issues): title/body from <sid>-intent.md → outbound scan guard →
+#   gh issue create --label intent:clarified → CREATED:<N>. A scan block prints
+#   SCAN_BLOCKED, writes the reason to <plans-dir>/<sid>-intent-scan-block.txt
+#   (the caller discards stderr), and exits 2.
 # --non-github: skip all gh calls, exit 0.
 # --repo-map IDX:owner/repo: per-issue repo routing for Path B (repeatable).
 # --repo <slug>: repo for Path C gh issue create (backward compat).
@@ -19,6 +23,10 @@ if [ "${AGENTS_BASH_MAJOR_OVERRIDE:-${BASH_VERSINFO:-0}}" -lt 4 ]; then
 fi
 
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR must be set}"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../lib/gh-outbound-guard.sh
+source "$SCRIPT_DIR/../lib/gh-outbound-guard.sh"
 
 SESSION_ID=""
 PLANS_DIR_ARG=""
@@ -73,10 +81,38 @@ fi
 
 # Path C: empty --issues
 if [[ "$ISSUES_SET" -eq 1 && -z "$ISSUES_CSV" ]]; then
+    # shellcheck source=lib/intent-to-issue.sh
+    source "$SCRIPT_DIR/lib/intent-to-issue.sh"
+    INTENT_PATH="$REAL_PLANS_DIR/$SESSION_ID-intent.md"
+    if [[ ! -f "$INTENT_PATH" ]]; then
+        echo "[clarify-commit-scope] intent.md not found: $INTENT_PATH" >&2
+        exit 1
+    fi
+    TITLE_LINE="$(intent_extract_title "$INTENT_PATH")"
+    BODY_TEXT="$(intent_extract_body "$INTENT_PATH")"
+
+    # Guard runs in THIS shell via redirection (never a pipe) so
+    # GH_OUTBOUND_GUARD_MESSAGE survives for the sidecar write below.
+    SCAN_TMP=$(mktemp)
+    printf '%s\n\n%s\n' "$TITLE_LINE" "$BODY_TEXT" > "$SCAN_TMP"
+    SIDECAR="$REAL_PLANS_DIR/$SESSION_ID-intent-scan-block.txt"
+    # Fixed literal label, never the local intent.md path: the content scanned is
+    # composed issue title/body text, not that file's own content, so a
+    # caller-local path must never coincidentally match an unrelated allowlist glob.
+    if ! gh_outbound_guard "intent-derived-issue-body" < "$SCAN_TMP"; then
+        # run-completion.sh discards this script's stderr — the sidecar file is
+        # the only channel the caller can surface the block reason through.
+        printf '%s\n' "$GH_OUTBOUND_GUARD_MESSAGE" > "$SIDECAR"
+        rm -f "$SCAN_TMP"
+        echo "SCAN_BLOCKED"
+        exit 2
+    fi
+    rm -f "$SCAN_TMP"
+
     GH_OUT=""
     if ! GH_OUT=$(gh issue create \
-            --title "Tracking issue" \
-            --body "Auto-created by clarify-intent" \
+            --title "$TITLE_LINE" \
+            --body "$BODY_TEXT" \
             --label "intent:clarified" \
             ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} 2>/dev/null); then
         echo "[clarify-commit-scope] gh issue create failed" >&2

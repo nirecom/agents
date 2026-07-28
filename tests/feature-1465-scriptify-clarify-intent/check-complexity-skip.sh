@@ -51,10 +51,12 @@ test_CCS_N2_judgment_both_true() {
     local SESSION_ID="test-session-ccs-n2"
 
     local judgment_marker="$TEST_DIR/record_skip_judgment_called"
+    local judgment_marker_node="$TEST_DIR_NODE/record_skip_judgment_called"
     cat > "$TEST_DIR/bin/workflow/record-skip-judgment" <<MOCK
-#!/usr/bin/env bash
-touch "$judgment_marker"
-exit 0
+#!/usr/bin/env node
+"use strict";
+require("fs").writeFileSync("$judgment_marker_node", "");
+process.exit(0);
 MOCK
     chmod +x "$TEST_DIR/bin/workflow/record-skip-judgment"
 
