@@ -1,5 +1,5 @@
 # Part of tests/bin-vscode-cc-repair-prune.sh (sourced, not standalone).
-# Tests: bin/vscode-cc-repair, bin/lib/vscode-cc-repair/prune.js, bin/lib/vscode-cc-repair/prune/execute.js, bin/lib/vscode-cc-repair/patch/apply.js
+# Tests: bin/vscode-cc-repair, bin/vscode-cc-repair/prune.js, bin/vscode-cc-repair/prune/execute.js, bin/vscode-cc-repair/patch/apply.js
 # Tags: bin, vscode, prune, packaging, structural, scope:common, pwsh-not-required, TL2
 #
 # G — packaging and structure. Nothing here is behavioural; these are the properties
@@ -20,7 +20,7 @@ run_g_entrypoint_packaging() {
     skip_case "G02 git index mode (AGENTS_DIR is not a git repository)"
     return 0
   fi
-  mode="$(git -C "$AGENTS_DIR" ls-files -s -- bin/vscode-cc-repair | awk '{print $1}')"
+  mode="$(git -C "$AGENTS_DIR" ls-files -s -- bin/vscode-cc-repair/index.js | awk '{print $1}')"
   if [ -z "$mode" ]; then
     skip_case "G02 git index mode (the entrypoint is not tracked)"
     return 0
@@ -30,7 +30,8 @@ run_g_entrypoint_packaging() {
 
 # The extracted modules are libraries, not commands: a shebang or an execute bit on
 # them advertises an entry point that does not exist. `git ls-files -s` reads the INDEX,
-# so the assertion holds on Windows and regardless of core.fileMode.
+# so the assertion holds on Windows and regardless of core.fileMode. `index.js` is the
+# one exception — it IS the command, and G01/G02 assert the opposite properties for it.
 run_g_lib_packaging() {
   local files f rel first mode n
   if [ ! -d "$LIB_DIR" ]; then
@@ -38,7 +39,7 @@ run_g_lib_packaging() {
     FAIL=$((FAIL + 1))
     return 0
   fi
-  files="$(find "$LIB_DIR" -type f -name '*.js' 2>/dev/null | sort)"
+  files="$(find "$LIB_DIR" -type f -name '*.js' ! -path "$LIB_DIR/index.js" 2>/dev/null | sort)"
   n="$(printf '%s' "$files" | grep -c . || true)"
   if [ "$n" = "0" ]; then
     echo "FAIL: G03: $LIB_REL/ contains at least one .js module -- none found"
@@ -109,7 +110,7 @@ run_g_readme() {
 # than destroy it with unlink — so a guard spelled `unlinkSync` would have gone green on
 # a build with no protection at all. The invariant restated for the whole class:
 #
-#   there is exactly one place under bin/lib/vscode-cc-repair/ where a
+#   there is exactly one place under bin/vscode-cc-repair/ where a
 #   session file is destroyed OR displaced, and it is the place that carries the
 #   re-verification.
 #

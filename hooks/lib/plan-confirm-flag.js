@@ -34,13 +34,49 @@ function getConfirmFlagName(suffix) {
 // Exact (case-insensitive) literals. Whitespace-padded values fail-safe to "on".
 const OFF_LITERALS = new Set(["off"]);
 
-function isConfirmOff(filePath) {
-  const suffix = getSuffix(filePath);
-  if (!suffix) return false;
-  const flagName = getConfirmFlagName(suffix);
+// SSOT for "has the user pre-waived the CONFIRM gate for this stage?".
+// stage is the bare suffix ("intent" | "outline" | "detail").
+function isConfirmOffForStage(stage) {
+  const flagName = getConfirmFlagName(stage);
+  if (!flagName) return false;
   const raw = process.env[flagName];
   if (raw == null) return false;
   return OFF_LITERALS.has(raw.toLowerCase());
 }
 
-module.exports = { getSuffix, getConfirmFlagName, isConfirmOff };
+// Config-file-only variant of isConfirmOffForStage.
+// Reads CONFIRM_<STAGE> from the parsed .env FILE contents and NEVER from
+// process.env, so an inline `CONFIRM_OUTLINE=off node bin/workflow/...` prefix on
+// a model-issued Bash command cannot waive the gate. Use this — not
+// isConfirmOffForStage — for any decision made in a process the Bash tool can
+// spawn (bin/workflow/next-step, bin/workflow/reconcile-state). Hook processes
+// launched by Claude Code itself keep using isConfirmOffForStage: their env is
+// inherited from the Claude Code process, not from a forgeable command prefix.
+function isConfirmOffForStageFromFile(stage) {
+  const flagName = getConfirmFlagName(stage);
+  if (!flagName) return false;
+  let fileEnv;
+  try {
+    const { readDefaultEnvFile } = require("./load-env");
+    fileEnv = readDefaultEnvFile();
+  } catch (_) {
+    return false; // fail-closed: unreadable config never waives the gate
+  }
+  const raw = fileEnv ? fileEnv[flagName] : undefined;
+  if (raw == null) return false;
+  return OFF_LITERALS.has(String(raw).toLowerCase());
+}
+
+function isConfirmOff(filePath) {
+  const suffix = getSuffix(filePath);
+  if (!suffix) return false;
+  return isConfirmOffForStage(suffix);
+}
+
+module.exports = {
+  getSuffix,
+  getConfirmFlagName,
+  isConfirmOff,
+  isConfirmOffForStage,
+  isConfirmOffForStageFromFile,
+};

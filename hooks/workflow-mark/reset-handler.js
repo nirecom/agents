@@ -9,6 +9,10 @@ const {
   recordStepTimestampsEnabled,
   applyStartedAt,
 } = require("../lib/workflow-state/step-timestamps");
+const {
+  APPROVAL_GATED_STEPS,
+  buildAuditApproval,
+} = require("../lib/workflow-state/completion-approval");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
@@ -67,7 +71,17 @@ function handle(ctx) {
         if (stamp) applyStartedAt(entry, { prev: null, now });
         newState.steps[VALID_STEPS[i]] = entry;
       }
-      writeState(sessionId, newState);
+      // WORKFLOW_RESET_FROM_* is permissions.ask — the user already approved this
+      // rollback, so the force-completed steps carry a sanctioned audit record
+      // rather than tripping the completion-approval invariant (#1133). Gated
+      // steps are seeded explicitly so a later same-status rewrite is not refused.
+      newState.plan_approvals = newState.plan_approvals || {};
+      for (const step of APPROVAL_GATED_STEPS) {
+        if (VALID_STEPS.indexOf(step) < fromIndex) {
+          newState.plan_approvals[step] = buildAuditApproval("reset-sentinel", rawReason);
+        }
+      }
+      writeState(sessionId, newState, { sanctioned: "reset-sentinel", reason: rawReason });
     } catch (e) {
       pushMessage(`workflow-mark: reset-from failed — ${e.message}.`);
     }

@@ -175,6 +175,17 @@ def main():
         action="store_true",
         help="Skip automatic rotation after appending",
     )
+    parser.add_argument(
+        "--allow-backdate",
+        action="store_true",
+        help=(
+            "Skip the ascending-date guard so an entry older than the last one "
+            "can be appended. For backfill of work that was completed but never "
+            "recorded (see /issue-reconcile). Existing entries are still sorted "
+            "on append; run bin/sort-history.py afterwards to place the final "
+            "backdated entry."
+        ),
+    )
     args = parser.parse_args()
 
     # Validate date
@@ -260,7 +271,11 @@ def main():
             last_incident = None
 
     # Ascending date check
-    if last_date is not None and new_date < last_date - timedelta(days=DATE_ORDER_TOLERANCE_DAYS):
+    if (
+        not args.allow_backdate
+        and last_date is not None
+        and new_date < last_date - timedelta(days=DATE_ORDER_TOLERANCE_DAYS)
+    ):
         print(
             f"Error: new date {new_date} is more than {DATE_ORDER_TOLERANCE_DAYS} days before last entry date {last_date}",
             file=sys.stderr,

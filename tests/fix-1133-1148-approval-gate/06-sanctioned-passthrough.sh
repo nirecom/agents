@@ -1,0 +1,31 @@
+# shellcheck shell=bash
+# Tests: hooks/lib/workflow-state/completion-approval.js, hooks/lib/workflow-state/state-io.js, bin/workflow/next-step, hooks/workflow-mark.js
+# Tags: workflow, approval-gate, outline, detail, scope:common
+# (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
+# ===========================================================================
+# G06: sanctioned-source passthrough is a closed set (#1133). writeState accepts
+# an opts.sanctioned token only when it is a member of the frozen
+# SANCTIONED_SOURCES set; an unknown token is rejected fail-closed with the
+# unknown-sanctioned-token code. This prevents callers from minting arbitrary
+# "sanctioned" bypasses of the approval invariant.
+# fail-before-fix: pre-fix writeState ignores any extra arg → NOERROR.
+# ===========================================================================
+
+echo ""
+echo "=== G06: unknown sanctioned token is rejected fail-closed ==="
+
+SID="g06-$$"
+write_state "$SID" "$(gen_state '{}')"
+OUT=$(node_probe '
+  const ws = require(process.argv[1]);
+  const sid = process.argv[2];
+  const s = ws.readState(sid);
+  s.steps.outline.status = "complete";
+  s.steps.outline.updated_at = "2026-06-20T10:00:00.000Z";
+  try { ws.writeState(sid, s, { sanctioned: "bogus-token" }); console.log("NOERROR"); }
+  catch (e) { console.log("THREW:" + (e.code || e.name)); }
+' "$WFSTATE_N" "$SID")
+
+check_contains "G06a. unknown sanctioned token throws" "THREW" "$OUT"
+check_contains "G06a2. throw identifies the unknown-sanctioned-token failure" "sanctioned" "$OUT"
+check_ne "G06b. outline was NOT persisted complete via the bogus token" "complete" "$(read_state_status "$SID" outline)"

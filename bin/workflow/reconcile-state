@@ -16,7 +16,14 @@ const {
   describeEvidence,
 } = require("../../hooks/lib/workflow-state");
 
-const EVIDENCE_STEPS = ["clarify_intent", "outline", "detail", "write_tests", "docs"];
+// EVIDENCE_STEPS is owned by hooks/lib/workflow-state/effective-state.js (SSOT)
+// so this CLI and bin/workflow/next-step can never drift apart.
+const { EVIDENCE_STEPS } = require("../../hooks/lib/workflow-state/effective-state");
+const {
+  isApprovalGatedStep,
+  evaluateCompletionApproval,
+  confirmSentinelFor,
+} = require("../../hooks/lib/workflow-state/completion-approval");
 
 function printUsage() {
   process.stdout.write(
@@ -94,6 +101,18 @@ function main() {
     if (!hasEvidence) {
       process.stdout.write("reconcile-state: " + step + ": pending (no evidence)\n");
       continue;
+    }
+    // Approval-gated steps (outline/detail): evidence alone is not authority.
+    // This CLI must never become a bypass — no sanctioned token is passed.
+    if (isApprovalGatedStep(step)) {
+      const verdict = evaluateCompletionApproval(sid, step, state);
+      if (!verdict.approved) {
+        process.stdout.write(
+          "reconcile-state: " + step + ": pending (evidence present, approval missing — " +
+          "emit " + confirmSentinelFor(step) + " to approve)\n"
+        );
+        continue;
+      }
     }
     const reason = describeEvidence(step).join("; ");
     if (args.dryRun) {

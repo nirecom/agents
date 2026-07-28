@@ -184,10 +184,11 @@ To add private patterns, copy `.private-info-blocklist.example` to `.private-inf
 The `anthropic.claude-code` VS Code extension hardcodes `includeWorktrees:!1` in its
 session-list call, so sessions whose cwd is inside a linked git worktree never appear in the
 extension's session list — and every extension auto-upgrade overwrites a manual fix.
-Run `bin/vscode-cc-repair` to re-apply it: the tool classifies each installed
+Run `bin/vscode-cc-repair/index.js` to re-apply it: the tool classifies each installed
 bundle and refuses rather than guessing when it sees a shape it does not recognize. It writes
 `extension.js.bak` only when that file is absent — a `.bak` left by an earlier run or an older
-version is preserved as-is, never refreshed. Add `--dry-run` to report without writing.
+version is preserved as-is, never refreshed. **Every pass applies for real by default** —
+omitting `--dry-run` writes to disk. Add `--dry-run` to report without writing.
 Patching the on-disk bundle does not touch the running extension host, so after a successful
 patch run VS Code's `Developer: Reload Window` before worktree sessions become visible.
 
@@ -202,7 +203,12 @@ extension, and restored by dropping the suffix — and the report names that bac
 earlier run is never overwritten: a same-second collision gets a timestamped generation
 (`<uuid>.jsonl.bak.<YYYYMMDD_HHMMSS>`, further disambiguated with a counter suffix if needed),
 so every earlier rescue copy stays recoverable. Report lines name the file relative to the
-announced `prune-root:`, never by basename alone. Combine with `--dry-run` first.
+announced `prune-root:`, never by basename alone.
+
+`--prune-stub-sessions` is **destructive by default**: without `--dry-run` it renames every
+stub it clears to `<uuid>.jsonl.bak` in the same run — there is no confirmation prompt and no
+`--apply` opt-in. Always run it once with `--dry-run` and read the report before running it
+for real.
 
 ### Cross-machine session continuity
 
@@ -267,7 +273,7 @@ copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files (planner, reviewer, planner, reviewer, outline-planner, outline-reviewer) — Claude Code only
 bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-cc-repair, measure-norm-docs, count-subagents, and other tools
-bin/lib/           — libraries backing bin/ entrypoints (codex-core.sh, per-tool module dirs)
+bin/lib/           — shared libraries used by two or more bin/ entrypoints (codex-core.sh, gh-outbound-guard.sh, …)
 install/
   win/             — Windows-specific install subscripts
   linux/           — Linux/macOS install subscripts

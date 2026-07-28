@@ -9,7 +9,12 @@
 # Usage:
 #   bin/github-issues/issue-to-history.sh <issue-number> [--commit <hash>]
 #       [--history-notes-file <path>] [--target <abs-path>]
+#       [--allow-backdate] [--no-auto-rotate]
 #       [--non-github-mode --title <title> --body-file <path> --closed-date <YYYY-MM-DD>]
+#
+# --allow-backdate forwards the same flag to doc-append, lifting the
+# ascending-date guard so an issue closed long ago can still be recorded.
+# Required for /issue-reconcile backfill.
 #
 # When --target <abs-path> is provided, doc-append writes to that path instead
 # of docs/history.md. Used by step-e.sh to append to a staging file fetched
@@ -57,6 +62,8 @@ NG_TITLE=""
 NG_BODY_FILE=""
 NG_CLOSED_DATE=""
 TARGET=""
+ALLOW_BACKDATE=0
+NO_AUTO_ROTATE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -91,6 +98,14 @@ while [ $# -gt 0 ]; do
         --target)
             TARGET="${2:-}"
             shift 2
+            ;;
+        --allow-backdate)
+            ALLOW_BACKDATE=1
+            shift
+            ;;
+        --no-auto-rotate)
+            NO_AUTO_ROTATE=1
+            shift
             ;;
         *) shift ;;
     esac
@@ -137,7 +152,14 @@ else
 # Anchor on `### ` prefix to avoid false-positive matches against in-body references
 # like "follow-up from #42:" or "see also #42: ...".
 GREP_BIN="$(command -v ggrep || echo grep)"
-if LC_ALL=C.UTF-8 "$GREP_BIN" -rPq "(^### #${ISSUE_NUM}\b)|(^### [^(]+ \([^)]+#${ISSUE_NUM}\b[^)]*\))|(^### [^\n]*#${ISSUE_NUM}\b[^\n]*\([0-9]{4}-)" "$HISTORY_FILE" "$HISTORY_DIR" 2>/dev/null; then
+# --target redirects the append away from the canonical pair, so the target and
+# its sibling archive must be checked too — the canonical pair alone cannot see
+# an entry already appended to the target, and a re-run would duplicate it.
+CHECK_PATHS=("$HISTORY_FILE" "$HISTORY_DIR")
+if [ -n "$TARGET" ]; then
+    CHECK_PATHS+=("$TARGET" "$(dirname "$TARGET")/$(basename "$TARGET" .md)")
+fi
+if LC_ALL=C.UTF-8 "$GREP_BIN" -rPq "(^### #${ISSUE_NUM}\b)|(^### [^(]+ \([^)]+#${ISSUE_NUM}\b[^)]*\))|(^### [^\n]*#${ISSUE_NUM}\b[^\n]*\([0-9]{4}-)" "${CHECK_PATHS[@]}" 2>/dev/null; then
     echo "Already in history (entry for #${ISSUE_NUM} exists). Skipping append."
     exit 0
 fi
@@ -259,6 +281,14 @@ if [ -n "$COMMIT" ]; then
     ARGS+=(--commits "${COMMIT}, #${ISSUE_NUM}")
 else
     ARGS+=(--commits "#${ISSUE_NUM}")
+fi
+
+if [ "$ALLOW_BACKDATE" -eq 1 ]; then
+    ARGS+=(--allow-backdate)
+fi
+
+if [ "$NO_AUTO_ROTATE" -eq 1 ]; then
+    ARGS+=(--no-auto-rotate)
 fi
 
 # --- Append (or dry-run print) ---

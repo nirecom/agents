@@ -41,6 +41,44 @@ That equality means zero measured elapsed time, which a directly-recorded `compl
 `skipped` step also produces — it does not identify a reset on its own. Rule SSOT:
 `hooks/lib/workflow-state/step-timestamps.js`.
 
+### `plan_approvals` (approval-gated steps)
+
+`outline` and `detail` carry an extra top-level record — not nested under `steps`, because
+`markStep()` fully replaces the step object:
+
+```json
+{
+  "plan_approvals": {
+    "outline": {
+      "source": "confirm-sentinel",
+      "reason": "approved approach B",
+      "artifact_sha256": "<sha256 of <PLANS_DIR>/<sid>-outline.md>",
+      "artifact_hash_status": "recorded",
+      "recorded_at": "2026-07-25T10:00:00.000Z"
+    }
+  }
+}
+```
+
+Neither step may be persisted `complete` without a valid record. On-disk evidence
+(`hasCompletionEvidence`) is necessary but never sufficient: it cannot distinguish
+"review not started" from "review finished, user has not approved". Authority lives in
+`hooks/lib/workflow-state/completion-approval.js` and is enforced at the `writeState`
+boundary, so every caller — hooks, `next-step`, `reconcile-state` — is gated identically.
+
+`source` is a closed set (`SANCTIONED_SOURCES`); an unknown token throws rather than
+silently disabling the gate:
+
+| Source | Recorded by | Hash-bound |
+|---|---|---|
+| `confirm-sentinel` | `<<WORKFLOW_CONFIRM_OUTLINE\|DETAIL: {summary}>>` | yes — a re-edited plan artifact invalidates the approval |
+| `confirm-flag-off` | `CONFIRM_OUTLINE=off` / `CONFIRM_DETAIL=off` waiver | no (audit record) |
+| `reset-sentinel` | `<<WORKFLOW_RESET_FROM_*>>` re-seeding steps below the reset point | no (audit record) |
+
+Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rejection,
+never a downgrade to an existence-only check. A gated step leaving `complete` drops its
+record, so a stale approval can never re-validate a later re-completion.
+
 `cwd` and `git_branch` are optional (absent in states created before the inheritance feature).
 `git_branch` is `null` for non-git directories and detached HEAD.
 
@@ -51,7 +89,7 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 
 ## Steps and owners
 
-The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io.js`. `bin/workflow/next-step --list` renders it with status markers.
+The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io/core.js` (re-exported by the `state-io.js` barrel). `bin/workflow/next-step --list` renders it with status markers.
 
 | Step | How completed |
 |---|---|

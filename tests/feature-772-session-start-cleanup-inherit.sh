@@ -111,6 +111,10 @@ prior_state_json() {
     "docs":              {"status": "complete", "updated_at": "$NOW_ISO"},
     "user_verification": {"status": "pending", "updated_at": null},
     "cleanup":           {"status": "$cleanup_status", "updated_at": "$NOW_ISO"}
+  },
+  "plan_approvals": {
+    "outline": {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"},
+    "detail":  {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"}
   }
 }
 EOF
@@ -231,6 +235,10 @@ C5_STATE=$(cat <<EOF
     "docs":              {"status": "complete", "updated_at": "$NOW_ISO"},
     "user_verification": {"status": "complete", "updated_at": "$NOW_ISO"},
     "cleanup":           {"status": "skipped",  "updated_at": "$NOW_ISO", "skip_reason": "inherited-from-prior-session"}
+  },
+  "plan_approvals": {
+    "outline": {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"},
+    "detail":  {"source": "confirm-flag-off", "reason": "test fixture", "artifact_sha256": null, "artifact_session_id": null, "artifact_hash_status": "not-applicable", "recorded_at": "$NOW_ISO"}
   }
 }
 EOF
