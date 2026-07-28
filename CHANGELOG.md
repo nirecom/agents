@@ -120,3 +120,7 @@ Changes: enforce-worktree write detection now runs on a single shared quote/expa
 ### FEATURE: PR #1649 (2026-07-28)
 Background: feat(#1627): add bin/vscode-patch-include-worktrees
 Changes: New `bin/vscode-patch-include-worktrees` re-enables worktree sessions in the VS Code extension's session list. Sessions started from a linked git worktree were missing from the list, and each extension upgrade undid a manual fix. Run the command, then `Developer: Reload Window`; `--dry-run` reports what it would change without writing. The tool refuses instead of guessing when an extension build no longer matches the expected shape.
+
+### FEATURE: PR #1646 (2026-07-28)
+Background: fix(#1591): fail-closed outbound scan guard for gh issue/PR writes
+Changes: GitHub issue/PR content created or updated mid-session (including auto-created tracking issues) is now scanned for private info before submission and blocked if the scan can't run or finds a match
