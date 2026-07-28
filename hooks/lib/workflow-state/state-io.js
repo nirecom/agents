@@ -5,6 +5,7 @@ const os = require("os");
 const path = require("path");
 const { execSync } = require("child_process");
 const { _listJsonlByMtime } = require("./session-id");
+const { recordStepTimestampsEnabled, applyStartedAt } = require("./state-io/step-timestamps");
 
 const VALID_STEPS = [
   "workflow_init",
@@ -229,7 +230,19 @@ function markStep(sessionId, stepName, status, extraFields = {}) {
   if (!state) {
     state = createInitialState(sessionId);
   }
-  state.steps[stepName] = { status, updated_at: new Date().toISOString(), ...extraFields };
+  const now = new Date().toISOString();
+  const entry = { status, updated_at: now, ...extraFields };
+  if (recordStepTimestampsEnabled()) {
+    // started_at is owned by the state layer alone. Applied AFTER the extraFields spread,
+    // so a caller cannot forge it. Rule SSOT: state-io/step-timestamps.js.
+    applyStartedAt(entry, { prev: state.steps[stepName] || null, now });
+  } else {
+    // Toggle off => `started_at` appears nowhere. The other half of the same ownership:
+    // extraFields is caller-supplied, so the off-state is enforced here rather than
+    // assumed of every call site.
+    delete entry.started_at;
+  }
+  state.steps[stepName] = entry;
   writeState(sessionId, state);
 }
 
@@ -510,6 +523,7 @@ module.exports = {
   getCurrentContext,
   findLatestStateForContext,
   markStep,
+  recordStepTimestampsEnabled,
   recordComplexityEvaluation,
   recordSessionModel,
   markReviewTestsComplete,

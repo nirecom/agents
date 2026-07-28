@@ -1,0 +1,312 @@
+#!/usr/bin/env node
+// Static byte/line baseline for the ALWAYS-LOADED normative documents of a repository —
+// metric (a) of the lightweight measurement set. Nothing is executed and no LLM is called:
+// the tool reads files (or a git ref) and adds up their size.
+//
+// ALWAYS-LOADED is defined here and ONLY here (CPR-2):
+//   the repo-root `CLAUDE.md`, plus every `rules/**/*.md` whose YAML frontmatter carries
+//   no `paths:` key. A `paths:` key means the file is loaded conditionally, so it is not
+//   part of the always-on budget. Paths containing an `_archived` segment are excluded,
+//   the same exclusion bin/review-prompt-size applies (CPR-5).
+//
+// `CLAUDE.local.md` is deliberately NOT counted: it is a private, untracked file, so a
+// `--ref` baseline could never be computed for it and the two modes would disagree.
+//
+// `lines` counts newline-terminated content lines: a trailing newline does not add a line,
+// so "abc" and "abc\n" are both 1 line and "" is 0 lines.
+//
+// Conditional (`paths:`) documents are out of scope by design: estimating how much of them
+// a given session actually loaded needs the touched-file set, which this tool does not have.
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
+const { parseArgs } = require('util');
+
+const { normalizeInputPath } = require('./lib/vscode-cc-repair/primitives');
+
+const USAGE = [
+  'Usage: measure-norm-docs [options]',
+  '',
+  'Options:',
+  '  --repo <path>  Repository to scan (absolute, no ".."). Default: $AGENTS_CONFIG_DIR',
+  '                 and, failing that, the repository this script ships in.',
+  '  --ref <ref>    Measure a past baseline out of git instead of the working tree.',
+  '  --json         Emit a machine-readable report instead of the text one.',
+  '  --help         Show this help and exit.',
+  '',
+].join('\n');
+
+const PREFIX = '[measure-norm-docs] ';
+
+function warn(message) {
+  process.stderr.write(PREFIX + message + '\n');
+}
+
+// A repo-relative path is always reported with forward slashes, so the report reads the
+// same on win32 and POSIX and stays greppable.
+function toPosix(relative) {
+  return String(relative).split(path.sep).join('/');
+}
+
+// Frontmatter verdict for one document. `warning` is non-null when the document is
+// malformed — an opening `---` with no closing one. Such a file is COUNTED (it is loaded
+// regardless of how badly its header is written) but the caller reports why.
+function isAlwaysLoaded(content) {
+  const text = String(content).replace(/^﻿/, '');
+  const lines = text.split(/\r?\n/);
+  if (lines[0] !== '---') return { alwaysLoaded: true, warning: null };
+  let close = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === '---') { close = i; break; }
+  }
+  if (close < 0) {
+    return { alwaysLoaded: true, warning: 'frontmatter not closed; counted as always-loaded' };
+  }
+  const frontmatter = lines.slice(1, close).join('\n');
+  return { alwaysLoaded: !/^paths:\s*($|\S)/m.test(frontmatter), warning: null };
+}
+
+function measure(content) {
+  const text = String(content);
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (text === '') return { bytes, lines: 0 };
+  const parts = text.split(/\r?\n/);
+  const lines = parts[parts.length - 1] === '' ? parts.length - 1 : parts.length;
+  return { bytes, lines };
+}
+
+function isArchived(relative) {
+  return toPosix(relative).split('/').includes('_archived');
+}
+
+// Recursive walk of `rules/`. Symlinks — file and directory alike — are skipped outright:
+// following one would let a link outside the repository inflate the repository's own budget.
+function walkRules(repo, out) {
+  // The top-level rules/ is lstat'ed rather than read blind. Every directory BELOW it is
+  // reached through a dirent whose isSymbolicLink() was checked, so without this the one
+  // directory the walk never inspects would be the only one able to link out of the repo —
+  // and ref mode already skips a symlinked rules/ via its mode-120000 filter (CPR-5).
+  // A symlinked rules/ is skipped exactly as a missing one is: an empty repo, not a failure.
+  try {
+    if (fs.lstatSync(path.join(repo, 'rules')).isSymbolicLink()) return;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return;
+  }
+  const stack = ['rules'];
+  while (stack.length > 0) {
+    const relDir = stack.pop();
+    let dirents;
+    try {
+      dirents = fs.readdirSync(path.join(repo, relDir), { withFileTypes: true });
+    } catch (error) {
+      // A missing rules/ directory is a legitimately empty repository, not a failure.
+      if (error.code !== 'ENOENT') throw error;
+      continue;
+    }
+    for (const dirent of dirents) {
+      if (dirent.isSymbolicLink()) continue;
+      const relative = path.join(relDir, dirent.name);
+      if (isArchived(relative)) continue;
+      if (dirent.isDirectory()) stack.push(relative);
+      else if (dirent.isFile() && dirent.name.endsWith('.md')) out.push(toPosix(relative));
+    }
+  }
+}
+
+// Working-tree target list: root CLAUDE.md first, then rules/ in ascending path order.
+function collectWorktreeTargets(repo) {
+  const targets = [];
+  try {
+    if (fs.lstatSync(path.join(repo, 'CLAUDE.md')).isFile()) targets.push('CLAUDE.md');
+  } catch { /* absent root CLAUDE.md is silently excluded */ }
+  const rules = [];
+  walkRules(repo, rules);
+  rules.sort();
+  return targets.concat(rules);
+}
+
+function git(repo, args) {
+  return execFileSync('git', ['-C', repo].concat(args), {
+    encoding: 'buffer',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
+
+// Target list at `ref`. Mode 120000 entries are symlinks and are skipped, symmetric with
+// the working-tree walk (CPR-5).
+function collectRefTargets(repo, ref) {
+  const out = git(repo, ['ls-tree', '-r', ref, '--', 'CLAUDE.md', 'rules']).toString('utf8');
+  const targets = [];
+  for (const line of out.split('\n')) {
+    if (line === '') continue;
+    const match = line.match(/^(\d{6}) (\w+) [0-9a-f]+\t(.*)$/);
+    if (!match) continue;
+    const [, mode, type, file] = match;
+    if (type !== 'blob' || mode === '120000') continue;
+    if (isArchived(file)) continue;
+    if (file !== 'CLAUDE.md' && !(file.startsWith('rules/') && file.endsWith('.md'))) continue;
+    targets.push(file);
+  }
+  targets.sort((a, b) => (a === 'CLAUDE.md' ? -1 : b === 'CLAUDE.md' ? 1 : a < b ? -1 : a > b ? 1 : 0));
+  return targets;
+}
+
+function readTarget(repo, ref, file) {
+  if (ref === null) return fs.readFileSync(path.join(repo, file), 'utf8');
+  return git(repo, ['show', ref + ':' + file]).toString('utf8');
+}
+
+// Returns { rows, failures }. A row is only produced for a document that was both read and
+// judged always-loaded; a document that could not be read is a failure, never a zero.
+function collectReport(repo, ref) {
+  const targets = ref === null ? collectWorktreeTargets(repo) : collectRefTargets(repo, ref);
+  const rows = [];
+  const failures = [];
+  for (const file of targets) {
+    let content;
+    try {
+      content = readTarget(repo, ref, file);
+    } catch (error) {
+      failures.push({ path: file, code: error.code || 'EIO' });
+      continue;
+    }
+    const verdict = isAlwaysLoaded(content);
+    if (!verdict.alwaysLoaded) continue;
+    rows.push(Object.assign({ path: file, warning: verdict.warning }, measure(content)));
+  }
+  return { rows, failures };
+}
+
+function totalOf(rows) {
+  return {
+    files: rows.length,
+    bytes: rows.reduce((sum, row) => sum + row.bytes, 0),
+    lines: rows.reduce((sum, row) => sum + row.lines, 0),
+  };
+}
+
+function rejectBadRepo(value) {
+  if (!path.isAbsolute(value)) {
+    warn('--repo must be an absolute path: ' + value);
+    return 2;
+  }
+  if (value.split(/[\\/]+/).includes('..')) {
+    warn('--repo must not contain "..": ' + value);
+    return 2;
+  }
+  return null;
+}
+
+// `git show <ref>:<file>` has no `--` separator, so a ref starting with `-` would be read
+// by git as an option. The rev-parse gate below happens to reject one too, but only as a
+// side effect of its `^{commit}` suffix; the rule is stated explicitly here so it does not
+// depend on that.
+function rejectBadRef(value) {
+  if (value.startsWith('-')) {
+    warn('--ref must not start with "-": ' + value);
+    return 2;
+  }
+  return null;
+}
+
+function main() {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      options: {
+        repo: { type: 'string' },
+        ref: { type: 'string' },
+        json: { type: 'boolean' },
+        help: { type: 'boolean' },
+      },
+      strict: true,
+      allowPositionals: false,
+    });
+  } catch (error) {
+    warn('argument error: ' + error.message);
+    return 2;
+  }
+
+  if (parsed.values.help) {
+    process.stdout.write(USAGE);
+    return 0;
+  }
+
+  const repo = normalizeInputPath(
+    String(parsed.values.repo || process.env.AGENTS_CONFIG_DIR || path.resolve(__dirname, '..'))
+  );
+  const rejected = rejectBadRepo(repo);
+  if (rejected !== null) return rejected;
+
+  const ref = typeof parsed.values.ref === 'string' ? parsed.values.ref : null;
+  if (ref !== null) {
+    const rejectedRef = rejectBadRef(ref);
+    if (rejectedRef !== null) return rejectedRef;
+    // An unresolvable ref is a caller error, not "zero always-loaded documents".
+    try {
+      git(repo, ['rev-parse', '--verify', '--quiet', ref + '^{commit}']);
+    } catch {
+      warn('--ref could not be resolved in ' + repo + ': ' + ref);
+      return 2;
+    }
+  }
+
+  let report;
+  try {
+    report = collectReport(repo, ref);
+  } catch (error) {
+    warn('scan failed: ' + (error.message || error));
+    return 2;
+  }
+
+  const total = totalOf(report.rows);
+  const json = parsed.values.json === true;
+
+  if (json) {
+    process.stdout.write(JSON.stringify({
+      generated_at: new Date().toISOString(),
+      repo,
+      ref: ref === null ? null : ref,
+      // `warning` and `errors` are carried into JSON for the same reason the text mode
+      // prints WARN/ERROR rows: a stored report that dropped them would be
+      // indistinguishable from a complete measurement (CPR-5, symmetric with the two
+      // output modes and with bin/count-subagents --json).
+      files: report.rows.map((row) => ({
+        path: row.path, bytes: row.bytes, lines: row.lines, warning: row.warning,
+      })),
+      total,
+      errors: report.failures.map((failure) => ({ path: failure.path, code: failure.code })),
+    }, null, 2) + '\n');
+  } else {
+    for (const row of report.rows) {
+      // A malformed document is reported on its own row rather than on stderr, so the
+      // warning cannot be separated from the numbers it qualifies.
+      const state = row.warning === null ? 'INFO' : 'WARN';
+      const tail = row.warning === null ? '' : '  (' + row.warning + ')';
+      process.stdout.write(
+        state + '  ' + row.path + '  bytes=' + row.bytes + ' lines=' + row.lines + tail + '\n'
+      );
+    }
+    for (const failure of report.failures) {
+      process.stdout.write('ERROR  ' + failure.path + '  reason=' + failure.code + '\n');
+    }
+    process.stdout.write(
+      'norm-docs-summary: files=' + total.files +
+      ' bytes=' + total.bytes +
+      ' lines=' + total.lines +
+      ' ref=' + (ref === null ? 'worktree' : ref) + '\n'
+    );
+  }
+
+  return report.failures.length > 0 ? 1 : 0;
+}
+
+if (require.main === module) {
+  process.exitCode = main();
+}
+
+module.exports = { USAGE, isAlwaysLoaded, measure, collectReport, totalOf, main };

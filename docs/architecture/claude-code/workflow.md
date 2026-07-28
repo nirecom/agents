@@ -33,6 +33,14 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
 }
 ```
 
+Each step object may carry an optional `started_at` (ISO-8601 UTC), written only while
+`RECORD_STEP_TIMESTAMPS=on`. It is attempt-scoped: every non-`pending` step has one, every
+`pending` step has none, and returning to `pending` discards it. For the steps a
+`WORKFLOW_RESET_FROM_*` regenerates ahead of its target, `started_at` equals `updated_at`.
+That equality means zero measured elapsed time, which a directly-recorded `complete` or
+`skipped` step also produces — it does not identify a reset on its own. Rule SSOT:
+`hooks/lib/workflow-state/state-io/step-timestamps.js`.
+
 `cwd` and `git_branch` are optional (absent in states created before the inheritance feature).
 `git_branch` is `null` for non-git directories and detached HEAD.
 

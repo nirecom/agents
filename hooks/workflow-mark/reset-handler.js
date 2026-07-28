@@ -5,6 +5,10 @@
 const { validateSkipReason } = require("./skip-reason");
 const { RESET_FROM_RE_DQ, RESET_FROM_LOOKSLIKE_RE } = require("../lib/sentinel-patterns");
 const { VALID_STEPS, createInitialState, writeState } = require("../lib/workflow-state");
+const {
+  recordStepTimestampsEnabled,
+  applyStartedAt,
+} = require("../lib/workflow-state/state-io/step-timestamps");
 
 function handle(ctx) {
   const { cmd, sessionId, pushMessage } = ctx;
@@ -55,8 +59,13 @@ function handle(ctx) {
       const newState = createInitialState(sessionId);
       const fromIndex = VALID_STEPS.indexOf(fromStep);
       const now = new Date().toISOString();
+      const stamp = recordStepTimestampsEnabled();
       for (let i = 0; i < fromIndex; i++) {
-        newState.steps[VALID_STEPS[i]] = { status: "complete", updated_at: now };
+        const entry = { status: "complete", updated_at: now };
+        // A DECLARED complete: updated_at is already synthetic here, so started_at is
+        // synthesised alongside it (prev: null). Rule SSOT: state-io/step-timestamps.js.
+        if (stamp) applyStartedAt(entry, { prev: null, now });
+        newState.steps[VALID_STEPS[i]] = entry;
       }
       writeState(sessionId, newState);
     } catch (e) {
