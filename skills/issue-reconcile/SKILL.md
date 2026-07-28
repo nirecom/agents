@@ -63,10 +63,6 @@ The script is internally idempotent — running it on `history-only` does
 nothing harmful — but skip those in step 2 anyway to avoid unnecessary
 GitHub API calls.
 
-Its idempotency check matches `#<N>:` only, so an issue already recorded in a
-`(#N)` or `(YYYY-MM-DD, #N)` heading is not detected — confirm absence by
-heading before appending.
-
 ## Step 3b: batch backfill
 
 When more than a handful of issues are pending, do not run Step 3 per issue —

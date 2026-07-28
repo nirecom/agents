@@ -152,7 +152,14 @@ else
 # Anchor on `### ` prefix to avoid false-positive matches against in-body references
 # like "follow-up from #42:" or "see also #42: ...".
 GREP_BIN="$(command -v ggrep || echo grep)"
-if LC_ALL=C.UTF-8 "$GREP_BIN" -rPq "(^### #${ISSUE_NUM}\b)|(^### [^(]+ \([^)]+#${ISSUE_NUM}\b[^)]*\))|(^### [^\n]*#${ISSUE_NUM}\b[^\n]*\([0-9]{4}-)" "$HISTORY_FILE" "$HISTORY_DIR" 2>/dev/null; then
+# --target redirects the append away from the canonical pair, so the target and
+# its sibling archive must be checked too — the canonical pair alone cannot see
+# an entry already appended to the target, and a re-run would duplicate it.
+CHECK_PATHS=("$HISTORY_FILE" "$HISTORY_DIR")
+if [ -n "$TARGET" ]; then
+    CHECK_PATHS+=("$TARGET" "$(dirname "$TARGET")/$(basename "$TARGET" .md)")
+fi
+if LC_ALL=C.UTF-8 "$GREP_BIN" -rPq "(^### #${ISSUE_NUM}\b)|(^### [^(]+ \([^)]+#${ISSUE_NUM}\b[^)]*\))|(^### [^\n]*#${ISSUE_NUM}\b[^\n]*\([0-9]{4}-)" "${CHECK_PATHS[@]}" 2>/dev/null; then
     echo "Already in history (entry for #${ISSUE_NUM} exists). Skipping append."
     exit 0
 fi

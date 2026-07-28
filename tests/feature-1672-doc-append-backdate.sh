@@ -25,6 +25,11 @@ PASS=0; FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
+# Scratch dir for captured stdout/stderr. Kept per-run (not a fixed /tmp path)
+# so concurrent runs of this file cannot clobber each other's captures.
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT
+
 run_da() {
     # run_da <file> [args...] — invokes doc-append.py against the local
     # worktree copy directly (not the globally-installed shim, which may
@@ -57,44 +62,44 @@ fi
 F1=$(setup_fixture "2026-01-20")
 BEFORE_SUM=$(sha256sum "$F1" | awk '{print $1}')
 run_da "$F1" --no-auto-rotate --category FEATURE --subject "Too old" \
-    --date "2026-01-01" --background "bg" --changes "ch" >/tmp/c1.out 2>/tmp/c1.err
+    --date "2026-01-01" --background "bg" --changes "ch" >"$WORKDIR"/c1.out 2>"$WORKDIR"/c1.err
 RC=$?
 AFTER_SUM=$(sha256sum "$F1" | awk '{print $1}')
 if [ "$RC" -ne 0 ] && [ "$BEFORE_SUM" = "$AFTER_SUM" ]; then
     pass "1: backdated append without --allow-backdate rejected, file byte-identical"
 else
-    fail "1: rc=$RC before=$BEFORE_SUM after=$AFTER_SUM stderr=$(cat /tmp/c1.err)"
+    fail "1: rc=$RC before=$BEFORE_SUM after=$AFTER_SUM stderr=$(cat "$WORKDIR"/c1.err)"
 fi
 rm -rf "$(dirname "$(dirname "$F1")")"
 
 # --- Case 2: same append WITH --allow-backdate succeeds, entry present ---
 F2=$(setup_fixture "2026-01-20")
 run_da "$F2" --no-auto-rotate --allow-backdate --category FEATURE --subject "Too old but allowed" \
-    --date "2026-01-01" --background "bg" --changes "ch" >/tmp/c2.out 2>/tmp/c2.err
+    --date "2026-01-01" --background "bg" --changes "ch" >"$WORKDIR"/c2.out 2>"$WORKDIR"/c2.err
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q "Too old but allowed" "$F2"; then
     pass "2: --allow-backdate accepts backdated append, entry present"
 else
-    fail "2: rc=$RC stderr=$(cat /tmp/c2.err) content=$(cat "$F2")"
+    fail "2: rc=$RC stderr=$(cat "$WORKDIR"/c2.err) content=$(cat "$F2")"
 fi
 rm -rf "$(dirname "$(dirname "$F2")")"
 
 # --- Case 3: exactly 7 days before last entry accepted WITHOUT the flag (boundary) ---
 F3=$(setup_fixture "2026-01-20")
 run_da "$F3" --no-auto-rotate --category FEATURE --subject "Exactly 7 days before" \
-    --date "2026-01-13" --background "bg" --changes "ch" >/tmp/c3.out 2>/tmp/c3.err
+    --date "2026-01-13" --background "bg" --changes "ch" >"$WORKDIR"/c3.out 2>"$WORKDIR"/c3.err
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q "Exactly 7 days before" "$F3"; then
     pass "3: 7-day-old entry accepted without --allow-backdate (tolerance boundary)"
 else
-    fail "3: rc=$RC stderr=$(cat /tmp/c3.err)"
+    fail "3: rc=$RC stderr=$(cat "$WORKDIR"/c3.err)"
 fi
 rm -rf "$(dirname "$(dirname "$F3")")"
 
 # --- Case 4: 8 days before rejected WITHOUT flag, accepted WITH flag ---
 F4a=$(setup_fixture "2026-01-20")
 run_da "$F4a" --no-auto-rotate --category FEATURE --subject "8 days before" \
-    --date "2026-01-12" --background "bg" --changes "ch" >/tmp/c4a.out 2>/tmp/c4a.err
+    --date "2026-01-12" --background "bg" --changes "ch" >"$WORKDIR"/c4a.out 2>"$WORKDIR"/c4a.err
 RC4A=$?
 if [ "$RC4A" -ne 0 ]; then
     pass "4a: 8-day-old entry rejected without --allow-backdate (past boundary)"
@@ -105,36 +110,36 @@ rm -rf "$(dirname "$(dirname "$F4a")")"
 
 F4b=$(setup_fixture "2026-01-20")
 run_da "$F4b" --no-auto-rotate --allow-backdate --category FEATURE --subject "8 days before allowed" \
-    --date "2026-01-12" --background "bg" --changes "ch" >/tmp/c4b.out 2>/tmp/c4b.err
+    --date "2026-01-12" --background "bg" --changes "ch" >"$WORKDIR"/c4b.out 2>"$WORKDIR"/c4b.err
 RC4B=$?
 if [ "$RC4B" -eq 0 ] && grep -q "8 days before allowed" "$F4b"; then
     pass "4b: 8-day-old entry accepted with --allow-backdate"
 else
-    fail "4b: rc=$RC4B stderr=$(cat /tmp/c4b.err)"
+    fail "4b: rc=$RC4B stderr=$(cat "$WORKDIR"/c4b.err)"
 fi
 rm -rf "$(dirname "$(dirname "$F4b")")"
 
 # --- Case 5: flag is inert for a normal forward-dated append ---
 F5=$(setup_fixture "2026-01-20")
 run_da "$F5" --no-auto-rotate --allow-backdate --category FEATURE --subject "Forward dated" \
-    --date "2026-02-01" --background "bg" --changes "ch" >/tmp/c5.out 2>/tmp/c5.err
+    --date "2026-02-01" --background "bg" --changes "ch" >"$WORKDIR"/c5.out 2>"$WORKDIR"/c5.err
 RC=$?
 if [ "$RC" -eq 0 ] && grep -q "Forward dated" "$F5"; then
     pass "5: --allow-backdate inert on normal forward-dated append"
 else
-    fail "5: rc=$RC stderr=$(cat /tmp/c5.err)"
+    fail "5: rc=$RC stderr=$(cat "$WORKDIR"/c5.err)"
 fi
 rm -rf "$(dirname "$(dirname "$F5")")"
 
 # --- Case 6: --allow-backdate does NOT disable unrelated BUGFIX/--test-gap guard ---
 F6=$(setup_fixture "2026-01-20")
 run_da "$F6" --no-auto-rotate --allow-backdate --category BUGFIX --subject "Missing test gap" \
-    --date "2026-01-21" --background "bg" --changes "ch" >/tmp/c6.out 2>/tmp/c6.err
+    --date "2026-01-21" --background "bg" --changes "ch" >"$WORKDIR"/c6.out 2>"$WORKDIR"/c6.err
 RC=$?
-if [ "$RC" -ne 0 ] && grep -qi "test-gap" /tmp/c6.err; then
+if [ "$RC" -ne 0 ] && grep -qi "test-gap" "$WORKDIR"/c6.err; then
     pass "6: --allow-backdate does not bypass BUGFIX --test-gap requirement on history.md"
 else
-    fail "6: rc=$RC stderr=$(cat /tmp/c6.err)"
+    fail "6: rc=$RC stderr=$(cat "$WORKDIR"/c6.err)"
 fi
 rm -rf "$(dirname "$(dirname "$F6")")"
 
@@ -156,7 +161,7 @@ Background: b
 Changes: c
 EOF
 run_da "$F7" --no-auto-rotate --allow-backdate --category FEATURE --subject "Backfilled tail entry" \
-    --date "2025-01-01" --background "bg" --changes "ch" >/tmp/c7.out 2>/tmp/c7.err
+    --date "2025-01-01" --background "bg" --changes "ch" >"$WORKDIR"/c7.out 2>"$WORKDIR"/c7.err
 RC=$?
 LINE_OLDEST=$(grep -n "Oldest existing" "$F7" | head -1 | cut -d: -f1)
 LINE_MID=$(grep -n "Mid existing" "$F7" | head -1 | cut -d: -f1)
@@ -218,9 +223,72 @@ else
     fail "10 (precondition): $ISSUE_TO_HISTORY not found or not executable"
 fi
 
-rm -f /tmp/c1.out /tmp/c1.err /tmp/c2.out /tmp/c2.err /tmp/c3.out /tmp/c3.err \
-    /tmp/c4a.out /tmp/c4a.err /tmp/c4b.out /tmp/c4b.err /tmp/c5.out /tmp/c5.err \
-    /tmp/c6.out /tmp/c6.err /tmp/c7.out /tmp/c7.err
+# --- Case 11: --target-aware idempotency — entry present ONLY in --target ---
+# The idempotency check must inspect --target too. Canonical
+# $AGENTS_CONFIG_DIR/docs/history.md deliberately lacks #1901, so a check that
+# looks at the canonical pair alone would fall through and append a duplicate
+# into the target (an append-only record).
+if [ -x "$ISSUE_TO_HISTORY" ]; then
+    T11=$(mktemp -d "$WORKDIR/idem11-XXXXXX")
+    mkdir -p "$T11/cfg/docs/history" "$T11/repo/docs"
+    cat > "$T11/cfg/docs/history.md" <<'EOF'
+### FEATURE: Unrelated canonical entry (2026-01-20)
+Background: b
+Changes: c
+EOF
+    # Authentic doc-append heading shape: "### CATEGORY: subject (date, ..., #N)".
+    cat > "$T11/repo/docs/history.md" <<'EOF'
+### FEATURE: Already backfilled by an earlier run (2026-01-20, #1901)
+Background: b
+Changes: c
+EOF
+    BEFORE11=$(sha256sum "$T11/repo/docs/history.md" | awk '{print $1}')
+    OUT11=$(AGENTS_CONFIG_DIR="$T11/cfg" bash "$ISSUE_TO_HISTORY" 1901 \
+        --target "$T11/repo/docs/history.md" --allow-backdate --no-auto-rotate 2>&1)
+    RC11=$?
+    AFTER11=$(sha256sum "$T11/repo/docs/history.md" | awk '{print $1}')
+    if [ "$RC11" -eq 0 ] && echo "$OUT11" | grep -q "Already in history" \
+        && [ "$BEFORE11" = "$AFTER11" ] \
+        && ! grep -q "1901" "$T11/cfg/docs/history.md"; then
+        pass "11: --target already containing #N short-circuits as 'Already in history', target byte-identical (canonical history.md lacks #N)"
+    else
+        fail "11: rc=$RC11 before=$BEFORE11 after=$AFTER11 out='$OUT11'"
+    fi
+else
+    fail "11 (precondition): $ISSUE_TO_HISTORY not found or not executable"
+fi
+
+# --- Case 12: symmetric non-regression — #N in NEITHER canonical pair nor target ---
+# The check must not become over-eager: with no matching heading anywhere the
+# script proceeds past idempotency (here it stops at the gh fetch, stubbed to
+# fail, which is proof enough that the short-circuit did not fire).
+if [ -x "$ISSUE_TO_HISTORY" ]; then
+    T12=$(mktemp -d "$WORKDIR/idem12-XXXXXX")
+    mkdir -p "$T12/cfg/docs/history" "$T12/repo/docs" "$T12/stubbin"
+    cat > "$T12/cfg/docs/history.md" <<'EOF'
+### FEATURE: Unrelated canonical entry (2026-01-20)
+Background: b
+Changes: c
+EOF
+    cat > "$T12/repo/docs/history.md" <<'EOF'
+### FEATURE: Unrelated target entry (2026-01-20)
+Background: b
+Changes: c
+EOF
+    printf '#!/bin/bash\nexit 1\n' > "$T12/stubbin/gh"
+    chmod +x "$T12/stubbin/gh"
+    OUT12=$(PATH="$T12/stubbin:$PATH" AGENTS_CONFIG_DIR="$T12/cfg" bash "$ISSUE_TO_HISTORY" 1902 \
+        --target "$T12/repo/docs/history.md" --allow-backdate --no-auto-rotate 2>&1)
+    RC12=$?
+    if [ "$RC12" -ne 0 ] && ! echo "$OUT12" | grep -q "Already in history" \
+        && echo "$OUT12" | grep -qi "failed to fetch"; then
+        pass "12: #N absent from both canonical pair and --target -- idempotency check does not fire, script proceeds to fetch"
+    else
+        fail "12: rc=$RC12 out='$OUT12'"
+    fi
+else
+    fail "12 (precondition): $ISSUE_TO_HISTORY not found or not executable"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

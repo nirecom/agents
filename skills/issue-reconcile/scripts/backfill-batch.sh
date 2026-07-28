@@ -84,13 +84,13 @@ done
 
 # Sort once: doc-append re-sorts pre-existing entries but writes each new entry
 # at the tail, so the stream is out of order until this runs.
-if ! (cd "$REPO_DIR" && uv run bin/sort-history.py docs/history.md); then
+if ! (cd "$AGENTS_CONFIG_DIR" && uv run bin/sort-history.py "$HISTORY"); then
     echo "Error: sort-history.py failed" >&2
     exit 1
 fi
 
 # Rotate once, with the same thresholds doc-append's auto-rotation would use.
-if ! (cd "$REPO_DIR" && uv run bin/doc-rotate.py docs/history.md --threshold-warn 500 --floor 20); then
+if ! (cd "$AGENTS_CONFIG_DIR" && uv run bin/doc-rotate.py "$HISTORY" --threshold-warn 500 --floor 20); then
     echo "Error: doc-rotate.py failed" >&2
     exit 1
 fi
