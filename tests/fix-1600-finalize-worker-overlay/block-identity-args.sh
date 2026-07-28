@@ -23,7 +23,18 @@ test_block_variable_script_path() {
     local cmd; cmd="$(build_initial "$acd" "$scripts" "$repo" "\$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts")"
     local rc=0
     run_guard "$(build_bash_payload "$cmd")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_block "BLOCK C1: variable \$AGENTS_CONFIG_DIR script path (not literal) → BLOCK" "$rc"
+    # #1679 (S-7/G1): FLIPPED from BLOCK to ALLOW. PreToolUse sees the command
+    # BEFORE shell expansion, so $AGENTS_CONFIG_DIR legitimately arrives as a
+    # literal prefix — worker-script.js's legacy eval path already normalizes
+    # exactly this prefix (#1484), and the overlay's blanket [$`~] reject made the
+    # two paths disagree. Only the AGENTS_CONFIG_DIR-PREFIX form is admitted, and
+    # only when it resolves to the marker-validated acd; every other variable form
+    # stays blocked, pinned in tests/fix-1679-finalize-overlay-arg-contract.sh by
+    # BK1679-7a (different variable), BK1679-7b (mid-path, not prefix),
+    # BK1679-7c (env unset / pointing elsewhere) and BK1679-7e (~ expansion).
+    # The function name is left as-is because its caller (run_all in
+    # tests/fix-1600-finalize-worker-overlay.sh) is out of scope for this change.
+    assert_allow "ALLOW C1 (#1679): \$AGENTS_CONFIG_DIR literal prefix script path → ALLOW (RED before fix)" "$rc"
 }
 
 test_block_fsd_env_mismatch() {
@@ -223,7 +234,15 @@ test_block_initial_missing_arg() {
         "$acd" "$scripts" "$repo" "$scripts")"
     local rc=0
     run_guard "$(build_bash_payload "$cmd")" "$repo" "AGENTS_CONFIG_DIR=$acd" "WORKFLOW_PLANS_DIR=$plans" || rc=$?
-    assert_block "BLOCK C3: run-initial.sh with 2 args (missing 3rd) → BLOCK" "$rc"
+    # #1679 (S-6/G2): FLIPPED from BLOCK to ALLOW. The 2-argument form is the
+    # documented shape for a current-repo issue (arg3 owner/repo omitted), so
+    # `argCountMin: 3` was wrong — it false-blocked a real invocation. The arg-count
+    # boundary is now pinned from both sides in
+    # tests/fix-1679-finalize-overlay-arg-contract.sh: BK1679-1 (1 arg → BLOCK) and
+    # BK1679-2 (4 args → BLOCK), with AC1679-2 pinning this 2-arg ALLOW.
+    # The function name is left as-is because its caller (run_all in
+    # tests/fix-1600-finalize-worker-overlay.sh) is out of scope for this change.
+    assert_allow "ALLOW C3 (#1679): run-initial.sh with 2 args (arg3 omitted) → ALLOW (RED before fix)" "$rc"
 }
 
 test_block_finalize_terminal_extra_arg() {

@@ -50,6 +50,14 @@ function hasControlChar(s) {
 // is a documented empty placeholder.
 const ID_VALUE_RE = /^[A-Za-z0-9._-]*$/;
 
+// owner/repo slug, bare repo name, or empty placeholder — all accepted for
+// run-initial.sh arg3 (G2/G3 fix, #1679 S-6). Accepts:
+//   ""            → empty placeholder (legacy current-repo form with 3 args)
+//   "repo"        → bare repo name (current-repo form)
+//   "owner/repo"  → cross-repo form (exactly one slash)
+// `..` traversal rejected explicitly in the spec handler (CWE-22).
+const REPO_SLUG_VALUE_RE = /^(?:[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)?)?$/;
+
 /**
  * True when `tok` is a single plain shell word whose value survives a second
  * round of shell parsing unchanged. Applied to every token regardless of
@@ -77,9 +85,9 @@ const FINALIZE_OVERLAY_REGISTRY = [
     rel: "skills/issue-close-finalize/scripts/run-initial.sh",
     interpreter: "bash",
     requiredEnv: ["AGENTS_CONFIG_DIR", "FINALIZE_SCRIPTS_DIR", "MAIN_WORKTREE_PATH"],
-    argCountMin: 3,
+    argCountMin: 2,
     argCountMax: 3,
-    argSpec: ["id", "id", "id"],
+    argSpec: ["id", "id", "repo-slug"],
     matchable: true,
   },
   {
@@ -221,6 +229,34 @@ function isUnderPlansDir(token) {
   }
 }
 
+// True when the hook process's own AGENTS_CONFIG_DIR env var agrees with the
+// marker-validated anchor (normLower'd). Fail-closed when env is absent or
+// disagrees — keeps the $AGENTS_CONFIG_DIR literal-prefix resolution safe.
+function acdEnvAgreesWithAnchor(anchorAcd) {
+  const envAcd = process.env.AGENTS_CONFIG_DIR;
+  if (!envAcd) return false;
+  try {
+    return normLower(envAcd) === anchorAcd;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Resolve a `$AGENTS_CONFIG_DIR/...` or `${AGENTS_CONFIG_DIR}/...` literal prefix
+// in `literal` to the actual acd path. Returns the resolved string, the original
+// `literal` unchanged (when no ACD prefix), or null (env-anchor mismatch → fail
+// closed). Bare `$` / backtick / `~` that are NOT an ACD prefix are left in place
+// so the caller's remaining `[$`~]` check still fires on them.
+function resolveAcdPrefix(literal, acd) {
+  if (typeof literal !== "string" || typeof acd !== "string") return null;
+  const hasBrace = literal.startsWith("${AGENTS_CONFIG_DIR}");
+  const hasPlain = !hasBrace && literal.startsWith("$AGENTS_CONFIG_DIR");
+  if (!hasBrace && !hasPlain) return literal; // no ACD prefix — return as-is
+  if (!acdEnvAgreesWithAnchor(normLower(acd))) return null;
+  const prefixLen = hasBrace ? "${AGENTS_CONFIG_DIR}".length : "$AGENTS_CONFIG_DIR".length;
+  return acd + literal.slice(prefixLen);
+}
+
 /**
  * HARD-validate a single-line finalize-worker `eval` invocation. Returns
  * { scriptPath: <normalized> } on a full pass, or null on any rejection
@@ -232,7 +268,7 @@ function matchFinalizeWorkerOverlay(cmd, acd, repoRoot) {
   if (cmd.includes("\n") || cmd.includes("\r")) return null;
 
   // Outer wrapper: eval "$(...)" with an optional `|| exit 0` tail and nothing else.
-  const mOuter = cmd.match(/^\s*eval\s+"\$\((.+)\)"\s*(?:\|\|\s*exit\s+0\s*)?$/);
+  const mOuter = cmd.match(/^\s*eval\s+"\$\((.+)\)"\s*(?:2>&1\s*)?(?:\|\|\s*exit\s+0\s*)?$/);
   if (!mOuter) return null;
   const inner = mOuter[1];
 
@@ -246,12 +282,15 @@ function matchFinalizeWorkerOverlay(cmd, acd, repoRoot) {
   const scriptLiteral = mInner[3];
   const argTail = (mInner[4] || "").trim();
 
-  // Script path must be a fully-resolved literal — no indirection.
-  if (/[$`~]/.test(scriptLiteral)) return null;
+  // Script path: resolve $AGENTS_CONFIG_DIR literal prefix when the hook's own
+  // env agrees with the anchor (#1679 S-7), then reject remaining indirection.
+  const resolvedScriptLiteral = resolveAcdPrefix(scriptLiteral, acd);
+  if (resolvedScriptLiteral === null) return null;
+  if (/[$`~]/.test(resolvedScriptLiteral)) return null;
 
   let normScript;
   try {
-    normScript = normLower(scriptLiteral);
+    normScript = normLower(resolvedScriptLiteral);
   } catch (_) {
     return null;
   }
@@ -311,13 +350,15 @@ function matchFinalizeWorkerOverlay(cmd, acd, repoRoot) {
     if (!WHITELIST.has(key)) return null;
     if (present.has(key)) return null; // duplicate key
     present.add(key);
-    if (/[$`~]/.test(val)) return null;
+    const resolvedVal = resolveAcdPrefix(val, acd);
+    if (resolvedVal === null) return null;
+    if (/[$`~]/.test(resolvedVal)) return null;
     if (key === "AGENTS_CONFIG_DIR") {
-      payloadAcd = normLower(val);
+      payloadAcd = normLower(resolvedVal);
     } else if (key === "FINALIZE_SCRIPTS_DIR") {
-      if (normLower(val) !== fsdNorm) return null;
+      if (normLower(resolvedVal) !== fsdNorm) return null;
     } else if (key === "MAIN_WORKTREE_PATH") {
-      const vNorm = normalizeForCompare(normalizeCwd(val) || val);
+      const vNorm = normalizeForCompare(normalizeCwd(resolvedVal) || resolvedVal);
       if (!vNorm || !rootNorm || vNorm !== rootNorm) return null;
     }
   }
@@ -356,6 +397,11 @@ function matchFinalizeWorkerOverlay(cmd, acd, repoRoot) {
       if (!G5_DECISION_VALUES.includes(tok.value)) return null;
     } else if (spec === "path-plansdir") {
       if (!isUnderPlansDir(tok.value)) return null;
+    } else if (spec === "repo-slug") {
+      if (!REPO_SLUG_VALUE_RE.test(tok.value)) return null;
+      const slugParts = tok.value === "" ? [] : tok.value.split("/");
+      if (slugParts.length > 2) return null; // belt-and-suspenders (regex already prevents)
+      if (slugParts.some((p) => p === "." || p === "..")) return null;
     } else {
       return null; // unknown spec → fail-closed
     }

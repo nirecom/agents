@@ -1,6 +1,66 @@
 "use strict";
 
 const { stripQuotedArgs, stripHeredocBody, stripInlineBodyArg, stripShellVarAssignment } = require("../strip-quoted-args");
+
+// Strip double-quoted content; handle single-quoted spans carefully.
+// Used by spanAware+stripDQOnly patterns so heredoc delimiters like <<'EOF'
+// remain visible — full stripQuotedArgs removes 'EOF' as an SQ span, losing
+// the <<'word' shape that the here-doc pattern requires (#1679 S-1).
+//
+// SQ handling strategy (#1679 HIGH-1 + FP1679-E):
+//
+// Problem 1 (HIGH-1): in `echo 'a"b' ; python <<EOF`, the `"` inside `'a"b'`
+// must NOT open a phantom DQ span that swallows the subsequent `<<EOF`.
+//
+// Problem 2 (FP1679-E): in `bash -c 'echo "see <<EOF in docs"'`, the `<<EOF`
+// is inside an SQ span (a body argument, not a real heredoc) and must NOT be
+// visible to the here-doc pattern.
+//
+// Solution: detect whether a `'` is a heredoc delimiter or a regular SQ span.
+//   - If the accumulated result (trimmed) ends with `<<` or `<<-`, the `'` is
+//     a heredoc delimiter (`<<'word'`) — preserve SQ content verbatim so the
+//     here-doc regex can see the word.
+//   - Otherwise it is a regular SQ span — strip the content (keep delimiters).
+//     This prevents body arguments from leaking <<EOF patterns AND prevents a
+//     `"` inside an SQ span from opening a phantom DQ span.
+function stripDoubleQuotedContent(cmd) {
+  let result = "";
+  let i = 0;
+  while (i < cmd.length) {
+    if (cmd[i] === "'") {
+      // Heredoc delimiter check: <<'word' or <<-'word'
+      const isHeredocDelim = /<<-?$/.test(result.trimEnd());
+      result += "'";
+      i++;
+      if (isHeredocDelim) {
+        // Preserve delimiter word verbatim so the here-doc pattern matches.
+        while (i < cmd.length && cmd[i] !== "'") {
+          result += cmd[i++];
+        }
+      } else {
+        // Regular SQ span: strip content.
+        // The `"` inside (e.g. `'a"b'`) must not open a phantom DQ span, and
+        // `<<EOF` inside a body arg (e.g. `bash -c 'echo "see <<EOF"'`) must
+        // not be visible to the here-doc pattern.
+        while (i < cmd.length && cmd[i] !== "'") {
+          i++; // skip content, do not append
+        }
+      }
+      if (i < cmd.length) { result += "'"; i++; } // consume closing '
+    } else if (cmd[i] === '"') {
+      result += '"';
+      i++;
+      while (i < cmd.length && cmd[i] !== '"') {
+        if (cmd[i] === '\\' && i + 1 < cmd.length) i++; // skip escape + next char
+        i++;
+      }
+      if (i < cmd.length) { result += '"'; i++; } // consume closing "
+    } else {
+      result += cmd[i++];
+    }
+  }
+  return result;
+}
 const { isStrictSentinel } = require("../sentinel-patterns");
 const { parse } = require("../command-ir");
 const { WRITE_PATTERNS, GH_GROUP_A_REGEX, KNOWN_DISPATCH_SUFFIXES, QUOTING_ONLY_NAMES, STRIP_KINDS, QUOTED_COMMAND_WORD_WRITE_NAMES, UNSAFE_REASON_CHARS, isGitWriteIR } = require("./patterns");
@@ -104,28 +164,40 @@ function classify(cmd) {
 
     // --- end IR-based signal suppressors ---
 
-    // Existing logic (unchanged from original classify()):
+    // Existing logic (with #1679 S-1 spanAware/stripDQOnly enhancements):
     const stripped = stripQuotedArgs(cmd);
+    const strippedDQOnly = stripDoubleQuotedContent(cmd);
     if (isQuotedWriteCommandWord(cmd)) return "write";
     const matchedNames = [];
     for (const p of WRITE_PATTERNS) {
       if (suppressedPatterns.has(p.name)) continue;
-      const scanned = STRIP_KINDS.has(p.kind) ? stripped : cmd;
+      // stripDQOnly: strip only DQ content so heredoc delimiters like <<'EOF'
+      // remain visible (SQ span not stripped). Used by here-doc and here-string.
+      // spanAware without stripDQOnly: use full stripQuotedArgs (for pwsh-here patterns).
+      const scanned = p.stripDQOnly ? strippedDQOnly
+        : (p.spanAware || STRIP_KINDS.has(p.kind)) ? stripped : cmd;
       if (p.regex.test(scanned)) matchedNames.push(p.name);
     }
     if (matchedNames.length === 0) return "read";
-    if (
-      matchedNames.every((n) => QUOTING_ONLY_NAMES.has(n)) &&
-      GH_GROUP_A_REGEX.test(cmd)
-    ) {
-      // #371 codex-review hardening: the quoting-only early-return only applies
-      // when every heredoc in the command is safe to collapse. Otherwise the
-      // body might execute (interpreter heredoc) or undergo shell expansion
-      // (unquoted opener with $(...) / backticks), and the dangerous content
-      // must remain visible to the classifier.
-      if (isSafeHeredocOnly(cmd)) {
-        return "read";
+    if (matchedNames.every((n) => QUOTING_ONLY_NAMES.has(n))) {
+      // #1679 S-1: Group A gh coordination commands / known dispatchers — the
+      // heredoc is a multi-line --body/--title argument, not a file-write shell
+      // construct. isSafeHeredocOnly decides whether the body is expansion-free.
+      // Group A is checked first so that `gh pr create ... | cat <<EOF > out`
+      // (a redirect on the same compound command) is correctly allowed as "read"
+      // for the gh segment while the posix-redir is caught by isPosixRedirWriteIR.
+      if (GH_GROUP_A_REGEX.test(cmd) || isKnownDispatchInvocation(cmd)) {
+        if (isSafeHeredocOnly(cmd)) return "read";
+        return "write";
       }
+      // Non-Group-A: a co-located posix write redirect makes this a real file
+      // write even though the only WRITE_PATTERNS match is a quoting-only
+      // here-doc opener (e.g. `cat <<'EOF' > README.md`). isPosixRedirWriteIR
+      // is retired from the general classify() path but is checked here so that
+      // FC1679-J security pins remain "write" without restoring the early-return.
+      if (isPosixRedirWriteIR(ir)) return "write";
+      // Safe cat-only heredoc without redirect: stdin/stdout data, not a file write.
+      if (isSafeHeredocOnly(cmd)) return "read";
       return "write";
     }
     // #371 + #596 fix: for Group A gh commands or known dispatcher invocations,
@@ -137,7 +209,7 @@ function classify(cmd) {
       const reStripped = stripQuotedArgs(bodyStripped);
       const reMatched = [];
       for (const p of WRITE_PATTERNS) {
-        const scanned = STRIP_KINDS.has(p.kind) ? reStripped : bodyStripped;
+        const scanned = (p.spanAware || STRIP_KINDS.has(p.kind)) ? reStripped : bodyStripped;
         if (p.regex.test(scanned)) reMatched.push(p.name);
       }
       if (reMatched.length === 0) return "read";
@@ -196,13 +268,16 @@ function isSafeHeredocOnly(cmd) {
 function isReadOnlyInterpreterC(cmd) {
   try {
     if (!cmd || typeof cmd !== "string") return false;
-    // Reject unsafe constructs at outer level
-    if (/\$'/.test(cmd)) return false;   // ANSI-C quoting
-    if (/<<</.test(cmd)) return false;    // here-string
-    if (/<<[^<]/.test(cmd)) return false; // here-doc
-    if (/`/.test(cmd)) return false;      // backtick substitution
-    // Reject outer chaining (& inside quotes is stripped first)
+    // Quote-span-aware outer prechecks (#1679 S-3): test outside quoted spans to
+    // avoid false positives from these patterns appearing inside body arguments.
     const stripped = stripQuotedArgs(cmd);
+    if (/\$'/.test(stripped)) return false;   // ANSI-C quoting at outer level
+    if (/<<</.test(stripped)) return false;    // here-string at outer level
+    if (/<<[^<]/.test(stripped)) return false; // here-doc at outer level
+    // Backtick: test FULL command — backtick IS active inside DQ spans (FC1679-K2).
+    // A span-aware check would remove DQ content, hiding `\`cmd\`` from detection.
+    if (/`/.test(cmd)) return false;           // backtick substitution
+    // Reject outer chaining (& inside quotes is stripped first)
     if (/[|;&]|\$\(/.test(stripped)) return false;
 
     const trimmed = cmd.trim();
@@ -218,7 +293,9 @@ function isReadOnlyInterpreterC(cmd) {
       const bashDouble = trimmed.match(
         /^(?:bash|sh|zsh|dash|fish)(?:\.exe)?\s+(?:-\w*c\w*)\s+"((?:[^"\\]|\\.)*)"\s*$/i
       );
-      if (bashDouble) body = bashDouble[1];
+      // De-escape DQ-captured body: \"→" and \\→\ (#1679 S-3) so that
+      // inner scan sees `echo "see <<EOF"` not `echo \"see <<EOF\"`.
+      if (bashDouble) body = bashDouble[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
     }
 
     // pwsh/powershell family: -Command / -c (PowerShell accepts `-c` as a
@@ -235,7 +312,29 @@ function isReadOnlyInterpreterC(cmd) {
       const pwshDouble = trimmed.match(
         /^(?:pwsh|powershell)(?:\.exe)?\s+(?:-Command|-c)\s+"((?:[^"\\]|\\.)*)"\s*$/i
       );
-      if (pwshDouble) body = pwshDouble[1];
+      if (pwshDouble) body = pwshDouble[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    }
+
+    // IR fallback (#1679 S-3): handles quote-concatenated forms (e.g. '…'"'"'…')
+    // that the simple regex extractors above cannot capture. The IR parser resolves
+    // quote concatenation at the argv level, so argv[cFlagIdx+1] is the correct body.
+    if (body === null) {
+      try {
+        const irFb = parse(trimmed);
+        if (!irFb.parseFailure && irFb.cmd0 && Array.isArray(irFb.argv)) {
+          const base = irFb.cmd0.toLowerCase().replace(/\.exe$/i, "");
+          if (/^(?:bash|sh|zsh|dash|fish|pwsh|powershell)$/.test(base)) {
+            for (let i = 0; i < irFb.argv.length; i++) {
+              const a = irFb.argv[i]; const al = a.toLowerCase();
+              const isPwsh = base === "pwsh" || base === "powershell";
+              const isCFlag = isPwsh
+                ? (al === "-c" || al === "-command")
+                : (al === "-c" || (a.startsWith("-") && !a.startsWith("--") && /c/.test(a.slice(1))));
+              if (isCFlag && i + 1 < irFb.argv.length) { body = irFb.argv[i + 1]; break; }
+            }
+          }
+        }
+      } catch (_) { body = null; }
     }
 
     if (body === null) return false; // unrecognized form → fail-closed
@@ -301,11 +400,18 @@ function classifyDetailed(cmd) {
   const kind = classify(cmd);
   // Re-run pattern matching to collect matched names
   const stripped = stripShellVarAssignment(stripInlineBodyArg(stripHeredocBody(cmd)));
+  const strippedQuotes = stripQuotedArgs(cmd);
+  const strippedDQOnly = stripDoubleQuotedContent(cmd);
   const matchedNames = [];
   for (const p of WRITE_PATTERNS) {
-    if (p.regex.test(stripped) || p.regex.test(cmd)) {
-      matchedNames.push(p.name || p.kind);
-    }
+    // stripDQOnly: DQ-only strip for here-doc/here-string (#1679 S-1)
+    // spanAware without stripDQOnly: full quote-strip for pwsh-here patterns
+    const matched = p.stripDQOnly
+      ? p.regex.test(strippedDQOnly)
+      : p.spanAware
+        ? p.regex.test(strippedQuotes)
+        : (p.regex.test(stripped) || p.regex.test(cmd));
+    if (matched) matchedNames.push(p.name || p.kind);
   }
   return { kind, matchedNames };
 }

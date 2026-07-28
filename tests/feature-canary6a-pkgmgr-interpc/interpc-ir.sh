@@ -32,6 +32,8 @@ IW-redir^sh -c "echo hi > out"^true
 IW-pwsh-remove^pwsh -Command "Remove-Item foo"^true
 IW-git-commit^bash -c "git commit"^true
 IW-npm-install^bash -c "npm install"^true
+FC1679-K2 dq body with a LIVE backtick substitution^bash -c "echo \"use `id` backtick\""^true
+FC1679-K3 dq body with a real rm write^bash -c "rm -f \"my file\""^true
 IW_TABLE
 
 echo "=== IR: interpreter-c READ bodies → false ==="
@@ -42,6 +44,11 @@ done <<'IR_TABLE'
 IR-echo^sh -c "echo hello"^false
 IR-getcontent^pwsh -Command "Get-Content foo"^false
 IR-ls^zsh -c "ls"^false
+FP1679-E sq body quoting <<EOF prose^bash -c 'echo "see <<EOF in docs"'^false
+FP1679-F sq body quoting the <<< operator^bash -c 'echo "the <<< operator"'^false
+FP1679-G sq body carrying a literal dollar-quote pair^bash -c 'grep -n "x$'"'"'y" file'^false
+FP1679-G2 dq body quoting <<EOF prose^bash -c "echo \"see <<EOF in docs\""^false
+FP1679-G3 dq body quoting the <<< operator^bash -c "echo \"the <<< operator\""^false
 IR_TABLE
 
 echo "=== C3: IR position — no false positive on argument text ==="

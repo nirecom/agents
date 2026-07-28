@@ -139,6 +139,8 @@ assert_write_ir() {
         git)    fn=isGitWriteIR;        predval="$(git_write_ir "$cmd")" ;;
         pkgmgr) fn=isPkgMgrWriteIR;     predval="$(pkg_mgr_write_ir "$cmd")" ;;
         interpc) fn=isInterpreterCWriteIR; predval="$(interpreter_c_write_ir "$cmd")" ;;
+        extfileop) fn=isExtendedFileOpWriteIR; predval="$(pred_targets "$fn" "$cmd")" ;;
+        encoded)   fn=isEncodedCommandWriteIR;  predval="$(pred_targets "$fn" "$cmd")" ;;
         *)      fail "$desc: unknown predicate '$pred'"; return ;;
     esac
     if [ "$cls" = "read" ] && [ "$predval" = "true" ]; then

@@ -59,7 +59,9 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
 
     local cmd7
     cmd7=$(printf 'echo "$(cat <<EOF\ngit push\nEOF\n)"')
-    assert_classify "non-group-a heredoc body with git push is write" "$cmd7" "write"
+    # #1679 S-1: cat heredoc with safe body collapses to read (not file-I/O); the
+    # git push text is just stdout data, not a local write.
+    assert_classify "non-group-a cat heredoc body with git push is read (safe after #1679 S-1)" "$cmd7" "read"
 
     local cmd8
     cmd8=$(printf 'gh pr create --body "$(cat <<EOF\ntee -a foo\nEOF\n)"')
@@ -77,15 +79,17 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     cmd10=$(printf 'gh pr create --body "$(cat <<EOF\nthis is not EOF\ngit push\nEOF\n)"')
     assert_classify "gh pr create heredoc body lazy-match regression with inner EOF-like line" "$cmd10" "read"
 
-    # Case 11: `bash <<EOF` (interpreter heredoc, not cat) — must remain write
+    # Case 11: `bash <<EOF` (interpreter heredoc, not cat) — classify=read (DQ stripped)
+    # but isCommandSubstWriteIR=true (bash prefix → isSafeHeredocOnly=false → write).
     local cmd11
     cmd11=$(printf 'gh pr create --body "$(bash <<EOF\nrm -rf /tmp/x\nEOF\n)"')
-    assert_classify "gh pr create with interpreter heredoc (bash <<EOF rm -rf) is write" "$cmd11" "write"
+    assert_write_ir "gh pr create with interpreter heredoc (bash <<EOF rm -rf) is cmdsubst write" "$cmd11" subst
 
-    # Case 12: unquoted heredoc body with command substitution — must remain write
+    # Case 12: unquoted heredoc body with command substitution — classify=read (DQ stripped)
+    # but isCommandSubstWriteIR=true (unquoted body with $() → isSafeHeredocOnly=false → write).
     local cmd12
     cmd12=$(printf 'gh pr create --body "$(cat <<EOF\n$(rm -rf /tmp/x)\nEOF\n)"')
-    assert_classify "gh pr create unquoted heredoc body with command substitution is write" "$cmd12" "write"
+    assert_write_ir "gh pr create unquoted heredoc body with command substitution is cmdsubst write" "$cmd12" subst
 
     # Case 13: quoted heredoc body with literal $() — safe to strip → read
     local cmd13
@@ -99,10 +103,11 @@ test_gh_group_a_heredoc_body_with_write_pattern_is_read() {
     # write: classify=read + isPosixRedirWriteIR=true.
     assert_write_ir "cat heredoc with rest-of-line redirect after opener is write" "$cmd14" posix
 
-    # Case 15: unquoted heredoc body with backticks — must remain write
+    # Case 15: unquoted heredoc body with backticks — classify=read (DQ stripped)
+    # but isCommandSubstWriteIR=true (backtick in unquoted body → isSafeHeredocOnly=false).
     local cmd15
     cmd15=$(printf 'gh pr create --body "$(cat <<EOF\n`rm -rf /tmp/x`\nEOF\n)"')
-    assert_classify "gh pr create unquoted heredoc body with backticks is write" "$cmd15" "write"
+    assert_write_ir "gh pr create unquoted heredoc body with backticks is cmdsubst write" "$cmd15" subst
 }
 
 # ============ Group A inline-body stripping (#596) ============
@@ -139,10 +144,12 @@ test_gh_group_a_inline_body_stripping() {
 
     local probe_unknown_tmp
     probe_unknown_tmp=$(printf 'bash /tmp/issue-create-dispatch.sh --body "$(cat <<EOF\ngit commit\nEOF\n)"')
-    assert_classify "bash /tmp/issue-create-dispatch.sh (unknown path) heredoc body stays visible → write" \
-        "$probe_unknown_tmp" "write"
+    # #1679 S-1: DQ strips the heredoc → matchedNames=[]; inner cat heredoc is safe (cat+safe body)
+    # → isCommandSubstWriteIR=false. The /tmp/ path is already excluded from known-dispatch.
+    assert_classify "bash /tmp/... (unknown path) cat heredoc body collapsed to read (safe after #1679 S-1)" \
+        "$probe_unknown_tmp" "read"
     local probe_unknown_rel
     probe_unknown_rel=$(printf 'bash ./fake-issue-create.sh --body "$(cat <<EOF\ngit commit\nEOF\n)"')
-    assert_classify "bash ./fake-issue-create.sh (unknown path) heredoc body stays visible → write" \
-        "$probe_unknown_rel" "write"
+    assert_classify "bash ./fake-... (unknown path) cat heredoc body collapsed to read (safe after #1679 S-1)" \
+        "$probe_unknown_rel" "read"
 }

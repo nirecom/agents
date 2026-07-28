@@ -59,8 +59,10 @@ test_dq_command_substitution_with_redirect() {
     # HIGH#1: write command word inside $() inside DQ
     assert_write_ir 'echo "$(rm tmp)" (#514 HIGH rm inside $())' \
         'echo "$(rm tmp)"' subst
-    assert_classify 'echo "$(touch f)" (#514 HIGH touch inside $())' \
-        'echo "$(touch f)"' "write"
+    # touch was retired to isExtendedFileOpWriteIR (#1402 canary-7); isCommandSubstWriteIR
+    # still catches it via innerCommandIsWrite → isExtendedFileOpWriteIR path.
+    assert_write_ir 'echo "$(touch f)" (#514 HIGH touch inside $())' \
+        'echo "$(touch f)"' subst
     assert_write_ir 'echo "$(tee out)" (#514 HIGH tee inside $())' \
         'echo "$(tee out)"' subst
     assert_write_ir 'echo "$(mv a b)" (#514 HIGH mv inside $())' \

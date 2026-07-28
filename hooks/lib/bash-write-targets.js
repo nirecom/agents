@@ -287,16 +287,72 @@ function looksDynamic(tok) {
   return typeof tok === "string" && (/\$/.test(tok) || /`/.test(tok));
 }
 
+// Known read-only env-emitter commands safe to `eval "$(…)"` (#1679 S-4).
+// Only exact single-command forms are allowlisted; multi-segment bodies
+// (`;`, `&&`, `||`) fail ALLOWLIST_MATCH by regex design (they contain `;`/`&`/`|`).
+// Each pattern must be anchored (^ … $) to prevent prefix attacks.
+const EVAL_SUBST_READ_ALLOWLIST = [
+  // ssh-agent -s / -c : outputs shell variable assignments (SSH_AUTH_SOCK etc.)
+  /^ssh-agent\b(?:\s+-[sack\d])?\s*$/,
+  // fnm env : outputs eval-able environment setup for node version management
+  /^fnm\s+env\b(?:\s+--[a-z][-a-z0-9]*(?:=[^\s]*)?)?\s*$/,
+  // direnv hook <shell> : outputs shell-specific eval hook, read-only
+  /^direnv\s+hook\s+(?:bash|zsh|fish|tcsh|elvish|nu)\s*$/,
+  // nvm use / nvm env (common nvm idioms used in scripts)
+  /^nvm\s+(?:use|env)\b(?:\s+[^\s]*)?\s*$/,
+];
+
+// True when the inner cmdsubst body matches a known read-only env emitter.
+function evalSubstIsAllowlistedRead(inner) {
+  const t = inner.trim();
+  return EVAL_SUBST_READ_ALLOWLIST.some((re) => re.test(t));
+}
+
+// 3-value expansion disposition for a single resolved token (#1679 S-4):
+//   "static"           — no shell expansion (`$`, backtick) in token
+//   "allowlisted-read" — expansion is a known safe env-emitter `$(…)`
+//   "opaque"           — expansion present but not in allowlist → fail-closed
+function expansionDisposition(tok) {
+  if (typeof tok !== "string") return "opaque";
+  if (!looksDynamic(tok)) return "static";
+  // Check for pure $(…) cmdsubst form (whole token = a single cmdsubst)
+  const m = tok.match(/^\$\(([^)]*)\)$/);
+  if (m && evalSubstIsAllowlistedRead(m[1])) return "allowlisted-read";
+  return "opaque";
+}
+
 // eval BODY... : the concatenation of eval's arguments is re-executed by the
 // shell. Reconstruct the body from the resolved argv (already unquoted) and the
 // RAW argv (to detect `$`-dynamic bodies). Static body → re-parse via
-// innerCommandIsWrite; dynamic/unparseable → fail-closed WRITE.
+// innerCommandIsWrite; allowlisted-read env-emitters → treat as read;
+// opaque/unknown → fail-closed WRITE.
 function evalSegmentIsWrite(seg) {
   const argv = resolveEffectiveArgv(seg);
   if (!Array.isArray(argv) || argv.length === 0) return false; // bare `eval` — no body
   const rawArgv = resolveRawArgvAfterEnvPrefix(seg);
-  // Any raw arg that still carries a shell expansion is dynamic → fail-closed.
-  if (rawArgv.some(looksDynamic) || argv.some(looksDynamic)) return true;
+
+  // Check resolved argv tokens for expansion disposition.
+  // "opaque" (unknown dynamic) → fail-closed immediately.
+  let anyAllowlisted = false;
+  for (const tok of argv) {
+    const disp = expansionDisposition(tok);
+    if (disp === "opaque") return true;
+    if (disp === "allowlisted-read") anyAllowlisted = true;
+  }
+
+  // Belt-and-suspenders: if rawArgv has dynamic content that argv did not
+  // (argv resolution missed an expansion in env-prefix position), fail-closed —
+  // unless argv also carries the same dynamic content (DQ-wrapped cmdsubst already
+  // handled above by the argv loop).
+  const argvHasDynamic = argv.some(looksDynamic);
+  if ((rawArgv || []).some(looksDynamic) && !argvHasDynamic) return true;
+
+  // If any token is a known allowlisted env-emitter, the eval body is determined
+  // at runtime by that emitter (e.g. ssh-agent -s → SSH_AUTH_SOCK=…; export …).
+  // No further static analysis is possible or needed — treat as read.
+  if (anyAllowlisted) return false;
+
+  // All static: re-parse the static body for writes.
   const body = argv.join(" ").trim();
   if (!body) return false;
   return innerCommandIsWrite(body, isCommandSubstWriteIR);
@@ -329,7 +385,10 @@ function xargsSegmentIsWrite(seg) {
   if (!Array.isArray(argv)) return false;
   const cmdTokens = xargsCommandTokens(argv);
   if (!cmdTokens || cmdTokens.length === 0) return false; // no explicit command
-  if (cmdTokens.some(looksDynamic)) return true;          // dynamic command → fail-closed
+  // Only the COMMAND token (cmdTokens[0]) is subject to the dynamic fail-closed check.
+  // Argument tokens (cmdTokens[1+]) are data passed by the outer shell before xargs runs
+  // (#1679 S-5 CPR-5): `$(git rev-parse …)` in a grep arg is not an xargs-executed command.
+  if (looksDynamic(cmdTokens[0])) return true;
   return innerCommandIsWrite(cmdTokens.join(" "), isCommandSubstWriteIR);
 }
 
@@ -355,8 +414,11 @@ function findSegmentIsWrite(seg) {
       if (cmdToks.length === 0) return true; // malformed action clause → fail-closed
       // Drop the `{}` placeholder tokens — they are the matched path, not command.
       const clean = cmdToks.filter((t) => t !== "{}");
-      if (clean.some(looksDynamic)) return true;
       if (clean.length === 0) return true;   // only placeholders → fail-closed
+      // Only the COMMAND token (clean[0]) is subject to the dynamic fail-closed check.
+      // Argument tokens (clean[1+]) are data the outer shell expands before find runs
+      // (#1679 S-5 CPR-5): `$(date +%F)` in a grep arg is not a find-executed command.
+      if (looksDynamic(clean[0])) return true;
       if (innerCommandIsWrite(clean.join(" "), isCommandSubstWriteIR)) return true;
       i = j; // continue scanning after this action clause
     }
