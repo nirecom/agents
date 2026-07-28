@@ -81,18 +81,13 @@ while IFS= read -r -d '' untracked_file; do
   UNCOMMITTED_DIFF+=$'\n'
 done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
 
-# Phase 3: committed + uncommitted を組み立て
-if [[ -n "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
-  # 両方あり: セパレータ付きで結合（Gap 2 修正）
-  DIFF="[COMMITTED DIFF (BASE...HEAD)]
-${DIFF}
-[UNCOMMITTED CHANGES (working tree vs HEAD)]
-${UNCOMMITTED_DIFF}"
-elif [[ -z "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
-  # committed なし、uncommitted あり: フォールバック（既存動作を維持）
+# Phase 3: committed diff を優先; uncommitted は committed がない場合のみフォールバック
+if [[ -z "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
+  # committed なし、uncommitted あり: フォールバック（Gap 1 修正 — 既存動作を維持）
   echo "Note: BASE...HEAD empty — reviewing uncommitted changes (staged + unstaged + untracked) instead."
   DIFF="$UNCOMMITTED_DIFF"
 fi
+# committed あり: committed diff のみ使用（staged は含まない）
 # 両方空の場合: 後段の SKIPPED ガードが処理する
 DIFF_LINES=$(printf '%s' "$DIFF" | wc -l)
 

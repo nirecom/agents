@@ -20,7 +20,7 @@ echo "=== A10: outline=pending + outline.md + FOREIGN-session outline-plan marke
 SID="a10-$$"
 FOREIGN_SID="foreign-a10-$$"
 write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
-touch "$PLANS_DIR/${SID}-outline.md"
+seed_approval "$SID" outline
 # Same stage, same marker name — but keyed to another session's id.
 touch "$PLANS_DIR/${FOREIGN_SID}-outline-plan-round-number.txt"
 
@@ -41,7 +41,8 @@ echo "=== A11: detail=pending + detail.md + FOREIGN-session detail-plan marker �
 SID="a11-$$"
 FOREIGN_SID="foreign-a11-$$"
 write_state "$SID" "$(DETAIL_PENDING_BRANCHING_COMPLETE $SID)"
-touch "$PLANS_DIR/${SID}-detail.md"
+touch "$PLANS_DIR/${SID}-outline.md"
+seed_approval "$SID" detail
 touch "$PLANS_DIR/${FOREIGN_SID}-detail-plan-concern-ledger.txt"
 
 OUT=$(run_next_step --session "$SID")
@@ -53,4 +54,4 @@ check "A11. foreign-session marker → detail auto-completes" \
 check "A11b. foreign-session marker → ACTION=invoke" \
   "invoke" "${ACTION:-}"
 
-rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${FOREIGN_SID}-detail-plan-concern-ledger.txt"
+rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-outline.md" "$PLANS_DIR/${FOREIGN_SID}-detail-plan-concern-ledger.txt"

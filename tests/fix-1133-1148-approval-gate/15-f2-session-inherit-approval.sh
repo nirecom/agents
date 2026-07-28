@@ -83,6 +83,9 @@ TBASE="$TMPDIR_BASE/transcripts"
 OLD_SID="g15old-$$"
 NEW_SID="g15new-$$"
 PROJ_OK="$(setup_repo)"
+# intent.md must exist: evaluateInheritance S3 blocks inheritance when
+# clarify_intent is genuinely recorded complete but intent.md is absent.
+printf 'intent placeholder\n' > "$PLANS_DIR/${OLD_SID}-intent.md"
 printf 'approved outline body\n' > "$PLANS_DIR/${OLD_SID}-outline.md"
 printf 'approved detail body\n' > "$PLANS_DIR/${OLD_SID}-detail.md"
 SHA_O="$(sha256_of "$PLANS_DIR/${OLD_SID}-outline.md")"
@@ -143,6 +146,7 @@ BAD_EXTRA="$(run_with_timeout node -e '
       artifact_hash_status: "verified", recorded_at: "2026-06-20T10:00:00.000Z" } } }));
 ' "$CWD_BAD" "$BRANCH_BAD" "$OLD_BAD" "$SHA_BAD")"
 
+printf 'intent placeholder\n' > "$PLANS_DIR/${OLD_BAD}-intent.md"
 seed_prior_session "$OLD_BAD" "$PROJ_BAD" "$TBASE" \
   "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code "$BAD_EXTRA")"
 
@@ -175,6 +179,7 @@ DEL_EXTRA="$(run_with_timeout node -e '
       artifact_hash_status: "verified", recorded_at: "2026-06-20T10:00:00.000Z" } } }));
 ' "$CWD_DEL" "$BRANCH_DEL" "$OLD_DEL" "$SHA_DEL")"
 
+printf 'intent placeholder\n' > "$PLANS_DIR/${OLD_DEL}-intent.md"
 seed_prior_session "$OLD_DEL" "$PROJ_DEL" "$TBASE" \
   "$(gen_state '{"workflow_init":"complete","clarify_intent":"complete","research":"complete","outline":"complete"}' wf-code "$DEL_EXTRA")"
 

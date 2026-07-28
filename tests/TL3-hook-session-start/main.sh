@@ -76,12 +76,13 @@ else
     fail "SS-E1. state file $SS_STATE_FILE not created. claude rc=$SS_RC output: $SS_OUTPUT"
 fi
 
-# AUXILIARY assert: additionalContext surfaced the session_id line into the live session.
-if printf '%s' "$SS_OUTPUT" | grep -qF "Current workflow session_id: $SS_SID"; then
-    pass "SS-E2. additionalContext contains 'Current workflow session_id: <sid>'"
-else
-    fail "SS-E2. additionalContext missing session_id line. claude rc=$SS_RC output: $SS_OUTPUT"
-fi
+# NOTE: the former SS-E2 case asserted that `claude -p --output-format json`
+# output contains "Current workflow session_id: <sid>". That field is the hook's
+# own additionalContext and never appears in that output shape, so the assertion
+# was permanently red at the wrong seam (#1619/#1648). It was removed; the
+# contract is now covered at TL2 as case C6 in
+# tests/feature-772-session-start-cleanup-inherit.sh, which invokes
+# hooks/session-start.js directly and asserts on its stdout.
 
 # TL3 gap: CONV_LANG/settings-drift injection branches depend on host env config
 # and are not asserted here; covered at L2 in feature-772-session-start-cleanup-inherit.sh.

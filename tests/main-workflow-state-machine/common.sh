@@ -15,6 +15,12 @@ run_with_timeout() {
 # Current timestamp for states that session-start may encounter (avoids cleanupZombies deletion)
 NOW_ISO=$(node -e "console.log(new Date().toISOString())" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+# Pinned plans dir: inheritance derivation consults on-disk plan artifacts
+# (intent.md / outline.md). Without this pin the predicates would read the real
+# ~/.workflow-plans of the developer running the suite.
+TEST_PLANS_DIR="$TMPDIR_BASE/plans"
+mkdir -p "$TEST_PLANS_DIR"
+
 setup_repo() {
     local repo="$TMPDIR_BASE/repo-$RANDOM"
     mkdir -p "$repo"
@@ -213,6 +219,7 @@ call_find_latest() {
     workflow_dir_node="$(to_node_path "$WORKFLOW_DIR")"
     HOME="$fake_home" \
         CLAUDE_WORKFLOW_DIR="$workflow_dir_node" \
+        WORKFLOW_PLANS_DIR="$(to_node_path "$TEST_PLANS_DIR")" \
         CLAUDE_TRANSCRIPT_BASE_DIR="$transcript_base_node" \
         run_with_timeout node -e "
 try {

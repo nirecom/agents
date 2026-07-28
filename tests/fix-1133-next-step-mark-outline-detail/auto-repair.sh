@@ -230,7 +230,7 @@ echo "=== A6: outline=pending + outline.md + UNRELATED detail-plan marker → au
 
 SID="a6-$$"
 write_state "$SID" "$(OUTLINE_PENDING_DETAIL_COMPLETE $SID)"
-touch "$PLANS_DIR/${SID}-outline.md"
+seed_approval "$SID" outline
 # Marker belongs to the detail stage — must not gate the outline predicate.
 touch "$PLANS_DIR/${SID}-detail-plan-round-number.txt"
 
@@ -250,6 +250,7 @@ echo "=== A7: detail=pending + detail.md + detail-plan-round-number.txt → auto
 
 SID="a7-$$"
 write_state "$SID" "$(DETAIL_PENDING_CLEAN $SID)"
+touch "$PLANS_DIR/${SID}-outline.md"
 touch "$PLANS_DIR/${SID}-detail.md"
 touch "$PLANS_DIR/${SID}-detail-plan-round-number.txt"
 
@@ -262,13 +263,14 @@ check "A7. round-number marker present → detail stays pending" \
 check "A7b. round-number marker present → NEXT_SKILL=make-detail-plan" \
   "make-detail-plan" "${NEXT_SKILL:-}"
 
-rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-detail-plan-round-number.txt"
+rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-outline.md" "$PLANS_DIR/${SID}-detail-plan-round-number.txt"
 
 echo ""
 echo "=== A8: detail=pending + detail.md + detail-plan-concern-ledger.txt → auto-complete blocked ==="
 
 SID="a8-$$"
 write_state "$SID" "$(DETAIL_PENDING_CLEAN $SID)"
+touch "$PLANS_DIR/${SID}-outline.md"
 touch "$PLANS_DIR/${SID}-detail.md"
 touch "$PLANS_DIR/${SID}-detail-plan-concern-ledger.txt"
 
@@ -281,14 +283,15 @@ check "A8. concern-ledger marker present → detail stays pending" \
 check "A8b. concern-ledger marker present → NEXT_SKILL=make-detail-plan" \
   "make-detail-plan" "${NEXT_SKILL:-}"
 
-rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-detail-plan-concern-ledger.txt"
+rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-outline.md" "$PLANS_DIR/${SID}-detail-plan-concern-ledger.txt"
 
 echo ""
 echo "=== A9: detail=pending + detail.md + UNRELATED outline-plan marker → auto-complete still fires ==="
 
 SID="a9-$$"
 write_state "$SID" "$(DETAIL_PENDING_BRANCHING_COMPLETE $SID)"
-touch "$PLANS_DIR/${SID}-detail.md"
+touch "$PLANS_DIR/${SID}-outline.md"
+seed_approval "$SID" detail
 # Marker belongs to the outline stage — must not gate the detail predicate.
 touch "$PLANS_DIR/${SID}-outline-plan-round-number.txt"
 
@@ -301,4 +304,4 @@ check "A9. unrelated-stage marker → detail auto-completes" \
 check "A9b. unrelated-stage marker → ACTION=invoke" \
   "invoke" "${ACTION:-}"
 
-rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-outline-plan-round-number.txt"
+rm -f "$PLANS_DIR/${SID}-detail.md" "$PLANS_DIR/${SID}-outline.md" "$PLANS_DIR/${SID}-outline-plan-round-number.txt"

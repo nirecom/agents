@@ -177,6 +177,17 @@ run_list_render_tests() {
     FAIL=$((FAIL + 1))
   fi
 
+  # ---- Case N1 (#1681): vetoed step renders [*], not [-] -------------------
+  # A skip whose recorded skip_verdict is "veto" is no longer a skip: read-time
+  # derivation must present it as the current/blocking step. Rendering it [-]
+  # tells the user the step is settled when it is in fact the thing to redo.
+  write_state "caseN1" "$JSON_OUTLINE_VETOED"
+  local VETO_LIST line_outline
+  VETO_LIST="$(run_next_step --list --session "caseN1" 2>/dev/null || true)"
+  line_outline="$(echo "$VETO_LIST" | grep -E 'outline' | head -n1 || true)"
+  check_contains "N1: vetoed outline shows [*] in --list" "[*]" "$line_outline"
+  check_not_contains "N1: vetoed outline does NOT show [-] in --list" "[-]" "$line_outline"
+
   # ---- Case 23: unknown CLI flag → exit non-zero ----------------------------
   local unk_rc=0
   run_next_step --unknown-flag-xyz >/dev/null 2>/dev/null || unk_rc=$?

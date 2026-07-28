@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # filename: tests/feature-772-session-start-cleanup-inherit.sh
 # Tests: hooks/session-start.js
-# Tags: session-start, cleanup, inheritance, regression
+# Tags: session-start, cleanup, inheritance, regression, scope:issue-specific
+#
+# TL3 gap: real SessionStart hook firing in a live Claude Code host (tool-use
+# event context) and CONV_LANG/settings-drift injection branches are not
+# asserted here. C6 (additionalContext TL2 case) is the day-to-day runner;
+# the live host firing is tracked in docs/architecture/claude-code/e2e-testing.md.
 #
 # Regression tests for issue #772:
 #   When a new session inherits workflow state from a prior session,
@@ -92,8 +97,13 @@ try {
 " "$f" 2>/dev/null || echo "MISSING"
 }
 
-# Build a "prior session" state JSON with all main workflow steps complete
+# Build a "prior session" state JSON with the main workflow steps complete
 # and `cleanup` at the specified status.
+#
+# review_security is deliberately "pending": the inheritance staleness boundary
+# is the verification tier (review_security onward), so a prior session sitting
+# ON that boundary is not inheritable at all and the cleanup assertions below
+# would never be reached. This fixture must stay strictly before the boundary.
 prior_state_json() {
     local sid="$1" cleanup_status="$2"
     cat <<EOF
@@ -106,7 +116,7 @@ prior_state_json() {
     "detail":            {"status": "complete", "updated_at": "$NOW_ISO"},
     "write_tests":       {"status": "complete", "updated_at": "$NOW_ISO"},
     "review_tests":      {"status": "skipped", "updated_at": "$NOW_ISO"},
-    "review_security":   {"status": "complete", "updated_at": "$NOW_ISO"},
+    "review_security":   {"status": "pending", "updated_at": null},
     "run_tests":         {"status": "complete", "updated_at": "$NOW_ISO"},
     "docs":              {"status": "complete", "updated_at": "$NOW_ISO"},
     "user_verification": {"status": "pending", "updated_at": null},
@@ -209,6 +219,40 @@ if [ "$RESEARCH" = "complete" ] && [ "$OUTLINE" = "complete" ] && [ "$DETAIL" = 
     pass "C4: other steps (research+outline+detail) inherited unchanged as complete"
 else
     fail "C4: expected research=outline=detail=complete, got research=$RESEARCH outline=$OUTLINE detail=$DETAIL"
+fi
+
+# ============================================================================
+# additionalContext contract (TL2)
+# ============================================================================
+
+# C6: session-start.js emits the session_id line into additionalContext.
+# This is the observable seam for that contract: the hook's own stdout. The
+# former TL3 assertion (SS-E2 in tests/TL3-hook-session-start/main.sh) asserted
+# the same string against `claude -p --output-format json` output, where
+# additionalContext never appears — wrong layer, permanently red (#1619/#1648).
+C6_SID="c6-$(printf '%04x%04x' $RANDOM $RANDOM)"
+C6_REPO="$(setup_repo)"
+C6_HOME="$TMPDIR_BASE/home-c6"
+mkdir -p "$C6_HOME/.claude/projects"
+C6_OUT=$(echo "{\"session_id\":\"$C6_SID\"}" | \
+    HOME="$C6_HOME" \
+    CLAUDE_PROJECT_DIR="$C6_REPO" \
+    CLAUDE_ENV_FILE="$TMPDIR_BASE/env-${C6_SID}.env" \
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" \
+    CLAUDE_TRANSCRIPT_BASE_DIR="$(to_node_path "$C6_HOME/.claude/projects")" \
+    run_with_timeout 30 node "$SESSION_START" 2>/dev/null || true)
+C6_CTX=$(printf '%s' "$C6_OUT" | node -e "
+let d='';
+process.stdin.on('data', c => d += c);
+process.stdin.on('end', () => {
+  try { process.stdout.write(String(JSON.parse(d.trim()).additionalContext || '')); }
+  catch (e) { process.stdout.write(''); }
+});
+" 2>/dev/null || true)
+if printf '%s' "$C6_CTX" | grep -qF "Current workflow session_id: $C6_SID"; then
+    pass "C6: additionalContext contains 'Current workflow session_id: <sid>'"
+else
+    fail "C6: additionalContext missing session_id line. got: $C6_CTX"
 fi
 
 # ============================================================================

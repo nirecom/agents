@@ -20,6 +20,7 @@ module.exports = {
   assertValidSessionId: core.assertValidSessionId,
   SESSION_ID_VALID_RE: core.SESSION_ID_VALID_RE,
   readState: core.readState,
+  readRawState: core.readRawState,
   writeState: core.writeState,
   createInitialState: core.createInitialState,
   getCurrentContext: core.getCurrentContext,

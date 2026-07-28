@@ -65,6 +65,17 @@ function readState(sessionId) {
   }
 }
 
+// Raw JSON read without fill-in logic. Callers that need to distinguish
+// "synthesized by readState" from "genuinely written" use this (#1681).
+function readRawState(sessionId) {
+  try {
+    const raw = fs.readFileSync(getStatePath(sessionId), "utf8");
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
 // writeState(sessionId, state, opts):
 //   opts.sanctioned : one of completion-approval.SANCTIONED_SOURCES. Bypasses the
 //                     approval invariant and stamps an audit record instead.
@@ -154,6 +165,7 @@ module.exports = {
   assertValidSessionId,
   getStatePath,
   readState,
+  readRawState,
   writeState,
   createInitialState,
   getCurrentContext,
