@@ -161,4 +161,17 @@ run_transitions_tests() {
       PASS=$((PASS + 1))
     fi
   fi
+
+  # ---- Case 14: post-merge reset (#1161) -----------------------------------
+  # user_verification は pending だが reset_reason=post-merge のため complete 扱い。
+  # next-step は cleanup を current step と判定し、ACTION=invoke を返す。
+  # cleanup は STEP_TO_SKILL="" のため NEXT_SKILL は空; worktree-end は NEXT_HINT に含まれる。
+  ACTION=""; NEXT_SKILL=""; NEXT_HINT=""; REASON=""
+  write_state "case14" "$JSON_UV_POST_MERGE"
+  OUT="$(run_next_step --session "case14" 2>/dev/null || true)"
+  eval "$OUT" 2>/dev/null || true
+  check "14: post-merge-reset ACTION=invoke" "invoke" "${ACTION:-}"
+  check "14: post-merge-reset NEXT_SKILL empty" "" "${NEXT_SKILL:-}"
+  check_contains "14: post-merge-reset NEXT_HINT mentions worktree-end" "worktree-end" "${NEXT_HINT:-}"
+  check_not_contains "14: post-merge-reset REASON must not be user_verification" "user_verification" "${REASON:-}"
 }
