@@ -14,7 +14,7 @@
 
 const fs = require("fs");
 const { spawnSync } = require("child_process");
-const { openInBrowser } = require("./lib/open-external");
+
 
 // Match the reason-bearing form only — the bare form was removed from the contract (#404).
 const USER_VERIFIED_RE = /<<WORKFLOW_USER_VERIFIED: [^>]+>>/;
@@ -79,7 +79,6 @@ if (require.main === module) {
   const cwd = resolveCwd(input);
   const staged = getStagedFiles(cwd);
   const prUrl = getPrUrl(cwd);
-  if (prUrl) openInBrowser(prUrl);
 
   // Fixed prefix matches outline.md description — single SSOT for the surfaced wording.
   const lines = ["User verification context:", "Staged files:"];
