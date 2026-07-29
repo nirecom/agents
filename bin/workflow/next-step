@@ -78,7 +78,7 @@ const STEP_DESC = Object.freeze({
 
 const STEP_HINT = Object.freeze({
   branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed, then enter the worktree (EnterWorktree tool, or cd) before any Edit/Write — see skills/_shared/worktree-transition.md.",
-  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol.",
+  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol. If you have already emitted the sentinel and then ran gh pr merge, the step is already complete — do not emit again.",
   cleanup: "Run /worktree-end (worktree path), delete branch + git push origin --delete (branch path), or echo WORKFLOW_MARK_STEP_cleanup_skipped (main/no-worktree path).",
   pre_final_report_gate: "Run /session-close from the main worktree.",
 });
@@ -411,10 +411,20 @@ function computeVerdict(rawSid, _didAutoRepair) {
   let currentIdx = -1;
   let currentStep = null;
   for (let i = 0; i < VALID_STEPS.length; i++) {
-    const status = snapStatus(VALID_STEPS[i]);
+    const step = VALID_STEPS[i];
+    const status = snapStatus(step);
     if (status !== "complete" && status !== "skipped") {
+      // post-merge guard: treat user_verification reset by gh pr merge as complete.
+      // Mirrors post-compact.js lines 66-70 (same reset_reason predicate).
+      if (
+        step === "user_verification" &&
+        status === "pending" &&
+        (state.steps["user_verification"] || {}).reset_reason === "post-merge"
+      ) {
+        continue;
+      }
       currentIdx = i;
-      currentStep = VALID_STEPS[i];
+      currentStep = step;
       break;
     }
   }
