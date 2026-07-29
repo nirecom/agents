@@ -152,3 +152,7 @@ Changes: Gate 2 in `workflow-gate.js` now blocks commits when any staged code fi
 ### FEATURE: PR #1702 (2026-07-29)
 Background: fix(#1305,#1681,#1091,#1619,#1648,#1674): Approach B read-time state derivation — veto de-skip, stale-state guard, early-gate security hardening
 Changes: Fixed: new workflow sessions no longer inherit stale state from a prior session that was abandoned before any real work began (#1305);Fixed: workflow sessions with a vetoed speculative plan skip now correctly return to the outline or detail planning step (#1681);Fixed: workflow-gate early tier now fails closed on derivation error instead of treating all steps as complete (#1674)
+
+### FEATURE: PR #1707 (2026-07-29)
+Background: fix(#1161): next-step post-merge guard — skip user_verification when reset_reason=post-merge
+Changes: bugfix: next-step no longer re-prompts for user verification after gh pr merge completes the WE-8 step
