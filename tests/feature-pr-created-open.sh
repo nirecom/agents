@@ -38,7 +38,7 @@ trap 'rm -rf "$ISOLATED_CFG_DIR"' EXIT
 
 # Test mode: don't actually open browser
 export SHOW_USER_VERIFIED_NO_SPAWN=1
-export PR_CREATED_OPEN_NO_BROWSER=1
+export PR_CREATED_OPEN_NO_BROWSER=1  # unused — no such env var in the hook; kept as marker for future opt-out
 export SHOW_USER_VERIFIED_NO_BROWSER=1
 
 run_hook() {
@@ -121,6 +121,69 @@ expect_empty "T4 gh pr create with exit_code=1 → noop" "$T4_JSON"
 echo "=== T5: gh pr create + no URL in stdout ==="
 T5_JSON=$(make_json "Bash" "gh pr create --title foo" "0" "some random output no url here")
 expect_empty "T5 gh pr create without URL in stdout → noop" "$T5_JSON"
+
+# ── T8: gh pr create + PR URL → openInBrowser IS called (marker written) ─────
+# Positive-path test confirming pr-created-open.js actually invokes openInBrowser.
+# This is the key regression test for agents#1706's premise: "pr-created-open.js
+# is the sole/actual opener" — if this hook stopped calling openInBrowser the fix
+# would silently suppress the browser open entirely (0 opens instead of 1).
+echo "=== T8: gh pr create + PR URL → openInBrowser called (marker written) ==="
+MARKER_T8="$ISOLATED_CFG_DIR/t8-marker.json"
+T8_URL="https://github.com/user/repo/pull/42"
+T8_JSON=$(make_json "Bash" "gh pr create --title foo" "0" "$T8_URL")
+# Run with SHOW_USER_VERIFIED_NO_BROWSER unset so openInBrowser is actually invoked;
+# SHOW_USER_VERIFIED_NO_SPAWN=1 is global (test-mode: writes marker instead of spawning).
+(
+  unset SHOW_USER_VERIFIED_NO_BROWSER
+  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_T8" \
+  run_hook "$T8_JSON" > /dev/null
+)
+if [ -f "$MARKER_T8" ] && node -e "
+  const d = JSON.parse(require('fs').readFileSync('$MARKER_T8', 'utf8'));
+  process.exit(d.args && d.args.includes('$T8_URL') ? 0 : 1);
+" 2>/dev/null; then
+  pass "T8 openInBrowser called — marker written with PR URL (pr-created-open.js is the sole opener)"
+else
+  fail "T8 — marker missing or wrong URL; pr-created-open.js did not invoke openInBrowser: $(cat "$MARKER_T8" 2>/dev/null || echo 'not found')"
+fi
+
+# ── T6: SHOW_USER_VERIFIED_NO_BROWSER=1 opt-out — marker NOT written ─────────
+# Relocated from feature-show-user-verified.sh U15 (agents#1706): openInBrowser is
+# now called only by pr-created-open.js, not show-user-verified-context.js.
+# Tests hooks/lib/open-external.js line 15 (NO_BROWSER opt-out) via this hook.
+echo "=== T6: SHOW_USER_VERIFIED_NO_BROWSER=1 → marker file NOT written ==="
+MARKER_T6="$ISOLATED_CFG_DIR/t6-marker.json"
+T6_URL="https://github.com/user/repo/pull/42"
+T6_JSON=$(make_json "Bash" "gh pr create --title foo" "0" "$T6_URL")
+# Run with NO_BROWSER=1 (NO_SPAWN=1 is already global — marker would be written
+# if openInBrowser were called without the opt-out).
+SHOW_USER_VERIFIED_NO_BROWSER=1 \
+SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_T6" \
+run_hook "$T6_JSON" > /dev/null
+if [ ! -f "$MARKER_T6" ]; then
+  pass "T6 NO_BROWSER opt-out — marker file not written when SHOW_USER_VERIFIED_NO_BROWSER=1"
+else
+  fail "T6 — marker file written despite SHOW_USER_VERIFIED_NO_BROWSER=1: $(cat "$MARKER_T6")"
+fi
+
+# ── T7: non-http(s) URL rejection by openInBrowser ───────────────────────────
+# Relocated from feature-show-user-verified.sh U16 (agents#1706): tests
+# hooks/lib/open-external.js line 14 (URL scheme guard) directly, since
+# pr-created-open.js's own URL regex would filter non-github URLs before
+# reaching openInBrowser — testing via open-external.js require() directly.
+echo "=== T7: non-http URL rejected by openInBrowser — marker NOT written ==="
+MARKER_T7="$ISOLATED_CFG_DIR/t7-marker.json"
+run_with_timeout node -e "
+  process.env.SHOW_USER_VERIFIED_NO_SPAWN = '1';
+  process.env.SHOW_USER_VERIFIED_MARKER_FILE = '$MARKER_T7';
+  delete process.env.SHOW_USER_VERIFIED_NO_BROWSER;
+  require('$AGENTS_DIR/hooks/lib/open-external').openInBrowser('javascript:alert(1)');
+" 2>/dev/null
+if [ ! -f "$MARKER_T7" ]; then
+  pass "T7 non-http URL rejected — openInBrowser did not spawn for javascript: URL"
+else
+  fail "T7 — marker written for non-http URL; scheme guard did not fire: $(cat "$MARKER_T7")"
+fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
 echo ""

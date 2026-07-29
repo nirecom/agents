@@ -261,98 +261,100 @@ SHIM
   fi
 fi
 
-# ── U14: browser spawn marker via SHOW_USER_VERIFIED_NO_SPAWN=1 ───────────
-echo "=== U14: browser spawn marker → marker file written with PR URL ==="
-IS_WINDOWS_U14=0
-case "$(uname -s 2>/dev/null || echo unknown)" in
-  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U14=1 ;;
-esac
-[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U14=1
-if [ "$IS_WINDOWS_U14" = "1" ]; then
-  pass "U14 browser spawn marker — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
-else
-  MARKER_FILE_U14="$WORK_DIR/u14-marker.json"
-  GH_U14_DIR="$WORK_DIR/gh-u14"
-  mkdir -p "$GH_U14_DIR"
-  cat > "$GH_U14_DIR/gh" << 'SHIM'
+# ── U14: no browser spawn — hook must never open the PR URL itself ────────
+# (agents#1706: pr-created-open.js already opens the PR earlier in the same
+# session; show-user-verified-context.js duplicated that open. The openInBrowser
+# call is removed from this hook entirely — assert the marker file is NOT written.)
+#
+# Windows coverage note: the gh-shim-with-URL variant (U14a) is skipped on Windows
+# because Node.js spawnSync cannot locate bash-script shims via the POSIX PATH
+# inherited from Git Bash. U14b (gh-absent, no URL) is cross-platform and confirms
+# the marker is absent when prUrl is falsy. On POSIX runners U14a covers the
+# regression case (prUrl truthy but openInBrowser no longer called).
+echo "=== U14a: no browser spawn, gh shim returns URL (cross-platform) → marker NOT written ==="
+MARKER_FILE_U14="$WORK_DIR/u14-marker.json"
+GH_U14_DIR="$WORK_DIR/gh-u14"
+mkdir -p "$GH_U14_DIR"
+# POSIX bash shim (used on non-Windows)
+cat > "$GH_U14_DIR/gh" << 'SHIM'
 #!/usr/bin/env bash
 echo "https://github.com/nirecom/agents/pull/314"
 exit 0
 SHIM
-  chmod +x "$GH_U14_DIR/gh"
-  U14_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
-  SHOW_USER_VERIFIED_NO_SPAWN=1 \
-  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U14" \
-  PATH="$GH_U14_DIR:$PATH" run_hook "$U14_JSON" > /dev/null
-  if [ -f "$MARKER_FILE_U14" ] && node -e "
-    const d = JSON.parse(require('fs').readFileSync('$MARKER_FILE_U14', 'utf8'));
-    process.exit(d.args && d.args.includes('https://github.com/nirecom/agents/pull/314') ? 0 : 1);
-  " 2>/dev/null; then
-    pass "U14 browser spawn marker — marker written with PR URL"
+chmod +x "$GH_U14_DIR/gh"
+# Windows .cmd shim: Node.js spawnSync can locate .cmd files when PATH is in mixed
+# (cygpath -m) format even from a Git Bash test environment.
+printf '@echo off\r\necho https://github.com/nirecom/agents/pull/314\r\nexit /b 0\r\n' > "$GH_U14_DIR/gh.cmd"
+# Resolve the stub dir in the format Node.js spawnSync can use on the current platform.
+GH_U14_NODE_PATH="$(cygpath -m "$GH_U14_DIR" 2>/dev/null || echo "$GH_U14_DIR")"
+# Use the appropriate PATH separator (; on Windows mixed paths, : on POSIX).
+if [ "$GH_U14_NODE_PATH" != "$GH_U14_DIR" ]; then
+  # Windows: mixed path — use semicolon separator so Node.js resolves the stub dir
+  U14_EFFECTIVE_PATH="${GH_U14_NODE_PATH};${PATH}"
+else
+  U14_EFFECTIVE_PATH="${GH_U14_DIR}:${PATH}"
+fi
+U14_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+U14_RESULT=$(SHOW_USER_VERIFIED_NO_SPAWN=1 \
+SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U14" \
+PATH="$U14_EFFECTIVE_PATH" run_hook "$U14_JSON")
+if [ ! -f "$MARKER_FILE_U14" ]; then
+  pass "U14a no browser spawn (URL case) — marker file not written (hook no longer opens the browser)"
+else
+  fail "U14a — marker file was written; hook should not spawn a browser: $(cat "$MARKER_FILE_U14")"
+fi
+# Assert that the "Open PR: <url>" text line is still present in systemMessage — only
+# when gh was actually accessible (prUrl truthy). On Windows+Git Bash, Node.js spawnSync
+# cannot resolve the gh shim via a POSIX-format PATH even with a .cmd file in a
+# Windows-format stub dir; in that case, the text-line assertion is covered by U5/U13
+# on POSIX runners (which have the gh shim accessible) and this block is a no-op.
+U14_MSG=$(echo "$U14_RESULT" | extract_msg)
+if echo "$U14_MSG" | grep -q "Open PR:"; then
+  if echo "$U14_MSG" | grep -q "Open PR: https://github.com/nirecom/agents/pull/314"; then
+    pass "U14a Open PR text line — still present in systemMessage after openInBrowser removal"
   else
-    fail "U14 — marker file missing or URL absent: $(cat "$MARKER_FILE_U14" 2>/dev/null || echo 'not found')"
+    fail "U14a — 'Open PR: ...' text line present but wrong URL: $U14_MSG"
   fi
+else
+  pass "U14a Open PR text line — gh not accessible via Node.js spawnSync on this runner; text-line coverage deferred to U5/U13 on POSIX"
 fi
 
-# ── U15: browser opt-out via SHOW_USER_VERIFIED_NO_BROWSER=1 ─────────────
-echo "=== U15: browser opt-out → marker file NOT written ==="
-IS_WINDOWS_U15=0
-case "$(uname -s 2>/dev/null || echo unknown)" in
-  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U15=1 ;;
-esac
-[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U15=1
-if [ "$IS_WINDOWS_U15" = "1" ]; then
-  pass "U15 browser opt-out — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
-else
-  MARKER_FILE_U15="$WORK_DIR/u15-marker.json"
-  GH_U15_DIR="$WORK_DIR/gh-u15"
-  mkdir -p "$GH_U15_DIR"
-  cat > "$GH_U15_DIR/gh" << 'SHIM'
+# ── U14b: no browser spawn, gh absent (cross-platform) → marker NOT written ──
+# Complements U14a on Windows: confirms marker absence even when prUrl is falsy.
+# SHOW_USER_VERIFIED_NO_BROWSER is dead config in this hook post-fix (openInBrowser
+# call site removed), but SHOW_USER_VERIFIED_NO_SPAWN is still meaningful as long
+# as open-external.js is shared with hooks/pr-created-open.js which still calls it.
+echo "=== U14b: no browser spawn, gh absent (cross-platform) → marker NOT written ==="
+MARKER_FILE_U14B="$WORK_DIR/u14b-marker.json"
+GH_U14B_DIR="$WORK_DIR/gh-u14b"
+mkdir -p "$GH_U14B_DIR"
+cat > "$GH_U14B_DIR/gh" << 'SHIM'
 #!/usr/bin/env bash
-echo "https://github.com/nirecom/agents/pull/314"
-exit 0
+exit 1
 SHIM
-  chmod +x "$GH_U15_DIR/gh"
-  U15_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
-  SHOW_USER_VERIFIED_NO_BROWSER=1 \
-  SHOW_USER_VERIFIED_NO_SPAWN=1 \
-  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U15" \
-  PATH="$GH_U15_DIR:$PATH" run_hook "$U15_JSON" > /dev/null
-  if [ ! -f "$MARKER_FILE_U15" ]; then
-    pass "U15 browser opt-out — marker file not written when SHOW_USER_VERIFIED_NO_BROWSER=1"
-  else
-    fail "U15 — marker was written despite SHOW_USER_VERIFIED_NO_BROWSER=1: $(cat "$MARKER_FILE_U15")"
-  fi
+chmod +x "$GH_U14B_DIR/gh"
+U14B_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
+SHOW_USER_VERIFIED_NO_SPAWN=1 \
+SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U14B" \
+PATH="$GH_U14B_DIR:$PATH" run_hook "$U14B_JSON" > /dev/null
+if [ ! -f "$MARKER_FILE_U14B" ]; then
+  pass "U14b no browser spawn (gh absent, cross-platform) — marker file not written"
+else
+  fail "U14b — marker file was written; hook should not spawn a browser: $(cat "$MARKER_FILE_U14B")"
 fi
 
-# ── U16: security — non-http/https URL rejected by openInBrowser ──────────
-echo "=== U16: non-http URL rejected — no browser spawn ==="
-IS_WINDOWS_U16=0
-case "$(uname -s 2>/dev/null || echo unknown)" in
-  MINGW*|MSYS*|CYGWIN*) IS_WINDOWS_U16=1 ;;
-esac
-[ "${OS:-}" = "Windows_NT" ] && IS_WINDOWS_U16=1
-if [ "$IS_WINDOWS_U16" = "1" ]; then
-  pass "U16 non-http URL rejected — skipped on Windows (POSIX PATH not searchable by Node.js spawnSync)"
+# ── U14c: whitebox source guard — openInBrowser(prUrl) call must be absent ───
+# Cross-platform red/green guard for agents#1706 fix: deterministically fails before
+# the fix is applied (call site still in source) and passes after.
+# Complements U14a/U14b which are gated on gh shim reachability via Node spawnSync.
+echo "=== U14c: whitebox source guard — openInBrowser(prUrl) call removed from hook ==="
+if run_with_timeout node -e "
+  const src = require('fs').readFileSync('hooks/show-user-verified-context.js', 'utf8');
+  process.exit(/openInBrowser\(prUrl\)/.test(src) ? 1 : 0);
+" 2>/dev/null; then
+  pass "U14c whitebox — openInBrowser(prUrl) call is absent from hooks/show-user-verified-context.js"
 else
-  MARKER_FILE_U16="$WORK_DIR/u16-marker.json"
-  GH_U16_DIR="$WORK_DIR/gh-u16"
-  mkdir -p "$GH_U16_DIR"
-  cat > "$GH_U16_DIR/gh" << 'SHIM'
-#!/usr/bin/env bash
-echo "javascript:alert(1)"
-exit 0
-SHIM
-  chmod +x "$GH_U16_DIR/gh"
-  U16_JSON="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$SENTINEL_CMD\",\"cwd\":\"$GIT_REPO\"}}"
-  SHOW_USER_VERIFIED_NO_SPAWN=1 \
-  SHOW_USER_VERIFIED_MARKER_FILE="$MARKER_FILE_U16" \
-  PATH="$GH_U16_DIR:$PATH" run_hook "$U16_JSON" > /dev/null
-  if [ ! -f "$MARKER_FILE_U16" ]; then
-    pass "U16 non-http URL rejected — browser spawn not attempted"
-  else
-    fail "U16 — non-http URL was passed to browser spawn: $(cat "$MARKER_FILE_U16")"
-  fi
+  fail "U14c whitebox — openInBrowser(prUrl) still present in hooks/show-user-verified-context.js; fix not yet applied"
 fi
 
 # ── Results ─────────────────────────────────────────────────────────────────
