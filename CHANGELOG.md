@@ -156,3 +156,7 @@ Changes: Fixed: new workflow sessions no longer inherit stale state from a prior
 ### FEATURE: PR #1707 (2026-07-29)
 Background: fix(#1161): next-step post-merge guard — skip user_verification when reset_reason=post-merge
 Changes: bugfix: next-step no longer re-prompts for user verification after gh pr merge completes the WE-8 step
+
+### FEATURE: PR #1708 (2026-07-29)
+Background: fix(#1706): remove duplicate openInBrowser call from show-user-verified-context.js
+Changes: Fixed: PR URL opened twice in the browser (once on `gh pr create`, once before the USER_VERIFIED approval dialog). Now opens exactly once via `pr-created-open.js`.
