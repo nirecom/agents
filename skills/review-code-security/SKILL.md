@@ -20,7 +20,7 @@ Use when the implementation touches external input, secrets handling, or third-p
 
 ## Procedure
 
-RCS-1. **Delegate scan to security-scanner** and run quality gates in parallel (same response, two tool calls):
+RCS-1. **Delegate scan to security-scanner**, issued together with the RCS-2 quality gates per `skills/_shared/subagent-concurrency.md` SC-P (independent — both are read-only over the merge-base diff and write no shared target):
    ```
    Agent({ subagent_type: "security-scanner", prompt: JSON.stringify({
      topic: "security review", context: SCAN_TARGET,
@@ -30,7 +30,7 @@ RCS-1. **Delegate scan to security-scanner** and run quality gates in parallel (
    On `failed` status: surface summary + artifact_path to user.
    Output: `## Security Review: PERFORMED|FAILED` (1 line) + artifact_path pointer. Read report only on failure or explicit user request.
 
-RCS-2. **Quality gates** (Bash, parallel with RCS-1): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs review-code-codex + 6 lint gates. Each gate is advisory; non-zero exit is a warning, not a blocker.
+RCS-2. **Quality gates** (Bash, issued with RCS-1 per SC-P): `bash "$AGENTS_CONFIG_DIR/skills/review-code-security/scripts/run-quality-gates.sh"` — resolves merge-base and runs review-code-codex + 6 lint gates. Each gate is advisory; non-zero exit is a warning, not a blocker.
    When the output carries any `## <gate>: NOT FOUND` line, append `(N gates NOT FOUND)` to the `## Security Review:` line so the reader sees the sweep was incomplete.
 
 ## Patterns by Axis

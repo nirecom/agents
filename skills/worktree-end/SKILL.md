@@ -50,6 +50,8 @@ Backup dir is derived by the worker as `<main_root>/.worktree-backup/<branch>/` 
 
 Both passes dispatch `worktree-backup` per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
 
+Serial by dependency (SC-S): Pass 2 copies exactly the file set Pass 1 inventoried and reported — a parallel Pass 2 would act on an uninventoried set and both passes write the same backup directory. See `skills/_shared/subagent-concurrency.md`.
+
 **Pass 1 — `mode: "dry_run"`**: `status: failed` → stop. File count 0 → `BACKUP_MANIFEST_PATH=(none)`, skip Pass 2.
 
 **Pass 2 — `mode: "execute"`**: `status: failed` → stop. `status: partial` → warn and continue. `status: copied` → set `BACKUP_MANIFEST_PATH` from `artifact_path`.
