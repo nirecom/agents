@@ -160,3 +160,7 @@ Changes: bugfix: next-step no longer re-prompts for user verification after gh p
 ### FEATURE: PR #1708 (2026-07-29)
 Background: fix(#1706): remove duplicate openInBrowser call from show-user-verified-context.js
 Changes: Fixed: PR URL opened twice in the browser (once on `gh pr create`, once before the USER_VERIFIED approval dialog). Now opens exactly once via `pr-created-open.js`.
+
+### FEATURE: PR #1711 (2026-07-30)
+Background: feat(#1643): replace six LLM worker subagents with a deterministic dispatcher
+Changes: Deterministic workers — test runner, worktree copy and backup, doc append, issue reconcile, and the session-close gate — now run as plain scripts through a single dispatcher instead of as LLM subagents. Same output contract for the calling skills, without spending a subagent context on work that has no judgement in it.;The pre-Final-Report gate now fails closed when the supervisor state file is unreadable: it yields for review rather than treating a corrupt file as "no findings".;Test runs dispatched from a linked worktree now run that worktree's tests. Previously the runner resolved its suite from the main worktree regardless of where it was told to run, so a branch's tests could report green without ever having been executed.;Backups taken by `/worktree-end` are now excluded from version control by the tracked ignore rules, not only by machine-local ones. A `.env` copied into a backup directory could previously be staged for commit from a different clone of the same repository.
