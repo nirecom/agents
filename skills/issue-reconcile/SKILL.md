@@ -23,9 +23,9 @@ Resolve in main: `OWNER_REPO=$(gh repo view --json owner,name --jq '.owner.login
 
 ## Step 2: scan via worker
 
-Invoke `issue-reconcile-worker` via Task tool with `owner_repo`, `history_md_path`, `history_dir_path`, `agents_config_dir`, and `artifact_dir` (`PLANS_DIR` resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly at this callsite — do NOT reuse any variable from earlier steps).
+Dispatch `issue-reconcile` per `skills/_shared/worker-dispatch.md`. Payload: `owner_repo`, `history_md_path`, `history_dir_path`, `artifact_dir` (the `PLANS_DIR` from WD-1), `limit` (omit for the 1000-issue default).
 
-On `status: failed`: stop and report. On `status: complete`: read JSONL artifact — issues with `classification: needs-reconcile` feed Step 3.
+On `status: failed`: stop and report. A `scan truncated at <N>` summary means the closed-issue scan hit `limit` — re-dispatch with a higher `limit` rather than acting on the partial result. On `status: complete`: read the JSONL artifact — issues with `classification: needs-reconcile` feed Step 3.
 
 ## Step 3: prompt and append
 

@@ -8,8 +8,7 @@
 //
 // Code-level consumers (require this module):
 //   - bin/parse-worktrees (CLI wrapper)
-// Prose/prompt references (pointer comments only — no require):
-//   - agents/worktree-copy-worker.md Step 3b
+//   - bin/worker-dispatch/workers/worktree-copy.js (via the CLI wrapper)
 //
 // Schema (written by skills/clarify-intent CI-4): a `## worktrees` section
 // where each entry is a `- repo: <owner/repo>` line immediately followed by a

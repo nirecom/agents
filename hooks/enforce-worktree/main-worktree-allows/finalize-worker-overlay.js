@@ -369,4 +369,9 @@ module.exports = {
   G5_DECISION_VALUES,
   matchFinalizeWorkerOverlay,
   stripRelSuffix,
+  // Shared with worker-dispatch-overlay.js (#1643) so the two overlays screen
+  // argument values against ONE reject set rather than two drifting copies.
+  isUnderPlansDir,
+  hasControlChar,
+  UNSAFE_ARG_VALUE_RE,
 };

@@ -136,11 +136,10 @@ node "$AGENTS_CONFIG_DIR/bin/issue-close-write-outcome.js" \
 
 ## Steps SC-4+SC-5 — Retrospective scan + Pre-Final-Report gate
 
-Invoke `session-close-worker` via Task tool with resolved absolute paths:
+Dispatch `session-close-gate` per `skills/_shared/worker-dispatch.md`. Payload:
 - `session_id`: current session ID (resolved from `$CLAUDE_ENV_FILE` / fallback chain per SC-0)
-- `plans_dir`: `<PLANS_DIR>` (resolved in SC-0)
-- `agents_config_dir`: absolute path resolved from `$AGENTS_CONFIG_DIR`
-- `artifact_dir`: `PLANS_DIR` (resolved by calling `bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir"` directly here — do NOT reuse the `<PLANS_DIR>` literal from SC-0, which was resolved with a fallback)
+- `plans_dir`: the `PLANS_DIR` from WD-1 — do NOT reuse the `<PLANS_DIR>` literal from SC-0, which was resolved with a fallback
+- `artifact_dir`: same value as `plans_dir`
 - `outcome_json_path`: absolute path to `<PLANS_DIR>/<session-id>-issue-close-outcome.json`
 
 On `status: failed`: emit `supervisor-report` warning and **STOP**. Do NOT proceed to SC-6. User must manually re-run `/session-close`. This path is fail-closed — SC-6 never runs on worker failure.

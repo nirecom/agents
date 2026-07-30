@@ -5,7 +5,7 @@
 //   (1) argv flags: --main-root <p> --worktree-path <p> [--include-file <p>]
 //   (2) JSON object on stdin (legacy): { mainRoot, worktreePath, includeFile }
 // The argv form lets callers invoke the tool directly without constructing the
-// input JSON inline (#1102 — removes a `node -e` from worktree-copy-worker.md).
+// input JSON inline (#1102 — removed a `node -e` from the copy worker).
 //
 // Writes a JSON object to stdout:
 //   { copied: string[], skipped: string[], denied: string[], errors: string[] }
