@@ -168,3 +168,7 @@ Changes: Deterministic workers — test runner, worktree copy and backup, doc ap
 ### FEATURE: PR #1729 (2026-07-30)
 Background: feat(#1721): centralize subagent parallel-dispatch protocol
 Changes: Reduced redundant parallel-dispatch instructions across workflow skills by centralizing them in a shared subagent-concurrency protocol doc, and documented why a few steps must stay serial.
+
+### FEATURE: PR #1737 (2026-07-30)
+Background: fix(#1725): honor WORKFLOW_OFF / EMERGENCY OFF override in block-history-direct.js
+Changes: Fixed: `block-history-direct.js` now respects an active `WORKFLOW_ENFORCE_WORKFLOW_OFF` / `WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY` session override instead of always blocking append-only doc writes.
