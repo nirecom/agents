@@ -60,10 +60,21 @@ json_escape() {
     printf '%s' "$s"
 }
 
+# Isolated workflow dir: the guard consults <workflowDir>/<sid>.workflow-off for the
+# session override (#1725). Pinning CLAUDE_WORKFLOW_DIR to an empty temp dir and
+# stripping the ambient session-identifying env vars keeps these block-expectations
+# environment-independent — a real WORKFLOW_OFF marker in the developer's live session
+# can never flip a verdict asserted here.
+ISOLATED_WORKFLOW_DIR="$(mktemp -d)"
+trap 'rm -rf "$ISOLATED_WORKFLOW_DIR"' EXIT
+
 # run_hook <stdin-json> → prints "approve" | "block" | "other"
 run_hook() {
     local out
-    out="$(printf '%s' "$1" | run_with_timeout 30 node "$HOOK" 2>/dev/null)"
+    out="$(printf '%s' "$1" | run_with_timeout 30 \
+        env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
+        "CLAUDE_WORKFLOW_DIR=$ISOLATED_WORKFLOW_DIR" \
+        node "$HOOK" 2>/dev/null)"
     case "$out" in
         *'"decision":"block"'*)   printf 'block' ;;
         *'"decision":"approve"'*) printf 'approve' ;;
@@ -161,7 +172,10 @@ TABLE
 echo ""
 echo "=== T1-P/c: fail-open ==="
 
-got="$(printf '%s' 'not json at all {{{' | run_with_timeout 30 node "$HOOK" 2>/dev/null | grep -c '"decision":"approve"' || true)"
+got="$(printf '%s' 'not json at all {{{' | run_with_timeout 30 \
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID -u CLAUDE_ENV_FILE \
+    "CLAUDE_WORKFLOW_DIR=$ISOLATED_WORKFLOW_DIR" \
+    node "$HOOK" 2>/dev/null | grep -c '"decision":"approve"' || true)"
 assert_eq "P19-invalid-json-approves" "1" "$got"
 
 assert_eq "P20-unknown-tool-approves" "approve" \
@@ -180,7 +194,7 @@ echo "=== T1-A: attack fixture — the protected archive must stay byte-identica
 # fails — the assertion is not vacuous.
 
 ATTACK_DIR="$(mktemp -d)"
-trap 'rm -rf "$ATTACK_DIR"' EXIT
+trap 'rm -rf "$ATTACK_DIR" "$ISOLATED_WORKFLOW_DIR"' EXIT
 mkdir -p "$ATTACK_DIR/docs/history"
 SENTINEL="$ATTACK_DIR/docs/history/2026.md"
 printf '### Sentinel entry (2026-01-01, abc1234)\nBackground: untouched.\n' > "$SENTINEL"
