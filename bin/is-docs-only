@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# bin/is-docs-only
+# Tests: bin/is-docs-only
+# Tags: docs-only, allowlist, ssot, scope:common, pwsh-not-required
+#
+# Classifies a list of paths (newline-separated, on stdin) as human-facing docs or not.
+#
+# The allowlist has ONE owner — DOCS_ONLY_ALLOWLIST in hooks/workflow-gate/staged-evidence.js —
+# and this script exists so shell callers can ASK it instead of re-typing the pattern. It must
+# never carry its own copy of the regex: a second copy is a second answer.
+#
+# Exit codes are three different facts and must not collapse into each other:
+#   0  at least one path, and every one of them is human-facing docs
+#   1  at least one path is not
+#   2  there was no input at all — the caller has nothing to conclude
+#   3  the classifier could not run (no node, or the allowlist module is unreachable)
+#      Also "nothing to conclude", but for a reason the caller must resolve toward DOING THE
+#      WORK: a broken install must never look like "docs only, skip everything".
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+ROOT="${AGENTS_CONFIG_DIR:-}"
+if [[ -z "$ROOT" ]]; then
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+
+command -v node >/dev/null 2>&1 || exit 3
+
+# Paths are MATCHED, never evaluated: they reach node as stdin data and are compared with a
+# regex, so a path containing shell metacharacters is just an unusual filename.
+node -e '
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const root = process.argv[1];
+let ALLOWLIST;
+try {
+  ({ DOCS_ONLY_ALLOWLIST: ALLOWLIST } =
+    require(path.join(root, "hooks", "workflow-gate", "staged-evidence")));
+} catch (e) {
+  process.exit(3);
+}
+if (!(ALLOWLIST instanceof RegExp)) process.exit(3);
+let raw = "";
+try {
+  raw = fs.readFileSync(0, "utf8");
+} catch (e) {
+  raw = "";
+}
+const paths = raw
+  .split("\n")
+  .map((s) => s.replace(/\r+$/, "").trim())
+  .filter((s) => s.length > 0);
+if (paths.length === 0) process.exit(2);
+for (const p of paths) {
+  if (!ALLOWLIST.test(p)) process.exit(1);
+}
+process.exit(0);
+' "$ROOT"
