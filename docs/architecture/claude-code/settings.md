@@ -167,6 +167,22 @@ See `docs/security-policy.md` for the full pattern list.
   share the fall-through — an explicit `AGENTS_CONFIG_DIR` must remain the sole source of
   settings, or an alternate config dir would silently be injected with the real repo's `.env`
   (CPR-3). The two share only the candidate enumeration.
+  **Worker-dispatch sanction (#1643)** — `main-worktree-allows/worker-dispatch-overlay.js`
+  sanctions exactly one command shape from the main worktree:
+  `node "<acd>/bin/worker-dispatch.js" <worker> <main-root> <payload-json>`. It deliberately
+  does **not** call the quote-spans scanner: rather than parse arbitrary quoting, it accepts
+  only two token shapes (a bare word free of quote characters, or a fully double-quoted word)
+  and rejects everything else, so no env prefix, redirect, pipe, `&&`, or `$VAR` can ride
+  along. Three locks must all hold: the script path's derived root equals the marker-validated
+  `AGENTS_CONFIG_DIR`; the `<main-root>` argument equals the repo under judgement; and that
+  same argument is one of `getSessionRepoRoots()`'s trusted main worktrees. The payload must
+  live under the plans dir. Argument values are screened against the reject set exported by
+  `finalize-worker-overlay.js` (`UNSAFE_ARG_VALUE_RE`, `hasControlChar`, `isUnderPlansDir`) —
+  one set shared by both overlays rather than two copies that drift. The overlay never reads
+  the payload: field-level trust is `bin/worker-dispatch/` 's own job, and a field it refuses
+  surfaces as `status: failed` on stdout, never as a silent drop. Worker names come from
+  `hooks/lib/worker-dispatch-registry.js`; when that module cannot be loaded the overlay
+  degrades to BLOCK instead of crashing the hook.
 - `post-push-workflow-reset.js` (UserPromptSubmit) — detects push milestone:
   if `last_pushed_sha` (recorded by `workflow-mark.js` on a successful `git push`)
   equals current HEAD, resets workflow step `branching_complete` to pending and

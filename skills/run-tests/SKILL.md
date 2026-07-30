@@ -1,12 +1,12 @@
 ---
 name: run-tests
-description: Invokes the test-runner subagent and emits the run_tests workflow sentinel. Used by Workflow Step 6.
-tools: Agent, Bash
+description: Runs the test suite through the test-runner worker and emits the run_tests workflow sentinel. Used by Workflow Step 6.
+tools: Bash, Write
 model: sonnet
 user-invocable: false
 ---
 
-Run the project test suite via the test-runner subagent and emit the workflow sentinel.
+Run the project test suite via the `test-runner` worker and emit the workflow sentinel.
 
 ## Procedure
 
@@ -40,9 +40,9 @@ RNT-5. **Empty-selection policy (no silent `--all` fallback).**
 RNT-6. **Run tests.**
    Pass the final list as positional args to `tests/run-all.sh`. Use `tests/run-all.sh --all` only when the user explicitly opts in. Never pass `auto-detect`.
 
-RNT-7. **Invoke test-runner subagent** with the resolved command and working directory. Return structured YAML.
+RNT-7. **Dispatch `test-runner`** per `skills/_shared/worker-dispatch.md`. Payload: `cwd` (worktree the tests run in), `test_args` (the RNT-6 list, or `["--all"]` on explicit opt-in), `timeout_seconds` (omit for the 120s default).
 
-RNT-8. **Parse the YAML** block returned by the agent.
+RNT-8. **Parse the YAML** the dispatch call printed on stdout.
 
 RNT-9. **Emit sentinel** as a separate Bash call:
    - `status: pass` → `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`

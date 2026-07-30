@@ -1,0 +1,91 @@
+#!/usr/bin/env node
+"use strict";
+// bin/worker-dispatch-paths
+//
+// Print the three literal absolute paths a worker-dispatch invocation needs.
+//
+//   DISPATCH=<acd>/bin/worker-dispatch.js
+//   MAIN_ROOT=<main worktree of the target repo>
+//   PLANS_DIR=<workflow plans directory>
+//
+// Why a resolver exists at all: the sanctioned command form
+// (hooks/enforce-worktree/main-worktree-allows/worker-dispatch-overlay.js) admits
+// no `$VAR`, no substitution and no chaining, so every one of the three arguments
+// has to reach the command line already resolved. Six calling skills would
+// otherwise each carry their own three-command resolution recipe.
+//
+// MAIN_ROOT is the MAIN worktree, never the caller's own: bin/worker-dispatch.js
+// rejects a linked worktree in that position. `git worktree list` lists the main
+// worktree first by definition, so the first record is the answer regardless of
+// which worktree the caller is standing in.
+//
+// Read-only: this script starts one `git worktree list` and writes nothing.
+
+const fs = require("fs");
+const path = require("path");
+const { spawnSync } = require("child_process");
+
+const { normalizeCwd } = require("../hooks/lib/path-normalize");
+const { getWorkflowPlansDir } = require("../hooks/lib/workflow-plans-dir");
+
+const GIT_TIMEOUT_MS = 20000;
+
+function fail(message) {
+  process.stderr.write(`worker-dispatch-paths: ${message}\n`);
+  process.exit(1);
+}
+
+function real(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch (_e) {
+    return path.resolve(p);
+  }
+}
+
+function mainWorktreeOf(dir) {
+  const res = spawnSync("git", ["-C", dir, "worktree", "list", "--porcelain"], {
+    shell: false,
+    encoding: "utf8",
+    timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
+  });
+  if (res.error || res.status !== 0) return null;
+  for (const line of String(res.stdout || "").split(/\r?\n/)) {
+    const m = /^worktree (.+)$/.exec(line);
+    if (m === null) continue;
+    const raw = m[1].trim();
+    if (raw === "") return null;
+    return real(normalizeCwd(raw) || raw);
+  }
+  return null;
+}
+
+function main() {
+  const arg = process.argv[2];
+  const target = arg ? normalizeCwd(arg) || arg : process.cwd();
+  if (!fs.existsSync(target)) fail(`target directory does not exist: ${target}`);
+
+  // The agents checkout this script is running from — its own location, so the
+  // answer cannot be bent by AGENTS_CONFIG_DIR pointing somewhere else.
+  const acd = real(path.resolve(__dirname, ".."));
+  const dispatch = path.join(acd, "bin", "worker-dispatch.js");
+  if (!fs.existsSync(dispatch)) fail(`dispatcher not found at ${dispatch}`);
+
+  const mainRoot = mainWorktreeOf(target);
+  if (mainRoot === null) fail(`cannot resolve the main worktree of ${target}`);
+
+  let plansDir = null;
+  try {
+    plansDir = getWorkflowPlansDir();
+  } catch (_e) {
+    plansDir = null;
+  }
+  if (!plansDir) fail("cannot resolve the workflow plans directory");
+
+  process.stdout.write(`DISPATCH=${dispatch}\n`);
+  process.stdout.write(`MAIN_ROOT=${mainRoot}\n`);
+  process.stdout.write(`PLANS_DIR=${real(plansDir)}\n`);
+}
+
+main();
