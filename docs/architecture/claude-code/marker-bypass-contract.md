@@ -1,9 +1,9 @@
 # Marker Bypass Contract
 
-Session-scoped markers grant bypass across all enforcement hooks that guard worktree
-isolation. This document defines the cross-hook honoring contract, the session-ID
-resolution chain used in the git hook context, and the exit-code semantics for the
-pre-commit inline Node snippet.
+Session-scoped markers grant bypass only to the enforcement hooks explicitly listed in
+the Honoring-hooks table below. This document defines the cross-hook honoring contract,
+the session-ID resolution chain used in the git hook context, and the exit-code
+semantics for the pre-commit inline Node snippet.
 
 ## Markers
 
@@ -12,13 +12,17 @@ otherwise `~/.claude/projects/workflow/`):
 
 | Marker file | Created by | Scope |
 |---|---|---|
-| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | Bypasses all enforcement except `enforce-system-ops.js`, `scan-outbound.js`, and `block-credentials.js` (see Honoring hooks) |
+| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | See Honoring hooks — bypasses only the hooks marked Yes there |
 | `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | Bypasses worktree-isolation enforcement only |
 
 `WORKFLOW_OFF` subsumes `WORKTREE_OFF`: when `.workflow-off` is present, all hooks that
 check `.worktree-off` treat it as also active.
 
 ## Honoring hooks
+
+Inclusion criterion: every `settings.json` `PreToolUse` hook, plus `hooks/pre-commit`.
+A hook absent from this table never reads the marker and is never bypassed — the table
+is the SSOT (CPR-2); no other document enumerates exceptions independently.
 
 | Hook | Layer | Honors `.workflow-off` | Honors `.worktree-off` |
 |---|---|---|---|
@@ -28,6 +32,17 @@ check `.worktree-off` treat it as also active.
 | `hooks/block-memory-direct.js` | PreToolUse | Yes | No |
 | `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
 | `hooks/block-credentials.js` | PreToolUse | **No** | **No** |
+| `hooks/block-shell-config.js` | PreToolUse | **No** | **No** |
+| `hooks/block-off-clearance-write.js` | PreToolUse | **No** | **No** |
+| `hooks/block-subagent-sentinels.js` | PreToolUse | **No** | **No** |
+| `hooks/gate-plan-skip-sentinel.js` | PreToolUse | **No** | **No** |
+| `hooks/check-cross-platform.js` | PreToolUse | **No** | **No** |
+| `hooks/check-japanese-in-docs.js` | PreToolUse | **No** | **No** |
+| `hooks/show-user-verified-context.js` | PreToolUse | **No** | **No** |
+| `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
+| `hooks/show-diff.js` | PreToolUse | **No** | **No** |
+| `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
+| `hooks/supervisor-off-proposal-shim.js` | PreToolUse | **No** | **No** |
 | `hooks/workflow-gate.js` | PreToolUse | Yes | No |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate only) | git pre-commit | Yes | Yes |
