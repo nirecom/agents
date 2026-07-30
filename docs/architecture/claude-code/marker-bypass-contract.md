@@ -12,7 +12,7 @@ otherwise `~/.claude/projects/workflow/`):
 
 | Marker file | Created by | Scope |
 |---|---|---|
-| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | Bypasses all enforcement except `enforce-system-ops.js` and `scan-outbound.js` (see Honoring hooks) |
+| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | Bypasses all enforcement except `enforce-system-ops.js`, `scan-outbound.js`, and `block-credentials.js` (see Honoring hooks) |
 | `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | Bypasses worktree-isolation enforcement only |
 
 `WORKFLOW_OFF` subsumes `WORKTREE_OFF`: when `.workflow-off` is present, all hooks that
@@ -27,6 +27,7 @@ check `.worktree-off` treat it as also active.
 | `hooks/block-history-direct.js` | PreToolUse | Yes | No |
 | `hooks/block-memory-direct.js` | PreToolUse | Yes | No |
 | `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
+| `hooks/block-credentials.js` | PreToolUse | **No** | **No** |
 | `hooks/workflow-gate.js` | PreToolUse | Yes | No |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate only) | git pre-commit | Yes | Yes |
