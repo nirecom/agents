@@ -8,10 +8,13 @@
 //     until /review-tests runs again.
 //
 // Inputs:  blob OID of each staged tests/** (or test/**) path, sorted by path.
+//          Deleted paths (staged status D) are excluded before the OID lookup —
+//          `git rev-parse :<path>` has no index entry for a deletion and would
+//          otherwise abort the whole computation (issue #1068).
 // Output:  16-hex-char SHA-256 prefix (content-addressed; deterministic).
 //          Returns null on:
 //            - non-git directory / git failure
-//            - no tests/** staged
+//            - no tests/** staged after excluding deletions
 //          The null result is the fail-open convention used elsewhere in
 //          workflow-gate (the caller treats null as "no evidence").
 
@@ -21,12 +24,19 @@ const crypto = require("crypto");
 function computeStagedTestsToken(repoDir) {
   let output;
   try {
-    output = execFileSync("git", ["diff", "--cached", "--name-only", "-z"], {
-      cwd: repoDir,
-      encoding: "buffer",
-      timeout: 5000,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    // --diff-filter=d excludes deleted paths (matches the exclude-deletions
+    // idiom used in hooks/pre-commit); renames still surface via their new
+    // path under --name-only.
+    output = execFileSync(
+      "git",
+      ["diff", "--cached", "--name-only", "--diff-filter=d", "-z"],
+      {
+        cwd: repoDir,
+        encoding: "buffer",
+        timeout: 5000,
+        stdio: ["pipe", "pipe", "pipe"],
+      }
+    );
   } catch (e) {
     return null;
   }
