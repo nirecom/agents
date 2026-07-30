@@ -12,7 +12,7 @@ otherwise `~/.claude/projects/workflow/`):
 
 | Marker file | Created by | Scope |
 |---|---|---|
-| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | Bypasses all enforcement except enforce-system-ops.js |
+| `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | Bypasses all enforcement except `enforce-system-ops.js` and `scan-outbound.js` (see Honoring hooks) |
 | `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | Bypasses worktree-isolation enforcement only |
 
 `WORKFLOW_OFF` subsumes `WORKTREE_OFF`: when `.workflow-off` is present, all hooks that
@@ -24,7 +24,9 @@ check `.worktree-off` treat it as also active.
 |---|---|---|---|
 | `hooks/enforce-worktree.js` | PreToolUse | Yes | Yes |
 | `hooks/block-dotenv.js` | PreToolUse | Yes | No |
-| `hooks/scan-outbound.js` | PreToolUse | Yes | No |
+| `hooks/block-history-direct.js` | PreToolUse | Yes | No |
+| `hooks/block-memory-direct.js` | PreToolUse | Yes | No |
+| `hooks/scan-outbound.js` | PreToolUse | **No** | **No** |
 | `hooks/workflow-gate.js` | PreToolUse | Yes | No |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate only) | git pre-commit | Yes | Yes |
@@ -36,6 +38,13 @@ private-info scanner (`scan-outbound.sh`) that runs later in the same hook is **
 bypassed by markers — secret leakage protection is unconditional on the git side.
 Users who need WORKFLOW_OFF semantics for staged secrets must add the entry to
 `.private-info-allowlist`.
+
+`hooks/scan-outbound.js` does not reference the marker at all — its PreToolUse private-info
+scan is unconditional, symmetric with the git-side `scan-outbound.sh` above (CPR-5). Users
+who need to bypass a specific match must use `.private-info-allowlist` instead.
+
+`hooks/block-history-direct.js`'s marker check runs only after a protected-path hit is
+detected, so non-protected paths never pay the session-ID resolution cost.
 
 `hooks/lib/session-markers.js` is the SSOT for marker **reads** and notice strings only
 (`isWorkflowOff(sid)` / `isWorktreeOff(sid)` / `workflowOffNoticeText` /
