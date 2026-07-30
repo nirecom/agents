@@ -47,7 +47,7 @@ exceptions independently.
 | `hooks/show-diff.js` | PreToolUse | **No** | **No** |
 | `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
 | `hooks/supervisor-off-proposal-shim.js` | PreToolUse | Yes | Yes (only when the OFF proposal's target is `worktree`) |
-| `hooks/workflow-gate.js` | PreToolUse | Yes | Yes (skips the unstaged-tracked Gate 1 check only) |
+| `hooks/workflow-gate.js` | PreToolUse | Yes | Yes (skips the unstaged-tracked Gate 1 check AND makes the Tier 3 worktree-entry early gate return `verdict: "dormant"`) |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
 | `hooks/stop-premature-stop-guard.js` | Stop | Yes | No |
 | `hooks/stop-final-report-guard.js` | Stop | Yes | No |
