@@ -5,14 +5,14 @@
 #
 # Classifies a list of paths (newline-separated, on stdin) as human-facing docs or not.
 #
-# The allowlist has ONE owner — DOCS_ONLY_ALLOWLIST in hooks/workflow-gate/staged-evidence.js —
+# The allowlist has ONE owner -- DOCS_ONLY_ALLOWLIST in hooks/workflow-gate/staged-evidence.js --
 # and this script exists so shell callers can ASK it instead of re-typing the pattern. It must
 # never carry its own copy of the regex: a second copy is a second answer.
 #
 # Exit codes are three different facts and must not collapse into each other:
 #   0  at least one path, and every one of them is human-facing docs
 #   1  at least one path is not
-#   2  there was no input at all — the caller has nothing to conclude
+#   2  there was no input at all -- the caller has nothing to conclude
 #   3  the classifier could not run (no node, or the allowlist module is unreachable)
 #      Also "nothing to conclude", but for a reason the caller must resolve toward DOING THE
 #      WORK: a broken install must never look like "docs only, skip everything".
