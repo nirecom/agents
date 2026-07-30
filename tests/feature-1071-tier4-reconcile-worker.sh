@@ -1,24 +1,30 @@
 #!/bin/bash
 # tests/feature-1071-tier4-reconcile-worker.sh
-# Tests: agents/issue-reconcile-worker.md, agents/issue-create-survey-worker.md, skills/issue-create/SKILL.md, skills/issue-reconcile/SKILL.md
-# Tags: static, agent, worker, issue-reconcile, issue-create, survey-worker, scope:issue-specific
+# Tests: bin/worker-dispatch/workers/issue-reconcile.js, hooks/lib/worker-dispatch-registry.js, bin/worker-dispatch/emit.js, agents/issue-create-survey-worker.md, skills/issue-create/SKILL.md, skills/issue-reconcile/SKILL.md
+# Tags: static, agent, worker, worker-dispatch, issue-reconcile, issue-create, survey-worker, TL2, scope:issue-specific
 #
-# Tier 4 static contract test for issue #1071 (skill/agent fork+worker audit).
-# Verifies the new reconcile-worker and survey-worker agents, plus Phase 3
-# confirmation semantics in issue-create SKILL.md.
-# Expected RED until #1071 creates the two worker .md files and updates
-# skills/issue-reconcile/SKILL.md with user-invocable: false.
+# Tier 4 contract test for the reconcile worker and the issue-create survey worker
+# (originally issue #1071).
+# #1643 replaced the LLM subagent agents/issue-reconcile-worker.md with the plain
+# script bin/worker-dispatch/workers/issue-reconcile.js, dispatched by
+# skills/issue-reconcile/SKILL.md Step 2 through skills/_shared/worker-dispatch.md.
+# Cases 1-3 therefore assert against the module, the renderer and the registry
+# capability declaration. agents/issue-create-survey-worker.md is NOT part of that
+# migration — it is still an LLM subagent, so cases 4-10 are unchanged.
 #
-# L3 gap (what this test does NOT catch):
+# TL3 gap (what this test does NOT catch):
 # - actual survey-worker verdict classification by the LLM (requires real claude -p)
-# - runtime reconcile scan over real GitHub issues
+# - a real reconcile scan over real GitHub issues (see tests/TL3-worker-dispatch-gh-contract.sh)
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: skill-orchestration
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RECONCILE_WORKER_MD="${AGENTS_DIR}/agents/issue-reconcile-worker.md"
+nodepath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi; }
+RECONCILE_WORKER_JS="${AGENTS_DIR}/bin/worker-dispatch/workers/issue-reconcile.js"
+REGISTRY_JS="${AGENTS_DIR}/hooks/lib/worker-dispatch-registry.js"
+EMIT_JS="${AGENTS_DIR}/bin/worker-dispatch/emit.js"
 SURVEY_WORKER_MD="${AGENTS_DIR}/agents/issue-create-survey-worker.md"
 IC_MD="${AGENTS_DIR}/skills/issue-create/SKILL.md"
 IR_MD="${AGENTS_DIR}/skills/issue-reconcile/SKILL.md"
@@ -29,51 +35,86 @@ FAIL=0
 pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "    detail: $2"; FAIL=$((FAIL + 1)); }
 
+run_with_timeout() {
+    local secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$@"
+    else
+        perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    fi
+}
+
 frontmatter() {
     awk 'NR==1 && $0=="---"{infm=1; next} infm && $0=="---"{exit} infm{print}' "$1"
 }
 
-# ── Test 1: issue-reconcile-worker.md exists ──────────────────────────────────
+# ── Test 1: reconcile worker module exists ────────────────────────────────────
 test_reconcile_worker_exists() {
-    if [ -f "$RECONCILE_WORKER_MD" ]; then
-        pass "1: agents/issue-reconcile-worker.md exists"
+    if [ -f "$RECONCILE_WORKER_JS" ]; then
+        pass "1: bin/worker-dispatch/workers/issue-reconcile.js exists"
     else
-        fail "1: agents/issue-reconcile-worker.md missing"
+        fail "1: bin/worker-dispatch/workers/issue-reconcile.js missing"
     fi
 }
 
-# ── Test 2: reconcile-worker output contract (3 lines + JSONL artifact) ───────
+# ── Test 2: output contract (status triple + JSONL artifact of needs-reconcile) ─
 test_reconcile_output_contract() {
-    if [ ! -f "$RECONCILE_WORKER_MD" ]; then
-        fail "2: reconcile-worker missing — cannot check output contract"
+    if [ ! -f "$RECONCILE_WORKER_JS" ] || [ ! -f "$REGISTRY_JS" ] || [ ! -f "$EMIT_JS" ]; then
+        fail "2: reconcile worker, registry or emit module missing — cannot check output contract"
         return
     fi
-    local has_status has_summary has_artifact
-    has_status=0; has_summary=0; has_artifact=0
-    grep -qE '^status:' "$RECONCILE_WORKER_MD" && has_status=1
-    grep -qE '^summary:' "$RECONCILE_WORKER_MD" && has_summary=1
-    grep -qE '^artifact_path:' "$RECONCILE_WORKER_MD" && has_artifact=1
-    if [ "$has_status" -eq 1 ] && [ "$has_summary" -eq 1 ] && [ "$has_artifact" -eq 1 ]; then
-        pass "2: reconcile-worker output contract has status:/summary:/artifact_path:"
+    local out
+    out=$(run_with_timeout 30 node -e '
+      const reg = require(process.argv[1]);
+      const emit = require(process.argv[2]);
+      const entry = reg.workers["issue-reconcile"];
+      if (!entry) { process.stdout.write("NO-ENTRY"); process.exit(0); }
+      if (entry.renderer !== "status-triple") {
+        process.stdout.write("RENDERER:" + entry.renderer); process.exit(0);
+      }
+      const text = emit.render(entry, {
+        status: "complete",
+        summary: "12 scanned; 3 to reconcile",
+        artifactPath: "/tmp/x-issue-reconcile-worker.jsonl",
+      });
+      const lines = text.split("\n").filter((l) => l !== "");
+      process.stdout.write(lines.map((l) => l.split(":")[0]).join(","));
+    ' "$(nodepath "$REGISTRY_JS")" "$(nodepath "$EMIT_JS")" 2>&1)
+    local jsonl_ok=0
+    # The artifact is a JSONL worklist holding ONLY needs-reconcile rows.
+    grep -q '\.jsonl' "$RECONCILE_WORKER_JS" && \
+      grep -q 'classification !== "needs-reconcile"' "$RECONCILE_WORKER_JS" && jsonl_ok=1
+    if [ "$out" = "status,summary,artifact_path" ] && [ "$jsonl_ok" -eq 1 ]; then
+        pass "2: output contract is the status triple; artifact is a needs-reconcile JSONL"
     else
-        fail "2: reconcile-worker output contract incomplete" "status=$has_status summary=$has_summary artifact_path=$has_artifact"
+        fail "2: reconcile output contract incomplete" "keys='$out' jsonl_ok=$jsonl_ok"
     fi
 }
 
-# ── Test 3: reconcile-worker is read-only (no gh issue comment, no doc-append) ─
+# ── Test 3: reconcile worker is read-only (registry capability declaration) ───
+# Read-only is now structural, not prose: bin/worker-dispatch/spawn.js only lets
+# the worker run the binaries its registry entry declares, and fsguard.js only
+# lets it write into its declared write scopes.
 test_reconcile_worker_readonly() {
-    if [ ! -f "$RECONCILE_WORKER_MD" ]; then
-        fail "3: reconcile-worker missing — cannot check read-only constraint"
+    if [ ! -f "$REGISTRY_JS" ]; then
+        fail "3: registry missing — cannot check read-only constraint"
         return
     fi
-    local has_comment has_docappend
-    has_comment=0; has_docappend=0
-    grep -qE 'gh issue comment' "$RECONCILE_WORKER_MD" && has_comment=1
-    grep -qE 'doc-append' "$RECONCILE_WORKER_MD" && has_docappend=1
-    if [ "$has_comment" -eq 0 ] && [ "$has_docappend" -eq 0 ]; then
-        pass "3: reconcile-worker is read-only (no gh issue comment or doc-append)"
+    local caps
+    caps=$(run_with_timeout 30 node -e '
+      const reg = require(process.argv[1]);
+      const e = reg.workers["issue-reconcile"];
+      const ext = (e.binaries.external || []).slice().sort().join("|");
+      const scripts = Object.keys(e.binaries.scripts || {}).sort().join("|");
+      const scopes = (e.writeScopes || []).slice().sort().join("|");
+      process.stdout.write(["ext=" + ext, "scripts=" + scripts, "scopes=" + scopes].join(" "));
+    ' "$(nodepath "$REGISTRY_JS")" 2>&1)
+    local has_comment=0
+    grep -qE 'gh[^\n]*issue[^\n]*comment|issue", *"comment"' "$RECONCILE_WORKER_JS" && has_comment=1
+    if [ "$caps" = "ext=gh scripts= scopes=plans-dir" ] && [ "$has_comment" -eq 0 ]; then
+        pass "3: reconcile worker declares gh as its only binary and plans-dir as its only write scope"
     else
-        fail "3: reconcile-worker contains write operations" "comment=$has_comment docappend=$has_docappend"
+        fail "3: reconcile worker read-only constraint broken" "$caps has_comment=$has_comment"
     fi
 }
 

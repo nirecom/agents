@@ -3,8 +3,12 @@ const { classify, classifyDetailed, isGitWriteIR } = require("../lib/bash-write-
 const { isPosixRedirWriteIR, isPwshWriteIR, isFileOpWriteIR, isCommandSubstWriteIR, isNewlineInjectedWriteIR, isExoticExecWriteIR, isInterpreterCWriteIR, isEncodedCommandWriteIR, isExtendedFileOpWriteIR } = require("../lib/bash-write-targets");
 const { isPkgMgrWriteIR } = require("../lib/bash-write-targets/pkg-mgr");
 const { isGhWriteCommand } = require("./bash-write-scope");
+const { isWorkerDispatchWriteIR } = require("./worker-dispatch-write");
 
 function detectWritePredicate(ir) {
+  // #1643: checked first so a worker dispatch can never be short-circuited as
+  // read-only before the main-worktree overlay gets to judge it.
+  if (isWorkerDispatchWriteIR(ir)) return { name: "isWorkerDispatchWriteIR", detail: "worker-dispatch invocation" };
   if (classify(ir) === "write") {
     const { matchedNames } = classifyDetailed(ir.rawText);
     return { name: "classify", detail: matchedNames.length ? `${matchedNames.join(", ")} (WRITE_PATTERNS)` : "WRITE_PATTERNS match" };

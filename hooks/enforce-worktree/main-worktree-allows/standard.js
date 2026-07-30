@@ -314,7 +314,10 @@ function isAllowedMainWorktreeCleanup(cmd, repoRoot) {
  * NOTE: rejectInterpreterAndChaining is intentionally NOT called — it rejects
  * any command starting with `bash` (in INTERP_NAMES). Safety is provided by
  * the raw argTail scan below, same style as isAllowedReadOnlyConfigCheck §163–165.
- * Coupling: if doc-append-worker.md changes the dispatch shape, update this matcher.
+ * Consumer: the WE-21 manual recovery path in skills/worktree-end/scripts/cleanup-cascade.md.
+ * The normal WE-21 route goes through bin/worker-dispatch.js instead, which runs this
+ * script itself via spawn.js and so never reaches this matcher.
+ * Coupling: if that recovery command changes shape, update this matcher.
  */
 function isAllowedComposeDocAppend(cmd, repoRoot) {
   if (!cmd || typeof cmd !== "string") return false;

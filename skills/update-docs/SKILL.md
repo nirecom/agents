@@ -67,10 +67,8 @@ UD-8f. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the wor
 
 UD-9. Complete delivery (Path B — `ENFORCE_WORKTREE=off`).
 
-UD-9a. Delegate history entry to doc-append-worker:
-   `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "history", category: CATEGORY, subject: "...", commits: "HASH", background: "...", changes: "...", cwd: CWD, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
-UD-9b. For public repos — delegate changelog entry to doc-append-worker:
-   `Agent({ subagent_type: "doc-append-worker", prompt: JSON.stringify({ mode: "changelog", category: CATEGORY, subject: "...", background: "...", changes: "...", cwd: CWD, agents_config_dir: AGENTS_CONFIG_DIR, artifact_dir: PLANS_DIR }) })`
-   On `failed` status: surface `artifact_path` to the user and stop.
+UD-9a. History entry — dispatch `doc-append` per `skills/_shared/worker-dispatch.md`. Payload: `mode: "history"`, `cwd`, `category`, `subject`, `commits`, `background`, `changes`, `test_gap` (required when `category` is BUGFIX), `artifact_dir`.
+UD-9b. For public repos — changelog entry: same dispatch with `mode: "changelog"` and no `commits` (payload sequence suffix `-2`).
+   On `failed` status: surface `summary` + `artifact_path` to the user and stop.
 UD-9c. `git add docs/ README.md CHANGELOG.md`
 UD-9d. Emit: `echo "<<WORKFLOW_MARK_STEP_docs_complete>>"` — satisfies the workflow gate. Do NOT emit `WORKFLOW_USER_VERIFIED` here; next-step owns `user_verification` (emitted just before `/commit-push` under `ENFORCE_WORKTREE=off`).

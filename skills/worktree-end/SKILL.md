@@ -46,11 +46,13 @@ Display URL; stop. On reply: `gh pr view "$PR_NUMBER" --json state` — `MERGED`
 Emit user-verified sentinel via `skills/_shared/user-verified.md` (description: `"PR #<N> — approving merge to main"`), then `gh pr merge --squash --delete-branch`. Failure → surface error and stop. Keep CWD in the linked worktree throughout WE-8; do not switch to main worktree before WE-13.
 
 ### Step WE-9 — Gitignored state inventory
-Default backup dir: `<main_root>/.worktree-backup/<branch>/`.
+Backup dir is derived by the worker as `<main_root>/.worktree-backup/<branch>/` — never passed in.
 
-**Pass 1 — dry run**: `Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({ mode: "dry_run", worktree_path: WORKTREE_PATH, branch: BRANCH, backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR }) })`. `status: failed` → stop. File count 0 → `BACKUP_MANIFEST_PATH=(none)`, skip Pass 2.
+Both passes dispatch `worktree-backup` per `skills/_shared/worker-dispatch.md` with payload `worktree_path` / `branch` / `docker_check: true` / `artifact_dir`, differing only in `mode`. Use payload sequence suffixes `-1` and `-2` so Pass 1's file is not overwritten.
 
-**Pass 2 — execute**: `Agent({ subagent_type: "worktree-backup-worker", prompt: JSON.stringify({ mode: "execute", worktree_path: WORKTREE_PATH, branch: BRANCH, backup_dir: BACKUP_DIR, docker_check: true, artifact_dir: PLANS_DIR }) })`. `status: failed` → stop. `status: partial` → warn and continue. `status: copied` → set `BACKUP_MANIFEST_PATH` from worker `artifact_path`.
+**Pass 1 — `mode: "dry_run"`**: `status: failed` → stop. File count 0 → `BACKUP_MANIFEST_PATH=(none)`, skip Pass 2.
+
+**Pass 2 — `mode: "execute"`**: `status: failed` → stop. `status: partial` → warn and continue. `status: copied` → set `BACKUP_MANIFEST_PATH` from `artifact_path`.
 
 ### Step WE-10 — Last-chance findings
 Append any outstanding BugsFound / RelatedTasks / NextTasks to `<worktree>/WORKTREE_NOTES.md`. **Capture cutoff** — findings after this step are excluded from the Final Report.

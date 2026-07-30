@@ -12,3 +12,6 @@ rules/language.md
 .private-info-allowlist
 .offensive-content-blocklist
 .backfill-appended.txt
+
+# Local backups written by /worktree-end (may contain gitignored .env files)
+.worktree-backup/

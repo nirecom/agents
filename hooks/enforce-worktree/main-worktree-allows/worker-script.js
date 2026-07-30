@@ -10,6 +10,7 @@ const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
 const { matchFinalizeWorkerOverlay } = require("./finalize-worker-overlay");
+const { matchWorkerDispatchOverlay } = require("./worker-dispatch-overlay");
 const { foldNewlinesInSpans } = require("../../lib/quote-spans");
 const { resolveAgentsConfigDir } = require("../../lib/agents-config-dir");
 const { rejectsUnsafeArgTail } = require("../arg-tail-guard");
@@ -56,6 +57,14 @@ function isSanctionedSingleInvocation(seg, acd, repoRoot) {
   // and argument shapes for the 3 live finalize scripts (single-line, fully-
   // resolved literal eval). On match, identity is confirmed — skip legacy path.
   if (matchFinalizeWorkerOverlay(seg, acd, repoRoot) !== null) return true;
+
+  // (a0-1) Worker-dispatch overlay (#1643): the single plain-script dispatch entry
+  // point. HARD-validates identity (Lock 1), the argv main-root against the repo
+  // under judgement (Lock 2) and against the session's trusted anchor set (Lock 3),
+  // plus worker enum and payload scope. The canonical form carries no redirect —
+  // the overlay's own metacharacter screen refuses `>` outright — so there is no
+  // write target left for the (c)/(d) tail to inspect.
+  if (matchWorkerDispatchOverlay(seg, acd, repoRoot) !== null) return true;
 
   // (a) Identity: eval "$(bash "<path>")" [2>&1] [|| exit 0]  (#1484)
   //           OR: bash "<path>" [args…]
