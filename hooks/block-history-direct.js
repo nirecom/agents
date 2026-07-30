@@ -32,6 +32,26 @@ function readStdin() {
 function approve() { console.log(JSON.stringify({ decision: "approve" })); process.exit(0); }
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
+// Shared by both dispatch lanes (CPR-5): a protected hit blocks UNLESS the
+// calling session has an active WORKFLOW_OFF / EMERGENCY OFF marker
+// (<workflowDir>/<sid>.workflow-off), in which case it approves instead —
+// after writing a stderr notice so the bypass is never silent. Only ever
+// called once a hit has actually been detected, so a non-hit never reaches
+// (and never logs via) this path.
+function blockOrBypass(sid) {
+  try {
+    const { isWorkflowOff, workflowOffNoticeText } = require("./lib/session-markers");
+    if (isWorkflowOff(sid)) {
+      process.stderr.write(workflowOffNoticeText("block-history-direct", sid) + "\n");
+      approve();
+    }
+  } catch (_e) {
+    // require() or the marker check itself threw — a confirmed protected hit
+    // must still block; do not let a dependency failure fail this open.
+  }
+  block(BLOCK_MSG);
+}
+
 // The append-only document family. Case-insensitive: Windows filesystems are
 // case-insensitive, so `Docs/History/2026.md` must not slip past (CPR-8).
 const PROTECTED_PATTERNS = [
@@ -95,18 +115,19 @@ if (!input || typeof input !== "object") approve();
 
 const toolName = input.tool_name;
 const toolInput = input.tool_input || {};
+const sid = input.session_id;
 
 switch (toolName) {
   case "Edit":
   case "Write":
   case "MultiEdit":
   case "editFiles":
-    if (isProtectedPath(toolInput.file_path)) block(BLOCK_MSG);
+    if (isProtectedPath(toolInput.file_path)) blockOrBypass(sid);
     break;
   case "Bash":
   case "runInTerminal":
   case "runCommands":
-    if (bashHitsProtected(toolInput.command)) block(BLOCK_MSG);
+    if (bashHitsProtected(toolInput.command)) blockOrBypass(sid);
     break;
   default:
     break;
