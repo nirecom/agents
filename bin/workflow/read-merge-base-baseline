@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/read-merge-base-baseline
+// Shell bridge to readMergeBaseBaseline(). This is how bin/resolve-merge-base.sh reaches
+// layer 1 without knowing anything about the state file's layout.
+//
+// Usage:
+//   read-merge-base-baseline --session <sid>
+//
+// With a record, one key=value per line:
+//   base= branch= branch_head= repo_root= source= post_session_head= alt_base= recorded_at=
+// With no record (including an unreadable or corrupt state file): NONE
+// Exits 0 in both cases; exits 1 on bad args.
+//
+// A missing field prints as an EMPTY value, never as "undefined": the consumer's identity
+// checks treat empty as unverifiable, and the string "undefined" would be handed to git.
+// alt_base is the exception — it prints the kv format's absent marker `-`, because every
+// consumer of that field would otherwise try to use it as a revision.
+
+const path = require("path");
+const { readMergeBaseBaseline } = require(
+  path.join(__dirname, "..", "..", "hooks", "workflow-state")
+);
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function scalar(v) {
+  if (v === null || v === undefined) return "";
+  return String(v).replace(/[\r\n]+/g, " ");
+}
+
+function main() {
+  const argv = process.argv.slice(2);
+  let session = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--session") {
+      session = argv[++i] || null;
+    } else {
+      process.stderr.write("read-merge-base-baseline: unknown argument: " + argv[i] + "\n");
+      process.exit(1);
+    }
+  }
+
+  if (!session || !SESSION_ID_RE.test(session)) {
+    process.stderr.write("read-merge-base-baseline: --session is required and must match /^[A-Za-z0-9_-]+$/\n");
+    process.exit(1);
+  }
+
+  let rec = null;
+  try {
+    rec = readMergeBaseBaseline(session);
+  } catch (e) {
+    rec = null;
+  }
+  if (!rec) {
+    process.stdout.write("NONE\n");
+    process.exit(0);
+  }
+
+  const alt = rec.alt_base === null || rec.alt_base === undefined || rec.alt_base === ""
+    ? "-"
+    : scalar(rec.alt_base);
+
+  process.stdout.write(
+    "base=" + scalar(rec.base) + "\n" +
+    "branch=" + scalar(rec.branch) + "\n" +
+    "branch_head=" + scalar(rec.branch_head) + "\n" +
+    "repo_root=" + scalar(rec.repo_root) + "\n" +
+    "source=" + (scalar(rec.source) || "recorded-baseline") + "\n" +
+    "post_session_head=" + (rec.post_session_head === true ? "true" : "false") + "\n" +
+    "alt_base=" + alt + "\n" +
+    "recorded_at=" + scalar(rec.recorded_at) + "\n"
+  );
+  process.exit(0);
+}
+
+main();

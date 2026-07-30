@@ -612,6 +612,224 @@ else
 fi
 rm -f "$out29" "$err29"
 
+# ============================================================================
+# V (#1638) — where the auto-mode file set comes from when nothing is staged.
+#
+# Auto mode used to compute its own range: default branch, then a merge-base against it,
+# then `git diff <base>...HEAD`. That is the same guess that produced #1638, and here it is
+# worse than elsewhere — this classifier decides which questions the user is asked before
+# WORKFLOW_USER_VERIFIED. A range reaching back past a history rewrite pulls in files the
+# session never touched and asks about them; a range that is too narrow drops the risky file
+# and asks NOTHING, which is a silent, irreversible pass at the last gate before commit.
+#
+# So the range now comes from the shared resolver, and the resolver's STATE decides:
+#   RECORDED / RESOLVED    classify `git diff <base>...HEAD`
+#   SUSPECT / FALLBACK / no answer / no resolver
+#                          classify uncommitted changes only, AND add merge-base-suspect so
+#                          the narrowing is something the user is told about rather than a
+#                          silently smaller question set.
+#
+# V2 and V3 use the SAME repository and differ only in the state the resolver reports, so
+# the file set really is following the state and not the fixture.
+# ============================================================================
+
+V_STUB_MARKER=""
+VBIN=""
+
+# check-verification-gate.sh finds the resolver next to itself, so the whole bin/ is copied
+# and only the resolver is replaced. Copying just the two files would leave any other
+# sibling the script consults unresolvable and turn every V row into a different failure.
+setup_v_bin() {
+    VBIN="$TMP/fakebin"
+    mkdir -p "$VBIN"
+    cp -r "$AGENTS_DIR/bin/." "$VBIN/"
+    cat > "$VBIN/resolve-merge-base.sh" <<'VSTUB'
+#!/usr/bin/env bash
+[ -n "${MB_STUB_MARKER:-}" ] && : > "$MB_STUB_MARKER"
+[ -n "${MB_STUB_OUT:-}" ] && [ -f "$MB_STUB_OUT" ] && cat "$MB_STUB_OUT"
+exit "${MB_STUB_RC:-0}"
+VSTUB
+    chmod +x "$VBIN/resolve-merge-base.sh" 2>/dev/null || true
+}
+
+# main carries an installer file; the feature branch commits a skill file; the working tree
+# has an UNCOMMITTED edit to the installer file. The two ranges therefore name disjoint
+# category sets — committed range → skill-orchestration, uncommitted → installer — which is
+# what makes "which range was used" observable from the categories alone.
+setup_v_repo() {
+    local repo="$1"
+    mkdir -p "$repo/skills/my-skill" "$repo/install"
+    (
+        cd "$repo" || exit 1
+        git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; }
+        git config user.email test@example.com
+        git config user.name Test
+        git config commit.gpgsign false
+        git config core.hooksPath "$repo/.git/no-such-hooks"
+        echo "initial" > README.md
+        printf 'Write-Host "install"\n' > install/foo.ps1
+        git add README.md install/foo.ps1
+        git commit -q -m initial
+        git switch -q -c feature/mb-test
+        echo "# My skill" > skills/my-skill/SKILL.md
+        git add skills/my-skill/SKILL.md
+        git commit -q -m "add skill"
+        printf 'Write-Host "edited but not staged"\n' >> install/foo.ps1
+    )
+}
+
+v_stub_kv() { # <state>
+    cat <<EOF
+base=main
+state=$1
+source=origin/main
+safe_base=HEAD
+diff_lines=99
+diff_files=2
+threshold_lines=20000
+threshold_files=500
+branch=feature/mb-test
+warn=none
+alt_base=-
+detail=stubbed for tests
+EOF
+}
+
+V_OUT=""
+V_ERR=""
+V_RC=0
+V_TOKENS=""
+
+run_v_gate() { # <repo> <state|-> <stub-rc> [extra gate args...]
+    local repo="$1" state="$2" rc="$3"
+    shift 3
+    local kvfile o e
+    kvfile="$TMP/v-kv"
+    if [ "$state" = "-" ]; then : > "$kvfile"; else v_stub_kv "$state" > "$kvfile"; fi
+    V_STUB_MARKER="$TMP/v-called"
+    rm -f "$V_STUB_MARKER"
+    o="$(mktemp)"; e="$(mktemp)"
+    V_RC=0
+    (
+        cd "$repo" || exit 1
+        export MB_STUB_OUT="$kvfile" MB_STUB_RC="$rc" MB_STUB_MARKER="$V_STUB_MARKER"
+        run_with_timeout 15 bash "$VBIN/check-verification-gate.sh" \
+            --settings-path "$SETTINGS_EMPTY" "$@"
+    ) >"$o" 2>"$e" || V_RC=$?
+    V_OUT="$(cat "$o")"
+    V_ERR="$(cat "$e")"
+    V_TOKENS="$(printf '%s\n' "$V_OUT" | sed -n 's/^CATEGORY: \([^	]*\)	.*/\1/p' | tr '\n' ' ')"
+    rm -f "$o" "$e"
+}
+
+# --- V1: an explicit file list is authoritative. Resolving a merge-base for a caller that
+#         already said which files it means is wasted work AND a chance to disagree with it.
+setup_tmp
+setup_v_bin
+v_repo="$TMP/v-repo"
+setup_v_repo "$v_repo"
+run_v_gate "$v_repo" RESOLVED 0 --files "$v_repo/install/foo.ps1"
+if [ -f "$V_STUB_MARKER" ]; then
+    fail "V1: the merge-base resolver was invoked even though --files was given"
+elif echo "$V_TOKENS" | grep -q "installer"; then
+    pass "V1: an explicit --files list is classified directly, without resolving a merge-base"
+else
+    fail "V1: expected installer from the explicit file list, got tokens=[$V_TOKENS] stderr=[$(head -2 <<< "$V_ERR")]"
+fi
+teardown_tmp
+
+# --- V2: a trustworthy base → the COMMITTED range is classified.
+setup_tmp
+setup_v_bin
+v_repo="$TMP/v-repo"
+setup_v_repo "$v_repo"
+run_v_gate "$v_repo" RESOLVED 0
+if echo "$V_TOKENS" | grep -q "skill-orchestration" && ! echo "$V_TOKENS" | grep -q "installer"; then
+    pass "V2: state=RESOLVED classifies the committed range (skill-orchestration, not the uncommitted installer edit)"
+else
+    fail "V2: expected skill-orchestration only, got tokens=[$V_TOKENS] rc=$V_RC stderr=[$(head -2 <<< "$V_ERR")]"
+fi
+teardown_tmp
+
+# --- V3: an untrustworthy base → the range is narrowed to uncommitted changes, and the
+#         narrowing is DECLARED. Narrowing silently would shrink the question set at the
+#         last gate before commit without anyone knowing it had shrunk.
+setup_tmp
+setup_v_bin
+v_repo="$TMP/v-repo"
+setup_v_repo "$v_repo"
+run_v_gate "$v_repo" SUSPECT 0
+v3_missing=""
+echo "$V_TOKENS" | grep -q "installer" || v3_missing="$v3_missing [installer]"
+echo "$V_TOKENS" | grep -q "merge-base-suspect" || v3_missing="$v3_missing [merge-base-suspect]"
+if echo "$V_TOKENS" | grep -q "skill-orchestration"; then
+    v3_missing="$v3_missing [unexpected:skill-orchestration]"
+fi
+if [ -z "$v3_missing" ]; then
+    pass "V3: state=SUSPECT narrows to uncommitted changes and declares merge-base-suspect"
+else
+    fail "V3: problems$v3_missing tokens=[$V_TOKENS] rc=$V_RC"
+fi
+# The narrowing is also announced on stderr, where the invoking skill logs it.
+if grep -q "narrowed to uncommitted changes" <<< "$V_ERR"; then
+    pass "V3-stderr: and says so on stderr for the invoking skill's log"
+else
+    fail "V3-stderr: no narrowing notice on stderr -- [$V_ERR]"
+fi
+teardown_tmp
+
+# --- V4: no base at all is treated exactly like an untrustworthy one. The question set must
+#         not silently become empty because the resolver had nothing to say.
+setup_tmp
+setup_v_bin
+v_repo="$TMP/v-repo"
+setup_v_repo "$v_repo"
+run_v_gate "$v_repo" - 3
+if echo "$V_TOKENS" | grep -q "installer" && echo "$V_TOKENS" | grep -q "merge-base-suspect"; then
+    pass "V4: resolver exit 3 degrades the same way as SUSPECT (uncommitted scope + merge-base-suspect)"
+else
+    fail "V4: expected installer + merge-base-suspect, got tokens=[$V_TOKENS] rc=$V_RC"
+fi
+teardown_tmp
+
+# --- V5: the emission stays sorted. The categories are read by a caller that diffs them
+#         between runs, so a set that reorders itself reads as a changed set.
+setup_tmp
+setup_v_bin
+v_repo="$TMP/v-repo"
+setup_v_repo "$v_repo"
+run_v_gate "$v_repo" SUSPECT 0
+v5_actual="$(printf '%s\n' "$V_TOKENS" | tr ' ' '\n' | grep -v '^$')"
+v5_sorted="$(printf '%s\n' "$v5_actual" | LC_ALL=C sort)"
+v5_count="$(printf '%s\n' "$v5_actual" | grep -c . || true)"
+if [ "$v5_count" -lt 2 ]; then
+    fail "V5: fewer than two categories were emitted, so ordering cannot be asserted -- tokens=[$V_TOKENS]"
+elif [ "$v5_actual" = "$v5_sorted" ]; then
+    pass "V5: the emitted categories are in sorted order"
+else
+    fail "V5: categories are not sorted -- got [$V_TOKENS]"
+fi
+teardown_tmp
+
+# --- V6: a missing resolver is a partial install, not an empty diff. Same degradation.
+setup_tmp
+setup_v_bin
+v_repo="$TMP/v-repo"
+setup_v_repo "$v_repo"
+rm -f "$VBIN/resolve-merge-base.sh"
+run_v_gate "$v_repo" RESOLVED 0
+if echo "$V_TOKENS" | grep -q "installer" && echo "$V_TOKENS" | grep -q "merge-base-suspect"; then
+    pass "V6: a missing resolver degrades to the uncommitted scope and declares it"
+else
+    fail "V6: expected installer + merge-base-suspect, got tokens=[$V_TOKENS] rc=$V_RC stderr=[$(head -2 <<< "$V_ERR")]"
+fi
+teardown_tmp
+
+# The rest of the merge-base state table lives in a sourced part: this file is already past the
+# 500-line hard split limit, and the W rows share every V helper above.
+# shellcheck source=./feature-833-check-verification-gate/merge-base-states.sh
+. "$AGENTS_DIR/tests/feature-833-check-verification-gate/merge-base-states.sh"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

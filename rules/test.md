@@ -53,7 +53,7 @@ When a TL2 fallback is taken, verification of the residual gap MUST happen at th
 
 ### Risk categories (SSOT)
 
-The authoritative list of risk categories lives in `bin/check-verification-gate.sh` — its stdout records both the category token and the question text. Do not duplicate the list here. Current categories: `pwsh-required`, `hook-registration`, `skill-orchestration`, `installer`.
+The authoritative list of risk categories lives in `bin/check-verification-gate.sh` — its stdout records both the category token and the question text. Do not duplicate the list here. Current categories: `pwsh-required`, `hook-registration`, `skill-orchestration`, `installer`, `merge-base-suspect`.
 
 ### TL4 aspiration
 
