@@ -12,19 +12,19 @@ Run the project test suite via the `test-runner` worker and emit the workflow se
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
 
-RNT-1. **merge-base を解決する。**
-   `bin/select-tests.sh --auto` が `bin/resolve-merge-base.sh` 経由で解決する — このスキルは連鎖を再実装しない。
-   exit 4（SUSPECT / FALLBACK / ヘルパー不在）→ 停止し、`bin/resolve-merge-base.sh --explain` の stderr 出力をそのまま提示して、採用する base をユーザーに選ばせる（候補の sha / 任意の sha / 安全側の `HEAD` / 中止）。
-   ユーザーが base を確定したら `bin/workflow/record-merge-base-baseline --session <sid> --base <sha> --reason "<確認内容>"` で記録し、RNT-1 を再実行する（以後は RECORDED として通る）。
-   中止を選ばれたら RNT-9 の pending sentinel を出して終了する。
-   exit 0 で stdout が空 → 空選択として RNT-5 の方針に従う。
+RNT-1. **Resolve merge-base.**
+   `bin/select-tests.sh --auto` resolves it via `bin/resolve-merge-base.sh` -- this skill does not reimplement the chain.
+   exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bin/resolve-merge-base.sh --explain`’s stderr output verbatim, and let the user choose the base (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
+   Once the user confirms a base, record it with `bin/workflow/record-merge-base-baseline --session <sid> --base <sha> --reason "<confirmation detail>"` and re-run RNT-1 (it now passes as RECORDED).
+   If the user chooses abort, emit RNT-9’s pending sentinel and stop.
+   exit 0 with empty stdout -> treat as an empty selection and follow the RNT-5 policy.
 
 RNT-2. **Tier 1 — mechanical stem match.**
    `tier1_tests=$(bin/select-tests.sh --auto)`
    Filename stem substring match only. No frontmatter reading.
 
 RNT-3. **Tier 2 — LLM semantic match.**
-   `merge_base=$(bin/resolve-merge-base.sh --format base)` — RNT-1 と同じ base が返るので Tier 1 と Tier 2 の対象範囲は一致する。
+   `merge_base=$(bin/resolve-merge-base.sh --format base)` -- same base as RNT-1, so Tier 1 and Tier 2 cover the same range.
    For each `tests/*.sh` not in `tier1_tests` and not under `tests/_archive/`:
    - Read `# Tests:` and `# Tags:` lines (single-line, within `head -n 10`).
    - Compare against `git diff --name-only "$merge_base"...HEAD` and diff body.
@@ -49,10 +49,10 @@ RNT-8. **Parse the YAML** the dispatch call printed on stdout.
 RNT-9. **Emit sentinel** as a separate Bash call:
    - `status: pass` → `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
    - `status: fail | timeout | runner-error` → `echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>"`
-   - 失敗が当該差分と無関係な既存失敗であることを示せる場合に限り、外科的復旧として `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` を使う。
-     根拠を同一ターンで提示する: 失敗テスト名 / 失敗が触れているパス / それが `bin/resolve-merge-base.sh --format base` を基点とした差分に含まれないこと / main でも同じ失敗が再現すること。
-     根拠を提示できないときは使わない。`pending` のままユーザーに判断を委ねる。
-     この目的で `WORKFLOW_ENFORCE_WORKFLOW_OFF` / EMERGENCY OFF を使ってはならない。単一ステップの復旧に session-wide の enforcement 解除は不要かつ過剰である。
+   - Only when the failure can be shown to be a pre-existing failure unrelated to this diff, use `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` as a surgical recovery.
+     Present the evidence in the same turn: the failing test name / the paths the failure touches / that those paths are outside the diff range rooted at `bin/resolve-merge-base.sh --format base` / that the same failure reproduces on main.
+     If the evidence cannot be presented, do not use this path -- stay `pending` and leave the judgment to the user.
+     Never use `WORKFLOW_ENFORCE_WORKFLOW_OFF` / EMERGENCY OFF for this purpose. A single-step recovery does not need -- and must not use -- session-wide enforcement suspension.
 
 RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tail`.
 
@@ -61,8 +61,8 @@ RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tai
 - Test selection is this skill's responsibility, not test-runner's. Never pass `auto-detect`.
 - Always pass an explicit list or `--all` to `tests/run-all.sh`.
 - Empty selection on non-doc changes requires user confirmation; no silent `--all` fallback.
-- merge-base の解決連鎖をこのスキル内に再実装しない（SSOT: bin/resolve-merge-base.sh）。
-- 無関係な既存失敗の復旧は run_tests 単一ステップの完了マークに限る。session-wide の OFF sentinel を代替に使わない。
+- Do not reimplement the merge-base resolution chain inside this skill (SSOT: bin/resolve-merge-base.sh).
+- Recovery for a pre-existing unrelated failure is limited to marking the single run_tests step complete. Never substitute a session-wide OFF sentinel.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
 - Report observations per rules/supervisor-reporting.md.
