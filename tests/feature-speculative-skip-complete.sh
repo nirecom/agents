@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json
+# Tests: hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json
 # Tags: L1, L2, workflow, speculative-skip, scope:issue-specific
 #
 # Issues #1392, #1352, #544, #1353 — speculative-skip engine: outline/detail
@@ -28,9 +28,9 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BARREL="$AGENTS_DIR/hooks/lib/workflow-state.js"
+BARREL="$AGENTS_DIR/hooks/workflow-state.js"
 BARREL_N="$(cygpath -m "$BARREL" 2>/dev/null || echo "$BARREL")"
-STATEIO="$AGENTS_DIR/hooks/lib/workflow-state/state-io.js"
+STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
 HANDLERS="$AGENTS_DIR/hooks/workflow-mark/not-needed-handlers.js"
 HANDLERS_N="$(cygpath -m "$HANDLERS" 2>/dev/null || echo "$HANDLERS")"

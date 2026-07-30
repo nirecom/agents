@@ -50,7 +50,7 @@ if (require.main === module) {
   let formatCumSevErrorReason, formatL2ArmedReason, formatWorktreeOffProposalReason;
   let arbitrate, formatIntegratedReason;
   try {
-    ({ resolveSessionId } = require("./lib/workflow-state"));
+    ({ resolveSessionId } = require("./workflow-state"));
     ({ isWorkflowOff } = require("./lib/session-markers"));
     ({ readState, getStatePath, incrementAlertRetryCount, writeAuditState, writeAlertState } = require("./lib/supervisor-state-writer"));
     ({ formatCumSevErrorReason, formatL2ArmedReason } = require("./lib/supervisor-report-format"));

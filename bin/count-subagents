@@ -1,0 +1,329 @@
+#!/usr/bin/env node
+// How often each subagent type was invoked — metric (b) of the lightweight measurement set.
+// The source is the session transcript store Claude Code already keeps; no new log file is
+// introduced and nothing is written.
+//
+// The counted thing is a `tool_use` block whose `input.subagent_type` is a non-empty
+// string. The block's `name` is deliberately NOT part of the predicate: it reads "Task" on
+// older Claude Code builds and "Agent" on current ones, and keying on a version-dependent
+// literal would silently zero the metric after an upgrade (CPR-8).
+//
+// An observation that FAILED is never reported as a count of zero. A directory that could
+// not be enumerated, a file that could not be read, and a file too large to classify all
+// land in the summary as their own counters and force a non-zero exit.
+//
+// Stub exclusion reuses the #1655 classifier from bin/vscode-cc-repair. One difference
+// from the prune path is deliberate: prune keeps a lone stub (it may not delete a file
+// whose content no surviving copy carries), whereas this tool deletes nothing, so no such
+// invariant is needed. A title-only file structurally holds zero subagent records, so
+// excluding every stub is both safe and exact.
+//
+// Session TITLES are user content and are never printed, on either stream, in either
+// output mode.
+'use strict';
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { parseArgs } = require('util');
+
+const { normalizeInputPath } = require('./vscode-cc-repair/primitives');
+const { classifySessionFile, SESSION_FILE_PATTERN } = require('./vscode-cc-repair/prune');
+const { scanLines, parseLine, VERIFY_MAX_SCAN } = require('./vscode-cc-repair/prune/verify');
+const { listJsonlByMtimeStrict } = require('../hooks/workflow-state/session-id');
+const { _encodeCwd } = require('../hooks/lib/session-title');
+
+const USAGE = [
+  'Usage: count-subagents [options]',
+  '',
+  'Options:',
+  '  --projects-root <path>  Session-store root (absolute, no ".."). Default:',
+  '                          $CLAUDE_TRANSCRIPT_BASE_DIR or ~/.claude/projects.',
+  '  --cwd <path>            Count only the slug directory of this working directory.',
+  '  --session <id>          Count only this session id.',
+  '  --all                   Count every slug directory under the root.',
+  '  --include-stubs         Do not exclude title-only stub session files.',
+  '  --json                  Emit a machine-readable report instead of the text one.',
+  '  --help                  Show this help and exit.',
+  '',
+].join('\n');
+
+const PREFIX = '[count-subagents] ';
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function warn(message) {
+  process.stderr.write(PREFIX + 'warn: ' + message + '\n');
+}
+
+function sessionIdOf(file) {
+  return path.basename(String(file)).replace(/\.jsonl$/i, '');
+}
+
+// Enumerates the session files to consider, and everything that could not be observed
+// while doing so. The root's own readdir is guarded explicitly: an unreadable root must
+// not read as "this user has no sessions".
+function collectSessionFiles(options) {
+  const { root, slugs, all } = options;
+  const files = [];
+  const errors = [];
+  let dirs = slugs;
+  if (all) {
+    dirs = [];
+    let dirents;
+    try {
+      dirents = fs.readdirSync(root, { withFileTypes: true });
+    } catch (error) {
+      errors.push({ scope: 'root', path: root, code: error.code || 'EIO' });
+      return { files, errors };
+    }
+    for (const dirent of dirents) {
+      if (dirent.isDirectory()) dirs.push(dirent.name);
+    }
+    dirs.sort();
+  }
+  for (const slug of dirs) {
+    const dir = path.join(root, slug);
+    const listed = listJsonlByMtimeStrict(dir);
+    for (const error of listed.errors) errors.push(error);
+    for (const entry of listed.files) {
+      // SESSION_FILE_PATTERN is mandatory, not cosmetic: the same directory holds
+      // `agent-<uuid>.jsonl` subagent transcripts and `.history.jsonl`, and counting those
+      // would double every invocation the parent session already recorded.
+      if (!SESSION_FILE_PATTERN.test(entry.name)) continue;
+      files.push(path.join(dir, entry.name));
+    }
+  }
+  files.sort();
+  return { files, errors };
+}
+
+// Counts the distinct subagent invocations recorded in one session file. Streamed under a
+// read budget rather than readFileSync: the real store reaches gigabytes.
+// Returns { byType, total, truncated }.
+function countSubagents(file, sessionId) {
+  const byType = new Map();
+  const seen = new Set();
+  let total = 0;
+  const scan = scanLines(file, VERIFY_MAX_SCAN, (line) => {
+    const record = parseLine(line);
+    if (record === null) return true;
+    if (record.sessionId !== sessionId) return true;
+    const message = record.message;
+    if (message === null || typeof message !== 'object') return true;
+    if (!Array.isArray(message.content)) return true;
+    for (const block of message.content) {
+      if (!block || block.type !== 'tool_use') continue;
+      const input = block.input;
+      if (!input || typeof input.subagent_type !== 'string' || input.subagent_type === '') continue;
+      // Re-emitted blocks share their id, so identity is the id — never the position.
+      const id = typeof block.id === 'string' ? block.id : null;
+      if (id !== null) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+      }
+      byType.set(input.subagent_type, (byType.get(input.subagent_type) || 0) + 1);
+      total += 1;
+    }
+    return true;
+  });
+  return { byType, total, truncated: scan.truncated };
+}
+
+// Reads every enumerated file and folds the results together. Files are classified first;
+// a verdict that is an OBSERVATION FAILURE never contributes a count.
+function aggregate(options) {
+  const { files, includeStubs } = options;
+  const excluded = { stub: 0, unreadable: 0, unclassified: 0 };
+  const sessions = [];
+  const totals = new Map();
+  let invocations = 0;
+
+  for (const file of files) {
+    const sessionId = sessionIdOf(file);
+    const classified = classifySessionFile(file);
+    if (classified.verdict === 'unreadable') {
+      excluded.unreadable += 1;
+      warn('unreadable session file: ' + file + ' (reason=' + classified.reason + ')');
+      sessions.push({ session_id: sessionId, path: file, state: 'unreadable', invocations: 0, by_type: {} });
+      continue;
+    }
+    if (classified.verdict === 'unclassified') {
+      excluded.unclassified += 1;
+      warn('session file too large to classify: ' + file);
+      sessions.push({ session_id: sessionId, path: file, state: 'unclassified', invocations: 0, by_type: {} });
+      continue;
+    }
+    if (classified.verdict === 'stub' && !includeStubs) {
+      excluded.stub += 1;
+      sessions.push({ session_id: sessionId, path: file, state: 'stub-excluded', invocations: 0, by_type: {} });
+      continue;
+    }
+
+    let counted;
+    try {
+      counted = countSubagents(file, sessionId);
+    } catch (error) {
+      excluded.unreadable += 1;
+      warn('unreadable session file: ' + file + ' (reason=' + (error.code || 'EIO') + ')');
+      sessions.push({ session_id: sessionId, path: file, state: 'unreadable', invocations: 0, by_type: {} });
+      continue;
+    }
+    if (counted.truncated) {
+      // Not read in full, so the count is a floor rather than a measurement.
+      excluded.unclassified += 1;
+      warn('session file exceeded the scan budget: ' + file);
+    }
+    for (const [type, n] of counted.byType) {
+      totals.set(type, (totals.get(type) || 0) + n);
+    }
+    invocations += counted.total;
+    sessions.push({
+      session_id: sessionId,
+      path: file,
+      state: counted.truncated ? 'unclassified' : 'scanned',
+      invocations: counted.total,
+      // A subagent_type is attacker-shaped input, so the per-session breakdown is held in
+      // the same Map the totals use and converted only at the serialization boundary
+      // (CPR-5): accumulating into a plain object would let `__proto__` or `constructor`
+      // be dropped or mangled, and the breakdown would then disagree with the totals.
+      by_type: Object.fromEntries(counted.byType),
+    });
+  }
+
+  return { sessions, totals, invocations, excluded };
+}
+
+function rejectBadPath(flag, value) {
+  if (!path.isAbsolute(value)) {
+    warn(flag + ' must be an absolute path: ' + value);
+    return 2;
+  }
+  if (value.split(/[\\/]+/).includes('..')) {
+    warn(flag + ' must not contain "..": ' + value);
+    return 2;
+  }
+  return null;
+}
+
+function summaryLine(counts) {
+  return (
+    'subagent-summary: sessions=' + counts.sessions +
+    ' scanned=' + counts.scanned +
+    ' stub-excluded=' + counts.excluded.stub +
+    ' unreadable=' + counts.excluded.unreadable +
+    ' unclassified=' + counts.excluded.unclassified +
+    ' enum-errors=' + counts.enumErrors +
+    ' invocations=' + counts.invocations +
+    ' types=' + counts.types
+  );
+}
+
+function main() {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      options: {
+        'projects-root': { type: 'string' },
+        cwd: { type: 'string' },
+        session: { type: 'string' },
+        all: { type: 'boolean' },
+        'include-stubs': { type: 'boolean' },
+        json: { type: 'boolean' },
+        help: { type: 'boolean' },
+      },
+      strict: true,
+      allowPositionals: false,
+    });
+  } catch (error) {
+    warn('argument error: ' + error.message);
+    return 2;
+  }
+
+  if (parsed.values.help) {
+    process.stdout.write(USAGE);
+    return 0;
+  }
+
+  const root = normalizeInputPath(String(
+    parsed.values['projects-root'] ||
+    process.env.CLAUDE_TRANSCRIPT_BASE_DIR ||
+    path.join(os.homedir(), '.claude', 'projects')
+  ));
+  const rejectedRoot = rejectBadPath('--projects-root', root);
+  if (rejectedRoot !== null) return rejectedRoot;
+
+  const all = parsed.values.all === true;
+  let slugCwd = null;
+  if (typeof parsed.values.cwd === 'string') {
+    slugCwd = normalizeInputPath(String(parsed.values.cwd));
+    const rejectedCwd = rejectBadPath('--cwd', slugCwd);
+    if (rejectedCwd !== null) return rejectedCwd;
+  }
+
+  const session = typeof parsed.values.session === 'string' ? parsed.values.session : null;
+  if (session !== null && !SESSION_ID_RE.test(session)) {
+    warn('--session must match [A-Za-z0-9_-]+: ' + session);
+    return 2;
+  }
+
+  // Default scope is the current repository's own slug — the full store is opt-in via
+  // --all, because it can hold thousands of files across gigabytes.
+  const slugs = all ? [] : [_encodeCwd(slugCwd === null ? process.cwd() : slugCwd)];
+  const collected = collectSessionFiles({ root, slugs, all });
+  for (const error of collected.errors) {
+    warn('could not enumerate ' + error.scope + ': ' + error.path + ' (reason=' + error.code + ')');
+  }
+
+  const selected = session === null
+    ? collected.files
+    : collected.files.filter((file) => sessionIdOf(file) === session);
+  const result = aggregate({ files: selected, includeStubs: parsed.values['include-stubs'] === true });
+
+  const rows = [...result.totals.entries()]
+    .sort((a, b) => (b[1] - a[1]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const scanned = result.sessions.filter((s) => s.state === 'scanned' || s.state === 'unclassified').length;
+  const counts = {
+    sessions: selected.length,
+    scanned,
+    excluded: result.excluded,
+    enumErrors: collected.errors.length,
+    invocations: result.invocations,
+    types: rows.length,
+  };
+
+  if (parsed.values.json === true) {
+    process.stdout.write(JSON.stringify({
+      generated_at: new Date().toISOString(),
+      root,
+      sessions: result.sessions,
+      totals: {
+        sessions: counts.sessions,
+        scanned: counts.scanned,
+        invocations: counts.invocations,
+        types: counts.types,
+        by_type: Object.fromEntries(rows),
+      },
+      excluded: result.excluded,
+      errors: collected.errors,
+    }, null, 2) + '\n');
+  } else {
+    for (const [type, n] of rows) process.stdout.write(n + '  ' + type + '\n');
+    process.stdout.write(summaryLine(counts) + '\n');
+  }
+
+  // A named session that no root holds is a caller error about a specific object, so it is
+  // reported explicitly rather than as a silent zero.
+  if (session !== null && selected.length === 0) {
+    warn('no session file found for --session ' + session);
+    return 1;
+  }
+  const failed =
+    counts.enumErrors + result.excluded.unreadable + result.excluded.unclassified > 0;
+  return failed ? 1 : 0;
+}
+
+if (require.main === module) {
+  process.exitCode = main();
+}
+
+module.exports = { USAGE, collectSessionFiles, countSubagents, aggregate, summaryLine, main };

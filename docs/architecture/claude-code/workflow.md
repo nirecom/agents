@@ -33,6 +33,14 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
 }
 ```
 
+Each step object may carry an optional `started_at` (ISO-8601 UTC), written only while
+`RECORD_STEP_TIMESTAMPS=on`. It is attempt-scoped: every non-`pending` step has one, every
+`pending` step has none, and returning to `pending` discards it. For the steps a
+`WORKFLOW_RESET_FROM_*` regenerates ahead of its target, `started_at` equals `updated_at`.
+That equality means zero measured elapsed time, which a directly-recorded `complete` or
+`skipped` step also produces — it does not identify a reset on its own. Rule SSOT:
+`hooks/workflow-state/step-timestamps.js`.
+
 ### `plan_approvals` (approval-gated steps)
 
 `outline` and `detail` carry an extra top-level record — not nested under `steps`, because
@@ -55,7 +63,7 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
 Neither step may be persisted `complete` without a valid record. On-disk evidence
 (`hasCompletionEvidence`) is necessary but never sufficient: it cannot distinguish
 "review not started" from "review finished, user has not approved". Authority lives in
-`hooks/lib/workflow-state/completion-approval.js` and is enforced at the `writeState`
+`hooks/workflow-state/completion-approval.js` and is enforced at the `writeState`
 boundary, so every caller — hooks, `next-step`, `reconcile-state` — is gated identically.
 
 `source` is a closed set (`SANCTIONED_SOURCES`); an unknown token throws rather than
@@ -79,9 +87,31 @@ Statuses: `pending` | `in_progress` | `complete` | `skipped`
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
 - `branching_complete` and `pre_final_report_gate`: cannot be `skipped`
 
+**`skip_verdict` field (outline/detail only):** When a speculative skip is recorded
+(`WORKFLOW_OUTLINE_NOT_NEEDED` / `WORKFLOW_DETAIL_NOT_NEEDED`), a `skip_verdict` object is
+stored alongside the `steps[step]` entry (top-level, keyed by step name):
+
+```json
+{
+  "skip_verdicts": {
+    "outline": {
+      "verdict": "pending",
+      "recorded_at": "2026-07-15T10:00:00.000Z"
+    }
+  }
+}
+```
+
+`verdict` is `pending` (skip-verifier not yet run), `approve` (skip confirmed safe), or
+`veto` (skip rejected — step must run). A `veto` verdict de-skips the step at read time:
+`reconcileEffectiveState` treats a step whose raw status is `skipped` but whose
+`skip_verdict.verdict === "veto"` as `pending`, forcing `next-step` to schedule it.
+A `pending` verdict blocks next-step with a `"skip_verdict_pending"` hint until the
+verifier resolves.
+
 ## Steps and owners
 
-The canonical step order is `VALID_STEPS` in `hooks/lib/workflow-state/state-io.js`. `bin/workflow/next-step --list` renders it with status markers.
+The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core.js` (re-exported by the `state-io.js` barrel). `bin/workflow/next-step --list` renders it with status markers.
 
 | Step | How completed |
 |---|---|
@@ -106,7 +136,14 @@ bypassing the state file entry for those steps. The state file still contains th
 (created by `session-start.js` with status `pending`); the evidence override happens only in
 the gate, not in the file.
 
-`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending`, it calls `hasCompletionEvidence()` from `evidence-resolver.js` and, if evidence is found (intent/outline/detail plan artifact exists, or test files are staged), auto-marks the step `complete` and re-evaluates the verdict — capped at one auto-repair per next-step call. This resolves compaction gaps where the step completed but the marker was lost.
+**Effective state derivation (Approach B):** Every consumer — `workflow-gate.js`, `bin/workflow/next-step`, `session-start.js` — reads the *effective* (derived) step status via `reconcileEffectiveState(state, sessionId, opts)` in `hooks/lib/workflow-state/effective-state.js`, not the raw JSON record directly. The function applies four derivation stages without writing anything back to disk:
+
+1. **wf-meta auto-skip** — non-applicable WF-CODE steps are treated as `skipped`.
+2. **skip_verdict gate** — outline/detail steps with a pending or vetoed `skip_verdict` are held at `pending`/`skipped` accordingly (see `skip_verdict` field above).
+3. **Post-veto reset** — when outline or detail is veto-de-skipped, downstream steps that were `complete` in the raw record are treated as `pending` until the plan is re-approved.
+4. **Evidence + approval resolution** — for `pending` steps in `EVIDENCE_STEPS`, `hasCompletionEvidence()` is checked; for approval-gated steps (`outline`, `detail`), `evaluateCompletionApproval()` is also checked. Only when both pass is the effective status `complete`. This derivation is read-only and does not mutate the state file.
+
+`clarify_intent`, `outline`, `detail`, and `write_tests` also accept evidence-based **next-step auto-repair**: when `next-step` finds one of these steps `pending` in the effective view, evidence already resolves it to `complete` inside the snapshot — no write-back occurs (Approach B). This resolves compaction gaps where the step completed but the marker was lost.
 
 `research`, `outline`, `detail`, and `write_tests` can be bypassed with `skipped` status via
 their respective `NOT_NEEDED` sentinels (e.g. `echo "<<WORKFLOW_RESEARCH_NOT_NEEDED: {reason}>>"`)
@@ -141,6 +178,9 @@ Session start → session-start.js (SessionStart hook)
       markers from SessionStart and PostCompact entries (in file order)
     tries each collected ID in reverse order (PostCompact/most-recent first):
       skip if: no state file, branch mismatch, or all-pending
+        (all-pending guard: a session whose every step is pending was abandoned
+         before doing any real work — inheriting it would overwrite a genuine
+         in-progress session's state; skip and try the next collected ID — #1305)
       if user_verification=complete: stop trying this JSONL (task done, start fresh)
       else: copies matching session's steps (state inheritance)
     if no match found in any transcript: creates fresh state with all steps pending
@@ -181,6 +221,16 @@ git commit attempt → workflow-gate.js (PreToolUse hook, full gate)
     modifications. Skipped on `git -c workflow.wip=1` or WORKTREE_OFF marker.
     Fail-open on error (git exec failure); CLI path (bin/check-unstaged-tracked.sh) is fail-safe.
     Detection logic: hasUnstagedTrackedChanges() in hooks/workflow-gate/staged-evidence.js.
+  Gate 2 (code-size HARD limit, #1701): runs `bash bin/review-code-size --staged` against the
+    staged index and blocks when any staged code file exceeds the 500-line HARD limit
+    (rules/coding/file-split.md). The script owns thresholds and line counting (CPR-2);
+    the hook only maps exit 1 → block. Line counts come from the staged blob
+    (`git show :<file>`), not the working tree, so the commit that performs a split passes.
+    Not skipped by the docs-only short-circuit, `workflow.wip=1`, or WORKTREE_OFF —
+    only WORKFLOW_OFF bypasses it (early return). Fails closed on infrastructure errors
+    (AGENTS_CONFIG_DIR unresolved, script missing, bash not on PATH, unexpected exit code);
+    fails open only on the 3s spawn timeout.
+    Implementation: checkCodeSizeHardLimit() in hooks/workflow-gate/code-size-gate.js.
   loads ~/.claude/projects/workflow/<session_id>.json
   docs-only short-circuit: if ALL staged files match the human-facing docs allowlist
     (docs/*.md or root README/CHANGELOG/CONTRIBUTING/LICENSE.md),
@@ -205,7 +255,7 @@ recent session_id in any given JSONL file.
 
 Hooks receive `session_id` via hook stdin JSON, but bash scripts and standalone Node CLIs have
 no such channel. They all resolve through one canonical implementation:
-`hooks/lib/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
+`hooks/workflow-state/session-id.js` (`resolveSessionId()`) — a 7-step chain: hook ctx input →
 `CLAUDE_CODE_SESSION_ID` → `CLAUDE_ENV_FILE` → `CLAUDE_SESSION_ID` → `ctx.transcriptPath` →
 `WORKTREE_NOTES.md` → JSONL mtime scan (gated by an `isSameGitRepo` cross-repo guard). Bash
 callers reach it via the `bin/resolve-session-id` bridge (stdout = sid, exit 2 when
@@ -236,7 +286,7 @@ node bin/workflow/next-step --session $CLAUDE_SESSION_ID
 
 Output is four `KEY=value` lines: `ACTION` (`invoke|done|blocked|abort`), `NEXT_SKILL`, `NEXT_HINT`, `REASON`. The `NEXT_SKILL` field maps directly to a skill name; non-skill steps (e.g. `branching_complete`, `user_verification`) have an empty `NEXT_SKILL` and a prose `NEXT_HINT` instead.
 
-At the `outline` and `detail` steps only, next-step first checks for an authoritative recorded-verdict skip (#1286): when the orchestrator has recorded a valid `skip_judgment` for the step (`judgment_source` = `orchestrator`, all conditions met), next-step marks the step `skipped` directly and advances — no advisory line, no user-emitted sentinel. The record is written by `bin/workflow/record-skip-judgment` and validated by `hooks/lib/workflow-state/skip-signal-resolver.js` (`hasValidSkipJudgment`). If `markStep` fails to persist the skip, next-step falls through to normal step handling instead of re-entering the skip branch — this guards against unbounded recursion when the mark cannot be written.
+At the `outline` and `detail` steps only, next-step first checks for an authoritative recorded-verdict skip (#1286): when the orchestrator has recorded a valid `skip_judgment` for the step (`judgment_source` = `orchestrator`, all conditions met), next-step marks the step `skipped` directly and advances — no advisory line, no user-emitted sentinel. The record is written by `bin/workflow/record-skip-judgment` and validated by `hooks/workflow-state/skip-signal-resolver.js` (`hasValidSkipJudgment`). If `markStep` fails to persist the skip, next-step falls through to normal step handling instead of re-entering the skip branch — this guards against unbounded recursion when the mark cannot be written.
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
@@ -315,6 +365,9 @@ When detected, the gate skips `user_verification` and Gate 1 (unstaged-tracked
 check). All other automated gates (`run_tests`, `review_security`, `docs`) still
 fire. The gate does NOT mutate state in the WIP path — `user_verification` remains
 `pending`, so the next non-WIP commit re-blocks until the user verifies.
+
+Gate 2 (code-size HARD limit) also continues to fire for WIP commits — a WIP
+commit must not be able to land a file that exceeds the 500-line HARD limit.
 
 The `-c key=value` form is parsed by `parseGitConfigValues` (in
 `hooks/lib/parse-git-args.js`) and only recognized when it appears **before**

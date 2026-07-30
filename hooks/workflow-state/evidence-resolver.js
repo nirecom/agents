@@ -17,10 +17,10 @@
 
 const path = require("path");
 const { execSync, execFileSync } = require("child_process");
-const { getWorkflowPlansDir } = require("../workflow-plans-dir");
+const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { SESSION_ID_VALID_RE } = require("./state-io");
-const { hasStagedDocChanges, hasStagedTestChanges } = require("../../workflow-gate/staged-evidence");
-const { hasWorktreeNotesDocEvidence } = require("../../workflow-gate/worktree-context");
+const { hasStagedDocChanges, hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
+const { hasWorktreeNotesDocEvidence } = require("../workflow-gate/worktree-context");
 
 // Post-merge fallback: checks whether any committed file under tests/ or test/
 // differs from the default branch (origin/HEAD). Returns false on any failure
@@ -58,6 +58,33 @@ function hasUnresolvedReviewCycle(plansDir, sessionId, format) {
   return fs.existsSync(roundFile) || fs.existsSync(ledgerFile);
 }
 
+// Plan-artifact existence check (SSOT for the step → artifact-suffix mapping).
+//
+// Returns true only if the plan artifact file for this step exists on disk.
+// Used by evaluateInheritance (S3) to distinguish a genuine recorded-complete
+// from a synthesized-complete: readState() synthesizes clarify_intent as
+// complete even without the artifact, which would otherwise cause false
+// inheritance. hasCompletionEvidence is deliberately NOT used there because it
+// also checks for an unresolved review cycle, which would block legitimate
+// in-progress-review inheritance.
+const PLAN_ARTIFACT_SUFFIX = Object.freeze({
+  clarify_intent: "intent",
+  outline: "outline",
+  detail: "detail",
+});
+
+function hasPlanArtifact(step, sessionId) {
+  const suffix = PLAN_ARTIFACT_SUFFIX[step];
+  if (!suffix) return false;
+  if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
+  try {
+    const fs = require("fs");
+    return fs.existsSync(path.join(getWorkflowPlansDir(), sessionId + "-" + suffix + ".md"));
+  } catch (e) {
+    return false;
+  }
+}
+
 // Resolve the git repository root used by docs evidence checks.
 // Precedence: opts.repoDir → CLAUDE_PROJECT_DIR → git rev-parse. Returns null
 // on failure (caller treats as no-evidence).
@@ -88,13 +115,9 @@ function resolveRepoDir(opts) {
 function hasCompletionEvidence(step, sessionId, opts = {}) {
   try {
     if (step === "clarify_intent") {
-      // fail-open: reject malformed sessionId before building any path
+      // hasPlanArtifact rejects a malformed sessionId before building any path
       // (defense-in-depth against path traversal; no live unvalidated path today).
-      if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
-      const fs = require("fs");
-      const plansDir = getWorkflowPlansDir();
-      const intentPath = path.join(plansDir, sessionId + "-intent.md");
-      return fs.existsSync(intentPath);
+      return hasPlanArtifact("clarify_intent", sessionId);
     }
     if (step === "docs") {
       const repoDir = resolveRepoDir(opts);
@@ -102,18 +125,12 @@ function hasCompletionEvidence(step, sessionId, opts = {}) {
       return hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir);
     }
     if (step === "outline") {
-      if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
-      const fs = require("fs");
-      const plansDir = getWorkflowPlansDir();
-      if (!fs.existsSync(path.join(plansDir, sessionId + "-outline.md"))) return false;
-      return !hasUnresolvedReviewCycle(plansDir, sessionId, "outline-plan");
+      if (!hasPlanArtifact("outline", sessionId)) return false;
+      return !hasUnresolvedReviewCycle(getWorkflowPlansDir(), sessionId, "outline-plan");
     }
     if (step === "detail") {
-      if (!sessionId || !SESSION_ID_VALID_RE.test(sessionId)) return false;
-      const fs = require("fs");
-      const plansDir = getWorkflowPlansDir();
-      if (!fs.existsSync(path.join(plansDir, sessionId + "-detail.md"))) return false;
-      return !hasUnresolvedReviewCycle(plansDir, sessionId, "detail-plan");
+      if (!hasPlanArtifact("detail", sessionId)) return false;
+      return !hasUnresolvedReviewCycle(getWorkflowPlansDir(), sessionId, "detail-plan");
     }
     if (step === "write_tests") {
       const repoDir = resolveRepoDir(opts);
@@ -172,4 +189,4 @@ function describeEvidence(step) {
   return [];
 }
 
-module.exports = { hasCompletionEvidence, describeEvidence };
+module.exports = { hasCompletionEvidence, describeEvidence, hasPlanArtifact };

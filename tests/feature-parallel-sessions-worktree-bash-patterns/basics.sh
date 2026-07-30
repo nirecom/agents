@@ -2,31 +2,42 @@
 
 # ============ Normal-block cases ============
 #
-# Post-#1296/#1400/#1401 retire: the rm/cp/mv/posix-redir/pwsh/git WRITE_PATTERNS
-# entries were removed from classify(). Each such command's local-write blocking
-# now lives at the enforce-worktree fast-allow gate via an IR predicate. The
-# migrated contract is: classify()=="read" AND the matching isXWriteIR() is true
-# (assert_write_ir). Commands whose patterns were NOT retired (sed -i / perl -i /
-# patch / touch / pwsh-encoded / heredoc / here-string / interpreter-c) still
-# classify()=="write" (assert_classify), because their detection never moved to
-# the IR predicate layer.
+# Post-#1296/#1400/#1401/#1402 retire: the rm/cp/mv/posix-redir/pwsh/git/
+# file-op/pwsh-alias/pwsh-encoded WRITE_PATTERNS entries were removed from
+# classify(). Each such command's local-write blocking now lives at the
+# enforce-worktree fast-allow gate via an IR predicate. The migrated contract is:
+# classify()=="read" AND the matching isXWriteIR() is true (assert_write_ir).
+# Only here-string (grep <<<) remains in WRITE_PATTERNS directly.
 
 # STILL-WRITE cases: classify() still returns "write" (patterns not retired).
 STILL_WRITE_CASES=(
     'grep <<<"input"'      # here-string (posix kind, not retired)
-    '-EncodedCommand abc'  # pwsh-encoded (not retired)
-    '-enc abc'
-    '--% Set-Content foo'  # ps-stop-parsing (not retired)
-    "sed -i 's/a/b/' f"    # file-op sed-inplace (not retired)
-    'perl -i.bak f'        # file-op perl-inplace (not retired)
-    'patch -p1 < x'        # file-op patch (not retired)
-    'touch f'              # file-op touch (not retired)
-    # pwsh-ALIAS forms (sc/ac/ni/ri) keep their WRITE_PATTERNS entries — only the
-    # full cmdlet forms (Set-Content / New-Item / …) were retired to the IR layer.
+)
+
+# RETIRED extended-file-op writes (#1402 canary-7): classify=read + isExtendedFileOpWriteIR=true.
+EXTENDED_FILEOP_CASES=(
+    "sed -i 's/a/b/' f"
+    'perl -i.bak f'
+    'patch -p1 < x'
+    'touch f'
+)
+
+# RETIRED pwsh-alias writes (#1402 canary-7): classify=read + isPwshWriteIR=true.
+PWSH_ALIAS_CASES=(
     'sc foo'
     'ac foo'
     'ni foo'
     'ri foo'
+)
+
+# Bare pwsh-encoded forms WITHOUT pwsh/powershell prefix: documented false negatives.
+# isEncodedCommandWriteIR is scoped to pwsh/powershell interpreter prefix (#1402).
+# classify=read + isEncodedCommandWriteIR=false for bare -enc/-EncodedCommand/--%
+# without an interpreter prefix. Real obfuscation uses `pwsh -enc <base64>` (caught).
+ENCODED_BARE_FN_CASES=(
+    '-EncodedCommand abc'
+    '-enc abc'
+    '--% Set-Content foo'
 )
 
 # RETIRED posix-redir writes: classify=read + isPosixRedirWriteIR=true.
@@ -114,13 +125,14 @@ GIT_WRITE_CASES=(
 )
 
 test_heredoc_token_classified_write() {
+    # #1679 S-1: cat + safe body collapses to "read" via isSafeHeredocOnly gate.
     local cmd='cat <<EOF
 hello
 EOF'
-    assert_classify "heredoc <<EOF" "$cmd" "write"
+    assert_classify "heredoc <<EOF" "$cmd" "read"
     assert_classify "heredoc <<-EOF" 'cat <<-EOF
 x
-EOF' "write"
+EOF' "read"
 }
 
 test_write_cases() {
@@ -139,6 +151,15 @@ test_write_cases() {
     done
     for c in "${GIT_WRITE_CASES[@]}"; do
         assert_write_ir "git-write[$c]" "$c" git
+    done
+    for c in "${EXTENDED_FILEOP_CASES[@]}"; do
+        assert_write_ir "extfileop[$c]" "$c" extfileop
+    done
+    for c in "${PWSH_ALIAS_CASES[@]}"; do
+        assert_write_ir "pwsh-alias[$c]" "$c" pwsh
+    done
+    for c in "${ENCODED_BARE_FN_CASES[@]}"; do
+        assert_classify "encoded-bare-fn[$c]" "$c" "read"
     done
     for c in "${PKG_MGR_CASES[@]}"; do
         assert_write_ir "pkg-mgr[$c]" "$c" pkgmgr
@@ -323,8 +344,11 @@ test_security_compound_destructive() {
 }
 
 test_security_encoded_bypass() {
-    # pwsh-encoded pattern was NOT retired → classify still returns "write".
-    assert_classify "PowerShell -enc bypass" '-enc SQBuAHYAbwBrAGUA' "write"
+    # Bare -enc without pwsh/powershell prefix: documented FN since #1402 canary-7.
+    # isEncodedCommandWriteIR is scoped to pwsh/powershell interpreter prefix.
+    assert_classify "bare -enc (documented FN, no pwsh prefix)" '-enc SQBuAHYAbwBrAGUA' "read"
+    # Real obfuscation form (pwsh prefix present) IS caught by isEncodedCommandWriteIR.
+    assert_write_ir "pwsh -enc (real obfuscation form)" 'pwsh -enc SQBuAHYAbwBrAGUA' encoded
 }
 
 test_documented_python_false_negative() {

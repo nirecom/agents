@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/lib/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
+# Tests: hooks/workflow-state.js, hooks/workflow-gate.js, hooks/workflow-mark.js, skills/clarify-intent/SKILL.md, skills/workflow-init/SKILL.md
 # Tags: workflow, gate, hook, init, routing, scope:common
 # L3 gap (what this test does NOT catch):
 # - None: these are static SKILL.md content assertions + workflow-state.js unit/integration tests.

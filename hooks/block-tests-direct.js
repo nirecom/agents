@@ -4,7 +4,7 @@
 // Fail-open: any error path approves rather than blocking.
 
 const fs = require("fs");
-const { resolveSessionId, readState } = require("./lib/workflow-state");
+const { resolveSessionId, readState } = require("./workflow-state");
 const { getPathSegments } = require("./lib/path-match");
 
 const DENY_MESSAGE =

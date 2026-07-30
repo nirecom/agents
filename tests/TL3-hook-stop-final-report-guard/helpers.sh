@@ -5,7 +5,7 @@
 # WSL-via-Windows bridge: CLAUDECODE not propagated, global settings read from Windows profile — test may pass on WSL but fail on macOS native
 
 # Two-directory env var system:
-#   CLAUDE_WORKFLOW_DIR — state files and turn markers (hooks/lib/workflow-state/state-io.js)
+#   CLAUDE_WORKFLOW_DIR — state files and turn markers (hooks/workflow-state/state-io.js)
 #   WORKFLOW_PLANS_DIR  — plans-dir fixtures (hooks/lib/workflow-plans-dir.js; MUST be absolute)
 
 run_with_timeout() {

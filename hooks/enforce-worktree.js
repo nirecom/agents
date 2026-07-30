@@ -21,7 +21,7 @@ const path = require("path");
 
 try { require("./lib/load-env").loadDefaultEnv(); } catch (e) { /* fail-open */ }
 
-const { resolveSessionId } = require("./lib/workflow-state");
+const { resolveSessionId } = require("./workflow-state");
 const { stripQuotedArgs } = require("./lib/strip-quoted-args");
 const { detectWritePredicate } = require("./enforce-worktree/write-detector");
 const { parse } = require("./lib/command-ir");

@@ -221,8 +221,14 @@ build_mark_json() {
 
 run_gate() {
     local cwd="$1" json="$2"; shift 2
-    echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$cwd" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" "$@" node "$GATE_HOOK" 2>/dev/null
+    local common_dir main_dir=""
+    common_dir="$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
+    if [ -n "$common_dir" ]; then
+        main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$cwd" "$common_dir" 2>/dev/null)" || main_dir=""
+    fi
+    local env_args=("CLAUDE_PROJECT_DIR=$cwd" "CLAUDE_WORKFLOW_DIR=$WORKFLOW_DIR")
+    [ -n "$main_dir" ] && env_args+=("AGENTS_CONFIG_DIR=$main_dir")
+    echo "$json" | run_with_timeout 30 env "${env_args[@]}" "$@" node "$GATE_HOOK" 2>/dev/null
 }
 
 run_mark() {
@@ -375,11 +381,20 @@ if is_block "$RES_14"; then pass "C14. detached HEAD in worktree + uv:pending â†
 else fail "C14. expected block (detached HEAD is not feature-branch worktree context), got: $RES_14"; fi
 
 # 15. Linked worktree on protected branch (e.g. main) + git commit + uv:pending â†’ block
-PAIR_15="$(setup_linked_worktree "secC-wt15")"
-MAIN_15="${PAIR_15%|*}"
-WT_15="${PAIR_15#*|}"
-git -C "$WT_15" checkout -q -b temp-redirect 2>/dev/null || true
-git -C "$WT_15" checkout -q main 2>/dev/null || true
+# git prevents two worktrees sharing the same branch. Switch the primary to 'develop'
+# first so 'main' is free to be checked out in the linked worktree.
+MAIN_15="$TMPDIR_BASE/secC-15-main"
+mkdir -p "$MAIN_15"
+git -C "$MAIN_15" init -q -b main
+git -C "$MAIN_15" config user.email "test@example.com"
+git -C "$MAIN_15" config user.name "Test"
+git -C "$MAIN_15" config core.hooksPath /dev/null
+echo "init" > "$MAIN_15/README.md"
+git -C "$MAIN_15" add README.md
+git -C "$MAIN_15" commit -q -m "initial"
+git -C "$MAIN_15" checkout -q -b develop
+WT_15="$TMPDIR_BASE/secC-15-wt"
+git -C "$MAIN_15" worktree add -q "$WT_15" main
 SID_15="c15-$$"
 write_state "$SID_15" "$(state_json "$SID_15" "main" "pending" "complete")"
 RES_15="$(run_gate "$WT_15" "$(build_gate_json 'git commit -m x' "$SID_15" "$WT_15")")"

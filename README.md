@@ -272,7 +272,7 @@ skills/            — slash commands (/clarify-intent, /make-outline-plan, /mak
 copilot/           — Copilot-specific configuration (VS Code settings scripts)
 hooks/             — git and Claude Code/Copilot hook scripts
 agents/            — agent definition files for work that needs judgement (outline-planner, detail-planner, their reviewers, survey-code, supervisor, …) — Claude Code only
-bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-cc-repair, and other tools
+bin/               — doc-append, doc-rotate, session-sync, scan-outbound, review-code-codex, review-plan-codex, review-loop-verdict, review-prompt-size, extract-accepted-tradeoffs, vscode-cc-repair, measure-norm-docs, count-subagents, and other tools
 bin/worker-dispatch.js — single entrypoint for deterministic workers (test-runner, worktree-copy, worktree-backup, doc-append, issue-reconcile, session-close-gate); skills dispatch these as plain scripts instead of spending a subagent on them
 bin/worker-dispatch/ — the dispatcher's worker modules, argument validators, and stdout renderers
 bin/lib/           — shared libraries used by two or more bin/ entrypoints (codex-core.sh, gh-outbound-guard.sh, …)

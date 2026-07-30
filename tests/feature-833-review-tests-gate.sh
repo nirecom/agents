@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/lib/workflow-state/state-io.js
+# Tests: hooks/workflow-gate.js, hooks/workflow-mark.js, hooks/workflow-mark/review-tests-handler.js, hooks/workflow-gate/review-tests-evidence.js, hooks/workflow-state/state-io.js
 # Tags: workflow, gate, hook, review-tests, sentinel, stale-token, scope:issue-specific
 #
 # Gate / mark integration tests for the review_tests step (issue #833).
@@ -255,8 +255,14 @@ build_mark_json() {
 
 run_gate() {
     local cwd="$1" json="$2"
-    echo "$json" | run_with_timeout 30 env CLAUDE_PROJECT_DIR="$cwd" \
-        CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node "$GATE_HOOK" 2>/dev/null
+    local common_dir main_dir=""
+    common_dir="$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null)" || common_dir=""
+    if [ -n "$common_dir" ]; then
+        main_dir="$(node -e "const p=require('path');process.stdout.write(p.dirname(p.resolve(process.argv[1],process.argv[2])))" -- "$cwd" "$common_dir" 2>/dev/null)" || main_dir=""
+    fi
+    local env_args=("CLAUDE_PROJECT_DIR=$cwd" "CLAUDE_WORKFLOW_DIR=$WORKFLOW_DIR")
+    [ -n "$main_dir" ] && env_args+=("AGENTS_CONFIG_DIR=$main_dir")
+    echo "$json" | run_with_timeout 30 env "${env_args[@]}" node "$GATE_HOOK" 2>/dev/null
 }
 
 run_mark() {

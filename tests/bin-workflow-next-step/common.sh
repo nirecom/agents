@@ -17,11 +17,11 @@ run_with_timeout() {
 }
 
 # Windows-native path to skip-signal-resolver.js (used by plant_valid_skip).
-SKIP_JUDGMENT_RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js")"
+SKIP_JUDGMENT_RESOLVER_N="$(cygpath -m "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" 2>/dev/null || echo "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js")"
 
 # Guard: returns 0 if recordSkipJudgment is available, non-zero otherwise.
 api_exists() {
-  [ -f "$NEXT_STEP_AGENTS_DIR/hooks/lib/workflow-state/skip-signal-resolver.js" ] || return 1
+  [ -f "$NEXT_STEP_AGENTS_DIR/hooks/workflow-state/skip-signal-resolver.js" ] || return 1
   run_with_timeout node -e "
     const r = require('$SKIP_JUDGMENT_RESOLVER_N');
     if (typeof r.recordSkipJudgment !== 'function') process.exit(1);
@@ -96,6 +96,9 @@ JSON_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{
 # closes_issues absent, but we've already passed clarify_intent — should NOT be blocked.
 JSON_NOT_BLOCKED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"pending"},"outline":{"status":"pending"},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}}}'
 
+# #1681: outline recorded as skipped, but its skip_verdict was vetoed.
+JSON_OUTLINE_VETOED='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"skipped","skip_reason":"speculative","skip_verdict":{"verdict":"veto","source":"skip-verifier","recorded_at":"2026-07-01T00:00:00.000Z"}},"detail":{"status":"pending"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1681]}'
+
 JSON_CORRUPT='{invalid json'
 
 # review_tests complete while write_tests still pending — impossible ordering.
@@ -136,3 +139,7 @@ JSON_WF_CODE_EXPLICIT='{"workflow_type":"wf-code","steps":{"workflow_init":{"sta
 
 # migration: old wf-plan state file must be treated as wf-meta via readState() migration shim
 JSON_WF_PLAN_LEGACY='{"workflow_type":"wf-plan","steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"pending"},"write_tests":{"status":"pending"},"review_tests":{"status":"pending"},"run_tests":{"status":"pending"},"review_security":{"status":"pending"},"docs":{"status":"pending"},"user_verification":{"status":"pending"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[721]}'
+
+# #1161: user_verification reset to pending after gh pr merge (reset_reason=post-merge).
+# next-step must skip it and advance to cleanup.
+JSON_UV_POST_MERGE='{"steps":{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"complete"},"outline":{"status":"complete"},"detail":{"status":"complete"},"branching_complete":{"status":"complete"},"write_tests":{"status":"complete"},"review_tests":{"status":"complete"},"run_tests":{"status":"complete"},"review_security":{"status":"complete"},"docs":{"status":"complete"},"user_verification":{"status":"pending","reset_reason":"post-merge"},"cleanup":{"status":"pending"},"pre_final_report_gate":{"status":"pending"}},"closes_issues":[1161]}'

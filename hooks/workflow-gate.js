@@ -9,10 +9,9 @@ const {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   readState,
-  markStep,
-  hasCompletionEvidence,
   getSkippableSteps,
-} = require("./lib/workflow-state");
+  reconcileEffectiveState,
+} = require("./workflow-state");
 
 const { isMergeToProtectedCommand, getProtectedBranches } = require("./lib/merge-detect");
 const { getWorkflowPlansDir } = require("./lib/workflow-plans-dir");
@@ -351,9 +350,31 @@ if (require.main === module) {
         } catch (e) { console.error(`workflow-gate: ${e.message}`); }
       }
       if (!isPlansAllowed) {
+        // Derived view (#1681): Tier 1/Tier 2 read the reconciled snapshot, not the
+        // raw record — so evidence-resolved steps clear the gate without the gate
+        // ever writing state back (Approach B replaces the old #1094 self-repair
+        // markStep).
+        // Security: no repoDir here — the early gate only reads workflow_init and
+        // clarify_intent, neither of which uses repoDir for evidence. Supplying
+        // toolInput.cwd would route git execs into an unvalidated path (#H1).
+        // Fail-closed: snapshot failure falls back to raw state, not "complete" (#H2).
+        let earlySnapshot = null;
+        try {
+          earlySnapshot = reconcileEffectiveState(earlyState, sessionId, {
+            isWfMeta: earlyState.workflow_type === "wf-meta",
+            evidencePolicy: "staged-only",
+          });
+        } catch (e) { earlySnapshot = null; }
+        const earlyStatus = (step) => {
+          if (!earlySnapshot || !earlySnapshot.steps) {
+            // Fall back to raw state on error (fail-closed, matching the commit gate).
+            return (earlyState && earlyState.steps && earlyState.steps[step] || {}).status || "pending";
+          }
+          return (earlySnapshot.steps[step] || {}).status || "pending";
+        };
+
         // Tier 1: workflow_init
-        const wi = earlyState.steps && earlyState.steps.workflow_init;
-        const wiStatus = wi ? wi.status : "pending";
+        const wiStatus = earlyStatus("workflow_init");
         if (wiStatus !== "complete" && wiStatus !== "skipped") {
           block(
             "workflow-gate: workflow_init has not been completed for this session.\n" +
@@ -365,16 +386,12 @@ if (require.main === module) {
             "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_workflow_init: {reason}>>\""
           );
         }
-        // Tier 2: clarify_intent (only reached once workflow_init has cleared)
-        const ci = earlyState.steps && earlyState.steps.clarify_intent;
-        const ciStatus = ci ? ci.status : "pending";
+        // Tier 2: clarify_intent (only reached once workflow_init has cleared).
+        // The #1094 evidence self-repair is now derivation, not a write: an
+        // existing intent.md already resolves clarify_intent to complete inside
+        // the snapshot, so the gate simply reads it and stays dormant.
+        const ciStatus = earlyStatus("clarify_intent");
         if (ciStatus !== "complete" && ciStatus !== "skipped") {
-          // Evidence-based self-repair (#1094): if intent.md already exists,
-          // mark clarify_intent complete and fall through (gate clears) instead
-          // of hard-blocking. fail-open: markStep error leaves the gate dormant.
-          if (hasCompletionEvidence("clarify_intent", sessionId)) {
-            try { markStep(sessionId, "clarify_intent", "complete"); } catch (e) { /* fail-open */ }
-          } else {
           block(
             "workflow-gate: clarify_intent has not been completed for this session.\n" +
             "Tool \"" + toolName + "\" is blocked until intent is locked in.\n\n" +
@@ -385,7 +402,6 @@ if (require.main === module) {
             "For docs-only edits: echo \"<<WORKFLOW_CLARIFY_INTENT_NOT_NEEDED: docs-only edit>>\"\n\n" +
             "To reset workflow state: echo \"<<WORKFLOW_RESET_FROM_clarify_intent: {reason}>>\""
           );
-          }
         }
         // Tier 3: session-bound worktree exists but CWD is outside it (#1610).
         try {
@@ -587,6 +603,14 @@ if (require.main === module) {
     }
   }
 
+  // Gate 2 (issue #1701): HARD file-size limit. bin/review-code-size --staged owns the
+  // thresholds and line counting (CPR-2); this call site only maps exit 1 -> block.
+  {
+    const { checkCodeSizeHardLimit } = require("./workflow-gate/code-size-gate");
+    const sizeVerdict = checkCodeSizeHardLimit(repoDir);
+    if (sizeVerdict.action === "block") block(sizeVerdict.reason);
+  }
+
   // session_id is required — fail-safe if missing
   if (!sessionId) {
     block(
@@ -607,21 +631,51 @@ if (require.main === module) {
     );
   }
 
+  // Derived view for the commit gate (#1681). resolveAll:true — every gated step
+  // must be judged, not just those up to the current one. evidencePolicy
+  // "staged-only" reproduces the gate's historical write_tests rule (staged
+  // tests/ only; the post-merge committed-tests fallback must not satisfy a
+  // commit-time gate). A veto-de-skipped or post-veto-reset step reads as
+  // `pending` here and therefore blocks the commit.
+  // Fail-open: on snapshot failure fall back to the raw record.
+  let commitSnapshot = null;
+  try {
+    commitSnapshot = reconcileEffectiveState(state, sessionId, {
+      repoDir,
+      isWfMeta: state.workflow_type === "wf-meta",
+      resolveAll: true,
+      evidencePolicy: "staged-only",
+    });
+  } catch (e) { commitSnapshot = null; }
+
   // Check all steps
   const incomplete = [];
   // Annotates entries pushed to `incomplete` — currently used for review_tests
   // stale-token / no-staged-tests messaging (issue #833).
   const incompleteReasons = {};
-  // Tracks whether write_tests was bypassed by evidence (staged tests/) in this
-  // gate evaluation. Used to allow symmetric review_tests bypass (issue #833):
-  // when write_tests itself needs evidence, review_tests should share it.
-  let writeTestsEvidenceBypassed = false;
   // Session-specific skippable steps: BUGFIX sessions exclude write_tests/review_tests (#1147).
   const skippable = getSkippableSteps(sessionId);
+  // Tracks whether write_tests was bypassed by evidence (staged tests/) in this
+  // gate evaluation. Used to allow symmetric review_tests bypass (issue #833).
+  // Case 1: snapshot resolved write_tests from staged evidence (pending → evidenced).
+  // Case 2: BUGFIX+skipped — write_tests excluded from skippable but staged tests/
+  //         exist; staged evidence bypasses the block symmetrically (#1147 C11).
+  const writeTestsEvidenceBypassed = (function () {
+    const snapshotWt = commitSnapshot && commitSnapshot.steps && commitSnapshot.steps.write_tests;
+    if (snapshotWt && snapshotWt.resolved_from === "evidence") return true;
+    if (
+      snapshotWt && snapshotWt.status === "skipped" &&
+      !skippable.includes("write_tests") &&
+      hasStagedTestChanges(repoDir)
+    ) return true;
+    return false;
+  }());
   for (const step of VALID_STEPS) {
     if (NON_GATE_STEPS.includes(step)) continue;
     const stepState = state.steps && state.steps[step];
-    const status = stepState ? stepState.status : "pending";
+    const status = (commitSnapshot && commitSnapshot.steps && commitSnapshot.steps[step])
+      ? commitSnapshot.steps[step].status
+      : (stepState ? stepState.status : "pending");
 
     // --- review_tests special-case (delegated to review-tests-checker.js) ---
     if (step === "review_tests") {
@@ -637,6 +691,8 @@ if (require.main === module) {
 
     if (status === "complete") continue;
     if (status === "skipped" && skippable.includes(step)) continue;
+    // BUGFIX: write_tests skipped (excluded from skippable) but bypassed by staged tests/ evidence.
+    if (step === "write_tests" && writeTestsEvidenceBypassed) continue;
     // docs-only short-circuit: skip all steps except user_verification
     if (docsOnly && step !== "user_verification") continue;
     // Worktree context: defer user_verification to merge-time gate.
@@ -647,12 +703,9 @@ if (require.main === module) {
     // #1112: defer cleanup to /worktree-end boundary; intermediate worktree
     // commits must not be blocked by a pending cleanup step.
     if (step === "cleanup" && isWorktreeContext(repoDir)) continue;
-    // Evidence-based overrides: staged files are proof of completion
-    if (step === "write_tests" && hasStagedTestChanges(repoDir)) {
-      writeTestsEvidenceBypassed = true;
-      continue;
-    }
-    if (step === "docs" && (hasStagedDocChanges(repoDir) || hasWorktreeNotesDocEvidence(repoDir))) continue;
+    // Evidence-based overrides for write_tests are no longer inline: the snapshot
+    // above already resolves pending write_tests (evidencePolicy "staged-only").
+    // The skipped+BUGFIX case is handled by the writeTestsEvidenceBypassed check above.
     incomplete.push(step);
   }
 

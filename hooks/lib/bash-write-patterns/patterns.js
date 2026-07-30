@@ -31,9 +31,15 @@ const WRITE_PATTERNS = [
   // posix-redirect + tee (kind posix-redir) retired (#1400): now owned by
   // isPosixRedirWriteIR (IR-based) reached via the enforce-worktree fast-allow gate.
   // here-doc: <<EOF, <<-EOF, <<'EOF', <<"EOF"
-  { name: "here-doc", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)<<-?['"]?\w/ },
+  // spanAware:true (#1679 S-1): tested against a stripped form to avoid FP from
+  // <<'EOF' / <<EOF prose inside a double-quoted argument.
+  // stripDQOnly:true (#1679 S-1 fix): strip ONLY DQ content (not SQ) so that the
+  // heredoc delimiter <<'EOF' is preserved for pattern matching. Full stripQuotedArgs
+  // strips the SQ span 'EOF', making bash <<'EOF' indistinguishable from bare <<.
+  { name: "here-doc", kind: "posix", regex: /(?:^|[\s;|&])(?:\d*)<<-?['"]?\w/, spanAware: true, stripDQOnly: true },
   // here-string: <<<
-  { name: "here-string", kind: "posix", regex: /<<</ },
+  // stripDQOnly:true: same rationale as here-doc (SQ spans must not be stripped).
+  { name: "here-string", kind: "posix", regex: /<<</, spanAware: true, stripDQOnly: true },
   // PowerShell write cmdlets (kind pwsh) retired (#1400): now owned by isPwshWriteIR.
   // PowerShell write aliases (kind pwsh-alias) retired (#1402 canary-7): now owned by
   // isPwshWriteIR (IR-based) via PWSH_CMDLET_RE in bash-write-targets.js.
@@ -45,8 +51,9 @@ const WRITE_PATTERNS = [
   // here-doc/here-string here-* entries are RETAINED (not retired #1402): they are
   // QUOTING_ONLY markers required by the Group A override + isSafeHeredocOnly gate.
   // isHereWriteIR (bash-write-targets/here.js) is the IR-side read/write companion.
-  { name: "pwsh-here-single", kind: "pwsh-here", regex: /@'[\s\S]*?'@/ },
-  { name: "pwsh-here-double", kind: "pwsh-here", regex: /@"[\s\S]*?"@/ },
+  // spanAware:true: @'…'@ / @"…"@ syntax inside a DQ arg is prose, not a here-string.
+  { name: "pwsh-here-single", kind: "pwsh-here", regex: /@'[\s\S]*?'@/, spanAware: true },
+  { name: "pwsh-here-double", kind: "pwsh-here", regex: /@"[\s\S]*?"@/, spanAware: true },
   // Destructive file operations (kind file-op) retired (#1402 canary-7):
   // isExtendedFileOpWriteIR (bash-write-targets/file-op.js) is the SSOT.
   // Flag-gated verbs (sed -i, perl -i, tar -x, dd of=) require explicit flags.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/lib/workflow-state/is-bugfix-session.js, hooks/lib/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-gate.js, hooks/workflow-gate/review-tests-checker.js
+# Tests: hooks/workflow-state/is-bugfix-session.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, hooks/workflow-gate.js, hooks/workflow-gate/review-tests-checker.js
 # Tags: workflow, gate, bugfix, write-tests, scope:issue-specific
 # L2 broad integration tests for #1147 T0-A: BUGFIX write_tests gate
 # L3 gap (what this test does NOT catch):

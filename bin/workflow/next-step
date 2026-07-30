@@ -9,18 +9,19 @@ const {
   getStatePath,
   resolveSessionId,
   markStep,
-} = require("../../hooks/lib/workflow-state");
+  hasPlanArtifact,
+} = require("../../hooks/workflow-state");
 const {
   effectiveStatus,
   reconcileEffectiveState,
-} = require("../../hooks/lib/workflow-state/effective-state");
+} = require("../../hooks/workflow-state/effective-state");
 const {
   APPROVAL_GATED_STEPS,
   isApprovalGatedStep,
   UnapprovedCompletionError,
   confirmSentinelFor,
   recoveryFor,
-} = require("../../hooks/lib/workflow-state/completion-approval");
+} = require("../../hooks/workflow-state/completion-approval");
 
 // Single resolution of the git repo root (forwarded to evidence predicates).
 // Precedence: CLAUDE_PROJECT_DIR → git rev-parse → cwd.
@@ -77,13 +78,13 @@ const STEP_DESC = Object.freeze({
 
 const STEP_HINT = Object.freeze({
   branching_complete: "Emit WORKFLOW_BRANCHING_COMPLETE sentinel. Run /worktree-start first if needed, then enter the worktree (EnterWorktree tool, or cd) before any Edit/Write — see skills/_shared/worktree-transition.md.",
-  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol.",
+  user_verification: "ENFORCE_WORKTREE=on: do NOT emit here — defer to /worktree-end WE-8. ENFORCE_WORKTREE=off: emit just before /commit-push. See skills/_shared/user-verified.md for preflight and protocol. If you have already emitted the sentinel and then ran gh pr merge, the step is already complete — do not emit again.",
   cleanup: "Run /worktree-end (worktree path), delete branch + git push origin --delete (branch path), or echo WORKFLOW_MARK_STEP_cleanup_skipped (main/no-worktree path).",
   pre_final_report_gate: "Run /session-close from the main worktree.",
 });
 
 // WF_META_AUTO_SKIP / effectiveStatus now live in
-// hooks/lib/workflow-state/effective-state.js (SSOT, imported above).
+// hooks/workflow-state/effective-state.js (SSOT, imported above).
 
 // ---- Import-time assertions -----------------------------------------------
 
@@ -233,11 +234,24 @@ function renderListWithState(sid) {
 
   const isWfMeta = (state.workflow_type === "wf-meta");
 
+  // Unified derivation (#1681): --list must show exactly what the gates see,
+  // including veto de-skip and post-veto reset. resolveAll:true because a list
+  // has no "current step" cutoff — every row is rendered.
+  let listSnapshot;
+  try {
+    listSnapshot = reconcileEffectiveState(state, sid, {
+      repoDir: resolveRepoDir(), isWfMeta, resolveAll: true,
+    });
+    if (!listSnapshot || !listSnapshot.steps) return renderListPlain();
+  } catch (_) {
+    return renderListPlain();
+  }
+  const listStatus = (step) => (listSnapshot.steps[step] || {}).status || "pending";
+
   // Find current step (first non-complete/non-skipped).
   let currentIdx = -1;
   for (let i = 0; i < VALID_STEPS.length; i++) {
-    const raw = (state.steps[VALID_STEPS[i]] || {}).status || "pending";
-    const s = effectiveStatus(VALID_STEPS[i], raw, isWfMeta);
+    const s = listStatus(VALID_STEPS[i]);
     if (s !== "complete" && s !== "skipped") { currentIdx = i; break; }
   }
 
@@ -247,8 +261,7 @@ function renderListWithState(sid) {
   const lines = [];
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
-    const raw = (state.steps[step] || {}).status || "pending";
-    const s = effectiveStatus(step, raw, isWfMeta);
+    const s = listStatus(step);
     let marker;
     if (s === "complete") {
       marker = "[x]";
@@ -347,6 +360,36 @@ function computeVerdict(rawSid, _didAutoRepair) {
   const snapshot = reconcileEffectiveState(state, sid, { repoDir, isWfMeta });
   const snapStatus = (step) => (snapshot.steps[step] || {}).status;
 
+  // A-4 speculative-skip gate (#1681): an unresolved verdict blocks the whole
+  // walk, not just the terminal "workflow-complete" branch — a pending verdict
+  // means we do not yet know whether the skipped stage is legitimate, so no
+  // downstream step may be advised. The vetoed case is NOT handled here: the
+  // snapshot already de-skips a vetoed step to pending, so the ordinary
+  // currentStep walk below selects it and routes to its planner skill.
+  for (const gatedStep of APPROVAL_GATED_STEPS) {
+    if ((snapshot.steps[gatedStep] || {}).skip_verdict_state !== "pending") continue;
+    // applyRecordedVerdictSkip marks the step skipped with skip_reason="recorded-verdict:..."
+    // THEN writes a pending verdict file, THEN calls computeVerdict recursively. In that
+    // recursive call the pending verdict is already on disk, so this gate would fire and
+    // return blocked instead of advancing. Discriminate by skip_reason: only speculative
+    // skips (written by make-outline-plan/make-detail-plan) block here; recorded-verdict
+    // skips have an already-trusted skip judgment and should pass through.
+    const rawEntry = (state.steps && state.steps[gatedStep]) || {};
+    if (
+      rawEntry.status === "skipped" &&
+      typeof rawEntry.skip_reason === "string" &&
+      rawEntry.skip_reason.startsWith("recorded-verdict:")
+    ) {
+      continue;
+    }
+    emit(
+      "blocked", "",
+      gatedStep + " speculative skip is pending verification by skip-verifier. Re-run next-step after verifier completes.",
+      "speculative-skip-pending"
+    );
+    return;
+  }
+
   // Persist the snapshot's evidence-resolved steps. Called only after the
   // inconsistency scan has passed (or when there is nothing left to scan).
   function persistResolutions() {
@@ -368,42 +411,41 @@ function computeVerdict(rawSid, _didAutoRepair) {
   let currentIdx = -1;
   let currentStep = null;
   for (let i = 0; i < VALID_STEPS.length; i++) {
-    const status = snapStatus(VALID_STEPS[i]);
+    const step = VALID_STEPS[i];
+    const status = snapStatus(step);
     if (status !== "complete" && status !== "skipped") {
+      // post-merge guard: treat user_verification reset by gh pr merge as complete.
+      // Mirrors post-compact.js lines 66-70 (same reset_reason predicate).
+      if (
+        step === "user_verification" &&
+        status === "pending" &&
+        (state.steps["user_verification"] || {}).reset_reason === "post-merge"
+      ) {
+        continue;
+      }
       currentIdx = i;
-      currentStep = VALID_STEPS[i];
+      currentStep = step;
       break;
     }
   }
 
   if (currentStep === null) {
     persistResolutions();
-    // A-4 speculative-skip gate: before declaring done, check whether any
-    // outline/detail step was skipped with an unresolved or vetoed verdict.
-    // skip_verdict absent = legacy skip = fail-open (invoke write-tests to re-confirm).
+    // Reaching here, a skipped gated step can only carry a `confirm` verdict or
+    // none at all: `pending` was blocked by the snapshot gate above, and `veto`
+    // was de-skipped to pending inside reconcileEffectiveState (so currentStep
+    // would not be null). Both remaining cases are fail-open: re-invoke
+    // /write-tests so the skipped stage gets re-confirmed downstream (#1681).
     try {
-      const wfState = require("../../hooks/lib/workflow-state");
-      if (typeof wfState.readSkipVerdict === "function") {
-        for (const gatedStep of ["outline", "detail"]) {
-          const stepData = state.steps[gatedStep];
-          if (!stepData || stepData.status !== "skipped") continue;
-          const sv = wfState.readSkipVerdict(sid, gatedStep);
-          if (sv && sv.verdict === "pending") {
-            emit("blocked", "", gatedStep + " speculative skip is pending verification by skip-verifier. Re-run next-step after verifier completes.", "speculative-skip-pending");
-            return;
-          }
-          if (sv && sv.verdict === "veto") {
-            const resetSkill = gatedStep === "outline" ? "make-outline-plan" : "make-detail-plan";
-            emit("abort", "", "skip-verifier vetoed the " + gatedStep + " skip. Emit WORKFLOW_RESET_FROM_" + gatedStep + ": veto, then re-run /" + resetSkill + ".", "speculative-skip-vetoed");
-            return;
-          }
-          // confirm or no verdict → invoke write-tests unless write_tests was
-          // already explicitly skipped (session opted out of tests entirely).
-          const wtsEntry = state.steps["write_tests"];
-          if (wtsEntry && wtsEntry.status === "skipped") continue;
-          emit("invoke", STEP_TO_SKILL["write_tests"] || "write-tests", "Run /write-tests via the Skill tool.", "write_tests");
-          return;
-        }
+      for (const gatedStep of APPROVAL_GATED_STEPS) {
+        const stepData = state.steps[gatedStep];
+        if (!stepData || stepData.status !== "skipped") continue;
+        // invoke write-tests unless write_tests was already explicitly skipped
+        // (session opted out of tests entirely).
+        const wtsEntry = state.steps["write_tests"];
+        if (wtsEntry && wtsEntry.status === "skipped") continue;
+        emit("invoke", STEP_TO_SKILL["write_tests"] || "write-tests", "Run /write-tests via the Skill tool.", "write_tests");
+        return;
       }
     } catch (_) { /* fail-open */ }
     emit("done", "", "", "workflow-complete");
@@ -480,7 +522,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
         );
         return;
       }
-      const { hasCompletionEvidence: hceGeneric } = require("../../hooks/lib/workflow-state/evidence-resolver");
+      const { hasCompletionEvidence: hceGeneric } = require("../../hooks/workflow-state/evidence-resolver");
       const hasEvidence = hceGeneric(currentStep, sid, { repoDir });
       let genericHint;
       if (hasEvidence && isApprovalGatedStep(currentStep)) {
@@ -516,6 +558,22 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // defensively inside persistResolutions.
   persistResolutions();
 
+  // detail has no usable input when neither the intent nor the outline artifact
+  // exists — /make-detail-plan would draft against nothing. This is reachable
+  // through post-veto reset (#1681), where detail becomes effective-pending while
+  // its upstream artifacts were never produced.
+  if (currentStep === "detail" &&
+      !hasPlanArtifact("clarify_intent", sid) &&
+      !hasPlanArtifact("outline", sid)) {
+    emit(
+      "blocked", "",
+      "detail has no input artifact: neither intent.md nor outline.md exists for this session. " +
+        "Run /clarify-intent first, then /make-outline-plan.",
+      "detail-input-missing"
+    );
+    return;
+  }
+
   const skill = STEP_TO_SKILL[currentStep];
   const hint = skill
     ? ("Run /" + skill + " via the Skill tool.")
@@ -527,7 +585,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // Returns null on any failure/invalid/absent path (caller falls through, no recursion).
   function applyRecordedVerdictSkip(sid, rawSid, stepName, skipReason) {
     try {
-      const wfState = require("../../hooks/lib/workflow-state");
+      const wfState = require("../../hooks/workflow-state");
       const hvsj = wfState.hasValidSkipJudgment;
       const rsjFn = wfState.readSkipJudgment;
       const irvFn = wfState.isRecordedVerdictValid;
@@ -540,7 +598,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
         // A-4: attach speculative skip verdict (pending-verification). Kept AFTER
         // markStep so the read-modify-write preserves skip_reason/skip_judgment.
         try {
-          const wfState2 = require("../../hooks/lib/workflow-state");
+          const wfState2 = require("../../hooks/workflow-state");
           if (typeof wfState2.recordSkipVerdict === "function") {
             wfState2.recordSkipVerdict(sid, stepName, "pending", "next-step-recorded-verdict");
           }
@@ -563,7 +621,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   let skipHint = "";
   if (currentStep === "outline" || currentStep === "detail") {
     try {
-      const { isTrivial } = require("../../hooks/lib/workflow-state/skip-signal-resolver");
+      const { isTrivial } = require("../../hooks/workflow-state/skip-signal-resolver");
       if (isTrivial(sid)) {
         skipHint = currentStep === "outline"
           ? "WORKFLOW_OUTLINE_NOT_NEEDED"

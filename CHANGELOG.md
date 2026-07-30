@@ -128,3 +128,35 @@ Changes: GitHub issue/PR content created or updated mid-session (including auto-
 ### FEATURE: PR #1677 (2026-07-28)
 Background: refactor(#1655): relocate vscode-cc-repair out of bin/lib/ and document apply-by-default
 Changes: `bin/vscode-cc-repair` is now a directory: run it as `bin/vscode-cc-repair/index.js`. Its implementation modules moved out of `bin/lib/`, which is reserved for libraries shared by more than one entrypoint.;README now states explicitly that the tool applies for real unless `--dry-run` is passed, and that `--prune-stub-sessions` renames matched stub session files to `.bak` without asking for confirmation.
+
+### FEATURE: PR #1675 (2026-07-28)
+Background: feat(#1672): add --allow-backdate to doc-append and batch backfill script
+Changes: `/issue-reconcile` can now backfill issues closed long ago. `doc-append --allow-backdate` lifts the ascending-date guard for backfill only, and a new batch script records a whole list of issues in one pass.
+
+### FEATURE: PR #1683 (2026-07-29)
+Background: feat(#1640): lightweight measurement infrastructure
+Changes: Added two read-only measurement commands: `bin/measure-norm-docs`, which reports the size of normative docs against the file-split thresholds, and `bin/count-subagents`, which counts subagent invocations in a session. Added an opt-in `RECORD_STEP_TIMESTAMPS` setting (default `off`) that records when each workflow step started.
+
+### FEATURE: PR #1700 (2026-07-29)
+Background: refactor(#1586): decouple verification-gate ask from RUN_TL3; add RUN_TL4
+Changes: Added a new configuration option, `RUN_TL4` (default `off`), that controls the verification confirmation prompt shown before commit or merge. `RUN_TL3` now controls only which tests are selected and run.;If you previously set `RUN_TL3=on` and relied on that confirmation prompt, it will no longer appear. Add `RUN_TL4=on` to your configuration to keep the previous behaviour.
+
+### FEATURE: PR #1704 (2026-07-29)
+Background: fix(#1679): enforce-worktree write-detection false-positive fixes
+Changes: Fixed main-worktree write guard incorrectly blocking `eval "$(...)"`, `bash -c '...'` wrappers, `$(...)` command substitutions, and heredoc syntax in quoted prose arguments — all sanctioned non-file-write patterns now pass through correctly.
+
+### FEATURE: PR #1703 (2026-07-29)
+Background: feat(#1701): block HARD file-size limit in workflow-gate.js (Gate 2)
+Changes: Gate 2 in `workflow-gate.js` now blocks commits when any staged code file exceeds 500 lines (HARD limit from `rules/coding/file-split.md`). The check reads the staged index blob so a commit that performs a split passes immediately.
+
+### FEATURE: PR #1702 (2026-07-29)
+Background: fix(#1305,#1681,#1091,#1619,#1648,#1674): Approach B read-time state derivation — veto de-skip, stale-state guard, early-gate security hardening
+Changes: Fixed: new workflow sessions no longer inherit stale state from a prior session that was abandoned before any real work began (#1305);Fixed: workflow sessions with a vetoed speculative plan skip now correctly return to the outline or detail planning step (#1681);Fixed: workflow-gate early tier now fails closed on derivation error instead of treating all steps as complete (#1674)
+
+### FEATURE: PR #1707 (2026-07-29)
+Background: fix(#1161): next-step post-merge guard — skip user_verification when reset_reason=post-merge
+Changes: bugfix: next-step no longer re-prompts for user verification after gh pr merge completes the WE-8 step
+
+### FEATURE: PR #1708 (2026-07-29)
+Background: fix(#1706): remove duplicate openInBrowser call from show-user-verified-context.js
+Changes: Fixed: PR URL opened twice in the browser (once on `gh pr create`, once before the USER_VERIFIED approval dialog). Now opens exactly once via `pr-created-open.js`.

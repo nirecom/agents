@@ -41,6 +41,37 @@ run_with_timeout() {
     fi
 }
 
+# Call an IR write predicate. Searches bash-write-targets then patterns.
+# Prints "true"|"false"|"ERROR: ...".
+pred_ir() {
+    local pred="$1" cmd="$2"
+    run_with_timeout 30 node -e "
+      try {
+        const t = require('$_AGENTS_DIR_NODE/hooks/lib/bash-write-targets');
+        const p = require('$_AGENTS_DIR_NODE/hooks/lib/bash-write-patterns/patterns');
+        const {parse} = require('$_AGENTS_DIR_NODE/hooks/lib/command-ir');
+        const fn = t[process.argv[1]] || p[process.argv[1]];
+        if (typeof fn !== 'function') { console.log('ERROR:not-exported'); process.exit(0); }
+        console.log(fn(parse(process.argv[2])) ? 'true' : 'false');
+      } catch (e) {
+        console.log('ERROR: ' + e.message);
+      }
+    " -- "$pred" "$cmd" 2>/dev/null
+}
+
+# Assert classify=read + named IR predicate=true (retired-write new contract).
+assert_write_contract() {
+    local desc="$1" cmd="$2" pred="$3"
+    local cls pval
+    cls="$(classify_cmd "$cmd")"
+    pval="$(pred_ir "$pred" "$cmd")"
+    if [ "$cls" = "read" ] && [ "$pval" = "true" ]; then
+        pass "$desc -> classify=read + ${pred}=true"
+    else
+        fail "$desc: expected classify=read + ${pred}=true, got classify='$cls' ${pred}='$pval'"
+    fi
+}
+
 # Classify a command. Prints "read", "write", or "ERROR: ...".
 classify_cmd() {
     run_with_timeout 30 node -e "
@@ -109,6 +140,32 @@ test_fp_cases() {
         'FP-5: echo "<<WORKFLOW_BRANCHING_COMPLETE>>"' \
         'echo "<<WORKFLOW_BRANCHING_COMPLETE>>"' \
         "read"
+
+    # ----------------------------------------------------------------
+    # #1679: the same class of false positive, one layer up. The retained
+    # quoting-only WRITE_PATTERNS entries (here-doc / here-string /
+    # pwsh-here-single / pwsh-here-double) are scanned against the RAW command
+    # because STRIP_KINDS is empty, so quoted PROSE that merely mentions the
+    # operator is classified write. These are RED until STRIP_KINDS covers them.
+    # ----------------------------------------------------------------
+
+    # FP1679-A: here-doc token quoted inside a --detail argument
+    assert_classify \
+        "FP1679-A: node bin/supervisor-report --detail \"used <<'EOF' heredoc…\"" \
+        'node "$ACD/bin/supervisor-report" --detail "used <<'"'"'EOF'"'"' heredoc in the script" --reporter x' \
+        "read"
+
+    # FP1679-B: here-string operator named in prose
+    assert_classify \
+        'FP1679-B: node bin/supervisor-report --detail "the <<< operator is a here-string"' \
+        'node bin/supervisor-report --detail "the <<< operator is a here-string"' \
+        "read"
+
+    # FP1679-C: pwsh here-string delimiters named in prose
+    assert_classify \
+        "FP1679-C: node bin/x --detail \"uses @'here'@ syntax\"" \
+        'node bin/x --detail "uses @'"'"'here'"'"'@ syntax"' \
+        "read"
 }
 
 # ============================================================
@@ -117,41 +174,41 @@ test_fp_cases() {
 # ============================================================
 
 test_hd_cases() {
-    echo "=== HD regression cases (must remain write) ==="
+    echo "=== HD regression cases ==="
 
-    # HD-1: basic heredoc (multiline)
+    # HD-1: basic heredoc (multiline) — cat + safe body → read (#1679 S-1)
     assert_classify \
         'HD-1: cat <<EOF (multiline)' \
         'cat <<EOF
 hello
 EOF' \
-        "write"
+        "read"
 
-    # HD-2: strip-tabs heredoc (<<-)
+    # HD-2: strip-tabs heredoc (<<-) — cat + safe body → read (#1679 S-1)
     assert_classify \
         'HD-2: cat <<-EOF' \
         'cat <<-EOF
 x
 EOF' \
-        "write"
+        "read"
 
-    # HD-3: single-quoted delimiter (no interpolation)
+    # HD-3: single-quoted delimiter (no interpolation) — cat + quoted → read (#1679 S-1)
     assert_classify \
         "HD-3: cat <<'EOF'" \
         "cat <<'EOF'
 hello
 EOF" \
-        "write"
+        "read"
 
-    # HD-4: double-quoted delimiter
+    # HD-4: double-quoted delimiter — cat + safe body → read (#1679 S-1)
     assert_classify \
         'HD-4: cat <<"EOF"' \
         'cat <<"EOF"
 hello
 EOF' \
-        "write"
+        "read"
 
-    # HD-5: explicit FD number before << at start of command
+    # HD-5: explicit FD number before << at start of command — non-cat prefix → write
     assert_classify \
         'HD-5: 0<<EOF (FD with heredoc at start)' \
         '0<<EOF
@@ -173,7 +230,7 @@ test_existing_suite() {
         return
     fi
     local exit_code
-    run_with_timeout 120 bash "$existing_test"
+    run_with_timeout 300 bash "$existing_test"
     exit_code=$?
     if [ "$exit_code" -eq 0 ]; then
         pass "EX: existing suite exited 0"
@@ -195,11 +252,11 @@ test_edge_cases() {
         'echo "<<WORKFLOW_X>>" && git status' \
         "read"
 
-    # Sentinel followed by write command — compound should be write
-    assert_classify \
-        'EDGE-2: echo "<<WORKFLOW_X>>" && rm foo' \
+    # Sentinel followed by write command — retired file-op: classify=read + isFileOpWriteIR=true
+    assert_write_contract \
+        'EDGE-2: echo "<<WORKFLOW_X>>" && rm foo (compound, retired file-op)' \
         'echo "<<WORKFLOW_X>>" && rm foo' \
-        "write"
+        "isFileOpWriteIR"
 
     # Multiple sentinels, no heredoc
     assert_classify \
@@ -237,8 +294,8 @@ EOF')"
     b="$(classify_cmd 'cat <<EOF
 hello
 EOF')"
-    if [ "$a" = "$b" ] && [ "$a" = "write" ]; then
-        pass "IDEM-2: classify is idempotent for heredoc (write)"
+    if [ "$a" = "$b" ] && [ "$a" = "read" ]; then
+        pass "IDEM-2: classify is idempotent for heredoc (read after #1679 S-1)"
     else
         fail "IDEM-2: classify not idempotent for heredoc: first=$a second=$b"
     fi
@@ -251,17 +308,17 @@ EOF')"
 test_security_cases() {
     echo "=== Security cases ==="
 
-    # Sentinel text in first arg, write op later — must still be write
-    assert_classify \
-        'SEC-1: sentinel + rm (compound should be write)' \
+    # Sentinel text in first arg, write op later — retired file-op: classify=read + isFileOpWriteIR=true
+    assert_write_contract \
+        'SEC-1: sentinel + rm (retired file-op, compound reaches IR gate)' \
         'echo "<<WORKFLOW_COMPLETE>>" ; rm -rf /tmp/x' \
-        "write"
+        "isFileOpWriteIR"
 
-    # Sentinel text injected before git commit
-    assert_classify \
-        'SEC-2: sentinel + git commit (compound should be write)' \
+    # Sentinel text injected before git commit — retired git: classify=read + isGitWriteIR=true
+    assert_write_contract \
+        'SEC-2: sentinel + git commit (retired git-write, compound reaches IR gate)' \
         'echo "<<WORKFLOW_COMPLETE>>" && git commit -m x' \
-        "write"
+        "isGitWriteIR"
 
     # Ensure <<< (here-string) is still write — pattern is different from <<
     assert_classify \

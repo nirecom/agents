@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-[ -f "hooks/lib/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (clarify_intent gate not yet evidence-aware)"; exit 0; }
+[ -f "hooks/workflow-state/evidence-resolver.js" ] || { echo "SKIP: evidence-resolver.js not yet implemented (clarify_intent gate not yet evidence-aware)"; exit 0; }
 
 if ! command -v node >/dev/null 2>&1; then
   echo "SKIP: node not available"
@@ -161,13 +161,14 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# After auto-repair, state should be complete
+# Approach B (read-time derivation) does not write evidence resolutions back to state.
+# The step stays "pending" in the stored state; effective status is computed on read.
 ACTUAL=$(read_state_status "$SID" "clarify_intent")
-if [ "$ACTUAL" = "complete" ]; then
-  echo "PASS: WGE-1b. clarify_intent auto-repaired to complete"
+if [ "$ACTUAL" = "pending" ]; then
+  echo "PASS: WGE-1b. clarify_intent stays pending in stored state (Approach B: no write-back)"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: WGE-1b. expected clarify_intent=complete after auto-repair, got: $ACTUAL"
+  echo "FAIL: WGE-1b. expected clarify_intent=pending (Approach B no write-back), got: $ACTUAL"
   FAIL=$((FAIL + 1))
 fi
 

@@ -328,7 +328,7 @@ group_wiring() {
     # The overlay call must precede the legacy SANCTIONED comparison.
     local call_line sanctioned_line
     call_line="$(grep -n 'matchWorkerDispatchOverlay(' "$WORKER_SCRIPT_JS" 2>/dev/null | grep -v require | head -1 | cut -d: -f1)"
-    sanctioned_line="$(grep -n 'const SANCTIONED' "$WORKER_SCRIPT_JS" 2>/dev/null | head -1 | cut -d: -f1)"
+    sanctioned_line="$(grep -n 'SANCTIONED.some(' "$WORKER_SCRIPT_JS" 2>/dev/null | head -1 | cut -d: -f1)"
     if [ -n "$call_line" ] && [ -n "$sanctioned_line" ] && [ "$call_line" -lt "$sanctioned_line" ]; then
         pass "wiring/overlay-before-sanctioned"
     else
