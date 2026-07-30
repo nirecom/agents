@@ -6,7 +6,8 @@
 # Issue #1725 — hooks/block-history-direct.js must approve (instead of block) when
 # a protected-path/command hit occurs AND the calling session's WORKFLOW_OFF marker
 # (<workflowDir>/<sid>.workflow-off) exists. The marker is shared by the normal
-# WORKFLOW_OFF sentinel and the EMERGENCY OFF sentinel — no new marker is introduced.
+# WORKFLOW_ENFORCE_WORKFLOW_OFF sentinel and the WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY
+# sentinel — no new marker is introduced.
 #
 # Contract:
 #   - No marker → protected hit still blocks (baseline regression, both lanes).

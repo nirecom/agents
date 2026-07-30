@@ -44,8 +44,9 @@ See `docs/security-policy.md` for the full pattern list.
   are excluded by name. **Registered as two matcher groups**: `Edit|Write|MultiEdit|NotebookEdit`
   for tool writes, and `Bash|runInTerminal|runCommands` for shell redirects / `tee` / `cp` / `mv`
   into a protected path. Both groups are required — either alone leaves the other lane open.
-  WORKFLOW_OFF / EMERGENCY OFF bypass: a protected hit approves instead of blocking when the
-  calling session has an active `isWorkflowOff(sid)` marker, per `rules/workflow-off.md`.
+  `WORKFLOW_ENFORCE_WORKFLOW_OFF` / `WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY` bypass: a protected
+  hit approves instead of blocking when the calling session has an active `isWorkflowOff(sid)`
+  marker, per `rules/workflow-off.md`.
 - `workflow-gate.js` (PreToolUse, matcher: `Bash`) — enforces all 10 workflow steps before
   `git commit`. Reads state from `~/.claude/projects/workflow/<session-id>.json`. Fail-safe:
   blocks on missing session_id, missing state file, or corrupted JSON. Evidence-based override

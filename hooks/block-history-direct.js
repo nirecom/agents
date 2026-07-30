@@ -33,8 +33,9 @@ function approve() { console.log(JSON.stringify({ decision: "approve" })); proce
 function block(reason) { console.log(JSON.stringify({ decision: "block", reason })); process.exit(0); }
 
 // Shared by both dispatch lanes (CPR-5): a protected hit blocks UNLESS the
-// calling session has an active WORKFLOW_OFF / EMERGENCY OFF marker
-// (<workflowDir>/<sid>.workflow-off), in which case it approves instead —
+// calling session has an active WORKFLOW_ENFORCE_WORKFLOW_OFF /
+// WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY marker (<workflowDir>/<sid>.workflow-off),
+// in which case it approves instead —
 // after writing a stderr notice so the bypass is never silent. Only ever
 // called once a hit has actually been detected, so a non-hit never reaches
 // (and never logs via) this path.
