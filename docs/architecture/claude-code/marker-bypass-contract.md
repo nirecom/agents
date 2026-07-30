@@ -13,16 +13,20 @@ otherwise `~/.claude/projects/workflow/`):
 | Marker file | Created by | Scope |
 |---|---|---|
 | `<sid>.workflow-off` | `<<WORKFLOW_ENFORCE_WORKFLOW_OFF: reason>>` sentinel | See Honoring hooks — bypasses only the hooks marked Yes there |
-| `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | Bypasses worktree-isolation enforcement only |
+| `<sid>.worktree-off` | `<<WORKFLOW_ENFORCE_WORKTREE_OFF: reason>>` sentinel | See Honoring hooks — bypasses only the hooks marked Yes there |
 
 `WORKFLOW_OFF` subsumes `WORKTREE_OFF`: when `.workflow-off` is present, all hooks that
 check `.worktree-off` treat it as also active.
 
 ## Honoring hooks
 
-Inclusion criterion: every `settings.json` `PreToolUse` hook, plus `hooks/pre-commit`.
-A hook absent from this table never reads the marker and is never bypassed — the table
-is the SSOT (CPR-2); no other document enumerates exceptions independently.
+Inclusion criterion: every hook that calls `isWorkflowOff` / `isWorktreeOff` from
+`hooks/lib/session-markers.js`, plus `hooks/pre-commit` (which reimplements the same
+check inline for the git context — see Session-ID resolution below). This is a
+grep-derivable criterion (`grep -rl "isWorkflowOff\|isWorktreeOff" hooks/`), not an
+enumerated guess: a hook absent from this table does not call either function and is
+never bypassed. This table is the SSOT (CPR-2); no other document enumerates
+exceptions independently.
 
 | Hook | Layer | Honors `.workflow-off` | Honors `.worktree-off` |
 |---|---|---|---|
@@ -42,9 +46,14 @@ is the SSOT (CPR-2); no other document enumerates exceptions independently.
 | `hooks/confirm-checkpoint.js` | PreToolUse | **No** | **No** |
 | `hooks/show-diff.js` | PreToolUse | **No** | **No** |
 | `hooks/block-tests-direct.js` | PreToolUse | **No** | **No** |
-| `hooks/supervisor-off-proposal-shim.js` | PreToolUse | **No** | **No** |
-| `hooks/workflow-gate.js` | PreToolUse | Yes | No |
+| `hooks/supervisor-off-proposal-shim.js` | PreToolUse | Yes | Yes (only when the OFF proposal's target is `worktree`) |
+| `hooks/workflow-gate.js` | PreToolUse | Yes | Yes (skips the unstaged-tracked Gate 1 check only) |
 | `hooks/enforce-issue-close.js` | PreToolUse | Yes | No |
+| `hooks/stop-premature-stop-guard.js` | Stop | Yes | No |
+| `hooks/stop-final-report-guard.js` | Stop | Yes | No |
+| `hooks/stop-l2-findings-display.js` | Stop | Yes | No |
+| `hooks/supervisor-guard.js` | Stop | Yes | No |
+| `hooks/supervisor-trigger.js` | PostToolUse | Yes | No |
 | `hooks/pre-commit` (worktree-isolation gate only) | git pre-commit | Yes | Yes |
 | `hooks/enforce-system-ops.js` | PreToolUse | **No** | **No** |
 
