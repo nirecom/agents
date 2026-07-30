@@ -13,9 +13,18 @@ The `{reason}` field is mandatory and non-empty. Bare sentinel form (no `: {reas
 
 ## What is bypassed when WORKFLOW_OFF is active
 
+Inclusion criterion and full hook list: SSOT is the Honoring-hooks table in
+`docs/architecture/claude-code/marker-bypass-contract.md` — a hook absent from
+that table never reads the marker and is never bypassed. The table below is a
+curated excerpt for the hooks most relevant to everyday WORKFLOW_OFF usage;
+it must stay a subset of, and consistent with, that SSOT (CPR-5).
+
 | Hook | Bypassed? |
 |---|---|
 | `block-dotenv.js` | Yes — `.env` file access allowed |
+| `block-history-direct.js` | Yes — append-only doc writes (docs/history.md, CHANGELOG.md, archives) allowed |
+| `block-memory-direct.js` | Yes — memory-directory writes allowed |
+| `block-credentials.js` | **No — credential-path access always blocked** |
 | `scan-outbound.js` | **No — outbound content scan always runs** |
 | `workflow-gate.js` | Yes — commit gate (step completion check) bypassed |
 | `enforce-issue-close.js` | Yes — bare `gh issue close` allowed |
