@@ -40,6 +40,10 @@ EOF
 MODE="auto"
 SETTINGS_PATH=""
 FILES=()
+# Set only by the auto-mode merge-base fallback. --files / --stdin never consult the resolver:
+# the caller has already stated the file set, and asking would be both pointless and a
+# needless git dependency in a mode that has none.
+MERGE_BASE_DEGRADED=0
 
 # Parse args manually so --files can take a variadic list of positional values.
 while [[ $# -gt 0 ]]; do
@@ -116,28 +120,63 @@ elif [[ "$MODE" == "auto" ]]; then
     fi
     if [[ -z "$staged" ]]; then
         # Fallback: staged is empty (e.g., ENFORCE_WORKTREE=on, commit already landed).
-        # Use branch-vs-main diff to classify.
-        default_branch="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || true)"
-        if [[ -z "$default_branch" ]]; then
-            for b in main master; do
-                if git show-ref --verify --quiet "refs/remotes/origin/$b" 2>/dev/null; then
-                    default_branch="$b"; break
-                fi
-            done
-        fi
-        if [[ -z "$default_branch" ]]; then
-            # No remote: try local main/master as the base branch.
-            for b in main master; do
-                if git show-ref --verify --quiet "refs/heads/$b" 2>/dev/null; then
-                    default_branch="$b"; break
-                fi
-            done
-        fi
-        if [[ -n "$default_branch" ]]; then
-            merge_base="$(git merge-base HEAD "origin/$default_branch" 2>/dev/null || git merge-base HEAD "$default_branch" 2>/dev/null || true)"
-            if [[ -n "$merge_base" ]]; then
-                staged="$(git diff "${merge_base}...HEAD" --name-only 2>/dev/null || true)"
+        # The base comes from bin/resolve-merge-base.sh rather than from a default-branch
+        # search of this script's own (#1638): five callers each deriving their own base gave
+        # five answers to one question, and this one runs at commit/merge time where a wrong
+        # answer silently removes the questions the user was about to be asked.
+        #
+        # --no-fetch because this runs SYNCHRONOUSLY inside the <<WORKFLOW_USER_VERIFIED>>
+        # preflight. A network wait there is a wait the user sits through.
+        #
+        # Every degradation lands on `git diff HEAD` and RAISES a flag rather than leaving the
+        # file set empty. This is the one consumer where the safe direction is inverted: an
+        # empty classification produces NO questions, which reads as "nothing needs verifying".
+        mb_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/resolve-merge-base.sh"
+        mb_state=""
+        mb_base=""
+        if [[ -r "$mb_helper" ]]; then
+            mb_rc=0
+            mb_out="$(bash "$mb_helper" -C . --format kv --no-fetch 2>/dev/null)" || mb_rc=$?
+            if [[ "$mb_rc" -eq 0 ]]; then
+                while IFS='=' read -r mb_k mb_v; do
+                    case "$mb_k" in
+                        base)  mb_base="$mb_v" ;;
+                        state) mb_state="$mb_v" ;;
+                    esac
+                done <<< "$mb_out"
+            else
+                mb_state="UNRESOLVED"
             fi
+        else
+            mb_state="UNAVAILABLE"
+        fi
+
+        # Degraded scope must also see untracked files: `git diff HEAD --name-only` only
+        # reports tracked-file changes, so a brand-new (never `git add`-ed) risky file --
+        # e.g. a new install/*.ps1 -- is invisible to the classifier unless it is combined
+        # with `git ls-files --others --exclude-standard` (dedupe via `sort -u`).
+        degraded_scope_files() {
+            { git diff HEAD --name-only 2>/dev/null || true; git ls-files --others --exclude-standard 2>/dev/null || true; } | sort -u
+        }
+
+        case "$mb_state" in
+            RECORDED|RESOLVED)
+                if [[ -n "$mb_base" && "$mb_base" != "-" ]]; then
+                    staged="$(git diff "${mb_base}...HEAD" --name-only 2>/dev/null || true)"
+                else
+                    MERGE_BASE_DEGRADED=1
+                    staged="$(degraded_scope_files)"
+                fi
+                ;;
+            *)
+                MERGE_BASE_DEGRADED=1
+                staged="$(degraded_scope_files)"
+                ;;
+        esac
+        if [[ "$MERGE_BASE_DEGRADED" == "1" ]]; then
+            # Also on stderr, because a caller may suppress the questions entirely, and a
+            # degradation nobody can see afterwards is a degradation that will happen again.
+            echo "[check-verification-gate] merge-base ${mb_state:-UNKNOWN}: classification narrowed to uncommitted changes" >&2
         fi
     fi
     while IFS= read -r line; do
@@ -316,6 +355,13 @@ tags_contain_pwsh_required() {
 # Collect matched categories into a set (use associative array).
 declare -A MATCHED=()
 
+# Raised by the auto-mode merge-base fallback above when the classified set had to be narrowed
+# to uncommitted changes. It becomes a category of its own: a narrowed set silently drops the
+# questions the wider set would have raised, so the narrowing itself has to be asked about.
+if [[ "$MERGE_BASE_DEGRADED" == "1" ]]; then
+    MATCHED["merge-base-suspect"]=1
+fi
+
 # Pre-fetch the registered-hook basename set (only if needed).
 REGISTERED_HOOKS=""
 need_registered_hooks() {
@@ -394,6 +440,9 @@ question_for() {
             ;;
         skill-orchestration)
             printf '%s\n' "Did you run the skill end-to-end (not just unit-tested its scripts)?"
+            ;;
+        merge-base-suspect)
+            printf '%s\n' "Did you confirm the diff scope yourself? The merge-base was not trustworthy, so the classified file set was narrowed to uncommitted changes."
             ;;
         *)
             printf '%s\n' "unknown category"

@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-689-select-tests.sh
 # Tests: bin/select-tests.sh
-# Tags: test-selection, tests, bin, git, pr
+# Tags: test-selection, tests, bin, git, pr, merge-base, docs-only, scope:issue-specific
 #
 # Issue #689 — PR-scoped test selection.
 # bin/select-tests.sh reads a git diff (between merge-base and HEAD) and
@@ -170,12 +170,34 @@ test_C6_docs_only_empty() {
     fi
 }
 
+# shellcheck source=./feature-689-select-tests/auto-merge-base.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/auto-merge-base.sh"
+# shellcheck source=./feature-689-select-tests/docs-only-table.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/docs-only-table.sh"
+
+
 test_C1_stem_match_skill_md
 test_C2_self_select
 test_C3_empty_diff
 test_C4_no_args
 test_C5_archive_excluded
 test_C6_docs_only_empty
+
+make_fake_agents
+test_S1_positional_form_unchanged
+test_S2_resolved_proceeds
+test_S3_recorded_proceeds
+test_S4_suspect_aborts
+test_S5_suspect_explains_recovery
+test_S6_fallback_aborts
+test_S7_unresolved_is_empty_not_abort
+test_S8_resolver_arg_error_aborts
+test_S9_resolver_absent_aborts
+test_S10_auto_docs_only_skips_tl3
+test_S11_auto_empty_diff_skips_tl3
+test_S12_docs_only_helper_absent_appends
+test_S13_post_session_head_notes_and_proceeds
+test_D_is_docs_only
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"

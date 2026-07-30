@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Adversarial code review via OpenAI Codex CLI.
-# Usage: review-code-codex [--base <ref>] [--no-log]
+# Usage: review-code-codex [--base <ref>] [--base-state <STATE>] [--no-log]
 #
 # Always emits one of:
 #   ## Codex Review: PERFORMED
 #   ## Codex Review: SKIPPED — <reason>
 #   ## Codex Review: FAILED — <reason>
+#
+# May additionally emit, BEFORE the verdict and in a separate label family:
+#   ## Codex Review Scope: TRUNCATED — ...
+#   ## Codex Review Scope: BASE-<STATE> — ...
+# Separate family on purpose: callers grep `## Codex Review: ` for the verdict, and a caveat
+# that matched that pattern would break every one of them.
 #
 # Designed to be called from Claude Code Bash tool at workflow step 5.
 # Always exits 0 so it never blocks the workflow.
@@ -17,6 +23,7 @@ set -uo pipefail
 source "$(dirname "$(realpath "$0")")/lib/codex-core.sh"
 
 BASE="main"
+BASE_STATE="UNKNOWN"
 NO_LOG=false
 CONTEXT_FILES=()
 while [[ $# -gt 0 ]]; do
@@ -27,6 +34,12 @@ while [[ $# -gt 0 ]]; do
         exit 0
       fi
       BASE="$2"; shift 2 ;;
+    --base-state)
+      if [[ $# -lt 2 ]]; then
+        echo "## Codex Review: FAILED — --base-state requires an argument"
+        exit 0
+      fi
+      BASE_STATE="$2"; shift 2 ;;
     --no-log) NO_LOG=true; shift ;;
     --context)
       if [[ $# -lt 2 ]]; then
@@ -43,6 +56,21 @@ if ! [[ "$BASE" =~ ^[A-Za-z0-9._/-]+$ ]]; then
   echo "## Codex Review: FAILED — invalid --base ref (rejected to prevent injection): '$BASE'"
   exit 0
 fi
+
+# The state is INTERPOLATED into a printed line, so an unrecognised value is normalised rather
+# than passed through. An unknown state is also not a caveat we can describe honestly, so it
+# becomes UNKNOWN — silent, like the trustworthy states — and the review still runs: a
+# malformed flag from a caller must not cost the review itself.
+if ! [[ "$BASE_STATE" =~ ^[A-Z-]+$ ]]; then
+  echo "review-code-codex: warning — invalid --base-state value, normalising to UNKNOWN" >&2
+  BASE_STATE="UNKNOWN"
+fi
+case "$BASE_STATE" in
+  RECORDED|RESOLVED|SUSPECT|FALLBACK|UNRESOLVED|UNKNOWN) ;;
+  *)
+    echo "review-code-codex: warning — unrecognised --base-state '${BASE_STATE}', treating it as UNKNOWN" >&2
+    BASE_STATE="UNKNOWN" ;;
+esac
 
 codex_core_init "Codex Review"
 
@@ -72,14 +100,25 @@ UNCOMMITTED_DIFF=$(git diff HEAD 2>"$DIFF_ERR") || {
   exit 0
 }
 
-# Phase 2b: untracked files の pseudo-diff を無条件追記
+# Phase 2b: append the untracked files' pseudo-diff -- but skip this when base-state is
+# degraded (SUSPECT/FALLBACK/UNRESOLVED). In a degraded state BASE=HEAD, so HEAD...HEAD is
+# always empty and this block would become the sole review target. Untracked files can
+# contain arbitrary content (not scanned for secrets etc. created as part of the reviewed
+# tree), so unconditionally sending their full text to an external LLM while degraded is an
+# information-leak risk. The tracked uncommitted diff (git diff HEAD) stays in the review
+# target even while degraded -- only the untracked files' raw content is skipped.
 # git diff --no-index exits 1 when files differ → || true が必須（set -uo pipefail 下）
 # 末尾改行グルー防止: git diff HEAD 結果がある場合は先にセパレータ改行を挿入する
-[[ -n "$UNCOMMITTED_DIFF" ]] && UNCOMMITTED_DIFF+=$'\n'
-while IFS= read -r -d '' untracked_file; do
-  UNCOMMITTED_DIFF+=$(git diff --no-index /dev/null "$untracked_file" 2>/dev/null || true)
-  UNCOMMITTED_DIFF+=$'\n'
-done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
+case "$BASE_STATE" in
+  SUSPECT|FALLBACK|UNRESOLVED) : ;; # degraded — skip untracked collection, see comment above
+  *)
+    [[ -n "$UNCOMMITTED_DIFF" ]] && UNCOMMITTED_DIFF+=$'\n'
+    while IFS= read -r -d '' untracked_file; do
+      UNCOMMITTED_DIFF+=$(git diff --no-index /dev/null "$untracked_file" 2>/dev/null || true)
+      UNCOMMITTED_DIFF+=$'\n'
+    done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
+    ;;
+esac
 
 # Phase 3: committed diff を優先; uncommitted は committed がない場合のみフォールバック
 if [[ -z "$DIFF" && -n "$UNCOMMITTED_DIFF" ]]; then
@@ -97,12 +136,32 @@ if [[ -z "$DIFF" ]]; then
   exit 0
 fi
 
-# Truncate large diffs
+# Truncate large diffs.
+#
+# The two ways this review's coverage can be incomplete are announced HERE, on stdout, above
+# the verdict — because "nothing concerning" read next to nothing else is indistinguishable
+# from "nothing concerning in the 12% I looked at". They are two separate lines: a truncated
+# diff and an untrustworthy base are different facts with different remedies (CPR-3).
+SCOPE_WARNING=""
 MAX_DIFF_LINES=5000
 if (( DIFF_LINES > MAX_DIFF_LINES )); then
-  echo "Warning: diff is ${DIFF_LINES} lines, truncating to ${MAX_DIFF_LINES} for codex."
+  echo "## Codex Review Scope: TRUNCATED — diff is ${DIFF_LINES} lines (> ${MAX_DIFF_LINES}); only the first ${MAX_DIFF_LINES} lines were reviewed. Coverage is INCOMPLETE — a \"nothing concerning\" verdict is unverified beyond that point."
+  SCOPE_WARNING+="SCOPE CAVEAT: the diff below is TRUNCATED — it is the first ${MAX_DIFF_LINES} lines of a ${DIFF_LINES}-line diff. Your review therefore cannot be complete."$'\n'
   DIFF=$(printf '%s' "$DIFF" | head -n "$MAX_DIFF_LINES")
   DIFF_LINES=$MAX_DIFF_LINES
+fi
+
+case "$BASE_STATE" in
+  SUSPECT|FALLBACK|UNRESOLVED)
+    echo "## Codex Review Scope: BASE-${BASE_STATE} — the review range was derived from an untrustworthy merge-base (${BASE})."
+    SCOPE_WARNING+="SCOPE CAVEAT: the review range was derived from an untrustworthy merge-base (state ${BASE_STATE}, base ${BASE}). Files outside it may have changed without appearing below."$'\n'
+    ;;
+esac
+
+if [[ -n "$SCOPE_WARNING" ]]; then
+  SCOPE_WARNING="${SCOPE_WARNING}State this incompleteness in the FIRST line of your findings, before any severity grouping.
+
+"
 fi
 
 # Build optional context section
@@ -124,7 +183,7 @@ fi
 
 PREAMBLE=$(codex_core_adversarial_preamble "code diff")
 
-PROMPT="${PREAMBLE}
+PROMPT="${SCOPE_WARNING}${PREAMBLE}
 
 ${CONTEXT_SECTION}You are doing an adversarial code review. Challenge design decisions, surface hidden assumptions, and question tradeoffs. Focus on:
 - Whether the chosen approach is the safest and simplest one (suggest alternatives if not)

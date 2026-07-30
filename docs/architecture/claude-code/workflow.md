@@ -29,7 +29,8 @@ Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outsi
     "user_verification":    { "status": "complete", "updated_at": "..." },
     "cleanup":              { "status": "skipped",  "updated_at": "..." },
     "pre_final_report_gate":{ "status": "pending",  "updated_at": "..." }
-  }
+  },
+  "merge_base_baseline": { "base": "<sha>", "branch": "feature/x", "source": "recorded-baseline" }
 }
 ```
 
@@ -78,6 +79,54 @@ silently disabling the gate:
 Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rejection,
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
 record, so a stale approval can never re-validate a later re-completion.
+
+### `merge_base_baseline` (where this branch started)
+
+Written once, when `branching_complete` is marked — the moment the branch point is still a
+fact. Everything downstream (test selection, the quality gates, the Codex review range, the
+verification gate) asks `bin/resolve-merge-base.sh` for the base, and the resolver prefers this
+record over `origin/main`. That is what #1638 fixed: a fetched `origin/main` can be rewritten,
+force-pushed over, or simply stale, so re-deriving the base later gave a different — sometimes
+wildly wrong — answer on every call, with no signal that anything had changed.
+
+```json
+{
+  "merge_base_baseline": {
+    "recorded_at": "2026-07-30T10:00:00.000Z",
+    "base": "<sha of HEAD at branching time>",
+    "branch": "feature/x",
+    "branch_head": "<sha>",
+    "repo_root": "/path/to/worktree",
+    "source": "recorded-baseline",
+    "head_committed_at": "2026-07-30T09:58:00.000Z",
+    "session_created_at": "2026-07-30T09:30:00.000Z",
+    "post_session_head": false,
+    "alt_base": "<sha or null>",
+    "approved_reason": null
+  }
+}
+```
+
+Ownership rules, all enforced in `hooks/workflow-state/merge-base-baseline.js`:
+
+- **`base` is always `git rev-parse HEAD`,** never a merge-base against a remote. A
+  remote-derived value is the stale guess the record exists to replace.
+- **One automatic writer,** `hooks/workflow-mark/branching-handler.js`, write-once. A
+  re-emitted `BRANCHING_COMPLETE` does not move a base that later steps already scoped by.
+  Failure to record is a warning, never fatal — a lost baseline degrades to guessing, which is
+  what every consumer did before.
+- **One override,** `bin/workflow/record-merge-base-baseline`, reached only after the user has
+  confirmed the base. `--reason` is mandatory, the sha is verified to resolve and to be an
+  ancestor of `HEAD`, and the record keeps `source: "user-approved"` plus `approved_reason` so
+  the decision stays auditable. This is the recovery path from a `SUSPECT` verdict.
+- **`post_session_head` and `alt_base` are evidence, not decisions.** They let a consumer say
+  "the recorded base may be behind your HEAD, here is the alternative" without any code
+  silently adopting the alternative.
+
+The resolver re-verifies identity before adopting the record (current branch matches, and both
+`branch_head` and `base` are ancestors of `HEAD`); a record that fails any check is demoted and
+reported, never used. `repo_root` is informational and deliberately excluded from that check —
+the same worktree is legitimately spelled several ways on Windows.
 
 `cwd` and `git_branch` are optional (absent in states created before the inheritance feature).
 `git_branch` is `null` for non-git directories and detached HEAD.

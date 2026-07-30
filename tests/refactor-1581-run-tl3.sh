@@ -9,10 +9,24 @@
 # Closest-to-action mitigation: checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: pwsh-required
 #
-# Issue #1581 — RUN_E2E → RUN_TL3 rename + RUN_TL3=on auto-appends tests/TL3-*.sh.
-# Behavioral cases (C1..C5) drive bin/select-tests.sh; static cases (C6,C7)
-# assert the .env.example and TL3-hook-*.sh source edits. Pre-implementation,
-# C1/C4/C6/C7 are expected RED; C2/C3/C5 pass now and after implementation.
+# Issue #1581 — RUN_E2E → RUN_TL3 rename + RUN_TL3=on appends tests/TL3-*.sh.
+# Behavioral cases (C1..C5, C8, Cnew) drive bin/select-tests.sh; static cases (C6,C7)
+# assert the .env.example and TL3-hook-*.sh source edits.
+#
+# Issue #1689 — the append is no longer UNCONDITIONAL. The TL3 tier is the expensive one
+# (real hooks, real shells, real installers), and running it over a diff that touched only
+# `docs/*.md` buys nothing while costing minutes on every docs commit. Worse, the same
+# unconditional append fired on an EMPTY diff, which is what a broken merge-base produces —
+# so a run that had resolved the wrong range still looked busy.
+#
+# The rule is now: empty diff → no TL3; docs-only diff → no TL3; anything else → all TL3.
+# C1a/C1b are the two halves of that cut and must be read together: a `return` bolted to the
+# top of the append block would satisfy C1a alone forever.
+#
+# Docs-only classification is delegated to bin/is-docs-only rather than re-derived here,
+# because the allowlist has a single owner (hooks/workflow-gate/staged-evidence.js) and a
+# second copy of it in select-tests.sh would drift. When that helper cannot answer, the
+# append is taken — a needless TL3 run is a cost, a skipped one is a missed regression.
 
 set -u
 
@@ -63,33 +77,52 @@ make_repo() {
     git -C "$repo" -c core.hooksPath= commit -q -m "head" --allow-empty
 }
 
-# C1: RUN_TL3=on + docs-only diff → ALL tests/TL3-*.sh dispatcher files appended.
-# We assert the exact count (not just "at least one") to prevent a hardcoded-file
-# implementation from slipping through.
-test_C1_tl3_on_appends() {
-    local repo="$TMPDIR_BASE/c1"
+# C1a (#1689): RUN_TL3=on + docs-only diff → NO TL3-*.sh. The tier exists to exercise real
+# hooks, shells and installers; a change to docs/history.md cannot break any of them, and
+# paying minutes for that on every docs commit is what this half removes.
+test_C1a_tl3_on_docs_only_absent() {
+    local repo="$TMPDIR_BASE/c1a"
     make_repo "$repo" "docs/history.md"
+    local out
+    out="$(cd "$repo" && RUN_TL3=on run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
+    if echo "$out" | grep -qE "tests/TL3-.*\.sh"; then
+        fail "C1a_tl3_on_docs_only_absent: TL3-*.sh appended for a docs-only diff (implementation pending)
+--- output ---
+$out"
+    else
+        pass "C1a_tl3_on_docs_only_absent: RUN_TL3=on skips TL3-*.sh when the diff is docs-only"
+    fi
+}
+
+# C1b: the other half — a code diff still gets ALL of them. Without this row, C1a is
+# satisfied by an implementation that never appends TL3 at all. The exact count (not "at
+# least one") is what keeps a hardcoded-file implementation out.
+test_C1b_tl3_on_code_diff_appends() {
+    local repo="$TMPDIR_BASE/c1b"
+    make_repo "$repo" "bin/somefile.sh"
     local out expected_count actual_count
     expected_count="$(find "$AGENTS_DIR/tests" -maxdepth 1 -name "TL3-*.sh" | wc -l | tr -d ' ')"
     out="$(cd "$repo" && RUN_TL3=on run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     actual_count="$(echo "$out" | grep -cE "tests/TL3-.*\.sh" || true)"
     if [ "$actual_count" -eq "$expected_count" ] && [ "$expected_count" -gt 0 ]; then
-        pass "C1_tl3_on_appends: RUN_TL3=on appends all $expected_count TL3-*.sh files on docs-only diff"
+        pass "C1b_tl3_on_code_diff_appends: RUN_TL3=on appends all $expected_count TL3-*.sh files on a code diff"
     elif [ "$actual_count" -gt 0 ] && [ "$actual_count" -lt "$expected_count" ]; then
-        fail "C1_tl3_on_appends: only $actual_count/$expected_count TL3-*.sh files appended (partial implementation?)
+        fail "C1b_tl3_on_code_diff_appends: only $actual_count/$expected_count TL3-*.sh files appended (partial implementation?)
 --- output ---
 $out"
     else
-        fail "C1_tl3_on_appends: expected $expected_count TL3-*.sh lines, got $actual_count (implementation pending)
+        fail "C1b_tl3_on_code_diff_appends: expected $expected_count TL3-*.sh lines, got $actual_count
 --- output ---
 $out"
     fi
 }
 
-# C2: RUN_TL3=off + docs-only diff → no TL3-*.sh in output.
+# C2: RUN_TL3=off → no TL3-*.sh in output.
+# The fixture is a CODE diff on purpose. With a docs-only one the row would be green under
+# #1689's new skip regardless of the toggle, and would stop testing the toggle at all.
 test_C2_tl3_off_absent() {
     local repo="$TMPDIR_BASE/c2"
-    make_repo "$repo" "docs/history.md"
+    make_repo "$repo" "bin/somefile.sh"
     local out
     out="$(cd "$repo" && RUN_TL3=off run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     if echo "$out" | grep -qE "tests/TL3-.*\.sh"; then
@@ -102,9 +135,10 @@ $out"
 }
 
 # C3: RUN_TL3 unset (default off) → no TL3-*.sh appended.
+# Code diff for the same reason as C2 — the default must be what suppresses the append here.
 test_C3_tl3_unset_absent() {
     local repo="$TMPDIR_BASE/c3"
-    make_repo "$repo" "docs/history.md"
+    make_repo "$repo" "bin/somefile.sh"
     local out
     out="$(cd "$repo" && env -u RUN_TL3 run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     if echo "$out" | grep -qE "tests/TL3-.*\.sh"; then
@@ -116,9 +150,10 @@ $out"
     fi
 }
 
-# C_new (HIGH-1): RUN_TL3=on + non-docs/non-matching diff → TL3-*.sh still appended.
-# select-tests.sh should append TL3 files unconditionally when RUN_TL3=on,
-# regardless of whether the changed files are docs-only or stem-matched.
+# C_new (HIGH-1): RUN_TL3=on + a code diff that stem-matches NOTHING → TL3-*.sh appended.
+# "No test file is named after this path" is not the same as "this path is harmless", so the
+# TL3 tier is still owed. This is the case #1689 must keep: only docs-only and empty diffs
+# lose the append.
 test_Cnew_tl3_on_non_docs_non_matching() {
     local repo="$TMPDIR_BASE/cnew"
     make_repo "$repo" "bin/somefile.sh"
@@ -138,7 +173,7 @@ $out"
 # the numeric alias only. Other truthy variants (true, yes) are out of scope here.
 test_C4_tl3_numeric_on() {
     local repo="$TMPDIR_BASE/c4"
-    make_repo "$repo" "docs/history.md"
+    make_repo "$repo" "bin/somefile.sh"
     local out
     out="$(cd "$repo" && RUN_TL3=1 run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     if echo "$out" | grep -qE "tests/TL3-.*\.sh"; then
@@ -172,14 +207,15 @@ $out"
     # Also verify a specific TL3-hook file appears exactly once (count == 1 assert).
     local hook_count
     hook_count="$(echo "$out" | grep -cE 'TL3-hook-workflow-mark\.sh' || true)"
+    # Exactly one — not "at most one". Zero occurrences is a FAILURE, not a deferred
+    # assertion: both the stem-match path and the RUN_TL3 append path are supposed to
+    # produce this file, so an empty output means BOTH are broken (or have been deleted)
+    # and the de-duplication this row exists to check was never exercised. Accepting zero
+    # is what lets a regression that drops the file entirely read as a pass.
     if [ "$hook_count" -eq 1 ]; then
         pass "C5_no_duplicate_lines: RUN_TL3=on + stem match produces no duplicate paths; TL3-hook-workflow-mark.sh appears exactly once"
-    elif [ "$hook_count" -eq 0 ]; then
-        # Pre-impl: hook file not yet appended; this is the same as no-duplicate check passing
-        # but the count==1 assertion cannot pass yet.
-        pass "C5_no_duplicate_lines: RUN_TL3=on + stem match produces no duplicate paths (TL3-hook-workflow-mark.sh not yet appended; count==1 check deferred to post-impl)"
     else
-        fail "C5_no_duplicate_lines: TL3-hook-workflow-mark.sh appears $hook_count times (expected exactly 1)
+        fail "C5_no_duplicate_lines: TL3-hook-workflow-mark.sh appears $hook_count times (expected exactly 1; 0 means neither the stem-match nor the RUN_TL3 append path produced it)
 --- output ---
 $out"
     fi
@@ -238,7 +274,7 @@ fi
 # The new TL3-append uses find -maxdepth 1 which should exclude _archive/ subdirectory.
 test_C8_tl3_archive_excluded() {
     local repo="$TMPDIR_BASE/c8"
-    make_repo "$repo" "docs/history.md"
+    make_repo "$repo" "bin/somefile.sh"
     local out
     out="$(cd "$repo" && RUN_TL3=on run_with_timeout 120 bash "$SELECT_SH" base 2>/dev/null)"
     if echo "$out" | grep -q "_archive/"; then
@@ -250,7 +286,8 @@ $out"
     fi
 }
 
-test_C1_tl3_on_appends
+test_C1a_tl3_on_docs_only_absent
+test_C1b_tl3_on_code_diff_appends
 test_C2_tl3_off_absent
 test_C3_tl3_unset_absent
 test_C4_tl3_numeric_on

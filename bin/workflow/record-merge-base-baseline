@@ -1,0 +1,75 @@
+#!/usr/bin/env node
+"use strict";
+// bin/workflow/record-merge-base-baseline
+// The ONE sanctioned way to overwrite the write-once merge-base baseline, after the user has
+// confirmed which commit the branch actually started from.
+//
+// Usage:
+//   record-merge-base-baseline --session <sid> --base <sha> --reason "<text>" [--repo <dir>]
+//
+// Success: prints `RECORDED base=<sha> source=user-approved` on stdout, exit 0.
+// Refusal: prints the reason on stderr, exit 1, and the stored baseline is left untouched.
+//
+// --reason is MANDATORY and may not be blank: the override trades an automatic fact for a
+// human decision, and a decision with no recorded rationale cannot be audited later.
+
+const path = require("path");
+const { approveMergeBaseBaseline } = require(
+  path.join(__dirname, "..", "..", "hooks", "workflow-state")
+);
+
+const SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
+const USAGE =
+  'record-merge-base-baseline --session <sid> --base <sha> --reason "<text>" [--repo <dir>]';
+
+function die(msg) {
+  process.stderr.write("record-merge-base-baseline: " + msg + "\n");
+  process.exit(1);
+}
+
+function main() {
+  const argv = process.argv.slice(2);
+  let session = null;
+  let base = null;
+  let reason = null;
+  let repo = null;
+
+  for (let i = 0; i < argv.length; i++) {
+    switch (argv[i]) {
+      case "--session": session = argv[++i] ?? null; break;
+      case "--base":    base = argv[++i] ?? null; break;
+      case "--reason":  reason = argv[++i] ?? null; break;
+      case "--repo":    repo = argv[++i] ?? null; break;
+      default:
+        die("unknown argument: " + argv[i] + "\n" + USAGE);
+    }
+  }
+
+  // The session id becomes a path under the workflow directory, so it is validated here
+  // rather than left to the state layer: `..` must never reach a path join.
+  if (!session || !SESSION_ID_RE.test(session)) {
+    die("--session is required and must match /^[A-Za-z0-9_-]+$/\n" + USAGE);
+  }
+  if (!base || !base.trim()) die("--base is required\n" + USAGE);
+  if (reason === null || !reason.trim()) {
+    die("--reason is required and must not be blank — the override is an audited decision\n" + USAGE);
+  }
+
+  const repoRoot = repo && repo.trim() ? repo : process.cwd();
+
+  let result;
+  try {
+    result = approveMergeBaseBaseline(session, repoRoot, base, reason);
+  } catch (e) {
+    die(e && e.message ? e.message : String(e));
+    return;
+  }
+  if (!result || !result.recorded) {
+    die(result && result.reason ? result.reason : "the baseline was not recorded");
+    return;
+  }
+  process.stdout.write("RECORDED base=" + result.base + " source=user-approved\n");
+  process.exit(0);
+}
+
+main();

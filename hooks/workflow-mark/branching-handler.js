@@ -4,7 +4,9 @@
 
 const fs = require("fs");
 const { validateSkipReason } = require("./skip-reason");
-const { markStep, recordSessionWorktree } = require("../workflow-state");
+const {
+  markStep, recordSessionWorktree, readState, recordMergeBaseBaseline,
+} = require("../workflow-state");
 const { isMainWorktree } = require("../workflow-state/resolve-worktree-path");
 const {
   BRANCHING_COMPLETE_RE_DQ, BRANCHING_COMPLETE_LOOKSLIKE_RE,
@@ -63,6 +65,34 @@ function handle(ctx) {
       }
     } catch (e) {
       pushMessage(`workflow-mark: warning — failed to record session_worktree: ${e.message}`);
+    }
+    // The session's merge-base baseline. This is the ONE automatic writer (#1638): the branch
+    // point is a fact right now and a guess forever after, so it is recorded here.
+    //
+    // Its own try/catch, and pushMessage rather than signalFatal on failure: a missing
+    // baseline degrades the later gates to guessing, which is exactly what they did before.
+    // Aborting the user's step over a lost optimisation would be a worse outcome than the
+    // problem. A session working directly in state.cwd (no `worktree:` segment) gets a
+    // baseline too — otherwise every main-worktree session silently records nothing.
+    try {
+      const wtMatch = v.reason.match(/\bworktree:\s*([^\s|]+)/);
+      const wtPath = wtMatch ? wtMatch[1] : null;
+      let repoRoot = null;
+      if (wtPath && fs.existsSync(wtPath)) {
+        repoRoot = wtPath;
+      } else {
+        const state = readState(sessionId);
+        repoRoot =
+          (state && typeof state.cwd === "string" && state.cwd) ||
+          process.env.CLAUDE_PROJECT_DIR ||
+          process.cwd();
+      }
+      const res = recordMergeBaseBaseline(sessionId, repoRoot);
+      if (res && !res.recorded && res.reason && !/write-once/.test(res.reason)) {
+        pushMessage(`workflow-mark: warning — merge-base baseline not recorded: ${res.reason}`);
+      }
+    } catch (e) {
+      pushMessage(`workflow-mark: warning — failed to record the merge-base baseline: ${e.message}`);
     }
     return true;
   }

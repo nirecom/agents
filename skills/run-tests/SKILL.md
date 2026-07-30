@@ -12,17 +12,19 @@ Run the project test suite via the `test-runner` worker and emit the workflow se
 
 When a hook blocks a sanctioned command, a fallback path is taken, or any unexpected outcome occurs, report via supervisor-report — see rules/supervisor-reporting.md.
 
-RNT-1. **Resolve merge-base** (fallback chain):
-   - Try: `git fetch origin main --no-tags 2>/dev/null`, then `merge_base=$(git merge-base origin/main HEAD)`.
-   - If fetch fails or `origin/main` absent: `merge_base=$(git merge-base main HEAD)`.
-   - If local `main` absent (shallow clone / detached): `merge_base=HEAD~1`; emit warning `[run-tests] merge-base fallback: HEAD~1 (no main ref)`.
-   - If `HEAD~1` unavailable (root commit): emit `[run-tests] cannot resolve merge-base; skipping selection` and treat as empty selection (go to step RNT-5 empty-selection policy).
+RNT-1. **Resolve merge-base.**
+   `bin/select-tests.sh --auto` resolves it via `bin/resolve-merge-base.sh` -- this skill does not reimplement the chain.
+   exit 4 (SUSPECT / FALLBACK / helper missing) -> stop, show `bin/resolve-merge-base.sh --explain`’s stderr output verbatim, and let the user choose the base (a candidate sha / an arbitrary sha / the safe fallback `HEAD` / abort).
+   Once the user confirms a base, record it with `bin/workflow/record-merge-base-baseline --session <sid> --base <sha> --reason "<confirmation detail>"` and re-run RNT-1 (it now passes as RECORDED).
+   If the user chooses abort, emit RNT-9’s pending sentinel and stop.
+   exit 0 with empty stdout -> treat as an empty selection and follow the RNT-5 policy.
 
 RNT-2. **Tier 1 — mechanical stem match.**
-   `tier1_tests=$(bin/select-tests.sh "$merge_base")`
+   `tier1_tests=$(bin/select-tests.sh --auto)`
    Filename stem substring match only. No frontmatter reading.
 
 RNT-3. **Tier 2 — LLM semantic match.**
+   `merge_base=$(bin/resolve-merge-base.sh --format base)` -- same base as RNT-1, so Tier 1 and Tier 2 cover the same range.
    For each `tests/*.sh` not in `tier1_tests` and not under `tests/_archive/`:
    - Read `# Tests:` and `# Tags:` lines (single-line, within `head -n 10`).
    - Compare against `git diff --name-only "$merge_base"...HEAD` and diff body.
@@ -47,6 +49,10 @@ RNT-8. **Parse the YAML** the dispatch call printed on stdout.
 RNT-9. **Emit sentinel** as a separate Bash call:
    - `status: pass` → `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"`
    - `status: fail | timeout | runner-error` → `echo "<<WORKFLOW_MARK_STEP_run_tests_pending>>"`
+   - Only when the failure can be shown to be a pre-existing failure unrelated to this diff, use `echo "<<WORKFLOW_MARK_STEP_run_tests_complete>>"` as a surgical recovery.
+     Present the evidence in the same turn: the failing test name / the paths the failure touches / that those paths are outside the diff range rooted at `bin/resolve-merge-base.sh --format base` / that the same failure reproduces on main.
+     If the evidence cannot be presented, do not use this path -- stay `pending` and leave the judgment to the user.
+     Never use `WORKFLOW_ENFORCE_WORKFLOW_OFF` / EMERGENCY OFF for this purpose. A single-step recovery does not need -- and must not use -- session-wide enforcement suspension.
 
 RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tail`.
 
@@ -55,6 +61,8 @@ RNT-10. If status is not `pass`, surface: `summary` / `failing_tests` / `log_tai
 - Test selection is this skill's responsibility, not test-runner's. Never pass `auto-detect`.
 - Always pass an explicit list or `--all` to `tests/run-all.sh`.
 - Empty selection on non-doc changes requires user confirmation; no silent `--all` fallback.
+- Do not reimplement the merge-base resolution chain inside this skill (SSOT: bin/resolve-merge-base.sh).
+- Recovery for a pre-existing unrelated failure is limited to marking the single run_tests step complete. Never substitute a session-wide OFF sentinel.
 - Never modify source code or test files.
 - Never retry on failure (Phase 1 only).
 - Report observations per rules/supervisor-reporting.md.
