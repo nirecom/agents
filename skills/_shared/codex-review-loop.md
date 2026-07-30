@@ -75,6 +75,8 @@ Within the wrapper, `bin/review-loop-verdict <round> <high> <medium> <low> [--bu
 
 ## Per-round protocol
 
+While a round is in flight, the caller MAY read the already-frozen upstream plan artifacts (intent / outline) to pre-check scope coverage — never the round's own output files (SC-W — `skills/_shared/subagent-concurrency.md`).
+
 ### a. Write planner output to final artifact
 
 The planner writes its output to `<PLANS_DIR>/<session-id>-{outline,detail}.md` via the Write tool. `assemble-mandatory.sh` later overwrites this same file in place to inject the mandatory sections.
