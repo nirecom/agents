@@ -26,6 +26,8 @@ When a hook blocks a sanctioned command, a fallback path is taken, or any unexpe
 
 ## Delegation — initial pass
 
+Serial by dependency (SC-S): the `initial` → `loop_step` → `finalize_terminal` worker passes all read and write the same `STATE_FILE`, so they can never be issued together. See `skills/_shared/subagent-concurrency.md`.
+
 <!-- ordering-contract: PR/SHA resolution MUST run after triage, only when NEXT_STEPS contains J. See tests/feature-361-finalize-pr-resolution-order.sh. -->
 Worker executes triage (`issue-close-finalize-triage.sh`); sets `STATE`, `SENTINEL`, `ACTION`, `NEXT_STEPS`.
 Then when `J` is in NEXT_STEPS (any position: `J,*`, `*,J,*`, or `*,J`) AND `ACTION != admin_close_path`: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/find-pr-by-marker.sh" "$N"` (sets `PR_NUMBER`, `MERGE_COMMIT`). When the `closes_issues` entry has a `repo` field (`issue_repo`), pass `--repo "$issue_repo"` to `find-pr-by-marker.sh`; `issue_repo` flows through the delegation JSON to the worker. Non-zero → stop with error. `admin_close_path` skips ICF-B (no PR exists); Step ICF-I posts ICF-I-2 sentinel only.

@@ -53,7 +53,7 @@ Read all `KEY=VALUE` output lines. Dispatch on `ACTION=`:
 
 ### Step WI-10 — Parallel survey launch (all Paths)
 
-In a **single assistant message**, invoke BOTH as parallel Agent tool calls (`run_in_background: false`). For each of `survey-code` / `survey-history`: prompt `session-id=<resolved>`, `context_path=<PLANS_DIR>/<session-id>-context.md`, `artifact_path=<PLANS_DIR>/<session-id>-survey-{code|history}.md`, instruct to read context_path + follow `skills/<survey-code|survey-history>/SKILL.md` Procedure, write to artifact_path, do NOT invoke make-outline-plan. Inject all paths as resolved strings (orchestrator substitutes `<PLANS_DIR>` for the absolute path from WI-1) — Agent subagents cannot expand `$VAR`.
+Dispatch `survey-code` + `survey-history` per `skills/_shared/subagent-concurrency.md` SC-P (independent — distinct artifact paths, neither reads the other's output). For each: prompt `session-id=<resolved>`, `context_path=<PLANS_DIR>/<session-id>-context.md`, `artifact_path=<PLANS_DIR>/<session-id>-survey-{code|history}.md`, instruct to read context_path + follow `skills/<survey-code|survey-history>/SKILL.md` Procedure, write to artifact_path, do NOT invoke make-outline-plan. Substitute `<PLANS_DIR>` with the absolute path resolved at WI-1.
 
 ### Step WI-11 — Post-check
 

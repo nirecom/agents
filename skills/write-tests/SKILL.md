@@ -44,6 +44,8 @@ WT-6. **Launch a subagent** (Agent tool, `mode: "default"`, `model: <model from 
    The subagent prompt MUST instruct: edit only test files, never modify source code.
    The subagent prompt MUST also include: "NEVER present diffs for approval. NEVER wait for user confirmation. Edit and run autonomously until tests pass."
 
+While the subagent runs, the orchestrator MAY run the WT-7 `CONFIRM_TESTS` gate probe (`bin/confirm-off`) — never read the test files the subagent is still writing (SC-W — `skills/_shared/subagent-concurrency.md`).
+
 WT-7. Present the final test file content to the user for review — gated by **CONFIRM_TESTS gate (post-action review)**:
    `bash -c 'cd "$AGENTS_CONFIG_DIR" && bash "$AGENTS_CONFIG_DIR/bin/confirm-off" CONFIRM_TESTS on'`
    - stdout `OFF`: skip this step; proceed directly to Completion (no user wait).
