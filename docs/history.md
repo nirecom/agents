@@ -97,4 +97,4 @@ Changes: #1725: `block-history-direct.js` now honors the session's `WORKFLOW_ENF
 
 ### FEATURE: PR #1752 — fix/review-plan-codex-stderr-fix (2026-07-31, 5fb8c8930edf2072212b746d1eb65d9f420ce805, #1752)
 Background: fix(#1734): route plan-truncation warning to stderr, not stdout
-Changes: FIX #1734: `bin/review-plan-codex`'s plan-truncation warning was printed to stdout, where <!-- compose-doc-append-sentinel: branch=fix/review-plan-codex-stderr-fix pr=#1752 -->
+Changes: FIX #1734: `bin/review-plan-codex`'s plan-truncation warning was printed to stdout, where `bin/run-codex-review-loop`'s `awk 'NF{print; exit}'` status-header parser misread it as the header whenever a plan/draft exceeded `MAX_PLAN_LINES=5000`, causing a false "unrecognized status header" `die()` → exit 4 (HALT) that broke the review loop. Fixed by redirecting the warning to stderr (line 155, `>&2`). Regression test `tests/feature-1734-plan-truncation-stderr.sh` covers direct invocation, the full wrapper pipeline, and the exact 5000/5001-line boundary. <!-- compose-doc-append-sentinel: branch=fix/review-plan-codex-stderr-fix pr=#1752 -->
