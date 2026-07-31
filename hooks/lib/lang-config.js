@@ -74,4 +74,15 @@ function getPlanLangInjection() {
   return `Write planning artifacts (files under the plans directory) in ${lang}.`;
 }
 
-module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, getPlanLangInjection };
+// Raw CODE_LANG_EXCLUDE string (semicolon-separated absolute paths / globs).
+// Deliberately NOT passed through normalizeValue(): lowercasing/trimming would
+// corrupt path comparisons (POSIX paths are case-sensitive; Windows-side
+// lowercasing is applied downstream by path-coverage-match.js). Unset or
+// non-string -> "".
+function loadCodeLangExclude() {
+  loadDefaultEnv();
+  const v = process.env.CODE_LANG_EXCLUDE;
+  return typeof v === "string" ? v : "";
+}
+
+module.exports = { loadDocsLangConfig, loadLangConfig, classifyPolicy, STRICT_POLICIES, getPlanLangInjection, loadCodeLangExclude };

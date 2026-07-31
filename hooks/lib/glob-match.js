@@ -14,6 +14,23 @@ function _normalize(p) {
   return s;
 }
 
+// Bounds on pattern complexity: unbounded alternating wildcard/literal globs
+// (e.g. "**a**a**a...z") drive the emitted regex into catastrophic backtracking
+// (CWE-1333) against a non-matching target. Patterns over either limit are
+// treated as non-matching rather than compiled, which fails toward "run the
+// full language check" (the safe direction), never toward a silent skip.
+const MAX_PATTERN_LENGTH = 1024;
+const MAX_WILDCARD_COUNT = 10;
+
+function _isPatternSafe(pattern) {
+  if (pattern.length > MAX_PATTERN_LENGTH) return false;
+  let stars = 0;
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "*") stars++;
+  }
+  return stars <= MAX_WILDCARD_COUNT;
+}
+
 function _globToRegExp(pattern) {
   const norm = _normalize(pattern);
   let re = "";
@@ -42,6 +59,7 @@ function _globToRegExp(pattern) {
 
 function pathMatchesGlob(filePath, pattern) {
   if (!pattern) return false;
+  if (!_isPatternSafe(pattern)) return false;
   const target = _normalize(filePath);
   return _globToRegExp(pattern).test(target);
 }

@@ -8,10 +8,24 @@
 // records store only file:line and the trimmed
 // line capped at 80 chars -- never whole-file content -- so staged secrets are
 // not echoed to the terminal.
+//
+// CODE_LANG_EXCLUDE (repo-granularity opt-out): when the repository root matches
+// an entry, the whole check is skipped (return carries excluded:true so the
+// pre-commit caller can emit a one-line audit trace) -- it is a repo-level
+// bypass, not a per-file filter. Matching is delegated to path-coverage-match.js
+// isCoveredByEntryList(), deliberately NOT shared-cmd-utils.isExcluded(): that
+// helper adds basename matching and built-in exclude patterns, neither of which
+// is wanted for a repo-root comparison. When the exclude list is non-empty but
+// the repo root cannot be determined, check() throws -- the existing catch in
+// hooks/pre-commit turns that into fail-open ("lint-commit-lang skipped").
+// Known limitation (out of scope here): glob entries must be written in
+// OS-native absolute path form, a constraint of the shared matcher.
+// The matcher modules are required lazily, inside the gate, so the default
+// (no exclusions) path keeps the pre-existing require graph unchanged.
 
 const { spawnSync } = require("child_process");
 const { hasCJK } = require("./detect-cjk");
-const { loadLangConfig, classifyPolicy } = require("./lang-config");
+const { loadLangConfig, classifyPolicy, loadCodeLangExclude } = require("./lang-config");
 const { ENGLISH_RUN_RE } = require("./lint-plan-lang");
 
 const MAX_LINE = 80;
@@ -19,6 +33,14 @@ const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 
 function git(args) {
   return spawnSync("git", args, { encoding: "buffer", maxBuffer: GIT_MAX_BUFFER });
+}
+
+// Absolute repository root, or null when it cannot be determined.
+function repoRoot() {
+  const r = git(["rev-parse", "--show-toplevel"]);
+  if (r.error || r.status !== 0 || !r.stdout) return null;
+  const root = r.stdout.toString("utf8").trim();
+  return root.length === 0 ? null : root;
 }
 
 // Staged file paths (added/copied/modified/renamed-destination). Renames are
@@ -64,6 +86,18 @@ function check(options) {
   try {
     const policy = loadLangConfig("code");
     if (classifyPolicy(policy) === "noop") return { violations, hints };
+    const raw = loadCodeLangExclude();
+    // Cheap pre-filter (no entry can survive semicolon-split + trim otherwise):
+    // keeps the matcher modules off the require graph for the default unset case.
+    if (/[^;\s]/.test(raw)) {
+      const { parseExcludePatterns } = require("./glob-match");
+      if (parseExcludePatterns(raw).length > 0) {
+        const { isCoveredByEntryList } = require("./path-coverage-match");
+        const root = repoRoot();
+        if (root === null) throw new Error("CODE_LANG_EXCLUDE is set but the repository root could not be determined");
+        if (isCoveredByEntryList(raw, root)) return { violations: [], hints: [], excluded: true };
+      }
+    }
     for (const file of stagedFiles()) {
       const buf = stagedBlob(file);
       if (buf === null) continue;

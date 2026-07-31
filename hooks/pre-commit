@@ -180,6 +180,10 @@ fi
 # spawns no node process and emits no output. classifyPolicy() in
 # hooks/lib/lang-config.js remains the SSOT for what each non-empty value means;
 # this guard only short-circuits the trivially-unset case.
+# Repo-level exclusion is evaluated inside the node module via CODE_LANG_EXCLUDE;
+# a matched exclusion prints a one-line audit trace (below) rather than skipping
+# silently. If the repo root cannot be determined it throws, and the catch below
+# fails open ("lint-commit-lang skipped").
 if [ -n "${CODE_LANG:-}" ]; then
     _lang_cfg_dir="${AGENTS_CONFIG_DIR:-$_cfg_dir}"
     if command -v cygpath >/dev/null 2>&1; then
@@ -192,6 +196,9 @@ if [ -n "${CODE_LANG:-}" ]; then
         var cfg = process.env.AGENTS_CONFIG_DIR;
         var m = require(cfg + "/hooks/lib/lint-commit-lang");
         var r = m.check();
+        if (r.excluded) {
+          process.stderr.write("lint-commit-lang: skipped (CODE_LANG_EXCLUDE match)\n");
+        }
         if (r.violations && r.violations.length > 0) {
           r.violations.slice(0, 10).forEach(function(v) {
             process.stderr.write("  " + v.file + ":" + v.lineNumber + ": " + v.line.slice(0,80) + "\n");

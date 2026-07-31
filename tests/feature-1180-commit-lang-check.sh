@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-1180-commit-lang-check.sh
-# Tests: hooks/lib/lint-commit-lang.js, hooks/pre-commit, hooks/lib/lang-config.js
+# Tests: hooks/lib/lint-commit-lang.js, hooks/pre-commit, hooks/lib/lang-config.js, hooks/lib/path-coverage-match.js, hooks/lib/glob-match.js
 # Tags: lang-enforce, commit-hook, scope:issue-specific
 #
 # Integration cases invoke hooks/pre-commit directly (per the established
@@ -37,6 +37,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/feature-1180-commit-la
 . "$SCRIPT_DIR/group-u-postfix.sh"
 # shellcheck source=./feature-1180-commit-lang-check/group-i-postfix.sh
 . "$SCRIPT_DIR/group-i-postfix.sh"
+# shellcheck source=./feature-1180-commit-lang-check/group-exclude.sh
+. "$SCRIPT_DIR/group-exclude.sh"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

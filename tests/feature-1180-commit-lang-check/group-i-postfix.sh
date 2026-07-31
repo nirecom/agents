@@ -94,6 +94,9 @@ cp "$AGENTS_DIR/hooks/lib/load-env.js"          "$_i10_cfg/hooks/lib/"
 # load-env.js -> agents-config-dir.js -> path-normalize.js (transitive requires)
 cp "$AGENTS_DIR/hooks/lib/agents-config-dir.js" "$_i10_cfg/hooks/lib/"
 cp "$AGENTS_DIR/hooks/lib/path-normalize.js"    "$_i10_cfg/hooks/lib/"
+# CODE_LANG_EXCLUDE exclude gate (lazily required) -> path-coverage-match.js / glob-match.js
+cp "$AGENTS_DIR/hooks/lib/path-coverage-match.js" "$_i10_cfg/hooks/lib/"
+cp "$AGENTS_DIR/hooks/lib/glob-match.js"          "$_i10_cfg/hooks/lib/"
 
 # Create a temp repo with a staged file containing CJK content
 _i10_repo="$(make_git_repo i10)"
