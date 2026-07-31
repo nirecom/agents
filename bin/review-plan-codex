@@ -152,7 +152,7 @@ INPUT_LINES=$(wc -l < "$INPUT")
 # Truncate to 5000 lines if needed
 MAX_PLAN_LINES=5000
 if (( INPUT_LINES > MAX_PLAN_LINES )); then
-  echo "Warning: plan is ${INPUT_LINES} lines, truncating to ${MAX_PLAN_LINES} for codex."
+  echo "Warning: plan is ${INPUT_LINES} lines, truncating to ${MAX_PLAN_LINES} for codex." >&2
   PLAN_CONTENT=$(printf '%s' "$PLAN_CONTENT" | head -n "$MAX_PLAN_LINES")
   INPUT_LINES=$MAX_PLAN_LINES
 fi
