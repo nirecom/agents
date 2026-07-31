@@ -188,3 +188,7 @@ Changes: Added `/wf-init` as a short alias for `/workflow-init` (re-run the inst
 ### FEATURE: PR #1774 (2026-08-01)
 Background: feat(#1747): add SESSION_SYNC toggle (default off) + fixes for #1218 #1564 #1214 #1739
 Changes: Automatic Claude Code session sync is now **off by default**. Set `SESSION_SYNC=on` in `agents/.env` to keep the previous automatic fetch-on-shell-startup and push-on-`codes` behavior. Manual `session-sync push/pull/status/reset` is unaffected and continues to work regardless of the setting.;Windows shell startup no longer leaks raw git/SSH diagnostics into the console when the session-sync auto-fetch fails; a single one-line hint is shown instead, matching the Linux/macOS behavior.;`session-sync reset` and `cc-session-mtime` now reject option-looking timestamps read from session JSONL files and pass `--` before filenames, so unusual session data can no longer influence how `touch` interprets its arguments.
+
+### FEATURE: PR #1781 (2026-08-01)
+Background: feat(#1741): add CODE_LANG_EXCLUDE repo-level opt-out for language check
+Changes: Added `CODE_LANG_EXCLUDE` to let specific repos opt out of the `CODE_LANG` commit-time language check, matched by absolute path or glob (semicolon-separated), same matcher as `ENFORCE_WORKTREE_EXCLUDE`.
