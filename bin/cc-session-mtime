@@ -31,9 +31,13 @@ find "$PROJECTS_DIR" -name "*.jsonl" ! -name ".history.jsonl" | while read -r f;
         echo "warn: no timestamp in $f" >&2
         continue
     fi
+    # Reject option-looking values (same check as session-sync.sh reset).
+    case "$ts" in
+        -*) echo "warn: rejecting option-like timestamp in $f" >&2; continue ;;
+    esac
     if [[ "$DRY_RUN" -eq 1 ]]; then
-        echo "would touch -d $ts $f"
+        echo "would touch -d $ts -- $f"
     else
-        touch -d "$ts" "$f" 2>/dev/null || true
+        touch -d "$ts" -- "$f" 2>/dev/null || true
     fi
 done

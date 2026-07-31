@@ -5,7 +5,11 @@
 #   get-config-var --is-off <NAME> [<default>]
 #       Exit 0 (OFF) | 1 (explicit ON) | 2 (unset, no default given) |
 #       3 (unrecognized value, stderr warning) | 4 (internal failure).
-#       Shell idiom '&& echo OFF || echo ON' maps exit 0 → OFF, 1/2/3/4 → ON.
+#       The '&& echo OFF || echo ON' shell idiom is one possible caller convention —
+#       fail-safe-ON, mapping exit 0 → OFF and 1/2/3/4 → ON. Callers wanting
+#       fail-safe-OFF instead should check $? explicitly and treat ONLY exit code 1
+#       as ON, every other code as OFF. This repo's SESSION_SYNC call sites use the
+#       fail-safe-OFF pattern deliberately.
 #   Usage error (missing NAME arg): exit 64.
 #
 # Resolution order for hooks/lib/load-env.js:
@@ -69,7 +73,7 @@ if [ "$MODE" = "is-off" ]; then
     off) exit 0 ;;
     on)  exit 1 ;;
     *)
-      printf 'get-config-var: unrecognized value %s for %s (treated as ON)\n' \
+      printf 'get-config-var: unrecognized value %s for %s (caller-dependent: exit 3 — see usage header for ON vs OFF handling)\n' \
         "$VAL" "$GETCV_NAME" >&2
       exit 3 ;;
   esac

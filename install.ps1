@@ -55,11 +55,17 @@ if ($Develop -or $Full -or $Base -or $Toolchain) {
 
 Write-Host ""
 Write-Host "--- Initializing Claude Code session sync ---"
-if (Get-Command claude -ErrorAction SilentlyContinue) {
-    & "$AgentsRoot\install\win\session-sync-init.ps1"
-} else {
+# --- BEGIN session-sync gate ---
+# One-time idempotent bootstrap (git init, .gitattributes/.gitignore write, remote
+# add/set-url) — runs unconditionally whenever Claude Code is present, independent of
+# the SESSION_SYNC toggle, which gates only *automatic* sync (see profile-snippet.ps1).
+# Manual `session-sync push/pull/status/reset` depends on this bootstrap having run.
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "Claude Code not found. Session sync skipped." -ForegroundColor Yellow
+} else {
+    & "$AgentsRoot\install\win\session-sync-init.ps1"
 }
+# --- END session-sync gate ---
 
 Write-Host ""
 Write-Host "--- Adding profile sourcing ---"
