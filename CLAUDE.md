@@ -4,7 +4,7 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
 
 ## Workflow
 
-Begin file-modifying sessions with `/workflow-init`; skip for read-only investigation. `/wf-init` is a short alias for the same skill.
+Begin file-modifying sessions with `/workflow-init`; skip for read-only investigation.
 
 Steps use prefix `WF-<TYPE>-N`; `WF-CODE-N` = standard implementation. `WF-META-N` = planning-only (meta issues, no worktree).
 
