@@ -175,4 +175,4 @@ Changes: Fixed: `block-history-direct.js` now respects an active `WORKFLOW_ENFOR
 
 ### FEATURE: PR #1752 (2026-07-31)
 Background: fix(#1734): route plan-truncation warning to stderr, not stdout
-Changes: Fixed a bug where an oversized plan/draft (over 5000 lines) passed to the Codex plan-review
+Changes: Fixed a bug where an oversized plan/draft (over 5000 lines) passed to the Codex plan-review loop could incorrectly halt the review with an "unrecognized status header" error instead of proceeding normally.
