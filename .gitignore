@@ -15,3 +15,6 @@ rules/language.md
 
 # Local backups written by /worktree-end (may contain gitignored .env files)
 .worktree-backup/
+
+# Installer-created directory symlink: /wf-init alias for /workflow-init (#1743)
+skills/wf-init

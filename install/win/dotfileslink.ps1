@@ -48,10 +48,15 @@ if ((Test-Path $oldCommands) -and (Get-Item $oldCommands -Force).Attributes -ban
 }
 
 $links = @(
-    @{ Source = "CLAUDE.md";   Dest = "$ClaudeDir\CLAUDE.md";   IsDir = $false }
-    @{ Source = "skills";      Dest = "$ClaudeDir\skills";      IsDir = $true }
-    @{ Source = "rules";       Dest = "$ClaudeDir\rules";       IsDir = $true }
-    @{ Source = "agents";      Dest = "$ClaudeDir\agents";      IsDir = $true }
+    @{ Source = "CLAUDE.md";            Dest = "$ClaudeDir\CLAUDE.md";            IsDir = $false }
+    @{ Source = "skills";                Dest = "$ClaudeDir\skills";               IsDir = $true }
+    @{ Source = "rules";                 Dest = "$ClaudeDir\rules";                IsDir = $true }
+    @{ Source = "agents";                Dest = "$ClaudeDir\agents";               IsDir = $true }
+    # /wf-init alias for /workflow-init (#1743): intra-repo symlink so autocomplete
+    # picks up a short name — /workflow-launch-exec (an unowned built-in) otherwise
+    # wins the `/wor` completion. Not a native Skill alias field (none exists);
+    # this is a second directory name resolving to the same SKILL.md.
+    @{ Source = "skills\workflow-init"; Dest = "$AgentsRoot\skills\wf-init";       IsDir = $true }
 )
 
 # Transactional symlink loop. Per-link failure logged + counted; loop continues to next link.
