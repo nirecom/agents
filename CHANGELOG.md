@@ -184,3 +184,7 @@ Changes: Fixed `/review-tests` COMPLETE sentinel incorrectly blocking when stage
 ### FEATURE: PR #1772 (2026-07-31)
 Background: feat(#1743): add /wf-init alias for /workflow-init
 Changes: Added `/wf-init` as a short alias for `/workflow-init` (re-run the installer to pick it up after `git pull`).
+
+### FEATURE: PR #1774 (2026-08-01)
+Background: feat(#1747): add SESSION_SYNC toggle (default off) + fixes for #1218 #1564 #1214 #1739
+Changes: Automatic Claude Code session sync is now **off by default**. Set `SESSION_SYNC=on` in `agents/.env` to keep the previous automatic fetch-on-shell-startup and push-on-`codes` behavior. Manual `session-sync push/pull/status/reset` is unaffected and continues to work regardless of the setting.;Windows shell startup no longer leaks raw git/SSH diagnostics into the console when the session-sync auto-fetch fails; a single one-line hint is shown instead, matching the Linux/macOS behavior.;`session-sync reset` and `cc-session-mtime` now reject option-looking timestamps read from session JSONL files and pass `--` before filenames, so unusual session data can no longer influence how `touch` interprets its arguments.
