@@ -15,6 +15,12 @@
 # - real SSH passphrase prompting on `git fetch` against a passphrase-protected key
 # - real iTerm/interactive-shell job-control rendering of "[N] + suspended"
 # - real network fetch/merge against the live session-sync remote
+# - the SESSION_SYNC gate as experienced from a real login shell: the gate cases
+#   below source a *copied* profile-snippet.sh from a mirror tree, so they cannot
+#   catch a regression that only shows up when the snippet runs from the real
+#   install location (e.g. an AGENTS_CONFIG_DIR that resolves differently there)
+# - the value actually shipped in the real .env (the mirror deliberately has no
+#   .env, so only process-env values are exercised)
 # Closest-to-action mitigation: this gap is checked at WORKFLOW_USER_VERIFIED preflight
 # via bin/check-verification-gate.sh category: installer
 
@@ -86,11 +92,104 @@ EOF
 }
 
 # Runs a snippet driver under a given shell with the sandbox HOME + fake git PATH.
-# Args: <shell: bash|zsh> <sandbox> <driver-script-path>
+# Args: <shell: bash|zsh> <sandbox> <driver-script-path> [<SESSION_SYNC value>]
+#
+# The 4th arg is the SESSION_SYNC value to hand the driver process; the literal
+# string UNSET (the default) removes the variable. It is never simply inherited:
+# once the SESSION_SYNC gate lands, a developer whose own config has the toggle
+# off would otherwise silently turn the fetch block into a no-op and take TC5 /
+# TC8-TC12 down with it. Those cases assert on the fetch block, so they pass
+# "on" explicitly and stay valid on both sides of the change.
 run_driver() {
-    local shell="$1" sb="$2" driver="$3"
-    HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
-        bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
+    local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}"
+    if [ "$ss" = "UNSET" ]; then
+        env -u SESSION_SYNC HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
+            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
+    else
+        env SESSION_SYNC="$ss" HOME="$sb/home" PATH="$sb/bin:$PATH" SNIPPET="$SNIPPET" \
+            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
+    fi
+}
+
+# --- Mirror sandbox (SESSION_SYNC gate cases) -------------------------------
+# profile-snippet.sh line ~11 unconditionally re-exports AGENTS_CONFIG_DIR and
+# AGENTS_DIR to *its own* parent directory. Sourcing the snippet from the real
+# checkout therefore resolves bin/get-config-var against the real .env, and
+# resolves codes()'s `$AGENTS_DIR/bin/session-sync.sh` to the real sync CLI —
+# which would push the developer's actual session repo. The mirror copies the
+# snippet into a throwaway tree carrying just enough of the repo around it, plus
+# recording stubs for the two commands codes() shells out to.
+#
+# Deliberately a local helper rather than a shared file: per-file helpers are the
+# convention in tests/ (make_sandbox above is the same shape).
+make_mirror_sandbox() {
+    local with_git_repo="$1"
+    local sb; sb="$(make_sandbox "$with_git_repo")"
+
+    mkdir -p "$sb/agents/bin" "$sb/agents/hooks" "$sb/agents/install/linux"
+    cp "$SNIPPET" "$sb/agents/profile-snippet.sh"
+    cp "$AGENTS_DIR/bin/get-config-var" "$sb/agents/bin/get-config-var"
+    chmod +x "$sb/agents/bin/get-config-var"
+    # get-config-var resolves hooks/lib/load-env.js under AGENTS_CONFIG_DIR.
+    cp -R "$AGENTS_DIR/hooks/lib" "$sb/agents/hooks/lib"
+    # No .env in the mirror on purpose: loadDefaultEnv short-circuits on
+    # AGENTS_CONFIG_DIR and never falls back, so SESSION_SYNC can only come from
+    # the process environment. That makes each case decide its own value.
+
+    # Recording stub for the manual sync CLI — never touches a real repo.
+    cat > "$sb/agents/bin/session-sync.sh" <<EOF
+#!/bin/bash
+printf 'was-called %s\n' "\$*" >> "$sb/session-sync.calls"
+exit 0
+EOF
+    chmod +x "$sb/agents/bin/session-sync.sh"
+    cat > "$sb/agents/bin/wait-vscode-window.sh" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$sb/agents/bin/wait-vscode-window.sh"
+    cat > "$sb/agents/install/linux/dotfileslink.sh" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$sb/agents/install/linux/dotfileslink.sh"
+
+    # Recording stub for the editor launch, so a case can tell "codes() did
+    # nothing" apart from "codes() ran but skipped the push".
+    cat > "$sb/bin/code" <<EOF
+#!/bin/bash
+printf 'was-called %s\n' "\$*" >> "$sb/code.calls"
+exit 0
+EOF
+    chmod +x "$sb/bin/code"
+    # Broken-node stub for the fail-safe cases. A stub rather than an empty PATH:
+    # the snippet also needs date/sleep/dirname, so node must be shadowed, not
+    # the whole environment removed.
+    mkdir -p "$sb/nonode"
+    cat > "$sb/nonode/node" <<'EOF'
+#!/bin/bash
+echo "node: simulated failure" >&2
+exit 127
+EOF
+    chmod +x "$sb/nonode/node"
+    echo "$sb"
+}
+
+# Runs a driver against the MIRRORED snippet.
+# Args: <shell> <sandbox> <driver> <SESSION_SYNC value|UNSET> [<with-node|no-node>]
+run_mirror_driver() {
+    local shell="$1" sb="$2" driver="$3" ss="${4:-UNSET}" node_mode="${5:-with-node}"
+    local path_val="$sb/bin:$PATH"
+    [ "$node_mode" = "no-node" ] && path_val="$sb/nonode:$sb/bin:$PATH"
+    if [ "$ss" = "UNSET" ]; then
+        env -u SESSION_SYNC HOME="$sb/home" PATH="$path_val" \
+            SNIPPET="$sb/agents/profile-snippet.sh" \
+            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
+    else
+        env SESSION_SYNC="$ss" HOME="$sb/home" PATH="$path_val" \
+            SNIPPET="$sb/agents/profile-snippet.sh" \
+            bash "$RUN_TIMEOUT" 30 "$shell" "$driver" 2>&1
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -150,7 +249,9 @@ tc_idempotent() {
 . "$SNIPPET"
 echo "LOADED=${_AGENTS_PROFILE_LOADED-MISSING}"
 EOF
-    local out; out="$(run_driver "$shell" "$sb" "$drv")"
+    # SESSION_SYNC=on: this case counts fetch-block emissions, so the automatic
+    # path must be enabled regardless of the machine's own toggle value.
+    local out; out="$(run_driver "$shell" "$sb" "$drv" on)"
     local n; n="$(echo "$out" | grep -c "git fetch Claude session sync")"
     if [ "$n" -eq 1 ]; then
         pass "$label: second source short-circuits (fetch marker printed once)"
@@ -179,7 +280,7 @@ tc_helper_cleaned() {
 . "$SNIPPET"
 if type _session_sync_fetch >/dev/null 2>&1; then echo "HELPER=present"; else echo "HELPER=absent"; fi
 EOF
-    local out; out="$(run_driver "$shell" "$sb" "$drv")"
+    local out; out="$(run_driver "$shell" "$sb" "$drv" on)"
     local runtime_absent=0
     echo "$out" | grep -q "HELPER=absent" && runtime_absent=1
 
@@ -209,7 +310,7 @@ tc_no_setopt_in_bash() {
 . "$SNIPPET"
 echo "DONE"
 EOF
-    local out; out="$(run_driver bash "$sb" "$drv")"
+    local out; out="$(run_driver bash "$sb" "$drv" on)"
     if echo "$out" | grep -q "DONE" && ! echo "$out" | grep -qi "setopt"; then
         pass "bash-compat: no setopt error when sourcing in bash"
     else
@@ -236,7 +337,7 @@ echo "DONE"
 EOF
     # Run zsh interactively-ish: monitor mode only matters with -m / interactive,
     # but the planned fix uses NO_MONITOR explicitly. We assert no suspend output.
-    local out; out="$(run_driver zsh "$sb" "$drv")"
+    local out; out="$(run_driver zsh "$sb" "$drv" on)"
     if echo "$out" | grep -Eq "suspended|\[[0-9]+\][[:space:]]*\+"; then
         fail "zsh job control: background suspend output present. Output: $out"
     else
@@ -257,7 +358,7 @@ tc_git_terminal_prompt() {
 . "$SNIPPET"
 echo "DONE"
 EOF
-    local out; out="$(run_driver bash "$sb" "$drv")"
+    local out; out="$(run_driver bash "$sb" "$drv" on)"
     if [ -f "$sb/gtp.out" ]; then
         local gtp; gtp="$(cat "$sb/gtp.out")"
         if [ "$gtp" = "0" ]; then
@@ -281,7 +382,9 @@ tc_no_git_repo() {
 . "$SNIPPET"
 echo "DONE"
 EOF
-    local out; out="$(run_driver bash "$sb" "$drv")"
+    # SESSION_SYNC=on so the only possible reason for skipping the fetch block is
+    # the missing repo — otherwise the assertion would pass vacuously.
+    local out; out="$(run_driver bash "$sb" "$drv" on)"
     if echo "$out" | grep -q "DONE" \
         && ! echo "$out" | grep -q "git fetch Claude session sync" \
         && [ ! -f "$sb/gtp.out" ] \
@@ -317,7 +420,7 @@ EOF
 . "$SNIPPET"
 echo "DONE"
 EOF
-    local out; out="$(run_driver bash "$sb" "$drv")"
+    local out; out="$(run_driver bash "$sb" "$drv" on)"
     if echo "$out" | grep -q "DONE" \
         && [ ! -f "$sb/merged.out" ] \
         && ! echo "$out" | grep -qi "error\|command not found"; then
@@ -346,6 +449,11 @@ else
     echo "SKIP: zsh not available — TC2/TC4/TC6"
 fi
 tc_no_job_control_zsh              # TC9 (self-skips if no zsh)
+
+# TC13+ — SESSION_SYNC gate cases. Kept in a sibling part file so this file
+# stays under the 500-line HARD limit of rules/coding/file-split.md.
+# shellcheck source=tests/fix-1225-profile-snippet-guards/session-sync-gate.sh
+. "${AGENTS_DIR}/tests/fix-1225-profile-snippet-guards/session-sync-gate.sh"
 
 echo "----------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"

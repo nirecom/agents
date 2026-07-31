@@ -158,7 +158,12 @@ case "$ACTION" in
         # Restore mtime from JSONL timestamps (git doesn't preserve mtime)
         find "$PROJECTS_DIR" -name "*.jsonl" ! -name ".history.jsonl" | while read -r f; do
             ts=$(grep -o '"timestamp":"[^"]*"' "$f" 2>/dev/null | tail -1 | cut -d'"' -f4) || true
-            [ -n "$ts" ] && touch -d "$ts" "$f" 2>/dev/null || true
+            # $ts comes from untrusted JSONL content. Reject option-looking values before
+            # they reach touch's argv (same check as cc-session-mtime, kept symmetric).
+            case "$ts" in
+                -*) echo "warn: rejecting option-like timestamp in $f" >&2; continue ;;
+            esac
+            if [ -n "$ts" ]; then touch -d "$ts" -- "$f" 2>/dev/null || true; fi
         done
         # Merge remote history with local (dedup, preserve order)
         if [ -f "$PROJECTS_DIR/.history.jsonl" ]; then

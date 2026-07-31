@@ -66,11 +66,17 @@ fi
 
 echo ""
 printf -- "${C_BOLD}--- Initializing Claude Code session sync ---${C_RESET}\n"
-if type claude >/dev/null 2>&1; then
-    "$AGENTS_ROOT/install/linux/session-sync-init.sh"
-else
+# --- BEGIN session-sync gate ---
+# One-time idempotent bootstrap (git init, .gitattributes/.gitignore write, remote
+# add/set-url) — runs unconditionally whenever Claude Code is present, independent of
+# the SESSION_SYNC toggle, which gates only *automatic* sync (see profile-snippet.sh).
+# Manual `session-sync push/pull/status/reset` depends on this bootstrap having run.
+if ! type claude >/dev/null 2>&1; then
     printf "${C_YELLOW}Claude Code not found. Session sync skipped.${C_RESET}\n"
+else
+    "$AGENTS_ROOT/install/linux/session-sync-init.sh"
 fi
+# --- END session-sync gate ---
 
 echo ""
 printf -- "${C_BOLD}--- Adding profile sourcing ---${C_RESET}\n"

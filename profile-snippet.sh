@@ -32,23 +32,36 @@ fi
 # Auto-pull Claude Code session sync repo (~/.claude/projects/) on startup.
 _session_dir="$HOME/.claude/projects"
 if type git >/dev/null 2>&1 && [ -d "$_session_dir/.git" ]; then
-    _session_sync_fetch() {
-        [ -n "${ZSH_VERSION-}" ] && setopt LOCAL_OPTIONS NO_MONITOR
-        echo "git fetch Claude session sync ..."
-        ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch 2>/dev/null ) &
-        _pid_ss=$!
-        _ss_deadline=$(( $(date +%s) + 3 ))
-        while kill -0 "$_pid_ss" 2>/dev/null; do
-            if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null; break; fi
-            sleep 0.2
-        done
-        wait "$_pid_ss" 2>/dev/null
-        _rc_ss=$?
-    }
-    _session_sync_fetch
-    unset -f _session_sync_fetch 2>/dev/null
-    [ "${_rc_ss:-1}" -eq 0 ] && git -C "$_session_dir" merge --ff-only FETCH_HEAD 2>/dev/null
-    unset _pid_ss _ss_deadline _rc_ss
+    # SESSION_SYNC is opt-in (default off): only an explicit `on` enables automatic
+    # session sync. get-config-var --is-off exits 1 for explicit ON; every other
+    # exit (off / empty / unrecognized / internal failure / node missing) keeps it
+    # off. Always use `if ...; then ...; fi` below, never `[ cond ] && var=1` — the
+    # latter is a top-level command whose failure status kills the script under
+    # set -e (see install.sh).
+    _ss_rc=0
+    "$_agents_root/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
+    _ss_on=0
+    if [ "$_ss_rc" -eq 1 ]; then _ss_on=1; fi
+    if [ "$_ss_on" = "1" ]; then
+        _session_sync_fetch() {
+            [ -n "${ZSH_VERSION-}" ] && setopt LOCAL_OPTIONS NO_MONITOR
+            echo "git fetch Claude session sync ..."
+            ( GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$_session_dir" fetch 2>/dev/null ) &
+            _pid_ss=$!
+            _ss_deadline=$(( $(date +%s) + 3 ))
+            while kill -0 "$_pid_ss" 2>/dev/null; do
+                if [ "$(date +%s)" -ge "$_ss_deadline" ]; then kill "$_pid_ss" 2>/dev/null; break; fi
+                sleep 0.2
+            done
+            wait "$_pid_ss" 2>/dev/null
+            _rc_ss=$?
+        }
+        _session_sync_fetch
+        unset -f _session_sync_fetch 2>/dev/null
+        [ "${_rc_ss:-1}" -eq 0 ] && git -C "$_session_dir" merge --ff-only FETCH_HEAD 2>/dev/null
+        unset _pid_ss _ss_deadline _rc_ss
+    fi
+    unset _ss_on _ss_rc
 fi
 unset _session_dir
 
@@ -78,11 +91,17 @@ codes() {
     fi
     (
         code --new-window "$@"
-        "$AGENTS_DIR/bin/wait-vscode-window.sh" "$name"
-        if _any_vscode_window; then
-            "$AGENTS_DIR/bin/session-sync.sh" push --quiet
-        else
-            "$AGENTS_DIR/bin/session-sync.sh" push --quiet --toast
+        _ss_rc=0
+        "$AGENTS_DIR/bin/get-config-var" --is-off SESSION_SYNC off >/dev/null 2>&1 || _ss_rc=$?
+        _ss_on=0
+        if [ "$_ss_rc" -eq 1 ]; then _ss_on=1; fi
+        if [ "$_ss_on" = "1" ]; then
+            "$AGENTS_DIR/bin/wait-vscode-window.sh" "$name"
+            if _any_vscode_window; then
+                "$AGENTS_DIR/bin/session-sync.sh" push --quiet
+            else
+                "$AGENTS_DIR/bin/session-sync.sh" push --quiet --toast
+            fi
         fi
     ) &
     disown

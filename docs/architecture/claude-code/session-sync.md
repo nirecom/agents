@@ -32,8 +32,13 @@ session data without conflict.
 **Configuration** (`agents/.env`, gitignored):
 
 ```
+SESSION_SYNC=off
 SESSION_SYNC_REMOTE_URL=git@github.com:YOUR_USERNAME/agent-sessions.git
 ```
+
+`SESSION_SYNC` accepts `on` / `off` only; everything else (unset, empty, `yes`/`true`/`1`,
+config-read failure, node missing) falls back to `off` — fail-safe OFF, the opposite
+direction from `RUN_TL3`'s fail-safe-ON convention.
 
 Priority at init time: `--remote-url` CLI arg > `.env` > built-in default.
 Changing `.env` after init requires re-running `session-sync-init.sh` / `session-sync-init.ps1`.
@@ -55,20 +60,37 @@ but tasks requiring local filesystem, MCP servers, or NSSM service operations mu
 mode. Local sessions are invisible to Web and vice versa. Self-hosted sync is necessary for
 sharing Local mode session history.
 
-**Automatic sync** (provided by `agents/profile-snippet.{sh,ps1}` — works without dotfiles):
-- **Terminal startup**: `profile-snippet.sh` (Linux/macOS) and `profile-snippet.ps1` (Windows) run
-  `git fetch + merge --ff-only` on `~/.claude/projects/` with 3-second timeout
-- **`codes` function**: Opens VS Code in a new window (`--new-window`), polls for window
-  closure via title matching (`bin/wait-vscode-window.ps1` / `.sh`), then runs session-sync push.
-  Each instance independently detects its own window. Push runs in quiet mode: shows a single
-  Windows toast notification on completion or failure (WinRT API, no external modules).
-  Linux: `notify-send` fallback.
+**Automatic sync** — disabled by default. All automatic sync is off unless `.env` carries
+an explicit `SESSION_SYNC=on`. The toggle gates 2 systems across 4 call sites:
+
+1. **Shell-startup fetch** — evaluated at shell startup — `profile-snippet.sh` and
+   `profile-snippet.ps1`. When on, runs `git fetch + merge --ff-only` on
+   `~/.claude/projects/` with a 3-second timeout.
+2. **`codes` push** — evaluated at `codes` invocation time — both shells. VS Code always
+   opens in a new window (`--new-window`) regardless of the toggle; when on, `codes`
+   additionally polls for window closure via title matching
+   (`bin/wait-vscode-window.ps1` / `.sh`), then runs session-sync push. Each instance
+   independently detects its own window. Push runs in quiet mode: shows a single Windows
+   toast notification on completion or failure (WinRT API, no external modules).
+   Linux: `notify-send` fallback.
+
+Installer bootstrap (`install.sh` / `install.ps1` calling `session-sync-init.sh` /
+`.ps1`) is **not** one of the gated systems — it runs unconditionally whenever the
+`claude` CLI is present, regardless of `SESSION_SYNC`. It is a one-time idempotent setup
+step (git init, `.gitattributes`/`.gitignore` write, remote add/set-url) with no ongoing
+automatic-sync side effects, so leaving it ungated is safe. This is what makes manual
+sync (below) always functional right after install, independent of the toggle's value.
 
 **Manual sync**:
 ```
 End of work:    Close all Claude Code sessions → session-sync push
 Other machine:  session-sync pull → Launch Claude Code
 ```
+Manual invocation of `session-sync push/pull/status/reset` is never gated by
+`SESSION_SYNC` — it always runs regardless of the toggle's value. This guarantee holds
+only because installer bootstrap (above) always runs: without it, a fresh install with
+the default (off) toggle would leave `~/.claude/projects/` uninitialized as a git repo,
+and manual commands would fail.
 
 **Known behavior**: `session-sync push` uses `git add .` to stage all working tree changes.
 In 2026-04, a format migration (`UUID.jsonl` → `UUID/subagents/`) caused 35 files to be
