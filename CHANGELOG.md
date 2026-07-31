@@ -180,3 +180,7 @@ Changes: Fixed a bug where an oversized plan/draft (over 5000 lines) passed to t
 ### FEATURE: PR #1751 (2026-07-31)
 Background: fix(#1068): exclude staged deletions from compute-staged-tests-token fingerprint
 Changes: Fixed `/review-tests` COMPLETE sentinel incorrectly blocking when staged test changes included deletions.
+
+### FEATURE: PR #1772 (2026-07-31)
+Background: feat(#1743): add /wf-init alias for /workflow-init
+Changes: Added `/wf-init` as a short alias for `/workflow-init` (re-run the installer to pick it up after `git pull`).
