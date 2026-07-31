@@ -52,7 +52,7 @@ process.stdout.write(v && v.length ? v : (process.env.GETCV_DEFAULT || ""));
       'off'   { exit 0 }
       'on'    { exit 1 }
       default {
-        Write-Error "get-config-var: unrecognized value '$val' for $Name (treated as ON)"
+        Write-Error "get-config-var: unrecognized value '$val' for $Name (caller-dependent: exit 3 — see usage header for ON vs OFF handling)"
         exit 3
       }
     }
