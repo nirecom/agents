@@ -172,3 +172,7 @@ Changes: Reduced redundant parallel-dispatch instructions across workflow skills
 ### FEATURE: PR #1737 (2026-07-30)
 Background: fix(#1725): honor WORKFLOW_OFF / EMERGENCY OFF override in block-history-direct.js
 Changes: Fixed: `block-history-direct.js` now respects an active `WORKFLOW_ENFORCE_WORKFLOW_OFF` / `WORKFLOW_ENFORCE_WORKFLOW_OFF_EMERGENCY` session override instead of always blocking append-only doc writes.
+
+### FEATURE: PR #1752 (2026-07-31)
+Background: fix(#1734): route plan-truncation warning to stderr, not stdout
+Changes: Fixed a bug where an oversized plan/draft (over 5000 lines) passed to the Codex plan-review
