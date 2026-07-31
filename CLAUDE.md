@@ -4,7 +4,7 @@ All work follows [`rules/core-principles.md`](rules/core-principles.md).
 
 ## Workflow
 
-Begin file-modifying sessions with `/workflow-init`; skip for read-only investigation. `/wf-init` is a short alias for the same skill (installer-created directory symlink `skills/wf-init` → `skills/workflow-init`) — it does not appear after a bare `git pull`; re-run the installer to pick it up.
+Begin file-modifying sessions with `/workflow-init`; skip for read-only investigation. `/wf-init` is a short alias for the same skill.
 
 Steps use prefix `WF-<TYPE>-N`; `WF-CODE-N` = standard implementation. `WF-META-N` = planning-only (meta issues, no worktree).
 
