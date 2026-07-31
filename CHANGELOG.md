@@ -176,3 +176,7 @@ Changes: Fixed: `block-history-direct.js` now respects an active `WORKFLOW_ENFOR
 ### FEATURE: PR #1752 (2026-07-31)
 Background: fix(#1734): route plan-truncation warning to stderr, not stdout
 Changes: Fixed a bug where an oversized plan/draft (over 5000 lines) passed to the Codex plan-review loop could incorrectly halt the review with an "unrecognized status header" error instead of proceeding normally.
+
+### FEATURE: PR #1751 (2026-07-31)
+Background: fix(#1068): exclude staged deletions from compute-staged-tests-token fingerprint
+Changes: Fixed `/review-tests` COMPLETE sentinel incorrectly blocking when staged test changes included deletions.
