@@ -1,44 +1,51 @@
 # Issue Verdict Cascade (SSOT)
 
-起票候補に対する verdict 判定基準の唯一の定義。`/issue-create` のサーベイ用サブエージェントと
-`bin/github-issues/review-survey-verdict-codex.sh` のレビュー段の**両方**がこの 1 ファイルを読む。
-どちらの側にも本文を複製しない。
+The single definition of the verdict-decision criteria for a filing candidate. Both
+`/issue-create`'s survey subagent and the review stage in
+`bin/github-issues/review-survey-verdict-codex.sh` read this one file.
+Neither side duplicates the body.
 
-## 評価順序
+## Evaluation order
 
-**上から順に評価し、最初に該当した規則で確定する(first match wins)。** 後続の規則が先行の規則を
-上書きすることはない。ある規則が該当した時点で、それより下の規則は一切評価しない。
+**Evaluate top to bottom; the first rule that matches decides (first match wins).** A
+later rule never overrides an earlier one. Once a rule matches, no rule below it is
+evaluated.
 
-## IC-C1 — reopen(最優先)
+## IC-C1 — reopen (highest priority)
 
-候補のうち、**根本原因または観測症状が実質同じ**ものが 1 件でもあれば `reopen` で確定する。
-表面の切り口・語彙・スコープ記述の違いを非該当の理由にしてはならない。
-`target` = 該当候補の番号。`children` / `related` は空。
+If even one candidate shares **substantially the same root cause or observed
+symptom**, decide `reopen`. Differences in surface framing, wording, or scope
+description must not be used as grounds for non-match.
+`target` = the matching candidate's number. `children` / `related` are empty.
 
-## IC-C2 — sub-of(既存 meta 親への従属)
+## IC-C2 — sub-of (attach to an existing meta parent)
 
-IC-C1 が非該当のとき**のみ**評価する。`relation_status` が `resolved` の候補のうち、
-`parent_is_meta: true` の親を持つものがあれば、その**親番号**への `sub-of` で確定する。
-複数該当するときは主題が最も近い親を 1 つ選ぶ。候補自身が meta 親である場合は
-その候補番号を `target` にしてよい。`children` / `related` は空。
+Evaluate **only** when IC-C1 does not match. Among candidates with
+`relation_status: resolved`, if any has a parent with `parent_is_meta: true`, decide
+`sub-of` targeting that **parent's number**. When multiple qualify, pick the single
+parent whose subject is closest. If the candidate itself is a meta parent, its own
+number may be used as `target`. `children` / `related` are empty.
 
-## IC-C3 — make-parent(孤立候補の集約)
+## IC-C3 — make-parent (group orphan candidates)
 
-IC-C1 と IC-C2 がともに非該当のとき**のみ**評価する。`relation_status` が `resolved` で
-`parent_number` が全て `null` の、同一クラスとみなせる候補が 2 件以上あるとき `make-parent`。
-`children` にその孤立候補群を列挙し、`target` は `null`。
+Evaluate **only** when both IC-C1 and IC-C2 do not match. Decide `make-parent` when
+two or more candidates with `relation_status: resolved` and `parent_number: null`
+can be treated as the same class.
+List that orphan group in `children`; `target` is `null`.
 
 ## IC-C4 — sibling / none
 
-IC-C1 / IC-C2 / IC-C3 のいずれにも該当しない場合のみ。関連する候補があれば `sibling`
-(`related` に列挙、`target` は `null`)、まったく関連がなければ `none`
-(`target` は `null`、`children` / `related` は空)。
+Only when none of IC-C1 / IC-C2 / IC-C3 match. `sibling` when a related candidate
+exists (listed in `related`, `target` is `null`); `none` when there is no relation
+at all (`target` is `null`, `children` / `related` are empty).
 
-## 補助規則
+## Auxiliary rules
 
-- 候補の年齢は **tie-break にのみ**使う。順序は closed > open、新しい(newer) > 古い、
-  番号が小さい(smaller) > 大きい。
-- 数値のしきい値は設けない。判断は内容の同一性についての説明可能な根拠で行う。
-- `relation_status` が `resolved` でない候補については IC-C2 / IC-C3 の条件を評価しない
-  (「不明」を「親なし」と誤読しないため)。全候補が未解決なら IC-C1 → IC-C4 のみで判定する。
-- `reason` は 1 文。どの規則で確定したかがわかる書き方にする。
+- Candidate age is used **only as a tie-break**. Order: closed > open, newer > older,
+  smaller number > larger number.
+- No numeric threshold is set. Judgment is based on explainable evidence of content
+  identity.
+- For candidates whose `relation_status` is not `resolved`, do not evaluate the
+  IC-C2 / IC-C3 conditions (to avoid misreading "unknown" as "no parent"). If all
+  candidates are unresolved, decide using only IC-C1 → IC-C4.
+- `reason` is one sentence, written so the matching rule is identifiable.
