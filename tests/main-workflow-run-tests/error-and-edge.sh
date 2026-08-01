@@ -23,13 +23,13 @@ run_error_and_edge_tests() {
     fi
 
     # Also verify last_run_failed is set
-    E1_FAILED=$(node -e "
+    E1_FAILED=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
 try {
-  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-  const rt = s.steps && s.steps.run_tests;
+  const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
+  const rt = s && s.steps && s.steps.run_tests;
   console.log(rt && rt.last_run_failed === true ? 'yes' : 'no');
 } catch(e) { console.log('no'); }
-" "$WORKFLOW_DIR/$SID.json" 2>/dev/null || echo "no")
+" "$SID" 2>/dev/null || echo "no")
     if [ "$E1_FAILED" = "yes" ]; then
         pass "E1b. pytest tests/ + exit=1 → last_run_failed=true"
     else

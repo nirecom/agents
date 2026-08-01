@@ -20,6 +20,9 @@ function detectSentinelHang(transcriptPath) {
   } catch (_) {
     return false;
   }
+  // Exempt because these two steps legitimately end the turn: `final_report` is the
+  // session's TERMINAL step (SSOT: state-io TERMINAL_STEPS) and `pre_final_report_gate`
+  // is the pause immediately before it — stopping there is the expected outcome, not a hang.
   const SENTINEL_HANG_EXEMPT_STEPS = new Set(["final_report", "pre_final_report_gate"]);
   const tail = lines.slice(-100);
   let lastAssistant = null;

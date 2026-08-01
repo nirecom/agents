@@ -273,8 +273,13 @@ const s = m.readState(process.argv[1]);
 const rt = s && s.steps && s.steps.review_tests;
 process.stdout.write(rt && 'invalidate_reason' in rt ? String(rt.invalidate_reason) : 'MISSING');
 " -- "$sid" 2>/dev/null)
-    if [ "$status_val" = "pending" ] && [ "$token_val" = "null" ] && [ "$reason_val" = "test-reason-g8" ]; then
-        pass "G8. invalidateReviewTests sets status=pending, token=null, invalidate_reason"
+    # #1733: step_annotation events with value:null are tombstones (projection.js
+    # deletes the key rather than storing an explicit null) -- token is now absent
+    # from the projected step entry, not present-with-null. This is the documented
+    # #1733 contract change, not a bug: assert MISSING rather than the literal
+    # string "null".
+    if [ "$status_val" = "pending" ] && [ "$token_val" = "MISSING" ] && [ "$reason_val" = "test-reason-g8" ]; then
+        pass "G8. invalidateReviewTests sets status=pending, token=tombstoned, invalidate_reason"
     else
         fail "G8. invalidateReviewTests: status=$status_val token=$token_val reason=$reason_val"
     fi

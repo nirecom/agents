@@ -121,17 +121,22 @@ write_state() {
     printf '%s' "$json" > "$WORKFLOW_DIR/${sid}.json"
 }
 
+# #1733: state on disk is an append-only event stream (no top-level .steps);
+# read through readState() so v1 fixtures migrate and the event log projects.
+AGENTS_DIR_N="$(cygpath -m "$AGENTS_DIR" 2>/dev/null || echo "$AGENTS_DIR")"
+
 read_state_step() {
     local sid="$1" step="$2"
     local f="$WORKFLOW_DIR/${sid}.json"
     [ -f "$f" ] || { echo "MISSING"; return; }
-    run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout 5 node -e "
       try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-        const st = s.steps && s.steps['$step'];
+        const S = require(process.argv[2] + '/hooks/workflow-state/state-io.js');
+        const s = S.readState(process.argv[1]);
+        const st = s && s.steps && s.steps['$step'];
         console.log(st && st.status ? st.status : 'MISSING');
       } catch(e){ console.log('MISSING'); }
-    " "$f" 2>/dev/null || echo "MISSING"
+    " "$sid" "$AGENTS_DIR_N" 2>/dev/null || echo "MISSING"
 }
 
 read_step_field() {
@@ -139,14 +144,15 @@ read_step_field() {
     local sid="$1" step="$2" field="$3"
     local f="$WORKFLOW_DIR/${sid}.json"
     [ -f "$f" ] || { echo "MISSING"; return; }
-    run_with_timeout 5 node -e "
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" run_with_timeout 5 node -e "
       try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-        const st = s.steps && s.steps['$step'];
+        const S = require(process.argv[2] + '/hooks/workflow-state/state-io.js');
+        const s = S.readState(process.argv[1]);
+        const st = s && s.steps && s.steps['$step'];
         const v = st && st['$field'];
         console.log(v == null ? 'MISSING' : String(v));
       } catch(e){ console.log('MISSING'); }
-    " "$f" 2>/dev/null || echo "MISSING"
+    " "$sid" "$AGENTS_DIR_N" 2>/dev/null || echo "MISSING"
 }
 
 # Build a state JSON with named-step overrides.

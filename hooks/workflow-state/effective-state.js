@@ -35,7 +35,7 @@
 // scan would then abort on. opts.resolveAll lifts that cutoff for callers that
 // need a complete picture (--list rendering, commit gate, session-start display).
 
-const { VALID_STEPS, readRawState } = require("./state-io");
+const { VALID_STEPS, normalizeStateVersion } = require("./state-io");
 const { hasCompletionEvidence, hasPlanArtifact } = require("./evidence-resolver");
 const { readSkipVerdict } = require("./skip-verdict");
 const { hasStagedTestChanges } = require("../workflow-gate/staged-evidence");
@@ -52,6 +52,11 @@ const EVIDENCE_STEPS = Object.freeze([
 ]);
 
 // Steps auto-skipped in a wf-meta (planning-only) workflow.
+//
+// `final_report` is deliberately NOT a member: it is a TERMINAL step for wf-code
+// and wf-meta alike (SSOT: state-io TERMINAL_STEPS), and auto-skipping it would
+// silently erase the boundary the interval calculation folds against.
+// `pre_final_report_gate` is likewise excluded — a meta session still closes.
 const WF_META_AUTO_SKIP = new Set([
   "branching_complete", "detail", "write_tests", "review_tests", "run_tests",
   "review_security", "docs", "user_verification", "cleanup",
@@ -84,22 +89,39 @@ function canResolveFromEvidence(step, state, sessionId, opts) {
   return verdict.approved === true;
 }
 
-// Was `step` actually written to disk as complete, with a real timestamp?
+// Was `step` genuinely completed by a process that saw it happen — as opposed to
+// reconstructed by a migration or synthesized by session inheritance?
 //
-// readState() synthesizes several steps (clarify_intent among them) as complete
-// even when the record was never written, so a migrated/synthesized entry is
-// indistinguishable from a genuine one through the normal read path. Reading the
-// raw JSON sees through that: an absent key means synthesized, and a null
-// updated_at is the synthesis marker.
+// Since #1733 this is a RECORDED FACT, not a heuristic: the latest `step_status`
+// event for the step must say `complete`, and its `provenance` must not be
+// `backfilled`. `observed` (a live markStep) and `declared` (a RESET_FROM force
+// -complete) both stay genuine, preserving the pre-#1733 verdict.
+//
+// The stream is scanned rather than the folded projection on purpose: the
+// projection exposes only the FINAL status, never the provenance of the event
+// that produced it. The stream is taken off the state object the caller already
+// holds — re-reading it by `state.session_id` would answer about a DIFFERENT
+// session whenever the two disagree, which is exactly the case for a migrated
+// fixture or a transcript-recovered donor whose file name is the canonical id.
 function hasGenuineRecordedComplete(state, step) {
   try {
-    const raw = readRawState(state && state.session_id);
-    if (!raw) return false;
-    const entry = raw.steps && raw.steps[step];
-    if (!entry) return false;
-    if (entry.status !== "complete") return false;
-    if (typeof entry.updated_at !== "string" || !entry.updated_at) return false;
-    return true;
+    if (!state || typeof state !== "object") return false;
+    let events = Array.isArray(state.events) ? state.events : null;
+    if (!events) {
+      // A raw v1 object handed in directly: fold it to events in memory only.
+      const normalized = normalizeStateVersion(state);
+      events = normalized && Array.isArray(normalized.events) ? normalized.events : null;
+    }
+    if (!events) return false;
+    let latest = null;
+    for (const e of events) {
+      if (!e || typeof e !== "object") continue;
+      if (e.kind !== "step_status" || e.step !== step) continue;
+      latest = e;
+    }
+    if (!latest) return false;
+    if (latest.status !== "complete") return false;
+    return latest.provenance !== "backfilled";
   } catch (_) {
     return false;
   }

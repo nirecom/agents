@@ -90,15 +90,17 @@ write_env_file() {
     printf 'CLAUDE_SESSION_ID=%s\n' "$1" > "$CLAUDE_ENV_FILE"
 }
 
+# #1733: state on disk is an append-only event stream (no top-level .steps);
+# read through readState() so the event log is projected before reading status.
 read_step_status() {
     local sid="$1" step="$2"
-    node -e "
-        const fs=require('fs');
+    AGENTS_REQ="$WIN_AGENTS_DIR" node -e "
+        const S=require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
         try {
-            const s=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-            process.stdout.write((s.steps[process.argv[2]]||{}).status||'MISSING');
+            const s=S.readState(process.argv[2]);
+            process.stdout.write((s && s.steps && s.steps[process.argv[3]] || {}).status||'MISSING');
         } catch(e){ process.stdout.write('ERR'); }
-    " -- "$CLAUDE_WORKFLOW_DIR/${sid}.json" "$step" 2>/dev/null || true
+    " -- "$CLAUDE_WORKFLOW_DIR" "$sid" "$step" 2>/dev/null || true
 }
 
 run_hook() {

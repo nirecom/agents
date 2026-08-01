@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const { assertValidSessionId, readState, markStep } = require("./core");
+const { appendEvents } = require("./events");
 
 // record the staged-tests fingerprint at sentinel-emission time
 function markReviewTestsComplete(sessionId, token, extraFields = {}) {
@@ -14,26 +15,43 @@ function markReviewTestsComplete(sessionId, token, extraFields = {}) {
   const { resolveWorkflowSessionId } = require("../../lib/resolve-workflow-session-id");
   let wsid = null;
   try { wsid = resolveWorkflowSessionId() || null; } catch (_) {}
-  markStep(sessionId, "review_tests", "complete", { token, ...extraFields, wsid });
+  // The resolved workflow session id is a FALLBACK: an explicitly supplied
+  // extraFields.wsid is the caller's own evidence and must win over the ambient probe.
+  markStep(sessionId, "review_tests", "complete", { token, wsid, ...extraFields });
 }
 
-// Clear review_tests warnings while preserving the existing token/wsid.
-// This is the state mutation for WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED.
-// markStep does a full replace (no merge), so we must explicitly carry forward
-// the existing token and wsid to avoid stale-token blocks in the gate.
+// Clear review_tests warnings. This is the state mutation for
+// WORKFLOW_REVIEW_TESTS_WARNINGS_ACCEPTED.
+//
+// The token/wsid carry-forward is gone (#1733): annotations accumulate on the step
+// instead of being replaced wholesale, so clearing one key can no longer drop the
+// staged-tests fingerprint and cause a stale-token block. The "is there anything to
+// clear?" decision is taken INSIDE the lock, so a concurrent warning append cannot
+// be cleared by a decision made against a stale read.
 function clearReviewTestsWarnings(sessionId, reason) {
   assertValidSessionId(sessionId); // explicit guard: readState's try-catch swallows errors
-  const state = readState(sessionId);
-  if (!state) return; // fail-open: nothing to clear
-  const existing = (state.steps && state.steps.review_tests) || {};
-  if (!existing.warnings_summary) return; // nothing to clear
-  const token = existing.token || null;
-  const wsid = existing.wsid || null;
-  markStep(sessionId, "review_tests", "complete", {
-    token,
-    wsid,
-    warnings_summary: null,
-    warnings_accepted_reason: reason || null,
+  if (!readState(sessionId)) return; // fail-open: nothing to clear
+  appendEvents(sessionId, (events, current) => {
+    const existing = (current && current.steps && current.steps.review_tests) || {};
+    if (!existing.warnings_summary) return []; // nothing to clear
+    return [
+      {
+        kind: "step_annotation",
+        step: "review_tests",
+        key: "warnings_summary",
+        value: null,
+        provenance: "observed",
+        origin: "clear-review-tests-warnings",
+      },
+      {
+        kind: "step_annotation",
+        step: "review_tests",
+        key: "warnings_accepted_reason",
+        value: reason || null,
+        provenance: "declared",
+        origin: "clear-review-tests-warnings",
+      },
+    ];
   });
 }
 
@@ -54,10 +72,16 @@ function clearReviewTestsTerminalMarker(sessionId) {
   }
 }
 
-// re-pending the review_tests step; clears the recorded token
+// re-pending the review_tests step; clears the recorded review evidence.
+// Every cleared key is nulled EXPLICITLY (a tombstone per key) rather than relying
+// on the step object being replaced — since #1733 nothing replaces it, so a key
+// left unmentioned would survive the invalidation and re-authorize the gate.
 function invalidateReviewTests(sessionId, reason) {
   markStep(sessionId, "review_tests", "pending", {
     token: null,
+    wsid: null,
+    warnings_summary: null,
+    warnings_accepted_reason: null,
     invalidate_reason: reason || null,
   });
 }

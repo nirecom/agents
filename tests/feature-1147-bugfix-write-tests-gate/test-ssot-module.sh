@@ -64,12 +64,16 @@ fi
 # C2: createInitialState gets is_bugfix flag from git_branch
 # ---------------------------------------------------------------------------
 echo "=== C2: createInitialState — is_bugfix flag from git_branch ==="
+# #1733: is_bugfix is DERIVED at projection time from session_start_context.git_branch,
+# never stored on the raw state createInitialState() returns (single source of truth:
+# git_branch is canonical, is_bugfix is folded from it -- see is-bugfix-session.js).
+# Route each raw state through projectState() to read the derived flag.
 C2_OUT="$(AGENTS_REQ="$WIN_AGENTS_DIR" run_with_timeout node -e "
 try {
-    const {createInitialState} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
-    const s1 = createInitialState('test-c2-fix', {git_branch: 'fix/x', cwd: '/tmp'});
-    const s2 = createInitialState('test-c2-main', {git_branch: 'main', cwd: '/tmp'});
-    const s3 = createInitialState('test-c2-null', {git_branch: null, cwd: '/tmp'});
+    const {createInitialState, projectState} = require(process.env.AGENTS_REQ + '/hooks/workflow-state/state-io');
+    const s1 = projectState(createInitialState('test-c2-fix', {git_branch: 'fix/x', cwd: '/tmp'}));
+    const s2 = projectState(createInitialState('test-c2-main', {git_branch: 'main', cwd: '/tmp'}));
+    const s3 = projectState(createInitialState('test-c2-null', {git_branch: null, cwd: '/tmp'}));
     console.log('fix/x is_bugfix:', s1.is_bugfix);
     console.log('main is_bugfix:', s2.is_bugfix);
     console.log('null is_bugfix:', s3.is_bugfix);
@@ -95,9 +99,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# C3: isBugfixSession — init-time flag wins over branch drift
+# C3: isBugfixSession — is_bugfix is derived from git_branch, a stale stored flag is ignored
 # ---------------------------------------------------------------------------
-echo "=== C3: isBugfixSession — init-time is_bugfix flag priority ==="
+echo "=== C3: isBugfixSession — stale stored is_bugfix flag is ignored ==="
+# #1733: is_bugfix is DERIVED from git_branch at projection time, never stored (single
+# source of truth). A v1 fixture carrying a stale is_bugfix:true field alongside
+# git_branch:"main" is migrated without that field surviving -- the projection recomputes
+# is_bugfix from git_branch alone, so the stale flag must NOT win.
 SID_C3="test-c3-$$"
 cat > "$CLAUDE_WORKFLOW_DIR/${SID_C3}.json" <<EOF
 {
@@ -126,8 +134,8 @@ try {
 if echo "$C3_OUT" | grep -q "MODULE_NOT_FOUND\|Cannot find module"; then
     fail "C3: isBugfixSession — module not found (expected — T0-A not yet implemented)"
 else
-    if echo "$C3_OUT" | grep -q "result: true"; then
-        pass "C3: isBugfixSession returns true when is_bugfix=true in state (init-time flag priority)"
+    if echo "$C3_OUT" | grep -q "result: false"; then
+        pass "C3: isBugfixSession derives false from git_branch=main, ignoring stale is_bugfix=true"
     else
         fail "C3: isBugfixSession flag priority unexpected: $C3_OUT"
     fi

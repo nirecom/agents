@@ -12,11 +12,13 @@ run_list_render_tests() {
   local LIST_OUT LINE_COUNT
   LIST_OUT="$(run_next_step --list 2>/dev/null || true)"
   LINE_COUNT="$(printf '%s\n' "$LIST_OUT" | grep -c . || true)"
-  check "14a: --list emits 14 rows" "14" "$LINE_COUNT"
+  # #1733: final_report is now a genuine terminal VALID_STEPS entry, surfaced
+  # as its own --list row (15 total, was 14).
+  check "14a: --list emits 15 rows" "15" "$LINE_COUNT"
 
   local step
   local missing=0
-  for step in workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate; do
+  for step in workflow_init clarify_intent research outline detail branching_complete write_tests review_tests run_tests review_security docs user_verification cleanup pre_final_report_gate final_report; do
     if ! echo "$LIST_OUT" | grep -qF "$step"; then
       echo "FAIL: 14b: --list missing step name [$step]"
       FAIL=$((FAIL + 1))
@@ -24,7 +26,7 @@ run_list_render_tests() {
     fi
   done
   if [ "$missing" = "0" ]; then
-    echo "PASS: 14b: --list contains all 14 step names"
+    echo "PASS: 14b: --list contains all 15 step names"
     PASS=$((PASS + 1))
   fi
 

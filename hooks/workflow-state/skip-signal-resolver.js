@@ -113,18 +113,27 @@ function isRecordedVerdictValid(sj, targetStep) {
 function recordSkipJudgment(sessionId, targetStep, conditions, source) {
   try {
     if (targetStep !== "outline" && targetStep !== "detail") return;
-    const { readState, markStep } = require("./state-io");
-    const state = readState(sessionId);
-    const currentStatus = (state && state.steps && state.steps[targetStep] && state.steps[targetStep].status) || "pending";
+    const { appendEvents } = require("./state-io");
     const condVals = Object.values(conditions || {});
     const all_conditions_met = condVals.length > 0 && condVals.every((v) => v === true);
-    const skip_judgment = {
-      recorded_at: new Date().toISOString(),
-      judgment_source: source,
-      conditions: conditions || {},
-      all_conditions_met,
-    };
-    markStep(sessionId, targetStep, currentStatus, { skip_judgment });
+    // A judgment is a fact ABOUT the step, so it is its own annotation event.
+    // Pre-#1733 this had to re-read the status and pass it back through markStep
+    // (which replaced the whole step object) purely to avoid resetting it (#1733).
+    appendEvents(sessionId, [
+      {
+        kind: "step_annotation",
+        step: targetStep,
+        key: "skip_judgment",
+        value: {
+          recorded_at: new Date().toISOString(),
+          judgment_source: source,
+          conditions: conditions || {},
+          all_conditions_met,
+        },
+        provenance: "observed",
+        origin: "record-skip-judgment",
+      },
+    ]);
   } catch (_) {
     // fail-open: silent
   }

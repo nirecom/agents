@@ -85,6 +85,9 @@ run_g37() {
     fi
     transcript_path_native="$tmp_node/transcript.jsonl"
     # final_report is in SENTINEL_HANG_EXEMPT_STEPS — detectSentinelHang returns false.
+    # #1733 made final_report a real step (it is the TERMINAL_STEPS boundary), so the
+    # sentinel is now recorded in the event stream as well. The exemption is unchanged:
+    # a terminal marker is the last sentinel of a session and must never read as a hang.
     node -e '
 const cmd = "echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\"";
 const obj = {type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:cmd}}]}};

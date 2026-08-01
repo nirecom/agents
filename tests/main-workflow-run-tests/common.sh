@@ -90,12 +90,14 @@ process.stdout.write(JSON.stringify(payload));
 # Prints the status string, or "absent" if the file/key is missing.
 get_run_tests_status() {
     local sid="$1"
-    node -e "
+    # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
+    # on-disk event stream, not a persisted top-level key.
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
 try {
-  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-  console.log(s.steps && s.steps.run_tests ? s.steps.run_tests.status : 'absent');
+  const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
+  console.log(s && s.steps && s.steps.run_tests ? s.steps.run_tests.status : 'absent');
 } catch(e) { console.log('absent'); }
-" "$WORKFLOW_DIR/$sid.json" 2>/dev/null || echo "absent"
+" "$sid" 2>/dev/null || echo "absent"
 }
 
 # check_state_file_absent <session_id>
@@ -153,10 +155,11 @@ seed_run_tests() {
 # Reads write_tests.status from the workflow state file. Prints status or "absent".
 get_write_tests_status() {
     local sid="$1"
-    node -e "
+    # Read through the canonical API (see get_run_tests_status).
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
 try {
-  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-  console.log(s.steps && s.steps.write_tests ? s.steps.write_tests.status : 'absent');
+  const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
+  console.log(s && s.steps && s.steps.write_tests ? s.steps.write_tests.status : 'absent');
 } catch(e) { console.log('absent'); }
-" "$WORKFLOW_DIR/$sid.json" 2>/dev/null || echo "absent"
+" "$sid" 2>/dev/null || echo "absent"
 }

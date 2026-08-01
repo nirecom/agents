@@ -113,7 +113,7 @@ flowchart TD
 
 Inspect the step list and current session state with `bin/workflow/next-step --list`:
 
-**WF-CODE** (standard implementation — all 14 steps active):
+**WF-CODE** (standard implementation — all 15 steps active):
 ```
  1  workflow_init       Initialize session state and GitHub issue
  2  clarify_intent      Interview and write intent.md

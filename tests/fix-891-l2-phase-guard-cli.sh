@@ -165,6 +165,12 @@ run_g38() {
     fi
 }
 
+# G39 / G42 / G43 use the final_report sentinel purely as transcript content. #1733
+# promoted final_report to a real workflow step, so the same command now also appends a
+# step_status event — but these cases only seed and assert the SUPERVISOR state under
+# WORKFLOW_PLANS_DIR and the hook's exit code, never the workflow state file. The
+# assertions therefore hold unchanged; the event-stream side is covered by
+# tests/feature-1733-state-event-stream/final-report-step.sh.
 run_g39() {
     require_source "$HOOK" "G39: alert_phase=paused + final_report sentinel as last tool_use -> exit 0" || return
     local tmp out rc tp

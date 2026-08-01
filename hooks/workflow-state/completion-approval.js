@@ -8,8 +8,10 @@
 // `plan_approvals[step]` record exists on the session state (or the user has
 // pre-waived the gate via CONFIRM_<STAGE>=off).
 //
-// Storage note: the record lives at the TOP LEVEL of state (`state.plan_approvals`),
-// NOT under `state.steps[step]`, because markStep() fully replaces the step object.
+// Storage note (#1733): approvals are no longer a mutable top-level field. Each
+// approval is a `plan_approval` event and each withdrawal a `plan_approval_revoked`
+// event; `state.plan_approvals` is the projection folded from that stream, so the
+// evidence behind a superseded or revoked approval stays readable forever.
 //
 // Failure contract: read paths fail-open (malformed → null / no record), but the
 // verdict itself is FAIL-CLOSED — every uncomputable or mismatching artifact hash
@@ -21,7 +23,7 @@ const crypto = require("crypto");
 
 const { getWorkflowPlansDir } = require("../lib/workflow-plans-dir");
 const { isConfirmOffForStageFromFile } = require("../lib/plan-confirm-flag");
-const { SESSION_ID_VALID_RE, readState, writeState } = require("./state-io");
+const { SESSION_ID_VALID_RE, readState } = require("./state-io");
 
 // The ONLY enumeration of the approval-gated step class. Every check iterates
 // this array — never hardcode one member without the other (CPR-5).
@@ -130,8 +132,8 @@ function readPlanApproval(state, step) {
   }
 }
 
-// Persists an approval record. Does NOT change any step status, so the
-// completion-boundary invariant in writeState never fires on this write.
+// Appends an approval to the stream. Emits no step_status, so the
+// completion-boundary invariant never fires on this append.
 function recordPlanApproval(sessionId, step, fields = {}) {
   if (!isApprovalGatedStep(step)) {
     throw new Error(`recordPlanApproval: "${step}" is not an approval-gated step`);
@@ -139,29 +141,30 @@ function recordPlanApproval(sessionId, step, fields = {}) {
   const source = fields.source;
   assertSanctionedSource(source, step);
 
-  const { createInitialState } = require("./state-io");
-  let state = readState(sessionId);
-  if (!state) state = createInitialState(sessionId);
-  if (!state.plan_approvals || typeof state.plan_approvals !== "object") {
-    state.plan_approvals = {};
-  }
-  state.plan_approvals[step] = {
-    source,
-    reason: fields.reason || null,
-    artifact_sha256: fields.artifactSha || null,
-    // Session whose artifact the recorded hash was taken from. Artifacts are
-    // named <sid>-<step>.md, so a record inherited by a LATER session must keep
-    // pointing at the session that owns the approved artifact (#1133).
-    artifact_session_id: fields.artifactSha ? sessionId : null,
-    artifact_hash_status: fields.artifactHashStatus || "unknown",
-    recorded_at: new Date().toISOString(),
-  };
-  writeState(sessionId, state);
-  return state.plan_approvals[step];
+  const { appendEvents } = require("./state-io");
+  appendEvents(sessionId, [
+    {
+      kind: "plan_approval",
+      step,
+      source,
+      reason: fields.reason || null,
+      artifact_sha256: fields.artifactSha || null,
+      // Session whose artifact the recorded hash was taken from. Artifacts are
+      // named <sid>-<step>.md, so a record inherited by a LATER session must keep
+      // pointing at the session that owns the approved artifact (#1133).
+      artifact_session_id: fields.artifactSha ? sessionId : null,
+      artifact_hash_status: fields.artifactHashStatus || "unknown",
+      provenance: "declared",
+      origin: "record-plan-approval",
+    },
+  ]);
+  const after = readState(sessionId);
+  return readPlanApproval(after, step);
 }
 
-// Builds the audit record stamped by writeState when a sanctioned token or the
-// CONFIRM_<STAGE>=off waiver authorizes a completion transition.
+// Builds the audit record stamped when a sanctioned token or the
+// CONFIRM_<STAGE>=off waiver authorizes a completion transition. Kept as the
+// SSOT for the record's SHAPE; the stream form is buildAuditApprovalEvent below.
 function buildAuditApproval(source, reason) {
   return {
     source,
@@ -171,6 +174,17 @@ function buildAuditApproval(source, reason) {
     artifact_hash_status: "not-applicable",
     recorded_at: new Date().toISOString(),
   };
+}
+
+// The same audit record as a `plan_approval` event. `recorded_at` is dropped:
+// the stream stamps `at`, and the projection derives recorded_at from it (CPR-2).
+function buildAuditApprovalEvent(step, source, reason, origin) {
+  const rec = buildAuditApproval(source, reason);
+  delete rec.recorded_at;
+  return Object.assign({ kind: "plan_approval", step }, rec, {
+    provenance: "declared",
+    origin: origin || "completion-boundary",
+  });
 }
 
 // Authoritative verdict for "may this gated step be persisted complete?".
@@ -233,70 +247,89 @@ function evaluateCompletionApproval(sessionId, step, state) {
   return { approved: true, code: null, source };
 }
 
-// Completion-boundary invariant for the approval-gated steps (#1133).
-// Runs before every persist. Order is significant:
-//   1. approval invalidation — a gated step LEAVING complete drops its approval
-//      record, so a stale approval can never re-validate a later re-completion.
+// Completion-boundary invariant for the approval-gated steps (#1133), expressed
+// over a BATCH of events (#1733).
+//
+// `prevProjection` is the fold of the stream as it stands on disk; `nextProjection`
+// is the fold of that stream PLUS the batch about to be appended. Comparing the two
+// folds — rather than a keyed step map before/after a rewrite — is what keeps the
+// gate on the only remaining write path, appendEvents.
+//
+// Order is significant:
+//   1. approval invalidation — a gated step LEAVING complete revokes its approval,
+//      so a stale approval can never re-validate a later re-completion.
 //   2. sanctioned bypass     — a validated opts.sanctioned token skips the check
 //      and stamps an audit record for each gated completion transition.
-//   3. invariant enforcement — an unsanctioned pending→complete transition must
-//      satisfy evaluateCompletionApproval, else it throws.
+//   3. invariant enforcement — an unsanctioned →complete transition must satisfy
+//      evaluateCompletionApproval, else it throws.
 // A complete→complete rewrite is not a transition and passes through, as does a
 // transition to `skipped`.
 //
-function applyCompletionBoundaryInvariant(sessionId, state, opts) {
-  const gated = APPROVAL_GATED_STEPS;
-
-  const prev = readState(sessionId);
-  const prevSteps = (prev && prev.steps) || {};
-  const nextSteps = (state && state.steps) || {};
-  const statusOf = (steps, step) => {
+// Returns the extra events the caller must append INSIDE the same batch (audit
+// approvals and revocations). Throws UnapprovedCompletionError on a violation,
+// before any byte is written.
+function completionBoundaryEventsForBatch(sessionId, prevProjection, nextProjection, opts) {
+  const extra = [];
+  const statusOf = (proj, step) => {
+    const steps = (proj && proj.steps) || {};
     const entry = steps[step];
     return (entry && entry.status) || "pending";
   };
+  const origin = (opts && typeof opts.origin === "string" && opts.origin) || "completion-boundary";
 
-  // 1. Approval invalidation.
-  for (const step of gated) {
-    if (statusOf(prevSteps, step) === "complete" && statusOf(nextSteps, step) !== "complete") {
-      if (state && state.plan_approvals && typeof state.plan_approvals === "object") {
-        delete state.plan_approvals[step];
-      }
-    }
-  }
-
-  // 2. Sanctioned token validation (throws on an unknown token, before any write).
+  // Sanctioned token validation (throws on an unknown token, before any write).
   const rawToken = opts && opts.sanctioned;
   const sanctioned = (rawToken === undefined || rawToken === null)
     ? null
     : assertSanctionedSource(rawToken);
 
-  for (const step of gated) {
-    const isCompletionTransition =
-      statusOf(prevSteps, step) !== "complete" && statusOf(nextSteps, step) === "complete";
-    if (!isCompletionTransition) continue;
+  for (const step of APPROVAL_GATED_STEPS) {
+    const before = statusOf(prevProjection, step);
+    const after = statusOf(nextProjection, step);
 
-    if (sanctioned) {
-      if (!state.plan_approvals || typeof state.plan_approvals !== "object") {
-        state.plan_approvals = {};
+    // 1. Approval invalidation.
+    if (before === "complete" && after !== "complete") {
+      if (readPlanApproval(nextProjection, step)) {
+        extra.push({
+          kind: "plan_approval_revoked",
+          step,
+          reason: "gated step left complete",
+          provenance: "declared",
+          origin,
+        });
       }
-      state.plan_approvals[step] = buildAuditApproval(sanctioned, opts && opts.reason);
+      continue;
+    }
+
+    if (before === "complete" || after !== "complete") continue;
+
+    // 2. Sanctioned bypass.
+    if (sanctioned) {
+      extra.push(buildAuditApprovalEvent(step, sanctioned, opts && opts.reason, origin));
       continue;
     }
 
     // 3. Invariant enforcement.
-    const verdict = evaluateCompletionApproval(sessionId, step, state);
+    const verdict = evaluateCompletionApproval(sessionId, step, nextProjection);
     if (!verdict.approved) {
       throw new UnapprovedCompletionError(step, verdict.code, recoveryFor(step));
     }
     // CONFIRM_<STAGE>=off waiver: re-verified at write time, then stamped as an
     // audit record so a completion is never silent/unrecorded.
-    if (verdict.source === "confirm-flag-off" && !readPlanApproval(state, step)) {
-      if (!state.plan_approvals || typeof state.plan_approvals !== "object") {
-        state.plan_approvals = {};
-      }
-      state.plan_approvals[step] = buildAuditApproval("confirm-flag-off", "CONFIRM flag off");
+    if (verdict.source === "confirm-flag-off" && !readPlanApproval(nextProjection, step)) {
+      extra.push(buildAuditApprovalEvent(step, "confirm-flag-off", "CONFIRM flag off", origin));
     }
   }
+  return extra;
+}
+
+// writeState boundary. Since #1733 `steps` is derived from `events`, and writeState
+// never touches `events` — so it can produce no status transition of its own. What
+// remains for it to enforce is the token domain: an unknown opts.sanctioned value
+// must abort the write rather than be silently ignored.
+function applyCompletionBoundaryInvariant(sessionId, state, opts) {
+  const rawToken = opts && opts.sanctioned;
+  if (rawToken !== undefined && rawToken !== null) assertSanctionedSource(rawToken);
 }
 
 module.exports = {
@@ -309,8 +342,10 @@ module.exports = {
   readPlanApproval,
   recordPlanApproval,
   buildAuditApproval,
+  buildAuditApprovalEvent,
   evaluateCompletionApproval,
   applyCompletionBoundaryInvariant,
+  completionBoundaryEventsForBatch,
   recoveryFor,
   confirmSentinelFor,
 };

@@ -64,11 +64,16 @@ check_contains() {
 
 json_val() {
   local file="$1" expr="$2"
-  STATE_FILE_PATH="$file" node -e "
-    const s=JSON.parse(require('fs').readFileSync(process.env.STATE_FILE_PATH,'utf8'));
+  local sid
+  sid="$(basename "$file" .json)"
+  # #1733: state file on disk is an append-only event stream (no top-level
+  # .steps); read through readState() so the event log is projected.
+  STATE_SID="$sid" node -e "
+    const S=require(process.argv[1] + '/hooks/workflow-state/state-io.js');
+    const s=S.readState(process.env.STATE_SID);
     const v=(${expr});
     console.log(v!=null?String(v):'__NULL__');
-  " 2>/dev/null || echo "__ERROR__"
+  " "$SCRIPT_AGENTS_DIR" 2>/dev/null || echo "__ERROR__"
 }
 
 write_state_json() {

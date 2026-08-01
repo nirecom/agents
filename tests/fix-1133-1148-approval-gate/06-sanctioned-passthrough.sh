@@ -14,14 +14,18 @@
 echo ""
 echo "=== G06: unknown sanctioned token is rejected fail-closed ==="
 
+# #1733: readState() returns a read-only projection -- mutating .steps on it
+# throws immediately (refusing Proxy), before writeState() is even reached.
+# The unknown-sanctioned-token check this case targets
+# (applyCompletionBoundaryInvariant in state-io/core.js) validates opts.sanctioned
+# unconditionally, independent of any step transition, so no .steps mutation is
+# needed to exercise it -- pass the unmodified projection straight through.
 SID="g06-$$"
 write_state "$SID" "$(gen_state '{}')"
 OUT=$(node_probe '
   const ws = require(process.argv[1]);
   const sid = process.argv[2];
   const s = ws.readState(sid);
-  s.steps.outline.status = "complete";
-  s.steps.outline.updated_at = "2026-06-20T10:00:00.000Z";
   try { ws.writeState(sid, s, { sanctioned: "bogus-token" }); console.log("NOERROR"); }
   catch (e) { console.log("THREW:" + (e.code || e.name)); }
 ' "$WFSTATE_N" "$SID")

@@ -64,30 +64,33 @@ read_state_status() {
     local sid="$1" step="$2"
     local state_file="$WORKFLOW_DIR/${sid}.json"
     if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
+    # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
+    # on-disk event stream, not a persisted top-level key.
+    (cd "$AGENTS_DIR" && node -e "
       try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const step = s.steps && s.steps['$step'];
+        const s = require('./hooks/workflow-state').readState(process.argv[1]);
+        const step = s && s.steps && s.steps['$step'];
         console.log(step && step.status ? step.status : 'MISSING');
       } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    " "$sid" 2>/dev/null) || echo "MISSING"
 }
 
 read_state_field() {
     local sid="$1" step="$2" field="$3"
     local state_file="$WORKFLOW_DIR/${sid}.json"
     if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-    node -e "
+    # Read through the canonical API (see read_state_status).
+    (cd "$AGENTS_DIR" && node -e "
       try {
-        const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const step = s.steps && s.steps['$step'];
+        const s = require('./hooks/workflow-state').readState(process.argv[1]);
+        const step = s && s.steps && s.steps['$step'];
         if (!step || step['$field'] === undefined || step['$field'] === null) {
           console.log('MISSING');
         } else {
           console.log(step['$field']);
         }
       } catch (e) { console.log('MISSING'); }
-    " "$state_file" 2>/dev/null || echo "MISSING"
+    " "$sid" 2>/dev/null) || echo "MISSING"
 }
 
 expect_state_step() {

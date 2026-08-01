@@ -2,37 +2,35 @@
 // Top-level (non-step) session field writers, plus the effective skippable-step view.
 // Entrypoint-private to state-io.js.
 
-const {
-  SKIPPABLE_STEPS,
-  readState,
-  writeState,
-  createInitialState,
-} = require("./core");
+const { SKIPPABLE_STEPS, readState, updateTopLevel } = require("./core");
+const { appendEvents } = require("./events");
+const { withStateLock } = require("./state-lock");
 
 // recordComplexityEvaluation(sessionId, level, signals):
-// Top-level field writer (does NOT go through markStep). Read-modify-write.
+// Session-scoped fact, recorded as its own event (#1733) — a re-evaluation
+// supersedes the previous one in the projection without erasing it.
 // Write path — no fail-open: an invalid level throws.
 function recordComplexityEvaluation(sessionId, level, signals) {
-  let state = readState(sessionId);
-  if (!state) {
-    state = createInitialState(sessionId);
-  }
   if (level !== "high" && level !== "low") {
     throw new Error(`recordComplexityEvaluation: level must be "high" or "low", got ${JSON.stringify(level)}`);
   }
-  state.complexity_evaluation = {
-    recorded_at: new Date().toISOString(),
-    level,
-    signals: Array.isArray(signals) ? signals : [],
-  };
-  writeState(sessionId, state);
+  appendEvents(sessionId, [
+    {
+      kind: "complexity_evaluation",
+      level,
+      signals: Array.isArray(signals) ? signals : [],
+      provenance: "observed",
+      origin: "record-complexity-evaluation",
+    },
+  ]);
 }
 
 // recordSessionModel(sessionId, { modelId | id, source }):
-// Top-level field writer (like recordComplexityEvaluation). Read-modify-write.
 // Freezes the session's model identity ONCE — re-invocation must not overwrite
 // an already-recorded identity — and decides `verbose_prompt` in the same transaction so the
-// flag and the identity can never disagree.
+// flag and the identity can never disagree. The write-once decision is taken
+// INSIDE the state lock (#1733): checked outside it, two racing SessionStart
+// processes would each observe "no identity yet" and both append one.
 // The identifier key is accepted as `modelId` or `id`: resolveModelId() returns
 // the `{ id, source }` shape and is passed straight through by SessionStart.
 // Returns { recorded, verbosePrompt }. Write errors propagate to the caller,
@@ -43,59 +41,65 @@ function recordSessionModel(sessionId, descriptor) {
   const modelId = typeof rawId === "string" && rawId.trim() ? rawId.trim() : null;
   if (!modelId) return { recorded: false, verbosePrompt: false };
 
-  let state = readState(sessionId);
-  if (!state) {
-    state = createInitialState(sessionId);
-  }
-  // Write-once: must not turn into last-writer-wins.
-  if (state.session_model) {
-    return { recorded: false, verbosePrompt: state.verbose_prompt === true };
-  }
+  return withStateLock(sessionId, () => {
+    const state = readState(sessionId);
+    // Write-once: must not turn into last-writer-wins.
+    if (state && state.session_model) {
+      return { recorded: false, verbosePrompt: state.verbose_prompt === true };
+    }
 
-  let verbosePrompt = false;
-  try {
-    require("../../lib/load-env").loadDefaultEnv();
-    const { matchKeyword, parseKeywordList } = require("../../lib/model-match");
-    verbosePrompt =
-      matchKeyword(modelId, parseKeywordList(process.env.VERBOSE_PROMPT_MODELS)) !== null;
-  } catch (_) {
-    verbosePrompt = false;
-  }
+    let verbosePrompt = false;
+    try {
+      require("../../lib/load-env").loadDefaultEnv();
+      const { matchKeyword, parseKeywordList } = require("../../lib/model-match");
+      verbosePrompt =
+        matchKeyword(modelId, parseKeywordList(process.env.VERBOSE_PROMPT_MODELS)) !== null;
+    } catch (_) {
+      verbosePrompt = false;
+    }
 
-  state.session_model = {
-    id: modelId,
-    source: typeof d.source === "string" && d.source ? d.source : "unknown",
-    recorded_at: new Date().toISOString(),
-  };
-  state.verbose_prompt = verbosePrompt;
-  // readState adds skip_judgment as a convenience view only; writing it back
-  // would persist it permanently.
-  delete state.skip_judgment;
-  writeState(sessionId, state);
-  return { recorded: true, verbosePrompt };
+    appendEvents(sessionId, [
+      {
+        kind: "session_model",
+        id: modelId,
+        source: typeof d.source === "string" && d.source ? d.source : "unknown",
+        provenance: "observed",
+        origin: "record-session-model",
+      },
+    ]);
+    // verbose_prompt is a decision, not a derived value, so it stays a persisted
+    // top-level field — written under the same lock as the identity it follows.
+    updateTopLevel(sessionId, (record) => {
+      record.verbose_prompt = verbosePrompt;
+    });
+    return { recorded: true, verbosePrompt };
+  });
 }
 
+// The three writers below own ONE non-derived top-level field each. updateTopLevel
+// does the read-modify-write under the lock and touches nothing else, so a
+// concurrent append can no longer be lost to a stale whole-state snapshot.
 function setLastPushedSha(sessionId, sha) {
-  const state = readState(sessionId);
-  if (!state) return false;
-  state.last_pushed_sha = sha;
-  writeState(sessionId, state);
+  if (!readState(sessionId)) return false;
+  updateTopLevel(sessionId, (record) => {
+    record.last_pushed_sha = sha;
+  });
   return true;
 }
 
 function clearLastPushedSha(sessionId) {
-  const state = readState(sessionId);
-  if (!state) return false;
-  state.last_pushed_sha = null;
-  writeState(sessionId, state);
+  if (!readState(sessionId)) return false;
+  updateTopLevel(sessionId, (record) => {
+    record.last_pushed_sha = null;
+  });
   return true;
 }
 
 function recordSessionWorktree(sessionId, worktreePath) {
-  const state = readState(sessionId);
-  if (!state) return;
-  state.session_worktree = worktreePath;
-  writeState(sessionId, state);
+  if (!readState(sessionId)) return;
+  updateTopLevel(sessionId, (record) => {
+    record.session_worktree = worktreePath;
+  });
 }
 
 // Returns the effective skippable steps for the given session.

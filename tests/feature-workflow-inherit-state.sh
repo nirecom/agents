@@ -212,7 +212,7 @@ elif [ "$RESULT_A1" = "null" ] || [ -z "$RESULT_A1" ]; then
     fail "A1. findLatestStateForContext returned null — expected state with session_id=$SID_A1"
 else
     RESEARCH_STATUS_A1=$(printf '%s' "$RESULT_A1" | node -e "
-try { const s=JSON.parse((function(){let d='',b=Buffer.alloc(4096),n;try{while((n=require('fs').readSync(0,b,0,4096))>0)d+=b.slice(0,n).toString();}catch(e){}return d;})()); console.log(s.steps && s.steps.research ? s.steps.research.status : 'MISSING'); } catch(e) { console.log('PARSE_ERROR'); }
+try { const s=JSON.parse((function(){let d='',b=Buffer.alloc(4096),n;try{while((n=require('fs').readSync(0,b,0,4096))>0)d+=b.slice(0,n).toString();}catch(e){}return d;})()); const steps = s.steps || (s.current && s.current.steps); console.log(steps && steps.research ? steps.research.status : 'MISSING'); } catch(e) { console.log('PARSE_ERROR'); }
 " 2>/dev/null || echo "PARSE_ERROR")
     if [ "$RESEARCH_STATUS_A1" = "complete" ]; then
         pass "A1. findLatestStateForContext returned state with research=complete"
@@ -552,14 +552,15 @@ ENV_FILE_A12="$TMPDIR_BASE/a12.env"
 # First run: creates state file
 run_with_timeout bash -c "echo '{\"session_id\":\"$SID_A12\"}' | CLAUDE_WORKFLOW_DIR='$WORKFLOW_DIR' CLAUDE_ENV_FILE='$ENV_FILE_A12' node '$SESSION_START_NODE'" >/dev/null 2>&1 || true
 
-# Modify state — set research=complete
+# Modify state — set research=complete.
+# Via markStep, never by mutating the file: since #1733 the event stream is
+# authoritative and `steps` is a derived projection, so a hand-written `steps`
+# entry would be discarded on the next read and A12 would fail for a reason
+# that has nothing to do with idempotency.
 STATE_FILE_A12="$WORKFLOW_DIR/${SID_A12}.json"
 if [ -f "$STATE_FILE_A12" ]; then
-    node -e "
-const fs = require('fs');
-const s = JSON.parse(fs.readFileSync('$(node_path "$STATE_FILE_A12")', 'utf8'));
-s.steps.research = { status: 'complete', updated_at: new Date().toISOString() };
-fs.writeFileSync('$(node_path "$STATE_FILE_A12")', JSON.stringify(s, null, 2));
+    CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
+require('$WORKFLOW_STATE_LIB_NODE').markStep('$SID_A12', 'research', 'complete');
 " 2>/dev/null || true
 fi
 
@@ -572,7 +573,8 @@ else
     RESEARCH_A12=$(node -e "
 try {
   const s = JSON.parse(require('fs').readFileSync('$(node_path "$STATE_FILE_A12")', 'utf8'));
-  const st = s.steps && s.steps.research ? s.steps.research.status : 'MISSING';
+  const steps = s.steps || (s.current && s.current.steps);
+  const st = steps && steps.research ? steps.research.status : 'MISSING';
   console.log(st);
 } catch(e) { console.log('PARSE_ERROR'); }
 " 2>/dev/null || echo "PARSE_ERROR")
@@ -689,8 +691,14 @@ node -e "
 const fs = require('fs');
 const p = '$WORKFLOW_DIR/${SID_TC3_OLD}.json';
 const s = JSON.parse(fs.readFileSync(p, 'utf8'));
-s.created_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
-Object.keys(s.steps).forEach(k => { s.steps[k].updated_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(); });
+const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+s.created_at = old;
+// v1 shape: age the raw steps map. v2 shape (#1733): the timestamps that matter
+// live on the events, so age those (and the projection mirror) too. Both branches
+// are guarded — the fixture may be either shape.
+Object.keys(s.steps || {}).forEach(k => { s.steps[k].updated_at = old; });
+(s.events || []).forEach(e => { if (e.at) e.at = old; });
+Object.keys((s.current && s.current.steps) || {}).forEach(k => { s.current.steps[k].updated_at = old; });
 fs.writeFileSync(p, JSON.stringify(s, null, 2));
 " 2>/dev/null || true
 

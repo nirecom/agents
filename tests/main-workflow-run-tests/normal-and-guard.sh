@@ -119,13 +119,13 @@ run_normal_and_guard_tests() {
     else
         fail "G5. write_tests=pending + exit=1 → expected run_tests=pending, got: $STATUS"
     fi
-    G5_FAILED=$(node -e "
+    G5_FAILED=$(CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
 try {
-  const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-  const rt = s.steps && s.steps.run_tests;
+  const s = require('$DOTFILES_WIN/hooks/workflow-state').readState(process.argv[1]);
+  const rt = s && s.steps && s.steps.run_tests;
   console.log(rt && rt.last_run_failed === true ? 'yes' : 'no');
 } catch(e) { console.log('no'); }
-" "$WORKFLOW_DIR/$SID.json" 2>/dev/null || echo "no")
+" "$SID" 2>/dev/null || echo "no")
     if [ "$G5_FAILED" = "yes" ]; then
         pass "G5b. write_tests=pending + exit=1 → last_run_failed=true (failure branch intact)"
     else
