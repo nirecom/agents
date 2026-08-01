@@ -114,6 +114,11 @@ else
 fi
 
 # 33. detectSentinelHang — exempt step: MARK_STEP_final_report_complete → false
+# Since #1733 `final_report` is a real workflow step, so the sentinel now also
+# records a step_status event. The exemption must survive that: final_report is the
+# TERMINAL boundary step, and a terminal marker is by definition the last thing a
+# session emits — treating it as an unanswered sentinel would flag every clean
+# session as hung. This asserts the exemption, not the absence of a state record.
 if [ ! -f "$DETECT_PATH" ]; then skip "detectSentinelHang exempt step final_report (detect.js missing)"
 else
     _f=$(mktemp); printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"echo \"<<WORKFLOW_MARK_STEP_final_report_complete>>\""}}]}}' > "$_f"

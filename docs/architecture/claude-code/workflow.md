@@ -1,50 +1,95 @@
 # Workflow State Machine
 
-All 14 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
+All 15 workflow steps are tracked in a per-session JSON state file and enforced at `git commit`
 time by a PreToolUse hook.
 
 ## State file
 
 Path: `~/.claude/projects/workflow/<session-id>.json` (never committed — outside any repo)
 
+Since #1733 the file is an **append-only event stream**. `events` is the only source of
+truth (CPR-2); every other field is a derived view folded from it and rewritten on each
+write. Nothing rewrites history — a step changing status appends an event, it does not
+replace one. This is what makes per-step elapsed time computable (`computeIntervals`),
+which a keyed map that overwrote `updated_at` in place could never reconstruct.
+
 ```json
 {
-  "version": 1,
+  "version": 2,
   "session_id": "abc123",
-  "cwd": "/path/to/project",
-  "git_branch": "main",
   "created_at": "2026-04-12T10:00:00.000Z",
-  "steps": {
-    "workflow_init":        { "status": "complete", "updated_at": "..." },
-    "clarify_intent":       { "status": "complete", "updated_at": "..." },
-    "research":             { "status": "complete", "updated_at": "..." },
-    "outline":              { "status": "skipped",  "updated_at": "..." },
-    "detail":               { "status": "complete", "updated_at": "..." },
-    "branching_complete":   { "status": "complete", "updated_at": "..." },
-    "write_tests":          { "status": "complete", "updated_at": "..." },
-    "review_tests":         { "status": "complete", "updated_at": "..." },
-    "run_tests":            { "status": "complete", "updated_at": "..." },
-    "review_security":      { "status": "skipped",  "updated_at": "..." },
-    "docs":                 { "status": "complete", "updated_at": "..." },
-    "user_verification":    { "status": "complete", "updated_at": "..." },
-    "cleanup":              { "status": "skipped",  "updated_at": "..." },
-    "pre_final_report_gate":{ "status": "pending",  "updated_at": "..." }
+  "session_start_context": { "cwd": "/path/to/project", "git_branch": "main" },
+  "workflow_type": "wf-code",
+  "events": [
+    { "seq": 1, "kind": "step_status", "step": "workflow_init", "status": "complete",
+      "at": "2026-04-12T10:00:03.000Z", "provenance": "observed", "origin": "workflow-mark" },
+    { "seq": 2, "kind": "step_annotation", "step": "outline", "key": "skip_reason",
+      "value": "single obvious approach",
+      "at": "2026-04-12T10:04:11.000Z", "provenance": "declared", "origin": "workflow-mark" }
+  ],
+  "current": {
+    "cwd": "/path/to/project",
+    "git_branch": "feature/x",
+    "steps": {
+      "workflow_init": { "status": "complete", "updated_at": "..." },
+      "outline":       { "status": "skipped",  "updated_at": "...", "skip_reason": "..." }
+    },
+    "plan_approvals": { },
+    "session_model": null
   }
 }
 ```
 
-Each step object may carry an optional `started_at` (ISO-8601 UTC), written only while
-`RECORD_STEP_TIMESTAMPS=on`. It is attempt-scoped: every non-`pending` step has one, every
-`pending` step has none, and returning to `pending` discards it. For the steps a
-`WORKFLOW_RESET_FROM_*` regenerates ahead of its target, `started_at` equals `updated_at`.
-That equality means zero measured elapsed time, which a directly-recorded `complete` or
-`skipped` step also produces — it does not identify a reset on its own. Rule SSOT:
-`hooks/workflow-state/step-timestamps.js`.
+`current` is a **cache, not a fact** — it is `projectState(events)` serialized alongside the
+stream so a reader needs no fold, and it is discarded and recomputed on every read. Its
+legacy `steps` shape is deliberate: every pre-#1733 consumer (`workflow-gate.js`,
+`next-step`, `session-start.js`) keeps reading `steps[step].status` unchanged. The key set is
+fixed by `PROJECTION_KEYS`; an unknown key aborts the write before a byte is persisted.
+
+### Event vocabulary
+
+| Field | Meaning |
+|---|---|
+| `seq` | 1-based, gap-free, strictly increasing. A break is corruption, not a repair opportunity — `appendEvents` refuses it and leaves the bytes untouched. |
+| `kind` | `step_status`, `step_annotation`, `step_annotations_cleared`, `worktree`, `session_model`, `complexity_evaluation`, `plan_approval`, `plan_approval_revoked`, `reset` |
+| `at` | ISO-8601 UTC |
+| `provenance` | `observed` (the process saw it happen), `declared` (a caller asserted it), `backfilled` (reconstructed — schema migration or repair) |
+| `origin` | which component appended the event |
+
+`provenance` is what lets a consumer distinguish a genuine completion from one reconstructed
+by migration or inherited from another session — `effective-state.hasGenuineRecordedComplete`
+rejects `backfilled`.
+
+### Reads never write
+
+`readState` normalizes a v1 file **in memory only** and never persists the result. The
+workflow directory is shared by every session on the machine, and callers read *foreign*
+session ids out of it (`context-scan.js` harvests them from other sessions' transcripts), so
+a v1 file may belong to a session still running an older release that cannot read v2 —
+migrating it on read would corrupt that session. Bringing a file forward is a **writer's**
+job: `writeState`, `updateTopLevel`, and `appendEvents` all normalize under the state lock,
+so a file migrates the moment its own session next writes. `persistMigratedState` exists for
+callers that want the write explicitly.
+
+`readRawState` throws `CorruptStateFileError` when the file exists but does not parse — that
+is evidence, not absence, and the commit gate fails closed on it. A file whose bytes are
+unreadable is never overwritten.
+
+### Migration from v1
+
+`migrateV1ToV2` is a pure function of its input — no clock, no randomness, no filesystem — so
+two processes migrating the same file agree byte-for-byte and `seq` stays a shared identifier
+for the same event. Reconstructed events carry `provenance: "backfilled"`, and those without a
+recoverable timestamp additionally carry `at_estimated: true`. It is the one event producer
+that does not run through `validateEvent`, so it sanitizes instead: out-of-vocabulary step
+keys are dropped and out-of-vocabulary statuses emit nothing (leaving the projection default
+`pending`), because a stream the integrity assertion later rejects would wedge the file with
+no in-band repair. `started_at` (retired with #1640) is dropped rather than carried.
 
 ### `plan_approvals` (approval-gated steps)
 
-`outline` and `detail` carry an extra top-level record — not nested under `steps`, because
-`markStep()` fully replaces the step object:
+`outline` and `detail` carry an approval record, folded from `plan_approval` /
+`plan_approval_revoked` events into `current.plan_approvals`:
 
 ```json
 {
@@ -79,24 +124,29 @@ Hash checks fail closed: a missing, unreadable, or mismatching artifact is a rej
 never a downgrade to an existence-only check. A gated step leaving `complete` drops its
 record, so a stale approval can never re-validate a later re-completion.
 
-`cwd` and `git_branch` are optional (absent in states created before the inheritance feature).
-`git_branch` is `null` for non-git directories and detached HEAD.
+`session_start_context` records where the session began and never changes; `current.cwd` /
+`current.git_branch` track where it is now, folded from `worktree` events. `git_branch` is
+`null` for non-git directories and detached HEAD.
 
 Statuses: `pending` | `in_progress` | `complete` | `skipped`
-- `skipped`: allowed for `research`, `outline`, `detail`, `write_tests`, `review_security`, and `cleanup`
+- `skipped`: allowed for the `SKIPPABLE_STEPS` set — `clarify_intent`, `research`, `outline`, `detail`, `write_tests`, `review_tests`, `review_security`, and `cleanup`
 - `user_verification`: cannot be `skipped` — enforced at CLI and permission level
 - `branching_complete` and `pre_final_report_gate`: cannot be `skipped`
 
 **`skip_verdict` field (outline/detail only):** When a speculative skip is recorded
 (`WORKFLOW_OUTLINE_NOT_NEEDED` / `WORKFLOW_DETAIL_NOT_NEEDED`), a `skip_verdict` object is
-stored alongside the `steps[step]` entry (top-level, keyed by step name):
+folded into the step's own entry as a step annotation:
 
 ```json
 {
-  "skip_verdicts": {
-    "outline": {
-      "verdict": "pending",
-      "recorded_at": "2026-07-15T10:00:00.000Z"
+  "current": {
+    "steps": {
+      "outline": {
+        "status": "skipped",
+        "updated_at": "2026-07-15T10:00:00.000Z",
+        "skip_reason": "single obvious approach",
+        "skip_verdict": { "verdict": "pending", "recorded_at": "2026-07-15T10:00:00.000Z" }
+      }
     }
   }
 }
@@ -129,6 +179,7 @@ The canonical step order is `VALID_STEPS` in `hooks/workflow-state/state-io/core
 | `user_verification` | `echo "<<WORKFLOW_USER_VERIFIED: {reason}>>"` — triggers `ask` permission dialog; reason mandatory |
 | `cleanup` | `/worktree-end` skill (worktree path), branch deletion after PR merge (branch path), or `echo "<<WORKFLOW_MARK_STEP_cleanup_skipped>>"` (main path) |
 | `pre_final_report_gate` | `/session-close` skill (emits `WORKFLOW_MARK_STEP_pre_final_report_gate_complete`) |
+| `final_report` | `echo "<<WORKFLOW_MARK_STEP_final_report_complete>>"` after the Final Report is rendered — the sole `TERMINAL_STEPS` member, and the only step the commit gate never enforces |
 
 `write_tests` and `docs` accept evidence-based completion: at commit time, `workflow-gate.js`
 checks `git diff --cached --name-only` and treats staged test/doc files as proof of completion,
@@ -185,7 +236,7 @@ Session start → session-start.js (SessionStart hook)
       else: copies matching session's steps (state inheritance)
     if no match found in any transcript: creates fresh state with all steps pending
   writes ~/.claude/projects/workflow/<sid>.json (includes cwd, git_branch)
-  calls bin/workflow/next-step --session <sid> → injects all 14 step statuses
+  calls bin/workflow/next-step --session <sid> → injects all 15 step statuses
     + "NEXT ACTION: <next-step NEXT_HINT>" into additionalContext (fail-open)
   outputs additionalContext: "Current workflow session_id: <sid>\nState file: ..."
     (→ recorded in transcript for future sessions to find via the scan above)
@@ -290,7 +341,7 @@ At the `outline` and `detail` steps only, next-step first checks for an authorit
 
 Absent a recorded verdict, next-step appends an optional fifth line `SKIP_HINT` (`WORKFLOW_OUTLINE_NOT_NEEDED` or `WORKFLOW_DETAIL_NOT_NEEDED`) when the session's `intent.md` reads as trivial (a mechanical-change keyword present, no broad-change or new-API-surface signal). This is a weak supplementary hint (demoted from sole gate by #1286) — advisory only, which the model may act on by emitting the corresponding ask-gated skip sentinel or ignore; the four-line contract is unchanged on every other step. Triviality is judged by the same resolver's `isTrivial`, which fails closed to "not trivial" on any uncertainty.
 
-`--list` mode renders the full 14-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
+`--list` mode renders the full 15-step plan with per-step status markers (`[x]` complete, `[-]` skipped, `[*]` current, `[!]` current with missing prereq, `[ ]` pending).
 
 `session-start.js` also calls next-step on every session start and injects `NEXT ACTION: <hint>` into `additionalContext`, so resumed sessions recover orientation automatically without user action.
 

@@ -2,9 +2,7 @@
 "use strict";
 
 const path = require("path");
-const { readState, createInitialState, writeState } = require(
-  path.join(__dirname, "../../hooks/workflow-state")
-);
+const { updateTopLevel } = require(path.join(__dirname, "../../hooks/workflow-state"));
 
 const VALID_TYPES = new Set(["wf-code", "wf-meta"]);
 
@@ -25,10 +23,11 @@ if (!VALID_TYPES.has(type)) {
   process.exit(1);
 }
 
-let state = readState(sessionId);
-if (!state) {
-  state = createInitialState(sessionId);
-}
-state.workflow_type = type;
-writeState(sessionId, state);
+// workflow_type is a persisted top-level setting, not a derived value: a narrow
+// locked read-modify-write touches it and nothing else, so a concurrently appended
+// event can never be lost to a stale whole-state snapshot (#1733). updateTopLevel
+// creates the state file when the session has none yet.
+updateTopLevel(sessionId, (record) => {
+  record.workflow_type = type;
+});
 process.exit(0);

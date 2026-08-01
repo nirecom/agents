@@ -82,13 +82,16 @@ read_state_status() {
   local sid="$1" step="$2"
   local state_file="$WORKFLOW_DIR/${sid}.json"
   if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
-  node -e "
+  # #1733: state is an append-only event stream on disk (no top-level .steps);
+  # read through readState() so v1 fixtures migrate and the event log projects.
+  CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR" node -e "
     try {
-      const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-      const step = s.steps && s.steps['$step'];
+      const S = require(process.argv[2]);
+      const s = S.readState(process.argv[1]);
+      const step = s && s.steps && s.steps['$step'];
       console.log(step && step.status ? step.status : 'MISSING');
     } catch (e) { console.log('MISSING'); }
-  " "$state_file" 2>/dev/null || echo "MISSING"
+  " "$sid" "$AGENTS_DIR/hooks/workflow-state/state-io.js" 2>/dev/null || echo "MISSING"
 }
 
 run_next_step() {

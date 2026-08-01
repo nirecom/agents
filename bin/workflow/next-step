@@ -4,6 +4,7 @@
 const fs = require("fs");
 const {
   VALID_STEPS,
+  TERMINAL_STEPS,
   VALID_STATUSES,
   readState,
   getStatePath,
@@ -57,6 +58,8 @@ const STEP_TO_SKILL = Object.freeze({
   user_verification: "",
   cleanup: "",
   pre_final_report_gate: "",
+  // Terminal step: recorded, never advised. See isTerminalStep below.
+  final_report: "",
 });
 
 const STEP_DESC = Object.freeze({
@@ -74,6 +77,7 @@ const STEP_DESC = Object.freeze({
   user_verification: "User verifies the implementation",
   cleanup: "Remove worktree and merge branch",
   pre_final_report_gate: "Final report and session close",
+  final_report: "Final report delivered (terminal)",
 });
 
 const STEP_HINT = Object.freeze({
@@ -85,6 +89,16 @@ const STEP_HINT = Object.freeze({
 
 // WF_META_AUTO_SKIP / effectiveStatus now live in
 // hooks/workflow-state/effective-state.js (SSOT, imported above).
+
+// A terminal step (SSOT: state-io TERMINAL_STEPS) is a boundary marker in the
+// event stream, not work to be advised: nothing comes after it, and no skill
+// completes it. It is therefore excluded from every walk that answers "what is
+// the current step?" — otherwise a finished session would be told forever to run
+// a skill that does not exist.
+const TERMINAL_STEP_SET = new Set(Array.isArray(TERMINAL_STEPS) ? TERMINAL_STEPS : []);
+function isTerminalStep(step) {
+  return TERMINAL_STEP_SET.has(step);
+}
 
 // ---- Import-time assertions -----------------------------------------------
 
@@ -125,7 +139,8 @@ function printUsage() {
     "\n" +
     "Options:\n" +
     "  --session <sid>   Use the given session id instead of resolving one.\n" +
-    "  --list            Print the 14-step workflow plan, with status markers\n" +
+    "  --list            Print the workflow plan (one row per VALID_STEPS entry,\n" +
+    "                    ending with the terminal final_report row), with status markers\n" +
     "                    when --session is provided.\n" +
     "  --reset <step>    Reset a workflow step to pending (recovery tool).\n" +
     "  --mark <step> complete   Mark a workflow step as complete (recovery tool).\n" +
@@ -248,9 +263,11 @@ function renderListWithState(sid) {
   }
   const listStatus = (step) => (listSnapshot.steps[step] || {}).status || "pending";
 
-  // Find current step (first non-complete/non-skipped).
+  // Find current step (first non-complete/non-skipped). Terminal steps are never
+  // "current" — the row is still rendered, just never marked [*].
   let currentIdx = -1;
   for (let i = 0; i < VALID_STEPS.length; i++) {
+    if (isTerminalStep(VALID_STEPS[i])) continue;
     const s = listStatus(VALID_STEPS[i]);
     if (s !== "complete" && s !== "skipped") { currentIdx = i; break; }
   }
@@ -340,6 +357,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   {
     let rawCurrent = null;
     for (const step of VALID_STEPS) {
+      if (isTerminalStep(step)) continue;
       const raw = (state.steps[step] || {}).status || "pending";
       const status = effectiveStatus(step, raw, isWfMeta);
       if (status !== "complete" && status !== "skipped") { rawCurrent = step; break; }
@@ -412,6 +430,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   let currentStep = null;
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
+    if (isTerminalStep(step)) continue;
     const status = snapStatus(step);
     if (status !== "complete" && status !== "skipped") {
       // post-merge guard: treat user_verification reset by gh pr merge as complete.
@@ -473,6 +492,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // as complete here, so a pending-but-evidenced step can no longer false-abort.
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
+    // A terminal step recorded complete is the session's own end marker, never
+    // evidence that an earlier step was skipped over.
+    if (isTerminalStep(step)) continue;
     const stEntry = state.steps[step];
     const rawStatus = stEntry ? stEntry.status : undefined;
     const status = rawStatus !== undefined && rawStatus !== null

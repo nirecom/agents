@@ -2,8 +2,11 @@
 // SSOT for BUGFIX session detection (#1147 T0-A).
 //
 // Signal priority (highest first):
-//   1. state.is_bugfix (immutable init-time flag set by createInitialState)
-//   2. state.git_branch (fallback for states written before is_bugfix existed)
+//   1. state.current.is_bugfix — DERIVED, not stored: the projection folds it from
+//      the branch the newest worktree event recorded (#1733). Read-only here; this
+//      module owns the RULE (isBugfixBranch), never the recorded value.
+//   2. state.current.git_branch — same projection, applying the rule directly.
+//      Retained for a state whose fold yields a branch but no boolean.
 //   3. runtime branch probe (last resort; may be wrong in detached HEAD / rename)
 
 const { execFileSync } = require("child_process");
@@ -21,17 +24,18 @@ function isBugfixBranch(branchName) {
 function isBugfixSession(opts = {}) {
   if (typeof opts === "string") opts = { sessionId: opts };
   const { repoDir, sessionId, branchName } = opts;
-  // Signal 1: session state is_bugfix flag (immutable, set at init time).
+  // Signal 1: the projected is_bugfix flag. Read-only — the projection derives it.
   if (sessionId) {
     try {
       const { readState } = require("./state-io");
       const state = readState(sessionId);
-      if (state && typeof state.is_bugfix === "boolean") {
-        return state.is_bugfix;
+      const current = (state && state.current) || state;
+      if (current && typeof current.is_bugfix === "boolean") {
+        return current.is_bugfix;
       }
-      // Signal 2: state.git_branch fallback (old states without is_bugfix).
-      if (state && typeof state.git_branch === "string") {
-        return isBugfixBranch(state.git_branch);
+      // Signal 2: the projected branch, with the rule applied here.
+      if (current && typeof current.git_branch === "string") {
+        return isBugfixBranch(current.git_branch);
       }
     } catch (_) {}
   }

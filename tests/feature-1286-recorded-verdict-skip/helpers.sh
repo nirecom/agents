@@ -97,6 +97,12 @@ write_state() {
 }
 
 # Read step.<field> from a state file. Bash reads the file; node parses stdin.
+# read_state_field / read_skip_judgment_raw read the state file directly and accept
+# BOTH shapes: the legacy top-level `steps` map and `.current.steps` (the derived
+# projection introduced by #1733, which turned skip_judgment / skip_verdict into
+# step_annotation events). The recorded-verdict contract asserted here is unchanged;
+# the annotation-event side is covered by
+# tests/feature-1733-state-event-stream/annotation-fold.sh.
 read_state_field() {
   local sid="$1" step="$2" field="$3"
   local state_file="$WORKFLOW_DIR/${sid}.json"
@@ -106,7 +112,8 @@ read_state_field() {
     process.stdin.on('end',()=>{
       try{
         const s=JSON.parse(data);
-        const entry=s.steps&&s.steps['$step'];
+        const m=s.steps||(s.current&&s.current.steps);
+        const entry=m&&m['$step'];
         if(!entry){console.log('null');process.exit(0);}
         const v=entry['$field'];
         console.log(JSON.stringify(v!==undefined?v:null));
@@ -125,7 +132,8 @@ read_skip_judgment_raw() {
     process.stdin.on('end',()=>{
       try{
         const s=JSON.parse(data);
-        const sj=s.steps&&s.steps['$step']&&s.steps['$step'].skip_judgment;
+        const m=s.steps||(s.current&&s.current.steps);
+        const sj=m&&m['$step']&&m['$step'].skip_judgment;
         console.log(JSON.stringify(sj||null));
       }catch(e){console.log('null');}
     });

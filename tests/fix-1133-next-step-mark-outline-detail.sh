@@ -125,10 +125,13 @@ read_state_status() {
   local sid="$1" step="$2"
   local state_file="$WORKFLOW_DIR/${sid}.json"
   if [ ! -f "$state_file" ]; then echo "MISSING"; return; fi
+  # #1733: on disk, v2 state persists .steps only under the .current projection
+  # (top-level events are the SSOT); fall back to that shape.
   node -e "
     try {
       const s = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-      const step = s.steps && s.steps['$step'];
+      const steps = s.steps || (s.current && s.current.steps);
+      const step = steps && steps['$step'];
       console.log(step && step.status ? step.status : 'MISSING');
     } catch (e) { console.log('MISSING'); }
   " "$state_file" 2>/dev/null || echo "MISSING"

@@ -5,6 +5,11 @@
 
 const { validateSkipReason } = require("./skip-reason");
 const { markStep, recordSkipVerdict } = require("../workflow-state");
+
+// A *_NOT_NEEDED sentinel is the model ASSERTING that a step is unnecessary — the
+// hook observed no work, only the claim. Every member of the class carries the same
+// provenance (CPR-5), so a reader can tell a declared skip from an observed one.
+const DECLARED = { provenance: "declared" };
 const {
   RESEARCH_NOT_NEEDED_RE_DQ, RESEARCH_NOT_NEEDED_LOOKSLIKE_RE,
   OUTLINE_NOT_NEEDED_RE_DQ, OUTLINE_NOT_NEEDED_LOOKSLIKE_RE,
@@ -57,7 +62,7 @@ function handle(ctx) {
       return true;
     }
     try {
-      markStep(sessionId, "research", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "research", "skipped", { skip_reason: v.reason }, DECLARED);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. research NOT recorded.`
@@ -90,7 +95,7 @@ function handle(ctx) {
       return true;
     }
     try {
-      markStep(sessionId, "outline", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "outline", "skipped", { skip_reason: v.reason }, DECLARED);
       // A-4: attach speculative skip verdict (pending-verification)
       recordSkipVerdict(sessionId, "outline", "pending", "sentinel");
     } catch (e) {
@@ -123,7 +128,7 @@ function handle(ctx) {
       return true;
     }
     try {
-      markStep(sessionId, "detail", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "detail", "skipped", { skip_reason: v.reason }, DECLARED);
       // A-4: attach speculative skip verdict (pending-verification)
       recordSkipVerdict(sessionId, "detail", "pending", "sentinel");
     } catch (e) {
@@ -169,12 +174,12 @@ function handle(ctx) {
       }
     } catch (_) {}
     try {
-      markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "write_tests", "skipped", { skip_reason: v.reason }, DECLARED);
       // Symmetric skip propagation (issue #833): review_tests is paired with
       // write_tests. If there are no tests to write, there are no tests to review.
       markStep(sessionId, "review_tests", "skipped", {
         skip_reason: `(symmetric: write_tests not needed) ${v.reason}`,
-      });
+      }, DECLARED);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. write_tests NOT recorded.`
@@ -209,7 +214,7 @@ function handle(ctx) {
       return true;
     }
     try {
-      markStep(sessionId, "review_security", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "review_security", "skipped", { skip_reason: v.reason }, DECLARED);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. review_security NOT recorded.`
@@ -253,7 +258,7 @@ function handle(ctx) {
       return true;
     }
     try {
-      markStep(sessionId, "clarify_intent", "skipped", { skip_reason: v.reason });
+      markStep(sessionId, "clarify_intent", "skipped", { skip_reason: v.reason }, DECLARED);
     } catch (e) {
       pushMessage(
         `workflow-mark: failed to write state — ${e.message}. clarify_intent NOT recorded.`
