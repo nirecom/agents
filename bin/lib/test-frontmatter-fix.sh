@@ -38,11 +38,14 @@ normalize_token() {
   pre="${pre%%—*}"
   pre="$(printf '%s' "$pre" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
-  local result="" word
-  # shellcheck disable=SC2086
-  for word in $pre; do
+  local result=""
+  local -a words
+  read -r -a words <<< "$pre"
+  local word
+  for word in "${words[@]:-}"; do
     [[ "$word" == --* ]] && continue
     [[ "$word" == *"*"* || "$word" == *"?"* ]] && continue
+    _is_root_like_token "$word" && continue
     if [[ "$word" == */* ]] || [[ "$word" =~ \.[a-zA-Z0-9]+$ ]]; then
       if [[ "$word" =~ $FRONTMATTER_TOKEN_VALID_RE ]]; then
         result="$word"
@@ -56,6 +59,16 @@ normalize_token() {
   else
     printf '%s' "$result"
   fi
+}
+
+# _is_root_like_token <token> — true when <token> is a root-equivalent /
+# no-op-path spelling that must never be treated as a meaningful test path,
+# even though `[[ -e ]]` reports it as existing.
+_is_root_like_token() {
+  case "$1" in
+    '/'|'.'|'..'|'./'|'../') return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # classify_tests_header <file> — classifies each `# Tests:` token into buckets.
@@ -101,7 +114,7 @@ classify_tests_header() {
 
     a_flag=0
     eff="$tok"
-    if [[ ! "$tok" =~ $FRONTMATTER_TOKEN_VALID_RE ]]; then
+    if [[ ! "$tok" =~ $FRONTMATTER_TOKEN_VALID_RE ]] || _is_root_like_token "$tok"; then
       a_flag=1
       CHR_HAS_A=1
       norm="$(normalize_token "$tok")"
@@ -199,8 +212,10 @@ _rebuild_tests_value() {
     [[ -z "$trimmed" ]] && continue
     local eff
     if [[ "$trimmed" =~ $FRONTMATTER_TOKEN_VALID_RE ]]; then
-      if [[ -e "$trimmed" ]]; then
+      if [[ -e "$trimmed" ]] && ! _is_root_like_token "$trimmed"; then
         eff="$trimmed"
+      elif [[ -e "$trimmed" ]]; then
+        eff=""
       else
         local rn; rn="$(find_renamed_path "$trimmed")"
         if [[ -n "$rn" ]]; then eff="$rn"; else eff="$trimmed"; fi

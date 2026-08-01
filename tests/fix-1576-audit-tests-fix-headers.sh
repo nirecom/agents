@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests: bin/audit-tests.sh, bin/audit-tests-common.sh
-# Tags: TL2, scope:issue-specific, fix-1576-test-frontmatter
+# Tests: bin/audit-tests.sh, bin/audit-tests-common.sh, bin/lib/test-frontmatter-fix.sh, bin/lib/test-frontmatter-constants.sh
+# Tags: TL2, scope:issue-specific, fix-1576-test-frontmatter, fix-1782-normalize-token-glob
 #
 # TL2 test of the #1576 --fix-headers feature added to audit-tests.sh and
 # audit-tests-common.sh. Exercises A/B/C token classification, the
@@ -11,6 +11,42 @@
 # Fail-before-fix: --fix-headers does not exist yet. Every TC below is
 # EXPECTED TO FAIL until #1576 write-code lands the feature.
 #
+# TC11-TC23 (added for #1782): normalize_token()'s unquoted `for word in $pre`
+# undergoes unwanted glob expansion, and both normalize_token() and the
+# classify_tests_header()/_rebuild_tests_value() direct-match branches accept
+# root-equivalent tokens (bare "/", ".", "..", "./", "../") as valid existing
+# paths via `[[ -e "$word" ]]`. TC11/TC12/TC14-TC23 are EXPECTED TO FAIL until
+# #1782 lands; TC13 guards against over-exclusion breaking the normal case.
+#
+# TC15-TC17 extend root-equivalent coverage to the remaining case-list members
+# (".", "..", "../") as standalone CSV tokens (same direct-match branch as
+# TC14's bare "/"). TC18-TC19 exercise the --apply rewrite path
+# (_rebuild_tests_value) against sandboxed synthetic fixtures to confirm a
+# root-equivalent or glob token cannot survive/silently-substitute into the
+# rewritten header (both now assert RC==0 explicitly on the --apply
+# invocation, not just byte-comparison, so a crash can't masquerade as an
+# "unchanged" pass). TC20-TC21 extend glob coverage (TC11 covers "*") to "?"
+# and a pure bracket-expression glob containing no "*"/"?" at all, matching
+# normalize_token()'s skip-guard (`*"*"*` / `*"?"*` only — bracket expressions
+# are not special-cased). TC22 covers "./" as its own standalone CSV token
+# (distinct from TC13's "./" embedded in prose). TC23 mirrors TC14's bare "/"
+# regression through bin/audit-tests-common.sh's --fix-headers path (CPR-5
+# symmetry with bin/audit-tests.sh).
+#
+#
+# Round-3 Codex test-coverage review (gaps C1/C2, addressed in this revision):
+# - C1: TC24-TC26 broaden root-equivalent-spelling coverage beyond the 5
+#   literal case-list members. TC24 ("bin/.") is a sanctioned non-root
+#   negative control; TC25 ("tests/..") and TC26 (absolute path to the
+#   fixture's own sandbox root) document the approved fix design's literal-
+#   match-only, no-path-resolution boundary (see comments at each case) —
+#   verified by direct execution against synthetic fixtures rather than
+#   assumed.
+# - C2: TC18/TC19 now additionally assert the exact `SKIP_APPLY_HAS_AC: <file>`
+#   diagnostic line via `grep -qxF` when the file is unchanged, closing the
+#   gap where "nothing changed" could otherwise mean either "correctly
+#   detected and preserved" or "crashed/matched nothing for an unrelated
+#   reason."
 # TL3 gap (what this test does NOT catch):
 # - Real pre-commit hook firing via actual git commit attempt
 # - gh API timeout behavior in a live GitHub environment
@@ -75,153 +111,28 @@ run_in() {
 }
 
 # --- Cases -----------------------------------------------------------------
-
-# TC1: A-token (bracket annotation — format-invalid) report mode => FIX_A:, file unchanged
-R1="$(make_fixture)"
-write_dispatcher "$R1" "feature-1-a.sh" '# Tests: bin/foo.sh (annotation)'
-before="$(cat "$R1/tests/feature-1-a.sh")"
-run_in "$R1" "$AUDIT" --dry-run --fix-headers --offline
-after="$(cat "$R1/tests/feature-1-a.sh")"
-if [[ "$OUT$ERR" == *"FIX_A:"* && "$before" == "$after" ]]; then
-  pass "TC1 A-token report mode emits FIX_A and leaves file unchanged"
-else
-  fail "TC1 A-token report mode emits FIX_A and leaves file unchanged" "rc=$RC out=<<$OUT>> err=<<$ERR>> changed=$([[ "$before" != "$after" ]] && echo yes || echo no)"
-fi
-rm -rf "$R1"
-
-# TC2: A-token --fix-headers --apply => header normalized, exec bit preserved
-R2="$(make_fixture)"
-write_dispatcher "$R2" "feature-2-a.sh" '# Tests: bin/foo.sh (annotation)'
-run_in "$R2" "$AUDIT" --fix-headers --apply --offline
-new_hdr="$(grep -m1 -E '^# Tests:' "$R2/tests/feature-2-a.sh" || true)"
-is_exec=0; [[ -x "$R2/tests/feature-2-a.sh" ]] && is_exec=1
-if [[ "$new_hdr" == '# Tests: bin/foo.sh' && "$is_exec" -eq 1 ]]; then
-  pass "TC2 A-token --apply normalizes header and preserves exec bit"
-else
-  fail "TC2 A-token --apply normalizes header and preserves exec bit" "rc=$RC hdr=<<$new_hdr>> exec=$is_exec out=<<$OUT>> err=<<$ERR>>"
-fi
-rm -rf "$R2"
-
-# TC3: B-token (renamed path) --fix-headers => FIX_B: <old> -> <new>
-# Create bin/old.sh, reference it, then git-rename to bin/new.sh so rename
-# tracking can resolve old -> new.
-R3="$(make_fixture)"
-echo '#!/usr/bin/env bash' > "$R3/bin/old.sh"
-git -C "$R3" add -A >/dev/null 2>&1
-git -C "$R3" commit -q --no-verify -m addold >/dev/null 2>&1
-git -C "$R3" mv bin/old.sh bin/new.sh >/dev/null 2>&1
-git -C "$R3" commit -q --no-verify -m rename >/dev/null 2>&1
-write_dispatcher "$R3" "feature-3-b.sh" '# Tests: bin/old.sh'
-run_in "$R3" "$AUDIT" --dry-run --fix-headers --offline
-if [[ "$OUT$ERR" == *"FIX_B:"* && "$OUT$ERR" == *"bin/old.sh"* && "$OUT$ERR" == *"bin/new.sh"* ]]; then
-  pass "TC3 B-token report emits FIX_B old -> new"
-else
-  fail "TC3 B-token report emits FIX_B old -> new" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
-fi
-rm -rf "$R3"
-
-# TC4: A-flag mixed with C-token --fix-headers --apply => SKIP_APPLY_HAS_A, file unchanged
-# Token is format-invalid (A, bracket) AND path-deleted (C). --apply must not rewrite.
-R4="$(make_fixture)"
-write_dispatcher "$R4" "feature-4-ac.sh" '# Tests: bin/deleted.sh (gone)'
-before="$(cat "$R4/tests/feature-4-ac.sh")"
-run_in "$R4" "$AUDIT" --fix-headers --apply --offline
-after="$(cat "$R4/tests/feature-4-ac.sh")"
-if [[ "$OUT$ERR" == *"SKIP_APPLY_HAS_A"* && "$before" == "$after" ]]; then
-  pass "TC4 A-flag present blocks --apply rewrite (SKIP_APPLY_HAS_A)"
-else
-  fail "TC4 A-flag present blocks --apply rewrite (SKIP_APPLY_HAS_A)" "rc=$RC out=<<$OUT>> err=<<$ERR>> changed=$([[ "$before" != "$after" ]] && echo yes || echo no)"
-fi
-rm -rf "$R4"
-
-# TC5: prose words only (0 path-like tokens) => MANUAL_REVIEW_REQUIRED
-R5="$(make_fixture)"
-write_dispatcher "$R5" "feature-5-prose.sh" '# Tests: some prose words here'
-run_in "$R5" "$AUDIT" --dry-run --fix-headers --offline
-if [[ "$OUT$ERR" == *"MANUAL_REVIEW_REQUIRED"* ]]; then
-  pass "TC5 zero path-like tokens yields MANUAL_REVIEW_REQUIRED"
-else
-  fail "TC5 zero path-like tokens yields MANUAL_REVIEW_REQUIRED" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
-fi
-rm -rf "$R5"
-
-# TC6: multi-paren => only first token survives normalize (report shows a.js only)
-R6="$(make_fixture)"
-echo '// a' > "$R6/bin/a.js"
-echo '// b' > "$R6/bin/b.js"
-git -C "$R6" add -A >/dev/null 2>&1
-git -C "$R6" commit -q --no-verify -m addjs >/dev/null 2>&1
-write_dispatcher "$R6" "feature-6-multiparen.sh" '# Tests: bin/a.js (note) bin/b.js (note2)'
-run_in "$R6" "$AUDIT" --dry-run --fix-headers --offline
-if [[ "$OUT$ERR" == *"bin/a.js"* && "$OUT$ERR" != *"bin/b.js"* ]]; then
-  pass "TC6 multi-paren normalize keeps only first token (a.js), drops b.js"
-else
-  fail "TC6 multi-paren normalize keeps only first token (a.js), drops b.js" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
-fi
-rm -rf "$R6"
-
-# TC7: multi-paren --fix-headers --apply => SKIP_APPLY_MULTI_PAREN, file unchanged
-R7="$(make_fixture)"
-write_dispatcher "$R7" "feature-7-multiparen.sh" '# Tests: bin/a.js (note) bin/b.js (note2)'
-before="$(cat "$R7/tests/feature-7-multiparen.sh")"
-run_in "$R7" "$AUDIT" --fix-headers --apply --offline
-after="$(cat "$R7/tests/feature-7-multiparen.sh")"
-if [[ "$OUT$ERR" == *"SKIP_APPLY_MULTI_PAREN"* && "$before" == "$after" ]]; then
-  pass "TC7 multi-paren --apply is skipped (SKIP_APPLY_MULTI_PAREN)"
-else
-  fail "TC7 multi-paren --apply is skipped (SKIP_APPLY_MULTI_PAREN)" "rc=$RC out=<<$OUT>> err=<<$ERR>> changed=$([[ "$before" != "$after" ]] && echo yes || echo no)"
-fi
-rm -rf "$R7"
-
-# TC8: audit-tests-common.sh --fix-headers A-report (CPR-5 symmetry)
-if [[ ! -f "$AUDIT_COMMON" ]]; then
-  fail "TC8 audit-tests-common.sh --fix-headers symmetry" "script not found: $AUDIT_COMMON"
-else
-  R8="$(make_fixture)"
-  # common script targets non-feature-NNN files.
-  write_dispatcher "$R8" "check-something.sh" '# Tests: bin/foo.sh (annotation)'
-  before="$(cat "$R8/tests/check-something.sh")"
-  run_in "$R8" "$AUDIT_COMMON" --fix-headers
-  after="$(cat "$R8/tests/check-something.sh")"
-  if [[ "$OUT$ERR" == *"FIX_A:"* && "$before" == "$after" ]]; then
-    pass "TC8 audit-tests-common.sh --fix-headers reports FIX_A without rewriting"
-  else
-    fail "TC8 audit-tests-common.sh --fix-headers reports FIX_A without rewriting" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
-  fi
-  rm -rf "$R8"
-fi
-
-# TC9: audit-tests-common.sh --fix-headers B-token (CPR-5 symmetry)
-if [[ -f "$AUDIT_COMMON" ]]; then
-  R9="$(make_fixture)"
-  echo '#!/usr/bin/env bash' > "$R9/bin/old.sh"
-  git -C "$R9" add -A >/dev/null 2>&1
-  git -C "$R9" commit -q --no-verify -m addold >/dev/null 2>&1
-  git -C "$R9" mv bin/old.sh bin/new.sh >/dev/null 2>&1
-  git -C "$R9" commit -q --no-verify -m rename >/dev/null 2>&1
-  write_dispatcher "$R9" "check-renamed.sh" '# Tests: bin/old.sh'
-  run_in "$R9" "$AUDIT_COMMON" --fix-headers
-  if [[ "$OUT$ERR" == *"FIX_B:"* ]]; then
-    pass "TC9 audit-tests-common.sh --fix-headers reports FIX_B for renamed path"
-  else
-    fail "TC9 audit-tests-common.sh --fix-headers reports FIX_B for renamed path" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
-  fi
-  rm -rf "$R9"
-fi
-
-# TC10: audit-tests-common.sh --fix-headers C-token (path deleted, no rename) (CPR-5 symmetry)
-if [[ -f "$AUDIT_COMMON" ]]; then
-  R10="$(make_fixture)"
-  write_dispatcher "$R10" "check-orphan.sh" '# Tests: bin/deleted.sh'
-  run_in "$R10" "$AUDIT_COMMON" --fix-headers
-  # C-class: path missing, no rename => should report as orphan/missing
-  if [[ "$OUT$ERR" == *"MISSING"* || "$OUT$ERR" == *"C:"* || "$OUT$ERR" == *"orphan"* || $RC -ne 0 ]]; then
-    pass "TC10 audit-tests-common.sh --fix-headers identifies C-token (deleted path)"
-  else
-    fail "TC10 audit-tests-common.sh --fix-headers identifies C-token (deleted path)" "rc=$RC out=<<$OUT>> err=<<$ERR>>"
-  fi
-  rm -rf "$R10"
-fi
+# Test case bodies (TC1-TC26) live in the sibling directory below, split by
+# logical grouping (HARD file-split limit, rules/coding/file-split.md). Each
+# fragment is *sourced* (not executed as a separate script) so it shares this
+# file's PASS/FAIL counters, pass()/fail() helpers, and fixture helpers, and
+# so tests/run-all.sh's non-recursive `tests/*.sh` glob never discovers or
+# double-runs them independently. Physical execution order below closely
+# reproduces the pre-split monolithic file's order (TC1-10, TC11, TC12,
+# TC22-26, TC13-17, TC18-21); the round-4 table-driven refactor (test-review
+# gap C1) regroups TC22 alongside TC24-26 (was before TC23, now after — a
+# harmless reorder of independent cases) and TC14-17 into their own table
+# within root-like-tokens-direct-match.sh. The TAP `1..26` numbering and
+# pass/fail semantics are unchanged: each table row still calls pass()/fail()
+# exactly once per logical TC.
+CASES_DIR="$SCRIPT_DIR/fix-1576-audit-tests-fix-headers"
+# shellcheck source=fix-1576-audit-tests-fix-headers/token-classification-abc.sh
+source "$CASES_DIR/token-classification-abc.sh"       # TC1-TC10
+# shellcheck source=fix-1576-audit-tests-fix-headers/root-like-tokens-report.sh
+source "$CASES_DIR/root-like-tokens-report.sh"        # TC11, TC12, TC22-TC26
+# shellcheck source=fix-1576-audit-tests-fix-headers/root-like-tokens-direct-match.sh
+source "$CASES_DIR/root-like-tokens-direct-match.sh"  # TC13-TC17
+# shellcheck source=fix-1576-audit-tests-fix-headers/apply-rewrite-and-extra-globs.sh
+source "$CASES_DIR/apply-rewrite-and-extra-globs.sh"  # TC18-TC21
 
 # --- Summary ---------------------------------------------------------------
 echo "1..$((PASS+FAIL))"
