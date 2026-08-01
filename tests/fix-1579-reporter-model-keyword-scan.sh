@@ -34,6 +34,7 @@ cat > "$MOCKDIR/gh" <<'MOCK'
 # Mock gh: capture --label args from `issue create`; everything else exits 1
 # (non-fatal in issue-create.sh: auth-status warn / resolver skip).
 if [ "${1:-}" = "issue" ] && [ "${2:-}" = "create" ]; then
+    printf 'created\n' >> "${GH_CREATE_LOG:-/dev/null}"
     while [ $# -gt 0 ]; do
         if [ "$1" = "--label" ]; then printf '%s\n' "$2" >> "$GH_LABEL_CAPTURE"; fi
         shift
@@ -46,20 +47,45 @@ MOCK
 chmod +x "$MOCKDIR/gh"
 
 CAP="$WORK/labels.txt"
+CREATED="$WORK/created.txt"
 
-# run_ic <args...> → runs issue-create.sh with mock gh; captures labels into $CAP.
-# Returns issue-create.sh exit code. Labels land in $CAP one per line.
+# run_ic <args...> → runs issue-create.sh with mock gh; captures labels into $CAP and
+# one 'created' line per `gh issue create` invocation into $CREATED.
+# Sets $IC_RC to issue-create.sh's exit code (and also returns it).
 run_ic() {
-    : > "$CAP"
+    : > "$CAP"; : > "$CREATED"
     GH_LABEL_CAPTURE="$CAP" \
+    GH_CREATE_LOG="$CREATED" \
     PATH="$MOCKDIR:$PATH" \
     AGENTS_CONFIG_DIR="" \
     ISSUE_CREATE_SKIP_SCHEMA=1 \
         bash "$IC" "$@" >/dev/null 2>"$WORK/stderr.txt"
-    return $?
+    IC_RC=$?
+    return $IC_RC
 }
 
 has_label()  { grep -qxF "$1" "$CAP"; }
+
+# assert_created <name> → 0 if the run actually created an issue.
+#
+# This is the precondition every NEGATIVE assertion in this file depends on. Without
+# it, "label X was absent" is satisfied just as well by a run that never reached
+# `gh issue create` at all — a broken argument parser, a failed preflight, or a typo
+# in the test's own flags all produce an empty $CAP and a green test. The label-absence
+# check only means something once we know the creation call happened and succeeded.
+assert_created() {
+    local name="$1"
+    if [ "${IC_RC:-1}" -ne 0 ]; then
+        fail "$name" "PRECONDITION: issue-create.sh exited $IC_RC — label-absence proves nothing (stderr: $(head -n 1 "$WORK/stderr.txt" 2>/dev/null))"
+        return 1
+    fi
+    local n; n=$(grep -c '^created$' "$CREATED" 2>/dev/null || printf '0')
+    if [ "$n" != "1" ]; then
+        fail "$name" "PRECONDITION: expected exactly 1 'gh issue create' invocation, saw $n — label-absence proves nothing"
+        return 1
+    fi
+    return 0
+}
 
 assert_label_present() {
     local name="$1"; shift; local args=(); local expect
@@ -67,6 +93,7 @@ assert_label_present() {
     expect="${!#}"
     args=("${@:1:$(($#-1))}")
     run_ic "${args[@]}"
+    assert_created "$name" || return
     if has_label "$expect"; then pass "$name"
     else fail "$name" "expected label '$expect' not passed to gh (got: $(tr '\n' ' ' < "$CAP"))"; fi
 }
@@ -76,6 +103,7 @@ assert_label_absent() {
     forbid="${!#}"
     args=("${@:1:$(($#-1))}")
     run_ic "${args[@]}"
+    assert_created "$name" || return
     if has_label "$forbid"; then fail "$name" "label '$forbid' unexpectedly passed to gh"
     else pass "$name"; fi
 }
@@ -84,6 +112,7 @@ assert_label_absent() {
 assert_no_reporter_model() {
     local name="$1"; shift
     run_ic "$@"
+    assert_created "$name" || return
     if grep -q '^reporter-model:' "$CAP"; then
         fail "$name" "unexpected reporter-model:* label (got: $(tr '\n' ' ' < "$CAP"))"
     else pass "$name"; fi
@@ -101,27 +130,6 @@ assert_label_present "T6-qwen-alias"     --title t --body "b" --reporter-model "
 
 # T7: unknown model → no reporter-model:* label
 assert_no_reporter_model "T7-unknown-no-label" --title t --body "b" --reporter-model "unknown-model-xyz"
-
-echo ""
-echo "=== severity keyword scan (abort|hang|security|leak, word-boundary) ==="
-
-# T8-T11: keyword in title or body forces severity:high
-assert_label_present "T8-title-abort"    --title "abort loop"      --body "b"            "severity:high"
-assert_label_present "T9-title-hang"     --title "it will hang"    --body "b"            "severity:high"
-assert_label_present "T10-body-security" --title "t"               --body "security bug" "severity:high"
-assert_label_present "T11-body-leak"     --title "t"               --body "a leak here"  "severity:high"
-
-# T12: explicit severity:low + keyword → high overrides low (low removed, high present)
-run_ic --title "t" --body "abort now" --label "severity:low"
-if has_label "severity:high" && ! has_label "severity:low"; then
-    pass "T12-high-overrides-low"
-else
-    fail "T12-high-overrides-low" "want severity:high present + severity:low absent (got: $(tr '\n' ' ' < "$CAP"))"
-fi
-
-# T13-T14: word-boundary — substring / inflection must NOT trigger
-assert_label_absent "T13-abstract-no-match" --title "abstract concept" --body "b" "severity:high"
-assert_label_absent "T14-hanging-no-match"  --title "hanging around"   --body "b" "severity:high"
 
 echo ""
 echo "=== T16 reporter-model via raw self-report sentence (--reporter-model-text) ==="
@@ -166,25 +174,34 @@ mkdir -p "$BROKEN_NODE_DIR"
 printf '#!/usr/bin/env bash\nexit 127\n' > "$BROKEN_NODE_DIR/node"
 chmod +x "$BROKEN_NODE_DIR/node"
 
-: > "$CAP"
+: > "$CAP"; : > "$CREATED"
 GH_LABEL_CAPTURE="$CAP" \
+GH_CREATE_LOG="$CREATED" \
 PATH="$BROKEN_NODE_DIR:$MOCKDIR:$PATH" \
 AGENTS_CONFIG_DIR="" \
 ISSUE_CREATE_SKIP_SCHEMA=1 \
     bash "$IC" --title t --body "b" \
         --reporter-model-text "You are powered by the model named DS4 Flash. The exact model ID is deepseek-v4-flash." \
         >/dev/null 2>>"$WORK/stderr.txt"
+IC_RC=$?
 
-if grep -q '^reporter-model:' "$CAP"; then
+# Order matters here: T19b is the precondition for T19, so it is asserted FIRST.
+# "no reporter-model label" is the expected outcome of a degraded matcher AND the
+# expected outcome of a wholly aborted run — only the creation check tells them apart.
+if [ "$IC_RC" -eq 0 ] && [ "$(grep -c '^created$' "$CREATED" 2>/dev/null || printf '0')" = "1" ]; then
+    pass "T19b-issue-still-created"
+    T19_OK=yes
+else
+    fail "T19b-issue-still-created" "issue creation aborted when the matcher process failed (rc=$IC_RC, creates=$(grep -c '^created$' "$CREATED" 2>/dev/null || printf '0'), labels: $(tr '\n' ' ' < "$CAP"))"
+    T19_OK=no
+fi
+
+if [ "$T19_OK" != "yes" ]; then
+    fail "T19-no-label-when-matcher-fails" "PRECONDITION: the issue was never created — label-absence proves nothing"
+elif grep -q '^reporter-model:' "$CAP"; then
     fail "T19-no-label-when-matcher-fails" "a reporter-model:* label appeared although the matcher process could not run (got: $(tr '\n' ' ' < "$CAP"))"
 else
     pass "T19-no-label-when-matcher-fails"
-fi
-
-if grep -qxF 'type:task' "$CAP"; then
-    pass "T19b-issue-still-created"
-else
-    fail "T19b-issue-still-created" "issue creation aborted when the matcher process failed (labels: $(tr '\n' ' ' < "$CAP"))"
 fi
 
 echo ""

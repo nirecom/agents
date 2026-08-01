@@ -199,6 +199,26 @@ See `docs/security-policy.md` for the full pattern list.
   / `getPlanLangInjection` (`hooks/lib/conv-lang.js`, `hooks/lib/lang-config.js`), the same
   source consumed by `subagent-start.js` (which injects `PLAN_LANG` only for the
   planner/reviewer agent whitelist). Fail-open: any error yields `{}`.
+- `issue-provenance-mint.js` (UserPromptSubmit) — observation point 1 of the
+  issue-creation provenance chain: when the turn's prompt is itself a request to file an
+  issue, it mints `<sid>.issue-provenance`, a target-bound (`issue-create`), time-boxed
+  (≤1h) token; any other prompt deletes a stale one. Every turn it also refreshes
+  `<sid>.session-transcript`, the pointer that lets a later non-hook process find the
+  transcript it can no longer be handed. Provenance has **three** observation points and
+  the later two exist because the first cannot be relied on: (1) this token, (2) a
+  re-scan of the newest user entry in the transcript, (3) workflow inactivity. All three
+  feed ONE consumption boundary — `bin/github-issues/issue-provenance --consume` — and
+  `<sid>.issue-provenance-consumed` is where single use actually lives: the token proves
+  a request happened, the consumption record is what stops the same request being spent
+  twice, so a missing or unreadable record resolves to `mid-workflow` (fail-closed, i.e.
+  one extra confirmation) rather than to a free pass. All three files are clearance
+  tokens under `hooks/block-clearance-token-write.js` — the model may never write them.
+- **Outbound content and the verdict review** — `ISSUE_VERDICT_REVIEW` sends the proposed
+  issue text AND the bodies of the surveyed candidate issues to codex. Candidate bodies are
+  written by other people, which is a content class the existing codex callers do not send.
+  It is bounded three ways: the switch turns it off, it does not fire by default on a
+  `user-explicit` run, and the reverse direction (codex output reaching GitHub) is scanned
+  by `gh_outbound_guard` before any comment is posted.
 - **Model-conditional prompt injection** — `hooks/lib/verbose-prompt.js` is the language-injection
   provider's sibling: a pure provider holding the single definition of a one-line procedure-hardening
   directive, injected only for models whose identifier matches `VERBOSE_PROMPT_MODELS`. Keeping the

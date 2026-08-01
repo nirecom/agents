@@ -326,6 +326,11 @@
             "type": "command",
             "command": "node \"$AGENTS_CONFIG_DIR/hooks/lang-inject.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/issue-provenance-mint.js\"",
+            "timeout": 5
           }
         ]
       }
@@ -420,7 +425,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-off-clearance-write.js\"",
+            "command": "node \"$AGENTS_CONFIG_DIR/hooks/block-clearance-token-write.js\"",
             "timeout": 5
           }
         ]

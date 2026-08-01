@@ -171,8 +171,75 @@ function isOffClearanceValid(sid, target, reasonText) {
   }
 }
 
+// --- issue-creation provenance token (#1763) --------------------------------
+// Same read/evaluate/valid triad as the OFF-clearance token above (CPR-5), over
+// <workflowDir>/<sid>.issue-provenance. `sid` is the CC session UUID — the id the
+// minting hook and the consuming CLI both hold; the path is derived by
+// issue-provenance-keys.js so no marker name is ever spelled twice.
+
+// The window a token may claim. A token whose expiry is further out than this is
+// indistinguishable from "never expires" and is rejected: the whole point of the
+// turn-boundary binding is that the authorization is short-lived.
+const ISSUE_PROVENANCE_MAX_WINDOW_MS = 60 * 60 * 1000;
+
+// readIssueProvenance(sid): READ LAYER ONLY. Absent / unreadable / unparseable /
+// non-object → null. Validity is decided by evaluateIssueProvenance().
+function readIssueProvenance(sid) {
+  try {
+    const { provenanceKeys, provenancePaths } = require("./issue-provenance-keys");
+    const keys = provenanceKeys(sid);
+    if (keys.length === 0) return null;
+    const token = JSON.parse(fs.readFileSync(provenancePaths(keys[0]).token, "utf8"));
+    if (!token || typeof token !== "object" || Array.isArray(token)) return null;
+    return token;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// The layers a mint may record. A token that does not say which observation
+// produced it is not a mint record, whatever else it contains.
+const ISSUE_PROVENANCE_MATCH_LAYERS = ["slash", "natural"];
+
+// evaluateIssueProvenance(token, target, sid): SSOT for provenance-token validity.
+// Valid iff the token is a complete mint record (target, the exact `user-explicit`
+// provenance value, and the layer that minted it) whose expiry is a parseable ISO
+// string both in the future and inside the maximum window.
+// Session binding is primarily the FILENAME — the token is read only from the key
+// derived for this session — so the `session_id` field is a cross-check: it must
+// agree when present, and its absence never widens the binding.
+// Fail-CLOSED on every deviation — an invalid token must degrade, never elevate.
+function evaluateIssueProvenance(token, target, sid) {
+  if (!token || typeof token !== "object" || Array.isArray(token)) return false;
+  if (typeof token.target !== "string" || token.target !== target) return false;
+  if (token.provenance !== "user-explicit") return false;
+  if (ISSUE_PROVENANCE_MATCH_LAYERS.indexOf(token.match_layer) === -1) return false;
+  if (token.session_id !== undefined && token.session_id !== sid) return false;
+  if (typeof token.expires_at !== "string") return false;
+  const expiresAt = Date.parse(token.expires_at);
+  if (Number.isNaN(expiresAt)) return false;
+  const now = Date.now();
+  if (expiresAt <= now) return false;
+  if (expiresAt - now > ISSUE_PROVENANCE_MAX_WINDOW_MS) return false;
+  return true;
+}
+
+// isIssueProvenanceValid(sid, target): true iff a readable token for sid satisfies
+// evaluateIssueProvenance(). Fail-closed: any error → false.
+function isIssueProvenanceValid(sid, target) {
+  try {
+    return evaluateIssueProvenance(readIssueProvenance(sid), target, sid);
+  } catch (_e) {
+    return false;
+  }
+}
+
 module.exports = {
   isWorkflowOff,
+  readIssueProvenance,
+  evaluateIssueProvenance,
+  isIssueProvenanceValid,
+  ISSUE_PROVENANCE_MAX_WINDOW_MS,
   isNextStepPaused,
   nextStepPausedNoticeText,
   readOffClearance,

@@ -26,6 +26,7 @@ function readStdin() {
 
 let sessionId;
 let modelHint = null;
+let transcriptPath = null;
 try {
   const input = JSON.parse(readStdin());
   sessionId = input.session_id;
@@ -34,8 +35,28 @@ try {
   modelHint = input.model ?? null;
   // transcript_path → correct JSONL path for worktree sessions
   if (input.transcript_path) process.env.CLAUDE_SESSION_JSONL_PATH = input.transcript_path;
+  if (typeof input.transcript_path === "string") transcriptPath = input.transcript_path;
 } catch (e) {
   // Fail-open: malformed input — continue without setting session ID
+}
+
+// Persist the transcript path as a file (#1763). CLAUDE_SESSION_JSONL_PATH above
+// never leaves this process, so the issue-provenance CLI — a separate Bash-tool
+// subprocess — has no other way to find the transcript on the very first turn of
+// a session. Keyed on the CC session UUID, like every other provenance marker.
+if (sessionId && transcriptPath) {
+  try {
+    const { provenanceKeys, provenancePaths } = require("./lib/issue-provenance-keys");
+    for (const key of provenanceKeys(sessionId)) {
+      const target = provenancePaths(key).transcript;
+      const tmp = target + ".tmp";
+      fs.mkdirSync(require("path").dirname(target), { recursive: true });
+      fs.writeFileSync(tmp, transcriptPath, { mode: 0o600 });
+      fs.renameSync(tmp, target);
+    }
+  } catch (e) {
+    // Fail-open: a SessionStart hook must never fail the session
+  }
 }
 
 // Write CLAUDE_SESSION_ID to env file if available (KEY=VALUE format, no export prefix)
