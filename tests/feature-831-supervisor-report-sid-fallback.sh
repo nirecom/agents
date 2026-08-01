@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-831-supervisor-report-sid-fallback.sh
-# Tests: bin/supervisor-report (session-id auto-resolve fallback chain)
+# Tests: bin/supervisor-report
 # Tags: supervisor, em-supervisor, cli, session-id, fallback, scope:issue-specific
 # Tests for issue #831 — supervisor-report session-id auto-resolve.
 #

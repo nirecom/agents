@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-885-double-block-integration.sh
-# Tests: hooks/enforce-worktree.js + hooks/enforce-issue-close.js + hooks/lib/supervisor-state-writer.js
+# Tests: hooks/enforce-worktree.js
 # Tags: double-block, integration, co-blocked-by, axis-a, feature-885
 # Integration test for issue #885 — synthesize a double-block scenario.
 #
