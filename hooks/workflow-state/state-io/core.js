@@ -30,6 +30,15 @@ const VALID_STEPS = [
 const SKIPPABLE_STEPS = ["clarify_intent", "research", "outline", "detail", "write_tests", "review_tests", "review_security", "cleanup"];
 const VALID_STATUSES = ["pending", "in_progress", "complete", "skipped"];
 
+// "settled" = the step needs no further action: it is either done ("complete")
+// or deliberately opted out of ("skipped"). "pending" and "in_progress" are NOT
+// settled — "in_progress" is deliberately excluded because the step is still
+// running and further action is expected.
+const SETTLED_STATUSES = Object.freeze(["complete", "skipped"]);
+function isSettledStatus(status) {
+  return SETTLED_STATUSES.indexOf(status) !== -1;
+}
+
 function getWorkflowDir() {
   if (process.env.CLAUDE_WORKFLOW_DIR) return process.env.CLAUDE_WORKFLOW_DIR;
   return path.join(os.homedir(), ".claude", "projects", "workflow");
@@ -160,6 +169,7 @@ module.exports = {
   VALID_STEPS,
   SKIPPABLE_STEPS,
   VALID_STATUSES,
+  isSettledStatus,
   getWorkflowDir,
   SESSION_ID_VALID_RE,
   assertValidSessionId,

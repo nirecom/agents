@@ -327,7 +327,7 @@ members one at a time.
 
 ## next-step-driven sequencing
 
-Step ordering is owned by `bin/workflow/next-step`. After each skill completes, the model queries next-step with:
+Step ordering is owned by `bin/workflow/next-step`. That file is a dispatcher only — the implementation lives in `bin/workflow/lib/next-step/` (`cli.js`, `steps.js`, `repo-dir.js`, `entrypoint-path.js`, `list.js`, `state-ops.js`, `verdict.js`). After each skill completes, the model queries next-step with:
 
 ```
 node bin/workflow/next-step --session $CLAUDE_SESSION_ID

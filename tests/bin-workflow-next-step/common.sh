@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, wf-meta, scope:common
 #
 # Shared helpers + JSON fixtures for the bin-workflow-next-step dispatcher.

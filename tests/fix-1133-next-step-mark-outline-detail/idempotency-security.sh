@@ -1,3 +1,5 @@
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: workflow, next-step, mark, idempotency, security, scope:issue-specific
 # ===========================================================================
 # === I1: --mark idempotency ===
 # ===========================================================================

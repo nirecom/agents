@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feat-1607-next-step-pause.sh
-# Tests: bin/workflow/next-step, hooks/lib/sentinel-patterns.js, hooks/lib/session-markers.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-trigger.js, hooks/stop-l2-findings-display.js, CLAUDE.md, settings.json
+# Tests: bin/workflow/next-step, hooks/lib/sentinel-patterns.js, hooks/lib/session-markers.js, hooks/workflow-mark/enforce-override-handlers.js, hooks/stop-premature-stop-guard.js, hooks/supervisor-guard.js, hooks/supervisor-trigger.js, hooks/stop-l2-findings-display.js, CLAUDE.md, settings.json, bin/workflow/lib/next-step/
 # Tags: next-step, pause, resume, quiet-layer, supervisor, workflow-off-quiet, scope:issue-specific, pwsh-not-required, TL1, TL2
 # TL3 gap (what this test does NOT catch):
 # - The Stop/PostToolUse hooks firing in a real claude -p session with a real transcript,

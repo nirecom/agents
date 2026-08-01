@@ -1,3 +1,5 @@
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: workflow, next-step, mark, outline, detail, scope:issue-specific
 # ===========================================================================
 # === M1-M6: --mark CLI flag ===
 # ===========================================================================

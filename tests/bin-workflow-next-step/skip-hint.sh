@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step, hooks/workflow-state/skip-signal-resolver.js
+# Tests: bin/workflow/next-step, hooks/workflow-state/skip-signal-resolver.js, bin/workflow/lib/next-step/
 # Tags: L2, workflow, skip-signal, scope:common
 #
 # Case group: SKIP_HINT emission (#485 — cases 40–44).

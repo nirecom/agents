@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state
+# Tests: hooks/workflow-state/completion-approval.js, hooks/workflow-state/effective-state.js, hooks/workflow-state/state-io.js, hooks/workflow-mark/confirm-approval-handler.js, hooks/workflow-mark/reset-handler.js, bin/workflow/next-step, bin/workflow/reconcile-state, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, approval-gate, outline, detail, confirm-sentinel, scope:common, pwsh-not-required
 #
 # TL3 gap (what this test does NOT catch):

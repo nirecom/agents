@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-534-stop-final-report-guard.sh
-# Tests: hooks/stop-final-report-guard.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, hooks/stop-premature-stop-guard.js, bin/workflow/next-step
+# Tests: hooks/stop-final-report-guard.js, hooks/lib/final-report-schema.js, skills/session-close/SKILL.md, hooks/stop-premature-stop-guard.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: settings, config, hook, tests, scope:issue-specific, TL2
 #
 # Issue #534 / #626 / #771 — Stop hook: stop-final-report-guard.js

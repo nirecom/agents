@@ -1,3 +1,5 @@
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: workflow, next-step, mark, auto-repair, scope:issue-specific
 # ===========================================================================
 # === A10-A11: review-cycle marker is SESSION-scoped as well as stage-scoped ===
 # ===========================================================================

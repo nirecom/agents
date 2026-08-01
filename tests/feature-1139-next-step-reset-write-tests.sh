@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, reset, write_tests, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 # - Real Claude Code session where the hook fires and next-step is consulted interactively

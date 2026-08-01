@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js
+# Tests: bin/workflow/next-step, hooks/workflow-state/completion-approval.js, hooks/workflow-state/state-io.js, bin/workflow/lib/next-step/
 # Tags: workflow, approval-gate, next-step, mark-cli, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================

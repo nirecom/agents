@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/feature-1640-step-started-at.sh
-# Tests: hooks/workflow-state/step-timestamps.js, hooks/workflow-state/state-io.js, hooks/workflow-state/state-io/core.js, hooks/workflow-mark/reset-handler.js, hooks/workflow-mark/mark-step-handler.js, bin/workflow/next-step
+# Tests: hooks/workflow-state/step-timestamps.js, hooks/workflow-state/state-io.js, hooks/workflow-state/state-io/core.js, hooks/workflow-mark/reset-handler.js, hooks/workflow-mark/mark-step-handler.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: measurement, started-at, workflow-state, mark-step, reset-from, toggle, scope:issue-specific, pwsh-not-required, TL2
 #
 # (c) of #1640. With RECORD_STEP_TIMESTAMPS=on, the workflow state file records when each

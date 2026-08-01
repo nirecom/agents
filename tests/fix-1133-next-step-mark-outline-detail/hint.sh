@@ -1,3 +1,5 @@
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
+# Tags: workflow, next-step, mark, hint, scope:issue-specific
 # ===========================================================================
 # === H1-H2: Scoped abort hint for outline=pending + detail=complete ===
 # ===========================================================================

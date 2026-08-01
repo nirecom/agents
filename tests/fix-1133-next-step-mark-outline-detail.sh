@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests: hooks/workflow-state/evidence-resolver.js, bin/workflow/next-step, bin/workflow/reconcile-state
+# Tests: hooks/workflow-state/evidence-resolver.js, bin/workflow/next-step, bin/workflow/reconcile-state, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, mark, outline, detail, auto-repair, scope:issue-specific
 # L3 gap (what this test does NOT catch):
 # - Real Claude Code session where PostCompact fires and next-step is consulted

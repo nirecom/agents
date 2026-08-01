@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/feature-1286-recorded-verdict-skip.sh
-# Tests: hooks/workflow-state/skip-signal-resolver.js, bin/workflow/record-skip-judgment, hooks/gate-plan-skip-sentinel.js, bin/workflow/next-step
+# Tests: hooks/workflow-state/skip-signal-resolver.js, bin/workflow/record-skip-judgment, hooks/gate-plan-skip-sentinel.js, bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, skip-signal, scope:issue-specific
 #
 # Pre-implementation tests for #1286 (recorded-verdict skip judgment).

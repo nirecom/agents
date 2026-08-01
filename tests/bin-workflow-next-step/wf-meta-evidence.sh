@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: bin/workflow/next-step
+# Tests: bin/workflow/next-step, bin/workflow/lib/next-step/
 # Tags: L2, workflow, wf-meta, scope:common
 #
 # Case group: WF-META workflow type + clarify_intent evidence auto-repair (cases 24–31).

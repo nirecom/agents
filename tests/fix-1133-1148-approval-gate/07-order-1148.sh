@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Tests: hooks/workflow-state/effective-state.js, bin/workflow/next-step, hooks/workflow-state/evidence-resolver.js
+# Tests: hooks/workflow-state/effective-state.js, bin/workflow/next-step, hooks/workflow-state/evidence-resolver.js, bin/workflow/lib/next-step/
 # Tags: workflow, next-step, docs, ordering, scope:common
 # (Sourced fragment of tests/fix-1133-1148-approval-gate.sh — not run standalone.)
 # ===========================================================================

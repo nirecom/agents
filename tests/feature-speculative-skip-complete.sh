@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests: hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json
+# Tests: hooks/workflow-state/state-io.js, hooks/workflow-mark/not-needed-handlers.js, bin/workflow/record-skip-verdict, bin/workflow/next-step, agents/skip-verifier.md, skills/clarify-intent/SKILL.md, skills/make-outline-plan/scripts/check-outline-skip.sh, skills/make-outline-plan/scripts/check-detail-skip.sh, settings.json, bin/workflow/lib/next-step/
 # Tags: L1, L2, workflow, speculative-skip, scope:issue-specific
 #
 # Issues #1392, #1352, #544, #1353 — speculative-skip engine: outline/detail
