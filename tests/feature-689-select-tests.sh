@@ -174,6 +174,16 @@ test_C6_docs_only_empty() {
 . "$AGENTS_DIR/tests/feature-689-select-tests/auto-merge-base.sh"
 # shellcheck source=./feature-689-select-tests/docs-only-table.sh
 . "$AGENTS_DIR/tests/feature-689-select-tests/docs-only-table.sh"
+# shellcheck source=./feature-689-select-tests/zero-commit.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/zero-commit.sh"
+# shellcheck source=./feature-689-select-tests/zero-commit-boundaries.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/zero-commit-boundaries.sh"
+# shellcheck source=./feature-689-select-tests/zero-commit-real-resolver.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/zero-commit-real-resolver.sh"
+# shellcheck source=./feature-689-select-tests/zero-commit-trust-and-faults.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/zero-commit-trust-and-faults.sh"
+# shellcheck source=./feature-689-select-tests/zero-commit-hostile-paths.sh
+. "$AGENTS_DIR/tests/feature-689-select-tests/zero-commit-hostile-paths.sh"
 
 
 test_C1_stem_match_skill_md
@@ -197,6 +207,40 @@ test_S10_auto_docs_only_skips_tl3
 test_S11_auto_empty_diff_skips_tl3
 test_S12_docs_only_helper_absent_appends
 test_S13_post_session_head_notes_and_proceeds
+
+# S14-S19 (#1779): the branch with zero commits, where merge-base == HEAD makes the diff range
+# structurally empty while the whole change sits in the working tree.
+test_S14_zero_commit_unstaged_selects
+test_S14b_zero_commit_staged_selects_both
+test_S15_zero_commit_untracked_selects
+test_S16_zero_commit_field_absent_still_falls_back
+test_S17_zero_commit_tl3_appends
+test_S18_zero_commit_docs_only_skips_tl3
+test_S19_zero_commit_git_failure_is_exit_1
+
+# S20: the same scenario with NOTHING stubbed — the real selector against the real resolver, so
+# a field the two scripts disagree about cannot pass both suites unnoticed.
+test_S20_real_resolver_end_to_end
+
+# S21-S24 (#1779): the edges of the fallback — where it must NOT reach, and what the kv parser
+# does with every value of base_is_head it can be handed.
+test_S21_normal_branch_field_absent_ignores_worktree
+test_S22_gitignored_file_is_not_a_change
+test_S23_gitignored_excluded_from_a_live_fallback
+test_S23b_clean_zero_commit_branch_is_empty_not_an_error
+test_S24_base_is_head_parser_table
+
+# S25-S27 (#1779): the trust state the fallback fires under, what it does when one half of the
+# working-tree union fails, and the filenames it has to survive.
+test_S25_zero_commit_recorded_state_degrades
+test_S26a_zero_commit_untracked_half_failure_is_exit_1
+test_S26b_zero_commit_tracked_half_failure_is_exit_1
+test_S27_zero_commit_hostile_filenames
+
+# S28 (#1779): the RECORDED trust state with NOTHING stubbed — the recovery RNT-1 documents,
+# replayed through the real baseline CLI, the real resolver and the real selector.
+test_S28_real_resolver_recorded_state_end_to_end
+
 test_D_is_docs_only
 
 echo ""

@@ -41,6 +41,10 @@ make_fake_agents() {
     cp -r "$AGENTS_DIR/hooks" "$FAKE/hooks"
     mkdir -p "$FAKE/tests"
     : > "$FAKE/tests/feature-689-select-tests.sh"
+    # #1779's second stem. A non-TL3 name is required: the zero-commit rows below assert on a
+    # stem match with RUN_TL3=off, and a TL3-* name could not tell a stem match apart from the
+    # tier append.
+    : > "$FAKE/tests/feature-1779-zero-commit.sh"
     : > "$FAKE/tests/TL3-fake-alpha.sh"
     : > "$FAKE/tests/TL3-fake-beta.sh"
     # The resolver is replaced by a stub driven from the environment, so a row states the
@@ -56,7 +60,13 @@ STUB
 
 # The stub's stdout for a given state. `base=base` names the fixture's base branch, so a row
 # that proceeds really does diff a real range rather than a placeholder.
-stub_kv() { # <state> ; prints a kv block
+#
+# #1779 added base_is_head and the working-tree census. The second argument is explicit rather
+# than defaulted-away so that S1-S13 exercise the FALSE branch on purpose: a selector that
+# ignored the field entirely and one that read it and found `false` are the same behaviour
+# today, and only the pinned-false rows keep them the same tomorrow. `omit` drops the four
+# lines altogether — that is a resolver older than the fix, and the selector still has to cope.
+stub_kv() { # <state> [base_is_head|omit] ; prints a kv block
     cat <<EOF
 base=base
 state=$1
@@ -71,6 +81,13 @@ warn=none
 alt_base=-
 detail=stubbed for tests
 EOF
+    [ "${2:-false}" = "omit" ] && return 0
+    cat <<EOF
+base_is_head=${2:-false}
+uncommitted_lines=0
+uncommitted_files=0
+untracked_files=0
+EOF
 }
 
 SA_OUT=""
@@ -78,12 +95,24 @@ SA_ERR=""
 SA_RC=0
 
 # Runs the fake tree's select-tests.sh inside a fixture repo with the stub configured.
-run_auto() { # <repo> <state|-> <stub-rc> [VAR=VAL...]
+#
+# BASE_IS_HEAD=<v> among the trailing assignments is consumed here rather than exported: it
+# shapes the STUB's output, not the selector's environment. Passing it as a fourth positional
+# would have displaced the VAR=VAL varargs every existing row already uses.
+run_auto() { # <repo> <state|-> <stub-rc> [BASE_IS_HEAD=<v>] [VAR=VAL...]
     local repo="$1" state="$2" rc="$3"
     shift 3
-    local kvfile o e
+    local kvfile o e bih="false" arg
+    local -a envargs=()
+    for arg in "$@"; do
+        case "$arg" in
+            BASE_IS_HEAD=*) bih="${arg#BASE_IS_HEAD=}" ;;
+            *) envargs+=("$arg") ;;
+        esac
+    done
+    set -- ${envargs[@]+"${envargs[@]}"}
     kvfile="$TMPDIR_BASE/stub-kv.$$"
-    if [ "$state" = "-" ]; then : > "$kvfile"; else stub_kv "$state" > "$kvfile"; fi
+    if [ "$state" = "-" ]; then : > "$kvfile"; else stub_kv "$state" "$bih" > "$kvfile"; fi
     o="$TMPDIR_BASE/auto-out.$$"
     e="$TMPDIR_BASE/auto-err.$$"
     SA_RC=0
@@ -259,9 +288,21 @@ $SA_OUT"
 # S11 (#1689): an EMPTY diff appends nothing either. This is the state a broken merge-base
 # produces, and appending the whole expensive tier to it was how a resolution failure got to
 # look like a busy, healthy run.
+#
+# NOT the #1779 case, and the distinction is the whole reason S14 exists. make_repo commits a
+# real (--allow-empty) HEAD on top of `base`, so base != HEAD: commits EXIST and the range
+# between them happens to be empty, which genuinely means "nothing changed". #1779 is the
+# opposite — no commits at all, so the range is empty by construction while the working tree
+# is full of work. An empty selection is right here and wrong there. The base != HEAD
+# assertion below guards the fixture: if make_repo ever stopped making that second commit,
+# this row would quietly become a zero-commit row asserting the bug is correct behaviour.
 test_S11_auto_empty_diff_skips_tl3() {
     local repo="$TMPDIR_BASE/s11"
     make_repo "$repo"
+    if [ "$(git -C "$repo" rev-parse base)" = "$(git -C "$repo" rev-parse HEAD)" ]; then
+        fail "S11_auto_empty_diff_skips_tl3: fixture drift — base == HEAD, so this is the #1779 zero-commit case, not an empty range between two commits"
+        return
+    fi
     run_auto "$repo" RESOLVED 0 RUN_TL3=on
     if [ "$SA_RC" = "0" ] && [ -z "$SA_OUT" ]; then
         pass "S11_auto_empty_diff_skips_tl3: an empty diff selects nothing at all, including TL3"

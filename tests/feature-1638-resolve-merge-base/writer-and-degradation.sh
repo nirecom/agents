@@ -112,5 +112,15 @@ r19_standalone_copy_still_works() {
   check "R19-rc: a copy with no sibling scripts still exits 0" "0" "$rc"
   check "R19-state: and the env-var threshold still takes effect" "SUSPECT" \
     "$(printf '%s\n' "$out" | sed -n 's/^state=//p' | head -1)"
+  # #1779: base_is_head is derived from git alone, so it must survive the same amputation as
+  # the rest of the kv block. A field that only appears when the sibling scripts are present
+  # would be absent in exactly the fixture (fix-quality-gates-not-found) that copies one file.
+  if printf '%s\n' "$out" | grep -qE '^base_is_head='; then
+    pass "R19-base_is_head: the standalone copy still reports base_is_head"
+  else
+    fail "R19-base_is_head: no base_is_head= line in the standalone copy's kv output
+--- output ---
+$out"
+  fi
 }
 
