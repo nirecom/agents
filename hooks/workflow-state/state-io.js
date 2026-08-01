@@ -15,6 +15,7 @@ module.exports = {
   VALID_STEPS: core.VALID_STEPS,
   SKIPPABLE_STEPS: core.SKIPPABLE_STEPS,
   VALID_STATUSES: core.VALID_STATUSES,
+  isSettledStatus: core.isSettledStatus,
   getWorkflowDir: core.getWorkflowDir,
   getStatePath: core.getStatePath,
   assertValidSessionId: core.assertValidSessionId,

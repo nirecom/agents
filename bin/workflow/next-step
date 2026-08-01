@@ -5,6 +5,7 @@ const fs = require("fs");
 const {
   VALID_STEPS,
   VALID_STATUSES,
+  isSettledStatus,
   readState,
   getStatePath,
   resolveSessionId,
@@ -252,7 +253,7 @@ function renderListWithState(sid) {
   let currentIdx = -1;
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const s = listStatus(VALID_STEPS[i]);
-    if (s !== "complete" && s !== "skipped") { currentIdx = i; break; }
+    if (!isSettledStatus(s)) { currentIdx = i; break; }
   }
 
   const issues = state.closes_issues;
@@ -342,7 +343,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
     for (const step of VALID_STEPS) {
       const raw = (state.steps[step] || {}).status || "pending";
       const status = effectiveStatus(step, raw, isWfMeta);
-      if (status !== "complete" && status !== "skipped") { rawCurrent = step; break; }
+      if (!isSettledStatus(status)) { rawCurrent = step; break; }
     }
     if (rawCurrent === "clarify_intent") {
       const issues = state.closes_issues;
@@ -413,7 +414,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
     const status = snapStatus(step);
-    if (status !== "complete" && status !== "skipped") {
+    if (!isSettledStatus(status)) {
       // post-merge guard: treat user_verification reset by gh pr merge as complete.
       // Mirrors post-compact.js lines 66-70 (same reset_reason predicate).
       if (
@@ -440,10 +441,13 @@ function computeVerdict(rawSid, _didAutoRepair) {
       for (const gatedStep of APPROVAL_GATED_STEPS) {
         const stepData = state.steps[gatedStep];
         if (!stepData || stepData.status !== "skipped") continue;
-        // invoke write-tests unless write_tests was already explicitly skipped
-        // (session opted out of tests entirely).
+        // invoke write-tests only when write_tests is NOT settled. Settled covers
+        // BOTH "skipped" (session opted out of tests entirely) and "complete"
+        // (tests were written, reviewed and passed) — re-invoking /write-tests
+        // after the normal path already completed is wrong and used to produce a
+        // permanent false ACTION=invoke at the end of the workflow (#1756).
         const wtsEntry = state.steps["write_tests"];
-        if (wtsEntry && wtsEntry.status === "skipped") continue;
+        if (wtsEntry && isSettledStatus(wtsEntry.status)) continue;
         emit("invoke", STEP_TO_SKILL["write_tests"] || "write-tests", "Run /write-tests via the Skill tool.", "write_tests");
         return;
       }
