@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/feature-sweep-hub.sh
-# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md, skills/sweep-branches/SKILL.md
-# Tags: sweep, worktree, branch, maintenance, frontmatter, tests
+# Tests: skills/sweep-worktrees/SKILL.md, skills/sweep/SKILL.md, skills/sweep-branches/SKILL.md, skills/sweep-issues/SKILL.md
+# Tags: sweep, worktree, branch, issues, maintenance, frontmatter, tests, scope:common, TL1
 #
 # Structural tests for the /sweep hub skill and the /sweep-worktrees dispatch
 # target. These check only file presence + frontmatter shape — no source-code
@@ -14,6 +14,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SWEEP_HUB="$AGENTS_DIR/skills/sweep/SKILL.md"
 SWEEP_WT="$AGENTS_DIR/skills/sweep-worktrees/SKILL.md"
 SWEEP_BR="$AGENTS_DIR/skills/sweep-branches/SKILL.md"
+SWEEP_IS="$AGENTS_DIR/skills/sweep-issues/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -187,6 +188,100 @@ T8_sweep_hub_references_sweep_plans() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# T9 — skills/sweep-issues/SKILL.md exists, is non-empty, and is user-invocable
+# ─────────────────────────────────────────────────────────────────────────────
+
+T9_sweep_issues_exists_user_invocable() {
+    if [ ! -f "$SWEEP_IS" ]; then
+        fail "T9 sweep_issues_exists_user_invocable: $SWEEP_IS does not exist"
+        return
+    fi
+    if [ ! -s "$SWEEP_IS" ]; then
+        fail "T9 sweep_issues_exists_user_invocable: $SWEEP_IS is empty"
+        return
+    fi
+    local fm
+    fm="$(frontmatter_of "$SWEEP_IS")"
+    if [ -z "$fm" ]; then
+        fail "T9 sweep_issues_exists_user_invocable: no frontmatter found"
+        return
+    fi
+    case "$fm" in
+        *"user-invocable: true"*|*"user-invocable:true"*)
+            pass "T9 sweep_issues_exists_user_invocable" ;;
+        *)
+            fail "T9 sweep_issues_exists_user_invocable: 'user-invocable: true' not in frontmatter: $fm" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T10 — skills/sweep/SKILL.md registers 'sweep-issues' as a dispatch target
+#       (both in the frontmatter description list and in the SW-N procedure)
+# ─────────────────────────────────────────────────────────────────────────────
+
+T10_sweep_hub_registers_sweep_issues() {
+    if [ ! -f "$SWEEP_HUB" ]; then
+        fail "T10 sweep_hub_registers_sweep_issues: $SWEEP_HUB does not exist"
+        return
+    fi
+    local fm
+    fm="$(frontmatter_of "$SWEEP_HUB")"
+    case "$fm" in
+        *"sweep-issues"*) ;;
+        *)
+            fail "T10 sweep_hub_registers_sweep_issues: 'sweep-issues' not in hub frontmatter description"
+            return ;;
+    esac
+    if grep -qE '^SW-[0-9]+[a-z]*\..*/sweep-issues' "$SWEEP_HUB" 2>/dev/null; then
+        pass "T10 sweep_hub_registers_sweep_issues"
+    else
+        fail "T10 sweep_hub_registers_sweep_issues: no SW-N step invokes /sweep-issues in $SWEEP_HUB"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# T11 — SW step numbering is coherent after the sweep-issues insertion:
+#       primary steps (SW-N. with no letter suffix) are unique and form the
+#       contiguous run 1..N — no duplicate and no skipped number. Lettered
+#       sub-steps (SW-2b/SW-2c) are sub-ordinates of their primary and are
+#       only required to reference an existing primary.
+# ─────────────────────────────────────────────────────────────────────────────
+
+T11_sweep_hub_sw_numbering_coherent() {
+    if [ ! -f "$SWEEP_HUB" ]; then
+        fail "T11 sweep_hub_sw_numbering_coherent: $SWEEP_HUB does not exist"
+        return
+    fi
+    local primaries sub_nums n expected=1 prev=""
+    primaries="$(grep -oE '^SW-[0-9]+\.' "$SWEEP_HUB" 2>/dev/null | sed 's/^SW-//; s/\.$//' | sort -n)"
+    if [ -z "$primaries" ]; then
+        fail "T11 sweep_hub_sw_numbering_coherent: no SW-N. steps found in $SWEEP_HUB"
+        return
+    fi
+    for n in $primaries; do
+        if [ "$n" = "$prev" ]; then
+            fail "T11 sweep_hub_sw_numbering_coherent: duplicate step SW-$n"
+            return
+        fi
+        if [ "$n" -ne "$expected" ]; then
+            fail "T11 sweep_hub_sw_numbering_coherent: expected SW-$expected, found SW-$n (gap or out-of-order)"
+            return
+        fi
+        prev="$n"
+        expected=$((expected + 1))
+    done
+    # Every lettered sub-step must hang off a declared primary number.
+    sub_nums="$(grep -oE '^SW-[0-9]+[a-z]+\.' "$SWEEP_HUB" 2>/dev/null | sed 's/^SW-//; s/[a-z]*\.$//' | sort -nu)"
+    for n in $sub_nums; do
+        if ! echo "$primaries" | grep -qx "$n"; then
+            fail "T11 sweep_hub_sw_numbering_coherent: sub-step SW-${n}x has no primary SW-$n"
+            return
+        fi
+    done
+    pass "T11 sweep_hub_sw_numbering_coherent (primaries: $(echo "$primaries" | tr '\n' ' '))"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Run all tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -198,6 +293,9 @@ T5_sweep_hub_references_sweep_worktrees
 T6_sweep_branches_exists_nonempty
 T7_sweep_hub_references_sweep_branches
 T8_sweep_hub_references_sweep_plans
+T9_sweep_issues_exists_user_invocable
+T10_sweep_hub_registers_sweep_issues
+T11_sweep_hub_sw_numbering_coherent
 
 echo ""
 echo "─────────────────────────────────────────"

@@ -1,4 +1,6 @@
 # Group C: audit-tests.sh core filtering logic (Cases 6-16)
+# Tests: bin/audit-tests.sh
+# Tags: audit-tests, filtering, closed-at, scope:issue-specific, TL2
 # Sourced by tests/feature-test-cleanup-944.sh
 
 if [[ ! -f "$AUDIT_TESTS" ]]; then
@@ -14,7 +16,7 @@ git -C "$REPO6" add tests/feature-100-old.sh
 backdate_commit "$REPO6" 200 "stale test"
 
 EXIT6=0
-OUT6=$(cd "$REPO6" && PATH="$STUB6:$PATH" run_with_timeout bash "$REPO6/bin/audit-tests.sh" 2>&1) || EXIT6=$?
+OUT6=$(cd "$REPO6" && PATH="$STUB6:$PATH" run_with_timeout bash "$REPO6/bin/audit-tests.sh" --dry-run 2>&1) || EXIT6=$?
 
 if echo "$OUT6" | grep -q "feature-100-old.sh"; then
     pass "Case 6: stale CLOSED feature-NNN- file appears in candidate report"
@@ -37,7 +39,7 @@ git -C "$REPO7" add tests/feature-200-open.sh
 backdate_commit "$REPO7" 200 "open issue test"
 
 EXIT7=0
-OUT7=$(cd "$REPO7" && PATH="$STUB7:$PATH" run_with_timeout bash "$REPO7/bin/audit-tests.sh" 2>&1) || EXIT7=$?
+OUT7=$(cd "$REPO7" && PATH="$STUB7:$PATH" run_with_timeout bash "$REPO7/bin/audit-tests.sh" --dry-run 2>&1) || EXIT7=$?
 
 if echo "$OUT7" | grep -q "feature-200-open.sh"; then
     fail "Case 7: OPEN issue file should not be a candidate but was reported"
@@ -52,15 +54,17 @@ else
 fi
 
 # Case 8: CLOSED but fresh (<3 months) → not a candidate
+# Freshness is the issue's closed_at (#1557), so the stub reports an issue
+# closed 30 days ago — inside the default 3-month window.
 STUB8=$(mktemp -d -p "$TMPDIR_BASE")
-make_gh_stub "$STUB8" "closed"
+make_gh_stub "$STUB8" "closed" "$(days_ago_iso 30)"
 REPO8=$(setup_audit_repo)
 echo "#!/bin/bash" > "$REPO8/tests/feature-100-fresh.sh"
 git -C "$REPO8" add tests/feature-100-fresh.sh
 backdate_commit "$REPO8" 30 "fresh test"
 
 EXIT8=0
-OUT8=$(cd "$REPO8" && PATH="$STUB8:$PATH" run_with_timeout bash "$REPO8/bin/audit-tests.sh" 2>&1) || EXIT8=$?
+OUT8=$(cd "$REPO8" && PATH="$STUB8:$PATH" run_with_timeout bash "$REPO8/bin/audit-tests.sh" --dry-run 2>&1) || EXIT8=$?
 
 if echo "$OUT8" | grep -q "feature-100-fresh.sh"; then
     fail "Case 8: fresh CLOSED file (<3mo) should not be candidate but was reported"
@@ -77,7 +81,7 @@ git -C "$REPO9" add tests/feature-100-old.sh
 backdate_commit "$REPO9" 200 "stale"
 
 EXIT9=0
-OUT9=$(cd "$REPO9" && PATH="$STUB9:$PATH" run_with_timeout bash "$REPO9/bin/audit-tests.sh" --offline 2>&1) || EXIT9=$?
+OUT9=$(cd "$REPO9" && PATH="$STUB9:$PATH" run_with_timeout bash "$REPO9/bin/audit-tests.sh" --dry-run --offline 2>&1) || EXIT9=$?
 
 if echo "$OUT9" | grep -q "feature-100-old.sh"; then
     fail "Case 9: --offline should yield no candidates but reported file"
@@ -100,7 +104,7 @@ git -C "$REPO10" add tests/feature-400-upper.sh
 backdate_commit "$REPO10" 200 "stale upper"
 
 EXIT10=0
-OUT10=$(cd "$REPO10" && PATH="$STUB10:$PATH" run_with_timeout bash "$REPO10/bin/audit-tests.sh" 2>&1) || EXIT10=$?
+OUT10=$(cd "$REPO10" && PATH="$STUB10:$PATH" run_with_timeout bash "$REPO10/bin/audit-tests.sh" --dry-run 2>&1) || EXIT10=$?
 
 if echo "$OUT10" | grep -q "feature-400-upper.sh"; then
     pass "Case 10: uppercase CLOSED is normalized and detected"
@@ -108,26 +112,15 @@ else
     fail "Case 10: uppercase CLOSED not normalized (output: $OUT10)"
 fi
 
-# Case 11: stale dispatcher + fresh sibling → MAX recent → not candidate
-STUB11=$(mktemp -d -p "$TMPDIR_BASE")
-make_gh_stub "$STUB11" "closed"
-REPO11=$(setup_audit_repo)
-mkdir -p "$REPO11/tests/feature-100-mixed"
-echo "#!/bin/bash" > "$REPO11/tests/feature-100-mixed.sh"
-git -C "$REPO11" add tests/feature-100-mixed.sh
-backdate_commit "$REPO11" 200 "stale dispatcher"
-echo "helper" > "$REPO11/tests/feature-100-mixed/helper.sh"
-git -C "$REPO11" add tests/feature-100-mixed/helper.sh
-backdate_commit "$REPO11" 10 "fresh sibling"
-
-EXIT11=0
-OUT11=$(cd "$REPO11" && PATH="$STUB11:$PATH" run_with_timeout bash "$REPO11/bin/audit-tests.sh" 2>&1) || EXIT11=$?
-
-if echo "$OUT11" | grep -q "feature-100-mixed.sh"; then
-    fail "Case 11: stale dispatcher with fresh sibling should NOT be candidate (MAX recent)"
-else
-    pass "Case 11: MAX(dispatcher, sibling) = fresh → not candidate"
-fi
+# Case 11: RETIRED (number retired in place — do not reuse).
+# Asserted the pre-#1557 contract that candidacy was gated on
+# MAX(dispatcher_commit_date, sibling_commit_date), so a stale dispatcher with a
+# fresh sibling was NOT a candidate. #1557 moved the candidacy filter from
+# commit-date to `state == closed && closed_at < CUTOFF`; `max_date` in
+# bin/audit-tests.sh is now computed for reporting only and never participates in
+# the filter. Replacement: tests/fix-1557-audit-tests-closed-at.sh TC8, which
+# asserts the authoritative post-#1557 contract (old closed_at + recent
+# last-commit IS a candidate).
 
 # Case 12: sibling folder exists → report includes sibling path + file count
 STUB12=$(mktemp -d -p "$TMPDIR_BASE")
@@ -141,7 +134,7 @@ git -C "$REPO12" add -A
 backdate_commit "$REPO12" 200 "all stale"
 
 EXIT12=0
-OUT12=$(cd "$REPO12" && PATH="$STUB12:$PATH" run_with_timeout bash "$REPO12/bin/audit-tests.sh" 2>&1) || EXIT12=$?
+OUT12=$(cd "$REPO12" && PATH="$STUB12:$PATH" run_with_timeout bash "$REPO12/bin/audit-tests.sh" --dry-run 2>&1) || EXIT12=$?
 
 if echo "$OUT12" | grep -qE "feature-100-sibs(/|.*sibling)"; then
     pass "Case 12: sibling folder path reported"
@@ -164,7 +157,7 @@ git -C "$REPO13" add tests/feature-100-lone.sh
 backdate_commit "$REPO13" 200 "lone stale"
 
 EXIT13=0
-OUT13=$(cd "$REPO13" && PATH="$STUB13:$PATH" run_with_timeout bash "$REPO13/bin/audit-tests.sh" 2>&1) || EXIT13=$?
+OUT13=$(cd "$REPO13" && PATH="$STUB13:$PATH" run_with_timeout bash "$REPO13/bin/audit-tests.sh" --dry-run 2>&1) || EXIT13=$?
 
 if echo "$OUT13" | grep -q "feature-100-lone.sh"; then
     pass "Case 13: lone dispatcher reported"
@@ -181,7 +174,7 @@ git -C "$REPO14" add tests/fix-123-other.sh
 backdate_commit "$REPO14" 200 "non-feature"
 
 EXIT14=0
-OUT14=$(cd "$REPO14" && PATH="$STUB14:$PATH" run_with_timeout bash "$REPO14/bin/audit-tests.sh" 2>&1) || EXIT14=$?
+OUT14=$(cd "$REPO14" && PATH="$STUB14:$PATH" run_with_timeout bash "$REPO14/bin/audit-tests.sh" --dry-run 2>&1) || EXIT14=$?
 
 if echo "$OUT14" | grep -q "fix-123-other.sh"; then
     fail "Case 14: fix-123-* pattern should be out of scope"
@@ -193,10 +186,11 @@ fi
 TMP_NOGIT=$(mktemp -d -p "$TMPDIR_BASE")
 cp "$AUDIT_TESTS" "$TMP_NOGIT/audit-tests.sh"
 chmod +x "$TMP_NOGIT/audit-tests.sh"
+install_audit_libs "$TMP_NOGIT"
 mkdir -p "$TMP_NOGIT/tests"
 
 EXIT15c=0
-(cd "$TMP_NOGIT" && run_with_timeout bash "$TMP_NOGIT/audit-tests.sh" 2>&1) || EXIT15c=$?
+(cd "$TMP_NOGIT" && run_with_timeout bash "$TMP_NOGIT/audit-tests.sh" --dry-run 2>&1) || EXIT15c=$?
 
 if [[ $EXIT15c -eq 2 ]] || [[ $EXIT15c -eq 1 ]]; then
     pass "Case 15c: error path returns non-zero ($EXIT15c) on non-git repo"
@@ -209,9 +203,10 @@ REPO_NOTESTS=$(make_repo)
 TMP_AUDIT="$REPO_NOTESTS/audit-tests.sh"
 cp "$AUDIT_TESTS" "$TMP_AUDIT"
 chmod +x "$TMP_AUDIT"
+install_audit_libs "$REPO_NOTESTS"
 
 EXIT15d=0
-(cd "$REPO_NOTESTS" && run_with_timeout bash "$TMP_AUDIT" 2>&1) || EXIT15d=$?
+(cd "$REPO_NOTESTS" && run_with_timeout bash "$TMP_AUDIT" --dry-run 2>&1) || EXIT15d=$?
 
 if [[ $EXIT15d -eq 2 ]]; then
     pass "Case 15d: valid git repo without tests/ dir exits 2"
@@ -225,7 +220,7 @@ STUB15e=$(mktemp -d -p "$TMPDIR_BASE")
 make_gh_stub "$STUB15e" "closed"
 
 EXIT15e=0
-OUT15e=$(cd "$REPO_EMPTY" && PATH="$STUB15e:$PATH" run_with_timeout bash "$REPO_EMPTY/bin/audit-tests.sh" 2>&1) || EXIT15e=$?
+OUT15e=$(cd "$REPO_EMPTY" && PATH="$STUB15e:$PATH" run_with_timeout bash "$REPO_EMPTY/bin/audit-tests.sh" --dry-run 2>&1) || EXIT15e=$?
 
 if [[ $EXIT15e -eq 1 ]]; then
     pass "Case 15e: empty tests/ dir exits 1 (no candidates)"
@@ -241,8 +236,8 @@ echo "#!/bin/bash" > "$REPO16/tests/feature-100-idem.sh"
 git -C "$REPO16" add tests/feature-100-idem.sh
 backdate_commit "$REPO16" 200 "stale"
 
-OUT16a=$(cd "$REPO16" && PATH="$STUB16:$PATH" run_with_timeout bash "$REPO16/bin/audit-tests.sh" 2>&1 || true)
-OUT16b=$(cd "$REPO16" && PATH="$STUB16:$PATH" run_with_timeout bash "$REPO16/bin/audit-tests.sh" 2>&1 || true)
+OUT16a=$(cd "$REPO16" && PATH="$STUB16:$PATH" run_with_timeout bash "$REPO16/bin/audit-tests.sh" --dry-run 2>&1 || true)
+OUT16b=$(cd "$REPO16" && PATH="$STUB16:$PATH" run_with_timeout bash "$REPO16/bin/audit-tests.sh" --dry-run 2>&1 || true)
 
 if [[ "$OUT16a" == "$OUT16b" ]]; then
     pass "Case 16: idempotent — two runs produce identical output"
@@ -259,7 +254,7 @@ git -C "$REPO28" add tests/feature-1x2-bad.sh
 backdate_commit "$REPO28" 200 "non-numeric id"
 
 EXIT28=0
-OUT28=$(cd "$REPO28" && PATH="$STUB28:$PATH" run_with_timeout bash "$REPO28/bin/audit-tests.sh" 2>&1) || EXIT28=$?
+OUT28=$(cd "$REPO28" && PATH="$STUB28:$PATH" run_with_timeout bash "$REPO28/bin/audit-tests.sh" --dry-run 2>&1) || EXIT28=$?
 
 if echo "$OUT28" | grep -q "feature-1x2-bad.sh"; then
     fail "Case 28: feature-NNN- requires purely numeric ID — alphanumeric should be excluded"

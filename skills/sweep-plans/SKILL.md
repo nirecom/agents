@@ -14,5 +14,5 @@ Reclaim stale session artifacts under `~/.workflow-plans/`.
 
 Invoke `bin/sweep-plans.sh` with forwarded arguments.
 
-Pass `--apply` to delete candidates. Dry-run by default.
+Candidates are deleted by default. Pass `--dry-run` to preview without deleting.
 Pass `--sweep-age-days N` to override `SWEEP_AGE_DAYS` (default: 30).

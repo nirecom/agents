@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # audit-tests.sh — Staleness checker for issue-specific test files.
 #
-# Usage: bin/audit-tests.sh [--stale-months N] [--offline] [--format text|json]
+# Usage: bin/audit-tests.sh [--dry-run] [--stale-months N] [--offline]
+#                           [--format text|json] [--fix-headers]
 # Exit:  0 = candidates found, 1 = no candidates, 2 = error
+#
+# Writes by default: a flagless run DELETES stale candidates (git rm), and
+# --fix-headers rewrites headers in place. Pass --dry-run to report only.
 #
 # Scans top-level tests/feature-NNN-*.sh files. For each, locates the optional
 # sibling tests/<stem>/ folder, computes MAX last-commit date across both,
@@ -17,12 +21,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/test-frontmatter-constants.sh"
 # shellcheck source=lib/test-frontmatter-fix.sh
 source "$SCRIPT_DIR/lib/test-frontmatter-fix.sh"
+# shellcheck source=lib/sweep-write-mode.sh
+source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
 
 STALE_MONTHS=3
 OFFLINE=0
 FORMAT=text
 FIX_HEADERS=0
-APPLY=0
+sweep_write_mode_init
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -43,7 +49,12 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --apply)
-      APPLY=1
+      # Backward-compatible synonym of the flagless default.
+      sweep_write_mode_apply
+      shift
+      ;;
+    --dry-run)
+      sweep_write_mode_dry_run
       shift
       ;;
     --format)
@@ -55,7 +66,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)

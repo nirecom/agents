@@ -16,9 +16,9 @@ git's worktree registry.
 
 SWT-1. Resolve `$AGENTS_CONFIG_DIR` from the environment; abort with a clear error
    if unset.
-SWT-2. Invoke the sweeper script (no `--apply` = dry-run):
+SWT-2. Invoke the sweeper script (no flag = deletes; `--dry-run` = preview):
    ```
-   bash "$AGENTS_CONFIG_DIR/bin/sweep-worktrees.sh" [--apply] [--min-age-hours N] [--ci-mode]
+   bash "$AGENTS_CONFIG_DIR/bin/sweep-worktrees.sh" [--dry-run] [--min-age-hours N] [--ci-mode]
    ```
 SWT-3. Print the script's stdout verbatim. Do not summarize or filter.
 
@@ -26,7 +26,7 @@ Forward the user's flags verbatim. Add no flags of your own.
 
 ## Rules
 
-- Default is dry-run; `--apply` must be explicit to delete.
+- Deletes by default; `--dry-run` must be explicit to preview only.
 - `--force` is not supported; the script uses `git worktree remove` without `--force`.
 - EPERM / busy / not-empty failures on a per-worktree basis are non-fatal:
   warning printed, that worktree skipped, sweep continues.

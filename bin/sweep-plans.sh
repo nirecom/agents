@@ -9,17 +9,22 @@
 # Usage:
 #   sweep-plans.sh [--dry-run|--apply] [--ci-mode] [--sweep-age-days N]
 #
+# Deletes by default; pass --dry-run to preview.
+#
 # Exit codes:
 #   0 — normal completion
 #   2 — SWEEP_AGE_DAYS validation error
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/sweep-write-mode.sh
+source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
+
 # ─── Defaults ──────────────────────────────────────────────────────────────
 
-APPLY=0
+sweep_write_mode_init
 CI_MODE=0
-DRY_RUN=1
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 # ─── Validators ────────────────────────────────────────────────────────────
@@ -39,8 +44,9 @@ usage() {
 Usage: sweep-plans.sh [options]
 
 Options:
-  --apply               Actually delete (default is dry-run).
-  --dry-run             Explicit dry-run (default).
+EOF
+  sweep_write_mode_usage_lines
+  cat <<'EOF'
   --ci-mode             Emit JSON summary on stdout (instead of plain text).
   --sweep-age-days N    Age threshold in days (default 30; env SWEEP_AGE_DAYS).
   -h, --help            Show this help and exit.
@@ -49,8 +55,8 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --apply) APPLY=1; DRY_RUN=0 ;;
-    --dry-run) APPLY=0; DRY_RUN=1 ;;
+    --apply) sweep_write_mode_apply ;;
+    --dry-run) sweep_write_mode_dry_run ;;
     --ci-mode) CI_MODE=1 ;;
     --sweep-age-days)
       shift
@@ -77,7 +83,7 @@ fi
 
 if [[ ! -d "$PLANS_DIR" ]]; then
   if [[ "$CI_MODE" == "1" ]]; then
-    printf '{"scanned":0,"groups_candidates":0,"groups_removed":0,"groups_skipped_young":0,"groups_skipped_revived":0,"files_removed":0,"errors":[]}\n'
+    printf '{"scanned":0,"groups_candidates":0,"groups_removed":0,"groups_skipped_young":0,"groups_skipped_revived":0,"files_removed":0,"files_skipped_unrecognized":0,"errors":[]}\n'
   else
     printf 'plans dir not found: %s\n' "$PLANS_DIR"
   fi
@@ -92,6 +98,7 @@ groups_removed=0
 groups_skipped_young=0
 groups_skipped_revived=0
 files_removed=0
+files_skipped_unrecognized=0
 errors=()
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
@@ -125,12 +132,27 @@ format_date() {
 declare -A PREFIX_FILES=()
 EMPTY_PREFIX_KEY="__empty@@__"
 
+# #847 guard — SSOT for which hyphen-prefixed basenames may enter the
+# empty-SID bucket. Only workflow-generated artifacts match: a lowercase-kebab
+# stem (allowing '.' and '_' as inner separators) plus one known machine
+# extension. Anything else ("-scratch", "-My Notes.docx") is left on disk and
+# counted in files_skipped_unrecognized.
+#
+# Fail-safe direction is deliberate: an unknown shape is never deleted. A new
+# artifact kind that lands in the empty-SID bucket therefore accumulates rather
+# than being lost, and the accumulation is observable via the counter.
+EMPTY_PREFIX_ALLOW_RE='^-[a-z0-9]+([._-][a-z0-9]+)*\.(md|txt|json|jsonl|log|built|tmp|tsv|err|out|status|patch)$'
+
 while IFS= read -r -d '' f; do
   scanned=$(( scanned + 1 ))
   basename="${f##*/}"
   if [[ "$basename" =~ ^([0-9]{8}-[0-9]{6}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]{10}-[0-9]+)- ]]; then
     key="${BASH_REMATCH[1]}"
   elif [[ "$basename" == -* ]]; then
+    if [[ ! "$basename" =~ $EMPTY_PREFIX_ALLOW_RE ]]; then
+      files_skipped_unrecognized=$(( files_skipped_unrecognized + 1 ))
+      continue
+    fi
     key="$EMPTY_PREFIX_KEY"
   else
     continue
@@ -208,10 +230,18 @@ if [[ "$APPLY" == "1" ]] && [[ "${#CAND_PREFIXES[@]}" -gt 0 ]]; then
       [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
     done <<< "$files_blob"
     while IFS= read -r -d '' newgf; do
+      # find returns a FULL PATH; EMPTY_PREFIX_ALLOW_RE is anchored at '^-', so
+      # match on the basename. Scope the re-check to exactly what the delete
+      # pass can touch: for the empty-SID bucket that is the allowlist, not
+      # every '-' prefixed basename (#847, S1-2(b)).
+      newgf_base="${newgf##*/}"
+      if [[ "$key" == "$EMPTY_PREFIX_KEY" ]] && [[ ! "$newgf_base" =~ $EMPTY_PREFIX_ALLOW_RE ]]; then
+        continue
+      fi
       rm="$(file_mtime "$newgf")"
       [[ "$rm" =~ ^[0-9]+$ ]] || rm=0
       [[ "$rm" -gt "$recheck_max" ]] && recheck_max="$rm"
-    done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -name "${prefix}-*" -print0 2>/dev/null)  # prefix="" → -name "-*": matches any '-' prefixed basename; portable on GNU and BSD find
+    done < <(find "$PLANS_DIR" -maxdepth 1 -mindepth 1 -type f -name "${prefix}-*" -print0 2>/dev/null)  # prefix="" → -name "-*": all '-' prefixed basenames, narrowed to EMPTY_PREFIX_ALLOW_RE above; portable on GNU and BSD find
     if [[ "$recheck_max" -ge "$threshold_epoch" ]]; then
       groups_skipped_revived=$(( groups_skipped_revived + 1 ))
       printf 'WARN: session %s touched since scan; skipping (revived)\n' "$prefix" >&2
@@ -242,10 +272,10 @@ if [[ "$CI_MODE" == "1" ]]; then
     errs_json="$(printf '%s\n' "${errors[@]}" | node -e \
       'const xs=require("fs").readFileSync(0,"utf8").split(/\r?\n/).filter(Boolean);process.stdout.write(JSON.stringify(xs))')"
   fi
-  printf '{"scanned":%d,"groups_candidates":%d,"groups_removed":%d,"groups_skipped_young":%d,"groups_skipped_revived":%d,"files_removed":%d,"errors":%s}\n' \
+  printf '{"scanned":%d,"groups_candidates":%d,"groups_removed":%d,"groups_skipped_young":%d,"groups_skipped_revived":%d,"files_removed":%d,"files_skipped_unrecognized":%d,"errors":%s}\n' \
     "$scanned" "$groups_candidates" "$groups_removed" \
     "$groups_skipped_young" "$groups_skipped_revived" \
-    "$files_removed" "$errs_json"
+    "$files_removed" "$files_skipped_unrecognized" "$errs_json"
 else
   printf 'sweep-plans summary:\n'
   printf '  scanned: %d\n' "$scanned"
@@ -254,10 +284,9 @@ else
   printf '  groups_skipped_young: %d\n' "$groups_skipped_young"
   printf '  groups_skipped_revived: %d\n' "$groups_skipped_revived"
   printf '  files_removed: %d\n' "$files_removed"
+  printf '  files_skipped_unrecognized: %d\n' "$files_skipped_unrecognized"
   printf '  errors: %d\n' "${#errors[@]}"
-  if [[ "$DRY_RUN" == "1" ]]; then
-    printf '  (dry-run; pass --apply to actually delete)\n'
-  fi
+  sweep_write_mode_footer
 fi
 
 exit 0

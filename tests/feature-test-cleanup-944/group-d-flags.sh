@@ -1,4 +1,6 @@
 # Group D: audit-tests.sh flags, edge cases, invalid args (Cases 17-27)
+# Tests: bin/audit-tests.sh
+# Tags: audit-tests, flags, cli, scope:issue-specific, TL2
 # Sourced by tests/feature-test-cleanup-944.sh
 
 if [[ ! -f "$AUDIT_TESTS" ]]; then
@@ -14,7 +16,7 @@ git -C "$REPO17" add tests/feature-100-json.sh
 backdate_commit "$REPO17" 200 "stale json"
 
 EXIT17=0
-OUT17=$(cd "$REPO17" && PATH="$STUB17:$PATH" run_with_timeout bash "$REPO17/bin/audit-tests.sh" --format json 2>&1) || EXIT17=$?
+OUT17=$(cd "$REPO17" && PATH="$STUB17:$PATH" run_with_timeout bash "$REPO17/bin/audit-tests.sh" --dry-run --format json 2>&1) || EXIT17=$?
 
 if echo "$OUT17" | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")); process.exit((d.candidates&&d.candidates.length>0)?0:1)' 2>/dev/null; then
     pass "Case 17: --format json produces valid JSON with non-empty candidates"
@@ -23,8 +25,10 @@ else
 fi
 
 # Case 18: --stale-months 1 lowers threshold
+# The threshold is applied to the issue's closed_at (#1557), so the 60-day
+# boundary lives in the stub, not in the fixture's commit date.
 STUB18=$(mktemp -d -p "$TMPDIR_BASE")
-make_gh_stub "$STUB18" "closed"
+make_gh_stub "$STUB18" "closed" "$(days_ago_iso 60)"
 REPO18=$(setup_audit_repo)
 echo "#!/bin/bash" > "$REPO18/tests/feature-100-short.sh"
 git -C "$REPO18" add tests/feature-100-short.sh
@@ -32,7 +36,7 @@ backdate_commit "$REPO18" 60 "60-day-old"
 
 # Default 3-month (~90 days) — 60-day-old file should NOT qualify
 EXIT18a=0
-OUT18a=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" 2>&1) || EXIT18a=$?
+OUT18a=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" --dry-run 2>&1) || EXIT18a=$?
 if echo "$OUT18a" | grep -q "CANDIDATE:"; then
     fail "Case 18a: 60-day-old file should not qualify at default 3-month threshold"
 else
@@ -41,7 +45,7 @@ fi
 
 # --stale-months 1 (~30 days) — 60-day-old file SHOULD qualify
 EXIT18b=0
-OUT18b=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" --stale-months 1 2>&1) || EXIT18b=$?
+OUT18b=$(cd "$REPO18" && PATH="$STUB18:$PATH" run_with_timeout bash "$REPO18/bin/audit-tests.sh" --dry-run --stale-months 1 2>&1) || EXIT18b=$?
 if echo "$OUT18b" | grep -q "CANDIDATE:"; then
     pass "Case 18b: 60-day-old file qualifies with --stale-months 1"
 else
@@ -52,6 +56,7 @@ fi
 NOGIT19=$(mktemp -d -p "$TMPDIR_BASE")
 cp "$AUDIT_TESTS" "$NOGIT19/audit-tests.sh"
 chmod +x "$NOGIT19/audit-tests.sh"
+install_audit_libs "$NOGIT19"
 mkdir -p "$NOGIT19/tests"
 
 for case_label in "19a:--stale-months" "19b:--format" "19c:--format bad" "19d:--stale-months abc"; do
@@ -59,7 +64,7 @@ for case_label in "19a:--stale-months" "19b:--format" "19c:--format bad" "19d:--
     args="${case_label#*:}"
     EXIT19=0
     # shellcheck disable=SC2086
-    (cd "$NOGIT19" && bash "$NOGIT19/audit-tests.sh" $args 2>/dev/null) || EXIT19=$?
+    (cd "$NOGIT19" && bash "$NOGIT19/audit-tests.sh" --dry-run $args 2>/dev/null) || EXIT19=$?
     if [[ $EXIT19 -eq 2 ]]; then
         pass "Case $label: invalid arg '$args' exits 2"
     else
@@ -76,16 +81,16 @@ else
     fail "Case 23: --help expected exit 0, got $EXIT23"
 fi
 
-# Case 24: --stale-months 0 — even 1-day-old file qualifies
+# Case 24: --stale-months 0 — even a 1-day-old issue qualifies
 STUB24=$(mktemp -d -p "$TMPDIR_BASE")
-make_gh_stub "$STUB24" "closed"
+make_gh_stub "$STUB24" "closed" "$(days_ago_iso 1)"
 REPO24=$(setup_audit_repo)
 echo "#!/bin/bash" > "$REPO24/tests/feature-100-new.sh"
 git -C "$REPO24" add tests/feature-100-new.sh
 backdate_commit "$REPO24" 1 "1-day-old"
 
 EXIT24=0
-OUT24=$(cd "$REPO24" && PATH="$STUB24:$PATH" run_with_timeout bash "$REPO24/bin/audit-tests.sh" --stale-months 0 2>&1) || EXIT24=$?
+OUT24=$(cd "$REPO24" && PATH="$STUB24:$PATH" run_with_timeout bash "$REPO24/bin/audit-tests.sh" --dry-run --stale-months 0 2>&1) || EXIT24=$?
 
 if echo "$OUT24" | grep -q "CANDIDATE:"; then
     pass "Case 24: --stale-months 0 qualifies 1-day-old CLOSED file"
@@ -103,7 +108,7 @@ git -C "$REPO25" add tests/feature-100-first.sh tests/feature-300-second.sh
 backdate_commit "$REPO25" 200 "two stale files"
 
 EXIT25=0
-OUT25=$(cd "$REPO25" && PATH="$STUB25:$PATH" run_with_timeout bash "$REPO25/bin/audit-tests.sh" 2>&1) || EXIT25=$?
+OUT25=$(cd "$REPO25" && PATH="$STUB25:$PATH" run_with_timeout bash "$REPO25/bin/audit-tests.sh" --dry-run 2>&1) || EXIT25=$?
 
 if echo "$OUT25" | grep -q "feature-100-first.sh" && echo "$OUT25" | grep -q "feature-300-second.sh"; then
     pass "Case 25: multi-file — both qualifying files appear in candidate report"
@@ -120,7 +125,7 @@ git -C "$REPO26" add tests/feature-200-open.sh
 backdate_commit "$REPO26" 200 "open issue"
 
 EXIT26=0
-OUT26=$(cd "$REPO26" && PATH="$STUB26:$PATH" run_with_timeout bash "$REPO26/bin/audit-tests.sh" --format json 2>&1) || EXIT26=$?
+OUT26=$(cd "$REPO26" && PATH="$STUB26:$PATH" run_with_timeout bash "$REPO26/bin/audit-tests.sh" --dry-run --format json 2>&1) || EXIT26=$?
 
 if echo "$OUT26" | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")); process.exit((Array.isArray(d.candidates)&&d.candidates.length===0)?0:1)' 2>/dev/null; then
     pass "Case 26: --format json with no candidates → empty candidates array"
@@ -142,7 +147,7 @@ git -C "$REPO27" add tests/feature-100-old.sh
 backdate_commit "$REPO27" 200 "stale"
 
 EXIT27=0
-OUT27=$(cd "$REPO27" && PATH="$STUB27:$PATH" run_with_timeout bash "$REPO27/bin/audit-tests.sh" 2>&1) || EXIT27=$?
+OUT27=$(cd "$REPO27" && PATH="$STUB27:$PATH" run_with_timeout bash "$REPO27/bin/audit-tests.sh" --dry-run 2>&1) || EXIT27=$?
 
 if echo "$OUT27" | grep -qi "offline\|WARNING"; then
     pass "Case 27: gh repo view failure → falls back to offline mode with warning"

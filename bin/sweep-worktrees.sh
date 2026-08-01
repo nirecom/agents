@@ -4,25 +4,47 @@
 #
 # Reclaims zombie linked worktrees and their branches. Also scans
 # WORKTREE_BASE_DIR for orphan directories not tracked by git's worktree
-# registry. Default is dry-run; pass --apply to delete.
+# registry. Deletes by default; pass --dry-run to preview.
 #
 # Usage:
-#   sweep-worktrees.sh [--apply] [--min-age-hours N] [--ci-mode]
-#                      [--dry-run] [--skip-gh-check] [--simulate-eperm]
+#   sweep-worktrees.sh [--dry-run] [--min-age-hours N] [--ci-mode]
+#                      [--apply] [--skip-gh-check] [--simulate-eperm]
+#
+# Entrypoint only: flag parsing, environment checks, the registered-worktree
+# main loop, and pass sequencing. The rest lives in the sibling
+# bin/sweep-worktrees/ modules (rules/coding/file-split.md Pattern A):
+#   gates.sh        — norm_path plus the per-worktree safety gates
+#   empty-parent.sh — cross-repo parent discovery and the empty-parent pass
+#   orphan-dirs.sh  — orphan-directory scan and stale-backup cleanup
+#   summary.sh      — CI-mode JSON and plain-text summary
 #
 # Exit code: 0 on normal completion (per-worktree EPERM is non-fatal).
 #            1 only on fatal setup error (missing AGENTS_CONFIG_DIR, git, etc.).
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/sweep-write-mode.sh
+source "$SCRIPT_DIR/lib/sweep-write-mode.sh"
+# gates.sh defines norm_path, which empty-parent.sh and orphan-dirs.sh both
+# call — it must be sourced first.
+# shellcheck source=./sweep-worktrees/gates.sh
+source "$SCRIPT_DIR/sweep-worktrees/gates.sh"
+# shellcheck source=./sweep-worktrees/empty-parent.sh
+source "$SCRIPT_DIR/sweep-worktrees/empty-parent.sh"
+# shellcheck source=./sweep-worktrees/orphan-dirs.sh
+source "$SCRIPT_DIR/sweep-worktrees/orphan-dirs.sh"
+# shellcheck source=./sweep-worktrees/summary.sh
+source "$SCRIPT_DIR/sweep-worktrees/summary.sh"
+
 # ─── Defaults & flag parsing ────────────────────────────────────────────────
 
-APPLY=0
+# DRY_RUN is the mirror of !APPLY, used by the orphan-dir scan for readability.
+sweep_write_mode_init
 MIN_AGE_HOURS=24
 CI_MODE=0
 SKIP_GH_CHECK=0
 SIMULATE_EPERM=0
-DRY_RUN=1 # mirror of !APPLY for orphan-dir scan readability
 SWEEP_AGE_DAYS="${SWEEP_AGE_DAYS:-30}"
 
 validate_sweep_age_days() {
@@ -40,8 +62,9 @@ usage() {
 Usage: sweep-worktrees.sh [options]
 
 Options:
-  --apply               Actually delete (default is dry-run).
-  --dry-run             Explicit dry-run (default).
+EOF
+  sweep_write_mode_usage_lines
+  cat <<'EOF'
   --min-age-hours N     Skip worktrees modified more recently than N hours
                         (default 24).
   --sweep-age-days N    Age threshold in days for the empty-parent pass
@@ -56,8 +79,8 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --apply) APPLY=1; DRY_RUN=0 ;;
-    --dry-run) APPLY=0; DRY_RUN=1 ;;
+    --apply) sweep_write_mode_apply ;;
+    --dry-run) sweep_write_mode_dry_run ;;
     --min-age-hours)
       shift
       MIN_AGE_HOURS="${1:?--min-age-hours requires a value}"
@@ -123,84 +146,6 @@ empty_parents_skipped_nonempty=0
 empty_parents_skipped_registered=0
 errors=()
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
-
-# realpath -m equivalent that returns the input on failure (path may not exist).
-# On Windows Git Bash, mktemp -d yields POSIX form (/tmp/...) while
-# `git worktree list --porcelain` returns Windows form (C:/Users/.../...).
-# `cygpath -u` normalizes both to a single POSIX form so equality checks work.
-norm_path() {
-  local p="$1"
-  if [[ -z "$p" ]]; then
-    printf ''
-    return
-  fi
-  if command -v realpath >/dev/null 2>&1; then
-    p="$(realpath -m -- "$p" 2>/dev/null || printf '%s' "$p")"
-  fi
-  if command -v cygpath >/dev/null 2>&1; then
-    cygpath -u -- "$p" 2>/dev/null || printf '%s' "$p"
-  else
-    printf '%s' "$p"
-  fi
-}
-
-# True if a worktree directory is "fresh" (mtime newer than threshold).
-is_fresh() {
-  local dir="$1"
-  local mins=$((MIN_AGE_HOURS * 60))
-  if [[ ! -d "$dir" ]]; then
-    return 1 # missing dir is never "fresh"
-  fi
-  if find "$dir" -maxdepth 0 -mmin "-$mins" 2>/dev/null | grep -q .; then
-    return 0
-  fi
-  return 1
-}
-
-# True if working tree is clean (or directory missing — treat as clean).
-is_clean_wt() {
-  local wt="$1"
-  if [[ ! -d "$wt" ]]; then
-    return 0
-  fi
-  local status_out untracked_out
-  status_out="$(git -C "$wt" status --porcelain 2>/dev/null || true)"
-  untracked_out="$(git -C "$wt" ls-files --others --exclude-standard 2>/dev/null || true)"
-  [[ -z "$status_out" ]] && [[ -z "$untracked_out" ]]
-}
-
-# True if tracked files are clean (ignores untracked files entirely).
-is_clean_tracked_only() {
-  local wt="$1"
-  if [[ ! -d "$wt" ]]; then
-    return 0
-  fi
-  local status_out
-  status_out="$(git -C "$wt" status --porcelain --untracked-files=no 2>/dev/null || true)"
-  [[ -z "$status_out" ]]
-}
-
-# True if a PR with head exactly == branch is merged.
-is_pr_merged() {
-  local branch="$1"
-  if [[ "$SKIP_GH_CHECK" == "1" ]]; then
-    return 0
-  fi
-  if ! command -v gh >/dev/null 2>&1; then
-    printf 'WARN: gh CLI not available; cannot verify merged state for %s\n' \
-      "$branch" >&2
-    return 1
-  fi
-  local out
-  if ! out="$(gh pr list -H "$branch" --state merged \
-      --json number --jq 'length > 0' 2>/dev/null)"; then
-    printf 'WARN: gh pr list failed for branch %s; skipping\n' "$branch" >&2
-    return 1
-  fi
-  [[ "$out" == "true" ]]
-}
-
 # ─── Main loop: enumerate linked worktrees ──────────────────────────────────
 
 # Parse `git worktree list --porcelain` into records separated by blank lines.
@@ -214,8 +159,6 @@ main_root_norm="$(norm_path "$MAIN_ROOT")"
 # was registered at the start of the run.
 declare -A DISCOVERED_MAIN_ROOTS=()
 declare -A REGISTERED_WT_PARENTS=()
-# shellcheck source=./sweep-worktrees/empty-parent.sh
-source "$(dirname "${BASH_SOURCE[0]}")/sweep-worktrees/empty-parent.sh"
 discover_registered_wt_parents
 
 current_path=""
@@ -326,183 +269,18 @@ if [[ -n "$current_path" ]]; then
   process_record "$current_path" "$current_branch"
 fi
 
-# ── Orphan-directory scan pre-pass guard ─────────────────────────────────────
-registered_norm_file=$(mktemp)
-# Function-form trap: defers expansion of $registered_norm_file to cleanup time
-# and quotes safely even if mktemp ever returns a path containing spaces or
-# shell metacharacters.
-cleanup_registered_files() {
-  rm -f -- "$registered_norm_file" "${registered_norm_file}.raw"
-}
-trap cleanup_registered_files EXIT
-SKIP_ORPHAN_DIR_SCAN=0
-if ! git -C "$MAIN_ROOT" worktree list --porcelain > "${registered_norm_file}.raw" 2>/dev/null; then
-  printf 'WARNING: git worktree list --porcelain failed; skipping orphan-dir scan pass\n' >&2
-  SKIP_ORPHAN_DIR_SCAN=1
-else
-  awk '/^worktree /{print substr($0,10)}' "${registered_norm_file}.raw" \
-    | while IFS= read -r r; do norm_path "$r"; printf '\n'; done > "$registered_norm_file"
-fi
-
-# ── Orphan-directory scan pass ────────────────────────────────────────────────
-# Reclaim directories under WORKTREE_BASE_DIR that are not in the git registry.
-# Reuses hooks/cleanup-orphan-dir.js for the actual removal (4-AND safety gate).
-if [[ "$SKIP_ORPHAN_DIR_SCAN" != "1" && -d "$WORKTREE_BASE_DIR" ]]; then
-  current_repo_name="$(basename "$MAIN_ROOT")"
-  wt_base_norm="$(norm_path "$WORKTREE_BASE_DIR")"
-
-  while IFS= read -r -d '' cand_dir; do
-    cand_name="$(basename "$cand_dir")"
-    # Cross-repo guard: only sweep dirs whose final segment matches this repo.
-    [[ "$cand_name" == "$current_repo_name" ]] || continue
-    cand_norm="$(norm_path "$cand_dir")"
-
-    # Gate (4): skip if registered (already handled by main loop).
-    if grep -Fxq -- "$cand_norm" "$registered_norm_file"; then
-      orphan_dirs_skipped_registered=$((orphan_dirs_skipped_registered + 1))
-      continue
-    fi
-    # Gate (1): containment under WORKTREE_BASE_DIR.
-    case "$cand_norm" in
-      "$wt_base_norm"/*) ;;
-      *) continue ;;
-    esac
-    # Gate (2): no .git present (file, dir, or dangling symlink).
-    if [[ -e "$cand_dir/.git" || -L "$cand_dir/.git" ]]; then
-      orphan_dirs_skipped_has_git=$((orphan_dirs_skipped_has_git + 1))
-      continue
-    fi
-    # Gate (3): mtime check (older than --min-age-hours).
-    if is_fresh "$cand_dir"; then
-      orphan_dirs_skipped_young=$((orphan_dirs_skipped_young + 1))
-      continue
-    fi
-    # Gate (5): cross-repo ownership proof. Requires WORKTREE_NOTES.md with a
-    # `Main repo:` line matching the current MAIN_ROOT (forward-slash form).
-    # Basename match alone is not unique ownership (two unrelated repos can
-    # share `agents`/`dotfiles` basenames under different parent paths), so
-    # legacy notes lacking the field and missing notes files are SKIPPED —
-    # never fall through to basename match.
-    #
-    # Gate (4) "empty-or-notes-only" was intentionally removed: a partial
-    # `git worktree remove` (removes .git + registry entry but fails on the
-    # filesystem due to e.g. MAX_PATH) leaves a full checkout with no .git.
-    # That directory has proven ownership via Gate (5) and is safe to delete
-    # via cleanup-orphan-dir.js --force-if-not-registered. Directories without
-    # a valid WORKTREE_NOTES.md are rejected by Gate (5) regardless of content.
-    notes_file="$cand_dir/WORKTREE_NOTES.md"
-    if [[ ! -f "$notes_file" ]]; then
-      orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
-      continue
-    fi
-    recorded="$( { grep -m1 -E '^Main repo:[[:space:]]*' "$notes_file" 2>/dev/null || true; } | sed -E 's/^Main repo:[[:space:]]*//' | tr -d '\r')"
-    if [[ -z "$recorded" ]]; then
-      orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
-      continue
-    fi
-    main_norm_fs="$(norm_path "$MAIN_ROOT")"
-    rec_norm_fs="$(norm_path "$recorded")"
-    if [[ "$rec_norm_fs" != "$main_norm_fs" ]]; then
-      orphan_dirs_skipped_repo_mismatch=$((orphan_dirs_skipped_repo_mismatch + 1))
-      continue
-    fi
-
-    if [[ "$DRY_RUN" == "1" ]]; then
-      printf 'would remove orphan dir: %s\n' "$cand_dir" >&2
-    else
-      node_out="$(WORKTREE_BASE_DIR="$WORKTREE_BASE_DIR" \
-        node "$AGENTS_CONFIG_DIR/hooks/cleanup-orphan-dir.js" \
-        --force-if-not-registered "$cand_dir" 2>&1)"
-      node_rc=$?
-      if [[ "$node_rc" -eq 0 ]]; then
-        orphan_dirs_removed=$((orphan_dirs_removed + 1))
-      else
-        orphan_dirs_skipped_failed=$((orphan_dirs_skipped_failed + 1))
-        printf 'WARNING: cleanup-orphan-dir failed for %s: %s\n' "$cand_dir" "$node_out" >&2
-      fi
-    fi
-  done < <(find "$WORKTREE_BASE_DIR" -mindepth 2 -maxdepth 2 -type d -print0 2>/dev/null)
-fi
+# ── Orphan-directory scan pass ──────────────────────────────────────────────
+sweep_orphan_dirs
 
 # ── Empty-parent pass (#809) ────────────────────────────────────────────────
 sweep_empty_parents
 
 # ─── Stale .worktree-backup cleanup ─────────────────────────────────────────
 
-backup_base="$MAIN_ROOT/.worktree-backup"
-if [[ -d "$backup_base" ]]; then
-  backup_threshold=$((MIN_AGE_HOURS * 7))
-  backup_threshold_mins=$((backup_threshold * 60))
-  real_base="$(norm_path "$backup_base")"
-  while IFS= read -r -d '' backup_dir; do
-    real_backup="$(norm_path "$backup_dir")"
-    # Reject paths containing ".."
-    case "$real_backup" in
-      *..*)
-        printf 'WARN: path traversal rejected: %s\n' "$backup_dir" >&2
-        continue
-        ;;
-    esac
-    # Must be strictly under real_base.
-    case "$real_backup" in
-      "$real_base"/*) ;;
-      *)
-        printf 'WARN: unsafe path skipped: %s\n' "$backup_dir" >&2
-        continue
-        ;;
-    esac
-    if [[ "$APPLY" == "1" ]]; then
-      rm -rf -- "$backup_dir"
-    else
-      printf 'DRY-RUN: would remove stale backup: %s\n' "$backup_dir"
-    fi
-  done < <(find "$backup_base" -maxdepth 1 -mindepth 1 -type d \
-    -not -mmin "-$backup_threshold_mins" -print0 2>/dev/null)
-fi
+sweep_stale_backups
 
 # ─── Summary output ─────────────────────────────────────────────────────────
 
-if [[ "$CI_MODE" == "1" ]]; then
-  errs_json="[]"
-  if [[ ${#errors[@]} -gt 0 ]]; then
-    errs_json="$(printf '%s\n' "${errors[@]}" | node -e \
-      'const xs=require("fs").readFileSync(0,"utf8").split(/\r?\n/).filter(Boolean);process.stdout.write(JSON.stringify(xs))')"
-  fi
-  printf '{"scanned":%d,"candidates":%d,"worktree_removed":%d,"branch_deleted":%d,"skipped_eperm":%d,"skipped_unmerged":%d,"skipped_dirty":%d,"orphan_dirs_removed":%d,"orphan_dirs_skipped_has_git":%d,"orphan_dirs_skipped_young":%d,"orphan_dirs_skipped_registered":%d,"orphan_dirs_skipped_failed":%d,"orphan_dirs_skipped_has_files":%d,"orphan_dirs_skipped_repo_mismatch":%d,"empty_parents_candidates":%d,"empty_parents_removed":%d,"empty_parents_skipped_young":%d,"empty_parents_skipped_nonempty":%d,"empty_parents_skipped_registered":%d,"errors":%s}\n' \
-    "$scanned" "$candidates" "$worktree_removed" "$branch_deleted" \
-    "$skipped_eperm" "$skipped_unmerged" "$skipped_dirty" "$orphan_dirs_removed" \
-    "$orphan_dirs_skipped_has_git" "$orphan_dirs_skipped_young" \
-    "$orphan_dirs_skipped_registered" "$orphan_dirs_skipped_failed" \
-    "$orphan_dirs_skipped_has_files" "$orphan_dirs_skipped_repo_mismatch" \
-    "$empty_parents_candidates" "$empty_parents_removed" \
-    "$empty_parents_skipped_young" "$empty_parents_skipped_nonempty" \
-    "$empty_parents_skipped_registered" \
-    "$errs_json"
-else
-  printf 'sweep-worktrees summary:\n'
-  printf '  scanned: %d\n' "$scanned"
-  printf '  candidates: %d\n' "$candidates"
-  printf '  worktree_removed: %d\n' "$worktree_removed"
-  printf '  branch_deleted: %d\n' "$branch_deleted"
-  printf '  skipped_eperm: %d\n' "$skipped_eperm"
-  printf '  skipped_unmerged: %d\n' "$skipped_unmerged"
-  printf '  skipped_dirty: %d\n' "$skipped_dirty"
-  if [[ "$orphan_dirs_removed" -gt 0 ]]; then
-    printf '  orphan_dirs_removed: %d\n' "$orphan_dirs_removed"
-  fi
-  skip_summary=""
-  [[ "$orphan_dirs_skipped_has_git" -gt 0 ]] && skip_summary+=" has_git=$orphan_dirs_skipped_has_git"
-  [[ "$orphan_dirs_skipped_young" -gt 0 ]] && skip_summary+=" young=$orphan_dirs_skipped_young"
-  [[ "$orphan_dirs_skipped_registered" -gt 0 ]] && skip_summary+=" registered=$orphan_dirs_skipped_registered"
-  [[ "$orphan_dirs_skipped_failed" -gt 0 ]] && skip_summary+=" failed=$orphan_dirs_skipped_failed"
-  [[ "$orphan_dirs_skipped_has_files" -gt 0 ]] && skip_summary+=" has_files=$orphan_dirs_skipped_has_files"
-  [[ "$orphan_dirs_skipped_repo_mismatch" -gt 0 ]] && skip_summary+=" repo_mismatch=$orphan_dirs_skipped_repo_mismatch"
-  if [[ -n "$skip_summary" ]]; then
-    printf '  orphan_dirs_skipped:%s\n' "$skip_summary"
-  fi
-  if [[ "$APPLY" != "1" ]]; then
-    printf '  (dry-run; pass --apply to actually delete)\n'
-  fi
-fi
+emit_summary
 
 exit 0
