@@ -14,8 +14,11 @@
 # rather than reporting one repository's issues against another's files.
 #
 # Writes by default. --dry-run suppresses EVERY write, including the tier-1
-# closes. --deep is an orthogonal axis: it widens the candidate set and emits
-# the tier-2 human-gate blocks, and never changes the write mode.
+# closes. --deep is an orthogonal axis: it opts tier 2 in, and never changes the
+# write mode. It does NOT widen the candidate set — SI-2 scans identically with
+# and without it. What it changes is what happens to the tier-2 candidates:
+# without it they are reported and dropped; with it they are handed to the
+# skill's human gate and can reach passes 2 and 3.
 #
 # Three exclusive passes (AskUserQuestion is a Claude tool and cannot be called
 # from bash, so the human gates live in skills/sweep-issues/SKILL.md and this
@@ -26,9 +29,12 @@
 #   pass 2  --verify-candidates   SI-4 evidence for the survivors TSV only
 #   pass 3  --decisions           SI-6 close execution and nothing else
 #
-# --verify-candidates and --decisions each REQUIRE --deep (exit 2 otherwise) and
-# are mutually exclusive (exit 2). Requiring --deep for pass 3 is what makes
-# "tier 2 only fires when --deep is explicit" true at the machine level.
+# --verify-candidates and --decisions are the skill↔script protocol for passes 2
+# and 3, not user-facing flags: a user runs `/sweep-issues --deep` and SKILL.md
+# issues these calls with the TSVs it wrote. They each REQUIRE --deep (exit 2
+# otherwise) and are mutually exclusive (exit 2). Requiring --deep for pass 3 is
+# what makes "tier 2 only fires when --deep is explicit" true at the machine
+# level even if a pass-3 call is issued on its own.
 #
 # The judgement axis table (which axis maps to which close action) lives in
 # bin/sweep-issues/close-batch.sh's header and is not restated here.
@@ -59,21 +65,33 @@ usage() {
 Usage: bin/sweep-issues.sh [--dry-run] [--deep] [--repo OWNER/REPO]
                            [--repo-root DIR]
                            [--band-size N] [--band-index K] [--ci-mode]
-                           [--verify-candidates FILE | --decisions FILE]
 
-  --deep                Emit the tier-2 human-gate blocks and unlock passes 2/3.
-                        Does NOT change the write mode.
+Normally invoked as /sweep-issues, which forwards these flags verbatim.
+
+  --deep                Also triage tier 2 (issues whose referenced test paths
+                        no longer exist), confirming each one with you before it
+                        is closed. Without it, tier-2 candidates are listed and
+                        nothing more. Does NOT change the write mode.
   --repo OWNER/REPO     Target repository (default: resolved via `gh repo view`).
   --repo-root DIR       Checkout that path tokens are probed against. Required
                         when --repo names a repository other than the working
                         tree (default: the working tree).
   --band-size N         Issues per band (default 100).
   --band-index K        Zero-based band to sweep (default 0).
-  --verify-candidates F Pass 2: gather evidence for the survivors TSV (needs --deep).
-  --decisions F         Pass 3: execute the decisions TSV (needs --deep).
   --ci-mode             Emit a one-line JSON summary instead of prose.
 EOF
   sweep_write_mode_usage_lines
+  cat <<'EOF'
+
+Tiers:
+  tier 1  meta parents whose sub-issues are all closed. Closed on every run.
+  tier 2  issues whose referenced tests/*.sh paths are gone. Listed on every
+          run; closed only under --deep, and only per-issue with your approval.
+
+Internal (issued by skills/sweep-issues/SKILL.md, not typed by hand):
+  --verify-candidates F Pass 2: gather evidence for the survivors TSV (needs --deep).
+  --decisions F         Pass 3: execute the decisions TSV (needs --deep).
+EOF
 }
 
 while [[ $# -gt 0 ]]; do
