@@ -90,7 +90,7 @@ run_review() {  # <case-dir> <codex-stdout> [extra env...]
     build_artifact "$ART"
     printf '%s' "$out" > "$CASE_DIR/codex-out.txt"
     [ "$RS_PRESENT" != "yes" ] && { RC=127; OUT=""; return; }
-    OUT=$(env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off "$@" \
+    OUT=$(env "$@" \
             CODEX_MOCK_OUT="$CASE_DIR/codex-out.txt" CODEX_PROMPT_LOG="$PROMPT" \
             PATH="$MOCKDIR:$PATH" \
             "$RWT" 40 bash "$RS" --artifact "$ART" --out "$FINAL" --log-dir "$CASE_DIR/logs" 2>"$STDERR")
@@ -227,7 +227,7 @@ echo "===     accepted through the normal validation path, never by frame positi
 # #10 IS a candidate, so this one is allowed to land. The point is that it lands as a
 # reviewed verdict (review.status: replaced) with the survey preserved for the G2 gate —
 # not silently swapped in.
-INSIDE='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"on reflection #10 is the same defect"}'
+INSIDE='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"on reflection #10 is the same defect","worth_filing":true}'
 run_review "$WORK/inside" "$INSIDE"
 if [ "$RS_PRESENT" != "yes" ]; then
     red "I6-replacement-recorded"; red "I6-survey-preserved-for-gate"

@@ -34,7 +34,7 @@ echo "=== E: malformed SURVEY artifacts — the other input, and the one not yet
 # allowlist — and an empty allowlist silently accepts nothing OR everything depending
 # on how the check is written. Both directions are dangerous, so every malformed
 # artifact must be rejected outright rather than silently narrowing the allowlist.
-VALID_REVIEW='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect"}'
+VALID_REVIEW='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}'
 
 # run_validate_art <artifact-json-literal-or-path> <raw> → verdict word
 run_validate_art() {
@@ -42,8 +42,7 @@ run_validate_art() {
     if [ "$VALIDATOR_PRESENT" != "yes" ]; then printf '<missing>'; return; fi
     if [ -f "$art" ]; then f="$art"; else printf '%s' "$art" > "$f"; fi
     printf '%s' "$raw" > "$WORK/mal-raw.txt"
-    out=$(ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off \
-            "$RWT" 15 node "$(node_path "$VALIDATOR")" \
+    out=$("$RWT" 15 node "$(node_path "$VALIDATOR")" \
             --artifact "$(node_path "$f")" \
             --review-raw "$(node_path "$WORK/mal-raw.txt")" 2>/dev/null | head -n 1)
     printf '%s' "${out//[[:space:]]/}"
@@ -184,7 +183,7 @@ fs.writeFileSync(process.argv[1], JSON.stringify({ schema_version: 2,
   verdict: 'none', target: null, children: [], related: [], reason: 'r',
   relations_mode: 'batched', relation_errors: [],
   candidates: Array.from({ length: 5000 }, (_, i) => cand(i + 1)) }));" "$(node_path "$WORK/huge.json")"
-    GOT=$(run_validate_art "$WORK/huge.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect"}')
+    GOT=$(run_validate_art "$WORK/huge.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}')
     [ "$GOT" = "invalid" ] && pass "E13-huge-candidate-list" \
         || fail "E13-huge-candidate-list" "a 5000-candidate artifact exceeds the documented 25-candidate ceiling and must be rejected (got: $GOT)"
 
@@ -197,7 +196,7 @@ fs.writeFileSync(process.argv[1], JSON.stringify({ schema_version: 2,
   candidates: [ { number: 10, title: 'x'.repeat(1000000), state: 'open', labels: [], body: 'b',
     relation_status: 'resolved', parent_number: null, parent_is_meta: false, has_sub_issues: false } ] }));" \
       "$(node_path "$WORK/hugestr.json")"
-    GOT=$(run_validate_art "$WORK/hugestr.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect"}')
+    GOT=$(run_validate_art "$WORK/hugestr.json" '{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same defect","worth_filing":true}')
     # Either verdict is defensible here; what must NOT happen is a crash or a hang,
     # which would surface as an empty first line.
     if [ "$GOT" = "valid" ] || [ "$GOT" = "invalid" ]; then

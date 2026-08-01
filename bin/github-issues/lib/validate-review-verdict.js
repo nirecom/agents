@@ -167,7 +167,16 @@ function validate(artifact, rawText) {
     return { ok: false, reason: "survey verdict bulk-sub-of is outside the review grammar" };
   }
 
-  const objs = extractJsonObjects(rawText);
+  // The reviewer may reason in the open — and with web search on, quoted excerpts can
+  // carry braces of their own. The `FINAL_VERDICT_JSON:` sentinel is where the answer
+  // starts; everything before the LAST one is working-out, not the answer. Without a
+  // sentinel the whole text is scanned, as before (tolerates a model that omits it).
+  const SENTINEL = "FINAL_VERDICT_JSON:";
+  const scanText = typeof rawText === "string" && rawText.lastIndexOf(SENTINEL) !== -1
+    ? rawText.slice(rawText.lastIndexOf(SENTINEL) + SENTINEL.length)
+    : rawText;
+
+  const objs = extractJsonObjects(scanText);
   // Cardinality is checked before content: two answers mean the reviewer never settled
   // on one, and "take the last" would silently pick for it.
   if (objs.length === 0) {
@@ -176,7 +185,7 @@ function validate(artifact, rawText) {
     // dangling `{` is a truncated or malformed answer — different things to chase.
     return {
       ok: false,
-      reason: rawText && rawText.indexOf("{") !== -1
+      reason: scanText && scanText.indexOf("{") !== -1
         ? "review output contained an incomplete or unparseable JSON object"
         : "review output contained no parseable JSON object",
     };
@@ -193,6 +202,12 @@ function validate(artifact, rawText) {
   }
   if (r.reason.length > REASON_MAX) {
     return { ok: false, reason: "reason exceeds " + REASON_MAX + " characters" };
+  }
+  // REQUIRED, and strictly boolean. This is the confirm gate's G3 input: a missing or
+  // stringified value must fold the whole review to `invalid` (→ G4, confirm) rather
+  // than be coerced — `"false"` is truthy and would flip the gate the wrong way.
+  if (typeof r.worth_filing !== "boolean") {
+    return { ok: false, reason: "worth_filing must be a boolean" };
   }
 
   const target = r.target === undefined ? null : r.target;
@@ -261,7 +276,7 @@ function validate(artifact, rawText) {
   return {
     ok: true,
     reason: "",
-    review: { verdict, target, children, related, reason: r.reason },
+    review: { verdict, target, children, related, reason: r.reason, worth_filing: r.worth_filing },
   };
 }
 

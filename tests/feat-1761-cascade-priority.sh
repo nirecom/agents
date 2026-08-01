@@ -232,8 +232,7 @@ MOCK
 JSON
 
     PROMPT="$WORK/prompt.txt"
-    ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off \
-      CODEX_PROMPT_LOG="$PROMPT" PATH="$MOCKDIR:$PATH" \
+    CODEX_PROMPT_LOG="$PROMPT" PATH="$MOCKDIR:$PATH" \
       "$RWT" 40 bash "$RS" --artifact "$ART" --out "$WORK/final.json" --no-log >/dev/null 2>&1
 
     if [ ! -s "$PROMPT" ]; then

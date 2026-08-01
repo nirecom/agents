@@ -55,10 +55,7 @@ new_case() { local d="$WORK/$1"; mkdir -p "$d"; printf '%s' "$d"; }
 run_cr() {
     local d="$1" slug="$2" nums="$3"
     if [ "$CR_PRESENT" != "yes" ]; then RC=127; OUT=""; ERR="candidate-relations.sh missing"; return; fi
-    # Config pinning (rules/test.md): relation collection feeds the review stage, so
-    # both switches are declared rather than inherited from the developer's .env.
-    OUT=$(ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off \
-            GH_MOCK_DIR="$d" GH_MOCK_ARGS_LOG="$d/args.log" PATH="$MOCKDIR:$PATH" \
+    OUT=$(GH_MOCK_DIR="$d" GH_MOCK_ARGS_LOG="$d/args.log" PATH="$MOCKDIR:$PATH" \
             "$RWT" 30 bash "$CR" "$slug" "$nums" 2>"$d/stderr.txt")
     RC=$?
     ERR=$(cat "$d/stderr.txt" 2>/dev/null)

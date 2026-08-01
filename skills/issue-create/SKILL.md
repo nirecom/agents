@@ -92,7 +92,7 @@ The survey follows an ordered cascade that considers `reopen` first; the criteri
 
 Every route below produces the same schema-v2 artifact. The worker-bypassing routes write it with `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/make-empty-verdict.sh" <out-path> <verdict> --title T --background B --changes C [--parent N]`.
 
-Of that artifact the main conversation reads only `verdict` / `target` / `children` / `related` / `reason` / `review_result` / `provenance`. Never read `proposal` or `candidates[].body` into the main context.
+Of that artifact the main conversation reads only `verdict` / `target` / `children` / `related` / `reason` / `review_result` / `review.worth_filing`. Never read `proposal` or `candidates[].body` into the main context.
 
 If invoked with `--skip-survey` (caller already ran a bulk dedupe pass and supplies an explicit `--verdict bulk-sub-of --parent N --manifest FILE`): skip Phase 2 entirely, write the artifact with `make-empty-verdict.sh <out> bulk-sub-of --parent N`, and proceed to Phase 3 with the caller-supplied verdict.
 
@@ -104,19 +104,18 @@ Skip this phase when `bin/is-github-dotcom-remote` returns non-zero (non-GitHub 
 2d. `status: no_candidates` → write the artifact with `make-empty-verdict.sh <out> none` and proceed to Phase 3 with `verdict: none`.
 2e. `status: complete` → read verdict JSON from `artifact_path`.
 
-### Phase 3 — Provenance, review, confirm
+### Phase 3 — Review and confirm
 
-3a. Resolve provenance once: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/issue-provenance" --consume` — stdout is `user-explicit` or `mid-workflow`, stderr carries `layer: A|B|C|none`. Single-use: never re-run it in the same invocation.
-3b. Review the survey verdict: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`, with `ISSUE_PROVENANCE_VALUE` / `ISSUE_PROVENANCE_LAYER` exported from 3a.
-3c. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `provenance`. Phase 4 dispatches on these, not on the Phase 2 values.
-3d. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) — it is the only file holding full candidate bodies, and the final artifact has superseded it. Skip silently if absent.
-3e. Classify the gate: `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> <provenance> <severity-label>` — stdout is `confirm: yes|no` then `reasons: <G-list>`.
-3f. `confirm: yes` → AskUserQuestion before Phase 4, naming the fired conditions. `confirm: no` → proceed to Phase 4 without asking.
+3a. Review the survey verdict: `bash "$AGENTS_CONFIG_DIR/bin/github-issues/review-survey-verdict-codex.sh" --artifact <survey-artifact> --out <final-artifact>`.
+3b. Of `<final-artifact>` read only `verdict` / `target` / `children` / `related` / `reason` / `review.status` / `review.worth_filing`. Phase 4 dispatches on these, not on the Phase 2 values.
+3c. Delete the Phase 2 survey artifact (`rm -f <survey-artifact>`) — it is the only file holding full candidate bodies, and the final artifact has superseded it. Skip silently if absent.
+3d. Classify the gate: `bash "$AGENTS_CONFIG_DIR/skills/issue-create/scripts/eval-confirm-gate.sh" <final-artifact> <severity-label>` — stdout is `confirm: yes|no` then `reasons: <G-list>`.
+3e. `confirm: yes` → AskUserQuestion before Phase 4, naming the fired conditions. `confirm: no` → proceed to Phase 4 without asking.
 
 The gate is the logical OR of four conditions; the script owns the decision, this list only supplies the question text:
 - G1 — final verdict is `reopen`, `make-parent`, `sub-of` or `bulk-sub-of` (mutates existing state)
 - G2 — the review stage replaced the survey verdict
-- G3 — provenance is not `user-explicit` and severity is not `severity:high` (the script re-resolves provenance itself; the argument can only lower it)
+- G3 — the review did not confirm filing is worthwhile (`review.worth_filing` is not `true`) and severity is not `severity:high`
 - G4 — review status is anything other than `upheld` or `replaced` (verdict unverified)
 
 Note: `sub-of` and `bulk-sub-of` are G1 because they may trigger ancestor reopen when the parent chain contains closed issues.
@@ -162,6 +161,7 @@ Failure is non-fatal — the script logs a stderr warning and continues.
     - Workflow interruption or abnormal behavior mid-execution (abort, hang, infinite loop, etc.)
     - Security breach (confidential information leak, external attack vector, prompt injection)
     - Primary feature rendered completely unusable
+    - The condition must be a confirmed instance, not a theoretical or deferred one — a hardening opportunity, a residual/follow-up finding explicitly deferred as non-blocking, or an unconfirmed "could happen" risk does not qualify.
   - Cosmetic or safely deferrable (visual glitch, non-blocking inconvenience, low-impact improvement) → `--label severity:low`.
   - All other cases → no severity label (no label = normal severity).
 - **reporter-model label (auto-detect, Phase 4)**: the system prompt contains a self-report sentence ("You are powered by the model named ..."); pass it verbatim as `--reporter-model-text "<sentence>"` in the `--` passthrough args. The dispatch script extracts the identifier and resolves the label through the shared matcher.

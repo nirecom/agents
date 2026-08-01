@@ -61,7 +61,7 @@ cat > "$ART" <<'JSON'
   ] }
 JSON
 
-VALID_JSON='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause"}'
+VALID_JSON='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true}'
 
 final_q() {  # <node expr over `d`>
     [ -f "${FINAL:-/nonexistent}" ] || { printf 'no-final'; return; }
@@ -78,7 +78,7 @@ run_case() {
     printf '%s' "$out" > "$CASE_DIR/codex-out.txt"
     FINAL="$CASE_DIR/final.json"
     if [ "$RS_PRESENT" != "yes" ]; then RC=127; OUT=""; LAST=""; return; fi
-    OUT=$(env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off "$@" \
+    OUT=$(env "$@" \
             CODEX_MOCK_OUT="$CASE_DIR/codex-out.txt" \
             CODEX_PROMPT_LOG="$CASE_DIR/prompt.txt" \
             PATH="$MOCKDIR:$PATH" \
@@ -158,7 +158,7 @@ SLOW
     chmod +x "$MOCKDIR/codex-slow"
     cp "$MOCKDIR/codex" "$MOCKDIR/codex.bak"
     cp "$MOCKDIR/codex-slow" "$MOCKDIR/codex"
-    OUT=$(env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off ISSUE_VERDICT_REVIEW_TIMEOUT_SECS=2 \
+    OUT=$(env CODEX_TIMEOUT_SECS=2 \
             PATH="$MOCKDIR:$PATH" \
             "$RWT" 40 bash "$RS" --artifact "$ART" --out "$FINAL" --no-log 2>"$CASE_DIR/stderr.txt")
     RC=$?
@@ -198,8 +198,7 @@ else
     printf '%s' "$VALID_JSON" > "$CASE_DIR/codex-out.txt"
     FINAL="$CASE_DIR/final.json"
     mkdir -p "$FINAL"   # a directory at the --out path makes any write fail
-    OUT=$(env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off \
-            CODEX_MOCK_OUT="$CASE_DIR/codex-out.txt" PATH="$MOCKDIR:$PATH" \
+    OUT=$(env CODEX_MOCK_OUT="$CASE_DIR/codex-out.txt" PATH="$MOCKDIR:$PATH" \
             "$RWT" 40 bash "$RS" --artifact "$ART" --out "$FINAL" --no-log 2>"$CASE_DIR/stderr.txt")
     RC=$?
     LAST=$(printf '%s\n' "$OUT" | grep -E '^review_result:' | tail -n 1)
@@ -273,8 +272,8 @@ fi
 
 echo ""
 echo "=== F14: the SKIP exit honours WRITE_OK too, not just the review exits ==="
-# F10 pins the write check on the path that ran a review. The skip exits (switch off,
-# codex absent) reach the caller through the same write_final → finish_written pairing
+# F10 pins the write check on the path that ran a review. The one remaining skip exit
+# (codex absent) reaches the caller through the same write_final → finish_written pairing
 # and are the ones most likely to be written as a bare early `finish`, because "nothing
 # was reviewed" feels like nothing can have gone wrong. It can: the artifact still has
 # to be produced, and a caller told `skipped` over an absent artifact is worse off than
@@ -285,7 +284,33 @@ else
     CASE_DIR="$WORK/f14"; mkdir -p "$CASE_DIR"
     FINAL="$CASE_DIR/final.json"
     mkdir -p "$FINAL"   # a directory at the --out path makes any write fail
-    OUT=$(env ISSUE_VERDICT_REVIEW=off ISSUE_PROVENANCE=off PATH="$MOCKDIR:$PATH" \
+    # Simulate "codex is not installed" by removing codex's directory (and the
+    # mock dir) from PATH: with the ISSUE_VERDICT_REVIEW toggle gone, codex absence
+    # is the only remaining reason the review stage can skip.
+    # Drop EVERY directory that provides a codex executable. There is routinely more
+    # than one on PATH (version managers keep parallel shims), and leaving a single
+    # one behind runs the real reviewer instead of exercising the skip path — which
+    # looks like a passing review rather than a broken fixture.
+    NOCODEX_PATH=""
+    _OLDIFS="$IFS"; IFS=":"
+    for _d in $PATH; do
+        [ -n "$_d" ] || continue
+        [ "$_d" = "${MOCKDIR:-}" ] && continue
+        if [ -x "$_d/codex" ] || [ -f "$_d/codex.exe" ] || [ -f "$_d/codex.cmd" ] || [ -f "$_d/codex.bat" ]; then continue; fi
+        NOCODEX_PATH="${NOCODEX_PATH:+$NOCODEX_PATH:}$_d"
+    done
+    IFS="$_OLDIFS"
+    # Dropping that directory can also drop node: version managers ship node and the
+    # tools installed under it in one shim directory. The script under test needs node,
+    # and losing it would surface as a failed review rather than a skipped one — so node
+    # is re-provided from its absolute path.
+    NOCODEX_SHIM="$WORK/nocodex-shim"; mkdir -p "$NOCODEX_SHIM"
+    printf '#!/usr/bin/env bash
+exec "%s" "$@"
+' "$(command -v node)" > "$NOCODEX_SHIM/node"
+    chmod +x "$NOCODEX_SHIM/node"
+    NOCODEX_PATH="$NOCODEX_SHIM:$NOCODEX_PATH"
+    OUT=$(env PATH="$NOCODEX_PATH" \
             "$RWT" 40 bash "$RS" --artifact "$ART" --out "$FINAL" --no-log 2>"$CASE_DIR/stderr.txt")
     RC=$?
     LAST=$(printf '%s\n' "$OUT" | grep -E '^review_result:' | tail -n 1)

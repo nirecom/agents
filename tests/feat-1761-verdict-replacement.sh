@@ -75,10 +75,7 @@ run_review() {
     printf '%s' "$codexout" > "$CASE_DIR/codex-out.txt"
     FINAL="$CASE_DIR/final.json"
     if [ "$RS_PRESENT" != "yes" ]; then RC=127; OUT=""; FIRST=""; LAST=""; return; fi
-    # Config pinning (rules/test.md): every case declares the feature switches it
-    # runs under rather than inheriting the developer's .env. Caller-supplied
-    # assignments come after the defaults, so a case can still pin `off` itself.
-    OUT=$(env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off "$@" \
+    OUT=$(env "$@" \
             CODEX_MOCK_OUT="$CASE_DIR/codex-out.txt" \
             CODEX_PROMPT_LOG="$CASE_DIR/prompt.txt" \
             PATH="$MOCKDIR:$PATH" \
@@ -112,9 +109,9 @@ ART_NONE="$WORK/survey-none.json";     write_artifact "$ART_NONE"   none   null
 ART_REOPEN="$WORK/survey-reopen.json"; write_artifact "$ART_REOPEN" reopen 10
 ART_NOPROP="$WORK/survey-noprop.json"; write_artifact "$ART_NOPROP" none   null --no-proposal
 
-REVIEW_REOPEN='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same root cause as #10"}'
-REVIEW_NONE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause"}'
-REVIEW_BAD='{"verdict":"reopen","target":4242,"children":[],"related":[],"reason":"a number that is not a candidate"}'
+REVIEW_REOPEN='{"verdict":"reopen","target":10,"children":[],"related":[],"reason":"same root cause as #10","worth_filing":true}'
+REVIEW_NONE='{"verdict":"none","target":null,"children":[],"related":[],"reason":"the candidates differ in root cause","worth_filing":true}'
+REVIEW_BAD='{"verdict":"reopen","target":4242,"children":[],"related":[],"reason":"a number that is not a candidate","worth_filing":true}'
 
 echo "=== (a) escalation: survey none → review reopen → replaced ==="
 run_review a "$ART_NONE" "$REVIEW_REOPEN"
@@ -167,9 +164,30 @@ else
     CASE_DIR="$WORK/e"; mkdir -p "$CASE_DIR"; FINAL="$CASE_DIR/final.json"
     # PATH with the mock dir AND any real codex install dir removed, so `codex` is
     # genuinely absent while node/bash/coreutils stay reachable.
-    _CODEX_DIR="$(dirname "$(command -v codex 2>/dev/null || printf '%s' '/nonexistent/none')")"
-    NOCODEX_PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$_CODEX_DIR" | grep -vxF "$MOCKDIR" | paste -sd: -)"
-    OUT=$("$RWT" 30 env PATH="$NOCODEX_PATH" ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off bash "$RS" \
+    # Drop EVERY directory that provides a codex executable. There is routinely more
+    # than one on PATH (version managers keep parallel shims), and leaving a single
+    # one behind runs the real reviewer instead of exercising the skip path — which
+    # looks like a passing review rather than a broken fixture.
+    NOCODEX_PATH=""
+    _OLDIFS="$IFS"; IFS=":"
+    for _d in $PATH; do
+        [ -n "$_d" ] || continue
+        [ "$_d" = "${MOCKDIR:-}" ] && continue
+        if [ -x "$_d/codex" ] || [ -f "$_d/codex.exe" ] || [ -f "$_d/codex.cmd" ] || [ -f "$_d/codex.bat" ]; then continue; fi
+        NOCODEX_PATH="${NOCODEX_PATH:+$NOCODEX_PATH:}$_d"
+    done
+    IFS="$_OLDIFS"
+    # Dropping that directory can also drop node: version managers ship node and the
+    # tools installed under it in one shim directory. The script under test needs node,
+    # and losing it would surface as a failed review rather than a skipped one — so node
+    # is re-provided from its absolute path.
+    NOCODEX_SHIM="$WORK/nocodex-shim"; mkdir -p "$NOCODEX_SHIM"
+    printf '#!/usr/bin/env bash
+exec "%s" "$@"
+' "$(command -v node)" > "$NOCODEX_SHIM/node"
+    chmod +x "$NOCODEX_SHIM/node"
+    NOCODEX_PATH="$NOCODEX_SHIM:$NOCODEX_PATH"
+    OUT=$("$RWT" 30 env PATH="$NOCODEX_PATH" bash "$RS" \
             --artifact "$ART_REOPEN" --out "$FINAL" --no-log 2>"$CASE_DIR/stderr.txt")
     RC=$?
     FIRST=$(printf '%s\n' "$OUT" | head -n 1)
@@ -181,11 +199,16 @@ else
         || fail "E-skipped-review_result" "want 'review_result: skipped' (got: '${LAST:-<none>}')"
     T=$(final_q "d.verdict"); [ "$T" = "reopen" ] && pass "E-skipped-final-verdict" \
         || fail "E-skipped-final-verdict" "the survey verdict must be held when the review is skipped (got: $T)"
+    # No reviewer ran, so there is no worth_filing opinion to carry: the field must be
+    # an explicit null rather than a defaulted boolean, otherwise the confirm gate would
+    # read a fabricated "not worth filing" (or "worth filing") out of a skipped review.
+    T=$(final_q "d.review && d.review.worth_filing"); [ "$T" = "null" ] && pass "E-skipped-worth-filing-null" \
+        || fail "E-skipped-worth-filing-null" "a skipped review must leave review.worth_filing null (got: $T)"
 fi
 
 echo ""
 echo "=== (f) codex timeout → invalid + survey verdict upheld ==="
-run_review f "$ART_REOPEN" "$REVIEW_NONE" CODEX_MOCK_SLEEP=10 ISSUE_VERDICT_REVIEW_TIMEOUT_SECS=2
+run_review f "$ART_REOPEN" "$REVIEW_NONE" CODEX_MOCK_SLEEP=10 CODEX_TIMEOUT_SECS=2
 assert_case "F-timeout" "invalid" "reopen"
 
 echo ""
@@ -229,15 +252,24 @@ else
 fi
 
 echo ""
-echo "=== ISSUE_VERDICT_REVIEW=off disables every path ==="
-run_review off "$ART_REOPEN" "$REVIEW_NONE" ISSUE_VERDICT_REVIEW=off
+echo "=== final artifact schema: provenance fields gone, review.worth_filing carried ==="
+# The provenance token is deleted in this PR, so the final artifact must not keep a
+# vestigial copy of it: a stale key would keep downstream readers (and the confirm
+# gate) able to branch on a value nothing writes any more. The reviewer's
+# worth_filing boolean takes its place as the gate's input.
+run_review s "$ART_NONE" "$REVIEW_REOPEN"
 if [ "$RS_PRESENT" != "yes" ]; then
-    red "O-off-skipped"; red "O-off-survey-held"
+    red "S-no-provenance-key"; red "S-no-provenance-layer-key"; red "S-review-worth-filing"
 else
-    [ "$LAST" = "review_result: skipped" ] && pass "O-off-skipped" \
-        || fail "O-off-skipped" "ISSUE_VERDICT_REVIEW=off must fold to 'skipped' (got: '${LAST:-<none>}')"
-    T=$(final_q "d.verdict"); [ "$T" = "reopen" ] && pass "O-off-survey-held" \
-        || fail "O-off-survey-held" "the survey verdict must be held when review is off (got: $T)"
+    T=$(final_q "Object.prototype.hasOwnProperty.call(d, 'provenance')")
+    [ "$T" = "false" ] && pass "S-no-provenance-key" \
+        || fail "S-no-provenance-key" "the final artifact must no longer carry a top-level 'provenance' key (got: $T)"
+    T=$(final_q "Object.prototype.hasOwnProperty.call(d, 'provenance_layer')")
+    [ "$T" = "false" ] && pass "S-no-provenance-layer-key" \
+        || fail "S-no-provenance-layer-key" "the final artifact must no longer carry 'provenance_layer' (got: $T)"
+    T=$(final_q "d.review && d.review.worth_filing")
+    [ "$T" = "true" ] && pass "S-review-worth-filing" \
+        || fail "S-review-worth-filing" "review.worth_filing must carry the reviewer's boolean verbatim (got: $T)"
 fi
 
 echo ""

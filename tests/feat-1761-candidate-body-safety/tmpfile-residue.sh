@@ -102,8 +102,7 @@ run_case() {
     build_artifact "$ART"
     printf '%s' "${CASE_OUT:-$HONEST}" > "$d/codex-out.txt"
     [ "$RS_PRESENT" != "yes" ] && { RC=127; return 1; }
-    env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off \
-        TMPDIR="$d/tmp" TMP="$d/tmp" TEMP="$d/tmp" \
+    env TMPDIR="$d/tmp" TMP="$d/tmp" TEMP="$d/tmp" \
         CODEX_MOCK_OUT="$d/codex-out.txt" CODEX_PROMPT_LOG="$d/prompt.txt" \
         PATH="$MOCKDIR:$PATH" "$@" \
         "$RWT" 40 bash "$RS" --artifact "$ART" --out "$FINAL" --log-dir "$d/logs" \

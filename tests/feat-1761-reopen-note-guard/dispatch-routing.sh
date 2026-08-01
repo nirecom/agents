@@ -76,7 +76,6 @@ run_dispatch() {
     : > "$LOG"
     [ "$DISPATCH_PRESENT" = "yes" ] || { DRC=127; return; }
     ARGV_LOG="$LOG" PATH="$MOCKDIR:$PATH" \
-    ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=off \
     AGENTS_CONFIG_DIR="$WORK/root" \
         "$RWT" 30 bash "$DISPATCH_COPY" "$@" >"$WORK/$case.out" 2>"$WORK/$case.err"
     DRC=$?

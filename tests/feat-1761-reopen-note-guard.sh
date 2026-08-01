@@ -97,11 +97,6 @@ run_reopen() {
     COMMENT_FILE="$d/comment.txt"; : > "$COMMENT_FILE"
     LABEL_FILE="$d/labels.txt";    : > "$LABEL_FILE"
     GH_ARGS_LOG="$d/gh-args.log";  : > "$GH_ARGS_LOG"
-    # Config pinning (rules/test.md): the reopen note is emitted after the review
-    # stage has already run, so the switches are declared rather than inherited from
-    # the developer's .env — the note contract must not vary with them.
-    ISSUE_VERDICT_REVIEW=on \
-    ISSUE_PROVENANCE=off \
     GUARD_MOCK_RC="$grc" \
     GUARD_MOCK_LABEL="$glbl" \
     GUARD_LABEL_LOG="$LABEL_FILE" \
@@ -243,7 +238,6 @@ fi
 echo ""
 echo "=== N10: no-note invocation is unchanged (regression guard) ==="
 d="$WORK/n10"; mkdir -p "$d"
-ISSUE_VERDICT_REVIEW=off ISSUE_PROVENANCE=off \
 GUARD_LABEL_LOG="$d/labels.txt" COMMENT_CAPTURE="$d/comment.txt" GH_ARGS_LOG="$d/gh-args.log" \
 AGENTS_CONFIG_DIR="$FAKE_CFG" CLAUDE_SESSION_ID="test-session" PATH="$MOCKDIR:$PATH" \
     "$RWT" 30 bash "$RWU" 4242 >"$d/stdout.txt" 2>"$d/stderr.txt"

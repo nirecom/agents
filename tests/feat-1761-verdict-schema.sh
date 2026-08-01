@@ -47,11 +47,7 @@ try {
 gen() {
     local out="$1" verdict="$2"; shift 2
     [ "$MEV_PRESENT" = "yes" ] || return 1
-    # Config pinning (rules/test.md): the empty-verdict routes exist precisely to
-    # bypass the survey, so they must produce the same artifact whatever the review
-    # and provenance switches are set to in the developer's .env.
-    env ISSUE_VERDICT_REVIEW=on ISSUE_PROVENANCE=on \
-        "$RWT" 20 bash "$MEV" "$WORK/$out" "$verdict" \
+    "$RWT" 20 bash "$MEV" "$WORK/$out" "$verdict" \
         --title "Proposed title" --background "Some background" --changes "Some changes" \
         "$@" >/dev/null 2>&1
 }
@@ -147,15 +143,41 @@ echo "=== S7: bulk-sub-of survives the artifact round-trip without degrading to 
 # the review grammar, so the review stage has no reviewer verdict to fold in and must
 # carry the survey's word through verbatim. A stage that normalised it to `sub-of` would
 # still produce a well-formed artifact, so only an end-to-end round trip catches it.
-# ISSUE_VERDICT_REVIEW=off is used deliberately: it is the shortest path through
-# write_final, and any normalisation on that path is normalisation on every path.
+# The review is skipped by making codex unreachable: that is the shortest path
+# through write_final, and any normalisation on that path is normalisation on every
+# path. (The old ISSUE_VERDICT_REVIEW=off toggle no longer exists.)
 if [ ! -f "$RS" ] || [ ! -f "$WORK/bulk-sub-of.json" ]; then
     fail "E21-roundtrip-verdict-held"        "RED-EXPECTED: review-survey-verdict-codex.sh or the bulk-sub-of artifact is missing"
     fail "E22-roundtrip-survey-verdict-held" "RED-EXPECTED: review-survey-verdict-codex.sh or the bulk-sub-of artifact is missing"
     fail "E23-roundtrip-target-held"         "RED-EXPECTED: review-survey-verdict-codex.sh or the bulk-sub-of artifact is missing"
 else
     RT="$WORK/bulk-sub-of-final.json"
-    env ISSUE_VERDICT_REVIEW=off ISSUE_PROVENANCE=off \
+    # Strip codex's directory from PATH so the review stage takes its skip exit while
+    # node/bash/coreutils stay reachable.
+    # Drop EVERY directory that provides a codex executable. There is routinely more
+    # than one on PATH (version managers keep parallel shims), and leaving a single
+    # one behind runs the real reviewer instead of exercising the skip path — which
+    # looks like a passing review rather than a broken fixture.
+    NOCODEX_PATH=""
+    _OLDIFS="$IFS"; IFS=":"
+    for _d in $PATH; do
+        [ -n "$_d" ] || continue
+        [ "$_d" = "${MOCKDIR:-}" ] && continue
+        if [ -x "$_d/codex" ] || [ -f "$_d/codex.exe" ] || [ -f "$_d/codex.cmd" ] || [ -f "$_d/codex.bat" ]; then continue; fi
+        NOCODEX_PATH="${NOCODEX_PATH:+$NOCODEX_PATH:}$_d"
+    done
+    IFS="$_OLDIFS"
+    # Dropping that directory can also drop node: version managers ship node and the
+    # tools installed under it in one shim directory. The script under test needs node,
+    # and losing it would surface as a failed review rather than a skipped one — so node
+    # is re-provided from its absolute path.
+    NOCODEX_SHIM="$WORK/nocodex-shim"; mkdir -p "$NOCODEX_SHIM"
+    printf '#!/usr/bin/env bash
+exec "%s" "$@"
+' "$(command -v node)" > "$NOCODEX_SHIM/node"
+    chmod +x "$NOCODEX_SHIM/node"
+    NOCODEX_PATH="$NOCODEX_SHIM:$NOCODEX_PATH"
+    env PATH="$NOCODEX_PATH" \
         "$RWT" 40 bash "$RS" --artifact "$WORK/bulk-sub-of.json" --out "$RT" --no-log >/dev/null 2>&1
 
     T=$(jsonq "$RT" "d.verdict")
@@ -169,6 +191,26 @@ else
     T=$(jsonq "$RT" "d.target")
     [ "$T" = "4242" ] && pass "E23-roundtrip-target-held" \
         || fail "E23-roundtrip-target-held" "the bulk parent must survive the round trip (got: '$T')"
+
+    # The provenance token is gone from the schema in this PR. A vestigial key would
+    # let a downstream reader keep branching on a value nothing writes any more.
+    T=$(jsonq "$RT" "Object.prototype.hasOwnProperty.call(d, 'provenance')")
+    [ "$T" = "false" ] && pass "E24-roundtrip-no-provenance-key" \
+        || fail "E24-roundtrip-no-provenance-key" "the final artifact must not carry a top-level 'provenance' key (got: '$T')"
+
+    T=$(jsonq "$RT" "Object.prototype.hasOwnProperty.call(d, 'provenance_layer')")
+    [ "$T" = "false" ] && pass "E25-roundtrip-no-provenance-layer-key" \
+        || fail "E25-roundtrip-no-provenance-layer-key" "the final artifact must not carry 'provenance_layer' (got: '$T')"
+
+    # review.worth_filing replaces it as the confirm gate's input; on a skipped review
+    # there is no reviewer opinion, so the key must be present and explicitly null.
+    T=$(jsonq "$RT" "d.review && Object.prototype.hasOwnProperty.call(d.review, 'worth_filing')")
+    [ "$T" = "true" ] && pass "E26-roundtrip-review-worth-filing-key" \
+        || fail "E26-roundtrip-review-worth-filing-key" "review.worth_filing must always be present (got: '$T')"
+
+    T=$(jsonq "$RT" "d.review && d.review.worth_filing")
+    [ "$T" = "null" ] && pass "E27-roundtrip-worth-filing-null-on-skip" \
+        || fail "E27-roundtrip-worth-filing-null-on-skip" "a skipped review must leave review.worth_filing null, not a fabricated boolean (got: '$T')"
 fi
 
 echo ""
