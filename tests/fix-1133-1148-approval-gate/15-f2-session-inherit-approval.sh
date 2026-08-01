@@ -70,10 +70,13 @@ run_session_start() {
 }
 
 # read_approval_field <sid> <step> <field> → value or "MISSING"
+# #1733: plan_approvals is folded into the .current projection, not a mutable
+# top-level field -- same fallback pattern as read_state_status/read_approval_source
+# above (accept both the legacy top-level shape and the .current-nested shape).
 read_approval_field() {
   local f="$WORKFLOW_DIR/${1}.json"
   [ -f "$f" ] || { echo "MISSING"; return; }
-  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const a=(s.plan_approvals||{})[process.argv[2]];const v=a?a[process.argv[3]]:null;console.log(v==null?'MISSING':String(v));}catch(e){console.log('ERR');}" "$f" "$2" "$3" 2>/dev/null || echo "ERR"
+  node -e "try{const s=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const pa=s.plan_approvals||(s.current&&s.current.plan_approvals)||{};const a=pa[process.argv[2]];const v=a?a[process.argv[3]]:null;console.log(v==null?'MISSING':String(v));}catch(e){console.log('ERR');}" "$f" "$2" "$3" 2>/dev/null || echo "ERR"
 }
 
 TBASE="$TMPDIR_BASE/transcripts"

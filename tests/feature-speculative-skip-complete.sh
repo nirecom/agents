@@ -10,6 +10,12 @@
 # Pre-implementation model: static cases (S1-S7) FAIL until write-code lands (expected).
 # Behavioral cases guard on API_READY/CLI_READY and SKIP (not FAIL) when impl absent.
 #
+# #1733 note: every case in this suite reads step state through io.readState(), which
+# still exposes `steps` / `skip_verdict` at the top level (the projection is pasted onto
+# the returned object). No fixture reads the state FILE raw, so the append-only migration
+# needs no change here. The event-level contract for skip_verdict annotations lives in
+# tests/feature-1733-state-event-stream/annotation-fold.sh.
+#
 # This is a dispatcher (file-split rule: >500 lines). Static cases live here;
 # behavioral suites live in the sibling feature-speculative-skip-complete/ folder.
 #
@@ -32,6 +38,8 @@ BARREL="$AGENTS_DIR/hooks/workflow-state.js"
 BARREL_N="$(cygpath -m "$BARREL" 2>/dev/null || echo "$BARREL")"
 STATEIO="$AGENTS_DIR/hooks/workflow-state/state-io.js"
 STATEIO_N="$(cygpath -m "$STATEIO" 2>/dev/null || echo "$STATEIO")"
+COMPLETION_APPROVAL="$AGENTS_DIR/hooks/workflow-state/completion-approval.js"
+COMPLETION_APPROVAL_N="$(cygpath -m "$COMPLETION_APPROVAL" 2>/dev/null || echo "$COMPLETION_APPROVAL")"
 HANDLERS="$AGENTS_DIR/hooks/workflow-mark/not-needed-handlers.js"
 HANDLERS_N="$(cygpath -m "$HANDLERS" 2>/dev/null || echo "$HANDLERS")"
 NEXT_STEP="$AGENTS_DIR/bin/workflow/next-step"
@@ -122,25 +130,34 @@ node_call() {
 # the fixture is independent of ambient CONFIRM_OUTLINE / CONFIRM_DETAIL.
 write_gate_state() {
   local sid="$1" step="$2" step_json="$3"
+  # #1733: state is an append-only event stream -- createInitialState() no
+  # longer returns a .steps object to mutate directly (assertProjectionUnmutated
+  # in writeState() would reject a hand-built projection anyway). Build the
+  # fixture through the event API instead: markStep() for every step (the
+  # target step last, with its raw JSON spread as extraFields so skip_reason /
+  # skip_verdict / etc. round-trip as step_annotation events), and
+  # recordPlanApproval() for the non-target approval-gated steps so the
+  # completion-boundary invariant does not fire on the blanket-complete loop.
   CLAUDE_WORKFLOW_DIR="$WORKFLOW_DIR_N" run_with_timeout node -e "
     const io = require('$STATEIO_N');
-    const s = io.createInitialState('$sid');
-    for (const k of Object.keys(s.steps)) {
-      s.steps[k] = { status: 'complete', updated_at: '2026-04-11T10:00:00.000Z' };
+    const approval = require('$COMPLETION_APPROVAL_N');
+    io.writeState('$sid', io.createInitialState('$sid'));
+    for (const k of io.VALID_STEPS) {
+      if (k === '$step') continue;
+      const extra = {};
+      if (approval.isApprovalGatedStep(k)) {
+        approval.recordPlanApproval('$sid', k, {
+          source: 'confirm-flag-off',
+          reason: 'test fixture',
+        });
+      }
+      io.markStep('$sid', k, 'complete');
     }
-    s.steps['$step'] = $step_json;
-    s.plan_approvals = s.plan_approvals || {};
-    for (const g of ['outline', 'detail']) {
-      if (g === '$step') continue;
-      s.plan_approvals[g] = {
-        source: 'confirm-flag-off',
-        reason: 'test fixture',
-        artifact_sha256: null,
-        artifact_hash_status: 'not-applicable',
-        recorded_at: '2026-04-11T10:00:00.000Z',
-      };
-    }
-    io.writeState('$sid', s);
+    const targetEntry = $step_json;
+    const targetExtra = Object.assign({}, targetEntry);
+    delete targetExtra.status;
+    delete targetExtra.updated_at;
+    io.markStep('$sid', '$step', targetEntry.status, targetExtra);
   " 2>/dev/null
 }
 

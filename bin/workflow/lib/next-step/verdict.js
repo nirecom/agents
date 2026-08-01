@@ -30,7 +30,7 @@ const {
   confirmSentinelFor,
   recoveryFor,
 } = require("../../../../hooks/workflow-state/completion-approval");
-const { STEP_TO_SKILL, STEP_HINT } = require("./steps");
+const { STEP_TO_SKILL, STEP_HINT, isTerminalStep } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 const { ENTRYPOINT_PATH } = require("./entrypoint-path");
 
@@ -109,6 +109,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   {
     let rawCurrent = null;
     for (const step of VALID_STEPS) {
+      if (isTerminalStep(step)) continue;
       const raw = (state.steps[step] || {}).status || "pending";
       const status = effectiveStatus(step, raw, isWfMeta);
       if (!isSettledStatus(status)) { rawCurrent = step; break; }
@@ -181,6 +182,7 @@ function computeVerdict(rawSid, _didAutoRepair) {
   let currentStep = null;
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
+    if (isTerminalStep(step)) continue;
     const status = snapStatus(step);
     if (!isSettledStatus(status)) {
       // post-merge guard: treat user_verification reset by gh pr merge as complete.
@@ -245,6 +247,9 @@ function computeVerdict(rawSid, _didAutoRepair) {
   // as complete here, so a pending-but-evidenced step can no longer false-abort.
   for (let i = 0; i < VALID_STEPS.length; i++) {
     const step = VALID_STEPS[i];
+    // A terminal step recorded complete is the session's own end marker, never
+    // evidence that an earlier step was skipped over.
+    if (isTerminalStep(step)) continue;
     const stEntry = state.steps[step];
     const rawStatus = stEntry ? stEntry.status : undefined;
     const status = rawStatus !== undefined && rawStatus !== null

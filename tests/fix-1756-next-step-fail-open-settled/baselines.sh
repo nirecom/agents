@@ -23,7 +23,7 @@ check_eq "X1: verdict path exits 0" "0" "$RC_CODE"
 check_contains "X1: verdict path still emits an ACTION line" "ACTION=" "$RC_OUT"
 run_next_step_rc --list --session "$X1_SID"
 check_eq "X1: --list path exits 0" "0" "$RC_CODE"
-check_eq "X1: --list emits all 14 step rows" "14" "$(printf '%s\n' "$RC_OUT" | sed '/^$/d' | wc -l | tr -d ' ')"
+check_eq "X1: --list emits all 15 step rows" "15" "$(printf '%s\n' "$RC_OUT" | sed '/^$/d' | wc -l | tr -d ' ')"
 
 # ---------------------------------------------------------------------------
 # X2 (idempotency): computing a verdict is a READ. Running it twice over the
@@ -81,13 +81,13 @@ done
 L1_SID="$(new_sid l1)"
 write_state "$L1_SID" '{"workflow_init":{"status":"complete"},"clarify_intent":{"status":"complete"},"research":{"status":"skipped","skip_reason":"not needed"},"outline":{"status":"complete"},"detail":{"status":"pending"}}'
 check_eq "L1: mixed complete/skipped/current/pending marker column" \
-    '[x]|[x]|[-]|[x]|[*]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]' \
+    '[x]|[x]|[-]|[x]|[*]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]|[ ]' \
     "$(list_markers --list --session "$L1_SID")"
 
 L2_SID="$(new_sid l2)"
 write_state "$L2_SID" "{$HEAD_COMPLETE,$RV_OUTLINE,\"detail\":{\"status\":\"complete\"},$TAIL_COMPLETE}"
 check_eq "L2: terminal state renders skipped [-] beside complete [x]" \
-    '[x]|[x]|[x]|[-]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]' \
+    '[x]|[x]|[x]|[-]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[x]|[ ]' \
     "$(list_markers --list --session "$L2_SID")"
 
 L3_SID="$(new_sid l3)"
@@ -102,13 +102,13 @@ check_eq "L3: empty closes_issues + clarify_intent current → second marker is 
 run_next_step_rc --list
 L4_PLAIN="$RC_OUT"
 check_eq "L4: --list (no session) exits 0" "0" "$RC_CODE"
-check_eq "L4: --list (no session) renders 14 rows" \
-    "14" "$(printf '%s\n' "$L4_PLAIN" | sed '/^$/d' | wc -l | tr -d ' ')"
+check_eq "L4: --list (no session) renders 15 rows" \
+    "15" "$(printf '%s\n' "$L4_PLAIN" | sed '/^$/d' | wc -l | tr -d ' ')"
 run_next_step_rc --list --session "missing-$(printf '%04x' $RANDOM)"
 L4_MISSING="$RC_OUT"
 check_eq "L4: --list with an unknown session exits 0" "0" "$RC_CODE"
-check_eq "L4: --list with an unknown session renders 14 rows" \
-    "14" "$(printf '%s\n' "$L4_MISSING" | sed '/^$/d' | wc -l | tr -d ' ')"
+check_eq "L4: --list with an unknown session renders 15 rows" \
+    "15" "$(printf '%s\n' "$L4_MISSING" | sed '/^$/d' | wc -l | tr -d ' ')"
 check_eq "L4: --list with an unknown session falls back to the plain list" \
     "$L4_PLAIN" "$L4_MISSING"
 

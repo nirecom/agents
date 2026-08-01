@@ -152,14 +152,16 @@ require("fs").writeFileSync(out, JSON.stringify(state, null, 2), "utf8");
 
 raw_step_field() {
     local sid="$1" step="$2" field="$3"
-    node -e '
-const [f, step, field] = process.argv.slice(1);
+    # Read through the canonical API: since #1733 `steps` is a PROJECTION over the
+    # on-disk event stream, not a persisted top-level key.
+    (cd "$AGENTS_DIR" && node -e '
+const [sid, step, field] = process.argv.slice(1);
 try {
-  const s = JSON.parse(require("fs").readFileSync(f, "utf8"));
-  const v = s.steps && s.steps[step] && s.steps[step][field];
+  const s = require("./hooks/workflow-state").readState(sid);
+  const v = s && s.steps && s.steps[step] && s.steps[step][field];
   process.stdout.write(v === undefined || v === null ? "" : String(v));
 } catch (e) { process.stdout.write("MISSING"); }
-' "$(to_node_path "$WORKFLOW_DIR/$sid.json")" "$step" "$field"
+' "$sid" "$step" "$field")
 }
 
 state_hash() {

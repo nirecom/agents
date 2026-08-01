@@ -16,7 +16,8 @@ function printUsage() {
     "\n" +
     "Options:\n" +
     "  --session <sid>   Use the given session id instead of resolving one.\n" +
-    "  --list            Print the 14-step workflow plan, with status markers\n" +
+    "  --list            Print the workflow plan (one row per VALID_STEPS entry,\n" +
+    "                    ending with the terminal final_report row), with status markers\n" +
     "                    when --session is provided.\n" +
     "  --reset <step>    Reset a workflow step to pending (recovery tool).\n" +
     "  --mark <step> complete   Mark a workflow step as complete (recovery tool).\n" +

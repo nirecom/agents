@@ -3,7 +3,7 @@
 // assertions. Requiring this module (directly or transitively) is what makes the
 // assertions run — every subcommand path must reach it.
 
-const { VALID_STEPS } = require("../../../../hooks/workflow-state");
+const { VALID_STEPS, TERMINAL_STEPS } = require("../../../../hooks/workflow-state");
 
 // ---- Lookup tables --------------------------------------------------------
 
@@ -22,6 +22,8 @@ const STEP_TO_SKILL = Object.freeze({
   user_verification: "",
   cleanup: "",
   pre_final_report_gate: "",
+  // Terminal step: recorded, never advised. See isTerminalStep below.
+  final_report: "",
 });
 
 const STEP_DESC = Object.freeze({
@@ -39,6 +41,7 @@ const STEP_DESC = Object.freeze({
   user_verification: "User verifies the implementation",
   cleanup: "Remove worktree and merge branch",
   pre_final_report_gate: "Final report and session close",
+  final_report: "Final report delivered (terminal)",
 });
 
 const STEP_HINT = Object.freeze({
@@ -50,6 +53,16 @@ const STEP_HINT = Object.freeze({
 
 // WF_META_AUTO_SKIP / effectiveStatus now live in
 // hooks/workflow-state/effective-state.js (SSOT).
+
+// A terminal step (SSOT: state-io TERMINAL_STEPS) is a boundary marker in the
+// event stream, not work to be advised: nothing comes after it, and no skill
+// completes it. It is therefore excluded from every walk that answers "what is
+// the current step?" — otherwise a finished session would be told forever to run
+// a skill that does not exist.
+const TERMINAL_STEP_SET = new Set(Array.isArray(TERMINAL_STEPS) ? TERMINAL_STEPS : []);
+function isTerminalStep(step) {
+  return TERMINAL_STEP_SET.has(step);
+}
 
 // ---- Import-time assertions -----------------------------------------------
 
@@ -77,4 +90,4 @@ const STEP_HINT = Object.freeze({
   checkNoQuote(STEP_HINT, "STEP_HINT");
 })();
 
-module.exports = { STEP_TO_SKILL, STEP_DESC, STEP_HINT };
+module.exports = { STEP_TO_SKILL, STEP_DESC, STEP_HINT, isTerminalStep };

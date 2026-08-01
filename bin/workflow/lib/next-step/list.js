@@ -11,7 +11,7 @@ const {
 const {
   reconcileEffectiveState,
 } = require("../../../../hooks/workflow-state/effective-state");
-const { STEP_DESC } = require("./steps");
+const { STEP_DESC, isTerminalStep } = require("./steps");
 const { resolveRepoDir } = require("./repo-dir");
 
 function pad2(n) {
@@ -58,9 +58,11 @@ function renderListWithState(sid) {
   }
   const listStatus = (step) => (listSnapshot.steps[step] || {}).status || "pending";
 
-  // Find current step (first non-settled).
+  // Find current step (first non-settled). Terminal steps are never "current" —
+  // the row is still rendered, just never marked [*].
   let currentIdx = -1;
   for (let i = 0; i < VALID_STEPS.length; i++) {
+    if (isTerminalStep(VALID_STEPS[i])) continue;
     const s = listStatus(VALID_STEPS[i]);
     if (!isSettledStatus(s)) { currentIdx = i; break; }
   }
