@@ -14,6 +14,13 @@
 #        only honest outcome is to stop and say what to run to recover.
 # Never reads frontmatter — frontmatter is Tier 2 (LLM in run-tests/SKILL.md).
 # Never returns tests/_archive/ entries.
+#
+# --auto only: on a branch with NO commits of its own the resolver's base IS HEAD, so
+# `<base>...HEAD` is empty by construction while the whole change sits in the working tree
+# (#1779). In that case the selection is built from the working tree instead — `git diff HEAD`
+# (tracked, staged and unstaged alike) unioned with `git ls-files --others` (untracked) — and a
+# note saying so is printed on stderr. The degraded path keeps the same contract as the ordinary
+# one: a git failure is exit 1, never a quietly empty selection.
 
 set -euo pipefail
 
@@ -24,6 +31,10 @@ fi
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TESTS_DIR="${AGENTS_DIR}/tests"
+
+# Initialised for BOTH invocation forms: the positional form is defined as "the caller already
+# resolved the range", so it never degrades, but it reaches the same reference below under `set -u`.
+MB_ZERO_COMMIT=0
 
 # --auto: ask bin/resolve-merge-base.sh instead of trusting whatever the caller computed.
 # The resolver answers with a STATE as well as a base, and the states are not interchangeable —
@@ -61,6 +72,7 @@ if [[ "$1" == "--auto" ]]; then
   mb_warn=""
   mb_alt=""
   mb_detail=""
+  mb_base_is_head=""
   while IFS='=' read -r mb_k mb_v; do
     [[ "$mb_v" == "-" || "$mb_v" == "none" ]] && mb_v=""
     case "$mb_k" in
@@ -69,6 +81,7 @@ if [[ "$1" == "--auto" ]]; then
       warn)   mb_warn="$mb_v" ;;
       alt_base) mb_alt="$mb_v" ;;
       detail) mb_detail="$mb_v" ;;
+      base_is_head) mb_base_is_head="$mb_v" ;;
     esac
   done <<< "$mb_out"
 
@@ -80,6 +93,24 @@ if [[ "$1" == "--auto" ]]; then
         exit 4
       fi
       MERGE_BASE="$mb_base"
+      # #1779. Asked only in the two TRUSTWORTHY states: SUSPECT/FALLBACK abort below, and an
+      # observation derived from a base we do not believe is not worth acting on.
+      case "$mb_base_is_head" in
+        true)  MB_ZERO_COMMIT=1 ;;
+        false) : ;;
+        *)
+          # Absent (a resolver older than the fix, or a stub), or a value this parser does not
+          # recognise. Neither is evidence of anything, and reading it as `false` would restore
+          # the #1779 bug permanently and silently — so the one-line observation is made here
+          # instead. Only the observation is duplicated; what to do about it stays in one place.
+          _head_sha="$(git rev-parse --verify --quiet HEAD 2>/dev/null)" || _head_sha=""
+          _base_sha="$(git rev-parse --verify --quiet "${MERGE_BASE}^{commit}" 2>/dev/null)" || _base_sha=""
+          if [[ -n "$_head_sha" && "$_head_sha" == "$_base_sha" ]]; then
+            MB_ZERO_COMMIT=1
+            echo "[select-tests] note: the resolver did not report base_is_head; observed locally" >&2
+          fi
+          ;;
+      esac
       ;;
     *)
       # SUSPECT, FALLBACK, and anything unrecognised. FALLBACK gets the same treatment as
@@ -108,7 +139,25 @@ else
   fi
 fi
 
-changed=$(git diff --name-only "${MERGE_BASE}...HEAD" -- 2>/dev/null) || exit 1
+if [[ "$MB_ZERO_COMMIT" -eq 1 ]]; then
+  echo "[select-tests] note: this branch has no commits yet (base == HEAD); selecting from the working tree" >&2
+  # Each git call keeps the documented contract: a git failure is exit 1, never an empty
+  # selection. `|| true` here would turn an unreadable working tree into "0 tests, all green",
+  # and running both inside one `{ ...; } | sort -u` would lose the failure the same way.
+  #
+  # `--full-name -- :/` because `git ls-files` is cwd-relative and cwd-limited by default while
+  # `git diff --name-only` is repo-root-relative over the whole tree; without it the two halves
+  # would use different path spellings when the selector is invoked from a subdirectory.
+  #
+  # No union with `<base>...HEAD` is needed: base == HEAD makes that range empty by definition.
+  tracked_changed=$(git diff HEAD --name-only 2>/dev/null) || exit 1
+  untracked_changed=$(git ls-files --others --exclude-standard --full-name -- :/ 2>/dev/null) || exit 1
+  # `sed '/^$/d'`: when either half is empty, `printf '%s\n'` still emits a blank line, and a
+  # `changed` that is blank-but-not-empty would make the TL3 gate below fire on nothing.
+  changed=$({ printf '%s\n' "$tracked_changed"; printf '%s\n' "$untracked_changed"; } | sed '/^$/d' | sort -u)
+else
+  changed=$(git diff --name-only "${MERGE_BASE}...HEAD" -- 2>/dev/null) || exit 1
+fi
 
 stems=()
 while IFS= read -r path; do

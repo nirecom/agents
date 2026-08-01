@@ -128,6 +128,24 @@ The resolver re-verifies identity before adopting the record (current branch mat
 reported, never used. `repo_root` is informational and deliberately excluded from that check —
 the same worktree is legitimately spelled several ways on Windows.
 
+#### Zero-commit branches (`base_is_head` and friends)
+
+A branch with zero commits — every change still staged, unstaged, or untracked — resolves
+`merge-base HEAD` to `HEAD` itself (#1779/#1331). A `<merge-base>...HEAD` diff range is then
+structurally empty even though real work exists, which silently starved both test selection
+(`bin/select-tests.sh --auto`) and the Tier 2 semantic match in `skills/run-tests/SKILL.md`
+RNT-3 of any input.
+
+`bin/resolve-merge-base.sh --format kv` reports this as data rather than deciding a policy for
+it: `base_is_head=true` plus three working-tree counts (`uncommitted_lines`, `uncommitted_files`,
+`untracked_files`). The resolver's 5-state trust machinery (`RESOLVED` / `RECORDED` / `SUSPECT`
+/ `FALLBACK` / `UNRESOLVED`) is unchanged — these fields are only ever populated once a base has
+already been trusted (`RESOLVED`/`RECORDED`), never used to launder a distrusted one. Each
+consumer decides what to do with a non-empty working tree on its own terms: `select-tests.sh`
+and RNT-3 both fall back to diffing the working tree directly when `base_is_head=true`. Other
+kv consumers (`bin/check-verification-gate.sh` notably) that do not yet read `base_is_head` keep
+their pre-existing behavior — the field is additive, not a breaking change to the kv contract.
+
 `cwd` and `git_branch` are optional (absent in states created before the inheritance feature).
 `git_branch` is `null` for non-git directories and detached HEAD.
 
