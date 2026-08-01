@@ -1,5 +1,5 @@
 # tests/fix-1630-overlay-cross-validation/metachar-args.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
+# Tests: hooks/enforce-worktree/arg-value-guard.js, hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
 # Tags: worktree, enforce, hook, overlay, security, injection, scope:issue-specific
 #
 # STATUS: RED. Sourced by tests/fix-1630-overlay-cross-validation.sh, after
@@ -144,7 +144,7 @@ run_metachar_hook_cases() {
     rc=0
     run_guard "$(build_bash_payload "$(build_loop_step "$XV_ACD" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/state.json" "accept")")" \
         "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_allow "ARG-hook the identical loop-step with a clean state file (pair)" "$rc"
+    assert_block "ARG-hook the identical loop-step with a clean state file — eval path retired (#1673)" "$rc"
 
     rc=0
     run_guard "$(build_bash_payload "$(build_loop_step "$XV_ACD" "$XV_SCRIPTS" "$XV_SCRIPTS" "$XV_PLANS/a>b.json" "accept")")" \
@@ -159,42 +159,29 @@ run_metachar_hook_cases() {
     rc=0
     run_guard "$(build_bash_payload "$(build_initial_arg1 "$XV_ACD" "$XV_SCRIPTS" "$XV_REPO" "1234")")" \
         "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_allow "ARG-hook the identical run-initial with a clean issue id (pair)" "$rc"
+    assert_block "ARG-hook the identical run-initial with a clean issue id — eval path retired (#1673)" "$rc"
 }
 
 # ============================================================================
-# D — arguments beyond argSpec.
+# D — arguments beyond argSpec. RETIRED BY #1673.
 #
-# ARG-spec-shape is the structural half: it is GREEN today and its job is to
-# STAY green. It fails the moment any entry declares an argCountMax it has no
-# argSpec entry for — i.e. the moment the `spec === undefined` trapdoor becomes
-# reachable from the shipped registry.
+# ARG-spec-shape and ARG-extra-* both reached into FINALIZE_OVERLAY_REGISTRY:
+# the first read every entry's argSpec/argCountMax pair, the second temporarily
+# raised run-loop-step's argCountMax so the `spec === undefined` trapdoor became
+# reachable. #1673 deleted finalize-worker-overlay.js and that registry with it,
+# so both rows can only report OVERLAY-RETIRED — a missing subject, not a
+# verdict.
 #
-# ARG-extra-* is the behavioural half. The probe raises run-loop-step's
-# argCountMax by one for the duration of a single call (the registry is exported
-# by reference) and restores it immediately, so the unvalidated branch is
-# actually entered. A poisoned extra token must be refused; the clean extra
-# token must still match, which is what keeps this from being "reject anything
-# with three arguments".
+# The trapdoor itself is gone rather than merely untested: the dispatcher takes
+# its payload as JSON validated field-by-field against payloadSpec in
+# hooks/lib/worker-dispatch-registry.js, so there is no positional argument
+# stream that can run past the end of a spec. Every field is either declared or
+# rejected as unknown — pinned by tests/feature-1643-worker-dispatch-schema.sh.
+#
+# The token-level half of this file (run_metachar_token_cases) is unaffected: it
+# reads isUnderPlansDir out of arg-value-guard.js, which is live and is what the
+# dispatcher overlay now screens argument values with.
 # ============================================================================
 run_extra_arg_cases() {
-    assert_eq "ARG-spec-shape every registry entry declares a spec for every argument it accepts" \
-        "$(AGENTS_CONFIG_DIR="$XV_ACD" overlay_probe specshape)" "ok"
-
-    # NOTE: a backslash is deliberately absent from the reject set — it is a
-    # legitimate separator inside a Windows plans-dir path, so pinning it as
-    # unsafe would break the feature on the platform this suite runs on.
-    extra_probe() {
-        AGENTS_CONFIG_DIR="$XV_ACD" WORKFLOW_PLANS_DIR="$XV_PLANS" \
-            overlay_probe matchextra "$1" "$XV_REPO"
-    }
-
-    assert_eq "ARG-extra-redirect an argument past argSpec is still token-checked (redirection)" \
-        "$(extra_probe "a<b")" "null"
-    assert_eq "ARG-extra-semicolon an argument past argSpec is still token-checked (separator)" \
-        "$(extra_probe "a;gh issue close 999")" "null"
-    assert_eq "ARG-extra-pipe an argument past argSpec is still token-checked (pipe)" \
-        "$(extra_probe "a|b")" "null"
-    assert_eq "ARG-extra-clean a clean argument past argSpec is not rejected by count alone (pair)" \
-        "$(extra_probe "1234")" "run-loop-step.js"
+    :
 }

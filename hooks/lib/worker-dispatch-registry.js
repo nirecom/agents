@@ -32,6 +32,10 @@ const WORKER_NAMES = [
   "doc-append",
   "issue-reconcile",
   "session-close-gate",
+  // #1673 forge family, listed in delivery order.
+  "commit-push",
+  "issue-close-stage",
+  "issue-close-finalize",
 ];
 
 // Canonical argv shape shared by every worker today. Spread per entry so that a
@@ -234,6 +238,175 @@ const workers = {
     envPassthrough: [],
     writeScopes: ["plans-dir"],
     renderer: "status-triple",
+  },
+
+  // -----------------------------------------------------------------------
+  // Stage 3 (#1673): the three forge workers. Same declare-first rule as stage 2
+  // — the capability surface is in force from the commit that declares it, and
+  // the MODULES table in bin/worker-dispatch/registry.js decides which names have
+  // an implementation yet.
+  //
+  // commit-push moves `git commit` / `git push` out of the Bash tool, which is
+  // also where hooks/workflow-gate.js (a PreToolUse hook) used to see them. The
+  // worker therefore drives that same gate as a child process, twice — once
+  // before commit, once before push — and the five workflow env vars below are
+  // what let the gate child resolve the SAME session state the hook would have.
+  // Handing it the wrong state directory makes it approve everything, so the
+  // worker sets all five explicitly via extraEnv rather than trusting
+  // inheritance; declaring them here only makes that assignment legal.
+  // -----------------------------------------------------------------------
+  "commit-push": {
+    name: "commit-push",
+    argSpec: [...STANDARD_ARG_SPEC],
+    payloadSpec: {
+      commit_message: { type: "text", required: true, max: 8000 },
+      branch: { type: "branch", required: true },
+      // issue-ref[], not int[]: the values come from hooks/lib/parse-closes-issues.js,
+      // the canonical `## Issues` parser, which returns { number, repo? } records —
+      // and skills/commit-push/SKILL.md tells the caller to use exactly that parser.
+      // An int[] schema made the documented call fail validation, and the obvious
+      // workaround (map to bare numbers) silently dropped the repo half of each
+      // issue's identity: two repositories' #42 became one `Closes #42`, applied by
+      // GitHub to whichever repo the PR lives in. Every element becomes a closing
+      // keyword and an `issue-close-pr-of` marker in a PR body GitHub acts on, so
+      // the identity has to survive the boundary intact.
+      closes_issues: { type: "issue-ref[]", required: false, default: [], maxItems: 32 },
+      pr_body_template: { type: "text", required: false, max: 60000 },
+      wip_mode: { type: "bool", required: false, default: false },
+      enforce_worktree: { type: "enum:on|off", required: false, default: "on" },
+      agents_config_dir: { type: "anchor-acd", required: false },
+      artifact_dir: { type: "path-under-plansdir", required: false },
+      // Deviation #3: the dispatcher can only accept a child cwd as a
+      // family-validated explicit path.
+      worktree_path: { type: "family-worktree", required: true },
+      // Deviation #2: workflow-gate.js blocks a merge-shaped push outright when
+      // it has no session id, so a missing value here is fail-closed by design.
+      session_id: { type: "session-id", required: true },
+    },
+    binaries: {
+      external: ["git", "gh", "bash", "node"],
+      scripts: {
+        unstagedCheck: { anchor: "acd", rel: "bin/check-unstaged-tracked.sh" },
+        bootstrapProbe: { anchor: "acd", rel: "bin/probe-remote-bootstrap.sh" },
+        isGithubRemote: { anchor: "acd", rel: "bin/is-github-dotcom-remote" },
+        // The PR title and body used to reach GitHub through the Bash tool, where
+        // hooks/scan-outbound.js (PreToolUse) read them first. A dispatched `gh`
+        // child is not a Bash-tool command, so that hook no longer sees them and
+        // the worker runs the same scanner itself before `gh pr create`.
+        // acd for the same reason as workflowGate: the scanner that clears
+        // outbound text must be the reviewed copy, not the branch's own.
+        scanOutbound: { anchor: "acd", rel: "bin/scan-outbound.sh" },
+        // acd, never family-worktree: the gate that authorizes a push must be
+        // the reviewed, merged copy — not the one on the branch being pushed.
+        workflowGate: { anchor: "acd", rel: "hooks/workflow-gate.js" },
+      },
+    },
+    envPassthrough: [
+      "GH_TOKEN",
+      "GITHUB_TOKEN",
+      "ENFORCE_WORKTREE",
+      // The five the gate child needs to answer as the PreToolUse hook would:
+      "CLAUDE_WORKFLOW_DIR",   // state-io's only state-directory variable
+      "WORKFLOW_PLANS_DIR",    // detail-plan read for the scope-drift verdict
+      "WORKFLOW_SESSION_ID",   // supervisor-state resolution fallback
+      "CLAUDE_PROJECT_DIR",    // getCurrentContext()'s cwd resolution
+      "DEFAULT_BRANCHES",      // merge-detect.js's protected-branch set
+    ],
+    writeScopes: ["family-worktree", "plans-dir"],
+    renderer: "status-triple-quoted",
+  },
+
+  // -----------------------------------------------------------------------
+  // ISSUE_CLOSE_SKILL contract (applies to both close-family entries below).
+  //
+  // hooks/enforce-issue-close.js inspects the HEAD of a Bash-tool command only.
+  // A child process the dispatcher starts with spawnSync is not a command head,
+  // so it was never in that hook's field of view — this is a structural fact,
+  // not a new bypass.
+  //
+  // skills/issue-close-stage/scripts/run-stage-chain.sh and
+  // skills/issue-close-finalize/scripts/run-finalize-terminal.sh each
+  // `export ISSUE_CLOSE_SKILL=1` for themselves. The dispatcher therefore does
+  // NOT need it in envPassthrough — and MUST NOT add it: passing it here would
+  // hand the bypass to every child of these workers rather than to the two
+  // scripts that opt into it. tests/feature-1673-{issue-close-stage,finalize}-
+  // *-schema.sh assert its absence structurally.
+  // -----------------------------------------------------------------------
+  "issue-close-stage": {
+    name: "issue-close-stage",
+    argSpec: [...STANDARD_ARG_SPEC],
+    payloadSpec: {
+      issue_number: { type: "int", required: true, min: 1 },
+      worktree_path: { type: "family-worktree", required: true },
+      owner_repo: { type: "owner-repo", required: true },
+      // Echo-only: accepted for readability, but only as the exact resolved ACD.
+      agents_config_dir: { type: "anchor-acd", required: false },
+      artifact_dir: { type: "path-under-plansdir", required: false },
+      // repo-ref, not owner-repo: the stage chain's cross-repo argument keeps the
+      // documented `<owner/repo>` OR bare `<repo>` form.
+      issue_repo: { type: "repo-ref", required: false },
+    },
+    binaries: {
+      external: ["bash", "gh"],
+      scripts: {
+        stageChain: { anchor: "acd", rel: "skills/issue-close-stage/scripts/run-stage-chain.sh" },
+      },
+    },
+    envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN"],
+    writeScopes: ["plans-dir"],
+    renderer: "status-triple-quoted",
+  },
+
+  // The payloadSpec is FLAT because capability.js has no notion of "required only
+  // when phase=X". The per-phase required-field table lives in the worker
+  // module's checkRequired (doc-append's mode check is the precedent):
+  //   initial          issue_number, root_issue_number, owner_repo,
+  //                    state_file_path, main_worktree_path
+  //   loop_step        root_issue_number, owner_repo, state_file_path, g5_decision
+  //   finalize_terminal root_issue_number, owner_repo, state_file_path,
+  //                    session_id, outcome_file_path
+  //
+  // `merge_commit` is deliberately NOT a field: it comes out of run-initial.sh's
+  // stdout and the worker writes it into the state file. It is never an input.
+  "issue-close-finalize": {
+    name: "issue-close-finalize",
+    argSpec: [...STANDARD_ARG_SPEC],
+    payloadSpec: {
+      phase: { type: "enum:initial|loop_step|finalize_terminal", required: true },
+      issue_number: { type: "int", required: false, min: 1 },
+      root_issue_number: { type: "int", required: false, min: 1 },
+      owner_repo: { type: "owner-repo", required: false },
+      // Field-validation order matters for this type — see the note on
+      // `state-file-for-session` in bin/worker-dispatch/capability.js.
+      state_file_path: { type: "state-file-for-session", required: false },
+      main_worktree_path: { type: "anchor-main-root", required: false },
+      issue_repo: { type: "repo-ref", required: false },
+      g5_decision: {
+        type: "enum:accept|decline|llm_declined|recurse_done",
+        required: false,
+      },
+      session_id: { type: "session-id", required: false },
+      outcome_file_path: { type: "path-under-plansdir", required: false },
+      agents_config_dir: { type: "anchor-acd", required: false },
+      finalize_scripts_dir: { type: "derived-finalize-scripts-dir", required: false },
+      artifact_dir: { type: "path-under-plansdir", required: false },
+    },
+    binaries: {
+      external: ["bash", "node", "gh"],
+      scripts: {
+        runInitial: { anchor: "acd", rel: "skills/issue-close-finalize/scripts/run-initial.sh" },
+        runLoopStep: { anchor: "acd", rel: "skills/issue-close-finalize/scripts/run-loop-step.js" },
+        runTerminal: {
+          anchor: "acd",
+          rel: "skills/issue-close-finalize/scripts/run-finalize-terminal.sh",
+        },
+      },
+    },
+    // Both non-token names are derived from anchors and set explicitly via
+    // extraEnv; declaring them here only makes that assignment legal.
+    envPassthrough: ["GH_TOKEN", "GITHUB_TOKEN", "FINALIZE_SCRIPTS_DIR", "MAIN_WORKTREE_PATH"],
+    writeScopes: ["plans-dir"],
+    renderer: "status-triple-quoted",
   },
 };
 

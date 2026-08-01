@@ -9,7 +9,6 @@ const { spawnSync } = require("child_process");
 const { normalizeCwd } = require("../../lib/path-normalize");
 const { normalizeForCompare } = require("../git-repo-detection");
 const { collectBashWriteTargets } = require("../bash-write-scope");
-const { matchFinalizeWorkerOverlay } = require("./finalize-worker-overlay");
 const { matchWorkerDispatchOverlay } = require("./worker-dispatch-overlay");
 const { foldNewlinesInSpans } = require("../../lib/quote-spans");
 const { resolveAgentsConfigDir } = require("../../lib/agents-config-dir");
@@ -33,12 +32,20 @@ const ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 // Sanctioned worker scripts. Any new worker script that must write inside a
 // linked worktree must be listed here (SSOT for the legacy SANCTIONED path).
+//
+// Entry criterion: a prompt-facing step runs the script through the Bash TOOL
+// from the main worktree. A script reachable only as a CHILD of another script
+// never reaches this predicate — PreToolUse inspects the command head only — so
+// listing it grants nothing and only widens the matchable surface. #1673 removed
+// three entries on exactly that ground (bin/issue-close-gate.sh,
+// bin/github-issues/issue-close-stage-triage.sh, bin/github-issues/parent-body-update.sh):
+// their sole callers are run-stage-chain.sh and run-initial.sh, which the
+// worker dispatcher spawns. tests/fix-1600-sanctioned-coverage-audit.sh pins
+// both halves — the surviving set, and the absence of any Bash-tool call site
+// for the three that left.
 const SANCTIONED = [
   "bin/check-unstaged-tracked.sh",
   "bin/probe-remote-bootstrap.sh",
-  "bin/issue-close-gate.sh",
-  "bin/github-issues/issue-close-stage-triage.sh",
-  "bin/github-issues/parent-body-update.sh",
   "bin/github-issues/issue-create-dispatch.sh",
   "skills/issue-create/scripts/run-bulk-dispatch.sh",
   "skills/issue-create/scripts/run-phase5-record.sh",
@@ -53,12 +60,7 @@ const SANCTIONED = [
  * WHOLE command in the caller (CPR-3: one scope check, not one per segment).
  */
 function isSanctionedSingleInvocation(seg, acd, repoRoot) {
-  // (a0) Finalize-worker overlay (#1600): HARD-validates identity, env VALUES,
-  // and argument shapes for the 3 live finalize scripts (single-line, fully-
-  // resolved literal eval). On match, identity is confirmed — skip legacy path.
-  if (matchFinalizeWorkerOverlay(seg, acd, repoRoot) !== null) return true;
-
-  // (a0-1) Worker-dispatch overlay (#1643): the single plain-script dispatch entry
+  // (a0) Worker-dispatch overlay (#1643): the single plain-script dispatch entry
   // point. HARD-validates identity (Lock 1), the argv main-root against the repo
   // under judgement (Lock 2) and against the session's trusted anchor set (Lock 3),
   // plus worker enum and payload scope. The canonical form carries no redirect —
@@ -188,7 +190,7 @@ function isAllowedWorkerScriptInvocation(cmd, repoRoot) {
 
 // (c)/(d) Write-target scope tail: extract write targets and require every one to
 // land inside a registered linked worktree of repoRoot (never the main worktree).
-// Shared by the legacy SANCTIONED path and the #1600 finalize-worker overlay.
+// Shared by the legacy SANCTIONED path and the worker-dispatch overlay.
 function writeTargetsAllInLinkedWorktrees(cmd, repoRoot) {
   // (c) Extract write targets
   const { targets, parseFailure } = collectBashWriteTargets(cmd);

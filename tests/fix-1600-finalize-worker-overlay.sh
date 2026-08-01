@@ -1,18 +1,25 @@
 #!/bin/bash
 # tests/fix-1600-finalize-worker-overlay.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
+# Tests: hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree.js
 # Tags: worktree, enforce, hook, security, scope:issue-specific
 #
-# Issue #1600: the finalize-worker command shapes moved to single-line,
-# fully-resolved-literal-path `eval` (env-prefix + node/bash interpreter + args).
-# The legacy SANCTIONED array + eval-unwrap regex in worker-script.js only match
-# a bare `eval "$(bash "<path>")"` (no env prefix, no args), so the three live
-# finalize shapes are false-blocked (#1590 regression). The fix adds a structured
-# overlay (finalize-worker-overlay.js: FINALIZE_OVERLAY_REGISTRY, G5_DECISION_VALUES,
-# matchFinalizeWorkerOverlay) wired into isAllowedWorkerScriptInvocation BEFORE the
-# legacy SANCTIONED check. This test drives that overlay:
-#   RED (BLOCK now, ALLOW after fix): every ALLOW case below
-#   GREEN (BLOCK always):             every identity/arg/structural attack below
+# HISTORY — this file changed polarity in #1673.
+#
+# #1600 added finalize-worker-overlay.js so that the three finalize scripts,
+# invoked from the main worktree as a single-line fully-resolved-literal-path
+# `eval` (env-prefix + node/bash interpreter + args), were ALLOWED past the guard.
+# #1673 replaced that Bash-tool `eval` entirely: the finalize scripts are now
+# spawned as children of bin/worker-dispatch.js, and the overlay module was
+# deleted along with the capability. Its reusable value helpers moved unchanged
+# to hooks/enforce-worktree/arg-value-guard.js (covered by
+# tests/fix-1600-sanctioned-coverage-audit.sh and tests/fix-1630-*).
+#
+# So every row here is now a BLOCK row, and the file's remaining job is to hold
+# the retired hole SHUT: no `eval` of run-initial.sh / run-loop-step.js /
+# run-finalize-terminal.sh may pass the guard from a main worktree, in the exact
+# shapes #1600 and #1679 once sanctioned nor in any mutation of them. The rows
+# kept their original case names so `git blame` and the #1590/#1600/#1679
+# provenance survive the polarity flip.
 #
 # TL3 gap (what this TL2 test does NOT catch):
 #   - A real /session-close → /issue-close-finalize chain issuing the eval from a

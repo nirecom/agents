@@ -32,26 +32,17 @@ Skip message on non-GitHub remote (emitted by the script to stdout): `[GITHUB_IS
 
 ## Delegation
 
-Resolve `PLANS_DIR="$(bash "$AGENTS_CONFIG_DIR/bin/workflow-plans-dir")"` for `artifact_dir`.
+Dispatch Steps A, B, D, F, G to the `issue-close-stage` worker per `skills/_shared/worker-dispatch.md`.
 
-Delegate Steps A, B, D, F, G to `issue-close-stage-worker`:
+Payload keys: `issue_number` (= N), `worktree_path` (= `git rev-parse --show-toplevel`), `owner_repo`, `agents_config_dir` (= `AGENTS_CONFIG_DIR`), `artifact_dir` (= `PLANS_DIR`), `issue_repo`.
 
-```
-Agent({
-  subagent_type: "issue-close-stage-worker",
-  prompt: JSON.stringify({
-    issue_number: N,
-    worktree_path: CWD,
-    owner_repo: OWNER_REPO,
-    agents_config_dir: AGENTS_CONFIG_DIR,
-    artifact_dir: PLANS_DIR,
-    issue_repo: ISSUE_REPO  // from closes_issues entry's `repo` field; omit for current-repo issues
-  })
-})
-```
+Omit `issue_repo` for current-repo issues; otherwise take it from the `closes_issues` entry's `repo` field.
 
+Cross-repo Phase 1 is unsupported: an `issue_repo` naming any repo other than `owner_repo` is refused with `error`. Run `/issue-close-stage` from a worktree of that repository instead.
+
+On `phase1_done` status: continue to End.
 On `blocked_sub_issue` status: surface summary to user and stop.
-On `error` status: surface summary + artifact_path to user and stop.
+On `error` or `failed` status: surface summary + artifact_path to user and stop.
 
 ## End
 

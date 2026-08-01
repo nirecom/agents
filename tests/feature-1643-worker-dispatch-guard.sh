@@ -240,6 +240,13 @@ TABLE
 
 # ===========================================================================
 # Group C — SANCTIONED array must not grow (the overlay is the only new surface)
+# Baseline is 7, not the original 10: #1673 desanctioned 3 entries
+# (bin/issue-close-gate.sh, bin/github-issues/issue-close-stage-triage.sh,
+# bin/github-issues/parent-body-update.sh) because those scripts are no longer
+# invoked directly by the Bash tool from the main worktree — they are now
+# subprocess-only, called by the worker-dispatch scripts that replaced the
+# retired finalize-worker-overlay.js. This assertion still catches unintended
+# growth (or further unexplained shrinkage) past that known baseline.
 # ===========================================================================
 group_sanctioned_count() {
     local n
@@ -250,7 +257,7 @@ group_sanctioned_count() {
       if (!m) { process.stdout.write("NO_ARRAY"); process.exit(0); }
       process.stdout.write(String((m[1].match(/"[^"]+"/g) || []).length));
     ' "$(nodepath "$WORKER_SCRIPT_JS")" 2>&1)"
-    assert_eq "sanctioned/count-still-10" "10" "$n"
+    assert_eq "sanctioned/count-still-7" "7" "$n"
 }
 
 # ===========================================================================

@@ -1,18 +1,53 @@
 #!/bin/bash
-# run-finalize-terminal.sh — phase=finalize_terminal for issue-close-finalize-worker
+# run-finalize-terminal.sh — phase=finalize_terminal for the issue-close-finalize worker
 # Steps H (close), I (sentinels), J (wip clear), K (outcome), then terminal state write.
-# Usage: bash run-finalize-terminal.sh <state_file_path> <session_id> <outcome_file_path>
+# Usage: bash run-finalize-terminal.sh <state_file_path> <session_id> <outcome_file_path> [expected_token]
 # Env:   AGENTS_CONFIG_DIR  FINALIZE_SCRIPTS_DIR
 # Stdout (eval-able KEY=VALUE): STATUS  SUMMARY
 # Exit 0 always; check STATUS.
+#
+# COMPARE-AND-SWAP. <expected_token> is the sha256 hex digest of the state file's
+# raw bytes as the calling worker validated them — the same protocol
+# run-loop-step.js speaks on its own 3rd argument. The caller's check happens in
+# another process; this script re-reads the file and EVALS what it finds, so a
+# replacement written in between would slip past that check entirely and bring
+# live shell syntax with it. The digest is therefore re-computed here and
+# compared BEFORE the eval. Optional so a manual invocation still works; the
+# worker always supplies it.
 set -euo pipefail
 
 STATE_FILE_PATH="${1:?state_file_path required}"
 SESSION_ID="${2:?session_id required}"
 OUTCOME_FILE_PATH="${3:?outcome_file_path required}"
+EXPECTED_TOKEN="${4:-}"
 : "${AGENTS_CONFIG_DIR:?AGENTS_CONFIG_DIR not set}"
 
 export ISSUE_CLOSE_SKILL=1
+
+# Same digest run-loop-step.js's tokenOf() computes: sha256 over the raw bytes.
+# Node is used rather than sha256sum/shasum so the two sides cannot drift, and
+# node is already a hard dependency of every other step in this chain.
+state_token() {
+    node -e "
+const fs = require('fs');
+const crypto = require('crypto');
+console.log(crypto.createHash('sha256').update(fs.readFileSync(process.argv[1], 'utf8')).digest('hex'));
+" "$STATE_FILE_PATH"
+}
+
+if [[ -n "$EXPECTED_TOKEN" ]]; then
+    rc=0
+    ACTUAL_TOKEN="$(state_token)" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        printf 'STATUS=failed\nSUMMARY=state file could not be read for the compare-and-swap check\n'
+        exit 0
+    fi
+    if [[ "$ACTUAL_TOKEN" != "$EXPECTED_TOKEN" ]]; then
+        printf 'state file conflict: it changed between the caller validation and this pass\n' >&2
+        printf 'STATUS=failed\nSUMMARY=state file conflict: it changed between the caller validation and this pass; re-run this pass\n'
+        exit 0
+    fi
+fi
 
 # Read required fields from state file
 read_state() {

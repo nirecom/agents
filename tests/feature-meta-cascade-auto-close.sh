@@ -1,6 +1,6 @@
 #!/bin/bash
-# Tests: bin/github-issues/issue-close-finalize-triage.sh, agents/issue-close-finalize-worker.md, skills/issue-close-finalize/SKILL.md, bin/issue-close-write-outcome.js
-# Tags: issue-close, finalize, meta, admin-close-path, cascade
+# Tests: bin/github-issues/issue-close-finalize-triage.sh, skills/issue-close-finalize/scripts/run-finalize-terminal.sh, skills/issue-close-finalize/SKILL.md, bin/issue-close-write-outcome.js
+# Tags: issue-close, finalize, meta, admin-close-path, cascade, scope:common
 
 set -u
 
@@ -90,14 +90,16 @@ else
 fi
 rm -rf "$TMP_MC3"
 
-# MC4: worker.md Step L has skipped_admin_close label (RED until implementation)
-# Worker passes triage_action through to Step L's historyEntry decision; the
-# admin_close_path branch must map to skipped_admin_close.
-WORKER_FILE="$AGENTS_DIR/agents/issue-close-finalize-worker.md"
-if grep -q "skipped_admin_close" "$WORKER_FILE"; then
-    pass "MC4: worker.md has skipped_admin_close in historyEntry decision"
+# MC4: Step L's historyEntry decision has the skipped_admin_close label.
+# The triage_action is passed through to run-finalize-terminal.sh, which owns the
+# branch table: admin_close_path must map to skipped_admin_close. #1673 replaced
+# agents/issue-close-finalize-worker.md with a dispatcher module that spawns this
+# script by registry key, so the branch table lives here, not in the module.
+WORKER_FILE="$AGENTS_DIR/skills/issue-close-finalize/scripts/run-finalize-terminal.sh"
+if [ -f "$WORKER_FILE" ] && grep -q "skipped_admin_close" "$WORKER_FILE"; then
+    pass "MC4: finalize terminal script has skipped_admin_close in historyEntry decision"
 else
-    fail "MC4: worker.md missing skipped_admin_close (expected RED before impl)"
+    fail "MC4: finalize terminal script missing skipped_admin_close ($WORKER_FILE)"
 fi
 
 echo ""

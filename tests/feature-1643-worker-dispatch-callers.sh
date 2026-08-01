@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # tests/feature-1643-worker-dispatch-callers.sh
-# Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md
+# Tests: skills/_shared/worker-dispatch.md, hooks/lib/worker-dispatch-registry.js, skills/run-tests/SKILL.md, skills/worktree-start/SKILL.md, skills/worktree-end/SKILL.md, skills/worktree-end/scripts/cleanup-cascade.md, skills/update-docs/SKILL.md, skills/issue-reconcile/SKILL.md, skills/session-close/SKILL.md, skills/commit-push/SKILL.md, skills/issue-close-stage/SKILL.md, skills/issue-close-finalize/SKILL.md
 # Tags: worker-dispatch, callers, skill-orchestration, static, regression, TL1, scope:issue-specific
 #
 # Issue #1643 — caller-side contract. Six LLM subagents were deleted and replaced
 # by plain scripts behind one dispatcher; each calling skill now dispatches per
-# skills/_shared/worker-dispatch.md instead of spawning a subagent.
+# skills/_shared/worker-dispatch.md instead of spawning a subagent. Issue #1673
+# brings the three forge workers (commit-push, issue-close-stage,
+# issue-close-finalize) onto the same path, taking the roster to nine.
 #
 # The regression that matters is the SYMMETRIC NEGATIVE: a caller left pointing at
 # a deleted agents/*.md, or still using the Task/Agent tool, would fail only at
 # run time inside a live session. The worker list is read from the registry SSOT
 # (hooks/lib/worker-dispatch-registry.js), and the table below must cover it
-# exactly — so a seventh worker cannot be added without a caller row here.
+# exactly — so a tenth worker cannot be added without a caller row here.
 #
 # TL1 (static): the subject is prompt text and a pure-data registry, both of which
 # this test reads directly. Behavior of the dispatcher itself is covered by
@@ -44,13 +46,21 @@ trap 'rm -rf "$TMPD"' EXIT
 # caller-rel | worker | step-label | start-line-prefix | end-line-prefix
 # Anchors are literal line prefixes (not regexes) so that `+` and `.` in step
 # labels cannot be reinterpreted as regex metacharacters.
+#
+# One row per worker — Group A compares the row set against the registry by
+# worker NAME. issue-close-finalize dispatches three times (initial / loop_step /
+# finalize_terminal); the row anchors the initial pass, and the whole-file check
+# in Group B plus the Group C negatives cover the other two.
 CALLER_TABLE='skills/run-tests/SKILL.md|test-runner|RNT-7|RNT-7.|RNT-8.
 skills/worktree-start/SKILL.md|worktree-copy|WS-7|WS-7.|WS-8.
 skills/worktree-end/SKILL.md|worktree-backup|WE-9|### Step WE-9|### Step WE-10
 skills/update-docs/SKILL.md|doc-append|UD-9a/UD-9b|UD-9a.|UD-9c.
 skills/worktree-end/scripts/cleanup-cascade.md|doc-append|WE-21|## WE-21|## WE-22
 skills/issue-reconcile/SKILL.md|issue-reconcile|Step 2|## Step 2|## Step 3
-skills/session-close/SKILL.md|session-close-gate|SC-4+SC-5|## Steps SC-4+SC-5|## Step SC-6'
+skills/session-close/SKILL.md|session-close-gate|SC-4+SC-5|## Steps SC-4+SC-5|## Step SC-6
+skills/commit-push/SKILL.md|commit-push|CP-2|CP-2.|CP-3.
+skills/issue-close-stage/SKILL.md|issue-close-stage|Delegation|## Delegation|## End
+skills/issue-close-finalize/SKILL.md|issue-close-finalize|Delegation-initial|## Delegation — initial pass|## ICF-D..ICF-G loop'
 
 has_prefix_line() {
     awk -v p="$2" 'substr($0, 1, length(p)) == p { found = 1; exit } END { exit !found }' "$1"
@@ -193,6 +203,24 @@ group_explicit_six_deleted() {
     fi
 }
 
+# #1673 deletes the three forge-worker subagents (and the finalize state-schema
+# split file). Named explicitly, not derived, so the removal cannot be "passed"
+# by a registry edit alone.
+group_explicit_three_deleted() {
+    local three found n
+    three="commit-push-worker.md issue-close-stage-worker.md issue-close-finalize-worker.md"
+    found=""
+    for n in $three; do
+        [ -e "$AGENTS_DIR/agents/$n" ] && found="$found agents/$n"
+    done
+    [ -e "$AGENTS_DIR/agents/issue-close-finalize-worker" ] && found="$found agents/issue-close-finalize-worker/"
+    if [ -z "$found" ]; then
+        pass "C2b: all three #1673-deleted agents/*.md files (and the state-schema split dir) are absent"
+    else
+        fail "C2b: #1673-deleted agent file(s) still on disk:$found"
+    fi
+}
+
 group_no_caller_references_legacy() {
     local names rel path hits n
     names="$(legacy_agent_basenames)"
@@ -319,6 +347,7 @@ group_table_covers_registry
 group_caller_rows
 group_no_legacy_agent_files
 group_explicit_six_deleted
+group_explicit_three_deleted
 group_no_caller_references_legacy
 group_no_task_tool_dispatch
 group_negative_detector_probe

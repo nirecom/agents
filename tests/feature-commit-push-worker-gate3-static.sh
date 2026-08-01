@@ -1,16 +1,18 @@
 #!/bin/bash
 # tests/feature-commit-push-worker-gate3-static.sh
-# Tests: agents/commit-push-worker.md, skills/commit-push/SKILL.md
+# Tests: bin/worker-dispatch/workers/commit-push.js, skills/commit-push/SKILL.md
 # Tags: static, agent, skill, commit-push, gate3, unstaged-tracked
 #
-# Static contract test for Gate 3 (commit-push-worker pre-flight Step 1.5).
-# Expected red until #269 lands Step 1.5 in agents/commit-push-worker.md and
-# updates skills/commit-push/SKILL.md Step 1.
+# Static contract test for Gate 3 (commit-push pre-flight staging check).
+# #1673 moved the worker from the agents/commit-push-worker.md subagent prompt to
+# the deterministic module bin/worker-dispatch/workers/commit-push.js, so the same
+# contract is now asserted against code rather than prose. The "skipped only when"
+# rule is a caller-side rule and is therefore asserted on SKILL.md.
 
 set -u
 
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKER_MD="${AGENTS_DIR}/agents/commit-push-worker.md"
+WORKER_MD="${AGENTS_DIR}/bin/worker-dispatch/workers/commit-push.js"
 CP_SKILL_MD="${AGENTS_DIR}/skills/commit-push/SKILL.md"
 
 PASS=0
@@ -25,10 +27,10 @@ test_1_worker_has_cli_literal() {
         fail "1: $WORKER_MD missing"
         return
     fi
-    if grep -qF 'bin/check-unstaged-tracked.sh' "$WORKER_MD"; then
-        pass "1: agents/commit-push-worker.md contains bin/check-unstaged-tracked.sh"
+    if grep -qF 'check-unstaged-tracked.sh' "$WORKER_MD"; then
+        pass "1: commit-push.js contains check-unstaged-tracked.sh"
     else
-        fail "1: agents/commit-push-worker.md missing bin/check-unstaged-tracked.sh literal"
+        fail "1: commit-push.js missing check-unstaged-tracked.sh literal"
     fi
 }
 
@@ -39,20 +41,21 @@ test_2_ordering_cli_before_commit() {
         return
     fi
     local cli_line commit_line
-    cli_line="$(grep -nF 'bin/check-unstaged-tracked.sh' "$WORKER_MD" | head -n 1 | cut -d: -f1)"
-    commit_line="$(grep -nF 'git commit -m' "$WORKER_MD" | head -n 1 | cut -d: -f1)"
+    cli_line="$(grep -nF 'check-unstaged-tracked.sh' "$WORKER_MD" | head -n 1 | cut -d: -f1)"
+    # argv form: the module spawns git with a "commit" token, not a shell string.
+    commit_line="$(grep -nE '"commit"' "$WORKER_MD" | head -n 1 | cut -d: -f1)"
     if [ -z "$cli_line" ]; then
         fail "2: CLI literal not found"
         return
     fi
     if [ -z "$commit_line" ]; then
-        fail "2: 'git commit -m' literal not found"
+        fail "2: git \"commit\" argv token not found"
         return
     fi
     if [ "$cli_line" -lt "$commit_line" ]; then
-        pass "2: CLI literal (line $cli_line) appears before 'git commit -m' (line $commit_line)"
+        pass "2: CLI literal (line $cli_line) appears before the git \"commit\" argv token (line $commit_line)"
     else
-        fail "2: CLI must appear before 'git commit -m'" "cli=$cli_line commit=$commit_line"
+        fail "2: CLI must appear before the git \"commit\" argv token" "cli=$cli_line commit=$commit_line"
     fi
 }
 
@@ -67,7 +70,7 @@ test_3_status_enum_values() {
     grep -qF 'staging_incomplete' "$WORKER_MD" && has_inc=1
     grep -qF 'staging_check_failed' "$WORKER_MD" && has_chk=1
     if [ "$has_inc" -eq 1 ] && [ "$has_chk" -eq 1 ]; then
-        pass "3: worker has staging_incomplete AND staging_check_failed in status enum"
+        pass "3: commit-push.js has staging_incomplete AND staging_check_failed in status enum"
     else
         fail "3: missing status values" "staging_incomplete=$has_inc staging_check_failed=$has_chk"
     fi
@@ -75,14 +78,16 @@ test_3_status_enum_values() {
 
 # Test 4: worker contains the rules sentence about Step CP-2 skip
 test_4_rules_skip_sentence() {
-    if [ ! -f "$WORKER_MD" ]; then
-        fail "4: $WORKER_MD missing"
+    # Caller-side rule: the worker module carries no prose, so the skip
+    # condition is pinned where the decision is actually made.
+    if [ ! -f "$CP_SKILL_MD" ]; then
+        fail "4: $CP_SKILL_MD missing"
         return
     fi
-    if grep -qF 'Staging verification (Step CP-2) is skipped only when' "$WORKER_MD"; then
-        pass "4: worker contains 'Staging verification (Step CP-2) is skipped only when'"
+    if grep -qF 'Staging verification (Step CP-2) is skipped only when' "$CP_SKILL_MD"; then
+        pass "4: SKILL.md contains 'Staging verification (Step CP-2) is skipped only when'"
     else
-        fail "4: worker missing Step CP-2 skip sentence"
+        fail "4: SKILL.md missing Step CP-2 skip sentence"
     fi
 }
 

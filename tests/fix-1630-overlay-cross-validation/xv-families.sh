@@ -1,10 +1,20 @@
 # tests/fix-1630-overlay-cross-validation/xv-families.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js
 # Tags: worktree, enforce, hook, config-dir, overlay, security, scope:issue-specific
 #
-# STATUS: GREEN today and after C5 — these are protection-fix negative
-# assertions (BLOCK stays BLOCK, ALLOW stays ALLOW) around the identification
-# rewrite. Sourced by tests/fix-1630-overlay-cross-validation.sh.
+# #1673 deleted finalize-worker-overlay.js along with the Bash-tool `eval` path
+# it guarded, so the whole file is now BLOCK-only: the XV-* mismatch families
+# were block before and stay block, and the VALUE-* rows — which used to prove
+# that env-prefix values are compared by RESOLVED PATH VALUE rather than by
+# string equality — now block too, because no `eval` of a finalize script is
+# allowed from a main worktree at all. They are kept as retired-capability pins.
+#
+# The resolved-path-value semantics they measured did not disappear; they moved
+# with the helpers into hooks/enforce-worktree/arg-value-guard.js and are pinned
+# at unit level by strip-units.sh (STRIP-*) and metachar-args.sh (ARG-tok-*),
+# which remain the non-vacuous half of this suite.
+#
+# Sourced by tests/fix-1630-overlay-cross-validation.sh.
 #
 # Fixture variables (XV_REPO / XV_ACD / XV_PLANS / XV_OTHER / XV_SIBLING /
 # XV_SCRIPTS / XV_STATE / XV_OUTCOME) are assigned as GLOBALS on purpose:
@@ -65,23 +75,27 @@ run_xv_family_cases() {
     assert_block "XV-4 inline env names the real root but the script path does not" "$rc"
 
     # ============================================================================
-    # VALUE-* — env-prefix values are compared by RESOLVED PATH VALUE, not by string
-    # equality. These are ALLOW cases and must stay green across C5.
+    # VALUE-* — these three were the ALLOW side of the value-vs-string axis: an
+    # inline env value that differs only by a trailing slash or a `/./` segment
+    # names the SAME directory, so it had to keep matching. #1673 retired the
+    # `eval` capability outright, so the correct verdict for all three is now
+    # BLOCK. Kept (rather than deleted) as retired-capability pins: the shapes a
+    # legitimate caller once used must not be re-opened by accident either.
     # ============================================================================
     rc=0
     run_guard "$(build_bash_payload "$(build_initial "$XV_ACD/" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
         "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_allow "VALUE-1 trailing slash on the inline AGENTS_CONFIG_DIR value" "$rc"
+    assert_block "VALUE-1 trailing slash on the inline AGENTS_CONFIG_DIR value — eval path retired (#1673)" "$rc"
 
     rc=0
     run_guard "$(build_bash_payload "$(build_initial "$XV_ACD/./" "$XV_SCRIPTS" "$XV_REPO" "$XV_SCRIPTS")")" \
         "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_allow "VALUE-2 '/./' segment in the inline AGENTS_CONFIG_DIR value" "$rc"
+    assert_block "VALUE-2 '/./' segment in the inline AGENTS_CONFIG_DIR value — eval path retired (#1673)" "$rc"
 
     rc=0
     run_guard "$(build_bash_payload "$(build_initial "$XV_ACD" "$XV_SCRIPTS" "$XV_REPO/" "$XV_SCRIPTS")")" \
         "$XV_REPO" "AGENTS_CONFIG_DIR=$XV_ACD" "WORKFLOW_PLANS_DIR=$XV_PLANS" || rc=$?
-    assert_allow "VALUE-3 trailing slash on the inline MAIN_WORKTREE_PATH value" "$rc"
+    assert_block "VALUE-3 trailing slash on the inline MAIN_WORKTREE_PATH value — eval path retired (#1673)" "$rc"
 
     # Negative side of the same axis: value semantics must not degrade into prefix
     # matching — a longer path that merely STARTS with the candidate is not equal.

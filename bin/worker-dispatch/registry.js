@@ -21,6 +21,9 @@ const MODULES = {
   "doc-append": () => require("./workers/doc-append"),
   "issue-reconcile": () => require("./workers/issue-reconcile"),
   "session-close-gate": () => require("./workers/session-close-gate"),
+  "commit-push": () => require("./workers/commit-push"),
+  "issue-close-stage": () => require("./workers/issue-close-stage"),
+  "issue-close-finalize": () => require("./workers/issue-close-finalize"),
 };
 
 function get(name) {

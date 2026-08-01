@@ -23,9 +23,14 @@
 #
 # IN1679-*  real logged blocked command strings — RED before the fix, GREEN after
 #           (IN1679-6 is the already-working bare shape: GREEN before AND after).
+#           IN1679-5 is the exception: #1673 deleted finalize-worker-overlay.js,
+#           the only matcher for a literal eval-wrapped run-initial.sh Bash-tool
+#           string, so that shape now BLOCKs at every segment composition —
+#           retired-capability pin, not a live ALLOW row.
 # AD1679-*  adversarial compositions — BLOCK before AND after the fix. These are
 #           the security boundary the S-8 widening must not breach.
 # E2E1679-* end-to-end decision + block-reason assertions on the same surface.
+#           E2E1679-5 mirrors IN1679-5's retirement — see the note there.
 # MU1679-*  TL1 unit rows calling isAllowedWorkerScriptInvocation() directly, so
 #           the predicate is isolated from every other branch of the hook.
 #
@@ -245,280 +250,16 @@ guard() {
     return $rc
 }
 
-# ============================================================================
-# IN — real logged blocked forms. All are the documented pre-flight/run-initial
-#      shapes; every one but IN1679-6 is RED before the fix.
-# ============================================================================
+# ----------------------------------------------------------------------------
+# Test groups (sourced — share the harness/fixtures/builders defined above).
+# ----------------------------------------------------------------------------
 
-test_in_cases() {
-    echo "=== IN: real logged blocked command forms ==="
-    local cmd rc
+SCRIPT_DIR_1679="$(dirname "${BASH_SOURCE[0]}")/fix-1679-worker-eval-segment-composition"
 
-    # IN1679-1 — the single most-observed blocked form (leading `cd` segment).
-    cmd="$(printf 'cd "%s" && %s && echo "OWNER_REPO=$OWNER_REPO"' "$REPO" "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "IN1679-1: cd <repo> && pre-flight eval && echo OWNER_REPO → ALLOW (RED before fix)" "$rc"
-
-    # IN1679-2 — the form that blocked the #1679 filing session itself.
-    cmd="$(printf '%s || exit 0; echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "IN1679-2: pre-flight eval || exit 0; echo OWNER_REPO → ALLOW (RED before fix)" "$rc"
-
-    # IN1679-3 — same as IN1679-2 but with the acd already resolved.
-    cmd="$(printf '%s || exit 0; echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_RESOLVED")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "IN1679-3: resolved-path pre-flight eval || exit 0; echo → ALLOW (RED before fix)" "$rc"
-
-    # IN1679-4 — fd-dup between the sanctioned segment and the companion segment.
-    cmd="$(printf '%s 2>&1 && echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "IN1679-4: pre-flight eval 2>&1 && echo OWNER_REPO → ALLOW (RED before fix)" "$rc"
-
-    # IN1679-5 — S-6 2-argument run-initial.sh plus a trailing echo companion.
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234")"; echo "STATUS=$STATUS"' \
-        "$ACD" "$SCRIPTS" "$REPO" "$SCRIPTS")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "IN1679-5: run-initial 2-arg eval; echo STATUS → ALLOW (RED before fix)" "$rc"
-
-    # IN1679-6 — the bare shape documented in issue-close-finalize/SKILL.md.
-    # Already allowed by the #1484 eval-unwrap; pinned here as the no-regression anchor.
-    cmd="$(pf_eval "$PF_LITERAL")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "IN1679-6: bare pre-flight eval, no companion segment → ALLOW (no regression)" "$rc"
-}
-
-# ============================================================================
-# AD — adversarial compositions. BLOCK before AND after the S-8 widening.
-# ============================================================================
-
-test_ad_cases() {
-    echo "=== AD: adversarial segment compositions (must stay BLOCK) ==="
-    local cmd rc
-
-    # AD1679-1: companion segment on a NEW LINE performing a real write.
-    cmd="$(printf '%s || exit 0\nrm -f README.md' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-1: pre-flight + newline + rm -f README.md → BLOCK" "$rc"
-
-    # AD1679-2: companion segment redirects into the main worktree.
-    cmd="$(printf '%s && echo x > out.txt' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-2: pre-flight + echo x > out.txt → BLOCK" "$rc"
-
-    # AD1679-3: write hidden inside a command substitution in the companion.
-    cmd="$(printf '%s && echo "$(rm -f x)"' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-3: pre-flight + echo \"\$(rm -f x)\" → BLOCK" "$rc"
-
-    # AD1679-4: opaque dynamic eval as the companion segment.
-    cmd="$(printf '%s ; eval "$DYNAMIC"' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-4: pre-flight + eval \"\$DYNAMIC\" → BLOCK" "$rc"
-
-    # AD1679-5: git write as the companion segment.
-    cmd="$(printf '%s && git commit -m x' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-5: pre-flight + git commit -m x → BLOCK" "$rc"
-
-    # AD1679-6: TWO sanctioned segments — the rule admits exactly one.
-    cmd="$(printf '%s && %s' "$(pf_eval "$PF_LITERAL")" "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-6: pre-flight eval chained twice → BLOCK" "$rc"
-
-    # AD1679-7: eval of a non-sanctioned script under acd, with a read companion.
-    cmd="$(printf 'eval "$(bash "%s/bin/evil.sh")" ; echo hi' "$ACD")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-7: eval of non-allowlisted <acd>/bin/evil.sh ; echo hi → BLOCK" "$rc"
-
-    # AD1679-8: pipe into a writer whose target lands in the main worktree.
-    # The plan wrote this row as `| tee /tmp/x`, but that target is OUTSIDE
-    # session scope, and ENFORCE_WORKTREE deliberately guards only writes into
-    # the main worktree — so `/tmp/x` is allowed by design and cannot express the
-    # boundary at TL2. A main-worktree-relative target expresses the same intent
-    # (a writer must not ride along on the sanctioned segment) observably.
-    cmd="$(printf '%s | tee out.txt' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-8: pre-flight + | tee out.txt (main-worktree target) → BLOCK" "$rc"
-
-    # AD1679-8b: the plan's literal form, pinned with its correct expectation so
-    # the in-scope/out-of-scope distinction above stays explicit rather than
-    # silently dropped. This is ENFORCE_WORKTREE's documented scope, not a gap.
-    cmd="$(printf '%s | tee /tmp/x' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "AD1679-8b: pre-flight + | tee /tmp/x (out-of-scope target) → ALLOW by design" "$rc"
-
-    # ---- Confused-deputy guards (ENV_MUTATION_RE / ASSIGN_RE) ---------------
-    # Each of the four leading segments below is classified read (null) by
-    # detectWritePredicate, so a write-only composition rule would admit them —
-    # and each can repoint the very variable the sanctioned segment resolves against.
-
-    # AD1679-9: export repoints AGENTS_CONFIG_DIR before the sanctioned segment.
-    cmd="$(printf 'export AGENTS_CONFIG_DIR=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-9: export AGENTS_CONFIG_DIR=/evil; + pre-flight → BLOCK (env mutation)" "$rc"
-
-    # AD1679-10: bare assignment, same effect.
-    cmd="$(printf 'AGENTS_CONFIG_DIR=/evil ; %s' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-10: AGENTS_CONFIG_DIR=/evil ; + pre-flight → BLOCK (assignment)" "$rc"
-
-    # AD1679-11: unset makes the literal prefix resolve against nothing.
-    cmd="$(printf 'unset AGENTS_CONFIG_DIR; %s' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-11: unset AGENTS_CONFIG_DIR; + pre-flight → BLOCK (env mutation)" "$rc"
-
-    # AD1679-12: `source` can mutate the environment arbitrarily and opaquely.
-    cmd="$(printf 'source /tmp/x.sh && %s' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "AD1679-12: source /tmp/x.sh && + pre-flight → BLOCK (opaque env mutation)" "$rc"
-}
-
-# ============================================================================
-# E2E — decision + block-reason assertions against the real hook process.
-# ============================================================================
-
-test_e2e_cases() {
-    echo "=== E2E: real hook process, main worktree on branch main ==="
-    local cmd rc
-
-    cmd="$(printf 'cd "%s" && %s && echo "OWNER_REPO=$OWNER_REPO"' "$REPO" "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "E2E1679-1: IN1679-1 through hooks/enforce-worktree.js → exit 0 (RED before fix)" "$rc"
-
-    cmd="$(printf '%s || exit 0; echo "OWNER_REPO=$OWNER_REPO"' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "E2E1679-2: IN1679-2 through hooks/enforce-worktree.js → exit 0 (RED before fix)" "$rc"
-
-    # E2E1679-3 also asserts the block REASON, not just the decision: an
-    # adversarial composition must be refused as a main-worktree write, not
-    # silently allowed nor blocked for some unrelated reason.
-    cmd="$(printf '%s || exit 0\nrm -f README.md' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "E2E1679-3: AD1679-1 through the real hook → BLOCK" "$rc"
-    if [ "$rc" -eq 1 ]; then
-        if echo "$GUARD_OUT" | grep -q "main worktree"; then
-            pass "E2E1679-3-reason: block reason mentions 'main worktree'"
-        else
-            fail "E2E1679-3-reason: block reason lacks 'main worktree' (out: $GUARD_OUT)"
-        fi
-    else
-        fail "E2E1679-3-reason: not blocked, reason unassertable (rc=$rc)"
-    fi
-
-    cmd="$(printf 'export AGENTS_CONFIG_DIR=/evil; %s' "$(pf_eval "$PF_LITERAL")")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_block "E2E1679-4: AD1679-9 through the real hook → BLOCK" "$rc"
-
-    cmd="$(printf 'eval "$(AGENTS_CONFIG_DIR="%s" FINALIZE_SCRIPTS_DIR="%s" MAIN_WORKTREE_PATH="%s" bash "%s/run-initial.sh" "1234" "1234")"' \
-        "$ACD" "$SCRIPTS" "$REPO" "$SCRIPTS")"
-    rc=0; guard "$cmd" || rc=$?
-    assert_allow "E2E1679-5: run-initial 2-arg form (S-6) through the real hook → exit 0 (RED before fix)" "$rc"
-}
-
-# =============================================================================
-# TL1 — Direct unit tests for companion-segment ENV_MUTATION guard (S-8)
-# =============================================================================
-# These call isAllowedWorkerScriptInvocation() directly (no subprocess).
-# Before fix: env-mutation BLOCK cases are GREEN (existing behavior),
-# but benign-companion ALLOW cases that need segmentation are RED (bug not fixed).
-# After fix: all GREEN.
-#
-# Why TL1 in addition to the TL2 rows above: the TL2 driver observes only the
-# hook's final decision, which is the OR/AND of several predicates. If
-# isAllowedWorkerScriptInvocation itself regressed but some other branch of
-# hooks/enforce-worktree.js happened to block (or allow) the same string, TL2
-# could not tell the difference. These rows isolate the predicate.
-#
-# The acd is resolved by hooks/lib/agents-config-dir.js from
-# process.env.AGENTS_CONFIG_DIR (marker-validated), so the shared fake-acd
-# fixture is passed through env; repoRoot is the shared main worktree, which
-# owns one registered linked worktree.
-
-TL1_JS="$TMPDIR_BASE/tl1-worker-script.js"
-
-cat > "$TL1_JS" <<'TL1_EOF'
-"use strict";
-const assert = require("assert");
-const { isAllowedWorkerScriptInvocation } = require(process.env.TL1_WORKER_JS);
-
-const repoRoot = process.env.TL1_REPO;
-
-// Literal (unexpanded) pre-flight eval — exactly what PreToolUse receives.
-const PF =
-  'eval "$(bash "$AGENTS_CONFIG_DIR/skills/issue-close-finalize/scripts/pre-flight.sh")"';
-
-const cases = [
-  // -- ENV_MUTATION companion segments: BLOCK before AND after the fix. ------
-  ["MU1679-TL1-1", PF + ' && export AGENTS_CONFIG_DIR=/evil', false,
-    "export in companion segment"],
-  ["MU1679-TL1-2", PF + ' ; AGENTS_CONFIG_DIR=/evil', false,
-    "bare assignment in companion segment"],
-  ["MU1679-TL1-3", PF + ' && unset AGENTS_CONFIG_DIR', false,
-    "unset in companion segment"],
-  ["MU1679-TL1-4", PF + ' && source /tmp/x.sh', false,
-    "source in companion segment"],
-  ["MU1679-TL1-5", PF + ' && eval "$DYNAMIC"', false,
-    "opaque eval in companion segment"],
-  ["MU1679-TL1-6", 'export AGENTS_CONFIG_DIR=/evil; ' + PF, false,
-    "mutation BEFORE the sanctioned segment"],
-
-  // -- Benign companion segments: ALLOW after the fix. ----------------------
-  ["MU1679-TL1-7", 'cd "' + repoRoot + '" && ' + PF + ' && echo "OWNER_REPO=$OWNER_REPO"', true,
-    "leading cd + trailing echo companions"],
-  ["MU1679-TL1-8", PF + ' || exit 0', true,
-    "|| exit 0 tail"],
-  ["MU1679-TL1-9", PF, true,
-    "no companion segment"],
-];
-
-// The bash side parses one TAB-delimited record per line, so every detail
-// string is flattened first — Node's AssertionError message is multi-line.
-const flat = (s) => String(s).replace(/\s+/g, " ").trim();
-const emit = (status, label, detail) =>
-  console.log([status, label, flat(detail)].join("\t"));
-
-for (const [label, cmd, expected, why] of cases) {
-  let actual;
-  try {
-    actual = isAllowedWorkerScriptInvocation(cmd, repoRoot);
-  } catch (e) {
-    emit("NG", label, why + " -> THREW " + e.message);
-    continue;
-  }
-  try {
-    assert.strictEqual(
-      actual, expected,
-      why + " -> expected " + expected + ", got " + actual
-    );
-    emit("OK", label, why + " -> " + (expected ? "ALLOW" : "BLOCK"));
-  } catch (e) {
-    emit("NG", label, e.message);
-  }
-}
-TL1_EOF
-
-test_tl1_cases() {
-    echo "=== TL1: isAllowedWorkerScriptInvocation() called directly ==="
-    local out rc=0
-    out="$(run_with_timeout 30 env \
-        "AGENTS_CONFIG_DIR=$ACD" \
-        "TL1_WORKER_JS=${_AGENTS_DIR_NODE}/hooks/enforce-worktree/main-worktree-allows/worker-script.js" \
-        "TL1_REPO=$REPO" \
-        node "$TL1_JS" 2>&1)" || rc=$?
-    if [ "$rc" -ne 0 ]; then
-        fail "MU1679-TL1: runner crashed (rc=$rc; out: $out)"
-        return
-    fi
-    local status label detail
-    while IFS=$'\t' read -r status label detail; do
-        [ -z "${status:-}" ] && continue
-        case "$status" in
-            OK) pass "$label: $detail" ;;
-            NG) fail "$label: $detail" ;;
-            *)  fail "MU1679-TL1: unparsable runner line: $status $label $detail" ;;
-        esac
-    done <<< "$out"
-}
+# shellcheck source=./fix-1679-worker-eval-segment-composition/in-ad-cases.sh
+. "$SCRIPT_DIR_1679/in-ad-cases.sh"
+# shellcheck source=./fix-1679-worker-eval-segment-composition/e2e-tl1-cases.sh
+. "$SCRIPT_DIR_1679/e2e-tl1-cases.sh"
 
 # ============================================================================
 # Run all

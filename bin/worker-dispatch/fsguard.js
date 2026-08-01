@@ -79,6 +79,37 @@ function writeFile(workerName, targetPath, data, ctx) {
   return abs;
 }
 
+// Atomic publish: rename a fully-written `.tmp` file onto its final name.
+// A reader of the final path therefore never observes a half-written state file
+// — the property the multi-pass finalize chain depends on between passes.
+//
+// BOTH paths are checked, and against the SAME root rather than merely against
+// the same scope set: a rename is a write to the destination and an unlink at the
+// source, and `fs.renameSync` across two roots (plans-dir -> family-worktree) is
+// not atomic on any platform even when both are individually writable.
+function renameWithin(workerName, tmpPath, dstPath, ctx) {
+  const absTmp = realAbs(tmpPath);
+  const absDst = realAbs(dstPath);
+  if (absTmp === null || absDst === null) {
+    throw new Error("rename source and destination must both be absolute paths");
+  }
+  // Reuse the single scope-check path rather than re-resolving roots here: both
+  // ends get the identical treatment every other write gets (CPR-2).
+  assertWritable(workerName, absTmp, ctx);
+  assertWritable(workerName, absDst, ctx);
+
+  const roots = scopeRootsFor(workerName, ctx);
+  const shared = roots.some((root) => isUnder(absTmp, root, false) && isUnder(absDst, root, false));
+  if (!shared) {
+    throw new Error(
+      `rename source and destination are not inside the same write scope of '${workerName}'`,
+    );
+  }
+  fs.mkdirSync(path.dirname(absDst), { recursive: true });
+  fs.renameSync(absTmp, absDst);
+  return absDst;
+}
+
 function mkdir(workerName, targetPath, ctx) {
   assertWritable(workerName, targetPath, ctx);
   const abs = realAbs(targetPath);
@@ -86,4 +117,4 @@ function mkdir(workerName, targetPath, ctx) {
   return abs;
 }
 
-module.exports = { assertWritable, writeFile, mkdir, scopeRootsFor };
+module.exports = { assertWritable, writeFile, mkdir, renameWithin, scopeRootsFor };

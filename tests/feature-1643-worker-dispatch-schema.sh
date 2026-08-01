@@ -321,13 +321,32 @@ group_e() {
       const workers = reg.workers || {};
       const ir = (workers["issue-reconcile"] || {}).envPassthrough || [];
       out("reconcile_tokens", TOKENS.filter((t) => ir.includes(t)).sort().join(","));
+      // Workers that legitimately authenticate against GitHub. #1643 had exactly
+      // one; #1673 added the three forge workers, each of which drives `gh` for
+      // the operator. The list is closed on purpose — a token reaching the
+      // children of any OTHER worker is the leak this group exists to catch.
+      // (No apostrophes in this block: the whole script is a single-quoted shell
+      // word, and one would end it mid-JS.)
+      const SANCTIONED = ["issue-reconcile", "commit-push", "issue-close-stage", "issue-close-finalize"];
+      const declarers = [];
       const others = [];
       for (const name of Object.keys(workers)) {
-        if (name === "issue-reconcile") continue;
         const pass = workers[name].envPassthrough || [];
-        for (const t of TOKENS) if (pass.includes(t)) others.push(name + ":" + t);
+        const held = TOKENS.filter((t) => pass.includes(t));
+        if (held.length === 0) continue;
+        declarers.push(name);
+        if (!SANCTIONED.includes(name)) for (const t of held) others.push(name + ":" + t);
       }
       out("other_workers_with_tokens", others.join(","));
+      // Asserted in both directions: a sanctioned worker that silently DROPS the
+      // tokens breaks `gh` auth just as surely as an extra one leaks them.
+      out("token_declarers", declarers.slice().sort().join(","));
+      out("sanctioned_expected", SANCTIONED.slice().sort().join(","));
+      // Each sanctioned worker must declare BOTH tokens, not just one.
+      out("sanctioned_partial", SANCTIONED.filter((n) => {
+        const pass = (workers[n] || {}).envPassthrough || [];
+        return TOKENS.filter((t) => pass.includes(t)).length !== TOKENS.length;
+      }).sort().join(","));
       const spec = (workers["test-runner"] || {}).payloadSpec || {};
       out("test_args_type", spec.test_args ? spec.test_args.type : "(absent)");
       out("test_args_max_items", spec.test_args ? spec.test_args.maxItems : "(absent)");
@@ -340,8 +359,11 @@ group_e() {
     assert_eq "credentials/tokens-not-global" "" "$(ev allowlist_tokens)"
     # …but issue-reconcile must still be able to authenticate.
     assert_eq "credentials/reconcile-declares-both" "GH_TOKEN,GITHUB_TOKEN" "$(ev reconcile_tokens)"
-    # …and no one else may claim them.
-    assert_eq "credentials/no-other-worker-declares-a-token" "" "$(ev other_workers_with_tokens)"
+    # …and no one outside the sanctioned GitHub-authenticating set may claim them.
+    assert_eq "credentials/no-unsanctioned-worker-declares-a-token" "" "$(ev other_workers_with_tokens)"
+    assert_eq "credentials/token-declarers-are-exactly-the-sanctioned-set" \
+        "$(ev sanctioned_expected)" "$(ev token_declarers)"
+    assert_eq "credentials/sanctioned-workers-declare-both-tokens" "" "$(ev sanctioned_partial)"
 
     assert_eq "payload/test-args-is-rel-path-arg" "rel-path-arg[]" "$(ev test_args_type)"
     assert_eq "payload/test-args-max-items-64" "64" "$(ev test_args_max_items)"

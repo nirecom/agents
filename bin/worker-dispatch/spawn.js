@@ -89,8 +89,17 @@ function assertCwdInFamily(cwd, anchors) {
   return abs;
 }
 
-// run(entry, { anchors, command, script, args, cwd, timeoutMs, extraEnv })
+// run(entry, { anchors, command, script, args, cwd, timeoutMs, extraEnv, input })
 // Returns { status, signal, timedOut, spawnError, stdout, stderr }.
+//
+// `input` is the ONLY way payload-derived free text reaches a child: a commit
+// message given as argv would still be inert (shell:false), but it would also be
+// visible in the process table and subject to the platform command-line length
+// limit. Sending it on stdin — `git commit -F -` — avoids both.
+//
+// Opting in is per-call and the default is unchanged: with `input` omitted the
+// child gets stdio[0] = "ignore" exactly as before, so the six pre-existing
+// workers see byte-for-byte identical behaviour.
 function run(entry, opts) {
   const anchors = opts.anchors;
   assertCommandAllowed(entry, opts.command);
@@ -108,7 +117,12 @@ function run(entry, opts) {
 
   const timeout = typeof opts.timeoutMs === "number" && opts.timeoutMs > 0 ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
 
-  const res = spawnSync(opts.command, argv, {
+  const hasInput = opts.input !== undefined && opts.input !== null;
+  if (hasInput && typeof opts.input !== "string" && !Buffer.isBuffer(opts.input)) {
+    throw new Error("child stdin input must be a string or Buffer");
+  }
+
+  const spawnOpts = {
     cwd,
     env: buildEnv(entry, anchors, opts.extraEnv),
     shell: false,
@@ -116,8 +130,14 @@ function run(entry, opts) {
     timeout,
     windowsHide: true,
     maxBuffer: MAX_BUFFER,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+    stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
+  };
+  // Set only when opted in: spawnSync treats a present-but-undefined `input` the
+  // same as an absent one today, but relying on that would make the no-input path
+  // depend on an implementation detail instead of on the option being absent.
+  if (hasInput) spawnOpts.input = opts.input;
+
+  const res = spawnSync(opts.command, argv, spawnOpts);
 
   const timedOut =
     (res.error && res.error.code === "ETIMEDOUT") ||

@@ -1,13 +1,21 @@
 # tests/fix-1630-overlay-cross-validation/strip-units.sh
-# Tests: hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
+# Tests: hooks/enforce-worktree/arg-value-guard.js
 # Tags: worktree, enforce, hook, config-dir, overlay, unit, scope:issue-specific
 #
-# STATUS: RED until C5 lands. Sourced by tests/fix-1630-overlay-cross-validation.sh.
-#   STRIP-* — stripRelSuffix is not exported yet (ERROR: ... is not exported).
-#   CAND-*  — identification is still join-equality against a single acd value.
+# Sourced by tests/fix-1630-overlay-cross-validation.sh.
 #
-# STRIP-* / CAND-* — stripRelSuffix units and candidate acceptance, asserted on
-# the overlay module directly rather than through a hook verdict.
+# STRIP-* — stripRelSuffix units, asserted on the module directly rather than
+# through a hook verdict. These are the LIVE half of this suite: #1673 moved
+# stripRelSuffix unchanged from the deleted finalize-worker-overlay.js into
+# hooks/enforce-worktree/arg-value-guard.js, where worker-dispatch-overlay.js
+# now consumes it, so every row below still measures shipped behaviour.
+#
+# The CAND-* rows that used to follow are gone with #1673: they asked
+# matchFinalizeWorkerOverlay which root a finalize `eval` implied, and both the
+# function and the `eval` capability were deleted. The equivalent question for
+# the dispatcher — which anchor a worker script resolves against — is owned by
+# tests/feature-1643-worker-dispatch-callers.sh and the TL3-worker-dispatch-*
+# suites, not by a probe over a module that no longer exists.
 
 overlay_probe() { run_with_timeout 30 node "$OVERLAY_PROBE" "$@" 2>&1; }
 
@@ -32,18 +40,4 @@ STRIP-suffix-only  | strip | skills/issue-close-finalize/scripts/run-initial.sh 
 STRIP-empty-path   | strip |  | skills/issue-close-finalize/scripts/run-initial.sh | null
 STRIP-empty-rel    | strip | C:/a/skills/issue-close-finalize/scripts/run-initial.sh |  | null
 TABLE
-
-    # Candidate acceptance: a script rooted at ANY valid resolver candidate is
-    # identified. RED today — identification is join-equality against a single acd.
-    CAND_ACD="$(setup_fake_acd "cand")"
-    CAND_REPO="$(setup_main_worktree "cand")"
-    CAND_SCRIPTS="$CAND_ACD/skills/issue-close-finalize/scripts"
-    CAND_CMD="$(build_initial "$CAND_ACD" "$CAND_SCRIPTS" "$CAND_REPO" "$CAND_SCRIPTS")"
-
-    assert_eq "CAND-accept root named by the env candidate" \
-        "$(AGENTS_CONFIG_DIR="$CAND_ACD" overlay_probe match "$CAND_CMD" "$CAND_REPO")" "run-initial.sh"
-    assert_eq "CAND-accept root reachable when the env candidate is stale" \
-        "$(AGENTS_CONFIG_DIR="$TMPDIR_BASE" overlay_probe match "$CAND_CMD" "$CAND_REPO")" "null"
-    assert_eq "CAND-reject root that is no candidate at all" \
-        "$(AGENTS_CONFIG_DIR="$CAND_ACD" overlay_probe match "$(build_initial "$XV_OTHER" "$XV_OTHER/skills/issue-close-finalize/scripts" "$CAND_REPO" "$XV_OTHER/skills/issue-close-finalize/scripts")" "$CAND_REPO")" "null"
 }
