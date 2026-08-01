@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-initial.sh — phase=initial orchestration for issue-close-finalize-worker
+# run-initial.sh — phase=initial orchestration for the issue-close-finalize worker
 # Steps 1-6 only; caller writes the JSON state file.
 # Usage: bash run-initial.sh <issue_number> <root_issue_number> [issue_repo]
 # Env:   AGENTS_CONFIG_DIR  FINALIZE_SCRIPTS_DIR  MAIN_WORKTREE_PATH

@@ -2,26 +2,35 @@
 # Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/lib/agents-config-dir.js
 # Tags: hook, worktree, config-dir, resolver, enforce, security, scope:issue-specific
 #
-# STATUS (pre-C4 RED gate). Sourced by tests/fix-1630-config-dir-resolver.sh.
-#   T4-ctrl rows  -> GREEN today (correct AGENTS_CONFIG_DIR; must stay green).
-#   T4a / T4b rows-> RED today. Each prints the observed hook decision, e.g.
-#                    "FAIL: ... (BLOCK — expected ALLOW)".
-#   T4a-attack    -> RED today, and it is the security row: an attacker-supplied
-#                    AGENTS_CONFIG_DIR currently ALLOWs its own scripts
-#                    ("ALLOW — expected BLOCK").
+# #1673 deleted hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js
+# together with the Bash-tool `eval "$(... bash "<finalize-script>" ...)"` path it
+# was the sole ALLOW route for. The T4-ctrl / T4a / T4b rows below drive the three
+# live single-line finalize eval shapes through the REAL hook; before #1673 the
+# overlay ALLOWed the correctly-scoped form and the resolver work (#1630) decided
+# whether AGENTS_CONFIG_DIR being missing/stale still recovered that ALLOW. With
+# the overlay gone there is no identity match left for these shapes at all — they
+# now BLOCK unconditionally, in every AGENTS_CONFIG_DIR state, and stand as
+# retired-capability pins (same treatment as tests/fix-1600-finalize-worker-overlay
+# /allow-cases.sh and tests/fix-1630-overlay-cross-validation.sh).
 #
-# T4a — stale AGENTS_CONFIG_DIR: the env var points at a directory that carries
-#       neither marker (no <d>/hooks/enforce-worktree.js, no <d>/bin). Today
-#       worker-script.js trusts the raw env value, so the overlay's env-VALUE
-#       cross-check fails and the finalize forms are blocked.
-# T4b — missing AGENTS_CONFIG_DIR: today worker-script.js does
-#       `if (!acd) return false;` and refuses every sanctioned invocation.
+# The env-state axis (correct / missing / stale) is kept in the row names even
+# though every row now asserts BLOCK: it documents that the retirement is total —
+# no AGENTS_CONFIG_DIR value brings the eval path back — rather than collapsing
+# the three rows into one and losing that coverage.
+#
+# T4a-attack / T4b-attack rows below were ALREADY block-under-#1630 (the resolver
+# refuses to let an attacker-supplied AGENTS_CONFIG_DIR sanction its own finalize
+# tree); #1673 makes them block for the simpler reason (no eval identity match at
+# all), so their expected verdict is unchanged.
+#
+# The resolver itself (C4/#1630) is still live and exercised elsewhere in this
+# suite: the module-level rows below (sanctioned bare `bash "<script>"` identity)
+# and resolver-units.sh / standard-predicates.sh / debug-and-cache.sh all cover
+# genuinely-current resolveAgentsConfigDir() call sites untouched by #1673.
 #
 # Both seams are driven through the REAL hook (hooks/enforce-worktree.js) from a
 # throwaway git main worktree, so the printed verdict is the same BLOCK/ALLOW a
-# human sees in a session. The sanctioned script paths point at the REAL agents
-# root — the path the resolver must recover once the env value is unusable — so
-# the resolver's answer is the only thing that can flip the verdict.
+# human sees in a session.
 #
 # Why the three finalize overlay forms and not `bash "<acd>/bin/...script.sh"`:
 # a bare sanctioned bash invocation is not a Bash write at all (verified: the
@@ -59,15 +68,16 @@ run_seam_cases() {
             loop)     cmd="$f_loop" ;;
             terminal) cmd="$f_terminal" ;;
         esac
-        # Control — GREEN today and after the fix.
-        assert_guard "T4-ctrl finalize $form, AGENTS_CONFIG_DIR correct" \
-            allow "$cmd" "AGENTS_CONFIG_DIR=$AGENTS_DIR_NODE"
+        # Control — the overlay's ALLOW route no longer exists (#1673): a
+        # correctly-scoped finalize eval blocks the same as every other state.
+        assert_guard "T4-ctrl finalize $form, AGENTS_CONFIG_DIR correct — eval path retired (#1673)" \
+            block "$cmd" "AGENTS_CONFIG_DIR=$AGENTS_DIR_NODE"
         # T4b — env var absent entirely (subagent / Bash-tool subprocess).
-        assert_guard "T4b finalize $form, AGENTS_CONFIG_DIR missing" \
-            allow "$cmd"
+        assert_guard "T4b finalize $form, AGENTS_CONFIG_DIR missing — eval path retired (#1673)" \
+            block "$cmd"
         # T4a — env var present but pointing at a marker-less directory.
-        assert_guard "T4a finalize $form, AGENTS_CONFIG_DIR stale" \
-            allow "$cmd" "AGENTS_CONFIG_DIR=$STALE"
+        assert_guard "T4a finalize $form, AGENTS_CONFIG_DIR stale — eval path retired (#1673)" \
+            block "$cmd" "AGENTS_CONFIG_DIR=$STALE"
     done
 
     # ── Attack scenario 1: attacker-controlled AGENTS_CONFIG_DIR ─────────────

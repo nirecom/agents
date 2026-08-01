@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Detects scope:common test files whose all # Tests: paths are missing.
-# Usage: bin/audit-tests-common.sh [--format text|json] [--offline]
+# Usage: bin/audit-tests-common.sh [--format text|json] [--offline] [--dry-run]
 # Exit:  0 = orphans found, 1 = no orphans, 2 = error
 #
 # --offline is accepted for interface symmetry with audit-tests.sh but has no
 # effect (orphan detection does not require GitHub API calls).
+# --dry-run is likewise an accepted no-op: this script has no write path, so
+# there is no default to invert. It exists so the /sweep family presents one
+# flag face (CPR-5) and so the nightly cron can state its intent explicitly.
+# --apply stays rejected — deletion here would need issue staleness context.
 
 set -euo pipefail
 
@@ -22,7 +26,9 @@ while [[ $# -gt 0 ]]; do
     --format) FORMAT="$2"; shift 2 ;;
     --offline) OFFLINE=1; shift ;;
     --fix-headers) FIX_HEADERS=1; shift ;;
+    --dry-run) shift ;;
     --apply) echo "ERROR: --apply is not supported by audit-tests-common.sh (deletion requires issue staleness context)" >&2; exit 2 ;;
+    -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done

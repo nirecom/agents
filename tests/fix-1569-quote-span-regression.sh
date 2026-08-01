@@ -1,6 +1,6 @@
 #!/bin/bash
 # tests/fix-1569-quote-span-regression.sh
-# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/main-worktree-allows/finalize-worker-overlay.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/quote-spans.js
+# Tests: hooks/enforce-worktree.js, hooks/enforce-worktree/arg-tail-guard.js, hooks/enforce-worktree/main-worktree-allows/worker-script.js, hooks/enforce-worktree/arg-value-guard.js, hooks/enforce-worktree/main-worktree-allows/standard.js, hooks/lib/quote-spans.js
 # Tags: worktree, enforce, hook, quote-spans, arg-tail, security, classifier, scope:issue-specific
 #
 # STATUS: partially RED until C3 lands (hooks/enforce-worktree/arg-tail-guard.js
@@ -245,8 +245,23 @@ assert_block "FP6b-attack #1191 same form, tee target moved into the MAIN worktr
 
 # ============================================================================
 # 7: PR #1612 — enum-g5 decision value carrying a pipe.
+#
+# #1673 deleted finalize-worker-overlay.js and the Bash-tool `eval` path for the
+# finalize scripts, so the clean row is no longer the ALLOW half of a pair: both
+# rows now BLOCK, the first because the capability is retired and the second
+# because it always was an injection. The clean row is kept as a
+# retired-capability pin — its BLOCK is the assertion that the shape a
+# legitimate caller once used stays shut too.
+#
+# The pairing this section provided (clean ALLOW vs. dirty BLOCK, so that
+# "reject everything" cannot pass) is not lost: it moved to the value-token
+# level, where the enum/plans-dir predicate still ships. It is asserted in
+# tests/fix-1630-overlay-cross-validation/metachar-args.sh (ARG-tok-* rejected
+# rows against their ARG-tok-plain/real/nested/dashes accepted controls), and at
+# hook level by the LIVE1679-* ALLOW rows in
+# tests/fix-1679-finalize-overlay-arg-contract.sh.
 # ============================================================================
-assert_allow "PR1612 finalize loop-step with clean enum decision" \
+assert_block "PR1612 finalize loop-step with clean enum decision — eval path retired (#1673)" \
     "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept\")\""
 assert_block "PR1612-attack finalize loop-step with decision 'accept|evil'" \
     "eval \"\$(AGENTS_CONFIG_DIR=\"$ACD\" FINALIZE_SCRIPTS_DIR=\"$FSD\" node \"$FSD/run-loop-step.js\" \"$STATE\" \"accept|evil\")\""

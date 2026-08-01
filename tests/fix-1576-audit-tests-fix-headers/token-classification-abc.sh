@@ -17,7 +17,7 @@
 R1="$(make_fixture)"
 write_dispatcher "$R1" "feature-1-a.sh" '# Tests: bin/foo.sh (annotation)'
 before="$(cat "$R1/tests/feature-1-a.sh")"
-run_in "$R1" "$AUDIT" --fix-headers --offline
+run_in "$R1" "$AUDIT" --dry-run --fix-headers --offline
 after="$(cat "$R1/tests/feature-1-a.sh")"
 if [[ "$OUT$ERR" == *"FIX_A:"* && "$before" == "$after" ]]; then
   pass "TC1 A-token report mode emits FIX_A and leaves file unchanged"
@@ -49,7 +49,7 @@ git -C "$R3" commit -q --no-verify -m addold >/dev/null 2>&1
 git -C "$R3" mv bin/old.sh bin/new.sh >/dev/null 2>&1
 git -C "$R3" commit -q --no-verify -m rename >/dev/null 2>&1
 write_dispatcher "$R3" "feature-3-b.sh" '# Tests: bin/old.sh'
-run_in "$R3" "$AUDIT" --fix-headers --offline
+run_in "$R3" "$AUDIT" --dry-run --fix-headers --offline
 if [[ "$OUT$ERR" == *"FIX_B:"* && "$OUT$ERR" == *"bin/old.sh"* && "$OUT$ERR" == *"bin/new.sh"* ]]; then
   pass "TC3 B-token report emits FIX_B old -> new"
 else
@@ -74,7 +74,7 @@ rm -rf "$R4"
 # TC5: prose words only (0 path-like tokens) => MANUAL_REVIEW_REQUIRED
 R5="$(make_fixture)"
 write_dispatcher "$R5" "feature-5-prose.sh" '# Tests: some prose words here'
-run_in "$R5" "$AUDIT" --fix-headers --offline
+run_in "$R5" "$AUDIT" --dry-run --fix-headers --offline
 if [[ "$OUT$ERR" == *"MANUAL_REVIEW_REQUIRED"* ]]; then
   pass "TC5 zero path-like tokens yields MANUAL_REVIEW_REQUIRED"
 else
@@ -89,7 +89,7 @@ echo '// b' > "$R6/bin/b.js"
 git -C "$R6" add -A >/dev/null 2>&1
 git -C "$R6" commit -q --no-verify -m addjs >/dev/null 2>&1
 write_dispatcher "$R6" "feature-6-multiparen.sh" '# Tests: bin/a.js (note) bin/b.js (note2)'
-run_in "$R6" "$AUDIT" --fix-headers --offline
+run_in "$R6" "$AUDIT" --dry-run --fix-headers --offline
 if [[ "$OUT$ERR" == *"bin/a.js"* && "$OUT$ERR" != *"bin/b.js"* ]]; then
   pass "TC6 multi-paren normalize keeps only first token (a.js), drops b.js"
 else

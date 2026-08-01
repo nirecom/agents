@@ -118,6 +118,10 @@ check_literal "R-CP-extra-a" "CP-2" "skills/commit-push/SKILL.md"
 check_absent "R-CP-extra-b" "step 2-6" "skills/commit-push/SKILL.md"
 check_absent "R-CP-extra-c" "CP-2-6" "skills/commit-push/SKILL.md"
 
-# R-CPW-ref: commit-push-worker prose reference updated; worker's own 1.5. retained (C4 scope)
-check_literal "R-CPW-ref-a" "Step CP-2" "agents/commit-push-worker.md"
-check_literal "R-CPW-ref-b" "1.5." "agents/commit-push-worker.md"
+# R-CPW-ref: commit-push worker step reference retained (C4 scope).
+# #1673 retired agents/commit-push-worker.md; the step numbering it carried now
+# lives on the caller side (SKILL.md), which is the only place a step label is
+# still meaningful — the module is invoked by name, not by step. The "1.5."
+# pre-flight label likewise belongs to the caller's CP-2 block.
+check_literal "R-CPW-ref-a" "Step CP-2" "skills/commit-push/SKILL.md"
+check_absent "R-CPW-ref-b" "commit-push-worker" "skills/commit-push/SKILL.md"
